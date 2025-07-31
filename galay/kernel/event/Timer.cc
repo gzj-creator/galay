@@ -31,14 +31,14 @@ namespace galay
 
     int64_t Timer::getTimeout() const
     {
-        int64_t now = utils::GetCurrentTimeMs();
+        int64_t now = utils::getCurrentTimeMs();
         return m_deadline - now;
     }
 
     int64_t
     Timer::getRemainTime() const
     {
-        int64_t now = utils::GetCurrentTimeMs();
+        int64_t now = utils::getCurrentTimeMs();
         const int64_t time = m_deadline - now;
         return time < 0 ? 0 : time;
     }
@@ -48,7 +48,7 @@ namespace galay
     {
         if (!isCancel()) return false;
         int64_t old = m_deadline.load();
-        int64_t now = utils::GetCurrentTimeMs();
+        int64_t now = utils::getCurrentTimeMs();
         if(!m_deadline.compare_exchange_strong(old, now + timeout))
         {
             return false;
@@ -238,7 +238,7 @@ namespace galay::details
     std::list<Timer::ptr> PriorityQueueTimerManager::GetArrivedTimers()
     {
         std::list<Timer::ptr> timers;
-        int64_t now = utils::GetCurrentTimeMs();
+        int64_t now = utils::getCurrentTimeMs();
         std::unique_lock lock(this->m_mutex);
         while (!m_timers.empty() && m_timers.top()->getDeadline() <= now) {
             auto timer = m_timers.top();
@@ -337,7 +337,7 @@ namespace galay::details
     std::list<Timer::ptr> RbtreeTimerManager::GetArrivedTimers()
     {
         std::list<Timer::ptr> timers;
-        int64_t now = utils::GetCurrentTimeMs();
+        int64_t now = utils::getCurrentTimeMs();
         std::unique_lock lock(this->m_mutex);
         while (!m_timers.empty() && (*m_timers.begin())->getDeadline() <= now) {
             auto timer = *(m_timers.begin());

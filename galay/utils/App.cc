@@ -10,22 +10,22 @@ args::ArgInputType::ArgInputType(Arg* arg)
 {
 }
 
-void args::ArgInputType::IsInt()
+void args::ArgInputType::isInt()
 {
     m_arg->m_input_type = InputType::InputInt;
 }
 
-void args::ArgInputType::IsFloat()
+void args::ArgInputType::isFloat()
 {
     m_arg->m_input_type = InputType::InputFloat;
 }
 
-void args::ArgInputType::IsDouble()
+void args::ArgInputType::isDouble()
 {
     m_arg->m_input_type = InputType::InputDouble;
 }
 
-void args::ArgInputType::IsString()
+void args::ArgInputType::isString()
 {
     m_arg->m_input_type = InputType::InputString;
 }
@@ -46,7 +46,7 @@ Arg::Arg(const std::string &name)
 {
 }
 
-Arg &Arg::Short(char short_name)
+Arg &Arg::shortcut(char short_name)
 {
     if(m_short_name == m_name) throw std::runtime_error("short name can not be same as long name");
     m_short_name = short_name;
@@ -54,43 +54,43 @@ Arg &Arg::Short(char short_name)
 }
 
 
-ArgInputType Arg::Input(bool input)
+ArgInputType Arg::input(bool input)
 {
     m_input = input;
     return ArgInputType(this);
 }
 
-Arg &Arg::Output(const std::string &output)
+Arg &Arg::output(const std::string &output)
 {
     m_output = output;
     return *this;
 }
 
-Arg &Arg::Required(bool required)
+Arg &Arg::required(bool required)
 {
     m_required = required;
     return *this;
 }
 
-Arg &args::Arg::Unique(bool unique)
+Arg &args::Arg::unique(bool unique)
 {
     m_unique = unique;
     return *this;
 }
 
-Arg &Arg::Success(std::function<void(Arg*)>&& callback)
+Arg &Arg::success(std::function<void(Arg*)>&& callback)
 {
     m_success_callback = std::move(callback);
     return *this;
 }
 
-Arg &Arg::Failure(std::function<void(std::string)> &&callback)
+Arg &Arg::failure(std::function<void(std::string)> &&callback)
 {
     m_failure_callback = std::move(callback);
     return *this;
 }
 
-Arg &Arg::PrintError()
+Arg &Arg::printError()
 {
     m_failure_callback = [](std::string errmsg) {
         std::cout << errmsg << std::endl;
@@ -98,7 +98,7 @@ Arg &Arg::PrintError()
     return *this;
 }
 
-InputValue args::Arg::Value()
+InputValue args::Arg::value()
 {
     return InputValue(this);
 }
@@ -113,13 +113,13 @@ Cmd::Cmd(const std::string &name)
 {
 }
 
-Cmd& Cmd::AddCmd(Cmd::uptr cmd)
+Cmd& Cmd::addCmd(Cmd::uptr cmd)
 {
     m_sub_cmds.emplace(cmd->m_name, std::move(cmd));
     return *this;
 }
 
-Cmd& Cmd::AddArg(Arg::ptr arg)
+Cmd& Cmd::addArg(Arg::ptr arg)
 {
     if(m_sub_args.find(arg->m_name) != m_sub_args.end()) {
         throw std::runtime_error("Arg already exists");
@@ -138,14 +138,14 @@ Cmd& Cmd::AddArg(Arg::ptr arg)
     return *this;
 }
 
-void args::Cmd::Help(const std::string &help_str)
+void args::Cmd::help(const std::string &help_str)
 {
     Arg::ptr arg = Arg::create("help");
-    arg->Output(help_str).Short('h').Unique(true);
-    AddArg(arg);
+    arg->output(help_str).shortcut('h').unique(true);
+    addArg(arg);
 }
 
-void args::Cmd::ShowHelp()
+void args::Cmd::showHelp()
 {
     if(m_sub_args.find("help") == m_sub_args.end()) {
         std::cout << "Not set help string" << std::endl;
@@ -156,7 +156,7 @@ void args::Cmd::ShowHelp()
 }
 
 
-bool Cmd::Collect(Arg::ptr arg)
+bool Cmd::collect(Arg::ptr arg)
 {
     if( m_collector.m_output_arg && !arg->m_output.empty()) {
         std::string msg = "--" + m_collector.m_output_arg->m_name + " does not use with --" + arg->m_name;
@@ -170,7 +170,7 @@ bool Cmd::Collect(Arg::ptr arg)
     return true;
 }
 
-bool Cmd::Parse(int argc, int index, const char **argv)
+bool Cmd::parse(int argc, int index, const char **argv)
 {
     for(int i = index; i < argc; ++i) {
         std::string arg = argv[i];
@@ -184,7 +184,7 @@ bool Cmd::Parse(int argc, int index, const char **argv)
                 if(arg_ptr->m_input) {
                     if( i + 1 < argc && argv[i + 1][0] != '-' ) {
                         arg_ptr->m_value = argv[++i];
-                        if(!Collect(arg_ptr)) {
+                        if(!collect(arg_ptr)) {
                             return false;
                         }
                     } else {
@@ -195,7 +195,7 @@ bool Cmd::Parse(int argc, int index, const char **argv)
                         return false;
                     }
                 } else {
-                    if(!Collect(arg_ptr)) {
+                    if(!collect(arg_ptr)) {
                         return false;
                     }
                 }
@@ -215,7 +215,7 @@ bool Cmd::Parse(int argc, int index, const char **argv)
                     if(arg_ptr->m_input) {
                         if( i + 1 < argc && argv[i + 1][0] != '-' ) {
                             arg_ptr->m_value = argv[++i];
-                            if(!Collect(arg_ptr)) {
+                            if(!collect(arg_ptr)) {
                                 return false;
                             }
                         } else {
@@ -226,7 +226,7 @@ bool Cmd::Parse(int argc, int index, const char **argv)
                             return false;
                         }
                     } else {
-                        if(!Collect(arg_ptr)) {
+                        if(!collect(arg_ptr)) {
                             return false;
                         }
                     }
@@ -249,7 +249,7 @@ bool Cmd::Parse(int argc, int index, const char **argv)
                             std::cout << real_name << " contains input argument: -" << short_name << std::endl; 
                             return false;
                         } else {
-                            if(!Collect(arg_ptr)) {
+                            if(!collect(arg_ptr)) {
                                 return false;
                             }
                         }
@@ -264,7 +264,7 @@ bool Cmd::Parse(int argc, int index, const char **argv)
             std::string real_name = arg;
             if(m_sub_cmds.find(real_name) != m_sub_cmds.end()) {
                 Cmd* cmd_ptr = m_sub_cmds[real_name].get();
-                return cmd_ptr->Parse(argc, index + 1, argv);
+                return cmd_ptr->parse(argc, index + 1, argv);
             } else {
                 std::cout << real_name << " is invaild argument" << std::endl;
                 return false;
@@ -316,21 +316,21 @@ App::App(const std::string &name)
 {
 }
 
-bool App::Parse(int argc, const char **argv)
+bool App::parse(int argc, const char **argv)
 {
-    bool res = Cmd::Parse(argc, 1, argv);
+    bool res = Cmd::parse(argc, 1, argv);
     if(!res) return false;
     return res;
 }
 
-void args::App::Help(const std::string &help_str)
+void args::App::help(const std::string &help_str)
 {
-    Cmd::Help(help_str);
+    Cmd::help(help_str);
 }
 
-void args::App::ShowHelp()
+void args::App::showHelp()
 {
-    Cmd::ShowHelp();
+    Cmd::showHelp();
 }
 
 

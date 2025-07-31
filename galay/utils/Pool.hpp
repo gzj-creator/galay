@@ -40,11 +40,11 @@ public:
 
     ~ObjectPool();
 
-    std::unique_ptr<T, std::function<void(T*)>> Acquire();
+    std::unique_ptr<T, std::function<void(T*)>> acquire();
 
-    bool Preallocate(uint32_t count);
+    bool preallocate(uint32_t count);
     size_t size() const;
-    void Clear();
+    void clear();
 
 private:
     void destroy(T* obj);
@@ -56,6 +56,6 @@ private:
 
 } // namespace galay::utils
 
-#include "Pool.tcc"
+#include "Pool.inl"
 
 #endif // GALAY_POOL_HPP

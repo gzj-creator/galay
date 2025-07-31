@@ -13,7 +13,7 @@ CountSemaphore::CountSemaphore(uint64_t initcount,uint64_t capacity)
 }
 
 bool 
-CountSemaphore::Get(uint64_t count)
+CountSemaphore::get(uint64_t count)
 {
     std::unique_lock<std::mutex> lock(m_mtx);
     if(count > m_capacity) return false;
@@ -26,7 +26,7 @@ CountSemaphore::Get(uint64_t count)
 
 
 void 
-CountSemaphore::Put(uint64_t count)
+CountSemaphore::put(uint64_t count)
 {
     std::unique_lock<std::mutex> lock(m_mtx);
     //可以m_nowcount += count，因为Get和Put互斥，+=时Get无法进入，不存在m_nowcount > m_capacity时大流量包的误判
@@ -51,7 +51,7 @@ RateLimiter::start()
 {
     if(m_runing) return;
     m_runing = true;
-    m_deliveryThread = std::make_unique<std::thread>(std::bind(&RateLimiter::ProduceToken,this));
+    m_deliveryThread = std::make_unique<std::thread>(std::bind(&RateLimiter::produceToken,this));
 }
 
 void 
@@ -64,7 +64,7 @@ RateLimiter::stop()
 }
 
 void 
-RateLimiter::ProduceToken()
+RateLimiter::produceToken()
 {
     auto lastTime = std::chrono::steady_clock::now();
     while(m_runing)
@@ -74,14 +74,14 @@ RateLimiter::ProduceToken()
         auto elapseMs = std::chrono::duration<double,std::milli>(curTime - lastTime).count();
         lastTime = curTime;
         auto tokens = elapseMs * m_rate / 1000;
-        m_semaphore->Put(static_cast<uint64_t>(tokens));
+        m_semaphore->put(static_cast<uint64_t>(tokens));
     }
 }
 
 bool
-RateLimiter::Pass(uint64_t flow)
+RateLimiter::pass(uint64_t flow)
 {
-    return m_semaphore->Get(flow);
+    return m_semaphore->get(flow);
 }
 
 RateLimiter::~RateLimiter()

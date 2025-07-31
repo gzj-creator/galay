@@ -1,7 +1,6 @@
 project(test)
 file(GLOB SRC_LIST *.cc)
 
-find_library(ssl REQUIRED)
 
 set(COMMON_LIB ssl crypto)
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")

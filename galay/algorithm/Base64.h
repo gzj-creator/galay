@@ -26,27 +26,27 @@ namespace galay::algorithm
     class Base64Util
     {
     public:
-        static std::string Base64Encode(std::string const &s, bool url = false);
-        static std::string Base64EncodePem(std::string const &s);
-        static std::string Base64EncodeMime(std::string const &s);
+        static std::string base64Encode(std::string const &s, bool url = false);
+        static std::string base64EncodePem(std::string const &s);
+        static std::string base64EncodeMime(std::string const &s);
 
-        static std::string Base64Decode(std::string const &s, bool remove_linebreaks = false);
-        static std::string Base64Encode(unsigned char const *, size_t len, bool url = false);
+        static std::string base64Decode(std::string const &s, bool remove_linebreaks = false);
+        static std::string base64Encode(unsigned char const *, size_t len, bool url = false);
 
 #if __cplusplus >= 201703L
 
-        static std::string Base64Encode(std::string_view s, bool url = false);
-        static std::string Base64EncodePem(std::string_view s);
-        static std::string Base64EncodeMime(std::string_view s);
+        static std::string base64Encode(std::string_view s, bool url = false);
+        static std::string base64EncodePem(std::string_view s);
+        static std::string base64EncodeMime(std::string_view s);
 
-        static std::string Base64Decode(std::string_view s, bool remove_linebreaks = false);
+        static std::string base64Decode(std::string_view s, bool remove_linebreaks = false);
 #endif
     private:
         template <typename String>
-        static std::string Decode(String const &encoded_string, bool remove_linebreaks)
+        static std::string decode(String const &encoded_string, bool remove_linebreaks)
         {
             //
-            // Decode(…) is templated so that it can be used with String = const std::string&
+            // decode(…) is templated so that it can be used with String = const std::string&
             // or std::string_view (requires at least C++17)
             //
 
@@ -60,7 +60,7 @@ namespace galay::algorithm
 
                 copy.erase(std::remove(copy.begin(), copy.end(), '\n'), copy.end());
 
-                return Base64Decode(copy, false);
+                return base64Decode(copy, false);
             }
 
             size_t length_of_string = encoded_string.length();
@@ -129,7 +129,7 @@ namespace galay::algorithm
         static unsigned int pos_of_char(const unsigned char chr)
         {
             //
-            // Return the position of chr within Base64Encode()
+            // Return the position of chr within base64Encode()
             //
 
             if (chr >= 'A' && chr <= 'Z')
@@ -174,7 +174,7 @@ namespace galay::algorithm
         template <typename String, unsigned int line_length>
         static std::string encode_with_line_breaks(String s)
         {
-            return insert_linebreaks(Base64Encode(s, false), line_length);
+            return insert_linebreaks(base64Encode(s, false), line_length);
         }
 
         template <typename String>
@@ -190,9 +190,9 @@ namespace galay::algorithm
         }
 
         template <typename String>
-        static std::string Encode(String s, bool url)
+        static std::string encode(String s, bool url)
         {
-            return Base64Encode(reinterpret_cast<const unsigned char *>(s.data()), s.length(), url);
+            return base64Encode(reinterpret_cast<const unsigned char *>(s.data()), s.length(), url);
         }
     };
 

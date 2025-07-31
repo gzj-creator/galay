@@ -3,6 +3,7 @@
 
 #if defined(__linux__)
 struct GHandle {
+    static GHandle invalid() { return GHandle{}; }
     int fd = -1;
 };
 #elif defined(__APPLE__)

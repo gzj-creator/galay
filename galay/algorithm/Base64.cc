@@ -11,7 +11,7 @@ namespace galay::algorithm
 
 
 std::string 
-Base64Util::Base64Encode(unsigned char const* bytes_to_encode, size_t in_len, bool url) {
+Base64Util::base64Encode(unsigned char const* bytes_to_encode, size_t in_len, bool url) {
 
     size_t len_encoded = (in_len +2) / 3 * 4;
 
@@ -64,22 +64,22 @@ Base64Util::Base64Encode(unsigned char const* bytes_to_encode, size_t in_len, bo
 
 
 std::string 
-Base64Util::Base64Decode(std::string const& s, bool remove_linebreaks) {
-   return Decode(s, remove_linebreaks);
+Base64Util::base64Decode(std::string const& s, bool remove_linebreaks) {
+   return decode(s, remove_linebreaks);
 }
 
 std::string 
-Base64Util::Base64Encode(std::string const& s, bool url) {
-   return Encode(s, url);
+Base64Util::base64Encode(std::string const& s, bool url) {
+   return encode(s, url);
 }
 
 std::string 
-Base64Util::Base64EncodePem (std::string const& s) {
+Base64Util::base64EncodePem (std::string const& s) {
    return encode_pem(s);
 }
 
 std::string 
-Base64Util::Base64EncodeMime(std::string const& s) {
+Base64Util::base64EncodeMime(std::string const& s) {
    return encode_mime(s);
 }
 
@@ -91,23 +91,23 @@ Base64Util::Base64EncodeMime(std::string const& s) {
 //
 
 std::string 
-Base64Util::Base64Encode(std::string_view s, bool url) {
-   return Encode(s, url);
+Base64Util::base64Encode(std::string_view s, bool url) {
+   return encode(s, url);
 }
 
 std::string 
-Base64Util::Base64EncodePem(std::string_view s) {
+Base64Util::base64EncodePem(std::string_view s) {
    return encode_pem(s);
 }
 
 std::string 
-Base64Util::Base64EncodeMime(std::string_view s) {
+Base64Util::base64EncodeMime(std::string_view s) {
    return encode_mime(s);
 }
 
 std::string 
-Base64Util::Base64Decode(std::string_view s, bool remove_linebreaks) {
-   return Decode(s, remove_linebreaks);
+Base64Util::base64Decode(std::string_view s, bool remove_linebreaks) {
+   return decode(s, remove_linebreaks);
 }
 
 #endif  // __cplusplus >= 201703L

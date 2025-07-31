@@ -25,12 +25,12 @@
 namespace galay::utils
 {
 
-int64_t GetCurrentTimeMs()
+int64_t getCurrentTimeMs()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-std::string GetCurrentGMTTimeString()
+std::string getCurrentGMTTimeString()
 {
     std::time_t now = std::time(nullptr);
     std::tm *gmt_time = std::gmtime(&now);
@@ -44,7 +44,7 @@ std::string GetCurrentGMTTimeString()
 }
 
 std::string 
-ReadFile(const std::string& FileName, bool IsBinary)
+readFile(const std::string& FileName, bool IsBinary)
 {
     std::ifstream in;
     if(IsBinary){
@@ -53,7 +53,11 @@ ReadFile(const std::string& FileName, bool IsBinary)
         in.open(FileName);
     }
     if(in.fail()) {
-        std::string str = std::format("ReadFile: Failed to open file: {}\n", FileName);
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
+        std::string str = std::format("failed to open file: {}\n", FileName);
+#else
+        std::string str = "failed to open file: " + FileName;
+#endif
         throw std::runtime_error(str);
     }
     uintmax_t size = std::filesystem::file_size(FileName);
@@ -66,7 +70,7 @@ ReadFile(const std::string& FileName, bool IsBinary)
 }
 
 void 
-WriteFile(const std::string& FileName,const std::string& Content, bool IsBinary)
+writeFile(const std::string& FileName,const std::string& Content, bool IsBinary)
 {
     std::ofstream out;
     if(IsBinary){
@@ -76,7 +80,11 @@ WriteFile(const std::string& FileName,const std::string& Content, bool IsBinary)
     }
     if(out.fail()){
         std::string path = std::filesystem::current_path();
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[Open file: {} failed , now path is {}]", FileName, path);
+#else
+        std::string str = "[" + FileName + "open failed , now path is " + path + "]";
+#endif
         throw std::runtime_error(str);
     }
     out.write(Content.c_str(),Content.length());
@@ -85,24 +93,36 @@ WriteFile(const std::string& FileName,const std::string& Content, bool IsBinary)
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
 std::string 
-ZeroReadFile(const std::string &FileName)
+zeroReadFile(const std::string &FileName)
 {
     int fd = open(FileName.c_str(),O_RDONLY);
     if(fd == -1){
         std::string path = std::filesystem::current_path();
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[Open file: {} failed , now path is {}]", FileName, path);
+#else
+        std::string str = "[" + FileName + "open failed , now path is " + path + "]";
+#endif
         throw std::runtime_error(str);
     }
     DEFER { close(fd); };
     struct stat st;
     if(fstat(fd,&st) == -1){
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[{} stat failed]", FileName);
+#else
+        std::string str = "[" + FileName + "stat failed]";
+#endif
         throw  std::runtime_error(str);
     }
     char *p = reinterpret_cast<char*>(mmap(nullptr,st.st_size,PROT_READ,MAP_PRIVATE,fd,0));
     if( p == MAP_FAILED) 
     {
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[{} mmap failed]", FileName);
+#else
+        std::string str = "[" + FileName + "mmap failed]";
+#endif
         throw  std::runtime_error(str);
     }
     std::string res(p,st.st_size);
@@ -112,43 +132,63 @@ ZeroReadFile(const std::string &FileName)
 
 
 void 
-ZeroWriteFile(const std::string &FileName, const std::string &Content ,bool IsBinary)
+zeroWriteFile(const std::string &FileName, const std::string &Content ,bool IsBinary)
 {
     int fd = open(FileName.c_str(),O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
     if(fd == -1) {
         std::string path = std::filesystem::current_path();
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[Open file: {} failed, now path is {}]", FileName,path);
+#else
+        std::string str = "[Open file: " + FileName + " failed, now path is " + path + "]";
+#endif
         throw std::runtime_error(str);
     }
     DEFER { close(fd); };
     if(ftruncate(fd,Content.size()) == -1){
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[Truncate file: {} failed]", FileName);
+#else
+        std::string str = "[Truncate file: " + FileName + " failed]";
+#endif
         throw std::runtime_error(str);
     }
     char* p = reinterpret_cast<char*>(mmap(nullptr,Content.size(),PROT_READ | PROT_WRITE,MAP_SHARED,fd,0));
     if (p == MAP_FAILED) {
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[Mmap file: {} failed]", FileName);
+#else
+        std::string str = "[Mmap file: " + FileName + " failed]";
+#endif
         throw std::runtime_error(str);
     }
     memcpy(p, Content.c_str(), Content.size());
     if (msync(p,Content.size(),MS_SYNC) == -1) {
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         std::string str = std::format("[Msync file: {} failed]", FileName);
+#else
+        std::string str = "[Open file: " + FileName + " failed]";
+#endif
         throw std::runtime_error(str);
     }
     if (munmap(p,Content.size()) == -1) {
-        std::string str = std::format("[Munmap file: {} failed]", FileName);
+#if defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
+        std::string str = std::format("[Open file: {} failed]", FileName);
+#else
+        std::string str = "[Open file: " + FileName + " failed]";
+#endif
         throw std::runtime_error(str);
     }
 }
 
 #endif
 
-std::string GetEnvValue(const std::string &name)
+std::string getEnvValue(const std::string &name)
 {
     return std::getenv(name.c_str());;
 }
 
-std::string GetHostIPV4(const std::string &domain) {
+std::string getHostIPV4(const std::string &domain) {
     struct addrinfo hints, *res, *p;
     int status;
     char ipstr[INET_ADDRSTRLEN];
@@ -212,7 +252,7 @@ bool isValidDomain(const std::string& domain) {
 }
 
 // 主判断函数
-AddressType CheckAddressType(const std::string& input) {
+AddressType checkAddressType(const std::string& input) {
     struct sockaddr_in sa4;
     struct sockaddr_in6 sa6;
 

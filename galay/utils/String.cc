@@ -3,7 +3,7 @@
 namespace galay::utils
 {
 std::vector<std::string> 
-StringSplitter::SpiltWithChar(const std::string &str, const char symbol)
+StringSplitter::spiltWithChar(const std::string &str, const char symbol)
 {
     std::vector<std::string> result;
     for (int i = 0; i < str.size(); i++)
@@ -22,7 +22,7 @@ StringSplitter::SpiltWithChar(const std::string &str, const char symbol)
 
 
 std::vector<std::string>
-StringSplitter::SpiltWithStr(const std::string &str, const std::string& symbol)
+StringSplitter::spiltWithStr(const std::string &str, const std::string& symbol)
 {
     std::vector<std::string> result;
     if (symbol.empty())
@@ -43,7 +43,7 @@ StringSplitter::SpiltWithStr(const std::string &str, const std::string& symbol)
 
 
 std::vector<std::string> 
-StringSplitter::SpiltWithCharAndConnectWithchar(const std::string &str, const char partition, const char connction)
+StringSplitter::spiltWithCharAndConnectWithchar(const std::string &str, const char partition, const char connction)
 {
     int beg = 0, end = 0;
     uint16_t status = 0;
@@ -113,7 +113,7 @@ StringSplitter::SpiltWithCharAndConnectWithchar(const std::string &str, const ch
 
 #if __cplusplus >= 201703L
 std::vector<std::string_view> 
-StringSplitter::SpiltWithChar(std::string_view str, const char symbol)
+StringSplitter::spiltWithChar(std::string_view str, const char symbol)
 {
     std::vector<std::string_view> result;
     for (int i = 0; i < str.size(); i++)
@@ -131,7 +131,7 @@ StringSplitter::SpiltWithChar(std::string_view str, const char symbol)
 }
 
 std::vector<std::string_view> 
-StringSplitter::SpiltWithStr(std::string_view str, std::string_view symbol)
+StringSplitter::spiltWithStr(std::string_view str, std::string_view symbol)
 {
     std::vector<std::string_view> result;
     if (symbol.empty())
@@ -151,7 +151,7 @@ StringSplitter::SpiltWithStr(std::string_view str, std::string_view symbol)
 }
 
 std::vector<std::string_view> 
-StringSplitter::SpiltWithCharAndConnectWithchar(std::string_view str, const char partition, const char connction)
+StringSplitter::spiltWithCharAndConnectWithchar(std::string_view str, const char partition, const char connction)
 {
     int beg = 0, end = 0;
     uint16_t status = 0;

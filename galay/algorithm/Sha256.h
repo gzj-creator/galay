@@ -18,9 +18,9 @@ namespace galay::algorithm
     class Sha256Util
     {
     public:
-        static std::string Encode(const std::string &str);
+        static std::string encode(const std::string &str);
 #if __cplusplus >= 201703L
-        static std::string Encode(std::string_view str);
+        static std::string encode(std::string_view str);
 #endif
     };
 

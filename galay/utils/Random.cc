@@ -4,7 +4,7 @@
 namespace galay::utils
 {
 int 
-Randomizer::RandomInt(int RandomMin,int RandomMax)
+Randomizer::randomInt(int RandomMin,int RandomMax)
 {
     std::random_device rd;
     std::mt19937_64 gen(rd());
@@ -13,7 +13,7 @@ Randomizer::RandomInt(int RandomMin,int RandomMax)
 }
 
 uint32_t 
-Randomizer::RandomUint32(uint32_t RandomMin, uint32_t RandomMax)
+Randomizer::randomUint32(uint32_t RandomMin, uint32_t RandomMax)
 {
     std::random_device rd;
     std::mt19937_64 gen(rd());
@@ -22,7 +22,7 @@ Randomizer::RandomUint32(uint32_t RandomMin, uint32_t RandomMax)
 }
 
 uint64_t 
-Randomizer::RandomUint64(uint64_t RandomMin, uint64_t RandomMax)
+Randomizer::randomUint64(uint64_t RandomMin, uint64_t RandomMax)
 {
     std::random_device rd;
     std::mt19937_64 gen(rd());
@@ -31,7 +31,7 @@ Randomizer::RandomUint64(uint64_t RandomMin, uint64_t RandomMax)
 }
 
 double 
-Randomizer::RandomDouble(double RandomMin, double RandomMax)
+Randomizer::randomDouble(double RandomMin, double RandomMax)
 {
     std::random_device rd;
     std::mt19937_64 gen(rd());

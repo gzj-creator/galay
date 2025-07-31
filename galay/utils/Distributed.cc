@@ -2,7 +2,7 @@
 
 namespace galay::utils 
 {
-void ConsistentHash::AddNode(const NodeConfig &config)
+void ConsistentHash::addNode(const NodeConfig &config)
 {
     std::unique_lock lock(mutex_);
         
@@ -12,10 +12,10 @@ void ConsistentHash::AddNode(const NodeConfig &config)
     };
     
     nodes_.emplace_back(std::move(node));
-    AddVirtualNodes(nodes_.back());
+    addVirtualNodes(nodes_.back());
 }
 
-bool ConsistentHash::RemoveNode(const std::string &node_id)
+bool ConsistentHash::removeNode(const std::string &node_id)
 {
     std::unique_lock lock(mutex_);    
     auto it = std::find_if(nodes_.begin(), nodes_.end(),
@@ -23,12 +23,12 @@ bool ConsistentHash::RemoveNode(const std::string &node_id)
     
     if (it == nodes_.end()) return false;
     
-    RemoveVirtualNodes(*it);
+    removeVirtualNodes(*it);
     nodes_.erase(it);
     return true;
 }
 
-NodeStatus ConsistentHash::GetNodeStatus(const std::string &node_id)
+NodeStatus ConsistentHash::getNodeStatus(const std::string &node_id)
 {
     std::shared_lock lock(mutex_);
         
@@ -39,7 +39,7 @@ NodeStatus ConsistentHash::GetNodeStatus(const std::string &node_id)
     return it->status; 
 }
 
-void ConsistentHash::UpdateNodeHealth(const std::string &node_id, bool healthy)
+void ConsistentHash::updateNodeHealth(const std::string &node_id, bool healthy)
 {
     std::unique_lock lock(mutex_);
         
@@ -51,12 +51,12 @@ void ConsistentHash::UpdateNodeHealth(const std::string &node_id, bool healthy)
     }
 }
 
-std::string ConsistentHash::GetNode(const std::string &key, int max_retry)
+std::string ConsistentHash::getNode(const std::string &key, int max_retry)
 {
     std::shared_lock lock(mutex_);
     if (ring_.empty()) return "";
     
-    uint32_t base_hash = CalculateHash(key);
+    uint32_t base_hash = calculateHash(key);
     uint32_t current_hash = base_hash;
     int tried = 0;
 
@@ -80,29 +80,29 @@ std::string ConsistentHash::GetNode(const std::string &key, int max_retry)
     return "";  // 所有尝试失败
 }
 
-uint32_t ConsistentHash::CalculateHash(const std::string &key)
+uint32_t ConsistentHash::calculateHash(const std::string &key)
 {
 #if defined(__x86_64__) || defined(_M_X64)
     uint64_t hash[2];
-    algorithm::MurmurHash3_x64_128(key.data(), key.size(), hash_seed_, hash);
+    algorithm::murmurHash3_x64_128(key.data(), key.size(), hash_seed_, hash);
     return static_cast<uint32_t>(hash[0] ^ hash[1]);
 #else
     uint32_t hash;
-    algorithm::MurmurHash3_x86_32(key.data(), key.size(), hash_seed_, &hash);
+    algorithm::murmurHash3_x86_32(key.data(), key.size(), hash_seed_, &hash);
     return hash;
 #endif
 }
 
-void ConsistentHash::AddVirtualNodes(PhysicalNode &node)
+void ConsistentHash::addVirtualNodes(PhysicalNode &node)
 {
     for (size_t i = 0; i < virtual_nodes_ * node.config.weight; ++i) {
         std::string vnode = node.config.id + "#" + std::to_string(i);
-        uint32_t hash = CalculateHash(vnode);
+        uint32_t hash = calculateHash(vnode);
         ring_.emplace(hash, &node);
     }
 }
 
-void ConsistentHash::RemoveVirtualNodes(const PhysicalNode &node)
+void ConsistentHash::removeVirtualNodes(const PhysicalNode &node)
 {
     auto it = ring_.begin();
     while (it != ring_.end()) {

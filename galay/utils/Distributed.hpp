@@ -54,23 +54,23 @@ public:
         : virtual_nodes_(virtual_nodes), hash_seed_(seed) {}
 
     // 添加节点（线程安全）
-    void AddNode(const NodeConfig& config);
+    void addNode(const NodeConfig& config);
 
     // 删除节点（线程安全）
-    bool RemoveNode(const std::string& node_id);
+    bool removeNode(const std::string& node_id);
 
     // 获取节点状态（线程安全）
-    NodeStatus GetNodeStatus(const std::string& node_id);
+    NodeStatus getNodeStatus(const std::string& node_id);
 
     // 更新节点健康状态（线程安全）
-    void UpdateNodeHealth(const std::string& node_id, bool healthy);
+    void updateNodeHealth(const std::string& node_id, bool healthy);
     // 查找节点（带健康检查重试）
-    std::string GetNode(const std::string& key, int max_retry = 3);
+    std::string getNode(const std::string& key, int max_retry = 3);
 private:
     // 哈希计算分发
-    uint32_t CalculateHash(const std::string& key);
-    void AddVirtualNodes(PhysicalNode& node);
-    void RemoveVirtualNodes(const PhysicalNode& node);
+    uint32_t calculateHash(const std::string& key);
+    void addVirtualNodes(PhysicalNode& node);
+    void removeVirtualNodes(const PhysicalNode& node);
 
 private:
     std::map<uint32_t, PhysicalNode*> ring_;  // 哈希环

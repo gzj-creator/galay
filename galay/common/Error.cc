@@ -6,19 +6,19 @@ namespace galay::error
 
     const char* error_string[] = {
         "no error",
+        "connection is closed by peer",
         "call scoket function error",
         "call bind function error",
         "call listen function error",
         "call accept function error",
         "call connect function error",
         "call recv function error",
-        "call recvfrom function error"
+        "call recvfrom function error",
         "call send function error",
         "call sendto function error",
         "call sendfile function error",
         "call close function error",
-        "connection is closed by peer",
-        "call ssl_new function error"
+        "call ssl_new function error",
         "call ssl_set_sd function error",
         "call ssl_handshake function error",
         "call ssl_shutdown function error",
@@ -60,7 +60,8 @@ namespace galay::error
 
     uint64_t SystemError::makeErrorCode(uint32_t galay_code, uint32_t system_code)
     {
-        uint64_t ret = system_code << 32;
+        uint64_t ret = system_code;
+        ret = ret << 32;
         return ret | galay_code;
     }
     

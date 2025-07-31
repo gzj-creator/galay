@@ -12,7 +12,7 @@
 namespace galay::utils 
 {
 
-class CircuitBreaker 
+class circuitBreaker 
 {
 public:
     enum class State { CLOSED, OPEN, HALF_OPEN };
@@ -25,7 +25,7 @@ public:
         uint32_t sliding_window_size = 10;   // 滑动窗口大小
     };
 
-    explicit CircuitBreaker(Config config) 
+    explicit circuitBreaker(Config config) 
         : config_(std::move(config)),
             state_(State::CLOSED),
             failure_count_(0),

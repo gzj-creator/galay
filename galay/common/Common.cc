@@ -108,7 +108,7 @@ namespace galay
         int ret = ioctlsocket(m_handle, FIONBIO, &mode);
     #endif
         if (ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::Error_SetBlockError, errno);
+            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetBlockError, errno);
             return false;
         }
         return true;
@@ -126,7 +126,7 @@ namespace galay
         int ret = ioctlsocket(m_handle.fd, FIONBIO, &mode);
     #endif
         if (ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::Error_SetNoBlockError, errno);
+            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetNoBlockError, errno);
             return false;
         }
         return true;
@@ -143,7 +143,7 @@ namespace galay
         int ret = setsockopt(m_handle.fd, SOL_SOCKET, SO_REUSEADDR, (char*)&option, sizeof(option));
     #endif
         if (ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::Error_SetSockOptError, errno);
+            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetSockOptError, errno);
             return false;
         }
         return true;
@@ -155,7 +155,7 @@ namespace galay
     #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
         constexpr int option = 1;
         if (const int ret = setsockopt(m_handle.fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option)); ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::Error_SetSockOptError, errno);
+            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetSockOptError, errno);
             return false;
         }
     #elif  defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)

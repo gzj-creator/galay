@@ -69,7 +69,7 @@ namespace galay {
         bool success = true;
         m_ctx.m_handle.fd = ::socket(AF_INET, SOCK_STREAM, 0);
         if (m_ctx.m_handle.fd < 0) {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_SocketError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallSocketError, errno);
             success = false;
             makeValue(wrapper, std::move(success), error);
             return wrapper;
@@ -99,7 +99,7 @@ namespace galay {
         else addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::bind(m_ctx.m_handle.fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(addr_in)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_BindError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallBindError, errno);
             success = false;
         }
         makeValue(wrapper, std::move(success), error);
@@ -115,7 +115,7 @@ namespace galay {
         bool success = true;
         if(::listen(m_ctx.m_handle.fd, backlog))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_ListenError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallListenError, errno);
             success = false;
         }
         makeValue(wrapper, std::move(success), error);
@@ -162,7 +162,7 @@ namespace galay {
         sockaddr_storage addr{};
         socklen_t len = sizeof(addr);
         if (getsockname(m_ctx.m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::Error_GetSockNameError, errno);
+            error = std::make_shared<SystemError>(error::CallGetSockNameError, errno);
             makeValue(wrapper, SockAddr(), error);
             return wrapper;
         }
@@ -179,7 +179,7 @@ namespace galay {
         socklen_t len = sizeof(addr);
 
         if (getpeername(m_ctx.m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::Error_GetPeerNameError, errno);
+            error = std::make_shared<SystemError>(error::CallGetPeerNameError, errno);
             makeValue(wrapper, SockAddr(), error);
             return wrapper;
         }
@@ -217,7 +217,7 @@ namespace galay {
         bool success = true;
         m_ctx.m_handle.fd = ::socket(AF_INET, SOCK_DGRAM, 0);
         if (m_ctx.m_handle.fd < 0) {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_SocketError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallSocketError, errno);
             success = false;
             makeValue(wrapper, std::move(success), error);
             return wrapper;
@@ -248,7 +248,7 @@ namespace galay {
         else addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::bind(m_ctx.m_handle.fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(sockaddr)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_BindError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallBindError, errno);
             success = false;
         }
         makeValue(wrapper, std::move(success), error);
@@ -266,14 +266,14 @@ namespace galay {
         addr_in.sin_port = htons(addr.port);
         if(addr.ip.empty())
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_ConnectError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallConnectError, errno);
             success = false;
             goto end;
         }
         addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::connect(m_ctx.m_handle.fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(sockaddr)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_ConnectError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallConnectError, errno);
             success = false;
         }
         end:
@@ -305,7 +305,7 @@ namespace galay {
         Error::ptr error = nullptr;
         SockAddr saddr {};
         if (getsockname(m_ctx.m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::Error_GetSockNameError, errno);
+            error = std::make_shared<SystemError>(error::CallGetSockNameError, errno);
         } else {
             saddr = SockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
         }
@@ -322,7 +322,7 @@ namespace galay {
         Error::ptr error = nullptr;
         SockAddr saddr {};
         if (getpeername(m_ctx.m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::Error_GetPeerNameError, errno);
+            error = std::make_shared<SystemError>(error::CallGetPeerNameError, errno);
         } else {
             saddr = SockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
         }
@@ -371,7 +371,7 @@ namespace galay {
         GHandle handle;
         handle.fd = ::socket(AF_INET, SOCK_STREAM, 0);
         if (handle.fd < 0) {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_SocketError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallSocketError, errno);
             success = false;
             makeValue(wrapper, std::move(success), error);
             return wrapper;
@@ -388,7 +388,7 @@ namespace galay {
         }
         m_ctx.m_ssl = SSL_new(getGlobalSSLCtx());
         if(m_ctx.m_ssl == nullptr) {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_SSLNewError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallSSLNewError, errno);
             success = false;
             makeValue(wrapper, std::move(success), error);
             return wrapper;
@@ -412,7 +412,7 @@ namespace galay {
         else addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::bind(getHandle().fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(sockaddr)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_BindError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallBindError, errno);
             success = false;
         }
         makeValue(wrapper, std::move(success), error);
@@ -427,7 +427,7 @@ namespace galay {
         bool success = true;
         if(::listen(getHandle().fd, backlog))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::Error_ListenError, errno);
+            error = std::make_shared<SystemError>(error::ErrorCode::CallListenError, errno);
             success = false;
         }
         makeValue(wrapper, std::move(success), error);

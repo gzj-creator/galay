@@ -50,7 +50,7 @@ namespace galay {
         void consume(CoroutineActionType type, CoroutineBase::wptr co) override;
         void stop() override;
     private:
-        void Run();
+        void run();
     private:
         std::thread m_thread;
         moodycamel::BlockingConcurrentQueue<std::pair<CoroutineActionType, CoroutineBase::wptr>> m_queue;

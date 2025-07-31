@@ -30,7 +30,7 @@ template <IsObject T>
 ObjectPool<T>& ObjectPool<T>::operator=(ObjectPool&& other) noexcept
 {
     if (this != &other) {
-        Clear();
+        clear();
         m_createFunc = std::move(other.m_createFunc);
         m_destroyFunc = std::move(other.m_destroyFunc);
         m_queue = std::move(other.m_queue);
@@ -41,11 +41,11 @@ ObjectPool<T>& ObjectPool<T>::operator=(ObjectPool&& other) noexcept
 template <IsObject T>
 ObjectPool<T>::~ObjectPool()
 {
-    Clear();
+    clear();
 }
 
 template <IsObject T>
-std::unique_ptr<T, std::function<void(T*)>> ObjectPool<T>::Acquire()
+std::unique_ptr<T, std::function<void(T*)>> ObjectPool<T>::acquire()
 {
     T* obj = nullptr;
     if (!m_queue.try_dequeue(obj)) {
@@ -56,7 +56,7 @@ std::unique_ptr<T, std::function<void(T*)>> ObjectPool<T>::Acquire()
 }
 
 template <IsObject T>
-bool ObjectPool<T>::Preallocate(uint32_t count)
+bool ObjectPool<T>::preallocate(uint32_t count)
 {
     try {
         for (uint32_t i = 0; i < count; ++i) {
@@ -75,7 +75,7 @@ size_t ObjectPool<T>::size() const
 }
 
 template <IsObject T>
-void ObjectPool<T>::Clear()
+void ObjectPool<T>::clear()
 {
     T* obj = nullptr;
     while (m_queue.try_dequeue(obj)) {

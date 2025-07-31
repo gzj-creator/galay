@@ -37,10 +37,10 @@ class ArgInputType
 {
 public:
     ArgInputType(Arg* arg);
-    void IsInt();
-    void IsFloat();
-    void IsDouble();
-    void IsString();
+    void isInt();
+    void isFloat();
+    void isDouble();
+    void isString();
 private:
     Arg* m_arg;
 };
@@ -50,7 +50,7 @@ class InputValue
 public:
     InputValue(Arg* arg);
     template<ArgInputAcceptType T>
-    T ConvertTo() const;
+    T convertTo() const;
 private:
     Arg* m_arg;
 };
@@ -67,19 +67,19 @@ public:
     static Arg::ptr create(const std::string& name);
 
     Arg(const std::string& name);
-    Arg& Short(char short_name);
+    Arg& shortcut(char short_name);
     //default input type is String
-    ArgInputType Input(bool input);
-    Arg& Output(const std::string& output);
-    Arg& Required(bool required);
-    Arg& Unique(bool unique);
-    Arg& Success(std::function<void(Arg*)>&& callback);
+    ArgInputType input(bool input);
+    Arg& output(const std::string& output);
+    Arg& required(bool required);
+    Arg& unique(bool unique);
+    Arg& success(std::function<void(Arg*)>&& callback);
     //callback [in] errmsg, replace print
-    Arg& Failure(std::function<void(std::string)>&& callback);
+    Arg& failure(std::function<void(std::string)>&& callback);
     // replace Failure's callback
-    Arg& PrintError();
+    Arg& printError();
 
-    InputValue Value();
+    InputValue value();
 private:
     Cmd* m_cmd = nullptr;
     std::string m_name;
@@ -107,15 +107,15 @@ public:
     static Cmd::uptr create(const std::string& name);
     
     Cmd(const std::string& name);
-    Cmd& AddCmd(Cmd::uptr cmd);
-    Cmd& AddArg(Arg::ptr arg);
-    void Help(const std::string& help_str);
+    Cmd& addCmd(Cmd::uptr cmd);
+    Cmd& addArg(Arg::ptr arg);
+    void help(const std::string& help_str);
 
-    void ShowHelp();
+    void showHelp();
 protected:
-    bool Collect(Arg::ptr arg);
+    bool collect(Arg::ptr arg);
 
-    bool Parse(int argc, int index, const char** argv);
+    bool parse(int argc, int index, const char** argv);
 protected:
     std::string m_name;
 
@@ -132,14 +132,14 @@ class App: public Cmd
     friend class Arg;
 public:
     App(const std::string& name); 
-    bool Parse(int argc, const char** argv);
-    void Help(const std::string& help_str);
+    bool parse(int argc, const char** argv);
+    void help(const std::string& help_str);
 
-    void ShowHelp();
+    void showHelp();
 };
 
 template <>
-inline int InputValue::ConvertTo() const
+inline int InputValue::convertTo() const
 {
     if(!m_arg->m_value.has_value()) throw std::runtime_error("no input value");
     try {
@@ -151,7 +151,7 @@ inline int InputValue::ConvertTo() const
 }
 
 template <>
-inline uint32_t InputValue::ConvertTo() const
+inline uint32_t InputValue::convertTo() const
 {
     if(!m_arg->m_value.has_value()) throw std::runtime_error("no input value");
     try {
@@ -163,7 +163,7 @@ inline uint32_t InputValue::ConvertTo() const
 }
 
 template <>
-inline float InputValue::ConvertTo() const
+inline float InputValue::convertTo() const
 {
     if(!m_arg->m_value.has_value()) throw std::runtime_error("no input value");
     try {
@@ -175,7 +175,7 @@ inline float InputValue::ConvertTo() const
 }
 
 template <>
-inline double InputValue::ConvertTo() const
+inline double InputValue::convertTo() const
 {
     if(!m_arg->m_value.has_value()) throw std::runtime_error("no input value");
     try {
@@ -187,7 +187,7 @@ inline double InputValue::ConvertTo() const
 }
 
 template <>
-inline std::string InputValue::ConvertTo() const
+inline std::string InputValue::convertTo() const
 {
     if(!m_arg->m_value.has_value()) throw std::runtime_error("no input value");
     return m_arg->m_value.value();

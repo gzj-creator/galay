@@ -10,7 +10,7 @@ namespace galay
 #if defined(__linux__) || defined(__APPLE__) 
         const int fd = ::open(path.c_str(), flags.getFlags(), modes.getModes());
         if( fd < 0 ) {
-            error = std::make_shared<SystemError>(ErrorCode::Error_OpenError, errno);
+            error = std::make_shared<SystemError>(ErrorCode::CallOpenError, errno);
             makeValue(wrapper, false, error);
             return wrapper;
         }

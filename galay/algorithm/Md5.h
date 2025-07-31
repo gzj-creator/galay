@@ -15,9 +15,9 @@ namespace galay::algorithm
     class Md5Util
     {
     public:
-        static std::string Encode(std::string const &str);
+        static std::string encode(std::string const &str);
 #if __cplusplus >= 201703L
-        static std::string Encode(std::string_view str);
+        static std::string encode(std::string_view str);
 #endif
     };
 }

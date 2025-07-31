@@ -19,7 +19,7 @@ inline Mvcc<T>::Mvcc(size_t initial_hash_size)
 }
 
 template <typename T>
-inline std::optional<VersionedValue<T>> Mvcc<T>::GetValue(Version version)
+inline std::optional<VersionedValue<T>> Mvcc<T>::getValue(Version version)
 {
     std::shared_lock lock(m_mutex);
     auto it = m_versioned_values.find(version);
@@ -30,13 +30,13 @@ inline std::optional<VersionedValue<T>> Mvcc<T>::GetValue(Version version)
 }
 
 template <typename T>
-inline std::optional<VersionedValue<T>> Mvcc<T>::GetCurrentValue()
+inline std::optional<VersionedValue<T>> Mvcc<T>::getCurrentValue()
 {
-    return GetValue(m_current_version.load());
+    return getValue(m_current_version.load());
 }
 
 template <typename T>
-inline bool Mvcc<T>::PutValue(T *value)
+inline bool Mvcc<T>::putValue(T *value)
 {
     Version old_version = m_current_version.load();
     if(!m_current_version.compare_exchange_strong(old_version, old_version + 1)) {
@@ -48,7 +48,7 @@ inline bool Mvcc<T>::PutValue(T *value)
 }
 
 template <typename T>
-inline bool Mvcc<T>::RemoveValue(Version version)
+inline bool Mvcc<T>::removeValue(Version version)
 {
     std::unique_lock<std::shared_mutex> lock(m_mutex);
     auto it = m_versioned_values.find(version);
@@ -60,7 +60,7 @@ inline bool Mvcc<T>::RemoveValue(Version version)
 }
 
 template <typename T>
-inline bool Mvcc<T>::IsValid(Version old_version)
+inline bool Mvcc<T>::isValid(Version old_version)
 {
     std::shared_lock lock(m_mutex);
     auto it = m_versioned_values.find(old_version);

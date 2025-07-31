@@ -8,7 +8,7 @@ namespace galay::algorithm
 std::string 
 Salt::create(int SaltLenMin,int SaltLenMax)
 {
-    int saltlen = utils::Randomizer::RandomInt(SaltLenMin,SaltLenMax);
+    int saltlen = utils::Randomizer::randomInt(SaltLenMin,SaltLenMax);
     unsigned char* salt = new unsigned char[saltlen];
     bzero(salt,saltlen);
     RAND_bytes(salt,saltlen);

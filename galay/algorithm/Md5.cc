@@ -3,7 +3,7 @@
 namespace galay::algorithm
 {
     std::string 
-    Md5Util::Encode(std::string const& str)
+    Md5Util::encode(std::string const& str)
     {
         unsigned char digest[MD5_DIGEST_LENGTH];
         memset(digest,0,MD5_DIGEST_LENGTH);
@@ -21,7 +21,7 @@ namespace galay::algorithm
 
     #if __cplusplus >= 201703L
     std::string 
-    Md5Util::Encode(std::string_view str)
+    Md5Util::encode(std::string_view str)
     {
         unsigned char digest[MD5_DIGEST_LENGTH];
         memset(digest,0,MD5_DIGEST_LENGTH);

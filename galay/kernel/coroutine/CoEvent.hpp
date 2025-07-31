@@ -17,7 +17,7 @@ public:
     SyncWrapper(SyncWrapper&& other) noexcept : m_value(std::move(other.m_value)) {} // 移动构造函数
     bool pass();
     void setValue(T&& value);
-    std::optional<T>& Value();
+    std::optional<T>& value();
 private:
     std::optional<T> m_value;
     std::atomic_flag m_flag = ATOMIC_FLAG_INIT;
@@ -36,7 +36,7 @@ void SyncWrapper<T>::setValue(T&& value)
 }
 
 template<CoType T>
-std::optional<T>& SyncWrapper<T>::Value()
+std::optional<T>& SyncWrapper<T>::value()
 {
     return m_value;
 }
@@ -101,7 +101,7 @@ public:
     TimeoutEvent(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func)
         : AsyncEvent<SyncWrapper<T>>(), m_func(func), m_ms(ms) {}
     bool ready() override {
-        if(m_ms <= 0) return true;
+        if(m_ms.count() <= 0) return true;
         return false;
     }
 

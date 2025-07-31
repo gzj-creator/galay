@@ -22,13 +22,13 @@ namespace galay::utils
     public:
         TrieTree();
         virtual ~TrieTree();
-        void Add(const std::string& word);
-        bool Contains(const std::string& word);
-        uint32_t Query(const std::string& word);
-        void Remove(const std::string& word);
-        std::vector<std::string> GetWordByPrefix(const std::string& prefix);
+        void add(const std::string& word);
+        bool contains(const std::string& word);
+        uint32_t query(const std::string& word);
+        void remove(const std::string& word);
+        std::vector<std::string> getWordByPrefix(const std::string& prefix);
     private:
-        void PreOrder(TrieNode* node, std::string word, std::vector<std::string>& words);
+        void preOrder(TrieNode* node, std::string word, std::vector<std::string>& words);
     private:
         TrieNode* m_root;
     };

@@ -29,8 +29,8 @@ class ThreadWaiters
 public:
     using ptr = std::shared_ptr<ThreadWaiters>;
     ThreadWaiters(int num);
-    bool Wait(int timeout = -1); //ms
-    bool Decrease();
+    bool wait(int timeout = -1); //ms
+    bool decrease();
 private:
     std::mutex m_mutex;
     std::atomic_int m_num;
@@ -40,8 +40,8 @@ private:
 class ScrambleThreadPool
 {
 private:
-    void Run();
-    void Done();
+    void run();
+    void done();
 public:
     using ptr = std::shared_ptr<ScrambleThreadPool>;
     using wptr = std::weak_ptr<ScrambleThreadPool>;
@@ -51,7 +51,7 @@ public:
     template <typename F, typename... Args>
     inline auto addTask(F &&f, Args &&...args) -> std::future<decltype(f(args...))>;
     void start(int num);
-    bool WaitForAllDone(uint32_t timeout = 0);
+    bool waitForAllDone(uint32_t timeout = 0);
     bool isDone();
     void stop();
     ~ScrambleThreadPool();
@@ -117,7 +117,7 @@ public:
         m_size.store(0);
     }
 
-    ListNode<T>* PushFront(const T& data)
+    ListNode<T>* pushFront(const T& data)
     {
         std::unique_lock lock(this->m_mtx);
         ListNode<T>* node = new ListNode<T>(data);
@@ -129,7 +129,7 @@ public:
         return node;
     }
 
-    ListNode<T>* PushFront(T&& data)
+    ListNode<T>* pushFront(T&& data)
     {
         std::unique_lock lock(this->m_mtx);
         ListNode<T>* node = new ListNode<T>(std::forward<T>(data));
@@ -141,7 +141,7 @@ public:
         return node;
     }
 
-    ListNode<T>* PushBack(const T& data)
+    ListNode<T>* pushBack(const T& data)
     {
         std::unique_lock lock(this->m_mtx);
         ListNode<T>* node = new ListNode<T>(data);
@@ -153,7 +153,7 @@ public:
         return node;
     }
 
-    ListNode<T>* PushBack(T&& data)
+    ListNode<T>* pushBack(T&& data)
     {
         std::unique_lock lock(this->m_mtx);
         ListNode<T>* node = new ListNode<T>(std::forward<T>(data));
@@ -165,7 +165,7 @@ public:
         return node;
     }
 
-    ListNode<T>* PopFront()
+    ListNode<T>* popFront()
     {
         std::unique_lock lock(this->m_mtx);
         if( m_size.load() <= 0 ) return nullptr;
@@ -178,7 +178,7 @@ public:
         return node;
     }
 
-    ListNode<T>* PopBack()
+    ListNode<T>* popBack()
     {
         std::unique_lock lock(this->m_mtx);
         if( m_size.load() == 0 ) return nullptr;
@@ -192,7 +192,7 @@ public:
     }
     
 
-    bool Remove(ListNode<T>* node)
+    bool remove(ListNode<T>* node)
     {
         std::unique_lock lock(this->m_mtx);
         if( node == nullptr || node->m_next == nullptr || node->m_prev == nullptr ) return false;
@@ -204,7 +204,7 @@ public:
         return true;
     }
 
-    bool Empty()
+    bool empty()
     {
         return m_size.load() == 0;
     }

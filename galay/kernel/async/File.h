@@ -1,7 +1,7 @@
 #ifndef GALAY_FILE_H
 #define GALAY_FILE_H 
 
-#ifndef __WIN32__ || __WIN64__
+#if !defined(__WIN32__) && !defined(__WIN64__)
 #include <unistd.h>
 #include <fcntl.h>
 #endif
@@ -46,7 +46,7 @@ namespace galay
         FileModes& readWrite() { m_mode = 0; return userRead().userWrite().groupRead().otherRead(); }
         FileModes& allRead() { m_mode = S_IRUSR | S_IRGRP | S_IROTH; return *this; }
         FileModes& privateMode() { m_mode = S_IRUSR | S_IWUSR; return *this; }
-        // Get the mode value
+        // get the mode value
         mode_t getModes() const { return m_mode; }
     private:
         mode_t m_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;  // Default: 0644

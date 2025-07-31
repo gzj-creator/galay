@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(galay VERSION 1.0)
+project(Galay VERSION 1.0)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(HEADER_SRC_DIR galay)
@@ -53,20 +53,22 @@ endforeach()
 
 if(${BUILD_STATIC})
     # 创建静态库
-    add_library(${PROJECT_NAME} STATIC ${OBJECT_LIBS})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${DEPEND_LIBS})
+    add_library(galay STATIC ${OBJECT_LIBS})
+    target_link_libraries(galay PRIVATE ${DEPEND_LIBS})
 else()
     # 创建共享库
-    add_library(${PROJECT_NAME} SHARED ${OBJECT_LIBS})
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${DEPEND_LIBS})
+    add_library(galay SHARED ${OBJECT_LIBS})
+    target_link_libraries(galay PRIVATE ${DEPEND_LIBS})
 endif()
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
+set_target_properties(galay PROPERTIES
         CXX_STANDARD 20
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
 )
-install(TARGETS ${PROJECT_NAME} DESTINATION lib EXPORT ${PROJECT_NAME}Targets)
+
+
+install(TARGETS galay DESTINATION lib EXPORT ${PROJECT_NAME}Targets)
 
 # 生成版本配置文件
 write_basic_package_version_file(

@@ -14,7 +14,7 @@ TrieTree::TrieTree()
 }
 
 void 
-TrieTree::Add(const std::string& word)
+TrieTree::add(const std::string& word)
 {
     TrieNode* cur = m_root;
     for (auto& c : word)
@@ -35,13 +35,13 @@ TrieTree::Add(const std::string& word)
 }
 
 bool 
-TrieTree::Contains(const std::string& word)
+TrieTree::contains(const std::string& word)
 {
-    return Query(word) != 0;
+    return query(word) != 0;
 }
 
 uint32_t 
-TrieTree::Query(const std::string& word)
+TrieTree::query(const std::string& word)
 {
     TrieNode* cur = m_root;
     for (auto& c : word)
@@ -60,7 +60,7 @@ TrieTree::Query(const std::string& word)
 }
 
 void 
-TrieTree::Remove(const std::string& word)
+TrieTree::remove(const std::string& word)
 {
     TrieNode* cur = m_root;
     TrieNode* del = m_root;
@@ -109,7 +109,7 @@ TrieTree::Remove(const std::string& word)
 }
 
 std::vector<std::string> 
-TrieTree::GetWordByPrefix(const std::string& prefix)
+TrieTree::getWordByPrefix(const std::string& prefix)
 {
     TrieNode* cur = m_root;
     for (auto& c : prefix)
@@ -125,12 +125,12 @@ TrieTree::GetWordByPrefix(const std::string& prefix)
         }
     }
     std::vector<std::string> words;
-    PreOrder(cur, prefix.substr(0, prefix.length() - 1), words);
+    preOrder(cur, prefix.substr(0, prefix.length() - 1), words);
     return words;
 }
 
 void 
-TrieTree::PreOrder(TrieNode* node, std::string word, std::vector<std::string>& words)
+TrieTree::preOrder(TrieNode* node, std::string word, std::vector<std::string>& words)
 {
     if( node != this->m_root )
     {
@@ -143,7 +143,7 @@ TrieTree::PreOrder(TrieNode* node, std::string word, std::vector<std::string>& w
 
     for( auto pair : node->m_childMap)
     {
-        PreOrder(pair.second, word, words);
+        preOrder(pair.second, word, words);
     }
 }
 

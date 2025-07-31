@@ -40,7 +40,7 @@ namespace galay
             other.m_event = nullptr;
         }
 
-        AsyncResult(AsyncEvent<T>::ptr event);
+        AsyncResult(typename AsyncEvent<T>::ptr event);
         AsyncResult(T&& result);
         bool await_ready();
         //true will suspend, false will not
@@ -48,7 +48,7 @@ namespace galay
         T await_resume() const;
     protected:
         CoroutineBase::wptr m_coroutine;
-        AsyncEvent<T>::ptr m_event;
+        typename AsyncEvent<T>::ptr m_event;
     };
 
 }

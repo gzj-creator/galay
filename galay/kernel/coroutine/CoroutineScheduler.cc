@@ -17,7 +17,7 @@ namespace galay
     {
         m_thread = std::thread([this]()
         {
-            Run();
+            run();
         });
     }
 
@@ -34,7 +34,7 @@ namespace galay
     }
 
 
-    void CoroutineConsumer::Run()
+    void CoroutineConsumer::run()
     {
         std::pair<CoroutineActionType, CoroutineBase::wptr> task;
         while(true) {

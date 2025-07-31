@@ -15,8 +15,8 @@ namespace galay::utils
         using ptr = std::shared_ptr<CountSemaphore>;
         using uptr = std::unique_ptr<CountSemaphore>;
         CountSemaphore(uint64_t initcount, uint64_t capacity);
-        bool Get(uint64_t count);
-        void Put(uint64_t count);
+        bool get(uint64_t count);
+        void put(uint64_t count);
     private:
         std::mutex m_mtx;
         uint64_t m_capacity;
@@ -34,10 +34,10 @@ namespace galay::utils
         RateLimiter(uint64_t rate, uint64_t capacity,uint64_t deliveryInteralMs);
         void start();
         void stop();
-        bool Pass(uint64_t flow);
+        bool pass(uint64_t flow);
         ~RateLimiter();
     private:
-        void ProduceToken();
+        void produceToken();
     private:
         uint64_t m_deliveryInteralMs;
         uint64_t m_rate;

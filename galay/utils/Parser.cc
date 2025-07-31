@@ -15,15 +15,15 @@ static void Trim(std::string& s) {
 
 ParserManager::ParserManager()
 {
-    RegisterExtension<ConfigParser>(".conf");
+    registerExtension<ConfigParser>(".conf");
 #ifdef USE_NLOHMANN_JSON
-    RegisterExtension<JsonParser>(".json");
+    registerExtension<JsonParser>(".json");
 #endif
 }
 
 
 ParserBase::ptr 
-ParserManager::CreateParser(const std::string &filename,bool IsParse)
+ParserManager::createParser(const std::string &filename,bool IsParse)
 {
     if(filename.empty()) return nullptr;
     int pos = filename.find_last_of(".");
@@ -32,7 +32,7 @@ ParserManager::CreateParser(const std::string &filename,bool IsParse)
     if(!m_creater.contains(ext)) return nullptr;
     auto parser = m_creater[ext]();
     if(IsParse) {
-        if(parser->Parse(filename) != 0) {
+        if(parser->parse(filename) != 0) {
             return nullptr;
         }
     }
@@ -40,15 +40,15 @@ ParserManager::CreateParser(const std::string &filename,bool IsParse)
 }
 
 int 
-ConfigParser::Parse(const std::string &filename)
+ConfigParser::parse(const std::string &filename)
 {
-    std::string buffer = galay::utils::ZeroReadFile(filename);
-    int ret = ParseContent(buffer);
+    std::string buffer = galay::utils::zeroReadFile(filename);
+    int ret = parseContent(buffer);
     return ret;
 }
 
 int 
-ConfigParser::ParseContent(const std::string& content) {
+ConfigParser::parseContent(const std::string& content) {
     std::stringstream stream(content);
     std::string line;
     
@@ -87,13 +87,13 @@ ConfigParser::ParseContent(const std::string& content) {
 
         // 处理数组值
         if (value.front() == '[' && value.back() == ']') {
-            std::vector<std::string> elements = ParseArray(value.substr(1, value.size()-2));
+            std::vector<std::string> elements = parseArray(value.substr(1, value.size()-2));
             m_fields[key] = elements;
         }
         // 处理字符串值
         else if (value.front() == '\"' && value.back() == '\"') {
             value = value.substr(1, value.size()-2);
-            ParseEscapes(value);
+            parseEscapes(value);
             m_fields[key] = value;
         }
         // 处理普通值
@@ -105,7 +105,7 @@ ConfigParser::ParseContent(const std::string& content) {
 }
 
 std::vector<std::string> 
-ConfigParser::ParseArray(const std::string& arr_str) 
+ConfigParser::parseArray(const std::string& arr_str) 
 {
     std::vector<std::string> elements;
     std::string current;
@@ -163,7 +163,7 @@ ConfigParser::ParseArray(const std::string& arr_str)
         {
             elem = elem.substr(1, elem.size() - 2);
         }
-        elem = ParseEscapes(elem);
+        elem = parseEscapes(elem);
     }
 
     return elements;
@@ -171,7 +171,7 @@ ConfigParser::ParseArray(const std::string& arr_str)
 
 
 std::any 
-ConfigParser::GetValue(const std::string &key)
+ConfigParser::getValue(const std::string &key)
 {
     auto it = m_fields.find(key);
     if (it == m_fields.end())
@@ -181,7 +181,7 @@ ConfigParser::GetValue(const std::string &key)
 
 
 std::string 
-ConfigParser::ParseEscapes(const std::string& input) {
+ConfigParser::parseEscapes(const std::string& input) {
     std::stringstream ss;
     for (size_t i = 0; i < input.size(); ++i) {
         if (input[i] == '\\' && i + 1 < input.size()) {
@@ -203,9 +203,9 @@ ConfigParser::ParseEscapes(const std::string& input) {
 
 #ifdef USE_NLOHMANN_JSON
 int 
-JsonParser::Parse(const std::string &filename)
+JsonParser::parse(const std::string &filename)
 {
-    std::string buffer = galay::utils::ZeroReadFile(filename);
+    std::string buffer = galay::utils::zeroReadFile(filename);
     if(!nlohmann::json::accept(buffer)){
         return -1;
     }
@@ -214,9 +214,9 @@ JsonParser::Parse(const std::string &filename)
 }
 
 std::any 
-JsonParser::GetValue(const std::string &key)
+JsonParser::getValue(const std::string &key)
 {
-    std::vector<std::string> path = galay::utils::StringSplitter::SpiltWithChar(key, '.');
+    std::vector<std::string> path = galay::utils::StringSplitter::spiltWithChar(key, '.');
     nlohmann::json j;
     for(auto &p : path){
         if(this->m_json.contains(p)){

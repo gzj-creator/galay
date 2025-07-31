@@ -59,10 +59,20 @@ Coroutine<nil> Recv(AsyncTcpSocket socket)
     while (true)
     {
         auto wrapper = co_await socket.recv(1024);
+        if(!wrapper.success()) {
+            if(wrapper.getError()->code() == error::ErrorCode::DisConnectError) {
+                // disconnect
+                co_await socket.close();
+                std::cout << "connection close" << std::endl;
+                co_return nil();
+            }
+            std::cout << wrapper.getError()->message() << std::endl;
+            co_return nil();
+        }
         Bytes bytes = wrapper.moveValue();
         std::string msg = bytes.toString();
         std::cout << msg.length() << "   " <<  msg << std::endl;
-        if (msg == "quit")
+        if (msg.find("quit") != std::string::npos)
         {
             auto success = co_await socket.close();
             if (success.success())

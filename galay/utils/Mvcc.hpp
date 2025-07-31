@@ -25,12 +25,12 @@ class Mvcc
 public:
     Mvcc();
     Mvcc(size_t initial_hash_size);
-    std::optional<VersionedValue<T>> GetValue(Version version);
-    std::optional<VersionedValue<T>> GetCurrentValue();
-    bool PutValue(T* value);
-    bool RemoveValue(Version version);
+    std::optional<VersionedValue<T>> getValue(Version version);
+    std::optional<VersionedValue<T>> getCurrentValue();
+    bool putValue(T* value);
+    bool removeValue(Version version);
     // Check if the version is valid
-    bool IsValid(Version old_version);
+    bool isValid(Version old_version);
 private:
     std::atomic<Version> m_current_version;
     std::shared_mutex m_mutex;
@@ -40,6 +40,6 @@ private:
 
 }
 
-#include "Mvcc.tcc"
+#include "Mvcc.inl"
 
 #endif

@@ -64,13 +64,13 @@ namespace galay::details
         if (!m_context.m_scheduler)
         {
             if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_AddEventError, errno);
+                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
                 return false;
             }
         } else {
             if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_ModEventError, errno);
+                auto error = std::make_shared<SystemError>(CallModEventError, errno);
                 makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
                 return false;
             }
@@ -96,19 +96,19 @@ namespace galay::details
                 if( errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ) {
                     return false;
                 }
-                error = std::make_shared<SystemError>(Error_AcceptError, errno);
+                error = std::make_shared<SystemError>(CallAcceptError, errno);
                 makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
                 return true;
             }
             m_accept_ssl = SSL_new(getGlobalSSLCtx());
             if(m_accept_ssl == nullptr) {
-                error = std::make_shared<SystemError>(Error_SSLNewError, errno);
+                error = std::make_shared<SystemError>(CallSSLNewError, errno);
                 close(handle.fd);
                 makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
                 return true;
             }
             if(SSL_set_fd(m_accept_ssl, handle.fd) == -1) {
-                error = std::make_shared<SystemError>(Error_SSLSetFdError, errno);
+                error = std::make_shared<SystemError>(CallSSLSetFdError, errno);
                 SSL_free(m_accept_ssl);
                 m_accept_ssl = nullptr;
                 close(handle.fd);
@@ -128,7 +128,7 @@ namespace galay::details
             if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
                 return false;
             } else {
-                error = std::make_shared<SystemError>(Error_SSLHandshakeError, errno);
+                error = std::make_shared<SystemError>(CallSSLHandshakeError, errno);
                 SSL_free(m_accept_ssl);
                 close(SSL_get_fd(m_accept_ssl));
                 m_accept_ssl = nullptr;
@@ -181,7 +181,7 @@ namespace galay::details
         } else if( this->m_ssl_code == SSL_ERROR_ZERO_RETURN ) {
             // 对端关闭
             close(SSL_get_fd(m_context.m_ssl));
-            error = std::make_shared<SystemError>(Error_DisConnectError, errno);
+            error = std::make_shared<SystemError>(DisConnectError, errno);
             makeValue(m_result, false, error);
             m_context.m_is_connected = false;
             SSL_free(m_context.m_ssl);
@@ -191,7 +191,7 @@ namespace galay::details
             SSL_set_quiet_shutdown(m_context.m_ssl, 1);
             SSL_shutdown(m_context.m_ssl);
             close(SSL_get_fd(m_context.m_ssl));
-            error = std::make_shared<SystemError>(Error_SSLShuntdownError, errno);
+            error = std::make_shared<SystemError>(CallSSLShuntdownError, errno);
             makeValue(m_result, false, error);
             m_context.m_is_connected = false;
             SSL_free(m_context.m_ssl);
@@ -226,13 +226,13 @@ namespace galay::details
         if (!m_context.m_scheduler)
         {
             if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_AddEventError, errno);
+                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
             }
         } else {
             if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_ModEventError, errno);
+                auto error = std::make_shared<SystemError>(CallModEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
             }
@@ -283,13 +283,13 @@ namespace galay::details
         if (!m_context.m_scheduler)
         {
             if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_AddEventError, errno);
+                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
             }
         } else {
             if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_ModEventError, errno);
+                auto error = std::make_shared<SystemError>(CallModEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
             }
@@ -315,7 +315,7 @@ namespace galay::details
                     return false;
                 }
                 success = false;
-                error = std::make_shared<SystemError>(Error_ConnectError, errno);
+                error = std::make_shared<SystemError>(CallConnectError, errno);
                 makeValue(m_result, std::move(success), error);
                 return true;
             }
@@ -336,7 +336,7 @@ namespace galay::details
             if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
                 return false;
             } else {
-                error = std::make_shared<SystemError>(Error_SSLHandshakeError, errno);
+                error = std::make_shared<SystemError>(CallSSLHandshakeError, errno);
                 success = false;
             }
         }
@@ -372,13 +372,13 @@ namespace galay::details
         if (!m_context.m_scheduler)
         {
             if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_AddEventError, errno);
+                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
             }
         } else {
             if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_ModEventError, errno);
+                auto error = std::make_shared<SystemError>(CallModEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
             }
@@ -396,7 +396,7 @@ namespace galay::details
             BytesVisitor visitor(bytes);
             visitor.size() = recvBytes;
         } else if (recvBytes == 0) {
-            error = std::make_shared<SystemError>(Error_DisConnectError, errno);
+            error = std::make_shared<SystemError>(DisConnectError, errno);
             m_context.m_is_connected = false;
             bytes = Bytes();
         } else {
@@ -404,7 +404,7 @@ namespace galay::details
             {
                 return false;
             }
-            error = std::make_shared<SystemError>(Error_RecvError, errno);
+            error = std::make_shared<SystemError>(CallRecvError, errno);
             bytes = Bytes();
         }
         makeValue(m_result, std::move(bytes), error);
@@ -438,13 +438,13 @@ namespace galay::details
         if (!m_context.m_scheduler)
         {
             if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_AddEventError, errno);
+                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
             }
         } else {
             if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(Error_ModEventError, errno);
+                auto error = std::make_shared<SystemError>(CallModEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
             }
@@ -461,7 +461,7 @@ namespace galay::details
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
         } else if (sendBytes == 0) {
-            error = std::make_shared<SystemError>(Error_DisConnectError, errno);
+            error = std::make_shared<SystemError>(DisConnectError, errno);
             m_context.m_is_connected = false;
             makeValue(m_result, std::move(m_bytes), error);
         } else {
@@ -469,7 +469,7 @@ namespace galay::details
             {
                 return false;
             }
-            error = std::make_shared<SystemError>(Error_SendError, errno);
+            error = std::make_shared<SystemError>(CallSendError, errno);
             makeValue(m_result, std::move(m_bytes), error);
         }
         return true;

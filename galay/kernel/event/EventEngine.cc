@@ -32,7 +32,7 @@ EpollEventEngine::EpollEventEngine(uint32_t max_events)
     this->m_stop = true;
     this->m_handle.fd = epoll_create(1);
     if(this->m_handle.fd < 0) {
-        m_error = std::make_shared<SystemError>(error::Error_EpollCreateError, errno);
+        m_error = std::make_shared<SystemError>(error::CallEpollCreateError, errno);
     }
 }
 
@@ -96,7 +96,7 @@ bool EpollEventEngine::notify()
     addEvent(event, nullptr);
     int ret = eventfd_write(handle.fd, 1);
     if(ret < 0) {
-        m_error = std::make_shared<SystemError>(error::Error_EventWriteError, errno);
+        m_error = std::make_shared<SystemError>(error::CallEventWriteError, errno);
         return false;
     }
     return true;
@@ -116,7 +116,7 @@ EpollEventEngine::addEvent(Event *event, void* ctx)
     ev.data.ptr = event;
     int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_ADD, event->getHandle().fd, &ev);
     if( ret != 0 ){
-        m_error = std::make_shared<SystemError>(error::Error_AddEventError, errno);
+        m_error = std::make_shared<SystemError>(error::CallAddEventError, errno);
     }
     return ret;
 }
@@ -132,7 +132,7 @@ EpollEventEngine::modEvent(Event* event, void* ctx)
     if( !convertToEpollEvent(ev, event, ctx) ) return 0;
     int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_MOD, event->getHandle().fd, &ev);
     if( ret != 0 ) {
-        m_error = std::make_shared<SystemError>(error::Error_ModEventError, errno);
+        m_error = std::make_shared<SystemError>(error::CallModEventError, errno);
     }
     return ret;
 }
@@ -149,7 +149,7 @@ EpollEventEngine::delEvent(Event* event, void* ctx)
     ev.events = (EPOLLIN | EPOLLOUT | EPOLLERR);
     int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_DEL, handle.fd, &ev);
     if( ret != 0 ) {
-        m_error = std::make_shared<SystemError>(error::Error_DelEventError, errno);
+        m_error = std::make_shared<SystemError>(error::CallDelEventError, errno);
     }
     return ret;
 }
@@ -224,7 +224,7 @@ KqueueEventEngine::KqueueEventEngine(const uint32_t max_events)
     m_events = static_cast<struct kevent*>(calloc(max_events, sizeof(struct kevent)));
     this->m_stop = true;
     if(this->m_handle.fd < 0) {
-        m_error = std::make_shared<SystemError>(error::Error_EpollCreateError, errno);
+        m_error = std::make_shared<SystemError>(error::CallEpollCreateError, errno);
     }
 }
 
@@ -315,7 +315,7 @@ int KqueueEventEngine::addEvent(Event *event, void* ctx)
     };
     int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
     if(ret != 0){
-        m_error = std::make_shared<SystemError>(error::Error_ModEventError, errno);
+        m_error = std::make_shared<SystemError>(error::CallModEventError, errno);
     }
     return ret;
 }
@@ -332,7 +332,7 @@ int KqueueEventEngine::modEvent(Event *event, void* ctx)
     }
     int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
     if(ret != 0){
-        m_error = std::make_shared<SystemError>(error::Error_ModEventError, errno);
+        m_error = std::make_shared<SystemError>(error::CallModEventError, errno);
     }
     return ret;
 }
@@ -349,7 +349,7 @@ int KqueueEventEngine::delEvent(Event *event, void* ctx)
     }
     int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
     if(ret != 0){
-        m_error = std::make_shared<SystemError>(error::Error_DelEventError, errno);
+        m_error = std::make_shared<SystemError>(error::CallDelEventError, errno);
     }
     return ret;
 }

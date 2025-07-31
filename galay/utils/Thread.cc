@@ -18,7 +18,7 @@ ThreadWaiters::ThreadWaiters(int num)
     this->m_num.store(num);
 }
 
-bool ThreadWaiters::Wait(int timeout)
+bool ThreadWaiters::wait(int timeout)
 {
     std::unique_lock lock(this->m_mutex);
     if(m_num.load() <= 0) return true;
@@ -38,7 +38,7 @@ bool ThreadWaiters::Wait(int timeout)
     return true;
 }
 
-bool ThreadWaiters::Decrease()
+bool ThreadWaiters::decrease()
 {
     std::unique_lock lock(this->m_mutex);
     if( m_num.load() == 0) return false;
@@ -58,7 +58,7 @@ ScrambleThreadPool::ScrambleThreadPool()
 }
 
 void 
-ScrambleThreadPool::Run()
+ScrambleThreadPool::run()
 {
     while (!m_terminate.load())
     {
@@ -81,15 +81,15 @@ ScrambleThreadPool::start(int num)
     for (int i = 0; i < num; i++)
     {
         auto th = std::make_unique<std::thread>([this](){
-            Run();
-            Done();
+            run();
+            done();
         });
         m_threads.push_back(std::move(th));
     }
 }
 
 bool 
-ScrambleThreadPool::WaitForAllDone(uint32_t timeout)
+ScrambleThreadPool::waitForAllDone(uint32_t timeout)
 {
     std::mutex mtx;
     std::unique_lock<std::mutex> lock(mtx);
@@ -114,7 +114,7 @@ ScrambleThreadPool::isDone()
 }
 
 void 
-ScrambleThreadPool::Done()
+ScrambleThreadPool::done()
 {
     this->m_nums.fetch_sub(1);
     if(this->m_nums.load() == 0){
