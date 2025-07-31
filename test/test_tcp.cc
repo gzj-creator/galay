@@ -1,0 +1,97 @@
+#include "galay/kernel/async/Socket.h"
+#include <iostream>
+#include "galay/kernel/async/Bytes.hpp"
+#include "galay/kernel/coroutine/CoroutineScheduler.hpp"
+#include "galay/kernel/runtime/Runtime.h"
+
+using namespace galay;
+
+Runtime runtime;
+
+Coroutine<nil> Recv(AsyncTcpSocket socket);
+Coroutine<nil> Send(AsyncTcpSocket socket);
+
+Coroutine<nil> test()
+{
+    AsyncTcpSocket socket = AsyncTcpSocket::create();
+    auto t1 = socket.socket();
+    socket.options().handleNonBlock();
+    socket.options().handleReusePort();
+    if (!t1.success())
+    {
+        std::cout << t1.getError()->message() << std::endl;
+        co_return nil();
+    }
+    std::cout << "socket success" << std::endl;
+    auto t2 = socket.bind({"127.0.0.1", 8070});
+    if (!t2.success())
+    {
+        std::cout << t2.getError()->message() << std::endl;
+        co_return nil();
+    }
+    std::cout << "bind success" << std::endl;
+    auto t3 = socket.listen(10);
+    if (!t3.success())
+    {
+        std::cout << t3.getError()->message() << std::endl;
+        co_return nil();
+    }
+    std::cout << "listen success" << std::endl;
+    while (true)
+    {
+        auto t4 = co_await socket.accept();
+        if (!t4.success())
+        {
+            std::cout << t4.getError()->message() << std::endl;
+            co_return nil();
+        }
+        std::cout << "accept success" << std::endl;
+        auto builder = t4.moveValue();
+        auto new_socket = builder.build();
+        new_socket.options().handleNonBlock();
+        runtime.schedule(Recv(std::move(new_socket)));
+
+    }
+}
+
+Coroutine<nil> Recv(AsyncTcpSocket socket)
+{
+    while (true)
+    {
+        auto wrapper = co_await socket.recv(1024);
+        Bytes bytes = wrapper.moveValue();
+        std::string msg = bytes.toString();
+        std::cout << msg.length() << "   " <<  msg << std::endl;
+        if (msg == "quit")
+        {
+            auto success = co_await socket.close();
+            if (success.success())
+            {
+                std::cout << "close success" << std::endl;
+            }
+            co_return nil();
+        }
+        runtime.schedule(Send(socket));
+    }
+}
+
+Coroutine<nil> Send(AsyncTcpSocket socket)
+{
+    const char* data = "Hello World";
+    Bytes bytes(data, 11);
+    auto wrapper = co_await socket.send(std::move(bytes));
+    if (wrapper.success())
+    {
+        Bytes remain = wrapper.moveValue();
+        std::cout << remain.toString()  << std::endl;
+    }
+    co_return nil();
+}
+
+
+int main()
+{
+    runtime.schedule(test());
+    getchar();
+    return 0;
+}
