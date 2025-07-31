@@ -6,7 +6,7 @@
 
 using namespace galay;
 
-Runtime runtime;
+Runtime::uptr runtime = nullptr;
 
 Coroutine<nil> Recv(AsyncTcpSocket socket);
 Coroutine<nil> Send(AsyncTcpSocket socket);
@@ -49,8 +49,7 @@ Coroutine<nil> test()
         auto builder = t4.moveValue();
         auto new_socket = builder.build();
         new_socket.options().handleNonBlock();
-        runtime.schedule(Recv(std::move(new_socket)));
-
+        runtime->schedule(Recv(std::move(new_socket)));
     }
 }
 
@@ -81,7 +80,7 @@ Coroutine<nil> Recv(AsyncTcpSocket socket)
             }
             co_return nil();
         }
-        runtime.schedule(Send(socket));
+        runtime->schedule(Send(socket));
     }
 }
 
@@ -101,7 +100,8 @@ Coroutine<nil> Send(AsyncTcpSocket socket)
 
 int main()
 {
-    runtime.schedule(test());
+    runtime = std::make_unique<Runtime>(true);
+    runtime->schedule(test());
     getchar();
     return 0;
 }
