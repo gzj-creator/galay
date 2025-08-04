@@ -178,7 +178,7 @@ EpollEventEngine::~EpollEventEngine()
 bool 
 EpollEventEngine::convertToEpollEvent(epoll_event &ev, Event *event, void* ctx)
 {
-    int event_type = event->getEventType();
+    EventType event_type = event->getEventType();
     ev.events = 0;
     ev.events = EPOLLONESHOT;
     switch(event_type)

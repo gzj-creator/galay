@@ -168,7 +168,7 @@ public:
     
     TimeEvent(GHandle handle, EventScheduler* scheduler, TimerManagerType type);
     std::string name() override { return "TimeEvent"; }
-    EventType getEventType() override { return kEventTypeTimer; };
+    EventType getEventType() const override { return kEventTypeTimer; };
 
     int64_t onceLoopTimeout();
 

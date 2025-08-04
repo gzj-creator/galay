@@ -40,7 +40,7 @@ namespace galay::error
         "call eventfd_write function Error",
         "call kqueue function error",
         "call open function error",
-        " LinuxAioSetup Error",
+        "call aio io_setup function error",
         "LinuxAioSubmit Error",
     };
 

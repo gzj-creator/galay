@@ -144,6 +144,11 @@ namespace galay::details
         return true;
     }
 
+    TcpSendEvent::TcpSendEvent(NetStatusContext& ctx, Bytes &&bytes)
+        : NetEvent<ValueWrapper<Bytes>>(ctx), m_bytes(std::move(bytes))
+    {
+    }
+
     bool TcpSendEvent::ready()
     {
         return sendBytes();
@@ -169,10 +174,7 @@ namespace galay::details
         return NetEvent::suspend(waker);
     }
 
-    TcpSendEvent::TcpSendEvent(NetStatusContext& ctx, Bytes &&bytes)
-        : NetEvent<ValueWrapper<Bytes>>(ctx), m_bytes(std::move(bytes))
-    {
-    }
+
 
     void TcpSendEvent::handleEvent()
     {
@@ -338,7 +340,7 @@ namespace galay::details
         using namespace error;
         Error::ptr error = nullptr;
         bool success = true;
-        waker.belongScheduler()->getEventScheduler()->delEvent(this, nullptr);
+        if(m_context.m_scheduler) m_context.m_scheduler->delEvent(this, nullptr);
         if(::close(m_context.m_handle.fd))
         {
             error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);
@@ -479,7 +481,7 @@ namespace galay::details
         using namespace error;
         Error::ptr error = nullptr;
         bool success = true;
-        waker.belongScheduler()->getEventScheduler()->delEvent(this, nullptr);
+        if(m_context.m_scheduler) m_context.m_scheduler->delEvent(this, nullptr);
         if(::close(m_context.m_handle.fd))
         {
             error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);

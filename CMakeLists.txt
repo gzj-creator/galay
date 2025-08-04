@@ -55,10 +55,22 @@ if(${BUILD_STATIC})
     # 创建静态库
     add_library(galay STATIC ${OBJECT_LIBS})
     target_link_libraries(galay PRIVATE ${DEPEND_LIBS})
+    if(ENABLE_DEBUG)
+        target_compile_options(galay PRIVATE 
+                            $<$<CONFIG:Debug>:-g>
+                            $<$<CONFIG:RealWithDebInfo>:-g>)
+    endif()
+    target_compile_definitions(galay PUBLIC "ENABLE_TRACE")
 else()
     # 创建共享库
     add_library(galay SHARED ${OBJECT_LIBS})
     target_link_libraries(galay PRIVATE ${DEPEND_LIBS})
+    if(ENABLE_DEBUG)
+        target_compile_options(galay PRIVATE 
+                            $<$<CONFIG:Debug>:-g>
+                            $<$<CONFIG:RealWithDebInfo>:-g>)
+    endif()
+    target_compile_definitions(galay PUBLIC "ENABLE_TRACE")
 endif()
 
 set_target_properties(galay PROPERTIES

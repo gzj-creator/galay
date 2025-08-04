@@ -39,38 +39,6 @@ else()
     message(FATAL_ERROR "Spdlog not found")
 endif()
 
-#libaio
-
-find_path(  LIBAIO_INCLUDE_DIR 
-            NAMES libaio.h 
-            PATHS
-                /usr/local/include
-                /usr/include
-                ${CMAKE_PREFIX_PATH}/include
-                $ENV{LIBAIO_ROOT}/include
-                ${LIBAIO_ROOT}/include
-            DOC "The directory where libaio headers reside"
-        )
-
-find_library(   LIBAIO_LIBRARY 
-                NAMES aio
-                PATHS
-                    /usr/local/lib
-                    /usr/lib
-                    ${CMAKE_PREFIX_PATH}/lib
-                    $ENV{LIBAIO_ROOT}/lib
-                    ${LIBAIO_ROOT}/lib
-                DOC "The libaio library"
-            )
-
-if(LIBAIO_INCLUDE_DIR AND LIBAIO_LIBRARY)
-    message(STATUS "Libaio found")
-    include_directories(${LIBAIO_INCLUDE_DIR})
-    set(LIBAIO_FOUND TRUE)
-else()
-    message(STATUS "Libaio not found")
-endif()
-
 #concurrentqueue
 find_path(  LIBCONCURRENTQUEUE_INCLUDE_DIR 
             NAMES concurrentqueue.h
@@ -88,4 +56,57 @@ if(LIBCONCURRENTQUEUE_INCLUDE_DIR)
     set(CONCURRENTQUEUE TRUE)
 else()
     message(STATUS "concurrentqueue not found")
+endif()
+
+
+
+# 检测内核版本以决定使用 aio 还是 iouring
+function(get_kernel_version)
+    execute_process(
+        COMMAND uname -r
+        OUTPUT_VARIABLE KERNEL_VERSION
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+    )
+    
+    string(REGEX MATCH "[0-9]+\\.[0-9]+" KERNEL_VERSION_MAJOR_MINOR "${KERNEL_VERSION}")
+    string(REPLACE "." "" KERNEL_VERSION_NUM "${KERNEL_VERSION_MAJOR_MINOR}")
+    
+    if(${KERNEL_VERSION_NUM} GREATER_EQUAL 54)
+        set(KERNEL_SUPPORTS_IOURING TRUE PARENT_SCOPE)
+        message(STATUS "Kernel version ${KERNEL_VERSION} supports io_uring")
+    else()
+        set(KERNEL_SUPPORTS_IOURING FALSE PARENT_SCOPE)
+        message(STATUS "Kernel version ${KERNEL_VERSION} does not support io_uring, using aio instead")
+    endif()
+endfunction()
+
+# 检测内核版本并设置相应的宏定义
+get_kernel_version()
+
+if(KERNEL_SUPPORTS_IOURING)
+    # 检查是否安装了 liburing
+    find_path(LIBURING_INCLUDE_DIR 
+              NAMES liburing.h
+              PATHS /usr/local/include /usr/include)
+    
+    find_library(LIBURING_LIBRARY 
+                 NAMES uring
+                 PATHS /usr/local/lib /usr/lib)
+    
+    if(LIBURING_INCLUDE_DIR AND LIBURING_LIBRARY)
+        message(STATUS "liburing found, using io_uring")
+        include_directories(${LIBURING_INCLUDE_DIR})
+        set(IO_URING_FOUND TRUE)
+        add_definitions(-DUSE_IO_URING)
+        set(USE_IO_URING true)
+    else()
+        message(STATUS "liburing not found, using aio")
+        set(IO_URING_FOUND FALSE)
+        add_definitions(-DUSE_AIO)
+        set(USE_AIO TRUE)
+    endif()
+else()
+    message(STATUS "Using aio due to kernel version")
+    add_definitions(-DUSE_AIO)
+    set(USE_AIO TRUE)
 endif()

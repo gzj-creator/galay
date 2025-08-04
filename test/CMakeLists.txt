@@ -3,9 +3,6 @@ file(GLOB SRC_LIST *.cc)
 
 
 set(COMMON_LIB ssl crypto)
-if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    list(APPEND COMMON_LIB aio)
-endif()
 
 foreach(SRC ${SRC_LIST})
     get_filename_component(FILE_NAME ${SRC} NAME_WE)

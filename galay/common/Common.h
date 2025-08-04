@@ -8,6 +8,9 @@
 
 namespace galay 
 {
+
+#define LL long long
+
     enum FamilyType
     {
         IPV4,

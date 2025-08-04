@@ -1,7 +1,7 @@
 #ifndef GALAY_LOG_H
 #define GALAY_LOG_H
 
-#ifdef ENABLE_DISPLAY_GALAY_LOG
+#ifdef ENABLE_TRACE
     #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
 #endif
 
@@ -46,6 +46,7 @@ public:
     InternelLogger();
     static InternelLogger* getInstance();
     void setLogger(Logger::uptr logger);
+    void setLevel(spdlog::level::level_enum level);
     Logger* getLogger();
     static void shutdown();
     ~InternelLogger();
@@ -60,8 +61,8 @@ private:
 
 namespace galay {
 
-#ifdef GALAY_INTERNEL_LOG
-    #define LogTrace(...)       SPDLOG_LOGGER_TRACE(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__);\
+#ifdef ENABLE_TRACE
+    #define LogTrace(...)       SPDLOG_LOGGER_TRACE(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)
     #define LogDebug(...)       SPDLOG_LOGGER_DEBUG(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
     #define LogInfo(...)        SPDLOG_LOGGER_INFO(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)
     #define LogWarn(...)        SPDLOG_LOGGER_WARN(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)

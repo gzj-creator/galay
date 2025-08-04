@@ -4,40 +4,63 @@
 #include "galay/kernel/coroutine/Result.hpp"
 #include "galay/common/Common.h"
 #include "galay/kernel/coroutine/Coroutine.hpp"
-
+#include "Bytes.hpp"
+#include <vector>
+#include <libaio.h>
 
 namespace galay::details { 
 
+
+    struct FileStatusContext
+    {
+        GHandle m_handle;
+        GHandle m_event_handle;
+        io_context_t m_io_ctx;
+        int32_t m_iocb_index = 0;
+        std::vector<iocb> m_iocbs;
+        int32_t m_unfinished = 0;
+        EventScheduler* m_scheduler = nullptr;
+    };
+
     template<CoType T>
-    class FileEvent: public AsyncEvent<ValueWrapper<T>>
+    class FileEvent: public AsyncEvent<T>
     { 
     public:
-        FileEvent(GHandle handle) :m_handle(handle) {}
+        FileEvent(FileStatusContext& context) :m_context(context) {}
         bool suspend(Waker waker) override {
             this->m_waker = waker;
             return true;
         }
-        GHandle getHandle() override {  return m_handle;    }
-        bool setEventScheduler(EventScheduler* scheduler) override { m_scheduler = scheduler;  return true; }
-        EventScheduler* belongEventScheduler() override { return m_scheduler; }
-        virtual ~FileEvent() {
-            if(m_scheduler) m_scheduler->delEvent(this, nullptr);
-        }
+        GHandle getHandle() override {  return m_context.m_event_handle;    }
+        bool setEventScheduler(EventScheduler* scheduler) override { m_context.m_scheduler = scheduler;  return true; }
+        EventScheduler* belongEventScheduler() override { return m_context.m_scheduler; }
     protected:
-        GHandle m_handle = {};
-        EventScheduler* m_scheduler = nullptr;
+        FileStatusContext& m_context;
     };
 
-    class FileOpenEvent: public FileEvent<ValueWrapper<bool>> 
+    class FileCloseEvent: public FileEvent<ValueWrapper<bool>> 
     {
     public:
-        FileOpenEvent(const std::string& path);
-        
-    private:
-        
+        FileCloseEvent(FileStatusContext& context);
+        std::string name() override { return "FileCloseEvent"; }
+        void handleEvent() override;
+        EventType getEventType() const override { return EventType::kEventTypeNone; }
+
+        bool ready() override;
+        bool suspend(Waker waker) override;
     };
     
+    class FileCommitEvent: public FileEvent<ValueWrapper<bool>>
+    {
+    public:
+        FileCommitEvent(FileStatusContext& context);
+        std::string name() override { return "FileCommitEvent"; }
+        void handleEvent() override;
+        EventType getEventType() const override { return EventType::kEventTypeRead; }
 
+        bool ready() override;
+        bool suspend(Waker waker) override;
+    };
 
 }
 

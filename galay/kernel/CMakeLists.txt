@@ -8,17 +8,16 @@ find_library(CRYPTO_LIB NAMES crypto)
 
 set(DEPEND_LIBS ${SSL_LIB} ${CRYPTO_LIB})
 
-if (LIBAIO_FOUND)
-    find_library(LIBAIO_LIB NAMES aio)
-    set(DEPEND_LIBS ${DEPEND_LIBS} ${LIBAIO_LIB})
-endif ()
+if(USE_IO_URING)
+  find_library(IO_URING_LIB NAMES io_uring)
+  list(APPEND DEPEND_LIBS ${IO_URING_LIB})
+else(USE_AIO)
+  find_library(AIO_LIB NAMES aio)
+  list(APPEND DEPEND_LIBS ${AIO_LIB})
+endif()
 
 add_library(${PROJECT_NAME} OBJECT ${SRC_LIST})
 target_link_libraries(${PROJECT_NAME} PRIVATE ${DEPEND_LIBS})
-if(ENABLE_TRACE_LOG)
-    message(STATUS "ENABLE_DISPLAY_GALAY_LOG ON")
-    target_compile_definitions(${PROJECT_NAME} PUBLIC "ENABLE_DISPLAY_GALAY_LOG")
-endif()
 
 install(TARGETS ${PROJECT_NAME} EXPORT GalayTargets)
 

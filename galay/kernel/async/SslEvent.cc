@@ -35,7 +35,7 @@ namespace galay::details
         }
     }
 
-    EventType SslAcceptEvent::getEventType()
+    EventType SslAcceptEvent::getEventType() const
     {
         if(m_status == SslAcceptStatus::kSslAcceptStatus_Accept) {
             return EventType::kEventTypeRead;
@@ -201,7 +201,7 @@ namespace galay::details
         return true;
     }
 
-    EventType SslCloseEvent::getEventType()
+    EventType SslCloseEvent::getEventType() const
     {
         switch (m_ssl_code)
         {
@@ -254,7 +254,7 @@ namespace galay::details
         }
     }
 
-    EventType SslConnectEvent::getEventType()
+    EventType SslConnectEvent::getEventType() const
     {
         if(m_status == ConnectState::kConnectState_Connect) {
             return EventType::kEventTypeWrite;
@@ -355,12 +355,6 @@ namespace galay::details
         m_waker.wakeUp();
     }
 
-
-    EventType SslRecvEvent::getEventType()
-    {
-        return kEventTypeRead;
-    }
-
     bool SslRecvEvent::ready()
     {
         return sslRecv();
@@ -420,11 +414,6 @@ namespace galay::details
     {
         sslSend();
         m_waker.wakeUp();
-    }
-
-    EventType SslSendEvent::getEventType()
-    {
-        return kEventTypeWrite;
     }
 
     bool SslSendEvent::ready()

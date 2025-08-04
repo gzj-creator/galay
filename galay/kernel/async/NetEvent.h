@@ -57,7 +57,7 @@ namespace galay::details
         TcpAcceptEvent(NetStatusContext& ctx) : NetEvent<ValueWrapper<AsyncTcpSocketBuilder>>(ctx) {}
         std::string name() override { return "TcpAcceptEvent"; }
         void handleEvent() override;
-        EventType getEventType() override { return EventType::kEventTypeRead; }
+        EventType getEventType() const override { return EventType::kEventTypeRead; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -71,7 +71,7 @@ namespace galay::details
         TcpRecvEvent(NetStatusContext& ctx, size_t length);
         std::string name() override { return "TcpRecvEvent"; }
         void handleEvent() override;
-        EventType getEventType() override { return EventType::kEventTypeRead; }
+        EventType getEventType() const override { return EventType::kEventTypeRead; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -87,7 +87,7 @@ namespace galay::details
         TcpSendEvent(NetStatusContext& ctx, Bytes&& bytes);
         std::string name() override { return "TcpSendEvent"; }
         void handleEvent() override;
-        EventType getEventType() override { return EventType::kEventTypeWrite; }
+        EventType getEventType() const override { return EventType::kEventTypeWrite; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -105,7 +105,7 @@ namespace galay::details
             : NetEvent<ValueWrapper<bool>>(ctx), m_file_handle(file_handle), m_offset(offset), m_length(length) {}
         std::string name() override { return "TcpSendfileEvent"; }
         void handleEvent() override;
-        EventType getEventType() override { return EventType::kEventTypeWrite; }
+        EventType getEventType() const override { return EventType::kEventTypeWrite; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -122,7 +122,7 @@ namespace galay::details
         TcpConnectEvent(NetStatusContext& ctx, const Host& host);
         std::string name() override { return "TcpConnectEvent"; }
         void handleEvent() override;
-        EventType getEventType() override { return EventType::kEventTypeWrite; }
+        EventType getEventType() const override { return EventType::kEventTypeWrite; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -138,7 +138,7 @@ namespace galay::details
         TcpCloseEvent(NetStatusContext& ctx);
         std::string name() override { return "TcpCloseEvent"; }
         void handleEvent() override {}
-        EventType getEventType() override { return EventType::kEventTypeNone; }
+        EventType getEventType() const override { return EventType::kEventTypeNone; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -151,7 +151,7 @@ namespace galay::details
         UdpRecvfromEvent(NetStatusContext& ctx, Host& remote, size_t length) : NetEvent<ValueWrapper<Bytes>>(ctx), m_remote(remote), m_length(length) {}
         std::string name() override { return "UdpRecvfromEvent"; }
         void handleEvent() override;
-        EventType getEventType() override { return EventType::kEventTypeRead; }
+        EventType getEventType() const override { return EventType::kEventTypeRead; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -168,7 +168,7 @@ namespace galay::details
         UdpSendtoEvent(NetStatusContext& ctx, const Host& remote, Bytes&& bytes) : NetEvent<ValueWrapper<Bytes>>(ctx),  m_remote(remote), m_bytes(std::move(bytes)) {}
         std::string name() override { return "UdpSendtoEvent"; }
         void handleEvent() override;
-        EventType getEventType() override { return EventType::kEventTypeWrite; }
+        EventType getEventType() const override { return EventType::kEventTypeWrite; }
 
         bool ready() override;
         bool suspend(Waker waker) override;
@@ -185,7 +185,7 @@ namespace galay::details
         UdpCloseEvent(NetStatusContext& ctx);
         std::string name() override { return "UdpCloseEvent"; }
         void handleEvent() override {}
-        EventType getEventType() override { return EventType::kEventTypeNone; }
+        EventType getEventType() const override { return EventType::kEventTypeNone; }
 
         bool ready() override;
         bool suspend(Waker waker) override;

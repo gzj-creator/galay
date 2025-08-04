@@ -2,14 +2,15 @@
 #define GALAY_FILE_H 
 
 #if !defined(__WIN32__) && !defined(__WIN64__)
-#include <unistd.h>
-#include <fcntl.h>
+    #include <unistd.h>
+    #include <fcntl.h>
 #endif
 
 #include "FileEvent.h"
 
 namespace galay 
 {
+
     class OpenFlags
     {
     public:
@@ -52,15 +53,54 @@ namespace galay
         mode_t m_mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;  // Default: 0644
     };
 
+    //USE_AIO.          AIO+epoll
+    //USE_IO_URING.     IO_URING
+
+#ifdef USE_AIO
+    class IOVecResultVisitor;
+
+    class IOVecResult
+    {
+        friend class IOVecResultVisitor;
+    public:
+        unsigned long result();
+    private:
+        unsigned long m_result;
+        std::vector<iovec> m_iovecs;
+    };
+
+    class IOVecResultVisitor
+    {
+    public:
+        IOVecResultVisitor(IOVecResult& result);
+        unsigned long& result();
+        std::vector<iovec>& iovecs();
+    private:
+        IOVecResult& m_result;
+    };
+
     class File
     {
     public:
+        File();
         ValueWrapper<bool> open(const std::string& path, OpenFlags flags, FileModes modes);
-        ValueWrapper<bool> close();
-    private:
-        GHandle m_handle {};
-    };
+        ValueWrapper<bool> aioInit(int max_events);
+        void preRead(Bytes& bytes, LL offset);
+        //设置O_APPEND后忽略 offset 参数,现代文件系统允许稀疏文件 offset 大于文件大小也可形成文件空洞，不计入实际占用
+        //保证 result 生命周期在下一次 commiy 之后
+        void preWrite(Bytes& bytes, int& result, LL offset);
+        //从第一个 Bytes 开始填充
+        void preReadV(std::vector<Bytes>& bytes_v, IOVecResult& temp, LL offset);
 
+        void preWriteV(std::vector<Bytes*>& bytes_v, IOVecResult &result, LL offset);
+
+        AsyncResult<ValueWrapper<bool>> commit();
+        AsyncResult<ValueWrapper<bool>> close();
+        ~File();
+    private:
+        details::FileStatusContext m_context;
+    };
+#endif
 }
 
 

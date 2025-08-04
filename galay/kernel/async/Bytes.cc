@@ -4,6 +4,38 @@
 
 namespace galay
 {
+    Bytes::Bytes(const std::string &data)
+    {
+        if (!data.empty()) {
+            mData = static_cast<uint8_t*>(malloc(data.size()));
+            if (!mData) throw std::bad_alloc();
+            mSize = data.size();
+            mCapacity = data.size();
+            std::memcpy(mData, data.data(), data.size());
+        }
+    }
+
+    Bytes::Bytes(const std::string_view &data)
+    {
+        if (!data.empty()) {
+            mData = static_cast<uint8_t*>(malloc(data.size()));
+            if (!mData) throw std::bad_alloc();
+            mSize = data.size();
+            mCapacity = data.size();
+            std::memcpy(mData, data.data(), data.size());
+        }
+    }
+
+    Bytes::Bytes(const char *data)
+    {
+        if (data) {
+            mSize = strlen(data);
+            mCapacity = mSize;
+            mData = static_cast<uint8_t*>(malloc(mSize));
+            if (!mData) throw std::bad_alloc();
+            std::memcpy(mData, data, mSize);
+        }
+    }
 
     Bytes::Bytes(const char* data, size_t length)
     {
@@ -162,6 +194,14 @@ namespace galay
             return std::string(reinterpret_cast<char*>(mData), mSize);
         }
         return "";
+    }
+
+    std::string_view Bytes::toStringView() const
+    {
+        if(mData) {
+            return std::string_view(reinterpret_cast<char*>(mData), mSize);
+        }
+        return std::string_view();
     }
 
     BytesVisitor::BytesVisitor(Bytes& bytes)

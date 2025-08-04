@@ -47,7 +47,7 @@ namespace galay::details
 
 #define DEFAULT_ASYNC_EVENT_IMPL() \
     void handleEvent() override {} \
-    EventType getEventType() override { return EventType::kEventTypeNone; }\
+    EventType getEventType() const override { return EventType::kEventTypeNone; }\
     GHandle getHandle() override { return {-1}; } \
     bool setEventScheduler(EventScheduler* scheduler) override { return true; } \
     EventScheduler* belongEventScheduler() override { return nullptr; }

@@ -109,6 +109,11 @@ void InternelLogger::setLogger(Logger::uptr logger)
     m_logger = std::move(logger);
 }
 
+void InternelLogger::setLevel(spdlog::level::level_enum level)
+{
+    m_logger->getSpdlogger()->set_level(level);
+}
+
 Logger* InternelLogger::getLogger()
 {
     return m_logger.get();

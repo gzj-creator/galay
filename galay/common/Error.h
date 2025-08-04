@@ -45,8 +45,8 @@ namespace galay::error
         CallEventWriteError,
         CallKqueueCreateError,
         CallOpenError,
-        CallLinuxAioSetupError,
-        CallLinuxAioSubmitError,
+        CallAioSetupError,
+        CallAioSubmitError,
         SystemErrorEnd
     };
 

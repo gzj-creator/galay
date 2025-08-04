@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string>
+#include <string_view>
 
 namespace galay 
 { 
@@ -19,6 +20,9 @@ namespace galay
     public:
         // 默认构造函数
         Bytes() = default;
+        Bytes(const std::string& data);
+        Bytes(const std::string_view& data);
+        Bytes(const char* data);
         // 从原始指针和长度构造
         Bytes(const char* data, size_t length);
         Bytes(const uint8_t* data, size_t length);
@@ -60,6 +64,7 @@ namespace galay
         Bytes slice(size_t pos, size_t len) const;
 
         std::string toString() const;
+        std::string_view toStringView() const;
 
         // 比较操作
         bool operator==(const Bytes& other) const {
