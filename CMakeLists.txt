@@ -60,7 +60,6 @@ if(${BUILD_STATIC})
                             $<$<CONFIG:Debug>:-g>
                             $<$<CONFIG:RealWithDebInfo>:-g>)
     endif()
-    target_compile_definitions(galay PUBLIC "ENABLE_TRACE")
 else()
     # 创建共享库
     add_library(galay SHARED ${OBJECT_LIBS})
@@ -70,7 +69,6 @@ else()
                             $<$<CONFIG:Debug>:-g>
                             $<$<CONFIG:RealWithDebInfo>:-g>)
     endif()
-    target_compile_definitions(galay PUBLIC "ENABLE_TRACE")
 endif()
 
 set_target_properties(galay PROPERTIES

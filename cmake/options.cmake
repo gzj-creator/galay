@@ -1,6 +1,7 @@
 option(ENABLE_DEBUG "Enable debug" ON)
 option(ENABLE_INSTALL_SYSTEM "Enable install system" ON) 
 option(BUILD_STATIC "Build static" OFF)
+option(ENABLE_LOG_TRACE "Enable log trace" ON)
 
 #gtest
 find_path(GTEST_INCLUDE_DIR NAMES gtest)

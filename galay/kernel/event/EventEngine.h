@@ -24,7 +24,7 @@ namespace galay::details
         using error_ptr = error::Error::ptr;
         EventEngine();
 
-        uint32_t GetEngineID() const { return m_id.load(); }
+        uint32_t getEngineID() const { return m_id.load(); }
         virtual bool start(int timeout) = 0;
         virtual bool stop() = 0;
         virtual bool notify() = 0;
@@ -69,7 +69,14 @@ namespace galay::details
         std::list<std::function<void()>> m_once_loop_cbs; 
     };
     #elif defined(USE_IOURING)
-
+    class IOUringEventEngine final: public EventEngine { 
+    public:
+        using error_ptr = error::Error::ptr;
+        explicit IOUringEventEngine(int max_events);
+        ~IOUringEventEngine() override;
+    private:
+        
+    };
     #elif defined(USE_SELECT)
 
     #elif defined(USE_KQUEUE)
