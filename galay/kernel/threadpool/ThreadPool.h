@@ -3,8 +3,8 @@
 
 #include <functional>
 #include <future>
+#include "galay/common/Base.h"
 #include "galay/common/Strategy.hpp"
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 
 namespace galay { 
 

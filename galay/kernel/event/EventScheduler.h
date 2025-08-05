@@ -33,8 +33,10 @@ namespace galay{
 
         using timer_ptr = std::shared_ptr<Timer>;
         using error_ptr = error::Error::ptr;
+        using engine_ptr = std::shared_ptr<details::EventEngine>;
+
         EventScheduler();
-        EventScheduler(details::EventEngine::ptr engine);
+        EventScheduler(engine_ptr engine);
         std::string name() override { return "EventScheduler"; }
 
         bool addEvent(details::Event* event, void* ctx);

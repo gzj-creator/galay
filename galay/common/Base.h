@@ -24,9 +24,14 @@ typedef signed long ssize_t;
 #error "Unsupported platform"
 #endif
 
+#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+
 #if defined(__linux__)
     #include <linux/version.h>
-    #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0) && !defined(ENABLE_DEFAULT_USE_EPOLL)
         #define USE_IOURING
     #else
         #define USE_EPOLL
@@ -35,6 +40,9 @@ typedef signed long ssize_t;
     #define USE_IOCP
     #define close(x) closesocket(x)
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__)
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
     #define USE_KQUEUE
 #else
     #error "Unsupported platform"
@@ -42,19 +50,12 @@ typedef signed long ssize_t;
 
 #if defined(USE_EPOLL)
     #include <sys/epoll.h>
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
 #elif defined(USE_IOURING)
     #include <liburing.h>
 #elif defined(USE_IOCP)
 
 #elif defined(USE_KQUEUE)
-    #include <sys/socket.h>
-    #include <netinet/in.h>
-    #include <arpa/inet.h>
     #include <sys/event.h>
-    
 #endif
 #define GALAY_EXTERN_API __attribute__((visibility("default")))
 

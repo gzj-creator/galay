@@ -1,3 +1,5 @@
+
+include(cmake/options.cmake)
 #openssl
 find_package(OpenSSL REQUIRED)
 
@@ -83,7 +85,7 @@ endfunction()
 # 检测内核版本并设置相应的宏定义
 get_kernel_version()
 
-if(KERNEL_SUPPORTS_IOURING)
+if(KERNEL_SUPPORTS_IOURING AND !ENABLE_DEFAULT_USE_EPOLL)
     # 检查是否安装了 liburing
     find_path(LIBURING_INCLUDE_DIR 
               NAMES liburing.h
@@ -106,7 +108,13 @@ if(KERNEL_SUPPORTS_IOURING)
         set(USE_AIO TRUE)
     endif()
 else()
-    message(STATUS "Using aio due to kernel version")
-    add_definitions(-DUSE_AIO)
-    set(USE_AIO TRUE)
+    if(ENABLE_DEFAULT_USE_EPOLL)
+        message(STATUS "Using aio due to use epoll")
+        add_definitions(-DUSE_AIO)
+        set(USE_AIO TRUE)
+    else()
+        message(STATUS "Using aio due to kernel version")
+        add_definitions(-DUSE_AIO)
+        set(USE_AIO TRUE)
+    endif()
 endif()

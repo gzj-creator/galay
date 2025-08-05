@@ -154,21 +154,6 @@ namespace galay::details
         return ret;
     }
 
-    void EpollEventEngine::resetMaxEventSize(uint32_t size)
-    {
-        m_error.reset();
-        if (size == m_event_size) {
-            m_event_size = m_event_size * 2;
-            epoll_event* new_events = (epoll_event*)realloc(m_events, sizeof(epoll_event) * m_event_size);                                                
-            if( new_events ) m_events = new_events;
-        }
-        if(size == m_event_size / 4 && m_event_size / 2 >= DEFAULT_MAX_EVENTS) {
-            m_event_size = m_event_size / 2;
-            epoll_event* new_events = (epoll_event*)realloc(m_events, sizeof(epoll_event) * m_event_size );                                                
-            if( new_events ) m_events = new_events;
-        }
-    }
-
     EpollEventEngine::~EpollEventEngine()
     {
         if(m_handle.fd > 0) close(m_handle.fd);

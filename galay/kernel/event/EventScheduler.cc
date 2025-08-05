@@ -10,13 +10,13 @@ namespace galay{
     #if defined(USE_EPOLL)
         m_engine = std::make_shared<details::EpollEventEngine>();
     #elif defined(USE_IOURING)
-        m_engine = std::make_shared<details::IoUringEventEngine>();
+        m_engine = std::make_shared<details::IOUringEventEngine>();
     #elif defined(USE_KQUEUE)
         m_engine = std::make_shared<details::KqueueEventEngine>();
     #endif
     }
 
-    EventScheduler::EventScheduler(details::EventEngine::ptr engine)
+    EventScheduler::EventScheduler(engine_ptr engine)
         : m_engine(engine)
     {
     }

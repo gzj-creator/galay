@@ -3,7 +3,6 @@
 
 #include <string>
 #include <thread>
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 #include "galay/common/Base.h"
 #include "galay/kernel/event/EventScheduler.h"
 #include "Result.hpp"

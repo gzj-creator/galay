@@ -6,7 +6,6 @@ set(HEADER_SRC_DIR galay)
 set(HEADER_DST_DIR include)
 
 include(CMakePackageConfigHelpers) 
-include(cmake/options.cmake)
 #查找依赖
 include(cmake/dependency.cmake)
 
@@ -25,6 +24,10 @@ else()
     message(STATUS "Release mode enabled")
 endif()
 
+if(${ENABLE_DEFAULT_USE_EPOLL}) 
+  message(STATUS "Enable default use epoll, add -DENABLE_DEFAULT_USE_EPOLL to cmake")
+  add_definitions(-DENABLE_DEFAULT_USE_EPOLL)
+endif()
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
