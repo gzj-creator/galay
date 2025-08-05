@@ -9,7 +9,7 @@ find_library(CRYPTO_LIB NAMES crypto)
 set(DEPEND_LIBS ${SSL_LIB} ${CRYPTO_LIB})
 
 if(USE_IO_URING)
-  find_library(IO_URING_LIB NAMES io_uring)
+  find_library(IO_URING_LIB NAMES uring)
   list(APPEND DEPEND_LIBS ${IO_URING_LIB})
 else(USE_AIO)
   find_library(AIO_LIB NAMES aio)

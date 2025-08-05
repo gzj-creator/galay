@@ -25,12 +25,12 @@ typedef signed long ssize_t;
 #endif
 
 #if defined(__linux__)
-    //#include <linux/version.h>
-    //#if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
-    //    #define USE_IOURING
-    //#else
+    #include <linux/version.h>
+    #if LINUX_VERSION_CODE >= KERNEL_VERSION(5,5,0)
+        #define USE_IOURING
+    #else
         #define USE_EPOLL
-    //#endif
+    #endif
 #elif defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)
     #define USE_IOCP
     #define close(x) closesocket(x)
