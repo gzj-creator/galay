@@ -17,6 +17,9 @@ public:
     virtual EventType getEventType() const = 0;
     virtual GHandle& getHandle() = 0;
     virtual ~Event() = default;
+    bool cancel();
+private:
+    std::atomic_bool m_cancel = false;
 };
 
 class CallbackEvent final : public Event
