@@ -1,7 +1,7 @@
 #include "galay/kernel/async/Socket.h"
 #include <iostream>
 #include "galay/kernel/async/Bytes.hpp"
-#include "galay/kernel/coroutine/CoroutineScheduler.hpp"
+#include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/runtime/Runtime.h"
 
 using namespace galay;
@@ -13,7 +13,7 @@ Coroutine<nil> Send(AsyncTcpSocket socket);
 
 Coroutine<nil> test()
 {
-    AsyncTcpSocket socket = AsyncTcpSocket::create();
+    AsyncTcpSocket socket(*runtime);
     auto t1 = socket.socket();
     socket.options().handleNonBlock();
     socket.options().handleReusePort();
@@ -100,8 +100,12 @@ Coroutine<nil> Send(AsyncTcpSocket socket)
 
 int main()
 {
-    runtime = std::make_unique<Runtime>(true);
+    runtime = std::make_unique<Runtime>();
+    auto config = runtime->config();
+    config.startCoManager(true);
+    runtime->start();
     runtime->schedule(test());
     getchar();
+    runtime->stop();
     return 0;
 }

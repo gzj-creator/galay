@@ -21,7 +21,7 @@ namespace galay::details
         m_id.store(gEngineId.load());
     }
 
-    #if defined(USE_EPOLL)
+#if defined(USE_EPOLL)
     EpollEventEngine::EpollEventEngine(uint32_t max_events)
     {
         using namespace error;
@@ -195,12 +195,12 @@ namespace galay::details
         return true;
     }
 
-    #elif defined(USE_IOURING)
+#elif defined(USE_IOURING)
+    
 
+#elif defined(USE_KQUEUE)
 
-    #elif defined(USE_KQUEUE)
-
-    KqueueEventEngine::KqueueEventEngine(const uint32_t max_events)
+    KqueueEventEngine::KqueueEventEngine(uint32_t max_events)
     {
         using namespace error;
         m_error.reset();
@@ -341,6 +341,8 @@ namespace galay::details
 
     KqueueEventEngine::~KqueueEventEngine()
     {
+        if(m_handle.fd > 0) close(m_handle.fd);
+        free(m_events);
     }
 
     bool KqueueEventEngine::convertToKEvent(struct kevent &ev, Event *event, void *ctx)
@@ -377,5 +379,7 @@ namespace galay::details
     }
 
     #endif
+
+    
 
 }

@@ -1,5 +1,5 @@
 #include "Waker.h"
-#include "CoroutineScheduler.hpp"
+#include "CoScheduler.hpp"
 
 namespace galay
 {

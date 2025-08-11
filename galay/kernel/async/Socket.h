@@ -3,6 +3,7 @@
 
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "NetEvent.h"
 #include "SslEvent.h"
 
@@ -16,12 +17,10 @@ namespace galay {
 
     class AsyncTcpSocket
     {
+        friend class AsyncTcpSocketBuilder;
     public:
-        static AsyncTcpSocket create();
-        static AsyncTcpSocket create(GHandle handle);
-
-        AsyncTcpSocket();
-        AsyncTcpSocket(GHandle handle);
+        AsyncTcpSocket(Runtime& runtime);
+        AsyncTcpSocket(Runtime& runtime, GHandle handle);
 
         HandleOption options();
 
@@ -45,6 +44,8 @@ namespace galay {
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getDestAddr() const;
     private:
+        AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
+    private:
         details::NetStatusContext m_ctx;
     };
 
@@ -52,11 +53,8 @@ namespace galay {
     class AsyncUdpSocket
     {
     public:
-        static AsyncUdpSocket create();
-        static AsyncUdpSocket create(GHandle handle);
-
-        AsyncUdpSocket();
-        AsyncUdpSocket(GHandle handle);
+        AsyncUdpSocket(Runtime& runtime);
+        AsyncUdpSocket(Runtime& runtime, GHandle handle);
 
         HandleOption options();
         ValueWrapper<bool> socket();
@@ -76,12 +74,10 @@ namespace galay {
 
     class AsyncSslSocket
     {
+        friend class AsyncSslSocketBuilder;
     public:
-        static AsyncSslSocket create(SSL* ssl);
-        static AsyncSslSocket create();
-
-        AsyncSslSocket();
-        AsyncSslSocket(SSL* ssl);
+        AsyncSslSocket(Runtime& runtime);
+        AsyncSslSocket(Runtime& runtime, GHandle handle, SSL* ssl);
 
         HandleOption options();
         ValueWrapper<bool> socket();
@@ -93,6 +89,7 @@ namespace galay {
         AsyncResult<ValueWrapper<Bytes>> sslSend(Bytes bytes);
         AsyncResult<ValueWrapper<bool>> sslClose();
     private:
+        AsyncSslSocket(EventScheduler* scheduler, GHandle handle, SSL* ssl);
         GHandle getHandle() const;
     private:
         details::SslStatusContext m_ctx;

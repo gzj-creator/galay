@@ -11,7 +11,6 @@
 namespace galay::details{ 
     class EventEngine;
     class Event;
-    class TimeEvent;
 }
 
 namespace galay{
@@ -44,23 +43,15 @@ namespace galay{
         bool delEvent(details::Event* event, void* ctx);
 
         void registerOnceLoopCallback(const std::function<void()>& callback);
-        /*
-            PriorityQueueTimerManager or RbTreeTimerManager can init anywhere
-            TimeWheelTimerManager must be inited before start()
-        */
-        void makeTimeEvent(TimerManagerType type);
-        std::shared_ptr<details::TimeEvent> getTimeEvent();
-        bool start();
+        bool start(int timeout);
         bool stop();
         bool notify();
         bool isRunning() const;
         error_ptr getError() const;
-        void addTimer(timer_ptr timer, int64_t ms);
         ~EventScheduler() = default;
     protected:
         std::unique_ptr<std::thread> m_thread;
         std::shared_ptr<details::EventEngine> m_engine;
-        std::shared_ptr<details::TimeEvent> m_timer_event;
     };
 
 }

@@ -1,5 +1,5 @@
-#ifndef GALAY_RESULT_HPP
-#define GALAY_RESULT_HPP
+#ifndef GALAY_COROUTINE_RESULT_HPP
+#define GALAY_COROUTINE_RESULT_HPP
 
 #include "Waker.h"
 #include "galay/kernel/event/Event.h"
@@ -8,7 +8,7 @@ namespace galay
 {
 
     template <CoType T>
-    class AsyncEvent: public std::enable_shared_from_this<AsyncEvent<T>>, public details::Event
+    class AsyncEvent: public details::Event
     {
     public:
 
@@ -23,7 +23,7 @@ namespace galay
         //return true while suspend
         virtual bool suspend(Waker waker) = 0;
 
-        T getMovedResult();
+        virtual T resume();
         ~AsyncEvent() override = default;
     protected:
         T m_result;

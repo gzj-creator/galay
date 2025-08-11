@@ -31,9 +31,7 @@ namespace galay::details {
             this->m_waker = waker;
             return true;
         }
-        GHandle getHandle() override {  return m_context.m_event_handle;    }
-        bool setEventScheduler(EventScheduler* scheduler) override { m_context.m_scheduler = scheduler;  return true; }
-        EventScheduler* belongEventScheduler() override { return m_context.m_scheduler; }
+        GHandle& getHandle() override {  return m_context.m_event_handle; }
     protected:
         FileStatusContext& m_context;
     };

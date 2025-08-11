@@ -3,12 +3,13 @@
 #include <sys/sendfile.h>
 #endif
 #include "Socket.h"
-#include "galay/kernel/coroutine/CoroutineScheduler.hpp"
+#include "galay/kernel/coroutine/CoScheduler.hpp"
 
-galay::AsyncTcpSocketBuilder galay::AsyncTcpSocketBuilder::create(GHandle handle)
+galay::AsyncTcpSocketBuilder galay::AsyncTcpSocketBuilder::create(EventScheduler* scheduler, GHandle handle)
 {
     AsyncTcpSocketBuilder builder;
     builder.m_handle = handle;
+    builder.m_scheduler = scheduler;
     return std::move(builder);
 }
 
@@ -16,7 +17,7 @@ galay::AsyncTcpSocketBuilder galay::AsyncTcpSocketBuilder::create(GHandle handle
 galay::AsyncTcpSocket galay::AsyncTcpSocketBuilder::build()
 {
     if(m_handle.fd < 0) throw std::runtime_error("Invalid handle");
-    return AsyncTcpSocket::create(m_handle);
+    return AsyncTcpSocket(m_scheduler, m_handle);
 }
 
 bool galay::AsyncTcpSocketBuilder::check() const
@@ -37,17 +38,17 @@ namespace galay::details
     bool TcpAcceptEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if (m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, AsyncTcpSocketBuilder::create({-1}), error);
+                makeValue(m_result, AsyncTcpSocketBuilder::create(m_context.m_scheduler, {}), error);
                 return false;
             }
         } else {
             if(!m_context.m_scheduler->modEvent(this, nullptr)) {
                 SystemError::ptr error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, AsyncTcpSocketBuilder::create({-1}), error);
+                makeValue(m_result, AsyncTcpSocketBuilder::create(m_context.m_scheduler, {}), error);
                 return false;
             }
         }
@@ -79,7 +80,7 @@ namespace galay::details
             }
             error = std::make_shared<SystemError>(CallAcceptError, errno);
         }
-        makeValue(m_result, AsyncTcpSocketBuilder::create(handle), error);
+        makeValue(m_result, AsyncTcpSocketBuilder::create(m_context.m_scheduler, handle), error);
         return true;
     }
 
@@ -102,9 +103,9 @@ namespace galay::details
     bool TcpRecvEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
@@ -157,9 +158,9 @@ namespace galay::details
     bool TcpSendEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, std::move(m_bytes), error);
                 return false;
@@ -228,9 +229,9 @@ namespace galay::details
     bool TcpSendfileEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
@@ -274,9 +275,9 @@ namespace galay::details
     bool TcpConnectEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
@@ -340,7 +341,7 @@ namespace galay::details
         using namespace error;
         Error::ptr error = nullptr;
         bool success = true;
-        if(m_context.m_scheduler) m_context.m_scheduler->delEvent(this, nullptr);
+        if(m_context.m_handle.flags[0] == 1) m_context.m_scheduler->delEvent(this, nullptr);
         if(::close(m_context.m_handle.fd))
         {
             error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);
@@ -367,9 +368,9 @@ namespace galay::details
     bool UdpRecvfromEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
@@ -423,9 +424,9 @@ namespace galay::details
     bool UdpSendtoEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
@@ -481,7 +482,7 @@ namespace galay::details
         using namespace error;
         Error::ptr error = nullptr;
         bool success = true;
-        if(m_context.m_scheduler) m_context.m_scheduler->delEvent(this, nullptr);
+        if(m_context.m_handle.flags[0] == 1) m_context.m_scheduler->delEvent(this, nullptr);
         if(::close(m_context.m_handle.fd))
         {
             error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);

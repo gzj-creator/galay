@@ -21,7 +21,7 @@ inline AsyncEvent<T>::AsyncEvent(T &&result)
 }
 
 template <CoType T>
-T AsyncEvent<T>::getMovedResult()
+T AsyncEvent<T>::resume()
 {
     return std::move(m_result);
 }
@@ -67,12 +67,12 @@ inline T AsyncResult<T>::await_resume() const
 {
     if(m_coroutine.expired()) {
         //说明没有wait
-        return this->m_event->getMovedResult();
+        return this->m_event->resume();
     }
     while(!m_coroutine.lock()->become(CoroutineStatus::Running)) {
         throw std::runtime_error("Coroutine become Failed");
     }
-    return this->m_event->getMovedResult();
+    return this->m_event->resume();
 }
 
 

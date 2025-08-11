@@ -15,9 +15,7 @@ public:
     virtual std::string name() = 0;
     virtual void handleEvent() = 0;
     virtual EventType getEventType() const = 0;
-    virtual GHandle getHandle() = 0;
-    virtual bool setEventScheduler(EventScheduler* scheduler) = 0;
-    virtual EventScheduler* belongEventScheduler() = 0;
+    virtual GHandle& getHandle() = 0;
     virtual ~Event() = default;
 };
 
@@ -42,9 +40,7 @@ public:
     void handleEvent() override;
     std::string name() override { return "CallbackEvent"; }
     EventType getEventType() const override { return m_type; }
-    GHandle getHandle() override { return m_handle; }
-    bool setEventScheduler(EventScheduler* scheduler) override;
-    EventScheduler* belongEventScheduler() override;
+    GHandle& getHandle() override { return m_handle; }
     ~CallbackEvent() override;
 private:
     EventType m_type;

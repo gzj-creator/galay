@@ -14,12 +14,13 @@ namespace galay
     class AsyncTcpSocketBuilder {
         friend class AsyncTcpSocket;
     public:
-        static AsyncTcpSocketBuilder create(GHandle handle);
+        static AsyncTcpSocketBuilder create(EventScheduler* scheduler, GHandle handle);
         //throw exception
         AsyncTcpSocket build();
         bool check() const;
     private:
         GHandle m_handle{-1};
+        EventScheduler* m_scheduler = nullptr;
     };
 }
 
@@ -41,10 +42,7 @@ namespace galay::details
             this->m_waker = waker;
             return true;
         }
-
-        GHandle getHandle() override { return m_context.m_handle; }
-        bool setEventScheduler(EventScheduler* scheduler) override { m_context.m_scheduler = scheduler;  return true; }
-        EventScheduler* belongEventScheduler() override { return m_context.m_scheduler; }
+        GHandle& getHandle() override { return m_context.m_handle; }
     protected:
         NetStatusContext& m_context;
     };

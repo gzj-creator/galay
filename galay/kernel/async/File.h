@@ -7,6 +7,7 @@
 #endif
 
 #include "FileEvent.h"
+#include "galay/kernel/runtime/Runtime.h"
 
 namespace galay 
 {
@@ -82,7 +83,8 @@ namespace galay
     class File
     {
     public:
-        File();
+        File(Runtime& runtime);
+        File(Runtime& runtime, GHandle handle);
         ValueWrapper<bool> open(const std::string& path, OpenFlags flags, FileModes modes);
         ValueWrapper<bool> aioInit(int max_events);
         void preRead(Bytes& bytes, LL offset);

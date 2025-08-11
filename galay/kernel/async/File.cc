@@ -23,9 +23,17 @@ namespace galay
         return m_result.m_iovecs;
     }
 
-    File::File()
+    File::File(Runtime& runtime)
     {
         m_context.m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
+        m_context.m_scheduler = runtime.eventScheduler();
+    }
+
+    File::File(Runtime &runtime, GHandle handle)
+    {
+        m_context.m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
+        m_context.m_handle = handle;
+        m_context.m_scheduler = runtime.eventScheduler();
     }
 
     ValueWrapper<bool> File::open(const std::string &path, OpenFlags flags, FileModes modes)

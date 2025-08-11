@@ -11,6 +11,25 @@ namespace galay
 
 #define LL long long
 
+inline void setThreadName(const std::string& name) {
+#ifdef __linux__
+    pthread_setname_np(pthread_self(), name.c_str());
+#elif defined(_WIN32)
+    if (auto SetThreadDescription = 
+        reinterpret_cast<decltype(&::SetThreadDescription)>(
+            GetProcAddress(GetModuleHandle("kernel32.dll"), "SetThreadDescription"))) {
+        wchar_t wname[256];
+        mbstowcs(wname, name, 256);
+        SetThreadDescription(GetCurrentThread(), wname);
+    }
+#elif defined(__APPLE__)
+    pthread_setname_np(name.c_str());
+#else
+    // 其他平台或不支持
+#endif
+}
+
+
     enum FamilyType
     {
         IPV4,
@@ -54,6 +73,7 @@ namespace galay
         error_ptr m_error;
     };
 
+    
 
     template<typename T>
     concept ValueTypeTrait = requires(T t) {

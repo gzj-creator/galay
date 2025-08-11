@@ -1,7 +1,7 @@
 #include "EventScheduler.h"
 #include "EventEngine.h"
 #include "galay/common/Log.h"
-#include "Timer.hpp"
+#include "Event.h"
 
 namespace galay{ 
 
@@ -23,9 +23,7 @@ namespace galay{
 
     bool EventScheduler::addEvent(details::Event* event, void* ctx)
     {
-        while(!event->setEventScheduler(this)) {
-            LogError("[setEventScheduler failed]");
-        }
+        event->getHandle().flags[0] = 1;
         return m_engine->addEvent(event, ctx) == 0;
     }
 
@@ -37,9 +35,7 @@ namespace galay{
 
     bool EventScheduler::delEvent(details::Event* event, void* ctx)
     {
-        while(!event->setEventScheduler(nullptr)) {
-            LogError("[setEventScheduler failed]");
-        }
+        event->getHandle().flags[0] = 0;
         return m_engine->delEvent(event, ctx) == 0;
     }
 
@@ -48,24 +44,9 @@ namespace galay{
         m_engine->registerOnceLoopCallback(callback);
     }
 
-
-    void EventScheduler::makeTimeEvent(TimerManagerType type)
+    bool EventScheduler::start(int timeout)
     {
-        GHandle handle{};
-        details::TimeEvent::CreateHandle(handle);
-        m_timer_event = std::make_shared<details::TimeEvent>(handle, this, type);
-    }
-
-    std::shared_ptr<details::TimeEvent> EventScheduler::getTimeEvent()
-    {
-        return m_timer_event;
-    }
-
-    bool EventScheduler::start()
-    {
-        this->m_thread = std::make_unique<std::thread>([this](){
-            int timeout = -1;
-            if( m_timer_event ) timeout = m_timer_event->onceLoopTimeout();
+        this->m_thread = std::make_unique<std::thread>([this, timeout](){
             m_engine->start(timeout);
             LogTrace("[{}({}) exist successfully]", name(), GetEngine()->getHandle().fd);
         });
@@ -74,7 +55,6 @@ namespace galay{
 
     bool EventScheduler::stop()
     {
-        m_timer_event.reset();
         if(!m_engine->isRunning()) return false;
         m_engine->stop();
         if(m_thread->joinable()) m_thread->join();
@@ -94,11 +74,6 @@ namespace galay{
     EventScheduler::error_ptr EventScheduler::getError() const
     {
         return m_engine->getError();
-    }
-
-    void EventScheduler::addTimer(timer_ptr timer, int64_t ms)
-    {
-        m_timer_event->addTimer(timer, ms);
     }
 
 }

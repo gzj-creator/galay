@@ -12,12 +12,14 @@ namespace galay
     class AsyncSslSocketBuilder {
         friend class AsyncTcpSslSocket;
     public:
-        static AsyncSslSocketBuilder create(SSL* ssl);
+        static AsyncSslSocketBuilder create(EventScheduler* scheduler, GHandle handle, SSL* ssl);
         //throw exception
         AsyncSslSocket build();
         bool check() const;
     private:
         SSL* m_ssl = nullptr;
+        EventScheduler* m_scheduler = nullptr;
+        GHandle m_handle{};
     };
  
 }
@@ -25,6 +27,7 @@ namespace galay
 namespace galay::details
 {
     struct SslStatusContext {
+        GHandle m_handle;
         SSL* m_ssl = nullptr;
         bool m_is_connected = false;
         EventScheduler* m_scheduler = nullptr;
@@ -39,10 +42,7 @@ namespace galay::details
             this->m_waker = waker;
             return true;
         }
-
-        GHandle getHandle() override { return {SSL_get_fd(m_context.m_ssl)}; }
-        bool setEventScheduler(EventScheduler* scheduler) override { m_context.m_scheduler = scheduler;  return true; }
-        EventScheduler* belongEventScheduler() override { return m_context.m_scheduler; }
+        GHandle& getHandle() override { return m_context.m_handle; }
     protected:
         SslStatusContext& m_context;
     };

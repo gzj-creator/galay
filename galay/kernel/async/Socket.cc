@@ -1,6 +1,6 @@
 #include "Socket.h"
 
-#include "galay/kernel/coroutine/CoroutineScheduler.hpp"
+#include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/event/Event.h"
 
 namespace galay {
@@ -35,26 +35,26 @@ namespace galay {
         return host;
     }
 
-    AsyncTcpSocket AsyncTcpSocket::create()
-    {
-        return {};
-    }
-
-    AsyncTcpSocket AsyncTcpSocket::create(GHandle handle)
-    {
-        return {handle};
-    }
-
-    AsyncTcpSocket::AsyncTcpSocket()
+    AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime)
         :m_ctx{}
     {
+        m_ctx.m_scheduler = runtime.eventScheduler();
     }
 
-    AsyncTcpSocket::AsyncTcpSocket(GHandle handle)
+    AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime, GHandle handle)
         :m_ctx{}
     {
         m_ctx.m_handle = handle;
+        m_ctx.m_scheduler = runtime.eventScheduler();
     }
+
+    AsyncTcpSocket::AsyncTcpSocket(EventScheduler* scheduler, GHandle handle)
+        :m_ctx{}
+    {
+        m_ctx.m_scheduler = scheduler;
+        m_ctx.m_handle = handle;
+    }
+
 
     HandleOption AsyncTcpSocket::options()
     {
@@ -187,26 +187,18 @@ namespace galay {
         return wrapper;
     }
 
-    
-    AsyncUdpSocket AsyncUdpSocket::create()
-    {
-        return {};
-    }
-
-    AsyncUdpSocket AsyncUdpSocket::create(GHandle handle)
-    {
-        return {handle};
-    }
-
-    AsyncUdpSocket::AsyncUdpSocket()
+   
+    AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime)
         :m_ctx{}
     {
+        m_ctx.m_scheduler = runtime.eventScheduler();
     }
 
-    AsyncUdpSocket::AsyncUdpSocket(GHandle handle)
+    AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime, GHandle handle)
         :m_ctx{}
     {
         m_ctx.m_handle = handle;
+        m_ctx.m_scheduler = runtime.eventScheduler();
     }
 
     ValueWrapper<bool> AsyncUdpSocket::socket()
@@ -330,26 +322,26 @@ namespace galay {
         return wrapper;
     }
 
-    AsyncSslSocket AsyncSslSocket::create(SSL* ssl)
-    {
-        return AsyncSslSocket(ssl);
-    }
-    
-    AsyncSslSocket AsyncSslSocket::create()
-    {
-        return AsyncSslSocket();
-    }
-
-
-    AsyncSslSocket::AsyncSslSocket()
+    AsyncSslSocket::AsyncSslSocket(Runtime& runtime)
         :m_ctx{}
     {
+        m_ctx.m_scheduler = runtime.eventScheduler();
     }
 
-    AsyncSslSocket::AsyncSslSocket(SSL *ssl)
+    AsyncSslSocket::AsyncSslSocket(Runtime& runtime, GHandle handle, SSL *ssl)
         :m_ctx{}
     {
         m_ctx.m_ssl = ssl;
+        m_ctx.m_handle = handle;
+        m_ctx.m_scheduler = runtime.eventScheduler();
+    }
+
+    AsyncSslSocket::AsyncSslSocket(EventScheduler* scheduler, GHandle handle, SSL* ssl)
+        :m_ctx{}
+    {
+        m_ctx.m_ssl = ssl;
+        m_ctx.m_handle = handle;
+        m_ctx.m_scheduler = scheduler;
     }
 
     HandleOption AsyncSslSocket::options()

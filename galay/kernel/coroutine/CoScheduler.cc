@@ -1,4 +1,4 @@
-#include "CoroutineScheduler.hpp"
+#include "CoScheduler.hpp"
 
 #include <utility>
 
@@ -15,10 +15,7 @@ namespace galay
 
     void CoroutineConsumer::start()
     {
-        m_thread = std::thread([this]()
-        {
-            run();
-        });
+        m_thread = std::thread([this]() {run();});
     }
 
     void CoroutineConsumer::consume(CoroutineActionType type, CoroutineBase::wptr co)
@@ -60,40 +57,22 @@ namespace galay
         }
     }
 
-    CoroutineScheduler::CoroutineScheduler(CoroutineConsumer::uptr consumer, TimerManagerType type)
-        :m_scheduler(std::make_shared<EventScheduler>()), m_consumer(std::move(consumer))
+    CoroutineScheduler::CoroutineScheduler(CoroutineConsumer::uptr consumer)
+        :m_consumer(std::move(consumer))
     {
-        m_scheduler->makeTimeEvent(type);
-    }
-
-    CoroutineScheduler::CoroutineScheduler(EventScheduler::ptr scheduler, CoroutineConsumer::uptr consumer, TimerManagerType type)
-        :m_scheduler(std::move(scheduler)), m_consumer(std::move(consumer))
-    {
-        m_scheduler->makeTimeEvent(type);
     }
 
     bool CoroutineScheduler::start()
     {
         m_consumer->start();
-        return m_scheduler->start();
+        return true;
     }
 
     bool CoroutineScheduler::stop()
     {
         m_consumer->stop();
-        return m_scheduler->stop();
+        return true;
     }
-
-    bool CoroutineScheduler::notify()
-    {
-        return m_scheduler->notify();
-    }
-
-    bool CoroutineScheduler::isRunning() const
-    {
-        return m_scheduler->isRunning();
-    }
-
 
     void CoroutineScheduler::resumeCoroutine(CoroutineBase::wptr co)
     {
@@ -105,21 +84,6 @@ namespace galay
     {
         if (!co.expired()) co.lock()->belongScheduler(this);
         m_consumer->consume(CoroutineActionType::kCoroutineActionTypeDestory, co);
-    }
-
-    EventScheduler::ptr CoroutineScheduler::getEventScheduler()
-    {
-        return m_scheduler;
-    }
-
-    CoroutineScheduler::uptr CoroutineSchedulerFactory::create(CoroutineConsumer::uptr consumer, TimerManagerType type)
-    {
-        return std::make_unique<CoroutineScheduler>(std::move(consumer), type);
-    }
-
-    CoroutineScheduler::uptr CoroutineSchedulerFactory::create(EventScheduler::ptr scheduler,CoroutineConsumer::uptr consumer, TimerManagerType type)
-    {
-        return std::make_unique<CoroutineScheduler>(std::move(scheduler), std::move(consumer), type);
     }
 
 

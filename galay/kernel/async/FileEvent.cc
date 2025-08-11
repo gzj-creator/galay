@@ -1,5 +1,5 @@
 #include "FileEvent.h"
-#include "galay/kernel/coroutine/CoroutineScheduler.hpp"
+#include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "File.h"
 
 namespace galay::details
@@ -26,7 +26,7 @@ namespace galay::details
         using namespace error;
         Error::ptr error = nullptr;
         bool success = true;
-        if(m_context.m_scheduler) m_context.m_scheduler->delEvent(this, nullptr);
+        if(m_context.m_handle.flags[0] == 1) m_context.m_scheduler->delEvent(this, nullptr);
         if(::close(m_context.m_handle.fd))
         {
             error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);
@@ -63,9 +63,9 @@ namespace galay::details
     bool FileCommitEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, false, error);
                 return false;

@@ -10,7 +10,7 @@ Runtime::uptr runtime = nullptr;
 
 Coroutine<nil> test()
 {
-    File file;
+    File file(*runtime);
     OpenFlags flags;
     //读写权限
     flags.create().noBlock().readWrite();
@@ -54,7 +54,7 @@ Coroutine<nil> test()
 
 Coroutine<nil> test_v()
 {
-    File file;
+    File file(*runtime);
     OpenFlags flags;
     flags.create().noBlock().readWrite();
     file.open("./test2.txt", flags, FileModes{});
@@ -94,9 +94,13 @@ Coroutine<nil> test_v()
 
 int main() { 
     galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
-    runtime = std::make_unique<Runtime>(true);
+    runtime = std::make_unique<Runtime>();
+    auto config = runtime->config();
+    config.startCoManager(true);
+    runtime->start();
     runtime->schedule(test());
     runtime->schedule(test_v());
     getchar();
+    runtime->stop();
     return 0;
 }

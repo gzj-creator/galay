@@ -6,6 +6,23 @@
 
 namespace galay
 {
+    RuntimeConfig::RuntimeConfig(Runtime &runtime)
+        :m_runtime(runtime)
+    {
+    }
+
+    RuntimeConfig &RuntimeConfig::eventTimeout(int64_t timeout)
+    {
+        m_runtime.m_event_timeout = timeout;
+        return *this;
+    }
+
+    RuntimeConfig &RuntimeConfig::startCoManager(bool start)
+    {
+        m_runtime.m_start_check_co = start;
+        return *this;
+    }
+
     CoroutineManager::CoroutineManager(CoroutineScheduler *scheduler, std::chrono::milliseconds interval)
         :m_scheduler(scheduler), m_interval(interval)
     {
@@ -81,20 +98,42 @@ namespace galay
         
     }
 
-    Runtime::Runtime(bool start_check, std::chrono::milliseconds check_interval, TimerManagerType type)
-        :m_scheduler(CoroutineSchedulerFactory::create(CoroutineConsumer::create(), type))
+    RuntimeConfig Runtime::config()
     {
-        m_scheduler->start();
-        if(start_check) {
-            m_manager = std::make_unique<CoroutineManager>(m_scheduler.get(), check_interval);
+        return RuntimeConfig(*this);
+    }
+
+    void Runtime::start()
+    {
+        m_eScheduler = std::make_shared<EventScheduler>();
+        m_eScheduler->start(m_event_timeout);
+        m_cScheduler = std::make_unique<CoroutineScheduler>(CoroutineConsumer::create());
+        m_cScheduler->start();
+        if(m_start_check_co) {
+            m_manager = std::make_unique<CoroutineManager>(m_cScheduler.get(), m_co_check_interval); 
             m_manager->start();
         }
     }
 
-    Runtime::~Runtime()
+    void Runtime::stop()
     {
-        if(m_manager) m_manager->stop();
-        m_scheduler->stop();
+        if(!m_eScheduler || !m_cScheduler) {
+            throw std::runtime_error("Runtime not started");
+        }
+        if(m_manager) {
+            m_manager->stop();
+            m_manager.reset();
+        }
+        m_cScheduler->stop();
+        m_cScheduler.reset();
+        m_eScheduler->stop();
+        m_eScheduler.reset();
     }
 
+    Runtime::~Runtime()
+    {
+        if(m_eScheduler || m_cScheduler) {
+            stop();
+        }
+    }
 }

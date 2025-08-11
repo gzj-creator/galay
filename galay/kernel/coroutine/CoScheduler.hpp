@@ -1,10 +1,9 @@
-#ifndef GALAY_COROUTINE_SCHEDULER_HPP
-#define GALAY_COROUTINE_SCHEDULER_HPP
+#ifndef GALAY_CO_SCHEDULER_HPP
+#define GALAY_CO_SCHEDULER_HPP
 
 #include <string>
 #include <thread>
 #include "galay/common/Base.h"
-#include "galay/kernel/event/EventScheduler.h"
 #include "Result.hpp"
 
 namespace galay {
@@ -63,33 +62,18 @@ namespace galay {
         using uptr = std::unique_ptr<CoroutineScheduler>;
 
 
-        CoroutineScheduler(CoroutineConsumer::uptr consumer, TimerManagerType type = kTimerManagerTypePriorityQueue);
-        CoroutineScheduler(EventScheduler::ptr scheduler, CoroutineConsumer::uptr consumer, TimerManagerType type = kTimerManagerTypePriorityQueue);
+        CoroutineScheduler(CoroutineConsumer::uptr consumer);
         std::string name() { return "CoroutineScheduler"; }
         bool start();
         bool stop();
-        bool notify();
-        bool isRunning() const;
-
         template<CoType T>
         void schedule(Coroutine<T>&& co);
 
         void resumeCoroutine(CoroutineBase::wptr co);
         void destroyCoroutine(CoroutineBase::wptr co);
 
-        EventScheduler::ptr getEventScheduler();
-
     private:
-        EventScheduler::ptr m_scheduler;
         CoroutineConsumer::uptr m_consumer;
-    };
-
-
-    class CoroutineSchedulerFactory
-    {
-    public:
-        static CoroutineScheduler::uptr create(CoroutineConsumer::uptr consumer, TimerManagerType type = kTimerManagerTypePriorityQueue);
-        static CoroutineScheduler::uptr create(EventScheduler::ptr scheduler, CoroutineConsumer::uptr consumer, TimerManagerType type = kTimerManagerTypePriorityQueue);
     };
 
     template <CoType T>

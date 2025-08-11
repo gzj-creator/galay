@@ -69,14 +69,33 @@ namespace galay::details
         std::list<std::function<void()>> m_once_loop_cbs; 
     };
     #elif defined(USE_IOURING)
-    class IOUringEventEngine final: public EventEngine { 
-    public:
-        using error_ptr = error::Error::ptr;
-        explicit IOUringEventEngine(int max_events);
-        ~IOUringEventEngine() override;
-    private:
-        
-    };
+    // class IOUringEventEngine final: public EventEngine { 
+    // public:
+    //     using error_ptr = error::Error::ptr;
+    //     //对实时性要求低的应用可以使用batch_mode提高并发
+    //     explicit IOUringEventEngine(bool batch_mode, uint32_t max_events = DEFAULT_MAX_EVENTS);
+    //     bool start(int timeout) override;
+    //     bool stop() override;
+    //     bool notify() override;
+    //     virtual int addEvent(Event* event, void* ctx) = 0;
+    //     virtual int modEvent(Event* event, void* ctx) = 0;
+    //     virtual int delEvent(Event* event, void* ctx) = 0;
+    //     virtual bool isRunning() const = 0;
+    //     virtual error_ptr getError() const = 0;
+    //     virtual GHandle getHandle() = 0;
+    //     virtual void registerOnceLoopCallback(const std::function<void()>& callback) = 0;
+    //     ~IOUringEventEngine() override;
+    // private: 
+    //     void startWait(int timeout);
+    //     void startBatch(int timeout);
+    // private:
+    //     uint32_t m_max_events = 0;
+    //     error_ptr m_error;
+    //     std::atomic_bool m_stop;
+    //     bool m_batch_mode = false;
+
+    //     io_uring m_ring;
+    // };
     #elif defined(USE_SELECT)
 
     #elif defined(USE_KQUEUE)

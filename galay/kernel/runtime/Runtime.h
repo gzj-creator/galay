@@ -5,7 +5,7 @@
 #ifndef GALAY_RUNTIME_H
 #define GALAY_RUNTIME_H
 
-#include "galay/kernel/coroutine/CoroutineScheduler.hpp"
+#include "galay/kernel/coroutine/CoScheduler.hpp"
 #include <unordered_set>
 
 namespace galay
@@ -32,20 +32,41 @@ namespace galay
         moodycamel::ConcurrentQueue<CoroutineBase::wptr> m_queue_2;
     };
 
+    class Runtime;
+
+    class RuntimeConfig {
+    public:
+        RuntimeConfig(Runtime& runtime);
+        RuntimeConfig& eventTimeout(int64_t timeout);
+        RuntimeConfig& startCoManager(bool start);
+    private:
+        Runtime& m_runtime;
+    };
+
     class Runtime
     {
+        friend class RuntimeConfig;
     public:
         using uptr = std::unique_ptr<Runtime>;
-
-        Runtime(bool start_check = false, std::chrono::milliseconds check_interval = std::chrono::milliseconds(800),\
-            TimerManagerType type = TimerManagerType::kTimerManagerTypePriorityQueue);
+        RuntimeConfig config();
+        void start();
+        void stop();
         //thread security
         template<CoType T>
         void schedule(Coroutine<T>&& co);
+
+        EventScheduler* eventScheduler() { return m_eScheduler.get(); }
+        CoroutineScheduler* coroutineScheduler() { return m_cScheduler.get(); }
+
         ~Runtime();
     private:
+        int m_event_timeout = -1;
+
+        bool m_start_check_co = false;
+        std::chrono::milliseconds m_co_check_interval;
+        EventScheduler::ptr m_eScheduler;
         CoroutineManager::uptr m_manager;
-        CoroutineScheduler::uptr m_scheduler;
+        CoroutineScheduler::uptr m_cScheduler;
     };
 
     template<CoType T>
@@ -55,7 +76,10 @@ namespace galay
         {
             m_manager->manage(co.getOriginCoroutine());
         }
-        m_scheduler->schedule(std::forward<Coroutine<T>>(co));
+        if(!m_eScheduler || !m_cScheduler) {
+            throw std::runtime_error("Runtime not started");
+        }
+        m_cScheduler->schedule(std::forward<Coroutine<T>>(co));
     }
 
 }

@@ -33,20 +33,6 @@ void CallbackEvent::handleEvent()
     this->m_callback(this, EventDeletor(this));
 }
 
-bool CallbackEvent::setEventScheduler(EventScheduler* scheduler)
-{
-    if(auto t = m_scheduler.load(); !m_scheduler.compare_exchange_strong(t, scheduler)) {
-        return false;
-    }
-    return true;
-}
-
-EventScheduler* CallbackEvent::belongEventScheduler()
-{
-    return m_scheduler.load();
-}
-
-
 CallbackEvent::~CallbackEvent()
 {
     if( m_scheduler ) m_scheduler.load()->delEvent(this, nullptr);

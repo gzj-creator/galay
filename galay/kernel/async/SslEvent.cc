@@ -1,17 +1,19 @@
 #include "SslEvent.h"
 #include "Socket.h"
-#include "galay/kernel/coroutine/CoroutineScheduler.hpp"
+#include "galay/kernel/coroutine/CoScheduler.hpp"
 
-galay::AsyncSslSocketBuilder galay::AsyncSslSocketBuilder::create(SSL *ssl){
+galay::AsyncSslSocketBuilder galay::AsyncSslSocketBuilder::create(EventScheduler* scheduler, GHandle handle, SSL *ssl){
     AsyncSslSocketBuilder builder;
     builder.m_ssl = ssl;
+    builder.m_scheduler = scheduler;
+    builder.m_handle = handle;
     return std::move(builder);
 }
 
 galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
 {
     if(m_ssl == nullptr) throw std::runtime_error("Invalid ssl");
-    return AsyncSslSocket::create(m_ssl);
+    return AsyncSslSocket(m_scheduler, m_handle, m_ssl);
 }
 
 bool galay::AsyncSslSocketBuilder::check() const
@@ -61,17 +63,17 @@ namespace galay::details
     bool SslAcceptEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
                 return false;
             }
         } else {
             if(!m_context.m_scheduler->modEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
                 return false;
             }
         }
@@ -97,14 +99,14 @@ namespace galay::details
                     return false;
                 }
                 error = std::make_shared<SystemError>(CallAcceptError, errno);
-                makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
                 return true;
             }
             m_accept_ssl = SSL_new(getGlobalSSLCtx());
             if(m_accept_ssl == nullptr) {
                 error = std::make_shared<SystemError>(CallSSLNewError, errno);
                 close(handle.fd);
-                makeValue(m_result, AsyncSslSocketBuilder::create(nullptr), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
                 return true;
             }
             if(SSL_set_fd(m_accept_ssl, handle.fd) == -1) {
@@ -112,7 +114,7 @@ namespace galay::details
                 SSL_free(m_accept_ssl);
                 m_accept_ssl = nullptr;
                 close(handle.fd);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_accept_ssl), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
                 return true;
             }
             SSL_set_accept_state(m_accept_ssl);
@@ -121,7 +123,9 @@ namespace galay::details
         if(m_status == SslAcceptStatus::kSslAcceptStatus_SslAccept) {
             int r = SSL_do_handshake(m_accept_ssl);
             if(r == 1) {
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_accept_ssl), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {
+                    .fd = SSL_get_fd(m_accept_ssl)
+                }, m_accept_ssl), error);
                 return true;
             } 
             m_ssl_code = SSL_get_error(m_accept_ssl, r);
@@ -134,7 +138,9 @@ namespace galay::details
                 m_accept_ssl = nullptr;
             }
         }
-        makeValue(m_result, AsyncSslSocketBuilder::create(m_accept_ssl), error);
+        makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {
+                    .fd = SSL_get_fd(m_accept_ssl)
+                },m_accept_ssl), error);
         return true;
     }
 
@@ -223,9 +229,9 @@ namespace galay::details
     bool SslCloseEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
@@ -280,9 +286,9 @@ namespace galay::details
     bool SslConnectEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, false, error);
                 return false;
@@ -363,9 +369,9 @@ namespace galay::details
     bool SslRecvEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;
@@ -424,9 +430,9 @@ namespace galay::details
     bool SslSendEvent::suspend(Waker waker)
     {
         using namespace error;
-        if (!m_context.m_scheduler)
+        if(m_context.m_handle.flags[0] == 0)
         {
-            if(!waker.belongScheduler()->getEventScheduler()->addEvent(this, nullptr)) {
+            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
                 auto error = std::make_shared<SystemError>(CallAddEventError, errno);
                 makeValue(m_result, Bytes(), error);
                 return false;

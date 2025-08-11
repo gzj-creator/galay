@@ -1,15 +1,26 @@
 #ifndef __GALAY_BASE_H__
 #define __GALAY_BASE_H__
-
+#include <bitset>
 #if defined(__linux__)
+
+#define FLAGS_BITS  16
+
+
+/*
+    flags:
+        1.第一位表示是否加入event_scheduler
+
+*/
 struct GHandle {
     static GHandle invalid() { return GHandle{}; }
     int fd = -1;
+    std::bitset<FLAGS_BITS> flags;
 };
 #elif defined(__APPLE__)
 struct GHandle {
     static GHandle invalid() { return GHandle{}; }
     int fd = -1;
+    std::bitset<FLAGS_BITS> flags;
 };
 #elif defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)
 #include <WinSock2.h>
@@ -103,8 +114,8 @@ private:
 
 #define _CONCAT(a, b) a##b
 #define _MAKE_DEFER_(line) DeferClass _CONCAT(defer_placeholder, line) = [&]()
-
-#undef DEFER
 #define DEFER _MAKE_DEFER_(__LINE__)
+
+
 
 #endif
