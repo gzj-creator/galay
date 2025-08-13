@@ -4,8 +4,12 @@ file(GLOB SRC_LIST *.cc)
 
 set(COMMON_LIB ssl crypto)
 
-if(${ENABLE_LOG_TRACE})
+if(ENABLE_SYSTEM_LOG)
+  add_definitions(-DENABLE_SYSTEM_LOG)
+  if(ENABLE_LOG_TRACE)
     add_definitions(-DENABLE_TRACE)
+    message(STATUS "Enable log trace")
+  endif()
 endif()
 
 foreach(SRC ${SRC_LIST})

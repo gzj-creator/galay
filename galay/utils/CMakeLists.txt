@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 project(utils)
 
+if(ENABLE_SYSTEM_LOG)
+  add_definitions(-DENABLE_SYSTEM_LOG)
+  if(ENABLE_LOG_TRACE)
+    add_definitions(-DENABLE_TRACE)
+    message(STATUS "Enable log trace")
+  endif()
+endif()
+
 file(GLOB SRC_LIST "*.cc")
 
 if(ENABLE_NLOHMANN_JSON)

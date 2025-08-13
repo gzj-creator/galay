@@ -2,6 +2,7 @@
 #define GALAY_COROUTINE_RESULT_HPP
 
 #include "AsyncEvent.hpp"
+#include "galay/common/Log.h"
 
 namespace galay
 {

@@ -1,5 +1,13 @@
 project(algorithm)
 
+if(ENABLE_SYSTEM_LOG)
+  add_definitions(-DENABLE_SYSTEM_LOG)
+  if(ENABLE_LOG_TRACE)
+    add_definitions(-DENABLE_TRACE)
+    message(STATUS "Enable log trace")
+  endif()
+endif()
+
 file(GLOB SRC_LIST "*.cc")
 
 add_library(${PROJECT_NAME} OBJECT ${SRC_LIST})

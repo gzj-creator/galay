@@ -4,6 +4,7 @@
 #endif
 #include "Socket.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
+#include "galay/common/Log.h"
 
 galay::AsyncTcpSocketBuilder galay::AsyncTcpSocketBuilder::create(EventScheduler* scheduler, GHandle handle)
 {
@@ -16,7 +17,9 @@ galay::AsyncTcpSocketBuilder galay::AsyncTcpSocketBuilder::create(EventScheduler
 
 galay::AsyncTcpSocket galay::AsyncTcpSocketBuilder::build()
 {
-    if(m_handle.fd < 0) throw std::runtime_error("Invalid handle");
+    if(m_handle.fd < 0) {
+        LogError("handle < 0");
+    }
     return AsyncTcpSocket(m_scheduler, m_handle);
 }
 
@@ -51,13 +54,15 @@ namespace galay::details
         GHandle handle {
             .fd = accept(m_handle.fd, &addr, &addr_len),
         };
-        LogTrace("[Accept Address: {}:{}]", ip, port);
         if( handle.fd < 0 ) {
             if( errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ) {
                 return false;
             }
             error = std::make_shared<SystemError>(CallAcceptError, errno);
         }
+        std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
+        uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
+        LogTrace("[Accept Address: {}:{}]", ip, port);
         makeValue(m_result, AsyncTcpSocketBuilder::create(m_scheduler, handle), error);
         return true;
     }

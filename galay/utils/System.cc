@@ -127,7 +127,7 @@ zeroReadFile(const std::string &FileName)
     }
     std::string res(p,st.st_size);
     munmap(p,st.st_size);
-    return std::move(res);
+    return res;
 }
 
 

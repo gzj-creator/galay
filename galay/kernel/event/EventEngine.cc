@@ -107,7 +107,7 @@ namespace galay::details
     {
         using namespace error;
         m_error.reset();
-        LogTrace("[Add {} To Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineId(), event->getHandle().fd, toString(event->getEventType()));
+        LogTrace("[Add {} To Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
         epoll_event ev;
         if(!convertToEpollEvent(ev, event, ctx))
         {
@@ -126,7 +126,7 @@ namespace galay::details
     {
         using namespace error;
         m_error.reset();
-        LogTrace("[Mod {} In Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineId(), event->getHandle().fd, toString(event->getEventType()));
+        LogTrace("[Mod {} In Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
         epoll_event ev;
         ev.data.ptr = event;
         if( !convertToEpollEvent(ev, event, ctx) ) return 0;
@@ -142,7 +142,7 @@ namespace galay::details
     {
         using namespace error;
         m_error.reset();
-        LogTrace("[Del {} From Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineId(), event->getHandle().fd, toString(event->getEventType()));
+        LogTrace("[Del {} From Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
         GHandle handle = event->getHandle();
         epoll_event ev;
         ev.data.ptr = event;
@@ -295,7 +295,7 @@ namespace galay::details
     {
         using namespace error;
         m_error.reset();
-        LogTrace("[Add {} To Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineId(), event->getHandle().fd, toString(event->getEventType()));
+        LogTrace("[Add {} To Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
         struct kevent k_event;
         k_event.flags = EV_ADD;
         if(!convertToKEvent(k_event, event, ctx)) {
@@ -312,7 +312,7 @@ namespace galay::details
     {
         using namespace error;
         m_error.reset();
-        LogTrace("[Mod {} In Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineId(), event->getHandle().fd, toString(event->getEventType()));
+        LogTrace("[Mod {} In Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
         struct kevent k_event;
         k_event.flags = EV_ADD;
         if(!convertToKEvent(k_event, event, ctx)) {
@@ -329,7 +329,7 @@ namespace galay::details
     {
         using namespace error;
         m_error.reset();
-        LogTrace("[Del {} From Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineId(), event->getHandle().fd, toString(event->getEventType()));
+        LogTrace("[Del {} From Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
         struct kevent k_event;
         k_event.flags = EV_DELETE;
         if(!convertToKEvent(k_event, event, ctx)) {

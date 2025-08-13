@@ -1,7 +1,13 @@
 cmake_minimum_required(VERSION 3.21)
 project(kernel)
 
-
+if(ENABLE_SYSTEM_LOG)
+  add_definitions(-DENABLE_SYSTEM_LOG)
+  if(ENABLE_LOG_TRACE)
+    add_definitions(-DENABLE_TRACE)
+    message(STATUS "Enable log trace")
+  endif()
+endif()
 
 file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "sync/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc")
 

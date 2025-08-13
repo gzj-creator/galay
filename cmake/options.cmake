@@ -1,6 +1,7 @@
 option(ENABLE_DEBUG "Enable debug" ON)
 option(ENABLE_INSTALL_SYSTEM "Enable install system" ON) 
 option(BUILD_STATIC "Build static" OFF)
+option(ENABLE_SYSTEM_LOG "Enable system log" ON)
 option(ENABLE_LOG_TRACE "Enable log trace" ON)
 option(ENABLE_DEFAULT_USE_EPOLL "Enable default use epoll" ON)
 

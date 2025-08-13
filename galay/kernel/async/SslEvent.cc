@@ -1,5 +1,6 @@
 #include "SslEvent.h"
 #include "Socket.h"
+#include "galay/common/Log.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 
 galay::AsyncSslSocketBuilder galay::AsyncSslSocketBuilder::create(EventScheduler* scheduler, SSL *ssl){
@@ -11,7 +12,9 @@ galay::AsyncSslSocketBuilder galay::AsyncSslSocketBuilder::create(EventScheduler
 
 galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
 {
-    if(m_ssl == nullptr) throw std::runtime_error("Invalid ssl");
+    if(m_ssl == nullptr) {
+        LogError("SSL* is nullptr");
+    }
     return AsyncSslSocket(m_scheduler, m_ssl);
 }
 
@@ -78,6 +81,9 @@ namespace galay::details
                 makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, nullptr), error);
                 return true;
             }
+            std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
+            uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
+            LogTrace("[Accept Address: {}:{}]", ip, port);
             m_accept_ssl = SSL_new(getGlobalSSLCtx());
             if(m_accept_ssl == nullptr) {
                 error = std::make_shared<SystemError>(CallSSLNewError, errno);

@@ -32,11 +32,12 @@ namespace galay {
         auto co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
         m_coroutine = co;
         if(co.expired()) {
-            throw std::runtime_error("Coroutine expired");
+            LogError("AsyncResult Coroutine expired");
+            return false;
         }
         if(m_event->suspend(Waker(co))) {
             while(!co.lock()->become(CoroutineStatus::Suspended)) {
-                throw std::runtime_error("Coroutine become Failed");
+                LogError("AsyncResult Coroutine become suspend error");
             } 
             return true;
         }
@@ -50,7 +51,7 @@ namespace galay {
             return this->m_event->resume();
         }
         while(!m_coroutine.lock()->become(CoroutineStatus::Running)) {
-            throw std::runtime_error("Coroutine become Failed");
+            LogError("AsyncResult Coroutine become running error");
         }
         return this->m_event->resume();
     }

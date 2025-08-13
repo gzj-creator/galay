@@ -125,6 +125,7 @@ namespace galay
     void Runtime::stop()
     {
         if(!m_eScheduler || !m_cScheduler) {
+            LogError("Runtime not started");
             throw std::runtime_error("Runtime not started");
         }
         if(m_manager) {

@@ -15,6 +15,7 @@ namespace galay
         {
             if (coroutine->belongScheduler() == nullptr)
             {
+                LogError("coroutine is not running on any scheduler");
                 throw std::runtime_error("coroutine is not running on any scheduler");
             }
             coroutine->belongScheduler()->resumeCoroutine(m_coroutine);

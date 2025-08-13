@@ -3,6 +3,8 @@
 #if defined(USE_EPOLL)
     #include <sys/timerfd.h>
 #endif
+#include "galay/common/Log.h"
+
 namespace galay
 {
 
@@ -33,10 +35,10 @@ namespace galay
             .it_interval = {},
             .it_value = abstime};
         if(timerfd_settime(event->getHandle().fd, 0, &its, nullptr)) {
-            throw std::runtime_error("timerfd_settime error");
+            LogTrace("TimerActivator::active: timerfd_settime failed");
         }
         if(!m_scheduler->activeEvent(event, nullptr)) {
-            throw std::runtime_error("modEvent failed");
+            LogTrace("TimerActivator::active: activeEvent failed");
         }
     }
 

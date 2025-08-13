@@ -55,7 +55,7 @@ void ScrambleThreadPool::consumeQueue()
 }
 
 SpecifiedThreadPool::SpecifiedThreadPool(size_t size, ThreadIndexSelector::ptr selector)
-    : m_stop(true), m_threads(size), m_queues(size), m_selector(selector)
+    : m_selector(selector), m_stop(true), m_threads(size), m_queues(size)
 {
     if(m_selector == nullptr) {
         m_selector = std::make_shared<RoundRobinThreadIndexSelector>(size - 1);
@@ -68,7 +68,7 @@ void SpecifiedThreadPool::start()
 {
     if(m_stop.load() == false) return;
     m_stop = false;
-    for(int i = 0; i < m_threads.size(); ++i) {
+    for(size_t i = 0; i < m_threads.size(); ++i) {
         m_threads[i] = std::thread([this, i]() {
             consumeQueue(i);
         });

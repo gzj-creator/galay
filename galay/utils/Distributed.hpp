@@ -51,7 +51,7 @@ public:
     // 节点状态（对外暴露）
 
     explicit ConsistentHash(size_t virtual_nodes = 1000, uint32_t seed = 0)
-        : virtual_nodes_(virtual_nodes), hash_seed_(seed) {}
+        : hash_seed_(seed), virtual_nodes_(virtual_nodes) {}
 
     // 添加节点（线程安全）
     void addNode(const NodeConfig& config);

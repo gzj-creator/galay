@@ -1,9 +1,8 @@
 #ifndef GALAY_LOG_H
 #define GALAY_LOG_H
 
-#ifdef ENABLE_TRACE
+#if defined(ENABLE_SYSTEM_LOG) && defined(ENABLE_TRACE)
     #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
-    #pragma message("enable trace log")
 #endif
 
 #include <memory>
@@ -62,13 +61,13 @@ private:
 
 namespace galay {
 
-#ifdef ENABLE_TRACE
-    #define LogTrace(...)       SPDLOG_LOGGER_TRACE(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)
+#ifdef ENABLE_SYSTEM_LOG
+    #define LogTrace(...)       SPDLOG_LOGGER_TRACE(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
     #define LogDebug(...)       SPDLOG_LOGGER_DEBUG(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
-    #define LogInfo(...)        SPDLOG_LOGGER_INFO(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)
-    #define LogWarn(...)        SPDLOG_LOGGER_WARN(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)
-    #define LogError(...)       SPDLOG_LOGGER_ERROR(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)
-    #define LogCritical(...)    SPDLOG_LOGGER_CRITICAL(galay::details::InternelLogger::GetInstance()->GetLogger()->SpdLogger(), __VA_ARGS__)
+    #define LogInfo(...)        SPDLOG_LOGGER_INFO(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
+    #define LogWarn(...)        SPDLOG_LOGGER_WARN(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
+    #define LogError(...)       SPDLOG_LOGGER_ERROR(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
+    #define LogCritical(...)    SPDLOG_LOGGER_CRITICAL(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
 #else
     #define LogTrace(...)       (void)0
     #define LogDebug(...)       (void)0

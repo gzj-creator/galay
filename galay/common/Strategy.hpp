@@ -19,7 +19,7 @@ public:
     using uptr = std::unique_ptr<RoundRobinLoadBalancer>;
     using ptr = std::shared_ptr<RoundRobinLoadBalancer>;
     RoundRobinLoadBalancer(const std::vector<Type>& nodes)
-        : m_nodes(nodes), m_index(0) {}
+        : m_index(0), m_nodes(nodes) {}
 
     std::optional<Type> select();
     size_t size() const;

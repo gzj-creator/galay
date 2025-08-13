@@ -1,8 +1,9 @@
 #include "galay/kernel/async/Socket.h"
-#include <iostream>
+#include "galay/common/Log.h"
 #include "galay/kernel/async/Bytes.hpp"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/runtime/Runtime.h"
+#include <iostream>
 
 using namespace galay;
 
@@ -100,6 +101,7 @@ Coroutine<nil> Send(AsyncTcpSocket socket)
 
 int main()
 {
+    galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
     runtime = std::make_unique<Runtime>();
     auto config = runtime->config();
     config.startCoManager(true, std::chrono::milliseconds(1000));

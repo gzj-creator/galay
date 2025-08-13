@@ -93,6 +93,7 @@ Coroutine<nil> test_v()
 }
 
 int main() { 
+    LogTrace("main");
     galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
     runtime = std::make_unique<Runtime>();
     auto config = runtime->config();

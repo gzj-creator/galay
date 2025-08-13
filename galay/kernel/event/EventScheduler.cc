@@ -49,7 +49,7 @@ namespace galay{
     {
         this->m_thread = std::make_unique<std::thread>([this, timeout](){
             m_engine->start(timeout);
-            LogTrace("[{}({}) exist successfully]", name(), GetEngine()->getHandle().fd);
+            LogTrace("[{}({}) exist successfully]", name(), m_engine->getEngineID());
         });
         return true;
     }

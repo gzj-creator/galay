@@ -1,6 +1,7 @@
 #include "Bytes.hpp"
 #include <stdexcept>
 #include <limits>
+#include "galay/common/Log.h"
 
 namespace galay
 {
@@ -8,7 +9,10 @@ namespace galay
     {
         if (!data.empty()) {
             mData = static_cast<uint8_t*>(malloc(data.size()));
-            if (!mData) throw std::bad_alloc();
+            if (!mData) {
+                LogError("malloc failed");
+                throw std::bad_alloc();
+            }
             mSize = data.size();
             mCapacity = data.size();
             std::memcpy(mData, data.data(), data.size());
@@ -19,7 +23,10 @@ namespace galay
     {
         if (!data.empty()) {
             mData = static_cast<uint8_t*>(malloc(data.size()));
-            if (!mData) throw std::bad_alloc();
+            if (!mData) {
+                LogError("malloc failed");
+                throw std::bad_alloc();
+            }
             mSize = data.size();
             mCapacity = data.size();
             std::memcpy(mData, data.data(), data.size());
@@ -32,7 +39,10 @@ namespace galay
             mSize = strlen(data);
             mCapacity = mSize;
             mData = static_cast<uint8_t*>(malloc(mSize));
-            if (!mData) throw std::bad_alloc();
+            if (!mData) {
+                LogError("malloc failed");
+                throw std::bad_alloc();
+            }
             std::memcpy(mData, data, mSize);
         }
     }
@@ -41,7 +51,10 @@ namespace galay
     {
         if (length > 0) {
             mData = static_cast<uint8_t*>(malloc(length));
-            if (!mData) throw std::bad_alloc();
+            if (!mData) {
+                LogError("malloc failed");
+                throw std::bad_alloc();
+            }
             mSize = length;
             mCapacity = length;
             std::memcpy(mData, data, length);
@@ -52,7 +65,10 @@ namespace galay
     {
         if (length > 0) {
             mData = static_cast<uint8_t*>(malloc(length));
-            if (!mData) throw std::bad_alloc();
+            if (!mData) {
+                LogError("malloc failed");
+                throw std::bad_alloc();
+            }
             mSize = length;
             mCapacity = length;
             std::memcpy(mData, data, length);
@@ -64,7 +80,10 @@ namespace galay
         if (capacity > 0)
         {
             mData = static_cast<uint8_t*>(malloc(capacity));
-            if (!mData) throw std::bad_alloc();
+            if (!mData) {
+                LogError("malloc failed");
+                throw std::bad_alloc();
+            }
             bzero(mData, capacity);
             mSize = 0;
             mCapacity = capacity;
@@ -126,7 +145,10 @@ namespace galay
         }
 
         uint8_t* newData = static_cast<uint8_t*>(realloc(mData, newSize));
-        if (!newData) throw std::bad_alloc();
+        if (!newData) {
+            LogError("reallocate failed");
+            throw std::bad_alloc();
+        }
 
         mData = newData;
         mSize = newSize;
@@ -146,7 +168,10 @@ namespace galay
         }
 
         uint8_t* newData = static_cast<uint8_t*>(calloc(newSize, 1));
-        if (!newData) throw std::bad_alloc();
+        if (!newData) {
+            LogError("reallocate failed");
+            throw std::bad_alloc();
+        }
 
         if (mData) {
             std::memcpy(newData, mData, std::min(mSize, newSize));
@@ -163,7 +188,10 @@ namespace galay
         if (newCapacity <= mCapacity) return;
 
         uint8_t* newData = static_cast<uint8_t*>(realloc(mData, newCapacity));
-        if (!newData) throw std::bad_alloc();
+        if (!newData) {
+            LogError("reallocate failed");
+            throw std::bad_alloc();
+        }
 
         mData = newData;
         mCapacity = newCapacity;
@@ -181,6 +209,7 @@ namespace galay
 
     Bytes Bytes::slice(size_t pos, size_t len) const {
         if (pos > mSize) {
+            LogError("Bytes::slice position out of range");
             throw std::out_of_range("Bytes::slice - position out of range");
         }
         len = std::min(len, mSize - pos);

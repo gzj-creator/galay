@@ -1,6 +1,6 @@
 #include "galay/kernel/async/TimerGenerator.h"
+#include "galay/common/Log.h"
 #include <iostream>
-
 
 using namespace galay;
 
@@ -37,6 +37,7 @@ Coroutine<nil> test()
 
 int main()
 {
+    galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
     runtime = std::make_unique<Runtime>();
     auto config = runtime->config();
     config.startCoManager(true, std::chrono::milliseconds(1000));

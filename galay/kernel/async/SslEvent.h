@@ -2,7 +2,6 @@
 #define GALAY_SSL_EVENT_H 
 
 #include "galay/kernel/coroutine/Result.hpp"
-#include "galay/common/Log.h"
 #include "galay/common/Common.h"
 #include "Bytes.hpp"
 

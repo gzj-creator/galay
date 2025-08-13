@@ -50,6 +50,7 @@ class ThreadIndexSelector
 public:
     using ptr = std::shared_ptr<ThreadIndexSelector>;
     virtual std::optional<int> select() = 0;
+    virtual ~ThreadIndexSelector() = default;
 };
 
 class RoundRobinThreadIndexSelector: public ThreadIndexSelector
