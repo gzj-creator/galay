@@ -10,54 +10,52 @@
 
 namespace galay::details { 
 
-
-    struct FileStatusContext
-    {
-        GHandle m_handle;
-        GHandle m_event_handle;
-        io_context_t m_io_ctx;
-        int32_t m_iocb_index = 0;
-        std::vector<iocb> m_iocbs;
-        int32_t m_unfinished = 0;
-        EventScheduler* m_scheduler = nullptr;
-    };
-
     template<CoType T>
     class FileEvent: public AsyncEvent<T>
     { 
     public:
-        FileEvent(FileStatusContext& context) :m_context(context) {}
+        FileEvent(GHandle ehandle, EventScheduler* scheduler) 
+            :m_ehandle(ehandle), m_scheduler(scheduler) {}
         bool suspend(Waker waker) override {
+            using namespace error;
             this->m_waker = waker;
+            if(!m_scheduler->activeEvent(this, nullptr)) {
+                Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
+                makeValue(this->m_result, false, error);
+                return false;
+            }
             return true;
         }
-        GHandle& getHandle() override {  return m_context.m_event_handle; }
+        GHandle getHandle() override {  return m_ehandle; }
     protected:
-        FileStatusContext& m_context;
+        GHandle m_ehandle;
+        EventScheduler* m_scheduler;
     };
 
     class FileCloseEvent: public FileEvent<ValueWrapper<bool>> 
     {
     public:
-        FileCloseEvent(FileStatusContext& context);
+        FileCloseEvent(GHandle event_handle, EventScheduler* scheduler, GHandle handle);
         std::string name() override { return "FileCloseEvent"; }
-        void handleEvent() override;
+        void handleEvent() override {}
         EventType getEventType() const override { return EventType::kEventTypeNone; }
-
         bool ready() override;
-        bool suspend(Waker waker) override;
+    private:
+        GHandle m_handle;
     };
     
     class FileCommitEvent: public FileEvent<ValueWrapper<bool>>
     {
     public:
-        FileCommitEvent(FileStatusContext& context);
+        FileCommitEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, std::vector<iocb>&& iocbs);
         std::string name() override { return "FileCommitEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return EventType::kEventTypeRead; }
-
         bool ready() override;
-        bool suspend(Waker waker) override;
+    private:
+        size_t m_unfinished_cb;
+        io_context_t m_context;
+        std::vector<iocb> m_iocbs;
     };
 
 }

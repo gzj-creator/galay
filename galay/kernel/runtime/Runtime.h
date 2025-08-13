@@ -6,10 +6,13 @@
 #define GALAY_RUNTIME_H
 
 #include "galay/kernel/coroutine/CoScheduler.hpp"
+#include "galay/kernel/time/TimerManager.h"
 #include <unordered_set>
 
 namespace galay
 {
+
+#define DEFAULT_FDS_SET_INITIAL_SIZE 1024
     //可容忍在改变状态之前读取旧值导致老队列管理co（下一轮也可以检查到）
     class CoroutineManager
     {
@@ -38,7 +41,7 @@ namespace galay
     public:
         RuntimeConfig(Runtime& runtime);
         RuntimeConfig& eventTimeout(int64_t timeout);
-        RuntimeConfig& startCoManager(bool start);
+        RuntimeConfig& startCoManager(bool start, std::chrono::milliseconds interval);
     private:
         Runtime& m_runtime;
     };
@@ -49,6 +52,8 @@ namespace galay
     public:
         using uptr = std::unique_ptr<Runtime>;
         RuntimeConfig config();
+        Runtime(int fds_initial_size = DEFAULT_FDS_SET_INITIAL_SIZE);
+
         void start();
         void stop();
         //thread security
@@ -57,16 +62,16 @@ namespace galay
 
         EventScheduler* eventScheduler() { return m_eScheduler.get(); }
         CoroutineScheduler* coroutineScheduler() { return m_cScheduler.get(); }
+        TimerManager* timerManager() { return m_timerManager.get(); }
 
         ~Runtime();
     private:
         int m_event_timeout = -1;
-
-        bool m_start_check_co = false;
-        std::chrono::milliseconds m_co_check_interval;
         EventScheduler::ptr m_eScheduler;
         CoroutineManager::uptr m_manager;
         CoroutineScheduler::uptr m_cScheduler;
+
+        TimerManager::ptr m_timerManager;
     };
 
     template<CoType T>

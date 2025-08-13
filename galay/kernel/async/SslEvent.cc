@@ -2,18 +2,17 @@
 #include "Socket.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 
-galay::AsyncSslSocketBuilder galay::AsyncSslSocketBuilder::create(EventScheduler* scheduler, GHandle handle, SSL *ssl){
+galay::AsyncSslSocketBuilder galay::AsyncSslSocketBuilder::create(EventScheduler* scheduler, SSL *ssl){
     AsyncSslSocketBuilder builder;
     builder.m_ssl = ssl;
     builder.m_scheduler = scheduler;
-    builder.m_handle = handle;
-    return std::move(builder);
+    return builder;
 }
 
 galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
 {
     if(m_ssl == nullptr) throw std::runtime_error("Invalid ssl");
-    return AsyncSslSocket(m_scheduler, m_handle, m_ssl);
+    return AsyncSslSocket(m_scheduler, m_ssl);
 }
 
 bool galay::AsyncSslSocketBuilder::check() const
@@ -23,8 +22,8 @@ bool galay::AsyncSslSocketBuilder::check() const
 
 namespace galay::details
 { 
-    SslAcceptEvent::SslAcceptEvent(SslStatusContext& ctx)
-        : SslEvent<ValueWrapper<AsyncSslSocketBuilder>>(ctx), m_status(SslAcceptStatus::kSslAcceptStatus_Accept)
+    SslAcceptEvent::SslAcceptEvent(SSL* ssl, EventScheduler* scheduler)
+        : SslEvent<ValueWrapper<AsyncSslSocketBuilder>>(ssl, scheduler), m_status(SslAcceptStatus::kSslAcceptStatus_Accept)
     {
     }
 
@@ -33,7 +32,7 @@ namespace galay::details
         if(sslAccept()) {
             m_waker.wakeUp();
         } else {
-            m_context.m_scheduler->modEvent(this, nullptr);
+            m_scheduler->activeEvent(this, nullptr);
         }
     }
 
@@ -60,26 +59,6 @@ namespace galay::details
         return sslAccept();
     }
 
-    bool SslAcceptEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
-                return false;
-            }
-        }
-        return SslEvent::suspend(waker);
-    }
-
     bool SslAcceptEvent::sslAccept()
     {
         using namespace error;
@@ -89,24 +68,21 @@ namespace galay::details
             sockaddr addr{};
             socklen_t addr_len = sizeof(addr);
             GHandle handle {
-                .fd = accept(SSL_get_fd(m_context.m_ssl), &addr, &addr_len),
+                .fd = accept(SSL_get_fd(m_ssl), &addr, &addr_len),
             };
-            std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
-            uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
-            LogTrace("[Accept Address: {}:{}]", ip, port);
             if( handle.fd < 0 ) {
                 if( errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ) {
                     return false;
                 }
                 error = std::make_shared<SystemError>(CallAcceptError, errno);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, nullptr), error);
                 return true;
             }
             m_accept_ssl = SSL_new(getGlobalSSLCtx());
             if(m_accept_ssl == nullptr) {
                 error = std::make_shared<SystemError>(CallSSLNewError, errno);
                 close(handle.fd);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, nullptr), error);
                 return true;
             }
             if(SSL_set_fd(m_accept_ssl, handle.fd) == -1) {
@@ -114,7 +90,7 @@ namespace galay::details
                 SSL_free(m_accept_ssl);
                 m_accept_ssl = nullptr;
                 close(handle.fd);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {}, nullptr), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, nullptr), error);
                 return true;
             }
             SSL_set_accept_state(m_accept_ssl);
@@ -123,9 +99,7 @@ namespace galay::details
         if(m_status == SslAcceptStatus::kSslAcceptStatus_SslAccept) {
             int r = SSL_do_handshake(m_accept_ssl);
             if(r == 1) {
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {
-                    .fd = SSL_get_fd(m_accept_ssl)
-                }, m_accept_ssl), error);
+                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, m_accept_ssl), error);
                 return true;
             } 
             m_ssl_code = SSL_get_error(m_accept_ssl, r);
@@ -138,14 +112,12 @@ namespace galay::details
                 m_accept_ssl = nullptr;
             }
         }
-        makeValue(m_result, AsyncSslSocketBuilder::create(m_context.m_scheduler, {
-                    .fd = SSL_get_fd(m_accept_ssl)
-                },m_accept_ssl), error);
+        makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, m_accept_ssl), error);
         return true;
     }
 
-    SslCloseEvent::SslCloseEvent(SslStatusContext& ctx)
-        : SslEvent<ValueWrapper<bool>>(ctx)
+    SslCloseEvent::SslCloseEvent(SSL* ssl, EventScheduler* scheduler)
+        : SslEvent<ValueWrapper<bool>>(ssl, scheduler)
     {
     }
 
@@ -154,7 +126,7 @@ namespace galay::details
         if(sslClose()) {
             m_waker.wakeUp();
         } else {
-            m_context.m_scheduler->modEvent(this, nullptr);
+            m_scheduler->activeEvent(this, nullptr);
         }
     }
 
@@ -162,46 +134,46 @@ namespace galay::details
     {
         using namespace error;
         SystemError::ptr error = nullptr;
-        int r = SSL_shutdown(m_context.m_ssl);
+        int r = SSL_shutdown(m_ssl);
         if(r == 1) {
-            close(SSL_get_fd(m_context.m_ssl));
+            close(SSL_get_fd(m_ssl));
+            m_scheduler->removeEvent(this, nullptr);
             makeValue(m_result, true, error);
-            m_context.m_is_connected = false;
-            SSL_free(m_context.m_ssl);
-            m_context.m_ssl = nullptr;
+            SSL_free(m_ssl);
+            m_ssl = nullptr;
             return true;
         } else if(r == 0) {
-            r = SSL_shutdown(m_context.m_ssl);
+            r = SSL_shutdown(m_ssl);
             if(r == 1) {
-                close(SSL_get_fd(m_context.m_ssl));
+                close(SSL_get_fd(m_ssl));
+                m_scheduler->removeEvent(this, nullptr);
                 makeValue(m_result, true, error);
-                m_context.m_is_connected = false;
-                SSL_free(m_context.m_ssl);
-                m_context.m_ssl = nullptr;
+                SSL_free(m_ssl);
+                m_ssl = nullptr;
                 return true;
             }
         }
-        m_ssl_code = SSL_get_error(m_context.m_ssl, r);
+        m_ssl_code = SSL_get_error(m_ssl, r);
         if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
             return false;
         } else if( this->m_ssl_code == SSL_ERROR_ZERO_RETURN ) {
             // 对端关闭
-            close(SSL_get_fd(m_context.m_ssl));
+            close(SSL_get_fd(m_ssl));
+            m_scheduler->removeEvent(this, nullptr);
             error = std::make_shared<SystemError>(DisConnectError, errno);
             makeValue(m_result, false, error);
-            m_context.m_is_connected = false;
-            SSL_free(m_context.m_ssl);
-            m_context.m_ssl = nullptr;
+            SSL_free(m_ssl);
+            m_ssl = nullptr;
             return true;
         } else {
-            SSL_set_quiet_shutdown(m_context.m_ssl, 1);
-            SSL_shutdown(m_context.m_ssl);
-            close(SSL_get_fd(m_context.m_ssl));
+            SSL_set_quiet_shutdown(m_ssl, 1);
+            SSL_shutdown(m_ssl);
+            close(SSL_get_fd(m_ssl));
+            m_scheduler->removeEvent(this, nullptr);
             error = std::make_shared<SystemError>(CallSSLShuntdownError, errno);
             makeValue(m_result, false, error);
-            m_context.m_is_connected = false;
-            SSL_free(m_context.m_ssl);
-            m_context.m_ssl = nullptr;
+            SSL_free(m_ssl);
+            m_ssl = nullptr;
             return true;
         }
         return true;
@@ -226,28 +198,8 @@ namespace galay::details
         return sslClose();
     }
 
-    bool SslCloseEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        }
-        return SslEvent::suspend(waker);
-    }
-
-    SslConnectEvent::SslConnectEvent(SslStatusContext& ctx, const Host &host)
-        : SslEvent<ValueWrapper<bool>>(ctx), m_host(host)
+    SslConnectEvent::SslConnectEvent(SSL* ssl, EventScheduler* scheduler, const Host &host)
+        : SslEvent<ValueWrapper<bool>>(ssl, scheduler), m_host(host)
     {
     }
 
@@ -256,7 +208,7 @@ namespace galay::details
         if(sslConnect()) {
             m_waker.wakeUp();
         } else {
-            m_context.m_scheduler->modEvent(this, nullptr);
+            m_scheduler->activeEvent(this, nullptr);
         }
     }
 
@@ -283,26 +235,6 @@ namespace galay::details
         return sslConnect();
     }
 
-    bool SslConnectEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        }
-        return SslEvent::suspend(waker);
-    }
-
     bool SslConnectEvent::sslConnect()
     {
         using namespace error;
@@ -314,7 +246,7 @@ namespace galay::details
             addr.sin_family = AF_INET;
             addr.sin_addr.s_addr = inet_addr(m_host.ip.c_str());
             addr.sin_port = htons(m_host.port);
-            const int ret = connect(SSL_get_fd(m_context.m_ssl), reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr_in));
+            const int ret = connect(SSL_get_fd(m_ssl), reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr_in));
             if( ret != 0) {
                 if( errno == EWOULDBLOCK || errno == EINTR || errno == EAGAIN || errno == EINPROGRESS) {
                     m_status = ConnectState::kConnectState_Connect;
@@ -328,17 +260,16 @@ namespace galay::details
             m_status = ConnectState::kConnectState_Connect;
         }
         if(m_status == ConnectState::kConnectState_Connect) {
-            m_context.m_is_connected = true;
             m_status = ConnectState::kConnectState_SslConnect;
-            SSL_set_connect_state(m_context.m_ssl);
+            SSL_set_connect_state(m_ssl);
         }
         if(m_status == ConnectState::kConnectState_SslConnect) {
-            int r = SSL_do_handshake(m_context.m_ssl);
+            int r = SSL_do_handshake(m_ssl);
             if(r == 1) {
                 makeValue(m_result, true, error);
                 return true;
             } 
-            m_ssl_code = SSL_get_error(m_context.m_ssl, r);
+            m_ssl_code = SSL_get_error(m_ssl, r);
             if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
                 return false;
             } else {
@@ -350,8 +281,8 @@ namespace galay::details
         return true;
     }
 
-    SslRecvEvent::SslRecvEvent(SslStatusContext& ctx, size_t length)
-        : SslEvent<ValueWrapper<Bytes>>(ctx), m_length(length)
+    SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, size_t length)
+        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_length(length)
     {
     }
 
@@ -366,38 +297,17 @@ namespace galay::details
         return sslRecv();
     }
 
-    bool SslRecvEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        }
-        return SslEvent::suspend(waker);
-    }
-
     bool SslRecvEvent::sslRecv()
     {
         using namespace error;
         SystemError::ptr error = nullptr;
         Bytes bytes(m_length);
-        int recvBytes = SSL_read(m_context.m_ssl, bytes.data(), m_length);
+        int recvBytes = SSL_read(m_ssl, bytes.data(), m_length);
         if (recvBytes > 0) {
             BytesVisitor visitor(bytes);
             visitor.size() = recvBytes;
         } else if (recvBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
-            m_context.m_is_connected = false;
             bytes = Bytes();
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
@@ -411,8 +321,8 @@ namespace galay::details
         return true;
     }
 
-    SslSendEvent::SslSendEvent(SslStatusContext& ctx, Bytes &&bytes)
-        : SslEvent<ValueWrapper<Bytes>>(ctx), m_bytes(std::move(bytes))
+    SslSendEvent::SslSendEvent(SSL* ssl, EventScheduler* scheduler, Bytes &&bytes)
+        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_bytes(std::move(bytes))
     {
     }
 
@@ -427,37 +337,16 @@ namespace galay::details
         return sslSend();
     }
 
-    bool SslSendEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        }
-        return SslEvent::suspend(waker);
-    }
-
     bool SslSendEvent::sslSend()
     {
         using namespace error;
         SystemError::ptr error = nullptr;
-        int sendBytes = SSL_write(m_context.m_ssl, m_bytes.data(), m_bytes.size());
+        int sendBytes = SSL_write(m_ssl, m_bytes.data(), m_bytes.size());
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
         } else if (sendBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
-            m_context.m_is_connected = false;
             makeValue(m_result, std::move(m_bytes), error);
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )

@@ -32,9 +32,8 @@ namespace galay::error
         CallSSLCloseError,
         CallFileReadError,
         CallFileWriteError,
-        CallAddEventError,
-        CallModEventError,
-        CallDelEventError,
+        CallActiveEventError,
+        CallRemoveEventError,
         CallGetSockNameError,
         CallGetPeerNameError,
         CallSetSockOptError,
@@ -47,6 +46,8 @@ namespace galay::error
         CallOpenError,
         CallAioSetupError,
         CallAioSubmitError,
+        NotInitializedError,
+        AsyncTimeoutError,
         SystemErrorEnd
     };
 
@@ -59,6 +60,7 @@ namespace galay::error
         Error(uint64_t code) : m_code(code) {}
         virtual std::string message() const = 0;
         virtual uint64_t code() const { return m_code; }
+        virtual ~Error() = default;
     protected:
         uint64_t m_code = 0;
     };

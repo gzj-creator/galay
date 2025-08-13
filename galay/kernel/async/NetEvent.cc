@@ -10,7 +10,7 @@ galay::AsyncTcpSocketBuilder galay::AsyncTcpSocketBuilder::create(EventScheduler
     AsyncTcpSocketBuilder builder;
     builder.m_handle = handle;
     builder.m_scheduler = scheduler;
-    return std::move(builder);
+    return builder;
 }
 
 
@@ -35,26 +35,6 @@ namespace galay::details
         return acceptSocket();
     }
 
-    bool TcpAcceptEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if (m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, AsyncTcpSocketBuilder::create(m_context.m_scheduler, {}), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, AsyncTcpSocketBuilder::create(m_context.m_scheduler, {}), error);
-                return false;
-            }
-        }
-        return NetEvent::suspend(waker);
-    }
-
     void TcpAcceptEvent::handleEvent()
     {
         acceptSocket();
@@ -69,10 +49,8 @@ namespace galay::details
         sockaddr addr{};
         socklen_t addr_len = sizeof(addr);
         GHandle handle {
-            .fd = accept(m_context.m_handle.fd, &addr, &addr_len),
+            .fd = accept(m_handle.fd, &addr, &addr_len),
         };
-        std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
-        uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
         LogTrace("[Accept Address: {}:{}]", ip, port);
         if( handle.fd < 0 ) {
             if( errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ) {
@@ -80,12 +58,12 @@ namespace galay::details
             }
             error = std::make_shared<SystemError>(CallAcceptError, errno);
         }
-        makeValue(m_result, AsyncTcpSocketBuilder::create(m_context.m_scheduler, handle), error);
+        makeValue(m_result, AsyncTcpSocketBuilder::create(m_scheduler, handle), error);
         return true;
     }
 
-    TcpRecvEvent::TcpRecvEvent(NetStatusContext& ctx, size_t length)
-        : NetEvent<ValueWrapper<Bytes>>(ctx), m_length(length)
+    TcpRecvEvent::TcpRecvEvent(GHandle handle, EventScheduler* scheduler, size_t length)
+        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_length(length)
     {
     }
 
@@ -100,38 +78,17 @@ namespace galay::details
         return recvBytes();
     }
 
-    bool TcpRecvEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        }
-        return NetEvent::suspend(waker);
-    }
-
     bool TcpRecvEvent::recvBytes()
     {
         using namespace error;
         SystemError::ptr error = nullptr;
         Bytes bytes(m_length);
-        int recvBytes = recv(m_context.m_handle.fd, bytes.data(), m_length, 0);
+        int recvBytes = recv(m_handle.fd, bytes.data(), m_length, 0);
         if (recvBytes > 0) {
             BytesVisitor visitor(bytes);
             visitor.size() = recvBytes;
         } else if (recvBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
-            m_context.m_is_connected = false;
             bytes = Bytes();
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
@@ -145,8 +102,8 @@ namespace galay::details
         return true;
     }
 
-    TcpSendEvent::TcpSendEvent(NetStatusContext& ctx, Bytes &&bytes)
-        : NetEvent<ValueWrapper<Bytes>>(ctx), m_bytes(std::move(bytes))
+    TcpSendEvent::TcpSendEvent(GHandle handle, EventScheduler* scheduler, Bytes &&bytes)
+        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_bytes(std::move(bytes))
     {
     }
 
@@ -154,28 +111,6 @@ namespace galay::details
     {
         return sendBytes();
     }
-
-    bool TcpSendEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, std::move(m_bytes), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, std::move(m_bytes), error);
-                return false;
-            }
-        }
-        return NetEvent::suspend(waker);
-    }
-
-
 
     void TcpSendEvent::handleEvent()
     {
@@ -187,13 +122,12 @@ namespace galay::details
     {
         using namespace error;
         SystemError::ptr error = nullptr;
-        int sendBytes = send(m_context.m_handle.fd, m_bytes.data(), m_bytes.size(), 0);
+        int sendBytes = send(m_handle.fd, m_bytes.data(), m_bytes.size(), 0);
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
         } else if (sendBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
-            m_context.m_is_connected = false;
             makeValue(m_result, std::move(m_bytes), error);
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
@@ -212,7 +146,7 @@ namespace galay::details
         using namespace error;
         SystemError::ptr error = nullptr;
         while(m_length > 0) {
-            int sendBytes = sendfile(m_context.m_handle.fd, m_file_handle.fd, &m_offset, m_length);
+            int sendBytes = sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
             if (sendBytes < 0) {
                 if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
                 {
@@ -226,32 +160,12 @@ namespace galay::details
         return true;
     }
 
-    bool TcpSendfileEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                SystemError::ptr error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        }
-        return NetEvent::suspend(waker);
-    }
-
     void TcpSendfileEvent::handleEvent()
     {
         using namespace error;
         SystemError::ptr  error = nullptr;
         while(m_length > 0) {
-            int sendBytes = sendfile(m_context.m_handle.fd, m_file_handle.fd, &m_offset, m_length);
+            int sendBytes = sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
             if (sendBytes < 0) {
                 if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
                 {
@@ -271,35 +185,13 @@ namespace galay::details
         return connectToHost();     
     }
 
-
-    bool TcpConnectEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, false, error);
-                return false;
-            }
-        }
-        return NetEvent::suspend(waker);
-    }
-
-    TcpConnectEvent::TcpConnectEvent(NetStatusContext& ctx, const Host &host)
-        : NetEvent<ValueWrapper<bool>>(ctx), m_host(host)
+    TcpConnectEvent::TcpConnectEvent(GHandle handle, EventScheduler* scheduler, const Host &host)
+        : NetEvent<ValueWrapper<bool>>(handle, scheduler), m_host(host)
     {
     }
 
     void TcpConnectEvent::handleEvent()
     {
-        m_context.m_is_connected = true;
         m_waker.wakeUp();
     }
 
@@ -313,7 +205,7 @@ namespace galay::details
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = inet_addr(m_host.ip.c_str());
         addr.sin_port = htons(m_host.port);
-        const int ret = connect(m_context.m_handle.fd, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr_in));
+        const int ret = connect(m_handle.fd, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr_in));
         if( ret != 0) {
             if( errno == EWOULDBLOCK || errno == EINTR || errno == EAGAIN || errno == EINPROGRESS) {
                 return false;
@@ -321,37 +213,28 @@ namespace galay::details
             success = false;
             error = std::make_shared<SystemError>(CallConnectError, errno);
         }
-        m_context.m_is_connected = true;
         makeValue(m_result, std::move(success), error);
         return true;
     }
 
-    TcpCloseEvent::TcpCloseEvent(NetStatusContext& ctx)
-        : NetEvent<ValueWrapper<bool>>(ctx)
+    TcpCloseEvent::TcpCloseEvent(GHandle handle, EventScheduler* scheduler)
+        : NetEvent<ValueWrapper<bool>>(handle, scheduler)
     {
     }
 
     bool TcpCloseEvent::ready()
     {
-        return false;
-    }
-
-    bool TcpCloseEvent::suspend(Waker waker)
-    {
         using namespace error;
         Error::ptr error = nullptr;
         bool success = true;
-        if(m_context.m_handle.flags[0] == 1) m_context.m_scheduler->delEvent(this, nullptr);
-        if(::close(m_context.m_handle.fd))
+        m_scheduler->removeEvent(this, nullptr);
+        if(::close(m_handle.fd))
         {
             error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);
             success = false;
-        } else {
-            m_context.m_handle = GHandle::invalid();
-            m_context.m_is_connected = false;
-        }
+        } 
         makeValue(m_result, std::move(success), error);
-        return false;
+        return true;
     }
 
     void UdpRecvfromEvent::handleEvent()
@@ -365,26 +248,6 @@ namespace galay::details
         return recvfromBytes();
     }
 
-    bool UdpRecvfromEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        }
-        return NetEvent::suspend(waker);
-    }
-
     bool UdpRecvfromEvent::recvfromBytes()
     {
         using namespace error;
@@ -392,10 +255,12 @@ namespace galay::details
         Bytes bytes(m_length);
         sockaddr addr;
         socklen_t addr_len = sizeof(addr);
-        int recvBytes = recvfrom(m_context.m_handle.fd, bytes.data(), m_length, 0, &addr, &addr_len);
+        int recvBytes = recvfrom(m_handle.fd, bytes.data(), m_length, 0, &addr, &addr_len);
         if (recvBytes > 0) {
             BytesVisitor visitor(bytes);
             visitor.size() = recvBytes;
+            m_remote.ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
+            m_remote.port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
         } else if (recvBytes == 0) {
             bytes = Bytes();
         } else {
@@ -421,26 +286,6 @@ namespace galay::details
         return sendtoBytes();
     }
 
-    bool UdpSendtoEvent::suspend(Waker waker)
-    {
-        using namespace error;
-        if(m_context.m_handle.flags[0] == 0)
-        {
-            if(!m_context.m_scheduler->addEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallAddEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        } else {
-            if(!m_context.m_scheduler->modEvent(this, nullptr)) {
-                auto error = std::make_shared<SystemError>(CallModEventError, errno);
-                makeValue(m_result, Bytes(), error);
-                return false;
-            }
-        }
-        return NetEvent::suspend(waker);
-    }
-
     bool UdpSendtoEvent::sendtoBytes()
     {
         using namespace error;
@@ -449,7 +294,7 @@ namespace galay::details
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = inet_addr(m_remote.ip.c_str());
         addr.sin_port = htons(m_remote.port);
-        int sendBytes = sendto(m_context.m_handle.fd, m_bytes.data(), m_bytes.size(), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr));
+        int sendBytes = sendto(m_handle.fd, m_bytes.data(), m_bytes.size(), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
@@ -467,31 +312,23 @@ namespace galay::details
         return true;
     }
 
-    UdpCloseEvent::UdpCloseEvent(NetStatusContext& ctx)
-        : NetEvent<ValueWrapper<bool>>(ctx)
+    UdpCloseEvent::UdpCloseEvent(GHandle handle, EventScheduler* scheduler)
+        : NetEvent<ValueWrapper<bool>>(handle, scheduler)
     {
     }
 
     bool UdpCloseEvent::ready()
     {
-        return false;
-    }
-
-    bool UdpCloseEvent::suspend(Waker waker)
-    {
         using namespace error;
         Error::ptr error = nullptr;
         bool success = true;
-        if(m_context.m_handle.flags[0] == 1) m_context.m_scheduler->delEvent(this, nullptr);
-        if(::close(m_context.m_handle.fd))
+        m_scheduler->removeEvent(this, nullptr);
+        if(::close(m_handle.fd))
         {
             error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);
             success = false;
-        } else {
-            m_context.m_handle = GHandle::invalid();
-        }
+        } 
         makeValue(m_result, std::move(success), error);
-        return false;
+        return true;
     }
-    
 }

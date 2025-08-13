@@ -16,14 +16,14 @@ namespace galay
         }
 
         AsyncResult(typename AsyncEvent<T>::ptr event);
-        AsyncResult(T&& result);
+        AsyncResult(T&& value);
         bool await_ready();
         //true will suspend, false will not
         bool await_suspend(std::coroutine_handle<> handle);
         T await_resume() const;
     protected:
         CoroutineBase::wptr m_coroutine;
-        typename AsyncEvent<T>::ptr m_event;
+        typename AsyncEvent<T>::ptr m_event = nullptr;
     };
 
 }

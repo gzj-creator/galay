@@ -6,7 +6,7 @@ std::vector<std::string>
 StringSplitter::spiltWithChar(const std::string &str, const char symbol)
 {
     std::vector<std::string> result;
-    for (int i = 0; i < str.size(); i++)
+    for (size_t i = 0; i < str.size(); i++)
     {
         int beg = i;
         i = str.find(symbol, beg);
@@ -28,9 +28,9 @@ StringSplitter::spiltWithStr(const std::string &str, const std::string& symbol)
     if (symbol.empty())
         return result;
     size_t len = symbol.length();
-    for (int i = 0; i < str.size(); i++)
+    for (size_t i = 0; i < str.size(); i++)
     {
-        int beg = i;
+        size_t beg = i;
         i = str.find(symbol, beg);
         std::string temp = str.substr(beg, i - beg);
         if(!temp.empty()) result.emplace_back(std::move(temp));
@@ -48,7 +48,7 @@ StringSplitter::spiltWithCharAndConnectWithchar(const std::string &str, const ch
     int beg = 0, end = 0;
     uint16_t status = 0;
     std::vector<std::string> result;
-    for (int i = 0; i < str.size(); i++)
+    for (size_t i = 0; i < str.size(); ++i)
     {
         if (str[i] == '\\')
         {
@@ -116,7 +116,7 @@ std::vector<std::string_view>
 StringSplitter::spiltWithChar(std::string_view str, const char symbol)
 {
     std::vector<std::string_view> result;
-    for (int i = 0; i < str.size(); i++)
+    for (size_t i = 0; i < str.size(); i++)
     {
         int beg = i;
         i = str.find(symbol, beg);
@@ -137,9 +137,9 @@ StringSplitter::spiltWithStr(std::string_view str, std::string_view symbol)
     if (symbol.empty())
         return result;
     size_t len = symbol.length();
-    for (int i = 0; i < str.size(); i++)
+    for (size_t i = 0; i < str.size(); i++)
     {
-        int beg = i;
+        size_t beg = i;
         i = str.find(symbol, beg);
         std::string_view temp = str.substr(beg, i - beg);
         if(!temp.empty()) result.emplace_back(temp);
@@ -156,7 +156,7 @@ StringSplitter::spiltWithCharAndConnectWithchar(std::string_view str, const char
     int beg = 0, end = 0;
     uint16_t status = 0;
     std::vector<std::string_view> result;
-    for (int i = 0; i < str.size(); i++)
+    for (size_t i = 0; i < str.size(); i++)
     {
         if (str[i] == '\\')
         {

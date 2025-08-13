@@ -15,11 +15,8 @@ public:
     virtual std::string name() = 0;
     virtual void handleEvent() = 0;
     virtual EventType getEventType() const = 0;
-    virtual GHandle& getHandle() = 0;
+    virtual GHandle getHandle() = 0;
     virtual ~Event() = default;
-    bool cancel();
-private:
-    std::atomic_bool m_cancel = false;
 };
 
 class CallbackEvent final : public Event
@@ -43,7 +40,7 @@ public:
     void handleEvent() override;
     std::string name() override { return "CallbackEvent"; }
     EventType getEventType() const override { return m_type; }
-    GHandle& getHandle() override { return m_handle; }
+    GHandle getHandle() override { return m_handle; }
     ~CallbackEvent() override;
 private:
     EventType m_type;

@@ -1,9 +1,8 @@
-#include "TimerActive.h"
+#include "TimerActivator.h"
 #include "galay/kernel/event/Event.h"
 #if defined(USE_EPOLL)
     #include <sys/timerfd.h>
 #endif
-
 namespace galay
 {
 
@@ -33,14 +32,24 @@ namespace galay
         struct itimerspec its = {
             .it_interval = {},
             .it_value = abstime};
-        timerfd_settime(event->getHandle().fd, 0, &its, nullptr);
-        m_scheduler->modEvent(event, nullptr);
+        if(timerfd_settime(event->getHandle().fd, 0, &its, nullptr)) {
+            throw std::runtime_error("timerfd_settime error");
+        }
+        if(!m_scheduler->activeEvent(event, nullptr)) {
+            throw std::runtime_error("modEvent failed");
+        }
     }
+
+    void EpollTimerActive::deactive(details::Event *event)
+    {
+        m_scheduler->removeEvent(event, nullptr);
+    }
+
 #elif defined(USE_KQUEUE)
     void galay::KQueueTimerActive::active(Timer::ptr timer)
     {
         uint64_t timeout = timer->getRemainTime();
-        m_scheduler->modEvent(event, &timeout);
+        m_scheduler->activeEvent(event, &timeout);
     }
 
 #endif

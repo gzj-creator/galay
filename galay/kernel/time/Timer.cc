@@ -1,12 +1,12 @@
 #include "Timer.h"
 #include "galay/utils/System.h"
 
-
 namespace galay 
 { 
-    Timer::Timer(std::chrono::milliseconds ms, Waker waker)
-        : m_deadline(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count() + ms.count()),\
-        m_waker(waker), m_cancel(false)
+    Timer::Timer(std::chrono::milliseconds ms, const std::function<void()>& callback)
+        : m_callback(callback), m_deadline(std::chrono::time_point_cast<std::chrono::milliseconds>(\
+            std::chrono::system_clock::now()).time_since_epoch().count() + ms.count()),\
+            m_cancel(false)
     {
     }
 
@@ -28,7 +28,7 @@ namespace galay
         if(!m_cancel.compare_exchange_strong(old, true)) {
             return;
         }
-        m_waker.wakeUp();
+        m_callback();
     }
 
     bool Timer::cancel()

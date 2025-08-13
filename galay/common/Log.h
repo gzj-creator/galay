@@ -3,6 +3,7 @@
 
 #ifdef ENABLE_TRACE
     #define SPDLOG_ACTIVE_LEVEL SPDLOG_LEVEL_TRACE
+    #pragma message("enable trace log")
 #endif
 
 #include <memory>

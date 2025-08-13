@@ -88,9 +88,9 @@ namespace galay::details
         GHandle handle{
             .fd = eventfd(0, EFD_NONBLOCK | EFD_SEMAPHORE | EFD_CLOEXEC)
         };
-        CallbackEvent* event = new CallbackEvent(handle, EventType::kEventTypeRead, [this](Event *event, CallbackEvent::EventDeletor deletor) {
+        CallbackEvent* event = new CallbackEvent(handle, EventType::kEventTypeRead, [](Event *event, [[maybe_unused]] CallbackEvent::EventDeletor deletor) {
             eventfd_t val;
-            int ret = eventfd_read(event->getHandle().fd, &val);
+            eventfd_read(event->getHandle().fd, &val);
             close(event->getHandle().fd);
         });
         addEvent(event, nullptr);
@@ -116,7 +116,7 @@ namespace galay::details
         ev.data.ptr = event;
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_ADD, event->getHandle().fd, &ev);
         if( ret != 0 ){
-            m_error = std::make_shared<SystemError>(error::CallAddEventError, errno);
+            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
         }
         return ret;
     }
@@ -132,13 +132,13 @@ namespace galay::details
         if( !convertToEpollEvent(ev, event, ctx) ) return 0;
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_MOD, event->getHandle().fd, &ev);
         if( ret != 0 ) {
-            m_error = std::make_shared<SystemError>(error::CallModEventError, errno);
+            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
         }
         return ret;
     }
 
     int 
-    EpollEventEngine::delEvent(Event* event, void* ctx)
+    EpollEventEngine::delEvent(Event* event, [[maybe_unused]] void* ctx)
     {
         using namespace error;
         m_error.reset();
@@ -149,7 +149,7 @@ namespace galay::details
         ev.events = (EPOLLIN | EPOLLOUT | EPOLLERR);
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_DEL, handle.fd, &ev);
         if( ret != 0 ) {
-            m_error = std::make_shared<SystemError>(error::CallDelEventError, errno);
+            m_error = std::make_shared<SystemError>(ErrorCode::CallRemoveEventError, errno);
         }
         return ret;
     }
@@ -161,7 +161,7 @@ namespace galay::details
     }
 
     bool 
-    EpollEventEngine::convertToEpollEvent(epoll_event &ev, Event *event, void* ctx)
+    EpollEventEngine::convertToEpollEvent(epoll_event &ev, Event *event, [[maybe_unused]] void* ctx)
     {
         EventType event_type = event->getEventType();
         ev.events = 0;
@@ -189,7 +189,10 @@ namespace galay::details
             }
                 break;
             case kEventTypeTimer:
+            {
                 ev.events |= EPOLLIN;
+                ev.events |= EPOLLET;
+            }
                 break;
         }
         return true;

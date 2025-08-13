@@ -17,9 +17,9 @@ namespace galay
         return *this;
     }
 
-    RuntimeConfig &RuntimeConfig::startCoManager(bool start)
+    RuntimeConfig &RuntimeConfig::startCoManager(bool start, std::chrono::milliseconds interval)
     {
-        m_runtime.m_start_check_co = start;
+        if(start) m_runtime.m_manager = std::make_unique<CoroutineManager>(m_runtime.m_cScheduler.get(), interval); 
         return *this;
     }
 
@@ -103,16 +103,23 @@ namespace galay
         return RuntimeConfig(*this);
     }
 
-    void Runtime::start()
+    Runtime::Runtime(int fds_initial_size)
     {
-        m_eScheduler = std::make_shared<EventScheduler>();
-        m_eScheduler->start(m_event_timeout);
+        m_eScheduler = std::make_shared<EventScheduler>(fds_initial_size);
         m_cScheduler = std::make_unique<CoroutineScheduler>(CoroutineConsumer::create());
+    #if defined(USE_EPOLL)
+        auto activator = std::make_shared<EpollTimerActive>(m_eScheduler.get());
+    #endif
+        m_timerManager = std::make_shared<PriorityQueueTimerManager>(activator);
+   
+    }
+
+    void Runtime::start()
+    {   
+        m_eScheduler->start(m_event_timeout);
         m_cScheduler->start();
-        if(m_start_check_co) {
-            m_manager = std::make_unique<CoroutineManager>(m_cScheduler.get(), m_co_check_interval); 
-            m_manager->start();
-        }
+        m_timerManager->start();
+        if(m_manager) m_manager->start();
     }
 
     void Runtime::stop()
@@ -124,6 +131,8 @@ namespace galay
             m_manager->stop();
             m_manager.reset();
         }
+        m_timerManager->stop();
+        m_timerManager.reset();
         m_cScheduler->stop();
         m_cScheduler.reset();
         m_eScheduler->stop();

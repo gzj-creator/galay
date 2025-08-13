@@ -14,13 +14,11 @@
 struct GHandle {
     static GHandle invalid() { return GHandle{}; }
     int fd = -1;
-    std::bitset<FLAGS_BITS> flags;
 };
 #elif defined(__APPLE__)
 struct GHandle {
     static GHandle invalid() { return GHandle{}; }
     int fd = -1;
-    std::bitset<FLAGS_BITS> flags;
 };
 #elif defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)
 #include <WinSock2.h>

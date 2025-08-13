@@ -27,7 +27,7 @@ namespace galay::utils
 
 int64_t getCurrentTimeMs()
 {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    return std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now()).time_since_epoch().count();
 }
 
 std::string getCurrentGMTTimeString()
@@ -132,7 +132,7 @@ zeroReadFile(const std::string &FileName)
 
 
 void 
-zeroWriteFile(const std::string &FileName, const std::string &Content ,bool IsBinary)
+zeroWriteFile(const std::string &FileName, const std::string &Content)
 {
     int fd = open(FileName.c_str(),O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
     if(fd == -1) {

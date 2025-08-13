@@ -19,7 +19,7 @@ namespace galay::error
         "call sendfile function error",
         "call close function error",
         "call ssl_new function error",
-        "call ssl_set_sd function error",
+        "call ssl_set_fd function error",
         "call ssl_handshake function error",
         "call ssl_shutdown function error",
         "call ssl_accept function error",
@@ -27,9 +27,8 @@ namespace galay::error
         "call ssl_close function error",
         "call read function error",
         "call write function Error",
-        "call addEvent function error",
-        "call modEvent function error",
-        "call delEvent function error",
+        "call activeEvent function error",
+        "call removeEvent function error",
         "call getsockname function error",
         "call getpeername function error",
         "call setsockopt function error",
@@ -41,7 +40,9 @@ namespace galay::error
         "call kqueue function error",
         "call open function error",
         "call aio io_setup function error",
-        "LinuxAioSubmit Error",
+        "call aio io_submit function error",
+        "not initialized",
+        "async function timeout",
     };
 
     SystemError::SystemError(uint32_t galay_code, uint32_t system_code)

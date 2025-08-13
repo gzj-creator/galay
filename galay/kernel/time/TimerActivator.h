@@ -1,5 +1,5 @@
-#ifndef GALAY_TIMER_ACTIVE_H
-#define GALAY_TIMER_ACTIVE_H 
+#ifndef GALAY_TIMER_ACTIVATOR_H
+#define GALAY_TIMER_ACTIVATOR_H 
 
 #include "Timer.h"
 #include "galay/common/Base.h"
@@ -8,15 +8,17 @@
 
 namespace galay
 {
-    class TimerActive
+    class TimerActivator
     {
     public:
-        using ptr = std::shared_ptr<TimerActive>;
+        using ptr = std::shared_ptr<TimerActivator>;
         virtual void active(Timer::ptr timer, details::Event* event) = 0;
+        virtual void deactive(details::Event* event) = 0;
+        virtual ~TimerActivator() = default;
     };
 
 #if defined(USE_EPOLL)
-    class EpollTimerActive: public TimerActive
+    class EpollTimerActive: public TimerActivator
     {
     public:
         EpollTimerActive(EventScheduler* scheduler)
@@ -25,12 +27,12 @@ namespace galay
         }
 
         void active(Timer::ptr timer, details::Event* event) override;
-
+        void deactive(details::Event* event) override;
     private:
         EventScheduler* m_scheduler;
     };
 #elif defined(USE_KQUEUE)
-    class KQueueTimerActive: public TimerActive
+    class KQueueTimerActive: public TimerActivator
     {
     public:
         KQueueTimerActive(EventScheduler* scheduler)

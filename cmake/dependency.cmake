@@ -47,17 +47,36 @@ find_path(  LIBCONCURRENTQUEUE_INCLUDE_DIR
             PATHS
                 /usr/local/include/concurrentqueue/moodycamel
                 ${CMAKE_PREFIX_PATH}/include
-                $ENV{LICONCURRENTQUEUE_ROOT}/include
-                ${LICONCURRENTQUEUE_ROOT}/include
+                $ENV{LIBCONCURRENTQUEUE_ROOT}/include
+                ${LIBCONCURRENTQUEUE_ROOT}/include
             DOC "The directory where concurrentqueue headers reside"
         )
 
 if(LIBCONCURRENTQUEUE_INCLUDE_DIR)
-    message(STATUS "concurrentqueue found")
+    message(STATUS "Concurrentqueue found")
     include_directories(${LIBCONCURRENTQUEUE_INCLUDE_DIR})
     set(CONCURRENTQUEUE TRUE)
 else()
     message(STATUS "concurrentqueue not found")
+endif()
+
+# libcuckoo
+find_path(  LIBCUCKOO_INCLUDE_DIR 
+            NAMES cuckoohash_map.hh
+            PATHS
+                /usr/local/include/libcuckoo/
+                ${CMAKE_PREFIX_PATH}/include
+                $ENV{LIBCUCKOO_ROOT}/include
+                ${LIBCUCKOO_ROOT}/include
+            DOC "The directory where libcuckoo headers reside"
+        )
+
+if(LIBCUCKOO_INCLUDE_DIR)
+    message(STATUS "libcuckoo found")
+    include_directories(${LIBCUCKOO_INCLUDE_DIR})
+    set(LIBCUCKOO TRUE)
+else()
+    message(STATUS "libcuckoo not found")
 endif()
 
 

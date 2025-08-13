@@ -17,7 +17,7 @@ extern void writeFile(const std::string &FileName, const std::string &Content , 
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) 
 extern std::string zeroReadFile(const std::string &FileName);
-extern void zeroWriteFile(const std::string &FileName, const std::string &Content,bool IsBinary = false);
+extern void zeroWriteFile(const std::string &FileName, const std::string &Content);
 #endif
 
 extern std::string getEnvValue(const std::string &name);

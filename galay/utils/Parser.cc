@@ -26,7 +26,7 @@ ParserBase::ptr
 ParserManager::createParser(const std::string &filename,bool IsParse)
 {
     if(filename.empty()) return nullptr;
-    int pos = filename.find_last_of(".");
+    size_t pos = filename.find_last_of(".");
     if(pos == std::string::npos) return nullptr;
     std::string ext = filename.substr(pos);
     if(!m_creater.contains(ext)) return nullptr;

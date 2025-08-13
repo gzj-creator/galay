@@ -7,41 +7,22 @@
 
 namespace galay {
 
-
-    template <CoType T>
-    inline AsyncEvent<T>::AsyncEvent()
-        : m_result()
-    {
-    }
-
-    template <CoType T>
-    inline AsyncEvent<T>::AsyncEvent(T &&result)
-        : m_result(std::move(result))
-    {
-    }
-
-    template <CoType T>
-    T AsyncEvent<T>::resume()
-    {
-        return std::move(m_result);
-    }
-
-
     template<CoType T>
     inline AsyncResult<T>::AsyncResult(typename AsyncEvent<T>::ptr event)
         : m_event(event)
     {
     }
 
-    template<CoType T>
-    inline AsyncResult<T>::AsyncResult(T&& result)
-        : m_event(std::make_shared<AsyncEvent<T>>(std::forward<T>(result)))
+    template <CoType T>
+    inline AsyncResult<T>::AsyncResult(T &&value)
+        : m_event(std::make_shared<ResultEvent<T>>(std::move(value)))
     {
     }
 
     template<CoType T>
     inline bool AsyncResult<T>::await_ready()
     {
+        if(!m_event) return true;
         return m_event->ready();
     }
 
@@ -66,7 +47,6 @@ namespace galay {
     inline T AsyncResult<T>::await_resume() const
     {
         if(m_coroutine.expired()) {
-            //说明没有wait
             return this->m_event->resume();
         }
         while(!m_coroutine.lock()->become(CoroutineStatus::Running)) {

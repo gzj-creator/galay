@@ -4,6 +4,10 @@ file(GLOB SRC_LIST *.cc)
 
 set(COMMON_LIB ssl crypto)
 
+if(${ENABLE_LOG_TRACE})
+    add_definitions(-DENABLE_TRACE)
+endif()
+
 foreach(SRC ${SRC_LIST})
     get_filename_component(FILE_NAME ${SRC} NAME_WE)
     # 使用文件名作为可执行文件名
@@ -17,4 +21,5 @@ foreach(SRC ${SRC_LIST})
         INSTALL_RPATH $ORIGIN/../lib
     )
     list(APPEND INSTALL_BIN ${EXECUTABLE_NAME})
+
 endforeach()

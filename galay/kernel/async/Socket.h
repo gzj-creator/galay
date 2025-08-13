@@ -46,7 +46,8 @@ namespace galay {
     private:
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
-        details::NetStatusContext m_ctx;
+        GHandle m_handle;
+        EventScheduler* m_scheduler = nullptr;
     };
 
 
@@ -69,7 +70,8 @@ namespace galay {
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getDestAddr() const;
     private:
-        details::NetStatusContext m_ctx;
+        GHandle m_handle;
+        EventScheduler* m_scheduler = nullptr;
     };
 
     class AsyncSslSocket
@@ -77,7 +79,7 @@ namespace galay {
         friend class AsyncSslSocketBuilder;
     public:
         AsyncSslSocket(Runtime& runtime);
-        AsyncSslSocket(Runtime& runtime, GHandle handle, SSL* ssl);
+        AsyncSslSocket(Runtime& runtime, SSL* ssl);
 
         HandleOption options();
         ValueWrapper<bool> socket();
@@ -89,10 +91,11 @@ namespace galay {
         AsyncResult<ValueWrapper<Bytes>> sslSend(Bytes bytes);
         AsyncResult<ValueWrapper<bool>> sslClose();
     private:
-        AsyncSslSocket(EventScheduler* scheduler, GHandle handle, SSL* ssl);
+        AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);
         GHandle getHandle() const;
     private:
-        details::SslStatusContext m_ctx;
+        SSL* m_ssl = nullptr;
+        EventScheduler* m_scheduler = nullptr;
     };
 
 

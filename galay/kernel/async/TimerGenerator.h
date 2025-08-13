@@ -3,6 +3,7 @@
 
 
 #include "TimeEvent.h"
+#include "galay/kernel/runtime/Runtime.h"
 
 namespace galay 
 { 
@@ -10,21 +11,19 @@ namespace galay
     class TimerGenerator 
     {
     public:
-        TimerGenerator(EventScheduler* scheduler);
-
-        template <typename T>
+        TimerGenerator(Runtime& runtime);
+        template <CoType T>
         AsyncResult<ValueWrapper<T>> timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func);
-        AsyncResult<ValueWrapper<bool>> close();
-        ~TimerGenerator();
+        AsyncResult<nil> sleepfor(std::chrono::milliseconds ms);
     private:
-        details::TimeStatusContext m_context;
+        TimerManager* m_manager = nullptr;
     };
 
-    // template <typename T>
-    // inline AsyncResult<ValueWrapper<T>> TimerGenerator::timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func)
-    // {
-    //     return {std::make_shared<>}
-    // }
+    template <CoType T>
+    inline AsyncResult<ValueWrapper<T>> TimerGenerator::timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()> &func)
+    {
+        return {std::make_shared<details::TimeoutEvent<T>>(m_manager, func, ms)};
+    }
 
 }
 

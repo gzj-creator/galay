@@ -100,7 +100,11 @@ namespace galay
         AsyncResult<ValueWrapper<bool>> close();
         ~File();
     private:
-        details::FileStatusContext m_context;
+        GHandle m_handle;
+        GHandle m_event_handle;
+        io_context_t m_io_ctx;
+        std::vector<iocb> m_iocbs;
+        EventScheduler* m_scheduler = nullptr;
     };
 #endif
 }

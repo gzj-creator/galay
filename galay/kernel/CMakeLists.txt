@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(kernel)
 
-file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc")
+
+
+file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "sync/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc")
 
 find_library(SSL_LIB NAMES ssl)
 find_library(CRYPTO_LIB NAMES crypto)

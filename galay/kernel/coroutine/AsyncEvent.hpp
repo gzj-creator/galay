@@ -7,6 +7,11 @@
 namespace galay
 {
 
+#define DEFAULT_EVENT_IMPL() \
+    void handleEvent() override {} \
+    EventType getEventType() const override { return EventType::kEventTypeNone; }\
+    GHandle getHandle() override { return m_handle; }
+
     template <CoType T>
     class AsyncEvent: public details::Event
     {
@@ -30,8 +35,37 @@ namespace galay
         Waker m_waker;
     };
 
+    template <CoType T>
+    class ResultEvent final : public AsyncEvent<T> {
+    public:
+        explicit ResultEvent(T&& result) : AsyncEvent<T>(std::move(result)) {}
+        bool ready() override { return true; }
+        bool suspend([[maybe_unused]] Waker waker) override { return false; }
+        T resume() override { return std::move(this->m_result); }
+        std::string name() override { return "ResultEvent"; }
+        DEFAULT_EVENT_IMPL();
+    private:
+        GHandle m_handle;
+    };
+
+    template <CoType T>
+    inline AsyncEvent<T>::AsyncEvent()
+        : m_result()
+    {
+    }
+
+    template <CoType T>
+    inline AsyncEvent<T>::AsyncEvent(T &&result)
+        : m_result(std::move(result))
+    {
+    }
+
+    template <CoType T>
+    T AsyncEvent<T>::resume()
+    {
+        return std::move(m_result);
+    }
+
 }
-
-
 
 #endif

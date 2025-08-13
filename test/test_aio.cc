@@ -96,7 +96,7 @@ int main() {
     galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
     runtime = std::make_unique<Runtime>();
     auto config = runtime->config();
-    config.startCoManager(true);
+    config.startCoManager(true, std::chrono::milliseconds(1000));
     runtime->start();
     runtime->schedule(test());
     runtime->schedule(test_v());

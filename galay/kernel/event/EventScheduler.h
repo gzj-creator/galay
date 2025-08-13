@@ -4,7 +4,9 @@
 #include <thread>
 #include <memory>
 #include <string>
+#include <variant>
 #include <functional>
+#include <libcuckoo/cuckoohash_map.hh>
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
 
@@ -34,13 +36,12 @@ namespace galay{
         using error_ptr = error::Error::ptr;
         using engine_ptr = std::shared_ptr<details::EventEngine>;
 
-        EventScheduler();
-        EventScheduler(engine_ptr engine);
+        EventScheduler(int64_t fds_init_size);
+        EventScheduler(engine_ptr engine, int64_t fds_init_size);
         std::string name() override { return "EventScheduler"; }
 
-        bool addEvent(details::Event* event, void* ctx);
-        bool modEvent(details::Event* event, void* ctx);
-        bool delEvent(details::Event* event, void* ctx);
+        bool activeEvent(details::Event* event, void* ctx);
+        bool removeEvent(details::Event* event, void* ctx);
 
         void registerOnceLoopCallback(const std::function<void()>& callback);
         bool start(int timeout);
@@ -51,6 +52,7 @@ namespace galay{
         ~EventScheduler() = default;
     protected:
         std::unique_ptr<std::thread> m_thread;
+        libcuckoo::cuckoohash_map<int, std::monostate> m_fds;
         std::shared_ptr<details::EventEngine> m_engine;
     };
 

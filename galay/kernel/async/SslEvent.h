@@ -12,39 +12,46 @@ namespace galay
     class AsyncSslSocketBuilder {
         friend class AsyncTcpSslSocket;
     public:
-        static AsyncSslSocketBuilder create(EventScheduler* scheduler, GHandle handle, SSL* ssl);
+        static AsyncSslSocketBuilder create(EventScheduler* scheduler, SSL* ssl);
         //throw exception
         AsyncSslSocket build();
         bool check() const;
     private:
         SSL* m_ssl = nullptr;
         EventScheduler* m_scheduler = nullptr;
-        GHandle m_handle{};
     };
  
 }
 
 namespace galay::details
 {
-    struct SslStatusContext {
-        GHandle m_handle;
-        SSL* m_ssl = nullptr;
-        bool m_is_connected = false;
-        EventScheduler* m_scheduler = nullptr;
-    };
-
     template <CoType T>
     class SslEvent: public AsyncEvent<T>
     {
     public:
-        SslEvent(SslStatusContext& ctx): m_context(ctx) {}
+        SslEvent(SSL* ssl, EventScheduler* scheduler)
+            : m_ssl(ssl), m_scheduler(scheduler) {}
+    
+        GHandle getHandle() override { 
+            if(m_ssl) {
+                return {SSL_get_fd(m_ssl)};
+            }
+            return GHandle{};
+        }
+
         bool suspend(Waker waker) override {
+            using namespace error;
             this->m_waker = waker;
+            if(!m_scheduler->activeEvent(this, nullptr)) {
+                Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
+                makeValue(this->m_result, error);
+                return false;
+            }
             return true;
         }
-        GHandle& getHandle() override { return m_context.m_handle; }
     protected:
-        SslStatusContext& m_context;
+        SSL* m_ssl;
+        EventScheduler* m_scheduler;
     };
 
     class SslAcceptEvent: public SslEvent<ValueWrapper<AsyncSslSocketBuilder>>
@@ -55,13 +62,12 @@ namespace galay::details
             kSslAcceptStatus_SslAccept,
         };
     public:
-        SslAcceptEvent(SslStatusContext& ctx);
+        SslAcceptEvent(SSL* ssl, EventScheduler* scheduler);
         std::string name() override { return "SslAcceptEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
 
         bool ready() override;
-        bool suspend(Waker waker) override;
     private:
         bool sslAccept();
     private:
@@ -73,13 +79,11 @@ namespace galay::details
     class SslCloseEvent: public SslEvent<ValueWrapper<bool>> 
     {
     public:
-        SslCloseEvent(SslStatusContext& ctx);
+        SslCloseEvent(SSL* ssl, EventScheduler* scheduler);
         std::string name() override { return "SslCloseEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
-
         bool ready() override;
-        bool suspend(Waker waker) override;
     private:
         bool sslClose();
     private:
@@ -94,13 +98,13 @@ namespace galay::details
             kConnectState_SslConnect,
         };
     public:
-        SslConnectEvent(SslStatusContext& ctx, const Host& host);
+        SslConnectEvent(SSL* ssl, EventScheduler* scheduler, const Host& host);
         std::string name() override { return "SslConnectEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
 
         bool ready() override;
-        bool suspend(Waker waker) override;
+        
     private:
         bool sslConnect();
     private:
@@ -112,13 +116,13 @@ namespace galay::details
     class SslRecvEvent: public SslEvent<ValueWrapper<Bytes>> 
     {
     public:
-        SslRecvEvent(SslStatusContext& ctx, size_t length);
+        SslRecvEvent(SSL* ssl, EventScheduler* scheduler, size_t length);
         std::string name() override { return "SslRecvEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeRead; }
 
         bool ready() override;
-        bool suspend(Waker waker) override;
+        
     private:
         bool sslRecv();
     private:
@@ -127,13 +131,13 @@ namespace galay::details
 
     class SslSendEvent: public SslEvent<ValueWrapper<Bytes>> {
     public:
-        SslSendEvent(SslStatusContext& ctx, Bytes&& bytes);
+        SslSendEvent(SSL* ssl, EventScheduler* scheduler, Bytes&& bytes);
         std::string name() override { return "SslSendEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeWrite; }
 
         bool ready() override;
-        bool suspend(Waker waker) override;
+        
     private:
         bool sslSend();
     private:

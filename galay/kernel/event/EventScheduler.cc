@@ -5,7 +5,8 @@
 
 namespace galay{ 
 
-    EventScheduler::EventScheduler()
+    EventScheduler::EventScheduler(int64_t fds_init_size)
+        :m_fds(fds_init_size)
     {
     #if defined(USE_EPOLL)
         m_engine = std::make_shared<details::EpollEventEngine>();
@@ -16,26 +17,26 @@ namespace galay{
     #endif
     }
 
-    EventScheduler::EventScheduler(engine_ptr engine)
-        : m_engine(engine)
+    EventScheduler::EventScheduler(engine_ptr engine, int64_t fds_init_size)
+        : m_fds(fds_init_size), m_engine(engine)
     {
     }
 
-    bool EventScheduler::addEvent(details::Event* event, void* ctx)
+    bool EventScheduler::activeEvent(details::Event* event, void* ctx)
     {
-        event->getHandle().flags[0] = 1;
-        return m_engine->addEvent(event, ctx) == 0;
-    }
-
-
-    bool EventScheduler::modEvent(details::Event* event, void* ctx)
-    {
+        if(!m_fds.contains(event->getHandle().fd)) {
+            m_fds.insert(event->getHandle().fd, std::monostate());
+            return m_engine->addEvent(event, ctx) == 0;
+        }
         return m_engine->modEvent(event, ctx) == 0;
     }
 
-    bool EventScheduler::delEvent(details::Event* event, void* ctx)
+    bool EventScheduler::removeEvent(details::Event* event, void* ctx)
     {
-        event->getHandle().flags[0] = 0;
+        if(!m_fds.contains(event->getHandle().fd)) {
+            return false;
+        }
+        m_fds.erase(event->getHandle().fd);
         return m_engine->delEvent(event, ctx) == 0;
     }
 

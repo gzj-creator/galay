@@ -22,12 +22,6 @@ namespace galay::details {
         return ""; 
     }
 
-    bool Event::cancel()
-    {
-        bool old = false;
-        return m_cancel.compare_exchange_strong(old, true);
-    }
-
     CallbackEvent::CallbackEvent(const GHandle handle, const EventType type, std::function<void(Event*, EventDeletor)> callback)
         : m_type(type), m_handle(handle), m_scheduler(nullptr), m_callback(std::move(callback))
     {
@@ -41,7 +35,7 @@ namespace galay::details {
 
     CallbackEvent::~CallbackEvent()
     {
-        if( m_scheduler ) m_scheduler.load()->delEvent(this, nullptr);
+        if( m_scheduler ) m_scheduler.load()->removeEvent(this, nullptr);
     }
 
 }
