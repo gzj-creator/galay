@@ -78,9 +78,7 @@ namespace galay::details
     public:
         SleepforEvent(TimerManager* manager, std::chrono::milliseconds ms);
         std::string name() override { return "SleepforEvent"; }
-        void handleEvent() override {
-            TimeEvent<nil>::handleEvent();
-        }
+        void handleEvent() override {}
 
         bool ready() override;
         bool suspend(Waker waker) override;

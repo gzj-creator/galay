@@ -84,7 +84,6 @@ Logger::~Logger()
 
 namespace galay::details
 {
-std::unique_ptr<InternelLogger> InternelLogger::m_instance = nullptr;
 
 InternelLogger::InternelLogger() {
     m_thread_pool = std::make_shared<spdlog::details::thread_pool>( DEFAULT_LOG_QUEUE_SIZE, DEFAULT_LOG_THREADS);
@@ -98,10 +97,8 @@ InternelLogger::InternelLogger() {
 
 InternelLogger *InternelLogger::getInstance()
 {
-    if(m_instance == nullptr) {
-        m_instance = std::make_unique<InternelLogger>();
-    }
-    return m_instance.get();
+    static InternelLogger instance;
+    return &instance;
 }
 
 void InternelLogger::setLogger(Logger::uptr logger)
@@ -121,12 +118,10 @@ Logger* InternelLogger::getLogger()
 
 
 void InternelLogger::shutdown() {
-    if (m_instance) {
-        m_instance->m_logger->getSpdlogger()->flush();
-        m_instance->m_logger.reset();
-        // 再释放线程池（此时线程池引用计数可能已为 0）
-        m_instance->m_thread_pool.reset();
-        m_instance.reset(); 
+    if (m_logger) {
+        m_logger->getSpdlogger()->flush();
+        m_logger.reset();
+        m_thread_pool.reset();
     }
 }
 

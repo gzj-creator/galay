@@ -37,13 +37,15 @@ namespace galay {
 
     AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime)
     {
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime, GHandle handle)
     {
         m_handle = handle;
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     AsyncTcpSocket::AsyncTcpSocket(EventScheduler* scheduler, GHandle handle)
@@ -145,7 +147,7 @@ namespace galay {
     }
 
 #ifdef __linux__
-    AsyncResult<ValueWrapper<bool>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
+    AsyncResult<ValueWrapper<long>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
     {
         return {std::make_shared<details::TcpSendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
     }
@@ -186,16 +188,16 @@ namespace galay {
 
    
     AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime)
-
     {
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime, GHandle handle)
-
     {
         m_handle = handle;
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     ValueWrapper<bool> AsyncUdpSocket::socket()
@@ -321,13 +323,15 @@ namespace galay {
 
     AsyncSslSocket::AsyncSslSocket(Runtime& runtime)
     {
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     AsyncSslSocket::AsyncSslSocket(Runtime& runtime, SSL *ssl)
     {
         m_ssl = ssl;
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     AsyncSslSocket::AsyncSslSocket(EventScheduler* scheduler, SSL* ssl)

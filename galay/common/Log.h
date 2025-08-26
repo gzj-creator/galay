@@ -48,10 +48,9 @@ public:
     void setLogger(Logger::uptr logger);
     void setLevel(spdlog::level::level_enum level);
     Logger* getLogger();
-    static void shutdown();
+    void shutdown();
     ~InternelLogger();
 private:
-    static std::unique_ptr<InternelLogger> m_instance;
     Logger::uptr m_logger;
     std::shared_ptr<spdlog::details::thread_pool> m_thread_pool;
 };

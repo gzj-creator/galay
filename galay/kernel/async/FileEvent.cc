@@ -52,7 +52,7 @@ namespace galay::details
         uint64_t finish_event = 0;
         int ret = read(m_ehandle.fd, &finish_event, sizeof(finish_event));
         std::vector<io_event> events(finish_event);
-        ret = io_getevents(m_context, 1, events.size(), events.data(), nullptr);
+        ret = io_getevents(m_context, 0, events.size(), events.data(), nullptr);
         while (ret -- > 0)
         {
             auto& event = events[ret];

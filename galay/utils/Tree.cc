@@ -65,7 +65,7 @@ TrieTree::remove(const std::string& word)
     TrieNode* cur = m_root;
     TrieNode* del = m_root;
     char delCh = word[0];
-    for (int i = 0; i < word.length() ; ++i)
+    for (size_t i = 0; i < word.length() ; ++i)
     {
         auto childIt = cur->m_childMap.find(word[i]);
         if (childIt == cur->m_childMap.end())

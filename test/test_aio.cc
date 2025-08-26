@@ -6,11 +6,11 @@
 
 using namespace galay;
 
-Runtime::uptr runtime = nullptr;
+Runtime runtime;
 
 Coroutine<nil> test()
 {
-    File file(*runtime);
+    File file(runtime);
     OpenFlags flags;
     //读写权限
     flags.create().noBlock().readWrite();
@@ -44,17 +44,17 @@ Coroutine<nil> test()
     co_await file.close();
     std::cout << "close success" << std::endl;
     std::error_code ec;
-    if(!std::filesystem::remove("./test1.txt", ec)) {
-        std::cout << "remove failed: " << ec.message() << std::endl;
-    } else {
-        std::cout << "remove success: " << ec.message() << std::endl;
-    }
+    // if(!std::filesystem::remove("./test1.txt", ec)) {
+    //     std::cout << "remove failed: " << ec.message() << std::endl;
+    // } else {
+    //     std::cout << "remove success: " << ec.message() << std::endl;
+    // }
     co_return nil();
 }
 
 Coroutine<nil> test_v()
 {
-    File file(*runtime);
+    File file(runtime);
     OpenFlags flags;
     flags.create().noBlock().readWrite();
     file.open("./test2.txt", flags, FileModes{});
@@ -84,24 +84,24 @@ Coroutine<nil> test_v()
     co_await file.close();
     std::cout << "file close success" << std::endl;
     std::error_code ec;
-    if(!std::filesystem::remove("./test2.txt", ec)) {
-        std::cout << "remove failed: " << ec.message() << std::endl;
-    } else {
-        std::cout << "remove success: " << ec.message() << std::endl;
-    }
+    // if(!std::filesystem::remove("./test2.txt", ec)) {
+    //     std::cout << "remove failed: " << ec.message() << std::endl;
+    // } else {
+    //     std::cout << "remove success: " << ec.message() << std::endl;
+    // }
     co_return nil();
 }
 
 int main() { 
     LogTrace("main");
     galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
-    runtime = std::make_unique<Runtime>();
-    auto config = runtime->config();
-    config.startCoManager(true, std::chrono::milliseconds(1000));
-    runtime->start();
-    runtime->schedule(test());
-    runtime->schedule(test_v());
+    RuntimeBuilder builder;
+    builder.startCoManager(std::chrono::milliseconds(1000));
+    runtime = builder.build();
+    runtime.start();
+    runtime.schedule(test());
+    runtime.schedule(test_v());
     getchar();
-    runtime->stop();
+    runtime.stop();
     return 0;
 }

@@ -9,7 +9,7 @@ if(ENABLE_SYSTEM_LOG)
   endif()
 endif()
 
-file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "sync/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc")
+file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "sync/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc" "server/*.cc")
 
 find_library(SSL_LIB NAMES ssl)
 find_library(CRYPTO_LIB NAMES crypto)

@@ -5,7 +5,8 @@ namespace galay
 {
     TimerGenerator::TimerGenerator(Runtime& runtime)
     {
-        m_manager = runtime.timerManager();
+        RuntimeVisitor visitor(runtime);
+        m_manager = visitor.timerManager().get();
     }
 
     AsyncResult<nil> TimerGenerator::sleepfor(std::chrono::milliseconds ms)

@@ -26,14 +26,16 @@ namespace galay
     File::File(Runtime& runtime)
     {
         m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     File::File(Runtime &runtime, GHandle handle)
     {
         m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
         m_handle = handle;
-        m_scheduler = runtime.eventScheduler();
+        RuntimeVisitor visitor(runtime);
+        m_scheduler = visitor.eventScheduler().get();
     }
 
     ValueWrapper<bool> File::open(const std::string &path, OpenFlags flags, FileModes modes)

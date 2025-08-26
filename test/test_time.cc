@@ -4,12 +4,12 @@
 
 using namespace galay;
 
-Runtime::uptr runtime = nullptr;
+Runtime runtime;
 
 
 Coroutine<nil> test()
 {
-    TimerGenerator generator(*runtime);
+    TimerGenerator generator(runtime);
     /*
 
         auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), [](){
@@ -38,12 +38,12 @@ Coroutine<nil> test()
 int main()
 {
     galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
-    runtime = std::make_unique<Runtime>();
-    auto config = runtime->config();
-    config.startCoManager(true, std::chrono::milliseconds(1000));
-    runtime->start();
-    runtime->schedule(test());
+    RuntimeBuilder builder;
+    builder.startCoManager(std::chrono::milliseconds(1000));
+    runtime = builder.build();
+    runtime.start();
+    runtime.schedule(test());
     getchar();
-    runtime->stop();
+    runtime.stop();
     return 0;
 }

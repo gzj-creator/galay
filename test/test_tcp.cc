@@ -7,14 +7,14 @@
 
 using namespace galay;
 
-Runtime::uptr runtime = nullptr;
+Runtime runtime;
 
 Coroutine<nil> Recv(AsyncTcpSocket socket);
 Coroutine<nil> Send(AsyncTcpSocket socket);
 
 Coroutine<nil> test()
 {
-    AsyncTcpSocket socket(*runtime);
+    AsyncTcpSocket socket(runtime);
     auto t1 = socket.socket();
     socket.options().handleNonBlock();
     socket.options().handleReusePort();
@@ -50,7 +50,7 @@ Coroutine<nil> test()
         auto builder = t4.moveValue();
         auto new_socket = builder.build();
         new_socket.options().handleNonBlock();
-        runtime->schedule(Recv(std::move(new_socket)));
+        runtime.schedule(Recv(std::move(new_socket)));
     }
 }
 
@@ -81,7 +81,7 @@ Coroutine<nil> Recv(AsyncTcpSocket socket)
             }
             co_return nil();
         }
-        runtime->schedule(Send(socket));
+        runtime.schedule(Send(socket));
     }
 }
 
@@ -102,12 +102,16 @@ Coroutine<nil> Send(AsyncTcpSocket socket)
 int main()
 {
     galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
-    runtime = std::make_unique<Runtime>();
-    auto config = runtime->config();
-    config.startCoManager(true, std::chrono::milliseconds(1000));
-    runtime->start();
-    runtime->schedule(test());
+    RuntimeBuilder builder;
+    builder.setCoSchedulerNum(4)
+            .startCoManager(std::chrono::milliseconds(1000))
+            .setEventCheckTimeout(5)
+            .setEventSchedulerInitFdsSize(1024);
+
+    runtime = builder.build();
+    runtime.start();
+    runtime.schedule(test());
     getchar();
-    runtime->stop();
+    runtime.stop();
     return 0;
 }

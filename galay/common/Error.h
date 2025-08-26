@@ -48,6 +48,7 @@ namespace galay::error
         CallAioSubmitError,
         NotInitializedError,
         AsyncTimeoutError,
+        NotifyButSourceNotReadyError,
         SystemErrorEnd
     };
 

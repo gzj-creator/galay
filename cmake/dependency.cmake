@@ -57,7 +57,7 @@ if(LIBCONCURRENTQUEUE_INCLUDE_DIR)
     include_directories(${LIBCONCURRENTQUEUE_INCLUDE_DIR})
     set(CONCURRENTQUEUE TRUE)
 else()
-    message(STATUS "concurrentqueue not found")
+    message(FATAL_ERROR "concurrentqueue not found")
 endif()
 
 # libcuckoo
@@ -76,7 +76,7 @@ if(LIBCUCKOO_INCLUDE_DIR)
     include_directories(${LIBCUCKOO_INCLUDE_DIR})
     set(LIBCUCKOO TRUE)
 else()
-    message(STATUS "libcuckoo not found")
+    message(FATAL_ERROR "libcuckoo not found")
 endif()
 
 

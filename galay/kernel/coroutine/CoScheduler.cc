@@ -1,5 +1,5 @@
 #include "CoScheduler.hpp"
-
+#include <pthread.h>
 #include <utility>
 
 
@@ -15,7 +15,11 @@ namespace galay
 
     void CoroutineConsumer::start()
     {
-        m_thread = std::thread([this]() {run();});
+        m_thread = std::thread([this]() {
+            pthread_setname_np(pthread_self(), "CoroutineConsumer");
+            run();
+            LogTrace("CoroutineConsumer exit successfully!");
+        });
     }
 
     void CoroutineConsumer::consume(CoroutineActionType type, CoroutineBase::wptr co)

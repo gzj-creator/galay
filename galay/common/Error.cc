@@ -43,6 +43,7 @@ namespace galay::error
         "call aio io_submit function error",
         "not initialized",
         "async function timeout",
+        "notify but source not ready",
     };
 
     SystemError::SystemError(uint32_t galay_code, uint32_t system_code)

@@ -26,6 +26,7 @@ namespace galay::details {
             }
             return true;
         }
+        void handleEvent() override { this->m_waker.wakeUp(); }
         GHandle getHandle() override {  return m_ehandle; }
     protected:
         GHandle m_ehandle;
@@ -49,9 +50,9 @@ namespace galay::details {
     public:
         FileCommitEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, std::vector<iocb>&& iocbs);
         std::string name() override { return "FileCommitEvent"; }
-        void handleEvent() override;
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
+        void handleEvent() override;
     private:
         size_t m_unfinished_cb;
         io_context_t m_context;

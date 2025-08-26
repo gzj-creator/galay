@@ -35,16 +35,17 @@ namespace galay::details
 
     bool TcpAcceptEvent::ready()
     {
-        return acceptSocket();
+        m_ready = acceptSocket(false);
+        return m_ready;
     }
 
-    void TcpAcceptEvent::handleEvent()
+    ValueWrapper<AsyncTcpSocketBuilder> TcpAcceptEvent::resume()
     {
-        acceptSocket();
-        m_waker.wakeUp();
+        if(!m_ready) acceptSocket(true);
+        return AsyncEvent<ValueWrapper<AsyncTcpSocketBuilder>>::resume();
     }
     
-    bool TcpAcceptEvent::acceptSocket()
+    bool TcpAcceptEvent::acceptSocket(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -56,6 +57,10 @@ namespace galay::details
         };
         if( handle.fd < 0 ) {
             if( errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ) {
+                if( notify ) {
+                    error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                    makeValue(m_result, AsyncTcpSocketBuilder::create(m_scheduler, handle), error);
+                }
                 return false;
             }
             error = std::make_shared<SystemError>(CallAcceptError, errno);
@@ -72,18 +77,19 @@ namespace galay::details
     {
     }
 
-    void TcpRecvEvent::handleEvent()
+    ValueWrapper<Bytes> TcpRecvEvent::resume()
     {
-        recvBytes();
-        m_waker.wakeUp();
+        if(!m_ready) recvBytes(true);
+        return NetEvent<ValueWrapper<Bytes>>::resume();
     }
 
     bool TcpRecvEvent::ready()
     {
-        return recvBytes();
+        m_ready = recvBytes(false);
+        return m_ready;
     }
 
-    bool TcpRecvEvent::recvBytes()
+    bool TcpRecvEvent::recvBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -98,6 +104,10 @@ namespace galay::details
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
             {
+                if( notify ) {
+                    error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                    makeValue(m_result, Bytes(), error);
+                }
                 return false;
             }
             error = std::make_shared<SystemError>(CallRecvError, errno);
@@ -114,16 +124,17 @@ namespace galay::details
 
     bool TcpSendEvent::ready()
     {
-        return sendBytes();
+        m_ready = sendBytes(false);
+        return m_ready;
     }
 
-    void TcpSendEvent::handleEvent()
+    ValueWrapper<Bytes> TcpSendEvent::resume()
     {
-        sendBytes();
-        m_waker.wakeUp();
+        if(!m_ready) sendBytes(true);
+        return AsyncEvent<ValueWrapper<Bytes>>::resume();
     }
 
-    bool TcpSendEvent::sendBytes()
+    bool TcpSendEvent::sendBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -137,6 +148,10 @@ namespace galay::details
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
             {
+                if( notify ) {
+                    error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                    makeValue(m_result, std::move(m_bytes), error);
+                }
                 return false;
             }
             error = std::make_shared<SystemError>(CallSendError, errno);
@@ -148,65 +163,67 @@ namespace galay::details
 #ifdef __linux__
     bool TcpSendfileEvent::ready()
     {
+        m_ready = sendfile(false);
+        return m_ready;
+    }
+
+    bool TcpSendfileEvent::sendfile(bool notify)
+    {
         using namespace error;
         SystemError::ptr error = nullptr;
         while(m_length > 0) {
-            int sendBytes = sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
+            int sendBytes = ::sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
             if (sendBytes < 0) {
                 if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
                 {
+                    if( notify ) {
+                        error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                        makeValue(m_result, std::move(m_offset), error);
+                    }
                     return false;
                 }
                 error = std::make_shared<SystemError>(CallSendfileError, errno);
-                makeValue(m_result, false, error);
+                makeValue(m_result, std::move(m_offset), error);
             }
             m_length -= sendBytes;
         }
         return true;
     }
 
-    void TcpSendfileEvent::handleEvent()
+    ValueWrapper<long> TcpSendfileEvent::resume()
     {
-        using namespace error;
-        SystemError::ptr  error = nullptr;
-        while(m_length > 0) {
-            int sendBytes = sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
-            if (sendBytes < 0) {
-                if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
-                {
-                    TcpSendfileEvent::suspend(m_waker);
-                    return;
-                }
-                error = std::make_shared<SystemError>(CallSendfileError, errno);
-                makeValue(m_result, false, error);
-            }
-            m_length -= sendBytes;
-        }
-        m_waker.wakeUp();
+        if(!m_ready) sendfile(true);
+        return AsyncEvent<ValueWrapper<long>>::resume();
     }
 #endif
-    bool TcpConnectEvent::ready()
-    {
-        return connectToHost();     
-    }
 
     TcpConnectEvent::TcpConnectEvent(GHandle handle, EventScheduler* scheduler, const Host &host)
         : NetEvent<ValueWrapper<bool>>(handle, scheduler), m_host(host)
     {
     }
 
-    void TcpConnectEvent::handleEvent()
+    bool TcpConnectEvent::ready()
     {
-        m_waker.wakeUp();
+        m_ready = connectToHost(false);
+        return m_ready;     
     }
 
+    ValueWrapper<bool> TcpConnectEvent::resume()
+    {
+        if(!m_ready) connectToHost(true);
+        return NetEvent<ValueWrapper<bool>>::resume();
+    }
 
-    bool TcpConnectEvent::connectToHost()
+    bool TcpConnectEvent::connectToHost(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
         bool success = true;
         sockaddr_in addr{};
+        if( notify ) {
+            makeValue(m_result, true, error);
+            return true;
+        }
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = inet_addr(m_host.ip.c_str());
         addr.sin_port = htons(m_host.port);
@@ -242,18 +259,19 @@ namespace galay::details
         return true;
     }
 
-    void UdpRecvfromEvent::handleEvent()
-    {
-        recvfromBytes();
-        m_waker.wakeUp();
-    }
-
     bool UdpRecvfromEvent::ready()
     {
-        return recvfromBytes();
+        m_ready = recvfromBytes(false);
+        return m_ready;
     }
 
-    bool UdpRecvfromEvent::recvfromBytes()
+    ValueWrapper<Bytes> UdpRecvfromEvent::resume()
+    {
+        if(!m_ready) recvfromBytes(true);
+        return NetEvent<ValueWrapper<Bytes>>::resume();
+    }
+
+    bool UdpRecvfromEvent::recvfromBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -271,6 +289,10 @@ namespace galay::details
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
             {
+                if( notify ) {
+                    error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                    makeValue(m_result, Bytes(), error);
+                }
                 return false;
             }
             error = std::make_shared<SystemError>(CallRecvfromError, errno);
@@ -280,18 +302,19 @@ namespace galay::details
         return true;
     }
 
-    void UdpSendtoEvent::handleEvent()
-    {
-        sendtoBytes();
-        m_waker.wakeUp();
-    }
-
     bool UdpSendtoEvent::ready()
     {
-        return sendtoBytes();
+        m_ready = sendtoBytes(false);;
+        return m_ready;
     }
 
-    bool UdpSendtoEvent::sendtoBytes()
+    ValueWrapper<Bytes> UdpSendtoEvent::resume()
+    {
+        if(!m_ready) sendtoBytes(true);
+        return NetEvent<ValueWrapper<Bytes>>::resume();
+    }
+
+    bool UdpSendtoEvent::sendtoBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error;
@@ -309,6 +332,10 @@ namespace galay::details
         } else {
             if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
             {
+                if( notify ) {
+                    error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                    makeValue(m_result, std::move(m_bytes), error);
+                }
                 return false;
             }
             error = std::make_shared<SystemError>(CallSendtoError, errno);

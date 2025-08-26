@@ -36,8 +36,8 @@ namespace galay {
         AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
         
     #ifdef __linux__
-        //return
-        AsyncResult<ValueWrapper<bool>> sendfile(GHandle file_handle, long offset, size_t length);
+        //return send length 
+        AsyncResult<ValueWrapper<long>> sendfile(GHandle file_handle, long offset, size_t length);
     #endif
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;

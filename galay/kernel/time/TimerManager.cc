@@ -28,7 +28,7 @@ namespace galay
 
     void PriorityQueueTimerManager::stop()
     {
-        m_activator->deactive(m_event.get());
+        if(m_event.get()) m_activator->deactive(m_event.get());
     }
 
     std::list<Timer::ptr> PriorityQueueTimerManager::getArrivedTimers()
