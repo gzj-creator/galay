@@ -5,6 +5,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(HEADER_SRC_DIR galay)
 set(HEADER_DST_DIR include)
 
+include(GNUInstallDirs)
 include(CMakePackageConfigHelpers) 
 #查找依赖
 include(cmake/dependency.cmake)
