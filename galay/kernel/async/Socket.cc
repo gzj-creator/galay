@@ -200,6 +200,11 @@ namespace galay {
         m_scheduler = visitor.eventScheduler().get();
     }
 
+    HandleOption AsyncUdpSocket::options()
+    {
+        return HandleOption(m_handle);
+    }
+
     ValueWrapper<bool> AsyncUdpSocket::socket()
     {
         using namespace error;
