@@ -10,9 +10,9 @@ namespace galay
 
     void Waker::wakeUp()
     {
-        auto coroutine = m_coroutine.lock();
-        if (coroutine)
+        if (!m_coroutine.expired())
         {
+            auto coroutine = m_coroutine.lock();
             if (coroutine->belongScheduler() == nullptr)
             {
                 LogError("coroutine is not running on any scheduler");

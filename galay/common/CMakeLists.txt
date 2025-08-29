@@ -14,7 +14,7 @@ file(GLOB SRC_LIST "*.cc")
 list(LENGTH SRC_LIST SRC_LIST_LEN)
 if(SRC_LIST_LEN GREATER 0)
     add_library(${PROJECT_NAME} OBJECT ${SRC_LIST})
-    link_libraries(${PROJECT_NAME} pthread)
+    link_libraries(${PROJECT_NAME} pthread ${SSL_LIB} ${CRYPTO_LIB})
 endif()
 install(TARGETS ${PROJECT_NAME} EXPORT GalayTargets)
 

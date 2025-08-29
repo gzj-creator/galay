@@ -63,6 +63,7 @@ namespace galay::details
 {
     class InnerTimeEvent: public Event 
     {
+        static std::atomic_uint64_t timer_id;
     public: 
         InnerTimeEvent(TimerManager* manager);
         std::string name() override { return "InnerTimeEvent"; }

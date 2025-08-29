@@ -11,10 +11,7 @@ endif()
 
 file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "sync/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc" "server/*.cc")
 
-find_library(SSL_LIB NAMES ssl)
-find_library(CRYPTO_LIB NAMES crypto)
-
-set(DEPEND_LIBS ${SSL_LIB} ${CRYPTO_LIB})
+set(DEPEND_LIBS ${SSL_LIB} ${CRYPTO_LIB} pthread)
 
 if(${USE_IO_URING})
   find_library(IO_URING_LIB NAMES uring)
@@ -36,3 +33,5 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
   CXX_STANDARD_REQUIRED ON
   CXX_EXTENSIONS OFF
 )
+
+target_compile_options(kernel PRIVATE -Wno-unused-parameter -Wno-reorder-ctor)

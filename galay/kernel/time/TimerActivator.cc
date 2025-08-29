@@ -48,10 +48,15 @@ namespace galay
     }
 
 #elif defined(USE_KQUEUE)
-    void galay::KQueueTimerActive::active(Timer::ptr timer)
+    void galay::KQueueTimerActive::active(Timer::ptr timer, details::Event* event)
     {
         uint64_t timeout = timer->getRemainTime();
         m_scheduler->activeEvent(event, &timeout);
+    }
+
+    void KQueueTimerActive::deactive(details::Event *event)
+    {
+        m_scheduler->removeEvent(event, nullptr);
     }
 
 #endif

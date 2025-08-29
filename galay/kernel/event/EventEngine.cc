@@ -212,7 +212,7 @@ namespace galay::details
         m_events = static_cast<struct kevent*>(calloc(max_events, sizeof(struct kevent)));
         this->m_stop = true;
         if(this->m_handle.fd < 0) {
-            m_error = std::make_shared<SystemError>(error::CallEpollCreateError, errno);
+            m_error = std::make_shared<SystemError>(error::CallKqueueCreateError, errno);
         }
     }
 
@@ -276,7 +276,7 @@ namespace galay::details
         int readfd = pipefd[0];
         int writefd = pipefd[1];
         GHandle handle = {readfd};
-        CallbackEvent* event = new CallbackEvent(handle, EventType::kEventTypeRead, [this](Event *event, CallbackEvent::EventDeletor deletor) {
+        CallbackEvent* event = new CallbackEvent(handle, EventType::kEventTypeRead, [](Event *event, CallbackEvent::EventDeletor deletor) {
                 char t;
                 read(event->getHandle().fd, &t, 1);
                 close(event->getHandle().fd);
@@ -303,7 +303,7 @@ namespace galay::details
         };
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
-            m_error = std::make_shared<SystemError>(error::CallModEventError, errno);
+            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
         }
         return ret;
     }
@@ -320,7 +320,7 @@ namespace galay::details
         }
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
-            m_error = std::make_shared<SystemError>(error::CallModEventError, errno);
+            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
         }
         return ret;
     }
@@ -337,7 +337,7 @@ namespace galay::details
         }
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
-            m_error = std::make_shared<SystemError>(error::CallDelEventError, errno);
+            m_error = std::make_shared<SystemError>(error::CallRemoveEventError, errno);
         }
         return ret;
     }

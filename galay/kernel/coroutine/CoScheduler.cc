@@ -1,5 +1,5 @@
 #include "CoScheduler.hpp"
-#include <pthread.h>
+#include "galay/common/Common.h"
 #include <utility>
 
 
@@ -16,7 +16,7 @@ namespace galay
     void CoroutineConsumer::start()
     {
         m_thread = std::thread([this]() {
-            pthread_setname_np(pthread_self(), "CoroutineConsumer");
+            setThreadName("CoroutineConsumer");
             run();
             LogTrace("CoroutineConsumer exit successfully!");
         });

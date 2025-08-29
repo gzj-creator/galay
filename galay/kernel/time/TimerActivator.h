@@ -39,9 +39,8 @@ namespace galay
             :m_scheduler(scheduler)
         {
         }
-
         void active(Timer::ptr timer, details::Event* event) override;
-
+        void deactive(details::Event* event) override;
     private:
         EventScheduler* m_scheduler;
     };

@@ -3,6 +3,8 @@
 #include "galay/kernel/event/Event.h"
 #if defined(USE_EPOLL)
     #include <sys/timerfd.h>
+#elif defined(USE_KQUEUE)
+    #include <unistd.h>
 #endif
 
 namespace galay
@@ -35,8 +37,10 @@ namespace galay
     {
         std::list<Timer::ptr> timers;
         int64_t now = utils::getCurrentTimeMs();
+    #ifdef USE_EPOLL
         uint64_t times = 0;
         read(m_event->getHandle().fd, &times, sizeof(uint64_t));
+    #endif
         std::unique_lock lock(this->m_mutex);
         while (!m_timers.empty() && m_timers.top()->getDeadline() <= now) {
             auto timer = m_timers.top();
@@ -76,13 +80,15 @@ namespace galay
     }
 }
 
+std::atomic_uint64_t galay::details::InnerTimeEvent::timer_id = 0;
+
 galay::details::InnerTimeEvent::InnerTimeEvent(TimerManager *manager)
     : m_manager(manager)
 {
     #if defined(USE_EPOLL)
         m_handle.fd = timerfd_create(CLOCK_MONOTONIC, TFD_NONBLOCK | TFD_CLOEXEC);
-    #else
-
+    #elif defined(USE_KQUEUE)
+        m_handle.fd = timer_id.fetch_add(1);
     #endif
 }
 

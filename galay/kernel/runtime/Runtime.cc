@@ -3,6 +3,7 @@
 //
 
 #include "Runtime.h"
+#include "galay/common/Common.h"
 
 namespace galay
 {
@@ -76,7 +77,7 @@ namespace galay
     {
         m_running = true;
         m_thread = std::thread([this]() {
-            pthread_setname_np(pthread_self(), "CoroutineManager");
+            setThreadName("CoroutineManager");
             run();
             LogTrace("CoroutineManager exit successfully!");
         });
@@ -153,6 +154,8 @@ namespace galay
         }
     #if defined(USE_EPOLL)
         auto activator = std::make_shared<EpollTimerActive>(m_eScheduler.get());
+    #elif defined(USE_KQUEUE)
+        auto activator = std::make_shared<KQueueTimerActive>(m_eScheduler.get());
     #endif
         m_timerManager = std::make_shared<PriorityQueueTimerManager>(activator);
     }

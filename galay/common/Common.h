@@ -3,6 +3,7 @@
 
 #include <openssl/ssl.h>
 #include <concepts>
+#include <pthread.h>
 #include "Error.h"
 #include "Base.h"
 
@@ -11,23 +12,23 @@ namespace galay
 
 #define LL long long
 
-inline void setThreadName(const std::string& name) {
-#ifdef __linux__
-    pthread_setname_np(pthread_self(), name.c_str());
-#elif defined(_WIN32)
-    if (auto SetThreadDescription = 
-        reinterpret_cast<decltype(&::SetThreadDescription)>(
-            GetProcAddress(GetModuleHandle("kernel32.dll"), "SetThreadDescription"))) {
-        wchar_t wname[256];
-        mbstowcs(wname, name, 256);
-        SetThreadDescription(GetCurrentThread(), wname);
+    inline void setThreadName(const std::string& name) {
+    #ifdef __linux__
+        pthread_setname_np(pthread_self(), name.c_str());
+    #elif defined(_WIN32)
+        if (auto SetThreadDescription = 
+            reinterpret_cast<decltype(&::SetThreadDescription)>(
+                GetProcAddress(GetModuleHandle("kernel32.dll"), "SetThreadDescription"))) {
+            wchar_t wname[256];
+            mbstowcs(wname, name, 256);
+            SetThreadDescription(GetCurrentThread(), wname);
+        }
+    #elif defined(__APPLE__)
+        pthread_setname_np(name.c_str());
+    #else
+        // 其他平台或不支持
+    #endif
     }
-#elif defined(__APPLE__)
-    pthread_setname_np(name.c_str());
-#else
-    // 其他平台或不支持
-#endif
-}
 
 
     enum FamilyType

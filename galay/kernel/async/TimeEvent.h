@@ -46,25 +46,27 @@ namespace galay::details
 
         bool suspend(Waker waker) override {
             SinglePassGate::ptr gate = std::make_shared<SinglePassGate>();
-            auto co = [gate, waker, this]() mutable -> Coroutine<nil> {
-                T res = co_await m_func();
+            //不能在协程捕获列表捕获，会销毁(initial_suspend:: always)
+            auto co = [](SinglePassGate::ptr gate, Waker waker, TimeoutEvent* event, std::function<AsyncResult<T>()>&& func) mutable -> Coroutine<nil> {
+                T res = co_await func();
                 if(gate->pass()) {
-                    makeValue(this->m_result, std::move(res), nullptr);
+                    makeValue(event->m_result, std::move(res), nullptr);
                     waker.wakeUp();
                 }
                 co_return nil();
             };
-            Coroutine<nil> res = co();
+            Coroutine<nil> res = co(gate, waker, this, std::move(m_func));
             CoroutineBase::wptr origin = res.getOriginCoroutine();
             waker.belongScheduler()->schedule(std::move(res));
-            Timer::ptr timer = std::make_shared<Timer>(m_ms, [waker, gate, origin, this]() mutable {
+            auto func = [gate, waker, origin, this]() mutable {
                 using namespace error;
                 if(gate->pass()) {
                     Error::ptr error = std::make_shared<SystemError>(ErrorCode::AsyncTimeoutError, 0);
                     makeValue(this->m_result, T{}, error);
                     waker.wakeUp();
                 }
-            });
+            };
+            Timer::ptr timer = std::make_shared<Timer>(m_ms, func);
             this->m_manager->push(timer);
             return TimeEvent<ValueWrapper<T>>::suspend(waker);
         }

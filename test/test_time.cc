@@ -25,7 +25,7 @@ Coroutine<nil> test()
         }
     */
    auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), [generator]() mutable {
-        return generator.sleepfor(std::chrono::milliseconds(10000));
+        return generator.sleepfor(std::chrono::milliseconds(1000));
     });
     if(res.success()) {
         std::cout << "exec success" << std::endl;

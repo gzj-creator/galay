@@ -1,5 +1,6 @@
 #include "EventScheduler.h"
 #include "EventEngine.h"
+#include "galay/common/Common.h"
 #include "galay/common/Log.h"
 #include "Event.h"
 #include <pthread.h>
@@ -52,7 +53,7 @@ namespace galay{
             return false;
         }        
         this->m_thread = std::make_unique<std::thread>([this, timeout](){
-            pthread_setname_np(pthread_self(), "EventScheduler");
+            setThreadName("EventScheduler");
             m_engine->start(timeout);
             LogTrace("[{}({}) exist successfully]", name(), m_engine->getEngineID());
         });

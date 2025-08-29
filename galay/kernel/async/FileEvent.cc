@@ -4,7 +4,7 @@
 
 namespace galay::details
 {
-
+#ifdef USE_AIO
     FileCloseEvent::FileCloseEvent(GHandle event_handle, EventScheduler* scheduler, GHandle handle)
         : FileEvent<ValueWrapper<bool>>(event_handle, scheduler), m_handle(handle)
     {
@@ -101,4 +101,5 @@ namespace galay::details
         }
     
     } 
+#endif
 }

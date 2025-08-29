@@ -1,8 +1,10 @@
 #include "File.h"
-#include <sys/eventfd.h>
-
+#ifdef USE_AIO
+    #include <sys/eventfd.h>
+#endif
 namespace galay 
 {
+#ifdef USE_AIO
     unsigned long IOVecResult::result()
     {
         return m_result;
@@ -131,4 +133,5 @@ namespace galay
     {
         io_destroy(m_io_ctx);
     }
+#endif
 }
