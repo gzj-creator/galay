@@ -1,5 +1,6 @@
 #include "Error.h"
 #include <string.h>
+#include <sstream>
 
 namespace galay::error
 {
@@ -56,8 +57,14 @@ namespace galay::error
     {
         uint32_t galay_code = m_code & 0xffffffff;
         uint32_t system_code = m_code >> 32;
-        std::string str = error_string[galay_code];
-        return str + ", system error: " + std::to_string(system_code);
+        std::stringstream str;
+        str << error_string[galay_code];
+        if(system_code != 0) {
+            str << "(sys:" << strerror(system_code) << ")";
+        } else {
+            str << "(sys:no error)";
+        }
+        return str.str();
     }
 
     uint64_t SystemError::makeErrorCode(uint32_t galay_code, uint32_t system_code)

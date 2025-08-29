@@ -19,9 +19,11 @@ set(DEPEND_LIBS ${SSL_LIB} ${CRYPTO_LIB})
 if(${USE_IO_URING})
   find_library(IO_URING_LIB NAMES uring)
   list(APPEND DEPEND_LIBS ${IO_URING_LIB})
-else(${USE_AIO})
+elseif(${USE_AIO})
   find_library(AIO_LIB NAMES aio)
   list(APPEND DEPEND_LIBS ${AIO_LIB})
+elseif(${USE_GCD})
+  
 endif()
 
 add_library(${PROJECT_NAME} OBJECT ${SRC_LIST})

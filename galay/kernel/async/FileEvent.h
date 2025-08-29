@@ -6,10 +6,14 @@
 #include "galay/kernel/coroutine/Coroutine.hpp"
 #include "Bytes.hpp"
 #include <vector>
+
+#ifdef USE_AIO
 #include <libaio.h>
+#endif
 
 namespace galay::details { 
 
+#ifdef USE_AIO
     template<CoType T>
     class FileEvent: public AsyncEvent<T>
     { 
@@ -58,7 +62,7 @@ namespace galay::details {
         io_context_t m_context;
         std::vector<iocb> m_iocbs;
     };
-
+#endif
 }
 
 #endif

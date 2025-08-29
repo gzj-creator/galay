@@ -80,9 +80,15 @@ else()
 endif()
 
 
-
+# linux
 # 检测内核版本以决定使用 aio 还是 iouring
 function(get_kernel_version)
+    if(NOT CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        message(STATUS "Not running on Linux. Defaulting to basic I/O operations.")
+        set(KERNEL_SUPPORTS_IOURING FALSE PARENT_SCOPE)
+        return()
+    endif()
+
     execute_process(
         COMMAND uname -r
         OUTPUT_VARIABLE KERNEL_VERSION
@@ -104,36 +110,46 @@ endfunction()
 # 检测内核版本并设置相应的宏定义
 get_kernel_version()
 
-if(KERNEL_SUPPORTS_IOURING AND !ENABLE_DEFAULT_USE_EPOLL)
-    # 检查是否安装了 liburing
-    find_path(LIBURING_INCLUDE_DIR 
-              NAMES liburing.h
-              PATHS /usr/local/include /usr/include)
-    
-    find_library(LIBURING_LIBRARY 
-                 NAMES uring
-                 PATHS /usr/local/lib /usr/lib)
-    
-    if(LIBURING_INCLUDE_DIR AND LIBURING_LIBRARY)
-        message(STATUS "liburing found, using io_uring")
-        include_directories(${LIBURING_INCLUDE_DIR})
-        set(IO_URING_FOUND TRUE)
-        add_definitions(-DUSE_IO_URING)
-        set(USE_IO_URING true)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    # linux
+    if(KERNEL_SUPPORTS_IOURING AND NOT ENABLE_DEFAULT_USE_EPOLL)
+        # 检查是否安装了 liburing
+        find_path(LIBURING_INCLUDE_DIR 
+                NAMES liburing.h
+                PATHS /usr/local/include /usr/include)
+        
+        find_library(LIBURING_LIBRARY 
+                    NAMES uring
+                    PATHS /usr/local/lib /usr/lib)
+        
+        if(LIBURING_INCLUDE_DIR AND LIBURING_LIBRARY)
+            message(STATUS "liburing found, using io_uring")
+            include_directories(${LIBURING_INCLUDE_DIR})
+            set(IO_URING_FOUND TRUE)
+            add_definitions(-DUSE_IO_URING)
+            set(USE_IO_URING true)
+        else()
+            message(STATUS "liburing not found, using aio")
+            set(IO_URING_FOUND FALSE)
+            add_definitions(-DUSE_AIO)
+            set(USE_AIO TRUE)
+        endif()
     else()
-        message(STATUS "liburing not found, using aio")
-        set(IO_URING_FOUND FALSE)
-        add_definitions(-DUSE_AIO)
-        set(USE_AIO TRUE)
+        if(ENABLE_DEFAULT_USE_EPOLL)
+            message(STATUS "Using aio due to use epoll")
+            add_definitions(-DUSE_AIO)
+            set(USE_AIO TRUE)
+        else()
+            message(STATUS "Using aio due to kernel version")
+            add_definitions(-DUSE_AIO)
+            set(USE_AIO TRUE)
+        endif()
     endif()
-else()
-    if(ENABLE_DEFAULT_USE_EPOLL)
-        message(STATUS "Using aio due to use epoll")
-        add_definitions(-DUSE_AIO)
-        set(USE_AIO TRUE)
-    else()
-        message(STATUS "Using aio due to kernel version")
-        add_definitions(-DUSE_AIO)
-        set(USE_AIO TRUE)
-    endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    # mac
+    message(STATUS "Running on macOS, using Grand Central Dispatch (GCD)")
+    add_definitions(-DUSE_GCD)
+    set(USE_GCD TRUE)
+    set(ENABLE_DEFAULT_USE_EPOLL FALSE)
 endif()
+
