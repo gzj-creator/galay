@@ -1,10 +1,6 @@
 project(test)
 file(GLOB SRC_LIST *.cc)
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  list(REMOVE_ITEM SRC_LIST ${CMAKE_CURRENT_SOURCE_DIR}/test_aio.cc)
-endif()
-
 set(COMMON_LIB ${SSL_LIB} ${CRYPTO_LIB})
 
 if(ENABLE_SYSTEM_LOG)

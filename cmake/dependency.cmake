@@ -149,9 +149,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     # mac
-    message(STATUS "Running on macOS, using Grand Central Dispatch (GCD)")
-    add_definitions(-DUSE_GCD)
-    set(USE_GCD TRUE)
     set(ENABLE_DEFAULT_USE_EPOLL FALSE)
 endif()
 

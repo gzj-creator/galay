@@ -17,10 +17,6 @@ namespace galay::details
             Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallCloseError, errno);
             makeValue(this->m_result, error);
         }
-        if(::close(m_ehandle.fd) < 0) {
-            Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallCloseError, errno);
-            makeValue(this->m_result, error);
-        }
         m_scheduler->removeEvent(this, nullptr);
         return true;
     }
@@ -101,5 +97,110 @@ namespace galay::details
         }
     
     } 
+#else
+    FileCloseEvent::FileCloseEvent(GHandle handle, EventScheduler *scheduler)
+        : FileEvent<ValueWrapper<bool>>(handle, scheduler)
+    {
+    }
+
+    bool FileCloseEvent::ready()
+    {   
+        using namespace error;
+        if(::close(m_handle.fd) < 0) {
+            Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallCloseError, errno);
+            makeValue(this->m_result, error);
+        }
+        m_scheduler->removeEvent(this, nullptr);
+        return true;
+    }
+
+    FileReadEvent::FileReadEvent(GHandle handle, EventScheduler *scheduler, char* buffer, size_t length)
+        : FileEvent<ValueWrapper<Bytes>>(handle, scheduler), m_length(length), m_buffer(buffer)
+    {
+    }
+
+    bool FileReadEvent::ready()
+    {
+        m_ready = readBytes(false);
+        return m_ready;
+    }
+
+    ValueWrapper<Bytes> FileReadEvent::resume()
+    {
+        if(!m_ready) readBytes(true);
+        return FileEvent<ValueWrapper<Bytes>>::resume();
+    }
+
+    bool FileReadEvent::readBytes(bool notify)
+    {
+        using namespace error;
+        SystemError::ptr error = nullptr;
+        Bytes bytes;
+        int recvBytes = read(m_handle.fd, m_buffer, m_length);
+        LogInfo("{}, {}, {}", recvBytes, m_length, m_buffer == nullptr);
+        if (recvBytes > 0) {
+            bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
+        } else if (recvBytes == 0) {
+            error = std::make_shared<SystemError>(CallFileReadError, errno);
+            bytes = Bytes();
+        } else {
+            if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
+            {
+                if( notify ) {
+                    error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                    makeValue(m_result, Bytes(), error);
+                }
+                return false;
+            }
+            error = std::make_shared<SystemError>(CallFileReadError, errno);
+            bytes = Bytes();
+        }
+        makeValue(m_result, std::move(bytes), error);
+        return true;
+    }
+
+    FileWriteEvent::FileWriteEvent(GHandle handle, EventScheduler *scheduler, Bytes &&bytes)
+        : FileEvent<ValueWrapper<Bytes>>(handle, scheduler), m_bytes(std::move(bytes))
+    {
+    }
+
+    bool FileWriteEvent::ready()
+    {
+        m_ready = writeBytes(false);
+        return m_ready;
+    }
+
+    ValueWrapper<Bytes> FileWriteEvent::resume()
+    {
+        if(!m_ready) writeBytes(true);
+        return FileEvent<ValueWrapper<Bytes>>::resume();
+    }
+
+    bool FileWriteEvent::writeBytes(bool notify)
+    {
+        using namespace error;
+        SystemError::ptr error = nullptr;
+        int sendBytes = write(m_handle.fd, m_bytes.data(), m_bytes.size());
+        if (sendBytes > 0) {
+            Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
+            makeValue(m_result, std::move(remain), error);
+        } else if (sendBytes == 0) {
+            error = std::make_shared<SystemError>(CallFileWriteError, errno);
+            makeValue(m_result, std::move(m_bytes), error);
+        } else {
+            if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
+            {
+                if( notify ) {
+                    error = std::make_shared<SystemError>(NotifyButSourceNotReadyError, errno);
+                    makeValue(m_result, std::move(m_bytes), error);
+                }
+                return false;
+            }
+            error = std::make_shared<SystemError>(CallFileWriteError, errno);
+            makeValue(m_result, std::move(m_bytes), error);
+        }
+        return true;
+    }
+
 #endif
 }

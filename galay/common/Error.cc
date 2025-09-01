@@ -27,7 +27,9 @@ namespace galay::error
         "call ssl_connect function error",
         "call ssl_close function error",
         "call read function error",
-        "call write function Error",
+        "call write function error",
+        "call lseek function error",
+        "call remove function error",
         "call activeEvent function error",
         "call removeEvent function error",
         "call getsockname function error",
@@ -45,6 +47,8 @@ namespace galay::error
         "not initialized",
         "async function timeout",
         "notify but source not ready",
+        "read return zero error",
+        "write return zero error",
     };
 
     SystemError::SystemError(uint32_t galay_code, uint32_t system_code)

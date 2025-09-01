@@ -287,8 +287,8 @@ namespace galay::details
         return true;
     }
 
-    SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, size_t length)
-        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_length(length)
+    SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* buffer, size_t length)
+        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_length(length), m_buffer(buffer)
     {
     }
 
@@ -307,11 +307,10 @@ namespace galay::details
     {
         using namespace error;
         SystemError::ptr error = nullptr;
-        Bytes bytes(m_length);
-        int recvBytes = SSL_read(m_ssl, bytes.data(), m_length);
+        Bytes bytes;
+        int recvBytes = SSL_read(m_ssl, m_buffer, m_length);
         if (recvBytes > 0) {
-            BytesVisitor visitor(bytes);
-            visitor.size() = recvBytes;
+            bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
         } else if (recvBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
             bytes = Bytes();

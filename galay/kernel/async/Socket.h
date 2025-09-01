@@ -9,6 +9,7 @@
 
 namespace galay {
 
+    #define DEFAULT_BUFFER_SIZE 1024
     /*
     *************************************************
                 net(not thread security)
@@ -21,7 +22,11 @@ namespace galay {
     public:
         AsyncTcpSocket(Runtime& runtime);
         AsyncTcpSocket(Runtime& runtime, GHandle handle);
-
+        AsyncTcpSocket(const AsyncTcpSocket& other);
+        AsyncTcpSocket(AsyncTcpSocket&& other);
+        AsyncTcpSocket& operator=(const AsyncTcpSocket& other);
+        AsyncTcpSocket& operator=(AsyncTcpSocket&& other);
+        ~AsyncTcpSocket();
         HandleOption options();
 
         ValueWrapper<bool> socket();
@@ -39,6 +44,7 @@ namespace galay {
         //return send length 
         AsyncResult<ValueWrapper<long>> sendfile(GHandle file_handle, long offset, size_t length);
     #endif
+        void reallocBuffer(size_t length);
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
         //throw exception
@@ -47,6 +53,7 @@ namespace galay {
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
         GHandle m_handle;
+        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 
@@ -57,6 +64,12 @@ namespace galay {
         AsyncUdpSocket(Runtime& runtime);
         AsyncUdpSocket(Runtime& runtime, GHandle handle);
 
+        AsyncUdpSocket(const AsyncUdpSocket& other);
+        AsyncUdpSocket(AsyncUdpSocket&& other);
+        AsyncUdpSocket& operator=(const AsyncUdpSocket& other);
+        AsyncUdpSocket& operator=(AsyncUdpSocket&& other);
+        ~AsyncUdpSocket();
+
         HandleOption options();
         ValueWrapper<bool> socket();
         ValueWrapper<bool> bind(const Host& addr);
@@ -65,12 +78,14 @@ namespace galay {
         AsyncResult<ValueWrapper<Bytes>> sendto(const Host& remote, Bytes bytes);
         AsyncResult<ValueWrapper<bool>> close();
 
+        void reallocBuffer(size_t length);
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getDestAddr() const;
     private:
         GHandle m_handle;
+        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 
@@ -80,7 +95,10 @@ namespace galay {
     public:
         AsyncSslSocket(Runtime& runtime);
         AsyncSslSocket(Runtime& runtime, SSL* ssl);
-
+        AsyncSslSocket(AsyncSslSocket&& other);
+        AsyncSslSocket(const AsyncSslSocket& other);
+        AsyncSslSocket& operator=(const AsyncSslSocket& other);
+        AsyncSslSocket& operator=(AsyncSslSocket&& other);
         HandleOption options();
         ValueWrapper<bool> socket();
         ValueWrapper<bool> bind(const Host& addr);
@@ -90,11 +108,14 @@ namespace galay {
         AsyncResult<ValueWrapper<Bytes>> sslRecv(size_t length);
         AsyncResult<ValueWrapper<Bytes>> sslSend(Bytes bytes);
         AsyncResult<ValueWrapper<bool>> sslClose();
+        void reallocBuffer(size_t length);
+        ~AsyncSslSocket();
     private:
         AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);
         GHandle getHandle() const;
     private:
         SSL* m_ssl = nullptr;
+        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 

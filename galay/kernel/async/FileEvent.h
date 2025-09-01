@@ -4,7 +4,7 @@
 #include "galay/kernel/coroutine/Result.hpp"
 #include "galay/common/Common.h"
 #include "galay/kernel/coroutine/Coroutine.hpp"
-#include "Bytes.hpp"
+#include "Bytes.h"
 #include <vector>
 
 #ifdef USE_AIO
@@ -25,7 +25,7 @@ namespace galay::details {
             this->m_waker = waker;
             if(!m_scheduler->activeEvent(this, nullptr)) {
                 Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
-                makeValue(this->m_result, false, error);
+                makeValue(this->m_result, error);
                 return false;
             }
             return true;
@@ -61,6 +61,72 @@ namespace galay::details {
         size_t m_unfinished_cb;
         io_context_t m_context;
         std::vector<iocb> m_iocbs;
+    };
+
+#else
+    template<CoType T>
+    class FileEvent: public AsyncEvent<T>
+    { 
+    public:
+        FileEvent(GHandle handle, EventScheduler* scheduler) 
+            :m_handle(handle), m_scheduler(scheduler) {}
+        bool suspend(Waker waker) override {
+            using namespace error;
+            this->m_waker = waker;
+            if(!m_scheduler->activeEvent(this, nullptr)) {
+                Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
+                makeValue(this->m_result, error);
+                return false;
+            }
+            return true;
+        }
+        void handleEvent() override { this->m_waker.wakeUp(); }
+        GHandle getHandle() override {  return m_handle; }
+    protected:
+        bool m_ready = false;
+        GHandle m_handle;
+        EventScheduler* m_scheduler;
+    };
+
+    class FileCloseEvent: public FileEvent<ValueWrapper<bool>> 
+    {
+    public:
+        FileCloseEvent(GHandle handle, EventScheduler* scheduler);
+        std::string name() override { return "FileCloseEvent"; }
+        void handleEvent() override {}
+        EventType getEventType() const override { return EventType::kEventTypeNone; }
+        bool ready() override;
+    private:
+        GHandle m_handle;
+    };
+
+    class FileReadEvent: public FileEvent<ValueWrapper<Bytes>>
+    {
+    public:
+        FileReadEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length);
+        std::string name() override { return "FileReadEvent"; }
+        EventType getEventType() const override { return EventType::kEventTypeRead; }
+        bool ready() override;
+        ValueWrapper<Bytes> resume() override;
+    private:
+        bool readBytes(bool notify);
+    private:
+        size_t m_length;
+        char* m_buffer;
+    };
+
+    class FileWriteEvent: public FileEvent<ValueWrapper<Bytes>>
+    {
+    public:
+        FileWriteEvent(GHandle handle, EventScheduler* scheduler, Bytes&& bytes);
+        std::string name() override { return "FileWriteEvent"; }
+        EventType getEventType() const override { return EventType::kEventTypeWrite; }
+        bool ready() override;
+        ValueWrapper<Bytes> resume() override;
+    private:
+        bool writeBytes(bool notify);
+    private:
+        Bytes m_bytes;
     };
 #endif
 }

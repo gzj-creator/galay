@@ -72,8 +72,8 @@ namespace galay::details
         return true;
     }
 
-    TcpRecvEvent::TcpRecvEvent(GHandle handle, EventScheduler* scheduler, size_t length)
-        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_length(length)
+    TcpRecvEvent::TcpRecvEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length)
+        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_length(length), m_buffer(buffer)
     {
     }
 
@@ -93,11 +93,10 @@ namespace galay::details
     {
         using namespace error;
         SystemError::ptr error = nullptr;
-        Bytes bytes(m_length);
-        int recvBytes = recv(m_handle.fd, bytes.data(), m_length, 0);
+        Bytes bytes;
+        int recvBytes = recv(m_handle.fd, m_buffer, m_length, 0);
         if (recvBytes > 0) {
-            BytesVisitor visitor(bytes);
-            visitor.size() = recvBytes;
+            bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
         } else if (recvBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
             bytes = Bytes();
@@ -275,13 +274,12 @@ namespace galay::details
     {
         using namespace error;
         SystemError::ptr error = nullptr;
-        Bytes bytes(m_length);
+        Bytes bytes;
         sockaddr addr;
         socklen_t addr_len = sizeof(addr);
-        int recvBytes = recvfrom(m_handle.fd, bytes.data(), m_length, 0, &addr, &addr_len);
+        int recvBytes = recvfrom(m_handle.fd, m_buffer, m_length, 0, &addr, &addr_len);
         if (recvBytes > 0) {
-            BytesVisitor visitor(bytes);
-            visitor.size() = recvBytes;
+            bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
             m_remote.ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
             m_remote.port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
         } else if (recvBytes == 0) {

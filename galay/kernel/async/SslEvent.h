@@ -3,7 +3,7 @@
 
 #include "galay/kernel/coroutine/Result.hpp"
 #include "galay/common/Common.h"
-#include "Bytes.hpp"
+#include "Bytes.h"
 
 namespace galay
 {
@@ -115,7 +115,7 @@ namespace galay::details
     class SslRecvEvent: public SslEvent<ValueWrapper<Bytes>> 
     {
     public:
-        SslRecvEvent(SSL* ssl, EventScheduler* scheduler, size_t length);
+        SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* buffer, size_t length);
         std::string name() override { return "SslRecvEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeRead; }
@@ -126,6 +126,7 @@ namespace galay::details
         bool sslRecv();
     private:
         size_t m_length;
+        char* m_buffer;
     };
 
     class SslSendEvent: public SslEvent<ValueWrapper<Bytes>> {

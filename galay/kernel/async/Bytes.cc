@@ -1,252 +1,325 @@
-#include "Bytes.hpp"
-#include <stdexcept>
-#include <limits>
-#include "galay/common/Log.h"
+#include "Bytes.h"
 
-namespace galay
+namespace galay 
 {
-    Bytes::Bytes(const std::string &data)
+    StringMetaData::StringMetaData(std::string &str)
     {
-        if (!data.empty()) {
-            mData = static_cast<uint8_t*>(malloc(data.size()));
-            if (!mData) {
-                LogError("malloc failed");
-                throw std::bad_alloc();
-            }
-            mSize = data.size();
-            mCapacity = data.size();
-            std::memcpy(mData, data.data(), data.size());
-        }
+        data = (uint8_t*)str.data();
+        size = str.size();
+        capacity = str.capacity();
     }
 
-    Bytes::Bytes(const std::string_view &data)
+    StringMetaData::StringMetaData(const std::string_view &str)
     {
-        if (!data.empty()) {
-            mData = static_cast<uint8_t*>(malloc(data.size()));
-            if (!mData) {
-                LogError("malloc failed");
-                throw std::bad_alloc();
-            }
-            mSize = data.size();
-            mCapacity = data.size();
-            std::memcpy(mData, data.data(), data.size());
-        }
+        data = (uint8_t*)str.data();
+        size = str.size();
+        capacity = str.length();
     }
 
-    Bytes::Bytes(const char *data)
+    StringMetaData::StringMetaData(const char *str)
     {
-        if (data) {
-            mSize = strlen(data);
-            mCapacity = mSize;
-            mData = static_cast<uint8_t*>(malloc(mSize));
-            if (!mData) {
-                LogError("malloc failed");
-                throw std::bad_alloc();
-            }
-            std::memcpy(mData, data, mSize);
-        }
+        size = strlen(str);
+        capacity = size;
+        data = (uint8_t*)str;
     }
 
-    Bytes::Bytes(const char* data, size_t length)
+    StringMetaData::StringMetaData(const uint8_t *str)
     {
-        if (length > 0) {
-            mData = static_cast<uint8_t*>(malloc(length));
-            if (!mData) {
-                LogError("malloc failed");
-                throw std::bad_alloc();
-            }
-            mSize = length;
-            mCapacity = length;
-            std::memcpy(mData, data, length);
-        }
+        size = strlen(reinterpret_cast<const char*>(str));
+        capacity = size;
+        data = (uint8_t*)str;
     }
 
-    Bytes::Bytes(const uint8_t* data, size_t length)
+    StringMetaData::StringMetaData(const char* str, size_t length)
     {
-        if (length > 0) {
-            mData = static_cast<uint8_t*>(malloc(length));
-            if (!mData) {
-                LogError("malloc failed");
-                throw std::bad_alloc();
-            }
-            mSize = length;
-            mCapacity = length;
-            std::memcpy(mData, data, length);
-        }
+        if(length <= 0) throw std::invalid_argument("length must be greater than 0");
+        size = strlen(reinterpret_cast<const char*>(str));
+        capacity = length;
+        size = length;
     }
 
-    Bytes::Bytes(size_t capacity)
+    StringMetaData::StringMetaData(const uint8_t* str, size_t length)
     {
-        if (capacity > 0)
-        {
-            mData = static_cast<uint8_t*>(malloc(capacity));
-            if (!mData) {
-                LogError("malloc failed");
-                throw std::bad_alloc();
-            }
-            bzero(mData, capacity);
-            mSize = 0;
-            mCapacity = capacity;
-        }
+        if(length <= 0) throw std::invalid_argument("length must be greater than 0");
+        size = strlen(reinterpret_cast<const char*>(str));
+        capacity = length;
+        size = length;
     }
 
-    Bytes::Bytes(Bytes&& other) noexcept
-        : mData(other.mData), mSize(other.mSize), mCapacity(other.mCapacity)
+    StringMetaData::StringMetaData(StringMetaData &&other)
+        : data(other.data), size(other.size), capacity(other.capacity) 
     {
-        other.mData = nullptr;
-        other.mSize = 0;
-        other.mCapacity = 0;
+        other.data = nullptr;
+        other.size = 0;
+        other.capacity = 0;
     }
 
-    Bytes::~Bytes() {
-        if (mData) {
-            free(mData);
-            mData = nullptr;
-        }
-    }
-
-    Bytes& Bytes::operator=(Bytes&& other) noexcept {
+    StringMetaData& StringMetaData::operator=(StringMetaData&& other) 
+    {
         if (this != &other) {
-            if (mData)
-            {
-                free(mData);
-                mData = nullptr;
-            }
-            mData = other.mData;
-            mSize = other.mSize;
-            mCapacity = other.mCapacity;
-            other.mData = nullptr;
-            other.mSize = 0;
-            other.mCapacity = 0;
+            data = other.data;
+            size = other.size;
+            capacity = other.capacity;
+            other.data = nullptr;
+            other.size = 0;
+            other.capacity = 0;
         }
         return *this;
     }
 
-    void Bytes::release() {
-        if (mData)
-        {
-            free(mData);
-            mData = nullptr;
+    StringMetaData::~StringMetaData()
+    {
+        if(data) {
+            data = nullptr;
+            size = 0;
+            capacity = 0;
         }
-        mData = nullptr;
-        mSize = 0;
-        mCapacity = 0;
     }
 
-    void Bytes::reallocate(size_t newSize) {
-        if (newSize == 0) {
-            release();
-            return;
-        }
-
-        if (newSize <= mCapacity) {
-            mSize = newSize;
-            return;
-        }
-
-        uint8_t* newData = static_cast<uint8_t*>(realloc(mData, newSize));
-        if (!newData) {
-            LogError("reallocate failed");
-            throw std::bad_alloc();
-        }
-
-        mData = newData;
-        mSize = newSize;
-        mCapacity = newSize;
+    Bytes::Bytes(std::string &str)
+    {
+        std::string data(str);
+        m_string = std::move(data);
     }
 
-    void Bytes::reallocateZero(size_t newSize) {
-        if (newSize == 0) {
-            release();
-            return;
-        }
-
-        if (newSize <= mCapacity) {
-            std::memset(mData, 0, newSize);
-            mSize = newSize;
-            return;
-        }
-
-        uint8_t* newData = static_cast<uint8_t*>(calloc(newSize, 1));
-        if (!newData) {
-            LogError("reallocate failed");
-            throw std::bad_alloc();
-        }
-
-        if (mData) {
-            std::memcpy(newData, mData, std::min(mSize, newSize));
-            free(mData);
-            mData = nullptr;
-        }
-
-        mData = newData;
-        mSize = newSize;
-        mCapacity = newSize;
+    Bytes::Bytes(std::string &&str)
+    {
+        m_string = std::move(str);
     }
 
-    void Bytes::reserve(size_t newCapacity) {
-        if (newCapacity <= mCapacity) return;
-
-        uint8_t* newData = static_cast<uint8_t*>(realloc(mData, newCapacity));
-        if (!newData) {
-            LogError("reallocate failed");
-            throw std::bad_alloc();
-        }
-
-        mData = newData;
-        mCapacity = newCapacity;
+    Bytes::Bytes(const char *str)
+    {
+        std::string data(str);
+        m_string = std::move(data);
     }
 
-    void Bytes::append(const uint8_t* data, size_t length) {
-        if (length == 0) return;
-
-        const size_t newSize = mSize + length;
-        reserve(newSize);
-
-        std::memcpy(mData + mSize, data, length);
-        mSize = newSize;
+    Bytes::Bytes(const uint8_t *str)
+    {
+        std::string data(reinterpret_cast<const char*>(str));
+        m_string = std::move(data);
     }
 
-    Bytes Bytes::slice(size_t pos, size_t len) const {
-        if (pos > mSize) {
-            LogError("Bytes::slice position out of range");
-            throw std::out_of_range("Bytes::slice - position out of range");
+    Bytes::Bytes(const char *str, size_t length)
+    {
+        std::string data(str, length);
+        m_string = std::move(data);
+    }
+    
+    Bytes::Bytes(const uint8_t *str, size_t length)
+    {
+        std::string data(reinterpret_cast<const char*>(str), length);
+        m_string = std::move(data);
+    }
+
+    Bytes::Bytes(size_t capacity)
+    {
+        std::string data;
+        data.reserve(capacity);
+        m_string = std::move(data);
+    }
+
+    Bytes::Bytes(Bytes &&other) noexcept
+    {
+        m_string = std::move(other.m_string);
+    }
+
+    Bytes &Bytes::operator=(Bytes &&other) noexcept
+    {
+        m_string = std::move(other.m_string);
+        return *this;
+    }
+
+    Bytes Bytes::fromString(std::string &str)
+    {
+        StringMetaData data;
+        data.data = reinterpret_cast<uint8_t*>(str.data());
+        data.size = str.size();
+        data.capacity = str.capacity();
+        Bytes bytes;
+        bytes.m_string = std::move(data);
+        return bytes;
+    }
+
+    Bytes Bytes::fromString(const std::string_view &str)
+    {
+        StringMetaData data;
+        data.data = reinterpret_cast<uint8_t*>(const_cast<char*>(str.data()));
+        data.size = str.size();
+        data.capacity = str.size();
+        Bytes bytes;
+        bytes.m_string = std::move(data);
+        return bytes;
+    }
+
+    Bytes Bytes::fromCString(const char *str, size_t length, size_t capacity)
+    {
+        StringMetaData data;
+        data.data = reinterpret_cast<uint8_t*>(const_cast<char*>(str));
+        data.size = length;
+        data.capacity = capacity;
+        Bytes bytes;
+        bytes.m_string = std::move(data);
+        return bytes;
+    }
+
+    const uint8_t* Bytes::data() const noexcept
+    {
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            return std::get<StringMetaData>(m_string).data;
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            return reinterpret_cast<const uint8_t*>(std::get<std::string>(m_string).data());
         }
-        len = std::min(len, mSize - pos);
-        return Bytes(mData + pos, len);
+        return nullptr;
+    }
+
+    const char* Bytes::c_str() const noexcept
+    {
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            auto& data = std::get<StringMetaData>(m_string);
+            if(data.data[data.size - 1] != '\0') {
+                data.data[data.size] = '\0';
+            }
+            return reinterpret_cast<const char*>(data.data);
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            return std::get<std::string>(m_string).c_str();
+        }
+        return nullptr;
+    }
+
+    size_t Bytes::size() const noexcept
+    {
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            return std::get<StringMetaData>(m_string).size;
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            return std::get<std::string>(m_string).size();
+        }
+        return 0;
+    }
+
+    size_t Bytes::capacity() const noexcept
+    {
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            return std::get<StringMetaData>(m_string).capacity;
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            return std::get<std::string>(m_string).capacity();
+        }
+        return 0;
+    }
+
+    bool Bytes::empty() const noexcept
+    {
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            return std::get<StringMetaData>(m_string).size == 0;
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            return std::get<std::string>(m_string).empty();
+        }
+        return true;
+    }
+
+    void Bytes::clear() noexcept
+    {
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            auto& str = std::get<StringMetaData>(m_string);
+            str.data = nullptr;
+            str.size = 0;
+            str.capacity = 0;
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            std::get<std::string>(m_string).clear();
+        }
     }
 
     std::string Bytes::toString() const
     {
-        if (mData)
-        {
-            return std::string(reinterpret_cast<char*>(mData), mSize);
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            auto& str = std::get<StringMetaData>(m_string);
+            return std::string(reinterpret_cast<char*>(str.data), str.size);
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            return std::get<std::string>(m_string);
         }
         return "";
     }
 
-    std::string_view Bytes::toStringView() const
+    bool Bytes::operator==(const Bytes &other) const
     {
-        if(mData) {
-            return std::string_view(reinterpret_cast<char*>(mData), mSize);
+        if(std::holds_alternative<StringMetaData>(m_string) && std::holds_alternative<StringMetaData>(other.m_string)) {
+            auto& str = std::get<StringMetaData>(m_string);
+            auto& str2 = std::get<StringMetaData>(other.m_string);
+            return str.size == str2.size && std::memcmp(str.data, str2.data, str.size) == 0;
+        } else if(std::holds_alternative<std::string>(m_string) && std::holds_alternative<std::string>(other.m_string)) {
+            auto& str = std::get<std::string>(m_string);
+            auto& str2 = std::get<std::string>(other.m_string);
+            return str == str2;
+        } else if(std::holds_alternative<std::string>(m_string) && std::holds_alternative<StringMetaData>(other.m_string)) {
+            auto& str = std::get<std::string>(m_string);
+            auto& str2 = std::get<StringMetaData>(other.m_string);
+            return str.size() == str2.size && std::memcmp(str.c_str(), str2.data, str.size()) == 0;
+        } else if(std::holds_alternative<StringMetaData>(m_string) && std::holds_alternative<std::string>(other.m_string)) {
+            auto& str = std::get<StringMetaData>(m_string);
+            auto& str2 = std::get<std::string>(other.m_string);
+            return str.size == str2.size() && std::memcmp(str.data, str2.c_str(), str.size) == 0;
         }
-        return std::string_view();
+        return false;
     }
 
-    BytesVisitor::BytesVisitor(Bytes& bytes)
-        :m_bytes(bytes)
+    bool Bytes::operator!=(const Bytes &other) const
     {
-
+        return !operator==(other);
     }
 
-    size_t& BytesVisitor::size()
+    StringMetaData mallocString(size_t length)
     {
-        return m_bytes.mSize;
+        StringMetaData metaData;
+        metaData.capacity = length;
+        metaData.data = (uint8_t*)malloc(length);
+        metaData.size = 0;
+        return metaData;
     }
 
-    size_t& BytesVisitor::Capacity()
+    StringMetaData deepCopyString(const StringMetaData& meta)
     {
-        return m_bytes.mCapacity;
+        StringMetaData metaData;
+        metaData = mallocString(meta.capacity);
+        metaData.size = meta.size;
+        memcpy(metaData.data, meta.data, meta.size);
+        return metaData;
     }
 
+    void reallocString(StringMetaData &meta, size_t length)
+    {
+        if(length == 0) {
+            // 释放内存
+            if (meta.data) {
+                free(meta.data);
+                meta.data = nullptr;
+            }
+            meta.size = 0;
+            meta.capacity = 0;
+            return;
+        }
+        if(meta.size > length) {
+            meta.size = length;
+        }
+        meta.capacity = length;
+        meta.data = (uint8_t*)realloc(meta.data, length);
+        if (meta.data == nullptr)
+        {
+            throw std::bad_alloc();
+        }
+    }
+
+    void clearString(StringMetaData &meta)
+    {
+        meta.size = 0;
+        memset(meta.data, 0, meta.capacity);
+    }
+
+    void freeString(StringMetaData &meta)
+    {
+        if(meta.data != nullptr) {
+            free(meta.data);
+            meta.data = nullptr;
+            meta.capacity = 0;
+            meta.size = 0;
+        }
+    }
 }

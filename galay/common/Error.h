@@ -32,6 +32,8 @@ namespace galay::error
         CallSSLCloseError,
         CallFileReadError,
         CallFileWriteError,
+        CallLSeekError,
+        CallRemoveError,
         CallActiveEventError,
         CallRemoveEventError,
         CallGetSockNameError,
@@ -49,6 +51,8 @@ namespace galay::error
         NotInitializedError,
         AsyncTimeoutError,
         NotifyButSourceNotReadyError,
+        FileReadEmptyError,
+        FileWriteEmptyError,
         SystemErrorEnd
     };
 

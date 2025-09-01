@@ -19,7 +19,7 @@ if(${USE_IO_URING})
 elseif(${USE_AIO})
   find_library(AIO_LIB NAMES aio)
   list(APPEND DEPEND_LIBS ${AIO_LIB})
-elseif(${USE_GCD})
+else()
   
 endif()
 

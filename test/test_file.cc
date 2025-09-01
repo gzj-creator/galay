@@ -8,6 +8,7 @@ using namespace galay;
 
 Runtime runtime;
 
+#ifdef USE_AIO  
 Coroutine<nil> test()
 {
     File file(runtime);
@@ -44,11 +45,11 @@ Coroutine<nil> test()
     co_await file.close();
     std::cout << "close success" << std::endl;
     std::error_code ec;
-    // if(!std::filesystem::remove("./test1.txt", ec)) {
-    //     std::cout << "remove failed: " << ec.message() << std::endl;
-    // } else {
-    //     std::cout << "remove success: " << ec.message() << std::endl;
-    // }
+    if(!std::filesystem::remove("./test1.txt", ec)) {
+        std::cout << "remove failed: " << ec.message() << std::endl;
+    } else {
+        std::cout << "remove success: " << ec.message() << std::endl;
+    }
     co_return nil();
 }
 
@@ -84,13 +85,56 @@ Coroutine<nil> test_v()
     co_await file.close();
     std::cout << "file close success" << std::endl;
     std::error_code ec;
-    // if(!std::filesystem::remove("./test2.txt", ec)) {
-    //     std::cout << "remove failed: " << ec.message() << std::endl;
-    // } else {
-    //     std::cout << "remove success: " << ec.message() << std::endl;
-    // }
+    if(!std::filesystem::remove("./test2.txt", ec)) {
+        std::cout << "remove failed: " << ec.message() << std::endl;
+    } else {
+        std::cout << "remove success: " << ec.message() << std::endl;
+    }
     co_return nil();
 }
+
+#else
+
+Coroutine<nil> test()
+{ 
+    std::cout << "testing" << std::endl;
+    File file(runtime);
+    OpenFlags flags;
+    flags.create().noBlock().readWrite();
+    auto ret = file.open("./test2.txt", flags, FileModes());
+    if(!ret.success()) {
+        std::cout << "open failed: " << ret.getError()->message() << std::endl;
+        co_return nil();
+    }
+    std::cout << "open success" << std::endl;
+    std::string verify(10240, 'a');
+    Bytes bytes = Bytes::fromString(verify);
+    auto wwrapper = co_await file.write(std::move(bytes));
+    if(!wwrapper.success()) {
+        std::cout << "write error: " << wwrapper.getError()->message() << std::endl;
+        co_return nil();
+    }
+    std::cout << "write success: " << wwrapper.moveValue().size() << std::endl;
+    file.seek(0);
+    auto rwrapper = co_await file.read(10240);
+    if(!rwrapper.success()) {
+        std::cout << "read error: " << rwrapper.getError()->message() << std::endl;
+        co_return nil();
+    }
+    auto str = rwrapper.moveValue();
+    std::cout << "read success: " << str.size() << std::endl;
+    if(str == verify) {
+        std::cout << "verify success" << std::endl;
+    } else {
+        std::cout << "verify failed" << std::endl;
+    }
+    co_await file.close();
+    file.remove();
+    co_return nil();
+}
+#endif
+
+
 
 int main() { 
     LogTrace("main");
@@ -100,7 +144,9 @@ int main() {
     runtime = builder.build();
     runtime.start();
     runtime.schedule(test());
+#ifdef USE_AIO
     runtime.schedule(test_v());
+#endif
     getchar();
     runtime.stop();
     return 0;

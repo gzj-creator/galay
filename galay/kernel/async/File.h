@@ -11,6 +11,7 @@
 
 namespace galay 
 {
+    #define DEFAULT_BUFFER_SIZE 1024
 
     class OpenFlags
     {
@@ -92,7 +93,7 @@ namespace galay
         //保证 result 生命周期在下一次 commiy 之后
         void preWrite(Bytes& bytes, int& result, LL offset);
         //从第一个 Bytes 开始填充
-        void preReadV(std::vector<Bytes>& bytes_v, IOVecResult& temp, LL offset);
+        void preReadV(std::vector<Bytes>& bytes_v, IOVecResult& result, LL offset);
 
         void preWriteV(std::vector<Bytes*>& bytes_v, IOVecResult &result, LL offset);
 
@@ -104,6 +105,33 @@ namespace galay
         GHandle m_event_handle;
         io_context_t m_io_ctx;
         std::vector<iocb> m_iocbs;
+        EventScheduler* m_scheduler = nullptr;
+    };
+#else
+    class File
+    { 
+    public:
+        File(Runtime& runtime);
+        File(Runtime& runtime, GHandle handle);
+
+        File(const File& other);
+        File(File&& other);
+        File& operator=(const File& other);
+        File& operator=(File&& other);
+        ~File();
+
+        HandleOption option();
+        ValueWrapper<bool> open(const std::string& path, OpenFlags flags, FileModes modes);
+        AsyncResult<ValueWrapper<Bytes>> read(size_t length);
+        ValueWrapper<bool> seek(size_t offset);
+        AsyncResult<ValueWrapper<Bytes>> write(Bytes bytes);
+        AsyncResult<ValueWrapper<bool>> close();
+        void reallocBuffer(size_t length);
+        ValueWrapper<bool> remove();
+    private:
+        GHandle m_handle;
+        std::string m_path;
+        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 #endif
