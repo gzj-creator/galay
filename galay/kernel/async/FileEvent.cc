@@ -54,28 +54,25 @@ namespace galay::details
             auto& event = events[ret];
             if(event.data) {
                 if(event.obj->aio_lio_opcode == IO_CMD_PREAD) {
-                    Bytes* result = static_cast<Bytes*>(event.data);
+                    StringMetaData* result = static_cast<StringMetaData*>(event.data);
                     if(event.res > 0) {
-                        BytesVisitor visitor(*result);
-                        visitor.size() = event.res;
+                        result->size = event.res;
                     }
                 } else if(event.obj->aio_lio_opcode == IO_CMD_PWRITE) {
                     int *result = static_cast<int*>(event.data);
                     *result = event.res;
                 } 
                 else if(event.obj->aio_lio_opcode == IO_CMD_PREADV) {
-                    std::vector<Bytes>* result = static_cast<std::vector<Bytes>*>(event.data);
+                    std::vector<StringMetaData>* result = static_cast<std::vector<StringMetaData>*>(event.data);
                     if(event.res > 0) { 
                         unsigned long remain = event.res;
                         for(size_t i = 0; i < result->size(); ++i) {
-                            if(remain > result->at(i).capacity()) {
-                                BytesVisitor visitor(result->at(i));
-                                visitor.size() = result->at(i).capacity();
-                                remain -= result->at(i).size();
+                            if(remain > result->at(i).capacity) {
+                                result->at(i).size = result->at(i).capacity;
+                                remain -= result->at(i).size;
                             } else {
-                                BytesVisitor visitor(result->at(i));
-                                visitor.size() = remain;
-                                remain -= result->at(i).size();
+                                result->at(i).size = remain;
+                                remain -= result->at(i).size;
                                 break;
                             }
                         }

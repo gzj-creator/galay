@@ -18,28 +18,28 @@ Coroutine<nil> test()
     file.open("./test1.txt", flags, FileModes{});
     //初始化异步IO
     file.aioInit(1024);
-    Bytes bytes("1234");
+    StringMetaData wdata("1234");
     //结果收集容器，保证生命周期在 commit 函数调用完成之后
     std::vector<int> results(1024, 0);
     for(int i = 0; i < 1024; i++) {
-        file.preWrite(bytes, results[i], i * bytes.size());
+        file.preWrite(wdata, results[i], i * wdata.size);
     }
     auto success = co_await file.commit();
     //结果收集容器，保证生命周期在 commit 函数调用完成之后
-    std::vector<Bytes> rbytes(1024);
+    std::vector<StringMetaData> rdata(1024);
     for(int i = 0; i < 1024; i++) {
-        rbytes[i] = Bytes(4);
-        file.preRead(rbytes[i], i * bytes.size());
+        rdata[i] = mallocString(4);
+        file.preRead(rdata[i], i * 4);
     }
     co_await file.commit();
     //验证数据
     std::string verify("1234");
-    for(auto& by: rbytes) {
-        if(by.toString() != verify) {
+    for(auto& by: rdata) {
+        if(std::string(reinterpret_cast<char*>(by.data), by.size) != verify) {
             std::cout << "verify failed" << std::endl;
             break;
-        } else {
-        }
+        } 
+        freeString(by);
     }
     std::cout << "verify success" << std::endl;
     co_await file.close();
@@ -60,23 +60,22 @@ Coroutine<nil> test_v()
     flags.create().noBlock().readWrite();
     file.open("./test2.txt", flags, FileModes{});
     file.aioInit(1024);
-    Bytes bytes("1234");
-    std::vector<Bytes*> wbytes(1024);
+    std::vector<StringMetaData> wbytes(1024);
     for(int i = 0; i < 1024; ++i){
-        wbytes[i] = &bytes;
+        wbytes[i] = StringMetaData("1234");
     }
     IOVecResult result;
     file.preWriteV(wbytes, result, 0);
     co_await file.commit();
-    std::vector<Bytes> rbytes(1024);
+    std::vector<StringMetaData> rdata(1024);
     for(int i = 0; i < 1024; ++i) {
-        rbytes[i] = Bytes(4);
+        rdata[i] = mallocString(4);
     }
     IOVecResult rresult;
-    file.preReadV(rbytes, rresult, 0);
+    file.preReadV(rdata, rresult, 0);
     co_await file.commit();
-    for(auto& v: rbytes){
-        if(v.toString() != "1234") {
+    for(auto& v: rdata){
+        if(std::string(reinterpret_cast<char*>(v.data), v.size) != "1234") {
             std::cout << "vector verify failed" << std::endl;
             break;
         }

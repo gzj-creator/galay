@@ -75,18 +75,18 @@ namespace galay
         return wrapper;
     }
 
-    void File::preRead(Bytes& bytes, LL offset)
+    void File::preRead(StringMetaData& bytes, LL offset)
     {
         m_iocbs.push_back(iocb{});
-        io_prep_pread(&m_iocbs.back(), m_handle.fd, bytes.data(), bytes.capacity(), offset);
+        io_prep_pread(&m_iocbs.back(), m_handle.fd, bytes.data, bytes.capacity, offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
         m_iocbs.back().data = &bytes;
     }
 
-    void File::preWrite(Bytes& bytes, int &result, LL offset)
+    void File::preWrite(StringMetaData& bytes, int &result, LL offset)
     {
         m_iocbs.push_back(iocb{});
-        io_prep_pwrite(&m_iocbs.back(), m_handle.fd, bytes.data(), bytes.size(), offset);
+        io_prep_pwrite(&m_iocbs.back(), m_handle.fd, bytes.data, bytes.size, offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
         m_iocbs.back().data = &result;
     }
@@ -112,7 +112,7 @@ namespace galay
         visitor.iovecs().resize(bytes_v.size());
         for(size_t i = 0; i < bytes_v.size(); ++i){
             visitor.iovecs()[i].iov_base = bytes_v[i].data;
-            visitor.iovecs()[i].iov_len = bytes_v[i];
+            visitor.iovecs()[i].iov_len = bytes_v[i].size;
         }
         io_prep_pwritev(&m_iocbs.back(), m_handle.fd, visitor.iovecs().data(), visitor.iovecs().size(), offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
@@ -127,11 +127,6 @@ namespace galay
     AsyncResult<ValueWrapper<bool>> File::close()
     {
         return {std::make_shared<details::FileCloseEvent>(m_event_handle, m_scheduler, m_handle)};
-    }
-
-    void File::reallocBuffer(size_t length)
-    {
-        reallocString(m_buffer, length);
     }
 
     File::~File()

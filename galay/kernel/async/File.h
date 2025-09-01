@@ -88,14 +88,14 @@ namespace galay
         File(Runtime& runtime, GHandle handle);
         ValueWrapper<bool> open(const std::string& path, OpenFlags flags, FileModes modes);
         ValueWrapper<bool> aioInit(int max_events);
-        void preRead(Bytes& bytes, LL offset);
+        void preRead(StringMetaData& bytes, LL offset);
         //设置O_APPEND后忽略 offset 参数,现代文件系统允许稀疏文件 offset 大于文件大小也可形成文件空洞，不计入实际占用
         //保证 result 生命周期在下一次 commiy 之后
-        void preWrite(Bytes& bytes, int& result, LL offset);
+        void preWrite(StringMetaData& bytes, int& result, LL offset);
         //从第一个 Bytes 开始填充
-        void preReadV(std::vector<Bytes>& bytes_v, IOVecResult& result, LL offset);
+        void preReadV(std::vector<StringMetaData>& bytes_v, IOVecResult& result, LL offset);
 
-        void preWriteV(std::vector<Bytes*>& bytes_v, IOVecResult &result, LL offset);
+        void preWriteV(std::vector<StringMetaData>& bytes_v, IOVecResult &result, LL offset);
 
         AsyncResult<ValueWrapper<bool>> commit();
         AsyncResult<ValueWrapper<bool>> close();
