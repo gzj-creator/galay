@@ -1,7 +1,6 @@
 #ifndef __GALAY_MD5_H__
 #define __GALAY_MD5_H__
 
-#include <openssl/md5.h>
 #include <string>
 #include <cstring>
 #include <sstream>
