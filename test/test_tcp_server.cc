@@ -1,10 +1,10 @@
 #include "galay/kernel/server/TcpServer.h"
 #include "galay/utils/BackTrace.h"
-#include <signal.h>
+#include "galay/utils/SignalHandler.hpp"
 
 using namespace galay;
 
-static std::string getSignalName(int sig) {
+std::string getSignalName(int sig) {
     switch(sig) {
         case SIGSEGV: return "SIGSEGV (Segmentation Fault)";
         case SIGABRT: return "SIGABRT (Abort)";
@@ -15,7 +15,7 @@ static std::string getSignalName(int sig) {
     }
 }
 
-static void signalHandler(int sig) {
+void signalHandler(int sig) {
     // 打印错误信息
     std::cerr << std::endl << "Received signal " << sig << " (" << getSignalName(sig) << ")" << std::endl;
     
@@ -29,7 +29,7 @@ static void signalHandler(int sig) {
 
 int main() 
 {
-    signal(SIGSEGV, signalHandler);
+    utils::SignalHandler::setSignalHandler<SIGSEGV>(signalHandler);
     TcpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
     TcpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();

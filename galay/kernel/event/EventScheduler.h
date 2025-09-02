@@ -6,7 +6,19 @@
 #include <string>
 #include <variant>
 #include <functional>
+#ifdef __clang__
+    #pragma clang diagnostic push
+    #pragma clang diagnostic ignored "-Wunused-parameter"
+#elif defined(__GNUC__)
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wunused-parameter"
+#endif
 #include <libcuckoo/cuckoohash_map.hh>
+#ifdef __clang__
+    #pragma clang diagnostic pop
+#elif defined(__GNUC__)
+    #pragma GCC diagnostic pop
+#endif
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
 
