@@ -29,6 +29,7 @@ static void signalHandler(int sig) {
 
 int main() 
 {
+    galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
     signal(SIGSEGV, signalHandler);
     UdpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});

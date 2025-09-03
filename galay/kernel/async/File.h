@@ -114,9 +114,9 @@ namespace galay
         File(Runtime& runtime);
         File(Runtime& runtime, GHandle handle);
 
-        File(const File& other);
+        File(const File& other) = delete;
         File(File&& other);
-        File& operator=(const File& other);
+        File& operator=(const File& other) = delete;
         File& operator=(File&& other);
         ~File();
 

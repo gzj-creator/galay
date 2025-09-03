@@ -53,12 +53,12 @@ namespace galay::details
 
     
 
-    class TcpAcceptEvent: public NetEvent<ValueWrapper<AsyncTcpSocketBuilder>>
+    class AcceptEvent: public NetEvent<ValueWrapper<AsyncTcpSocketBuilder>>
     {
     public:
-        TcpAcceptEvent(GHandle handle, EventScheduler* scheduler) 
+        AcceptEvent(GHandle handle, EventScheduler* scheduler) 
             : NetEvent<ValueWrapper<AsyncTcpSocketBuilder>>(handle, scheduler) {}
-        std::string name() override { return "TcpAcceptEvent"; }
+        std::string name() override { return "AcceptEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
         ValueWrapper<AsyncTcpSocketBuilder> resume() override;  
@@ -66,11 +66,11 @@ namespace galay::details
         bool acceptSocket(bool notify);
     };
 
-    class TcpRecvEvent: public NetEvent<ValueWrapper<Bytes>>
+    class RecvEvent: public NetEvent<ValueWrapper<Bytes>>
     {
     public:
-        TcpRecvEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length);
-        std::string name() override { return "TcpRecvEvent"; }
+        RecvEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length);
+        std::string name() override { return "RecvEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
         ValueWrapper<Bytes> resume() override;
@@ -81,11 +81,11 @@ namespace galay::details
         char* m_buffer = nullptr;
     };
 
-    class TcpSendEvent: public NetEvent<ValueWrapper<Bytes>>
+    class SendEvent: public NetEvent<ValueWrapper<Bytes>>
     {
     public:
-        TcpSendEvent(GHandle handle, EventScheduler* scheduler, Bytes&& bytes);
-        std::string name() override { return "TcpSendEvent"; }
+        SendEvent(GHandle handle, EventScheduler* scheduler, Bytes&& bytes);
+        std::string name() override { return "SendEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool ready() override;
         ValueWrapper<Bytes> resume() override;
@@ -96,12 +96,12 @@ namespace galay::details
     };
 
 #ifdef __linux__
-    class TcpSendfileEvent: public NetEvent<ValueWrapper<long>>
+    class SendfileEvent: public NetEvent<ValueWrapper<long>>
     {
     public:
-        TcpSendfileEvent(GHandle handle, EventScheduler* scheduler, GHandle file_handle, long offset, size_t length) 
+        SendfileEvent(GHandle handle, EventScheduler* scheduler, GHandle file_handle, long offset, size_t length) 
             : NetEvent<ValueWrapper<long>>(handle, scheduler), m_file_handle(file_handle), m_offset(offset), m_length(length) {}
-        std::string name() override { return "TcpSendfileEvent"; }
+        std::string name() override { return "SendfileEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool ready() override;
         ValueWrapper<long> resume() override;
@@ -114,11 +114,11 @@ namespace galay::details
     };
 #endif
 
-    class TcpConnectEvent: public NetEvent<ValueWrapper<bool>>
+    class ConnectEvent: public NetEvent<ValueWrapper<bool>>
     { 
     public:
-        TcpConnectEvent(GHandle handle, EventScheduler* scheduler, const Host& host);
-        std::string name() override { return "TcpConnectEvent"; }
+        ConnectEvent(GHandle handle, EventScheduler* scheduler, const Host& host);
+        std::string name() override { return "ConnectEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool ready() override;
         ValueWrapper<bool> resume() override;
@@ -128,11 +128,11 @@ namespace galay::details
         Host m_host;
     };
 
-    class TcpCloseEvent: public NetEvent<ValueWrapper<bool>>
+    class CloseEvent: public NetEvent<ValueWrapper<bool>>
     { 
     public:
-        TcpCloseEvent(GHandle handle, EventScheduler* scheduler);
-        std::string name() override { return "TcpCloseEvent"; }
+        CloseEvent(GHandle handle, EventScheduler* scheduler);
+        std::string name() override { return "CloseEvent"; }
         void handleEvent() override {}
         EventType getEventType() const override { return EventType::kEventTypeNone; }
 
@@ -140,12 +140,12 @@ namespace galay::details
     };
 
 
-    class UdpRecvfromEvent: public NetEvent<ValueWrapper<Bytes>>
+    class RecvfromEvent: public NetEvent<ValueWrapper<Bytes>>
     {
     public:
-        UdpRecvfromEvent(GHandle handle, EventScheduler* scheduler, Host& remote, char* buffer, size_t length) 
+        RecvfromEvent(GHandle handle, EventScheduler* scheduler, Host& remote, char* buffer, size_t length) 
             : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_remote(remote), m_length(length), m_buffer(buffer) {}
-        std::string name() override { return "UdpRecvfromEvent"; }
+        std::string name() override { return "RecvfromEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
         ValueWrapper<Bytes> resume() override;
@@ -158,12 +158,12 @@ namespace galay::details
         char* m_buffer;
     };
 
-    class UdpSendtoEvent: public NetEvent<ValueWrapper<Bytes>>
+    class SendtoEvent: public NetEvent<ValueWrapper<Bytes>>
     {
     public:
-        UdpSendtoEvent(GHandle handle, EventScheduler* scheduler, const Host& remote, Bytes&& bytes) 
+        SendtoEvent(GHandle handle, EventScheduler* scheduler, const Host& remote, Bytes&& bytes) 
             : NetEvent<ValueWrapper<Bytes>>(handle, scheduler),  m_remote(remote), m_bytes(std::move(bytes)) {}
-        std::string name() override { return "UdpSendtoEvent"; }
+        std::string name() override { return "SendtoEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
 
         bool ready() override;
@@ -173,17 +173,6 @@ namespace galay::details
     private:
         const Host& m_remote;
         Bytes m_bytes;
-    };
-
-    class UdpCloseEvent: public NetEvent<ValueWrapper<bool>>
-    { 
-    public:
-        UdpCloseEvent(GHandle handle, EventScheduler* scheduler);
-        std::string name() override { return "UdpCloseEvent"; }
-        void handleEvent() override {}
-        EventType getEventType() const override { return EventType::kEventTypeNone; }
-
-        bool ready() override;
     };
 }
 

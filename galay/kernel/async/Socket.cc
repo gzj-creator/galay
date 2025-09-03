@@ -167,17 +167,17 @@ namespace galay {
 
     AsyncResult<ValueWrapper<bool>> AsyncTcpSocket::close()
     {
-        return {std::make_shared<details::TcpCloseEvent>(m_handle, m_scheduler)};
+        return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
     AsyncResult<ValueWrapper<AsyncTcpSocketBuilder>> AsyncTcpSocket::accept()
     {
-        return {std::make_shared<details::TcpAcceptEvent>(m_handle, m_scheduler)};
+        return {std::make_shared<details::AcceptEvent>(m_handle, m_scheduler)};
     }
 
     AsyncResult<ValueWrapper<bool>> AsyncTcpSocket::connect(const Host& host)
     {
-        return {std::make_shared<details::TcpConnectEvent>(m_handle, m_scheduler, host)};
+        return {std::make_shared<details::ConnectEvent>(m_handle, m_scheduler, host)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::recv(size_t length)
@@ -186,12 +186,12 @@ namespace galay {
             reallocString(m_buffer, length);
         }
         clearString(m_buffer);
-        return {std::make_shared<details::TcpRecvEvent>(m_handle, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
+        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::send(Bytes bytes)
     {
-        return {std::make_shared<details::TcpSendEvent>(m_handle, m_scheduler, std::move(bytes))};
+        return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
 
 #ifdef __linux__
@@ -374,23 +374,37 @@ namespace galay {
         return wrapper;
     }
 
+    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recv(size_t length)
+    {
+        if(m_buffer.capacity < length) {
+            reallocString(m_buffer, length);
+        }
+        clearString(m_buffer);
+        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
+    }
+
+    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::send(Bytes bytes)
+    {
+        return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
+    }
+
     AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recvfrom(Host& remote, size_t length)
     {
         if(m_buffer.capacity < length) {
             reallocString(m_buffer, length);
         } 
         clearString(m_buffer);
-        return {std::make_shared<details::UdpRecvfromEvent>(m_handle, m_scheduler, remote, reinterpret_cast<char*>(m_buffer.data), length)};
+        return {std::make_shared<details::RecvfromEvent>(m_handle, m_scheduler, remote, reinterpret_cast<char*>(m_buffer.data), length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::sendto(const Host& remote, Bytes bytes)
     {
-        return {std::make_shared<details::UdpSendtoEvent>(m_handle, m_scheduler, remote, std::move(bytes))};
+        return {std::make_shared<details::SendtoEvent>(m_handle, m_scheduler, remote, std::move(bytes))};
     }
 
     AsyncResult<ValueWrapper<bool>> AsyncUdpSocket::close()
     {
-        return {std::make_shared<details::UdpCloseEvent>(m_handle, m_scheduler)};
+        return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
     void AsyncUdpSocket::reallocBuffer(size_t length)

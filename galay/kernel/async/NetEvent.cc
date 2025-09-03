@@ -33,19 +33,19 @@ bool galay::AsyncTcpSocketBuilder::check() const
 namespace galay::details
 {
 
-    bool TcpAcceptEvent::ready()
+    bool AcceptEvent::ready()
     {
         m_ready = acceptSocket(false);
         return m_ready;
     }
 
-    ValueWrapper<AsyncTcpSocketBuilder> TcpAcceptEvent::resume()
+    ValueWrapper<AsyncTcpSocketBuilder> AcceptEvent::resume()
     {
         if(!m_ready) acceptSocket(true);
         return AsyncEvent<ValueWrapper<AsyncTcpSocketBuilder>>::resume();
     }
     
-    bool TcpAcceptEvent::acceptSocket(bool notify)
+    bool AcceptEvent::acceptSocket(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -72,29 +72,30 @@ namespace galay::details
         return true;
     }
 
-    TcpRecvEvent::TcpRecvEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length)
+    RecvEvent::RecvEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length)
         : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_length(length), m_buffer(buffer)
     {
     }
 
-    ValueWrapper<Bytes> TcpRecvEvent::resume()
+    ValueWrapper<Bytes> RecvEvent::resume()
     {
         if(!m_ready) recvBytes(true);
         return NetEvent<ValueWrapper<Bytes>>::resume();
     }
 
-    bool TcpRecvEvent::ready()
+    bool RecvEvent::ready()
     {
         m_ready = recvBytes(false);
         return m_ready;
     }
 
-    bool TcpRecvEvent::recvBytes(bool notify)
+    bool RecvEvent::recvBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
         Bytes bytes;
         int recvBytes = recv(m_handle.fd, m_buffer, m_length, 0);
+        LogTrace("recvBytes: {}, buffer: {}", recvBytes, m_buffer);
         if (recvBytes > 0) {
             bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
         } else if (recvBytes == 0) {
@@ -116,28 +117,29 @@ namespace galay::details
         return true;
     }
 
-    TcpSendEvent::TcpSendEvent(GHandle handle, EventScheduler* scheduler, Bytes &&bytes)
+    SendEvent::SendEvent(GHandle handle, EventScheduler* scheduler, Bytes &&bytes)
         : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_bytes(std::move(bytes))
     {
     }
 
-    bool TcpSendEvent::ready()
+    bool SendEvent::ready()
     {
         m_ready = sendBytes(false);
         return m_ready;
     }
 
-    ValueWrapper<Bytes> TcpSendEvent::resume()
+    ValueWrapper<Bytes> SendEvent::resume()
     {
         if(!m_ready) sendBytes(true);
         return AsyncEvent<ValueWrapper<Bytes>>::resume();
     }
 
-    bool TcpSendEvent::sendBytes(bool notify)
+    bool SendEvent::sendBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
         int sendBytes = send(m_handle.fd, m_bytes.data(), m_bytes.size(), 0);
+        LogTrace("sendBytes: {}, buffer: {}", sendBytes, m_bytes.data());
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
@@ -160,13 +162,13 @@ namespace galay::details
     }
 
 #ifdef __linux__
-    bool TcpSendfileEvent::ready()
+    bool SendfileEvent::ready()
     {
         m_ready = sendfile(false);
         return m_ready;
     }
 
-    bool TcpSendfileEvent::sendfile(bool notify)
+    bool SendfileEvent::sendfile(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -189,31 +191,31 @@ namespace galay::details
         return true;
     }
 
-    ValueWrapper<long> TcpSendfileEvent::resume()
+    ValueWrapper<long> SendfileEvent::resume()
     {
         if(!m_ready) sendfile(true);
         return AsyncEvent<ValueWrapper<long>>::resume();
     }
 #endif
 
-    TcpConnectEvent::TcpConnectEvent(GHandle handle, EventScheduler* scheduler, const Host &host)
+    ConnectEvent::ConnectEvent(GHandle handle, EventScheduler* scheduler, const Host &host)
         : NetEvent<ValueWrapper<bool>>(handle, scheduler), m_host(host)
     {
     }
 
-    bool TcpConnectEvent::ready()
+    bool ConnectEvent::ready()
     {
         m_ready = connectToHost(false);
         return m_ready;     
     }
 
-    ValueWrapper<bool> TcpConnectEvent::resume()
+    ValueWrapper<bool> ConnectEvent::resume()
     {
         if(!m_ready) connectToHost(true);
         return NetEvent<ValueWrapper<bool>>::resume();
     }
 
-    bool TcpConnectEvent::connectToHost(bool notify)
+    bool ConnectEvent::connectToHost(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -238,12 +240,12 @@ namespace galay::details
         return true;
     }
 
-    TcpCloseEvent::TcpCloseEvent(GHandle handle, EventScheduler* scheduler)
+    CloseEvent::CloseEvent(GHandle handle, EventScheduler* scheduler)
         : NetEvent<ValueWrapper<bool>>(handle, scheduler)
     {
     }
 
-    bool TcpCloseEvent::ready()
+    bool CloseEvent::ready()
     {
         using namespace error;
         Error::ptr error = nullptr;
@@ -258,19 +260,19 @@ namespace galay::details
         return true;
     }
 
-    bool UdpRecvfromEvent::ready()
+    bool RecvfromEvent::ready()
     {
         m_ready = recvfromBytes(false);
         return m_ready;
     }
 
-    ValueWrapper<Bytes> UdpRecvfromEvent::resume()
+    ValueWrapper<Bytes> RecvfromEvent::resume()
     {
         if(!m_ready) recvfromBytes(true);
         return NetEvent<ValueWrapper<Bytes>>::resume();
     }
 
-    bool UdpRecvfromEvent::recvfromBytes(bool notify)
+    bool RecvfromEvent::recvfromBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error = nullptr;
@@ -278,6 +280,7 @@ namespace galay::details
         sockaddr addr;
         socklen_t addr_len = sizeof(addr);
         int recvBytes = recvfrom(m_handle.fd, m_buffer, m_length, 0, &addr, &addr_len);
+        LogTrace("recvfromBytes: {}, buffer: {}", recvBytes, m_buffer);
         if (recvBytes > 0) {
             bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
             m_remote.ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
@@ -300,19 +303,19 @@ namespace galay::details
         return true;
     }
 
-    bool UdpSendtoEvent::ready()
+    bool SendtoEvent::ready()
     {
         m_ready = sendtoBytes(false);;
         return m_ready;
     }
 
-    ValueWrapper<Bytes> UdpSendtoEvent::resume()
+    ValueWrapper<Bytes> SendtoEvent::resume()
     {
         if(!m_ready) sendtoBytes(true);
         return NetEvent<ValueWrapper<Bytes>>::resume();
     }
 
-    bool UdpSendtoEvent::sendtoBytes(bool notify)
+    bool SendtoEvent::sendtoBytes(bool notify)
     {
         using namespace error;
         SystemError::ptr error;
@@ -321,6 +324,7 @@ namespace galay::details
         addr.sin_addr.s_addr = inet_addr(m_remote.ip.c_str());
         addr.sin_port = htons(m_remote.port);
         int sendBytes = sendto(m_handle.fd, m_bytes.data(), m_bytes.size(), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr));
+        LogTrace("sendToBytes: {}, buffer: {}", sendBytes, m_bytes.data());
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
@@ -342,23 +346,4 @@ namespace galay::details
         return true;
     }
 
-    UdpCloseEvent::UdpCloseEvent(GHandle handle, EventScheduler* scheduler)
-        : NetEvent<ValueWrapper<bool>>(handle, scheduler)
-    {
-    }
-
-    bool UdpCloseEvent::ready()
-    {
-        using namespace error;
-        Error::ptr error = nullptr;
-        bool success = true;
-        m_scheduler->removeEvent(this, nullptr);
-        if(::close(m_handle.fd))
-        {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallCloseError, errno);
-            success = false;
-        } 
-        makeValue(m_result, std::move(success), error);
-        return true;
-    }
 }

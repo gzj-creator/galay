@@ -74,6 +74,8 @@ namespace galay {
         ValueWrapper<bool> socket();
         ValueWrapper<bool> bind(const Host& addr);
         ValueWrapper<bool> connect(const Host& addr);
+        AsyncResult<ValueWrapper<Bytes>> recv(size_t length);
+        AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
         AsyncResult<ValueWrapper<Bytes>> recvfrom(Host& remote, size_t length);
         AsyncResult<ValueWrapper<Bytes>> sendto(const Host& remote, Bytes bytes);
         AsyncResult<ValueWrapper<bool>> close();

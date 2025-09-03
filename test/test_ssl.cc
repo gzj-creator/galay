@@ -81,7 +81,7 @@ Coroutine<nil> Recv(AsyncSslSocket socket)
             }
             co_return nil();
         }
-        runtime.schedule(Send(socket));
+        runtime.schedule(Send(std::move(socket)));
     }
 }
 

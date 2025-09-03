@@ -20,8 +20,6 @@ namespace galay
         UdpServer& operator=(UdpServer&& server);
         UdpServer& operator=(const UdpServer& server) = delete;
         ~UdpServer();
-    private:
-        Coroutine<nil> dealConnection(const std::function<Coroutine<nil>(AsyncUdpSocket&)>& callback, size_t i);
     protected:
         Host m_host = {"0.0.0.0", 8080};
         Runtime m_runtime;

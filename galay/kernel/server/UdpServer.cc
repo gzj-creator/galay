@@ -39,7 +39,7 @@ namespace galay
             options.handleReuseAddr();
             options.handleReusePort();
             m_sockets[i].bind(m_host);
-            m_runtime.schedule(dealConnection(callback, i), i);
+            m_runtime.schedule(callback(m_sockets[i]), i);
         }
     }
 
@@ -62,13 +62,6 @@ namespace galay
             m_host = std::move(server.m_host);
         }
         return *this;
-    }
-
-    Coroutine<nil> UdpServer::dealConnection(const std::function<Coroutine<nil>(AsyncUdpSocket&)>& callback, size_t i)
-    {
-        AsyncUdpSocket socket = m_sockets[i];
-        m_runtime.schedule(callback(socket), i);
-        co_return nil();
     }
 
     UdpServer::~UdpServer()

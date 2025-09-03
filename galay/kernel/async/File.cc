@@ -149,29 +149,11 @@ namespace galay
         m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
-    File::File(const File& other)
-    {
-        m_handle = other.m_handle;
-        m_scheduler = other.m_scheduler;
-        m_buffer = deepCopyString(other.m_buffer);
-    }
-
     File::File(File&& other)
         : m_handle(other.m_handle), m_scheduler(other.m_scheduler), m_buffer(std::move(other.m_buffer))
     {
         other.m_handle = GHandle::invalid();
         other.m_scheduler = nullptr;
-    }
-
-    File& File::operator=(const File& other)
-    {
-        if (this != &other)
-        {
-            m_handle = other.m_handle;
-            m_scheduler = other.m_scheduler;
-            m_buffer = deepCopyString(other.m_buffer);
-        }
-        return *this;
     }
 
     File& File::operator=(File&& other)
