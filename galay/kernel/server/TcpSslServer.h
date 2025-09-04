@@ -17,14 +17,14 @@ namespace galay
         TcpSslServer(Runtime&& runtime);
         TcpSslServer(TcpSslServer&& server);
         TcpSslServer(const TcpSslServer& server) = delete;
-        void run(const std::function<Coroutine<nil>(AsyncSslSocket&)>& callback);
+        void run(const std::function<Coroutine<nil>(AsyncSslSocket)>& callback);
         void stop();
         void wait();
         TcpSslServer& operator=(TcpSslServer&& server);
         TcpSslServer& operator=(const TcpSslServer& server) = delete;
         ~TcpSslServer();
     private:
-        Coroutine<nil> acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket&)>& callback, size_t i);
+        Coroutine<nil> acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket)>& callback, size_t i);
     protected:
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
         Host m_host = {"0.0.0.0", 8080};

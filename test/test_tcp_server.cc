@@ -33,7 +33,7 @@ int main()
     TcpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
     TcpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
-    server.run([&server](AsyncTcpSocket& socket) -> Coroutine<nil> {
+    server.run([&server](AsyncTcpSocket socket) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
         while(true) {
             auto rwrapper = co_await socket.recv(1024);

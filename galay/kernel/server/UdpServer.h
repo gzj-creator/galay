@@ -14,7 +14,7 @@ namespace galay
         UdpServer(Runtime&& runtime);
         UdpServer(UdpServer&& server);
         UdpServer(const UdpServer& server) = delete;
-        void run(const std::function<Coroutine<nil>(AsyncUdpSocket&)>& callback);
+        void run(const std::function<Coroutine<nil>(AsyncUdpSocket)>& callback);
         void stop();
         void wait();
         UdpServer& operator=(UdpServer&& server);
@@ -25,7 +25,6 @@ namespace galay
         Runtime m_runtime;
         std::mutex m_mutex;
         std::condition_variable m_condition;
-        std::vector<AsyncUdpSocket> m_sockets;
     };
 
     class UdpServerBuilder

@@ -28,12 +28,12 @@ Coroutine<nil> test(Runtime& runtime)
             cond.notify_one();
             co_return nil();
         }
-        auto res = co_await client.recv(1024);
-        if (!res.success()) {
-            std::cout << "recv error: " << res.getError()->message() << std::endl;
+        auto res3 = co_await client.recv(1024);
+        if (!res3.success()) {
+            std::cout << "recv error: " << res3.getError()->message() << std::endl;
             co_return nil();
         }
-        std::cout << "recv: " << res2.moveValue().toString() << std::endl;
+        std::cout << "recv: " << res3.moveValue().toString() << std::endl;
     }
 
 }

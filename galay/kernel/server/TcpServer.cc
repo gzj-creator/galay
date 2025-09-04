@@ -29,7 +29,7 @@ namespace galay
     }
 
 
-    void TcpServer::run(const std::function<Coroutine<nil>(AsyncTcpSocket&)>& callback)
+    void TcpServer::run(const std::function<Coroutine<nil>(AsyncTcpSocket)>& callback)
     {
         m_runtime.start();
         size_t co_num = m_runtime.coSchedulerSize();
@@ -72,7 +72,7 @@ namespace galay
         m_runtime.stop();
     }
 
-    Coroutine<nil> TcpServer::acceptConnection(const std::function<Coroutine<nil>(AsyncTcpSocket&)>& callback, size_t i)
+    Coroutine<nil> TcpServer::acceptConnection(const std::function<Coroutine<nil>(AsyncTcpSocket)>& callback, size_t i)
     {
         while(true) {
             auto wrapper = co_await m_sockets[i].accept();
@@ -81,7 +81,7 @@ namespace galay
                 auto builder = wrapper.moveValue();
                 auto socket = builder.build();
                 socket.options().handleNonBlock();
-                m_runtime.schedule(callback(socket), i);
+                m_runtime.schedule(callback(std::move(socket)), i);
             } else {
                 LogError("[acceptConnection failed] [error: {}]", wrapper.getError()->message());
             }

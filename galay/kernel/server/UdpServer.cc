@@ -6,40 +6,32 @@ namespace galay
     UdpServer::UdpServer()
         : m_runtime(RuntimeBuilder().build())
     {
-        size_t num = m_runtime.coSchedulerSize();
-        for(size_t i = 0; i < num; ++i) {
-            m_sockets.emplace_back(AsyncUdpSocket(m_runtime));
-        }
     }
 
     UdpServer::UdpServer(Runtime&& runtime)
         : m_runtime(std::move(runtime))
     {
-        size_t num = m_runtime.coSchedulerSize();
-        for(size_t i = 0; i < num; ++i) {
-            m_sockets.emplace_back(AsyncUdpSocket(m_runtime));
-        }
     }
 
     UdpServer::UdpServer(UdpServer&& server)
-        : m_runtime(std::move(server.m_runtime)),
-            m_sockets(std::move(server.m_sockets))
+        : m_runtime(std::move(server.m_runtime))
     {
         m_host = std::move(server.m_host);
     }
 
-    void UdpServer::run(const std::function<Coroutine<nil>(AsyncUdpSocket&)>& callback)
+    void UdpServer::run(const std::function<Coroutine<nil>(AsyncUdpSocket)>& callback)
     {
         m_runtime.start();
         size_t co_num = m_runtime.coSchedulerSize();
         for(size_t i = 0; i < co_num; ++i) {
-            m_sockets[i].socket();
-            HandleOption options = m_sockets[i].options();
+            AsyncUdpSocket socket(m_runtime);
+            socket.socket();
+            HandleOption options = socket.options();
             options.handleNonBlock();
             options.handleReuseAddr();
             options.handleReusePort();
-            m_sockets[i].bind(m_host);
-            m_runtime.schedule(callback(m_sockets[i]), i);
+            socket.bind(m_host);
+            m_runtime.schedule(callback(std::move(socket)), i);
         }
     }
 
@@ -58,7 +50,6 @@ namespace galay
     {
         if(this != &server) {
             m_runtime = std::move(server.m_runtime);
-            m_sockets = std::move(server.m_sockets);
             m_host = std::move(server.m_host);
         }
         return *this;

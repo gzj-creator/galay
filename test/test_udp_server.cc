@@ -34,7 +34,7 @@ int main()
     UdpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
     UdpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
-    server.run([&server](AsyncUdpSocket& socket) -> Coroutine<nil> {
+    server.run([&server](AsyncUdpSocket socket) -> Coroutine<nil> {
         while(true) {
             Host remote;
             auto rwrapper = co_await socket.recvfrom(remote, 1024);
