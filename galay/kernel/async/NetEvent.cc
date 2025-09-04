@@ -139,7 +139,7 @@ namespace galay::details
         using namespace error;
         SystemError::ptr error = nullptr;
         int sendBytes = send(m_handle.fd, m_bytes.data(), m_bytes.size(), 0);
-        LogTrace("sendBytes: {}, buffer: {}", sendBytes, m_bytes.data());
+        LogTrace("sendBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
@@ -324,7 +324,7 @@ namespace galay::details
         addr.sin_addr.s_addr = inet_addr(m_remote.ip.c_str());
         addr.sin_port = htons(m_remote.port);
         int sendBytes = sendto(m_handle.fd, m_bytes.data(), m_bytes.size(), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr));
-        LogTrace("sendToBytes: {}, buffer: {}", sendBytes, m_bytes.data());
+        LogTrace("sendToBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
