@@ -197,7 +197,7 @@ namespace galay {
 #ifdef __linux__
     AsyncResult<ValueWrapper<long>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
     {
-        return {std::make_shared<details::TcpSendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
+        return {std::make_shared<details::SendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
     }
 #endif
     void AsyncTcpSocket::reallocBuffer(size_t length)
