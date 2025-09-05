@@ -11,7 +11,7 @@ namespace galay::details
 {
     
     template<CoType T>
-    class TimeEvent: public AsyncEvent<T>
+    class TimeEvent: public AsyncEvent<T>, public Event
     {
     public:
         using ptr = std::shared_ptr<TimeEvent>;
@@ -75,7 +75,7 @@ namespace galay::details
         std::function<AsyncResult<T>()> m_func;  
     };
 
-    class SleepforEvent: public TimeEvent<nil> 
+    class SleepforEvent: public TimeEvent<nil>
     {
     public:
         SleepforEvent(TimerManager* manager, std::chrono::milliseconds ms);

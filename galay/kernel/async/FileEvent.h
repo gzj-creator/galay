@@ -15,7 +15,7 @@ namespace galay::details {
 
 #ifdef USE_AIO
     template<CoType T>
-    class FileEvent: public AsyncEvent<T>
+    class FileEvent: public AsyncEvent<T>, public Event
     { 
     public:
         FileEvent(GHandle ehandle, EventScheduler* scheduler) 
@@ -65,7 +65,7 @@ namespace galay::details {
 
 #else
     template<CoType T>
-    class FileEvent: public AsyncEvent<T>
+    class FileEvent: public AsyncEvent<T>, public Event
     { 
     public:
         FileEvent(GHandle handle, EventScheduler* scheduler) 

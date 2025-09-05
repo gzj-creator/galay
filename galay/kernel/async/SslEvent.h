@@ -25,7 +25,7 @@ namespace galay
 namespace galay::details
 {
     template <CoType T>
-    class SslEvent: public AsyncEvent<T>
+    class SslEvent: public AsyncEvent<T>, public Event
     {
     public:
         SslEvent(SSL* ssl, EventScheduler* scheduler)

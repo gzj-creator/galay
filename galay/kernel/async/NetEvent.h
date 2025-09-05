@@ -27,7 +27,7 @@ namespace galay::details
 {
 
     template <CoType T>
-    class NetEvent: public AsyncEvent<T>
+    class NetEvent: public AsyncEvent<T>, public Event
     {
     public:
         NetEvent(GHandle handle, EventScheduler* scheduler)

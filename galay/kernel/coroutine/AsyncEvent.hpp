@@ -7,13 +7,8 @@
 namespace galay
 {
 
-#define DEFAULT_EVENT_IMPL() \
-    void handleEvent() override {} \
-    EventType getEventType() const override { return EventType::kEventTypeNone; }\
-    GHandle getHandle() override { return m_handle; }
-
     template <CoType T>
-    class AsyncEvent: public details::Event
+    class AsyncEvent
     {
     public:
 
@@ -29,7 +24,7 @@ namespace galay
         virtual bool suspend(Waker waker) = 0;
 
         virtual T resume();
-        ~AsyncEvent() override = default;
+        virtual ~AsyncEvent() = default;
     protected:
         T m_result;
         Waker m_waker;
@@ -42,8 +37,6 @@ namespace galay
         bool ready() override { return true; }
         bool suspend([[maybe_unused]] Waker waker) override { return false; }
         T resume() override { return std::move(this->m_result); }
-        std::string name() override { return "ResultEvent"; }
-        DEFAULT_EVENT_IMPL();
     private:
         GHandle m_handle;
     };
