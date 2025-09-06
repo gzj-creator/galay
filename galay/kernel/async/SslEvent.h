@@ -115,18 +115,16 @@ namespace galay::details
     class SslRecvEvent: public SslEvent<ValueWrapper<Bytes>> 
     {
     public:
-        SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* buffer, size_t length);
+        SslRecvEvent(SSL* ssl, EventScheduler* scheduler, StringMetaData& data, size_t length);
         std::string name() override { return "SslRecvEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeRead; }
-
         bool ready() override;
-        
     private:
         bool sslRecv();
     private:
         size_t m_length;
-        char* m_buffer;
+        StringMetaData& m_data;
     };
 
     class SslSendEvent: public SslEvent<ValueWrapper<Bytes>> {
@@ -135,9 +133,7 @@ namespace galay::details
         std::string name() override { return "SslSendEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeWrite; }
-
         bool ready() override;
-        
     private:
         bool sslSend();
     private:

@@ -35,8 +35,9 @@ int main()
     TcpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
     server.run([&server](AsyncTcpSocket socket) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
+        bool cover = true;
         while(true) {
-            auto rwrapper = co_await socket.recv(1024);
+            auto rwrapper = co_await socket.recv(1024, cover);
             if(!rwrapper.success()) {
                 if(rwrapper.getError()->code() == error::ErrorCode::DisConnectError) {
                     // disconnect
@@ -49,7 +50,6 @@ int main()
             }
             Bytes bytes = rwrapper.moveValue();
             std::string msg = bytes.toString();
-            std::cout << msg.length() << "   " <<  msg << std::endl;
             if (msg.find("quit") != std::string::npos)
             {
                 auto success = co_await socket.close();
@@ -59,6 +59,17 @@ int main()
                 }
                 server.stop();
                 co_return nil();
+            } else {
+                if(msg == "start") {
+                    cover = false;
+                } else if(msg == "stop") {
+                    cover = true;
+                }
+            }
+            if(cover) {
+                std::cout << msg.length() << "   " <<  msg << std::endl;
+            } else {
+                std::cout << socket.getReadBytes().toString() << std::endl;
             }
             auto wwrapper = co_await socket.send(std::move(bytes));
             if (wwrapper.success())

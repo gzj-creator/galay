@@ -72,8 +72,8 @@ namespace galay::details
         return true;
     }
 
-    RecvEvent::RecvEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length)
-        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_length(length), m_buffer(buffer)
+    RecvEvent::RecvEvent(GHandle handle, EventScheduler* scheduler, StringMetaData& data, size_t length)
+        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_data(data), m_length(length)
     {
     }
 
@@ -94,10 +94,12 @@ namespace galay::details
         using namespace error;
         SystemError::ptr error = nullptr;
         Bytes bytes;
-        int recvBytes = recv(m_handle.fd, m_buffer, m_length, 0);
-        LogTrace("recvBytes: {}, buffer: {}", recvBytes, m_buffer);
+        char* buffer = reinterpret_cast<char*>(m_data.data);
+        int recvBytes = recv(m_handle.fd, buffer + m_data.size, m_length, 0);
+        LogTrace("recvBytes: {}, buffer: {}", recvBytes, buffer + m_data.size);
         if (recvBytes > 0) {
-            bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
+            bytes = Bytes::fromCString(buffer + m_data.size, recvBytes, m_data.capacity);
+            m_data.size += recvBytes;
         } else if (recvBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
             bytes = Bytes();

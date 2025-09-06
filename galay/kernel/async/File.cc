@@ -233,7 +233,7 @@ namespace galay
         return {std::make_shared<details::FileCloseEvent>(m_handle, m_scheduler)};
     }
 
-    void File::reallocBuffer(size_t length)
+    void File::reallocReadBuffer(size_t length)
     {
         reallocString(m_buffer, length);
     }

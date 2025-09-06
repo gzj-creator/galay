@@ -36,7 +36,7 @@ namespace galay {
         //throw exception
         AsyncResult<ValueWrapper<AsyncTcpSocketBuilder>> accept();
         AsyncResult<ValueWrapper<bool>> connect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> recv(size_t length);
+        AsyncResult<ValueWrapper<Bytes>> recv(size_t length, bool cover = true);
         //返回剩余Bytes
         AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
         
@@ -44,7 +44,9 @@ namespace galay {
         //return send length 
         AsyncResult<ValueWrapper<long>> sendfile(GHandle file_handle, long offset, size_t length);
     #endif
-        void reallocBuffer(size_t length);
+        void reallocReadBuffer(size_t length);
+        void clearReadBuffer();
+        Bytes getReadBytes() const;
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
         //throw exception
@@ -80,7 +82,8 @@ namespace galay {
         AsyncResult<ValueWrapper<Bytes>> sendto(const Host& remote, Bytes bytes);
         AsyncResult<ValueWrapper<bool>> close();
 
-        void reallocBuffer(size_t length);
+        void clearReadBuffer();
+        void reallocReadBuffer(size_t length);
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
         //throw exception
@@ -107,10 +110,12 @@ namespace galay {
         ValueWrapper<bool> listen(int backlog);
         AsyncResult<ValueWrapper<AsyncSslSocketBuilder>> sslAccept();
         AsyncResult<ValueWrapper<bool>> sslConnect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> sslRecv(size_t length);
+        AsyncResult<ValueWrapper<Bytes>> sslRecv(size_t length, bool cover = true);
         AsyncResult<ValueWrapper<Bytes>> sslSend(Bytes bytes);
         AsyncResult<ValueWrapper<bool>> sslClose();
-        void reallocBuffer(size_t length);
+        void reallocReadBuffer(size_t length);
+        void clearReadBuffer();
+        Bytes getReadBytes() const;
         ~AsyncSslSocket();
     private:
         AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);

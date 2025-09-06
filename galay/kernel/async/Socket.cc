@@ -180,13 +180,19 @@ namespace galay {
         return {std::make_shared<details::ConnectEvent>(m_handle, m_scheduler, host)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::recv(size_t length)
+    AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::recv(size_t length, bool cover)
     {
-        if(m_buffer.capacity < length) {
-            reallocString(m_buffer, length);
+        if(cover) {
+            if(m_buffer.capacity < length) {
+                reallocString(m_buffer, length);
+            }
+            clearString(m_buffer);
+        } else {
+            if(m_buffer.capacity < m_buffer.size + length) {
+                reallocString(m_buffer, m_buffer.size + length);
+            }
         }
-        clearString(m_buffer);
-        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
+        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, m_buffer, length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::send(Bytes bytes)
@@ -200,9 +206,19 @@ namespace galay {
         return {std::make_shared<details::SendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
     }
 #endif
-    void AsyncTcpSocket::reallocBuffer(size_t length)
+    void AsyncTcpSocket::reallocReadBuffer(size_t length)
     {
         reallocString(m_buffer, length);
+    }
+
+    void AsyncTcpSocket::clearReadBuffer()
+    {
+        clearString(m_buffer);
+    }
+
+    Bytes AsyncTcpSocket::getReadBytes() const
+    {
+        return Bytes::fromCString(reinterpret_cast<const char*>(m_buffer.data), m_buffer.size, m_buffer.capacity);
     }
 
     ValueWrapper<SockAddr> AsyncTcpSocket::getSrcAddr() const
@@ -380,7 +396,7 @@ namespace galay {
             reallocString(m_buffer, length);
         }
         clearString(m_buffer);
-        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
+        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, m_buffer, length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::send(Bytes bytes)
@@ -407,9 +423,14 @@ namespace galay {
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
-    void AsyncUdpSocket::reallocBuffer(size_t length)
+    void AsyncUdpSocket::reallocReadBuffer(size_t length)
     {
         reallocString(m_buffer, length);
+    }
+
+    void AsyncUdpSocket::clearReadBuffer()
+    {
+        clearString(m_buffer);
     }
 
     ValueWrapper<SockAddr> AsyncUdpSocket::getSrcAddr() const
@@ -598,13 +619,19 @@ namespace galay {
         return {std::make_shared<details::SslConnectEvent>(m_ssl, m_scheduler, addr)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslRecv(size_t length)
+    AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslRecv(size_t length, bool cover)
     {
-        if(m_buffer.capacity < length) {
-            reallocString(m_buffer, length);
+        if(cover) {
+            if(m_buffer.capacity < length) {
+                reallocString(m_buffer, length);
+            }
+            clearString(m_buffer);
+        } else {
+            if(m_buffer.capacity < m_buffer.size + length) {
+                reallocString(m_buffer, m_buffer.size + length);
+            }
         }
-        clearString(m_buffer);
-        return {std::make_shared<details::SslRecvEvent>(m_ssl, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
+        return {std::make_shared<details::SslRecvEvent>(m_ssl, m_scheduler, m_buffer, length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslSend(Bytes bytes)
@@ -617,9 +644,19 @@ namespace galay {
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
     }
 
-    void AsyncSslSocket::reallocBuffer(size_t length)
+    void AsyncSslSocket::reallocReadBuffer(size_t length)
     {
         reallocString(m_buffer, length);
+    }
+
+    void AsyncSslSocket::clearReadBuffer()
+    {
+        clearString(m_buffer);
+    }
+
+    Bytes AsyncSslSocket::getReadBytes() const
+    {
+        return Bytes::fromCString(reinterpret_cast<const char*>(m_buffer.data), m_buffer.size, m_buffer.capacity);
     }
 
     AsyncSslSocket::~AsyncSslSocket()

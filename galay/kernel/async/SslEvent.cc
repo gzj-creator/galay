@@ -287,8 +287,8 @@ namespace galay::details
         return true;
     }
 
-    SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* buffer, size_t length)
-        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_length(length), m_buffer(buffer)
+    SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, StringMetaData& data, size_t length)
+        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_data(data), m_length(length)
     {
     }
 
@@ -308,9 +308,12 @@ namespace galay::details
         using namespace error;
         SystemError::ptr error = nullptr;
         Bytes bytes;
-        int recvBytes = SSL_read(m_ssl, m_buffer, m_length);
+        char* buffer = reinterpret_cast<char*>(m_data.data);
+        int recvBytes = SSL_read(m_ssl, buffer + m_data.size, m_length);
+        LogTrace("recvBytes: {}, buffer: {}", recvBytes, buffer + m_data.size);
         if (recvBytes > 0) {
-            bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
+            bytes = Bytes::fromCString(buffer + m_data.size, recvBytes, m_data.capacity);
+            m_data.size += recvBytes;
         } else if (recvBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
             bytes = Bytes();
@@ -347,6 +350,7 @@ namespace galay::details
         using namespace error;
         SystemError::ptr error = nullptr;
         int sendBytes = SSL_write(m_ssl, m_bytes.data(), m_bytes.size());
+        LogTrace("sendBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);

@@ -16,7 +16,7 @@ Coroutine<nil> test(Runtime& runtime)
     std::cout << "connect success" << std::endl;
     while (true) { 
         std::string msg;
-        std::cin >> msg;
+        std::getline(std::cin, msg);
         auto res1 = co_await client.send(Bytes::fromString(msg));
         if (!res1.success()) {
             std::cout << "send error: " << res1.getError()->message() << std::endl;

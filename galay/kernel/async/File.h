@@ -126,7 +126,7 @@ namespace galay
         ValueWrapper<bool> seek(size_t offset);
         AsyncResult<ValueWrapper<Bytes>> write(Bytes bytes);
         AsyncResult<ValueWrapper<bool>> close();
-        void reallocBuffer(size_t length);
+        void reallocReadBuffer(size_t length);
         ValueWrapper<bool> remove();
     private:
         GHandle m_handle;
