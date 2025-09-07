@@ -239,6 +239,17 @@ namespace galay
         return "";
     }
 
+    std::string_view Bytes::toStringView() const
+    {
+        if(std::holds_alternative<StringMetaData>(m_string)) {
+            auto& str = std::get<StringMetaData>(m_string);
+            return std::string_view(reinterpret_cast<const char*>(str.data), str.size);
+        } else if(std::holds_alternative<std::string>(m_string)) {
+            return std::get<std::string>(m_string);
+        }
+        return std::string_view();
+    }
+
     bool Bytes::operator==(const Bytes &other) const
     {
         if(std::holds_alternative<StringMetaData>(m_string) && std::holds_alternative<StringMetaData>(other.m_string)) {

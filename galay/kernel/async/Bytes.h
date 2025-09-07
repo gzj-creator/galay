@@ -81,6 +81,7 @@ namespace galay
         // 清空数据（保留容量）
         void clear() noexcept;
         std::string toString() const;
+        std::string_view toStringView() const;
         // 比较操作
         bool operator==(const Bytes& other) const;
         bool operator!=(const Bytes& other) const;
