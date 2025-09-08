@@ -35,9 +35,9 @@ namespace galay
         return m_socket.connect(addr);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> TcpClient::recv(size_t length)
+    AsyncResult<ValueWrapper<Bytes>> TcpClient::recv(char* buffer, size_t length)
     {
-        return m_socket.recv(length);
+        return m_socket.recv(buffer, length);
     }
 
     AsyncResult<ValueWrapper<Bytes>> TcpClient::send(Bytes bytes)

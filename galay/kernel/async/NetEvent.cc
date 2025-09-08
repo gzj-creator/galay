@@ -72,8 +72,8 @@ namespace galay::details
         return true;
     }
 
-    RecvEvent::RecvEvent(GHandle handle, EventScheduler* scheduler, StringMetaData& data, size_t length)
-        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_data(data), m_length(length)
+    RecvEvent::RecvEvent(GHandle handle, EventScheduler* scheduler, char* result, size_t length)
+        : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_result_str(result), m_length(length)
     {
     }
 
@@ -94,12 +94,10 @@ namespace galay::details
         using namespace error;
         SystemError::ptr error = nullptr;
         Bytes bytes;
-        char* buffer = reinterpret_cast<char*>(m_data.data);
-        int recvBytes = recv(m_handle.fd, buffer + m_data.size, m_length, 0);
-        LogTrace("recvBytes: {}, buffer: {}", recvBytes, buffer + m_data.size);
+        int recvBytes = recv(m_handle.fd, m_result_str, m_length, 0);
+        if(recvBytes > 0) LogTrace("recvBytes: {}, buffer: {}", recvBytes, std::string(m_result_str, recvBytes));
         if (recvBytes > 0) {
-            bytes = Bytes::fromCString(buffer + m_data.size, recvBytes, m_data.capacity);
-            m_data.size += recvBytes;
+            bytes = Bytes::fromCString(m_result_str, recvBytes, recvBytes);
         } else if (recvBytes == 0) {
             error = std::make_shared<SystemError>(DisConnectError, errno);
             bytes = Bytes();
@@ -141,7 +139,7 @@ namespace galay::details
         using namespace error;
         SystemError::ptr error = nullptr;
         int sendBytes = send(m_handle.fd, m_bytes.data(), m_bytes.size(), 0);
-        LogTrace("sendBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
+        if(sendBytes > 0) LogTrace("sendBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);
@@ -282,9 +280,9 @@ namespace galay::details
         sockaddr addr;
         socklen_t addr_len = sizeof(addr);
         int recvBytes = recvfrom(m_handle.fd, m_buffer, m_length, 0, &addr, &addr_len);
-        LogTrace("recvfromBytes: {}, buffer: {}", recvBytes, m_buffer);
+        if(recvBytes > 0) LogTrace("recvfromBytes: {}, buffer: {}", recvBytes, m_buffer);
         if (recvBytes > 0) {
-            bytes = Bytes::fromCString(m_buffer, recvBytes, m_length);
+            bytes = Bytes::fromCString(m_buffer, recvBytes, recvBytes);
             m_remote.ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
             m_remote.port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
         } else if (recvBytes == 0) {
@@ -326,7 +324,7 @@ namespace galay::details
         addr.sin_addr.s_addr = inet_addr(m_remote.ip.c_str());
         addr.sin_port = htons(m_remote.port);
         int sendBytes = sendto(m_handle.fd, m_bytes.data(), m_bytes.size(), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr));
-        LogTrace("sendToBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
+        if(sendBytes > 0) LogTrace("sendToBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             makeValue(m_result, std::move(remain), error);

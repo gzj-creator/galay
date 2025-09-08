@@ -35,9 +35,9 @@ namespace galay
         return m_socket.sslConnect(addr);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> TcpSslClient::recv(size_t length)
+    AsyncResult<ValueWrapper<Bytes>> TcpSslClient::recv(char* buffer, size_t length)
     {
-        return m_socket.sslRecv(length);
+        return m_socket.sslRecv(buffer, length);
     }
 
     AsyncResult<ValueWrapper<Bytes>> TcpSslClient::send(Bytes bytes)

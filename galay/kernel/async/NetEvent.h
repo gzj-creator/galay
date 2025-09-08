@@ -69,7 +69,7 @@ namespace galay::details
     class RecvEvent: public NetEvent<ValueWrapper<Bytes>>
     {
     public:
-        RecvEvent(GHandle handle, EventScheduler* scheduler, StringMetaData& data, size_t length);
+        RecvEvent(GHandle handle, EventScheduler* scheduler, char* result, size_t length);
         std::string name() override { return "RecvEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
@@ -78,7 +78,7 @@ namespace galay::details
         bool recvBytes(bool notify);
     private:
         size_t m_length = 0;
-        StringMetaData& m_data;
+        char* m_result_str = 0;
     };
 
     class SendEvent: public NetEvent<ValueWrapper<Bytes>>

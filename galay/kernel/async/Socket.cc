@@ -39,7 +39,6 @@ namespace galay {
     {
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime, GHandle handle)
@@ -47,14 +46,12 @@ namespace galay {
         m_handle = handle;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     AsyncTcpSocket::AsyncTcpSocket(const AsyncTcpSocket& other)
     {
         m_handle = other.m_handle;
         m_scheduler = other.m_scheduler;
-        m_buffer = deepCopyString(other.m_buffer);
     }
 
     AsyncTcpSocket::AsyncTcpSocket(AsyncTcpSocket&& other)
@@ -63,7 +60,6 @@ namespace galay {
         other.m_handle = GHandle::invalid();
         m_scheduler = other.m_scheduler;
         other.m_scheduler = nullptr;
-        m_buffer = std::move(other.m_buffer);
     }
 
     AsyncTcpSocket& AsyncTcpSocket::operator=(const AsyncTcpSocket& other)
@@ -71,7 +67,6 @@ namespace galay {
         if (this != &other) {
             m_handle = other.m_handle;
             m_scheduler = other.m_scheduler;
-            m_buffer = deepCopyString(other.m_buffer);
         }
         return *this;
     }
@@ -81,21 +76,18 @@ namespace galay {
         if (this != &other) {
             m_handle = other.m_handle;
             m_scheduler = other.m_scheduler;
-            m_buffer = std::move(other.m_buffer);
         }
         return *this;
     }
 
     AsyncTcpSocket::~AsyncTcpSocket()
     {
-        freeString(m_buffer);
     }
 
     AsyncTcpSocket::AsyncTcpSocket(EventScheduler* scheduler, GHandle handle)
     {
         m_scheduler = scheduler;
         m_handle = handle;
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
 
@@ -180,19 +172,9 @@ namespace galay {
         return {std::make_shared<details::ConnectEvent>(m_handle, m_scheduler, host)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::recv(size_t length, bool cover)
+    AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::recv(char* result, size_t length)
     {
-        if(cover) {
-            if(m_buffer.capacity < length) {
-                reallocString(m_buffer, length);
-            }
-            clearString(m_buffer);
-        } else {
-            if(m_buffer.capacity < m_buffer.size + length) {
-                reallocString(m_buffer, m_buffer.size + length);
-            }
-        }
-        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, m_buffer, length)};
+        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::send(Bytes bytes)
@@ -206,20 +188,6 @@ namespace galay {
         return {std::make_shared<details::SendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
     }
 #endif
-    void AsyncTcpSocket::reallocReadBuffer(size_t length)
-    {
-        reallocString(m_buffer, length);
-    }
-
-    void AsyncTcpSocket::clearReadBuffer()
-    {
-        clearString(m_buffer);
-    }
-
-    Bytes AsyncTcpSocket::getReadBytes() const
-    {
-        return Bytes::fromCString(reinterpret_cast<const char*>(m_buffer.data), m_buffer.size, m_buffer.capacity);
-    }
 
     ValueWrapper<SockAddr> AsyncTcpSocket::getSrcAddr() const
     {
@@ -259,7 +227,6 @@ namespace galay {
     {
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime, GHandle handle)
@@ -267,14 +234,12 @@ namespace galay {
         m_handle = handle;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     AsyncUdpSocket::AsyncUdpSocket(const AsyncUdpSocket& other)
     {
         m_handle = other.m_handle;
         m_scheduler = other.m_scheduler;
-        m_buffer = deepCopyString(other.m_buffer);
     }
 
     AsyncUdpSocket::AsyncUdpSocket(AsyncUdpSocket&& other)
@@ -283,7 +248,6 @@ namespace galay {
         other.m_handle = GHandle::invalid();
         m_scheduler = other.m_scheduler;
         other.m_scheduler = nullptr;
-        m_buffer = std::move(other.m_buffer);
     }
     
     AsyncUdpSocket& AsyncUdpSocket::operator=(const AsyncUdpSocket& other)
@@ -291,7 +255,6 @@ namespace galay {
         if(this != &other) {
             m_handle = other.m_handle;
             m_scheduler = other.m_scheduler;
-            m_buffer = deepCopyString(other.m_buffer);
         }
         return *this;
     }
@@ -303,14 +266,12 @@ namespace galay {
             other.m_handle = GHandle::invalid();
             m_scheduler = other.m_scheduler;
             other.m_scheduler = nullptr;
-            m_buffer = std::move(other.m_buffer);
         }
         return *this;
     }
 
     AsyncUdpSocket::~AsyncUdpSocket()
     {
-        freeString(m_buffer);
     }
 
     HandleOption AsyncUdpSocket::options()
@@ -390,13 +351,9 @@ namespace galay {
         return wrapper;
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recv(size_t length)
+    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recv(char* result, size_t length)
     {
-        if(m_buffer.capacity < length) {
-            reallocString(m_buffer, length);
-        }
-        clearString(m_buffer);
-        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, m_buffer, length)};
+        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::send(Bytes bytes)
@@ -404,13 +361,9 @@ namespace galay {
         return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recvfrom(Host& remote, size_t length)
+    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recvfrom(Host& remote, char* result, size_t length)
     {
-        if(m_buffer.capacity < length) {
-            reallocString(m_buffer, length);
-        } 
-        clearString(m_buffer);
-        return {std::make_shared<details::RecvfromEvent>(m_handle, m_scheduler, remote, reinterpret_cast<char*>(m_buffer.data), length)};
+        return {std::make_shared<details::RecvfromEvent>(m_handle, m_scheduler, remote, result, length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::sendto(const Host& remote, Bytes bytes)
@@ -421,16 +374,6 @@ namespace galay {
     AsyncResult<ValueWrapper<bool>> AsyncUdpSocket::close()
     {
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
-    }
-
-    void AsyncUdpSocket::reallocReadBuffer(size_t length)
-    {
-        reallocString(m_buffer, length);
-    }
-
-    void AsyncUdpSocket::clearReadBuffer()
-    {
-        clearString(m_buffer);
     }
 
     ValueWrapper<SockAddr> AsyncUdpSocket::getSrcAddr() const
@@ -471,7 +414,6 @@ namespace galay {
     {
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     AsyncSslSocket::AsyncSslSocket(Runtime& runtime, SSL *ssl)
@@ -479,7 +421,6 @@ namespace galay {
         m_ssl = ssl;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     AsyncSslSocket::AsyncSslSocket(AsyncSslSocket &&other)
@@ -488,14 +429,12 @@ namespace galay {
         other.m_ssl = nullptr;
         m_scheduler = other.m_scheduler;
         other.m_scheduler = nullptr;
-        m_buffer = std::move(other.m_buffer);
     }
 
     AsyncSslSocket::AsyncSslSocket(const AsyncSslSocket &other)
     {
         m_ssl = other.m_ssl;
         m_scheduler = other.m_scheduler;
-        m_buffer = deepCopyString(other.m_buffer);
     }
 
     AsyncSslSocket &AsyncSslSocket::operator=(const AsyncSslSocket &other)
@@ -503,7 +442,6 @@ namespace galay {
         if(this == &other) {
             m_ssl = other.m_ssl;
             m_scheduler = other.m_scheduler;
-            m_buffer = deepCopyString(other.m_buffer);
         }
         return *this;
     }
@@ -515,7 +453,6 @@ namespace galay {
             other.m_ssl = nullptr;
             m_scheduler = other.m_scheduler;
             other.m_scheduler = nullptr;
-            m_buffer = std::move(other.m_buffer);
         }
         return *this;
     }
@@ -524,7 +461,6 @@ namespace galay {
     {
         m_ssl = ssl;
         m_scheduler = scheduler;
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     HandleOption AsyncSslSocket::options()
@@ -619,19 +555,9 @@ namespace galay {
         return {std::make_shared<details::SslConnectEvent>(m_ssl, m_scheduler, addr)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslRecv(size_t length, bool cover)
+    AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslRecv(char* result, size_t length)
     {
-        if(cover) {
-            if(m_buffer.capacity < length) {
-                reallocString(m_buffer, length);
-            }
-            clearString(m_buffer);
-        } else {
-            if(m_buffer.capacity < m_buffer.size + length) {
-                reallocString(m_buffer, m_buffer.size + length);
-            }
-        }
-        return {std::make_shared<details::SslRecvEvent>(m_ssl, m_scheduler, m_buffer, length)};
+        return {std::make_shared<details::SslRecvEvent>(m_ssl, m_scheduler, result, length)};
     }
 
     AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslSend(Bytes bytes)
@@ -644,24 +570,9 @@ namespace galay {
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
     }
 
-    void AsyncSslSocket::reallocReadBuffer(size_t length)
-    {
-        reallocString(m_buffer, length);
-    }
-
-    void AsyncSslSocket::clearReadBuffer()
-    {
-        clearString(m_buffer);
-    }
-
-    Bytes AsyncSslSocket::getReadBytes() const
-    {
-        return Bytes::fromCString(reinterpret_cast<const char*>(m_buffer.data), m_buffer.size, m_buffer.capacity);
-    }
-
     AsyncSslSocket::~AsyncSslSocket()
     {
-        freeString(m_buffer);
+
     }
 
 } // namespace galay

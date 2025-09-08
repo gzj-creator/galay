@@ -1,5 +1,6 @@
 #include "galay/kernel/server/TcpSslServer.h"
 #include "galay/utils/BackTrace.h"
+#include "galay/common/Buffer.hpp"
 #include <signal.h>
 
 using namespace galay;
@@ -36,8 +37,10 @@ int main()
     TcpSslServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
     server.run([&server](AsyncSslSocket socket, size_t id) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
+        Buffer buffer(1024);
         while(true) {
-            auto rwrapper = co_await socket.sslRecv(1024);
+            //return view
+            auto rwrapper = co_await socket.sslRecv(buffer.data(), buffer.capacity());
             if(!rwrapper.success()) {
                 if(rwrapper.getError()->code() == error::ErrorCode::DisConnectError) {
                     // disconnect

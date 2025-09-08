@@ -35,9 +35,9 @@ namespace galay
         return m_socket.connect(addr);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> UdpClient::recv(size_t length)
+    AsyncResult<ValueWrapper<Bytes>> UdpClient::recv(char* buffer, size_t length)
     {
-        return m_socket.recv(length);
+        return m_socket.recv(buffer, length);
     }
 
     AsyncResult<ValueWrapper<Bytes>> UdpClient::send(Bytes bytes)
@@ -45,9 +45,9 @@ namespace galay
         return m_socket.send(std::move(bytes));
     }
 
-    AsyncResult<ValueWrapper<Bytes>> UdpClient::recvfrom(Host& remote, size_t length)
+    AsyncResult<ValueWrapper<Bytes>> UdpClient::recvfrom(Host& remote, char* buffer, size_t length)
     {
-        return m_socket.recvfrom(remote, length);
+        return m_socket.recvfrom(remote, buffer, length);
     }
 
     AsyncResult<ValueWrapper<Bytes>> UdpClient::sendto(const Host& remote, Bytes bytes)

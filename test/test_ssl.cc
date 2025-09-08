@@ -3,6 +3,7 @@
 #include "galay/kernel/async/Bytes.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/runtime/Runtime.h"
+#include "galay/common/Buffer.hpp"
 #include <iostream>
 
 using namespace galay;
@@ -56,9 +57,10 @@ Coroutine<nil> test()
 
 Coroutine<nil> Recv(AsyncSslSocket socket)
 {
+    Buffer buffer(1024);
     while (true)
     {
-        auto wrapper = co_await socket.sslRecv(1024);
+        auto wrapper = co_await socket.sslRecv(buffer.data(), buffer.size());
         if(!wrapper.success()) {
             if(wrapper.getError()->code() == error::ErrorCode::DisConnectError) {
                 // disconnect

@@ -36,7 +36,7 @@ namespace galay {
         //throw exception
         AsyncResult<ValueWrapper<AsyncTcpSocketBuilder>> accept();
         AsyncResult<ValueWrapper<bool>> connect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> recv(size_t length, bool cover = true);
+        AsyncResult<ValueWrapper<Bytes>> recv(char* result, size_t length);
         //返回剩余Bytes
         AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
         
@@ -44,9 +44,6 @@ namespace galay {
         //return send length 
         AsyncResult<ValueWrapper<long>> sendfile(GHandle file_handle, long offset, size_t length);
     #endif
-        void reallocReadBuffer(size_t length);
-        void clearReadBuffer();
-        Bytes getReadBytes() const;
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
         //throw exception
@@ -55,7 +52,6 @@ namespace galay {
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
         GHandle m_handle;
-        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 
@@ -76,21 +72,17 @@ namespace galay {
         ValueWrapper<bool> socket();
         ValueWrapper<bool> bind(const Host& addr);
         ValueWrapper<bool> connect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> recv(size_t length);
+        AsyncResult<ValueWrapper<Bytes>> recv(char* result, size_t length);
         AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
-        AsyncResult<ValueWrapper<Bytes>> recvfrom(Host& remote, size_t length);
+        AsyncResult<ValueWrapper<Bytes>> recvfrom(Host& remote, char* result, size_t length);
         AsyncResult<ValueWrapper<Bytes>> sendto(const Host& remote, Bytes bytes);
         AsyncResult<ValueWrapper<bool>> close();
-
-        void clearReadBuffer();
-        void reallocReadBuffer(size_t length);
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
         //throw exception
         [[nodiscard]] ValueWrapper<SockAddr> getDestAddr() const;
     private:
         GHandle m_handle;
-        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 
@@ -110,19 +102,15 @@ namespace galay {
         ValueWrapper<bool> listen(int backlog);
         AsyncResult<ValueWrapper<AsyncSslSocketBuilder>> sslAccept();
         AsyncResult<ValueWrapper<bool>> sslConnect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> sslRecv(size_t length, bool cover = true);
+        AsyncResult<ValueWrapper<Bytes>> sslRecv(char* result, size_t length);
         AsyncResult<ValueWrapper<Bytes>> sslSend(Bytes bytes);
         AsyncResult<ValueWrapper<bool>> sslClose();
-        void reallocReadBuffer(size_t length);
-        void clearReadBuffer();
-        Bytes getReadBytes() const;
         ~AsyncSslSocket();
     private:
         AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);
         GHandle getHandle() const;
     private:
         SSL* m_ssl = nullptr;
-        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 

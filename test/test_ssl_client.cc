@@ -1,4 +1,5 @@
 #include "galay/kernel/client/TcpSslClient.h"
+#include "galay/common/Buffer.hpp"
 
 using namespace galay;
 
@@ -14,6 +15,7 @@ Coroutine<nil> test(Runtime& runtime)
         co_return nil();
     }
     std::cout << "connect success" << std::endl;
+    Buffer buffer(1024);
     while (true) { 
         std::string msg;
         std::getline(std::cin, msg);
@@ -28,7 +30,7 @@ Coroutine<nil> test(Runtime& runtime)
             cond.notify_one();
             co_return nil();
         }
-        auto res2 = co_await client.recv(1024);
+        auto res2 = co_await client.recv(buffer.data(), buffer.capacity());
         if (!res2.success()) {
             std::cout << "recv error: " << res2.getError()->message() << std::endl;
             co_return nil();
