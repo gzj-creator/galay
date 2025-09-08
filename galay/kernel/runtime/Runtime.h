@@ -114,18 +114,18 @@ namespace galay
     }
 
     template<CoType T>
-    inline void Runtime::schedule(Coroutine<T>&& co, size_t index)
+    inline void Runtime::schedule(Coroutine<T>&& co, size_t id)
     {
         if(!m_eScheduler || m_cSchedulers.size() == 0) {
             throw std::runtime_error("Runtime not started");
         }
-        if(index >= m_cSchedulers.size()) {
+        if(id >= m_cSchedulers.size()) {
             throw std::runtime_error("Invalid index");
         }
         if(m_cManager) {
             m_cManager->manage(co.getOriginCoroutine());
         }
-        m_cSchedulers[index].schedule(std::forward<Coroutine<T>>(co));
+        m_cSchedulers[id].schedule(std::forward<Coroutine<T>>(co));
     }
 
 }

@@ -34,7 +34,7 @@ int main()
     builder.sslConf("server.crt", "server.key");
     builder.addListen({"0.0.0.0", 8070});
     TcpSslServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
-    server.run([&server](AsyncSslSocket socket) -> Coroutine<nil> {
+    server.run([&server](AsyncSslSocket socket, size_t id) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
         while(true) {
             auto rwrapper = co_await socket.sslRecv(1024);

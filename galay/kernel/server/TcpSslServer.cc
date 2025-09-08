@@ -30,7 +30,7 @@ namespace galay
         m_key = std::move(server.m_key);
     }
 
-    void TcpSslServer::run(const std::function<Coroutine<nil>(AsyncSslSocket)>& callback)
+    void TcpSslServer::run(const std::function<Coroutine<nil>(AsyncSslSocket,size_t)>& callback)
     {
         if(m_cert.empty() || m_key.empty()) {
             throw std::runtime_error("cert or key is empty");
@@ -77,7 +77,7 @@ namespace galay
         return *this;
     }
 
-    Coroutine<nil> TcpSslServer::acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket)>& callback, size_t i)
+    Coroutine<nil> TcpSslServer::acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket,size_t)>& callback, size_t i)
     {
         while(true) {
             auto wrapper = co_await m_sockets[i].sslAccept();
@@ -86,7 +86,7 @@ namespace galay
                 auto builder = wrapper.moveValue();
                 auto socket = builder.build();
                 socket.options().handleNonBlock();
-                m_runtime.schedule(callback(std::move(socket)), i);
+                m_runtime.schedule(callback(std::move(socket),i), i);
             } else {
                 LogError("[acceptConnection failed] [error: {}]", wrapper.getError()->message());
             }

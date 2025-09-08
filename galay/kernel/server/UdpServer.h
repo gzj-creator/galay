@@ -14,7 +14,7 @@ namespace galay
         UdpServer(Runtime&& runtime);
         UdpServer(UdpServer&& server);
         UdpServer(const UdpServer& server) = delete;
-        void run(const std::function<Coroutine<nil>(AsyncUdpSocket)>& callback);
+        void run(const std::function<Coroutine<nil>(AsyncUdpSocket,size_t)>& callback);
         void stop();
         void wait();
         UdpServer& operator=(UdpServer&& server);
