@@ -288,7 +288,7 @@ namespace galay::details
     }
 
     SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* result, size_t length)
-        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_result_str(result), m_length(length)
+        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_length(length), m_result_str(result)
     {
     }
 
