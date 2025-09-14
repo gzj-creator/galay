@@ -1,7 +1,7 @@
 #ifndef GALAY_UDP_SERVER_H
 #define GALAY_UDP_SERVER_H 
 
-#include "galay/kernel/async/Socket.h"
+#include "galay/kernel/async/AsyncFactory.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 
 namespace galay
@@ -14,7 +14,7 @@ namespace galay
         UdpServer(Runtime&& runtime);
         UdpServer(UdpServer&& server);
         UdpServer(const UdpServer& server) = delete;
-        void run(const std::function<Coroutine<nil>(AsyncUdpSocket,size_t)>& callback);
+        void run(const std::function<Coroutine<nil>(AsyncUdpSocket,AsyncFactory)>& callback);
         void stop();
         void wait();
         UdpServer& operator=(UdpServer&& server);

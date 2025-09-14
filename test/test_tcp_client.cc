@@ -1,5 +1,5 @@
 #include "galay/kernel/client/TcpClient.h"
-#include "galay/common/Buffer.hpp"
+#include "galay/common/Buffer.h"
 
 using namespace galay;
 
@@ -33,6 +33,7 @@ Coroutine<nil> test(Runtime& runtime)
         auto res3 = co_await client.recv(buffer.data(), buffer.capacity());
         if (!res3.success()) {
             std::cout << "recv error: " << res3.getError()->message() << std::endl;
+            co_await client.close();
             co_return nil();
         }
         std::cout << "recv: " << res3.moveValue().toString() << std::endl;

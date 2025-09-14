@@ -4,22 +4,23 @@
 
 namespace galay::details
 {
-    SleepforEvent::SleepforEvent(TimerManager* manager, std::chrono::milliseconds ms)
-        : TimeEvent<nil>(manager), m_ms(ms)
+    SleepforEvent::SleepforEvent(TimerManager* manager, Timer::ptr timer, std::chrono::milliseconds ms)
+        : TimeEvent<nil>(manager), m_timer(timer), m_ms(ms)
     {
     }
 
     bool SleepforEvent::ready()
-    {
-        return false;
+    { 
+        return m_ms == std::chrono::milliseconds::zero();
     }
 
     bool SleepforEvent::suspend(Waker waker) 
     {
-        Timer::ptr timer = std::make_shared<Timer>(m_ms, [waker]() mutable{
+        m_timer->setFunction([waker]() mutable{
             waker.wakeUp();
         });
-        m_manager->push(timer);
+        m_timer->reset(m_ms);
+        m_manager->push(m_timer);
         return TimeEvent<nil>::suspend(waker);
     }
 }

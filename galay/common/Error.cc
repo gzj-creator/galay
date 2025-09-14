@@ -18,6 +18,7 @@ namespace galay::error
         "call send function error",
         "call sendto function error",
         "call sendfile function error",
+        "call shuntdown function error",
         "call close function error",
         "call ssl_new function error",
         "call ssl_set_fd function error",
@@ -49,10 +50,17 @@ namespace galay::error
         "notify but source not ready",
         "read return zero error",
         "write return zero error",
+        "concurrent error",
     };
 
+    bool SystemError::contains(uint64_t error, ErrorCode code)
+    {
+        uint32_t galay_code = error & 0xffffffff;
+        return static_cast<uint32_t>(code) == galay_code;
+    }
+
     SystemError::SystemError(uint32_t galay_code, uint32_t system_code)
-        : Error(makeErrorCode(galay_code, system_code)) 
+        : Error(makeErrorCode(galay_code, system_code))
     {
 
     }

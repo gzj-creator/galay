@@ -12,7 +12,7 @@ namespace galay
 
     namespace details
     {
-        class WaitEvent: public AsyncEvent<nil>
+        class WaitEvent: public AsyncEvent<ValueWrapper<nil>>
         {
         public:
             WaitEvent(AsyncWaiter& waiter);
@@ -25,7 +25,7 @@ namespace galay
         };
 
         template<CoType T>
-        class ResultWaitEvent: public AsyncEvent<T>
+        class ResultWaitEvent: public AsyncEvent<ValueWrapper<T>>
         {
             template<CoType M>
             friend class galay::AsyncResultWaiter;
@@ -45,7 +45,8 @@ namespace galay
         friend class details::WaitEvent;
     public:
         AsyncWaiter();
-        AsyncResult<nil> wait();
+        AsyncResult<ValueWrapper<nil>> wait();
+        bool isWaiting();
         void notify();
     private:
         Waker m_waker;
@@ -60,8 +61,10 @@ namespace galay
         friend class details::ResultWaitEvent;
     public:
         AsyncResultWaiter();
-        AsyncResult<T> wait();
+        AsyncResult<ValueWrapper<T>> wait();
+        bool isWaiting();
         void notify(T&& value);
+        void notify(ValueWrapper<T>&& value);
     private:
         Waker m_waker;
         std::atomic_bool m_wait = false;
@@ -76,16 +79,36 @@ namespace galay
     }
 
     template <CoType T>
-    inline AsyncResult<T> AsyncResultWaiter<T>::wait()
+    inline AsyncResult<ValueWrapper<T>> AsyncResultWaiter<T>::wait()
     {
         return {m_event};
     }
 
     template <CoType T>
+    inline bool AsyncResultWaiter<T>::isWaiting()
+    {
+        return m_wait.load();
+    }
+
+    template <CoType T>
     inline void AsyncResultWaiter<T>::notify(T &&value)
     {
-        if(m_wait.load()) {
-            m_wait.store(false);
+        bool expected = true;
+        if(m_wait.compare_exchange_strong(expected, false, 
+                                      std::memory_order_acq_rel, 
+                                      std::memory_order_acquire)) {
+            makeValue(m_event->m_result, std::move(value), nullptr);
+            m_waker.wakeUp();
+        }
+    }
+
+    template <CoType T>
+    inline void AsyncResultWaiter<T>::notify(ValueWrapper<T> &&value)
+    {
+        bool expected = true;
+        if(m_wait.compare_exchange_strong(expected, false, 
+                                      std::memory_order_acq_rel, 
+                                      std::memory_order_acquire)) {
             m_event->m_result = std::move(value);
             m_waker.wakeUp();
         }
@@ -110,7 +133,15 @@ namespace galay::details
     inline bool ResultWaitEvent<T>::suspend(Waker waker)
     {
         m_waiter.m_waker = waker;
-        m_waiter.m_wait.store(true);
+        bool expected = false;
+        if(!m_waiter.m_wait.compare_exchange_strong(expected, true, 
+                                              std::memory_order_acq_rel, 
+                                              std::memory_order_acquire)) {
+            using namespace error;
+            SystemError::ptr e = std::make_shared<SystemError>(ConcurrentError, errno);
+            makeValue(this->m_result, e);
+            return false;
+        }
         return true;
     }
 }

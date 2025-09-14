@@ -1,7 +1,7 @@
 #ifndef GALAY_KERNEL_TCP_SERVER_H
 #define GALAY_KERNEL_TCP_SERVER_H 
 
-#include "galay/kernel/async/Socket.h"
+#include "galay/kernel/async/AsyncFactory.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 
 namespace galay 
@@ -16,14 +16,14 @@ namespace galay
         TcpServer(Runtime&& runtime);
         TcpServer(TcpServer&& server);
         TcpServer(const TcpServer& server) = delete;
-        void run(const std::function<Coroutine<nil>(AsyncTcpSocket,size_t)>& callback);
+        void run(const std::function<Coroutine<nil>(AsyncTcpSocket,AsyncFactory)>& callback);
         void stop();
         void wait();
         TcpServer& operator=(TcpServer&& server);
         TcpServer& operator=(const TcpServer& server) = delete;
         ~TcpServer();
     private:
-        Coroutine<nil> acceptConnection(const std::function<Coroutine<nil>(AsyncTcpSocket,size_t)>& callback, size_t i);
+        Coroutine<nil> acceptConnection(const std::function<Coroutine<nil>(AsyncTcpSocket,AsyncFactory)>& callback, size_t i);
     protected:
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
         Host m_host = {"0.0.0.0", 8080};

@@ -1,7 +1,8 @@
 #include "galay/kernel/server/TcpServer.h"
 #include "galay/utils/BackTrace.h"
 #include "galay/utils/SignalHandler.hpp"
-#include "galay/common/Buffer.hpp"
+#include "galay/common/Buffer.h"
+#include "galay/kernel/async/TimerGenerator.h"
 
 using namespace galay;
 
@@ -34,16 +35,30 @@ int main()
     TcpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
     TcpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
-    server.run([&server](AsyncTcpSocket socket, size_t id) -> Coroutine<nil> {
+    server.run([&server](AsyncTcpSocket socket, AsyncFactory factory) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
+        using namespace error;
         Buffer buffer(1024);
+        TimerGenerator generator = factory.createTimerGenerator();
         while(true) {
-            auto rwrapper = co_await socket.recv(buffer.data(), buffer.capacity());
-            if(!rwrapper.success()) {
-                if(rwrapper.getError()->code() == error::ErrorCode::DisConnectError) {
+            auto twrapper = co_await generator.timeout<ValueWrapper<Bytes>>(std::chrono::milliseconds(5000), [&](){
+                return socket.recv(buffer.data(), buffer.capacity());
+            }) ;
+            if(!twrapper.success()) {
+                if(SystemError::contains(twrapper.getError()->code(), ErrorCode::AsyncTimeoutError)) {
                     // disconnect
                     co_await socket.close();
-                    std::cout << "connection close" << std::endl;
+                    co_return nil();
+                }
+                std::cout << "twrapper error: " << twrapper.getError()->message() << std::endl;
+                co_return nil();
+            }
+            auto rwrapper = twrapper.moveValue();
+            if (!rwrapper.success())
+            {
+                if(SystemError::contains(rwrapper.getError()->code(), ErrorCode::DisConnectError)) {
+                    co_await socket.close();
+                    std::cout << "disconnect" << std::endl;
                     co_return nil();
                 }
                 std::cout << "recv error: " << rwrapper.getError()->message() << std::endl;

@@ -3,7 +3,7 @@
 #include "galay/kernel/async/Bytes.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/runtime/Runtime.h"
-#include "galay/common/Buffer.hpp"  
+#include "galay/common/Buffer.h"  
 #include <iostream>
 
 using namespace galay;
@@ -57,7 +57,7 @@ Coroutine<nil> test()
 
 Coroutine<nil> Recv(AsyncTcpSocket socket)
 {
-    Buffer buffer;
+    Buffer buffer(1024);
     while (true)
     {
         auto wrapper = co_await socket.recv(buffer.data(), buffer.capacity());

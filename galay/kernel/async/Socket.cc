@@ -157,6 +157,35 @@ namespace galay {
         return wrapper;
     }
 
+    ValueWrapper<bool> AsyncTcpSocket::shuntdown(ShutdownType type)
+    {
+        using namespace error;
+        ValueWrapper<bool> result;
+        int ret = -1;
+        switch (type)
+        {
+        case ShutdownType::Read:
+            ret = ::shutdown(m_handle.fd, SHUT_RD);
+            break;
+        case ShutdownType::Write:
+            ret = ::shutdown(m_handle.fd, SHUT_WR);
+            break;
+        case ShutdownType::Both:
+            ret = ::shutdown(m_handle.fd, SHUT_RDWR);
+            break;
+        default:
+            break;
+        }
+        if(ret != 0) {
+            SystemError::ptr error = std::make_shared<SystemError>(ErrorCode::CallShuntdownError, errno);
+            makeValue(result, false, error);
+        } else {
+            makeValue(result, true, nullptr);
+        }
+        return result;
+    }
+
+
     AsyncResult<ValueWrapper<bool>> AsyncTcpSocket::close()
     {
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};

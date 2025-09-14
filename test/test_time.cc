@@ -5,18 +5,23 @@
 using namespace galay;
 
 Runtime runtime;
+int main_co_id = -1;
 
 
 Coroutine<nil> test()
-{
-    TimerGenerator generator(runtime);
+{   
+    while(main_co_id == -1) {}
+
+    TimerGenerator generator(runtime, main_co_id);
+    TimerGenerator generator1(runtime, main_co_id);
+    //TimerGenerator::ptr generator2 = TimerGenerator::createPtr(runtime);
     /*
 
         auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), [](){
             //错误 generator会析构
             TimerGenerator generator(*runtime);
             generator.init();
-            return generator.sleepfor(std::chrono::milliseconds(10000));
+            return generator.sleep(std::chrono::milliseconds(10000));
         });
         if(res.success()) {
             std::cout << "exec success" << std::endl;
@@ -24,9 +29,11 @@ Coroutine<nil> test()
             std::cout << res.getError()->message() << std::endl;
         }
     */
-   auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), [generator]() mutable {
-        return generator.sleepfor(std::chrono::milliseconds(1000));
-    });
+    auto func = [generator1]() mutable {
+        std::cout << "ready sleep" << std::endl;
+        return generator1.sleep(std::chrono::milliseconds(1000));
+    };
+    auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), func);
     if(res.success()) {
         std::cout << "exec success" << std::endl;
     } else {
@@ -42,7 +49,7 @@ int main()
     builder.startCoManager(std::chrono::milliseconds(1000));
     runtime = builder.build();
     runtime.start();
-    runtime.schedule(test());
+    main_co_id = runtime.schedule(test());
     getchar();
     runtime.stop();
     return 0;

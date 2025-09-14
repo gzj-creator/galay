@@ -3,17 +3,28 @@
 
 namespace galay 
 {
-    TimerGenerator::TimerGenerator(Runtime& runtime)
+    TimerGenerator::ptr TimerGenerator::createPtr(Runtime &runtime, int co_id)
     {
-        RuntimeVisitor visitor(runtime);
-        m_manager = visitor.timerManager().get();
+        return std::make_shared<TimerGenerator>(runtime, co_id);
     }
 
-    AsyncResult<nil> TimerGenerator::sleepfor(std::chrono::milliseconds ms)
+    TimerGenerator::TimerGenerator(Runtime& runtime, int co_id)
+        :m_runtime(runtime), m_timer(std::make_shared<Timer>(std::chrono::milliseconds::zero(), nullptr)), m_co_id(co_id)
+    {
+    }
+
+    AsyncResult<nil> TimerGenerator::sleep(std::chrono::milliseconds ms)
     {
         if(ms < std::chrono::milliseconds::zero()) {
             return {nil()};
         }
-        return {std::make_shared<details::SleepforEvent>(m_manager, ms)};
+        RuntimeVisitor visitor(m_runtime);
+        auto manager = visitor.timerManager().get();
+        return {std::make_shared<details::SleepforEvent>(manager, m_timer, ms)};
+    }
+
+    TimerGenerator::TimerGenerator(const TimerGenerator &other)
+        : m_runtime(other.m_runtime), m_timer(std::make_shared<Timer>(std::chrono::milliseconds::zero(), nullptr))
+    {
     }
 }

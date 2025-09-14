@@ -15,6 +15,11 @@ namespace galay {
                 net(not thread security)
     *************************************************
     */
+    enum class ShutdownType {
+        Read = 0,
+        Write = 1,
+        Both = 2
+    };
 
     class AsyncTcpSocket
     {
@@ -32,6 +37,7 @@ namespace galay {
         ValueWrapper<bool> socket();
         ValueWrapper<bool> bind(const Host& addr);
         ValueWrapper<bool> listen(int backlog);
+        ValueWrapper<bool> shuntdown(ShutdownType type);
         AsyncResult<ValueWrapper<bool>> close();
         //throw exception
         AsyncResult<ValueWrapper<AsyncTcpSocketBuilder>> accept();

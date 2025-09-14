@@ -9,7 +9,7 @@ if(ENABLE_SYSTEM_LOG)
   endif()
 endif()
 
-file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "sync/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc" "server/*.cc" "client/*.cc")
+file(GLOB SRC_LIST "*.cc" "coroutine/*.cc" "event/*.cc" "async/*.cc" "time/*.cc" "runtime/*.cc" "server/*.cc" "client/*.cc")
 
 set(DEPEND_LIBS ${SSL_LIB} ${CRYPTO_LIB} pthread)
 

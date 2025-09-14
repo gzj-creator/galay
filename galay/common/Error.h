@@ -22,6 +22,7 @@ namespace galay::error
         CallSendError,
         CallSendtoError,
         CallSendfileError,
+        CallShuntdownError,
         CallCloseError,
         CallSSLNewError,
         CallSSLSetFdError,
@@ -53,6 +54,7 @@ namespace galay::error
         NotifyButSourceNotReadyError,
         FileReadEmptyError,
         FileWriteEmptyError,
+        ConcurrentError,
         SystemErrorEnd
     };
 
@@ -73,6 +75,7 @@ namespace galay::error
     class SystemError : public Error
     {
     public:
+        static bool contains(uint64_t error, ErrorCode code);
         SystemError(uint32_t galay_code, uint32_t system_code);
         std::string message() const override;
     private:

@@ -3,45 +3,15 @@
 
 #include <cstring>
 #include <algorithm>
-#include <memory>
 #include <utility>
 #include <stdexcept>
 #include <cstdint>
 #include <cstdlib>
-#include <string>
-#include <variant>
 #include <string_view>
+#include "galay/common/Buffer.h"
 
 namespace galay 
 { 
-    struct StringMetaData
-    {
-        StringMetaData() {};
-        StringMetaData(std::string& str);
-        StringMetaData(const std::string_view& str);
-        //以\0结尾的字符串构造
-        StringMetaData(const char* str);
-        StringMetaData(const uint8_t* str);
-        // 从原始指针和长度构造
-        StringMetaData(const char* str, size_t length);
-        StringMetaData(const uint8_t* str, size_t length);
-        StringMetaData(StringMetaData&& other);
-
-        StringMetaData& operator=(StringMetaData&& other);
-
-        ~StringMetaData();
-
-        uint8_t* data = nullptr;
-        size_t size = 0;
-        size_t capacity = 0;
-    };
-
-    StringMetaData mallocString(size_t length);
-    StringMetaData deepCopyString(const StringMetaData& meta);
-    void reallocString(StringMetaData& meta, size_t length);
-    void clearString(StringMetaData& meta);
-    void freeString(StringMetaData& meta);
-
     class Bytes 
     {
     public:

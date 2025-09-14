@@ -1,7 +1,7 @@
 #ifndef GALAY_TCP_SSL_SERVER_H
 #define GALAY_TCP_SSL_SERVER_H 
 
-#include "galay/kernel/async/Socket.h"
+#include "galay/kernel/async/AsyncFactory.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 
 namespace galay
@@ -17,14 +17,14 @@ namespace galay
         TcpSslServer(Runtime&& runtime);
         TcpSslServer(TcpSslServer&& server);
         TcpSslServer(const TcpSslServer& server) = delete;
-        void run(const std::function<Coroutine<nil>(AsyncSslSocket,size_t)>& callback);
+        void run(const std::function<Coroutine<nil>(AsyncSslSocket,AsyncFactory)>& callback);
         void stop();
         void wait();
         TcpSslServer& operator=(TcpSslServer&& server);
         TcpSslServer& operator=(const TcpSslServer& server) = delete;
         ~TcpSslServer();
     private:
-        Coroutine<nil> acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket,size_t)>& callback, size_t i);
+        Coroutine<nil> acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket,AsyncFactory)>& callback, size_t i);
     protected:
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
         Host m_host = {"0.0.0.0", 8080};

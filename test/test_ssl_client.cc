@@ -1,5 +1,5 @@
 #include "galay/kernel/client/TcpSslClient.h"
-#include "galay/common/Buffer.hpp"
+#include "galay/common/Buffer.h"
 
 using namespace galay;
 

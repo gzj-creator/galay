@@ -1,6 +1,6 @@
 #include "galay/kernel/server/UdpServer.h"
 #include "galay/utils/BackTrace.h"
-#include "galay/common/Buffer.hpp"
+#include "galay/common/Buffer.h"
 #include <signal.h>
 
 using namespace galay;
@@ -35,13 +35,14 @@ int main()
     UdpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
     UdpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
-    server.run([&server](AsyncUdpSocket socket, size_t id) -> Coroutine<nil> {
+    server.run([&server](AsyncUdpSocket socket, AsyncFactory factory) -> Coroutine<nil> {
         Buffer buffer(1024);
+        using namespace error;
         while(true) {
             Host remote;
             auto rwrapper = co_await socket.recvfrom(remote, buffer.data(), buffer.capacity());
             if(!rwrapper.success()) {
-                if(rwrapper.getError()->code() == error::ErrorCode::DisConnectError) {
+                if(SystemError::contains(rwrapper.getError()->code(), ErrorCode::DisConnectError)) {
                     // disconnect
                     co_await socket.close();
                     std::cout << "connection close" << std::endl;

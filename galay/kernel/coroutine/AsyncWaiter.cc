@@ -15,7 +15,15 @@ namespace galay
     bool details::WaitEvent::suspend(Waker waker)
     {
         m_waiter.m_waker = waker;
-        m_waiter.m_wait.store(true);
+        bool expected = false;
+        if(!m_waiter.m_wait.compare_exchange_strong(expected, true, 
+                                      std::memory_order_acq_rel, 
+                                      std::memory_order_acquire)) {
+            using namespace error;
+            SystemError::ptr e = std::make_shared<SystemError>(ConcurrentError, errno);
+            makeValue(m_result, e);
+            return false;
+        }
         return true;
     }
 
@@ -24,15 +32,22 @@ namespace galay
     {
     }
 
-    AsyncResult<nil> AsyncWaiter::wait()
+    AsyncResult<ValueWrapper<nil>> AsyncWaiter::wait()
     {
         return {m_event};
     }
 
+    bool AsyncWaiter::isWaiting()
+    {
+        return m_wait.load();
+    }
+
     void AsyncWaiter::notify()
     {
-        if(m_wait.load()) {
-            m_wait.store(false);
+        bool expected = true;
+        if(m_wait.compare_exchange_strong(expected, false, 
+                                      std::memory_order_acq_rel, 
+                                      std::memory_order_acquire)) {
             m_waker.wakeUp();
         }
     }

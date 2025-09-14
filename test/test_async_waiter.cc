@@ -20,19 +20,31 @@ Coroutine<nil> async_waiter_test(Runtime& runtime) {
     co_return nil();
 }
 
-Coroutine<nil> async_result_notify_test(AsyncResultWaiter<bool>& waiter) { 
-    std::cout << "async_result_notify_test" << std::endl;
+Coroutine<nil> async_result_notify_test_1(AsyncResultWaiter<bool>& waiter) { 
+    //std::cout << "async_result_notify_test_1" << std::endl;
     waiter.notify(true);
-    std::cout << "async_result_notify_test end" << std::endl;
+    //std::cout << "async_result_notify_test end" << std::endl;
+    co_return nil();
+}
+
+Coroutine<nil> async_result_notify_test_2(AsyncResultWaiter<bool>& waiter) { 
+    //std::cout << "async_result_notify_test_2" << std::endl;
+    waiter.notify(false);
+    //std::cout << "async_result_notify_test end" << std::endl;
     co_return nil();
 }
 
 Coroutine<nil> async_result_waiter_test(Runtime& runtime) {
     AsyncResultWaiter<bool> waiter;
     std::cout << "async_result_waiter_test" << std::endl;
-    runtime.schedule(async_result_notify_test(waiter));
-    bool res = co_await waiter.wait();
-    std::cout << "result: " << res << std::endl;
+    runtime.schedule(async_result_notify_test_1(waiter));
+    runtime.schedule(async_result_notify_test_2(waiter));
+    ValueWrapper<bool> res = co_await waiter.wait();
+    if(!res.success()) {
+        std::cout << "error: " << res.getError()->message() << std::endl;
+        co_return nil();
+    }
+    std::cout << "result: " << res.moveValue() << std::endl;
     std::cout << "async_result_waiter_test end" << std::endl;
     co_return nil();
 }

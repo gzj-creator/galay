@@ -28,7 +28,7 @@ namespace galay
         return m_runtime.m_eTimeout;
     }
 
-    std::atomic_size_t &RuntimeVisitor::index()
+    std::atomic_int32_t &RuntimeVisitor::index()
     {
         return m_runtime.m_index;
     }
