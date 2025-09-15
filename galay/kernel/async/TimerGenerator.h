@@ -22,9 +22,9 @@ namespace galay
         TimerGenerator& operator=(const TimerGenerator& other) = delete;
     private:
         template <CoType T>
-        Coroutine<nil> waitSleep(std::chrono::milliseconds ms, std::shared_ptr<AsyncResultWaiter<T>> waiter);
+        Coroutine<nil> waitSleep(std::chrono::milliseconds ms, std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter);
         template <CoType T>
-        Coroutine<nil> waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncResultWaiter<T>> waiter);
+        Coroutine<nil> waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter);
     private:
         Runtime& m_runtime;
         Timer::ptr m_timer;
@@ -34,7 +34,7 @@ namespace galay
     template <CoType T>
     inline AsyncResult<std::expected<T, CommonError>> TimerGenerator::timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()> &func)
     {
-        std::shared_ptr<AsyncResultWaiter<T>> waiter = std::make_shared<AsyncResultWaiter<T>>();
+        std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter = std::make_shared<AsyncResultWaiter<T, CommonError>>();
         if(m_co_id == -1) {
             m_runtime.schedule(waitSleep<T>(ms, waiter));
             m_runtime.schedule(waitFunc<T>(func, waiter));
@@ -46,7 +46,7 @@ namespace galay
     }
 
     template <CoType T>
-    Coroutine<nil> TimerGenerator::waitSleep(std::chrono::milliseconds ms, std::shared_ptr<AsyncResultWaiter<T>> waiter)
+    Coroutine<nil> TimerGenerator::waitSleep(std::chrono::milliseconds ms, std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter)
     {
         co_await this->sleep(ms);
         if(waiter->isWaiting()) {
@@ -57,7 +57,7 @@ namespace galay
     }
 
     template <CoType T>
-    inline Coroutine<nil> TimerGenerator::waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncResultWaiter<T>> waiter)
+    inline Coroutine<nil> TimerGenerator::waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter)
     {
         T res = co_await func();
         if(waiter->isWaiting()) {

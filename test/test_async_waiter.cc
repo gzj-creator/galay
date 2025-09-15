@@ -4,7 +4,7 @@
 using namespace galay;
 
 
-Coroutine<nil> async_notify_test(AsyncWaiter& waiter) {
+Coroutine<nil> async_notify_test(AsyncWaiter<CommonError>& waiter) {
     std::cout << "async_notify_test" << std::endl;
     waiter.notify();
     std::cout << "async_notify_test end" << std::endl;
@@ -12,7 +12,7 @@ Coroutine<nil> async_notify_test(AsyncWaiter& waiter) {
 }
 
 Coroutine<nil> async_waiter_test(Runtime& runtime) {
-    AsyncWaiter waiter;
+    AsyncWaiter<CommonError> waiter;
     std::cout << "async_waiter_test" << std::endl;
     runtime.schedule(async_notify_test(waiter));
     co_await waiter.wait();
@@ -20,14 +20,14 @@ Coroutine<nil> async_waiter_test(Runtime& runtime) {
     co_return nil();
 }
 
-Coroutine<nil> async_result_notify_test_1(AsyncResultWaiter<bool>& waiter) { 
+Coroutine<nil> async_result_notify_test_1(AsyncResultWaiter<bool, CommonError>& waiter) { 
     //std::cout << "async_result_notify_test_1" << std::endl;
     waiter.notify(true);
     //std::cout << "async_result_notify_test end" << std::endl;
     co_return nil();
 }
 
-Coroutine<nil> async_result_notify_test_2(AsyncResultWaiter<bool>& waiter) { 
+Coroutine<nil> async_result_notify_test_2(AsyncResultWaiter<bool, CommonError>& waiter) { 
     //std::cout << "async_result_notify_test_2" << std::endl;
     waiter.notify(false);
     //std::cout << "async_result_notify_test end" << std::endl;
@@ -35,7 +35,7 @@ Coroutine<nil> async_result_notify_test_2(AsyncResultWaiter<bool>& waiter) {
 }
 
 Coroutine<nil> async_result_waiter_test(Runtime& runtime) {
-    AsyncResultWaiter<bool> waiter;
+    AsyncResultWaiter<bool, CommonError> waiter;
     std::cout << "async_result_waiter_test" << std::endl;
     runtime.schedule(async_result_notify_test_1(waiter));
     runtime.schedule(async_result_notify_test_2(waiter));
