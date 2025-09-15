@@ -36,7 +36,7 @@ namespace galay::details
             iocb_ptrs[i] = &m_iocbs[i];
         }
         if(io_submit(m_context, nums, iocb_ptrs.data()) == -1) {
-            m_result = std::unexpected(SystemError{CallAioSubmitError, static_cast<uint32_t>(errno)});
+            m_result = std::unexpected(CommonError{CallAioSubmitError, static_cast<uint32_t>(errno)});
             return true;
         }
         return false;

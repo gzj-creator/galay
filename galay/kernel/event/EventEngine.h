@@ -7,6 +7,7 @@
 #include <list>
 #include <memory>
 #include <functional>
+#include <optional>
 
 namespace galay::details
 {

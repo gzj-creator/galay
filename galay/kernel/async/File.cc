@@ -55,7 +55,7 @@ namespace galay
         return {};
     }
 
-    ValueWrapper<void> File::aioInit(int max_events)
+    std::expected<void, CommonError> File::aioInit(int max_events)
     {
         using namespace error;
         int ret = io_setup(max_events, &m_io_ctx);

@@ -21,6 +21,7 @@
 #endif
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
+#include <optional>
 
 namespace galay::details{ 
     class EventEngine;

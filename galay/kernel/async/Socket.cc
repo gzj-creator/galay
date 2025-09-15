@@ -104,11 +104,12 @@ namespace galay {
             return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
         HandleOption option(m_handle);
-        return option.handleNonBlock().or_else([&](CommonError error) -> std::expected<void, CommonError> {
+        auto res = option.handleNonBlock();
+        if(!res) {
             ::close(m_handle.fd);
             m_handle.fd = -1;
-            return std::unexpected(error);
-        });
+        }
+        return res;
     }
 
     std::expected<void, CommonError> AsyncTcpSocket::bind(const Host& addr)
@@ -188,7 +189,7 @@ namespace galay {
     }
 
 #ifdef __linux__
-    AsyncResult<ValueWrapper<long>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
+    AsyncResult<std::expected<long, CommonError>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
     {
         return {std::make_shared<details::SendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
     }
@@ -284,11 +285,12 @@ namespace galay {
             return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
         HandleOption option(m_handle);
-        return option.handleNonBlock().or_else([&](CommonError error) -> std::expected<void, CommonError> {
+        auto res = option.handleNonBlock();
+        if(!res) {
             ::close(m_handle.fd);
             m_handle.fd = -1;
-            return std::unexpected(error);
-        });
+        }
+        return res;
     }
 
 
@@ -446,12 +448,10 @@ namespace galay {
             return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
         HandleOption option(handle);
-        auto res = option.handleNonBlock().or_else([&](CommonError error) -> std::expected<void, CommonError> {
+        auto res = option.handleNonBlock();
+        if(!res) {
             ::close(handle.fd);
             handle.fd = -1;
-            return std::unexpected(error);
-        });
-        if(!res) {
             return res;
         }
         m_ssl = SSL_new(getGlobalSSLCtx());

@@ -71,7 +71,7 @@ namespace galay::details
     }
 
     RecvEvent::RecvEvent(GHandle handle, EventScheduler* scheduler, char* result, size_t length)
-        : NetEvent<std::expected<Bytes, CommonError>>(handle, scheduler), m_result_str(result), m_length(length)
+        : NetEvent<std::expected<Bytes, CommonError>>(handle, scheduler), m_length(length), m_result_str(result)
     {
     }
 
@@ -161,7 +161,6 @@ namespace galay::details
     bool SendfileEvent::sendfile(bool notify)
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
         long total = 0;
         while(m_length > 0) {
             int sendBytes = ::sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
@@ -173,7 +172,7 @@ namespace galay::details
                     }
                     return false;
                 }
-                m_result = std::unexpected(CommonError(SendfileError, static_cast<uint32_t>(errno)));
+                m_result = std::unexpected(CommonError(CallSendfileError, static_cast<uint32_t>(errno)));
             }
             m_length -= sendBytes;
             total += sendBytes;
