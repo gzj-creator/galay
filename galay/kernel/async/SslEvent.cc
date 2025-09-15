@@ -274,7 +274,7 @@ namespace galay::details
     }
 
     SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* result, size_t length)
-        : SslEvent<std::expected<Bytes, CommonError>>(ssl, scheduler), m_result_str(result), m_length(length)
+        : SslEvent<std::expected<Bytes, CommonError>>(ssl, scheduler), m_length(length), m_result_str(result)
     {
     }
 
