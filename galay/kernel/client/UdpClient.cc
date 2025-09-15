@@ -5,9 +5,9 @@ namespace galay
     UdpClient::UdpClient(Runtime &runtime)
         : m_socket(runtime)
     {
-        ValueWrapper<bool> res = m_socket.socket();
-        if(!res.success()) {
-            throw std::runtime_error(res.getError()->message());
+        std::expected<void, CommonError> res = m_socket.socket();
+        if(!res) {
+            throw std::runtime_error(res.error().message());
         }
         if(!m_socket.options().handleNonBlock()) {
             throw std::runtime_error("set socket non-block error");
@@ -17,45 +17,45 @@ namespace galay
     UdpClient::UdpClient(Runtime &runtime, const Host &bind_addr)
         : m_socket(runtime)
     {
-        ValueWrapper<bool> res = m_socket.socket();
-        if(!res.success()) {
-            throw std::runtime_error(res.getError()->message());
+        std::expected<void, CommonError> res = m_socket.socket();
+        if(!res) {
+            throw std::runtime_error(res.error().message());
         }
         if(!m_socket.options().handleNonBlock()) {
             throw std::runtime_error("set socket non-block error");
         }
-        ValueWrapper<bool> bind_res = m_socket.bind(bind_addr);
-        if(!bind_res.success()) {
-            throw std::runtime_error(bind_res.getError()->message());
+        std::expected<void, CommonError> bind_res = m_socket.bind(bind_addr);
+        if(!bind_res) {
+            throw std::runtime_error(bind_res.error().message());
         }
     }
 
-    AsyncResult<ValueWrapper<bool>> UdpClient::connect(const Host& addr)
+    AsyncResult<std::expected<void, CommonError>> UdpClient::connect(const Host& addr)
     {
         return m_socket.connect(addr);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> UdpClient::recv(char* buffer, size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> UdpClient::recv(char* buffer, size_t length)
     {
         return m_socket.recv(buffer, length);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> UdpClient::send(Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> UdpClient::send(Bytes bytes)
     {
         return m_socket.send(std::move(bytes));
     }
 
-    AsyncResult<ValueWrapper<Bytes>> UdpClient::recvfrom(Host& remote, char* buffer, size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> UdpClient::recvfrom(Host& remote, char* buffer, size_t length)
     {
         return m_socket.recvfrom(remote, buffer, length);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> UdpClient::sendto(const Host& remote, Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> UdpClient::sendto(const Host& remote, Bytes bytes)
     {
         return m_socket.sendto(remote, std::move(bytes));
     }
 
-    AsyncResult<ValueWrapper<bool>> UdpClient::close()
+    AsyncResult<std::expected<void, CommonError>> UdpClient::close()
     {
         return m_socket.close();
     }

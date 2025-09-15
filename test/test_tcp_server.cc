@@ -41,35 +41,36 @@ int main()
         Buffer buffer(1024);
         TimerGenerator generator = factory.createTimerGenerator();
         while(true) {
-            auto twrapper = co_await generator.timeout<ValueWrapper<Bytes>>(std::chrono::milliseconds(5000), [&](){
+            auto twrapper = co_await generator.timeout<std::expected<Bytes, CommonError>>(std::chrono::milliseconds(5000), [&](){
                 return socket.recv(buffer.data(), buffer.capacity());
             }) ;
-            if(!twrapper.success()) {
-                if(SystemError::contains(twrapper.getError()->code(), ErrorCode::AsyncTimeoutError)) {
+            if(!twrapper) {
+                if(CommonError::contains(twrapper.error().code(), ErrorCode::AsyncTimeoutError)) {
+                    std::cout << "timeout" << std::endl;
                     // disconnect
                     co_await socket.close();
                     co_return nil();
                 }
-                std::cout << "twrapper error: " << twrapper.getError()->message() << std::endl;
+                std::cout << "twrapper error: " << twrapper.error().message() << std::endl;
                 co_return nil();
             }
-            auto rwrapper = twrapper.moveValue();
-            if (!rwrapper.success())
+            auto& rwrapper = twrapper.value();
+            if (!rwrapper)
             {
-                if(SystemError::contains(rwrapper.getError()->code(), ErrorCode::DisConnectError)) {
+                if(CommonError::contains(rwrapper.error().code(), ErrorCode::DisConnectError)) {
                     co_await socket.close();
                     std::cout << "disconnect" << std::endl;
                     co_return nil();
                 }
-                std::cout << "recv error: " << rwrapper.getError()->message() << std::endl;
+                std::cout << "recv error: " << rwrapper.error().message() << std::endl;
                 co_return nil();
             }
-            Bytes bytes = rwrapper.moveValue();
+            Bytes& bytes = rwrapper.value();
             std::string msg = bytes.toString();
             if (msg.find("quit") != std::string::npos)
             {
                 auto success = co_await socket.close();
-                if (success.success())
+                if (success)
                 {
                     std::cout << "close success" << std::endl;
                 }
@@ -78,12 +79,12 @@ int main()
             } 
             std::cout << "receive: " << msg << std::endl;
             auto wwrapper = co_await socket.send(std::move(bytes));
-            if (wwrapper.success())
+            if (wwrapper)
             {
-                Bytes remain = wwrapper.moveValue();
+                Bytes& remain = wwrapper.value();
                 std::cout << remain.toString()  << std::endl;
             } else {
-                std::cout << "write error: " << wwrapper.getError()->message() << std::endl;
+                std::cout << "write error: " << wwrapper.error().message() << std::endl;
             }
         }
     });

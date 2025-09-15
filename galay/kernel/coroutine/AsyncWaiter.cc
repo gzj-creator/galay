@@ -20,8 +20,7 @@ namespace galay
                                       std::memory_order_acq_rel, 
                                       std::memory_order_acquire)) {
             using namespace error;
-            SystemError::ptr e = std::make_shared<SystemError>(ConcurrentError, errno);
-            makeValue(m_result, e);
+            m_result = std::unexpected(CommonError(ConcurrentError, static_cast<uint32_t>(errno)));
             return false;
         }
         return true;
@@ -32,7 +31,7 @@ namespace galay
     {
     }
 
-    AsyncResult<ValueWrapper<nil>> AsyncWaiter::wait()
+    AsyncResult<std::expected<void, CommonError>> AsyncWaiter::wait()
     {
         return {m_event};
     }

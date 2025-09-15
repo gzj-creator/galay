@@ -55,31 +55,21 @@ namespace galay::error
         FileReadEmptyError,
         FileWriteEmptyError,
         ConcurrentError,
-        SystemErrorEnd
+        ErrorEnd
     };
 
-    
-
-    class Error
-    {
-    public:
-        using ptr = std::shared_ptr<Error>;
-        Error(uint64_t code) : m_code(code) {}
-        virtual std::string message() const = 0;
-        virtual uint64_t code() const { return m_code; }
-        virtual ~Error() = default;
-    protected:
-        uint64_t m_code = 0;
-    };
-
-    class SystemError : public Error
+    class CommonError
     {
     public:
         static bool contains(uint64_t error, ErrorCode code);
-        SystemError(uint32_t galay_code, uint32_t system_code);
-        std::string message() const override;
+        CommonError(uint32_t galay_code, uint32_t system_code);
+        uint64_t code() const;
+        std::string message() const;
+        void reset();
     private:
         uint64_t makeErrorCode(uint32_t galay_code, uint32_t system_code);
+    private:
+        uint64_t m_code;
     };
 
 }

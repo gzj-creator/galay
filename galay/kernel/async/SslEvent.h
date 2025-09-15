@@ -42,8 +42,7 @@ namespace galay::details
             using namespace error;
             this->m_waker = waker;
             if(!m_scheduler->activeEvent(this, nullptr)) {
-                Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
-                makeValue(this->m_result, error);
+                this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
                 return false;
             }
             return true;
@@ -53,7 +52,7 @@ namespace galay::details
         EventScheduler* m_scheduler;
     };
 
-    class SslAcceptEvent: public SslEvent<ValueWrapper<AsyncSslSocketBuilder>>
+    class SslAcceptEvent: public SslEvent<std::expected<AsyncSslSocketBuilder, CommonError>>
     {
         enum class SslAcceptStatus: uint8_t
         {
@@ -75,7 +74,7 @@ namespace galay::details
         SslAcceptStatus m_status;
     };
 
-    class SslCloseEvent: public SslEvent<ValueWrapper<bool>> 
+    class SslCloseEvent: public SslEvent<std::expected<void, CommonError>> 
     {
     public:
         SslCloseEvent(SSL* ssl, EventScheduler* scheduler);
@@ -89,7 +88,7 @@ namespace galay::details
         int m_ssl_code = 0;
     };
 
-    class SslConnectEvent: public SslEvent<ValueWrapper<bool>> 
+    class SslConnectEvent: public SslEvent<std::expected<void, CommonError>> 
     {
         enum class ConnectState {
             kConnectState_Ready,
@@ -112,7 +111,7 @@ namespace galay::details
         ConnectState m_status;
     };
 
-    class SslRecvEvent: public SslEvent<ValueWrapper<Bytes>> 
+    class SslRecvEvent: public SslEvent<std::expected<Bytes, CommonError>> 
     {
     public:
         SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* result, size_t length);
@@ -127,7 +126,7 @@ namespace galay::details
         char* m_result_str;
     };
 
-    class SslSendEvent: public SslEvent<ValueWrapper<Bytes>> {
+    class SslSendEvent: public SslEvent<std::expected<Bytes, CommonError>> {
     public:
         SslSendEvent(SSL* ssl, EventScheduler* scheduler, Bytes&& bytes);
         std::string name() override { return "SslSendEvent"; }

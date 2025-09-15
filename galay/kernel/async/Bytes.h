@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <string_view>
+#include <variant>
 #include "galay/common/Buffer.h"
 
 namespace galay 

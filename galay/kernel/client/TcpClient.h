@@ -11,10 +11,10 @@ namespace galay
         //throw exception
         TcpClient(Runtime& runtime);
         TcpClient(Runtime& runtime, const Host& bind_addr);
-        AsyncResult<ValueWrapper<bool>> connect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> recv(char* buffer, size_t length);
-        AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
-        AsyncResult<ValueWrapper<bool>> close();
+        AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
+        AsyncResult<std::expected<Bytes, CommonError>> recv(char* buffer, size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
+        AsyncResult<std::expected<void, CommonError>> close();
     private:
         AsyncTcpSocket m_socket;
     };

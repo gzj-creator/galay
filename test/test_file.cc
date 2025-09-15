@@ -101,26 +101,26 @@ Coroutine<nil> test()
     OpenFlags flags;
     flags.create().noBlock().readWrite();
     auto ret = file.open("./test2.txt", flags, FileModes());
-    if(!ret.success()) {
-        std::cout << "open failed: " << ret.getError()->message() << std::endl;
+    if(!ret) {
+        std::cout << "open failed: " << ret.error().message() << std::endl;
         co_return nil();
     }
     std::cout << "open success" << std::endl;
     std::string verify(10240, 'a');
     Bytes bytes = Bytes::fromString(verify);
     auto wwrapper = co_await file.write(std::move(bytes));
-    if(!wwrapper.success()) {
-        std::cout << "write error: " << wwrapper.getError()->message() << std::endl;
+    if(!wwrapper) {
+        std::cout << "write error: " << wwrapper.error().message() << std::endl;
         co_return nil();
     }
-    std::cout << "write success: " << wwrapper.moveValue().size() << std::endl;
+    std::cout << "write success: " << wwrapper.value().size() << std::endl;
     file.seek(0);
     auto rwrapper = co_await file.read(10240);
-    if(!rwrapper.success()) {
-        std::cout << "read error: " << rwrapper.getError()->message() << std::endl;
+    if(!rwrapper) {
+        std::cout << "read error: " << rwrapper.error().message() << std::endl;
         co_return nil();
     }
-    auto str = rwrapper.moveValue();
+    auto& str = rwrapper.value();
     std::cout << "read success: " << str.size() << std::endl;
     if(str == verify) {
         std::cout << "verify success" << std::endl;

@@ -39,12 +39,12 @@ Coroutine<nil> async_result_waiter_test(Runtime& runtime) {
     std::cout << "async_result_waiter_test" << std::endl;
     runtime.schedule(async_result_notify_test_1(waiter));
     runtime.schedule(async_result_notify_test_2(waiter));
-    ValueWrapper<bool> res = co_await waiter.wait();
-    if(!res.success()) {
-        std::cout << "error: " << res.getError()->message() << std::endl;
+    auto res = co_await waiter.wait();
+    if(!res) {
+        std::cout << "error: " << res.error().message() << std::endl;
         co_return nil();
     }
-    std::cout << "result: " << res.moveValue() << std::endl;
+    std::cout << "result: " << res.value() << std::endl;
     std::cout << "async_result_waiter_test end" << std::endl;
     co_return nil();
 }

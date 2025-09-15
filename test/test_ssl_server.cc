@@ -42,23 +42,23 @@ int main()
         while(true) {
             //return view
             auto rwrapper = co_await socket.sslRecv(buffer.data(), buffer.capacity());
-            if(!rwrapper.success()) {
-                if(SystemError::contains(rwrapper.getError()->code(), ErrorCode::DisConnectError)) {
+            if(!rwrapper) {
+                if(CommonError::contains(rwrapper.error().code(), ErrorCode::DisConnectError)) {
                     // disconnect
                     co_await socket.sslClose();
                     std::cout << "connection close" << std::endl;
                     co_return nil();
                 }
-                std::cout << "recv error: " << rwrapper.getError()->message() << std::endl;
+                std::cout << "recv error: " << rwrapper.error().message() << std::endl;
                 co_return nil();
             }
-            Bytes bytes = rwrapper.moveValue();
+            Bytes& bytes = rwrapper.value();
             std::string msg = bytes.toString();
             std::cout << msg.length() << "   " <<  msg << std::endl;
             if (msg.find("quit") != std::string::npos)
             {
                 auto success = co_await socket.sslClose();
-                if (success.success())
+                if (success)
                 {
                     std::cout << "close success" << std::endl;
                 }
@@ -66,12 +66,12 @@ int main()
                 co_return nil();
             }
             auto wwrapper = co_await socket.sslSend(std::move(bytes));
-            if (wwrapper.success())
+            if (wwrapper)
             {
-                Bytes remain = wwrapper.moveValue();
+                Bytes& remain = wwrapper.value();
                 std::cout << remain.toString()  << std::endl;
             } else {
-                std::cout << "write error: " << wwrapper.getError()->message() << std::endl;
+                std::cout << "write error: " << wwrapper.error().message() << std::endl;
             }
         }
     });

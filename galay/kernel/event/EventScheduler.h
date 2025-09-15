@@ -27,10 +27,11 @@ namespace galay::details{
     class Event;
 }
 
-namespace galay{
-
+namespace galay
+{
+    using namespace error;
     class Timer;
-
+    
     class Scheduler
     {
     public:
@@ -45,7 +46,6 @@ namespace galay{
         using uptr = std::unique_ptr<EventScheduler>;
 
         using timer_ptr = std::shared_ptr<Timer>;
-        using error_ptr = error::Error::ptr;
         using engine_ptr = std::shared_ptr<details::EventEngine>;
 
         EventScheduler(int64_t fds_init_size);
@@ -60,7 +60,7 @@ namespace galay{
         bool stop();
         bool notify();
         bool isRunning() const;
-        error_ptr getError() const;
+        std::optional<CommonError> getError() const;
         ~EventScheduler() = default;
     protected:
         std::unique_ptr<std::thread> m_thread;

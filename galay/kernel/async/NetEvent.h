@@ -36,8 +36,7 @@ namespace galay::details
             using namespace error;
             this->m_waker = waker;
             if(!m_scheduler->activeEvent(this, nullptr)) {
-                Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
-                makeValue(this->m_result, error);
+                this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
                 return false;
             }
             return true;
@@ -53,27 +52,27 @@ namespace galay::details
 
     
 
-    class AcceptEvent: public NetEvent<ValueWrapper<AsyncTcpSocketBuilder>>
+    class AcceptEvent: public NetEvent<std::expected<AsyncTcpSocketBuilder, CommonError>>
     {
     public:
         AcceptEvent(GHandle handle, EventScheduler* scheduler) 
-            : NetEvent<ValueWrapper<AsyncTcpSocketBuilder>>(handle, scheduler) {}
+            : NetEvent<std::expected<AsyncTcpSocketBuilder, CommonError>>(handle, scheduler) {}
         std::string name() override { return "AcceptEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
-        ValueWrapper<AsyncTcpSocketBuilder> resume() override;  
+        std::expected<AsyncTcpSocketBuilder, CommonError> resume() override;  
     private:
         bool acceptSocket(bool notify);
     };
 
-    class RecvEvent: public NetEvent<ValueWrapper<Bytes>>
+    class RecvEvent: public NetEvent<std::expected<Bytes, CommonError>>
     {
     public:
         RecvEvent(GHandle handle, EventScheduler* scheduler, char* result, size_t length);
         std::string name() override { return "RecvEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
-        ValueWrapper<Bytes> resume() override;
+        std::expected<Bytes, CommonError> resume() override;
     private:
         bool recvBytes(bool notify);
     private:
@@ -81,14 +80,14 @@ namespace galay::details
         char* m_result_str = 0;
     };
 
-    class SendEvent: public NetEvent<ValueWrapper<Bytes>>
+    class SendEvent: public NetEvent<std::expected<Bytes, CommonError>>
     {
     public:
         SendEvent(GHandle handle, EventScheduler* scheduler, Bytes&& bytes);
         std::string name() override { return "SendEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool ready() override;
-        ValueWrapper<Bytes> resume() override;
+        std::expected<Bytes, CommonError> resume() override;
     private:
         bool sendBytes(bool notify);
     private:
@@ -96,15 +95,15 @@ namespace galay::details
     };
 
 #ifdef __linux__
-    class SendfileEvent: public NetEvent<ValueWrapper<long>>
+    class SendfileEvent: public NetEvent<std::expected<long, CommonError>>
     {
     public:
         SendfileEvent(GHandle handle, EventScheduler* scheduler, GHandle file_handle, long offset, size_t length) 
-            : NetEvent<ValueWrapper<long>>(handle, scheduler), m_file_handle(file_handle), m_offset(offset), m_length(length) {}
+            : NetEvent<std::expected<long, CommonError>>(handle, scheduler), m_file_handle(file_handle), m_offset(offset), m_length(length) {}
         std::string name() override { return "SendfileEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool ready() override;
-        ValueWrapper<long> resume() override;
+        std::expected<long, CommonError> resume() override;
     private:
         bool sendfile(bool notify);
     private:
@@ -114,21 +113,21 @@ namespace galay::details
     };
 #endif
 
-    class ConnectEvent: public NetEvent<ValueWrapper<bool>>
+    class ConnectEvent: public NetEvent<std::expected<void, CommonError>>
     { 
     public:
         ConnectEvent(GHandle handle, EventScheduler* scheduler, const Host& host);
         std::string name() override { return "ConnectEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool ready() override;
-        ValueWrapper<bool> resume() override;
+        std::expected<void, CommonError> resume() override;
     private:
         bool connectToHost(bool notify);
     private:
         Host m_host;
     };
 
-    class CloseEvent: public NetEvent<ValueWrapper<bool>>
+    class CloseEvent: public NetEvent<std::expected<void, CommonError>>
     { 
     public:
         CloseEvent(GHandle handle, EventScheduler* scheduler);
@@ -140,15 +139,15 @@ namespace galay::details
     };
 
 
-    class RecvfromEvent: public NetEvent<ValueWrapper<Bytes>>
+    class RecvfromEvent: public NetEvent<std::expected<Bytes, CommonError>>
     {
     public:
         RecvfromEvent(GHandle handle, EventScheduler* scheduler, Host& remote, char* buffer, size_t length) 
-            : NetEvent<ValueWrapper<Bytes>>(handle, scheduler), m_remote(remote), m_length(length), m_buffer(buffer) {}
+            : NetEvent<std::expected<Bytes, CommonError>>(handle, scheduler), m_remote(remote), m_length(length), m_buffer(buffer) {}
         std::string name() override { return "RecvfromEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
-        ValueWrapper<Bytes> resume() override;
+        std::expected<Bytes, CommonError> resume() override;
 
     private:
         bool recvfromBytes(bool notify);
@@ -158,16 +157,16 @@ namespace galay::details
         char* m_buffer;
     };
 
-    class SendtoEvent: public NetEvent<ValueWrapper<Bytes>>
+    class SendtoEvent: public NetEvent<std::expected<Bytes, CommonError>>
     {
     public:
         SendtoEvent(GHandle handle, EventScheduler* scheduler, const Host& remote, Bytes&& bytes) 
-            : NetEvent<ValueWrapper<Bytes>>(handle, scheduler),  m_remote(remote), m_bytes(std::move(bytes)) {}
+            : NetEvent<std::expected<Bytes, CommonError>>(handle, scheduler),  m_remote(remote), m_bytes(std::move(bytes)) {}
         std::string name() override { return "SendtoEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
 
         bool ready() override;
-        ValueWrapper<Bytes> resume() override;  
+        std::expected<Bytes, CommonError> resume() override;  
     private:
         bool sendtoBytes(bool notify);
     private:

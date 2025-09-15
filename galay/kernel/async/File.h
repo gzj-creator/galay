@@ -13,6 +13,8 @@ namespace galay
 {
     #define DEFAULT_BUFFER_SIZE 1024
 
+    using namespace error;
+
     class OpenFlags
     {
     public:
@@ -86,8 +88,8 @@ namespace galay
     public:
         File(Runtime& runtime);
         File(Runtime& runtime, GHandle handle);
-        ValueWrapper<bool> open(const std::string& path, OpenFlags flags, FileModes modes);
-        ValueWrapper<bool> aioInit(int max_events);
+        std::expected<void, CommonError> open(const std::string& path, OpenFlags flags, FileModes modes);
+        std::expected<void, CommonError> aioInit(int max_events);
         void preRead(StringMetaData& bytes, LL offset);
         //设置O_APPEND后忽略 offset 参数,现代文件系统允许稀疏文件 offset 大于文件大小也可形成文件空洞，不计入实际占用
         //保证 result 生命周期在下一次 commiy 之后
@@ -97,8 +99,8 @@ namespace galay
 
         void preWriteV(std::vector<StringMetaData>& bytes_v, IOVecResult &result, LL offset);
 
-        AsyncResult<ValueWrapper<bool>> commit();
-        AsyncResult<ValueWrapper<bool>> close();
+        AsyncResult<std::expected<void, CommonError>> commit();
+        AsyncResult<std::expected<void, CommonError>> close();
         ~File();
     private:
         GHandle m_handle;
@@ -121,13 +123,13 @@ namespace galay
         ~File();
 
         HandleOption option();
-        ValueWrapper<bool> open(const std::string& path, OpenFlags flags, FileModes modes);
-        AsyncResult<ValueWrapper<Bytes>> read(size_t length);
-        ValueWrapper<bool> seek(size_t offset);
-        AsyncResult<ValueWrapper<Bytes>> write(Bytes bytes);
-        AsyncResult<ValueWrapper<bool>> close();
+        std::expected<void, CommonError> open(const std::string& path, OpenFlags flags, FileModes modes);
+        AsyncResult<std::expected<Bytes, CommonError>> read(size_t length);
+        std::expected<void, CommonError> seek(size_t offset);
+        AsyncResult<std::expected<Bytes, CommonError>> write(Bytes bytes);
+        AsyncResult<std::expected<void, CommonError>> close();
         void reallocReadBuffer(size_t length);
-        ValueWrapper<bool> remove();
+        std::expected<void, CommonError> remove();
     private:
         GHandle m_handle;
         std::string m_path;

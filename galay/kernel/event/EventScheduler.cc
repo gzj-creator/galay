@@ -78,7 +78,7 @@ namespace galay{
         return m_engine->isRunning();
     }
 
-    EventScheduler::error_ptr EventScheduler::getError() const
+    std::optional<CommonError> EventScheduler::getError() const
     {
         return m_engine->getError();
     }

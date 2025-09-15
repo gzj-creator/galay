@@ -26,7 +26,7 @@ bool galay::AsyncSslSocketBuilder::check() const
 namespace galay::details
 { 
     SslAcceptEvent::SslAcceptEvent(SSL* ssl, EventScheduler* scheduler)
-        : SslEvent<ValueWrapper<AsyncSslSocketBuilder>>(ssl, scheduler), m_status(SslAcceptStatus::kSslAcceptStatus_Accept)
+        : SslEvent<std::expected<AsyncSslSocketBuilder, CommonError>>(ssl, scheduler), m_status(SslAcceptStatus::kSslAcceptStatus_Accept)
     {
     }
 
@@ -65,7 +65,6 @@ namespace galay::details
     bool SslAcceptEvent::sslAccept()
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
         if(m_status == SslAcceptStatus::kSslAcceptStatus_Accept) {
             //accept
             sockaddr addr{};
@@ -74,11 +73,10 @@ namespace galay::details
                 .fd = accept(SSL_get_fd(m_ssl), &addr, &addr_len),
             };
             if( handle.fd < 0 ) {
-                if( errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ) {
+                if( static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR ) {
                     return false;
                 }
-                error = std::make_shared<SystemError>(CallAcceptError, errno);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, nullptr), error);
+                m_result = std::unexpected(CommonError(CallAcceptError, static_cast<uint32_t>(errno)));
                 return true;
             }
             std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
@@ -86,17 +84,15 @@ namespace galay::details
             LogTrace("[Accept Address: {}:{}]", ip, port);
             m_accept_ssl = SSL_new(getGlobalSSLCtx());
             if(m_accept_ssl == nullptr) {
-                error = std::make_shared<SystemError>(CallSSLNewError, errno);
                 close(handle.fd);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, nullptr), error);
+                m_result = std::unexpected(CommonError(CallSSLNewError, static_cast<uint32_t>(errno)));
                 return true;
             }
             if(SSL_set_fd(m_accept_ssl, handle.fd) == -1) {
-                error = std::make_shared<SystemError>(CallSSLSetFdError, errno);
                 SSL_free(m_accept_ssl);
                 m_accept_ssl = nullptr;
                 close(handle.fd);
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, nullptr), error);
+                m_result = std::unexpected(CommonError(CallSSLSetFdError, static_cast<uint32_t>(errno)));
                 return true;
             }
             SSL_set_accept_state(m_accept_ssl);
@@ -105,25 +101,24 @@ namespace galay::details
         if(m_status == SslAcceptStatus::kSslAcceptStatus_SslAccept) {
             int r = SSL_do_handshake(m_accept_ssl);
             if(r == 1) {
-                makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, m_accept_ssl), error);
+                m_result = AsyncSslSocketBuilder::create(m_scheduler, m_accept_ssl);
                 return true;
             } 
             m_ssl_code = SSL_get_error(m_accept_ssl, r);
             if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
                 return false;
             } else {
-                error = std::make_shared<SystemError>(CallSSLHandshakeError, errno);
                 SSL_free(m_accept_ssl);
                 close(SSL_get_fd(m_accept_ssl));
                 m_accept_ssl = nullptr;
+                m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
             }
         }
-        makeValue(m_result, AsyncSslSocketBuilder::create(m_scheduler, m_accept_ssl), error);
         return true;
     }
 
     SslCloseEvent::SslCloseEvent(SSL* ssl, EventScheduler* scheduler)
-        : SslEvent<ValueWrapper<bool>>(ssl, scheduler)
+        : SslEvent<std::expected<void, CommonError>>(ssl, scheduler)
     {
     }
 
@@ -139,21 +134,20 @@ namespace galay::details
     bool SslCloseEvent::sslClose()
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
         int r = SSL_shutdown(m_ssl);
         if(r == 1) {
             close(SSL_get_fd(m_ssl));
             m_scheduler->removeEvent(this, nullptr);
-            makeValue(m_result, true, error);
             SSL_free(m_ssl);
             m_ssl = nullptr;
+            
             return true;
         } else if(r == 0) {
             r = SSL_shutdown(m_ssl);
             if(r == 1) {
                 close(SSL_get_fd(m_ssl));
                 m_scheduler->removeEvent(this, nullptr);
-                makeValue(m_result, true, error);
+                m_result = {};
                 SSL_free(m_ssl);
                 m_ssl = nullptr;
                 return true;
@@ -166,8 +160,7 @@ namespace galay::details
             // 对端关闭
             close(SSL_get_fd(m_ssl));
             m_scheduler->removeEvent(this, nullptr);
-            error = std::make_shared<SystemError>(DisConnectError, errno);
-            makeValue(m_result, false, error);
+            m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
             SSL_free(m_ssl);
             m_ssl = nullptr;
             return true;
@@ -176,8 +169,7 @@ namespace galay::details
             SSL_shutdown(m_ssl);
             close(SSL_get_fd(m_ssl));
             m_scheduler->removeEvent(this, nullptr);
-            error = std::make_shared<SystemError>(CallSSLShuntdownError, errno);
-            makeValue(m_result, false, error);
+            m_result = std::unexpected(CommonError(CallSSLShuntdownError, static_cast<uint32_t>(errno)));
             SSL_free(m_ssl);
             m_ssl = nullptr;
             return true;
@@ -205,7 +197,7 @@ namespace galay::details
     }
 
     SslConnectEvent::SslConnectEvent(SSL* ssl, EventScheduler* scheduler, const Host &host)
-        : SslEvent<ValueWrapper<bool>>(ssl, scheduler), m_host(host)
+        : SslEvent<std::expected<void, CommonError>>(ssl, scheduler), m_host(host)
     {
     }
 
@@ -244,8 +236,6 @@ namespace galay::details
     bool SslConnectEvent::sslConnect()
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
-        bool success = true;
         if(m_status == ConnectState::kConnectState_Ready) {
             m_status = ConnectState::kConnectState_Connect;
             sockaddr_in addr{};
@@ -254,13 +244,11 @@ namespace galay::details
             addr.sin_port = htons(m_host.port);
             const int ret = connect(SSL_get_fd(m_ssl), reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr_in));
             if( ret != 0) {
-                if( errno == EWOULDBLOCK || errno == EINTR || errno == EAGAIN || errno == EINPROGRESS) {
+                if( static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR || static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EINPROGRESS) {
                     m_status = ConnectState::kConnectState_Connect;
                     return false;
                 }
-                success = false;
-                error = std::make_shared<SystemError>(CallConnectError, errno);
-                makeValue(m_result, std::move(success), error);
+                m_result = std::unexpected(CommonError(CallConnectError, static_cast<uint32_t>(errno)));
                 return true;
             }
             m_status = ConnectState::kConnectState_Connect;
@@ -272,23 +260,21 @@ namespace galay::details
         if(m_status == ConnectState::kConnectState_SslConnect) {
             int r = SSL_do_handshake(m_ssl);
             if(r == 1) {
-                makeValue(m_result, true, error);
+                m_result = {};
                 return true;
             } 
             m_ssl_code = SSL_get_error(m_ssl, r);
             if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
                 return false;
             } else {
-                error = std::make_shared<SystemError>(CallSSLHandshakeError, errno);
-                success = false;
+                m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
             }
         }
-        makeValue(m_result, std::move(success), error);
         return true;
     }
 
     SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* result, size_t length)
-        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_result_str(result), m_length(length)
+        : SslEvent<std::expected<Bytes, CommonError>>(ssl, scheduler), m_result_str(result), m_length(length)
     {
     }
 
@@ -306,29 +292,26 @@ namespace galay::details
     bool SslRecvEvent::sslRecv()
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
         Bytes bytes;
         int recvBytes = SSL_read(m_ssl, m_result_str, m_length);
         if(recvBytes > 0) LogTrace("recvBytes: {}, buffer: {}", recvBytes, std::string(m_result_str, recvBytes));
         if (recvBytes > 0) {
             bytes = Bytes::fromCString(m_result_str, recvBytes, recvBytes);
+            m_result = std::move(bytes);
         } else if (recvBytes == 0) {
-            error = std::make_shared<SystemError>(DisConnectError, errno);
-            bytes = Bytes();
+            m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
         } else {
-            if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
+            if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
             {
                 return false;
             }
-            error = std::make_shared<SystemError>(CallRecvError, errno);
-            bytes = Bytes();
+            m_result = std::unexpected(CommonError(CallRecvError, static_cast<uint32_t>(errno)));
         }
-        makeValue(m_result, std::move(bytes), error);
         return true;
     }
 
     SslSendEvent::SslSendEvent(SSL* ssl, EventScheduler* scheduler, Bytes &&bytes)
-        : SslEvent<ValueWrapper<Bytes>>(ssl, scheduler), m_bytes(std::move(bytes))
+        : SslEvent<std::expected<Bytes, CommonError>>(ssl, scheduler), m_bytes(std::move(bytes))
     {
     }
 
@@ -346,22 +329,19 @@ namespace galay::details
     bool SslSendEvent::sslSend()
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
         int sendBytes = SSL_write(m_ssl, m_bytes.data(), m_bytes.size());
         if(sendBytes > 0) LogTrace("sendBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
-            makeValue(m_result, std::move(remain), error);
+            m_result = std::move(remain);
         } else if (sendBytes == 0) {
-            error = std::make_shared<SystemError>(DisConnectError, errno);
-            makeValue(m_result, std::move(m_bytes), error);
+            m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
         } else {
-            if(errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR )
+            if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
             {
                 return false;
             }
-            error = std::make_shared<SystemError>(CallSendError, errno);
-            makeValue(m_result, std::move(m_bytes), error);
+            m_result = std::unexpected(CommonError(CallSendError, static_cast<uint32_t>(errno)));
         }
         return true;
     }

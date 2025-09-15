@@ -5,9 +5,9 @@ namespace galay
     TcpSslClient::TcpSslClient(Runtime &runtime)
         :m_socket(runtime)
     {
-        ValueWrapper<bool> res = m_socket.socket();
-        if(!res.success()) {
-            throw std::runtime_error(res.getError()->message());
+        std::expected<void, CommonError> res = m_socket.socket();
+        if(!res) {
+            throw std::runtime_error(res.error().message());
         }
         if(!m_socket.options().handleNonBlock()) {
             throw std::runtime_error("set socket non-block error");
@@ -17,35 +17,35 @@ namespace galay
     TcpSslClient::TcpSslClient(Runtime &runtime, const Host &bind_addr) 
         :m_socket(runtime)
     {
-        ValueWrapper<bool> res = m_socket.socket();
-        if(!res.success()) {
-            throw std::runtime_error(res.getError()->message());
+        std::expected<void, CommonError> res = m_socket.socket();
+        if(!res) {
+            throw std::runtime_error(res.error().message());
         }
         if(!m_socket.options().handleNonBlock()) {
             throw std::runtime_error("set socket non-block error");
         }
-        ValueWrapper<bool> bind_res = m_socket.bind(bind_addr);
-        if(!bind_res.success()) {
-            throw std::runtime_error(bind_res.getError()->message());
+        std::expected<void, CommonError> bind_res = m_socket.bind(bind_addr);
+        if(!bind_res) {
+            throw std::runtime_error(bind_res.error().message());
         }
     }
 
-    AsyncResult<ValueWrapper<bool>> TcpSslClient::connect(const Host& addr)
+    AsyncResult<std::expected<void, CommonError>> TcpSslClient::connect(const Host& addr)
     {
         return m_socket.sslConnect(addr);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> TcpSslClient::recv(char* buffer, size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> TcpSslClient::recv(char* buffer, size_t length)
     {
         return m_socket.sslRecv(buffer, length);
     }
 
-    AsyncResult<ValueWrapper<Bytes>> TcpSslClient::send(Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> TcpSslClient::send(Bytes bytes)
     {
         return m_socket.sslSend(std::move(bytes));
     }
 
-    AsyncResult<ValueWrapper<bool>> TcpSslClient::close()
+    AsyncResult<std::expected<void, CommonError>> TcpSslClient::close()
     {
         return m_socket.sslClose();
     }

@@ -80,15 +80,15 @@ namespace galay
     Coroutine<nil> TcpSslServer::acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket,AsyncFactory)>& callback, size_t i)
     {
         while(true) {
-            auto wrapper = co_await m_sockets[i].sslAccept();
-            if(wrapper.success()) {
+            auto acceptor = co_await m_sockets[i].sslAccept();
+            if(acceptor) {
                 LogInfo("[acceptConnection success]");
-                auto builder = wrapper.moveValue();
+                auto builder = acceptor.value();
                 auto socket = builder.build();
                 socket.options().handleNonBlock();
                 m_runtime.schedule(callback(std::move(socket),AsyncFactory(m_runtime, i)), i);
             } else {
-                LogError("[acceptConnection failed] [error: {}]", wrapper.getError()->message());
+                LogError("[acceptConnection failed] [error: {}]", acceptor.error().message());
             }
         }
         co_return nil();

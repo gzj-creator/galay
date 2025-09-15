@@ -12,7 +12,7 @@ namespace galay
 
     namespace details
     {
-        class WaitEvent: public AsyncEvent<ValueWrapper<nil>>
+        class WaitEvent: public AsyncEvent<std::expected<void, CommonError>>
         {
         public:
             WaitEvent(AsyncWaiter& waiter);
@@ -25,7 +25,7 @@ namespace galay
         };
 
         template<CoType T>
-        class ResultWaitEvent: public AsyncEvent<ValueWrapper<T>>
+        class ResultWaitEvent: public AsyncEvent<std::expected<T, CommonError>>
         {
             template<CoType M>
             friend class galay::AsyncResultWaiter;
@@ -45,7 +45,7 @@ namespace galay
         friend class details::WaitEvent;
     public:
         AsyncWaiter();
-        AsyncResult<ValueWrapper<nil>> wait();
+        AsyncResult<std::expected<void, CommonError>> wait();
         bool isWaiting();
         void notify();
     private:
@@ -61,10 +61,9 @@ namespace galay
         friend class details::ResultWaitEvent;
     public:
         AsyncResultWaiter();
-        AsyncResult<ValueWrapper<T>> wait();
+        AsyncResult<std::expected<T, CommonError>> wait();
         bool isWaiting();
-        void notify(T&& value);
-        void notify(ValueWrapper<T>&& value);
+        void notify(std::expected<T, CommonError>&& value);
     private:
         Waker m_waker;
         std::atomic_bool m_wait = false;
@@ -79,7 +78,7 @@ namespace galay
     }
 
     template <CoType T>
-    inline AsyncResult<ValueWrapper<T>> AsyncResultWaiter<T>::wait()
+    inline AsyncResult<std::expected<T, CommonError>> AsyncResultWaiter<T>::wait()
     {
         return {m_event};
     }
@@ -91,19 +90,7 @@ namespace galay
     }
 
     template <CoType T>
-    inline void AsyncResultWaiter<T>::notify(T &&value)
-    {
-        bool expected = true;
-        if(m_wait.compare_exchange_strong(expected, false, 
-                                      std::memory_order_acq_rel, 
-                                      std::memory_order_acquire)) {
-            makeValue(m_event->m_result, std::move(value), nullptr);
-            m_waker.wakeUp();
-        }
-    }
-
-    template <CoType T>
-    inline void AsyncResultWaiter<T>::notify(ValueWrapper<T> &&value)
+    inline void AsyncResultWaiter<T>::notify(std::expected<T, CommonError> &&value)
     {
         bool expected = true;
         if(m_wait.compare_exchange_strong(expected, false, 
@@ -138,8 +125,7 @@ namespace galay::details
                                               std::memory_order_acq_rel, 
                                               std::memory_order_acquire)) {
             using namespace error;
-            SystemError::ptr e = std::make_shared<SystemError>(ConcurrentError, errno);
-            makeValue(this->m_result, e);
+            this->m_result = std::unexpected(CommonError(ConcurrentError, static_cast<uint32_t>(errno)));
             return false;
         }
         return true;

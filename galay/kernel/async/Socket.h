@@ -10,6 +10,8 @@
 namespace galay {
 
     #define DEFAULT_BUFFER_SIZE 1024
+
+    using namespace error;
     /*
     *************************************************
                 net(not thread security)
@@ -34,26 +36,26 @@ namespace galay {
         ~AsyncTcpSocket();
         HandleOption options();
 
-        ValueWrapper<bool> socket();
-        ValueWrapper<bool> bind(const Host& addr);
-        ValueWrapper<bool> listen(int backlog);
-        ValueWrapper<bool> shuntdown(ShutdownType type);
-        AsyncResult<ValueWrapper<bool>> close();
+        std::expected<void, CommonError> socket();
+        std::expected<void, CommonError> bind(const Host& addr);
+        std::expected<void, CommonError> listen(int backlog);
+        std::expected<void, CommonError> shuntdown(ShutdownType type);
+        AsyncResult<std::expected<void, CommonError>> close();
         //throw exception
-        AsyncResult<ValueWrapper<AsyncTcpSocketBuilder>> accept();
-        AsyncResult<ValueWrapper<bool>> connect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> recv(char* result, size_t length);
+        AsyncResult<std::expected<AsyncTcpSocketBuilder, CommonError>> accept();
+        AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
+        AsyncResult<std::expected<Bytes, CommonError>> recv(char* result, size_t length);
         //返回剩余Bytes
-        AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
+        AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
         
     #ifdef __linux__
         //return send length 
-        AsyncResult<ValueWrapper<long>> sendfile(GHandle file_handle, long offset, size_t length);
+        AsyncResult<std::expected<long, CommonError>> sendfile(GHandle file_handle, long offset, size_t length);
     #endif
         //throw exception
-        [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
+        [[nodiscard]] std::expected<SockAddr, CommonError> getSrcAddr() const;
         //throw exception
-        [[nodiscard]] ValueWrapper<SockAddr> getDestAddr() const;
+        [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
     private:
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
@@ -75,18 +77,18 @@ namespace galay {
         ~AsyncUdpSocket();
 
         HandleOption options();
-        ValueWrapper<bool> socket();
-        ValueWrapper<bool> bind(const Host& addr);
-        ValueWrapper<bool> connect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> recv(char* result, size_t length);
-        AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
-        AsyncResult<ValueWrapper<Bytes>> recvfrom(Host& remote, char* result, size_t length);
-        AsyncResult<ValueWrapper<Bytes>> sendto(const Host& remote, Bytes bytes);
-        AsyncResult<ValueWrapper<bool>> close();
+        std::expected<void, CommonError> socket();
+        std::expected<void, CommonError> bind(const Host& addr);
+        std::expected<void, CommonError> connect(const Host& addr);
+        AsyncResult<std::expected<Bytes, CommonError>> recv(char* result, size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
+        AsyncResult<std::expected<Bytes, CommonError>> recvfrom(Host& remote, char* result, size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> sendto(const Host& remote, Bytes bytes);
+        AsyncResult<std::expected<void, CommonError>> close();
         //throw exception
-        [[nodiscard]] ValueWrapper<SockAddr> getSrcAddr() const;
+        [[nodiscard]] std::expected<SockAddr, CommonError> getSrcAddr() const;
         //throw exception
-        [[nodiscard]] ValueWrapper<SockAddr> getDestAddr() const;
+        [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
@@ -103,14 +105,14 @@ namespace galay {
         AsyncSslSocket& operator=(const AsyncSslSocket& other);
         AsyncSslSocket& operator=(AsyncSslSocket&& other);
         HandleOption options();
-        ValueWrapper<bool> socket();
-        ValueWrapper<bool> bind(const Host& addr);
-        ValueWrapper<bool> listen(int backlog);
-        AsyncResult<ValueWrapper<AsyncSslSocketBuilder>> sslAccept();
-        AsyncResult<ValueWrapper<bool>> sslConnect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> sslRecv(char* result, size_t length);
-        AsyncResult<ValueWrapper<Bytes>> sslSend(Bytes bytes);
-        AsyncResult<ValueWrapper<bool>> sslClose();
+        std::expected<void, CommonError> socket();
+        std::expected<void, CommonError> bind(const Host& addr);
+        std::expected<void, CommonError> listen(int backlog);
+        AsyncResult<std::expected<AsyncSslSocketBuilder, CommonError>> sslAccept();
+        AsyncResult<std::expected<void, CommonError>> sslConnect(const Host& addr);
+        AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* result, size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
+        AsyncResult<std::expected<void, CommonError>> sslClose();
         ~AsyncSslSocket();
     private:
         AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);

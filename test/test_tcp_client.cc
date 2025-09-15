@@ -10,8 +10,8 @@ Coroutine<nil> test(Runtime& runtime)
 {
     TcpClient client(runtime);
     auto res1 = co_await client.connect({"127.0.0.1", 8070});
-    if (!res1.success()) {
-        std::cout << "connect error: " << res1.getError()->message() << std::endl;
+    if (!res1) {
+        std::cout << "connect error: " << res1.error().message() << std::endl;
         co_return nil();
     }
     std::cout << "connect success" << std::endl;
@@ -20,8 +20,8 @@ Coroutine<nil> test(Runtime& runtime)
         std::string msg;
         std::getline(std::cin, msg);
         auto res2 = co_await client.send(Bytes::fromString(msg));
-        if (!res2.success()) {
-            std::cout << "send error: " << res2.getError()->message() << std::endl;
+        if (!res2) {
+            std::cout << "send error: " << res2.error().message() << std::endl;
             co_return nil();
         }
         std::cout << "send success" << std::endl;
@@ -31,12 +31,12 @@ Coroutine<nil> test(Runtime& runtime)
             co_return nil();
         }
         auto res3 = co_await client.recv(buffer.data(), buffer.capacity());
-        if (!res3.success()) {
-            std::cout << "recv error: " << res3.getError()->message() << std::endl;
+        if (!res3) {
+            std::cout << "recv error: " << res3.error().message() << std::endl;
             co_await client.close();
             co_return nil();
         }
-        std::cout << "recv: " << res3.moveValue().toString() << std::endl;
+        std::cout << "recv: " << res3.value().toString() << std::endl;
     }
 
 }

@@ -32,7 +32,7 @@ namespace galay::details
         this->m_stop = true;
         this->m_handle.fd = epoll_create(1);
         if(this->m_handle.fd < 0) {
-            m_error = std::make_shared<SystemError>(error::CallEpollCreateError, errno);
+            m_error = CommonError(error::CallEpollCreateError, static_cast<uint32_t>(errno));
         }
     }
 
@@ -96,7 +96,7 @@ namespace galay::details
         addEvent(event, nullptr);
         int ret = eventfd_write(handle.fd, 1);
         if(ret < 0) {
-            m_error = std::make_shared<SystemError>(error::CallEventWriteError, errno);
+            m_error = CommonError(error::CallEventWriteError, static_cast<uint32_t>(errno));
             return false;
         }
         return true;
@@ -116,7 +116,7 @@ namespace galay::details
         ev.data.ptr = event;
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_ADD, event->getHandle().fd, &ev);
         if( ret != 0 ){
-            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
+            m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
         }
         return ret;
     }
@@ -132,7 +132,7 @@ namespace galay::details
         if( !convertToEpollEvent(ev, event, ctx) ) return 0;
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_MOD, event->getHandle().fd, &ev);
         if( ret != 0 ) {
-            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
+            m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
         }
         return ret;
     }
@@ -149,7 +149,7 @@ namespace galay::details
         ev.events = (EPOLLIN | EPOLLOUT | EPOLLERR);
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_DEL, handle.fd, &ev);
         if( ret != 0 ) {
-            m_error = std::make_shared<SystemError>(ErrorCode::CallRemoveEventError, errno);
+            m_error = CommonError(ErrorCode::CallRemoveEventError, static_cast<uint32_t>(errno));
         }
         return ret;
     }
@@ -212,7 +212,7 @@ namespace galay::details
         m_events = static_cast<struct kevent*>(calloc(max_events, sizeof(struct kevent)));
         this->m_stop = true;
         if(this->m_handle.fd < 0) {
-            m_error = std::make_shared<SystemError>(error::CallKqueueCreateError, errno);
+            m_error = CommonError(error::CallKqueueCreateError, static_cast<uint32_t>(errno));
         }
     }
 
@@ -303,7 +303,7 @@ namespace galay::details
         };
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
-            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
+            m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
         }
         return ret;
     }
@@ -320,7 +320,7 @@ namespace galay::details
         }
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
-            m_error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
+            m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
         }
         return ret;
     }
@@ -337,7 +337,7 @@ namespace galay::details
         }
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
-            m_error = std::make_shared<SystemError>(error::CallRemoveEventError, errno);
+            m_error = CommonError(error::CallRemoveEventError, static_cast<uint32_t>(errno));
         }
         return ret;
     }

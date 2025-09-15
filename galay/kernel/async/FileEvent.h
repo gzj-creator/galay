@@ -24,8 +24,7 @@ namespace galay::details {
             using namespace error;
             this->m_waker = waker;
             if(!m_scheduler->activeEvent(this, nullptr)) {
-                Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
-                makeValue(this->m_result, error);
+                this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
                 return false;
             }
             return true;
@@ -37,7 +36,7 @@ namespace galay::details {
         EventScheduler* m_scheduler;
     };
 
-    class FileCloseEvent: public FileEvent<ValueWrapper<bool>> 
+    class FileCloseEvent: public FileEvent<std::expected<void, CommonError>>
     {
     public:
         FileCloseEvent(GHandle event_handle, EventScheduler* scheduler, GHandle handle);
@@ -49,7 +48,7 @@ namespace galay::details {
         GHandle m_handle;
     };
     
-    class FileCommitEvent: public FileEvent<ValueWrapper<bool>>
+    class FileCommitEvent: public FileEvent<std::expected<void, CommonError>>
     {
     public:
         FileCommitEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, std::vector<iocb>&& iocbs);
@@ -74,8 +73,7 @@ namespace galay::details {
             using namespace error;
             this->m_waker = waker;
             if(!m_scheduler->activeEvent(this, nullptr)) {
-                Error::ptr error = std::make_shared<SystemError>(ErrorCode::CallActiveEventError, errno);
-                makeValue(this->m_result, error);
+                this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
                 return false;
             }
             return true;
@@ -88,7 +86,7 @@ namespace galay::details {
         EventScheduler* m_scheduler;
     };
 
-    class FileCloseEvent: public FileEvent<ValueWrapper<bool>> 
+    class FileCloseEvent: public FileEvent<std::expected<void, CommonError>> 
     {
     public:
         FileCloseEvent(GHandle handle, EventScheduler* scheduler);
@@ -100,14 +98,14 @@ namespace galay::details {
         GHandle m_handle;
     };
 
-    class FileReadEvent: public FileEvent<ValueWrapper<Bytes>>
+    class FileReadEvent: public FileEvent<std::expected<Bytes, CommonError>>
     {
     public:
         FileReadEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length);
         std::string name() override { return "FileReadEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool ready() override;
-        ValueWrapper<Bytes> resume() override;
+        std::expected<Bytes, CommonError> resume() override;
     private:
         bool readBytes(bool notify);
     private:
@@ -115,14 +113,14 @@ namespace galay::details {
         char* m_buffer;
     };
 
-    class FileWriteEvent: public FileEvent<ValueWrapper<Bytes>>
+    class FileWriteEvent: public FileEvent<std::expected<Bytes, CommonError>>
     {
     public:
         FileWriteEvent(GHandle handle, EventScheduler* scheduler, Bytes&& bytes);
         std::string name() override { return "FileWriteEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool ready() override;
-        ValueWrapper<Bytes> resume() override;
+        std::expected<Bytes, CommonError> resume() override;
     private:
         bool writeBytes(bool notify);
     private:

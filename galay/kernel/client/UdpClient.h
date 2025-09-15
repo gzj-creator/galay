@@ -11,12 +11,12 @@ namespace galay
         //throw exception
         UdpClient(Runtime& runtime);
         UdpClient(Runtime& runtime, const Host& bind_addr);
-        AsyncResult<ValueWrapper<bool>> connect(const Host& addr);
-        AsyncResult<ValueWrapper<Bytes>> recv(char* buffer, size_t length);
-        AsyncResult<ValueWrapper<Bytes>> send(Bytes bytes);
-        AsyncResult<ValueWrapper<Bytes>> recvfrom(Host& remote, char* buffer, size_t length);
-        AsyncResult<ValueWrapper<Bytes>> sendto(const Host& remote, Bytes bytes);
-        AsyncResult<ValueWrapper<bool>> close();
+        AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
+        AsyncResult<std::expected<Bytes, CommonError>> recv(char* buffer, size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
+        AsyncResult<std::expected<Bytes, CommonError>> recvfrom(Host& remote, char* buffer, size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> sendto(const Host& remote, Bytes bytes);
+        AsyncResult<std::expected<void, CommonError>> close();
     private:
         AsyncUdpSocket m_socket;
     };

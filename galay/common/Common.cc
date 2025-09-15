@@ -92,11 +92,11 @@ namespace galay
     }
 
     HandleOption::HandleOption(const GHandle handle)
-        : m_handle(handle), m_error(nullptr)
+        : m_handle(handle)
     {
     }
 
-    bool HandleOption::handleBlock()
+    std::expected<void, CommonError> HandleOption::handleBlock()
     {
         using namespace error;
     #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -108,13 +108,12 @@ namespace galay
         int ret = ioctlsocket(m_handle, FIONBIO, &mode);
     #endif
         if (ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetBlockError, errno);
-            return false;
+            return std::unexpected(CommonError{CallSetBlockError, static_cast<uint32_t>(errno)});
         }
-        return true;
+        return {};
     }
 
-    bool HandleOption::handleNonBlock()
+    std::expected<void, CommonError> HandleOption::handleNonBlock()
     {
         using namespace error;
     #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -126,13 +125,12 @@ namespace galay
         int ret = ioctlsocket(m_handle.fd, FIONBIO, &mode);
     #endif
         if (ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetNoBlockError, errno);
-            return false;
+            return std::unexpected(CommonError(CallSetNoBlockError, static_cast<uint32_t>(errno)));
         }
-        return true;
+        return {};
     }
 
-    bool HandleOption::handleReuseAddr()
+    std::expected<void, CommonError> HandleOption::handleReuseAddr()
     {
         using namespace error;
     #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
@@ -143,32 +141,22 @@ namespace galay
         int ret = setsockopt(m_handle.fd, SOL_SOCKET, SO_REUSEADDR, (char*)&option, sizeof(option));
     #endif
         if (ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetSockOptError, errno);
-            return false;
+            return std::unexpected(CommonError(CallSetSockOptError, static_cast<uint32_t>(errno)));
         }
-        return true;
+        return {};
     }
 
-    bool HandleOption::handleReusePort()
+    std::expected<void, CommonError> HandleOption::handleReusePort()
     {
         using namespace error;
     #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
         constexpr int option = 1;
         if (const int ret = setsockopt(m_handle.fd, SOL_SOCKET, SO_REUSEPORT, &option, sizeof(option)); ret < 0) {
-            m_error = std::make_shared<SystemError>(error::ErrorCode::CallSetSockOptError, errno);
-            return false;
+            return std::unexpected(CommonError(CallSetSockOptError, static_cast<uint32_t>(errno)));
         }
     #elif  defined(WIN32) || defined(_WIN32) || defined(_WIN32_) || defined(WIN64) || defined(_WIN64) || defined(_WIN64_)
         //To Do
     #endif
-        return true;
+        return {};
     }
-
-    HandleOption::error_ptr HandleOption::getError()
-    {
-        return m_error;
-    }
-
-
-
 }

@@ -18,7 +18,7 @@ foreach(SRC ${SRC_LIST})
     add_executable(${EXECUTABLE_NAME} ${SRC})
     target_link_libraries(${EXECUTABLE_NAME} galay ${COMMON_LIB})
     set_target_properties(${EXECUTABLE_NAME} PROPERTIES
-        CXX_STANDARD 20
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
         INSTALL_RPATH $ORIGIN/../lib

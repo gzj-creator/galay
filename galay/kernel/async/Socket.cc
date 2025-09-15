@@ -96,37 +96,24 @@ namespace galay {
         return HandleOption(m_handle);
     }
 
-    ValueWrapper<bool> AsyncTcpSocket::socket()
+    std::expected<void, CommonError> AsyncTcpSocket::socket()
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         m_handle.fd = ::socket(AF_INET, SOCK_STREAM, 0);
         if (m_handle.fd < 0) {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallSocketError, errno);
-            success = false;
-            makeValue(wrapper, std::move(success), error);
-            return wrapper;
+            return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
         HandleOption option(m_handle);
-        option.handleNonBlock();
-        error = option.getError();
-        if(error != nullptr) {
+        return option.handleNonBlock().or_else([&](CommonError error) -> std::expected<void, CommonError> {
             ::close(m_handle.fd);
             m_handle.fd = -1;
-            success = false;
-        }
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+            return std::unexpected(error);
+        });
     }
 
-    ValueWrapper<bool> AsyncTcpSocket::bind(const Host& addr)
+    std::expected<void, CommonError> AsyncTcpSocket::bind(const Host& addr)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
         addr_in.sin_port = htons(addr.port);
@@ -134,33 +121,25 @@ namespace galay {
         else addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::bind(m_handle.fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(addr_in)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallBindError, errno);
-            success = false;
+            return std::unexpected(CommonError(CallBindError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+        return {};
     }
 
 
-    ValueWrapper<bool> AsyncTcpSocket::listen(int backlog)
+    std::expected<void, CommonError> AsyncTcpSocket::listen(int backlog)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         if(::listen(m_handle.fd, backlog))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallListenError, errno);
-            success = false;
+            return std::unexpected(CommonError(CallListenError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+        return {};
     }
 
-    ValueWrapper<bool> AsyncTcpSocket::shuntdown(ShutdownType type)
+    std::expected<void, CommonError> AsyncTcpSocket::shuntdown(ShutdownType type)
     {
         using namespace error;
-        ValueWrapper<bool> result;
         int ret = -1;
         switch (type)
         {
@@ -177,36 +156,33 @@ namespace galay {
             break;
         }
         if(ret != 0) {
-            SystemError::ptr error = std::make_shared<SystemError>(ErrorCode::CallShuntdownError, errno);
-            makeValue(result, false, error);
-        } else {
-            makeValue(result, true, nullptr);
-        }
-        return result;
+            return std::unexpected(CommonError(CallShuntdownError, static_cast<uint32_t>(errno)));
+        } 
+        return {};
     }
 
 
-    AsyncResult<ValueWrapper<bool>> AsyncTcpSocket::close()
+    AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::close()
     {
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
-    AsyncResult<ValueWrapper<AsyncTcpSocketBuilder>> AsyncTcpSocket::accept()
+    AsyncResult<std::expected<AsyncTcpSocketBuilder, CommonError>> AsyncTcpSocket::accept()
     {
         return {std::make_shared<details::AcceptEvent>(m_handle, m_scheduler)};
     }
 
-    AsyncResult<ValueWrapper<bool>> AsyncTcpSocket::connect(const Host& host)
+    AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::connect(const Host& host)
     {
         return {std::make_shared<details::ConnectEvent>(m_handle, m_scheduler, host)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::recv(char* result, size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncTcpSocket::recv(char* result, size_t length)
     {
         return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncTcpSocket::send(Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncTcpSocket::send(Bytes bytes)
     {
         return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
@@ -218,37 +194,29 @@ namespace galay {
     }
 #endif
 
-    ValueWrapper<SockAddr> AsyncTcpSocket::getSrcAddr() const
+    std::expected<SockAddr, CommonError> AsyncTcpSocket::getSrcAddr() const
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
-        ValueWrapper<SockAddr> wrapper;
+        std::expected<SockAddr, CommonError> wrapper;
         sockaddr_storage addr{};
         socklen_t len = sizeof(addr);
         if (getsockname(m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::CallGetSockNameError, errno);
-            makeValue(wrapper, SockAddr(), error);
-            return wrapper;
+            return std::unexpected(CommonError(CallGetSockNameError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr)), error);
-        return wrapper;
+        return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    ValueWrapper<SockAddr> AsyncTcpSocket::getDestAddr() const
+    std::expected<SockAddr, CommonError> AsyncTcpSocket::getDestAddr() const
     {
         using namespace error;
-        SystemError::ptr error = nullptr;
-        ValueWrapper<SockAddr> wrapper;
+        std::expected<SockAddr, CommonError> wrapper;
         sockaddr_storage addr{};
         socklen_t len = sizeof(addr);
 
         if (getpeername(m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::CallGetPeerNameError, errno);
-            makeValue(wrapper, SockAddr(), error);
-            return wrapper;
+            return std::unexpected(CommonError(CallGetPeerNameError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr)), error);
-        return wrapper;
+        return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
    
@@ -308,38 +276,25 @@ namespace galay {
         return HandleOption(m_handle);
     }
 
-    ValueWrapper<bool> AsyncUdpSocket::socket()
+    std::expected<void, CommonError> AsyncUdpSocket::socket()
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        SystemError::ptr error = nullptr;
-        bool success = true;
         m_handle.fd = ::socket(AF_INET, SOCK_DGRAM, 0);
         if (m_handle.fd < 0) {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallSocketError, errno);
-            success = false;
-            makeValue(wrapper, std::move(success), error);
-            return wrapper;
+            return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
         HandleOption option(m_handle);
-        option.handleNonBlock();
-        error = option.getError();
-        if(error != nullptr) {
+        return option.handleNonBlock().or_else([&](CommonError error) -> std::expected<void, CommonError> {
             ::close(m_handle.fd);
             m_handle.fd = -1;
-            success = false;
-        }
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+            return std::unexpected(error);
+        });
     }
 
 
-    ValueWrapper<bool> AsyncUdpSocket::bind(const Host& addr)
+    std::expected<void, CommonError> AsyncUdpSocket::bind(const Host& addr)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
         addr_in.sin_port = htons(addr.port);
@@ -347,96 +302,76 @@ namespace galay {
         else addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::bind(m_handle.fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(sockaddr)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallBindError, errno);
-            success = false;
+            return std::unexpected(CommonError(CallBindError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+        return {};
     }
 
-    ValueWrapper<bool> AsyncUdpSocket::connect(const Host& addr)
+    std::expected<void, CommonError> AsyncUdpSocket::connect(const Host& addr)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
         addr_in.sin_port = htons(addr.port);
         if(addr.ip.empty())
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallConnectError, errno);
-            success = false;
-            goto end;
+            return std::unexpected(CommonError(CallConnectError, static_cast<uint32_t>(errno)));
         }
         addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::connect(m_handle.fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(sockaddr)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallConnectError, errno);
-            success = false;
+            return std::unexpected(CommonError(CallConnectError, static_cast<uint32_t>(errno)));
         }
-        end:
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+        return {};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recv(char* result, size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::recv(char* result, size_t length)
     {
         return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::send(Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::send(Bytes bytes)
     {
         return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::recvfrom(Host& remote, char* result, size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::recvfrom(Host& remote, char* result, size_t length)
     {
         return {std::make_shared<details::RecvfromEvent>(m_handle, m_scheduler, remote, result, length)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncUdpSocket::sendto(const Host& remote, Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::sendto(const Host& remote, Bytes bytes)
     {
         return {std::make_shared<details::SendtoEvent>(m_handle, m_scheduler, remote, std::move(bytes))};
     }
 
-    AsyncResult<ValueWrapper<bool>> AsyncUdpSocket::close()
+    AsyncResult<std::expected<void, CommonError>> AsyncUdpSocket::close()
     {
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
-    ValueWrapper<SockAddr> AsyncUdpSocket::getSrcAddr() const
+    std::expected<SockAddr, CommonError> AsyncUdpSocket::getSrcAddr() const
     {
         using namespace error;
-        ValueWrapper<SockAddr> wrapper;
         sockaddr_storage addr{};
         socklen_t len = sizeof(addr);
-        Error::ptr error = nullptr;
         SockAddr saddr {};
         if (getsockname(m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::CallGetSockNameError, errno);
-        } else {
-            saddr = sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
+            return std::unexpected(CommonError(CallGetSockNameError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, std::move(saddr), error);
-        return wrapper;
+        return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    ValueWrapper<SockAddr> AsyncUdpSocket::getDestAddr() const
+    std::expected<SockAddr, CommonError> AsyncUdpSocket::getDestAddr() const
     {
         using namespace error;
-        ValueWrapper<SockAddr> wrapper;
         sockaddr_storage addr{};
         socklen_t len = sizeof(addr);
-        Error::ptr error = nullptr;
         SockAddr saddr {};
         if (getpeername(m_handle.fd, reinterpret_cast<sockaddr*>(&addr), &len) != 0) {
-            error = std::make_shared<SystemError>(error::CallGetPeerNameError, errno);
-        } else {
-            saddr = sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
-        }
-        makeValue(wrapper, std::move(saddr), error);
-        return wrapper;
+            return std::unexpected(CommonError(CallGetPeerNameError, static_cast<uint32_t>(errno)));
+        } 
+        return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
     AsyncSslSocket::AsyncSslSocket(Runtime& runtime)
@@ -502,49 +437,35 @@ namespace galay {
         return { SSL_get_fd(m_ssl) };
     }
 
-    ValueWrapper<bool> AsyncSslSocket::socket()
+    std::expected<void, CommonError> AsyncSslSocket::socket()
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         GHandle handle;
         handle.fd = ::socket(AF_INET, SOCK_STREAM, 0);
         if (handle.fd < 0) {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallSocketError, errno);
-            success = false;
-            makeValue(wrapper, std::move(success), error);
-            return wrapper;
+            return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
         HandleOption option(handle);
-        option.handleNonBlock();
-        error = option.getError();
-        if(error != nullptr) {
+        auto res = option.handleNonBlock().or_else([&](CommonError error) -> std::expected<void, CommonError> {
             ::close(handle.fd);
             handle.fd = -1;
-            success = false;
-            makeValue(wrapper, std::move(success), error);
-            return wrapper;
+            return std::unexpected(error);
+        });
+        if(!res) {
+            return res;
         }
         m_ssl = SSL_new(getGlobalSSLCtx());
         if(m_ssl == nullptr) {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallSSLNewError, errno);
-            success = false;
-            makeValue(wrapper, std::move(success), error);
-            return wrapper;
+            return std::unexpected(CommonError(CallSSLNewError, static_cast<uint32_t>(errno)));
         }
         SSL_set_fd(m_ssl, handle.fd);
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+        return {};
     }
 
 
-    ValueWrapper<bool> AsyncSslSocket::bind(const Host& addr)
+    std::expected<void, CommonError> AsyncSslSocket::bind(const Host& addr)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
         addr_in.sin_port = htons(addr.port);
@@ -552,49 +473,42 @@ namespace galay {
         else addr_in.sin_addr.s_addr = inet_addr(addr.ip.c_str());
         if(::bind(getHandle().fd, reinterpret_cast<sockaddr*>(&addr_in), sizeof(sockaddr)))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallBindError, errno);
-            success = false;
+            return std::unexpected(CommonError(CallBindError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+        return {};
     }
 
-    ValueWrapper<bool> AsyncSslSocket::listen(int backlog)
+    std::expected<void, CommonError> AsyncSslSocket::listen(int backlog)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
-        bool success = true;
         if(::listen(getHandle().fd, backlog))
         {
-            error = std::make_shared<SystemError>(error::ErrorCode::CallListenError, errno);
-            success = false;
+            return std::unexpected(CommonError(CallListenError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, std::move(success), error);
-        return wrapper;
+        return {};
     }
 
-    AsyncResult<ValueWrapper<AsyncSslSocketBuilder>> AsyncSslSocket::sslAccept()
+    AsyncResult<std::expected<AsyncSslSocketBuilder, CommonError>> AsyncSslSocket::sslAccept()
     {
         return {std::make_shared<details::SslAcceptEvent>(m_ssl, m_scheduler)};
     }
 
-    AsyncResult<ValueWrapper<bool>> AsyncSslSocket::sslConnect(const Host &addr)
+    AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::sslConnect(const Host &addr)
     {
         return {std::make_shared<details::SslConnectEvent>(m_ssl, m_scheduler, addr)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslRecv(char* result, size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncSslSocket::sslRecv(char* result, size_t length)
     {
         return {std::make_shared<details::SslRecvEvent>(m_ssl, m_scheduler, result, length)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> AsyncSslSocket::sslSend(Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> AsyncSslSocket::sslSend(Bytes bytes)
     {
         return {std::make_shared<details::SslSendEvent>(m_ssl, m_scheduler, std::move(bytes))};
     }
 
-    AsyncResult<ValueWrapper<bool>> AsyncSslSocket::sslClose()
+    AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::sslClose()
     {
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
     }

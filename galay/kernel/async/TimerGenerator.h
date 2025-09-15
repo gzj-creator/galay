@@ -16,7 +16,7 @@ namespace galay
         static TimerGenerator::ptr createPtr(Runtime& runtime, int co_id = -1);
         TimerGenerator(Runtime& runtime, int co_id = -1);
         template <CoType T>
-        AsyncResult<ValueWrapper<T>> timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func);
+        AsyncResult<std::expected<T, CommonError>> timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func);
         AsyncResult<nil> sleep(std::chrono::milliseconds ms);
         TimerGenerator(const TimerGenerator& other);
         TimerGenerator& operator=(const TimerGenerator& other) = delete;
@@ -32,7 +32,7 @@ namespace galay
     };
 
     template <CoType T>
-    inline AsyncResult<ValueWrapper<T>> TimerGenerator::timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()> &func)
+    inline AsyncResult<std::expected<T, CommonError>> TimerGenerator::timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()> &func)
     {
         std::shared_ptr<AsyncResultWaiter<T>> waiter = std::make_shared<AsyncResultWaiter<T>>();
         if(m_co_id == -1) {
@@ -50,11 +50,8 @@ namespace galay
     {
         co_await this->sleep(ms);
         if(waiter->isWaiting()) {
-            ValueWrapper<T> wrapper;
             using namespace error;
-            SystemError::ptr e = std::make_shared<SystemError>(ErrorCode::AsyncTimeoutError, errno);
-            makeValue(wrapper, e);
-            waiter->notify(std::move(wrapper));
+            waiter->notify(std::unexpected(CommonError(AsyncTimeoutError, static_cast<uint32_t>(errno))));
         }
         co_return nil();
     }
@@ -64,9 +61,7 @@ namespace galay
     {
         T res = co_await func();
         if(waiter->isWaiting()) {
-            ValueWrapper<T> wrapper;
-            makeValue(wrapper, std::move(res), nullptr);
-            waiter->notify(std::move(wrapper));
+            waiter->notify(std::move(res));
         }
         co_return nil();
     }

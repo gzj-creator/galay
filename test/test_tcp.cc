@@ -19,36 +19,36 @@ Coroutine<nil> test()
     auto t1 = socket.socket();
     socket.options().handleNonBlock();
     socket.options().handleReusePort();
-    if (!t1.success())
+    if (!t1)
     {
-        std::cout << t1.getError()->message() << std::endl;
+        std::cout << t1.error().message() << std::endl;
         co_return nil();
     }
     std::cout << "socket success" << std::endl;
     auto t2 = socket.bind({"127.0.0.1", 8070});
-    if (!t2.success())
+    if (!t2)
     {
-        std::cout << t2.getError()->message() << std::endl;
+        std::cout << t2.error().message() << std::endl;
         co_return nil();
     }
     std::cout << "bind success" << std::endl;
     auto t3 = socket.listen(10);
-    if (!t3.success())
+    if (!t3)
     {
-        std::cout << t3.getError()->message() << std::endl;
+        std::cout << t3.error().message() << std::endl;
         co_return nil();
     }
     std::cout << "listen success" << std::endl;
     while (true)
     {
         auto t4 = co_await socket.accept();
-        if (!t4.success())
+        if (!t4)
         {
-            std::cout << t4.getError()->message() << std::endl;
+            std::cout << t4.error().message() << std::endl;
             co_return nil();
         }
         std::cout << "accept success" << std::endl;
-        auto builder = t4.moveValue();
+        auto& builder = t4.value();
         auto new_socket = builder.build();
         new_socket.options().handleNonBlock();
         runtime.schedule(Recv(std::move(new_socket)));
@@ -61,23 +61,23 @@ Coroutine<nil> Recv(AsyncTcpSocket socket)
     while (true)
     {
         auto wrapper = co_await socket.recv(buffer.data(), buffer.capacity());
-        if(!wrapper.success()) {
-            if(wrapper.getError()->code() == error::ErrorCode::DisConnectError) {
+        if(!wrapper) {
+            if(CommonError::contains(wrapper.error().code(), ErrorCode::DisConnectError)) {
                 // disconnect
                 co_await socket.close();
                 std::cout << "connection close" << std::endl;
                 co_return nil();
             }
-            std::cout << wrapper.getError()->message() << std::endl;
+            std::cout << wrapper.error().message() << std::endl;
             co_return nil();
         }
-        Bytes bytes = wrapper.moveValue();
+        Bytes& bytes = wrapper.value();
         std::string msg = bytes.toString();
         std::cout << msg.length() << "   " <<  msg << std::endl;
         if (msg.find("quit") != std::string::npos)
         {
             auto success = co_await socket.close();
-            if (success.success())
+            if (success)
             {
                 std::cout << "close success" << std::endl;
             }
@@ -92,9 +92,9 @@ Coroutine<nil> Send(AsyncTcpSocket socket)
     const char* data = "Hello World";
     Bytes bytes(data, 11);
     auto wrapper = co_await socket.send(std::move(bytes));
-    if (wrapper.success())
+    if (wrapper)
     {
-        Bytes remain = wrapper.moveValue();
+        Bytes& remain = wrapper.value();
         std::cout << remain.toString()  << std::endl;
     }
     co_return nil();

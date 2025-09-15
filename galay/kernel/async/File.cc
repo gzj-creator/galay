@@ -40,39 +40,29 @@ namespace galay
         m_scheduler = visitor.eventScheduler().get();
     }
 
-    ValueWrapper<bool> File::open(const std::string &path, OpenFlags flags, FileModes modes)
+    std::expected<void, CommonError> File::open(const std::string &path, OpenFlags flags, FileModes modes)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        SystemError::ptr error = nullptr;
         const int fd = ::open(path.c_str(), flags.getFlags(), modes.getModes());
         if( fd < 0 ) {
-            error = std::make_shared<SystemError>(ErrorCode::CallOpenError, errno);
-            makeValue(wrapper, false, error);
-            return wrapper;
+            return std::unexpected<CommonError>({ErrorCode::CallOpenError, static_cast<uint32_t>(errno)});
         }
         m_handle.fd = fd;
         GHandle handle;
         handle.fd = fd;
         HandleOption option(handle);
         option.handleNonBlock();
-        makeValue(wrapper, true, error);
-        return wrapper;
+        return {};
     }
 
-    ValueWrapper<bool> File::aioInit(int max_events)
+    ValueWrapper<void> File::aioInit(int max_events)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        Error::ptr error = nullptr;
         int ret = io_setup(max_events, &m_io_ctx);
         if(ret) {
-            error = std::make_shared<SystemError>(ErrorCode::CallAioSetupError, errno);
-            makeValue(wrapper, false, error);
-            return wrapper;
+            return std::unexpected<CommonError>({ErrorCode::CallAioSetupError, static_cast<uint32_t>(errno)});
         }
-        makeValue(wrapper, true, error);  // 修复：成功时也需要设置返回值
-        return wrapper;
+        return {};
     }
 
     void File::preRead(StringMetaData& bytes, LL offset)
@@ -119,12 +109,12 @@ namespace galay
         m_iocbs.back().data = &result;
     }
 
-    AsyncResult<ValueWrapper<bool>> File::commit()
+    AsyncResult<std::expected<void, CommonError>> File::commit()
     {
         return {std::make_shared<details::FileCommitEvent>(m_event_handle, m_scheduler, m_io_ctx, std::move(m_iocbs))};
     }
 
-    AsyncResult<ValueWrapper<bool>> File::close()
+    AsyncResult<std::expected<void, CommonError>> File::close()
     {
         return {std::make_shared<details::FileCloseEvent>(m_event_handle, m_scheduler, m_handle)};
     }
@@ -179,28 +169,23 @@ namespace galay
         return HandleOption(m_handle);
     }
 
-    ValueWrapper<bool> File::open(const std::string& path, OpenFlags flags, FileModes modes)
+    std::expected<void, CommonError> File::open(const std::string& path, OpenFlags flags, FileModes modes)
     {
         using namespace error;
         m_path = path;
-        ValueWrapper<bool> wrapper;
-        SystemError::ptr error = nullptr;
         const int fd = ::open(path.c_str(), flags.getFlags(), modes.getModes());
         if( fd < 0 ) {
-            error = std::make_shared<SystemError>(ErrorCode::CallOpenError, errno);
-            makeValue(wrapper, false, error);
-            return wrapper;
+            return std::unexpected<CommonError>({ErrorCode::CallOpenError, static_cast<uint32_t>(errno)});
         }
         m_handle.fd = fd;
         GHandle handle;
         handle.fd = fd;
         HandleOption option(handle);
         option.handleNonBlock();
-        makeValue(wrapper, true, error);
-        return wrapper;
+        return {};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> File::read(size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> File::read(size_t length)
     {
         if(m_buffer.capacity < length) {
             reallocString(m_buffer, length);
@@ -209,26 +194,21 @@ namespace galay
         return {std::make_shared<details::FileReadEvent>(m_handle, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
     }
 
-    AsyncResult<ValueWrapper<Bytes>> File::write(Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> File::write(Bytes bytes)
     {
         return {std::make_shared<details::FileWriteEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
 
-    ValueWrapper<bool> File::seek(size_t offset)
+    std::expected<void, CommonError> File::seek(size_t offset)
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        SystemError::ptr error;
         if (::lseek(m_handle.fd, offset, SEEK_SET) == -1) { 
-            error = std::make_shared<SystemError>(ErrorCode::CallLSeekError, errno);
-            makeValue(wrapper, false, error);
-            return wrapper;
+            return std::unexpected(CommonError(ErrorCode::CallLSeekError, static_cast<uint32_t>(errno)));
         }
-        makeValue(wrapper, true, error);
-        return wrapper;
+        return {};
     }
 
-    AsyncResult<ValueWrapper<bool>> File::close()
+    AsyncResult<std::expected<void, CommonError>> File::close()
     {
         return {std::make_shared<details::FileCloseEvent>(m_handle, m_scheduler)};
     }
@@ -238,18 +218,13 @@ namespace galay
         reallocString(m_buffer, length);
     }
 
-    ValueWrapper<bool> File::remove()
+    std::expected<void, CommonError> File::remove()
     {
         using namespace error;
-        ValueWrapper<bool> wrapper;
-        SystemError::ptr error;
         if (::remove(m_path.c_str()) == -1) {
-            error = std::make_shared<SystemError>(ErrorCode::CallRemoveError, errno);
-            makeValue(wrapper, false, error);
-            return wrapper;
+            return std::unexpected(CommonError(ErrorCode::CallRemoveError, static_cast<uint32_t>(errno)));
         } 
-        makeValue(wrapper, true, error);
-        return wrapper;
+        return {};
     }
 #endif
 }

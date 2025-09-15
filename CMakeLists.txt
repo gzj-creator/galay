@@ -123,7 +123,7 @@ if(ENABLE_DEBUG)
 endif()
 
 set_target_properties(galay PROPERTIES
-        CXX_STANDARD 20
+        CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
 )

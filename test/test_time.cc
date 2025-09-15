@@ -23,10 +23,10 @@ Coroutine<nil> test()
             generator.init();
             return generator.sleep(std::chrono::milliseconds(10000));
         });
-        if(res.success()) {
+        if(res) {
             std::cout << "exec success" << std::endl;
         } else {
-            std::cout << res.getError()->message() << std::endl;
+            std::cout << res.error().message() << std::endl;
         }
     */
     auto func = [generator1]() mutable {
@@ -34,10 +34,10 @@ Coroutine<nil> test()
         return generator1.sleep(std::chrono::milliseconds(1000));
     };
     auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), func);
-    if(res.success()) {
+    if(res) {
         std::cout << "exec success" << std::endl;
     } else {
-        std::cout << res.getError()->message() << std::endl;
+        std::cout << res.error().message() << std::endl;
     }
     co_return nil();
 }

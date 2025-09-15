@@ -1,16 +1,16 @@
 # Galay
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![C++ Standard](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-3.21%2B-blue.svg)](https://cmake.org/)
 
-Galay is a high-performance, cross-platform C++20 networking library that provides asynchronous I/O operations with coroutine support. It features a modern C++ design with support for TCP, UDP, and SSL/TLS protocols, along with advanced I/O mechanisms including epoll and kqueue.
+Galay is a high-performance, cross-platform C++23 networking library that provides asynchronous I/O operations with coroutine support. It features a modern C++ design with support for TCP, UDP, and SSL/TLS protocols, along with advanced I/O mechanisms including epoll and kqueue.
 
 ## Features
 
 ### 🚀 **High Performance**
 - **Modern I/O Mechanisms**: Automatic detection and use of epoll and kqueue
-- **Coroutine Support**: Built-in C++20 coroutine support for asynchronous programming
+- **Coroutine Support**: Built-in C++23 coroutine support for asynchronous programming
 - **Zero-Copy Operations**: Efficient memory management with minimal data copying
 - **Multi-threaded Runtime**: Thread pool-based execution for optimal performance
 
@@ -28,7 +28,7 @@ Galay is a high-performance, cross-platform C++20 networking library that provid
 - **Signal Handling**: Graceful signal processing with stack traces
 
 ### 📦 **Modern C++ Design**
-- **C++20 Standard**: Latest C++ features including concepts and coroutines
+- **C++23 Standard**: Latest C++ features including concepts and coroutines
 - **Header-Only Components**: Many utilities available as header-only libraries
 - **Template Metaprogramming**: Advanced type-safe programming patterns
 - **RAII**: Resource management with automatic cleanup
@@ -37,7 +37,7 @@ Galay is a high-performance, cross-platform C++20 networking library that provid
 
 ### Prerequisites
 
-- **C++20 Compatible Compiler**: GCC 10+, Clang 12+, or MSVC 2019+
+- **C++23 Compatible Compiler**: GCC 10+, Clang 12+, or MSVC 2019+
 - **CMake 3.21+**
 - **OpenSSL**: For SSL/TLS support
 - **spdlog**: For logging functionality
@@ -221,7 +221,7 @@ int main() {
 
 #### ⚡ **Kernel Module**
 - **Async I/O**: File, network, and timer event handling
-- **Coroutines**: C++20 coroutine support for async operations
+- **Coroutines**: C++23 coroutine support for async operations
 - **Event Loop**: High-performance event-driven architecture
 - **Runtime**: Thread pool and scheduler management
 - **Servers**: TCP, UDP, and SSL server implementations
@@ -322,4 +322,4 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ---
 
-**Galay** - High-performance C++20 networking library with coroutine support.
+**Galay** - High-performance C++23 networking library with coroutine support.

@@ -1,16 +1,16 @@
 # Galay
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![C++ Standard](https://img.shields.io/badge/C%2B%2B-20-blue.svg)](https://en.cppreference.com/w/cpp/20)
+[![C++ Standard](https://img.shields.io/badge/C%2B%2B-23-blue.svg)](https://en.cppreference.com/w/cpp/23)
 [![CMake](https://img.shields.io/badge/CMake-3.21%2B-blue.svg)](https://cmake.org/)
 
-Galay 是一个高性能、跨平台的 C++20 网络库，提供支持协程的异步 I/O 操作。它采用现代 C++ 设计，支持 TCP、UDP 和 SSL/TLS 协议，并集成了先进的 I/O 机制，包括epoll 和 kqueue。
+Galay 是一个高性能、跨平台的 C++23 网络库，提供支持协程的异步 I/O 操作。它采用现代 C++ 设计，支持 TCP、UDP 和 SSL/TLS 协议，并集成了先进的 I/O 机制，包括epoll 和 kqueue。
 
 ## 特性
 
 ### 🚀 **高性能**
 - **现代 I/O 机制**：自动检测并使用 epoll、kqueue
-- **协程支持**：内置 C++20 协程支持，用于异步编程
+- **协程支持**：内置 C++23 协程支持，用于异步编程
 - **零拷贝操作**：高效的内存管理，最小化数据拷贝
 - **多线程运行时**：基于线程池的执行，实现最优性能
 
@@ -28,7 +28,7 @@ Galay 是一个高性能、跨平台的 C++20 网络库，提供支持协程的�
 - **信号处理**：优雅的信号处理，支持堆栈跟踪
 
 ### 📦 **现代 C++ 设计**
-- **C++20 标准**：使用最新的 C++ 特性，包括概念和协程
+- **C++23 标准**：使用最新的 C++ 特性，包括概念和协程
 - **头文件组件**：许多工具以头文件库的形式提供
 - **模板元编程**：高级类型安全编程模式
 - **RAII**：自动清理的资源管理
@@ -37,7 +37,7 @@ Galay 是一个高性能、跨平台的 C++20 网络库，提供支持协程的�
 
 ### 前置要求
 
-- **C++20 兼容编译器**：GCC 10+、Clang 12+ 或 MSVC 2019+
+- **C++23 兼容编译器**：GCC 10+、Clang 12+ 或 MSVC 2019+
 - **CMake 3.21+**
 - **OpenSSL**：用于 SSL/TLS 支持
 - **spdlog**：用于日志功能
@@ -221,7 +221,7 @@ int main() {
 
 #### ⚡ **内核模块**
 - **异步 I/O**：文件、网络和定时器事件处理
-- **协程**：C++20 协程支持异步操作
+- **协程**：C++23 协程支持异步操作
 - **事件循环**：高性能事件驱动架构
 - **运行时**：线程池和调度器管理
 - **服务器**：TCP、UDP 和 SSL 服务器实现
@@ -322,4 +322,4 @@ make -j$(nproc)
 
 ---
 
-**Galay** - 支持协程的高性能 C++20 网络库。
+**Galay** - 支持协程的高性能 C++23 网络库。

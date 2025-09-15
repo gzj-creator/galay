@@ -53,19 +53,23 @@ namespace galay::error
         "concurrent error",
     };
 
-    bool SystemError::contains(uint64_t error, ErrorCode code)
+    bool CommonError::contains(uint64_t error, ErrorCode code)
     {
         uint32_t galay_code = error & 0xffffffff;
         return static_cast<uint32_t>(code) == galay_code;
     }
 
-    SystemError::SystemError(uint32_t galay_code, uint32_t system_code)
-        : Error(makeErrorCode(galay_code, system_code))
+    CommonError::CommonError(uint32_t galay_code, uint32_t system_code)
+        : m_code(makeErrorCode(galay_code, system_code))
     {
-
     }
 
-    std::string SystemError::message() const
+    uint64_t CommonError::code() const
+    {
+        return m_code;
+    }
+
+    std::string CommonError::message() const
     {
         uint32_t galay_code = m_code & 0xffffffff;
         uint32_t system_code = m_code >> 32;
@@ -79,7 +83,12 @@ namespace galay::error
         return str.str();
     }
 
-    uint64_t SystemError::makeErrorCode(uint32_t galay_code, uint32_t system_code)
+    void CommonError::reset()
+    {
+        m_code = 0;
+    }
+
+    uint64_t CommonError::makeErrorCode(uint32_t galay_code, uint32_t system_code)
     {
         uint64_t ret = system_code;
         ret = ret << 32;
