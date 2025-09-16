@@ -27,7 +27,7 @@ namespace galay
         };
 
         template<CoType T, typename E>
-        class ResultWaitEvent: public AsyncEvent<std::expected<T, CommonError>>
+        class ResultWaitEvent: public AsyncEvent<std::expected<T, E>>
         {
             template<CoType M, typename F>
             friend class galay::AsyncResultWaiter;
