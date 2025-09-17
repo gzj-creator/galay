@@ -38,7 +38,7 @@ namespace galay::details
             return GHandle{};
         }
 
-        bool suspend(Waker waker) override {
+        bool onSuspend(Waker waker) override {
             using namespace error;
             this->m_waker = waker;
             if(!m_scheduler->activeEvent(this, nullptr)) {
@@ -65,7 +65,7 @@ namespace galay::details
         void handleEvent() override;
         EventType getEventType() const override;
 
-        bool ready() override;
+        bool onReady() override;
     private:
         bool sslAccept();
     private:
@@ -81,7 +81,7 @@ namespace galay::details
         std::string name() override { return "SslCloseEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
-        bool ready() override;
+        bool onReady() override;
     private:
         bool sslClose();
     private:
@@ -101,7 +101,7 @@ namespace galay::details
         void handleEvent() override;
         EventType getEventType() const override;
 
-        bool ready() override;
+        bool onReady() override;
         
     private:
         bool sslConnect();
@@ -118,7 +118,7 @@ namespace galay::details
         std::string name() override { return "SslRecvEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeRead; }
-        bool ready() override;
+        bool onReady() override;
     private:
         bool sslRecv();
     private:
@@ -132,7 +132,7 @@ namespace galay::details
         std::string name() override { return "SslSendEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeWrite; }
-        bool ready() override;
+        bool onReady() override;
     private:
         bool sslSend();
     private:

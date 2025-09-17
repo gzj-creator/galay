@@ -23,7 +23,7 @@ namespace galay {
     inline bool AsyncResult<T>::await_ready()
     {
         if(!m_event) return true;
-        return m_event->ready();
+        return m_event->onReady();
     }
 
     template<CoType T>
@@ -35,7 +35,7 @@ namespace galay {
             LogError("AsyncResult Coroutine expired");
             return false;
         }
-        if(m_event->suspend(Waker(co))) {
+        if(m_event->onSuspend(Waker(co))) {
             while(!co.lock()->become(CoroutineStatus::Suspended)) {
                 LogError("AsyncResult Coroutine become suspend error");
             } 
@@ -48,12 +48,12 @@ namespace galay {
     inline T AsyncResult<T>::await_resume() const
     {
         if(m_coroutine.expired()) {
-            return this->m_event->resume();
+            return this->m_event->onResume();
         }
         while(!m_coroutine.lock()->become(CoroutineStatus::Running)) {
             LogError("AsyncResult Coroutine become running error");
         }
-        return this->m_event->resume();
+        return this->m_event->onResume();
     }
 
 

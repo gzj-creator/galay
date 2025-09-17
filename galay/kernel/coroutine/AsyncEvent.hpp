@@ -19,11 +19,11 @@ namespace galay
         explicit AsyncEvent(T&& result);
 
         //return true while not suspend
-        virtual bool ready() = 0;
+        virtual bool onReady() = 0;
         //return true while suspend
-        virtual bool suspend(Waker waker) = 0;
+        virtual bool onSuspend(Waker waker) = 0;
 
-        virtual T resume();
+        virtual T onResume();
         virtual ~AsyncEvent() = default;
     protected:
         T m_result;
@@ -34,9 +34,9 @@ namespace galay
     class ResultEvent final : public AsyncEvent<T> {
     public:
         explicit ResultEvent(T&& result) : AsyncEvent<T>(std::move(result)) {}
-        bool ready() override { return true; }
-        bool suspend([[maybe_unused]] Waker waker) override { return false; }
-        T resume() override { return std::move(this->m_result); }
+        bool onReady() override { return true; }
+        bool onSuspend([[maybe_unused]] Waker waker) override { return false; }
+        T onResume() override { return std::move(this->m_result); }
     private:
         GHandle m_handle;
     };
@@ -54,7 +54,7 @@ namespace galay
     }
 
     template <CoType T>
-    T AsyncEvent<T>::resume()
+    T AsyncEvent<T>::onResume()
     {
         return std::move(m_result);
     }

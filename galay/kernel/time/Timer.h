@@ -19,7 +19,7 @@ namespace galay
         int64_t getDeadline();
         int64_t getRemainTime();
         void setFunction(const std::function<void()>& callback);
-        bool ready() const;
+        bool onReady() const;
         void reset(std::chrono::milliseconds ms);
         void execute();
         bool cancel();

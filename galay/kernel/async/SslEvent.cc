@@ -57,7 +57,7 @@ namespace galay::details
         return EventType::kEventTypeNone;
     }
 
-    bool SslAcceptEvent::ready()
+    bool SslAcceptEvent::onReady()
     {
         return sslAccept();
     }
@@ -191,7 +191,7 @@ namespace galay::details
         return EventType::kEventTypeNone;
     }
 
-    bool SslCloseEvent::ready()
+    bool SslCloseEvent::onReady()
     {
         return sslClose();
     }
@@ -228,7 +228,7 @@ namespace galay::details
         return EventType::kEventTypeNone;
     }
 
-    bool SslConnectEvent::ready()
+    bool SslConnectEvent::onReady()
     {
         return sslConnect();
     }
@@ -284,7 +284,7 @@ namespace galay::details
         m_waker.wakeUp();
     }
 
-    bool SslRecvEvent::ready()
+    bool SslRecvEvent::onReady()
     {
         return sslRecv();
     }
@@ -321,7 +321,7 @@ namespace galay::details
         m_waker.wakeUp();
     }
 
-    bool SslSendEvent::ready()
+    bool SslSendEvent::onReady()
     {
         return sslSend();
     }

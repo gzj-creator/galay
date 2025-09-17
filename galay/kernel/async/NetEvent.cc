@@ -33,16 +33,16 @@ bool galay::AsyncTcpSocketBuilder::check() const
 namespace galay::details
 {
 
-    bool AcceptEvent::ready()
+    bool AcceptEvent::onReady()
     {
         m_ready = acceptSocket(false);
         return m_ready;
     }
 
-    std::expected<AsyncTcpSocketBuilder, CommonError> AcceptEvent::resume()
+    std::expected<AsyncTcpSocketBuilder, CommonError> AcceptEvent::onResume()
     {
         if(!m_ready) acceptSocket(true);
-        return AsyncEvent<std::expected<AsyncTcpSocketBuilder, CommonError>>::resume();
+        return AsyncEvent<std::expected<AsyncTcpSocketBuilder, CommonError>>::onResume();
     }
     
     bool AcceptEvent::acceptSocket(bool notify)
@@ -75,13 +75,13 @@ namespace galay::details
     {
     }
 
-    std::expected<Bytes, CommonError> RecvEvent::resume()
+    std::expected<Bytes, CommonError> RecvEvent::onResume()
     {
         if(!m_ready) recvBytes(true);
-        return NetEvent<std::expected<Bytes, CommonError>>::resume();
+        return NetEvent<std::expected<Bytes, CommonError>>::onResume();
     }
 
-    bool RecvEvent::ready()
+    bool RecvEvent::onReady()
     {
         m_ready = recvBytes(false);
         return m_ready;
@@ -116,16 +116,16 @@ namespace galay::details
     {
     }
 
-    bool SendEvent::ready()
+    bool SendEvent::onReady()
     {
         m_ready = sendBytes(false);
         return m_ready;
     }
 
-    std::expected<Bytes, CommonError> SendEvent::resume()
+    std::expected<Bytes, CommonError> SendEvent::onResume()
     {
         if(!m_ready) sendBytes(true);
-        return AsyncEvent<std::expected<Bytes, CommonError>>::resume();
+        return AsyncEvent<std::expected<Bytes, CommonError>>::onResume();
     }
 
     bool SendEvent::sendBytes(bool notify)
@@ -152,7 +152,7 @@ namespace galay::details
     }
 
 #ifdef __linux__
-    bool SendfileEvent::ready()
+    bool SendfileEvent::onReady()
     {
         m_ready = sendfile(false);
         return m_ready;
@@ -181,10 +181,10 @@ namespace galay::details
         return true;
     }
 
-    std::expected<long, CommonError> SendfileEvent::resume()
+    std::expected<long, CommonError> SendfileEvent::onResume()
     {
         if(!m_ready) sendfile(true);
-        return AsyncEvent<std::expected<long, CommonError>>::resume();
+        return AsyncEvent<std::expected<long, CommonError>>::onResume();
     }
 #endif
 
@@ -193,16 +193,16 @@ namespace galay::details
     {
     }
 
-    bool ConnectEvent::ready()
+    bool ConnectEvent::onReady()
     {
         m_ready = connectToHost(false);
         return m_ready;     
     }
 
-    std::expected<void, CommonError> ConnectEvent::resume()
+    std::expected<void, CommonError> ConnectEvent::onResume()
     {
         if(!m_ready) connectToHost(true);
-        return NetEvent<std::expected<void, CommonError>>::resume();
+        return NetEvent<std::expected<void, CommonError>>::onResume();
     }
 
     bool ConnectEvent::connectToHost(bool notify)
@@ -232,7 +232,7 @@ namespace galay::details
     {
     }
 
-    bool CloseEvent::ready()
+    bool CloseEvent::onReady()
     {
         using namespace error;
         m_scheduler->removeEvent(this, nullptr);
@@ -245,16 +245,16 @@ namespace galay::details
         return true;
     }
 
-    bool RecvfromEvent::ready()
+    bool RecvfromEvent::onReady()
     {
         m_ready = recvfromBytes(false);
         return m_ready;
     }
 
-    std::expected<Bytes, CommonError> RecvfromEvent::resume()
+    std::expected<Bytes, CommonError> RecvfromEvent::onResume()
     {
         if(!m_ready) recvfromBytes(true);
-        return NetEvent<std::expected<Bytes, CommonError>>::resume();
+        return NetEvent<std::expected<Bytes, CommonError>>::onResume();
     }
 
     bool RecvfromEvent::recvfromBytes(bool notify)
@@ -284,16 +284,16 @@ namespace galay::details
         return true;
     }
 
-    bool SendtoEvent::ready()
+    bool SendtoEvent::onReady()
     {
         m_ready = sendtoBytes(false);;
         return m_ready;
     }
 
-    std::expected<Bytes, CommonError> SendtoEvent::resume()
+    std::expected<Bytes, CommonError> SendtoEvent::onResume()
     {
         if(!m_ready) sendtoBytes(true);
-        return NetEvent<std::expected<Bytes, CommonError>>::resume();
+        return NetEvent<std::expected<Bytes, CommonError>>::onResume();
     }
 
     bool SendtoEvent::sendtoBytes(bool notify)

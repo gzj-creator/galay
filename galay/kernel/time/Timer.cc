@@ -29,7 +29,7 @@ namespace galay
         m_callback = callback;
     }
 
-    bool Timer::ready() const
+    bool Timer::onReady() const
     {
         return m_deadline >= m_expect_deadline;
     }

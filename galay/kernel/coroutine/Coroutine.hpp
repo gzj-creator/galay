@@ -50,7 +50,7 @@ public:
     virtual bool isSuspend() const = 0;
     virtual bool isDone() const = 0;
     virtual CoroutineScheduler* belongScheduler() const = 0;
-    virtual void resume() = 0;
+    virtual void onResume() = 0;
     virtual void destroy() = 0;
     virtual ~CoroutineBase() = default;
 
@@ -137,7 +137,7 @@ public:
     bool isDone() const override;
 
     void destroy() override;
-    void resume() override;
+    void onResume() override;
     
     std::optional<T> result();
     std::optional<T> operator()();

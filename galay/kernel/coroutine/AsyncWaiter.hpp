@@ -19,9 +19,9 @@ namespace galay
         public:
             WaitEvent(AsyncWaiter<E>& waiter);
             //return true while not suspend
-            bool ready() override;
+            bool onReady() override;
             //return true while suspend
-            bool suspend(Waker waker) override;
+            bool onSuspend(Waker waker) override;
         private:
             AsyncWaiter<E>& m_waiter;
         };
@@ -34,9 +34,9 @@ namespace galay
         public:
             ResultWaitEvent(AsyncResultWaiter<T, E>& waiter);
             //return true while not suspend
-            bool ready() override;
+            bool onReady() override;
             //return true while suspend
-            bool suspend(Waker waker) override;
+            bool onSuspend(Waker waker) override;
         private:
             AsyncResultWaiter<T, E>& m_waiter;
         };
@@ -145,13 +145,13 @@ namespace galay::details
     }
 
     template<typename E>
-    bool WaitEvent<E>::ready()
+    bool WaitEvent<E>::onReady()
     {
         return false;
     }
 
     template<typename E>
-    bool WaitEvent<E>::suspend(Waker waker)
+    bool WaitEvent<E>::onSuspend(Waker waker)
     {
         m_waiter.m_waker = waker;
         bool expected = false;
@@ -171,13 +171,13 @@ namespace galay::details
     }
     
     template <CoType T, typename E>
-    inline bool ResultWaitEvent<T, E>::ready()
+    inline bool ResultWaitEvent<T, E>::onReady()
     {
         return false;
     }
 
     template <CoType T, typename E>
-    inline bool ResultWaitEvent<T, E>::suspend(Waker waker)
+    inline bool ResultWaitEvent<T, E>::onSuspend(Waker waker)
     {
         m_waiter.m_waker = waker;
         bool expected = false;

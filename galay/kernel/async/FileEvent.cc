@@ -10,7 +10,7 @@ namespace galay::details
     {
     }
 
-    bool FileCloseEvent::ready()
+    bool FileCloseEvent::onReady()
     {   
         using namespace error;
         if(::close(m_handle.fd) < 0) {
@@ -27,7 +27,7 @@ namespace galay::details
     {
     }
 
-    bool FileCommitEvent::ready()
+    bool FileCommitEvent::onReady()
     {
         using namespace error;
         size_t nums = m_iocbs.size();
@@ -100,7 +100,7 @@ namespace galay::details
     {
     }
 
-    bool FileCloseEvent::ready()
+    bool FileCloseEvent::onReady()
     {   
         using namespace error;
         if(::close(m_handle.fd) < 0) {
@@ -117,16 +117,16 @@ namespace galay::details
     {
     }
 
-    bool FileReadEvent::ready()
+    bool FileReadEvent::onReady()
     {
         m_ready = readBytes(false);
         return m_ready;
     }
 
-    std::expected<Bytes, CommonError> FileReadEvent::resume()
+    std::expected<Bytes, CommonError> FileReadEvent::onResume()
     {
         if(!m_ready) readBytes(true);
-        return FileEvent<std::expected<Bytes, CommonError>>::resume();
+        return FileEvent<std::expected<Bytes, CommonError>>::onResume();
     }
 
     bool FileReadEvent::readBytes(bool notify)
@@ -158,16 +158,16 @@ namespace galay::details
     {
     }
 
-    bool FileWriteEvent::ready()
+    bool FileWriteEvent::onReady()
     {
         m_ready = writeBytes(false);
         return m_ready;
     }
 
-    std::expected<Bytes, CommonError> FileWriteEvent::resume()
+    std::expected<Bytes, CommonError> FileWriteEvent::onResume()
     {
         if(!m_ready) writeBytes(true);
-        return FileEvent<std::expected<Bytes, CommonError>>::resume();
+        return FileEvent<std::expected<Bytes, CommonError>>::onResume();
     }
 
     bool FileWriteEvent::writeBytes(bool notify)

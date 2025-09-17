@@ -22,7 +22,7 @@ namespace galay::details
         EventType getEventType() const override { return kEventTypeNone; };
         GHandle getHandle() override { return {}; }
         void handleEvent() override {}
-        bool suspend(Waker waker) override
+        bool onSuspend(Waker waker) override
         {
             this->m_waker = waker;
             return true;
@@ -38,8 +38,8 @@ namespace galay::details
         std::string name() override { return "SleepforEvent"; }
         void handleEvent() override {}
 
-        bool ready() override;
-        bool suspend(Waker waker) override;
+        bool onReady() override;
+        bool onSuspend(Waker waker) override;
     private:
         Timer::ptr m_timer;
         std::chrono::milliseconds m_ms;

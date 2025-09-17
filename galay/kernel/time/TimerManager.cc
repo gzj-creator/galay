@@ -96,7 +96,7 @@ void galay::details::InnerTimeEvent::handleEvent()
 {
     auto timers = m_manager->getArrivedTimers();
     for (auto& timer: timers) {
-        if(timer->ready()) timer->execute();
+        if(timer->onReady()) timer->execute();
         else m_manager->push(timer);
     }
 }

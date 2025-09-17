@@ -47,7 +47,7 @@ namespace galay
                 return;
             case CoroutineActionType::kCoroutineActionTypeResume:
                 if(!co.expired()){
-                    co.lock()->resume();
+                    co.lock()->onResume();
                 }
                 break;
             case CoroutineActionType::kCoroutineActionTypeDestory:

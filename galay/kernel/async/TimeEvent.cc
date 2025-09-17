@@ -9,18 +9,18 @@ namespace galay::details
     {
     }
 
-    bool SleepforEvent::ready()
+    bool SleepforEvent::onReady()
     { 
         return m_ms == std::chrono::milliseconds::zero();
     }
 
-    bool SleepforEvent::suspend(Waker waker) 
+    bool SleepforEvent::onSuspend(Waker waker) 
     {
         m_timer->setFunction([waker]() mutable{
             waker.wakeUp();
         });
         m_timer->reset(m_ms);
         m_manager->push(m_timer);
-        return TimeEvent<nil>::suspend(waker);
+        return TimeEvent<nil>::onSuspend(waker);
     }
 }
