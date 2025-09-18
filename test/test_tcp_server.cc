@@ -49,8 +49,8 @@ int main()
                 if(CommonError::contains(twrapper.error().code(), ErrorCode::AsyncTimeoutError)) {
                     std::cout << "timeout" << std::endl;
                     // disconnect
-                    co_await socket.close();
-                    co_return nil();
+                    holder.destory();
+                    continue;
                 }
                 std::cout << "twrapper error: " << twrapper.error().message() << std::endl;
                 co_return nil();
