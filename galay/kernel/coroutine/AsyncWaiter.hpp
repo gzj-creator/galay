@@ -6,46 +6,63 @@
 
 namespace galay
 {
-    template<typename E>
+    template<typename T, typename E>
     class AsyncWaiter;
-    template<CoType T, typename E>
-    class AsyncResultWaiter;
 
     namespace details
     {
-        template<typename E>
-        class WaitEvent: public AsyncEvent<std::expected<void, E>>
+        template<typename T, typename E>
+        class WaitEvent: public AsyncEvent<std::expected<T, E>>
         {
+            template<typename M, typename F>
+            friend class galay::AsyncWaiter;
         public:
-            WaitEvent(AsyncWaiter<E>& waiter);
+            WaitEvent(AsyncWaiter<T, E>& waiter);
             //return true while not suspend
             bool onReady() override;
             //return true while suspend
             bool onSuspend(Waker waker) override;
         private:
-            AsyncWaiter<E>& m_waiter;
+            AsyncWaiter<T, E>& m_waiter;
         };
 
-        template<CoType T, typename E>
-        class ResultWaitEvent: public AsyncEvent<std::expected<T, E>>
+        template<typename E>
+        class WaitEvent<void, E>: public AsyncEvent<std::expected<void, E>>
         {
-            template<CoType M, typename F>
-            friend class galay::AsyncResultWaiter;
+            template<typename M, typename F>
+            friend class galay::AsyncWaiter;
         public:
-            ResultWaitEvent(AsyncResultWaiter<T, E>& waiter);
+            WaitEvent(AsyncWaiter<void, E>& waiter);
             //return true while not suspend
             bool onReady() override;
             //return true while suspend
             bool onSuspend(Waker waker) override;
         private:
-            AsyncResultWaiter<T, E>& m_waiter;
+            AsyncWaiter<void, E>& m_waiter;
         };
+
     }
 
-    template<typename E>
+    template<typename T, typename E>
     class AsyncWaiter 
     {
-        template<typename F>
+        template<typename M, typename F>
+        friend class details::WaitEvent;
+    public:
+        AsyncWaiter();
+        AsyncResult<std::expected<T, E>> wait();
+        bool isWaiting();
+        bool notify(std::expected<T, E>&& value);
+    private:
+        Waker m_waker;
+        std::atomic_bool m_wait = false;
+        std::shared_ptr<details::WaitEvent<T, E>> m_event;
+    };
+
+    template<typename E>
+    class AsyncWaiter<void, E>
+    {
+        template<typename M, typename F>
         friend class details::WaitEvent;
     public:
         AsyncWaiter();
@@ -55,45 +72,30 @@ namespace galay
     private:
         Waker m_waker;
         std::atomic_bool m_wait = false;
-        std::shared_ptr<details::WaitEvent<E>> m_event;
+        std::shared_ptr<details::WaitEvent<void, E>> m_event;
     };
 
-    template<CoType T, typename E>
-    class AsyncResultWaiter 
-    {
-        template<CoType M, typename F>
-        friend class details::ResultWaitEvent;
-    public:
-        AsyncResultWaiter();
-        AsyncResult<std::expected<T, E>> wait();
-        bool isWaiting();
-        bool notify(std::expected<T, E>&& value);
-    private:
-        Waker m_waker;
-        std::atomic_bool m_wait = false;
-        std::shared_ptr<details::ResultWaitEvent<T, E>> m_event;
-    };
 
     template<typename E>
-    AsyncWaiter<E>::AsyncWaiter()
-        :m_event(std::make_shared<details::WaitEvent<E>>(*this))
+    AsyncWaiter<void, E>::AsyncWaiter()
+        :m_event(std::make_shared<details::WaitEvent<void, E>>(*this))
     {
     }
 
     template<typename E>
-    AsyncResult<std::expected<void, E>> AsyncWaiter<E>::wait()
+    AsyncResult<std::expected<void, E>> AsyncWaiter<void, E>::wait()
     {
         return {m_event};
     }
 
     template<typename E>
-    bool AsyncWaiter<E>::isWaiting()
+    bool AsyncWaiter<void, E>::isWaiting()
     {
         return m_wait.load();
     }
 
     template<typename E>
-    bool AsyncWaiter<E>::notify()
+    bool AsyncWaiter<void, E>::notify()
     {
         bool expected = true;
         if(m_wait.compare_exchange_strong(expected, false, 
@@ -107,26 +109,26 @@ namespace galay
 
 
 
-    template <CoType T, typename E>
-    inline AsyncResultWaiter<T, E>::AsyncResultWaiter()
-        : m_event(std::make_shared<details::ResultWaitEvent<T, E>>(*this))
+    template <typename T, typename E>
+    inline AsyncWaiter<T, E>::AsyncWaiter()
+        : m_event(std::make_shared<details::WaitEvent<T, E>>(*this))
     {
     }
 
-    template <CoType T, typename E>
-    inline AsyncResult<std::expected<T, E>> AsyncResultWaiter<T, E>::wait()
+    template <typename T, typename E>
+    inline AsyncResult<std::expected<T, E>> AsyncWaiter<T, E>::wait()
     {
         return {this->m_event};
     }
 
-    template <CoType T, typename E>
-    inline bool AsyncResultWaiter<T, E>::isWaiting()
+    template <typename T, typename E>
+    inline bool AsyncWaiter<T, E>::isWaiting()
     {
         return m_wait.load();
     }
 
-    template <CoType T, typename E>
-    inline bool AsyncResultWaiter<T, E>::notify(std::expected<T, E> &&value)
+    template <typename T, typename E>
+    inline bool AsyncWaiter<T, E>::notify(std::expected<T, E> &&value)
     {
         bool expected = true;
         if(m_wait.compare_exchange_strong(expected, false, 
@@ -143,52 +145,52 @@ namespace galay
 namespace galay::details 
 {
     template<typename E>
-    WaitEvent<E>::WaitEvent(AsyncWaiter<E> &waiter)
+    WaitEvent<void, E>::WaitEvent(AsyncWaiter<void, E> &waiter)
         : m_waiter(waiter)
     {
     }
 
     template<typename E>
-    bool WaitEvent<E>::onReady()
+    bool WaitEvent<void, E>::onReady()
     {
         return false;
     }
 
     template<typename E>
-    bool WaitEvent<E>::onSuspend(Waker waker)
+    bool WaitEvent<void, E>::onSuspend(Waker waker)
     {
         m_waiter.m_waker = waker;
         bool expected = false;
         if(!m_waiter.m_wait.compare_exchange_strong(expected, true, 
                                       std::memory_order_acq_rel, 
                                       std::memory_order_acquire)) {
-            LogTrace("ResultWaitEvent::suspend: waiter already set");
+            LogTrace("WaitEvent::suspend: waiter already set");
             return false;
         }
         return true;
     }
 
-    template <CoType T, typename E>
-    inline ResultWaitEvent<T, E>::ResultWaitEvent(AsyncResultWaiter<T, E> &waiter)
+    template <typename T, typename E>
+    inline WaitEvent<T, E>::WaitEvent(AsyncWaiter<T, E> &waiter)
         : m_waiter(waiter)
     {
     }
     
-    template <CoType T, typename E>
-    inline bool ResultWaitEvent<T, E>::onReady()
+    template <typename T, typename E>
+    inline bool WaitEvent<T, E>::onReady()
     {
         return false;
     }
 
-    template <CoType T, typename E>
-    inline bool ResultWaitEvent<T, E>::onSuspend(Waker waker)
+    template <typename T, typename E>
+    inline bool WaitEvent<T, E>::onSuspend(Waker waker)
     {
         m_waiter.m_waker = waker;
         bool expected = false;
         if(!m_waiter.m_wait.compare_exchange_strong(expected, true, 
                                               std::memory_order_acq_rel, 
                                               std::memory_order_acquire)) {
-            LogTrace("ResultWaitEvent::suspend: waiter already set");
+            LogTrace("WaitEvent::suspend: waiter already set");
             return false;
         }
         return true;

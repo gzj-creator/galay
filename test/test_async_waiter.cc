@@ -4,7 +4,7 @@
 using namespace galay;
 
 
-Coroutine<nil> async_notify_test(AsyncWaiter<CommonError>& waiter) {
+Coroutine<nil> async_notify_test(AsyncWaiter<void, CommonError>& waiter) {
     std::cout << "async_notify_test" << std::endl;
     waiter.notify();
     std::cout << "async_notify_test end" << std::endl;
@@ -12,7 +12,7 @@ Coroutine<nil> async_notify_test(AsyncWaiter<CommonError>& waiter) {
 }
 
 Coroutine<nil> async_waiter_test(Runtime& runtime) {
-    AsyncWaiter<CommonError> waiter;
+    AsyncWaiter<void, CommonError> waiter;
     std::cout << "async_waiter_test" << std::endl;
     runtime.schedule(async_notify_test(waiter));
     co_await waiter.wait();
@@ -20,22 +20,22 @@ Coroutine<nil> async_waiter_test(Runtime& runtime) {
     co_return nil();
 }
 
-Coroutine<nil> async_result_notify_test_1(AsyncResultWaiter<bool, CommonError>& waiter) { 
-    //std::cout << "async_result_notify_test_1" << std::endl;
+Coroutine<nil> async_result_notify_test_1(AsyncWaiter<bool, CommonError>& waiter) { 
+    std::cout << "async_result_notify_test_1" << std::endl;
     waiter.notify(true);
-    //std::cout << "async_result_notify_test end" << std::endl;
+    std::cout << "async_result_notify_test end" << std::endl;
     co_return nil();
 }
 
-Coroutine<nil> async_result_notify_test_2(AsyncResultWaiter<bool, CommonError>& waiter) { 
-    //std::cout << "async_result_notify_test_2" << std::endl;
+Coroutine<nil> async_result_notify_test_2(AsyncWaiter<bool, CommonError>& waiter) { 
+    std::cout << "async_result_notify_test_2" << std::endl;
     waiter.notify(false);
-    //std::cout << "async_result_notify_test end" << std::endl;
+    std::cout << "async_result_notify_test end" << std::endl;
     co_return nil();
 }
 
 Coroutine<nil> async_result_waiter_test(Runtime& runtime) {
-    AsyncResultWaiter<bool, CommonError> waiter;
+    AsyncWaiter<bool, CommonError> waiter;
     std::cout << "async_result_waiter_test" << std::endl;
     runtime.schedule(async_result_notify_test_1(waiter));
     runtime.schedule(async_result_notify_test_2(waiter));
@@ -44,7 +44,7 @@ Coroutine<nil> async_result_waiter_test(Runtime& runtime) {
         std::cout << "error: " << res.error().message() << std::endl;
         co_return nil();
     }
-    std::cout << "result: " << res.value() << std::endl;
+    std::cout << "result: " << std::boolalpha << res.value() << std::endl;
     std::cout << "async_result_waiter_test end" << std::endl;
     co_return nil();
 }
