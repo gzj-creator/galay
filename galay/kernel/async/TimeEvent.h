@@ -34,17 +34,29 @@ namespace galay::details
     class SleepforEvent: public TimeEvent<nil>
     {
     public:
-        SleepforEvent(TimerManager* manager, Timer::ptr timer, std::chrono::milliseconds ms);
+        SleepforEvent(TimerManager* manager, std::chrono::milliseconds ms);
         std::string name() override { return "SleepforEvent"; }
         void handleEvent() override {}
 
         bool onReady() override;
         bool onSuspend(Waker waker) override;
     private:
-        Timer::ptr m_timer;
         std::chrono::milliseconds m_ms;
     };
 
+    class TimeWaitEvent: public TimeEvent<nil>
+    {
+    public:
+        TimeWaitEvent(TimerManager* manager, std::chrono::milliseconds ms, const std::function<void()>& callback);
+        std::string name() override { return "TimeWaitEvent"; }
+        void handleEvent() override {}
+        bool onReady() override;
+        bool onSuspend(Waker waker) override;
+        nil onResume() override;
+    private:
+        std::chrono::milliseconds m_ms;
+        std::function<void()> m_callback;
+    };
 }
 
 

@@ -14,6 +14,7 @@ namespace galay
         using ptr = std::shared_ptr<TimerGenerator>;
         static TimerGenerator::ptr createPtr(Runtime& runtime);
         TimerGenerator(Runtime& runtime);
+        AsyncResult<nil> wait(std::chrono::milliseconds ms, const std::function<void()>& func);
         template <CoType T>
         AsyncResult<std::expected<T, CommonError>> timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func);
         AsyncResult<nil> sleep(std::chrono::milliseconds ms);
@@ -26,7 +27,6 @@ namespace galay
         Coroutine<nil> waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter);
     private:
         Runtime& m_runtime;
-        Timer::ptr m_timer;
     };
 
     template <CoType T>

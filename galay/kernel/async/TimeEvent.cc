@@ -4,8 +4,8 @@
 
 namespace galay::details
 {
-    SleepforEvent::SleepforEvent(TimerManager* manager, Timer::ptr timer, std::chrono::milliseconds ms)
-        : TimeEvent<nil>(manager), m_timer(timer), m_ms(ms)
+    SleepforEvent::SleepforEvent(TimerManager* manager, std::chrono::milliseconds ms)
+        : TimeEvent<nil>(manager), m_ms(ms)
     {
     }
 
@@ -16,11 +16,35 @@ namespace galay::details
 
     bool SleepforEvent::onSuspend(Waker waker) 
     {
-        m_timer->setFunction([waker]() mutable{
+        auto timer = std::make_shared<Timer>(m_ms, [waker]() mutable{
             waker.wakeUp();
         });
-        m_timer->reset(m_ms);
-        m_manager->push(m_timer);
+        m_manager->push(timer);
         return TimeEvent<nil>::onSuspend(waker);
+    }
+
+    TimeWaitEvent::TimeWaitEvent(TimerManager *manager, std::chrono::milliseconds ms, const std::function<void()>& callback)
+        : TimeEvent<nil>(manager), m_ms(ms), m_callback(callback)
+    {
+    }
+
+    bool TimeWaitEvent::onReady()
+    {
+        return m_ms == std::chrono::milliseconds::zero();
+    }
+
+    bool TimeWaitEvent::onSuspend(Waker waker)
+    {
+        auto timer = std::make_shared<Timer>(m_ms, [waker]() mutable{
+            waker.wakeUp();
+        });
+        m_manager->push(timer);
+        return TimeEvent<nil>::onSuspend(waker);
+    }
+
+    nil TimeWaitEvent::onResume()
+    {
+        m_callback();
+        return TimeEvent<nil>::onResume();
     }
 }
