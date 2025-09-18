@@ -130,6 +130,7 @@ namespace galay
         AsyncResult<std::expected<void, CommonError>> close();
         void reallocReadBuffer(size_t length);
         std::expected<void, CommonError> remove();
+        GHandle getHandle() const;
     private:
         GHandle m_handle;
         std::string m_path;

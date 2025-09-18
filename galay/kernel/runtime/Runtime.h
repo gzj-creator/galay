@@ -91,7 +91,11 @@ namespace galay
         RuntimeBuilder& useExternalEventScheduler(EventScheduler::ptr scheduler);
         Runtime build();
     private:
-        Runtime m_runtime;
+        int m_eTimeout = -1;
+        int m_coSchedulerNum = DEFAULT_COS_SCHEDULER_THREAD_NUM;
+        std::chrono::milliseconds m_interval = std::chrono::milliseconds::zero();
+        int m_eventSchedulerInitFdsSize = DEFAULT_FDS_SET_INITIAL_SIZE;
+        EventScheduler::ptr m_eventScheduler;
     };
 
     template<CoType T>

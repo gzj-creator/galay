@@ -44,7 +44,6 @@ namespace galay
         for(size_t i = 0; i < co_num; ++i) {
             m_sockets[i].socket();
             HandleOption options = m_sockets[i].options();
-            options.handleNonBlock();
             options.handleReuseAddr();
             options.handleReusePort();
             m_sockets[i].bind(m_host);
@@ -85,8 +84,7 @@ namespace galay
                 LogInfo("[acceptConnection success]");
                 auto builder = acceptor.value();
                 auto socket = builder.build();
-                socket.options().handleNonBlock();
-                m_runtime.schedule(callback(std::move(socket),AsyncFactory(m_runtime, i)), i);
+                m_runtime.schedule(callback(std::move(socket),AsyncFactory(m_runtime)), i);
             } else {
                 LogError("[acceptConnection failed] [error: {}]", acceptor.error().message());
             }

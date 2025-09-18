@@ -14,6 +14,11 @@ namespace galay
         }
     }
 
+    TcpClient::TcpClient(AsyncTcpSocket &&socket)
+        : m_socket(std::move(socket))
+    {
+    }
+
     TcpClient::TcpClient(Runtime &runtime, const Host &bind_addr)
         : m_socket(runtime)
     {
@@ -48,5 +53,10 @@ namespace galay
     AsyncResult<std::expected<void, CommonError>> TcpClient::close()
     {
         return m_socket.close();
+    }
+
+    TcpClient TcpClient::alsoRunningOn(Runtime& runtime) const
+    {
+        return TcpClient(m_socket.alsoRunningOn(runtime));
     }
 }

@@ -27,11 +27,10 @@ namespace galay
             AsyncUdpSocket socket(m_runtime);
             socket.socket();
             HandleOption options = socket.options();
-            options.handleNonBlock();
             options.handleReuseAddr();
             options.handleReusePort();
             socket.bind(m_host);
-            m_runtime.schedule(callback(std::move(socket),AsyncFactory(m_runtime, i)), i);
+            m_runtime.schedule(callback(std::move(socket),AsyncFactory(m_runtime)), i);
         }
     }
 

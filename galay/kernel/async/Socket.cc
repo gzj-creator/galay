@@ -46,12 +46,8 @@ namespace galay {
         m_handle = handle;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-    }
-
-    AsyncTcpSocket::AsyncTcpSocket(const AsyncTcpSocket& other)
-    {
-        m_handle = other.m_handle;
-        m_scheduler = other.m_scheduler;
+        HandleOption options(handle);
+        options.handleNonBlock();
     }
 
     AsyncTcpSocket::AsyncTcpSocket(AsyncTcpSocket&& other)
@@ -60,15 +56,6 @@ namespace galay {
         other.m_handle = GHandle::invalid();
         m_scheduler = other.m_scheduler;
         other.m_scheduler = nullptr;
-    }
-
-    AsyncTcpSocket& AsyncTcpSocket::operator=(const AsyncTcpSocket& other)
-    {
-        if (this != &other) {
-            m_handle = other.m_handle;
-            m_scheduler = other.m_scheduler;
-        }
-        return *this;
     }
 
     AsyncTcpSocket& AsyncTcpSocket::operator=(AsyncTcpSocket&& other)
@@ -220,7 +207,11 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-   
+    AsyncTcpSocket AsyncTcpSocket::alsoRunningOn(Runtime &runtime) const
+    {
+        return AsyncTcpSocket(runtime, m_handle);
+    }
+
     AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime)
     {
         RuntimeVisitor visitor(runtime);
@@ -234,27 +225,12 @@ namespace galay {
         m_scheduler = visitor.eventScheduler().get();
     }
 
-    AsyncUdpSocket::AsyncUdpSocket(const AsyncUdpSocket& other)
-    {
-        m_handle = other.m_handle;
-        m_scheduler = other.m_scheduler;
-    }
-
     AsyncUdpSocket::AsyncUdpSocket(AsyncUdpSocket&& other)
     {
         m_handle = other.m_handle;
         other.m_handle = GHandle::invalid();
         m_scheduler = other.m_scheduler;
         other.m_scheduler = nullptr;
-    }
-    
-    AsyncUdpSocket& AsyncUdpSocket::operator=(const AsyncUdpSocket& other)
-    {
-        if(this != &other) {
-            m_handle = other.m_handle;
-            m_scheduler = other.m_scheduler;
-        }
-        return *this;
     }
 
     AsyncUdpSocket& AsyncUdpSocket::operator=(AsyncUdpSocket&& other)
@@ -376,6 +352,11 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
+    AsyncUdpSocket AsyncUdpSocket::alsoRunningOn(Runtime& runtime) const
+    {
+        return AsyncUdpSocket(runtime, m_handle);
+    }
+
     AsyncSslSocket::AsyncSslSocket(Runtime& runtime)
     {
         RuntimeVisitor visitor(runtime);
@@ -395,21 +376,6 @@ namespace galay {
         other.m_ssl = nullptr;
         m_scheduler = other.m_scheduler;
         other.m_scheduler = nullptr;
-    }
-
-    AsyncSslSocket::AsyncSslSocket(const AsyncSslSocket &other)
-    {
-        m_ssl = other.m_ssl;
-        m_scheduler = other.m_scheduler;
-    }
-
-    AsyncSslSocket &AsyncSslSocket::operator=(const AsyncSslSocket &other)
-    {
-        if(this == &other) {
-            m_ssl = other.m_ssl;
-            m_scheduler = other.m_scheduler;
-        }
-        return *this;
     }
 
     AsyncSslSocket &AsyncSslSocket::operator=(AsyncSslSocket &&other)
@@ -511,6 +477,11 @@ namespace galay {
     AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::sslClose()
     {
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
+    }
+
+    AsyncSslSocket AsyncSslSocket::alsoRunningOn(Runtime& runtime) const
+    {
+        return AsyncSslSocket(runtime, m_ssl);
     }
 
     AsyncSslSocket::~AsyncSslSocket()

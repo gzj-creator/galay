@@ -2,8 +2,8 @@
 
 namespace galay
 {
-    AsyncFactory::AsyncFactory(Runtime &runtime, int index)
-        : m_runtime(runtime), m_index(index)
+    AsyncFactory::AsyncFactory(Runtime &runtime)
+        : m_runtime(runtime)
     {
     }
 
@@ -52,8 +52,8 @@ namespace galay
         return TimerGenerator(m_runtime);
     }
 
-    TaskRunner AsyncFactory::createTaskRunner()
+    TaskRunner AsyncFactory::createTaskRunner(int co_id)
     {
-        return TaskRunner(m_runtime, m_index);
+        return TaskRunner(m_runtime, co_id);
     }
 }

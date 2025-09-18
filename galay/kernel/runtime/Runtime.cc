@@ -147,17 +147,6 @@ namespace galay
 
     Runtime::Runtime()
     {
-        m_eScheduler = std::make_shared<EventScheduler>(DEFAULT_FDS_SET_INITIAL_SIZE);
-        for(size_t i = 0; i < DEFAULT_COS_SCHEDULER_THREAD_NUM; ++i) {
-            CoroutineConsumer::uptr consumer = CoroutineConsumer::create();
-            m_cSchedulers.emplace_back(CoroutineScheduler(std::move(consumer)));
-        }
-    #if defined(USE_EPOLL)
-        auto activator = std::make_shared<EpollTimerActive>(m_eScheduler.get());
-    #elif defined(USE_KQUEUE)
-        auto activator = std::make_shared<KQueueTimerActive>(m_eScheduler.get());
-    #endif
-        m_timerManager = std::make_shared<PriorityQueueTimerManager>(activator);
     }
 
     Runtime::Runtime(Runtime &&rt)
@@ -253,42 +242,58 @@ namespace galay
 
     RuntimeBuilder &RuntimeBuilder::startCoManager(std::chrono::milliseconds interval)
     {
-        m_runtime.startCoManager(interval);
+        m_interval = interval;
         return *this;
     }
 
     RuntimeBuilder &RuntimeBuilder::setEventCheckTimeout(int timeout)
     {
-        m_runtime.m_eTimeout = timeout;
+        m_eTimeout = timeout;
         return *this;
     }
 
     RuntimeBuilder &RuntimeBuilder::setCoSchedulerNum(int num)
     {
-        m_runtime.m_cSchedulers.clear();
-        for(int i = 0; i < num; ++i) {
-            m_runtime.m_cSchedulers.emplace_back(CoroutineScheduler(std::make_unique<CoroutineConsumer>()));
-        }
+        m_coSchedulerNum = num;
         return *this;
     }
 
     RuntimeBuilder &RuntimeBuilder::useExternalEventScheduler(EventScheduler::ptr scheduler)
     {
-        m_runtime.m_eScheduler = scheduler;
+        m_eventScheduler = scheduler;
         return *this;
     }
 
     RuntimeBuilder &RuntimeBuilder::setEventSchedulerInitFdsSize(int fds_set_size)
     {
-        m_runtime.m_eScheduler = std::make_shared<EventScheduler>(fds_set_size);
+        m_eventSchedulerInitFdsSize = fds_set_size;
         return *this;
     }
 
     Runtime RuntimeBuilder::build()
     {
-        Runtime rt = std::move(m_runtime);
-        m_runtime = Runtime();
-        return rt;
+        Runtime runtime;
+        runtime.m_cSchedulers.clear();
+        for(int i = 0; i < m_coSchedulerNum; ++i) {
+            runtime.m_cSchedulers.emplace_back(CoroutineScheduler(std::make_unique<CoroutineConsumer>()));
+        }
+        runtime.m_eTimeout = m_eTimeout;
+        if(m_eventScheduler) {
+            runtime.m_eScheduler = m_eventScheduler;
+        } else {
+            runtime.m_eScheduler = std::make_shared<EventScheduler>(m_eventSchedulerInitFdsSize);
+        }
+        if(m_interval != std::chrono::milliseconds::zero()) {
+            runtime.startCoManager(m_interval);
+        }
+        
+    #if defined(USE_EPOLL)
+        auto activator = std::make_shared<EpollTimerActive>(runtime.m_eScheduler.get());
+    #elif defined(USE_KQUEUE)
+        auto activator = std::make_shared<KQueueTimerActive>(runtime.m_eScheduler.get());
+    #endif
+        runtime.m_timerManager = std::make_shared<PriorityQueueTimerManager>(activator);
+        return runtime;
     }
 
 }

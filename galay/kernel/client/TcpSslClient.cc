@@ -14,6 +14,11 @@ namespace galay
         }
     }
 
+    TcpSslClient::TcpSslClient(AsyncSslSocket &&socket)
+        :m_socket(std::move(socket))
+    {
+    }
+
     TcpSslClient::TcpSslClient(Runtime &runtime, const Host &bind_addr) 
         :m_socket(runtime)
     {
@@ -48,5 +53,10 @@ namespace galay
     AsyncResult<std::expected<void, CommonError>> TcpSslClient::close()
     {
         return m_socket.sslClose();
+    }
+
+    TcpSslClient TcpSslClient::alsoRunningOn(Runtime& runtime) const
+    {
+        return TcpSslClient(m_socket.alsoRunningOn(runtime));
     }
 }

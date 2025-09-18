@@ -43,7 +43,7 @@ Coroutine<nil> test(Runtime& runtime)
 int main()
 {
     initialiszeSSLClientEnv();
-    Runtime runtime;
+    Runtime runtime = RuntimeBuilder().build();
     runtime.start();
     runtime.schedule(test(runtime));
     std::unique_lock lock(mtx);

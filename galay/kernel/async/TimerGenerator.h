@@ -8,13 +8,12 @@
 
 namespace galay 
 { 
-    //不允许跨线程/协程同时调用同一个TimerGenerator对象
     class TimerGenerator 
     {
     public:
         using ptr = std::shared_ptr<TimerGenerator>;
-        static TimerGenerator::ptr createPtr(Runtime& runtime, int co_id = -1);
-        TimerGenerator(Runtime& runtime, int co_id = -1);
+        static TimerGenerator::ptr createPtr(Runtime& runtime);
+        TimerGenerator(Runtime& runtime);
         template <CoType T>
         AsyncResult<std::expected<T, CommonError>> timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func);
         AsyncResult<nil> sleep(std::chrono::milliseconds ms);
@@ -28,20 +27,15 @@ namespace galay
     private:
         Runtime& m_runtime;
         Timer::ptr m_timer;
-        int m_co_id;
     };
 
     template <CoType T>
     inline AsyncResult<std::expected<T, CommonError>> TimerGenerator::timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()> &func)
     {
         std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter = std::make_shared<AsyncResultWaiter<T, CommonError>>();
-        if(m_co_id == -1) {
-            m_runtime.schedule(waitSleep<T>(ms, waiter));
-            m_runtime.schedule(waitFunc<T>(func, waiter));
-        } else {
-            m_runtime.schedule(waitSleep<T>(ms, waiter), m_co_id);
-            m_runtime.schedule(waitFunc<T>(func, waiter), m_co_id);
-        }
+        
+        m_runtime.schedule(waitSleep<T>(ms, waiter));
+        m_runtime.schedule(waitFunc<T>(func, waiter));
         return waiter->wait();
     }
 

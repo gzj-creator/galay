@@ -29,9 +29,9 @@ namespace galay {
     public:
         AsyncTcpSocket(Runtime& runtime);
         AsyncTcpSocket(Runtime& runtime, GHandle handle);
-        AsyncTcpSocket(const AsyncTcpSocket& other);
+        AsyncTcpSocket(const AsyncTcpSocket& other) = delete;
         AsyncTcpSocket(AsyncTcpSocket&& other);
-        AsyncTcpSocket& operator=(const AsyncTcpSocket& other);
+        AsyncTcpSocket& operator=(const AsyncTcpSocket& other) = delete;
         AsyncTcpSocket& operator=(AsyncTcpSocket&& other);
         ~AsyncTcpSocket();
         HandleOption options();
@@ -56,6 +56,8 @@ namespace galay {
         [[nodiscard]] std::expected<SockAddr, CommonError> getSrcAddr() const;
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
+
+        AsyncTcpSocket alsoRunningOn(Runtime& runtime) const;
     private:
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
@@ -70,9 +72,9 @@ namespace galay {
         AsyncUdpSocket(Runtime& runtime);
         AsyncUdpSocket(Runtime& runtime, GHandle handle);
 
-        AsyncUdpSocket(const AsyncUdpSocket& other);
+        AsyncUdpSocket(const AsyncUdpSocket& other) = delete;
         AsyncUdpSocket(AsyncUdpSocket&& other);
-        AsyncUdpSocket& operator=(const AsyncUdpSocket& other);
+        AsyncUdpSocket& operator=(const AsyncUdpSocket& other) = delete;
         AsyncUdpSocket& operator=(AsyncUdpSocket&& other);
         ~AsyncUdpSocket();
 
@@ -89,6 +91,7 @@ namespace galay {
         [[nodiscard]] std::expected<SockAddr, CommonError> getSrcAddr() const;
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
+        AsyncUdpSocket alsoRunningOn(Runtime& runtime) const;
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
@@ -101,8 +104,8 @@ namespace galay {
         AsyncSslSocket(Runtime& runtime);
         AsyncSslSocket(Runtime& runtime, SSL* ssl);
         AsyncSslSocket(AsyncSslSocket&& other);
-        AsyncSslSocket(const AsyncSslSocket& other);
-        AsyncSslSocket& operator=(const AsyncSslSocket& other);
+        AsyncSslSocket(const AsyncSslSocket& other) = delete;
+        AsyncSslSocket& operator=(const AsyncSslSocket& other) = delete;
         AsyncSslSocket& operator=(AsyncSslSocket&& other);
         HandleOption options();
         std::expected<void, CommonError> socket();
@@ -113,6 +116,7 @@ namespace galay {
         AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* result, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> sslClose();
+        AsyncSslSocket alsoRunningOn(Runtime& runtime) const;
         ~AsyncSslSocket();
     private:
         AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);

@@ -8,12 +8,15 @@
 
 namespace galay
 {
+    //同一运行时同一时间只允许出现一次同一异步对象的异步操作
+    //但可跨运行时实现同一异步对象的异步操作
     class AsyncFactory
     { 
     public:
-        AsyncFactory(Runtime& runtime, int index = -1);
+        AsyncFactory(Runtime& runtime);
         AsyncTcpSocket createTcpSocket();
         AsyncTcpSocket createTcpSocket(GHandle handle);
+        
         AsyncUdpSocket createUdpSocket();
         AsyncUdpSocket createUdpSocket(GHandle handle);
         AsyncSslSocket createSslSocket();
@@ -24,11 +27,9 @@ namespace galay
         File createFile(GHandle handle);
         TimerGenerator createTimerGenerator();
 
-        TaskRunner createTaskRunner();
-
+        TaskRunner createTaskRunner(int co_id);
     private:
         Runtime& m_runtime;
-        int m_index;
     };
 }
 

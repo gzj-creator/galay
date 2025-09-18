@@ -15,6 +15,8 @@ galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
     if(m_ssl == nullptr) {
         LogError("SSL* is nullptr");
     }
+    HandleOption option({SSL_get_fd(m_ssl)});
+    option.handleNonBlock();
     return AsyncSslSocket(m_scheduler, m_ssl);
 }
 

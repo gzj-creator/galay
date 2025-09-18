@@ -12,8 +12,8 @@ Coroutine<nil> test()
 {   
     while(main_co_id == -1) {}
 
-    TimerGenerator generator(runtime, main_co_id);
-    TimerGenerator generator1(runtime, main_co_id);
+    TimerGenerator generator(runtime);
+    TimerGenerator generator1(runtime);
     //TimerGenerator::ptr generator2 = TimerGenerator::createPtr(runtime);
     /*
 

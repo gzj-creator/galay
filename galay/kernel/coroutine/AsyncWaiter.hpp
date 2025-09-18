@@ -51,7 +51,7 @@ namespace galay
         AsyncWaiter();
         AsyncResult<std::expected<void, E>> wait();
         bool isWaiting();
-        void notify();
+        bool notify();
     private:
         Waker m_waker;
         std::atomic_bool m_wait = false;
@@ -67,7 +67,7 @@ namespace galay
         AsyncResultWaiter();
         AsyncResult<std::expected<T, E>> wait();
         bool isWaiting();
-        void notify(std::expected<T, E>&& value);
+        bool notify(std::expected<T, E>&& value);
     private:
         Waker m_waker;
         std::atomic_bool m_wait = false;
@@ -93,14 +93,16 @@ namespace galay
     }
 
     template<typename E>
-    void AsyncWaiter<E>::notify()
+    bool AsyncWaiter<E>::notify()
     {
         bool expected = true;
         if(m_wait.compare_exchange_strong(expected, false, 
                                       std::memory_order_acq_rel, 
                                       std::memory_order_acquire)) {
             m_waker.wakeUp();
+            return true;
         }
+        return false;
     }
 
 
@@ -124,7 +126,7 @@ namespace galay
     }
 
     template <CoType T, typename E>
-    inline void AsyncResultWaiter<T, E>::notify(std::expected<T, E> &&value)
+    inline bool AsyncResultWaiter<T, E>::notify(std::expected<T, E> &&value)
     {
         bool expected = true;
         if(m_wait.compare_exchange_strong(expected, false, 
@@ -132,7 +134,9 @@ namespace galay
                                       std::memory_order_acquire)) {
             m_event->m_result = std::move(value);
             m_waker.wakeUp();
+            return true;
         }
+        return false;
     }
 }
 

@@ -226,5 +226,10 @@ namespace galay
         } 
         return {};
     }
+
+    GHandle File::getHandle() const
+    {
+        return m_handle;
+    }
 #endif
 }

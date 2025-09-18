@@ -157,9 +157,9 @@ namespace galay
     }
 
     template<CoType T>
-    inline void Coroutine<T>::onResume()
+    inline void Coroutine<T>::resume()
     {
-        return m_handle.onResume();
+        return m_handle.resume();
     }
 
 

@@ -20,6 +20,8 @@ galay::AsyncTcpSocket galay::AsyncTcpSocketBuilder::build()
     if(m_handle.fd < 0) {
         LogError("handle < 0");
     }
+    HandleOption option(m_handle);
+    option.handleNonBlock();
     return AsyncTcpSocket(m_scheduler, m_handle);
 }
 

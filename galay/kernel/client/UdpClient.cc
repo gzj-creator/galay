@@ -14,6 +14,11 @@ namespace galay
         }
     }
 
+    UdpClient::UdpClient(AsyncUdpSocket &&socket)
+        : m_socket(std::move(socket))
+    {
+    }
+
     UdpClient::UdpClient(Runtime &runtime, const Host &bind_addr)
         : m_socket(runtime)
     {
@@ -58,5 +63,10 @@ namespace galay
     AsyncResult<std::expected<void, CommonError>> UdpClient::close()
     {
         return m_socket.close();
+    }
+
+    UdpClient UdpClient::alsoRunningOn(Runtime& runtime) const
+    {
+        return UdpClient(m_socket.alsoRunningOn(runtime));
     }
 }

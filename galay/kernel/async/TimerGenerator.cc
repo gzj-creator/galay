@@ -3,13 +3,13 @@
 
 namespace galay 
 {
-    TimerGenerator::ptr TimerGenerator::createPtr(Runtime &runtime, int co_id)
+    TimerGenerator::ptr TimerGenerator::createPtr(Runtime &runtime)
     {
-        return std::make_shared<TimerGenerator>(runtime, co_id);
+        return std::make_shared<TimerGenerator>(runtime);
     }
 
-    TimerGenerator::TimerGenerator(Runtime& runtime, int co_id)
-        :m_runtime(runtime), m_timer(std::make_shared<Timer>(std::chrono::milliseconds::zero(), nullptr)), m_co_id(co_id)
+    TimerGenerator::TimerGenerator(Runtime& runtime)
+        :m_runtime(runtime), m_timer(std::make_shared<Timer>(std::chrono::milliseconds::zero(), nullptr))
     {
     }
 
