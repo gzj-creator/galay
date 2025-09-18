@@ -62,6 +62,7 @@ Coroutine<nil> test()
     std::cout << "connect success" << std::endl;
     runtime_2.schedule(testRead(client.alsoRunningOn(runtime_2)));
     runtime_1.schedule(testWrite(std::move(client)));
+    co_return nil();
 }
 
 int main() { 

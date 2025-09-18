@@ -52,6 +52,7 @@ namespace galay
         bool isEmpty() override;
         size_t size() override { std::shared_lock lock(m_mutex); return m_timers.size(); }
         void push(Timer::ptr timer) override;
+        ~PriorityQueueTimerManager();
     private:
         std::shared_mutex m_mutex;
         std::unique_ptr<details::InnerTimeEvent> m_event;

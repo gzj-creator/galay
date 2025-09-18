@@ -78,6 +78,9 @@ namespace galay
             m_activator->active(timer, m_event.get());
         }
     }
+    PriorityQueueTimerManager::~PriorityQueueTimerManager()
+    {
+    }
 }
 
 std::atomic_uint64_t galay::details::InnerTimeEvent::timer_id = 0;

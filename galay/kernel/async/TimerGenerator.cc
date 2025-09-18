@@ -32,9 +32,4 @@ namespace galay
         auto manager = visitor.timerManager().get();
         return {std::make_shared<details::SleepforEvent>(manager, ms)};
     }
-
-    TimerGenerator::TimerGenerator(const TimerGenerator &other)
-        : m_runtime(other.m_runtime)
-    {
-    }
 }

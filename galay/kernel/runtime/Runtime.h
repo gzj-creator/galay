@@ -5,7 +5,7 @@
 #ifndef GALAY_RUNTIME_H
 #define GALAY_RUNTIME_H
 
-#include "galay/kernel/coroutine/CoScheduler.hpp"
+#include "Holder.h"
 #include "galay/kernel/time/TimerManager.h"
 #include <vector>
 
@@ -67,10 +67,10 @@ namespace galay
         //thread security
         // return co_id
         template<CoType T>
-        int schedule(Coroutine<T>&& co);
+        Holder schedule(Coroutine<T>&& co);
         // return co_id
         template<CoType T>
-        int schedule(Coroutine<T>&& co, int id);
+        Holder schedule(Coroutine<T>&& co, int index);
     private:
         int m_eTimeout = -1;
         std::atomic_bool m_running = false;
@@ -99,11 +99,12 @@ namespace galay
     };
 
     template<CoType T>
-    inline int Runtime::schedule(Coroutine<T>&& co)
+    inline Holder Runtime::schedule(Coroutine<T>&& co)
     {
         if(!m_eScheduler || m_cSchedulers.size() == 0) {
             throw std::runtime_error("Runtime not started");
         }
+        auto origin = co.getOriginCoroutine();
         int old = -1;
         while (true)
         {
@@ -111,29 +112,30 @@ namespace galay
             if (m_index.compare_exchange_strong(old, (old + 1) % m_cSchedulers.size()))
             {
                 if(m_cManager) {
-                    m_cManager->manage(co.getOriginCoroutine());
+                    m_cManager->manage(origin);
                 }
                 m_cSchedulers[old].schedule(std::forward<Coroutine<T>>(co));
                 break;
             }
         }
-        return old;
+        return Holder(&m_cSchedulers[old], old, origin);
     }
 
     template<CoType T>
-    inline int Runtime::schedule(Coroutine<T>&& co, int id)
+    inline Holder Runtime::schedule(Coroutine<T>&& co, int index)
     {
         if(!m_eScheduler || m_cSchedulers.size() == 0) {
             throw std::runtime_error("Runtime not started");
         }
-        if(id >= static_cast<int>(m_cSchedulers.size())) {
+        if(index >= static_cast<int>(m_cSchedulers.size())) {
             throw std::runtime_error("Invalid index");
         }
+        auto origin = co.getOriginCoroutine();
         if(m_cManager) {
-            m_cManager->manage(co.getOriginCoroutine());
+            m_cManager->manage(origin);
         }
-        m_cSchedulers[id].schedule(std::forward<Coroutine<T>>(co));
-        return id;
+        m_cSchedulers[index].schedule(std::forward<Coroutine<T>>(co));
+        return Holder(&m_cSchedulers[index], index, origin);
     }
 
 }

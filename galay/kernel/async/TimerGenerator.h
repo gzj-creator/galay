@@ -16,10 +16,8 @@ namespace galay
         TimerGenerator(Runtime& runtime);
         AsyncResult<nil> wait(std::chrono::milliseconds ms, const std::function<void()>& func);
         template <CoType T>
-        AsyncResult<std::expected<T, CommonError>> timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()>& func);
+        AsyncResult<std::expected<T, CommonError>> timeout(Holder& holder, const std::function<AsyncResult<T>()>& func, std::chrono::milliseconds ms);
         AsyncResult<nil> sleep(std::chrono::milliseconds ms);
-        TimerGenerator(const TimerGenerator& other);
-        TimerGenerator& operator=(const TimerGenerator& other) = delete;
     private:
         template <CoType T>
         Coroutine<nil> waitSleep(std::chrono::milliseconds ms, std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter);
@@ -30,12 +28,11 @@ namespace galay
     };
 
     template <CoType T>
-    inline AsyncResult<std::expected<T, CommonError>> TimerGenerator::timeout(std::chrono::milliseconds ms, const std::function<AsyncResult<T>()> &func)
+    inline AsyncResult<std::expected<T, CommonError>> TimerGenerator::timeout(Holder& holder, const std::function<AsyncResult<T>()> &func, std::chrono::milliseconds ms)
     {
         std::shared_ptr<AsyncResultWaiter<T, CommonError>> waiter = std::make_shared<AsyncResultWaiter<T, CommonError>>();
-        
         m_runtime.schedule(waitSleep<T>(ms, waiter));
-        m_runtime.schedule(waitFunc<T>(func, waiter));
+        holder = m_runtime.schedule(waitFunc<T>(func, waiter));
         return waiter->wait();
     }
 
