@@ -282,16 +282,22 @@ namespace galay::details
 
     void SslRecvEvent::handleEvent()
     {
-        sslRecv();
         m_waker.wakeUp();
     }
 
     bool SslRecvEvent::onReady()
     {
-        return sslRecv();
+        m_ready = sslRecv(false);
+        return m_ready;
     }
 
-    bool SslRecvEvent::sslRecv()
+    std::expected<Bytes, CommonError> SslRecvEvent::onResume()
+    {
+        if(!m_ready) sslRecv(true);
+        return SslEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+
+    bool SslRecvEvent::sslRecv(bool notify)
     {
         using namespace error;
         Bytes bytes;
@@ -305,6 +311,9 @@ namespace galay::details
         } else {
             if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
             {
+                if( notify ) {
+                    m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
+                }
                 return false;
             }
             m_result = std::unexpected(CommonError(CallRecvError, static_cast<uint32_t>(errno)));
@@ -319,16 +328,22 @@ namespace galay::details
 
     void SslSendEvent::handleEvent()
     {
-        sslSend();
         m_waker.wakeUp();
     }
 
     bool SslSendEvent::onReady()
     {
-        return sslSend();
+        m_ready = sslSend(false);
+        return m_ready;
     }
 
-    bool SslSendEvent::sslSend()
+    std::expected<Bytes, CommonError> SslSendEvent::onResume()
+    {
+        if(!m_ready) sslSend(true);
+        return SslEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+
+    bool SslSendEvent::sslSend(bool notify)
     {
         using namespace error;
         int sendBytes = SSL_write(m_ssl, m_bytes.data(), m_bytes.size());
@@ -341,6 +356,9 @@ namespace galay::details
         } else {
             if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
             {
+                if( notify ) {
+                    m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
+                }
                 return false;
             }
             m_result = std::unexpected(CommonError(CallSendError, static_cast<uint32_t>(errno)));

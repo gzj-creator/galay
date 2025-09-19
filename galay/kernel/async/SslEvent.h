@@ -100,9 +100,7 @@ namespace galay::details
         std::string name() override { return "SslConnectEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
-
         bool onReady() override;
-        
     private:
         bool sslConnect();
     private:
@@ -119,9 +117,11 @@ namespace galay::details
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeRead; }
         bool onReady() override;
+        std::expected<Bytes, CommonError> onResume() override;
     private:
-        bool sslRecv();
+        bool sslRecv(bool notify);
     private:
+        bool m_ready;
         size_t m_length;
         char* m_result_str;
     };
@@ -133,9 +133,11 @@ namespace galay::details
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeWrite; }
         bool onReady() override;
+        std::expected<Bytes, CommonError> onResume() override;
     private:
-        bool sslSend();
+        bool sslSend(bool notify);
     private:
+        bool m_ready;
         Bytes m_bytes;
     };
 
