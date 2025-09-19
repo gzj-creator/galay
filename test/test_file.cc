@@ -1,4 +1,5 @@
 #include "galay/kernel/async/File.h"
+#include "galay/common/Buffer.h"
 #include "galay/kernel/runtime/Runtime.h"
 #include "galay/common/Log.h"
 #include <iostream>
@@ -18,29 +19,36 @@ Coroutine<nil> test()
     file.open("./test1.txt", flags, FileModes{});
     //初始化异步IO
     file.aioInit(1024);
-    StringMetaData wdata("1234");
-    //结果收集容器，保证生命周期在 commit 函数调用完成之后
-    std::vector<int> results(1024, 0);
+    char* buffer = "1234";
     for(int i = 0; i < 1024; i++) {
-        file.preWrite(wdata, results[i], i * wdata.size);
+        file.preWrite(buffer, 4, i * 4);
     }
-    auto success = co_await file.commit();
-    //结果收集容器，保证生命周期在 commit 函数调用完成之后
-    std::vector<StringMetaData> rdata(1024);
+    auto wexpects = file.commit();
+    while(auto events = co_await file.getEvent(wexpects.value())) {
+    }
+    file.clearIocbs();
+    std::cout << std::endl; 
+    char rbuffer[1024 * 4] = {0};
+    std::cout << "start read" << std::endl;
     for(int i = 0; i < 1024; i++) {
-        rdata[i] = mallocString(4);
-        file.preRead(rdata[i], i * 4);
+        file.preRead(rbuffer + i * 4, 4, i * 4);
     }
-    co_await file.commit();
-    //验证数据
-    std::string verify("1234");
-    for(auto& by: rdata) {
-        if(std::string(reinterpret_cast<char*>(by.data), by.size) != verify) {
+    auto expects = file.commit();
+    
+    while(auto rdata = co_await file.getEvent(expects.value())) {
+    }
+    for(int i = 0; i < 1024; i++) {
+        std::string_view str(rbuffer + i * 4, 4);
+        if(str != "1234") {
+            std::cout << str << " - " << i << " ";
             std::cout << "verify failed" << std::endl;
-            break;
-        } 
-        freeString(by);
+            co_await file.close();
+            co_return nil();
+        }
+
     }
+    file.clearIocbs();
+    //验证数据
     std::cout << "verify success" << std::endl;
     co_await file.close();
     std::cout << "close success" << std::endl;
@@ -59,27 +67,56 @@ Coroutine<nil> test_v()
     OpenFlags flags;
     flags.create().noBlock().readWrite();
     file.open("./test2.txt", flags, FileModes{});
-    file.aioInit(1024);
-    std::vector<StringMetaData> wbytes(1024);
+    if( auto res = file.aioInit(1024); !res) {
+        std::cout << "aio init failed" << std::endl;
+        std::cout << res.error().message() << std::endl;
+        co_await file.close();
+        co_return nil();
+    }
+
+    char* buffer = "1234";
+    std::vector<iovec> wvecs(1024);
     for(int i = 0; i < 1024; ++i){
-        wbytes[i] = StringMetaData("1234");
+        wvecs[i].iov_base = buffer;
+        wvecs[i].iov_len = 4;
     }
-    IOVecResult result;
-    file.preWriteV(wbytes, result, 0);
-    co_await file.commit();
-    std::vector<StringMetaData> rdata(1024);
-    for(int i = 0; i < 1024; ++i) {
-        rdata[i] = mallocString(4);
+    std::cout << "start write" << std::endl;
+    file.preWriteV(wvecs, 0);
+    auto expected = file.commit();
+    if(!expected) {
+        std::cout << "commit error: " << expected.error().message() << std::endl;
+        co_await file.close();
+        co_return nil();
+    } else {
+        std::cout << "commit success: " << expected.value() << std::endl;
     }
-    IOVecResult rresult;
-    file.preReadV(rdata, rresult, 0);
-    co_await file.commit();
-    for(auto& v: rdata){
-        if(std::string(reinterpret_cast<char*>(v.data), v.size) != "1234") {
-            std::cout << "vector verify failed" << std::endl;
-            break;
+    while(auto events = co_await file.getEvent(expected.value())) {
+        for(auto& event: events.value()) {
+            std::cout << event.res << " - " << event.res2 << " ";
         }
     }
+    std::cout << std::endl;
+    file.clearIocbs();
+    Buffer rbuffer(1024 * 4);
+    std::vector<iovec> rdata(1024);
+    for(int i = 0; i < 1024; ++i) {
+        rdata[i].iov_base = ( rbuffer.data() + i * 4);
+        rdata[i].iov_len = 4;
+    }
+    file.preReadV(rdata, 0);
+    auto revents = file.commit();
+    while(auto rres = co_await file.getEvent(revents.value())) {
+    }
+    for(int i = 0; i < 1024; i++) {
+        std::string_view str(rbuffer.data() + i * 4, 4);
+        if(str != "1234") {
+            std::cout << "verify failed" << std::endl;
+            co_await file.close();
+            co_return nil();
+        }
+
+    }
+    file.clearIocbs();
     std::cout << "vector verify success" << std::endl;
     co_await file.close();
     std::cout << "file close success" << std::endl;
@@ -143,6 +180,7 @@ int main() {
     runtime = builder.build();
     runtime.start();
     runtime.schedule(test());
+    getchar();
 #ifdef USE_AIO
     runtime.schedule(test_v());
 #endif

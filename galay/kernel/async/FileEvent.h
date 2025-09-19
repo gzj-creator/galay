@@ -23,6 +23,7 @@ namespace galay::details {
         bool onSuspend(Waker waker) override {
             using namespace error;
             this->m_waker = waker;
+            std::cout << "FileEvent::onSuspend" << std::endl;
             if(!m_scheduler->activeEvent(this, nullptr)) {
                 this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
                 return false;
@@ -48,18 +49,21 @@ namespace galay::details {
         GHandle m_handle;
     };
     
-    class FileCommitEvent: public FileEvent<std::expected<void, CommonError>>
+    class AioGetEvent: public FileEvent<std::expected<std::vector<io_event>, CommonError>>
     {
     public:
-        FileCommitEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, std::vector<iocb>&& iocbs);
-        std::string name() override { return "FileCommitEvent"; }
+        AioGetEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, uint64_t& expect_events);
+        std::string name() override { return "AioGetEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool onReady() override;
         void handleEvent() override;
+        std::expected<std::vector<io_event>, CommonError> onResume() override;
     private:
-        size_t m_unfinished_cb;
+        bool getEvent(bool notify);
+    private:
+        bool m_ready = false;
         io_context_t m_context;
-        std::vector<iocb> m_iocbs;
+        uint64_t& m_expect_events;
     };
 
 #else

@@ -61,27 +61,6 @@ namespace galay
     //USE_IO_URING.     IO_URING
 
 #ifdef USE_AIO
-    class IOVecResultVisitor;
-
-    class IOVecResult
-    {
-        friend class IOVecResultVisitor;
-    public:
-        unsigned long result();
-    private:
-        unsigned long m_result;
-        std::vector<iovec> m_iovecs;
-    };
-
-    class IOVecResultVisitor
-    {
-    public:
-        IOVecResultVisitor(IOVecResult& result);
-        unsigned long& result();
-        std::vector<iovec>& iovecs();
-    private:
-        IOVecResult& m_result;
-    };
 
     class File
     {
@@ -90,22 +69,27 @@ namespace galay
         File(Runtime& runtime, GHandle handle);
         std::expected<void, CommonError> open(const std::string& path, OpenFlags flags, FileModes modes);
         std::expected<void, CommonError> aioInit(int max_events);
-        void preRead(StringMetaData& bytes, LL offset);
+        void preRead(char* buffer, size_t size, LL offset, void* data = nullptr);
         //设置O_APPEND后忽略 offset 参数,现代文件系统允许稀疏文件 offset 大于文件大小也可形成文件空洞，不计入实际占用
         //保证 result 生命周期在下一次 commiy 之后
-        void preWrite(StringMetaData& bytes, int& result, LL offset);
+        void preWrite(char* buffer, size_t size, LL offset, void* data = nullptr);
         //从第一个 Bytes 开始填充
-        void preReadV(std::vector<StringMetaData>& bytes_v, IOVecResult& result, LL offset);
+        void preReadV(std::vector<iovec>& vec, LL offset, void* data = nullptr);
 
-        void preWriteV(std::vector<StringMetaData>& bytes_v, IOVecResult &result, LL offset);
+        void preWriteV(std::vector<iovec>& vec, LL offset, void* data = nullptr);
 
-        AsyncResult<std::expected<void, CommonError>> commit();
+        std::expected<uint64_t, CommonError> commit();
+
+        AsyncResult<std::expected<std::vector<io_event>, CommonError>> getEvent(uint64_t& expect_events);
+
+        void clearIocbs();
+
         AsyncResult<std::expected<void, CommonError>> close();
         ~File();
     private:
         GHandle m_handle;
         GHandle m_event_handle;
-        io_context_t m_io_ctx;
+        io_context_t m_io_ctx = {0};
         std::vector<iocb> m_iocbs;
         EventScheduler* m_scheduler = nullptr;
     };

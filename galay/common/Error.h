@@ -55,6 +55,7 @@ namespace galay::error
         FileReadEmptyError,
         FileWriteEmptyError,
         ConcurrentError,
+        AioEventsAllCompleteError,
         ErrorEnd
     };
 

@@ -5,25 +5,6 @@
 namespace galay 
 {
 #ifdef USE_AIO
-    unsigned long IOVecResult::result()
-    {
-        return m_result;
-    }
-
-    IOVecResultVisitor::IOVecResultVisitor(IOVecResult &result)
-        : m_result(result)
-    {
-    }
-
-    unsigned long& IOVecResultVisitor::result()
-    {
-        return m_result.m_result;
-    }
-
-    std::vector<iovec>& IOVecResultVisitor::iovecs()
-    {
-        return m_result.m_iovecs;
-    }
 
     File::File(Runtime& runtime)
     {
@@ -60,58 +41,65 @@ namespace galay
         using namespace error;
         int ret = io_setup(max_events, &m_io_ctx);
         if(ret) {
-            return std::unexpected<CommonError>({ErrorCode::CallAioSetupError, static_cast<uint32_t>(errno)});
+            return std::unexpected<CommonError>({ErrorCode::CallAioSetupError, static_cast<uint32_t>(-ret)});
         }
         return {};
     }
 
-    void File::preRead(StringMetaData& bytes, LL offset)
+    void File::preRead(char* buffer, size_t size, LL offset, void* data)
     {
         m_iocbs.push_back(iocb{});
-        io_prep_pread(&m_iocbs.back(), m_handle.fd, bytes.data, bytes.capacity, offset);
+        io_prep_pread(&m_iocbs.back(), m_handle.fd, buffer, size, offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
-        m_iocbs.back().data = &bytes;
+        m_iocbs.back().data = data;
     }
 
-    void File::preWrite(StringMetaData& bytes, int &result, LL offset)
+    void File::preWrite(char* buffer, size_t size, LL offset, void* data)
     {
         m_iocbs.push_back(iocb{});
-        io_prep_pwrite(&m_iocbs.back(), m_handle.fd, bytes.data, bytes.size, offset);
+        io_prep_pwrite(&m_iocbs.back(), m_handle.fd, buffer, size, offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
-        m_iocbs.back().data = &result;
+        m_iocbs.back().data = data;
     }
 
-    void File::preReadV(std::vector<StringMetaData>& bytes_v, IOVecResult &temp, LL offset)
+    void File::preReadV(std::vector<iovec>& vec, LL offset, void* data)
     {
         m_iocbs.push_back(iocb{});
-        IOVecResultVisitor visitor(temp);
-        visitor.iovecs().resize(bytes_v.size());
-        for(size_t i = 0; i < bytes_v.size(); ++i){
-            visitor.iovecs()[i].iov_base = bytes_v[i].data;
-            visitor.iovecs()[i].iov_len = bytes_v[i].capacity;
+        io_prep_preadv(&m_iocbs.back(), m_handle.fd, vec.data(), vec.size(), offset);
+        io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
+        m_iocbs.back().data = data;
+    }
+
+    void File::preWriteV(std::vector<iovec>& vec, LL offset, void* data)
+    {
+        m_iocbs.push_back(iocb{});
+        io_prep_pwritev(&m_iocbs.back(), m_handle.fd, vec.data(), static_cast<int>(vec.size()), offset);
+        io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
+        m_iocbs.back().data = data;
+    }
+
+    std::expected<uint64_t, CommonError> File::commit()
+    {
+        using namespace error;
+        size_t nums = m_iocbs.size();
+        std::vector<iocb*> iocb_ptrs(nums, nullptr);
+        for (size_t i = 0; i < nums; i++) {
+            iocb_ptrs[i] = &m_iocbs[i];
         }
-        io_prep_preadv(&m_iocbs.back(), m_handle.fd, visitor.iovecs().data(), visitor.iovecs().size(), offset);
-        io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
-        m_iocbs.back().data = &bytes_v;
-    }
-
-    void File::preWriteV(std::vector<StringMetaData> &bytes_v, IOVecResult &result, LL offset)
-    {
-        m_iocbs.push_back(iocb{});
-        IOVecResultVisitor visitor(result);
-        visitor.iovecs().resize(bytes_v.size());
-        for(size_t i = 0; i < bytes_v.size(); ++i){
-            visitor.iovecs()[i].iov_base = bytes_v[i].data;
-            visitor.iovecs()[i].iov_len = bytes_v[i].size;
+        if(io_submit(m_io_ctx, nums, iocb_ptrs.data()) == -1) {
+            return std::unexpected(CommonError{CallAioSubmitError, static_cast<uint32_t>(errno)});
         }
-        io_prep_pwritev(&m_iocbs.back(), m_handle.fd, visitor.iovecs().data(), visitor.iovecs().size(), offset);
-        io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
-        m_iocbs.back().data = &result;
+        return nums;
     }
 
-    AsyncResult<std::expected<void, CommonError>> File::commit()
+    AsyncResult<std::expected<std::vector<io_event>, CommonError>> File::getEvent(uint64_t& expect_events)
     {
-        return {std::make_shared<details::FileCommitEvent>(m_event_handle, m_scheduler, m_io_ctx, std::move(m_iocbs))};
+        return {std::make_shared<details::AioGetEvent>(m_event_handle, m_scheduler, m_io_ctx, expect_events)};
+    }
+
+    void File::clearIocbs()
+    {
+        m_iocbs.clear();
     }
 
     AsyncResult<std::expected<void, CommonError>> File::close()

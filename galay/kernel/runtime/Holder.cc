@@ -8,7 +8,7 @@ namespace galay
     }
 
     Holder::Holder(CoroutineScheduler *scheduler, int index, CoroutineBase::wptr co)
-        : m_index(index), m_scheduler(scheduler), m_co(co)
+        : m_index(index), m_co(co), m_scheduler(scheduler)
     {
     }
 

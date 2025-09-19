@@ -22,78 +22,56 @@ namespace galay::details
         return true;
     }
 
-    FileCommitEvent::FileCommitEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, std::vector<iocb>&& iocbs)
-        : FileEvent<std::expected<void, CommonError>>(event_handle, scheduler), m_unfinished_cb(iocbs.size()), m_context(context), m_iocbs(std::move(iocbs))
+    AioGetEvent::AioGetEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, uint64_t& expect_events)
+        : FileEvent<std::expected<std::vector<io_event>, CommonError>>(event_handle, scheduler), m_context(context), m_expect_events(expect_events)
     {
     }
 
-    bool FileCommitEvent::onReady()
+    bool AioGetEvent::onReady()
     {
-        using namespace error;
-        size_t nums = m_iocbs.size();
-        std::vector<iocb*> iocb_ptrs(nums, nullptr);
-        for (size_t i = 0; i < nums; i++) {
-            iocb_ptrs[i] = &m_iocbs[i];
+        if(m_expect_events == 0) {
+            m_result = std::unexpected(CommonError(AioEventsAllCompleteError, 0));
+            m_ready = true;
+            return m_ready;
         }
-        if(io_submit(m_context, nums, iocb_ptrs.data()) == -1) {
-            m_result = std::unexpected(CommonError{CallAioSubmitError, static_cast<uint32_t>(errno)});
-            return true;
-        }
-        return false;
+        m_ready = getEvent(false);
+        return m_ready;
     }
 
-    void FileCommitEvent::handleEvent()
+    void AioGetEvent::handleEvent()
+    {
+        m_waker.wakeUp();
+    }
+
+    std::expected<std::vector<io_event>, CommonError> AioGetEvent::onResume()
+    {
+        if(!m_ready) getEvent(true);
+        return FileEvent<std::expected<std::vector<io_event>, CommonError>>::onResume();
+    }
+
+    bool AioGetEvent::getEvent(bool notify)
     {
         uint64_t finish_event = 0;
         int ret = read(m_ehandle.fd, &finish_event, sizeof(finish_event));
-        std::vector<io_event> events(finish_event);
-        ret = io_getevents(m_context, 0, events.size(), events.data(), nullptr);
-        while (ret -- > 0)
-        {
-            auto& event = events[ret];
-            if(event.data) {
-                if(event.obj->aio_lio_opcode == IO_CMD_PREAD) {
-                    StringMetaData* result = static_cast<StringMetaData*>(event.data);
-                    if(event.res > 0) {
-                        result->size = event.res;
-                    }
-                } else if(event.obj->aio_lio_opcode == IO_CMD_PWRITE) {
-                    int *result = static_cast<int*>(event.data);
-                    *result = event.res;
-                } 
-                else if(event.obj->aio_lio_opcode == IO_CMD_PREADV) {
-                    std::vector<StringMetaData>* result = static_cast<std::vector<StringMetaData>*>(event.data);
-                    if(event.res > 0) { 
-                        unsigned long remain = event.res;
-                        for(size_t i = 0; i < result->size(); ++i) {
-                            if(remain > result->at(i).capacity) {
-                                result->at(i).size = result->at(i).capacity;
-                                remain -= result->at(i).size;
-                            } else {
-                                result->at(i).size = remain;
-                                remain -= result->at(i).size;
-                                break;
-                            }
-                        }
-                    }
+        if(ret < 0) {
+            if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
+            {
+                if( notify ) {
+                    m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
                 }
-                else if (event.obj->aio_lio_opcode == IO_CMD_PWRITEV) {
-                    IOVecResult *result = static_cast<IOVecResult*>(event.data);
-                    IOVecResultVisitor visitor(*result);
-                    visitor.result() = event.res;
-                }
+                return false;
             }
-        }
-        m_unfinished_cb -= finish_event;
-        if(m_unfinished_cb == 0) {
-            m_scheduler->removeEvent(this, nullptr);
-            m_result = {};
-            m_waker.wakeUp();
+            m_result = std::unexpected(CommonError(CallFileReadError, static_cast<uint32_t>(errno)));
         } else {
-            m_scheduler->activeEvent(this, nullptr);
+            std::vector<io_event> events(finish_event);
+            ret = io_getevents(m_context, finish_event, events.size(), events.data(), nullptr);
+            m_expect_events -= ret;
+            events.resize(ret);
+            m_result = std::move(events);
         }
-    
-    } 
+        return true;
+    }
+
 #else
     FileCloseEvent::FileCloseEvent(GHandle handle, EventScheduler *scheduler)
         : FileEvent<std::expected<void, CommonError>>(handle, scheduler)
