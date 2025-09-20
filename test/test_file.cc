@@ -152,7 +152,8 @@ Coroutine<nil> test()
     }
     std::cout << "write success: " << wwrapper.value().size() << std::endl;
     file.seek(0);
-    auto rwrapper = co_await file.read(10240);
+    Buffer buffer(10240);
+    auto rwrapper = co_await file.read(buffer.data(), buffer.capacity());
     if(!rwrapper) {
         std::cout << "read error: " << rwrapper.error().message() << std::endl;
         co_return nil();

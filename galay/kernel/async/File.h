@@ -105,20 +105,17 @@ namespace galay
         File& operator=(const File& other) = delete;
         File& operator=(File&& other);
         ~File();
-
         HandleOption option();
         std::expected<void, CommonError> open(const std::string& path, OpenFlags flags, FileModes modes);
-        AsyncResult<std::expected<Bytes, CommonError>> read(size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> read(char* result, size_t length);
         std::expected<void, CommonError> seek(size_t offset);
         AsyncResult<std::expected<Bytes, CommonError>> write(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> close();
-        void reallocReadBuffer(size_t length);
         std::expected<void, CommonError> remove();
         GHandle getHandle() const;
     private:
         GHandle m_handle;
         std::string m_path;
-        StringMetaData m_buffer;
         EventScheduler* m_scheduler = nullptr;
     };
 #endif

@@ -116,7 +116,6 @@ namespace galay
     {
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     File::File(Runtime& runtime, GHandle handle)
@@ -124,11 +123,10 @@ namespace galay
         m_handle = handle;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
-        m_buffer = mallocString(DEFAULT_BUFFER_SIZE);
     }
 
     File::File(File&& other)
-        : m_handle(other.m_handle), m_scheduler(other.m_scheduler), m_buffer(std::move(other.m_buffer))
+        : m_handle(other.m_handle), m_scheduler(other.m_scheduler)
     {
         other.m_handle = GHandle::invalid();
         other.m_scheduler = nullptr;
@@ -140,7 +138,6 @@ namespace galay
         {
             m_handle = other.m_handle;
             m_scheduler = other.m_scheduler;
-            m_buffer = std::move(other.m_buffer);
             other.m_handle = GHandle::invalid();
             other.m_scheduler = nullptr;
         }
@@ -149,7 +146,6 @@ namespace galay
 
     File::~File()
     {
-        freeString(m_buffer);
     }
 
     HandleOption File::option()
@@ -173,13 +169,9 @@ namespace galay
         return {};
     }
 
-    AsyncResult<std::expected<Bytes, CommonError>> File::read(size_t length)
+    AsyncResult<std::expected<Bytes, CommonError>> File::read(char* buffer, size_t length)
     {
-        if(m_buffer.capacity < length) {
-            reallocString(m_buffer, length);
-        }
-        clearString(m_buffer);
-        return {std::make_shared<details::FileReadEvent>(m_handle, m_scheduler, reinterpret_cast<char*>(m_buffer.data), length)};
+        return {std::make_shared<details::FileReadEvent>(m_handle, m_scheduler, buffer, length)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> File::write(Bytes bytes)
@@ -199,11 +191,6 @@ namespace galay
     AsyncResult<std::expected<void, CommonError>> File::close()
     {
         return {std::make_shared<details::FileCloseEvent>(m_handle, m_scheduler)};
-    }
-
-    void File::reallocReadBuffer(size_t length)
-    {
-        reallocString(m_buffer, length);
     }
 
     std::expected<void, CommonError> File::remove()
