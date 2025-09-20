@@ -69,6 +69,8 @@ namespace galay {
         template<CoType T>
         void schedule(Coroutine<T>&& co);
 
+        void schedule(CoroutineBase::wptr co);
+
         void resumeCoroutine(CoroutineBase::wptr co);
         void destroyCoroutine(CoroutineBase::wptr co);
 
@@ -80,7 +82,7 @@ namespace galay {
     inline void CoroutineScheduler::schedule(Coroutine<T> &&co)
     {
         co.belongScheduler(this);
-        m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co.getOriginCoroutine());
+        m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co.origin());
     }
 
 

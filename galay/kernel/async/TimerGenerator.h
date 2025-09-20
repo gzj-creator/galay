@@ -31,8 +31,8 @@ namespace galay
     inline AsyncResult<std::expected<T, CommonError>> TimerGenerator::timeout(Holder& holder, const std::function<AsyncResult<T>()> &func, std::chrono::milliseconds ms)
     {
         std::shared_ptr<AsyncWaiter<T, CommonError>> waiter = std::make_shared<AsyncWaiter<T, CommonError>>();
-        m_runtime.schedule(waitSleep<T>(ms, waiter));
-        holder = m_runtime.schedule(waitFunc<T>(func, waiter));
+        waiter->appendTask(waitSleep<T>(ms, waiter));
+        waiter->appendTask(waitFunc<T>(func, waiter));
         return waiter->wait();
     }
 

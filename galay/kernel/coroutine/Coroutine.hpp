@@ -142,7 +142,7 @@ public:
     std::optional<T> result();
     std::optional<T> operator()();
 
-    CoroutineBase::wptr getOriginCoroutine();
+    CoroutineBase::wptr origin();
     ~Coroutine() override = default;
 private:
     void appendExitCallback(const ExitHandle& callback) override;

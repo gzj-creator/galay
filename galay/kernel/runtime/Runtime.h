@@ -71,6 +71,9 @@ namespace galay
         // return co_id
         template<CoType T>
         Holder schedule(Coroutine<T>&& co, int index);
+
+        Holder schedule(CoroutineBase::wptr co);
+        Holder schedule(CoroutineBase::wptr co, int index);
     private:
         int m_eTimeout = -1;
         std::atomic_bool m_running = false;
@@ -101,41 +104,13 @@ namespace galay
     template<CoType T>
     inline Holder Runtime::schedule(Coroutine<T>&& co)
     {
-        if(!m_eScheduler || m_cSchedulers.size() == 0) {
-            throw std::runtime_error("Runtime not started");
-        }
-        auto origin = co.getOriginCoroutine();
-        int old = -1;
-        while (true)
-        {
-            old = m_index.load();
-            if (m_index.compare_exchange_strong(old, (old + 1) % m_cSchedulers.size()))
-            {
-                if(m_cManager) {
-                    m_cManager->manage(origin);
-                }
-                m_cSchedulers[old].schedule(std::forward<Coroutine<T>>(co));
-                break;
-            }
-        }
-        return Holder(&m_cSchedulers[old], old, origin);
+        return schedule(co.origin());
     }
 
     template<CoType T>
     inline Holder Runtime::schedule(Coroutine<T>&& co, int index)
     {
-        if(!m_eScheduler || m_cSchedulers.size() == 0) {
-            throw std::runtime_error("Runtime not started");
-        }
-        if(index >= static_cast<int>(m_cSchedulers.size())) {
-            throw std::runtime_error("Invalid index");
-        }
-        auto origin = co.getOriginCoroutine();
-        if(m_cManager) {
-            m_cManager->manage(origin);
-        }
-        m_cSchedulers[index].schedule(std::forward<Coroutine<T>>(co));
-        return Holder(&m_cSchedulers[index], index, origin);
+        return schedule(co.origin(), index);
     }
 
 }

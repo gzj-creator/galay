@@ -240,6 +240,42 @@ namespace galay
         return m_cSchedulers.size();
     }
 
+    Holder Runtime::schedule(CoroutineBase::wptr co)
+    {
+        if(!m_eScheduler || m_cSchedulers.size() == 0) {
+            throw std::runtime_error("Runtime not started");
+        }
+        int old = -1;
+        while (true)
+        {
+            old = m_index.load();
+            if (m_index.compare_exchange_strong(old, (old + 1) % m_cSchedulers.size()))
+            {
+                if(m_cManager) {
+                    m_cManager->manage(co);
+                }
+                m_cSchedulers[old].schedule(co);
+                break;
+            }
+        }
+        return Holder(&m_cSchedulers[old], old, co);
+    }
+
+    Holder Runtime::schedule(CoroutineBase::wptr co, int index)
+    {
+        if(!m_eScheduler || m_cSchedulers.size() == 0) {
+            throw std::runtime_error("Runtime not started");
+        }
+        if(index >= static_cast<int>(m_cSchedulers.size())) {
+            throw std::runtime_error("Invalid index");
+        }
+        if(m_cManager) {
+            m_cManager->manage(co);
+        }
+        m_cSchedulers[index].schedule(co);
+        return Holder(&m_cSchedulers[index], index, co);
+    }
+
     RuntimeBuilder &RuntimeBuilder::startCoManager(std::chrono::milliseconds interval)
     {
         m_interval = interval;

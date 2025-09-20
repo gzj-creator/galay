@@ -78,6 +78,14 @@ namespace galay
         return true;
     }
 
+    void CoroutineScheduler::schedule(CoroutineBase::wptr co)
+    {
+        if(!co.expired()) {
+            co.lock()->belongScheduler(this);
+            m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co);
+        }
+    }
+
     void CoroutineScheduler::resumeCoroutine(CoroutineBase::wptr co)
     {
         if (!co.expired()) co.lock()->belongScheduler(this);

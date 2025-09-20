@@ -144,7 +144,7 @@ namespace galay
     }
 
     template<CoType T>
-    inline CoroutineBase::wptr Coroutine<T>::getOriginCoroutine()
+    inline CoroutineBase::wptr Coroutine<T>::origin()
     {
         return m_handle.promise().getCoroutine();
     }

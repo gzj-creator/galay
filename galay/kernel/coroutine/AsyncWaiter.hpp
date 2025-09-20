@@ -3,6 +3,7 @@
 
 #include "Result.hpp"
 #include "galay/common/Common.h"
+#include "CoScheduler.hpp"
 
 namespace galay
 {
@@ -22,8 +23,12 @@ namespace galay
             bool onReady() override;
             //return true while suspend
             bool onSuspend(Waker waker) override;
+
+            template<CoType Type>
+            void appendTask(Coroutine<Type>&& co);
         private:
             AsyncWaiter<T, E>& m_waiter;
+            std::shared_ptr<std::list<CoroutineBase::wptr>> m_tasks;
         };
     }
 
@@ -34,6 +39,8 @@ namespace galay
         friend class details::WaitEvent;
     public:
         AsyncWaiter();
+        template<CoType Type>
+        void appendTask(Coroutine<Type>&& co);
         AsyncResult<std::expected<T, E>> wait();
         bool isWaiting();
         bool notify(std::expected<T, E>&& value);
@@ -74,6 +81,14 @@ namespace galay
         }
         return false;
     }
+
+
+    template <typename T, typename E>
+    template <CoType Type>
+    inline void AsyncWaiter<T, E>::appendTask(Coroutine<Type> &&co)
+    {
+        m_event->appendTask(std::move(co));
+    }
 }
 
 namespace galay::details 
@@ -101,7 +116,22 @@ namespace galay::details
             LogTrace("WaitEvent::suspend: waiter already set");
             return false;
         }
+        if(m_tasks) {
+            for(auto it = m_tasks->begin(); it != m_tasks->end(); ++it) {
+                waker.belongScheduler()->schedule(*it);
+            }
+        }
         return true;
+    }
+
+    template <typename T, typename E>
+    template <CoType Type>
+    inline void WaitEvent<T, E>::appendTask(Coroutine<Type> &&co)
+    {
+        if(!m_tasks) {
+            m_tasks = std::make_shared<std::list<CoroutineBase::wptr>>();
+        }
+        m_tasks->emplace_back(co.origin());
     }
 }
 
