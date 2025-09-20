@@ -8,12 +8,9 @@
 namespace galay
 {
     class AsyncTcpSocket;
-    class AsyncUdpSocket;
-
     class AsyncTcpSocketBuilder {
         friend class AsyncTcpSocket;
     public:
-        static AsyncTcpSocketBuilder create(EventScheduler* scheduler, GHandle handle);
         //throw exception
         AsyncTcpSocket build();
         bool check() const;
@@ -52,17 +49,19 @@ namespace galay::details
 
     
 
-    class AcceptEvent: public NetEvent<std::expected<AsyncTcpSocketBuilder, CommonError>>
+class AcceptEvent: public NetEvent<std::expected<void, CommonError>>
     {
     public:
-        AcceptEvent(GHandle handle, EventScheduler* scheduler) 
-            : NetEvent<std::expected<AsyncTcpSocketBuilder, CommonError>>(handle, scheduler) {}
+        AcceptEvent(GHandle handle, EventScheduler* scheduler, GHandle& accept_handle) 
+            : NetEvent<std::expected<void, CommonError>>(handle, scheduler), m_accept_handle(accept_handle) {}
         std::string name() override { return "AcceptEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool onReady() override;
-        std::expected<AsyncTcpSocketBuilder, CommonError> onResume() override;  
+        std::expected<void, CommonError> onResume() override;  
     private:
         bool acceptSocket(bool notify);
+    private:
+        GHandle& m_accept_handle;
     };
 
     class RecvEvent: public NetEvent<std::expected<Bytes, CommonError>>

@@ -6,14 +6,6 @@
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/common/Log.h"
 
-galay::AsyncTcpSocketBuilder galay::AsyncTcpSocketBuilder::create(EventScheduler* scheduler, GHandle handle)
-{
-    AsyncTcpSocketBuilder builder;
-    builder.m_handle = handle;
-    builder.m_scheduler = scheduler;
-    return builder;
-}
-
 
 galay::AsyncTcpSocket galay::AsyncTcpSocketBuilder::build()
 {
@@ -41,10 +33,10 @@ namespace galay::details
         return m_ready;
     }
 
-    std::expected<AsyncTcpSocketBuilder, CommonError> AcceptEvent::onResume()
+    std::expected<void, CommonError> AcceptEvent::onResume()
     {
         if(!m_ready) acceptSocket(true);
-        return AsyncEvent<std::expected<AsyncTcpSocketBuilder, CommonError>>::onResume();
+        return AsyncEvent<std::expected<void, CommonError>>::onResume();
     }
     
     bool AcceptEvent::acceptSocket(bool notify)
@@ -68,7 +60,8 @@ namespace galay::details
         std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
         uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
         LogTrace("[Accept Address: {}:{}]", ip, port);
-        m_result = AsyncTcpSocketBuilder::create(m_scheduler, handle);
+        m_result = {};
+        m_accept_handle = handle;
         return true;
     }
 

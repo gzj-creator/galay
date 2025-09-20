@@ -57,9 +57,9 @@ Coroutine<nil> test()
     socket.listen(1024);
     while (true)
     {
-        auto builder = co_await socket.accept();
-        std::cout << "accept" << std::endl;
-        auto new_socket = builder.value().build();
+        AsyncTcpSocketBuilder builder;
+        auto result = socket.accept(builder);
+        auto new_socket = builder.build();
         runtime_2.schedule(testWrite(new_socket.alsoRunningOn(runtime_2)));
         runtime_1.schedule(testRead(std::move(new_socket)));
     }

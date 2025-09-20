@@ -41,14 +41,28 @@ Coroutine<nil> test()
     std::cout << "listen success" << std::endl;
     while (true)
     {
-        auto t4 = co_await socket.sslAccept();
-        if (!t4)
-        {
-            std::cout << t4.error().message() << std::endl;
-            co_return nil();
+        AsyncSslSocketBuilder builder;
+        if(auto acceptor = co_await socket.accept(builder); !acceptor) {
+            std::cout << acceptor.error().message() << std::endl;
+            continue;
+        } 
+        if( auto res = socket.readyToSslAccept(builder); !res) {
+            std::cout << res.error().message() << std::endl;
+            continue;
         }
-        std::cout << "accept success" << std::endl;
-        auto& builder = t4.value();
+        std::expected<bool, CommonError> res;
+        do
+        {
+            res = co_await socket.sslAccept(builder);
+            if(!res) {
+                std::cout << res.error().message() << std::endl;
+            } 
+            if(res.value()) {
+                std::cout << "ssl accept success" << std::endl;
+                break;
+            }
+        } while (true);
+        if(!res) continue;
         auto new_socket = builder.build();
         new_socket.options().handleNonBlock();
         runtime.schedule(Recv(std::move(new_socket)));

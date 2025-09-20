@@ -1,4 +1,5 @@
 #include "TcpSslClient.h"
+#include "galay/kernel/coroutine/AsyncWaiter.hpp"
 
 namespace galay
 {
@@ -37,15 +38,25 @@ namespace galay
 
     AsyncResult<std::expected<void, CommonError>> TcpSslClient::connect(const Host& addr)
     {
-        return m_socket.sslConnect(addr);
+        return m_socket.connect(addr);
     }
 
-    AsyncResult<std::expected<Bytes, CommonError>> TcpSslClient::recv(char* buffer, size_t length)
+    void TcpSslClient::readyToSslConnect()
+    {
+        m_socket.readyToSslConnect();
+    }
+
+    AsyncResult<std::expected<bool, CommonError>> TcpSslClient::sslConnect()
+    {
+        return m_socket.sslConnect();
+    }
+
+    AsyncResult<std::expected<Bytes, CommonError>> TcpSslClient::sslRecv(char* buffer, size_t length)
     {
         return m_socket.sslRecv(buffer, length);
     }
 
-    AsyncResult<std::expected<Bytes, CommonError>> TcpSslClient::send(Bytes bytes)
+    AsyncResult<std::expected<Bytes, CommonError>> TcpSslClient::sslSend(Bytes bytes)
     {
         return m_socket.sslSend(std::move(bytes));
     }

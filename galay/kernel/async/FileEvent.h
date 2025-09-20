@@ -23,7 +23,6 @@ namespace galay::details {
         bool onSuspend(Waker waker) override {
             using namespace error;
             this->m_waker = waker;
-            std::cout << "FileEvent::onSuspend" << std::endl;
             if(!m_scheduler->activeEvent(this, nullptr)) {
                 this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
                 return false;

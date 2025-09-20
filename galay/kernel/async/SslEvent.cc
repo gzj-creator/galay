@@ -3,13 +3,6 @@
 #include "galay/common/Log.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 
-galay::AsyncSslSocketBuilder galay::AsyncSslSocketBuilder::create(EventScheduler* scheduler, SSL *ssl){
-    AsyncSslSocketBuilder builder;
-    builder.m_ssl = ssl;
-    builder.m_scheduler = scheduler;
-    return builder;
-}
-
 galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
 {
     if(m_ssl == nullptr) {
@@ -28,93 +21,60 @@ bool galay::AsyncSslSocketBuilder::check() const
 namespace galay::details
 { 
     SslAcceptEvent::SslAcceptEvent(SSL* ssl, EventScheduler* scheduler)
-        : SslEvent<std::expected<AsyncSslSocketBuilder, CommonError>>(ssl, scheduler), m_status(SslAcceptStatus::kSslAcceptStatus_Accept)
+        : SslEvent<std::expected<bool, CommonError>>(ssl, scheduler)
     {
     }
 
     void SslAcceptEvent::handleEvent()
     {
-        if(sslAccept()) {
-            m_waker.wakeUp();
-        } else {
-            m_scheduler->activeEvent(this, nullptr);
-        }
+        m_waker.wakeUp();
     }
 
     EventType SslAcceptEvent::getEventType() const
     {
-        if(m_status == SslAcceptStatus::kSslAcceptStatus_Accept) {
+        switch (m_ssl_code)
+        {
+        case SSL_ERROR_WANT_READ:
             return EventType::kEventTypeRead;
-        } else if(m_status == SslAcceptStatus::kSslAcceptStatus_SslAccept) {
-            switch (m_ssl_code)
-            {
-            case SSL_ERROR_WANT_READ:
-                return EventType::kEventTypeRead;
-            case SSL_ERROR_WANT_WRITE:
-                return EventType::kEventTypeWrite;
-            default:
-                break;
-            }
+        case SSL_ERROR_WANT_WRITE:
+            return EventType::kEventTypeWrite;
+        default:
+            break;
         }
         return EventType::kEventTypeNone;
     }
 
     bool SslAcceptEvent::onReady()
     {
-        return sslAccept();
+        m_ready = sslAccept(false);
+        return m_ready;
     }
 
-    bool SslAcceptEvent::sslAccept()
+    std::expected<bool, CommonError> SslAcceptEvent::onResume()
+    {
+        if(!m_ready) sslAccept(true);
+        return SslEvent<std::expected<bool, CommonError>>::onResume();
+    }
+
+    bool SslAcceptEvent::sslAccept(bool notify)
     {
         using namespace error;
-        if(m_status == SslAcceptStatus::kSslAcceptStatus_Accept) {
-            //accept
-            sockaddr addr{};
-            socklen_t addr_len = sizeof(addr);
-            GHandle handle {
-                .fd = accept(SSL_get_fd(m_ssl), &addr, &addr_len),
-            };
-            if( handle.fd < 0 ) {
-                if( static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR ) {
-                    return false;
-                }
-                m_result = std::unexpected(CommonError(CallAcceptError, static_cast<uint32_t>(errno)));
-                return true;
+        int r = SSL_do_handshake(m_ssl);
+        if(r == 1) {
+            m_result = true;
+            return true;
+        } 
+        m_ssl_code = SSL_get_error(m_ssl, r);
+        if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ) {
+            if( notify ) {
+                m_result = false;
             }
-            std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
-            uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
-            LogTrace("[Accept Address: {}:{}]", ip, port);
-            m_accept_ssl = SSL_new(getGlobalSSLCtx());
-            if(m_accept_ssl == nullptr) {
-                close(handle.fd);
-                m_result = std::unexpected(CommonError(CallSSLNewError, static_cast<uint32_t>(errno)));
-                return true;
-            }
-            if(SSL_set_fd(m_accept_ssl, handle.fd) == -1) {
-                SSL_free(m_accept_ssl);
-                m_accept_ssl = nullptr;
-                close(handle.fd);
-                m_result = std::unexpected(CommonError(CallSSLSetFdError, static_cast<uint32_t>(errno)));
-                return true;
-            }
-            SSL_set_accept_state(m_accept_ssl);
-            m_status = SslAcceptStatus::kSslAcceptStatus_SslAccept;
-        }
-        if(m_status == SslAcceptStatus::kSslAcceptStatus_SslAccept) {
-            int r = SSL_do_handshake(m_accept_ssl);
-            if(r == 1) {
-                m_result = AsyncSslSocketBuilder::create(m_scheduler, m_accept_ssl);
-                return true;
-            } 
-            m_ssl_code = SSL_get_error(m_accept_ssl, r);
-            if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
-                return false;
-            } else {
-                SSL_free(m_accept_ssl);
-                close(SSL_get_fd(m_accept_ssl));
-                m_accept_ssl = nullptr;
-                m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
-            }
+            return false;
+        } else {
+            SSL_free(m_ssl);
+            close(SSL_get_fd(m_ssl));
+            m_ssl = nullptr;
+            m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
         }
         return true;
     }
@@ -198,79 +158,58 @@ namespace galay::details
         return sslClose();
     }
 
-    SslConnectEvent::SslConnectEvent(SSL* ssl, EventScheduler* scheduler, const Host &host)
-        : SslEvent<std::expected<void, CommonError>>(ssl, scheduler), m_host(host)
+    SslConnectEvent::SslConnectEvent(SSL* ssl, EventScheduler* scheduler)
+        : SslEvent<std::expected<bool, CommonError>>(ssl, scheduler)
     {
     }
 
     void SslConnectEvent::handleEvent()
     {
-        if(sslConnect()) {
-            m_waker.wakeUp();
-        } else {
-            m_scheduler->activeEvent(this, nullptr);
-        }
+        m_waker.wakeUp();
     }
 
     EventType SslConnectEvent::getEventType() const
     {
-        if(m_status == ConnectState::kConnectState_Connect) {
+        switch (m_ssl_code)
+        {
+        case SSL_ERROR_WANT_READ:
+            return EventType::kEventTypeRead;
+        case SSL_ERROR_WANT_WRITE:
             return EventType::kEventTypeWrite;
-        } else {
-            switch (m_ssl_code)
-            {
-            case SSL_ERROR_WANT_READ:
-                return EventType::kEventTypeRead;
-            case SSL_ERROR_WANT_WRITE:
-                return EventType::kEventTypeWrite;
-            default:
-                break;
-            }
+        default:
+            break;
         }
         return EventType::kEventTypeNone;
     }
 
     bool SslConnectEvent::onReady()
     {
-        return sslConnect();
+        m_ready = sslConnect(false);
+        return m_ready;
     }
 
-    bool SslConnectEvent::sslConnect()
+    std::expected<bool, CommonError> SslConnectEvent::onResume()
+    {
+        if(!m_ready) sslConnect(true);
+        return SslEvent<std::expected<bool, CommonError>>::onResume();
+    }
+
+    bool SslConnectEvent::sslConnect(bool notify)
     {
         using namespace error;
-        if(m_status == ConnectState::kConnectState_Ready) {
-            m_status = ConnectState::kConnectState_Connect;
-            sockaddr_in addr{};
-            addr.sin_family = AF_INET;
-            addr.sin_addr.s_addr = inet_addr(m_host.ip.c_str());
-            addr.sin_port = htons(m_host.port);
-            const int ret = connect(SSL_get_fd(m_ssl), reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr_in));
-            if( ret != 0) {
-                if( static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR || static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EINPROGRESS) {
-                    m_status = ConnectState::kConnectState_Connect;
-                    return false;
-                }
-                m_result = std::unexpected(CommonError(CallConnectError, static_cast<uint32_t>(errno)));
-                return true;
+        int r = SSL_do_handshake(m_ssl);
+        if(r == 1) {
+            m_result = true;
+            return true;
+        } 
+        m_ssl_code = SSL_get_error(m_ssl, r);
+        if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
+            if( notify ) {
+                m_result = false;
             }
-            m_status = ConnectState::kConnectState_Connect;
-        }
-        if(m_status == ConnectState::kConnectState_Connect) {
-            m_status = ConnectState::kConnectState_SslConnect;
-            SSL_set_connect_state(m_ssl);
-        }
-        if(m_status == ConnectState::kConnectState_SslConnect) {
-            int r = SSL_do_handshake(m_ssl);
-            if(r == 1) {
-                m_result = {};
-                return true;
-            } 
-            m_ssl_code = SSL_get_error(m_ssl, r);
-            if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ){
-                return false;
-            } else {
-                m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
-            }
+            return false;
+        } else {
+            m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
         }
         return true;
     }

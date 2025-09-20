@@ -42,7 +42,7 @@ namespace galay {
         std::expected<void, CommonError> shuntdown(ShutdownType type);
         AsyncResult<std::expected<void, CommonError>> close();
         //throw exception
-        AsyncResult<std::expected<AsyncTcpSocketBuilder, CommonError>> accept();
+        AsyncResult<std::expected<void, CommonError>> accept(AsyncTcpSocketBuilder& builder);
         AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
         AsyncResult<std::expected<Bytes, CommonError>> recv(char* result, size_t length);
         //返回剩余Bytes
@@ -111,8 +111,15 @@ namespace galay {
         std::expected<void, CommonError> socket();
         std::expected<void, CommonError> bind(const Host& addr);
         std::expected<void, CommonError> listen(int backlog);
-        AsyncResult<std::expected<AsyncSslSocketBuilder, CommonError>> sslAccept();
-        AsyncResult<std::expected<void, CommonError>> sslConnect(const Host& addr);
+        AsyncResult<std::expected<void, CommonError>> accept(AsyncSslSocketBuilder& builder);
+        std::expected<void, CommonError> readyToSslAccept(AsyncSslSocketBuilder &builder);
+        //false need to be called again
+        //CallSSLHandshakeError 失败AsyncSslSocketBuilder不可用
+        AsyncResult<std::expected<bool, CommonError>> sslAccept(AsyncSslSocketBuilder& builder);
+        AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
+        void readyToSslConnect();
+        //false need to be called again
+        AsyncResult<std::expected<bool, CommonError>> sslConnect();
         AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* result, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> sslClose();

@@ -74,10 +74,10 @@ namespace galay
     Coroutine<nil> TcpServer::acceptConnection(const std::function<Coroutine<nil>(AsyncTcpSocket,AsyncFactory)>& callback, size_t i)
     {
         while(true) {
-            auto acceptor = co_await m_sockets[i].accept();
+            AsyncTcpSocketBuilder builder;
+            auto acceptor = co_await m_sockets[i].accept(builder);
             if(acceptor) {
                 LogInfo("[acceptConnection success]");
-                auto& builder = acceptor.value();
                 auto socket = builder.build();
                 m_runtime.schedule(callback(std::move(socket), AsyncFactory(m_runtime)), i);
             } else {

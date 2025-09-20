@@ -155,9 +155,10 @@ namespace galay {
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
-    AsyncResult<std::expected<AsyncTcpSocketBuilder, CommonError>> AsyncTcpSocket::accept()
+    AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::accept(AsyncTcpSocketBuilder& builder)
     {
-        return {std::make_shared<details::AcceptEvent>(m_handle, m_scheduler)};
+        builder.m_scheduler = m_scheduler;
+        return {std::make_shared<details::AcceptEvent>(m_handle, m_scheduler, builder.m_handle)};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::connect(const Host& host)
@@ -454,14 +455,47 @@ namespace galay {
         return {};
     }
 
-    AsyncResult<std::expected<AsyncSslSocketBuilder, CommonError>> AsyncSslSocket::sslAccept()
+    AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::accept(AsyncSslSocketBuilder &builder)
     {
-        return {std::make_shared<details::SslAcceptEvent>(m_ssl, m_scheduler)};
+        builder.m_scheduler = m_scheduler;
+        return {std::make_shared<details::AcceptEvent>(GHandle(SSL_get_fd(m_ssl)), m_scheduler, builder.m_handle)};
     }
 
-    AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::sslConnect(const Host &addr)
+    std::expected<void, CommonError> AsyncSslSocket::readyToSslAccept(AsyncSslSocketBuilder &builder)
     {
-        return {std::make_shared<details::SslConnectEvent>(m_ssl, m_scheduler, addr)};
+        builder.m_ssl = SSL_new(getGlobalSSLCtx());
+        if(builder.m_ssl == nullptr) {
+            close(builder.m_handle.fd);
+            return std::unexpected(CommonError(CallSSLNewError, static_cast<uint32_t>(errno)));
+        }
+        if(SSL_set_fd(builder.m_ssl, builder.m_handle.fd) == -1) {
+            SSL_free(builder.m_ssl);
+            builder.m_ssl = nullptr;
+            close(builder.m_handle.fd);
+            return std::unexpected(CommonError(CallSSLSetFdError, static_cast<uint32_t>(errno)));
+        }
+        SSL_set_accept_state(builder.m_ssl);
+        return {};
+    }
+
+    AsyncResult<std::expected<bool, CommonError>> AsyncSslSocket::sslAccept(AsyncSslSocketBuilder& builder)
+    {
+        return {std::make_shared<details::SslAcceptEvent>(builder.m_ssl, m_scheduler)};
+    }
+
+    AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::connect(const Host& addr)
+    {
+        return {std::make_shared<details::ConnectEvent>(GHandle(SSL_get_fd(m_ssl)), m_scheduler, addr)};
+    }
+
+    void AsyncSslSocket::readyToSslConnect()
+    {
+        SSL_set_connect_state(m_ssl);
+    }
+
+    AsyncResult<std::expected<bool, CommonError>> AsyncSslSocket::sslConnect()
+    {
+        return {std::make_shared<details::SslConnectEvent>(m_ssl, m_scheduler)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncSslSocket::sslRecv(char* result, size_t length)

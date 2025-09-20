@@ -12,9 +12,12 @@ namespace galay
         TcpSslClient(Runtime& runtime);
         TcpSslClient(AsyncSslSocket&& socket);
         TcpSslClient(Runtime& runtime, const Host& bind_addr);
+        
         AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
-        AsyncResult<std::expected<Bytes, CommonError>> recv(char* buffer, size_t length);
-        AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
+        void readyToSslConnect();
+        AsyncResult<std::expected<bool, CommonError>> sslConnect();
+        AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* buffer, size_t length);
+        AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> close();
         TcpSslClient alsoRunningOn(Runtime& runtime) const;
     private:

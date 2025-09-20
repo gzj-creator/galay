@@ -9,13 +9,13 @@ namespace galay
 {
     class AsyncSslSocket;
     class AsyncSslSocketBuilder {
-        friend class AsyncTcpSslSocket;
+        friend class AsyncSslSocket;
     public:
-        static AsyncSslSocketBuilder create(EventScheduler* scheduler, SSL* ssl);
         //throw exception
         AsyncSslSocket build();
         bool check() const;
     private:
+        GHandle m_handle = GHandle::invalid();
         SSL* m_ssl = nullptr;
         EventScheduler* m_scheduler = nullptr;
     };
@@ -52,26 +52,20 @@ namespace galay::details
         EventScheduler* m_scheduler;
     };
 
-    class SslAcceptEvent: public SslEvent<std::expected<AsyncSslSocketBuilder, CommonError>>
+    class SslAcceptEvent: public SslEvent<std::expected<bool, CommonError>>
     {
-        enum class SslAcceptStatus: uint8_t
-        {
-            kSslAcceptStatus_Accept,
-            kSslAcceptStatus_SslAccept,
-        };
     public:
         SslAcceptEvent(SSL* ssl, EventScheduler* scheduler);
         std::string name() override { return "SslAcceptEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
-
         bool onReady() override;
+        std::expected<bool, CommonError> onResume() override;
     private:
-        bool sslAccept();
+        bool sslAccept(bool notify);
     private:
-        SSL* m_accept_ssl;
-        int m_ssl_code = 0;  
-        SslAcceptStatus m_status;
+        bool m_ready = false;
+        int m_ssl_code = 0;
     };
 
     class SslCloseEvent: public SslEvent<std::expected<void, CommonError>> 
@@ -88,25 +82,20 @@ namespace galay::details
         int m_ssl_code = 0;
     };
 
-    class SslConnectEvent: public SslEvent<std::expected<void, CommonError>> 
+    class SslConnectEvent: public SslEvent<std::expected<bool, CommonError>> 
     {
-        enum class ConnectState {
-            kConnectState_Ready,
-            kConnectState_Connect,
-            kConnectState_SslConnect,
-        };
     public:
-        SslConnectEvent(SSL* ssl, EventScheduler* scheduler, const Host& host);
+        SslConnectEvent(SSL* ssl, EventScheduler* scheduler);
         std::string name() override { return "SslConnectEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
         bool onReady() override;
+        std::expected<bool, CommonError> onResume() override;
     private:
-        bool sslConnect();
+        bool sslConnect(bool notify);
     private:
-        Host m_host;
+        bool m_ready = false;
         int m_ssl_code = 0;
-        ConnectState m_status;
     };
 
     class SslRecvEvent: public SslEvent<std::expected<Bytes, CommonError>> 

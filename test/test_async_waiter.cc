@@ -6,7 +6,7 @@ using namespace galay;
 
 Coroutine<nil> async_notify_test(AsyncWaiter<void, CommonError>& waiter) {
     std::cout << "async_notify_test" << std::endl;
-    waiter.notify();
+    waiter.notify({});
     std::cout << "async_notify_test end" << std::endl;
     co_return nil();
 }
