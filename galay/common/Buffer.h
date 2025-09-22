@@ -54,6 +54,9 @@ namespace galay
         void resize(size_t capacity);
         std::string toString() const;
         std::string_view toStringView() const;
+
+        Buffer& operator=(Buffer&& other);
+
         ~Buffer();
         void swap(Buffer& other) {
             std::swap(m_data, other.m_data);

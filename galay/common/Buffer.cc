@@ -139,6 +139,13 @@ namespace galay
         return std::string_view(reinterpret_cast<const char*>(m_data.data), m_data.size);
     }
 
+    Buffer &Buffer::operator=(Buffer &&other)
+    {
+        if(this != &other) {
+            m_data = std::move(other.m_data);
+        }
+    }
+
     Buffer::~Buffer()
     {
         clearString(m_data);
