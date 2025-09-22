@@ -41,6 +41,7 @@ namespace galay
     class Buffer 
     {
     public:
+        Buffer();
         Buffer(size_t capacity);
         Buffer(const void* data, size_t size);
         Buffer(const std::string& str);

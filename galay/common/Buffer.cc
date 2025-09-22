@@ -76,6 +76,10 @@ namespace galay
         }
     }
 
+    Buffer::Buffer()
+    {
+    }
+
     Buffer::Buffer(size_t capacity)
     {
         m_data = mallocString(capacity);
