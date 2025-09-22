@@ -144,6 +144,7 @@ namespace galay
         if(this != &other) {
             m_data = std::move(other.m_data);
         }
+        return *this;
     }
 
     Buffer::~Buffer()
