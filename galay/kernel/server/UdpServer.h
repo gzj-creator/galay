@@ -44,7 +44,7 @@ namespace galay
         UdpServerBuilder& timeout(int timeout);
         UdpServerBuilder& threads(int threads);
     private:
-        Host m_host;
+        Host m_host = {"0.0.0.0", 8080};
         std::chrono::milliseconds m_coCheckerInterval = std::chrono::milliseconds(-1);
         int m_threads = DEFAULT_COS_SCHEDULER_THREAD_NUM;
         int m_timeout = -1;

@@ -52,7 +52,7 @@ namespace galay
         TcpServerBuilder& threads(int threads);
         TcpServer build();
     private:
-        Host m_host;
+        Host m_host = {"0.0.0.0", 8080};
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
         std::chrono::milliseconds m_coCheckerInterval = std::chrono::milliseconds(-1);
         int m_threads = DEFAULT_COS_SCHEDULER_THREAD_NUM;
