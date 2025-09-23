@@ -34,7 +34,7 @@ int main()
     utils::SignalHandler::setSignalHandler<SIGSEGV>(signalHandler);
     TcpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
-    TcpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
+    TcpServer server = builder.startCoChecker(std::chrono::milliseconds(1000)).backlog(1024).threads(1).build();
     server.run([&server](AsyncTcpSocket socket, AsyncFactory factory) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
         using namespace error;

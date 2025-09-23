@@ -86,7 +86,7 @@ namespace galay
 
     class RuntimeBuilder {
     public:
-        // < 0 means not use coManager, num is associated with coScheduler
+        // == 0 means not use coManager, num is associated with coScheduler
         RuntimeBuilder& startCoManager(std::chrono::milliseconds interval);
         RuntimeBuilder& setEventCheckTimeout(int timeout);
         RuntimeBuilder& setCoSchedulerNum(int num);
@@ -96,7 +96,7 @@ namespace galay
     private:
         int m_eTimeout = -1;
         int m_coSchedulerNum = DEFAULT_COS_SCHEDULER_THREAD_NUM;
-        std::chrono::milliseconds m_interval = std::chrono::milliseconds::zero();
+        std::chrono::milliseconds m_interval = std::chrono::milliseconds(-1);
         int m_eventSchedulerInitFdsSize = DEFAULT_FDS_SET_INITIAL_SIZE;
         EventScheduler::ptr m_eventScheduler;
     };

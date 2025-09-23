@@ -11,12 +11,23 @@ namespace galay
     UdpServer::UdpServer(Runtime&& runtime)
         : m_runtime(std::move(runtime))
     {
+
     }
 
     UdpServer::UdpServer(UdpServer&& server)
         : m_runtime(std::move(server.m_runtime))
     {
         m_host = std::move(server.m_host);
+    }
+
+    void UdpServer::listenOn(Host host)
+    {
+        m_host = std::move(host);
+    }
+
+    void UdpServer::useStrategy(ServerStrategy strategy)
+    {
+        m_strategy = strategy;
     }
 
     void UdpServer::run(const std::function<Coroutine<nil>(AsyncUdpSocket,AsyncFactory)>& callback)
@@ -61,24 +72,45 @@ namespace galay
 
     UdpServerBuilder &UdpServerBuilder::addListen(const Host &host)
     {
-        m_server.m_host = host;
+        m_host = host;
         return *this;
     }
 
-    UdpServerBuilder &UdpServerBuilder::startCoChecker(bool start, std::chrono::milliseconds interval)
+    UdpServerBuilder &UdpServerBuilder::startCoChecker(std::chrono::milliseconds interval)
     {
-        if(start) {
-            m_server.m_runtime.startCoManager(interval);
-        } else {
-            m_server.m_runtime.startCoManager(std::chrono::milliseconds(-1));
-        }
+        m_coCheckerInterval = interval;
+        return *this;
+    }
+
+    UdpServerBuilder &UdpServerBuilder::strategy(ServerStrategy strategy)
+    {
+        m_strategy = strategy;
+        return *this;
+    }
+
+    UdpServerBuilder &UdpServerBuilder::timeout(int timeout)
+    {
+        m_timeout = timeout;
+        return *this;
+    }
+
+    UdpServerBuilder &UdpServerBuilder::threads(int threads)
+    {
+        m_threads = threads;
         return *this;
     }
 
     UdpServer UdpServerBuilder::build()
     {
-        UdpServer server = std::move(m_server);
-        m_server = UdpServer{};
+        RuntimeBuilder builder;
+        builder.setCoSchedulerNum(m_threads);
+        builder.setEventCheckTimeout(m_timeout);
+        builder.startCoManager(m_coCheckerInterval);
+        Runtime runtime = builder.build();
+        UdpServer server(std::move(runtime));
+        server.listenOn(m_host);
+        server.useStrategy(m_strategy);
         return server;
     }
+
 }

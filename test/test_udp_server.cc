@@ -34,7 +34,7 @@ int main()
     signal(SIGSEGV, signalHandler);
     UdpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
-    UdpServer server = builder.startCoChecker(true, std::chrono::milliseconds(1000)).build();
+    UdpServer server = builder.startCoChecker(std::chrono::milliseconds(1000)).build();
     server.run([&server](AsyncUdpSocket socket, AsyncFactory factory) -> Coroutine<nil> {
         Buffer buffer(1024);
         using namespace error;

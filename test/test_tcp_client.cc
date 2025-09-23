@@ -12,6 +12,7 @@ Coroutine<nil> test(Runtime& runtime)
     auto res1 = co_await client.connect({"127.0.0.1", 8070});
     if (!res1) {
         std::cout << "connect error: " << res1.error().message() << std::endl;
+        cond.notify_one();
         co_return nil();
     }
     std::cout << "connect success" << std::endl;

@@ -205,6 +205,13 @@ namespace galay::details
         using namespace error;
         sockaddr_in addr{};
         if( notify ) {
+            int error_code = 0;
+            socklen_t error_len = sizeof(error_code);
+            int ret = getsockopt(m_handle.fd, SOL_SOCKET, SO_ERROR, &error_code, &error_len);
+            if (ret < 0 || error_code != 0) {
+                m_result = std::unexpected(CommonError(CallConnectError, error_code));
+                return true;
+            }
             m_result = {};
             return true;
         }
@@ -217,6 +224,7 @@ namespace galay::details
                 return false;
             }
             m_result = std::unexpected(CommonError(CallConnectError, static_cast<uint32_t>(errno)));
+            return true;
         }
         m_result = {};
         return true;

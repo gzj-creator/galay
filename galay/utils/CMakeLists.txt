@@ -9,7 +9,7 @@ if(ENABLE_SYSTEM_LOG)
   endif()
 endif()
 
-file(GLOB SRC_LIST "*.cc")
+file(GLOB SRC_LIST "*.cc" "*.hpp")
 
 if(ENABLE_NLOHMANN_JSON)
     message(STATUS "USE_NLOHMANN_JSON ON")

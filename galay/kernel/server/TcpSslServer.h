@@ -3,6 +3,7 @@
 
 #include "galay/kernel/async/AsyncFactory.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
+#include "ServerDefn.hpp"
 
 namespace galay
 {
@@ -11,12 +12,13 @@ namespace galay
     // 保证单进程单例
     class TcpSslServer
     {
-        friend class TcpSslServerBuilder;
     public:
-        TcpSslServer();
-        TcpSslServer(Runtime&& runtime);
+        TcpSslServer(const std::string& cert_file, const std::string& key_file);
+        TcpSslServer(Runtime&& runtime, const std::string& cert_file, const std::string& key_file);
         TcpSslServer(TcpSslServer&& server);
         TcpSslServer(const TcpSslServer& server) = delete;
+        void listenOn(Host host, int backlog);
+        void useStrategy(ServerStrategy strategy);
         void run(const std::function<Coroutine<nil>(AsyncSslSocket,AsyncFactory)>& callback);
         void stop();
         void wait();
@@ -34,18 +36,33 @@ namespace galay
         std::mutex m_mutex;
         std::condition_variable m_condition;
         std::vector<AsyncSslSocket> m_sockets;
+        ServerStrategy m_strategy = ServerStrategy::SingleRuntime;
     };
 
     class TcpSslServerBuilder
     {
     public:
-        TcpSslServerBuilder& sslConf(const std::string& cert, const std::string& key);
+        TcpSslServerBuilder(const std::string& cert, const std::string& key);
         TcpSslServerBuilder& addListen(const Host& host);
         TcpSslServerBuilder& backlog(int backlog);
-        TcpSslServerBuilder& startCoChecker(bool start, std::chrono::milliseconds interval);
+        TcpSslServerBuilder& startCoChecker(std::chrono::milliseconds interval);
+        TcpSslServerBuilder& strategy(ServerStrategy strategy);
+        /*
+            @brief EventScheduler timeout
+            @param timeout milliseconds, -1 means never timeout
+        */
+        TcpSslServerBuilder& timeout(int timeout);
+        TcpSslServerBuilder& threads(int threads);
         TcpSslServer build();
     private:
-        TcpSslServer m_server;
+        std::string m_cert;
+        std::string m_key;
+        Host m_host;
+        int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
+        std::chrono::milliseconds m_coCheckerInterval = std::chrono::milliseconds(-1);
+        int m_threads = DEFAULT_COS_SCHEDULER_THREAD_NUM;
+        int m_timeout = -1;
+        ServerStrategy m_strategy = ServerStrategy::SingleRuntime;
     };
 }
 

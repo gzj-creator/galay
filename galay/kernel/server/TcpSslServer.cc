@@ -2,17 +2,18 @@
 
 namespace galay
 {
-    TcpSslServer::TcpSslServer()
+    TcpSslServer::TcpSslServer(const std::string& cert_file, const std::string& key_file)
         : m_runtime(RuntimeBuilder().build())
     {
+        
         size_t num = m_runtime.coSchedulerSize();
         for(size_t i = 0; i < num; ++i) {
             m_sockets.emplace_back(AsyncSslSocket(m_runtime));
         }
     }
 
-    TcpSslServer::TcpSslServer(Runtime&& runtime)
-        : m_runtime(std::move(runtime))
+    TcpSslServer::TcpSslServer(Runtime&& runtime, const std::string& cert_file, const std::string& key_file)
+        : m_runtime(std::move(runtime)), m_cert(cert_file), m_key(key_file)
     {
         size_t num = m_runtime.coSchedulerSize();
         for(size_t i = 0; i < num; ++i) {
@@ -30,7 +31,18 @@ namespace galay
         m_key = std::move(server.m_key);
     }
 
-    void TcpSslServer::run(const std::function<Coroutine<nil>(AsyncSslSocket,AsyncFactory)>& callback)
+    void TcpSslServer::listenOn(Host host, int backlog)
+    {
+        m_host = std::move(host);
+        m_backlog = backlog;
+    }
+
+    void TcpSslServer::useStrategy(ServerStrategy strategy)
+    {
+        m_strategy = strategy;
+    }
+
+    void TcpSslServer::run(const std::function<Coroutine<nil>(AsyncSslSocket, AsyncFactory)> &callback)
     {
         if(m_cert.empty() || m_key.empty()) {
             throw std::runtime_error("cert or key is empty");
@@ -116,39 +128,59 @@ namespace galay
         }
     }
 
-    TcpSslServerBuilder& TcpSslServerBuilder::sslConf(const std::string& cert, const std::string& key)
+
+    TcpSslServerBuilder::TcpSslServerBuilder(const std::string &cert, const std::string &key)
     {
-        m_server.m_cert = cert;
-        m_server.m_key = key;
-        return *this;
+        m_cert = cert;
+        m_key = key;
     }
 
     TcpSslServerBuilder &TcpSslServerBuilder::addListen(const Host &host)
     {
-        m_server.m_host = host;
+        m_host = host;
         return *this;
     }
 
     TcpSslServerBuilder &TcpSslServerBuilder::backlog(int backlog)
     {
-        m_server.m_backlog = backlog;
+        m_backlog = backlog;
         return *this;
     }
 
-    TcpSslServerBuilder &TcpSslServerBuilder::startCoChecker(bool start, std::chrono::milliseconds interval)
+    TcpSslServerBuilder &TcpSslServerBuilder::startCoChecker(std::chrono::milliseconds interval)
     {
-        if(start) {
-            m_server.m_runtime.startCoManager(interval);
-        } else {
-            m_server.m_runtime.startCoManager(std::chrono::milliseconds(-1));
-        }
+        m_coCheckerInterval = interval;
         return *this;
     }
 
+    TcpSslServerBuilder &TcpSslServerBuilder::strategy(ServerStrategy strategy)
+    {
+        m_strategy = strategy;
+        return *this;
+    }
+
+    TcpSslServerBuilder &TcpSslServerBuilder::timeout(int timeout)
+    {
+        m_timeout = timeout;
+        return *this;
+    }
+
+    TcpSslServerBuilder &TcpSslServerBuilder::threads(int threads)
+    {
+        m_threads = threads;
+        return *this;
+    }
+    
     TcpSslServer TcpSslServerBuilder::build()
     {
-        TcpSslServer server = std::move(m_server);
-        m_server = TcpSslServer{};
+        RuntimeBuilder builder;
+        builder.setCoSchedulerNum(m_threads);
+        builder.setEventCheckTimeout(m_timeout);
+        builder.startCoManager(m_coCheckerInterval);
+        Runtime runtime = builder.build();
+        TcpSslServer server(std::move(runtime), m_cert, m_key);
+        server.listenOn(m_host, m_backlog);
+        server.useStrategy(m_strategy);
         return server;
     }
 }
