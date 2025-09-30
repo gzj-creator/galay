@@ -34,7 +34,7 @@ Coroutine<nil> test()
         return generator1.sleep(std::chrono::milliseconds(5001));
     };
     Holder holder;
-    auto res = co_await generator.timeout<nil>(holder, func, std::chrono::milliseconds(5000));
+    auto res = co_await generator.timeout<nil>(func, std::chrono::milliseconds(5000));
     if(res) {
         std::cout << "exec success" << std::endl;
     } else {

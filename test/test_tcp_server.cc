@@ -41,15 +41,12 @@ int main()
         Buffer buffer(1024);
         TimerGenerator generator = factory.createTimerGenerator();
         while(true) {
-            Holder holder;
-            auto twrapper = co_await generator.timeout<std::expected<Bytes, CommonError>>(holder, [&](){
+            auto twrapper = co_await generator.timeout<std::expected<Bytes, CommonError>>([&](){
                 return socket.recv(buffer.data(), buffer.capacity());
             }, std::chrono::milliseconds(5000)) ;
             if(!twrapper) {
                 if(CommonError::contains(twrapper.error().code(), ErrorCode::AsyncTimeoutError)) {
                     std::cout << "timeout" << std::endl;
-                    // disconnect
-                    holder.destory();
                     continue;
                 }
                 std::cout << "twrapper error: " << twrapper.error().message() << std::endl;
