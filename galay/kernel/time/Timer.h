@@ -18,7 +18,7 @@ namespace galay
         Timer(std::chrono::milliseconds ms, const std::function<void()>& callback);
         int64_t getDeadline();
         int64_t getRemainTime();
-        void setFunction(const std::function<void()>& callback);
+        void resetCallback(const std::function<void()>& callback);
         bool onReady() const;
         void reset(std::chrono::milliseconds ms);
         void execute();

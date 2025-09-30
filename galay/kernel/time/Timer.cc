@@ -24,7 +24,7 @@ namespace galay
         return time < 0 ? 0 : time;
     }
 
-    void Timer::setFunction(const std::function<void()> &callback)
+    void Timer::resetCallback(const std::function<void()> &callback)
     {
         m_callback = callback;
     }

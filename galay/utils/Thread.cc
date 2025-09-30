@@ -21,11 +21,11 @@ ThreadWaiters::ThreadWaiters(int num)
 bool ThreadWaiters::wait(int timeout)
 {
     std::unique_lock lock(this->m_mutex);
-    if(m_num.load() <= 0) return true;
+    if(m_num.load() == 0) return true;
     if(timeout == -1)
     {
         m_cond.wait(lock, [this]() {
-            return m_num.load() <= 0;
+            return m_num.load() == 0;
         });
     }
     else
@@ -50,34 +50,33 @@ bool ThreadWaiters::decrease()
     return true;
 }
 
-ScrambleThreadPool::ScrambleThreadPool()
+ScrambleThreadPool::ScrambleThreadPool(std::chrono::milliseconds timeout)
 {
-    m_terminate.store(false, std::memory_order_relaxed);
-    m_nums.store(0);
-    m_isDone.store(false);
+    m_stop.store(true, std::memory_order_relaxed);
+    m_running.store(0);
+    m_timeout = timeout;
 }
 
 void 
 ScrambleThreadPool::run()
 {
-    while (!m_terminate.load())
+    std::chrono::milliseconds timeout = m_timeout;
+    while (!m_stop.load())
     {
-        std::unique_lock<std::mutex> lock(m_mtx);
-        m_workCond.wait(lock, [this]()
-                    { return !m_tasks.empty() || m_terminate.load() == true; });
-        if (m_terminate.load())
-            break;
-        std::shared_ptr<ThreadTask> task = m_tasks.front();
-        m_tasks.pop();
-        lock.unlock();
-        task->execute();
+        ThreadTask::ptr task = nullptr;
+        m_tasks.wait_dequeue_timed(task, timeout);
+        if(task) task->execute();
     }
 }
 
 void 
 ScrambleThreadPool::start(int num)
 {
-    this->m_nums.store(num);
+    if(!m_stop.load()) return;
+    if(!m_threads.empty()) {
+        m_threads.resize(0);
+    }
+    m_stop.store(false, std::memory_order_release);
     for (int i = 0; i < num; i++)
     {
         auto th = std::make_unique<std::thread>([this](){
@@ -86,61 +85,24 @@ ScrambleThreadPool::start(int num)
         });
         m_threads.push_back(std::move(th));
     }
-}
-
-bool 
-ScrambleThreadPool::waitForAllDone(uint32_t timeout)
-{
-    std::mutex mtx;
-    std::unique_lock<std::mutex> lock(mtx);
-    if(timeout == 0){
-        this->m_exitCond.wait(lock);
-    }else{
-        auto now = std::chrono::system_clock::now();
-        this->m_exitCond.wait_for(lock, std::chrono::milliseconds(timeout));
-        auto end = std::chrono::system_clock::now();
-        if(std::chrono::duration_cast<std::chrono::milliseconds>(end - now) >= std::chrono::milliseconds(timeout)){
-            if(this->m_nums.load() == 0) return true;
-            else return false;
-        }
-    }
-    return true;
-}
-
-bool 
-ScrambleThreadPool::isDone()
-{
-    return this->m_isDone.load();
+    m_running.store(num);
 }
 
 void 
 ScrambleThreadPool::done()
 {
-    this->m_nums.fetch_sub(1);
-    if(this->m_nums.load() == 0){
-        this->m_exitCond.notify_one();
-        this->m_isDone.store(true);
-    }
+    this->m_running.fetch_sub(1);
 }
 
 void 
 ScrambleThreadPool::stop()
 {
-    if (!m_terminate.load())
+    if (!m_stop.load())
     {
-        m_terminate.store(true, std::memory_order_relaxed);
-        m_workCond.notify_all();
+        m_stop.store(true, std::memory_order_relaxed);
     }
     for(auto& thread : m_threads) {
         if(thread->joinable()) thread->join();
-    }
-}
-
-ScrambleThreadPool::~ScrambleThreadPool()
-{
-    if (!m_terminate.load())
-    {
-        stop();
     }
 }
 }
