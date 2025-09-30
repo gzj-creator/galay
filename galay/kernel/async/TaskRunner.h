@@ -5,7 +5,7 @@
 
 namespace galay 
 { 
-    class TaskRunner 
+    class TaskRunner: public std::enable_shared_from_this<TaskRunner>
     {
     public:
         TaskRunner(Runtime& runtime, int co_id = -1);
@@ -14,8 +14,6 @@ namespace galay
     private:
         Runtime& m_runtime;
         int m_co_id;
-        std::mutex m_mutex;
-        std::condition_variable m_cond;
     };
 
 

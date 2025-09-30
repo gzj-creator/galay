@@ -10,7 +10,7 @@ namespace galay::details
 {
     
     template<CoType T>
-    class TimeEvent: public AsyncEvent<T>, public Event
+    class TimeEvent: public AsyncEvent<T>
     {
     public:
         using ptr = std::shared_ptr<TimeEvent>;
@@ -18,10 +18,6 @@ namespace galay::details
 
         TimeEvent(TimerManager* manager) 
             :m_manager(manager) {} 
-        std::string name() override { return "TimeEvent"; }
-        EventType getEventType() const override { return kEventTypeNone; };
-        GHandle getHandle() override { return {}; }
-        void handleEvent() override {}
         bool onSuspend(Waker waker) override
         {
             this->m_waker = waker;
@@ -35,9 +31,6 @@ namespace galay::details
     {
     public:
         SleepforEvent(TimerManager* manager, std::chrono::milliseconds ms);
-        std::string name() override { return "SleepforEvent"; }
-        void handleEvent() override {}
-
         bool onReady() override;
         bool onSuspend(Waker waker) override;
     private:
@@ -48,8 +41,6 @@ namespace galay::details
     {
     public:
         TimeWaitEvent(TimerManager* manager, std::chrono::milliseconds ms, const std::function<void()>& callback);
-        std::string name() override { return "TimeWaitEvent"; }
-        void handleEvent() override {}
         bool onReady() override;
         bool onSuspend(Waker waker) override;
         nil onResume() override;

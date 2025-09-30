@@ -16,9 +16,7 @@ namespace galay::details
 
     bool SleepforEvent::onSuspend(Waker waker) 
     {
-        auto timer = std::make_shared<Timer>(m_ms, [waker]() mutable{
-            waker.wakeUp();
-        });
+        auto timer = std::make_shared<Timer>(m_ms, waker);
         m_manager->push(timer);
         return TimeEvent<nil>::onSuspend(waker);
     }
@@ -35,9 +33,7 @@ namespace galay::details
 
     bool TimeWaitEvent::onSuspend(Waker waker)
     {
-        auto timer = std::make_shared<Timer>(m_ms, [waker]() mutable{
-            waker.wakeUp();
-        });
+        auto timer = std::make_shared<Timer>(m_ms, waker);
         m_manager->push(timer);
         return TimeEvent<nil>::onSuspend(waker);
     }

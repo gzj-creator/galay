@@ -3,8 +3,8 @@
 
 namespace galay 
 { 
-    Timer::Timer(std::chrono::milliseconds ms, const std::function<void()>& callback)
-        : m_callback(callback), m_deadline(std::chrono::time_point_cast<std::chrono::milliseconds>(\
+    Timer::Timer(std::chrono::milliseconds ms, Waker waker)
+        : m_waker(waker), m_deadline(std::chrono::time_point_cast<std::chrono::milliseconds>(\
             std::chrono::system_clock::now()).time_since_epoch().count() + ms.count()),\
             m_cancel(false)
     {
@@ -24,9 +24,9 @@ namespace galay
         return time < 0 ? 0 : time;
     }
 
-    void Timer::resetCallback(const std::function<void()> &callback)
+    void Timer::resetWaker(Waker waker)
     {
-        m_callback = callback;
+        m_waker = waker;
     }
 
     bool Timer::onReady() const
@@ -56,7 +56,7 @@ namespace galay
         if(!m_cancel.compare_exchange_strong(old, true)) {
             return;
         }
-        m_callback();
+        m_waker.wakeUp();
     }
 
     bool Timer::cancel()
