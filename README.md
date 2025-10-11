@@ -202,6 +202,36 @@ int main() {
 }
 ```
 
+## API Documentation
+
+All public functions and classes are documented with detailed Doxygen-style comments in Chinese. Key APIs include:
+
+### Algorithm Module
+- `Base64Util`: Base64 encoding/decoding with PEM, MIME, and URL-safe variants
+- `Md5Util::encode()`: MD5 hash generation
+- `Sha256Util::encode()`: SHA-256 hash generation  
+- `Sha512Util::encode()`: SHA-512 hash generation
+- `Salt::create()`: Secure random salt generation
+- `murmurHash3_*()`: Fast non-cryptographic hashing
+
+### Network Module
+- `TcpServer/TcpClient`: Asynchronous TCP networking with coroutines
+- `UdpServer/UdpClient`: Asynchronous UDP networking
+- `TcpSslServer/TcpSslClient`: Secure SSL/TLS connections
+- `Bytes`: Efficient zero-copy byte container
+
+### Common Module
+- `Buffer`: Dynamic memory buffer with capacity management
+- `Logger`: Flexible logging with multiple output formats
+- `CommonError`: Comprehensive error handling
+
+### Utils Module
+- `ScrambleThreadPool`: High-performance thread pool
+- `RateLimiter`: Token bucket rate limiting
+- `ParserManager`: Configuration file parsing (JSON, custom formats)
+
+See inline source code documentation for detailed API reference.
+
 ## Architecture
 
 ### Core Modules
@@ -263,13 +293,23 @@ The library automatically detects and uses the best available I/O mechanism:
 
 The project includes comprehensive test suites for all major components:
 
+### Unit Tests
+
 ```bash
 # Build tests
 cd build
 make
 
-# Run all tests
+# Run unit tests
 cd test
+./test_algorithm_unit    # Algorithm module unit tests (Base64, MD5, SHA256, etc.)
+./test_buffer_unit       # Buffer and Bytes unit tests
+```
+
+### Integration Tests
+
+```bash
+# Run integration tests
 ./test_tcp_server    # TCP server functionality
 ./test_ssl_server    # SSL/TLS server functionality
 ./test_udp_server    # UDP server functionality
@@ -279,6 +319,22 @@ cd test
 ./test_file          # File I/O operations
 ./test_time          # Timer functionality
 ```
+
+### Stress Tests
+
+```bash
+# Run stress tests
+./test_stress_tcp           # TCP server stress test (1000 concurrent clients)
+./test_stress_threadpool    # Thread pool stress test (100k tasks)
+```
+
+### Test Coverage
+
+- **Algorithm Module**: Base64 encode/decode, MD5, SHA256, SHA512, Salt generation, MurmurHash3
+- **Buffer Module**: Buffer creation, capacity management, data conversion
+- **Bytes Module**: Bytes construction, data access, conversion, comparison
+- **Network Module**: TCP/UDP/SSL server and client functionality
+- **Performance**: High concurrency and throughput testing
 
 ## Performance
 
@@ -309,6 +365,35 @@ mkdir build && cd build
 cmake .. -DENABLE_DEBUG=ON
 make -j$(nproc)
 ```
+
+### Building Tests
+
+To build and run tests:
+
+```bash
+cd build
+make
+
+# Run all unit tests
+cd test
+./test_algorithm_unit
+./test_buffer_unit
+
+# Run stress tests
+./test_stress_tcp
+./test_stress_threadpool
+```
+
+### Code Documentation
+
+All public APIs are documented with:
+- **@brief**: Short function description
+- **@details**: Detailed explanation
+- **@param**: Parameter descriptions
+- **@return**: Return value description
+- **@throw**: Exception information
+
+Documentation is written in Chinese (Simplified) for better accessibility to Chinese developers.
 
 ## License
 

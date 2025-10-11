@@ -55,10 +55,34 @@ inline uint64_t rotl64 ( uint64_t x, int8_t r )
 namespace galay::algorithm
 {
 
-
-
+/**
+ * @brief MurmurHash3 x86 32位哈希函数
+ * @details 适用于32位系统的快速非加密哈希算法，常用于哈希表、布隆过滤器等
+ * @param key 待哈希的数据指针
+ * @param len 数据长度（字节）
+ * @param seed 哈希种子值，用于生成不同的哈希序列
+ * @param out 输出缓冲区指针，需要至少4字节空间（存储uint32_t）
+ */
 void murmurHash3_x86_32  ( const void * key, int len, uint32_t seed, void * out );
+
+/**
+ * @brief MurmurHash3 x86 128位哈希函数
+ * @details 适用于32位系统的128位哈希算法，提供更低的碰撞率
+ * @param key 待哈希的数据指针
+ * @param len 数据长度（字节）
+ * @param seed 哈希种子值
+ * @param out 输出缓冲区指针，需要至少16字节空间（存储4个uint32_t）
+ */
 void murmurHash3_x86_128 ( const void * key, int len, uint32_t seed, void * out );
+
+/**
+ * @brief MurmurHash3 x64 128位哈希函数
+ * @details 适用于64位系统的128位哈希算法，性能优于x86版本
+ * @param key 待哈希的数据指针
+ * @param len 数据长度（字节）
+ * @param seed 哈希种子值
+ * @param out 输出缓冲区指针，需要至少16字节空间（存储2个uint64_t）
+ */
 void murmurHash3_x64_128 ( const void * key, int len, uint32_t seed, void * out );
 
 

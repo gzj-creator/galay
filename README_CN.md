@@ -202,6 +202,36 @@ int main() {
 }
 ```
 
+## API文档
+
+所有公共函数和类都使用Doxygen风格的中文详细注释。主要API包括：
+
+### 算法模块
+- `Base64Util`：Base64编解码，支持PEM、MIME和URL安全变体
+- `Md5Util::encode()`：MD5哈希生成
+- `Sha256Util::encode()`：SHA-256哈希生成
+- `Sha512Util::encode()`：SHA-512哈希生成
+- `Salt::create()`：安全随机盐值生成
+- `murmurHash3_*()`：快速非加密哈希
+
+### 网络模块
+- `TcpServer/TcpClient`：基于协程的异步TCP网络
+- `UdpServer/UdpClient`：异步UDP网络
+- `TcpSslServer/TcpSslClient`：安全SSL/TLS连接
+- `Bytes`：高效零拷贝字节容器
+
+### 通用模块
+- `Buffer`：动态内存缓冲区，支持容量管理
+- `Logger`：灵活的日志系统，支持多种输出格式
+- `CommonError`：全面的错误处理
+
+### 工具模块
+- `ScrambleThreadPool`：高性能线程池
+- `RateLimiter`：令牌桶限流器
+- `ParserManager`：配置文件解析（JSON、自定义格式）
+
+详细的API参考请查看源代码内联文档。
+
 ## 架构
 
 ### 核心模块
@@ -263,13 +293,23 @@ int main() {
 
 项目包含所有主要组件的综合测试套件：
 
+### 单元测试
+
 ```bash
 # 构建测试
 cd build
 make
 
-# 运行所有测试
+# 运行单元测试
 cd test
+./test_algorithm_unit    # 算法模块单元测试（Base64、MD5、SHA256等）
+./test_buffer_unit       # Buffer和Bytes单元测试
+```
+
+### 集成测试
+
+```bash
+# 运行集成测试
 ./test_tcp_server    # TCP 服务器功能
 ./test_ssl_server    # SSL/TLS 服务器功能
 ./test_udp_server    # UDP 服务器功能
@@ -279,6 +319,22 @@ cd test
 ./test_file          # 文件 I/O 操作
 ./test_time          # 定时器功能
 ```
+
+### 压力测试
+
+```bash
+# 运行压力测试
+./test_stress_tcp           # TCP服务器压力测试（1000并发客户端）
+./test_stress_threadpool    # 线程池压力测试（10万任务）
+```
+
+### 测试覆盖
+
+- **算法模块**：Base64编解码、MD5、SHA256、SHA512、盐值生成、MurmurHash3
+- **缓冲区模块**：Buffer创建、容量管理、数据转换
+- **字节模块**：Bytes构造、数据访问、转换、比较
+- **网络模块**：TCP/UDP/SSL服务器和客户端功能
+- **性能测试**：高并发和吞吐量测试
 
 ## 性能
 
@@ -309,6 +365,35 @@ mkdir build && cd build
 cmake .. -DENABLE_DEBUG=ON
 make -j$(nproc)
 ```
+
+### 构建测试
+
+构建和运行测试：
+
+```bash
+cd build
+make
+
+# 运行所有单元测试
+cd test
+./test_algorithm_unit
+./test_buffer_unit
+
+# 运行压力测试
+./test_stress_tcp
+./test_stress_threadpool
+```
+
+### 代码文档
+
+所有公共API都包含详细文档：
+- **@brief**：简短功能描述
+- **@details**：详细说明
+- **@param**：参数描述
+- **@return**：返回值描述
+- **@throw**：异常信息
+
+文档使用简体中文编写，便于中国开发者阅读。
 
 ## 许可证
 

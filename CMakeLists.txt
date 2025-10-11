@@ -179,6 +179,7 @@ install(DIRECTORY ${HEADER_SRC_DIR}
 
 
 add_subdirectory(test)
+add_subdirectory(benchmark)
 
 
 

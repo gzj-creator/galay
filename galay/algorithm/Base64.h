@@ -23,22 +23,82 @@ namespace galay::algorithm
         "0123456789"
         "-_"};
 
+    /**
+     * @brief Base64编码解码工具类
+     * @details 提供标准Base64、PEM格式、MIME格式以及URL安全的Base64编码解码功能
+     */
     class Base64Util
     {
     public:
+        /**
+         * @brief Base64编码字符串
+         * @param s 待编码的字符串
+         * @param url 是否使用URL安全字符集（使用'-'和'_'替代'+'和'/'），默认false
+         * @return 编码后的Base64字符串
+         */
         static std::string base64Encode(std::string const &s, bool url = false);
+        
+        /**
+         * @brief 以PEM格式编码字符串（每64字符插入换行符）
+         * @param s 待编码的字符串
+         * @return PEM格式的Base64字符串
+         */
         static std::string base64EncodePem(std::string const &s);
+        
+        /**
+         * @brief 以MIME格式编码字符串（每76字符插入换行符）
+         * @param s 待编码的字符串
+         * @return MIME格式的Base64字符串
+         */
         static std::string base64EncodeMime(std::string const &s);
 
+        /**
+         * @brief Base64解码字符串
+         * @param s 待解码的Base64字符串
+         * @param remove_linebreaks 是否移除换行符，默认false
+         * @return 解码后的原始字符串
+         * @throw std::runtime_error 当输入不是有效的Base64编码数据时
+         */
         static std::string base64Decode(std::string const &s, bool remove_linebreaks = false);
+        
+        /**
+         * @brief Base64编码字节数组
+         * @param data 待编码的字节数组指针
+         * @param len 字节数组长度
+         * @param url 是否使用URL安全字符集，默认false
+         * @return 编码后的Base64字符串
+         */
         static std::string base64Encode(unsigned char const *, size_t len, bool url = false);
 
 #if __cplusplus >= 201703L
-
+        /**
+         * @brief Base64编码字符串视图（C++17）
+         * @param s 待编码的字符串视图
+         * @param url 是否使用URL安全字符集，默认false
+         * @return 编码后的Base64字符串
+         */
         static std::string base64Encode(std::string_view s, bool url = false);
+        
+        /**
+         * @brief 以PEM格式编码字符串视图（C++17）
+         * @param s 待编码的字符串视图
+         * @return PEM格式的Base64字符串
+         */
         static std::string base64EncodePem(std::string_view s);
+        
+        /**
+         * @brief 以MIME格式编码字符串视图（C++17）
+         * @param s 待编码的字符串视图
+         * @return MIME格式的Base64字符串
+         */
         static std::string base64EncodeMime(std::string_view s);
 
+        /**
+         * @brief Base64解码字符串视图（C++17）
+         * @param s 待解码的Base64字符串视图
+         * @param remove_linebreaks 是否移除换行符，默认false
+         * @return 解码后的原始字符串
+         */
         static std::string base64Decode(std::string_view s, bool remove_linebreaks = false);
 #endif
     private:
