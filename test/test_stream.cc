@@ -48,8 +48,8 @@ Coroutine<nil> testWrite(AsyncTcpSocket socket)
 
 Coroutine<nil> test()
 {
-    AsyncFactory factory1(runtime_1), factory2(runtime_2);
-    auto socket = factory1.createTcpSocket();
+    AsyncFactory factory1 = runtime_1.getAsyncFactory();
+    auto socket = factory1.getTcpSocket();
     socket.socket();
     auto options = socket.options();
     options.handleReuseAddr();
@@ -60,7 +60,7 @@ Coroutine<nil> test()
         AsyncTcpSocketBuilder builder;
         auto result = socket.accept(builder);
         auto new_socket = builder.build();
-        runtime_2.schedule(testWrite(new_socket.alsoRunningOn(runtime_2)));
+        runtime_2.schedule(testWrite(new_socket.cloneForDifferentRole(runtime_2)));
         runtime_1.schedule(testRead(std::move(new_socket)));
     }
     

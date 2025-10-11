@@ -3,27 +3,12 @@
 namespace galay
 {
     TcpSslServer::TcpSslServer(const std::string& cert_file, const std::string& key_file)
-        : m_runtime(RuntimeBuilder().build())
+        : m_cert(cert_file), m_key(key_file)
     {
-        
-        size_t num = m_runtime.coSchedulerSize();
-        for(size_t i = 0; i < num; ++i) {
-            m_sockets.emplace_back(AsyncSslSocket(m_runtime));
-        }
-    }
-
-    TcpSslServer::TcpSslServer(Runtime&& runtime, const std::string& cert_file, const std::string& key_file)
-        : m_runtime(std::move(runtime)), m_cert(cert_file), m_key(key_file)
-    {
-        size_t num = m_runtime.coSchedulerSize();
-        for(size_t i = 0; i < num; ++i) {
-            m_sockets.emplace_back(AsyncSslSocket(m_runtime));
-        }
     }
 
     TcpSslServer::TcpSslServer(TcpSslServer&& server)
-        : m_runtime(std::move(server.m_runtime)),
-            m_sockets(std::move(server.m_sockets))
+        : m_sockets(std::move(server.m_sockets))
     {
         m_host = std::move(server.m_host);
         m_backlog = server.m_backlog;
@@ -37,12 +22,7 @@ namespace galay
         m_backlog = backlog;
     }
 
-    void TcpSslServer::useStrategy(ServerStrategy strategy)
-    {
-        m_strategy = strategy;
-    }
-
-    void TcpSslServer::run(const std::function<Coroutine<nil>(AsyncSslSocket, AsyncFactory)> &callback)
+    void TcpSslServer::run(Runtime& runtime, const AsyncSslFunc &callback)
     {
         if(m_cert.empty() || m_key.empty()) {
             throw std::runtime_error("cert or key is empty");
@@ -51,16 +31,17 @@ namespace galay
                 initializeSSLServerEnv(m_cert.c_str(), m_key.c_str());
             }
         }
-        m_runtime.start();
-        size_t co_num = m_runtime.coSchedulerSize();
+        size_t co_num = runtime.coSchedulerSize();
+        AsyncFactory factory = runtime.getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
+            m_sockets.emplace_back(factory.getSslSocket());
             m_sockets[i].socket();
             HandleOption options = m_sockets[i].options();
             options.handleReuseAddr();
             options.handleReusePort();
             m_sockets[i].bind(m_host);
             m_sockets[i].listen(m_backlog);
-            m_runtime.schedule(acceptConnection(callback, i), i);
+            runtime.schedule(acceptConnection(runtime, callback, i), i);
         }
     }
 
@@ -78,7 +59,6 @@ namespace galay
     TcpSslServer &TcpSslServer::operator=(TcpSslServer &&server)
     {
         if(this != &server) {
-            m_runtime = std::move(server.m_runtime);
             m_sockets = std::move(server.m_sockets);
             m_host = std::move(server.m_host);
             m_backlog = server.m_backlog;
@@ -88,7 +68,7 @@ namespace galay
         return *this;
     }
 
-    Coroutine<nil> TcpSslServer::acceptConnection(const std::function<Coroutine<nil>(AsyncSslSocket,AsyncFactory)>& callback, size_t i)
+    Coroutine<nil> TcpSslServer::acceptConnection(Runtime& runtime, const AsyncSslFunc& callback, size_t i)
     {
         while(true) {
             AsyncSslSocketBuilder builder;
@@ -115,14 +95,13 @@ namespace galay
             }
             if(!res) continue;
             auto socket = builder.build();
-            m_runtime.schedule(callback(std::move(socket),AsyncFactory(m_runtime)), i);
+            runtime.schedule(callback(std::move(socket)), i);
         }
         co_return nil();
     }
 
     TcpSslServer::~TcpSslServer()
     {
-        m_runtime.stop();
         if(getGlobalSSLCtx() != nullptr) { 
             destroySSLEnv();
         }
@@ -147,40 +126,10 @@ namespace galay
         return *this;
     }
 
-    TcpSslServerBuilder &TcpSslServerBuilder::startCoChecker(std::chrono::milliseconds interval)
-    {
-        m_coCheckerInterval = interval;
-        return *this;
-    }
-
-    TcpSslServerBuilder &TcpSslServerBuilder::strategy(ServerStrategy strategy)
-    {
-        m_strategy = strategy;
-        return *this;
-    }
-
-    TcpSslServerBuilder &TcpSslServerBuilder::timeout(int timeout)
-    {
-        m_timeout = timeout;
-        return *this;
-    }
-
-    TcpSslServerBuilder &TcpSslServerBuilder::threads(int threads)
-    {
-        m_threads = threads;
-        return *this;
-    }
-    
     TcpSslServer TcpSslServerBuilder::build()
     {
-        RuntimeBuilder builder;
-        builder.setCoSchedulerNum(m_threads);
-        builder.setEventCheckTimeout(m_timeout);
-        builder.startCoManager(m_coCheckerInterval);
-        Runtime runtime = builder.build();
-        TcpSslServer server(std::move(runtime), m_cert, m_key);
+        TcpSslServer server(m_cert, m_key);
         server.listenOn(m_host, m_backlog);
-        server.useStrategy(m_strategy);
         return server;
     }
 }

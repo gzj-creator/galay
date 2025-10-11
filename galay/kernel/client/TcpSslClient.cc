@@ -66,8 +66,8 @@ namespace galay
         return m_socket.sslClose();
     }
 
-    TcpSslClient TcpSslClient::alsoRunningOn(Runtime& runtime) const
+    TcpSslClient TcpSslClient::cloneForDifferentRole(Runtime& runtime) const
     {
-        return TcpSslClient(m_socket.alsoRunningOn(runtime));
+        return TcpSslClient(m_socket.cloneForDifferentRole(runtime));
     }
 }

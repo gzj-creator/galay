@@ -14,6 +14,8 @@ namespace galay
 
 #define DEFAULT_FDS_SET_INITIAL_SIZE        1024
 #define DEFAULT_COS_SCHEDULER_THREAD_NUM    4
+
+    class AsyncFactory;
     //可容忍在改变状态之前读取旧值导致老队列管理co（下一轮也可以检查到）
     class CoroutineManager
     {
@@ -60,9 +62,13 @@ namespace galay
         Runtime();
         Runtime(Runtime&& rt);
         Runtime& operator=(Runtime&& rt);
+
+        AsyncFactory getAsyncFactory();
+
         void startCoManager(std::chrono::milliseconds interval);
         void start();
         void stop();
+        bool isRunning();
         size_t coSchedulerSize();
         //thread security
         // return co_id

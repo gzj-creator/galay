@@ -19,7 +19,7 @@ namespace galay
         AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* buffer, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> close();
-        TcpSslClient alsoRunningOn(Runtime& runtime) const;
+        TcpSslClient cloneForDifferentRole(Runtime& runtime) const;
     private:
         AsyncSslSocket m_socket;
     };

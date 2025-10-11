@@ -65,8 +65,8 @@ namespace galay
         return m_socket.close();
     }
 
-    UdpClient UdpClient::alsoRunningOn(Runtime& runtime) const
+    UdpClient UdpClient::cloneForDifferentRole(Runtime& runtime) const
     {
-        return UdpClient(m_socket.alsoRunningOn(runtime));
+        return UdpClient(m_socket.cloneForDifferentRole(runtime));
     }
 }

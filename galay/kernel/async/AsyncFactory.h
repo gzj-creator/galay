@@ -12,22 +12,29 @@ namespace galay
     //但可跨运行时实现同一异步对象的异步操作
     class AsyncFactory
     { 
+        friend class Runtime;
     public:
-        AsyncFactory(Runtime& runtime);
-        AsyncTcpSocket createTcpSocket();
-        AsyncTcpSocket createTcpSocket(GHandle handle);
+
+        AsyncFactory(const AsyncFactory& other);
+
+        AsyncFactory& operator=(const AsyncFactory& other) = delete;
         
-        AsyncUdpSocket createUdpSocket();
-        AsyncUdpSocket createUdpSocket(GHandle handle);
-        AsyncSslSocket createSslSocket();
+        AsyncTcpSocket getTcpSocket();
+        AsyncTcpSocket getTcpSocket(GHandle handle);
+        
+        AsyncUdpSocket getUdpSocket();
+        AsyncUdpSocket getUdpSocket(GHandle handle);
+        AsyncSslSocket getSslSocket();
         //SSL_set_fd must be called before
-        AsyncSslSocket createSslSocket(SSL* ssl);
+        AsyncSslSocket getSslSocket(SSL* ssl);
 
-        File createFile();
-        File createFile(GHandle handle);
-        TimerGenerator createTimerGenerator();
+        File getFile();
+        File getFile(GHandle handle);
+        TimerGenerator getTimerGenerator();
 
-        TaskRunner createTaskRunner(int co_id);
+        TaskRunner getTaskRunner(int co_id);
+    private:
+        AsyncFactory(Runtime& runtime);
     private:
         Runtime& m_runtime;
     };

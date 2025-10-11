@@ -16,7 +16,7 @@ namespace galay
         AsyncResult<std::expected<Bytes, CommonError>> recv(char* buffer, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> close();
-        TcpClient alsoRunningOn(Runtime& runtime) const;
+        TcpClient cloneForDifferentRole(Runtime& runtime) const;
     private:
         AsyncTcpSocket m_socket;
     };

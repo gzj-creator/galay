@@ -18,7 +18,7 @@ namespace galay
         AsyncResult<std::expected<Bytes, CommonError>> recvfrom(Host& remote, char* buffer, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sendto(const Host& remote, Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> close();
-        UdpClient alsoRunningOn(Runtime& runtime) const;
+        UdpClient cloneForDifferentRole(Runtime& runtime) const;
     private:
         AsyncUdpSocket m_socket;
     };

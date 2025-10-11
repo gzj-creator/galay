@@ -208,7 +208,7 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncTcpSocket AsyncTcpSocket::alsoRunningOn(Runtime &runtime) const
+    AsyncTcpSocket AsyncTcpSocket::cloneForDifferentRole(Runtime &runtime) const
     {
         return AsyncTcpSocket(runtime, m_handle);
     }
@@ -353,7 +353,7 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncUdpSocket AsyncUdpSocket::alsoRunningOn(Runtime& runtime) const
+    AsyncUdpSocket AsyncUdpSocket::cloneForDifferentRole(Runtime& runtime) const
     {
         return AsyncUdpSocket(runtime, m_handle);
     }
@@ -513,7 +513,7 @@ namespace galay {
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
     }
 
-    AsyncSslSocket AsyncSslSocket::alsoRunningOn(Runtime& runtime) const
+    AsyncSslSocket AsyncSslSocket::cloneForDifferentRole(Runtime& runtime) const
     {
         return AsyncSslSocket(runtime, m_ssl);
     }

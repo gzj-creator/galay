@@ -30,11 +30,13 @@ static void signalHandler(int sig) {
 
 int main() 
 {
+    RuntimeBuilder runtimeBuilder;
+    Runtime runtime = runtimeBuilder.build();
     signal(SIGSEGV, signalHandler);
     TcpSslServerBuilder builder("server.crt", "server.key");
     builder.addListen({"0.0.0.0", 8070});
-    TcpSslServer server = builder.startCoChecker(std::chrono::milliseconds(1000)).build();
-    server.run([&server](AsyncSslSocket socket, AsyncFactory factory) -> Coroutine<nil> {
+    TcpSslServer server = builder.build();
+    server.run(runtime, [&server](AsyncSslSocket socket) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
         using namespace error;
         Buffer buffer(1024);

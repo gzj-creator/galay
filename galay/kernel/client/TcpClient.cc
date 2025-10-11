@@ -55,8 +55,8 @@ namespace galay
         return m_socket.close();
     }
 
-    TcpClient TcpClient::alsoRunningOn(Runtime& runtime) const
+    TcpClient TcpClient::cloneForDifferentRole(Runtime& runtime) const
     {
-        return TcpClient(m_socket.alsoRunningOn(runtime));
+        return TcpClient(m_socket.cloneForDifferentRole(runtime));
     }
 }

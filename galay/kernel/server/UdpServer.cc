@@ -3,19 +3,8 @@
 
 namespace galay
 {
-    UdpServer::UdpServer()
-        : m_runtime(RuntimeBuilder().build())
-    {
-    }
-
-    UdpServer::UdpServer(Runtime&& runtime)
-        : m_runtime(std::move(runtime))
-    {
-
-    }
 
     UdpServer::UdpServer(UdpServer&& server)
-        : m_runtime(std::move(server.m_runtime))
     {
         m_host = std::move(server.m_host);
     }
@@ -25,23 +14,18 @@ namespace galay
         m_host = std::move(host);
     }
 
-    void UdpServer::useStrategy(ServerStrategy strategy)
+    void UdpServer::run(Runtime& runtime, const AsyncUdpFunc& callback)
     {
-        m_strategy = strategy;
-    }
-
-    void UdpServer::run(const std::function<Coroutine<nil>(AsyncUdpSocket,AsyncFactory)>& callback)
-    {
-        m_runtime.start();
-        size_t co_num = m_runtime.coSchedulerSize();
+        size_t co_num = runtime.coSchedulerSize();
+        AsyncFactory factory = runtime.getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
-            AsyncUdpSocket socket(m_runtime);
+            AsyncUdpSocket socket = factory.getUdpSocket();
             socket.socket();
             HandleOption options = socket.options();
             options.handleReuseAddr();
             options.handleReusePort();
             socket.bind(m_host);
-            m_runtime.schedule(callback(std::move(socket),AsyncFactory(m_runtime)), i);
+            runtime.schedule(callback(std::move(socket)), i);
         }
     }
 
@@ -59,15 +43,9 @@ namespace galay
     UdpServer &UdpServer::operator=(UdpServer &&server)
     {
         if(this != &server) {
-            m_runtime = std::move(server.m_runtime);
             m_host = std::move(server.m_host);
         }
         return *this;
-    }
-
-    UdpServer::~UdpServer()
-    {
-        m_runtime.stop();
     }
 
     UdpServerBuilder &UdpServerBuilder::addListen(const Host &host)
@@ -76,40 +54,10 @@ namespace galay
         return *this;
     }
 
-    UdpServerBuilder &UdpServerBuilder::startCoChecker(std::chrono::milliseconds interval)
-    {
-        m_coCheckerInterval = interval;
-        return *this;
-    }
-
-    UdpServerBuilder &UdpServerBuilder::strategy(ServerStrategy strategy)
-    {
-        m_strategy = strategy;
-        return *this;
-    }
-
-    UdpServerBuilder &UdpServerBuilder::timeout(int timeout)
-    {
-        m_timeout = timeout;
-        return *this;
-    }
-
-    UdpServerBuilder &UdpServerBuilder::threads(int threads)
-    {
-        m_threads = threads;
-        return *this;
-    }
-
     UdpServer UdpServerBuilder::build()
     {
-        RuntimeBuilder builder;
-        builder.setCoSchedulerNum(m_threads);
-        builder.setEventCheckTimeout(m_timeout);
-        builder.startCoManager(m_coCheckerInterval);
-        Runtime runtime = builder.build();
-        UdpServer server(std::move(runtime));
+        UdpServer server;
         server.listenOn(m_host);
-        server.useStrategy(m_strategy);
         return server;
     }
 

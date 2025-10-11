@@ -30,12 +30,14 @@ static void signalHandler(int sig) {
 
 int main() 
 {
+    RuntimeBuilder runtimebuilder;
+    Runtime runtime = runtimebuilder.build();
     galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
     signal(SIGSEGV, signalHandler);
     UdpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
-    UdpServer server = builder.startCoChecker(std::chrono::milliseconds(1000)).build();
-    server.run([&server](AsyncUdpSocket socket, AsyncFactory factory) -> Coroutine<nil> {
+    UdpServer server = builder.build();
+    server.run(runtime, [&server](AsyncUdpSocket socket) -> Coroutine<nil> {
         Buffer buffer(1024);
         using namespace error;
         while(true) {
@@ -76,5 +78,6 @@ int main()
         }
     });
     server.wait();
+    runtime.stop();
     return 0;
 }

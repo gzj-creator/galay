@@ -4,6 +4,7 @@
 
 #include "Runtime.h"
 #include "galay/common/Common.h"
+#include "galay/kernel/async/AsyncFactory.h"
 
 namespace galay
 {
@@ -180,6 +181,11 @@ namespace galay
         return *this;
     }
 
+    AsyncFactory Runtime::getAsyncFactory()
+    {
+        return AsyncFactory(*this);
+    }
+
     void Runtime::startCoManager(std::chrono::milliseconds interval)
     {
         if(interval >= std::chrono::milliseconds::zero()) {
@@ -233,6 +239,11 @@ namespace galay
             m_eScheduler->stop();
             m_eScheduler.reset();
         }
+    }
+
+    bool Runtime::isRunning()
+    {
+        return m_running.load();
     }
 
     size_t Runtime::coSchedulerSize()

@@ -3,31 +3,11 @@
 
 namespace galay
 {
-    TcpServer::TcpServer()
-        : m_runtime(RuntimeBuilder().build())
-    {
-        size_t num = m_runtime.coSchedulerSize();
-        for(size_t i = 0; i < num; ++i) {
-            m_sockets.emplace_back(AsyncTcpSocket(m_runtime));
-        }
-    }
-
-    TcpServer::TcpServer(Runtime &&runtime)
-        : m_runtime(std::move(runtime))
-    {
-        size_t num = m_runtime.coSchedulerSize();
-        for(size_t i = 0; i < num; ++i) {
-            m_sockets.emplace_back(AsyncTcpSocket(m_runtime));
-        }
-    }
-
     TcpServer::TcpServer(TcpServer &&server)
-        : m_runtime(std::move(server.m_runtime)),
-            m_sockets(std::move(server.m_sockets))
+        : m_sockets(std::move(server.m_sockets))
     {
         m_host = std::move(server.m_host);
         m_backlog = server.m_backlog;
-        m_strategy = server.m_strategy;
     }
 
     void TcpServer::listenOn(Host host, int backlog)
@@ -36,34 +16,21 @@ namespace galay
         m_backlog = backlog;
     }
 
-    void TcpServer::useStrategy(ServerStrategy strategy)
+    bool TcpServer::run(Runtime& runtime, const AsyncTcpFunc &callback)
     {
-        m_strategy = strategy;
-    }
-
-    bool TcpServer::run(const std::function<Coroutine<nil>(AsyncTcpSocket, AsyncFactory)> &callback)
-    {
-        switch (m_strategy)
-        {
-        case ServerStrategy::SingleRuntime:
-        {
-            m_runtime.start();
-            size_t co_num = m_runtime.coSchedulerSize();
-            for(size_t i = 0; i < co_num; ++i) {
-                m_sockets[i].socket();
-                HandleOption options = m_sockets[i].options();
-                options.handleReuseAddr();
-                options.handleReusePort();
-                m_sockets[i].bind(m_host);
-                m_sockets[i].listen(m_backlog);
-                m_runtime.schedule(acceptConnection(callback, i), i);
-            }
-            return true;
+        size_t co_num = runtime.coSchedulerSize();
+        AsyncFactory factory = runtime.getAsyncFactory();
+        for(size_t i = 0; i < co_num; ++i) {
+            m_sockets.emplace_back(factory.getTcpSocket());
+            m_sockets[i].socket();
+            HandleOption options = m_sockets[i].options();
+            options.handleReuseAddr();
+            options.handleReusePort();
+            m_sockets[i].bind(m_host);
+            m_sockets[i].listen(m_backlog);
+            runtime.schedule(acceptConnection(runtime, callback, i), i);
         }
-        default:
-            break;
-        }
-        return false;
+        return true;
     }
 
     void TcpServer::stop()
@@ -80,7 +47,6 @@ namespace galay
     TcpServer &TcpServer::operator=(TcpServer &&server)
     {
         if(this != &server) {
-            m_runtime = std::move(server.m_runtime);
             m_sockets = std::move(server.m_sockets);
             m_host = std::move(server.m_host);
             m_backlog = server.m_backlog;
@@ -88,12 +54,7 @@ namespace galay
         return *this;
     }
 
-    TcpServer::~TcpServer()
-    {
-        m_runtime.stop();
-    }
-
-    Coroutine<nil> TcpServer::acceptConnection(const std::function<Coroutine<nil>(AsyncTcpSocket,AsyncFactory)>& callback, size_t i)
+    Coroutine<nil> TcpServer::acceptConnection(Runtime& runtime, const AsyncTcpFunc& callback, size_t i)
     {
         while(true) {
             AsyncTcpSocketBuilder builder;
@@ -101,7 +62,7 @@ namespace galay
             if(acceptor) {
                 LogInfo("[acceptConnection success]");
                 auto socket = builder.build();
-                m_runtime.schedule(callback(std::move(socket), AsyncFactory(m_runtime)), i);
+                runtime.schedule(callback(std::move(socket)), i);
             } else {
                 LogError("[acceptConnection failed] [error: {}]", acceptor.error().message());
             }
@@ -120,40 +81,11 @@ namespace galay
         m_backlog = backlog;
         return *this;
     }
-
-    TcpServerBuilder &TcpServerBuilder::startCoChecker(std::chrono::milliseconds interval)
-    {
-        m_coCheckerInterval = interval;
-        return *this;
-    }
-
-    TcpServerBuilder &TcpServerBuilder::strategy(ServerStrategy strategy)
-    {
-        return *this;
-    }
-
-    TcpServerBuilder &TcpServerBuilder::timeout(int timeout)
-    {
-        m_timeout = timeout;
-        return *this;
-    }
-
-    TcpServerBuilder &TcpServerBuilder::threads(int threads)
-    {
-        m_threads = threads;
-        return *this;
-    }
-
+    
     TcpServer TcpServerBuilder::build()
     {
-        RuntimeBuilder builder;
-        builder.setCoSchedulerNum(m_threads);
-        builder.setEventCheckTimeout(m_timeout);
-        builder.startCoManager(m_coCheckerInterval);
-        Runtime runtime = builder.build();
-        TcpServer server(std::move(runtime));
+        TcpServer server;
         server.listenOn(m_host, m_backlog);
-        server.useStrategy(m_strategy);
         return server;
     }
 }

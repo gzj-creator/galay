@@ -31,15 +31,19 @@ void signalHandler(int sig) {
 
 int main() 
 {
+    RuntimeBuilder runtimeBuilder;
+    Runtime runtime = runtimeBuilder.build();
+    runtime.start();
     utils::SignalHandler::setSignalHandler<SIGSEGV>(signalHandler);
     TcpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
-    TcpServer server = builder.startCoChecker(std::chrono::milliseconds(1000)).backlog(1024).threads(1).build();
-    server.run([&server](AsyncTcpSocket socket, AsyncFactory factory) -> Coroutine<nil> {
+    TcpServer server = builder.backlog(1024).build();
+    server.run(runtime, [&server, &runtime](AsyncTcpSocket socket) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
         using namespace error;
         Buffer buffer(1024);
-        TimerGenerator generator = factory.createTimerGenerator();
+        AsyncFactory factory = runtime.getAsyncFactory();
+        TimerGenerator generator = factory.getTimerGenerator();
         while(true) {
             auto twrapper = co_await generator.timeout<std::expected<Bytes, CommonError>>([&](){
                 return socket.recv(buffer.data(), buffer.capacity());
@@ -87,5 +91,6 @@ int main()
         }
     });
     server.wait();
+    runtime.stop();
     return 0;
 }
