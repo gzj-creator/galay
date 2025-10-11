@@ -73,6 +73,10 @@ namespace galay::error
         uint64_t m_code;
     };
 
+    class Infallible
+    {
+    };
+
 }
 
 #endif
