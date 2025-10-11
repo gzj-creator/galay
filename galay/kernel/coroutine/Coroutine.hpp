@@ -3,7 +3,7 @@
 
 #include <memory>
 #include <coroutine>
-#include <stack>
+#include <queue>
 #include <atomic>
 #include <variant>
 #include <optional>
@@ -44,7 +44,7 @@ public:
     using ptr = std::shared_ptr<CoroutineBase>;
     using wptr = std::weak_ptr<CoroutineBase>;
 
-    using ExitHandle = std::function<void(CoroutineBase::wptr)>;
+    using Handler = std::function<void()>;
     
     virtual bool isRunning() const = 0;
     virtual bool isSuspend() const = 0;
@@ -52,15 +52,16 @@ public:
     virtual CoroutineScheduler* belongScheduler() const = 0;
     virtual void resume() = 0;
     virtual void destroy() = 0;
+    virtual CoroutineBase& then(const Handler& callback) = 0;
     virtual ~CoroutineBase() = default;
 
     template<typename CoRtn>
-    std::shared_ptr<Coroutine<CoRtn>> ImplCast()
+    std::shared_ptr<Coroutine<CoRtn>> implCast()
     {
         return std::static_pointer_cast<Coroutine<CoRtn>>(shared_from_this());
     }
+
 protected:
-    virtual void appendExitCallback(const ExitHandle& callback) = 0;
     virtual bool become(CoroutineStatus status) = 0;
     virtual void belongScheduler(CoroutineScheduler* scheduler) = 0;
 };
@@ -116,7 +117,7 @@ class Coroutine: public CoroutineBase
         std::atomic<CoroutineStatus> m_status = CoroutineStatus::Running;
         std::atomic<CoroutineScheduler*> m_scheduler = nullptr;
 
-        std::stack<ExitHandle> m_defer_stk;
+        std::queue<Handler> m_cbs;
     };
 
 public:
@@ -138,6 +139,7 @@ public:
 
     void destroy() override;
     void resume() override;
+    CoroutineBase& then(const Handler& callback) override;
     
     std::optional<T> result();
     std::optional<T> operator()();
@@ -145,7 +147,6 @@ public:
     CoroutineBase::wptr origin();
     ~Coroutine() override = default;
 private:
-    void appendExitCallback(const ExitHandle& callback) override;
     bool become(CoroutineStatus status) override;
     void belongScheduler(CoroutineScheduler* scheduler) override;
     void exitToExecuteDeferStk();

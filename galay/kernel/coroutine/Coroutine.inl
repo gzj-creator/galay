@@ -109,9 +109,10 @@ namespace galay
     }
 
     template <CoType T>
-    inline void Coroutine<T>::appendExitCallback(const ExitHandle &callback)
+    inline CoroutineBase& Coroutine<T>::then(const Handler &callback)
     {
-        m_data->m_defer_stk.push(callback);
+        m_data->m_cbs.push(callback);
+        return *this;
     }
 
     template <CoType T>
@@ -166,10 +167,9 @@ namespace galay
     template <CoType T>
     inline void Coroutine<T>::exitToExecuteDeferStk()
     {
-        while(!m_data->m_defer_stk.empty()) {
-            auto callback = m_data->m_defer_stk.top();
-            callback(weak_from_this());
-            m_data->m_defer_stk.pop();
+        while(!m_data->m_cbs.empty()) {
+            m_data->m_cbs.front()();
+            m_data->m_cbs.pop();
         }
     }
 
