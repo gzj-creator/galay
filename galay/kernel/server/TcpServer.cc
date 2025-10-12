@@ -54,7 +54,7 @@ namespace galay
         return *this;
     }
 
-    Coroutine<nil> TcpServer::acceptConnection(Runtime& runtime, const AsyncTcpFunc& callback, size_t i)
+    Coroutine<nil> TcpServer::acceptConnection(Runtime& runtime, AsyncTcpFunc callback, size_t i)
     {
         while(true) {
             AsyncTcpSocketBuilder builder;

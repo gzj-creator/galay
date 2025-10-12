@@ -69,7 +69,7 @@ namespace galay
         
         ~TcpServer() {}
     private:
-        Coroutine<nil> acceptConnection(Runtime& runtime, const AsyncTcpFunc& callback, size_t i);
+        Coroutine<nil> acceptConnection(Runtime& runtime, AsyncTcpFunc callback, size_t i);
     protected:
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
         Host m_host = {"0.0.0.0", 8080};
