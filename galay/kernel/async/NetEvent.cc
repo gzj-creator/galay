@@ -56,6 +56,7 @@ namespace galay::details
                 return false;
             }
             m_result = std::unexpected(CommonError(CallAcceptError, static_cast<uint32_t>(errno)));
+            return true;
         }
         std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
         uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
