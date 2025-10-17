@@ -182,20 +182,20 @@ namespace galay
 
     template <CoType T>
     inline bool CoroutineDataVisitor<T>::setResult(T&& result) {
-        m_coroutine.lock()->template ImplCast<T>()->m_data->m_result = std::move(result);
+        m_coroutine.lock()->template implCast<T>()->m_data->m_result = std::move(result);
         return true;
     }
 
     template <CoType T>
     inline bool CoroutineDataVisitor<T>::setStatus(CoroutineStatus status) {
-        m_coroutine.lock()->template ImplCast<T>()->m_data->m_status.store(status);
+        m_coroutine.lock()->template implCast<T>()->m_data->m_status.store(status);
         return true;
     }
 
     template <CoType T>
     inline bool CoroutineDataVisitor<T>::setScheduler(CoroutineScheduler *scheduler)
     {
-        m_coroutine.lock()->template ImplCast<T>()->m_data->m_scheduler = scheduler;
+        m_coroutine.lock()->template implCast<T>()->m_data->m_scheduler = scheduler;
         return true;
     }
 
