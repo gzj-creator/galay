@@ -6,12 +6,27 @@
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/common/Log.h"
 
+// macOS上MSG_NOSIGNAL不可用，定义为0
+// macOS通过SO_NOSIGPIPE socket选项来防止SIGPIPE
+#ifndef MSG_NOSIGNAL
+#define MSG_NOSIGNAL 0
+#endif
+
 
 galay::AsyncTcpSocket galay::AsyncTcpSocketBuilder::build()
 {
     if(m_handle.fd < 0) {
         LogError("handle < 0");
     }
+    
+    // macOS上设置SO_NOSIGPIPE选项防止SIGPIPE信号
+    #ifdef SO_NOSIGPIPE
+    int set = 1;
+    if(setsockopt(m_handle.fd, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set)) < 0) {
+        LogWarn("Failed to set SO_NOSIGPIPE: {}", strerror(errno));
+    }
+    #endif
+    
     HandleOption option(m_handle);
     option.handleNonBlock();
     return AsyncTcpSocket(m_scheduler, m_handle);
@@ -127,7 +142,8 @@ namespace galay::details
     bool SendEvent::sendBytes(bool notify)
     {
         using namespace error;
-        int sendBytes = send(m_handle.fd, m_bytes.data(), m_bytes.size(), 0);
+        // 使用MSG_NOSIGNAL防止SIGPIPE信号
+        int sendBytes = send(m_handle.fd, m_bytes.data(), m_bytes.size(), MSG_NOSIGNAL);
         if(sendBytes > 0) LogTrace("sendBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
@@ -307,7 +323,8 @@ namespace galay::details
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = inet_addr(m_remote.ip.c_str());
         addr.sin_port = htons(m_remote.port);
-        int sendBytes = sendto(m_handle.fd, m_bytes.data(), m_bytes.size(), 0, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr));
+        // 使用MSG_NOSIGNAL防止SIGPIPE信号
+        int sendBytes = sendto(m_handle.fd, m_bytes.data(), m_bytes.size(), MSG_NOSIGNAL, reinterpret_cast<sockaddr*>(&addr), sizeof(sockaddr));
         if(sendBytes > 0) LogTrace("sendToBytes: {}, buffer: {}", sendBytes, std::string(reinterpret_cast<const char*>(m_bytes.data())));
         if (sendBytes > 0) {
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);

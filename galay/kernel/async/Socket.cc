@@ -90,6 +90,13 @@ namespace galay {
         if (m_handle.fd < 0) {
             return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
+        
+        // macOS上设置SO_NOSIGPIPE选项防止SIGPIPE信号
+        #ifdef SO_NOSIGPIPE
+        int set = 1;
+        (void)setsockopt(m_handle.fd, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set));
+        #endif
+        
         HandleOption option(m_handle);
         auto res = option.handleNonBlock();
         if(!res) {
@@ -261,6 +268,13 @@ namespace galay {
         if (m_handle.fd < 0) {
             return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
+        
+        // macOS上设置SO_NOSIGPIPE选项防止SIGPIPE信号
+        #ifdef SO_NOSIGPIPE
+        int set = 1;
+        (void)setsockopt(m_handle.fd, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set));
+        #endif
+        
         HandleOption option(m_handle);
         auto res = option.handleNonBlock();
         if(!res) {
@@ -414,6 +428,13 @@ namespace galay {
         if (handle.fd < 0) {
             return std::unexpected(CommonError(CallSocketError, static_cast<uint32_t>(errno)));
         }
+        
+        // macOS上设置SO_NOSIGPIPE选项防止SIGPIPE信号
+        #ifdef SO_NOSIGPIPE
+        int set = 1;
+        (void)setsockopt(handle.fd, SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set));
+        #endif
+        
         HandleOption option(handle);
         auto res = option.handleNonBlock();
         if(!res) {
