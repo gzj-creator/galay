@@ -5,12 +5,12 @@ cmake_minimum_required(VERSION 3.21)
 
 # 压力测试服务器
 add_executable(stress_tcp_server stress_tcp_server.cc)
-target_link_libraries(stress_tcp_server ${PROJECT_NAME})
+target_link_libraries(stress_tcp_server galay)
 target_include_directories(stress_tcp_server PRIVATE ${CMAKE_SOURCE_DIR})
 
 # 压力测试客户端
 add_executable(stress_tcp_client stress_tcp_client.cc)
-target_link_libraries(stress_tcp_client ${PROJECT_NAME})
+target_link_libraries(stress_tcp_client galay)
 target_include_directories(stress_tcp_client PRIVATE ${CMAKE_SOURCE_DIR})
 
 # 设置C++标准和RPATH

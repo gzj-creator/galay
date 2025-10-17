@@ -12,6 +12,7 @@
 #include <unistd.h>
 #include <sys/wait.h>
 #endif
+#include <string>
 #include <vector>
 
 
