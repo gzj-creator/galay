@@ -1,5 +1,4 @@
 #include "TcpServer.h"
-#include "galay/utils/System.h"
 
 namespace galay
 {
@@ -22,12 +21,27 @@ namespace galay
         AsyncFactory factory = runtime.getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
             m_sockets.emplace_back(factory.getTcpSocket());
-            m_sockets[i].socket();
+            if(auto res = m_sockets[i].socket(); !res) {
+                LogError("[TcpServer::run] [error: {}]", res.error().message());
+                return false;
+            }
             HandleOption options = m_sockets[i].options();
-            options.handleReuseAddr();
-            options.handleReusePort();
-            m_sockets[i].bind(m_host);
-            m_sockets[i].listen(m_backlog);
+            if(auto res = options.handleReuseAddr(); !res) {
+                LogError("[TcpServer::run] [error: {}]", res.error().message());
+                return false;
+            }
+            if(auto res = options.handleReusePort(); !res) {
+                LogError("[TcpServer::run] [error: {}]", res.error().message());
+                return false;
+            }
+            if(auto res = m_sockets[i].bind(m_host); !res) {
+                LogError("[TcpServer::run] [error: {}]", res.error().message());
+                return false;
+            }
+            if(auto res = m_sockets[i].listen(m_backlog); !res) {
+                LogError("[TcpServer::run] [error: {}]", res.error().message());
+                return false;
+            }
             runtime.schedule(acceptConnection(runtime, callback, i), i);
         }
         return true;
