@@ -149,7 +149,7 @@ namespace galay::details
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             m_result = std::move(remain);
         } else if (sendBytes == 0) {
-            m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
+            m_result = Bytes{};
         } else {
             if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
             {
@@ -157,6 +157,9 @@ namespace galay::details
                     m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
                 }
                 return false;
+            } else if ( static_cast<uint32_t>(errno) == EPIPE || static_cast<uint32_t>(errno) == ECONNRESET ) {
+                m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
+                return true;
             }
             m_result = std::unexpected(CommonError(CallSendError, static_cast<uint32_t>(errno)));
         }
@@ -330,7 +333,7 @@ namespace galay::details
             Bytes remain(m_bytes.data() + sendBytes, m_bytes.size() - sendBytes);
             m_result = std::move(remain);
         } else if (sendBytes == 0) {
-            m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
+            m_result = Bytes();
         } else {
             if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
             {
@@ -338,6 +341,9 @@ namespace galay::details
                     m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
                 }
                 return false;
+            } else if ( static_cast<uint32_t>(errno) == EPIPE || static_cast<uint32_t>(errno) == ECONNRESET ) {
+                m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
+                return true;
             }
             m_result = std::unexpected(CommonError(CallSendtoError, static_cast<uint32_t>(errno)));
         }

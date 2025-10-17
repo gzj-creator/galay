@@ -49,7 +49,7 @@ namespace galay::details
 
     
 
-class AcceptEvent: public NetEvent<std::expected<void, CommonError>>
+    class AcceptEvent: public NetEvent<std::expected<void, CommonError>>
     {
     public:
         AcceptEvent(GHandle handle, EventScheduler* scheduler, GHandle& accept_handle) 
