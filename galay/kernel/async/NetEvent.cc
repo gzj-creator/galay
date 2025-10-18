@@ -176,23 +176,26 @@ namespace galay::details
     bool SendfileEvent::sendfile(bool notify)
     {
         using namespace error;
-        long total = 0;
-        while(m_length > 0) {
-            int sendBytes = ::sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
-            if (sendBytes < 0) {
-                if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
-                {
-                    if( notify ) {
-                        m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
-                    }
-                    return false;
-                }
-                m_result = std::unexpected(CommonError(CallSendfileError, static_cast<uint32_t>(errno)));
-            }
+        int sendBytes = ::sendfile(m_handle.fd, m_file_handle.fd, &m_offset, m_length);
+        if (sendBytes > 0) {
+            LogTrace("sendfileBytes: {}", sendBytes);
             m_length -= sendBytes;
-            total += sendBytes;
+            m_result = sendBytes;
+        } else if (sendBytes == 0) {
+            m_result = 0L;
+        } else {
+            if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
+            {
+                if( notify ) {
+                    m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
+                }
+                return false;
+            } else if ( static_cast<uint32_t>(errno) == EPIPE || static_cast<uint32_t>(errno) == ECONNRESET ) {
+                m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
+                return true;
+            }
+            m_result = std::unexpected(CommonError(CallSendfileError, static_cast<uint32_t>(errno)));
         }
-        m_result = total;
         return true;
     }
 
