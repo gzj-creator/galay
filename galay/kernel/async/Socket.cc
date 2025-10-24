@@ -539,6 +539,11 @@ namespace galay {
         return AsyncSslSocket(runtime, m_ssl);
     }
 
+    SSL* AsyncSslSocket::getSsl() const
+    {
+        return m_ssl;
+    }
+
     AsyncSslSocket::~AsyncSslSocket()
     {
 

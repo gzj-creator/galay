@@ -124,6 +124,7 @@ namespace galay {
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> sslClose();
         AsyncSslSocket cloneForDifferentRole(Runtime& runtime) const;
+        SSL* getSsl() const;
         ~AsyncSslSocket();
     private:
         AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);
