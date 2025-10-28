@@ -1,8 +1,6 @@
 #ifndef GALAY_SCHEDULER_HOLDER_INL
 #define GALAY_SCHEDULER_HOLDER_INL
 
-#include "SchedulerHolder.hpp"
-
 namespace galay::details
 {
 

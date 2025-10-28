@@ -1,12 +1,17 @@
 #ifndef GALAY_KERNEL_TCP_SERVER_H
 #define GALAY_KERNEL_TCP_SERVER_H 
 
-#include "galay/kernel/async/AsyncFactory.h"
-#include "galay/kernel/coroutine/CoScheduler.hpp"
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <vector>
+#include "galay/kernel/async/Socket.h"
+#include "galay/kernel/coroutine/Coroutine.hpp"
 #include "ServerDefn.hpp"
 
 namespace galay 
 {
+
     /**
      * @brief TCP服务器类
      * @details 提供基于协程的异步TCP服务器实现，支持多客户端并发连接

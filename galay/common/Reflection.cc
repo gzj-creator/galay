@@ -3,10 +3,10 @@
 galay::common::FactoryManager::uptr galay::common::FactoryManager::m_FactoryManager;
 
 void 
-galay::common::FactoryManager::addReleaseFunc(std::function<void()> func)
+galay::common::FactoryManager::addReleaseFunc(::std::function<void()> func)
 {
     if(!m_FactoryManager){
-        m_FactoryManager = std::make_unique<FactoryManager>();
+        m_FactoryManager = ::std::make_unique<FactoryManager>();
     }
     m_FactoryManager->m_ReleaseFunc.push_back(func);
 }

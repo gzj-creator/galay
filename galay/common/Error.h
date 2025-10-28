@@ -1,9 +1,7 @@
 #ifndef __GALAY_ERROR_H__
 #define __GALAY_ERROR_H__
 
-#include <cinttypes>
 #include <string>
-#include <memory>
 
 namespace galay::error
 {

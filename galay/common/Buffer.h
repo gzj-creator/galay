@@ -1,11 +1,8 @@
 #ifndef GALAY_BUFFER_H
 #define GALAY_BUFFER_H 
 
-#include <memory>
-#include <cstring>
-#include <stdexcept>
-#include <type_traits>
 #include <algorithm>
+#include <cstring>
 #include <string>
 
 namespace galay

@@ -1,5 +1,7 @@
 #include "Md5.h"
 #include <openssl/evp.h>
+#include <sstream>
+#include <iomanip>
 
 namespace galay::algorithm
 {

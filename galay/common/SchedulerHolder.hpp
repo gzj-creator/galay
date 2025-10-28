@@ -1,8 +1,9 @@
 #ifndef GALAY_SCHEDULER_HOLDER_HPP
 #define GALAY_SCHEDULER_HOLDER_HPP
 
-#include "Base.h"
-#include "Error.h"
+#include <concepts>
+#include <memory>
+#include <vector>
 #include "Log.h"
 
 namespace galay::details

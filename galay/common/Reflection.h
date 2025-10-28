@@ -137,9 +137,8 @@ namespace common
     };
 
 
-    
-    #include "Reflection.inl"
 }
+    #include "Reflection.inl"
 
 }
 

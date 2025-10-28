@@ -2,7 +2,6 @@
 #define GALAY_COMMON_H
 
 #include <openssl/ssl.h>
-#include <concepts>
 #include <pthread.h>
 #include <expected>
 #include "Error.h"

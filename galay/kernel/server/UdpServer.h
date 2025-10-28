@@ -1,9 +1,11 @@
 #ifndef GALAY_UDP_SERVER_H
 #define GALAY_UDP_SERVER_H 
 
-#include "galay/kernel/async/AsyncFactory.h"
-#include "galay/kernel/coroutine/CoScheduler.hpp"
-#include "ServerDefn.hpp"
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include "galay/kernel/async/Socket.h"
+#include "galay/kernel/coroutine/Coroutine.hpp"
 
 namespace galay
 {

@@ -1,13 +1,18 @@
 #ifndef GALAY_TCP_SSL_SERVER_H
 #define GALAY_TCP_SSL_SERVER_H 
 
-#include "galay/kernel/async/AsyncFactory.h"
-#include "galay/kernel/coroutine/CoScheduler.hpp"
+#include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <mutex>
+#include <string>
+#include <vector>
+#include "galay/kernel/async/Socket.h"
+#include "galay/kernel/coroutine/Coroutine.hpp"
 #include "ServerDefn.hpp"
 
 namespace galay
 {
-    #define DEFAULT_TCP_BACKLOG_SIZE       1024
 
     // 保证单进程单例
     class TcpSslServer

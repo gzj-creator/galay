@@ -11,9 +11,9 @@
 namespace galay::utils
 {
     template <typename T>
-    std::string getTypeName()
+    ::std::string getTypeName()
     {
-        std::string typeName;
+        ::std::string typeName;
         char *szDemangleName = nullptr;
 #ifdef __GNUC__
         szDemangleName = abi::__cxa_demangle(typeid(T).name(), nullptr, nullptr, nullptr);
