@@ -25,7 +25,7 @@ namespace galay
         TcpSslServer& operator=(const TcpSslServer& server) = delete;
         ~TcpSslServer();
     private:
-        Coroutine<nil> acceptConnection(Runtime& runtime, const AsyncSslFunc& callback, size_t i);
+        Coroutine<nil> acceptConnection(Runtime& runtime, AsyncSslFunc callback, size_t i);
     protected:
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
         Host m_host = {"0.0.0.0", 8080};
@@ -34,6 +34,7 @@ namespace galay
         std::mutex m_mutex;
         std::condition_variable m_condition;
         std::vector<AsyncSslSocket> m_sockets;
+        std::atomic<bool> m_running{false};
     };
 
     class TcpSslServerBuilder

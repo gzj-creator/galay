@@ -20,11 +20,23 @@ namespace galay
         AsyncFactory factory = runtime.getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
             AsyncUdpSocket socket = factory.getUdpSocket();
-            socket.socket();
+            if(auto res = socket.socket(); !res) {
+                LogError("[UdpServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
             HandleOption options = socket.options();
-            options.handleReuseAddr();
-            options.handleReusePort();
-            socket.bind(m_host);
+            if(auto res = options.handleReuseAddr(); !res) {
+                LogError("[UdpServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
+            if(auto res = options.handleReusePort(); !res) {
+                LogError("[UdpServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
+            if(auto res = socket.bind(m_host); !res) {
+                LogError("[UdpServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
             runtime.schedule(callback(std::move(socket)), i);
         }
     }

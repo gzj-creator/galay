@@ -30,8 +30,12 @@ static void signalHandler(int sig) {
 
 int main() 
 {
+    // 设置日志级别为 trace 以便查看详细日志
+    galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
+    
     RuntimeBuilder runtimeBuilder;
     Runtime runtime = runtimeBuilder.build();
+    runtime.start();  // 启动 runtime，这是必须的！
     signal(SIGSEGV, signalHandler);
     TcpSslServerBuilder builder("server.crt", "server.key");
     builder.addListen({"0.0.0.0", 8070});
@@ -77,5 +81,8 @@ int main()
         }
     });
     server.wait();
+    // 等待一小段时间，让协程有机会检查 m_running 标志并退出
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    runtime.stop();
     return 0;
 }

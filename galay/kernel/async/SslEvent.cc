@@ -60,21 +60,26 @@ namespace galay::details
     {
         using namespace error;
         int r = SSL_do_handshake(m_ssl);
+        LogTrace("[sslAccept] [handshake_return: {}] [notify: {}]", r, notify);
         if(r == 1) {
+            LogInfo("[SSL handshake completed successfully]");
             m_result = true;
             return true;
         } 
         m_ssl_code = SSL_get_error(m_ssl, r);
         if( this->m_ssl_code == SSL_ERROR_WANT_READ || this->m_ssl_code == SSL_ERROR_WANT_WRITE ) {
+            LogTrace("[SSL_do_handshake needs more data] [ssl_error: {}] [notify: {}]", m_ssl_code, notify);
             if( notify ) {
                 m_result = false;
             }
             return false;
         } else {
+            int fd = SSL_get_fd(m_ssl);
+            LogError("[SSL_do_handshake failed] [return: {}] [ssl_error: {}] [errno: {}]", r, m_ssl_code, errno);
             SSL_free(m_ssl);
-            close(SSL_get_fd(m_ssl));
+            close(fd);
             m_ssl = nullptr;
-            m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
+            m_result = std::unexpected(CommonError(CallSSLHandshakeError, m_ssl_code));
         }
         return true;
     }
@@ -209,7 +214,8 @@ namespace galay::details
             }
             return false;
         } else {
-            m_result = std::unexpected(CommonError(CallSSLHandshakeError, static_cast<uint32_t>(errno)));
+            LogError("[SSL_do_handshake failed] [return: {}] [ssl_error: {}] [errno: {}]", r, m_ssl_code, errno);
+            m_result = std::unexpected(CommonError(CallSSLHandshakeError, m_ssl_code));
         }
         return true;
     }

@@ -1,4 +1,6 @@
 #include "TcpSslServer.h"
+#include <sys/socket.h>
+#include <unistd.h>
 
 namespace galay
 {
@@ -31,22 +33,47 @@ namespace galay
                 initializeSSLServerEnv(m_cert.c_str(), m_key.c_str());
             }
         }
+        m_running.store(true);
         size_t co_num = runtime.coSchedulerSize();
         AsyncFactory factory = runtime.getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
             m_sockets.emplace_back(factory.getSslSocket());
-            m_sockets[i].socket();
+            if(auto res = m_sockets[i].socket(); !res) {
+                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
             HandleOption options = m_sockets[i].options();
-            options.handleReuseAddr();
-            options.handleReusePort();
-            m_sockets[i].bind(m_host);
-            m_sockets[i].listen(m_backlog);
+            if(auto res = options.handleReuseAddr(); !res) {
+                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
+            if(auto res = options.handleReusePort(); !res) {
+                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
+            if(auto res = m_sockets[i].bind(m_host); !res) {
+                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
+            if(auto res = m_sockets[i].listen(m_backlog); !res) {
+                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
+                throw std::runtime_error(res.error().message());
+            }
             runtime.schedule(acceptConnection(runtime, callback, i), i);
         }
     }
 
     void TcpSslServer::stop()
     {
+        m_running.store(false);
+        // 关闭所有监听 socket，让挂起的 accept 立即返回错误
+        for(auto& sock : m_sockets) {
+            int fd = SSL_get_fd(sock.getSsl());
+            if(fd >= 0) {
+                // 关闭 socket 会导致挂起的 accept 返回错误
+                ::shutdown(fd, SHUT_RDWR);
+            }
+        }
         m_condition.notify_one();
     }
 
@@ -68,11 +95,17 @@ namespace galay
         return *this;
     }
 
-    Coroutine<nil> TcpSslServer::acceptConnection(Runtime& runtime, const AsyncSslFunc& callback, size_t i)
+    Coroutine<nil> TcpSslServer::acceptConnection(Runtime& runtime, AsyncSslFunc callback, size_t i)
     {
-        while(true) {
+        while(m_running.load()) {
             AsyncSslSocketBuilder builder;
-            if(auto acceptor = co_await m_sockets[i].accept(builder); !acceptor) {
+            auto acceptor = co_await m_sockets[i].accept(builder);
+            // 立即检查运行状态，防止在 stop 后继续执行
+            if(!m_running.load()) {
+                LogInfo("[acceptConnection stopped after accept] [thread: {}]", i);
+                break;
+            }
+            if(!acceptor) {
                 LogError("[acceptConnection failed] [error: {}]", acceptor.error().message());
                 continue;
             } 
@@ -81,9 +114,14 @@ namespace galay
                 continue;
             }
             std::expected<bool, CommonError> res;
-            while (true)
+            while (m_running.load())
             {
                 res = co_await m_sockets[i].sslAccept(builder);
+                // 每次 co_await 返回后都检查
+                if(!m_running.load()) {
+                    LogInfo("[acceptConnection stopped during sslAccept] [thread: {}]", i);
+                    co_return nil();
+                }
                 if(!res) {
                     LogError("[sslAccept failed] [error: {}]", res.error().message());
                     break;
@@ -97,6 +135,7 @@ namespace galay
             auto socket = builder.build();
             runtime.schedule(callback(std::move(socket)), i);
         }
+        LogInfo("[acceptConnection loop exit] [thread: {}]", i);
         co_return nil();
     }
 
