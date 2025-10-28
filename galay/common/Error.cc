@@ -51,7 +51,8 @@ namespace galay::error
         "read return zero error",
         "write return zero error",
         "concurrent error",
-        "aio events are all completed"
+        "aio events are all completed",
+        "global ssl context not initialized"
     };
 
     bool CommonError::contains(uint64_t error, ErrorCode code)

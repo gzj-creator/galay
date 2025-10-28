@@ -57,6 +57,7 @@ namespace galay::error
         FileWriteEmptyError,              ///< 文件写入为空错误
         ConcurrentError,                  ///< 并发错误
         AioEventsAllCompleteError,        ///< AIO事件全部完成错误
+        GlobalSSLCtxNotInitializedError,  ///< 全局SSL上下文未初始化错误
         ErrorEnd                          ///< 错误枚举结束标记
     };
 

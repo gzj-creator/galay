@@ -1,5 +1,6 @@
 #include "Socket.h"
 
+#include "common/Error.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/event/Event.h"
 
@@ -441,6 +442,9 @@ namespace galay {
             ::close(handle.fd);
             handle.fd = -1;
             return res;
+        }
+        if(getGlobalSSLCtx() == nullptr) {
+            return std::unexpected(CommonError(GlobalSSLCtxNotInitializedError, static_cast<uint32_t>(errno)));
         }
         m_ssl = SSL_new(getGlobalSSLCtx());
         if(m_ssl == nullptr) {
