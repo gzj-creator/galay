@@ -127,11 +127,11 @@ namespace galay
                     break;
                 } 
                 if(res.value()) {
-                    LogInfo("[sslAccept success]");
                     break;
                 }
             }
-            if(!res) continue;
+            if(!res || !res.value()) continue;
+            LogInfo("[sslAccept success]");
             auto socket = builder.build();
             runtime.schedule(callback(std::move(socket)), i);
         }
