@@ -66,31 +66,6 @@ namespace galay
         return true;
     }
 
-    bool initializeHttp2ServerEnv(const char* cert_file, const char* key_file)
-    {
-        if(!initializeSSLServerEnv(cert_file, key_file)) {
-            return false;
-        }
-        const unsigned char alpn_protocols[] = "\x08\x04\x00\x00"; // HTTP/2
-        SSL_CTX_set_alpn_protos(SslCtx, alpn_protocols, sizeof(alpn_protocols));
-        return true;
-    }
-
-    bool initializeHttp2ClientEnv(const char* server_pem)
-    {
-        if(!initialiszeSSLClientEnv(server_pem)) {
-            return false;
-        }
-        const unsigned char alpn_protocols[] = "\x08\x04\x00\x00"; // HTTP/2
-        SSL_CTX_set_alpn_protos(SslCtx, alpn_protocols, sizeof(alpn_protocols));
-        return true;
-    }
-
-    bool destroyHttp2Env()
-    {
-        return destroySSLEnv();
-    }
-
 
     SSL_CTX *getGlobalSSLCtx()
     {

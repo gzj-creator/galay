@@ -80,27 +80,6 @@ namespace galay
     bool destroySSLEnv();
 
     /**
-     * @brief 初始化HTTP/2服务器环境
-     * @param cert_file 证书文件路径
-     * @param key_file 私钥文件路径
-     * @return 初始化是否成功
-     */
-    bool initializeHttp2ServerEnv(const char* cert_file, const char* key_file);
-    
-    /**
-     * @brief 初始化HTTP/2客户端环境
-     * @param server_pem 服务器证书文件路径（可选）
-     * @return 初始化是否成功
-     */
-    bool initializeHttp2ClientEnv(const char* server_pem = nullptr);
-    
-    /**
-     * @brief 销毁HTTP/2环境
-     * @return 销毁是否成功
-     */
-    bool destroyHttp2Env();
-
-    /**
      * @brief 获取全局SSL上下文
      * @return SSL_CTX指针
      */
