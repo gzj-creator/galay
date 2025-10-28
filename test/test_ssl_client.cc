@@ -57,7 +57,7 @@ Coroutine<nil> test(Runtime& runtime)
 
 int main()
 {
-    initialiszeSSLClientEnv();
+    // SSL context is now managed by TcpSslClient
     Runtime runtime = RuntimeBuilder().build();
     runtime.start();
     runtime.schedule(test(runtime));

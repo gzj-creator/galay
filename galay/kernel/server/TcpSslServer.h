@@ -7,6 +7,7 @@
 #include <mutex>
 #include <string>
 #include <vector>
+#include <openssl/ssl.h>
 #include "galay/kernel/async/Socket.h"
 #include "galay/kernel/coroutine/Coroutine.hpp"
 #include "ServerDefn.hpp"
@@ -31,11 +32,13 @@ namespace galay
         ~TcpSslServer();
     private:
         Coroutine<nil> acceptConnection(Runtime& runtime, AsyncSslFunc callback, size_t i);
+        bool initSSLContext();
     protected:
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;
         Host m_host = {"0.0.0.0", 8080};
         std::string m_cert;
         std::string m_key;
+        SSL_CTX* m_ssl_ctx = nullptr;
         std::mutex m_mutex;
         std::condition_variable m_condition;
         std::vector<AsyncSslSocket> m_sockets;

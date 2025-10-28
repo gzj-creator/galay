@@ -13,64 +13,7 @@
 #endif
 
 namespace galay 
-{ 
-
-
-    SSL_CTX* SslCtx = nullptr;
-    // API
-
-    bool initializeSSLServerEnv(const char *cert_file, const char *key_file)
-    {
-        if(SslCtx != nullptr) {
-            return false;
-        }
-        SSL_library_init();
-        OpenSSL_add_all_algorithms();
-        SSL_load_error_strings();
-        SslCtx = SSL_CTX_new(TLS_server_method());
-        if (SslCtx == nullptr) {
-            return false;
-        }
-
-        // 加载证书和私钥
-        if (SSL_CTX_use_certificate_file(SslCtx, cert_file, SSL_FILETYPE_PEM) <= 0) {
-            return false;
-        }
-        if (SSL_CTX_use_PrivateKey_file(SslCtx, key_file, SSL_FILETYPE_PEM) <= 0) {
-            return false;
-        }
-        return true;
-    }
-
-    bool initialiszeSSLClientEnv(const char* server_pem)
-    {
-        if(SslCtx != nullptr) {
-            return false;
-        }
-        SslCtx = SSL_CTX_new(TLS_client_method());
-        if (SslCtx == nullptr) {
-            return false;
-        }
-        if(server_pem) {
-            if(SSL_CTX_load_verify_locations(SslCtx, server_pem, NULL) <= 0) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    bool destroySSLEnv()
-    {
-        SSL_CTX_free(SslCtx);
-        EVP_cleanup();
-        return true;
-    }
-
-
-    SSL_CTX *getGlobalSSLCtx()
-    {
-        return SslCtx;
-    }
+{
 
     HandleOption::HandleOption(const GHandle handle)
         : m_handle(handle)

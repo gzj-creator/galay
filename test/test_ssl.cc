@@ -9,13 +9,14 @@
 using namespace galay;
 
 Runtime runtime;
+SSL_CTX* g_ssl_ctx = nullptr;
 
 Coroutine<nil> Recv(AsyncSslSocket socket);
 Coroutine<nil> Send(AsyncSslSocket socket);
 
 Coroutine<nil> test()
 {
-    AsyncSslSocket socket(runtime);
+    AsyncSslSocket socket(runtime, g_ssl_ctx);
     auto t1 = socket.socket();
     socket.options().handleNonBlock();
     socket.options().handleReusePort();
@@ -41,7 +42,7 @@ Coroutine<nil> test()
     std::cout << "listen success" << std::endl;
     while (true)
     {
-        AsyncSslSocketBuilder builder;
+        AsyncSslSocketBuilder builder(g_ssl_ctx);
         if(auto acceptor = co_await socket.accept(builder); !acceptor) {
             std::cout << acceptor.error().message() << std::endl;
             continue;
@@ -123,11 +124,35 @@ int main()
             .startCoManager(std::chrono::milliseconds(1000))
             .setEventCheckTimeout(5)
             .setEventSchedulerInitFdsSize(1024);
-    initializeSSLServerEnv("server.crt", "server.key");
+    
+    // Initialize SSL context
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();
+    SSL_load_error_strings();
+    g_ssl_ctx = SSL_CTX_new(TLS_server_method());
+    if(!g_ssl_ctx) {
+        std::cerr << "Failed to create SSL context" << std::endl;
+        return 1;
+    }
+    if(SSL_CTX_use_certificate_file(g_ssl_ctx, "server.crt", SSL_FILETYPE_PEM) <= 0) {
+        std::cerr << "Failed to load certificate" << std::endl;
+        return 1;
+    }
+    if(SSL_CTX_use_PrivateKey_file(g_ssl_ctx, "server.key", SSL_FILETYPE_PEM) <= 0) {
+        std::cerr << "Failed to load private key" << std::endl;
+        return 1;
+    }
+    
     runtime = builder.build();
     runtime.start();
     runtime.schedule(test());
     getchar();
     runtime.stop();
+    
+    // Cleanup SSL context
+    if(g_ssl_ctx) {
+        SSL_CTX_free(g_ssl_ctx);
+        EVP_cleanup();
+    }
     return 0;
 }

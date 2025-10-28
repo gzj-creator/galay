@@ -11,12 +11,46 @@ namespace galay
     }
 
     TcpSslServer::TcpSslServer(TcpSslServer&& server)
-        : m_sockets(std::move(server.m_sockets))
+        : m_sockets(std::move(server.m_sockets)),
+          m_running(server.m_running.load())
     {
         m_host = std::move(server.m_host);
         m_backlog = server.m_backlog;
         m_cert = std::move(server.m_cert);
         m_key = std::move(server.m_key);
+        m_ssl_ctx = server.m_ssl_ctx;
+        server.m_ssl_ctx = nullptr;
+        server.m_running.store(false);
+    }
+    
+    bool TcpSslServer::initSSLContext()
+    {
+        if(m_ssl_ctx) {
+            return true;  // Already initialized
+        }
+        
+        SSL_library_init();
+        OpenSSL_add_all_algorithms();
+        SSL_load_error_strings();
+        
+        m_ssl_ctx = SSL_CTX_new(TLS_server_method());
+        if(!m_ssl_ctx) {
+            return false;
+        }
+        
+        if(SSL_CTX_use_certificate_file(m_ssl_ctx, m_cert.c_str(), SSL_FILETYPE_PEM) <= 0) {
+            SSL_CTX_free(m_ssl_ctx);
+            m_ssl_ctx = nullptr;
+            return false;
+        }
+        
+        if(SSL_CTX_use_PrivateKey_file(m_ssl_ctx, m_key.c_str(), SSL_FILETYPE_PEM) <= 0) {
+            SSL_CTX_free(m_ssl_ctx);
+            m_ssl_ctx = nullptr;
+            return false;
+        }
+        
+        return true;
     }
 
     void TcpSslServer::listenOn(Host host, int backlog)
@@ -29,16 +63,17 @@ namespace galay
     {
         if(m_cert.empty() || m_key.empty()) {
             throw std::runtime_error("cert or key is empty");
-        } else {
-            if(getGlobalSSLCtx() == nullptr) {
-                initializeSSLServerEnv(m_cert.c_str(), m_key.c_str());
-            }
         }
+        
+        if(!initSSLContext()) {
+            throw std::runtime_error("Failed to initialize SSL context");
+        }
+        
         m_running.store(true);
         size_t co_num = runtime.coSchedulerSize();
         AsyncFactory factory = runtime.getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
-            m_sockets.emplace_back(factory.getSslSocket());
+            m_sockets.emplace_back(factory.getSslSocket(m_ssl_ctx));
             if(auto res = m_sockets[i].socket(); !res) {
                 LogError("[TcpSslServer::run] [error: {}]", res.error().message());
                 throw std::runtime_error(res.error().message());
@@ -87,11 +122,16 @@ namespace galay
     TcpSslServer &TcpSslServer::operator=(TcpSslServer &&server)
     {
         if(this != &server) {
+            if(m_ssl_ctx) {
+                SSL_CTX_free(m_ssl_ctx);
+            }
             m_sockets = std::move(server.m_sockets);
             m_host = std::move(server.m_host);
             m_backlog = server.m_backlog;
             m_cert = std::move(server.m_cert);
             m_key = std::move(server.m_key);
+            m_ssl_ctx = server.m_ssl_ctx;
+            server.m_ssl_ctx = nullptr;
         }
         return *this;
     }
@@ -99,7 +139,7 @@ namespace galay
     Coroutine<nil> TcpSslServer::acceptConnection(Runtime& runtime, AsyncSslFunc callback, size_t i)
     {
         while(m_running.load()) {
-            AsyncSslSocketBuilder builder;
+            AsyncSslSocketBuilder builder(m_ssl_ctx);
             auto acceptor = co_await m_sockets[i].accept(builder);
             // 立即检查运行状态，防止在 stop 后继续执行
             if(!m_running.load()) {
@@ -142,8 +182,9 @@ namespace galay
 
     TcpSslServer::~TcpSslServer()
     {
-        if(getGlobalSSLCtx() != nullptr) { 
-            destroySSLEnv();
+        if(m_ssl_ctx) {
+            SSL_CTX_free(m_ssl_ctx);
+            m_ssl_ctx = nullptr;
         }
     }
 

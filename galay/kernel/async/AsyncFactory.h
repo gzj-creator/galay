@@ -24,7 +24,7 @@ namespace galay
         
         AsyncUdpSocket getUdpSocket();
         AsyncUdpSocket getUdpSocket(GHandle handle);
-        AsyncSslSocket getSslSocket();
+        AsyncSslSocket getSslSocket(SSL_CTX* ssl_ctx);
         //SSL_set_fd must be called before
         AsyncSslSocket getSslSocket(SSL* ssl);
 

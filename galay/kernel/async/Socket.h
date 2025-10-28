@@ -101,7 +101,7 @@ namespace galay {
     {
         friend class AsyncSslSocketBuilder;
     public:
-        AsyncSslSocket(Runtime& runtime);
+        AsyncSslSocket(Runtime& runtime, SSL_CTX* ssl_ctx);
         AsyncSslSocket(Runtime& runtime, SSL* ssl);
         AsyncSslSocket(AsyncSslSocket&& other);
         AsyncSslSocket(const AsyncSslSocket& other) = delete;

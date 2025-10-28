@@ -58,32 +58,6 @@ namespace galay
         Host host;               ///< 主机地址
     };
 
-    /**
-     * @brief 初始化SSL服务器环境
-     * @param cert_file 证书文件路径
-     * @param key_file 私钥文件路径
-     * @return 初始化是否成功
-     */
-    bool initializeSSLServerEnv(const char* cert_file, const char* key_file);
-    
-    /**
-     * @brief 初始化SSL客户端环境
-     * @param server_pem 服务器证书文件路径（可选）
-     * @return 初始化是否成功
-     */
-    bool initialiszeSSLClientEnv(const char* server_pem = nullptr);
-    
-    /**
-     * @brief 销毁SSL环境
-     * @return 销毁是否成功
-     */
-    bool destroySSLEnv();
-
-    /**
-     * @brief 获取全局SSL上下文
-     * @return SSL_CTX指针
-     */
-    SSL_CTX* getGlobalSSLCtx();
 
     using namespace error;
     

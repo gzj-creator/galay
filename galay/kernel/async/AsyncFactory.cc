@@ -33,9 +33,9 @@ namespace galay
         return AsyncUdpSocket(m_runtime, handle);
     }
 
-    AsyncSslSocket AsyncFactory::getSslSocket()
+    AsyncSslSocket AsyncFactory::getSslSocket(SSL_CTX* ssl_ctx)
     {
-        return AsyncSslSocket(m_runtime);
+        return AsyncSslSocket(m_runtime, ssl_ctx);
     }
 
     AsyncSslSocket AsyncFactory::getSslSocket(SSL *ssl)

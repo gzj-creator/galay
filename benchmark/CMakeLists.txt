@@ -22,8 +22,3 @@ set_target_properties(stress_tcp_server stress_tcp_client PROPERTIES
     INSTALL_RPATH_USE_LINK_PATH TRUE
 )
 
-# 安装目标（可选）
-install(TARGETS stress_tcp_server stress_tcp_client
-    RUNTIME DESTINATION bin/benchmark
-)
-

@@ -3,8 +3,51 @@
 
 namespace galay
 {
-    TcpSslClient::TcpSslClient(Runtime &runtime)
-        :m_socket(runtime)
+    bool TcpSslClient::initSSLContext(const char* server_pem)
+    {
+        if(m_ssl_ctx) {
+            return true;
+        }
+        
+        SSL_library_init();
+        OpenSSL_add_all_algorithms();
+        SSL_load_error_strings();
+        
+        m_ssl_ctx = SSL_CTX_new(TLS_client_method());
+        if(!m_ssl_ctx) {
+            return false;
+        }
+        
+        if(server_pem) {
+            if(SSL_CTX_load_verify_locations(m_ssl_ctx, server_pem, NULL) <= 0) {
+                SSL_CTX_free(m_ssl_ctx);
+                m_ssl_ctx = nullptr;
+                return false;
+            }
+        }
+        
+        m_owns_ctx = true;
+        return true;
+    }
+
+    TcpSslClient::TcpSslClient(Runtime &runtime, const char* server_pem)
+        :m_socket(runtime, static_cast<SSL_CTX*>(nullptr))
+    {
+        if(!initSSLContext(server_pem)) {
+            throw std::runtime_error("Failed to initialize SSL context");
+        }
+        m_socket = AsyncSslSocket(runtime, m_ssl_ctx);
+        std::expected<void, CommonError> res = m_socket.socket();
+        if(!res) {
+            throw std::runtime_error(res.error().message());
+        }
+        if(!m_socket.options().handleNonBlock()) {
+            throw std::runtime_error("set socket non-block error");
+        }
+    }
+
+    TcpSslClient::TcpSslClient(Runtime &runtime, SSL_CTX* ssl_ctx)
+        :m_socket(runtime, ssl_ctx), m_ssl_ctx(ssl_ctx), m_owns_ctx(false)
     {
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
@@ -16,12 +59,32 @@ namespace galay
     }
 
     TcpSslClient::TcpSslClient(AsyncSslSocket &&socket)
-        :m_socket(std::move(socket))
+        :m_socket(std::move(socket)), m_ssl_ctx(nullptr), m_owns_ctx(false)
     {
     }
 
-    TcpSslClient::TcpSslClient(Runtime &runtime, const Host &bind_addr) 
-        :m_socket(runtime)
+    TcpSslClient::TcpSslClient(Runtime &runtime, const Host &bind_addr, const char* server_pem) 
+        :m_socket(runtime, static_cast<SSL_CTX*>(nullptr))
+    {
+        if(!initSSLContext(server_pem)) {
+            throw std::runtime_error("Failed to initialize SSL context");
+        }
+        m_socket = AsyncSslSocket(runtime, m_ssl_ctx);
+        std::expected<void, CommonError> res = m_socket.socket();
+        if(!res) {
+            throw std::runtime_error(res.error().message());
+        }
+        if(!m_socket.options().handleNonBlock()) {
+            throw std::runtime_error("set socket non-block error");
+        }
+        std::expected<void, CommonError> bind_res = m_socket.bind(bind_addr);
+        if(!bind_res) {
+            throw std::runtime_error(bind_res.error().message());
+        }
+    }
+
+    TcpSslClient::TcpSslClient(Runtime &runtime, const Host &bind_addr, SSL_CTX* ssl_ctx)
+        :m_socket(runtime, ssl_ctx), m_ssl_ctx(ssl_ctx), m_owns_ctx(false)
     {
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
@@ -33,6 +96,14 @@ namespace galay
         std::expected<void, CommonError> bind_res = m_socket.bind(bind_addr);
         if(!bind_res) {
             throw std::runtime_error(bind_res.error().message());
+        }
+    }
+
+    TcpSslClient::~TcpSslClient()
+    {
+        if(m_owns_ctx && m_ssl_ctx) {
+            SSL_CTX_free(m_ssl_ctx);
+            m_ssl_ctx = nullptr;
         }
     }
 

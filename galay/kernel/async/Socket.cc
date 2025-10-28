@@ -3,6 +3,7 @@
 #include "common/Error.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/event/Event.h"
+#include <openssl/err.h>
 
 namespace galay {
 
@@ -373,10 +374,19 @@ namespace galay {
         return AsyncUdpSocket(runtime, m_handle);
     }
 
-    AsyncSslSocket::AsyncSslSocket(Runtime& runtime)
+    AsyncSslSocket::AsyncSslSocket(Runtime& runtime, SSL_CTX* ssl_ctx)
     {
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
+        if(ssl_ctx) {
+            m_ssl = SSL_new(ssl_ctx);
+            if(m_ssl == nullptr) {
+                unsigned long err = ERR_get_error();
+                char err_buf[256];
+                ERR_error_string_n(err, err_buf, sizeof(err_buf));
+                throw std::runtime_error(err_buf);
+            }
+        }
     }
 
     AsyncSslSocket::AsyncSslSocket(Runtime& runtime, SSL *ssl)
@@ -443,14 +453,9 @@ namespace galay {
             handle.fd = -1;
             return res;
         }
-        if(getGlobalSSLCtx() == nullptr) {
-            return std::unexpected(CommonError(GlobalSSLCtxNotInitializedError, static_cast<uint32_t>(errno)));
+        if(m_ssl) {
+            SSL_set_fd(m_ssl, handle.fd);
         }
-        m_ssl = SSL_new(getGlobalSSLCtx());
-        if(m_ssl == nullptr) {
-            return std::unexpected(CommonError(CallSSLNewError, static_cast<uint32_t>(errno)));
-        }
-        SSL_set_fd(m_ssl, handle.fd);
         return {};
     }
 
@@ -488,7 +493,11 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncSslSocket::readyToSslAccept(AsyncSslSocketBuilder &builder)
     {
-        builder.m_ssl = SSL_new(getGlobalSSLCtx());
+        if(!builder.m_ssl_ctx) {
+            close(builder.m_handle.fd);
+            return std::unexpected(CommonError(GlobalSSLCtxNotInitializedError, static_cast<uint32_t>(errno)));
+        }
+        builder.m_ssl = SSL_new(builder.m_ssl_ctx);
         if(builder.m_ssl == nullptr) {
             close(builder.m_handle.fd);
             return std::unexpected(CommonError(CallSSLNewError, static_cast<uint32_t>(errno)));

@@ -11,10 +11,12 @@ namespace galay
     class AsyncSslSocketBuilder {
         friend class AsyncSslSocket;
     public:
+        AsyncSslSocketBuilder(SSL_CTX* ssl_ctx) : m_ssl_ctx(ssl_ctx) {}
         //throw exception
         AsyncSslSocket build();
         bool check() const;
     private:
+        SSL_CTX* m_ssl_ctx = nullptr;
         GHandle m_handle = GHandle::invalid();
         SSL* m_ssl = nullptr;
         EventScheduler* m_scheduler = nullptr;
