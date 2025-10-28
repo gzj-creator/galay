@@ -21,6 +21,9 @@ namespace galay
 
     bool initializeSSLServerEnv(const char *cert_file, const char *key_file)
     {
+        if(SslCtx != nullptr) {
+            return false;
+        }
         SSL_library_init();
         OpenSSL_add_all_algorithms();
         SSL_load_error_strings();
@@ -41,6 +44,9 @@ namespace galay
 
     bool initialiszeSSLClientEnv(const char* server_pem)
     {
+        if(SslCtx != nullptr) {
+            return false;
+        }
         SslCtx = SSL_CTX_new(TLS_client_method());
         if (SslCtx == nullptr) {
             return false;
