@@ -16,8 +16,10 @@ namespace galay
     public:
         AsyncFactory() = default;
         AsyncFactory(const AsyncFactory& other);
+        AsyncFactory(AsyncFactory&& other) noexcept;
 
-        AsyncFactory& operator=(const AsyncFactory& other) = delete;
+        AsyncFactory& operator=(const AsyncFactory& other);
+        AsyncFactory& operator=(AsyncFactory&& other) noexcept;
         
         AsyncTcpSocket getTcpSocket();
         AsyncTcpSocket getTcpSocket(GHandle handle);

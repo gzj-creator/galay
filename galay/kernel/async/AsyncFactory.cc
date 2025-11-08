@@ -9,9 +9,32 @@ namespace galay
         assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
     }
 
-    AsyncFactory::AsyncFactory(const AsyncFactory &other)
+    AsyncFactory::AsyncFactory(const AsyncFactory& other)
         : m_runtime(other.m_runtime)
     {
+    }
+
+    AsyncFactory::AsyncFactory(AsyncFactory&& other) noexcept
+        : m_runtime(other.m_runtime)
+    {
+        other.m_runtime = nullptr;
+    }
+
+    AsyncFactory& AsyncFactory::operator=(const AsyncFactory& other)
+    {
+        if (this != &other) {
+            m_runtime = other.m_runtime;
+        }
+        return *this;
+    }
+
+    AsyncFactory& AsyncFactory::operator=(AsyncFactory&& other) noexcept
+    {
+        if (this != &other) {
+            m_runtime = other.m_runtime;
+            other.m_runtime = nullptr;
+        }
+        return *this;
     }
 
 
