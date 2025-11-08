@@ -206,9 +206,19 @@ namespace galay
         return *this;
     }
 
-    AsyncFactory Runtime::getAsyncFactory()
+    CoSchedulerHandle Runtime::getCoSchedulerHandle()
     {
-        return AsyncFactory(this);
+        // 使用轮询选择一个调度器
+        int old = -1;
+        while (true)
+        {
+            old = m_index.load();
+            if (m_index.compare_exchange_strong(old, (old + 1) % m_cSchedulers.size()))
+            {
+                break;
+            }
+        }
+        return CoSchedulerHandle(&m_cSchedulers[old], this);
     }
 
     std::optional<CoSchedulerHandle> Runtime::getCoSchedulerHandle(Token token)
@@ -216,7 +226,7 @@ namespace galay
         if(token >= static_cast<int>(m_cSchedulers.size())) {
             return std::nullopt;
         }
-        return CoSchedulerHandle(&m_cSchedulers[token]);
+        return CoSchedulerHandle(&m_cSchedulers[token], this);
     }
 
     void Runtime::startCoManager(std::chrono::milliseconds interval)
@@ -302,7 +312,7 @@ namespace galay
                 break;
             }
         }
-        return CoSchedulerHandle(&m_cSchedulers[old]);
+        return CoSchedulerHandle(&m_cSchedulers[old], this);
     }
 
     CoSchedulerHandle Runtime::schedule(CoroutineBase::wptr co, Token token)
@@ -317,7 +327,7 @@ namespace galay
             m_cManager->manage(co);
         }
         m_cSchedulers[token].schedule(co);
-        return CoSchedulerHandle(&m_cSchedulers[token]);
+        return CoSchedulerHandle(&m_cSchedulers[token], this);
     }
 
     RuntimeBuilder &RuntimeBuilder::startCoManager(std::chrono::milliseconds interval)

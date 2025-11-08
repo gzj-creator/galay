@@ -3,10 +3,9 @@
 
 namespace galay 
 {
-    UdpClient::UdpClient(Runtime* runtime)
-        : m_socket(runtime)
+    UdpClient::UdpClient(CoSchedulerHandle handle)
+        : m_socket(handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
             throw std::runtime_error(res.error().message());
@@ -21,10 +20,9 @@ namespace galay
     {
     }
 
-    UdpClient::UdpClient(Runtime* runtime, const Host &bind_addr)
-        : m_socket(runtime)
+    UdpClient::UdpClient(CoSchedulerHandle handle, const Host &bind_addr)
+        : m_socket(handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
             throw std::runtime_error(res.error().message());
@@ -68,8 +66,8 @@ namespace galay
         return m_socket.close();
     }
 
-    UdpClient UdpClient::cloneForDifferentRole(Runtime* runtime) const
+    UdpClient UdpClient::cloneForDifferentRole(CoSchedulerHandle handle) const
     {
-        return UdpClient(m_socket.cloneForDifferentRole(runtime));
+        return UdpClient(m_socket.cloneForDifferentRole(handle));
     }
 }

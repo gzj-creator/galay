@@ -12,12 +12,12 @@ namespace galay
         //default constructor
         TcpSslClient() = default;
         //throw exception - creates own SSL_CTX
-        TcpSslClient(Runtime* runtime, const char* server_pem = nullptr);
+        TcpSslClient(CoSchedulerHandle handle, const char* server_pem = nullptr);
         //throw exception - uses provided SSL_CTX
-        TcpSslClient(Runtime* runtime, SSL_CTX* ssl_ctx);
+        TcpSslClient(CoSchedulerHandle handle, SSL_CTX* ssl_ctx);
         TcpSslClient(AsyncSslSocket&& socket);
-        TcpSslClient(Runtime* runtime, const Host& bind_addr, const char* server_pem = nullptr);
-        TcpSslClient(Runtime* runtime, const Host& bind_addr, SSL_CTX* ssl_ctx);
+        TcpSslClient(CoSchedulerHandle handle, const Host& bind_addr, const char* server_pem = nullptr);
+        TcpSslClient(CoSchedulerHandle handle, const Host& bind_addr, SSL_CTX* ssl_ctx);
         ~TcpSslClient();
         
         AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
@@ -26,7 +26,7 @@ namespace galay
         AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* buffer, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> close();
-        TcpSslClient cloneForDifferentRole(Runtime* runtime) const;
+        TcpSslClient cloneForDifferentRole(CoSchedulerHandle handle) const;
     private:
         bool initSSLContext(const char* server_pem);
     private:

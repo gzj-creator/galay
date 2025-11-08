@@ -1,4 +1,5 @@
 #include "galay/kernel/client/TcpSslClient.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "galay/common/Buffer.h"
 
 using namespace galay;
@@ -8,7 +9,8 @@ std::condition_variable cond;
 
 Coroutine<nil> test(Runtime& runtime)
 {
-    TcpSslClient client(&runtime);
+    auto handle = runtime.getCoSchedulerHandle(0).value();
+    TcpSslClient client(handle);
     
     auto res = co_await client.connect({"127.0.0.1", 8070});
     if (!res) {

@@ -74,7 +74,9 @@ namespace galay
         Runtime& operator=(Runtime&& rt);
 
 
-        AsyncFactory getAsyncFactory();
+        // 轮询方式获取CoSchedulerHandle
+        CoSchedulerHandle getCoSchedulerHandle();
+        // 指定token获取CoSchedulerHandle
         std::optional<CoSchedulerHandle> getCoSchedulerHandle(Token token);
 
         void startCoManager(std::chrono::milliseconds interval);

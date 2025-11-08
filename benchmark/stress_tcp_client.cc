@@ -5,6 +5,7 @@
  */
 
 #include "galay/kernel/client/TcpClient.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "galay/common/Buffer.h"
 #include "galay/utils/Thread.h"
 #include <atomic>
@@ -61,7 +62,8 @@ std::string generateMessage(int size) {
 Coroutine<nil> clientBenchmark(Runtime& runtime, const BenchmarkConfig& config, int client_id)
 {
     try {
-        TcpClient client(&runtime);
+        auto handle = runtime.getCoSchedulerHandle(0).value();
+        TcpClient client(handle);
         
         // 连接服务器
         auto res1 = co_await client.connect({config.server_ip, config.server_port});
@@ -223,7 +225,8 @@ int main(int argc, char* argv[])
     std::atomic<bool> start_cmd_done{false};
     ctrl_runtime.schedule([&ctrl_runtime, &config, &start_cmd_done]() -> Coroutine<nil> {
         try {
-            TcpClient ctrl_client(&ctrl_runtime);
+            auto handle = ctrl_runtime.getCoSchedulerHandle(0).value();
+            TcpClient ctrl_client(handle);
             auto connect_res = co_await ctrl_client.connect({config.server_ip, config.server_port});
             if (connect_res) {
                 auto cmd = Bytes::fromString(std::string("start"));
@@ -278,7 +281,8 @@ int main(int argc, char* argv[])
     std::atomic<bool> finish_cmd_done{false};
     ctrl_runtime.schedule([&ctrl_runtime, &config, &finish_cmd_done]() -> Coroutine<nil> {
         try {
-            TcpClient ctrl_client(&ctrl_runtime);
+            auto handle = ctrl_runtime.getCoSchedulerHandle(0).value();
+            TcpClient ctrl_client(handle);
             auto connect_res = co_await ctrl_client.connect({config.server_ip, config.server_port});
             if (connect_res) {
                 auto cmd = Bytes::fromString(std::string("finish"));

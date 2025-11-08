@@ -1,5 +1,6 @@
 #include "galay/kernel/async/AsyncFactory.h"
 #include "galay/kernel/client/TcpClient.h"
+#include "galay/kernel/runtime/Runtime.h"
 
 using namespace galay;
 
@@ -53,14 +54,16 @@ Coroutine<nil> testWrite(TcpClient client)
 
 Coroutine<nil> test()
 {
-    TcpClient client(&runtime_1);
+    auto handle1 = runtime_1.getCoSchedulerHandle(0).value();
+    auto handle2 = runtime_2.getCoSchedulerHandle(0).value();
+    TcpClient client(handle1);
     auto res1 = co_await client.connect({"127.0.0.1", 8070});
     if (!res1) {
         std::cout << "connect error: " << res1.error().message() << std::endl;
         co_return nil();
     }
     std::cout << "connect success" << std::endl;
-    runtime_2.schedule(testRead(client.cloneForDifferentRole(&runtime_2)));
+    runtime_2.schedule(testRead(client.cloneForDifferentRole(handle2)));
     runtime_1.schedule(testWrite(std::move(client)));
     co_return nil();
 }

@@ -1,4 +1,5 @@
 #include "galay/kernel/client/TcpClient.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "galay/common/Buffer.h"
 
 using namespace galay;
@@ -8,7 +9,8 @@ std::condition_variable cond;
 
 Coroutine<nil> test(Runtime& runtime)
 {
-    TcpClient client(&runtime);
+    auto handle = runtime.getCoSchedulerHandle(0).value();
+    TcpClient client(handle);
     auto res1 = co_await client.connect({"127.0.0.1", 8070});
     if (!res1) {
         std::cout << "connect error: " << res1.error().message() << std::endl;

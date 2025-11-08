@@ -1,5 +1,6 @@
 #include "UdpServer.h"
 #include "galay/kernel/async/AsyncFactory.h"
+#include "galay/kernel/runtime/Runtime.h"
 
 namespace galay
 {
@@ -17,7 +18,7 @@ namespace galay
     void UdpServer::run(Runtime& runtime, const AsyncUdpFunc& callback)
     {
         size_t co_num = runtime.coSchedulerSize();
-        AsyncFactory factory = runtime.getAsyncFactory();
+        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
             AsyncUdpSocket socket = factory.getUdpSocket();
             if(auto res = socket.socket(); !res) {

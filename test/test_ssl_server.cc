@@ -1,4 +1,5 @@
 #include "galay/kernel/server/TcpSslServer.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "galay/utils/BackTrace.h"
 #include "galay/common/Buffer.h"
 #include <signal.h>

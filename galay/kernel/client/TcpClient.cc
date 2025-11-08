@@ -3,10 +3,9 @@
 
 namespace galay 
 {
-    TcpClient::TcpClient(Runtime* runtime)
-        : m_socket(runtime)
+    TcpClient::TcpClient(CoSchedulerHandle handle)
+        : m_socket(handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
             throw std::runtime_error(res.error().message());
@@ -21,10 +20,9 @@ namespace galay
     {
     }
 
-    TcpClient::TcpClient(Runtime* runtime, const Host &bind_addr)
-        : m_socket(runtime)
+    TcpClient::TcpClient(CoSchedulerHandle handle, const Host &bind_addr)
+        : m_socket(handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
             throw std::runtime_error(res.error().message());
@@ -58,8 +56,8 @@ namespace galay
         return m_socket.close();
     }
 
-    TcpClient TcpClient::cloneForDifferentRole(Runtime* runtime) const
+    TcpClient TcpClient::cloneForDifferentRole(CoSchedulerHandle handle) const
     {
-        return TcpClient(m_socket.cloneForDifferentRole(runtime));
+        return TcpClient(m_socket.cloneForDifferentRole(handle));
     }
 }

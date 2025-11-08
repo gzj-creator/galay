@@ -7,22 +7,18 @@ namespace galay
 {
 #ifdef USE_AIO
 
-    File::File(Runtime* runtime)
+    File::File(CoSchedulerHandle handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    File::File(Runtime* runtime, GHandle handle)
+    File::File(CoSchedulerHandle handle, GHandle fd)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
-        m_handle = handle;
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_handle = fd;
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
@@ -127,20 +123,16 @@ namespace galay
         io_destroy(m_io_ctx);
     }
 #else
-    File::File(Runtime* runtime)
+    File::File(CoSchedulerHandle handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    File::File(Runtime* runtime, GHandle handle)
+    File::File(CoSchedulerHandle handle, GHandle fd)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        m_handle = handle;
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_handle = fd;
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 

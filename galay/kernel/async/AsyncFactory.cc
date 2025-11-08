@@ -3,27 +3,25 @@
 
 namespace galay
 {
-    AsyncFactory::AsyncFactory(Runtime* runtime)
-        : m_runtime(runtime)
+    AsyncFactory::AsyncFactory(CoSchedulerHandle handle)
+        : m_handle(handle)
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
     }
 
     AsyncFactory::AsyncFactory(const AsyncFactory& other)
-        : m_runtime(other.m_runtime)
+        : m_handle(other.m_handle)
     {
     }
 
     AsyncFactory::AsyncFactory(AsyncFactory&& other) noexcept
-        : m_runtime(other.m_runtime)
+        : m_handle(other.m_handle)
     {
-        other.m_runtime = nullptr;
     }
 
     AsyncFactory& AsyncFactory::operator=(const AsyncFactory& other)
     {
         if (this != &other) {
-            m_runtime = other.m_runtime;
+            m_handle = other.m_handle;
         }
         return *this;
     }
@@ -31,8 +29,7 @@ namespace galay
     AsyncFactory& AsyncFactory::operator=(AsyncFactory&& other) noexcept
     {
         if (this != &other) {
-            m_runtime = other.m_runtime;
-            other.m_runtime = nullptr;
+            m_handle = other.m_handle;
         }
         return *this;
     }
@@ -40,56 +37,46 @@ namespace galay
 
     AsyncTcpSocket AsyncFactory::getTcpSocket()
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncTcpSocket(m_runtime);
+        return AsyncTcpSocket(m_handle);
     }
 
     AsyncTcpSocket AsyncFactory::getTcpSocket(GHandle handle)
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncTcpSocket(m_runtime, handle);
+        return AsyncTcpSocket(m_handle, handle);
     }
 
     AsyncUdpSocket AsyncFactory::getUdpSocket()
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncUdpSocket(m_runtime);
+        return AsyncUdpSocket(m_handle);
     }
 
     AsyncUdpSocket AsyncFactory::getUdpSocket(GHandle handle)
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncUdpSocket(m_runtime, handle);
+        return AsyncUdpSocket(m_handle, handle);
     }
 
-    AsyncSslSocket AsyncFactory::getSslSocket(SSL_CTX* ssl_ctx)
+    AsyncSslSocket AsyncFactory::getSslSocket(SSL_CTX *ssl_ctx)
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncSslSocket(m_runtime, ssl_ctx);
+        return AsyncSslSocket(m_handle, ssl_ctx);
     }
 
     AsyncSslSocket AsyncFactory::getSslSocket(SSL *ssl)
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncSslSocket(m_runtime, ssl);
+        return AsyncSslSocket(m_handle, ssl);
     }
 
     File AsyncFactory::getFile()
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return File(m_runtime);
+        return File(m_handle);
     }
 
     File AsyncFactory::getFile(GHandle handle)
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return File(m_runtime, handle);
+        return File(m_handle, handle);
     }
 
     TimerGenerator AsyncFactory::getTimerGenerator()
     {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return TimerGenerator(m_runtime);
+        return TimerGenerator(m_handle);
     }
-
 }

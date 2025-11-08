@@ -38,22 +38,18 @@ namespace galay {
         return host;
     }
 
-    AsyncTcpSocket::AsyncTcpSocket(Runtime* runtime)
+    AsyncTcpSocket::AsyncTcpSocket(CoSchedulerHandle handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    AsyncTcpSocket::AsyncTcpSocket(Runtime* runtime, GHandle handle)
+    AsyncTcpSocket::AsyncTcpSocket(CoSchedulerHandle handle, GHandle fd)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        m_handle = handle;
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_handle = fd;
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        HandleOption options(handle);
+        HandleOption options(fd);
         options.handleNonBlock();
     }
 
@@ -235,26 +231,21 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncTcpSocket AsyncTcpSocket::cloneForDifferentRole(Runtime* runtime) const
+    AsyncTcpSocket AsyncTcpSocket::cloneForDifferentRole(CoSchedulerHandle handle) const
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncTcpSocket(runtime, m_handle);
+        return AsyncTcpSocket(handle, m_handle);
     }
 
-    AsyncUdpSocket::AsyncUdpSocket(Runtime* runtime)
+    AsyncUdpSocket::AsyncUdpSocket(CoSchedulerHandle handle)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    AsyncUdpSocket::AsyncUdpSocket(Runtime* runtime, GHandle handle)
+    AsyncUdpSocket::AsyncUdpSocket(CoSchedulerHandle handle, GHandle fd)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        m_handle = handle;
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_handle = fd;
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
@@ -403,20 +394,14 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncUdpSocket AsyncUdpSocket::cloneForDifferentRole(Runtime* runtime) const
+    AsyncUdpSocket AsyncUdpSocket::cloneForDifferentRole(CoSchedulerHandle handle) const
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncUdpSocket(runtime, m_handle);
+        return AsyncUdpSocket(handle, m_handle);
     }
 
-    AsyncSslSocket::AsyncSslSocket(Runtime* runtime, SSL_CTX* ssl_ctx)
+    AsyncSslSocket::AsyncSslSocket(CoSchedulerHandle handle, SSL_CTX* ssl_ctx)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        RuntimeVisitor visitor(*runtime);
-        auto eScheduler_ptr = visitor.eventScheduler();
-        LogTrace("[AsyncSslSocket constructor] EventScheduler shared_ptr: {}, use_count: {}", 
-                 static_cast<void*>(eScheduler_ptr.get()), eScheduler_ptr.use_count());
-        m_scheduler = eScheduler_ptr.get();
+        m_scheduler = handle.eventScheduler();
         LogTrace("[AsyncSslSocket constructor] m_scheduler: {}", static_cast<void*>(m_scheduler));
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         if(ssl_ctx) {
@@ -430,12 +415,10 @@ namespace galay {
         }
     }
 
-    AsyncSslSocket::AsyncSslSocket(Runtime* runtime, SSL *ssl)
+    AsyncSslSocket::AsyncSslSocket(CoSchedulerHandle handle, SSL *ssl)
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_ssl = ssl;
-        RuntimeVisitor visitor(*runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
@@ -632,10 +615,9 @@ namespace galay {
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
     }
 
-    AsyncSslSocket AsyncSslSocket::cloneForDifferentRole(Runtime* runtime) const
+    AsyncSslSocket AsyncSslSocket::cloneForDifferentRole(CoSchedulerHandle handle) const
     {
-        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return AsyncSslSocket(runtime, m_ssl);
+        return AsyncSslSocket(handle, m_ssl);
     }
 
     SSL* AsyncSslSocket::getSsl() const

@@ -1,5 +1,6 @@
 #include "galay/kernel/server/TcpServer.h"
 #include "galay/kernel/async/AsyncFactory.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "galay/utils/BackTrace.h"
 #include "galay/utils/SignalHandler.hpp"
 #include "galay/common/Buffer.h"
@@ -43,7 +44,7 @@ int main()
         std::cout << "connection established" << std::endl;
         using namespace error;
         Buffer buffer(1024);
-        AsyncFactory factory = runtime.getAsyncFactory();
+        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
         TimerGenerator generator = factory.getTimerGenerator();
         while(true) {
             auto twrapper = co_await generator.timeout<std::expected<Bytes, CommonError>>([&](){

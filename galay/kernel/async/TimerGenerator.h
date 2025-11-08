@@ -4,7 +4,7 @@
 
 #include "TimeEvent.h"
 #include "galay/kernel/coroutine/AsyncWaiter.hpp"
-#include "galay/kernel/runtime/Runtime.h"
+#include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 
 namespace galay 
 { 
@@ -12,9 +12,9 @@ namespace galay
     {
     public:
         using ptr = std::shared_ptr<TimerGenerator>;
-        static TimerGenerator::ptr createPtr(Runtime* runtime);
+        static TimerGenerator::ptr createPtr(CoSchedulerHandle handle);
         TimerGenerator() = default;
-        TimerGenerator(Runtime* runtime);
+        TimerGenerator(CoSchedulerHandle handle);
         AsyncResult<nil> wait(std::chrono::milliseconds ms, const std::function<void()>& func);
         template <CoType T>
         AsyncResult<std::expected<T, CommonError>> timeout(const std::function<AsyncResult<T>()>& func, std::chrono::milliseconds ms);
@@ -25,7 +25,7 @@ namespace galay
         template <CoType T>
         Coroutine<nil> waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncWaiter<T, CommonError>> waiter);
     private:
-        Runtime* m_runtime = nullptr;
+        CoSchedulerHandle m_handle;
     };
 
     template <CoType T>

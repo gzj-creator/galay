@@ -1,5 +1,6 @@
 #include "TcpServer.h"
 #include "galay/kernel/async/AsyncFactory.h"
+#include "galay/kernel/runtime/Runtime.h"
 
 namespace galay
 {
@@ -19,7 +20,7 @@ namespace galay
     bool TcpServer::run(Runtime& runtime, const AsyncTcpFunc &callback)
     {
         size_t co_num = runtime.coSchedulerSize();
-        AsyncFactory factory = runtime.getAsyncFactory();
+        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
             m_sockets.emplace_back(factory.getTcpSocket());
             if(auto res = m_sockets[i].socket(); !res) {

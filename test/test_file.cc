@@ -12,7 +12,8 @@ Runtime runtime;
 #ifdef USE_AIO  
 Coroutine<nil> test()
 {
-    File file(&runtime);
+    auto handle = runtime.getCoSchedulerHandle(0).value();
+    File file(handle);
     OpenFlags flags;
     //读写权限
     flags.create().noBlock().readWrite();
@@ -63,7 +64,8 @@ Coroutine<nil> test()
 
 Coroutine<nil> test_v()
 {
-    File file(&runtime);
+    auto handle = runtime.getCoSchedulerHandle(0).value();
+    File file(handle);
     OpenFlags flags;
     flags.create().noBlock().readWrite();
     file.open("./test2.txt", flags, FileModes{});
@@ -134,7 +136,8 @@ Coroutine<nil> test_v()
 Coroutine<nil> test()
 { 
     std::cout << "testing" << std::endl;
-    File file(&runtime);
+    auto handle = runtime.getCoSchedulerHandle(0).value();
+    File file(handle);
     OpenFlags flags;
     flags.create().noBlock().readWrite();
     auto ret = file.open("./test2.txt", flags, FileModes());

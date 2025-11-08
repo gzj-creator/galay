@@ -1,4 +1,5 @@
 #include "galay/kernel/async/TimerGenerator.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "galay/common/Log.h"
 #include <iostream>
 
@@ -10,10 +11,10 @@ CoSchedulerHandle main_holder;
 
 Coroutine<nil> test()
 {   
-
-    TimerGenerator generator(&runtime);
-    TimerGenerator generator1(&runtime);
-    //TimerGenerator::ptr generator2 = TimerGenerator::createPtr(runtime);
+     auto handle = runtime.getCoSchedulerHandle(0).value();
+    TimerGenerator generator(handle);
+    TimerGenerator generator1(handle);
+    //TimerGenerator::ptr generator2 = TimerGenerator::createPtr(handle);
     /*
 
         auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), [](){

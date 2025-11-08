@@ -5,6 +5,7 @@
  */
 
 #include "galay/kernel/server/TcpServer.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include "galay/utils/BackTrace.h"
 #include "galay/utils/SignalHandler.hpp"
 #include "galay/common/Buffer.h"

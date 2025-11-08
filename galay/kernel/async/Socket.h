@@ -3,7 +3,7 @@
 
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
-#include "galay/kernel/runtime/Runtime.h"
+#include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 #include "NetEvent.h"
 #include "SslEvent.h"
 
@@ -28,8 +28,8 @@ namespace galay {
         friend class AsyncTcpSocketBuilder;
     public:
         AsyncTcpSocket() = default;
-        AsyncTcpSocket(Runtime* runtime);
-        AsyncTcpSocket(Runtime* runtime, GHandle handle);
+        AsyncTcpSocket(CoSchedulerHandle handle);
+        AsyncTcpSocket(CoSchedulerHandle handle, GHandle fd);
         AsyncTcpSocket(const AsyncTcpSocket& other) = delete;
         AsyncTcpSocket(AsyncTcpSocket&& other);
         AsyncTcpSocket& operator=(const AsyncTcpSocket& other) = delete;
@@ -58,7 +58,7 @@ namespace galay {
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
 
-        AsyncTcpSocket cloneForDifferentRole(Runtime* runtime) const;
+        AsyncTcpSocket cloneForDifferentRole(CoSchedulerHandle handle) const;
     private:
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
@@ -71,8 +71,8 @@ namespace galay {
     {
     public:
         AsyncUdpSocket() = default;
-        AsyncUdpSocket(Runtime* runtime);
-        AsyncUdpSocket(Runtime* runtime, GHandle handle);
+        AsyncUdpSocket(CoSchedulerHandle handle);
+        AsyncUdpSocket(CoSchedulerHandle handle, GHandle fd);
 
         AsyncUdpSocket(const AsyncUdpSocket& other) = delete;
         AsyncUdpSocket(AsyncUdpSocket&& other);
@@ -93,7 +93,7 @@ namespace galay {
         [[nodiscard]] std::expected<SockAddr, CommonError> getSrcAddr() const;
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
-        AsyncUdpSocket cloneForDifferentRole(Runtime* runtime) const;
+        AsyncUdpSocket cloneForDifferentRole(CoSchedulerHandle handle) const;
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
@@ -104,8 +104,8 @@ namespace galay {
         friend class AsyncSslSocketBuilder;
     public:
         AsyncSslSocket() = default;
-        AsyncSslSocket(Runtime* runtime, SSL_CTX* ssl_ctx);
-        AsyncSslSocket(Runtime* runtime, SSL* ssl);
+        AsyncSslSocket(CoSchedulerHandle handle, SSL_CTX* ssl_ctx);
+        AsyncSslSocket(CoSchedulerHandle handle, SSL* ssl);
         AsyncSslSocket(AsyncSslSocket&& other);
         AsyncSslSocket(const AsyncSslSocket& other) = delete;
         AsyncSslSocket& operator=(const AsyncSslSocket& other) = delete;
@@ -126,7 +126,7 @@ namespace galay {
         AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* result, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> sslClose();
-        AsyncSslSocket cloneForDifferentRole(Runtime* runtime) const;
+        AsyncSslSocket cloneForDifferentRole(CoSchedulerHandle handle) const;
         SSL* getSsl() const;
         ~AsyncSslSocket();
     private:

@@ -7,7 +7,7 @@
 #endif
 
 #include "FileEvent.h"
-#include "galay/kernel/runtime/Runtime.h"
+#include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 
 namespace galay 
 {
@@ -66,8 +66,8 @@ namespace galay
     {
     public:
         File() = default;
-        File(Runtime* runtime);
-        File(Runtime* runtime, GHandle handle);
+        File(CoSchedulerHandle handle);
+        File(CoSchedulerHandle handle, GHandle fd);
         std::expected<void, CommonError> open(const std::string& path, OpenFlags flags, FileModes modes);
         std::expected<void, CommonError> aioInit(int max_events);
         void preRead(char* buffer, size_t size, LL offset, void* data = nullptr);
@@ -99,8 +99,8 @@ namespace galay
     { 
     public:
         File() = default;
-        File(Runtime* runtime);
-        File(Runtime* runtime, GHandle handle);
+        File(CoSchedulerHandle handle);
+        File(CoSchedulerHandle handle, GHandle fd);
 
         File(const File& other) = delete;
         File(File&& other);

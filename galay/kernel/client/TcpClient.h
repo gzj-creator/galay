@@ -19,10 +19,10 @@ namespace galay
         
         /**
          * @brief 构造TCP客户端
-         * @param runtime 运行时环境指针
+         * @param handle 协程调度器句柄
          * @throw 可能抛出异常
          */
-        TcpClient(Runtime* runtime);
+        TcpClient(CoSchedulerHandle handle);
         
         /**
          * @brief 从已有socket构造TCP客户端
@@ -32,10 +32,10 @@ namespace galay
         
         /**
          * @brief 构造并绑定本地地址的TCP客户端
-         * @param runtime 运行时环境指针
+         * @param handle 协程调度器句柄
          * @param bind_addr 本地绑定地址
          */
-        TcpClient(Runtime* runtime, const Host& bind_addr);
+        TcpClient(CoSchedulerHandle handle, const Host& bind_addr);
         
         /**
          * @brief 连接到远程服务器
@@ -67,10 +67,10 @@ namespace galay
         
         /**
          * @brief 克隆客户端用于不同角色
-         * @param runtime 新的运行时环境指针
+         * @param handle 新的协程调度器句柄
          * @return 克隆的TcpClient对象
          */
-        TcpClient cloneForDifferentRole(Runtime* runtime) const;
+        TcpClient cloneForDifferentRole(CoSchedulerHandle handle) const;
     private:
         AsyncTcpSocket m_socket;  ///< 异步TCP socket
     };

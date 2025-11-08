@@ -4,6 +4,7 @@
 #include "Socket.h"
 #include "File.h"
 #include "TimerGenerator.h"
+#include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 
 namespace galay
 {
@@ -12,6 +13,7 @@ namespace galay
     class AsyncFactory
     { 
         friend class Runtime;
+        friend class CoSchedulerHandle;
     public:
         AsyncFactory() = default;
         AsyncFactory(const AsyncFactory& other);
@@ -34,9 +36,9 @@ namespace galay
         TimerGenerator getTimerGenerator();
 
     private:
-        AsyncFactory(Runtime* runtime);
+        AsyncFactory(CoSchedulerHandle handle);
     private:
-        Runtime* m_runtime = nullptr;
+        CoSchedulerHandle m_handle;
     };
 }
 

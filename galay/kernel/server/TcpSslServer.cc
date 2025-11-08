@@ -1,5 +1,6 @@
 #include "TcpSslServer.h"
 #include "galay/kernel/async/AsyncFactory.h"
+#include "galay/kernel/runtime/Runtime.h"
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -81,7 +82,7 @@ namespace galay
         
         m_running.store(true);
         size_t co_num = runtime.coSchedulerSize();
-        AsyncFactory factory = runtime.getAsyncFactory();
+        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
             m_sockets.emplace_back(factory.getSslSocket(m_ssl_ctx));
             if(auto res = m_sockets[i].socket(); !res) {
