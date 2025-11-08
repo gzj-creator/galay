@@ -65,8 +65,9 @@ namespace galay
     class File
     {
     public:
-        File(Runtime& runtime);
-        File(Runtime& runtime, GHandle handle);
+        File() = default;
+        File(Runtime* runtime);
+        File(Runtime* runtime, GHandle handle);
         std::expected<void, CommonError> open(const std::string& path, OpenFlags flags, FileModes modes);
         std::expected<void, CommonError> aioInit(int max_events);
         void preRead(char* buffer, size_t size, LL offset, void* data = nullptr);
@@ -97,8 +98,9 @@ namespace galay
     class File
     { 
     public:
-        File(Runtime& runtime);
-        File(Runtime& runtime, GHandle handle);
+        File() = default;
+        File(Runtime* runtime);
+        File(Runtime* runtime, GHandle handle);
 
         File(const File& other) = delete;
         File(File&& other);

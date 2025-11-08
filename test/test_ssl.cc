@@ -16,7 +16,7 @@ Coroutine<nil> Send(AsyncSslSocket socket);
 
 Coroutine<nil> test()
 {
-    AsyncSslSocket socket(runtime, g_ssl_ctx);
+    AsyncSslSocket socket(&runtime, g_ssl_ctx);
     auto t1 = socket.socket();
     socket.options().handleNonBlock();
     socket.options().handleReusePort();

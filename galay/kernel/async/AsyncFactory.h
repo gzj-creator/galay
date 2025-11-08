@@ -14,7 +14,7 @@ namespace galay
     { 
         friend class Runtime;
     public:
-
+        AsyncFactory() = default;
         AsyncFactory(const AsyncFactory& other);
 
         AsyncFactory& operator=(const AsyncFactory& other) = delete;
@@ -34,9 +34,9 @@ namespace galay
 
         TaskRunner getTaskRunner(int co_id);
     private:
-        AsyncFactory(Runtime& runtime);
+        AsyncFactory(Runtime* runtime);
     private:
-        Runtime& m_runtime;
+        Runtime* m_runtime = nullptr;
     };
 }
 

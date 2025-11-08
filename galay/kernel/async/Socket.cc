@@ -38,19 +38,21 @@ namespace galay {
         return host;
     }
 
-    AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime)
+    AsyncTcpSocket::AsyncTcpSocket(Runtime* runtime)
     {
-        RuntimeVisitor visitor(runtime);
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
-        assert(m_scheduler != nullptr);
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime, GHandle handle)
+    AsyncTcpSocket::AsyncTcpSocket(Runtime* runtime, GHandle handle)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_handle = handle;
-        RuntimeVisitor visitor(runtime);
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
-        assert(m_scheduler != nullptr);
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         HandleOption options(handle);
         options.handleNonBlock();
     }
@@ -85,11 +87,13 @@ namespace galay {
 
     HandleOption AsyncTcpSocket::options()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return HandleOption(m_handle);
     }
 
     std::expected<void, CommonError> AsyncTcpSocket::socket()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         m_handle.fd = ::socket(AF_INET, SOCK_STREAM, 0);
         if (m_handle.fd < 0) {
@@ -113,6 +117,7 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncTcpSocket::bind(const Host& addr)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
@@ -129,6 +134,7 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncTcpSocket::listen(int backlog)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         if(::listen(m_handle.fd, backlog))
         {
@@ -139,6 +145,7 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncTcpSocket::shuntdown(ShutdownType type)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         int ret = -1;
         switch (type)
@@ -164,39 +171,46 @@ namespace galay {
 
     AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::close()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::accept(AsyncTcpSocketBuilder& builder)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         builder.m_scheduler = m_scheduler;
         return {std::make_shared<details::AcceptEvent>(m_handle, m_scheduler, builder.m_handle)};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::connect(const Host& host)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::ConnectEvent>(m_handle, m_scheduler, host)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncTcpSocket::recv(char* result, size_t length)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncTcpSocket::send(Bytes bytes)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
 
 #ifdef __linux__
     AsyncResult<std::expected<long, CommonError>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::SendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
     }
 #endif
 
     std::expected<SockAddr, CommonError> AsyncTcpSocket::getSrcAddr() const
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         std::expected<SockAddr, CommonError> wrapper;
         sockaddr_storage addr{};
@@ -209,6 +223,7 @@ namespace galay {
 
     std::expected<SockAddr, CommonError> AsyncTcpSocket::getDestAddr() const
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         std::expected<SockAddr, CommonError> wrapper;
         sockaddr_storage addr{};
@@ -220,24 +235,27 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncTcpSocket AsyncTcpSocket::cloneForDifferentRole(Runtime &runtime) const
+    AsyncTcpSocket AsyncTcpSocket::cloneForDifferentRole(Runtime* runtime) const
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         return AsyncTcpSocket(runtime, m_handle);
     }
 
-    AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime)
+    AsyncUdpSocket::AsyncUdpSocket(Runtime* runtime)
     {
-        RuntimeVisitor visitor(runtime);
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
-        assert(m_scheduler != nullptr);
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime, GHandle handle)
+    AsyncUdpSocket::AsyncUdpSocket(Runtime* runtime, GHandle handle)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_handle = handle;
-        RuntimeVisitor visitor(runtime);
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
-        assert(m_scheduler != nullptr);
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
     AsyncUdpSocket::AsyncUdpSocket(AsyncUdpSocket&& other)
@@ -265,11 +283,13 @@ namespace galay {
 
     HandleOption AsyncUdpSocket::options()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return HandleOption(m_handle);
     }
 
     std::expected<void, CommonError> AsyncUdpSocket::socket()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         m_handle.fd = ::socket(AF_INET, SOCK_DGRAM, 0);
         if (m_handle.fd < 0) {
@@ -294,6 +314,7 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncUdpSocket::bind(const Host& addr)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
@@ -309,6 +330,7 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncUdpSocket::connect(const Host& addr)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
@@ -327,31 +349,37 @@ namespace galay {
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::recv(char* result, size_t length)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::send(Bytes bytes)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::recvfrom(Host& remote, char* result, size_t length)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::RecvfromEvent>(m_handle, m_scheduler, remote, result, length)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::sendto(const Host& remote, Bytes bytes)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::SendtoEvent>(m_handle, m_scheduler, remote, std::move(bytes))};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncUdpSocket::close()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
     }
 
     std::expected<SockAddr, CommonError> AsyncUdpSocket::getSrcAddr() const
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         sockaddr_storage addr{};
         socklen_t len = sizeof(addr);
@@ -364,6 +392,7 @@ namespace galay {
 
     std::expected<SockAddr, CommonError> AsyncUdpSocket::getDestAddr() const
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         sockaddr_storage addr{};
         socklen_t len = sizeof(addr);
@@ -374,20 +403,22 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncUdpSocket AsyncUdpSocket::cloneForDifferentRole(Runtime& runtime) const
+    AsyncUdpSocket AsyncUdpSocket::cloneForDifferentRole(Runtime* runtime) const
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         return AsyncUdpSocket(runtime, m_handle);
     }
 
-    AsyncSslSocket::AsyncSslSocket(Runtime& runtime, SSL_CTX* ssl_ctx)
+    AsyncSslSocket::AsyncSslSocket(Runtime* runtime, SSL_CTX* ssl_ctx)
     {
-        RuntimeVisitor visitor(runtime);
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
+        RuntimeVisitor visitor(*runtime);
         auto eScheduler_ptr = visitor.eventScheduler();
         LogTrace("[AsyncSslSocket constructor] EventScheduler shared_ptr: {}, use_count: {}", 
                  static_cast<void*>(eScheduler_ptr.get()), eScheduler_ptr.use_count());
         m_scheduler = eScheduler_ptr.get();
         LogTrace("[AsyncSslSocket constructor] m_scheduler: {}", static_cast<void*>(m_scheduler));
-        assert(m_scheduler != nullptr);
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         if(ssl_ctx) {
             m_ssl = SSL_new(ssl_ctx);
             if(m_ssl == nullptr) {
@@ -399,12 +430,13 @@ namespace galay {
         }
     }
 
-    AsyncSslSocket::AsyncSslSocket(Runtime& runtime, SSL *ssl)
+    AsyncSslSocket::AsyncSslSocket(Runtime* runtime, SSL *ssl)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_ssl = ssl;
-        RuntimeVisitor visitor(runtime);
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
-        assert(m_scheduler != nullptr);
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
     AsyncSslSocket::AsyncSslSocket(AsyncSslSocket &&other)
@@ -438,16 +470,21 @@ namespace galay {
 
     HandleOption AsyncSslSocket::options()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         return HandleOption(getHandle());
     }
 
     GHandle AsyncSslSocket::getHandle() const
     {
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         return { SSL_get_fd(m_ssl) };
     }
 
     std::expected<void, CommonError> AsyncSslSocket::socket()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         using namespace error;
         GHandle handle;
         handle.fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -477,6 +514,8 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncSslSocket::bind(const Host& addr)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         using namespace error;
         sockaddr_in addr_in{};
         addr_in.sin_family = AF_INET;
@@ -492,6 +531,8 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncSslSocket::listen(int backlog)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         using namespace error;
         if(::listen(getHandle().fd, backlog))
         {
@@ -502,6 +543,8 @@ namespace galay {
 
     AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::accept(AsyncSslSocketBuilder &builder)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         LogTrace("[AsyncSslSocket::accept] this m_scheduler: {}", static_cast<void*>(m_scheduler));
         builder.m_scheduler = m_scheduler;
         return {std::make_shared<details::AcceptEvent>(GHandle(SSL_get_fd(m_ssl)), m_scheduler, builder.m_handle)};
@@ -509,6 +552,7 @@ namespace galay {
 
     std::expected<void, CommonError> AsyncSslSocket::readyToSslAccept(AsyncSslSocketBuilder &builder)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         if(!builder.m_ssl_ctx) {
             LogError("[readyToSslAccept] SSL_CTX is nullptr!");
             close(builder.m_handle.fd);
@@ -542,41 +586,55 @@ namespace galay {
 
     AsyncResult<std::expected<bool, CommonError>> AsyncSslSocket::sslAccept(AsyncSslSocketBuilder& builder)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::SslAcceptEvent>(builder.m_ssl, m_scheduler)};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::connect(const Host& addr)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         return {std::make_shared<details::ConnectEvent>(GHandle(SSL_get_fd(m_ssl)), m_scheduler, addr)};
     }
 
     void AsyncSslSocket::readyToSslConnect()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         SSL_set_connect_state(m_ssl);
     }
 
     AsyncResult<std::expected<bool, CommonError>> AsyncSslSocket::sslConnect()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         return {std::make_shared<details::SslConnectEvent>(m_ssl, m_scheduler)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncSslSocket::sslRecv(char* result, size_t length)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         return {std::make_shared<details::SslRecvEvent>(m_ssl, m_scheduler, result, length)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncSslSocket::sslSend(Bytes bytes)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         return {std::make_shared<details::SslSendEvent>(m_ssl, m_scheduler, std::move(bytes))};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::sslClose()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
+        assert(m_ssl != nullptr && "SSL cannot be nullptr");
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
     }
 
-    AsyncSslSocket AsyncSslSocket::cloneForDifferentRole(Runtime& runtime) const
+    AsyncSslSocket AsyncSslSocket::cloneForDifferentRole(Runtime* runtime) const
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         return AsyncSslSocket(runtime, m_ssl);
     }
 

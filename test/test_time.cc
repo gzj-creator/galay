@@ -12,14 +12,14 @@ Coroutine<nil> test()
 {   
     while(main_holder.index() == -1) {}
 
-    TimerGenerator generator(runtime);
-    TimerGenerator generator1(runtime);
+    TimerGenerator generator(&runtime);
+    TimerGenerator generator1(&runtime);
     //TimerGenerator::ptr generator2 = TimerGenerator::createPtr(runtime);
     /*
 
         auto res = co_await generator.timeout<nil>(std::chrono::milliseconds(5000), [](){
             //错误 generator会析构
-            TimerGenerator generator(*runtime);
+            TimerGenerator generator(runtime);
             generator.init();
             return generator.sleep(std::chrono::milliseconds(10000));
         });

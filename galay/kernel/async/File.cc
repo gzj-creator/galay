@@ -1,4 +1,5 @@
 #include "File.h"
+#include <cassert>
 #ifdef USE_AIO
     #include <sys/eventfd.h>
 #endif
@@ -6,23 +7,28 @@ namespace galay
 {
 #ifdef USE_AIO
 
-    File::File(Runtime& runtime)
+    File::File(Runtime* runtime)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
-        RuntimeVisitor visitor(runtime);
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    File::File(Runtime &runtime, GHandle handle)
+    File::File(Runtime* runtime, GHandle handle)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_event_handle.fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC | EFD_SEMAPHORE);
         m_handle = handle;
-        RuntimeVisitor visitor(runtime);
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
     std::expected<void, CommonError> File::open(const std::string &path, OpenFlags flags, FileModes modes)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         const int fd = ::open(path.c_str(), flags.getFlags(), modes.getModes());
         if( fd < 0 ) {
@@ -38,6 +44,7 @@ namespace galay
 
     std::expected<void, CommonError> File::aioInit(int max_events)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         int ret = io_setup(max_events, &m_io_ctx);
         if(ret) {
@@ -48,6 +55,7 @@ namespace galay
 
     void File::preRead(char* buffer, size_t size, LL offset, void* data)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         m_iocbs.push_back(iocb{});
         io_prep_pread(&m_iocbs.back(), m_handle.fd, buffer, size, offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
@@ -56,6 +64,7 @@ namespace galay
 
     void File::preWrite(char* buffer, size_t size, LL offset, void* data)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         m_iocbs.push_back(iocb{});
         io_prep_pwrite(&m_iocbs.back(), m_handle.fd, buffer, size, offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
@@ -64,6 +73,7 @@ namespace galay
 
     void File::preReadV(std::vector<iovec>& vec, LL offset, void* data)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         m_iocbs.push_back(iocb{});
         io_prep_preadv(&m_iocbs.back(), m_handle.fd, vec.data(), vec.size(), offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
@@ -72,6 +82,7 @@ namespace galay
 
     void File::preWriteV(std::vector<iovec>& vec, LL offset, void* data)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         m_iocbs.push_back(iocb{});
         io_prep_pwritev(&m_iocbs.back(), m_handle.fd, vec.data(), static_cast<int>(vec.size()), offset);
         io_set_eventfd(&m_iocbs.back(), m_event_handle.fd);
@@ -80,6 +91,7 @@ namespace galay
 
     std::expected<uint64_t, CommonError> File::commit()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         size_t nums = m_iocbs.size();
         std::vector<iocb*> iocb_ptrs(nums, nullptr);
@@ -94,16 +106,19 @@ namespace galay
 
     AsyncResult<std::expected<std::vector<io_event>, CommonError>> File::getEvent(uint64_t& expect_events)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::AioGetEvent>(m_event_handle, m_scheduler, m_io_ctx, expect_events)};
     }
 
     void File::clearIocbs()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         m_iocbs.clear();
     }
 
     AsyncResult<std::expected<void, CommonError>> File::close()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::FileCloseEvent>(m_event_handle, m_scheduler, m_handle)};
     }
 
@@ -112,17 +127,21 @@ namespace galay
         io_destroy(m_io_ctx);
     }
 #else
-    File::File(Runtime& runtime)
+    File::File(Runtime* runtime)
     {
-        RuntimeVisitor visitor(runtime);
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
-    File::File(Runtime& runtime, GHandle handle)
+    File::File(Runtime* runtime, GHandle handle)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         m_handle = handle;
-        RuntimeVisitor visitor(runtime);
+        RuntimeVisitor visitor(*runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
     }
 
     File::File(File&& other)
@@ -150,11 +169,13 @@ namespace galay
 
     HandleOption File::option()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return HandleOption(m_handle);
     }
 
     std::expected<void, CommonError> File::open(const std::string& path, OpenFlags flags, FileModes modes)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         m_path = path;
         const int fd = ::open(path.c_str(), flags.getFlags(), modes.getModes());
@@ -171,16 +192,19 @@ namespace galay
 
     AsyncResult<std::expected<Bytes, CommonError>> File::read(char* buffer, size_t length)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::FileReadEvent>(m_handle, m_scheduler, buffer, length)};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> File::write(Bytes bytes)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::FileWriteEvent>(m_handle, m_scheduler, std::move(bytes))};
     }
 
     std::expected<void, CommonError> File::seek(size_t offset)
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         if (::lseek(m_handle.fd, offset, SEEK_SET) == -1) { 
             return std::unexpected(CommonError(ErrorCode::CallLSeekError, static_cast<uint32_t>(errno)));
@@ -190,11 +214,13 @@ namespace galay
 
     AsyncResult<std::expected<void, CommonError>> File::close()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         return {std::make_shared<details::FileCloseEvent>(m_handle, m_scheduler)};
     }
 
     std::expected<void, CommonError> File::remove()
     {
+        assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         using namespace error;
         if (::remove(m_path.c_str()) == -1) {
             return std::unexpected(CommonError(ErrorCode::CallRemoveError, static_cast<uint32_t>(errno)));

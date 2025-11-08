@@ -8,7 +8,7 @@ std::condition_variable cond;
 
 Coroutine<nil> test(Runtime& runtime)
 {
-    TcpSslClient client(runtime);
+    TcpSslClient client(&runtime);
     
     auto res = co_await client.connect({"127.0.0.1", 8070});
     if (!res) {

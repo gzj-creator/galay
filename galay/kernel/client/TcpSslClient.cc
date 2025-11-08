@@ -1,5 +1,6 @@
 #include "TcpSslClient.h"
 #include "galay/kernel/coroutine/AsyncWaiter.hpp"
+#include <cassert>
 
 namespace galay
 {
@@ -30,9 +31,10 @@ namespace galay
         return true;
     }
 
-    TcpSslClient::TcpSslClient(Runtime &runtime, const char* server_pem)
+    TcpSslClient::TcpSslClient(Runtime* runtime, const char* server_pem)
         :m_socket(runtime, static_cast<SSL_CTX*>(nullptr))
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         if(!initSSLContext(server_pem)) {
             throw std::runtime_error("Failed to initialize SSL context");
         }
@@ -46,9 +48,10 @@ namespace galay
         }
     }
 
-    TcpSslClient::TcpSslClient(Runtime &runtime, SSL_CTX* ssl_ctx)
+    TcpSslClient::TcpSslClient(Runtime* runtime, SSL_CTX* ssl_ctx)
         :m_socket(runtime, ssl_ctx), m_ssl_ctx(ssl_ctx), m_owns_ctx(false)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
             throw std::runtime_error(res.error().message());
@@ -63,9 +66,10 @@ namespace galay
     {
     }
 
-    TcpSslClient::TcpSslClient(Runtime &runtime, const Host &bind_addr, const char* server_pem) 
+    TcpSslClient::TcpSslClient(Runtime* runtime, const Host &bind_addr, const char* server_pem) 
         :m_socket(runtime, static_cast<SSL_CTX*>(nullptr))
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         if(!initSSLContext(server_pem)) {
             throw std::runtime_error("Failed to initialize SSL context");
         }
@@ -83,9 +87,10 @@ namespace galay
         }
     }
 
-    TcpSslClient::TcpSslClient(Runtime &runtime, const Host &bind_addr, SSL_CTX* ssl_ctx)
+    TcpSslClient::TcpSslClient(Runtime* runtime, const Host &bind_addr, SSL_CTX* ssl_ctx)
         :m_socket(runtime, ssl_ctx), m_ssl_ctx(ssl_ctx), m_owns_ctx(false)
     {
+        assert(runtime != nullptr && "Runtime pointer cannot be nullptr");
         std::expected<void, CommonError> res = m_socket.socket();
         if(!res) {
             throw std::runtime_error(res.error().message());
@@ -137,7 +142,7 @@ namespace galay
         return m_socket.sslClose();
     }
 
-    TcpSslClient TcpSslClient::cloneForDifferentRole(Runtime& runtime) const
+    TcpSslClient TcpSslClient::cloneForDifferentRole(Runtime* runtime) const
     {
         return TcpSslClient(m_socket.cloneForDifferentRole(runtime));
     }

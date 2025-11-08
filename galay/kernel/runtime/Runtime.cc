@@ -208,7 +208,7 @@ namespace galay
 
     AsyncFactory Runtime::getAsyncFactory()
     {
-        return AsyncFactory(*this);
+        return AsyncFactory(this);
     }
 
     void Runtime::startCoManager(std::chrono::milliseconds interval)

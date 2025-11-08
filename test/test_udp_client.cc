@@ -8,7 +8,7 @@ std::condition_variable cond;
 
 Coroutine<nil> test(Runtime& runtime)
 {
-    UdpClient client(runtime);
+    UdpClient client(&runtime);
     auto res1 = co_await client.connect({"127.0.0.1", 8070});
     if (!res1) {
         std::cout << "connect error: " << res1.error().message() << std::endl;

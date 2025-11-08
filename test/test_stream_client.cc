@@ -53,14 +53,14 @@ Coroutine<nil> testWrite(TcpClient client)
 
 Coroutine<nil> test()
 {
-    TcpClient client(runtime_1);
+    TcpClient client(&runtime_1);
     auto res1 = co_await client.connect({"127.0.0.1", 8070});
     if (!res1) {
         std::cout << "connect error: " << res1.error().message() << std::endl;
         co_return nil();
     }
     std::cout << "connect success" << std::endl;
-    runtime_2.schedule(testRead(client.cloneForDifferentRole(runtime_2)));
+    runtime_2.schedule(testRead(client.cloneForDifferentRole(&runtime_2)));
     runtime_1.schedule(testWrite(std::move(client)));
     co_return nil();
 }

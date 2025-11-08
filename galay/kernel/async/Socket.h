@@ -27,8 +27,9 @@ namespace galay {
     {
         friend class AsyncTcpSocketBuilder;
     public:
-        AsyncTcpSocket(Runtime& runtime);
-        AsyncTcpSocket(Runtime& runtime, GHandle handle);
+        AsyncTcpSocket() = default;
+        AsyncTcpSocket(Runtime* runtime);
+        AsyncTcpSocket(Runtime* runtime, GHandle handle);
         AsyncTcpSocket(const AsyncTcpSocket& other) = delete;
         AsyncTcpSocket(AsyncTcpSocket&& other);
         AsyncTcpSocket& operator=(const AsyncTcpSocket& other) = delete;
@@ -57,7 +58,7 @@ namespace galay {
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
 
-        AsyncTcpSocket cloneForDifferentRole(Runtime& runtime) const;
+        AsyncTcpSocket cloneForDifferentRole(Runtime* runtime) const;
     private:
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
@@ -69,8 +70,9 @@ namespace galay {
     class AsyncUdpSocket
     {
     public:
-        AsyncUdpSocket(Runtime& runtime);
-        AsyncUdpSocket(Runtime& runtime, GHandle handle);
+        AsyncUdpSocket() = default;
+        AsyncUdpSocket(Runtime* runtime);
+        AsyncUdpSocket(Runtime* runtime, GHandle handle);
 
         AsyncUdpSocket(const AsyncUdpSocket& other) = delete;
         AsyncUdpSocket(AsyncUdpSocket&& other);
@@ -91,7 +93,7 @@ namespace galay {
         [[nodiscard]] std::expected<SockAddr, CommonError> getSrcAddr() const;
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
-        AsyncUdpSocket cloneForDifferentRole(Runtime& runtime) const;
+        AsyncUdpSocket cloneForDifferentRole(Runtime* runtime) const;
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
@@ -101,8 +103,9 @@ namespace galay {
     {
         friend class AsyncSslSocketBuilder;
     public:
-        AsyncSslSocket(Runtime& runtime, SSL_CTX* ssl_ctx);
-        AsyncSslSocket(Runtime& runtime, SSL* ssl);
+        AsyncSslSocket() = default;
+        AsyncSslSocket(Runtime* runtime, SSL_CTX* ssl_ctx);
+        AsyncSslSocket(Runtime* runtime, SSL* ssl);
         AsyncSslSocket(AsyncSslSocket&& other);
         AsyncSslSocket(const AsyncSslSocket& other) = delete;
         AsyncSslSocket& operator=(const AsyncSslSocket& other) = delete;
@@ -123,7 +126,7 @@ namespace galay {
         AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* result, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> sslClose();
-        AsyncSslSocket cloneForDifferentRole(Runtime& runtime) const;
+        AsyncSslSocket cloneForDifferentRole(Runtime* runtime) const;
         SSL* getSsl() const;
         ~AsyncSslSocket();
     private:
