@@ -92,9 +92,4 @@ namespace galay
         return TimerGenerator(m_runtime);
     }
 
-    TaskRunner AsyncFactory::getTaskRunner(int co_id)
-    {
-        assert(m_runtime != nullptr && "Runtime pointer cannot be nullptr");
-        return TaskRunner(m_runtime, co_id);
-    }
 }

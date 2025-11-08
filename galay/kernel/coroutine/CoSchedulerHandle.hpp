@@ -19,7 +19,7 @@ namespace galay
         template<CoType T>
         void destory(Coroutine<T>&& co);
         template<CoType T>
-        void resume(Coroutine<T>&& co);
+        void spawn(Coroutine<T>&& co);
     private:
         CoroutineScheduler* m_scheduler = nullptr;
     };
@@ -32,7 +32,7 @@ namespace galay
     }
 
     template<CoType T>
-    void CoSchedulerHandle::resume(Coroutine<T>&& co)
+    void CoSchedulerHandle::spawn(Coroutine<T>&& co)
     {
         m_scheduler->resumeCoroutine(co.origin());
     }

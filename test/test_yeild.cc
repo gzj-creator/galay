@@ -33,9 +33,9 @@ Coroutine<int> printC()
 Coroutine<nil> sync(Runtime& runtime)
 {
     CoSchedulerHandle handle = runtime.getCoSchedulerHandle(0).value();
-    handle.resume(printA());
-    handle.resume(printB());
-    handle.resume(printC());
+    handle.spawn(printA());
+    handle.spawn(printB());
+    handle.spawn(printC());
     co_return nil();
 }
 

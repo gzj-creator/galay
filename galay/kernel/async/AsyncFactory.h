@@ -4,7 +4,6 @@
 #include "Socket.h"
 #include "File.h"
 #include "TimerGenerator.h"
-#include "TaskRunner.h"
 
 namespace galay
 {
@@ -34,7 +33,6 @@ namespace galay
         File getFile(GHandle handle);
         TimerGenerator getTimerGenerator();
 
-        TaskRunner getTaskRunner(int co_id);
     private:
         AsyncFactory(Runtime* runtime);
     private:
