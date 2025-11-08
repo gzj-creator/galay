@@ -3,6 +3,10 @@
 
 #include "EventScheduler.h"
 
+namespace galay {
+    class EventDispatcher;
+}
+
 namespace galay::details 
 { 
 
@@ -17,6 +21,13 @@ public:
     virtual EventType getEventType() const = 0;
     virtual GHandle getHandle() = 0;
     virtual ~Event() = default;
+    
+    // 设置和获取关联的 EventDispatcher
+    void setDispatcher(galay::EventDispatcher* dispatcher) { m_dispatcher = dispatcher; }
+    galay::EventDispatcher* getDispatcher() const { return m_dispatcher; }
+    
+private:
+    galay::EventDispatcher* m_dispatcher = nullptr;  // 关联的事件分发器
 };
 
 class CallbackEvent final : public Event

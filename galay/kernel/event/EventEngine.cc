@@ -5,6 +5,7 @@
     
 #endif
 #include "Event.h"
+#include "EventDispatch.h"
 #include "galay/common/Error.h"
 #include "galay/common/Log.h"
 
@@ -57,8 +58,19 @@ namespace galay::details
             };
             for(int i = 0; i < nEvents; ++i)
             {
-                Event* event = (Event*)m_events[i].data.ptr;
-                event->handleEvent();
+                // data.ptr 存储的是 Event*
+                Event* event = static_cast<Event*>(m_events[i].data.ptr);
+                if (event != nullptr) {
+                    // 通过 Event 获取关联的 EventDispatcher
+                    EventDispatcher* dispatcher = event->getDispatcher();
+                    if (dispatcher != nullptr) {
+                        // 调用 dispatch 方法，会移除状态并调用对应Event的handleEvent
+                        dispatcher->dispatch(m_events[i].events);
+                    } else {
+                        // 没有 dispatcher（例如特殊事件），直接调用 handleEvent
+                        event->handleEvent();
+                    }
+                }
             }
             if(! m_once_loop_cbs.empty() ) {
                 for(auto& callback: m_once_loop_cbs) {
@@ -113,6 +125,7 @@ namespace galay::details
         {
             return 0;
         }
+        // data.ptr 存储 Event*
         ev.data.ptr = event;
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_ADD, event->getHandle().fd, &ev);
         if( ret != 0 ){
@@ -128,8 +141,9 @@ namespace galay::details
         m_error.reset();
         LogTrace("[Mod {} In Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
         epoll_event ev;
-        ev.data.ptr = event;
         if( !convertToEpollEvent(ev, event, ctx) ) return 0;
+        // data.ptr 存储 Event*
+        ev.data.ptr = event;
         int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_MOD, event->getHandle().fd, &ev);
         if( ret != 0 ) {
             m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
@@ -166,6 +180,25 @@ namespace galay::details
         EventType event_type = event->getEventType();
         ev.events = 0;
         ev.events = EPOLLONESHOT;
+        
+        // 通过 event 获取关联的 EventDispatcher
+        EventDispatcher* dispatcher = event->getDispatcher();
+        if (dispatcher != nullptr && (event_type == kEventTypeRead || event_type == kEventTypeWrite || event_type == kEventTypeError)) {
+            // 根据 dispatcher 中注册的事件类型设置监听
+            if (dispatcher->hasRead()) {
+                ev.events |= EPOLLIN;
+            }
+            if (dispatcher->hasWrite()) {
+                ev.events |= EPOLLOUT;
+            }
+            if (dispatcher->hasError()) {
+                ev.events |= EPOLLERR;
+            }
+            ev.events |= EPOLLET;
+            return true;
+        }
+        
+        // 否则按原有单一事件类型处理（用于Timer等特殊事件，ctx 保留给其他参数）
         switch(event_type)
         {
             case kEventTypeNone:
@@ -243,8 +276,23 @@ namespace galay::details
             };
             for(int i = 0; i < nEvents; ++i)
             {
-                Event* event = (Event*)m_events[i].udata;
-                event->handleEvent();
+                // udata 存储的是 Event*
+                Event* event = static_cast<Event*>(m_events[i].udata);
+                if (event != nullptr) {
+                    // 通过 Event 获取关联的 EventDispatcher
+                    EventDispatcher* dispatcher = event->getDispatcher();
+                    if (dispatcher != nullptr) {
+                        // 将 kqueue 的 filter 转换为标准的事件标志
+                        uint32_t events = 0;
+                        if (m_events[i].filter == EVFILT_READ) events |= 0x01;  // EPOLLIN
+                        if (m_events[i].filter == EVFILT_WRITE) events |= 0x02; // EPOLLOUT
+                        // 调用 dispatch 方法，会移除状态并调用对应Event的handleEvent
+                        dispatcher->dispatch(events);
+                    } else {
+                        // 没有 dispatcher（例如特殊事件），直接调用 handleEvent
+                        event->handleEvent();
+                    }
+                }
             }
             if(! m_once_loop_cbs.empty() ) {
                 for(auto& callback: m_once_loop_cbs) {
@@ -301,6 +349,8 @@ namespace galay::details
         if(!convertToKEvent(k_event, event, ctx)) {
             return 0;
         };
+        // udata 存储 Event*
+        k_event.udata = event;
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
             m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
@@ -313,11 +363,53 @@ namespace galay::details
         using namespace error;
         m_error.reset();
         LogTrace("[Mod {} In Engine({}), Handle: {}, Type: {}]]", event->name(), getEngineID(), event->getHandle().fd, toString(event->getEventType()));
+        
+        // 通过 event 获取关联的 EventDispatcher
+        EventDispatcher* dispatcher = event->getDispatcher();
+        
+        if (dispatcher != nullptr) {
+            // Kqueue 需要分别注册 READ 和 WRITE filter
+            struct kevent k_events[3];  // 最多3个：读、写、错误
+            int event_count = 0;
+            int fd = event->getHandle().fd;
+            
+            if (dispatcher->hasRead()) {
+                k_events[event_count].ident = fd;
+                k_events[event_count].filter = EVFILT_READ;
+                k_events[event_count].flags = EV_ADD | EV_CLEAR | EV_ONESHOT | EV_ENABLE;
+                k_events[event_count].fflags = 0;
+                k_events[event_count].data = 0;
+                k_events[event_count].udata = event;  // 存储 Event*
+                event_count++;
+            }
+            
+            if (dispatcher->hasWrite()) {
+                k_events[event_count].ident = fd;
+                k_events[event_count].filter = EVFILT_WRITE;
+                k_events[event_count].flags = EV_ADD | EV_CLEAR | EV_ONESHOT | EV_ENABLE;
+                k_events[event_count].fflags = 0;
+                k_events[event_count].data = 0;
+                k_events[event_count].udata = event;  // 存储 Event*
+                event_count++;
+            }
+            
+            // Kqueue 不直接支持 EPOLLERR，错误会通过 EV_ERROR 标志返回
+            // 这里暂不处理 hasError()
+            
+            int ret = kevent(m_handle.fd, k_events, event_count, nullptr, 0, nullptr);
+            if(ret != 0){
+                m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
+            }
+            return ret;
+        }
+        
+        // 否则按原有单一事件类型处理（ctx 保留给其他参数）
         struct kevent k_event;
         k_event.flags = EV_ADD;
         if(!convertToKEvent(k_event, event, ctx)) {
             return 0;
         }
+        k_event.udata = event;  // 存储 Event*
         int ret = kevent(m_handle.fd, &k_event, 1, nullptr, 0, nullptr);
         if(ret != 0){
             m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));

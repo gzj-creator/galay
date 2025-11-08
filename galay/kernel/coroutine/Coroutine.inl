@@ -20,6 +20,7 @@ namespace galay
     {
         *(m_coroutine->m_data->m_result) = std::move(value);
         m_coroutine->become(CoroutineStatus::Suspended);
+        m_coroutine->belongScheduler()->resumeCoroutine(m_coroutine);
         return {};
     }
 

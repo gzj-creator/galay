@@ -21,6 +21,7 @@
 #endif
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
+#include "EventDispatch.h"
 #include <optional>
 
 namespace galay::details{ 
@@ -65,7 +66,9 @@ namespace galay
         ~EventScheduler() = default;
     protected:
         std::unique_ptr<std::thread> m_thread;
-        libcuckoo::cuckoohash_map<int, std::monostate> m_fds;
+        // 使用 EventDispatcher 管理同一个fd的多个事件
+        // 使用 shared_ptr 因为 cuckoohash_map 需要可拷贝的值类型
+        libcuckoo::cuckoohash_map<int, std::shared_ptr<EventDispatcher>> m_fds;
         std::shared_ptr<details::EventEngine> m_engine;
     };
 
