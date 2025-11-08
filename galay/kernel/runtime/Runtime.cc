@@ -211,6 +211,14 @@ namespace galay
         return AsyncFactory(this);
     }
 
+    std::optional<CoSchedulerHandle> Runtime::getCoSchedulerHandle(Token token)
+    {
+        if(token >= static_cast<int>(m_cSchedulers.size())) {
+            return std::nullopt;
+        }
+        return CoSchedulerHandle(&m_cSchedulers[token]);
+    }
+
     void Runtime::startCoManager(std::chrono::milliseconds interval)
     {
         if(interval >= std::chrono::milliseconds::zero()) {
@@ -276,7 +284,7 @@ namespace galay
         return m_cSchedulers.size();
     }
 
-    Holder Runtime::schedule(CoroutineBase::wptr co)
+    CoSchedulerHandle Runtime::schedule(CoroutineBase::wptr co)
     {
         if(!m_eScheduler || m_cSchedulers.size() == 0) {
             throw std::runtime_error("Runtime not started");
@@ -294,22 +302,22 @@ namespace galay
                 break;
             }
         }
-        return Holder(&m_cSchedulers[old], old, co);
+        return CoSchedulerHandle(&m_cSchedulers[old]);
     }
 
-    Holder Runtime::schedule(CoroutineBase::wptr co, int index)
+    CoSchedulerHandle Runtime::schedule(CoroutineBase::wptr co, Token token)
     {
         if(!m_eScheduler || m_cSchedulers.size() == 0) {
             throw std::runtime_error("Runtime not started");
         }
-        if(index >= static_cast<int>(m_cSchedulers.size())) {
-            throw std::runtime_error("Invalid index");
+        if(token < 0 || token >= static_cast<int>(m_cSchedulers.size())) {
+            throw std::runtime_error("Invalid token");
         }
         if(m_cManager) {
             m_cManager->manage(co);
         }
-        m_cSchedulers[index].schedule(co);
-        return Holder(&m_cSchedulers[index], index, co);
+        m_cSchedulers[token].schedule(co);
+        return CoSchedulerHandle(&m_cSchedulers[token]);
     }
 
     RuntimeBuilder &RuntimeBuilder::startCoManager(std::chrono::milliseconds interval)

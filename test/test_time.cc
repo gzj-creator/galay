@@ -5,12 +5,11 @@
 using namespace galay;
 
 Runtime runtime;
-Holder main_holder;
+CoSchedulerHandle main_holder;
 
 
 Coroutine<nil> test()
 {   
-    while(main_holder.index() == -1) {}
 
     TimerGenerator generator(&runtime);
     TimerGenerator generator1(&runtime);
@@ -33,13 +32,11 @@ Coroutine<nil> test()
         std::cout << "ready sleep" << std::endl;
         return generator1.sleep(std::chrono::milliseconds(5001));
     };
-    Holder holder;
     auto res = co_await generator.timeout<nil>(func, std::chrono::milliseconds(5000));
     if(res) {
         std::cout << "exec success" << std::endl;
     } else {
         std::cout << res.error().message() << std::endl;
-        holder.destory();
     }
     co_return nil();
 }

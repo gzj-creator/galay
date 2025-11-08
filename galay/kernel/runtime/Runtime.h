@@ -5,8 +5,9 @@
 #ifndef GALAY_RUNTIME_H
 #define GALAY_RUNTIME_H
 
-#include "Holder.h"
+#include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 #include "galay/kernel/time/TimerManager.h"
+#include <optional>
 #include <vector>
 
 namespace galay
@@ -59,6 +60,8 @@ namespace galay
         friend class RuntimeBuilder;
         friend class RuntimeVisitor;
     public:
+
+        using Token = int;
         Runtime();
         Runtime(
             int eTimeout,
@@ -70,7 +73,9 @@ namespace galay
         Runtime(Runtime&& rt);
         Runtime& operator=(Runtime&& rt);
 
+
         AsyncFactory getAsyncFactory();
+        std::optional<CoSchedulerHandle> getCoSchedulerHandle(Token token);
 
         void startCoManager(std::chrono::milliseconds interval);
         void start();
@@ -80,13 +85,13 @@ namespace galay
         //thread security
         // return co_id
         template<CoType T>
-        Holder schedule(Coroutine<T>&& co);
+        CoSchedulerHandle schedule(Coroutine<T>&& co);
         // return co_id
         template<CoType T>
-        Holder schedule(Coroutine<T>&& co, int index);
+        CoSchedulerHandle schedule(Coroutine<T>&& co, Token token);
 
-        Holder schedule(CoroutineBase::wptr co);
-        Holder schedule(CoroutineBase::wptr co, int index);
+        CoSchedulerHandle schedule(CoroutineBase::wptr co);
+        CoSchedulerHandle schedule(CoroutineBase::wptr co, Token token);
     private:
         int m_eTimeout = -1;
         std::atomic_bool m_running = false;
@@ -115,15 +120,15 @@ namespace galay
     };
 
     template<CoType T>
-    inline Holder Runtime::schedule(Coroutine<T>&& co)
+    inline CoSchedulerHandle Runtime::schedule(Coroutine<T>&& co)
     {
         return schedule(co.origin());
     }
 
     template<CoType T>
-    inline Holder Runtime::schedule(Coroutine<T>&& co, int index)
+    inline CoSchedulerHandle Runtime::schedule(Coroutine<T>&& co, Token token)
     {
-        return schedule(co.origin(), index);
+        return schedule(co.origin(), token);
     }
 
 }

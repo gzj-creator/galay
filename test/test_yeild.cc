@@ -1,4 +1,3 @@
-#include "galay/kernel/coroutine/Waker.h"
 #include "galay/kernel/runtime/Runtime.h"
 #include <cstdio>
 
@@ -33,9 +32,10 @@ Coroutine<int> printC()
 
 Coroutine<nil> sync(Runtime& runtime)
 {
-    runtime.schedule(printA(), 0);
-    runtime.schedule(printB(), 0);
-    runtime.schedule(printC(), 0);
+    CoSchedulerHandle handle = runtime.getCoSchedulerHandle(0).value();
+    handle.resume(printA());
+    handle.resume(printB());
+    handle.resume(printC());
     co_return nil();
 }
 
