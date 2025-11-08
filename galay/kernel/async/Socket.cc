@@ -3,6 +3,7 @@
 #include "common/Error.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
 #include "galay/kernel/event/Event.h"
+#include <cassert>
 #include <openssl/err.h>
 
 namespace galay {
@@ -41,6 +42,7 @@ namespace galay {
     {
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr);
     }
 
     AsyncTcpSocket::AsyncTcpSocket(Runtime& runtime, GHandle handle)
@@ -48,6 +50,7 @@ namespace galay {
         m_handle = handle;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr);
         HandleOption options(handle);
         options.handleNonBlock();
     }
@@ -226,6 +229,7 @@ namespace galay {
     {
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr);
     }
 
     AsyncUdpSocket::AsyncUdpSocket(Runtime& runtime, GHandle handle)
@@ -233,6 +237,7 @@ namespace galay {
         m_handle = handle;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr);
     }
 
     AsyncUdpSocket::AsyncUdpSocket(AsyncUdpSocket&& other)
@@ -377,7 +382,12 @@ namespace galay {
     AsyncSslSocket::AsyncSslSocket(Runtime& runtime, SSL_CTX* ssl_ctx)
     {
         RuntimeVisitor visitor(runtime);
-        m_scheduler = visitor.eventScheduler().get();
+        auto eScheduler_ptr = visitor.eventScheduler();
+        LogTrace("[AsyncSslSocket constructor] EventScheduler shared_ptr: {}, use_count: {}", 
+                 static_cast<void*>(eScheduler_ptr.get()), eScheduler_ptr.use_count());
+        m_scheduler = eScheduler_ptr.get();
+        LogTrace("[AsyncSslSocket constructor] m_scheduler: {}", static_cast<void*>(m_scheduler));
+        assert(m_scheduler != nullptr);
         if(ssl_ctx) {
             m_ssl = SSL_new(ssl_ctx);
             if(m_ssl == nullptr) {
@@ -394,13 +404,18 @@ namespace galay {
         m_ssl = ssl;
         RuntimeVisitor visitor(runtime);
         m_scheduler = visitor.eventScheduler().get();
+        assert(m_scheduler != nullptr);
     }
 
     AsyncSslSocket::AsyncSslSocket(AsyncSslSocket &&other)
     {
+        LogTrace("[AsyncSslSocket move constructor] source m_scheduler: {}, target m_scheduler before: {}", 
+                 static_cast<void*>(other.m_scheduler), static_cast<void*>(m_scheduler));
         m_ssl = other.m_ssl;
         other.m_ssl = nullptr;
         m_scheduler = other.m_scheduler;
+        // 注意：移动后，新对象（this）应该有正确的 m_scheduler
+        LogTrace("[AsyncSslSocket move constructor] target m_scheduler after: {}", static_cast<void*>(m_scheduler));
         other.m_scheduler = nullptr;
     }
 
@@ -487,6 +502,7 @@ namespace galay {
 
     AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::accept(AsyncSslSocketBuilder &builder)
     {
+        LogTrace("[AsyncSslSocket::accept] this m_scheduler: {}", static_cast<void*>(m_scheduler));
         builder.m_scheduler = m_scheduler;
         return {std::make_shared<details::AcceptEvent>(GHandle(SSL_get_fd(m_ssl)), m_scheduler, builder.m_handle)};
     }
@@ -494,21 +510,33 @@ namespace galay {
     std::expected<void, CommonError> AsyncSslSocket::readyToSslAccept(AsyncSslSocketBuilder &builder)
     {
         if(!builder.m_ssl_ctx) {
+            LogError("[readyToSslAccept] SSL_CTX is nullptr!");
             close(builder.m_handle.fd);
             return std::unexpected(CommonError(GlobalSSLCtxNotInitializedError, static_cast<uint32_t>(errno)));
         }
+        LogTrace("[readyToSslAccept] Creating SSL object from SSL_CTX: {}", static_cast<void*>(builder.m_ssl_ctx));
         builder.m_ssl = SSL_new(builder.m_ssl_ctx);
         if(builder.m_ssl == nullptr) {
+            unsigned long err = ERR_get_error();
+            char err_buf[256];
+            ERR_error_string_n(err, err_buf, sizeof(err_buf));
+            LogError("[readyToSslAccept] SSL_new failed: {}", err_buf);
             close(builder.m_handle.fd);
             return std::unexpected(CommonError(CallSSLNewError, static_cast<uint32_t>(errno)));
         }
+        LogTrace("[readyToSslAccept] SSL object created: {}, setting fd: {}", static_cast<void*>(builder.m_ssl), builder.m_handle.fd);
         if(SSL_set_fd(builder.m_ssl, builder.m_handle.fd) == -1) {
+            unsigned long err = ERR_get_error();
+            char err_buf[256];
+            ERR_error_string_n(err, err_buf, sizeof(err_buf));
+            LogError("[readyToSslAccept] SSL_set_fd failed: {}", err_buf);
             SSL_free(builder.m_ssl);
             builder.m_ssl = nullptr;
             close(builder.m_handle.fd);
             return std::unexpected(CommonError(CallSSLSetFdError, static_cast<uint32_t>(errno)));
         }
         SSL_set_accept_state(builder.m_ssl);
+        LogTrace("[readyToSslAccept] SSL object ready for accept");
         return {};
     }
 

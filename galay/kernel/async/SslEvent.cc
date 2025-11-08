@@ -2,6 +2,7 @@
 #include "Socket.h"
 #include "galay/common/Log.h"
 #include "galay/kernel/coroutine/CoScheduler.hpp"
+#include <openssl/err.h>
 
 galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
 {
@@ -75,7 +76,12 @@ namespace galay::details
             return false;
         } else {
             int fd = SSL_get_fd(m_ssl);
-            LogError("[SSL_do_handshake failed] [return: {}] [ssl_error: {}] [errno: {}]", r, m_ssl_code, errno);
+            // 获取详细的 OpenSSL 错误信息
+            unsigned long err = ERR_get_error();
+            char err_buf[256];
+            ERR_error_string_n(err, err_buf, sizeof(err_buf));
+            LogError("[SSL_do_handshake failed] [return: {}] [ssl_error: {}] [errno: {}] [openssl_error: {}]", 
+                     r, m_ssl_code, errno, err_buf);
             SSL_free(m_ssl);
             close(fd);
             m_ssl = nullptr;

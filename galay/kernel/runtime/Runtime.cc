@@ -5,6 +5,7 @@
 #include "Runtime.h"
 #include "galay/common/Common.h"
 #include "galay/kernel/async/AsyncFactory.h"
+#include <thread>
 
 namespace galay
 {
@@ -82,6 +83,7 @@ namespace galay
             run();
             LogTrace("CoroutineManager exit successfully!");
         });
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
     void CoroutineManager::manage(CoroutineBase::wptr co)
@@ -148,6 +150,29 @@ namespace galay
 
     Runtime::Runtime()
     {
+    }
+
+    Runtime::Runtime(
+        int eTimeout,
+        int coSchedulerNum,
+        EventScheduler::ptr eScheduler,
+        TimerManager::ptr timerManager,
+        std::chrono::milliseconds coManagerInterval
+    )
+        : m_eTimeout(eTimeout)
+        , m_eScheduler(std::move(eScheduler))
+        , m_timerManager(std::move(timerManager))
+    {
+        // 初始化协程调度器
+        m_cSchedulers.reserve(coSchedulerNum);
+        for(int i = 0; i < coSchedulerNum; ++i) {
+            m_cSchedulers.emplace_back(CoroutineScheduler(std::make_unique<CoroutineConsumer>()));
+        }
+        
+        // 初始化协程管理器（如果需要）
+        if(coManagerInterval >= std::chrono::milliseconds::zero()) {
+            m_cManager = std::make_unique<CoroutineManager>(coManagerInterval);
+        }
     }
 
     Runtime::Runtime(Runtime &&rt)
@@ -319,28 +344,27 @@ namespace galay
 
     Runtime RuntimeBuilder::build()
     {
-        Runtime runtime;
-        runtime.m_cSchedulers.clear();
-        for(int i = 0; i < m_coSchedulerNum; ++i) {
-            runtime.m_cSchedulers.emplace_back(CoroutineScheduler(std::make_unique<CoroutineConsumer>()));
-        }
-        runtime.m_eTimeout = m_eTimeout;
-        if(m_eventScheduler) {
-            runtime.m_eScheduler = m_eventScheduler;
-        } else {
-            runtime.m_eScheduler = std::make_shared<EventScheduler>(m_eventSchedulerInitFdsSize);
-        }
-        if(m_interval != std::chrono::milliseconds::zero()) {
-            runtime.startCoManager(m_interval);
-        }
+        // 创建或使用现有的 EventScheduler
+        EventScheduler::ptr eScheduler = m_eventScheduler 
+            ? m_eventScheduler 
+            : std::make_shared<EventScheduler>(m_eventSchedulerInitFdsSize);
         
+        // 创建 TimerManager 及其激活器
     #if defined(USE_EPOLL)
-        auto activator = std::make_shared<EpollTimerActive>(runtime.m_eScheduler.get());
+        auto activator = std::make_shared<EpollTimerActive>(eScheduler.get());
     #elif defined(USE_KQUEUE)
-        auto activator = std::make_shared<KQueueTimerActive>(runtime.m_eScheduler.get());
+        auto activator = std::make_shared<KQueueTimerActive>(eScheduler.get());
     #endif
-        runtime.m_timerManager = std::make_shared<PriorityQueueTimerManager>(activator);
-        return runtime;
+        TimerManager::ptr timerManager = std::make_shared<PriorityQueueTimerManager>(activator);
+        
+        // 使用构造函数直接创建 Runtime
+        return Runtime(
+            m_eTimeout,
+            m_coSchedulerNum,
+            std::move(eScheduler),
+            std::move(timerManager),
+            m_interval
+        );
     }
 
 }

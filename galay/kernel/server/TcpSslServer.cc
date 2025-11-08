@@ -58,6 +58,16 @@ namespace galay
         m_host = std::move(host);
         m_backlog = backlog;
     }
+    
+    bool TcpSslServer::initializeSSLContext()
+    {
+        return initSSLContext();
+    }
+    
+    SSL_CTX* TcpSslServer::getSSLContext() const
+    {
+        return m_ssl_ctx;
+    }
 
     void TcpSslServer::run(Runtime& runtime, const AsyncSslFunc &callback)
     {

@@ -27,6 +27,19 @@ namespace galay
         void run(Runtime& runtime, const AsyncSslFunc& callback);
         void stop();
         void wait();
+        
+        /**
+         * @brief 主动初始化SSL上下文
+         * @return 初始化成功返回true，失败或已初始化返回false
+         */
+        bool initializeSSLContext();
+        
+        /**
+         * @brief 获取SSL上下文指针
+         * @return SSL_CTX指针，如果未初始化则返回nullptr
+         */
+        SSL_CTX* getSSLContext() const;
+        
         TcpSslServer& operator=(TcpSslServer&& server);
         TcpSslServer& operator=(const TcpSslServer& server) = delete;
         ~TcpSslServer();

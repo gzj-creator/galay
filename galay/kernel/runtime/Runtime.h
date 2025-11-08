@@ -60,6 +60,13 @@ namespace galay
         friend class RuntimeVisitor;
     public:
         Runtime();
+        Runtime(
+            int eTimeout,
+            int coSchedulerNum,
+            EventScheduler::ptr eScheduler,
+            TimerManager::ptr timerManager,
+            std::chrono::milliseconds coManagerInterval = std::chrono::milliseconds(-1)
+        );
         Runtime(Runtime&& rt);
         Runtime& operator=(Runtime&& rt);
 
