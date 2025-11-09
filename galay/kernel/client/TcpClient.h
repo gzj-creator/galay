@@ -64,13 +64,26 @@ namespace galay
          * @return 异步结果，成功返回void，失败返回CommonError
          */
         AsyncResult<std::expected<void, CommonError>> close();
+
+        /**
+         * @brief 克隆客户端
+         * @param handle 新的协程调度器句柄
+         * @return 克隆的TcpClient对象
+         */
+        TcpClient clone() const;
         
         /**
          * @brief 克隆客户端用于不同角色
          * @param handle 新的协程调度器句柄
          * @return 克隆的TcpClient对象
          */
-        TcpClient cloneForDifferentRole(CoSchedulerHandle handle) const;
+        TcpClient clone(CoSchedulerHandle handle) const;
+        
+        /**
+         * @brief 获取底层socket句柄（用于调试）
+         * @return socket句柄
+         */
+        GHandle getHandle() const;
     private:
         AsyncTcpSocket m_socket;  ///< 异步TCP socket
     };

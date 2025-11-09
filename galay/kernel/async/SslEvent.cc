@@ -1,7 +1,6 @@
 #include "SslEvent.h"
 #include "Socket.h"
 #include "galay/common/Log.h"
-#include "galay/kernel/coroutine/CoScheduler.hpp"
 #include <openssl/err.h>
 
 galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
@@ -10,7 +9,9 @@ galay::AsyncSslSocket galay::AsyncSslSocketBuilder::build()
         LogError("SSL* is nullptr");
     }
     HandleOption option({SSL_get_fd(m_ssl)});
-    option.handleNonBlock();
+    if (auto res = option.handleNonBlock(); !res) {
+        LogError("handleNonBlock failed");
+    }
     return AsyncSslSocket(m_scheduler, m_ssl);
 }
 

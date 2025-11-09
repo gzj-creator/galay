@@ -2,6 +2,8 @@
 #define GALAY_EVENT_ENGINE_H
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
+#include "EventDispatch.h"
+#include <libcuckoo/cuckoohash_map.hh>
 #include <string>
 #include <atomic>
 #include <list>
@@ -64,7 +66,8 @@ namespace galay::details
         std::atomic_bool m_stop;
         std::atomic_uint32_t m_event_size;
         std::atomic<epoll_event*> m_events;
-        std::list<std::function<void()>> m_once_loop_cbs; 
+        std::list<std::function<void()>> m_once_loop_cbs;
+        libcuckoo::cuckoohash_map<int, std::shared_ptr<galay::EventDispatcher>> m_dispatchers;
     };
     #elif defined(USE_IOURING)
     // class IOUringEventEngine final: public EventEngine { 
@@ -121,7 +124,8 @@ namespace galay::details
         std::atomic_bool m_stop;
         std::atomic_uint32_t m_event_size;
         std::atomic<struct kevent*> m_events;
-        std::list<std::function<void()>> m_once_loop_cbs; 
+        std::list<std::function<void()>> m_once_loop_cbs;
+        libcuckoo::cuckoohash_map<int, std::shared_ptr<galay::EventDispatcher>> m_dispatchers;
     };
 
     #endif

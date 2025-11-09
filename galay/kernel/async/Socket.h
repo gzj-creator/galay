@@ -58,7 +58,9 @@ namespace galay {
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
 
-        AsyncTcpSocket cloneForDifferentRole(CoSchedulerHandle handle) const;
+        AsyncTcpSocket clone() const;
+        AsyncTcpSocket clone(CoSchedulerHandle handle) const;
+        GHandle getHandle() const { return m_handle; }
     private:
         AsyncTcpSocket(EventScheduler* scheduler, GHandle handle);
     private:
@@ -93,7 +95,10 @@ namespace galay {
         [[nodiscard]] std::expected<SockAddr, CommonError> getSrcAddr() const;
         //throw exception
         [[nodiscard]] std::expected<SockAddr, CommonError> getDestAddr() const;
-        AsyncUdpSocket cloneForDifferentRole(CoSchedulerHandle handle) const;
+        AsyncUdpSocket clone() const;
+        AsyncUdpSocket clone(CoSchedulerHandle handle) const;
+    private:
+        AsyncUdpSocket(EventScheduler* scheduler, GHandle handle);
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
@@ -126,7 +131,8 @@ namespace galay {
         AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* result, size_t length);
         AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
         AsyncResult<std::expected<void, CommonError>> sslClose();
-        AsyncSslSocket cloneForDifferentRole(CoSchedulerHandle handle) const;
+        AsyncSslSocket clone() const;
+        AsyncSslSocket clone(CoSchedulerHandle handle) const;
         SSL* getSsl() const;
         ~AsyncSslSocket();
     private:

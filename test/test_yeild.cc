@@ -1,5 +1,6 @@
 #include "galay/kernel/runtime/Runtime.h"
 #include <cstdio>
+#include <iostream>
 
 using namespace galay;
 

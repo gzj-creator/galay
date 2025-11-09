@@ -1,4 +1,5 @@
 #include "TimerGenerator.h"
+#include "TimeEvent.h"
 #include <cassert>
 
 namespace galay 

@@ -56,8 +56,18 @@ namespace galay
         return m_socket.close();
     }
 
-    TcpClient TcpClient::cloneForDifferentRole(CoSchedulerHandle handle) const
+    TcpClient TcpClient::clone() const
     {
-        return TcpClient(m_socket.cloneForDifferentRole(handle));
+        return TcpClient(m_socket.clone());
+    }
+
+    TcpClient TcpClient::clone(CoSchedulerHandle handle) const
+    {
+        return TcpClient(m_socket.clone(handle));
+    }
+    
+    GHandle TcpClient::getHandle() const
+    {
+        return m_socket.getHandle();
     }
 }

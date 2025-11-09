@@ -4,6 +4,7 @@
 #include "Result.hpp"
 #include "galay/common/Common.h"
 #include "CoScheduler.hpp"
+#include <list>
 
 namespace galay
 {

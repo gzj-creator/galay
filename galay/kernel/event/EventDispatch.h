@@ -30,20 +30,29 @@ public:
     
     enum EventMask : uint8_t {
         None  = 0,
-        Read  = 1 << 0,  // 0b001 - 读事件
-        Write = 1 << 1,  // 0b010 - 写事件
-        Error = 1 << 2   // 0b100 - 错误事件
+        Read  = 1 << 0,  // 0b0001 - 读事件
+        Write = 1 << 1,  // 0b0010 - 写事件
+        Error = 1 << 2,  // 0b0100 - 错误事件
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+        Timer = 1 << 3   // 0b1000 - 定时器事件（仅 macOS/BSD）
+#endif
     };
     
     // 添加事件（原子操作）
     void addReadEvent(details::Event* event);
     void addWriteEvent(details::Event* event);
     void addErrorEvent(details::Event* event);
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    void addTimerEvent(details::Event* event);
+#endif
     
     // 移除事件（原子操作）
     void removeReadEvent();
     void removeWriteEvent();
     void removeErrorEvent();
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    void removeTimerEvent();
+#endif
     
     // 查询状态
     bool hasRead() const { 
@@ -57,6 +66,12 @@ public:
     bool hasError() const { 
         return registered_events.load(std::memory_order_acquire) & Error; 
     }
+    
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    bool hasTimer() const {
+        return registered_events.load(std::memory_order_acquire) & Timer;
+    }
+#endif
     
     bool isEmpty() const { 
         return registered_events.load(std::memory_order_acquire) == None; 
@@ -81,6 +96,9 @@ private:
     details::Event* read_event = nullptr;       // 等待读事件的Event
     details::Event* write_event = nullptr;      // 等待写事件的Event
     details::Event* error_event = nullptr;      // 等待错误事件的Event
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    details::Event* timer_event = nullptr;      // 等待定时器事件的Event（仅 macOS/BSD）
+#endif
 };
 
 } // namespace galay

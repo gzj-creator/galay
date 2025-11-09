@@ -103,20 +103,25 @@ namespace galay::details
         using namespace error;
         Bytes bytes;
         int recvBytes = recv(m_handle.fd, m_result_str, m_length, 0);
+        LogInfo("[RecvEvent::recvBytes] fd: {}, recvBytes: {}, errno: {}, notify: {}", 
+                m_handle.fd, recvBytes, errno, notify);
         if(recvBytes > 0) LogTrace("recvBytes: {}, buffer: {}", recvBytes, std::string(m_result_str, recvBytes));
         if (recvBytes > 0) {
             bytes = Bytes::fromCString(m_result_str, recvBytes, recvBytes);
             m_result = std::move(bytes);
         } else if (recvBytes == 0) {
+            LogInfo("[RecvEvent::recvBytes] Connection closed by peer, fd: {}", m_handle.fd);
             m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(errno)));
         } else {
             if(static_cast<uint32_t>(errno) == EAGAIN || static_cast<uint32_t>(errno) == EWOULDBLOCK || static_cast<uint32_t>(errno) == EINTR )
             {
+                LogInfo("[RecvEvent::recvBytes] Would block, fd: {}, errno: {}", m_handle.fd, errno);
                 if( notify ) {
                     m_result = std::unexpected(CommonError(NotifyButSourceNotReadyError, static_cast<uint32_t>(errno)));
                 }
                 return false;
             }
+            LogError("[RecvEvent::recvBytes] recv error, fd: {}, errno: {}", m_handle.fd, errno);
             m_result = std::unexpected(CommonError(CallRecvError, static_cast<uint32_t>(errno)));
         }
         return true;

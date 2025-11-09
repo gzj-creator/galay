@@ -365,7 +365,7 @@ namespace galay
         // 创建或使用现有的 EventScheduler
         EventScheduler::ptr eScheduler = m_eventScheduler 
             ? m_eventScheduler 
-            : std::make_shared<EventScheduler>(m_eventSchedulerInitFdsSize);
+            : std::make_shared<EventScheduler>();
         
         // 创建 TimerManager 及其激活器
     #if defined(USE_EPOLL)

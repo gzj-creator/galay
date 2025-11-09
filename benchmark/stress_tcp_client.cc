@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <vector>
+#include <iostream>
 #include <iomanip>
 #include <random>
 

@@ -1,6 +1,7 @@
 #include "galay/kernel/client/TcpSslClient.h"
 #include "galay/kernel/runtime/Runtime.h"
 #include "galay/common/Buffer.h"
+#include <iostream>
 
 using namespace galay;
 

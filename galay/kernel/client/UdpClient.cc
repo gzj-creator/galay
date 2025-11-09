@@ -68,6 +68,6 @@ namespace galay
 
     UdpClient UdpClient::cloneForDifferentRole(CoSchedulerHandle handle) const
     {
-        return UdpClient(m_socket.cloneForDifferentRole(handle));
+        return UdpClient(m_socket.clone(handle));
     }
 }

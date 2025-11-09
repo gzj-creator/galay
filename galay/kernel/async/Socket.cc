@@ -1,8 +1,6 @@
 #include "Socket.h"
 
-#include "common/Error.h"
-#include "galay/kernel/coroutine/CoScheduler.hpp"
-#include "galay/kernel/event/Event.h"
+#include "galay/common/Error.h"
 #include <cassert>
 #include <openssl/err.h>
 
@@ -50,7 +48,10 @@ namespace galay {
         m_scheduler = handle.eventScheduler();
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         HandleOption options(fd);
-        options.handleNonBlock();
+        if (auto res = options.handleNonBlock(); !res) {
+            LogError("handleNonBlock failed");
+            m_handle = GHandle::invalid();
+        }
     }
 
     AsyncTcpSocket::AsyncTcpSocket(AsyncTcpSocket&& other)
@@ -231,7 +232,12 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncTcpSocket AsyncTcpSocket::cloneForDifferentRole(CoSchedulerHandle handle) const
+    AsyncTcpSocket AsyncTcpSocket::clone() const
+    {
+        return AsyncTcpSocket(m_scheduler, m_handle);
+    }
+
+    AsyncTcpSocket AsyncTcpSocket::clone(CoSchedulerHandle handle) const
     {
         return AsyncTcpSocket(handle, m_handle);
     }
@@ -394,11 +400,22 @@ namespace galay {
         return sockAddrToTHost(reinterpret_cast<sockaddr*>(&addr));
     }
 
-    AsyncUdpSocket AsyncUdpSocket::cloneForDifferentRole(CoSchedulerHandle handle) const
+    AsyncUdpSocket AsyncUdpSocket::clone() const
+    {
+        return AsyncUdpSocket(m_scheduler, m_handle);
+    }
+
+    AsyncUdpSocket AsyncUdpSocket::clone(CoSchedulerHandle handle) const
     {
         return AsyncUdpSocket(handle, m_handle);
     }
 
+    AsyncUdpSocket::AsyncUdpSocket(EventScheduler* scheduler, GHandle handle)
+    {
+        m_handle = handle;
+        m_scheduler = scheduler;
+    }
+    
     AsyncSslSocket::AsyncSslSocket(CoSchedulerHandle handle, SSL_CTX* ssl_ctx)
     {
         m_scheduler = handle.eventScheduler();
@@ -615,7 +632,12 @@ namespace galay {
         return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
     }
 
-    AsyncSslSocket AsyncSslSocket::cloneForDifferentRole(CoSchedulerHandle handle) const
+    AsyncSslSocket AsyncSslSocket::clone() const    
+    {
+        return AsyncSslSocket(m_scheduler, m_ssl);
+    }
+
+    AsyncSslSocket AsyncSslSocket::clone(CoSchedulerHandle handle) const
     {
         return AsyncSslSocket(handle, m_ssl);
     }

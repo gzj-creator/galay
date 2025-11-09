@@ -140,6 +140,6 @@ namespace galay
 
     TcpSslClient TcpSslClient::cloneForDifferentRole(CoSchedulerHandle handle) const
     {
-        return TcpSslClient(m_socket.cloneForDifferentRole(handle));
+        return TcpSslClient(m_socket.clone(handle));
     }
 }
