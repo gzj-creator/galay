@@ -115,7 +115,7 @@ namespace galay::details {
 
 /**
  * @brief 内部日志记录器（单例）
- * @details 管理Galay框架全局日志记录器，支持异步日志处理
+ * @details 管理Galay框架全局日志记录器，支持异步日志处理和运行时开关控制
  */
 class InternelLogger {
 public: 
@@ -135,9 +135,41 @@ public:
     
     /**
      * @brief 设置全局日志级别
-     * @param level 日志级别
+     * @param level 日志级别（trace/debug/info/warn/error/critical/off）
+     * @note 设置为 spdlog::level::off 可以完全禁用日志输出
      */
     void setLevel(spdlog::level::level_enum level);
+    
+    /**
+     * @brief 获取当前日志级别
+     * @return 当前日志级别
+     */
+    spdlog::level::level_enum getLevel() const;
+    
+    /**
+     * @brief 启用日志输出
+     * @param level 日志级别（默认为 debug）
+     * @note 首次调用时会初始化日志系统并创建日志文件
+     */
+    void enable(spdlog::level::level_enum level = spdlog::level::debug);
+    
+    /**
+     * @brief 禁用日志输出
+     * @note 禁用后日志系统仍然存在，只是不输出日志
+     */
+    void disable();
+    
+    /**
+     * @brief 检查日志是否启用
+     * @return true 如果日志已启用，false 如果已禁用
+     */
+    bool isEnabled() const;
+    
+    /**
+     * @brief 检查日志系统是否已初始化
+     * @return true 如果已初始化，false 如果未初始化
+     */
+    bool isInitialized() const;
     
     /**
      * @brief 获取当前日志记录器
@@ -152,8 +184,15 @@ public:
     
     ~InternelLogger();
 private:
+    /**
+     * @brief 初始化日志系统（延迟初始化）
+     * @note 只在首次启用日志时调用
+     */
+    void initializeLogger();
+    
     Logger::uptr m_logger;                                               ///< 日志记录器
     std::shared_ptr<spdlog::details::thread_pool> m_thread_pool;        ///< 异步日志线程池
+    bool m_initialized;                                                  ///< 日志系统是否已初始化
 };
 
 
@@ -162,12 +201,12 @@ private:
 namespace galay {
 
 #ifdef ENABLE_SYSTEM_LOG
-    #define LogTrace(...)       SPDLOG_LOGGER_TRACE(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
-    #define LogDebug(...)       SPDLOG_LOGGER_DEBUG(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
-    #define LogInfo(...)        SPDLOG_LOGGER_INFO(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
-    #define LogWarn(...)        SPDLOG_LOGGER_WARN(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
-    #define LogError(...)       SPDLOG_LOGGER_ERROR(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
-    #define LogCritical(...)    SPDLOG_LOGGER_CRITICAL(galay::details::InternelLogger::getInstance()->getLogger()->getSpdlogger(), __VA_ARGS__)
+    #define LogTrace(...)       do { auto* __logger = galay::details::InternelLogger::getInstance()->getLogger(); if (__logger) { SPDLOG_LOGGER_TRACE(__logger->getSpdlogger(), __VA_ARGS__); } } while(0)
+    #define LogDebug(...)       do { auto* __logger = galay::details::InternelLogger::getInstance()->getLogger(); if (__logger) { SPDLOG_LOGGER_DEBUG(__logger->getSpdlogger(), __VA_ARGS__); } } while(0)
+    #define LogInfo(...)        do { auto* __logger = galay::details::InternelLogger::getInstance()->getLogger(); if (__logger) { SPDLOG_LOGGER_INFO(__logger->getSpdlogger(), __VA_ARGS__); } } while(0)
+    #define LogWarn(...)        do { auto* __logger = galay::details::InternelLogger::getInstance()->getLogger(); if (__logger) { SPDLOG_LOGGER_WARN(__logger->getSpdlogger(), __VA_ARGS__); } } while(0)
+    #define LogError(...)       do { auto* __logger = galay::details::InternelLogger::getInstance()->getLogger(); if (__logger) { SPDLOG_LOGGER_ERROR(__logger->getSpdlogger(), __VA_ARGS__); } } while(0)
+    #define LogCritical(...)    do { auto* __logger = galay::details::InternelLogger::getInstance()->getLogger(); if (__logger) { SPDLOG_LOGGER_CRITICAL(__logger->getSpdlogger(), __VA_ARGS__); } } while(0)
 #else
     #define LogTrace(...)       (void)0
     #define LogDebug(...)       (void)0
@@ -176,6 +215,70 @@ namespace galay {
     #define LogError(...)       (void)0
     #define LogCritical(...)    (void)0
 #endif
+
+/**
+ * @brief 日志控制便捷函数
+ * @details 提供全局函数来方便地控制 Galay 框架的日志输出
+ */
+namespace log {
+
+    /**
+     * @brief 启用日志输出
+     * @param level 日志级别（默认为 debug）
+     * @example
+     *   galay::log::enable();                    // 启用日志，级别为 debug
+     *   galay::log::enable(spdlog::level::info);  // 启用日志，级别为 info
+     */
+    inline void enable(spdlog::level::level_enum level = spdlog::level::debug) {
+        details::InternelLogger::getInstance()->enable(level);
+    }
+
+    /**
+     * @brief 禁用日志输出
+     * @example
+     *   galay::log::disable();  // 完全禁用日志输出
+     */
+    inline void disable() {
+        details::InternelLogger::getInstance()->disable();
+    }
+
+    /**
+     * @brief 设置日志级别
+     * @param level 日志级别（trace/debug/info/warn/error/critical/off）
+     * @example
+     *   galay::log::setLevel(spdlog::level::info);  // 只输出 info 及以上级别
+     *   galay::log::setLevel(spdlog::level::off);   // 完全禁用日志
+     */
+    inline void setLevel(spdlog::level::level_enum level) {
+        details::InternelLogger::getInstance()->setLevel(level);
+    }
+
+    /**
+     * @brief 获取当前日志级别
+     * @return 当前日志级别
+     */
+    inline spdlog::level::level_enum getLevel() {
+        return details::InternelLogger::getInstance()->getLevel();
+    }
+
+    /**
+     * @brief 检查日志是否启用
+     * @return true 如果日志已启用，false 如果已禁用
+     */
+    inline bool isEnabled() {
+        return details::InternelLogger::getInstance()->isEnabled();
+    }
+    
+    /**
+     * @brief 检查日志系统是否已初始化
+     * @return true 如果已初始化，false 如果未初始化
+     */
+    inline bool isInitialized() {
+        return details::InternelLogger::getInstance()->isInitialized();
+    }
+
+} // namespace log
+
 }
 
 #endif

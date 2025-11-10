@@ -85,14 +85,28 @@ Logger::~Logger()
 namespace galay::details
 {
 
-InternelLogger::InternelLogger() {
-    m_thread_pool = std::make_shared<spdlog::details::thread_pool>( DEFAULT_LOG_QUEUE_SIZE, DEFAULT_LOG_THREADS);
+InternelLogger::InternelLogger() 
+    : m_logger(nullptr)
+    , m_thread_pool(nullptr)
+    , m_initialized(false)
+{
+    // 延迟初始化：不在构造函数中创建日志文件
+    // 只有在首次调用 enable() 时才会初始化日志系统
+}
+
+void InternelLogger::initializeLogger() {
+    if (m_initialized) {
+        return;
+    }
+    
+    m_thread_pool = std::make_shared<spdlog::details::thread_pool>(DEFAULT_LOG_QUEUE_SIZE, DEFAULT_LOG_THREADS);
     auto sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(DEFAULT_LOG_FILE_PATH, DEFAULT_MAX_LOG_FILE_SIZE, DEFAULT_MAX_LOG_FILES);
     auto logger = std::make_shared<spdlog::async_logger>("galay", sink, m_thread_pool, spdlog::async_overflow_policy::overrun_oldest);
     logger->set_pattern("[%Y-%m-%d %H:%M:%S.%f][%^%L%$][%t][%25!s:%4!#][%20!!] %v");
     logger->set_level(spdlog::level::debug);
     logger->flush_on(spdlog::level::debug);
-    m_logger = std::make_unique<Logger>(logger); 
+    m_logger = std::make_unique<Logger>(logger);
+    m_initialized = true;
 }
 
 InternelLogger *InternelLogger::getInstance()
@@ -108,7 +122,41 @@ void InternelLogger::setLogger(Logger::uptr logger)
 
 void InternelLogger::setLevel(spdlog::level::level_enum level)
 {
-    m_logger->getSpdlogger()->set_level(level);
+    if (m_logger) {
+        m_logger->getSpdlogger()->set_level(level);
+    }
+}
+
+spdlog::level::level_enum InternelLogger::getLevel() const
+{
+    if (m_logger) {
+        return m_logger->getSpdlogger()->level();
+    }
+    return spdlog::level::off;
+}
+
+void InternelLogger::enable(spdlog::level::level_enum level)
+{
+    // 首次启用时初始化日志系统
+    if (!m_initialized) {
+        initializeLogger();
+    }
+    setLevel(level);
+}
+
+void InternelLogger::disable()
+{
+    setLevel(spdlog::level::off);
+}
+
+bool InternelLogger::isEnabled() const
+{
+    return m_initialized && getLevel() != spdlog::level::off;
+}
+
+bool InternelLogger::isInitialized() const
+{
+    return m_initialized;
 }
 
 Logger* InternelLogger::getLogger()
