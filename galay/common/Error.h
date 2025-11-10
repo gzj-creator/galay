@@ -2,6 +2,7 @@
 #define __GALAY_ERROR_H__
 
 #include <string>
+#include <cstdint>
 
 namespace galay::error
 {

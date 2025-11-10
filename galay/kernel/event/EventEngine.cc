@@ -64,6 +64,8 @@ namespace galay::details
                 EventDispatcher* dispatcher = static_cast<EventDispatcher*>(m_events[i].data.ptr);
                 
                 // 调用 dispatch 方法，会移除状态并调用对应Event的handleEvent
+                // 在纯ET模式下,事件不会自动从epoll移除,dispatcher会管理event指针
+                // event的handleEvent会导致协程resume,协程可能会重新注册新的事件
                 dispatcher->dispatch(m_events[i].events);
             }
             if(! m_once_loop_cbs.empty() ) {
@@ -135,32 +137,51 @@ namespace galay::details
             dispatcher->addWriteEvent(event);
         } else if (type == EventType::kEventTypeError) {
             dispatcher->addErrorEvent(event);
+        } else if (type == EventType::kEventTypeTimer) {
+            // 在Linux上，Timer使用timerfd，产生EPOLLIN事件，所以当作Read事件处理
+            dispatcher->addReadEvent(event);
         }
         
         // 设置 event 的 dispatcher
         event->setDispatcher(dispatcher.get());
         
+        // 构造epoll_event
+        epoll_event ev;
+        if(!convertToEpollEvent(ev, event, ctx)) {
+            return 0;
+        }
+        ev.data.ptr = dispatcher.get();
+        
         // 判断是第一次添加还是修改
+        // 在ET模式下,old_state==0说明之前没有事件或所有事件都已触发并移除
         bool is_first_event = (old_state == 0);
         
+        int ret;
         if (is_first_event) {
-            // 第一次注册这个fd
-            epoll_event ev;
-            if(!convertToEpollEvent(ev, event, ctx)) {
-                return 0;
+            // 第一次注册,使用ADD
+            ret = epoll_ctl(m_handle.fd, EPOLL_CTL_ADD, fd, &ev);
+            // 如果ADD失败且错误是EEXIST,说明fd已在epoll中,改用MOD
+            if (ret != 0 && errno == EEXIST) {
+                LogTrace("[Add failed with EEXIST, try MOD] fd: {}", fd);
+                ret = epoll_ctl(m_handle.fd, EPOLL_CTL_MOD, fd, &ev);
             }
-            // data.ptr 存储 EventDispatcher*
-            ev.data.ptr = dispatcher.get();
-            
-            int ret = epoll_ctl(m_handle.fd, EPOLL_CTL_ADD, fd, &ev);
-            if( ret != 0 ){
-                m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
-            }
-            return ret;
         } else {
-            // fd已存在其他类型的事件，需要修改
-            return modEvent(event, ctx);
+            // fd已有其他事件,使用MOD
+            ret = epoll_ctl(m_handle.fd, EPOLL_CTL_MOD, fd, &ev);
+            // 如果MOD失败且错误是ENOENT,说明fd不在epoll中(可能被dispatch后删除了),改用ADD
+            if (ret != 0 && errno == ENOENT) {
+                LogTrace("[MOD failed with ENOENT, try ADD] fd: {}", fd);
+                ret = epoll_ctl(m_handle.fd, EPOLL_CTL_ADD, fd, &ev);
+            }
         }
+        
+        if( ret != 0 ){
+            m_error = CommonError(ErrorCode::CallActiveEventError, static_cast<uint32_t>(errno));
+        } else {
+            // 成功时清空errno,避免残留的错误码影响后续操作
+            errno = 0;
+        }
+        return ret;
     }
 
     int 
@@ -180,7 +201,7 @@ namespace galay::details
         
         // 构建包含所有注册事件的 epoll_event
         epoll_event ev;
-        ev.events = EPOLLET;  // ET mode
+        ev.events = EPOLLET;  // ET mode (不使用ONESHOT)
         
         if (dispatcher->hasRead()) {
             ev.events |= EPOLLIN;
@@ -225,6 +246,9 @@ namespace galay::details
             dispatcher->removeWriteEvent();
         } else if (type == EventType::kEventTypeError) {
             dispatcher->removeErrorEvent();
+        } else if (type == EventType::kEventTypeTimer) {
+            // 在Linux上，Timer被当作Read事件处理
+            dispatcher->removeReadEvent();
         }
         
         // 判断是完全删除还是修改
@@ -257,7 +281,10 @@ namespace galay::details
     {
         EventType event_type = event->getEventType();
         ev.events = 0;
-        ev.events = EPOLLONESHOT;
+        // 注意: 不使用 EPOLLONESHOT，因为它会在任何事件触发后移除整个fd
+        // 这与kqueue的per-filter ONESHOT行为不一致
+        // 改用纯ET模式，事件触发后不自动移除，由dispatcher在处理后决定是否保持注册
+        ev.events = EPOLLET;
         
         // 通过 event 获取关联的 EventDispatcher
         EventDispatcher* dispatcher = event->getDispatcher();
@@ -272,7 +299,6 @@ namespace galay::details
             if (dispatcher->hasError()) {
                 ev.events |= EPOLLERR;
             }
-            ev.events |= EPOLLET;
             return true;
         }
         
@@ -284,25 +310,21 @@ namespace galay::details
             case kEventTypeError:
             {
                 ev.events |= EPOLLERR;
-                ev.events |= EPOLLET;
             }
                 break;
             case kEventTypeRead:
             {
                 ev.events |= EPOLLIN;
-                ev.events |= EPOLLET;
             }
                 break;
             case kEventTypeWrite:
             {
                 ev.events |= EPOLLOUT;
-                ev.events |= EPOLLET;
             }
                 break;
             case kEventTypeTimer:
             {
                 ev.events |= EPOLLIN;
-                ev.events |= EPOLLET;
             }
                 break;
         }

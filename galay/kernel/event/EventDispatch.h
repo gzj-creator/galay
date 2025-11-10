@@ -81,6 +81,14 @@ public:
         return registered_events.load(std::memory_order_acquire);
     }
     
+    // 获取事件指针
+    details::Event* getReadEvent() const { return read_event; }
+    details::Event* getWriteEvent() const { return write_event; }
+    details::Event* getErrorEvent() const { return error_event; }
+#if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+    details::Event* getTimerEvent() const { return timer_event; }
+#endif
+    
     /**
      * @brief 分发事件到对应的Event并移除状态
      * @param triggered_events 触发的事件标志（epoll的events或kqueue转换后的标志）

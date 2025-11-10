@@ -60,10 +60,9 @@ std::string generateMessage(int size) {
 /**
  * @brief 单个客户端压测协程
  */
-Coroutine<nil> clientBenchmark(Runtime& runtime, const BenchmarkConfig& config, int client_id)
+Coroutine<nil> clientBenchmark(CoSchedulerHandle handle, const BenchmarkConfig& config, int client_id)
 {
     try {
-        auto handle = runtime.getCoSchedulerHandle(0).value();
         TcpClient client(handle);
         
         // 连接服务器
@@ -224,10 +223,10 @@ int main(int argc, char* argv[])
     std::cout << "\n发送start命令到服务器..." << std::endl;
     Runtime& ctrl_runtime = *runtimes[0];
     std::atomic<bool> start_cmd_done{false};
-    ctrl_runtime.schedule([&ctrl_runtime, &config, &start_cmd_done]() -> Coroutine<nil> {
+    auto ctrl_handle = ctrl_runtime.getCoSchedulerHandle(0).value();
+    ctrl_runtime.schedule([ctrl_handle, &config, &start_cmd_done]() -> Coroutine<nil> {
         try {
-            auto handle = ctrl_runtime.getCoSchedulerHandle(0).value();
-            TcpClient ctrl_client(handle);
+            TcpClient ctrl_client(ctrl_handle);
             auto connect_res = co_await ctrl_client.connect({config.server_ip, config.server_port});
             if (connect_res) {
                 auto cmd = Bytes::fromString(std::string("start"));
@@ -262,7 +261,8 @@ int main(int argc, char* argv[])
     // 启动所有客户端协程
     for (int i = 0; i < config.client_count; ++i) {
         Runtime& runtime = *runtimes[i % runtime_count];
-        runtime.schedule(clientBenchmark(runtime, config, i));
+        auto handle = runtime.getCoSchedulerHandle(0).value();
+        runtime.schedule(clientBenchmark(handle, config, i));
     }
     
     // 等待所有客户端完成
@@ -280,10 +280,10 @@ int main(int argc, char* argv[])
     // 发送finish命令到服务器
     std::cout << "发送finish命令到服务器..." << std::endl;
     std::atomic<bool> finish_cmd_done{false};
-    ctrl_runtime.schedule([&ctrl_runtime, &config, &finish_cmd_done]() -> Coroutine<nil> {
+    auto finish_handle = ctrl_runtime.getCoSchedulerHandle(0).value();
+    ctrl_runtime.schedule([finish_handle, &config, &finish_cmd_done]() -> Coroutine<nil> {
         try {
-            auto handle = ctrl_runtime.getCoSchedulerHandle(0).value();
-            TcpClient ctrl_client(handle);
+            TcpClient ctrl_client(finish_handle);
             auto connect_res = co_await ctrl_client.connect({config.server_ip, config.server_port});
             if (connect_res) {
                 auto cmd = Bytes::fromString(std::string("finish"));

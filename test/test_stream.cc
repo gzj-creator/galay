@@ -108,7 +108,7 @@ Coroutine<nil> test()
 }
 
 int main() { 
-    details::InternelLogger().getInstance()->getLogger()->getSpdlogger()->set_level(spdlog::level::debug);
+    log::enable(spdlog::level::debug);
     RuntimeBuilder builder;
     builder.startCoManager(std::chrono::milliseconds(10));  // 减少到 10ms，提高调度频率
     auto runtime = builder.build();

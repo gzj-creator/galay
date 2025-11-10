@@ -4,6 +4,8 @@
 #include <algorithm>
 #include <cstring>
 #include <string>
+#include <cstdint>
+#include <stdexcept>
 
 namespace galay
 {

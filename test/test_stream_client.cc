@@ -97,7 +97,7 @@ Coroutine<nil> test()
 }
 
 int main() { 
-    details::InternelLogger().getInstance()->getLogger()->getSpdlogger()->set_level(spdlog::level::debug);
+    log::enable(spdlog::level::debug);
     
     // 启动输入线程，专门处理 std::getline
     std::thread input_thread([]() {

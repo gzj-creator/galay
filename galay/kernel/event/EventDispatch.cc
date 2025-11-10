@@ -79,8 +79,8 @@ void EventDispatcher::dispatch(uint32_t triggered_events)
 {
     // 根据触发的事件类型，移除状态并调用对应的Event
     // 注意：多个事件可能同时触发（例如：同时可读可写）
-    // 注意：使用 ONESHOT 模式时，事件触发后会自动从 epoll/kqueue 中移除
-    //       我们需要从 dispatcher 中移除事件指针，以便下次重新注册新的 Event 对象
+    // 无论是kqueue还是epoll,都需要移除event指针,因为event对象的生命周期由协程管理
+    // 当协程resume后,event可能被销毁,所以必须在handleEvent前移除指针
 
     const char* read_event_name = read_event ? read_event->name().c_str() : "null";
     const char* write_event_name = write_event ? write_event->name().c_str() : "null";
@@ -88,39 +88,27 @@ void EventDispatcher::dispatch(uint32_t triggered_events)
             triggered_events, read_event_name, write_event_name);
     
     if ((triggered_events & EPOLLIN) && read_event != nullptr) {
-        // 先保存指针，避免在 removeReadEvent 后变为 nullptr
         auto* event = read_event;
-        // 移除读事件状态（因为使用 ONESHOT，事件已从内核中移除）
         removeReadEvent();
-        // 调用Event的handleEvent方法
         event->handleEvent();
     }
     
     if ((triggered_events & EPOLLOUT) && write_event != nullptr) {
-        // 先保存指针，避免在 removeWriteEvent 后变为 nullptr
         auto* event = write_event;
-        // 移除写事件状态（因为使用 ONESHOT，事件已从内核中移除）
         removeWriteEvent();
-        // 调用Event的handleEvent方法
         event->handleEvent();
     }
     
     if ((triggered_events & EPOLLERR) && error_event != nullptr) {
-        // 先保存指针，避免在 removeErrorEvent 后变为 nullptr
         auto* event = error_event;
-        // 移除错误事件状态
         removeErrorEvent();
-        // 调用Event的handleEvent方法
         event->handleEvent();
     }
     
 #if defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
     if ((triggered_events & EPOLLTIMER) && timer_event != nullptr) {
-        // 先保存指针，避免在 removeTimerEvent 后变为 nullptr
         auto* event = timer_event;
-        // 移除定时器事件状态（因为使用 ONESHOT，事件已从内核中移除）
         removeTimerEvent();
-        // 调用Event的handleEvent方法
         event->handleEvent();
     }
 #endif
