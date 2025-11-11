@@ -40,11 +40,11 @@ int main()
     TcpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
     TcpServer server = builder.backlog(1024).build();
-    server.run(runtime, [&server, &runtime](AsyncTcpSocket socket) -> Coroutine<nil> {
+    server.run(runtime, [&server](AsyncTcpSocket socket, CoSchedulerHandle handle) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
         using namespace error;
         Buffer buffer(1024);
-        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
+        AsyncFactory factory = handle.getAsyncFactory();
         TimerGenerator generator = factory.getTimerGenerator();
         while(true) {
             auto twrapper = co_await generator.timeout<std::expected<Bytes, CommonError>>([&](){

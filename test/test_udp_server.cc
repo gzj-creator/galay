@@ -38,7 +38,7 @@ int main()
     UdpServerBuilder builder;
     builder.addListen({"0.0.0.0", 8070});
     UdpServer server = builder.build();
-    server.run(runtime, [&server](AsyncUdpSocket socket) -> Coroutine<nil> {
+    server.run(runtime, [&server](AsyncUdpSocket socket, CoSchedulerHandle handle) -> Coroutine<nil> {
         Buffer buffer(1024);
         using namespace error;
         while(true) {

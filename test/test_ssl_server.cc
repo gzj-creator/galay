@@ -41,7 +41,7 @@ int main()
     TcpSslServerBuilder builder("server.crt", "server.key");
     builder.addListen({"0.0.0.0", 8070});
     TcpSslServer server = builder.build();
-    server.run(runtime, [&server](AsyncSslSocket socket) -> Coroutine<nil> {
+    server.run(runtime, [&server](AsyncSslSocket socket, CoSchedulerHandle handle) -> Coroutine<nil> {
         std::cout << "connection established" << std::endl;
         using namespace error;
         Buffer buffer(1024);

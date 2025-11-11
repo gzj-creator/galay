@@ -18,27 +18,27 @@ namespace galay
     void UdpServer::run(Runtime& runtime, const AsyncUdpFunc& callback)
     {
         size_t co_num = runtime.coSchedulerSize();
-        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
-            AsyncUdpSocket socket = factory.getUdpSocket();
-            if(auto res = socket.socket(); !res) {
-                LogError("[UdpServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
+            auto handle = runtime.getCoSchedulerHandle(i);
+            if(handle.has_value()) {
+                AsyncUdpSocket socket = handle.value().getAsyncFactory().getUdpSocket();
+                if(auto res = socket.socket(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                HandleOption options = socket.options();
+                if(auto res = options.handleReuseAddr(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = options.handleReusePort(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = socket.bind(m_host); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                handle.value().spawn(callback(std::move(socket), handle.value()));
+            } else {
+                throw std::runtime_error("[UdpServer::run] [invalid handle index]");
             }
-            HandleOption options = socket.options();
-            if(auto res = options.handleReuseAddr(); !res) {
-                LogError("[UdpServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
-            }
-            if(auto res = options.handleReusePort(); !res) {
-                LogError("[UdpServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
-            }
-            if(auto res = socket.bind(m_host); !res) {
-                LogError("[UdpServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
-            }
-            runtime.schedule(callback(std::move(socket)), i);
         }
     }
 

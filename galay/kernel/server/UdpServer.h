@@ -17,7 +17,7 @@ namespace galay
     { 
     public:
         /// 异步UDP处理函数类型：接收AsyncUdpSocket参数，返回Coroutine<nil>
-        using AsyncUdpFunc = std::function<Coroutine<nil>(AsyncUdpSocket)>;
+        using AsyncUdpFunc = std::function<Coroutine<nil>(AsyncUdpSocket, CoSchedulerHandle)>;
         
         /**
          * @brief 默认构造函数

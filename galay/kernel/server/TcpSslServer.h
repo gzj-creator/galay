@@ -19,7 +19,7 @@ namespace galay
     class TcpSslServer
     {
     public:
-        using AsyncSslFunc = std::function<Coroutine<nil>(AsyncSslSocket)>;
+        using AsyncSslFunc = std::function<Coroutine<nil>(AsyncSslSocket, CoSchedulerHandle)>;
         TcpSslServer(const std::string& cert_file, const std::string& key_file);
         TcpSslServer(TcpSslServer&& server);
         TcpSslServer(const TcpSslServer& server) = delete;
@@ -44,7 +44,7 @@ namespace galay
         TcpSslServer& operator=(const TcpSslServer& server) = delete;
         ~TcpSslServer();
     private:
-        Coroutine<nil> acceptConnection(Runtime& runtime, AsyncSslFunc callback, size_t i);
+        Coroutine<nil> acceptConnection(CoSchedulerHandle handle, AsyncSslFunc callback, size_t i);
         bool initSSLContext();
     protected:
         int m_backlog = DEFAULT_TCP_BACKLOG_SIZE;

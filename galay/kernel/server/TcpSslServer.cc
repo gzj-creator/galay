@@ -82,31 +82,30 @@ namespace galay
         
         m_running.store(true);
         size_t co_num = runtime.coSchedulerSize();
-        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
-            m_sockets.emplace_back(factory.getSslSocket(m_ssl_ctx));
-            if(auto res = m_sockets[i].socket(); !res) {
-                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
+            auto handle = runtime.getCoSchedulerHandle(i);
+            if(handle.has_value()) {
+                m_sockets.emplace_back(handle.value().getAsyncFactory().getSslSocket(m_ssl_ctx));
+                if(auto res = m_sockets[i].socket(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                HandleOption options = m_sockets[i].options();
+                if(auto res = options.handleReuseAddr(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = options.handleReusePort(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = m_sockets[i].bind(m_host); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = m_sockets[i].listen(m_backlog); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                handle.value().spawn(acceptConnection(handle.value(), callback, i));
+            } else {
+                throw std::runtime_error("[SslServer::run] [invalid handle index]");
             }
-            HandleOption options = m_sockets[i].options();
-            if(auto res = options.handleReuseAddr(); !res) {
-                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
-            }
-            if(auto res = options.handleReusePort(); !res) {
-                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
-            }
-            if(auto res = m_sockets[i].bind(m_host); !res) {
-                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
-            }
-            if(auto res = m_sockets[i].listen(m_backlog); !res) {
-                LogError("[TcpSslServer::run] [error: {}]", res.error().message());
-                throw std::runtime_error(res.error().message());
-            }
-            runtime.schedule(acceptConnection(runtime, callback, i), i);
         }
     }
 
@@ -147,7 +146,7 @@ namespace galay
         return *this;
     }
 
-    Coroutine<nil> TcpSslServer::acceptConnection(Runtime& runtime, AsyncSslFunc callback, size_t i)
+    Coroutine<nil> TcpSslServer::acceptConnection(CoSchedulerHandle handle, AsyncSslFunc callback, size_t i)
     {
         while(m_running.load()) {
             AsyncSslSocketBuilder builder(m_ssl_ctx);
@@ -185,7 +184,7 @@ namespace galay
             if(!res || !res.value()) continue;
             LogInfo("[sslAccept success]");
             auto socket = builder.build();
-            runtime.schedule(callback(std::move(socket)), i);
+            handle.spawn(callback(std::move(socket), handle));
         }
         LogInfo("[acceptConnection loop exit] [thread: {}]", i);
         co_return nil();

@@ -51,7 +51,7 @@ Galay 是一个高性能、跨平台的 C++23 网络库，提供支持协程的�
 
 ```bash
 # 克隆仓库
-git clone https://github.com/your-username/galay.git
+git clone https://github.com/galay-creator/galay.git
 cd galay
 
 # 创建构建目录
@@ -71,7 +71,7 @@ sudo make install
 
 ```cmd
 # 克隆仓库
-git clone https://github.com/your-username/galay.git
+git clone https://github.com/galay-creator/galay.git
 cd galay
 
 # 创建构建目录

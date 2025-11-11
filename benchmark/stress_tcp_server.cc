@@ -135,7 +135,7 @@ int main(int argc, char* argv[])
     TcpServer server = builder.backlog(backlog_size).build();
     
     // 运行服务器
-    server.run(runtime, [](AsyncTcpSocket socket) -> Coroutine<nil> {
+    server.run(runtime, [](AsyncTcpSocket socket, CoSchedulerHandle handle[[maybe_unused]]) -> Coroutine<nil> {
         using namespace error;
         
         // 连接建立

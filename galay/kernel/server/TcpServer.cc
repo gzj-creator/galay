@@ -19,38 +19,50 @@ namespace galay
 
     bool TcpServer::run(Runtime& runtime, const AsyncTcpFunc &callback)
     {
+        if(m_running.load()) {
+            LogError("[TcpServer::run] [runtime is running]");
+            return false;
+        }
+        m_running.store(true);
         size_t co_num = runtime.coSchedulerSize();
-        AsyncFactory factory = runtime.getCoSchedulerHandle().getAsyncFactory();
         for(size_t i = 0; i < co_num; ++i) {
-            m_sockets.emplace_back(factory.getTcpSocket());
-            if(auto res = m_sockets[i].socket(); !res) {
-                LogError("[TcpServer::run] [error: {}]", res.error().message());
-                return false;
+            auto handle = runtime.getCoSchedulerHandle(i);
+            if(handle.has_value()) {
+                m_sockets.emplace_back(handle.value().getAsyncFactory().getTcpSocket());
+                if(auto res = m_sockets[i].socket(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                HandleOption options = m_sockets[i].options();
+                if(auto res = options.handleReuseAddr(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = options.handleReusePort(); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = m_sockets[i].bind(m_host); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                if(auto res = m_sockets[i].listen(m_backlog); !res) {
+                    throw std::runtime_error(res.error().message());
+                }
+                handle.value().spawn(acceptConnection(handle.value(), callback, i));
+            } else {
+                throw std::runtime_error("[TcpServer::run] [invalid handle index]");
             }
-            HandleOption options = m_sockets[i].options();
-            if(auto res = options.handleReuseAddr(); !res) {
-                LogError("[TcpServer::run] [error: {}]", res.error().message());
-                return false;
-            }
-            if(auto res = options.handleReusePort(); !res) {
-                LogError("[TcpServer::run] [error: {}]", res.error().message());
-                return false;
-            }
-            if(auto res = m_sockets[i].bind(m_host); !res) {
-                LogError("[TcpServer::run] [error: {}]", res.error().message());
-                return false;
-            }
-            if(auto res = m_sockets[i].listen(m_backlog); !res) {
-                LogError("[TcpServer::run] [error: {}]", res.error().message());
-                return false;
-            }
-            runtime.schedule(acceptConnection(runtime, callback, i), i);
         }
         return true;
     }
 
     void TcpServer::stop()
     {
+        m_running.store(false);
+        for(auto& sock : m_sockets) {
+            int fd = sock.getHandle().fd;
+            if(fd >= 0) {
+                // 关闭 socket 会导致挂起的 accept 返回错误
+                ::shutdown(fd, SHUT_RDWR);
+            }
+        }
         m_condition.notify_one();
     }
 
@@ -70,7 +82,7 @@ namespace galay
         return *this;
     }
 
-    Coroutine<nil> TcpServer::acceptConnection(Runtime& runtime, AsyncTcpFunc callback, size_t i)
+    Coroutine<nil> TcpServer::acceptConnection(CoSchedulerHandle handle, AsyncTcpFunc callback, size_t i)
     {
         while(true) {
             AsyncTcpSocketBuilder builder;
@@ -78,7 +90,7 @@ namespace galay
             if(acceptor) {
                 LogInfo("[acceptConnection success]");
                 auto socket = builder.build();
-                runtime.schedule(callback(std::move(socket)), i);
+                handle.spawn(callback(std::move(socket), handle));
             } else {
                 LogError("[acceptConnection failed] [error: {}]", acceptor.error().message());
             }
