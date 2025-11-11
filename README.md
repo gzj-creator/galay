@@ -51,7 +51,7 @@ Galay is a high-performance, cross-platform C++23 networking library that provid
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/galay.git
+git clone https://github.com/gzj-creator/galay.git
 cd galay
 
 # Create build directory
@@ -71,7 +71,7 @@ sudo make install
 
 ```cmd
 # Clone the repository
-git clone https://github.com/your-username/galay.git
+git clone https://github.com/gzj-creator/galay.git
 cd galay
 
 # Create build directory
