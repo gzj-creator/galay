@@ -167,7 +167,7 @@ Coroutine<nil> statsLoop()
 
 int main() {
     // 设置日志级别
-    details::InternelLogger().getInstance()->getLogger()->getSpdlogger()->set_level(spdlog::level::warn);
+    log::enable(spdlog::level::debug);
     
     std::cout << "========== 高性能双向通信服务器 ==========" << std::endl;
     std::cout << "特性:" << std::endl;

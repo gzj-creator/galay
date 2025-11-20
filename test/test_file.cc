@@ -177,8 +177,8 @@ Coroutine<nil> test()
 
 
 int main() { 
+    log::enable(spdlog::level::trace);
     LogTrace("main");
-    galay::details::InternelLogger::getInstance()->setLevel(spdlog::level::trace);
     RuntimeBuilder builder;
     builder.startCoManager(std::chrono::milliseconds(1000));
     runtime = builder.build();
