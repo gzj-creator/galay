@@ -7,6 +7,7 @@
 #include <chrono>
 
 using namespace galay;
+using namespace galay::mpsc;
 using namespace std::chrono_literals;
 
 // 生产者协程

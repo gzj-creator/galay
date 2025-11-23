@@ -7,7 +7,7 @@
 #include <queue>
 #include <list>
 
-namespace galay
+namespace galay::mpsc
 {
     template<typename T, typename E>
     class AsyncQueue;
@@ -18,7 +18,7 @@ namespace galay
         class DequeueEvent: public AsyncEvent<std::expected<T, E>>
         {
             template<typename M, typename F>
-            friend class galay::AsyncQueue;
+            friend class galay::mpsc::AsyncQueue;
         public:
             DequeueEvent(AsyncQueue<T, E>& queue);
             //return true while not suspend
@@ -126,7 +126,7 @@ namespace galay
     }
 }
 
-namespace galay::details
+namespace galay::mpsc::details
 {
     template <typename T, typename E>
     inline DequeueEvent<T, E>::DequeueEvent(AsyncQueue<T, E> &queue)
