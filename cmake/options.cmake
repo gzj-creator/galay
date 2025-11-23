@@ -1,4 +1,4 @@
-option(ENABLE_DEBUG "Enable debug" ON)
+option(ENABLE_DEBUG "Enable debug" OFF)
 option(ENABLE_INSTALL_SYSTEM "Enable install system" ON) 
 option(BUILD_STATIC "Build static" OFF)
 option(ENABLE_SYSTEM_LOG "Enable system log" ON)
