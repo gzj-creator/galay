@@ -51,7 +51,7 @@ namespace galay {
     }
 
     template<CoType T>
-    inline T AsyncResult<T>::await_resume()  // ← Changed: removed const
+    inline T AsyncResult<T>::await_resume() const
     {
         if(m_coroutine.expired()) {
             return this->m_event->onResume();
@@ -60,10 +60,8 @@ namespace galay {
         auto co_ptr = m_coroutine.lock();
         if(co_ptr) {
             // Only if we can transition to running
-            int attempts = 0;
-            while(attempts < 10 && !co_ptr->become(CoroutineStatus::Running)) {
+            while(!co_ptr->become(CoroutineStatus::Running)) {
                 LogError("AsyncResult Coroutine become running error");
-                attempts++;
             }
         }
         return this->m_event->onResume();
