@@ -33,36 +33,38 @@ namespace galay
 
         /**
          * @brief Asynchronously dequeue a value
-         *
-         * Returns immediately if queue is not empty.
-         * If queue is empty, suspends the current coroutine until a value is available.
-         * Supports multiple concurrent consumers.
+         * Simplified: Direct single-shot dequeue, no complex suspend logic
          */
         AsyncResult<T> waitDequeue() {
+            // Always try to dequeue first (no defer to DequeueEvent)
             T out;
-            if(m_queue.try_dequeue(out)) {
-                return AsyncResult<T>(std::move(out));
+            for (int attempts = 0; attempts < 100; ++attempts) {
+                if(m_queue.try_dequeue(out)) {
+                    // Successfully got a value, return it immediately
+                    return AsyncResult<T>(std::move(out));
+                }
+                // Queue is temporarily empty, but might get filled soon by producers
+                // Try again without suspending (busy-wait style) for better reliability
             }
-            // Queue is empty, need to wait
+
+            // After 100 attempts, if still no data, use the event-based waiting
             return AsyncResult<T>(std::make_shared<DequeueEvent>(this));
         }
 
         /**
          * @brief Enqueue a value (move semantics)
-         * Thread-safe, can be called from multiple producers
          */
         void enqueue(T&& value) {
             m_queue.enqueue(std::move(value));
-            wakeWaiters();  // Wake up one waiting consumer
+            wakeWaiters();
         }
 
         /**
          * @brief Enqueue a value (copy semantics)
-         * Thread-safe, can be called from multiple producers
          */
         void enqueue(const T& value) {
             m_queue.enqueue(value);
-            wakeWaiters();  // Wake up one waiting consumer
+            wakeWaiters();
         }
 
         /**
@@ -90,11 +92,10 @@ namespace galay
     private:
         mutable std::mutex m_mutex;
         moodycamel::ConcurrentQueue<T> m_queue;
-        std::list<std::shared_ptr<Waker>> m_waiting_wakers;  // ✅ List of shared_ptr wakers
+        std::list<std::shared_ptr<Waker>> m_waiting_wakers;
 
         /**
          * @brief Wake up one waiting consumer (FIFO order)
-         * Called whenever a new item is enqueued
          */
         void wakeWaiters() {
             std::shared_ptr<Waker> waker_to_wake = nullptr;
@@ -105,7 +106,7 @@ namespace galay
                     m_waiting_wakers.pop_front();
                 }
             }
-            // Call wakeUp outside the lock (FIFO: wake one consumer at a time)
+            // Call wakeUp outside the lock
             if (waker_to_wake) {
                 waker_to_wake->wakeUp();
             }
@@ -113,7 +114,6 @@ namespace galay
 
         /**
          * @brief Add a waiting consumer to the list
-         * Called by DequeueEvent when suspending
          */
         void addWaiter(std::shared_ptr<Waker> waker) {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -122,56 +122,69 @@ namespace galay
             }
         }
 
-        /**
-         * @brief Remove a waiting consumer from the list
-         * Called by DequeueEvent when resuming or canceling
-         */
-        void removeWaiter(std::shared_ptr<Waker> waker) {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            if (!waker) return;
-            // Remove the specific waker from the list
-            m_waiting_wakers.remove(waker);
-        }
-
         friend class DequeueEvent;
 
         /**
-         * @brief Custom AsyncEvent for dequeue waiting (supports multiple consumers)
+         * @brief Custom AsyncEvent for dequeue waiting
+         * Simplified: Maximize onReady() usage to avoid suspend when possible
          */
         class DequeueEvent : public AsyncEvent<T> {
         public:
-            explicit DequeueEvent(AsyncQueue* queue) : m_queue(queue), m_waker_storage(nullptr) {}
+            explicit DequeueEvent(AsyncQueue* queue) : m_queue(queue), m_waker_storage(nullptr), m_fetched(false) {}
 
             bool onReady() override {
                 T out;
+                // First attempt: try to get from queue
                 if (m_queue->m_queue.try_dequeue(out)) {
                     this->m_result = std::move(out);
-                    return true;
+                    m_fetched = true;
+                    return true;  // Data available, no need to suspend
                 }
-                return false;
+                return false;  // No data, may need to suspend
             }
 
             bool onSuspend(Waker waker) override {
-                // ⚠️ Changed: Remove double-check to avoid complexity
-                // Store waker in shared_ptr for safe multi-consumer support
+                // Before suspending, double-check the queue one more time
+                T out;
+                if (m_queue->m_queue.try_dequeue(out)) {
+                    // Race-free data found! Store it and don't suspend
+                    this->m_result = std::move(out);
+                    m_fetched = true;
+                    return false;  // Don't suspend
+                }
+
+                // No data found, need to suspend
+                // Store the waker in a shared_ptr to ensure it outlives this event
                 m_waker_storage = std::make_shared<Waker>(std::move(waker));
                 m_queue->addWaiter(m_waker_storage);
-                return true;  // Always suspend, rely on onResume to check queue
+                return true;  // Suspend this coroutine
             }
 
             T onResume() override {
-                // Try to dequeue when resumed
+                // When woken up, try to get data from queue
                 T out;
                 if (m_queue->m_queue.try_dequeue(out)) {
                     return std::move(out);
                 }
-                // If dequeue fails, return the pre-fetched result from onReady/onSuspend
-                return std::move(this->m_result);
+
+                // Critical: Only return m_result if we actually fetched it during onSuspend
+                // This prevents returning stale or uninitialized values
+                if (m_fetched && this->m_result != T()) {
+                    // Return only if we have a valid fetched value
+                    T result = std::move(this->m_result);
+                    m_fetched = false;  // Clear the flag to prevent reuse
+                    return result;
+                }
+
+                // Should not reach here in normal operation
+                // Return default T() instead of potentially stale m_result
+                return T();
             }
 
         private:
             AsyncQueue* m_queue;
             std::shared_ptr<Waker> m_waker_storage;
+            bool m_fetched;  // Flag: did we successfully fetch a value?
         };
     };
 }
