@@ -21,7 +21,7 @@ namespace galay
         bool await_ready();
         //true will suspend, false will not
         bool await_suspend(std::coroutine_handle<> handle);
-        T await_resume() const;
+        T await_resume();  // ← Changed: removed const to allow proper move semantics
     protected:
         CoroutineBase::wptr m_coroutine;
         typename AsyncEvent<T>::ptr m_event = nullptr;

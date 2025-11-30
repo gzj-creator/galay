@@ -1,5 +1,5 @@
 #ifndef GALAY_RESULT_INL
-#define GALAY_RESULT_INL 
+#define GALAY_RESULT_INL
 
 
 #include "Result.hpp"
@@ -36,22 +36,35 @@ namespace galay {
             return false;
         }
         if(m_event->onSuspend(Waker(co))) {
+            // onSuspend returned true: coroutine WILL be suspended
             while(!co.lock()->become(CoroutineStatus::Suspended)) {
                 LogError("AsyncResult Coroutine become suspend error");
-            } 
-            return true;
+            }
+            return true;  // Suspending
         }
-        return false;
+        // onSuspend returned false: coroutine will NOT be suspended
+        // Need to mark it as running now, since we won't suspend
+        while(!co.lock()->become(CoroutineStatus::Running)) {
+            LogError("AsyncResult Coroutine become running error (in await_suspend)");
+        }
+        return false;  // NOT suspending, continue immediately
     }
 
     template<CoType T>
-    inline T AsyncResult<T>::await_resume() const
+    inline T AsyncResult<T>::await_resume()  // ← Changed: removed const
     {
         if(m_coroutine.expired()) {
             return this->m_event->onResume();
         }
-        while(!m_coroutine.lock()->become(CoroutineStatus::Running)) {
-            LogError("AsyncResult Coroutine become running error");
+        // Try to transition to Running status if not already
+        auto co_ptr = m_coroutine.lock();
+        if(co_ptr) {
+            // Only if we can transition to running
+            int attempts = 0;
+            while(attempts < 10 && !co_ptr->become(CoroutineStatus::Running)) {
+                LogError("AsyncResult Coroutine become running error");
+                attempts++;
+            }
         }
         return this->m_event->onResume();
     }
