@@ -161,18 +161,12 @@ int main() {
     std::cout << "║   Total Operations: 2000 + 2500 + 1500 = 6000      ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════╝" << std::endl;
 
-    auto scheduler = runtime.getCoSchedulerHandle(0);
-    if (!scheduler) {
-        std::cerr << "Failed to get scheduler" << std::endl;
-        return 1;
-    }
-
     // 顺序运行三个测试，每个给足时间完成
-    runtime.schedule(test_single_handle_contention(*scheduler));
+    runtime.schedule(test_single_handle_contention(*runtime.getCoSchedulerHandle(0)));
     getchar();
-    runtime.schedule(test_intense_contention(*scheduler));
+    runtime.schedule(test_intense_contention(*runtime.getCoSchedulerHandle(1)));
     getchar();
-    runtime.schedule(test_mutex_semantics(*scheduler));
+    runtime.schedule(test_mutex_semantics(*runtime.getCoSchedulerHandle(2)));
     getchar();
 
     std::cout << "\n╔══════════════════════════════════════════════════════╗" << std::endl;
