@@ -67,22 +67,21 @@ namespace galay {
         bool start();
         bool stop();
         template<CoType T>
-        void schedule(Coroutine<T>&& co);
+        bool schedule(Coroutine<T>&& co);
 
-        void schedule(CoroutineBase::wptr co);
+        bool schedule(CoroutineBase::wptr co);
 
-        void resumeCoroutine(CoroutineBase::wptr co);
-        void destroyCoroutine(CoroutineBase::wptr co);
+        bool resumeCoroutine(CoroutineBase::wptr co);
+        bool destroyCoroutine(CoroutineBase::wptr co);
 
     private:
         CoroutineConsumer::uptr m_consumer;
     };
 
     template <CoType T>
-    inline void CoroutineScheduler::schedule(Coroutine<T> &&co)
+    inline bool CoroutineScheduler::schedule(Coroutine<T> &&co)
     {
-        co.belongScheduler(this);
-        m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co.origin());
+        resumeCoroutine(co.origin());
     }
 
 

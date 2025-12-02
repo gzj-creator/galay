@@ -3,10 +3,11 @@
 
 #include <memory>
 #include <coroutine>
+#include <optional>
 #include <queue>
 #include <atomic>
 #include <variant>
-#include <optional>
+#include <expected>
 #include <functional>
 #include <concepts>
 
@@ -29,11 +30,13 @@ class CoroutineDataVisitor;
 
 class CoroutineScheduler;
 
-enum class CoroutineStatus: int32_t {
-    Running = 0,
+enum class CoroutineStatus: uint8_t {
     Suspended,
+    Scheduled,
+    Running,
     Finished,
 };
+
 
 class CoroutineBase: public std::enable_shared_from_this<CoroutineBase>
 {
@@ -48,6 +51,7 @@ public:
     
     virtual bool isRunning() const = 0;
     virtual bool isSuspend() const = 0;
+    virtual bool isScheduled() const = 0;
     virtual bool isDone() const = 0;
     virtual CoroutineScheduler* belongScheduler() const = 0;
     virtual void resume() = 0;
@@ -55,14 +59,12 @@ public:
     virtual CoroutineBase& then(const Handler& callback) = 0;
     virtual ~CoroutineBase() = default;
 
-    template<typename CoRtn>
-    std::shared_ptr<Coroutine<CoRtn>> implCast()
-    {
-        return std::static_pointer_cast<Coroutine<CoRtn>>(shared_from_this());
-    }
+    virtual void modToSuspend() = 0;
+    virtual void modToScheduled() = 0;
+    virtual void modToRunning() = 0;
+    virtual void modToFinished() = 0;
 
 protected:
-    virtual bool become(CoroutineStatus status) = 0;
     virtual void belongScheduler(CoroutineScheduler* scheduler) = 0;
 };
 
@@ -73,15 +75,29 @@ public:
     virtual ~PromiseTypeBase() = default;
 };
 
+
+
 template<CoType T>
 class PromiseType: public PromiseTypeBase
 {
     friend class Coroutine<T>;
+    struct suspend_choice {
+        bool should_suspend = true;
+        bool await_ready() const noexcept { return !should_suspend; }
+        void await_suspend(std::coroutine_handle<>) const noexcept {}
+        void await_resume() const noexcept {}
+    };
 public:
+    template<CoType U>
+    struct YieldValue {
+        U value;
+        bool should_suspend = true;
+    };
+
     int get_return_object_on_alloaction_failure() noexcept { return -1; }
     Coroutine<T> get_return_object() noexcept;
     std::suspend_always initial_suspend() noexcept { return {}; }
-    std::suspend_always yield_value(T&& value) noexcept;
+    suspend_choice yield_value(YieldValue<T>&& value) noexcept;
     std::suspend_never final_suspend() noexcept { return {};  }
     void unhandled_exception() noexcept {}
     void return_value (T&& value) const noexcept;
@@ -114,7 +130,7 @@ class Coroutine: public CoroutineBase
     {
         std::optional<T> m_result;
         //多线程访问
-        std::atomic<CoroutineStatus> m_status = CoroutineStatus::Running;
+        std::atomic<CoroutineStatus> m_status = CoroutineStatus::Suspended;
         std::atomic<CoroutineScheduler*> m_scheduler = nullptr;
 
         std::queue<Handler> m_cbs;
@@ -135,6 +151,7 @@ public:
 
     bool isRunning() const override;
     bool isSuspend() const override;
+    bool isScheduled() const override;
     bool isDone() const override;
 
     void destroy() override;
@@ -147,9 +164,22 @@ public:
     CoroutineBase::wptr origin();
     ~Coroutine() override = default;
 private:
-    bool become(CoroutineStatus status) override;
+    void modToSuspend() override { 
+        return m_data->m_status.store(CoroutineStatus::Suspended); 
+    }
+
+    void modToScheduled() override { 
+        return m_data->m_status.store(CoroutineStatus::Scheduled); 
+    }
+
+    void modToRunning() override { 
+        m_data->m_status.store(CoroutineStatus::Running);
+    }
+
+    void modToFinished() override { m_data->m_status.store(CoroutineStatus::Finished); }
+
     void belongScheduler(CoroutineScheduler* scheduler) override;
-    void exitToExecuteDeferStk();
+    void executeDeferTask();
 private:
     std::coroutine_handle<promise_type> m_handle;
     std::shared_ptr<CoroutineData> m_data;
@@ -161,7 +191,6 @@ class CoroutineDataVisitor {
 public:
     CoroutineDataVisitor(CoroutineBase::wptr coroutine);
     bool setResult(T&& result);
-    bool setStatus(CoroutineStatus status);
     bool setScheduler(CoroutineScheduler* scheduler);
 private:
     CoroutineBase::wptr m_coroutine;

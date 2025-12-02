@@ -38,7 +38,7 @@ Coroutine<nil> testRead(TcpClient client)
         }
         std::string msg = result.value().toString();
         std::cout << "testRead: received [" << msg.length() << " bytes]: " << msg << std::endl;
-        co_yield nil();
+        co_yield {};
     }
     
 }

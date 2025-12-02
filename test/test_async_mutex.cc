@@ -1,4 +1,4 @@
-#include "galay/kernel/coroutine/AsyncMutex.h"
+#include "galay/kernel/concurrency/AsyncMutex.h"
 #include "galay/kernel/runtime/Runtime.h"
 #include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 #include "galay/kernel/async/AsyncFactory.h"

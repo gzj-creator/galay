@@ -1,5 +1,6 @@
 #include "CoScheduler.hpp"
 #include "galay/common/Common.h"
+#include "kernel/coroutine/Coroutine.hpp"
 #include <utility>
 
 
@@ -47,12 +48,22 @@ namespace galay
                 return;
             case CoroutineActionType::kCoroutineActionTypeResume:
                 if(!co.expired()){
-                    co.lock()->resume();
+                    auto co_ptr = co.lock();
+                    if(!co_ptr) {
+                        LogWarn("Consumer: coroutine lock failed in Resume action");
+                        break;
+                    }
+                    // 正常情况：Scheduled → Running
+                    co_ptr->modToRunning();
+                    co_ptr->resume();
                 }
                 break;
             case CoroutineActionType::kCoroutineActionTypeDestory:
                 if(!co.expired()) {
-                    co.lock()->destroy();
+                    auto co_ptr = co.lock();
+                    if(co_ptr) {
+                        co_ptr->destroy();
+                    }
                 }
                 break;
             default:
@@ -78,24 +89,67 @@ namespace galay
         return true;
     }
 
-    void CoroutineScheduler::schedule(CoroutineBase::wptr co)
+    bool CoroutineScheduler::schedule(CoroutineBase::wptr co)
     {
-        if(!co.expired()) {
-            co.lock()->belongScheduler(this);
+        return resumeCoroutine(co);
+    }
+
+    bool CoroutineScheduler::resumeCoroutine(CoroutineBase::wptr co)
+    {
+        if (!co.expired()) {
+            auto co_ptr = co.lock();
+            if(!co_ptr) {
+                LogWarn("resumeCoroutine: coroutine lock failed");
+                return false;
+            }
+
+            // 检查当前状态
+            auto status_str = co_ptr->isRunning() ? "Running" :
+                             co_ptr->isSuspend() ? "Suspended" :
+                             co_ptr->isScheduled() ? "Scheduled" :
+                             co_ptr->isDone() ? "Finished" : "Unknown";
+            LogDebug("resumeCoroutine: current status = {}", status_str);
+
+            // 如果已经是Scheduled状态，说明已经在队列中了，直接返回成功
+            if(co_ptr->isScheduled()) {
+                LogDebug("resumeCoroutine: already Scheduled, skip");
+                return true;
+            }
+
+            // 如果已经完成，不需要恢复
+            if(co_ptr->isDone()) {
+                LogDebug("resumeCoroutine: already Finished, skip");
+                return true;
+            }
+
+            // 运行中，不需要恢复
+            if(co_ptr->isRunning()) {
+                LogDebug("resumeCoroutine: already Running, skip");
+                return true;
+            }
+
+            co_ptr->modToScheduled();
+            co_ptr->belongScheduler(this);
             m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co);
+            return true;
         }
+        LogWarn("resumeCoroutine: coroutine expired");
+        return false;
     }
 
-    void CoroutineScheduler::resumeCoroutine(CoroutineBase::wptr co)
+    bool CoroutineScheduler::destroyCoroutine(CoroutineBase::wptr co)
     {
-        if (!co.expired()) co.lock()->belongScheduler(this);
-        m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co);
-    }
-
-    void CoroutineScheduler::destroyCoroutine(CoroutineBase::wptr co)
-    {
-        if (!co.expired()) co.lock()->belongScheduler(this);
-        m_consumer->consume(CoroutineActionType::kCoroutineActionTypeDestory, co);
+        if (!co.expired()) {
+            auto co_ptr = co.lock();
+            if(!co_ptr) {
+                LogWarn("destroyCoroutine: coroutine lock failed");
+                return false;
+            }
+            co_ptr->belongScheduler(this);
+            m_consumer->consume(CoroutineActionType::kCoroutineActionTypeDestory, co);
+            return true;
+        }
+        return false;
     }
 
 

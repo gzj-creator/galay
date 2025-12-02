@@ -16,30 +16,29 @@ namespace galay
     }
 
     template<CoType T>
-    inline std::suspend_always PromiseType<T>::yield_value(T&& value) noexcept
+    inline PromiseType<T>::suspend_choice PromiseType<T>::yield_value(YieldValue<T>&& value) noexcept
     {
-        *(m_coroutine->m_data->m_result) = std::move(value);
-        m_coroutine->become(CoroutineStatus::Suspended);
-        m_coroutine->belongScheduler()->resumeCoroutine(m_coroutine);
-        return {};
+        *(m_coroutine->m_data->m_result) = std::move(value.value);
+        if(!value.should_suspend) {
+            return {false};
+        }
+        m_coroutine->modToSuspend();
+        return {true};
     }
 
     template<CoType T>
     inline void PromiseType<T>::return_value(T&& value) const noexcept
     {
         *(m_coroutine->m_data->m_result) = std::move(value);
+        m_coroutine->modToFinished();
     }
 
 
     template<CoType T>
     inline PromiseType<T>::~PromiseType()
     {
-        CoroutineStatus origin = m_coroutine->m_data->m_status.load();
-        if(!m_coroutine->m_data->m_status.compare_exchange_strong(origin, CoroutineStatus::Finished)) {
-            return;
-        }
         if(m_coroutine) {
-            m_coroutine->exitToExecuteDeferStk();
+            m_coroutine->executeDeferTask();
         }
     }
 
@@ -98,6 +97,12 @@ namespace galay
     }
 
     template<CoType T>
+    inline bool Coroutine<T>::isScheduled() const
+    {
+        return m_data->m_status.load() == CoroutineStatus::Scheduled;
+    }
+
+    template<CoType T>
     inline bool Coroutine<T>::isDone() const
     {
         return m_data->m_status.load() == CoroutineStatus::Finished;
@@ -120,16 +125,6 @@ namespace galay
     inline std::optional<T> Coroutine<T>::result()
     {
         return m_data->m_result;
-    }
-
-    template <CoType T>
-    inline bool Coroutine<T>::become(CoroutineStatus status)
-    {
-        auto origin = m_data->m_status.load();
-        if(!m_data->m_status.compare_exchange_strong(origin, status)) {
-            return false;
-        }
-        return true;
     }
 
     template <CoType T>
@@ -166,7 +161,7 @@ namespace galay
 
 
     template <CoType T>
-    inline void Coroutine<T>::exitToExecuteDeferStk()
+    inline void Coroutine<T>::executeDeferTask()
     {
         while(!m_data->m_cbs.empty()) {
             m_data->m_cbs.front()();
@@ -187,11 +182,6 @@ namespace galay
         return true;
     }
 
-    template <CoType T>
-    inline bool CoroutineDataVisitor<T>::setStatus(CoroutineStatus status) {
-        m_coroutine.lock()->template implCast<T>()->m_data->m_status.store(status);
-        return true;
-    }
 
     template <CoType T>
     inline bool CoroutineDataVisitor<T>::setScheduler(CoroutineScheduler *scheduler)

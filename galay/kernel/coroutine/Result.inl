@@ -3,7 +3,7 @@
 
 
 #include "Result.hpp"
-
+#include "CoScheduler.hpp"
 
 namespace galay {
 
@@ -35,18 +35,12 @@ namespace galay {
             LogError("AsyncResult Coroutine expired");
             return false;
         }
+        auto co_ptr = co.lock();
+        co_ptr->modToSuspend();
         if(m_event->onSuspend(Waker(co))) {
-            // onSuspend returned true: coroutine WILL be suspended
-            while(!co.lock()->become(CoroutineStatus::Suspended)) {
-                LogError("AsyncResult Coroutine become suspend error");
-            }
-            return true;  // Suspending
+            return true;
         }
-        // onSuspend returned false: coroutine will NOT be suspended
-        // Need to mark it as running now, since we won't suspend
-        while(!co.lock()->become(CoroutineStatus::Running)) {
-            LogError("AsyncResult Coroutine become running error (in await_suspend)");
-        }
+        co_ptr->modToRunning();
         return false;  // NOT suspending, continue immediately
     }
 
@@ -55,14 +49,6 @@ namespace galay {
     {
         if(m_coroutine.expired()) {
             return this->m_event->onResume();
-        }
-        // Try to transition to Running status if not already
-        auto co_ptr = m_coroutine.lock();
-        if(co_ptr) {
-            // Only if we can transition to running
-            while(!co_ptr->become(CoroutineStatus::Running)) {
-                LogError("AsyncResult Coroutine become running error");
-            }
         }
         return this->m_event->onResume();
     }

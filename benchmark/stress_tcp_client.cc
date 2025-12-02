@@ -4,10 +4,12 @@
  * @details 多线程并发TCP客户端压测工具，支持自定义并发数和请求数
  */
 
+#include "galay/common/Log.h"
 #include "galay/kernel/client/TcpClient.h"
 #include "galay/kernel/runtime/Runtime.h"
 #include "galay/common/Buffer.h"
 #include "galay/utils/Thread.h"
+#include "spdlog/common.h"
 #include <atomic>
 #include <chrono>
 #include <vector>
@@ -84,21 +86,29 @@ Coroutine<nil> clientBenchmark(CoSchedulerHandle handle, const BenchmarkConfig& 
         // 发送请求
         for (int i = 0; i < config.requests_per_client; ++i) {
             auto start = std::chrono::high_resolution_clock::now();
-            
+
+            if (client_id % 10 == 0 && i % 50 == 0) {
+                std::cout << "客户端 " << client_id << " 开始请求 " << i << std::endl;
+            }
+
             // 发送数据
             auto res2 = co_await client.send(Bytes::fromString(message));
             if (!res2) {
-                std::cerr << "客户端 " << client_id << " 发送失败: " << res2.error().message() << std::endl;
+                std::cerr << "客户端 " << client_id << " 发送失败(请求" << i << "): " << res2.error().message() << std::endl;
                 total_errors++;
                 break;
             }
             total_requests++;
             total_bytes_sent += config.message_size;
-            
+
+            if (client_id % 10 == 0 && i % 50 == 0) {
+                std::cout << "客户端 " << client_id << " 请求 " << i << " 发送成功，等待接收..." << std::endl;
+            }
+
             // 接收响应
             auto res3 = co_await client.recv(buffer.data(), buffer.capacity());
             if (!res3) {
-                std::cerr << "客户端 " << client_id << " 接收失败: " << res3.error().message() << std::endl;
+                std::cerr << "客户端 " << client_id << " 接收失败(请求" << i << "): " << res3.error().message() << std::endl;
                 total_errors++;
                 break;
             }
@@ -205,6 +215,7 @@ int main(int argc, char* argv[])
     
     // 等待用户确认
     std::cout << "按回车开始测试..." << std::endl;
+    log::disable();
     std::cin.get();
     
     // 创建运行时和线程池

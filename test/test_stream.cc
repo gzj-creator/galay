@@ -40,7 +40,7 @@ Coroutine<nil> testRead(AsyncTcpSocket socket)
             std::cout << "testRead close" << std::endl;
             co_return nil();
         }
-        co_yield nil();
+        co_yield {};
     }
     co_return nil();
 }

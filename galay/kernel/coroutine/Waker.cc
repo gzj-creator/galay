@@ -8,18 +8,22 @@ namespace galay
     {
     }
 
-    void Waker::wakeUp()
+    bool Waker::wakeUp()
     {
         if (!m_coroutine.expired())
         {
             auto coroutine = m_coroutine.lock();
-            if (coroutine->belongScheduler() == nullptr)
-            {
-                LogError("coroutine is not running on any scheduler");
-                throw std::runtime_error("coroutine is not running on any scheduler");
+            if (!coroutine) {
+                LogWarn("Waker::wakeUp - coroutine lock failed");
+                return false;
             }
-            coroutine->belongScheduler()->resumeCoroutine(m_coroutine);
-        }
+
+            auto scheduler = coroutine->belongScheduler();
+
+            return scheduler->resumeCoroutine(m_coroutine);
+        } 
+        LogWarn("Waker::wakeUp - coroutine expired");
+        return false;
     }
 
     CoroutineBase::wptr Waker::getCoroutine()

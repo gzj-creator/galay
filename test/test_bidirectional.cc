@@ -58,7 +58,7 @@ Coroutine<nil> handleConnection(AsyncTcpSocket socket, uint32_t conn_id)
         total_send_bytes.fetch_add(send_result.value().size());
         
         // 让出 CPU，允许其他协程执行
-        co_yield nil();
+        co_yield {};
     }
     
     // 关闭连接
@@ -124,7 +124,7 @@ Coroutine<nil> acceptLoop()
             std::cout << "accept 失败: " << result.error().message() << std::endl;
         }
         
-        co_yield nil();
+        co_yield {};
     }
 }
 
@@ -138,7 +138,7 @@ Coroutine<nil> statsLoop()
     while (true) {
         // 每 5 秒打印一次统计
         for (int i = 0; i < 50; ++i) {
-            co_yield nil();
+            co_yield {};
         }
         
         auto now = std::chrono::steady_clock::now();

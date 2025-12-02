@@ -2,7 +2,6 @@
 #define GALAY_KERNEL_ASYNC_ASYNCMUTEX_H
 
 #include <atomic>
-#include <memory>
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include "galay/kernel/coroutine/AsyncEvent.hpp"
 #include "galay/kernel/coroutine/Result.hpp"

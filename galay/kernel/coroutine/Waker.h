@@ -12,7 +12,7 @@ namespace galay
     public:
         Waker() {}
         Waker(CoroutineBase::wptr coroutine);
-        void wakeUp();
+        bool wakeUp();
 
         CoroutineBase::wptr getCoroutine();
         CoroutineScheduler* belongScheduler() const;
