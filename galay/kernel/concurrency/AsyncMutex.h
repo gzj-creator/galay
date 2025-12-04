@@ -44,10 +44,10 @@ namespace galay
         bool isLocked() const;
 
     private:
-        // 状态标志：0 = 未锁定, 1 = 已锁定
-        std::atomic<uint32_t> m_locked{0};
+        std::atomic_bool m_locked{false};
 
-        // 无锁等待队列 - 存储等待获取锁的协程的 Waker
+        // 无锁等待队列 - 存储<Waker, LockEvent*>对
+        // LockEvent*用于标记该协程是否已被唤醒
         moodycamel::ConcurrentQueue<Waker> m_waiters;
 
         // 尝试获取锁，返回是否成功

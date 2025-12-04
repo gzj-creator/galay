@@ -2,6 +2,7 @@
 #define GALAY_KERNEL_ASYNC_ASYNCMUTEX_INL
 
 #include "AsyncMutex.h"
+#include <atomic>
 
 namespace galay
 {
@@ -20,29 +21,13 @@ namespace galay
 
         inline bool LockEvent::onSuspend(Waker waker)
         {
-            // Step 1: 无锁入队
             m_mutex.m_waiters.enqueue(waker);
-
-            // Step 2: Double-Check - 再次尝试获取锁
-            if (m_mutex.tryLock())
-            {
-                // 成功获取锁，从队列中移除当前 waker
-                Waker w;
-                if (m_mutex.m_waiters.try_dequeue(w))
-                {
-                    // w 就是当前协程（或至少是队列中的一个）
-                    // 由于我们成功 tryLock，不需要暂停
-                }
-                return false; // 不需要真正暂停，直接返回
-            }
-
-            // 需要暂停，等待被唤醒
             return true;
         }
     }
 
     inline AsyncMutex::AsyncMutex()
-        : m_locked(0)
+        : m_locked(false)
     {
     }
 
@@ -66,7 +51,7 @@ namespace galay
     inline void AsyncMutex::unlock()
     {
         // 标记为未锁定 (Release 语义)
-        m_locked.store(0, std::memory_order_release);
+        m_locked.store(false, std::memory_order_release);
 
         // 唤醒下一个等待的协程
         wakeupNext();
@@ -79,9 +64,9 @@ namespace galay
 
     inline bool AsyncMutex::tryLock()
     {
-        uint32_t expected = 0;
+        bool expected = false;
         return m_locked.compare_exchange_strong(
-            expected, 1,
+            expected, true,
             std::memory_order_acq_rel,
             std::memory_order_acquire
         );
@@ -98,8 +83,11 @@ namespace galay
                 // 成功获取锁，唤醒该协程
                 waker.wakeUp();
                 return;
+            } else {
+                // 说明在 unlock  ----   dequeue时间内有lock
+                m_waiters.enqueue(waker);
+                return;
             }
-            // 如果获取锁失败，继续尝试下一个等待者
         }
     }
 }

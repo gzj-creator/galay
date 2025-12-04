@@ -2,6 +2,7 @@
 #define GALAY_COROUTINE_INL
 
 #include "Coroutine.hpp"
+#include <atomic>
 
 
 namespace galay
@@ -87,31 +88,31 @@ namespace galay
     template<CoType T>
     inline bool Coroutine<T>::isRunning() const
     {
-        return m_data->m_status.load() == CoroutineStatus::Running;
+        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Running;
     }
 
     template<CoType T>
     inline bool Coroutine<T>::isSuspend() const
     {
-        return m_data->m_status.load() == CoroutineStatus::Suspended;
+        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Suspended;
     }
 
     template<CoType T>
     inline bool Coroutine<T>::isScheduled() const
     {
-        return m_data->m_status.load() == CoroutineStatus::Scheduled;
+        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Scheduled;
     }
 
     template<CoType T>
     inline bool Coroutine<T>::isDone() const
     {
-        return m_data->m_status.load() == CoroutineStatus::Finished;
+        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Finished;
     }
 
     template <CoType T>
     inline CoroutineScheduler *Coroutine<T>::belongScheduler() const
     {
-        return m_data->m_scheduler.load();
+        return m_data->m_scheduler.load(std::memory_order_relaxed);
     }
 
     template <CoType T>

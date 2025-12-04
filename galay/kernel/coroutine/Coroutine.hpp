@@ -165,18 +165,18 @@ public:
     ~Coroutine() override = default;
 private:
     void modToSuspend() override { 
-        return m_data->m_status.store(CoroutineStatus::Suspended); 
+        return m_data->m_status.store(CoroutineStatus::Suspended, std::memory_order_release); 
     }
 
     void modToScheduled() override { 
-        return m_data->m_status.store(CoroutineStatus::Scheduled); 
+        return m_data->m_status.store(CoroutineStatus::Scheduled, std::memory_order_release); 
     }
 
     void modToRunning() override { 
-        m_data->m_status.store(CoroutineStatus::Running);
+        m_data->m_status.store(CoroutineStatus::Running, std::memory_order_release);
     }
 
-    void modToFinished() override { m_data->m_status.store(CoroutineStatus::Finished); }
+    void modToFinished() override { m_data->m_status.store(CoroutineStatus::Finished, std::memory_order_release); }
 
     void belongScheduler(CoroutineScheduler* scheduler) override;
     void executeDeferTask();

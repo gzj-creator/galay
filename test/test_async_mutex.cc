@@ -2,9 +2,11 @@
 #include "galay/kernel/runtime/Runtime.h"
 #include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 #include "galay/kernel/async/AsyncFactory.h"
+#include <cstdio>
 #include <iostream>
 #include <chrono>
 #include <atomic>
+#include <memory>
 
 using namespace galay;
 using namespace std::chrono_literals;
@@ -30,9 +32,11 @@ Coroutine<nil> single_handle_worker(std::shared_ptr<SharedState> state, int id, 
             if (state->counter != old_val + 1) {
                 state->errors++;
             }
+            //std::cout << "single_handle_worker " << id << " counter: " << state->counter << std::endl;
         }
         state->mutex.unlock();
     }
+    std::cout << "single_handle_worker " << id << " finished" << std::endl;
     co_return nil{};
 }
 
@@ -148,6 +152,18 @@ Coroutine<nil> test_mutex_semantics(CoSchedulerHandle handle) {
     co_return nil{};
 }
 
+// 多线程测试
+std::shared_ptr<SharedState> gState = std::make_shared<SharedState>();
+void test_multi_thread(CoSchedulerHandle handle1, CoSchedulerHandle handle2, CoSchedulerHandle handle3) {
+    handle1.spawn(single_handle_worker(gState, 0, 100000));
+    handle2.spawn(single_handle_worker(gState, 1, 100000));
+    handle3.spawn(single_handle_worker(gState, 2, 100000));
+    getchar();
+    std::cout << "gState->counter: " << gState->counter << std::endl;
+    return;
+}
+
+
 // ============================================================================
 // 主函数
 // ============================================================================
@@ -156,19 +172,20 @@ int main() {
     Runtime runtime = builder.startCoManager(std::chrono::milliseconds(1000)).build();
     runtime.start();
 
-    std::cout << "\n╔══════════════════════════════════════════════════════╗" << std::endl;
-    std::cout << "║    AsyncMutex Test - High Volume & Race Detection   ║" << std::endl;
-    std::cout << "║   Total Operations: 2000 + 2500 + 1500 = 6000      ║" << std::endl;
-    std::cout << "╚══════════════════════════════════════════════════════╝" << std::endl;
+    // std::cout << "\n╔══════════════════════════════════════════════════════╗" << std::endl;
+    // std::cout << "║    AsyncMutex Test - High Volume & Race Detection   ║" << std::endl;
+    // std::cout << "║   Total Operations: 2000 + 2500 + 1500 = 6000      ║" << std::endl;
+    // std::cout << "╚══════════════════════════════════════════════════════╝" << std::endl;
 
     // 顺序运行三个测试，每个给足时间完成
-    runtime.schedule(test_single_handle_contention(*runtime.getCoSchedulerHandle(0)));
-    getchar();
-    runtime.schedule(test_intense_contention(*runtime.getCoSchedulerHandle(1)));
-    getchar();
-    runtime.schedule(test_mutex_semantics(*runtime.getCoSchedulerHandle(2)));
-    getchar();
-
+    //runtime.schedule(test_single_handle_contention(*runtime.getCoSchedulerHandle(0)));
+    //getchar();
+    //runtime.schedule(test_intense_contention(*runtime.getCoSchedulerHandle(1)));
+    //getchar();
+    //runtime.schedule(test_mutex_semantics(*runtime.getCoSchedulerHandle(2)));
+    //getchar();
+    std::cout << "test start" << std::endl;
+    test_multi_thread(*runtime.getCoSchedulerHandle(1), *runtime.getCoSchedulerHandle(2), *runtime.getCoSchedulerHandle(3));
     std::cout << "\n╔══════════════════════════════════════════════════════╗" << std::endl;
     std::cout << "║                All tests completed!                  ║" << std::endl;
     std::cout << "╚══════════════════════════════════════════════════════╝\n" << std::endl;
