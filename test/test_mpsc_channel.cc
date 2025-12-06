@@ -9,7 +9,7 @@ using namespace galay;
 
 #define MAX_COUNT 100000000
 
-Coroutine<nil> Consume(mpsc::AsyncChannel& channel)
+Coroutine<nil> Consume(mpsc::AsyncChannel<int>& channel)
 {
     std::chrono::steady_clock::time_point start_steady;
     // 执行一些操作...
@@ -18,6 +18,10 @@ Coroutine<nil> Consume(mpsc::AsyncChannel& channel)
         auto result = co_await channel.recv();
         if(i == 0) start_steady = std::chrono::steady_clock::now();
         ++i;
+        if(!result.has_value()) {
+            std::cout << "no value" << std::endl;
+            co_return nil();
+        }
         if(i == MAX_COUNT) {
             break;
         }
@@ -32,7 +36,7 @@ Coroutine<nil> Consume(mpsc::AsyncChannel& channel)
     co_return nil();
 }
 
-Coroutine<nil> Produce(mpsc::AsyncChannel& channel)
+Coroutine<nil> Produce(mpsc::AsyncChannel<int>& channel)
 {
     int i = 0;
     for (int i = 0; i <= MAX_COUNT / 2; ++i) {
@@ -44,7 +48,7 @@ Coroutine<nil> Produce(mpsc::AsyncChannel& channel)
 
 void test(CoSchedulerHandle handle, CoSchedulerHandle producer_handle1, CoSchedulerHandle producer_handle2)
 {
-    mpsc::AsyncChannel channel;
+    mpsc::AsyncChannel<int> channel;
     producer_handle1.spawn(Produce(channel));
     producer_handle2.spawn(Produce(channel));
     handle.spawn(Consume(channel));

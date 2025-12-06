@@ -6,12 +6,14 @@
 namespace galay::mpsc
 {
     namespace details {
-        inline bool ChannelEvent::onReady() {
+        template<typename T>
+        inline bool ChannelEvent<T>::onReady() {
             // Check if there are items available
             return m_channel.m_size.load(std::memory_order_acquire) > 0;
         }
 
-        inline bool ChannelEvent::onSuspend(Waker waker) {
+        template<typename T>
+        inline bool ChannelEvent<T>::onSuspend(Waker waker) {
             // Store the waker first
             m_channel.m_waker = waker;
             if (m_channel.m_size.load(std::memory_order_acquire) > 0) {
@@ -20,9 +22,10 @@ namespace galay::mpsc
             return true;
         }
 
-        inline std::optional<int> ChannelEvent::onResume() {
+        template<typename T>
+        inline std::optional<T> ChannelEvent<T>::onResume() {
             // Dequeue the value FIRST before resetting state
-            int value;
+            T value;
             if (!m_channel.m_queue.try_dequeue(value)) {
                 return std::nullopt;
             }

@@ -10,26 +10,30 @@
 
 namespace galay::mpsc
 {
+    template <typename T>
     class AsyncChannel;
 
     namespace details {
-        class ChannelEvent : public AsyncEvent<std::optional<int>> {
+        template<typename T>
+        class ChannelEvent : public AsyncEvent<std::optional<T>> {
         public:
-            ChannelEvent(AsyncChannel& channel)
+            ChannelEvent(AsyncChannel<T>& channel)
                 : m_channel(channel) {}
             bool onReady() override;
             bool onSuspend(Waker waker) override;
-            std::optional<int> onResume() override;
+            std::optional<T> onResume() override;
         private:
-            AsyncChannel& m_channel;
+            AsyncChannel<T>& m_channel;
         };
     }
 
+    template <typename T>
     class AsyncChannel
     {
+        template<typename U>
         friend class details::ChannelEvent;
     public:
-        void send(int value) {
+        void send(T value) {
             m_queue.enqueue(value);
             uint32_t size = m_size.fetch_add(1, std::memory_order_acq_rel);
             if(size == 0) {
@@ -37,13 +41,13 @@ namespace galay::mpsc
             }
         }
 
-        AsyncResult<std::optional<int>> recv() {
-            return {std::make_shared<details::ChannelEvent>(*this)};
+        AsyncResult<std::optional<T>> recv() {
+            return {std::make_shared<details::ChannelEvent<T>>(*this)};
         }
     private:
         Waker m_waker;
         std::atomic_uint32_t m_size{0};
-        moodycamel::ConcurrentQueue<int> m_queue;
+        moodycamel::ConcurrentQueue<T> m_queue;
     };
 }
 
