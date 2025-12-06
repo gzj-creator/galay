@@ -201,6 +201,122 @@ namespace galay
     private:
         StringMetaData m_data;
     };
+
+    /**
+     * @brief 环形缓冲区类
+     * @details 使用镜像缓冲区技术，分配2倍容量的内存，前半部分镜像到后半部分
+     *          这样任何位置的数据在逻辑上都是连续的，无需内存拷贝
+     *          适用于网络I/O和流式数据处理，支持动态扩容
+     */
+    class RingBuffer
+    {
+    public:
+        /**
+         * @brief 构造函数，创建指定容量的环形缓冲区
+         * @param capacity 初始容量，默认为4096字节
+         */
+        explicit RingBuffer(size_t capacity = 4096);
+
+        /**
+         * @brief 禁止拷贝构造
+         */
+        RingBuffer(const RingBuffer&) = delete;
+
+        /**
+         * @brief 禁止拷贝赋值
+         */
+        RingBuffer& operator=(const RingBuffer&) = delete;
+
+        /**
+         * @brief 移动构造函数
+         */
+        RingBuffer(RingBuffer&& other) noexcept;
+
+        /**
+         * @brief 移动赋值运算符
+         */
+        RingBuffer& operator=(RingBuffer&& other) noexcept;
+
+        /**
+         * @brief 析构函数
+         */
+        ~RingBuffer();
+
+        /**
+         * @brief 获取写缓冲区指针和可写大小
+         * @details 返回连续的可写空间
+         * @return pair<写指针, 可写字节数>
+         */
+        std::pair<char*, size_t> getWriteBuffer();
+
+        /**
+         * @brief 获取读缓冲区指针和可读大小
+         * @details 返回连续的可读数据（通过镜像实现零拷贝）
+         * @return pair<读指针, 可读字节数>
+         */
+        std::pair<const char*, size_t> getReadBuffer() const;
+
+        /**
+         * @brief 移动写指针（提交写入）
+         * @param n 写入的字节数
+         */
+        void produce(size_t n);
+
+        /**
+         * @brief 移动读指针（消费数据）
+         * @param n 消费的字节数
+         */
+        void consume(size_t n);
+
+        /**
+         * @brief 扩容到指定大小
+         * @param new_capacity 新的容量大小
+         * @details 新容量必须大于等于当前数据量
+         */
+        void resize(size_t new_capacity);
+
+        /**
+         * @brief 获取当前可读数据大小
+         * @return 可读字节数
+         */
+        size_t readable() const;
+
+        /**
+         * @brief 获取当前可写空间大小
+         * @return 可写字节数
+         */
+        size_t writable() const;
+
+        /**
+         * @brief 获取缓冲区总容量
+         * @return 总容量字节数
+         */
+        size_t capacity() const;
+
+        /**
+         * @brief 检查缓冲区是否为空
+         * @return true表示为空
+         */
+        bool empty() const;
+
+        /**
+         * @brief 清空缓冲区（不释放内存）
+         */
+        void clear();
+
+    private:
+        /**
+         * @brief 更新镜像区域
+         * @details 将前半部分修改的数据同步到后半部分
+         */
+        void updateMirror();
+
+        uint8_t* m_buffer;      ///< 缓冲区指针（实际分配2*capacity大小）
+        size_t m_capacity;      ///< 逻辑容量
+        size_t m_read_pos;      ///< 读位置
+        size_t m_write_pos;     ///< 写位置
+        size_t m_size;          ///< 当前数据量
+    };
 }
 
 #endif
