@@ -98,9 +98,15 @@ namespace galay
     }
 
     template<CoType T>
-    inline bool Coroutine<T>::isScheduled() const
+    inline bool Coroutine<T>::isWaking() const
     {
-        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Scheduled;
+        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Waking;
+    }
+
+    template<CoType T>
+    inline bool Coroutine<T>::isDestroying() const
+    {
+        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Destroying;
     }
 
     template<CoType T>

@@ -31,23 +31,21 @@ namespace galay {
     {
         auto co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
         m_coroutine = co;
-        if(co.expired()) {
-            LogError("AsyncResult Coroutine expired");
-            return false;
+        if(auto co_ptr = co.lock()) {
+            co_ptr->modToSuspend();
+            if(m_event->onSuspend(Waker(co))) {
+                return true;
+            }
+            co_ptr->modToRunning();
         }
-        auto co_ptr = co.lock();
-        co_ptr->modToSuspend();
-        if(m_event->onSuspend(Waker(co))) {
-            return true;
-        }
-        co_ptr->modToRunning();
-        return false;  // NOT suspending, continue immediately
+        return false;
     }
 
     template<CoType T>
     inline T AsyncResult<T>::await_resume() const
     {
-        if(m_coroutine.expired()) {
+        if(auto co_ptr = m_coroutine.lock()) {
+            co_ptr->modToRunning();
             return this->m_event->onResume();
         }
         return this->m_event->onResume();

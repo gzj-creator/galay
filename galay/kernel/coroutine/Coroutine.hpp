@@ -31,10 +31,11 @@ class CoroutineDataVisitor;
 class CoroutineScheduler;
 
 enum class CoroutineStatus: uint8_t {
-    Suspended,
-    Scheduled,
-    Running,
-    Finished,
+    Suspended,              // 挂起
+    Waking,                 // 调度唤醒
+    Running,                // 运行中
+    Destroying,             // 调度销毁
+    Finished,               // 完成
 };
 
 
@@ -51,7 +52,8 @@ public:
     
     virtual bool isRunning() const = 0;
     virtual bool isSuspend() const = 0;
-    virtual bool isScheduled() const = 0;
+    virtual bool isWaking() const = 0;
+    virtual bool isDestroying() const = 0;
     virtual bool isDone() const = 0;
     virtual CoroutineScheduler* belongScheduler() const = 0;
     virtual void resume() = 0;
@@ -60,9 +62,21 @@ public:
     virtual ~CoroutineBase() = default;
 
     virtual void modToSuspend() = 0;
-    virtual void modToScheduled() = 0;
+    virtual void modToWaking() = 0;
     virtual void modToRunning() = 0;
+    virtual void modToDestroying() = 0;
     virtual void modToFinished() = 0;
+    
+    // 原子的条件状态转换：只有当前状态为 Suspended 时才转换为 Waking
+    // 返回 true 表示成功转换，false 表示当前状态不允许转换
+    // actual_status 会被设置为实际的当前状态
+    virtual bool tryModToWaking(CoroutineStatus& actual_status) = 0;
+    
+    // 原子的条件状态转换：尝试将状态转换为 Destroying
+    // 可以从 Suspended 或 Waking 状态转换为 Destroying
+    // 返回 true 表示成功转换，false 表示当前状态不允许转换
+    // actual_status 会被设置为实际的当前状态
+    virtual bool tryModToDestroying(CoroutineStatus& actual_status) = 0;
 
 protected:
     virtual void belongScheduler(CoroutineScheduler* scheduler) = 0;
@@ -151,7 +165,8 @@ public:
 
     bool isRunning() const override;
     bool isSuspend() const override;
-    bool isScheduled() const override;
+    bool isWaking() const override;
+    bool isDestroying() const override;
     bool isDone() const override;
 
     void destroy() override;
@@ -168,15 +183,58 @@ private:
         return m_data->m_status.store(CoroutineStatus::Suspended, std::memory_order_release); 
     }
 
-    void modToScheduled() override { 
-        return m_data->m_status.store(CoroutineStatus::Scheduled, std::memory_order_release); 
+    void modToWaking() override { 
+        return m_data->m_status.store(CoroutineStatus::Waking, std::memory_order_release); 
     }
 
     void modToRunning() override { 
         m_data->m_status.store(CoroutineStatus::Running, std::memory_order_release);
     }
 
-    void modToFinished() override { m_data->m_status.store(CoroutineStatus::Finished, std::memory_order_release); }
+    void modToDestroying() override { 
+        m_data->m_status.store(CoroutineStatus::Destroying, std::memory_order_release); 
+    }
+
+    void modToFinished() override { 
+        m_data->m_status.store(CoroutineStatus::Finished, std::memory_order_release); 
+    }
+    
+    bool tryModToWaking(CoroutineStatus& actual_status) override {
+        actual_status = CoroutineStatus::Suspended;
+        return m_data->m_status.compare_exchange_strong(
+            actual_status,
+            CoroutineStatus::Waking,
+            std::memory_order_release,
+            std::memory_order_acquire
+        );
+    }
+    
+    bool tryModToDestroying(CoroutineStatus& actual_status) override {
+        // 尝试从 Suspended 转换为 Destroying
+        actual_status = CoroutineStatus::Suspended;
+        if (m_data->m_status.compare_exchange_strong(
+                actual_status,
+                CoroutineStatus::Destroying,
+                std::memory_order_release,
+                std::memory_order_acquire)) {
+            return true;
+        }
+        
+        // 如果失败，可能是 Waking 状态，尝试从 Waking 转换为 Destroying
+        // 这是处理竞态的关键：即使协程已经在调度队列中，也能将其标记为销毁
+        if (actual_status == CoroutineStatus::Waking) {
+            if (m_data->m_status.compare_exchange_strong(
+                    actual_status,
+                    CoroutineStatus::Destroying,
+                    std::memory_order_release,
+                    std::memory_order_acquire)) {
+                return true;
+            }
+        }
+        
+        // 转换失败，actual_status 包含实际状态
+        return false;
+    }
 
     void belongScheduler(CoroutineScheduler* scheduler) override;
     void executeDeferTask();

@@ -47,22 +47,28 @@ namespace galay
             case CoroutineActionType::kCoroutineActionTypeNone:
                 return;
             case CoroutineActionType::kCoroutineActionTypeResume:
-                if(!co.expired()){
-                    auto co_ptr = co.lock();
-                    if(!co_ptr) {
-                        LogWarn("Consumer: coroutine lock failed in Resume action");
-                        break;
+                if(auto co_ptr = co.lock()){
+                    // 检查状态：只有 Waking 状态才能 resume
+                    // 如果在队列中等待期间被 destroy，状态会变成 Destroying
+                    if (co_ptr->isWaking()) {
+                        co_ptr->modToRunning();
+                        co_ptr->resume();
+                    } else if (co_ptr->isDestroying()) {
+                        // 在队列中等待时被标记为销毁，执行销毁而不是恢复
+                        LogDebug("CoroutineConsumer: coroutine marked for destroy during resume, executing destroy");
+                        co_ptr->destroy();
+                    } else {
+                        LogDebug("CoroutineConsumer: unexpected status for resume, skip");
                     }
-                    // 正常情况：Scheduled → Running
-                    co_ptr->modToRunning();
-                    co_ptr->resume();
                 }
                 break;
             case CoroutineActionType::kCoroutineActionTypeDestory:
-                if(!co.expired()) {
-                    auto co_ptr = co.lock();
-                    if(co_ptr) {
+                if(auto co_ptr = co.lock()) {
+                    // 只有 Destroying 状态才能 destroy
+                    if (co_ptr->isDestroying()) {
                         co_ptr->destroy();
+                    } else {
+                        LogDebug("CoroutineConsumer: unexpected status for destroy, skip");
                     }
                 }
                 break;
@@ -96,39 +102,33 @@ namespace galay
 
     bool CoroutineScheduler::resumeCoroutine(CoroutineBase::wptr co)
     {
-        if (!co.expired()) {
-            auto co_ptr = co.lock();
-            if(!co_ptr) {
-                LogWarn("resumeCoroutine: coroutine lock failed");
-                return false;
+        if (auto co_ptr = co.lock()) {
+            // 使用原子的 compare_exchange 一次性完成状态检查和修改
+            // 只有当状态为 Suspended 时才能成功转换为 Waking
+            CoroutineStatus actual_status;
+            if (!co_ptr->tryModToWaking(actual_status)) {
+                // 转换失败，说明协程不在 Suspended 状态
+                switch(actual_status) {
+                    case CoroutineStatus::Waking:
+                        LogDebug("resumeCoroutine: already Waking, skip");
+                        break;
+                    case CoroutineStatus::Running:
+                        LogDebug("resumeCoroutine: already Running, skip");
+                        break;
+                    case CoroutineStatus::Finished:
+                        LogDebug("resumeCoroutine: already Finished, skip");
+                        break;
+                    case CoroutineStatus::Destroying:
+                        LogDebug("resumeCoroutine: already Destroying, skip");
+                        break;
+                    default:
+                        LogDebug("resumeCoroutine: unexpected status");
+                        break;
+                }
+                return true;  // 这些状态都不需要重新调度
             }
-
-            // 检查当前状态
-            auto status_str = co_ptr->isRunning() ? "Running" :
-                             co_ptr->isSuspend() ? "Suspended" :
-                             co_ptr->isScheduled() ? "Scheduled" :
-                             co_ptr->isDone() ? "Finished" : "Unknown";
-            LogDebug("resumeCoroutine: current status = {}", status_str);
-
-            // 如果已经是Scheduled状态，说明已经在队列中了，直接返回成功
-            if(co_ptr->isScheduled()) {
-                LogDebug("resumeCoroutine: already Scheduled, skip");
-                return true;
-            }
-
-            // 如果已经完成，不需要恢复
-            if(co_ptr->isDone()) {
-                LogDebug("resumeCoroutine: already Finished, skip");
-                return true;
-            }
-
-            // 运行中，不需要恢复
-            if(co_ptr->isRunning()) {
-                LogDebug("resumeCoroutine: already Running, skip");
-                return true;
-            }
-
-            co_ptr->modToScheduled();
+            
+            // 成功将状态从 Suspended 转换为 Waking
             co_ptr->belongScheduler(this);
             m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co);
             return true;
@@ -139,12 +139,30 @@ namespace galay
 
     bool CoroutineScheduler::destroyCoroutine(CoroutineBase::wptr co)
     {
-        if (!co.expired()) {
-            auto co_ptr = co.lock();
-            if(!co_ptr) {
-                LogWarn("destroyCoroutine: coroutine lock failed");
-                return false;
+        if (auto co_ptr = co.lock()) {
+            // 使用原子的 compare_exchange 尝试将状态转换为 Destroying
+            // 可以从 Suspended 或 Waking 状态转换
+            // 这样即使协程已经在调度队列中（Waking状态），也能将其标记为销毁
+            CoroutineStatus actual_status;
+            if (!co_ptr->tryModToDestroying(actual_status)) {
+                // 转换失败，检查实际状态
+                switch(actual_status) {
+                    case CoroutineStatus::Running:
+                        LogWarn("destroyCoroutine: coroutine is Running, cannot destroy now");
+                        return false;
+                    case CoroutineStatus::Finished:
+                        LogDebug("destroyCoroutine: already Finished, skip");
+                        return true;
+                    case CoroutineStatus::Destroying:
+                        LogDebug("destroyCoroutine: already Destroying, skip");
+                        return true;
+                    default:
+                        LogDebug("destroyCoroutine: unexpected status");
+                        return false;
+                }
             }
+            
+            // 成功将状态转换为 Destroying，加入销毁队列
             co_ptr->belongScheduler(this);
             m_consumer->consume(CoroutineActionType::kCoroutineActionTypeDestory, co);
             return true;

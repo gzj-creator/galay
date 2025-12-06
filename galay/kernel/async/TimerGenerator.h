@@ -4,6 +4,7 @@
 
 #include "galay/kernel/coroutine/AsyncWaiter.hpp"
 #include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
+#include "galay/kernel/coroutine/LimitWaiter.hpp"
 
 namespace galay 
 { 
@@ -20,9 +21,9 @@ namespace galay
         AsyncResult<nil> sleep(std::chrono::milliseconds ms);
     private:
         template <CoType T>
-        Coroutine<nil> waitSleep(std::chrono::milliseconds ms, std::shared_ptr<AsyncWaiter<T, CommonError>> waiter);
+        Coroutine<nil> waitSleep(std::chrono::milliseconds ms, std::shared_ptr<LimitWaiter<T, CommonError>> waiter);
         template <CoType T>
-        Coroutine<nil> waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncWaiter<T, CommonError>> waiter);
+        Coroutine<nil> waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<LimitWaiter<T, CommonError>> waiter);
     private:
         CoSchedulerHandle m_handle;
     };
@@ -30,30 +31,26 @@ namespace galay
     template <CoType T>
     inline AsyncResult<std::expected<T, CommonError>> TimerGenerator::timeout(const std::function<AsyncResult<T>()> &func, std::chrono::milliseconds ms)
     {
-        std::shared_ptr<AsyncWaiter<T, CommonError>> waiter = std::make_shared<AsyncWaiter<T, CommonError>>();
+        std::shared_ptr<LimitWaiter<T, CommonError>> waiter = std::make_shared<LimitWaiter<T, CommonError>>();
         waiter->appendTask(waitSleep<T>(ms, waiter));
         waiter->appendTask(waitFunc<T>(func, waiter));
         return waiter->wait();
     }
 
     template <CoType T>
-    Coroutine<nil> TimerGenerator::waitSleep(std::chrono::milliseconds ms, std::shared_ptr<AsyncWaiter<T, CommonError>> waiter)
+    Coroutine<nil> TimerGenerator::waitSleep(std::chrono::milliseconds ms, std::shared_ptr<LimitWaiter<T, CommonError>> waiter)
     {
         co_await this->sleep(ms);
-        if(waiter->isWaiting()) {
-            using namespace error;
-            waiter->notify(std::unexpected(CommonError(AsyncTimeoutError, static_cast<uint32_t>(errno))));
-        }
+        using namespace error;
+        waiter->notify(std::unexpected(CommonError(AsyncTimeoutError, static_cast<uint32_t>(errno))));
         co_return nil();
     }
 
     template <CoType T>
-    inline Coroutine<nil> TimerGenerator::waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<AsyncWaiter<T, CommonError>> waiter)
+    inline Coroutine<nil> TimerGenerator::waitFunc(const std::function<AsyncResult<T>()>& func, std::shared_ptr<LimitWaiter<T, CommonError>> waiter)
     {
         T res = co_await func();
-        if(waiter->isWaiting()) {
-            waiter->notify(std::move(res));
-        }
+        waiter->notify(std::move(res));
         co_return nil();
     }
 }
