@@ -55,11 +55,9 @@ namespace galay
                         co_ptr->resume();
                     } else if (co_ptr->isDestroying()) {
                         // 在队列中等待时被标记为销毁，执行销毁而不是恢复
-                        LogDebug("CoroutineConsumer: coroutine marked for destroy during resume, executing destroy");
                         co_ptr->destroy();
-                    } else {
-                        LogDebug("CoroutineConsumer: unexpected status for resume, skip");
                     }
+                    // 其他状态：Suspended/Running/Finished 无需处理，跳过日志
                 }
                 break;
             case CoroutineActionType::kCoroutineActionTypeDestory:
@@ -67,9 +65,8 @@ namespace galay
                     // 只有 Destroying 状态才能 destroy
                     if (co_ptr->isDestroying()) {
                         co_ptr->destroy();
-                    } else {
-                        LogDebug("CoroutineConsumer: unexpected status for destroy, skip");
                     }
+                    // 其他状态无需处理，跳过日志
                 }
                 break;
             default:
@@ -108,32 +105,15 @@ namespace galay
             CoroutineStatus actual_status;
             if (!co_ptr->tryModToWaking(actual_status)) {
                 // 转换失败，说明协程不在 Suspended 状态
-                switch(actual_status) {
-                    case CoroutineStatus::Waking:
-                        LogDebug("resumeCoroutine: already Waking, skip");
-                        break;
-                    case CoroutineStatus::Running:
-                        LogDebug("resumeCoroutine: already Running, skip");
-                        break;
-                    case CoroutineStatus::Finished:
-                        LogDebug("resumeCoroutine: already Finished, skip");
-                        break;
-                    case CoroutineStatus::Destroying:
-                        LogDebug("resumeCoroutine: already Destroying, skip");
-                        break;
-                    default:
-                        LogDebug("resumeCoroutine: unexpected status");
-                        break;
-                }
-                return true;  // 这些状态都不需要重新调度
+                // 这些状态都不需要重新调度，无需日志输出
+                return true;
             }
-            
+
             // 成功将状态从 Suspended 转换为 Waking
             co_ptr->belongScheduler(this);
             m_consumer->consume(CoroutineActionType::kCoroutineActionTypeResume, co);
             return true;
         }
-        LogWarn("resumeCoroutine: coroutine expired");
         return false;
     }
 
@@ -142,26 +122,19 @@ namespace galay
         if (auto co_ptr = co.lock()) {
             // 使用原子的 compare_exchange 尝试将状态转换为 Destroying
             // 可以从 Suspended 或 Waking 状态转换
-            // 这样即使协程已经在调度队列中（Waking状态），也能将其标记为销毁
             CoroutineStatus actual_status;
             if (!co_ptr->tryModToDestroying(actual_status)) {
                 // 转换失败，检查实际状态
-                switch(actual_status) {
-                    case CoroutineStatus::Running:
-                        LogWarn("destroyCoroutine: coroutine is Running, cannot destroy now");
-                        return false;
-                    case CoroutineStatus::Finished:
-                        LogDebug("destroyCoroutine: already Finished, skip");
-                        return true;
-                    case CoroutineStatus::Destroying:
-                        LogDebug("destroyCoroutine: already Destroying, skip");
-                        return true;
-                    default:
-                        LogDebug("destroyCoroutine: unexpected status");
-                        return false;
+                if (actual_status == CoroutineStatus::Running) {
+                    // Running 状态不能销毁（保留此日志用于调试）
+                    LogWarn("destroyCoroutine: coroutine is Running, cannot destroy now");
+                    return false;
                 }
+                // Finished/Destroying 状态返回 true（已完成或已在销毁中）
+                return actual_status == CoroutineStatus::Finished ||
+                       actual_status == CoroutineStatus::Destroying;
             }
-            
+
             // 成功将状态转换为 Destroying，加入销毁队列
             co_ptr->belongScheduler(this);
             m_consumer->consume(CoroutineActionType::kCoroutineActionTypeDestory, co);

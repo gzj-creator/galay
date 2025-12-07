@@ -10,20 +10,15 @@ namespace galay
 
     bool Waker::wakeUp()
     {
-        if (!m_coroutine.expired())
-        {
-            auto coroutine = m_coroutine.lock();
-            if (!coroutine) {
-                LogWarn("Waker::wakeUp - coroutine lock failed");
-                return false;
-            }
+        // 直接 lock()，避免 expired() 的额外检查
+        auto coroutine = m_coroutine.lock();
+        if (!coroutine) {
+            // 协程已经被销毁，这是正常情况
+            return false;
+        }
 
-            auto scheduler = coroutine->belongScheduler();
-
-            return scheduler->resumeCoroutine(m_coroutine);
-        } 
-        LogWarn("Waker::wakeUp - coroutine expired");
-        return false;
+        auto scheduler = coroutine->belongScheduler();
+        return scheduler->resumeCoroutine(m_coroutine);
     }
 
     CoroutineBase::wptr Waker::getCoroutine()

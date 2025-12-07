@@ -88,31 +88,31 @@ namespace galay
     template<CoType T>
     inline bool Coroutine<T>::isRunning() const
     {
-        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Running;
+        return m_data->m_status.load(std::memory_order_relaxed) == CoroutineStatus::Running;
     }
 
     template<CoType T>
     inline bool Coroutine<T>::isSuspend() const
     {
-        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Suspended;
+        return m_data->m_status.load(std::memory_order_relaxed) == CoroutineStatus::Suspended;
     }
 
     template<CoType T>
     inline bool Coroutine<T>::isWaking() const
     {
-        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Waking;
+        return m_data->m_status.load(std::memory_order_relaxed) == CoroutineStatus::Waking;
     }
 
     template<CoType T>
     inline bool Coroutine<T>::isDestroying() const
     {
-        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Destroying;
+        return m_data->m_status.load(std::memory_order_relaxed) == CoroutineStatus::Destroying;
     }
 
     template<CoType T>
     inline bool Coroutine<T>::isDone() const
     {
-        return m_data->m_status.load(std::memory_order_acquire) == CoroutineStatus::Finished;
+        return m_data->m_status.load(std::memory_order_relaxed) == CoroutineStatus::Finished;
     }
 
     template <CoType T>
@@ -137,7 +137,7 @@ namespace galay
     template <CoType T>
     inline void Coroutine<T>::belongScheduler(CoroutineScheduler* scheduler)
     {
-        m_data->m_scheduler.store(scheduler);
+        m_data->m_scheduler.store(scheduler, std::memory_order_relaxed);
     }
 
 

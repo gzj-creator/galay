@@ -140,7 +140,7 @@ class Coroutine: public CoroutineBase
     template<CoType B>
     friend class CoroutineDataVisitor; 
 
-    struct CoroutineData
+    struct alignas(64) CoroutineData
     {
         std::optional<T> m_result;
         //多线程访问
@@ -179,24 +179,24 @@ public:
     CoroutineBase::wptr origin();
     ~Coroutine() override = default;
 private:
-    void modToSuspend() override { 
-        return m_data->m_status.store(CoroutineStatus::Suspended, std::memory_order_release); 
+    void modToSuspend() override {
+        return m_data->m_status.store(CoroutineStatus::Suspended, std::memory_order_relaxed);
     }
 
-    void modToWaking() override { 
-        return m_data->m_status.store(CoroutineStatus::Waking, std::memory_order_release); 
+    void modToWaking() override {
+        return m_data->m_status.store(CoroutineStatus::Waking, std::memory_order_relaxed);
     }
 
-    void modToRunning() override { 
-        m_data->m_status.store(CoroutineStatus::Running, std::memory_order_release);
+    void modToRunning() override {
+        m_data->m_status.store(CoroutineStatus::Running, std::memory_order_relaxed);
     }
 
-    void modToDestroying() override { 
-        m_data->m_status.store(CoroutineStatus::Destroying, std::memory_order_release); 
+    void modToDestroying() override {
+        m_data->m_status.store(CoroutineStatus::Destroying, std::memory_order_relaxed);
     }
 
-    void modToFinished() override { 
-        m_data->m_status.store(CoroutineStatus::Finished, std::memory_order_release); 
+    void modToFinished() override {
+        m_data->m_status.store(CoroutineStatus::Finished, std::memory_order_relaxed);
     }
     
     bool tryModToWaking(CoroutineStatus& actual_status) override {
@@ -204,7 +204,7 @@ private:
         return m_data->m_status.compare_exchange_strong(
             actual_status,
             CoroutineStatus::Waking,
-            std::memory_order_release,
+            std::memory_order_acq_rel,
             std::memory_order_acquire
         );
     }
@@ -215,23 +215,23 @@ private:
         if (m_data->m_status.compare_exchange_strong(
                 actual_status,
                 CoroutineStatus::Destroying,
-                std::memory_order_release,
+                std::memory_order_acq_rel,
                 std::memory_order_acquire)) {
             return true;
         }
-        
+
         // 如果失败，可能是 Waking 状态，尝试从 Waking 转换为 Destroying
         // 这是处理竞态的关键：即使协程已经在调度队列中，也能将其标记为销毁
         if (actual_status == CoroutineStatus::Waking) {
             if (m_data->m_status.compare_exchange_strong(
                     actual_status,
                     CoroutineStatus::Destroying,
-                    std::memory_order_release,
+                    std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
                 return true;
             }
         }
-        
+
         // 转换失败，actual_status 包含实际状态
         return false;
     }
