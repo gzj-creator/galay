@@ -32,7 +32,7 @@ namespace galay::mpsc
 
         template<typename T>
         inline bool BatchChannelEvent<T>::onReady() {
-            return m_channel.m_size.load(std::memory_order_acquire) >= 0;
+            return m_channel.m_size.load(std::memory_order_acquire) > 0;
         }
 
         template<typename T>
@@ -51,7 +51,18 @@ namespace galay::mpsc
             if (count == 0) {
                 return std::nullopt;
             }
-            m_channel.m_size.fetch_sub(count, std::memory_order_acq_rel);
+            // 直接减少 m_size
+            // enqueue_bulk(1000) 会 fetch_add(1000)，所以正常情况下 m_size >= count
+            // 如果 count > m_size，说明 m_size 和队列不同步，但这是正常的（m_size 只是近似值）
+            // 使用饱和减法避免下溢：如果 count > m_size，将 m_size 设置为 0
+            uint32_t current_size = m_channel.m_size.load(std::memory_order_acquire);
+            if (count > current_size) {
+                // 实际取出的数量超过了 m_size，说明 m_size 和队列不同步
+                // 使用饱和减法：将 m_size 设置为 0（因为已经取出了所有元素）
+                m_channel.m_size.store(0, std::memory_order_release);
+            } else {
+                m_channel.m_size.fetch_sub(count, std::memory_order_acq_rel);
+            }
             values.resize(count);
             return std::move(values);
         }

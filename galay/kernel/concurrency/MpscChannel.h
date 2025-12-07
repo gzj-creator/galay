@@ -49,27 +49,33 @@ namespace galay::mpsc
     public:
         static constexpr size_t BATCH_SIZE = 1024;
 
-        void send(T value) {
-            m_queue.enqueue(value);
+        bool send(T value) {
+            if(!m_queue.enqueue(value)) {
+                return false;
+            }
             uint32_t size = m_size.fetch_add(1, std::memory_order_acq_rel);
             if(size == 0) {
                 m_waker.wakeUp();
             }
+            return true;
         }
 
-        void sendBatch(std::vector<T> values) {
-            m_queue.enqueue_bulk(values.begin(), values.end());
+        bool sendBatch(const std::vector<T>& values) {
+            if(!m_queue.enqueue_bulk(values.data(), values.size())) {
+                return false;
+            }
             uint32_t size = m_size.fetch_add(values.size(), std::memory_order_acq_rel);
             if(size == 0) {
                 m_waker.wakeUp();
             }
+            return true;
         }
 
         AsyncResult<std::optional<T>> recv() {
             return {m_event};
         }
 
-        AsyncResult<std::optional<std::vector<T>>> recvBatch(size_t count) {
+        AsyncResult<std::optional<std::vector<T>>> recvBatch() {
             return {m_batchEvent};
         }
     private:
