@@ -39,6 +39,8 @@ namespace galay {
     class CoroutineConsumer: public CoroutineConsumerBase
     {
     public:
+        static constexpr size_t BATCH_SIZE = 1024;
+
         using uptr = std::unique_ptr<CoroutineConsumer>;
 
         static CoroutineConsumer::uptr create();

@@ -36,16 +36,14 @@ namespace galay
     }
 
 
-    void CoroutineConsumer::run()
-    {
-        std::pair<CoroutineActionType, CoroutineBase::wptr> task;
-        while(true) {
-            m_queue.wait_dequeue(task);
+    namespace {
+        // 处理单个任务的辅助函数
+        inline bool processTask(const std::pair<CoroutineActionType, CoroutineBase::wptr>& task) {
             auto [type, co] = task;
             switch (type)
             {
             case CoroutineActionType::kCoroutineActionTypeNone:
-                return;
+                return false;  // 返回 false 表示需要退出
             case CoroutineActionType::kCoroutineActionTypeResume:
                 if(auto co_ptr = co.lock()){
                     // 检查状态：只有 Waking 状态才能 resume
@@ -57,7 +55,6 @@ namespace galay
                         // 在队列中等待时被标记为销毁，执行销毁而不是恢复
                         co_ptr->destroy();
                     }
-                    // 其他状态：Suspended/Running/Finished 无需处理，跳过日志
                 }
                 break;
             case CoroutineActionType::kCoroutineActionTypeDestory:
@@ -71,6 +68,32 @@ namespace galay
                 break;
             default:
                 break;
+            }
+            return true;  // 返回 true 表示继续处理
+        }
+    }
+
+    void CoroutineConsumer::run()
+    {
+        std::pair<CoroutineActionType, CoroutineBase::wptr> tasks[CoroutineConsumer::BATCH_SIZE] = {};
+        while(true) {
+            // 混合策略：先尝试非阻塞批量取出（高吞吐）
+            size_t count = m_queue.try_dequeue_bulk(tasks, CoroutineConsumer::BATCH_SIZE);
+            
+            if (count > 0) {
+                // 批量处理：高负载时提高吞吐量
+                for(size_t i = 0; i < count; ++i) {
+                    if (!processTask(tasks[i])) {
+                        return;  // 收到停止信号
+                    }
+                }
+            } else {
+                // 单处理：低负载时降低延迟
+                std::pair<CoroutineActionType, CoroutineBase::wptr> task;
+                m_queue.wait_dequeue(task);
+                if (!processTask(task)) {
+                    return;  // 收到停止信号
+                }
             }
         }
     }
