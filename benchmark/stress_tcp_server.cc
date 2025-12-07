@@ -4,12 +4,12 @@
  * @details 基于Galay框架的高性能TCP压测服务器，支持echo和统计功能
  */
 
+#include "galay/kernel/async/Bytes.h"
 #include "galay/kernel/server/TcpServer.h"
 #include "galay/kernel/runtime/Runtime.h"
 #include "galay/utils/BackTrace.h"
 #include "galay/utils/SignalHandler.hpp"
 #include "galay/common/Buffer.h"
-#include "galay/kernel/async/TimerGenerator.h"
 #include <atomic>
 #include <chrono>
 #include <iomanip>
@@ -135,10 +135,10 @@ int main(int argc, char* argv[])
     TcpServer server = builder.backlog(backlog_size).build();
     
     // 运行服务器
-    server.run(runtime, [](AsyncTcpSocket socket, CoSchedulerHandle handle[[maybe_unused]]) -> Coroutine<nil> {
+    std::cout << "Starting TCP server..." << std::endl;
+    bool run_result = server.run(runtime, [](AsyncTcpSocket socket, CoSchedulerHandle handle[[maybe_unused]]) -> Coroutine<nil> {
         using namespace error;
         
-        // 连接建立
         total_connections++;
         active_connections++;
         
@@ -147,7 +147,6 @@ int main(int argc, char* argv[])
         while(true) {
             // 接收数据
             auto rwrapper = co_await socket.recv(buffer.data(), buffer.capacity());
-            
             if (!rwrapper) {
                 if(CommonError::contains(rwrapper.error().code(), ErrorCode::DisConnectError)) {
                     active_connections--;
@@ -179,9 +178,9 @@ int main(int argc, char* argv[])
             // 更新统计
             total_requests++;
             total_bytes_received += recv_size;
-            
+            Bytes response = Bytes::fromString("HTTP/1.1 200 OK\r\nContent-Length: 13\r\n\r\nHello, World!");
             // Echo回数据（纯粹的压测服务器，不处理特殊命令）
-            auto wwrapper = co_await socket.send(std::move(bytes));
+            auto wwrapper = co_await socket.send(std::move(response));
             if (wwrapper) {
                 total_bytes_sent += recv_size;
             } else {
@@ -191,6 +190,13 @@ int main(int argc, char* argv[])
             }
         }
     });
+    
+    if (!run_result) {
+        std::cerr << "Failed to start TCP server!" << std::endl;
+        return 1;
+    }
+    std::cout << "TCP server started successfully!" << std::endl;
+    std::cout << "Waiting for connections..." << std::endl;
     
     // 等待服务器结束
     server.wait();

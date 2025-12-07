@@ -1,6 +1,7 @@
 #ifndef GALAY_KERNEL_TCP_SERVER_H
 #define GALAY_KERNEL_TCP_SERVER_H 
 
+#include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
@@ -81,7 +82,7 @@ namespace galay
         std::mutex m_mutex;
         std::condition_variable m_condition;
         std::vector<AsyncTcpSocket> m_sockets;
-        std::atomic<bool> m_running = false;
+        std::atomic<bool> m_running{false};
     };
 
     
