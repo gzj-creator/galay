@@ -39,6 +39,7 @@ namespace galay::mpsc
         };
     }
 
+    // thread safe mpsc channel
     template <typename T>
     class AsyncChannel
     {
