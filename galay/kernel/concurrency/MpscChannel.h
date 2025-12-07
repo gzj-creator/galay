@@ -50,16 +50,6 @@ namespace galay::mpsc
     public:
         static constexpr size_t BATCH_SIZE = 1024;
 
-        bool send(T value) {
-            if(!m_queue.enqueue(value)) {
-                return false;
-            }
-            uint32_t size = m_size.fetch_add(1, std::memory_order_acq_rel);
-            if(size == 0) {
-                m_waker.wakeUp();
-            }
-            return true;
-        }
 
         bool send(T&& value) {
             if(!m_queue.enqueue(std::move(value))) {

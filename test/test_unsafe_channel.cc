@@ -11,7 +11,8 @@ using namespace galay;
 Coroutine<nil> testSend(unsafe::AsyncChannel<int>& channel)
 {
     for(int i = 0; i < MAX_COUNT; i++) {
-        channel.send(i);
+        int value = i;
+        channel.send(std::move(value));
     }
     co_return nil();
 }

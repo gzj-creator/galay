@@ -46,7 +46,6 @@ namespace galay::unsafe
         template <typename U>
         friend class details::ChannelEvent;
     public:
-        bool send(T value);
         bool send(T&& value);
         bool sendBatch(const std::vector<T>& values);
         AsyncResult<std::optional<T>> recv();

@@ -63,16 +63,6 @@ namespace galay::unsafe
     }
 
     template <typename T>
-    inline bool AsyncChannel<T>::send(T value)
-    {
-        m_queue.push(value);
-        if(m_queue.size() == 1) {
-            m_waker.wakeUp();
-        }
-        return true;
-    }
-    
-    template <typename T>
     inline bool AsyncChannel<T>::send(T&& value)
     {
         m_queue.push(std::move(value));

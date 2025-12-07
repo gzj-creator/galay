@@ -58,7 +58,8 @@ Coroutine<nil> Consume(mpsc::AsyncChannel<int>& channel)
 Coroutine<nil> Produce(mpsc::AsyncChannel<int>& channel, int start, int end)
 {
     for (int i = start; i < end; ++i) {
-        channel.send(i);
+        int value = i;
+        channel.send(std::move(value));
     }
     std::cout << "Produce finished: " << start << " to " << (end - 1) << std::endl;
     co_return nil();
