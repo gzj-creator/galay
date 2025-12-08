@@ -2,6 +2,7 @@
 #define GALAY_KERNEL_CONCURRENCY_UNSAFECHANNEL_H
 
 #include <atomic>
+#include <cstddef>
 #include <queue>
 #include "galay/kernel/coroutine/Result.hpp"
 #include "galay/kernel/coroutine/Waker.h"
@@ -50,6 +51,10 @@ namespace galay::unsafe
         bool sendBatch(const std::vector<T>& values);
         AsyncResult<std::optional<T>> recv();
         AsyncResult<std::optional<std::vector<T>>> recvBatch();
+
+        size_t size() {
+            return m_queue.size();
+        }
     private:
         Waker m_waker;
         std::queue<T> m_queue;

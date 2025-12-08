@@ -94,24 +94,17 @@ public:
 template<CoType T>
 class PromiseType: public PromiseTypeBase
 {
-    friend class Coroutine<T>;
-    struct suspend_choice {
-        bool should_suspend = true;
-        bool await_ready() const noexcept { return !should_suspend; }
-        void await_suspend(std::coroutine_handle<>) const noexcept {}
-        void await_resume() const noexcept {}
-    };
 public:
     template<CoType U>
     struct YieldValue {
         U value;
-        bool should_suspend = true;
+        bool re_scheduler = false;
     };
 
     int get_return_object_on_alloaction_failure() noexcept { return -1; }
     Coroutine<T> get_return_object() noexcept;
     std::suspend_always initial_suspend() noexcept { return {}; }
-    suspend_choice yield_value(YieldValue<T>&& value) noexcept;
+    std::suspend_always yield_value(YieldValue<T>&& value) noexcept;
     std::suspend_never final_suspend() noexcept { return {};  }
     void unhandled_exception() noexcept {}
     void return_value (T&& value) const noexcept;

@@ -8,7 +8,7 @@ Coroutine<int> printA()
 {
     for (int i = 0; i < 10; ++i) {
         std::cout << "A" << std::endl;
-        co_yield {1, false};
+        co_yield {1, true};
     }
     co_return 0;
 }
@@ -17,7 +17,7 @@ Coroutine<int> printB()
 {
     for (int i = 0; i < 10; ++i) {
         std::cout << "B" << std::endl;
-        co_yield {2, false};
+        co_yield {2, true};
     }
     co_return 0;
 }
@@ -26,7 +26,7 @@ Coroutine<int> printC()
 {
     for (int i = 0; i < 10; ++i) {
         std::cout << "C" << std::endl;
-        co_yield {3, false};
+        co_yield {3, true};
     }
     co_return 0;
 }

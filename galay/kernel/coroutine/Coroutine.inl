@@ -3,6 +3,7 @@
 
 #include "Coroutine.hpp"
 #include <atomic>
+#include <coroutine>
 
 
 namespace galay
@@ -17,14 +18,14 @@ namespace galay
     }
 
     template<CoType T>
-    inline PromiseType<T>::suspend_choice PromiseType<T>::yield_value(YieldValue<T>&& value) noexcept
+    inline std::suspend_always PromiseType<T>::yield_value(YieldValue<T>&& value) noexcept
     {
         *(m_coroutine->m_data->m_result) = std::move(value.value);
-        if(!value.should_suspend) {
-            return {false};
-        }
         m_coroutine->modToSuspend();
-        return {true};
+        if(value.re_scheduler) {
+            m_coroutine->belongScheduler()->resumeCoroutine(m_coroutine);
+        }
+        return {};
     }
 
     template<CoType T>
