@@ -77,13 +77,8 @@ namespace galay::details
         uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
         LogTrace("[Accept Address: {}:{}]", ip, port);
         m_result = {};
-        m_accept_handle = handle;
+        *m_accept_handle = handle;
         return true;
-    }
-
-    RecvEvent::RecvEvent(GHandle handle, EventScheduler* scheduler, char* result, size_t length)
-        : NetEvent<std::expected<Bytes, CommonError>>(handle, scheduler), m_length(length), m_result_str(result)
-    {
     }
 
     std::expected<Bytes, CommonError> RecvEvent::onResume()
@@ -127,10 +122,6 @@ namespace galay::details
         return true;
     }
 
-    SendEvent::SendEvent(GHandle handle, EventScheduler* scheduler, Bytes &&bytes)
-        : NetEvent<std::expected<Bytes, CommonError>>(handle, scheduler), m_bytes(std::move(bytes))
-    {
-    }
 
     bool SendEvent::onReady()
     {
@@ -211,11 +202,6 @@ namespace galay::details
     }
 #endif
 
-    ConnectEvent::ConnectEvent(GHandle handle, EventScheduler* scheduler, const Host &host)
-        : NetEvent<std::expected<void, CommonError>>(handle, scheduler), m_host(host)
-    {
-    }
-
     bool ConnectEvent::onReady()
     {
         m_ready = connectToHost(false);
@@ -258,11 +244,6 @@ namespace galay::details
         return true;
     }
 
-    CloseEvent::CloseEvent(GHandle handle, EventScheduler* scheduler)
-        : NetEvent<std::expected<void, CommonError>>(handle, scheduler)
-    {
-    }
-
     bool CloseEvent::onReady()
     {
         using namespace error;
@@ -297,8 +278,8 @@ namespace galay::details
         if(recvBytes > 0) LogTrace("recvfromBytes: {}, buffer: {}", recvBytes, m_buffer);
         if (recvBytes > 0) {
             Bytes bytes = Bytes::fromCString(m_buffer, recvBytes, recvBytes);
-            m_remote.ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
-            m_remote.port = ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port);
+            m_remote->ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&addr)->sin_addr);
+            m_remote->port = static_cast<uint16_t>(ntohs(reinterpret_cast<sockaddr_in*>(&addr)->sin_port));
             m_result = std::move(bytes);
         } else if (recvBytes == 0) {
             m_result = Bytes();

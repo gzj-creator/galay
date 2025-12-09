@@ -5,10 +5,6 @@
 namespace galay::details
 {
 #ifdef USE_AIO
-    FileCloseEvent::FileCloseEvent(GHandle event_handle, EventScheduler* scheduler, GHandle handle)
-        : FileEvent<std::expected<void, CommonError>>(event_handle, scheduler), m_handle(handle)
-    {
-    }
 
     bool FileCloseEvent::onReady()
     {   
@@ -73,10 +69,6 @@ namespace galay::details
     }
 
 #else
-    FileCloseEvent::FileCloseEvent(GHandle handle, EventScheduler *scheduler)
-        : FileEvent<std::expected<void, CommonError>>(handle, scheduler)
-    {
-    }
 
     bool FileCloseEvent::onReady()
     {   
@@ -88,11 +80,6 @@ namespace galay::details
         }
         m_scheduler->removeEvent(this, nullptr);
         return true;
-    }
-
-    FileReadEvent::FileReadEvent(GHandle handle, EventScheduler *scheduler, char* buffer, size_t length)
-        : FileEvent<std::expected<Bytes, CommonError>>(handle, scheduler), m_length(length), m_buffer(buffer)
-    {
     }
 
     bool FileReadEvent::onReady()
@@ -131,10 +118,6 @@ namespace galay::details
         return true;
     }
 
-    FileWriteEvent::FileWriteEvent(GHandle handle, EventScheduler *scheduler, Bytes &&bytes)
-        : FileEvent<std::expected<Bytes, CommonError>>(handle, scheduler), m_bytes(std::move(bytes))
-    {
-    }
 
     bool FileWriteEvent::onReady()
     {

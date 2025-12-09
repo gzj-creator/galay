@@ -48,9 +48,9 @@ namespace galay {
         AsyncResult<std::expected<Bytes, CommonError>> recv(char* result, size_t length);
         //返回剩余Bytes
         AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
-        
+
     #ifdef __linux__
-        //return send length 
+        //return send length
         AsyncResult<std::expected<long, CommonError>> sendfile(GHandle file_handle, long offset, size_t length);
     #endif
         //throw exception
@@ -66,6 +66,16 @@ namespace galay {
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
+
+        // Event member variables to avoid frequent allocations
+        details::CloseEvent m_closeEvent;
+        details::AcceptEvent m_acceptEvent;
+        details::ConnectEvent m_connectEvent;
+        details::RecvEvent m_recvEvent;
+        details::SendEvent m_sendEvent;
+    #ifdef __linux__
+        details::SendfileEvent m_sendfileEvent;
+    #endif
     };
 
 
@@ -102,6 +112,13 @@ namespace galay {
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
+
+        // Event member variables to avoid frequent allocations
+        details::CloseEvent m_closeEvent;
+        details::RecvEvent m_recvEvent;
+        details::SendEvent m_sendEvent;
+        details::RecvfromEvent m_recvfromEvent;
+        details::SendtoEvent m_sendtoEvent;
     };
 
     class AsyncSslSocket
@@ -141,6 +158,15 @@ namespace galay {
     private:
         SSL* m_ssl = nullptr;
         EventScheduler* m_scheduler = nullptr;
+
+        // Event member variables to avoid frequent allocations
+        details::AcceptEvent m_acceptEvent;
+        details::ConnectEvent m_connectEvent;
+        details::SslConnectEvent m_sslConnectEvent;
+        details::SslAcceptEvent m_sslAcceptEvent;
+        details::SslRecvEvent m_sslRecvEvent;
+        details::SslSendEvent m_sslSendEvent;
+        details::SslCloseEvent m_sslCloseEvent;
     };
 
 

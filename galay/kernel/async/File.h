@@ -93,6 +93,8 @@ namespace galay
         io_context_t m_io_ctx = {0};
         std::vector<iocb> m_iocbs;
         EventScheduler* m_scheduler = nullptr;
+        details::AioGetEvent m_aioGetEvent;
+        details::FileCloseEvent m_closeEvent;
     };
 #else
     class File
@@ -119,6 +121,9 @@ namespace galay
         GHandle m_handle;
         std::string m_path;
         EventScheduler* m_scheduler = nullptr;
+        details::FileCloseEvent m_closeEvent;
+        details::FileReadEvent m_readEvent;
+        details::FileWriteEvent m_writeEvent;
     };
 #endif
 }

@@ -5,7 +5,6 @@
 #include "galay/common/Common.h"
 #include "galay/kernel/coroutine/Coroutine.hpp"
 #include "Bytes.h"
-#include <vector>
 
 #ifdef USE_AIO
 #include <libaio.h>
@@ -18,8 +17,7 @@ namespace galay::details {
     class FileEvent: public AsyncEvent<T>, public Event
     { 
     public:
-        FileEvent(GHandle ehandle, EventScheduler* scheduler) 
-            :m_ehandle(ehandle), m_scheduler(scheduler) {}
+        
         bool onSuspend(Waker waker) override {
             using namespace error;
             this->m_waker = waker;
@@ -39,7 +37,11 @@ namespace galay::details {
     class FileCloseEvent: public FileEvent<std::expected<void, CommonError>>
     {
     public:
-        FileCloseEvent(GHandle event_handle, EventScheduler* scheduler, GHandle handle);
+        void reset(GHandle event_handle, EventScheduler* scheduler, GHandle handle) {
+            m_ehandle = event_handle;
+            m_scheduler = scheduler;
+            m_handle = handle;
+        }
         std::string name() override { return "FileCloseEvent"; }
         void handleEvent() override {}
         EventType getEventType() const override { return EventType::kEventTypeNone; }
@@ -51,7 +53,12 @@ namespace galay::details {
     class AioGetEvent: public FileEvent<std::expected<std::vector<io_event>, CommonError>>
     {
     public:
-        AioGetEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, uint64_t& expect_events);
+        void reset(GHandle event_handle, EventScheduler* scheduler, io_context_t context, uint64_t& expect_events) {
+            m_ehandle = event_handle;
+            m_scheduler = scheduler;
+            m_context = context;
+            m_expect_events = expect_events;
+        }
         std::string name() override { return "AioGetEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool onReady() override;
@@ -70,8 +77,6 @@ namespace galay::details {
     class FileEvent: public AsyncEvent<T>, public Event
     { 
     public:
-        FileEvent(GHandle handle, EventScheduler* scheduler) 
-            :m_handle(handle), m_scheduler(scheduler) {}
         bool onSuspend(Waker waker) override {
             using namespace error;
             this->m_waker = waker;
@@ -85,26 +90,32 @@ namespace galay::details {
         GHandle getHandle() override {  return m_handle; }
     protected:
         bool m_ready = false;
-        GHandle m_handle;
-        EventScheduler* m_scheduler;
+        GHandle m_handle = GHandle::invalid();
+        EventScheduler* m_scheduler = nullptr;
     };
 
     class FileCloseEvent: public FileEvent<std::expected<void, CommonError>> 
     {
     public:
-        FileCloseEvent(GHandle handle, EventScheduler* scheduler);
+        void reset(GHandle handle, EventScheduler* scheduler) {
+            m_handle = handle;
+            m_scheduler = scheduler;
+        }
         std::string name() override { return "FileCloseEvent"; }
         void handleEvent() override {}
         EventType getEventType() const override { return EventType::kEventTypeNone; }
         bool onReady() override;
-    private:
-        GHandle m_handle;
     };
 
     class FileReadEvent: public FileEvent<std::expected<Bytes, CommonError>>
     {
     public:
-        FileReadEvent(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length);
+        void reset(GHandle handle, EventScheduler* scheduler, char* buffer, size_t length) {
+            m_handle = handle;
+            m_scheduler = scheduler;
+            m_buffer = buffer;
+            m_length = length;
+        }
         std::string name() override { return "FileReadEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool onReady() override;
@@ -112,14 +123,18 @@ namespace galay::details {
     private:
         bool readBytes(bool notify);
     private:
-        size_t m_length;
-        char* m_buffer;
+        size_t m_length = 0;
+        char* m_buffer = nullptr;
     };
 
     class FileWriteEvent: public FileEvent<std::expected<Bytes, CommonError>>
     {
     public:
-        FileWriteEvent(GHandle handle, EventScheduler* scheduler, Bytes&& bytes);
+        void reset(GHandle handle, EventScheduler* scheduler, Bytes&& bytes) {
+            m_handle = handle;
+            m_scheduler = scheduler;
+            m_bytes = std::move(bytes);
+        }
         std::string name() override { return "FileWriteEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool onReady() override;
@@ -127,7 +142,7 @@ namespace galay::details {
     private:
         bool writeBytes(bool notify);
     private:
-        Bytes m_bytes;
+        Bytes m_bytes = Bytes();
     };
 #endif
 }

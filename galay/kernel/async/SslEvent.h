@@ -30,9 +30,6 @@ namespace galay::details
     class SslEvent: public AsyncEvent<T>, public Event
     {
     public:
-        SslEvent(SSL* ssl, EventScheduler* scheduler)
-            : m_ssl(ssl), m_scheduler(scheduler) {}
-    
         GHandle getHandle() override { 
             if(m_ssl) {
                 return {SSL_get_fd(m_ssl)};
@@ -57,7 +54,14 @@ namespace galay::details
     class SslAcceptEvent: public SslEvent<std::expected<bool, CommonError>>
     {
     public:
-        SslAcceptEvent(SSL* ssl, EventScheduler* scheduler);
+        
+        void reset(SSL* ssl, EventScheduler* scheduler) {
+            m_ssl = ssl;
+            m_scheduler = scheduler;
+            m_ready = false;
+            m_ssl_code = 0;
+        }
+
         std::string name() override { return "SslAcceptEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
@@ -70,10 +74,15 @@ namespace galay::details
         int m_ssl_code = 0;
     };
 
-    class SslCloseEvent: public SslEvent<std::expected<void, CommonError>> 
+    class SslCloseEvent: public SslEvent<std::expected<void, CommonError>>
     {
     public:
-        SslCloseEvent(SSL* ssl, EventScheduler* scheduler);
+        void reset(SSL* ssl, EventScheduler* scheduler) {
+            m_ssl = ssl;
+            m_scheduler = scheduler;
+            m_ssl_code = 0;
+        }
+
         std::string name() override { return "SslCloseEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
@@ -84,10 +93,16 @@ namespace galay::details
         int m_ssl_code = 0;
     };
 
-    class SslConnectEvent: public SslEvent<std::expected<bool, CommonError>> 
+    class SslConnectEvent: public SslEvent<std::expected<bool, CommonError>>
     {
     public:
-        SslConnectEvent(SSL* ssl, EventScheduler* scheduler);
+        void reset(SSL* ssl, EventScheduler* scheduler) {
+            m_ssl = ssl;
+            m_scheduler = scheduler;
+            m_ready = false;
+            m_ssl_code = 0;
+        }
+
         std::string name() override { return "SslConnectEvent"; }
         void handleEvent() override;
         EventType getEventType() const override;
@@ -100,10 +115,17 @@ namespace galay::details
         int m_ssl_code = 0;
     };
 
-    class SslRecvEvent: public SslEvent<std::expected<Bytes, CommonError>> 
+    class SslRecvEvent: public SslEvent<std::expected<Bytes, CommonError>>
     {
     public:
-        SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* result, size_t length);
+        void reset(SSL* ssl, EventScheduler* scheduler, char* result, size_t length) {
+            m_ssl = ssl;
+            m_scheduler = scheduler;
+            m_result_str = result;
+            m_length = length;
+            m_ready = false;
+        }
+
         std::string name() override { return "SslRecvEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeRead; }
@@ -119,7 +141,13 @@ namespace galay::details
 
     class SslSendEvent: public SslEvent<std::expected<Bytes, CommonError>> {
     public:
-        SslSendEvent(SSL* ssl, EventScheduler* scheduler, Bytes&& bytes);
+        void reset(SSL* ssl, EventScheduler* scheduler, Bytes&& bytes) {
+            m_ssl = ssl;
+            m_scheduler = scheduler;
+            m_bytes = std::move(bytes);
+            m_ready = false;
+        }
+
         std::string name() override { return "SslSendEvent"; }
         void handleEvent() override;
         EventType getEventType() const override { return kEventTypeWrite; }

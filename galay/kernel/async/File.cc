@@ -103,7 +103,8 @@ namespace galay
     AsyncResult<std::expected<std::vector<io_event>, CommonError>> File::getEvent(uint64_t& expect_events)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::AioGetEvent>(m_event_handle, m_scheduler, m_io_ctx, expect_events)};
+        m_aioGetEvent.reset(m_event_handle, m_scheduler, m_io_ctx, expect_events);
+        return {std::shared_ptr<details::AioGetEvent>(&m_aioGetEvent, [](details::AioGetEvent*){})};
     }
 
     void File::clearIocbs()
@@ -115,7 +116,8 @@ namespace galay
     AsyncResult<std::expected<void, CommonError>> File::close()
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::FileCloseEvent>(m_event_handle, m_scheduler, m_handle)};
+        m_closeEvent.reset(m_event_handle, m_scheduler, m_handle);
+        return {std::shared_ptr<details::FileCloseEvent>(&m_closeEvent, [](details::FileCloseEvent*){})};
     }
 
     File::~File()
@@ -185,13 +187,15 @@ namespace galay
     AsyncResult<std::expected<Bytes, CommonError>> File::read(char* buffer, size_t length)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::FileReadEvent>(m_handle, m_scheduler, buffer, length)};
+        m_readEvent.reset(m_handle, m_scheduler, buffer, length);
+        return {std::shared_ptr<details::FileReadEvent>(&m_readEvent, [](details::FileReadEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> File::write(Bytes bytes)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::FileWriteEvent>(m_handle, m_scheduler, std::move(bytes))};
+        m_writeEvent.reset(m_handle, m_scheduler, std::move(bytes));
+        return {std::shared_ptr<details::FileWriteEvent>(&m_writeEvent, [](details::FileWriteEvent*){})};
     }
 
     std::expected<void, CommonError> File::seek(size_t offset)
@@ -207,7 +211,8 @@ namespace galay
     AsyncResult<std::expected<void, CommonError>> File::close()
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::FileCloseEvent>(m_handle, m_scheduler)};
+        m_closeEvent.reset(m_handle, m_scheduler);
+        return {std::shared_ptr<details::FileCloseEvent>(&m_closeEvent, [](details::FileCloseEvent*){})};
     }
 
     std::expected<void, CommonError> File::remove()

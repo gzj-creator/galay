@@ -22,11 +22,6 @@ bool galay::AsyncSslSocketBuilder::check() const
 
 namespace galay::details
 { 
-    SslAcceptEvent::SslAcceptEvent(SSL* ssl, EventScheduler* scheduler)
-        : SslEvent<std::expected<bool, CommonError>>(ssl, scheduler)
-    {
-    }
-
     void SslAcceptEvent::handleEvent()
     {
         m_waker.wakeUp();
@@ -89,11 +84,6 @@ namespace galay::details
             m_result = std::unexpected(CommonError(CallSSLHandshakeError, m_ssl_code));
         }
         return true;
-    }
-
-    SslCloseEvent::SslCloseEvent(SSL* ssl, EventScheduler* scheduler)
-        : SslEvent<std::expected<void, CommonError>>(ssl, scheduler)
-    {
     }
 
     void SslCloseEvent::handleEvent()
@@ -170,11 +160,6 @@ namespace galay::details
         return sslClose();
     }
 
-    SslConnectEvent::SslConnectEvent(SSL* ssl, EventScheduler* scheduler)
-        : SslEvent<std::expected<bool, CommonError>>(ssl, scheduler)
-    {
-    }
-
     void SslConnectEvent::handleEvent()
     {
         m_waker.wakeUp();
@@ -227,11 +212,6 @@ namespace galay::details
         return true;
     }
 
-    SslRecvEvent::SslRecvEvent(SSL* ssl, EventScheduler* scheduler, char* result, size_t length)
-        : SslEvent<std::expected<Bytes, CommonError>>(ssl, scheduler), m_length(length), m_result_str(result)
-    {
-    }
-
     void SslRecvEvent::handleEvent()
     {
         m_waker.wakeUp();
@@ -271,11 +251,6 @@ namespace galay::details
             m_result = std::unexpected(CommonError(CallRecvError, static_cast<uint32_t>(errno)));
         }
         return true;
-    }
-
-    SslSendEvent::SslSendEvent(SSL* ssl, EventScheduler* scheduler, Bytes &&bytes)
-        : SslEvent<std::expected<Bytes, CommonError>>(ssl, scheduler), m_bytes(std::move(bytes))
-    {
     }
 
     void SslSendEvent::handleEvent()

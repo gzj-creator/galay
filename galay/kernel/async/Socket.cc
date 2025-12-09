@@ -2,6 +2,7 @@
 
 #include "galay/common/Error.h"
 #include <cassert>
+#include <memory>
 #include <openssl/err.h>
 
 namespace galay {
@@ -169,39 +170,45 @@ namespace galay {
     AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::close()
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
+        m_closeEvent.reset(m_handle, m_scheduler);
+        return {std::shared_ptr<details::CloseEvent>(&m_closeEvent, [](details::CloseEvent*){})};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::accept(AsyncTcpSocketBuilder& builder)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         builder.m_scheduler = m_scheduler;
-        return {std::make_shared<details::AcceptEvent>(m_handle, m_scheduler, builder.m_handle)};
+        m_acceptEvent.reset(m_handle, m_scheduler, &builder.m_handle);
+        return {std::shared_ptr<details::AcceptEvent>(&m_acceptEvent, [](details::AcceptEvent*){})};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncTcpSocket::connect(const Host& host)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::ConnectEvent>(m_handle, m_scheduler, host)};
+        m_connectEvent.reset(m_handle, m_scheduler, host);
+        return {std::shared_ptr<details::ConnectEvent>(&m_connectEvent, [](details::ConnectEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncTcpSocket::recv(char* result, size_t length)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
+        m_recvEvent.reset(m_handle, m_scheduler, result, length);
+        return {std::shared_ptr<details::RecvEvent>(&m_recvEvent, [](details::RecvEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncTcpSocket::send(Bytes bytes)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
+        m_sendEvent.reset(m_handle, m_scheduler, std::move(bytes));
+        return {std::shared_ptr<details::SendEvent>(&m_sendEvent, [](details::SendEvent*){})};
     }
 
 #ifdef __linux__
     AsyncResult<std::expected<long, CommonError>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::SendfileEvent>(m_handle, m_scheduler, file_handle, offset, length)};
+        m_sendfileEvent.reset(m_handle, m_scheduler, file_handle, offset, length);
+        return {std::shared_ptr<details::SendfileEvent>(&m_sendfileEvent, [](details::SendfileEvent*){})};
     }
 #endif
 
@@ -347,31 +354,36 @@ namespace galay {
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::recv(char* result, size_t length)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::RecvEvent>(m_handle, m_scheduler, result, length)};
+        m_recvEvent.reset(m_handle, m_scheduler, result, length);
+        return {std::shared_ptr<details::RecvEvent>(&m_recvEvent, [](details::RecvEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::send(Bytes bytes)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::SendEvent>(m_handle, m_scheduler, std::move(bytes))};
+        m_sendEvent.reset(m_handle, m_scheduler, std::move(bytes));
+        return {std::shared_ptr<details::SendEvent>(&m_sendEvent, [](details::SendEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::recvfrom(Host& remote, char* result, size_t length)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::RecvfromEvent>(m_handle, m_scheduler, remote, result, length)};
+        m_recvfromEvent.reset(m_handle, m_scheduler, &remote, result, length);
+        return {std::shared_ptr<details::RecvfromEvent>(&m_recvfromEvent, [](details::RecvfromEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncUdpSocket::sendto(const Host& remote, Bytes bytes)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::SendtoEvent>(m_handle, m_scheduler, remote, std::move(bytes))};
+        m_sendtoEvent.reset(m_handle, m_scheduler, remote, std::move(bytes));
+        return {std::shared_ptr<details::SendtoEvent>(&m_sendtoEvent, [](details::SendtoEvent*){})};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncUdpSocket::close()
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::CloseEvent>(m_handle, m_scheduler)};
+        m_closeEvent.reset(m_handle, m_scheduler);
+        return {std::shared_ptr<details::CloseEvent>(&m_closeEvent, [](details::CloseEvent*){})};
     }
 
     std::expected<SockAddr, CommonError> AsyncUdpSocket::getSrcAddr() const
@@ -547,7 +559,8 @@ namespace galay {
         assert(m_ssl != nullptr && "SSL cannot be nullptr");
         LogTrace("[AsyncSslSocket::accept] this m_scheduler: {}", static_cast<void*>(m_scheduler));
         builder.m_scheduler = m_scheduler;
-        return {std::make_shared<details::AcceptEvent>(GHandle(SSL_get_fd(m_ssl)), m_scheduler, builder.m_handle)};
+        m_acceptEvent.reset(GHandle(SSL_get_fd(m_ssl)), m_scheduler, &builder.m_handle);
+        return {std::shared_ptr<details::AcceptEvent>(&m_acceptEvent, [](details::AcceptEvent*){})};
     }
 
     std::expected<void, CommonError> AsyncSslSocket::readyToSslAccept(AsyncSslSocketBuilder &builder)
@@ -587,14 +600,16 @@ namespace galay {
     AsyncResult<std::expected<bool, CommonError>> AsyncSslSocket::sslAccept(AsyncSslSocketBuilder& builder)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        return {std::make_shared<details::SslAcceptEvent>(builder.m_ssl, m_scheduler)};
+        m_sslAcceptEvent.reset(builder.m_ssl, m_scheduler);
+        return {std::shared_ptr<details::SslAcceptEvent>(&m_sslAcceptEvent, [](details::SslAcceptEvent*){})};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::connect(const Host& addr)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         assert(m_ssl != nullptr && "SSL cannot be nullptr");
-        return {std::make_shared<details::ConnectEvent>(GHandle(SSL_get_fd(m_ssl)), m_scheduler, addr)};
+        m_connectEvent.reset(GHandle(SSL_get_fd(m_ssl)), m_scheduler, addr);
+        return {std::shared_ptr<details::ConnectEvent>(&m_connectEvent, [](details::ConnectEvent*){})};
     }
 
     void AsyncSslSocket::readyToSslConnect()
@@ -608,28 +623,32 @@ namespace galay {
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         assert(m_ssl != nullptr && "SSL cannot be nullptr");
-        return {std::make_shared<details::SslConnectEvent>(m_ssl, m_scheduler)};
+        m_sslConnectEvent.reset(m_ssl, m_scheduler);
+        return {std::shared_ptr<details::SslConnectEvent>(&m_sslConnectEvent, [](details::SslConnectEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncSslSocket::sslRecv(char* result, size_t length)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         assert(m_ssl != nullptr && "SSL cannot be nullptr");
-        return {std::make_shared<details::SslRecvEvent>(m_ssl, m_scheduler, result, length)};
+        m_sslRecvEvent.reset(m_ssl, m_scheduler, result, length);
+        return {std::shared_ptr<details::SslRecvEvent>(&m_sslRecvEvent, [](details::SslRecvEvent*){})};
     }
 
     AsyncResult<std::expected<Bytes, CommonError>> AsyncSslSocket::sslSend(Bytes bytes)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         assert(m_ssl != nullptr && "SSL cannot be nullptr");
-        return {std::make_shared<details::SslSendEvent>(m_ssl, m_scheduler, std::move(bytes))};
+        m_sslSendEvent.reset(m_ssl, m_scheduler, std::move(bytes));
+        return {std::shared_ptr<details::SslSendEvent>(&m_sslSendEvent, [](details::SslSendEvent*){})};
     }
 
     AsyncResult<std::expected<void, CommonError>> AsyncSslSocket::sslClose()
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
         assert(m_ssl != nullptr && "SSL cannot be nullptr");
-        return {std::make_shared<details::SslCloseEvent>(m_ssl, m_scheduler)};
+        m_sslCloseEvent.reset(m_ssl, m_scheduler);
+        return {std::shared_ptr<details::SslCloseEvent>(&m_sslCloseEvent, [](details::SslCloseEvent*){})};
     }
 
     AsyncSslSocket AsyncSslSocket::clone() const    
