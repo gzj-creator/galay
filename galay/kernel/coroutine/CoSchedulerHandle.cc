@@ -22,5 +22,15 @@ namespace galay
     {
         return AsyncFactory(*this);
     }
+
+    void CoSchedulerHandle::destory(CoroutineBase::wptr co)
+    {
+        m_scheduler->destroyCoroutine(co);
+    }
+
+    void CoSchedulerHandle::spawn(CoroutineBase::wptr co)
+    {
+        m_scheduler->resumeCoroutine(co);
+    }
 }
 

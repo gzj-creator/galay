@@ -4,12 +4,12 @@
 #include <memory>
 #include <coroutine>
 #include <optional>
-#include <queue>
 #include <atomic>
 #include <variant>
 #include <expected>
 #include <functional>
 #include <concepts>
+#include "CoScheduler.hpp"
 
 namespace galay 
 {
@@ -58,7 +58,7 @@ public:
     virtual CoroutineScheduler* belongScheduler() const = 0;
     virtual void resume() = 0;
     virtual void destroy() = 0;
-    virtual CoroutineBase& then(const Handler& callback) = 0;
+    virtual CoroutineBase& then(CoroutineBase::wptr co) = 0;
     virtual ~CoroutineBase() = default;
 
     virtual void modToSuspend() = 0;
@@ -95,16 +95,14 @@ template<CoType T>
 class PromiseType: public PromiseTypeBase
 {
 public:
-    template<CoType U>
     struct YieldValue {
-        U value;
         bool re_scheduler = false;
     };
 
     int get_return_object_on_alloaction_failure() noexcept { return -1; }
     Coroutine<T> get_return_object() noexcept;
     std::suspend_always initial_suspend() noexcept { return {}; }
-    std::suspend_always yield_value(YieldValue<T>&& value) noexcept;
+    std::suspend_always yield_value(YieldValue&& value) noexcept;
     std::suspend_never final_suspend() noexcept { return {};  }
     void unhandled_exception() noexcept {}
     void return_value (T&& value) const noexcept;
@@ -125,13 +123,29 @@ Exit:
 */
 
 template<CoType T>
+    struct WaitResult {
+    public:
+        //拷贝防止协程生命周期问题
+        WaitResult(Coroutine<T> co) : m_coroutine(co) {}
+        bool await_ready() {
+            return false;
+        }
+
+        bool await_suspend(std::coroutine_handle<> handle);
+        std::optional<T> await_resume() {
+            return m_coroutine.result();
+        }
+    private:
+        Coroutine<T> m_coroutine;
+    };
+
+
+template<CoType T>
 class Coroutine: public CoroutineBase
 {
     friend class PromiseType<T>;
     friend class CoroutineScheduler;
     friend class CoroutineConsumer;
-    template<CoType B>
-    friend class CoroutineDataVisitor; 
 
     struct alignas(64) CoroutineData
     {
@@ -140,7 +154,7 @@ class Coroutine: public CoroutineBase
         std::atomic<CoroutineStatus> m_status = CoroutineStatus::Suspended;
         std::atomic<CoroutineScheduler*> m_scheduler = nullptr;
 
-        std::queue<Handler> m_cbs;
+        CoroutineBase::wptr m_next;
     };
 
 public:
@@ -151,8 +165,8 @@ public:
     explicit Coroutine(std::coroutine_handle<promise_type> handle) noexcept;
     Coroutine(Coroutine&& other) noexcept;
     Coroutine(const Coroutine& other) noexcept;
-    Coroutine& operator=(Coroutine&& other) noexcept;
-    Coroutine& operator=(const Coroutine& other) noexcept;
+    Coroutine& operator=(Coroutine&& other) = delete;
+    Coroutine& operator=(const Coroutine& other) = delete;
     
     CoroutineScheduler* belongScheduler() const override;
 
@@ -164,12 +178,15 @@ public:
 
     void destroy() override;
     void resume() override;
-    CoroutineBase& then(const Handler& callback) override;
+    CoroutineBase& then(CoroutineBase::wptr co) override;
     
     std::optional<T> result();
     std::optional<T> operator()();
 
     CoroutineBase::wptr origin();
+    
+    WaitResult<T> wait();
+    
     ~Coroutine() override = default;
 private:
     void modToSuspend() override {
@@ -237,21 +254,10 @@ private:
 };
 
 
-template<CoType T>
-class CoroutineDataVisitor {
-public:
-    CoroutineDataVisitor(CoroutineBase::wptr coroutine);
-    bool setResult(T&& result);
-    bool setScheduler(CoroutineScheduler* scheduler);
-private:
-    CoroutineBase::wptr m_coroutine;
-};
-
-
-
 
 }
 
+#include "CoScheduler.hpp"
 #include "Coroutine.inl"
 
 #endif

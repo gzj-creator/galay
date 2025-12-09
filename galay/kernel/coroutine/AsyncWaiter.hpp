@@ -2,7 +2,7 @@
 #define GALAY_ASYNC_WAITER_HPP
 
 #include "Result.hpp"
-#include "galay/common/Common.h"
+#include "CoScheduler.hpp"
 #include "CoScheduler.hpp"
 #include <list>
 
@@ -119,7 +119,7 @@ namespace galay::details
         }
         if(m_tasks) {
             for(auto it = m_tasks->begin(); it != m_tasks->end(); ++it) {
-                waker.belongScheduler()->schedule(*it);
+                waker.belongScheduler()->resumeCoroutine(*it);
             }
         }
         return true;

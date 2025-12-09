@@ -4,7 +4,7 @@
 
 #include "Runtime.h"
 #include "galay/common/Common.h"
-#include "galay/kernel/async/AsyncFactory.h"
+#include "galay/common/Log.h"
 #include <thread>
 
 namespace galay
@@ -308,7 +308,7 @@ namespace galay
                 if(m_cManager) {
                     m_cManager->manage(co);
                 }
-                m_cSchedulers[old].schedule(co);
+                m_cSchedulers[old].resumeCoroutine(co);
                 break;
             }
         }
@@ -326,7 +326,7 @@ namespace galay
         if(m_cManager) {
             m_cManager->manage(co);
         }
-        m_cSchedulers[token].schedule(co);
+        m_cSchedulers[token].resumeCoroutine(co);
         return CoSchedulerHandle(&m_cSchedulers[token], this);
     }
 

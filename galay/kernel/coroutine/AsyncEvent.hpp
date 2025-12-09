@@ -2,7 +2,6 @@
 #define GALAY_ASYNC_EVENT_HPP
 
 #include "Waker.h"
-#include "galay/kernel/event/Event.h"
 
 namespace galay
 {

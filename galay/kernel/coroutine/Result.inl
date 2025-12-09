@@ -3,7 +3,6 @@
 
 
 #include "Result.hpp"
-#include "CoScheduler.hpp"
 
 namespace galay {
 

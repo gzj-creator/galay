@@ -1,10 +1,10 @@
 #ifndef GALAY_CO_SCHEDULER_HPP
 #define GALAY_CO_SCHEDULER_HPP
 
+#include <memory>
 #include <string>
 #include <thread>
 #include "galay/common/Base.h"
-#include "Result.hpp"
 
 namespace galay {
 
@@ -15,13 +15,7 @@ namespace galay {
         kCoroutineActionTypeDestory,
     };
 
-    template<typename Func, typename CoRtn, typename ...Args>
-    concept AsyncFuncType = requires(Func func, Args... args) {
-        { std::forward<Func>(func)(std::forward<Args>(args)...) }
-        -> std::same_as<Coroutine<CoRtn>>;
-    };
-
-
+    class CoroutineBase;
 
     //想实现自己的协程调度器，继承CoroutineQueue类，并实现AddCoroutine、RunCoroutine、StopCoroutine三个方法
     //后续添加批量入队接口
@@ -31,7 +25,7 @@ namespace galay {
         using ptr = std::shared_ptr<CoroutineConsumerBase>;
         using uptr = std::unique_ptr<CoroutineConsumerBase>;
         virtual void start() = 0;
-        virtual void consume(CoroutineActionType type, CoroutineBase::wptr co) = 0;
+        virtual void consume(CoroutineActionType type, std::weak_ptr<CoroutineBase> co) = 0;
         virtual void stop() = 0;
         virtual ~CoroutineConsumerBase() = default;
     };
@@ -47,13 +41,13 @@ namespace galay {
 
         CoroutineConsumer();
         void start() override;
-        void consume(CoroutineActionType type, CoroutineBase::wptr co) override;
+        void consume(CoroutineActionType type, std::weak_ptr<CoroutineBase> co) override;
         void stop() override;
     private:
         void run();
     private:
         std::thread m_thread;
-        moodycamel::BlockingConcurrentQueue<std::pair<CoroutineActionType, CoroutineBase::wptr>> m_queue;
+        moodycamel::BlockingConcurrentQueue<std::pair<CoroutineActionType, std::weak_ptr<CoroutineBase>>> m_queue;
     };
 
 
@@ -68,24 +62,13 @@ namespace galay {
         std::string name() { return "CoroutineScheduler"; }
         bool start();
         bool stop();
-        template<CoType T>
-        bool schedule(Coroutine<T>&& co);
 
-        bool schedule(CoroutineBase::wptr co);
-
-        bool resumeCoroutine(CoroutineBase::wptr co);
-        bool destroyCoroutine(CoroutineBase::wptr co);
+        bool resumeCoroutine(std::weak_ptr<CoroutineBase> co);
+        bool destroyCoroutine(std::weak_ptr<CoroutineBase> co);
 
     private:
         CoroutineConsumer::uptr m_consumer;
     };
-
-    template <CoType T>
-    inline bool CoroutineScheduler::schedule(Coroutine<T> &&co)
-    {
-        resumeCoroutine(co.origin());
-    }
-
 
 
 }

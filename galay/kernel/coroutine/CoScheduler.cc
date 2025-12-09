@@ -1,6 +1,7 @@
 #include "CoScheduler.hpp"
 #include "galay/common/Common.h"
 #include "kernel/coroutine/Coroutine.hpp"
+#include "galay/common/Log.h"
 #include <utility>
 
 
@@ -115,10 +116,6 @@ namespace galay
         return true;
     }
 
-    bool CoroutineScheduler::schedule(CoroutineBase::wptr co)
-    {
-        return resumeCoroutine(co);
-    }
 
     bool CoroutineScheduler::resumeCoroutine(CoroutineBase::wptr co)
     {

@@ -1,9 +1,10 @@
 #ifndef GALAY_FILE_EVENT_H
 #define GALAY_FILE_EVENT_H 
 
-#include "galay/kernel/coroutine/Result.hpp"
 #include "galay/common/Common.h"
 #include "galay/kernel/coroutine/Coroutine.hpp"
+#include "galay/kernel/event/Event.h"
+#include "galay/kernel/coroutine/AsyncEvent.hpp"
 #include "Bytes.h"
 
 #ifdef USE_AIO

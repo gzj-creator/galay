@@ -2,12 +2,26 @@
 #define GALAY_COROUTINE_INL
 
 #include "Coroutine.hpp"
+#include "CoScheduler.hpp"
 #include <atomic>
 #include <coroutine>
 
 
 namespace galay
 {
+
+    template<CoType T>
+    inline bool WaitResult<T>::await_suspend(std::coroutine_handle<> handle)
+    {
+        auto wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
+        if(auto co_ptr = wait_co.lock()) {
+            co_ptr->modToSuspend();
+            m_coroutine.then(wait_co);
+            co_ptr->belongScheduler()->resumeCoroutine(m_coroutine.origin());
+            return true;
+        }
+        return false;
+    }
 
 
     template <CoType T>
@@ -18,9 +32,8 @@ namespace galay
     }
 
     template<CoType T>
-    inline std::suspend_always PromiseType<T>::yield_value(YieldValue<T>&& value) noexcept
+    inline std::suspend_always PromiseType<T>::yield_value(YieldValue&& value) noexcept
     {
-        *(m_coroutine->m_data->m_result) = std::move(value.value);
         m_coroutine->modToSuspend();
         if(value.re_scheduler) {
             m_coroutine->belongScheduler()->resumeCoroutine(m_coroutine);
@@ -31,7 +44,7 @@ namespace galay
     template<CoType T>
     inline void PromiseType<T>::return_value(T&& value) const noexcept
     {
-        *(m_coroutine->m_data->m_result) = std::move(value);
+        m_coroutine->m_data->m_result = std::move(value);
         m_coroutine->modToFinished();
     }
 
@@ -66,25 +79,6 @@ namespace galay
         m_handle = other.m_handle;
         m_data = other.m_data;
     }
-
-    template<CoType T>
-    inline Coroutine<T>& Coroutine<T>::operator=(Coroutine&& other) noexcept
-    {
-        m_handle = other.m_handle;
-        other.m_handle = nullptr;
-        m_data = other.m_data;
-        other.m_data.reset();
-        return *this;
-    }
-
-    template<CoType T>
-    Coroutine<T>& Coroutine<T>::operator=(const Coroutine& other) noexcept
-    {
-        m_handle = other.m_handle;
-        m_data  = other.m_data;
-        return *this;
-    }
-
 
     template<CoType T>
     inline bool Coroutine<T>::isRunning() const
@@ -123,9 +117,9 @@ namespace galay
     }
 
     template <CoType T>
-    inline CoroutineBase& Coroutine<T>::then(const Handler &callback)
+    inline CoroutineBase& Coroutine<T>::then(CoroutineBase::wptr co)
     {
-        m_data->m_cbs.push(callback);
+        m_data->m_next = co;
         return *this;
     }
 
@@ -154,6 +148,12 @@ namespace galay
         return m_handle.promise().getCoroutine();
     }
 
+    template<CoType T>
+    inline WaitResult<T> Coroutine<T>::wait()
+    {
+        return WaitResult<T>(*this);
+    }
+
 
     template<CoType T>
     inline void Coroutine<T>::destroy()
@@ -171,32 +171,12 @@ namespace galay
     template <CoType T>
     inline void Coroutine<T>::executeDeferTask()
     {
-        while(!m_data->m_cbs.empty()) {
-            m_data->m_cbs.front()();
-            m_data->m_cbs.pop();
+        if(auto next = m_data->m_next.lock()) {
+            next->belongScheduler()->resumeCoroutine(next);
+            m_data->m_next.reset();
         }
     }
 
-
-    template <CoType T>
-    inline CoroutineDataVisitor<T>::CoroutineDataVisitor(CoroutineBase::wptr coroutine)
-        : m_coroutine(coroutine)
-    {
-    }
-
-    template <CoType T>
-    inline bool CoroutineDataVisitor<T>::setResult(T&& result) {
-        m_coroutine.lock()->template implCast<T>()->m_data->m_result = std::move(result);
-        return true;
-    }
-
-
-    template <CoType T>
-    inline bool CoroutineDataVisitor<T>::setScheduler(CoroutineScheduler *scheduler)
-    {
-        m_coroutine.lock()->template implCast<T>()->m_data->m_scheduler = scheduler;
-        return true;
-    }
 
 }
 

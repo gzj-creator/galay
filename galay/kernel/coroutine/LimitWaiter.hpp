@@ -132,7 +132,7 @@ namespace galay::details
         m_waiter.m_waker = waker;
         if(m_tasks) {
             for(auto it = m_tasks->begin(); it != m_tasks->end(); ++it) {
-                waker.belongScheduler()->schedule(*it);
+                waker.belongScheduler()->resumeCoroutine(*it);
             }
         }
         return true;

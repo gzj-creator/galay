@@ -6,6 +6,7 @@
 #include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 #include "NetEvent.h"
 #include "SslEvent.h"
+#include "galay/kernel/coroutine/Result.hpp"
 
 namespace galay {
 

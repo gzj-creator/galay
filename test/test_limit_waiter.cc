@@ -38,14 +38,8 @@ Coroutine<nil> test(CoSchedulerHandle handle)
 {
     std::shared_ptr<LimitWaiter<nil, Infallible>> waiter = std::make_shared<LimitWaiter<nil, Infallible>>();
     auto co1 = test1(handle, waiter);
-    co1.then([](){
-        std::cout << "test1 success" << std::endl;
-    });
     auto co2 = test2(handle, waiter);
-    co2.then([](){
-        std::cout << "test2 success" << std::endl;
-    });
-    waiter->appendTask(std::move(co1));
+    co2.then(co1.origin());
     waiter->appendTask(std::move(co2));
     auto result = co_await waiter->wait();
     if(result) {

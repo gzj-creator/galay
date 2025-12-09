@@ -7,6 +7,7 @@
 #endif
 
 #include "FileEvent.h"
+#include "galay/kernel/coroutine/Result.hpp"
 #include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
 
 namespace galay 
