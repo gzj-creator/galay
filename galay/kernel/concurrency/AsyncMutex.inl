@@ -8,21 +8,34 @@ namespace galay
 {
     namespace details
     {
-        inline LockEvent::LockEvent(AsyncMutex& mutex)
+        inline LockResult::LockResult(AsyncMutex& mutex)
             : m_mutex(mutex)
         {
         }
 
-        inline bool LockEvent::onReady()
+        inline bool LockResult::await_ready()
         {
             // 检查是否能立即获取锁
             return m_mutex.tryLock();
         }
 
-        inline bool LockEvent::onSuspend(Waker waker)
+        inline bool LockResult::await_suspend(std::coroutine_handle<> handle)
         {
-            m_mutex.m_waiters.enqueue(waker);
-            return true;
+            m_wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
+            if(auto co_ptr = m_wait_co.lock()) {
+                co_ptr->modToSuspend();
+                m_mutex.m_waiters.enqueue(Waker(m_wait_co));
+                return true;
+            }
+            return false;
+        }
+
+        inline nil LockResult::await_resume() const
+        {
+            if(auto co_ptr = m_wait_co.lock()) {
+                co_ptr->modToRunning();
+            }
+            return nil{};
         }
     }
 
@@ -35,18 +48,10 @@ namespace galay
     {
     }
 
-    inline AsyncResult<nil> AsyncMutex::lock()
+    inline details::LockResult AsyncMutex::lock()
     {
-        // 尝试立即获取锁
-        if (tryLock())
-        {
-            return AsyncResult<nil>(nil{});
-        }
-
-        // 创建 LockEvent，协程将在此处暂停
-        auto event = std::make_shared<details::LockEvent>(*this);
-        return AsyncResult<nil>(event);
-    }
+        return details::LockResult(*this);
+    }       
 
     inline void AsyncMutex::unlock()
     {

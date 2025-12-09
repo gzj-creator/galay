@@ -1,7 +1,6 @@
 #ifndef GALAY_KERNEL_CONCURRENCY_UNSAFECHANNEL_H
 #define GALAY_KERNEL_CONCURRENCY_UNSAFECHANNEL_H
 
-#include <atomic>
 #include <cstddef>
 #include <queue>
 #include "galay/kernel/coroutine/Result.hpp"
@@ -16,25 +15,25 @@ namespace galay::unsafe
 
     namespace details {
         template <typename T>
-        class ChannelEvent : public AsyncEvent<std::optional<T>> {
+        class ChannelResult {
         public:
-            ChannelEvent(AsyncChannel<T>& channel)
+            ChannelResult(AsyncChannel<T>& channel)
                 : m_channel(channel) {}
-            bool onReady() override;
-            bool onSuspend(Waker waker) override;
-            std::optional<T> onResume() override;
+            bool await_ready();
+            bool await_suspend(std::coroutine_handle<> handle);
+            std::optional<T> await_resume() const;
         private:
             AsyncChannel<T>& m_channel;
         };
 
         template <typename T>
-        class BatchChannelEvent : public AsyncEvent<std::optional<std::vector<T>>> {
+        class BatchChannelResult {
         public:
-            BatchChannelEvent(AsyncChannel<T>& channel)
+            BatchChannelResult(AsyncChannel<T>& channel)
                 : m_channel(channel) {}
-            bool onReady() override;
-            bool onSuspend(Waker waker) override;
-            std::optional<std::vector<T>> onResume() override;
+            bool await_ready();
+            bool await_suspend(std::coroutine_handle<> handle);
+            std::optional<std::vector<T>> await_resume() const;
         private:
             AsyncChannel<T>& m_channel;
         };
@@ -45,12 +44,14 @@ namespace galay::unsafe
     class AsyncChannel
     {
         template <typename U>
-        friend class details::ChannelEvent;
+        friend class details::ChannelResult;
+        template<typename U>
+        friend class details::BatchChannelResult;
     public:
         bool send(T&& value);
         bool sendBatch(const std::vector<T>& values);
-        AsyncResult<std::optional<T>> recv();
-        AsyncResult<std::optional<std::vector<T>>> recvBatch();
+        details::ChannelResult<T> recv();
+        details::BatchChannelResult<T> recvBatch();
 
         size_t size() {
             return m_queue.size();

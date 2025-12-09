@@ -13,29 +13,31 @@ namespace galay
 
     namespace details
     {
-        class LockEvent : public AsyncEvent<nil>
+        class LockResult
         {
             friend class galay::AsyncMutex;
         public:
-            LockEvent(AsyncMutex& mutex);
-            bool onReady() override;
-            bool onSuspend(Waker waker) override;
+            LockResult(AsyncMutex& mutex);
 
+            bool await_ready();
+            bool await_suspend(std::coroutine_handle<> handle);
+            nil await_resume() const;
         private:
             AsyncMutex& m_mutex;
+            CoroutineBase::wptr m_wait_co;
         };
     }
 
     class AsyncMutex
     {
-        friend class details::LockEvent;
+        friend class details::LockResult;
 
     public:
         AsyncMutex();
         ~AsyncMutex();
 
         // 返回AsyncResult，协程可以await
-        AsyncResult<nil> lock();
+        details::LockResult lock();
 
         // 解锁
         void unlock();

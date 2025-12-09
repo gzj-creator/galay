@@ -133,10 +133,14 @@ template<CoType T>
 
         bool await_suspend(std::coroutine_handle<> handle);
         std::optional<T> await_resume() {
+            if(auto co_ptr = m_wait_co.lock()) {
+                co_ptr->modToRunning();
+            }
             return m_coroutine.result();
         }
     private:
         Coroutine<T> m_coroutine;
+        CoroutineBase::wptr m_wait_co;
     };
 
 

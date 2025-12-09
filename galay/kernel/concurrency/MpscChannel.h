@@ -2,10 +2,10 @@
 #define GALAY_KERNEL_CONCURRENCY_MPSCCHANNEL_H
 
 #include "galay/kernel/coroutine/Result.hpp"
+#include "galay/kernel/coroutine/Coroutine.hpp"
 #include <atomic>
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include <cstdint>
-#include <memory>
 #include <optional>
 
 namespace galay::mpsc
@@ -15,25 +15,25 @@ namespace galay::mpsc
 
     namespace details {
         template<typename T>
-        class ChannelEvent : public AsyncEvent<std::optional<T>> {
+        class ChannelResult {
         public:
-            ChannelEvent(AsyncChannel<T>& channel)
+            ChannelResult(AsyncChannel<T>& channel)
                 : m_channel(channel) {}
-            bool onReady() override;
-            bool onSuspend(Waker waker) override;
-            std::optional<T> onResume() override;
+            bool await_ready();
+            bool await_suspend(std::coroutine_handle<> handle);
+            std::optional<T> await_resume() const;
         private:
             AsyncChannel<T>& m_channel;
         };
 
         template<typename T>
-        class BatchChannelEvent : public AsyncEvent<std::optional<std::vector<T>>> {
+        class BatchChannelResult {
         public:
-            BatchChannelEvent(AsyncChannel<T>& channel)
+            BatchChannelResult(AsyncChannel<T>& channel)
                 : m_channel(channel) {}
-            bool onReady() override;
-            bool onSuspend(Waker waker) override;
-            std::optional<std::vector<T>> onResume() override;
+            bool await_ready();
+            bool await_suspend(std::coroutine_handle<> handle);
+            std::optional<std::vector<T>> await_resume() const;
         private:
             AsyncChannel<T>& m_channel;
         };
@@ -44,9 +44,9 @@ namespace galay::mpsc
     class AsyncChannel
     {
         template<typename U>
-        friend class details::ChannelEvent;
+        friend class details::ChannelResult;
         template<typename U>
-        friend class details::BatchChannelEvent;
+        friend class details::BatchChannelResult;
     public:
         static constexpr size_t BATCH_SIZE = 1024;
 
@@ -73,12 +73,12 @@ namespace galay::mpsc
             return true;
         }
 
-        AsyncResult<std::optional<T>> recv() {
-            return {m_event};
+        details::ChannelResult<T> recv() {
+            return details::ChannelResult<T>(*this);
         }
 
-        AsyncResult<std::optional<std::vector<T>>> recvBatch() {
-            return {m_batchEvent};
+        details::BatchChannelResult<T> recvBatch() {
+            return details::BatchChannelResult<T>(*this);
         }
     private:
         // 内存对齐优化：将频繁访问的 m_size 单独对齐到缓存行
@@ -86,8 +86,6 @@ namespace galay::mpsc
         alignas(64) std::atomic_uint32_t m_size{0};
         moodycamel::ConcurrentQueue<T> m_queue;
         Waker m_waker;  // 放在最后，减少对 m_size 的影响
-        std::shared_ptr<details::ChannelEvent<T>> m_event = std::make_shared<details::ChannelEvent<T>>(*this);
-        std::shared_ptr<details::BatchChannelEvent<T>> m_batchEvent = std::make_shared<details::BatchChannelEvent<T>>(*this);
     };
 }
 

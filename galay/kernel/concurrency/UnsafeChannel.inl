@@ -7,45 +7,58 @@ namespace galay::unsafe
 {
     namespace details {
         template <typename T>
-        inline bool ChannelEvent<T>::onReady()
+        inline bool ChannelResult<T>::await_ready()
         {
             return !m_channel.m_queue.empty();
         }
 
         template <typename T>
-        inline bool ChannelEvent<T>::onSuspend(Waker waker)
+        inline bool ChannelResult<T>::await_suspend(std::coroutine_handle<> handle)
         {
-            m_channel.m_waker = waker;
+            auto wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
+            if(auto co_ptr = wait_co.lock()) {
+                co_ptr->modToSuspend();
+            }
+            m_channel.m_waker = Waker(wait_co);
             return true;
         }
 
         template <typename T>
-        inline std::optional<T> ChannelEvent<T>::onResume()
+        inline std::optional<T> ChannelResult<T>::await_resume() const
         {
-            if(m_channel.m_queue.empty()) {
-                return std::nullopt;
+            auto co = m_channel.m_waker.getCoroutine();
+            if(auto co_ptr = co.lock()) {
+                co_ptr->modToRunning();
             }
             T value = m_channel.m_queue.front();
             m_channel.m_queue.pop();
-            return value;
+            return std::move(value);
         }
 
         template <typename T>
-        inline bool BatchChannelEvent<T>::onReady()
+        inline bool BatchChannelResult<T>::await_ready()
         {
             return !m_channel.m_queue.empty();
         }
         
         template <typename T>
-        inline bool BatchChannelEvent<T>::onSuspend(Waker waker)
+        inline bool BatchChannelResult<T>::await_suspend(std::coroutine_handle<> handle)
         {
-            m_channel.m_waker = waker;
+            auto wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
+            if(auto co_ptr = wait_co.lock()) {
+                co_ptr->modToSuspend();
+            }
+            m_channel.m_waker = Waker(wait_co);
             return true;
-        }
+        }   
 
         template <typename T>
-        inline std::optional<std::vector<T>> BatchChannelEvent<T>::onResume()
+        inline std::optional<std::vector<T>> BatchChannelResult<T>::await_resume() const
         {
+            auto co = m_channel.m_waker.getCoroutine();
+            if(auto co_ptr = co.lock()) {
+                co_ptr->modToRunning();
+            }
             if(m_channel.m_queue.empty()) {
                 return std::nullopt;
             }
@@ -91,16 +104,16 @@ namespace galay::unsafe
     }
 
     template <typename T>
-    inline AsyncResult<std::optional<T>> AsyncChannel<T>::recv()
+    inline details::ChannelResult<T> AsyncChannel<T>::recv()
     {
-        return AsyncResult<std::optional<T>>(std::make_shared<details::ChannelEvent<T>>(*this));
+        return details::ChannelResult<T>(*this);
     }
     
     
     template <typename T>
-    inline AsyncResult<std::optional<std::vector<T>>> AsyncChannel<T>::recvBatch()
+    inline details::BatchChannelResult<T> AsyncChannel<T>::recvBatch()
     {
-        return AsyncResult<std::optional<std::vector<T>>>(std::make_shared<details::BatchChannelEvent<T>>(*this));
+        return details::BatchChannelResult<T>(*this);
     }
 }
 

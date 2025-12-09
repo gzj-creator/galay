@@ -7,21 +7,30 @@ namespace galay::mpsc
 {
     namespace details {
         template<typename T>
-        inline bool ChannelEvent<T>::onReady() {
+        inline bool ChannelResult<T>::await_ready() {
             return m_channel.m_size.load(std::memory_order_acquire) > 0;
         }
 
         template<typename T>
-        inline bool ChannelEvent<T>::onSuspend(Waker waker) {
-            m_channel.m_waker = waker;
+        inline bool ChannelResult<T>::await_suspend(std::coroutine_handle<> handle) {
+            auto wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
             if (m_channel.m_size.load(std::memory_order_acquire) > 0) {
                 return false;
             }
-            return true;
+            if(auto co_ptr = wait_co.lock()) {
+                m_channel.m_waker = Waker(wait_co);
+                co_ptr->modToSuspend();
+                return true;
+            }
+            return false;
         }
 
         template<typename T>
-        inline std::optional<T> ChannelEvent<T>::onResume() {
+        inline std::optional<T> ChannelResult<T>::await_resume() const {
+            auto co = m_channel.m_waker.getCoroutine();
+            if(auto co_ptr = co.lock()) {
+                co_ptr->modToRunning();
+            }
             T value;
             if (!m_channel.m_queue.try_dequeue(value)) {
                 return std::nullopt;
@@ -31,21 +40,30 @@ namespace galay::mpsc
         }
 
         template<typename T>
-        inline bool BatchChannelEvent<T>::onReady() {
+        inline bool BatchChannelResult<T>::await_ready() {
             return m_channel.m_size.load(std::memory_order_acquire) > 0;
         }
 
         template<typename T>
-        inline bool BatchChannelEvent<T>::onSuspend(Waker waker) {
-            m_channel.m_waker = waker;
+        inline bool BatchChannelResult<T>::await_suspend(std::coroutine_handle<> handle) {
+            auto wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
             if (m_channel.m_size.load(std::memory_order_acquire) > 0) {
                 return false;
             }
-            return true;
+            if(auto co_ptr = wait_co.lock()) {
+                co_ptr->modToSuspend();
+                m_channel.m_waker = Waker(wait_co);
+                return true;
+            }
+            return false;
         }
 
         template<typename T>
-        inline std::optional<std::vector<T>> BatchChannelEvent<T>::onResume() {
+        inline std::optional<std::vector<T>> BatchChannelResult<T>::await_resume() const {
+            auto co = m_channel.m_waker.getCoroutine();
+            if(auto co_ptr = co.lock()) {
+                co_ptr->modToRunning();
+            }
             std::vector<T> values(AsyncChannel<T>::BATCH_SIZE);
             size_t count = m_channel.m_queue.try_dequeue_bulk(values.data(), values.size());
             if (count == 0) {

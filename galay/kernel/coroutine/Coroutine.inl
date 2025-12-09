@@ -13,10 +13,10 @@ namespace galay
     template<CoType T>
     inline bool WaitResult<T>::await_suspend(std::coroutine_handle<> handle)
     {
-        auto wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
-        if(auto co_ptr = wait_co.lock()) {
+        m_wait_co = std::coroutine_handle<PromiseTypeBase>::from_address(handle.address()).promise().getCoroutine();
+        if(auto co_ptr = m_wait_co.lock()) {
             co_ptr->modToSuspend();
-            m_coroutine.then(wait_co);
+            m_coroutine.then(m_wait_co);
             co_ptr->belongScheduler()->resumeCoroutine(m_coroutine.origin());
             return true;
         }
