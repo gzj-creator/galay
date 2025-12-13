@@ -30,7 +30,20 @@ namespace galay::details
     class NetEvent: public AsyncEvent<T>, public Event, public IOResultHolder
     {
     public:
-        void handleEvent() override { this->m_waker.wakeUp(); }
+        // 默认的 onSuspend 实现，子类必须覆盖此方法
+        // 这个默认实现只是为了避免纯虚函数错误，实际上不应该被调用
+        bool onSuspend(Waker waker) override {
+            this->m_waker = waker;
+            LogTrace("[NetEvent::onSuspend] DEFAULT IMPL CALLED! this={}, handle.fd={}", (void*)this, m_handle.fd);
+            // 立即唤醒，避免挂起
+            this->m_waker.wakeUp();
+            return false;
+        }
+
+        void handleEvent() override {
+            LogTrace("[NetEvent::handleEvent] this={}, handle.fd={}", (void*)this, m_handle.fd);
+            this->m_waker.wakeUp();
+        }
         GHandle getHandle() override { return m_handle; }
 
         // IOResultHolder 接口实现

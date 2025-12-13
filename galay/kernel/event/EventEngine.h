@@ -55,12 +55,13 @@ namespace galay::details
     };
 #endif
 
-    class EventEngine
+    // Reactor 模式事件引擎基类
+    class ReactorEventEngine
     {
         static std::atomic_uint32_t gEngineId;
     public:
-        using ptr = std::shared_ptr<EventEngine>;
-        EventEngine();
+        using ptr = std::shared_ptr<ReactorEventEngine>;
+        ReactorEventEngine();
         uint32_t getEngineID() const { return m_id.load(); }
         virtual bool start(int timeout) = 0;
         virtual bool stop() = 0;
@@ -72,30 +73,51 @@ namespace galay::details
         virtual std::optional<CommonError> getError() = 0;
         virtual GHandle getHandle() = 0;
         virtual void registerOnceLoopCallback(const std::function<void()>& callback) = 0;
-        virtual ~EventEngine() = default;
-
-#if defined(USE_IOURING)
-        // Proactor 风格接口 (io_uring 专用)
-        virtual int submitRead(Event* event, int fd, void* buf, size_t len) { return -1; }
-        virtual int submitWrite(Event* event, int fd, const void* buf, size_t len) { return -1; }
-        virtual int submitRecv(Event* event, int fd, void* buf, size_t len, int flags) { return -1; }
-        virtual int submitSend(Event* event, int fd, const void* buf, size_t len, int flags) { return -1; }
-        virtual int submitAccept(Event* event, int fd, sockaddr* addr, socklen_t* addrlen) { return -1; }
-        virtual int submitConnect(Event* event, int fd, const sockaddr* addr, socklen_t addrlen) { return -1; }
-        virtual int submitClose(Event* event, int fd) { return -1; }
-        virtual int submitRecvfrom(Event* event, int fd, void* buf, size_t len, int flags,
-                                   sockaddr* src_addr, socklen_t* addrlen) { return -1; }
-        virtual int submitSendto(Event* event, int fd, const void* buf, size_t len, int flags,
-                                 const sockaddr* dest_addr, socklen_t addrlen) { return -1; }
-#endif
+        virtual ~ReactorEventEngine() = default;
 
     protected:
         std::atomic_uint32_t m_id;
     };
 
+#if defined(USE_IOURING)
+    // Proactor 模式事件引擎基类 (io_uring)
+    class ProactorEventEngine
+    {
+        static std::atomic_uint32_t gEngineId;
+    public:
+        using ptr = std::shared_ptr<ProactorEventEngine>;
+        ProactorEventEngine();
+        uint32_t getEngineID() const { return m_id.load(); }
+        virtual bool start(int timeout) = 0;
+        virtual bool stop() = 0;
+        virtual bool notify() = 0;
+        virtual bool isRunning() const = 0;
+        virtual std::optional<CommonError> getError() = 0;
+        virtual GHandle getHandle() = 0;
+        virtual void registerOnceLoopCallback(const std::function<void()>& callback) = 0;
+
+        // Proactor 风格接口
+        virtual int submitRead(Event* event, int fd, void* buf, size_t len) = 0;
+        virtual int submitWrite(Event* event, int fd, const void* buf, size_t len) = 0;
+        virtual int submitRecv(Event* event, int fd, void* buf, size_t len, int flags) = 0;
+        virtual int submitSend(Event* event, int fd, const void* buf, size_t len, int flags) = 0;
+        virtual int submitAccept(Event* event, int fd, sockaddr* addr, socklen_t* addrlen) = 0;
+        virtual int submitConnect(Event* event, int fd, const sockaddr* addr, socklen_t addrlen) = 0;
+        virtual int submitClose(Event* event, int fd) = 0;
+        virtual int submitRecvfrom(Event* event, int fd, void* buf, size_t len, int flags,
+                                   sockaddr* src_addr, socklen_t* addrlen) = 0;
+        virtual int submitSendto(Event* event, int fd, const void* buf, size_t len, int flags,
+                                 const sockaddr* dest_addr, socklen_t addrlen) = 0;
+        virtual ~ProactorEventEngine() = default;
+
+    protected:
+        std::atomic_uint32_t m_id;
+    };
+#endif
+
     #if defined(USE_EPOLL)
     //default ET mode
-    class EpollEventEngine: public EventEngine
+    class EpollEventEngine: public ReactorEventEngine
     {
     public:
         EpollEventEngine(uint32_t max_events = DEFAULT_MAX_EVENTS);
@@ -123,15 +145,12 @@ namespace galay::details
     };
     #elif defined(USE_IOURING)
 
-    class IOUringEventEngine final: public EventEngine {
+    class IOUringEventEngine final: public ProactorEventEngine {
     public:
         explicit IOUringEventEngine(uint32_t queue_depth = DEFAULT_MAX_EVENTS);
         bool start(int timeout) override;
         bool stop() override;
         bool notify() override;
-        int addEvent(Event* event, void* ctx) override;
-        int modEvent(Event* event, void* ctx) override;
-        int delEvent(Event* event, void* ctx) override;
         bool isRunning() const override { return !m_stop.load(); }
         std::optional<CommonError> getError() override { return m_error; }
         GHandle getHandle() override { return GHandle{.fd = m_ring.ring_fd}; }
@@ -173,8 +192,8 @@ namespace galay::details
 
     #elif defined(USE_KQUEUE)
 
-    //default ET 
-    class KqueueEventEngine final : public EventEngine
+    //default ET
+    class KqueueEventEngine final : public ReactorEventEngine
     {
     public:
         explicit KqueueEventEngine(uint32_t max_events = DEFAULT_MAX_EVENTS);

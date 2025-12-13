@@ -19,6 +19,13 @@ namespace galay::details {
     class FileEvent: public AsyncEvent<T>, public Event, public IOResultHolder
     {
     public:
+        // 默认的 onSuspend 实现，子类必须覆盖此方法
+        bool onSuspend(Waker waker) override {
+            this->m_waker = waker;
+            // 子类应该覆盖此方法并提交实际的 io_uring 操作
+            return true;
+        }
+
         void handleEvent() override { this->m_waker.wakeUp(); }
         GHandle getHandle() override { return m_handle; }
 

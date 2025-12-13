@@ -14,14 +14,25 @@
 namespace galay::details
 {
 
-    std::atomic_uint32_t EventEngine::gEngineId = 0;
+    std::atomic_uint32_t ReactorEventEngine::gEngineId = 0;
 
-    EventEngine::EventEngine()
+    ReactorEventEngine::ReactorEventEngine()
         :m_id(0)
     {
         gEngineId.fetch_add(1);
         m_id.store(gEngineId.load());
     }
+
+#if defined(USE_IOURING)
+    std::atomic_uint32_t ProactorEventEngine::gEngineId = 0;
+
+    ProactorEventEngine::ProactorEventEngine()
+        :m_id(0)
+    {
+        gEngineId.fetch_add(1);
+        m_id.store(gEngineId.load());
+    }
+#endif
 
 #if defined(USE_EPOLL)
     EpollEventEngine::EpollEventEngine(uint32_t max_events)
@@ -382,22 +393,31 @@ namespace galay::details
 
             // 处理完成事件
             Event* event = static_cast<Event*>(io_uring_cqe_get_data(cqe));
-            if (event != nullptr) {
-                // 存储结果到 event（通过 IOResultHolder 接口）
-                // event 需要实现 setIOResult 方法
-                int result = cqe->res;
+            int result = cqe->res;
+
+            LogTrace("[IOUring] Completion event: event={}, result={}, fd={}",
+                     (void*)event, result, event ? event->getHandle().fd : -1);
+
+            // 跳过取消操作的完成事件（user_data 为 nullptr）
+            // 以及被取消的操作（result == -ECANCELED）
+            if (event != nullptr && result != -ECANCELED) {
+                LogTrace("[IOUring] Processing event: name={}, this={}",
+                         event->name(), (void*)event);
 
                 // 清理 msghdr 上下文（如果有）
                 m_msg_contexts.erase(event);
 
-                // 调用 event 的 handleEvent，传递结果
-                // 这里我们通过一个临时存储来传递结果
-                // Event 子类需要在 handleEvent 之前获取结果
+                // 存储结果到 event（通过 IOResultHolder 接口）
                 if (auto* io_event = dynamic_cast<class IOResultHolder*>(event)) {
                     io_event->setIOResult(result);
+                    LogTrace("[IOUring] Set IO result: {}", result);
                 }
 
+                LogTrace("[IOUring] Calling handleEvent on event={}", (void*)event);
                 event->handleEvent();
+                LogTrace("[IOUring] handleEvent completed for event={}", (void*)event);
+            } else if (result == -ECANCELED) {
+                LogTrace("[IOUring] Skipping canceled event: event={}", (void*)event);
             }
 
             io_uring_cqe_seen(&m_ring, cqe);
@@ -445,82 +465,6 @@ namespace galay::details
             return false;
         }
         return true;
-    }
-
-    // addEvent 使用 POLL_ADD 实现 Reactor 兼容
-    int IOUringEventEngine::addEvent(Event* event, void* ctx)
-    {
-        using namespace error;
-        m_error.reset();
-
-        int fd = event->getHandle().fd;
-        EventType type = event->getEventType();
-        LogTrace("[Add {} To IOUring Engine({}), Handle: {}, Type: {}]", event->name(), getEngineID(), fd, toString(type));
-
-        io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
-        if (!sqe) {
-            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
-            return -1;
-        }
-
-        // 转换事件类型到 poll 事件
-        unsigned poll_mask = 0;
-        switch (type) {
-            case kEventTypeRead:
-            case kEventTypeTimer:
-                poll_mask = POLLIN;
-                break;
-            case kEventTypeWrite:
-                poll_mask = POLLOUT;
-                break;
-            case kEventTypeError:
-                poll_mask = POLLERR;
-                break;
-            default:
-                return -1;
-        }
-
-        io_uring_prep_poll_add(sqe, fd, poll_mask);
-        io_uring_sqe_set_data(sqe, event);
-
-        int ret = io_uring_submit(&m_ring);
-        if (ret < 0) {
-            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
-            return ret;
-        }
-        return 0;
-    }
-
-    int IOUringEventEngine::modEvent(Event* event, void* ctx)
-    {
-        // io_uring 的 poll 是一次性的，修改需要先删除再添加
-        delEvent(event, ctx);
-        return addEvent(event, ctx);
-    }
-
-    int IOUringEventEngine::delEvent(Event* event, void* ctx)
-    {
-        using namespace error;
-        m_error.reset();
-
-        int fd = event->getHandle().fd;
-        LogTrace("[Del {} From IOUring Engine({}), Handle: {}]", event->name(), getEngineID(), fd);
-
-        io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
-        if (!sqe) {
-            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
-            return -1;
-        }
-
-        io_uring_prep_poll_remove(sqe, reinterpret_cast<__u64>(event));
-        io_uring_sqe_set_data(sqe, nullptr);
-
-        int ret = io_uring_submit(&m_ring);
-        if (ret < 0) {
-            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
-            return ret;
-        }
-        return 0;
     }
 
     io_uring_sqe* IOUringEventEngine::getSqe()
@@ -583,6 +527,9 @@ namespace galay::details
         using namespace error;
         m_error.reset();
 
+        LogTrace("[IOUring] submitRecv: event={}, name={}, fd={}, len={}",
+                 (void*)event, event->name(), fd, len);
+
         io_uring_sqe* sqe = getSqe();
         if (!sqe) {
             m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
@@ -597,6 +544,7 @@ namespace galay::details
             m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
             return ret;
         }
+        LogTrace("[IOUring] submitRecv success: event={}", (void*)event);
         return 0;
     }
 
@@ -604,6 +552,9 @@ namespace galay::details
     {
         using namespace error;
         m_error.reset();
+
+        LogTrace("[IOUring] submitSend: event={}, name={}, fd={}, len={}",
+                 (void*)event, event->name(), fd, len);
 
         io_uring_sqe* sqe = getSqe();
         if (!sqe) {
@@ -619,6 +570,7 @@ namespace galay::details
             m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
             return ret;
         }
+        LogTrace("[IOUring] submitSend success: event={}", (void*)event);
         return 0;
     }
 
@@ -671,6 +623,9 @@ namespace galay::details
         using namespace error;
         m_error.reset();
 
+        LogTrace("[IOUring] submitClose: event={}, name={}, fd={}",
+                 (void*)event, event->name(), fd);
+
         io_uring_sqe* sqe = getSqe();
         if (!sqe) {
             m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
@@ -685,6 +640,7 @@ namespace galay::details
             m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
             return ret;
         }
+        LogTrace("[IOUring] submitClose success: event={}", (void*)event);
         return 0;
     }
 

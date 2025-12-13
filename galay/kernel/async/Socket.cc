@@ -74,6 +74,8 @@ namespace galay {
 
     AsyncTcpSocket::~AsyncTcpSocket()
     {
+        LogTrace("[AsyncTcpSocket::~AsyncTcpSocket] this={}, fd={}, recvEvent={}, sendEvent={}, closeEvent={}",
+                 (void*)this, m_handle.fd, (void*)&m_recvEvent, (void*)&m_sendEvent, (void*)&m_closeEvent);
     }
 
     AsyncTcpSocket::AsyncTcpSocket(EventScheduler* scheduler, GHandle handle)

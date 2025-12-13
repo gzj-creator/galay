@@ -11,7 +11,8 @@
 #include <optional>
 
 namespace galay::details{
-    class EventEngine;
+    class ReactorEventEngine;
+    class ProactorEventEngine;
     class Event;
 }
 
@@ -27,18 +28,19 @@ namespace galay
         virtual ~Scheduler() = default;
     };
 
-    class EventScheduler final: public Scheduler
+#if !defined(USE_IOURING)
+    // Reactor 模式调度器 (epoll, kqueue)
+    class ReactorEventScheduler final: public Scheduler
     {
     public:
-        using ptr = std::shared_ptr<EventScheduler>;
-        using uptr = std::unique_ptr<EventScheduler>;
-
+        using ptr = std::shared_ptr<ReactorEventScheduler>;
+        using uptr = std::unique_ptr<ReactorEventScheduler>;
         using timer_ptr = std::shared_ptr<Timer>;
-        using engine_ptr = std::shared_ptr<details::EventEngine>;
+        using engine_ptr = std::shared_ptr<details::ReactorEventEngine>;
 
-        EventScheduler();
-        EventScheduler(engine_ptr engine);
-        std::string name() override { return "EventScheduler"; }
+        ReactorEventScheduler();
+        ReactorEventScheduler(engine_ptr engine);
+        std::string name() override { return "ReactorEventScheduler"; }
 
         bool activeEvent(details::Event* event, void* ctx);
         bool removeEvent(details::Event* event, void* ctx);
@@ -50,8 +52,37 @@ namespace galay
         bool isRunning() const;
         std::optional<CommonError> getError() const;
 
-#if defined(USE_IOURING)
-        // io_uring Proactor 风格接口
+        ~ReactorEventScheduler() = default;
+    protected:
+        std::unique_ptr<std::thread> m_thread;
+        std::shared_ptr<details::ReactorEventEngine> m_engine;
+    };
+
+    // 为了兼容性，定义 EventScheduler 为 ReactorEventScheduler 的别名
+    using EventScheduler = ReactorEventScheduler;
+
+#else
+    // Proactor 模式调度器 (io_uring)
+    class ProactorEventScheduler final: public Scheduler
+    {
+    public:
+        using ptr = std::shared_ptr<ProactorEventScheduler>;
+        using uptr = std::unique_ptr<ProactorEventScheduler>;
+        using timer_ptr = std::shared_ptr<Timer>;
+        using engine_ptr = std::shared_ptr<details::ProactorEventEngine>;
+
+        ProactorEventScheduler();
+        ProactorEventScheduler(engine_ptr engine);
+        std::string name() override { return "ProactorEventScheduler"; }
+
+        void registerOnceLoopCallback(const std::function<void()>& callback);
+        bool start(int timeout);
+        bool stop();
+        bool notify();
+        bool isRunning() const;
+        std::optional<CommonError> getError() const;
+
+        // Proactor 风格接口
         bool submitRead(details::Event* event, int fd, void* buf, size_t len);
         bool submitWrite(details::Event* event, int fd, const void* buf, size_t len);
         bool submitRecv(details::Event* event, int fd, void* buf, size_t len, int flags);
@@ -63,13 +94,16 @@ namespace galay
                            sockaddr* src_addr, socklen_t* addrlen);
         bool submitSendto(details::Event* event, int fd, const void* buf, size_t len, int flags,
                          const sockaddr* dest_addr, socklen_t addrlen);
-#endif
 
-        ~EventScheduler() = default;
+        ~ProactorEventScheduler() = default;
     protected:
         std::unique_ptr<std::thread> m_thread;
-        std::shared_ptr<details::EventEngine> m_engine;
+        std::shared_ptr<details::ProactorEventEngine> m_engine;
     };
+
+    // 为了兼容性，定义 EventScheduler 为 ProactorEventScheduler 的别名
+    using EventScheduler = ProactorEventScheduler;
+#endif
 
 }
 

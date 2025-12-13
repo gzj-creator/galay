@@ -116,6 +116,9 @@ int main(int argc, char* argv[])
     std::cout << "Backlog: " << backlog_size << std::endl;
     std::cout << "======================================\n" << std::endl;
     
+    // 启用日志（trace 级别）
+    galay::log::enable(spdlog::level::trace);
+
     // 初始化运行时
     RuntimeBuilder runtimeBuilder;
     Runtime runtime = runtimeBuilder.build();
