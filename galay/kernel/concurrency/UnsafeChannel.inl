@@ -30,7 +30,7 @@ namespace galay::unsafe
             if(auto co_ptr = co.lock()) {
                 co_ptr->modToRunning();
             }
-            T value = m_channel.m_queue.front();
+            T value = std::move(m_channel.m_queue.front());
             m_channel.m_queue.pop();
             return std::move(value);
         }
@@ -67,7 +67,7 @@ namespace galay::unsafe
             values.reserve(queue_size);
             // 修复：应该使用 queue_size 而不是 values.size()（此时 values 还是空的）
             for(size_t i = 0; i < queue_size; ++i) {
-                values.push_back(std::move(m_channel.m_queue.front()));
+                values.emplace_back(std::move(m_channel.m_queue.front()));
                 m_channel.m_queue.pop();
             }
             values.shrink_to_fit();
