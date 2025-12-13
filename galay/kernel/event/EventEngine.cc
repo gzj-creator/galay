@@ -332,7 +332,438 @@ namespace galay::details
     }
 
 #elif defined(USE_IOURING)
-    
+
+    IOUringEventEngine::IOUringEventEngine(uint32_t queue_depth)
+    {
+        using namespace error;
+        m_error.reset();
+        int ret = io_uring_queue_init(queue_depth, &m_ring, 0);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringInitError, static_cast<uint32_t>(-ret));
+        }
+    }
+
+    IOUringEventEngine::~IOUringEventEngine()
+    {
+        io_uring_queue_exit(&m_ring);
+    }
+
+    bool IOUringEventEngine::start(int timeout)
+    {
+        m_error.reset();
+        m_stop.store(false);
+        LogTrace("[IOUring Engine start, Engine: {}]", m_ring.ring_fd);
+
+        __kernel_timespec ts{};
+        __kernel_timespec* ts_ptr = nullptr;
+        if (timeout > 0) {
+            ts.tv_sec = timeout / 1000;
+            ts.tv_nsec = (timeout % 1000) * 1000000;
+            ts_ptr = &ts;
+        }
+
+        while (!m_stop.load()) {
+            io_uring_cqe* cqe;
+            int ret;
+
+            if (ts_ptr) {
+                ret = io_uring_wait_cqe_timeout(&m_ring, &cqe, ts_ptr);
+            } else {
+                ret = io_uring_wait_cqe(&m_ring, &cqe);
+            }
+
+            if (ret < 0) {
+                if (ret == -ETIME || ret == -EINTR) {
+                    continue;
+                }
+                continue;
+            }
+
+            // 处理完成事件
+            Event* event = static_cast<Event*>(io_uring_cqe_get_data(cqe));
+            if (event != nullptr) {
+                // 存储结果到 event（通过 IOResultHolder 接口）
+                // event 需要实现 setIOResult 方法
+                int result = cqe->res;
+
+                // 清理 msghdr 上下文（如果有）
+                m_msg_contexts.erase(event);
+
+                // 调用 event 的 handleEvent，传递结果
+                // 这里我们通过一个临时存储来传递结果
+                // Event 子类需要在 handleEvent 之前获取结果
+                if (auto* io_event = dynamic_cast<class IOResultHolder*>(event)) {
+                    io_event->setIOResult(result);
+                }
+
+                event->handleEvent();
+            }
+
+            io_uring_cqe_seen(&m_ring, cqe);
+
+            // 处理一次性回调
+            if (!m_once_loop_cbs.empty()) {
+                for (auto& callback : m_once_loop_cbs) {
+                    callback();
+                }
+                m_once_loop_cbs.clear();
+            }
+        }
+
+        return true;
+    }
+
+    bool IOUringEventEngine::stop()
+    {
+        m_error.reset();
+        if (!m_stop.load()) {
+            m_stop.store(true);
+            return notify();
+        }
+        return false;
+    }
+
+    bool IOUringEventEngine::notify()
+    {
+        using namespace error;
+        m_error.reset();
+
+        // 使用 IORING_OP_NOP 来唤醒等待的线程
+        io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return false;
+        }
+
+        io_uring_prep_nop(sqe);
+        io_uring_sqe_set_data(sqe, nullptr);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return false;
+        }
+        return true;
+    }
+
+    // addEvent 使用 POLL_ADD 实现 Reactor 兼容
+    int IOUringEventEngine::addEvent(Event* event, void* ctx)
+    {
+        using namespace error;
+        m_error.reset();
+
+        int fd = event->getHandle().fd;
+        EventType type = event->getEventType();
+        LogTrace("[Add {} To IOUring Engine({}), Handle: {}, Type: {}]", event->name(), getEngineID(), fd, toString(type));
+
+        io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        // 转换事件类型到 poll 事件
+        unsigned poll_mask = 0;
+        switch (type) {
+            case kEventTypeRead:
+            case kEventTypeTimer:
+                poll_mask = POLLIN;
+                break;
+            case kEventTypeWrite:
+                poll_mask = POLLOUT;
+                break;
+            case kEventTypeError:
+                poll_mask = POLLERR;
+                break;
+            default:
+                return -1;
+        }
+
+        io_uring_prep_poll_add(sqe, fd, poll_mask);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::modEvent(Event* event, void* ctx)
+    {
+        // io_uring 的 poll 是一次性的，修改需要先删除再添加
+        delEvent(event, ctx);
+        return addEvent(event, ctx);
+    }
+
+    int IOUringEventEngine::delEvent(Event* event, void* ctx)
+    {
+        using namespace error;
+        m_error.reset();
+
+        int fd = event->getHandle().fd;
+        LogTrace("[Del {} From IOUring Engine({}), Handle: {}]", event->name(), getEngineID(), fd);
+
+        io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_poll_remove(sqe, reinterpret_cast<__u64>(event));
+        io_uring_sqe_set_data(sqe, nullptr);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    io_uring_sqe* IOUringEventEngine::getSqe()
+    {
+        io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
+        if (!sqe) {
+            // 队列满了，先提交再获取
+            io_uring_submit(&m_ring);
+            sqe = io_uring_get_sqe(&m_ring);
+        }
+        return sqe;
+    }
+
+    int IOUringEventEngine::submitRead(Event* event, int fd, void* buf, size_t len)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_read(sqe, fd, buf, len, 0);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitWrite(Event* event, int fd, const void* buf, size_t len)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_write(sqe, fd, buf, len, 0);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitRecv(Event* event, int fd, void* buf, size_t len, int flags)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_recv(sqe, fd, buf, len, flags);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitSend(Event* event, int fd, const void* buf, size_t len, int flags)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_send(sqe, fd, buf, len, flags);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitAccept(Event* event, int fd, sockaddr* addr, socklen_t* addrlen)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_accept(sqe, fd, addr, addrlen, 0);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitConnect(Event* event, int fd, const sockaddr* addr, socklen_t addrlen)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_connect(sqe, fd, addr, addrlen);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitClose(Event* event, int fd)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        io_uring_prep_close(sqe, fd);
+        io_uring_sqe_set_data(sqe, event);
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitRecvfrom(Event* event, int fd, void* buf, size_t len, int flags,
+                                           sockaddr* src_addr, socklen_t* addrlen)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        // 创建并存储 msghdr 上下文
+        auto ctx = std::make_unique<MsgHdrContext>();
+        ctx->iov.iov_base = buf;
+        ctx->iov.iov_len = len;
+        ctx->msg.msg_name = src_addr;
+        ctx->msg.msg_namelen = addrlen ? *addrlen : 0;
+        ctx->msg.msg_iov = &ctx->iov;
+        ctx->msg.msg_iovlen = 1;
+        ctx->msg.msg_control = nullptr;
+        ctx->msg.msg_controllen = 0;
+        ctx->msg.msg_flags = 0;
+
+        io_uring_prep_recvmsg(sqe, fd, &ctx->msg, flags);
+        io_uring_sqe_set_data(sqe, event);
+
+        // 存储上下文，防止被释放
+        m_msg_contexts.insert(event, std::move(ctx));
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_msg_contexts.erase(event);
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
+
+    int IOUringEventEngine::submitSendto(Event* event, int fd, const void* buf, size_t len, int flags,
+                                         const sockaddr* dest_addr, socklen_t addrlen)
+    {
+        using namespace error;
+        m_error.reset();
+
+        io_uring_sqe* sqe = getSqe();
+        if (!sqe) {
+            m_error = CommonError(ErrorCode::CallIOUringGetSqeError, 0);
+            return -1;
+        }
+
+        // 创建并存储 msghdr 上下文
+        auto ctx = std::make_unique<MsgHdrContext>();
+        ctx->iov.iov_base = const_cast<void*>(buf);
+        ctx->iov.iov_len = len;
+        ctx->msg.msg_name = const_cast<sockaddr*>(dest_addr);
+        ctx->msg.msg_namelen = addrlen;
+        ctx->msg.msg_iov = &ctx->iov;
+        ctx->msg.msg_iovlen = 1;
+        ctx->msg.msg_control = nullptr;
+        ctx->msg.msg_controllen = 0;
+        ctx->msg.msg_flags = 0;
+
+        io_uring_prep_sendmsg(sqe, fd, &ctx->msg, flags);
+        io_uring_sqe_set_data(sqe, event);
+
+        // 存储上下文，防止被释放
+        m_msg_contexts.insert(event, std::move(ctx));
+
+        int ret = io_uring_submit(&m_ring);
+        if (ret < 0) {
+            m_msg_contexts.erase(event);
+            m_error = CommonError(ErrorCode::CallIOUringSubmitError, static_cast<uint32_t>(-ret));
+            return ret;
+        }
+        return 0;
+    }
 
 #elif defined(USE_KQUEUE)
 

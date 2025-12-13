@@ -1,5 +1,5 @@
 #ifndef GALAY_EVENT_H
-#define GALAY_EVENT_H 
+#define GALAY_EVENT_H
 
 #include "EventScheduler.h"
 
@@ -7,10 +7,20 @@ namespace galay {
     class EventDispatcher;
 }
 
-namespace galay::details 
-{ 
+namespace galay::details
+{
 
 extern std::string toString(EventType type);
+
+#if defined(USE_IOURING)
+// io_uring 结果持有者接口
+// Event 子类实现此接口以接收 io_uring 完成结果
+class IOResultHolder {
+public:
+    virtual ~IOResultHolder() = default;
+    virtual void setIOResult(int result) = 0;
+};
+#endif
 
 //must be alloc at heap
 class Event

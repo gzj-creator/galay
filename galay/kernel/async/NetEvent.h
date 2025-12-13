@@ -24,6 +24,26 @@ namespace galay
 namespace galay::details
 {
 
+#if defined(USE_IOURING)
+    // io_uring Proactor 模式的 NetEvent 基类
+    template <CoType T>
+    class NetEvent: public AsyncEvent<T>, public Event, public IOResultHolder
+    {
+    public:
+        void handleEvent() override { this->m_waker.wakeUp(); }
+        GHandle getHandle() override { return m_handle; }
+
+        // IOResultHolder 接口实现
+        void setIOResult(int result) override { m_io_result = result; }
+
+    protected:
+        bool m_ready = false;
+        GHandle m_handle;
+        EventScheduler* m_scheduler;
+        int m_io_result = 0;  // io_uring 完成结果
+    };
+#else
+    // epoll/kqueue Reactor 模式的 NetEvent 基类
     template <CoType T>
     class NetEvent: public AsyncEvent<T>, public Event
     {
@@ -45,6 +65,7 @@ namespace galay::details
         GHandle m_handle;
         EventScheduler* m_scheduler;
     };
+#endif
 
     
 
@@ -56,16 +77,29 @@ namespace galay::details
             m_scheduler = scheduler;
             m_accept_handle = accept_handle;
             m_ready = false;
+#if defined(USE_IOURING)
+            m_io_result = 0;
+            m_addr_len = sizeof(m_addr);
+#endif
         }
 
         std::string name() override { return "AcceptEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool onReady() override;
         std::expected<void, CommonError> onResume() override;
+#if defined(USE_IOURING)
+        bool onSuspend(Waker waker) override;
+#endif
     private:
+#if !defined(USE_IOURING)
         bool acceptSocket(bool notify);
+#endif
     private:
         GHandle* m_accept_handle = nullptr;
+#if defined(USE_IOURING)
+        sockaddr m_addr{};
+        socklen_t m_addr_len = sizeof(m_addr);
+#endif
     };
 
     class RecvEvent: public NetEvent<std::expected<Bytes, CommonError>>
@@ -77,17 +111,25 @@ namespace galay::details
             m_result_str = result;
             m_length = length;
             m_ready = false;
+#if defined(USE_IOURING)
+            m_io_result = 0;
+#endif
         }
 
         std::string name() override { return "RecvEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool onReady() override;
         std::expected<Bytes, CommonError> onResume() override;
+#if defined(USE_IOURING)
+        bool onSuspend(Waker waker) override;
+#endif
     private:
+#if !defined(USE_IOURING)
         bool recvBytes(bool notify);
+#endif
     private:
         size_t m_length = 0;
-        char* m_result_str = 0;
+        char* m_result_str = nullptr;
     };
 
     class SendEvent: public NetEvent<std::expected<Bytes, CommonError>>
@@ -98,14 +140,22 @@ namespace galay::details
             m_scheduler = scheduler;
             m_bytes = std::move(bytes);
             m_ready = false;
+#if defined(USE_IOURING)
+            m_io_result = 0;
+#endif
         }
 
         std::string name() override { return "SendEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool onReady() override;
         std::expected<Bytes, CommonError> onResume() override;
+#if defined(USE_IOURING)
+        bool onSuspend(Waker waker) override;
+#endif
     private:
+#if !defined(USE_IOURING)
         bool sendBytes(bool notify);
+#endif
     private:
         Bytes m_bytes;
     };
@@ -144,16 +194,27 @@ namespace galay::details
             m_scheduler = scheduler;
             m_host = host;
             m_ready = false;
+#if defined(USE_IOURING)
+            m_io_result = 0;
+#endif
         }
 
         std::string name() override { return "ConnectEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeWrite; }
         bool onReady() override;
         std::expected<void, CommonError> onResume() override;
+#if defined(USE_IOURING)
+        bool onSuspend(Waker waker) override;
+#endif
     private:
+#if !defined(USE_IOURING)
         bool connectToHost(bool notify);
+#endif
     private:
         Host m_host;
+#if defined(USE_IOURING)
+        sockaddr_in m_addr{};
+#endif
     };
 
     class CloseEvent: public NetEvent<std::expected<void, CommonError>>
@@ -163,13 +224,22 @@ namespace galay::details
             m_handle = handle;
             m_scheduler = scheduler;
             m_ready = false;
+#if defined(USE_IOURING)
+            m_io_result = 0;
+#endif
         }
 
         std::string name() override { return "CloseEvent"; }
+#if !defined(USE_IOURING)
         void handleEvent() override {}
+#endif
         EventType getEventType() const override { return EventType::kEventTypeNone; }
 
         bool onReady() override;
+#if defined(USE_IOURING)
+        bool onSuspend(Waker waker) override;
+        std::expected<void, CommonError> onResume() override;
+#endif
     };
 
 
@@ -183,19 +253,32 @@ namespace galay::details
             m_length = length;
             m_buffer = buffer;
             m_ready = false;
+#if defined(USE_IOURING)
+            m_io_result = 0;
+            m_addr_len = sizeof(m_addr);
+#endif
         }
 
         std::string name() override { return "RecvfromEvent"; }
         EventType getEventType() const override { return EventType::kEventTypeRead; }
         bool onReady() override;
         std::expected<Bytes, CommonError> onResume() override;
+#if defined(USE_IOURING)
+        bool onSuspend(Waker waker) override;
+#endif
 
     private:
+#if !defined(USE_IOURING)
         bool recvfromBytes(bool notify);
+#endif
     private:
         Host* m_remote = nullptr;
         size_t m_length;
         char* m_buffer;
+#if defined(USE_IOURING)
+        sockaddr m_addr{};
+        socklen_t m_addr_len = sizeof(m_addr);
+#endif
     };
 
     class SendtoEvent: public NetEvent<std::expected<Bytes, CommonError>>
@@ -207,6 +290,9 @@ namespace galay::details
             m_remote = remote;
             m_bytes = std::move(bytes);
             m_ready = false;
+#if defined(USE_IOURING)
+            m_io_result = 0;
+#endif
         }
 
         std::string name() override { return "SendtoEvent"; }
@@ -214,11 +300,19 @@ namespace galay::details
 
         bool onReady() override;
         std::expected<Bytes, CommonError> onResume() override;
+#if defined(USE_IOURING)
+        bool onSuspend(Waker waker) override;
+#endif
     private:
+#if !defined(USE_IOURING)
         bool sendtoBytes(bool notify);
+#endif
     private:
         Host m_remote;
         Bytes m_bytes;
+#if defined(USE_IOURING)
+        sockaddr_in m_addr{};
+#endif
     };
 }
 

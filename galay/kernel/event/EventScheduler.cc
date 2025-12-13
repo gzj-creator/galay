@@ -78,4 +78,53 @@ namespace galay{
         return m_engine->getError();
     }
 
+#if defined(USE_IOURING)
+    bool EventScheduler::submitRead(details::Event* event, int fd, void* buf, size_t len)
+    {
+        return m_engine->submitRead(event, fd, buf, len) == 0;
+    }
+
+    bool EventScheduler::submitWrite(details::Event* event, int fd, const void* buf, size_t len)
+    {
+        return m_engine->submitWrite(event, fd, buf, len) == 0;
+    }
+
+    bool EventScheduler::submitRecv(details::Event* event, int fd, void* buf, size_t len, int flags)
+    {
+        return m_engine->submitRecv(event, fd, buf, len, flags) == 0;
+    }
+
+    bool EventScheduler::submitSend(details::Event* event, int fd, const void* buf, size_t len, int flags)
+    {
+        return m_engine->submitSend(event, fd, buf, len, flags) == 0;
+    }
+
+    bool EventScheduler::submitAccept(details::Event* event, int fd, sockaddr* addr, socklen_t* addrlen)
+    {
+        return m_engine->submitAccept(event, fd, addr, addrlen) == 0;
+    }
+
+    bool EventScheduler::submitConnect(details::Event* event, int fd, const sockaddr* addr, socklen_t addrlen)
+    {
+        return m_engine->submitConnect(event, fd, addr, addrlen) == 0;
+    }
+
+    bool EventScheduler::submitClose(details::Event* event, int fd)
+    {
+        return m_engine->submitClose(event, fd) == 0;
+    }
+
+    bool EventScheduler::submitRecvfrom(details::Event* event, int fd, void* buf, size_t len, int flags,
+                                        sockaddr* src_addr, socklen_t* addrlen)
+    {
+        return m_engine->submitRecvfrom(event, fd, buf, len, flags, src_addr, addrlen) == 0;
+    }
+
+    bool EventScheduler::submitSendto(details::Event* event, int fd, const void* buf, size_t len, int flags,
+                                      const sockaddr* dest_addr, socklen_t addrlen)
+    {
+        return m_engine->submitSendto(event, fd, buf, len, flags, dest_addr, addrlen) == 0;
+    }
+#endif
+
 }

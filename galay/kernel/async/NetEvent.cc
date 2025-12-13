@@ -12,6 +12,256 @@
 #define MSG_NOSIGNAL 0
 #endif
 
+#if defined(USE_IOURING)
+// io_uring Proactor 模式实现
+namespace galay::details
+{
+    // AcceptEvent io_uring 实现
+    bool AcceptEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitAccept(this, m_handle.fd, &m_addr, &m_addr_len)) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool AcceptEvent::onReady()
+    {
+        // io_uring 模式下，onReady 总是返回 false，必须走异步路径
+        return false;
+    }
+
+    std::expected<void, CommonError> AcceptEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result >= 0) {
+            m_accept_handle->fd = m_io_result;
+            std::string ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&m_addr)->sin_addr);
+            uint16_t port = ntohs(reinterpret_cast<sockaddr_in*>(&m_addr)->sin_port);
+            LogTrace("[Accept Address: {}:{}]", ip, port);
+            m_result = {};
+        } else {
+            m_result = std::unexpected(CommonError(CallAcceptError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return NetEvent<std::expected<void, CommonError>>::onResume();
+    }
+
+    // RecvEvent io_uring 实现
+    bool RecvEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitRecv(this, m_handle.fd, m_result_str, m_length, 0)) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool RecvEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<Bytes, CommonError> RecvEvent::onResume()
+    {
+        using namespace error;
+        LogInfo("[RecvEvent::onResume] fd: {}, io_result: {}", m_handle.fd, m_io_result);
+        if (m_io_result > 0) {
+            LogTrace("recvBytes: {}, buffer: {}", m_io_result, std::string(m_result_str, m_io_result));
+            Bytes bytes = Bytes::fromCString(m_result_str, m_io_result, m_io_result);
+            m_result = std::move(bytes);
+        } else if (m_io_result == 0) {
+            LogInfo("[RecvEvent::onResume] Connection closed by peer, fd: {}", m_handle.fd);
+            m_result = std::unexpected(CommonError(DisConnectError, 0));
+        } else {
+            LogError("[RecvEvent::onResume] recv error, fd: {}, result: {}", m_handle.fd, m_io_result);
+            m_result = std::unexpected(CommonError(CallRecvError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return NetEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+
+    // SendEvent io_uring 实现
+    bool SendEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitSend(this, m_handle.fd, m_bytes.data(), m_bytes.size(), MSG_NOSIGNAL)) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool SendEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<Bytes, CommonError> SendEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result > 0) {
+            LogTrace("sendBytes: {}, buffer: {}", m_io_result, std::string(reinterpret_cast<const char*>(m_bytes.data())));
+            Bytes remain(m_bytes.data() + m_io_result, m_bytes.size() - m_io_result);
+            m_result = std::move(remain);
+        } else if (m_io_result == 0) {
+            m_result = Bytes{};
+        } else {
+            int err = -m_io_result;
+            if (err == EPIPE || err == ECONNRESET) {
+                m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(err)));
+            } else {
+                m_result = std::unexpected(CommonError(CallSendError, static_cast<uint32_t>(err)));
+            }
+        }
+        return NetEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+
+    // ConnectEvent io_uring 实现
+    bool ConnectEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+
+        m_addr.sin_family = AF_INET;
+        m_addr.sin_addr.s_addr = inet_addr(m_host.ip.c_str());
+        m_addr.sin_port = htons(m_host.port);
+
+        if (!m_scheduler->submitConnect(this, m_handle.fd, reinterpret_cast<sockaddr*>(&m_addr), sizeof(m_addr))) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool ConnectEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<void, CommonError> ConnectEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result == 0) {
+            m_result = {};
+        } else {
+            m_result = std::unexpected(CommonError(CallConnectError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return NetEvent<std::expected<void, CommonError>>::onResume();
+    }
+
+    // CloseEvent io_uring 实现
+    bool CloseEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitClose(this, m_handle.fd)) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool CloseEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<void, CommonError> CloseEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result == 0) {
+            m_result = {};
+        } else {
+            m_result = std::unexpected(CommonError(CallCloseError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return NetEvent<std::expected<void, CommonError>>::onResume();
+    }
+
+    // RecvfromEvent io_uring 实现
+    bool RecvfromEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitRecvfrom(this, m_handle.fd, m_buffer, m_length, 0, &m_addr, &m_addr_len)) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool RecvfromEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<Bytes, CommonError> RecvfromEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result > 0) {
+            LogTrace("recvfromBytes: {}, buffer: {}", m_io_result, m_buffer);
+            Bytes bytes = Bytes::fromCString(m_buffer, m_io_result, m_io_result);
+            m_remote->ip = inet_ntoa(reinterpret_cast<sockaddr_in*>(&m_addr)->sin_addr);
+            m_remote->port = static_cast<uint16_t>(ntohs(reinterpret_cast<sockaddr_in*>(&m_addr)->sin_port));
+            m_result = std::move(bytes);
+        } else if (m_io_result == 0) {
+            m_result = Bytes();
+        } else {
+            m_result = std::unexpected(CommonError(CallRecvfromError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return NetEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+
+    // SendtoEvent io_uring 实现
+    bool SendtoEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+
+        m_addr.sin_family = AF_INET;
+        m_addr.sin_addr.s_addr = inet_addr(m_remote.ip.c_str());
+        m_addr.sin_port = htons(m_remote.port);
+
+        if (!m_scheduler->submitSendto(this, m_handle.fd, m_bytes.data(), m_bytes.size(), MSG_NOSIGNAL,
+                                       reinterpret_cast<sockaddr*>(&m_addr), sizeof(m_addr))) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool SendtoEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<Bytes, CommonError> SendtoEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result > 0) {
+            LogTrace("sendToBytes: {}, buffer: {}", m_io_result, std::string(reinterpret_cast<const char*>(m_bytes.data())));
+            Bytes remain(m_bytes.data() + m_io_result, m_bytes.size() - m_io_result);
+            m_result = std::move(remain);
+        } else if (m_io_result == 0) {
+            m_result = Bytes();
+        } else {
+            int err = -m_io_result;
+            if (err == EPIPE || err == ECONNRESET) {
+                m_result = std::unexpected(CommonError(DisConnectError, static_cast<uint32_t>(err)));
+            } else {
+                m_result = std::unexpected(CommonError(CallSendtoError, static_cast<uint32_t>(err)));
+            }
+        }
+        return NetEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+}
+
+#endif // USE_IOURING
+
 
 galay::AsyncTcpSocket galay::AsyncTcpSocketBuilder::build()
 {
@@ -39,6 +289,8 @@ bool galay::AsyncTcpSocketBuilder::check() const
 
 
 
+#if !defined(USE_IOURING)
+// epoll/kqueue Reactor 模式实现
 namespace galay::details
 {
 
@@ -53,7 +305,7 @@ namespace galay::details
         if(!m_ready) acceptSocket(true);
         return AsyncEvent<std::expected<void, CommonError>>::onResume();
     }
-    
+
     bool AcceptEvent::acceptSocket(bool notify)
     {
         using namespace error;
@@ -340,3 +592,4 @@ namespace galay::details
     }
 
 }
+#endif // !defined(USE_IOURING)

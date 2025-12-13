@@ -51,6 +51,9 @@ namespace galay::error
         CallOpenError,                    ///< open()调用错误
         CallAioSetupError,                ///< AIO设置错误
         CallAioSubmitError,               ///< AIO提交错误
+        CallIOUringInitError,             ///< io_uring初始化错误
+        CallIOUringGetSqeError,           ///< io_uring获取SQE错误
+        CallIOUringSubmitError,           ///< io_uring提交错误
         NotInitializedError,              ///< 未初始化错误
         AsyncTimeoutError,                ///< 异步超时错误
         NotifyButSourceNotReadyError,     ///< 通知时源未就绪错误

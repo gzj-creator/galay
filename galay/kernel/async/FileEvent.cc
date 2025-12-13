@@ -4,7 +4,99 @@
 
 namespace galay::details
 {
-#ifdef USE_AIO
+
+#if defined(USE_IOURING)
+// io_uring Proactor 模式实现
+
+    bool FileCloseEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitClose(this, m_handle.fd)) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool FileCloseEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<void, CommonError> FileCloseEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result == 0) {
+            m_result = {};
+        } else {
+            m_result = std::unexpected(CommonError(CallCloseError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return FileEvent<std::expected<void, CommonError>>::onResume();
+    }
+
+    bool FileReadEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitRead(this, m_handle.fd, m_buffer, m_length)) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool FileReadEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<Bytes, CommonError> FileReadEvent::onResume()
+    {
+        using namespace error;
+        LogInfo("FileReadEvent io_result: {}, length: {}", m_io_result, m_length);
+        if (m_io_result > 0) {
+            Bytes bytes = Bytes::fromCString(m_buffer, m_io_result, m_length);
+            m_result = std::move(bytes);
+        } else if (m_io_result == 0) {
+            m_result = std::unexpected(CommonError(CallFileReadError, 0));
+        } else {
+            m_result = std::unexpected(CommonError(CallFileReadError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return FileEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+
+    bool FileWriteEvent::onSuspend(Waker waker)
+    {
+        using namespace error;
+        this->m_waker = waker;
+        if (!m_scheduler->submitWrite(this, m_handle.fd, m_bytes.data(), m_bytes.size())) {
+            this->m_result = std::unexpected(CommonError(CallActiveEventError, static_cast<uint32_t>(errno)));
+            return false;
+        }
+        return true;
+    }
+
+    bool FileWriteEvent::onReady()
+    {
+        return false;
+    }
+
+    std::expected<Bytes, CommonError> FileWriteEvent::onResume()
+    {
+        using namespace error;
+        if (m_io_result > 0) {
+            Bytes remain(m_bytes.data() + m_io_result, m_bytes.size() - m_io_result);
+            m_result = std::move(remain);
+        } else if (m_io_result == 0) {
+            m_result = std::unexpected(CommonError(CallFileWriteError, 0));
+        } else {
+            m_result = std::unexpected(CommonError(CallFileWriteError, static_cast<uint32_t>(-m_io_result)));
+        }
+        return FileEvent<std::expected<Bytes, CommonError>>::onResume();
+    }
+
+#elif defined(USE_AIO)
 
     bool FileCloseEvent::onReady()
     {   
