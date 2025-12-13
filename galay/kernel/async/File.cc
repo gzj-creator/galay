@@ -103,7 +103,7 @@ namespace galay
     AsyncResult<std::expected<std::vector<io_event>, CommonError>> File::getEvent(uint64_t& expect_events)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");
-        m_aioGetEvent.reset(m_event_handle, m_scheduler, m_io_ctx, expect_events);
+        m_aioGetEvent.reset(m_event_handle, m_scheduler, m_io_ctx, &expect_events);
         return {std::shared_ptr<details::AioGetEvent>(&m_aioGetEvent, [](details::AioGetEvent*){})};
     }
 

@@ -126,7 +126,7 @@ namespace galay::details {
     class AioGetEvent: public FileEvent<std::expected<std::vector<io_event>, CommonError>>
     {
     public:
-        void reset(GHandle event_handle, EventScheduler* scheduler, io_context_t context, uint64_t& expect_events) {
+        void reset(GHandle event_handle, EventScheduler* scheduler, io_context_t context, uint64_t* expect_events) {
             m_ehandle = event_handle;
             m_scheduler = scheduler;
             m_context = context;
@@ -142,7 +142,7 @@ namespace galay::details {
     private:
         bool m_ready = false;
         io_context_t m_context;
-        uint64_t& m_expect_events;
+        uint64_t* m_expect_events = nullptr;
     };
 
 #else

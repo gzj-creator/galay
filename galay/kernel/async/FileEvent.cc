@@ -110,14 +110,9 @@ namespace galay::details
         return true;
     }
 
-    AioGetEvent::AioGetEvent(GHandle event_handle, EventScheduler* scheduler, io_context_t context, uint64_t& expect_events)
-        : FileEvent<std::expected<std::vector<io_event>, CommonError>>(event_handle, scheduler), m_context(context), m_expect_events(expect_events)
-    {
-    }
-
     bool AioGetEvent::onReady()
     {
-        if(m_expect_events == 0) {
+        if(*m_expect_events == 0) {
             m_result = std::unexpected(CommonError(AioEventsAllCompleteError, 0));
             m_ready = true;
             return m_ready;
@@ -153,7 +148,7 @@ namespace galay::details
         } else {
             std::vector<io_event> events(finish_event);
             ret = io_getevents(m_context, finish_event, events.size(), events.data(), nullptr);
-            m_expect_events -= ret;
+            *m_expect_events -= ret;
             events.resize(ret);
             m_result = std::move(events);
         }
