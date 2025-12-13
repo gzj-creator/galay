@@ -203,7 +203,7 @@ namespace galay {
         return {std::shared_ptr<details::SendEvent>(&m_sendEvent, [](details::SendEvent*){})};
     }
 
-#ifdef __linux__
+#if defined(__linux__) && !defined(USE_IOURING)
     AsyncResult<std::expected<long, CommonError>> AsyncTcpSocket::sendfile(GHandle file_handle, long offset, size_t length)
     {
         assert(m_scheduler != nullptr && "EventScheduler cannot be nullptr");

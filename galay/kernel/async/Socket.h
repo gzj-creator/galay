@@ -50,7 +50,7 @@ namespace galay {
         //返回剩余Bytes
         AsyncResult<std::expected<Bytes, CommonError>> send(Bytes bytes);
 
-    #ifdef __linux__
+    #if defined(__linux__) && !defined(USE_IOURING)
         //return send length
         AsyncResult<std::expected<long, CommonError>> sendfile(GHandle file_handle, long offset, size_t length);
     #endif
@@ -74,7 +74,7 @@ namespace galay {
         details::ConnectEvent m_connectEvent;
         details::RecvEvent m_recvEvent;
         details::SendEvent m_sendEvent;
-    #ifdef __linux__
+    #if defined(__linux__) && !defined(USE_IOURING)
         details::SendfileEvent m_sendfileEvent;
     #endif
     };

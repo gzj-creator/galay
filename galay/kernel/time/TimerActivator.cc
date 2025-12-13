@@ -59,5 +59,17 @@ namespace galay
         m_scheduler->removeEvent(event, nullptr);
     }
 
+#elif defined(USE_IOURING)
+    void galay::IOUringTimerActive::active(Timer::ptr timer, details::Event* event)
+    {
+        uint64_t timeout = timer->getRemainTime();
+        m_scheduler->activeEvent(event, &timeout);
+    }
+
+    void IOUringTimerActive::deactive(details::Event *event)
+    {
+        m_scheduler->removeEvent(event, nullptr);
+    }
+
 #endif
 }

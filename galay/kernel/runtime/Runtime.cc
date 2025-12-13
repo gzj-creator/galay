@@ -372,6 +372,8 @@ namespace galay
         auto activator = std::make_shared<EpollTimerActive>(eScheduler.get());
     #elif defined(USE_KQUEUE)
         auto activator = std::make_shared<KQueueTimerActive>(eScheduler.get());
+    #elif defined(USE_IOURING)
+        auto activator = std::make_shared<IOUringTimerActive>(eScheduler.get());
     #endif
         TimerManager::ptr timerManager = std::make_shared<PriorityQueueTimerManager>(activator);
         

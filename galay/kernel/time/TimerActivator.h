@@ -45,6 +45,18 @@ namespace galay
         EventScheduler* m_scheduler;
     };
 #elif defined(USE_IOURING)
+    class IOUringTimerActive: public TimerActivator
+    {
+    public:
+        IOUringTimerActive(EventScheduler* scheduler)
+            :m_scheduler(scheduler)
+        {
+        }
+        void active(Timer::ptr timer, details::Event* event) override;
+        void deactive(details::Event* event) override;
+    private:
+        EventScheduler* m_scheduler;
+    };
 #else
 #endif
 

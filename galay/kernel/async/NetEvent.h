@@ -160,7 +160,7 @@ namespace galay::details
         Bytes m_bytes;
     };
 
-#ifdef __linux__
+#if defined(__linux__) && !defined(USE_IOURING)
     class SendfileEvent: public NetEvent<std::expected<long, CommonError>>
     {
     public:

@@ -1,8 +1,9 @@
 #include "EventEngine.h"
 #if defined(__linux__)
     #include <sys/eventfd.h>
+    #include <poll.h>
 #elif defined(__APPLE__) || defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
-    
+
 #endif
 #include "Event.h"
 #include "EventDispatch.h"
