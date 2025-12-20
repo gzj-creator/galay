@@ -2,9 +2,6 @@
 #define GALAY_COROUTINE_INL
 
 #include "Coroutine.hpp"
-#include "CoScheduler.hpp"
-#include <atomic>
-#include <coroutine>
 
 
 namespace galay
@@ -17,7 +14,7 @@ namespace galay
         if(auto co_ptr = m_wait_co.lock()) {
             co_ptr->modToSuspend();
             m_coroutine.then(m_wait_co);
-            co_ptr->belongScheduler()->resumeCoroutine(m_coroutine.origin());
+            co_ptr->belongEngine()->spwan(m_coroutine.origin());
             return true;
         }
         return false;
@@ -36,7 +33,7 @@ namespace galay
     {
         m_coroutine->modToSuspend();
         if(value.re_scheduler) {
-            m_coroutine->belongScheduler()->resumeCoroutine(m_coroutine);
+            m_coroutine->belongEngine()->spwan(m_coroutine);
         }
         return {};
     }
@@ -111,7 +108,7 @@ namespace galay
     }
 
     template <CoType T>
-    inline CoroutineScheduler *Coroutine<T>::belongScheduler() const
+    inline Engine *Coroutine<T>::belongEngine() const
     {
         return m_data->m_scheduler.load(std::memory_order_relaxed);
     }
@@ -130,7 +127,7 @@ namespace galay
     }
 
     template <CoType T>
-    inline void Coroutine<T>::belongScheduler(CoroutineScheduler* scheduler)
+    inline void Coroutine<T>::belongEngine(Engine* scheduler)
     {
         m_data->m_scheduler.store(scheduler, std::memory_order_relaxed);
     }
@@ -172,7 +169,7 @@ namespace galay
     inline void Coroutine<T>::executeDeferTask()
     {
         if(auto next = m_data->m_next.lock()) {
-            next->belongScheduler()->resumeCoroutine(next);
+            next->belongEngine()->spwan(next);
             m_data->m_next.reset();
         }
     }

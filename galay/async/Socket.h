@@ -4,8 +4,7 @@
 #include "galay/common/Base.h"
 #include "galay/common/Error.h"
 #include "galay/kernel/coroutine/CoSchedulerHandle.hpp"
-#include "NetEvent.h"
-#include "SslEvent.h"
+#include "NetResult.h"
 #include "galay/kernel/coroutine/Result.hpp"
 
 namespace galay {
@@ -44,7 +43,7 @@ namespace galay {
         std::expected<void, CommonError> shuntdown(ShutdownType type);
         AsyncResult<std::expected<void, CommonError>> close();
         //throw exception
-        AsyncResult<std::expected<void, CommonError>> accept(AsyncTcpSocketBuilder& builder);
+        AsyncResult<std::expected<void, CommonError>> accept(details::AsyncTcpSocketBuilder& builder);
         AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
         AsyncResult<std::expected<Bytes, CommonError>> recv(char* result, size_t length);
         //返回剩余Bytes
@@ -67,16 +66,6 @@ namespace galay {
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
-
-        // Event member variables to avoid frequent allocations
-        details::CloseEvent m_closeEvent;
-        details::AcceptEvent m_acceptEvent;
-        details::ConnectEvent m_connectEvent;
-        details::RecvEvent m_recvEvent;
-        details::SendEvent m_sendEvent;
-    #if defined(__linux__) && !defined(USE_IOURING)
-        details::SendfileEvent m_sendfileEvent;
-    #endif
     };
 
 
@@ -113,61 +102,6 @@ namespace galay {
     private:
         GHandle m_handle;
         EventScheduler* m_scheduler = nullptr;
-
-        // Event member variables to avoid frequent allocations
-        details::CloseEvent m_closeEvent;
-        details::RecvEvent m_recvEvent;
-        details::SendEvent m_sendEvent;
-        details::RecvfromEvent m_recvfromEvent;
-        details::SendtoEvent m_sendtoEvent;
-    };
-
-    class AsyncSslSocket
-    {
-        friend class AsyncSslSocketBuilder;
-    public:
-        AsyncSslSocket() = default;
-        AsyncSslSocket(CoSchedulerHandle handle, SSL_CTX* ssl_ctx);
-        AsyncSslSocket(CoSchedulerHandle handle, SSL* ssl);
-        AsyncSslSocket(AsyncSslSocket&& other);
-        AsyncSslSocket(const AsyncSslSocket& other) = delete;
-        AsyncSslSocket& operator=(const AsyncSslSocket& other) = delete;
-        AsyncSslSocket& operator=(AsyncSslSocket&& other);
-        HandleOption options();
-        std::expected<void, CommonError> socket();
-        std::expected<void, CommonError> bind(const Host& addr);
-        std::expected<void, CommonError> listen(int backlog);
-        AsyncResult<std::expected<void, CommonError>> accept(AsyncSslSocketBuilder& builder);
-        std::expected<void, CommonError> readyToSslAccept(AsyncSslSocketBuilder &builder);
-        //false need to be called again
-        //CallSSLHandshakeError 失败AsyncSslSocketBuilder不可用
-        AsyncResult<std::expected<bool, CommonError>> sslAccept(AsyncSslSocketBuilder& builder);
-        AsyncResult<std::expected<void, CommonError>> connect(const Host& addr);
-        void readyToSslConnect();
-        //false need to be called again
-        AsyncResult<std::expected<bool, CommonError>> sslConnect();
-        AsyncResult<std::expected<Bytes, CommonError>> sslRecv(char* result, size_t length);
-        AsyncResult<std::expected<Bytes, CommonError>> sslSend(Bytes bytes);
-        AsyncResult<std::expected<void, CommonError>> sslClose();
-        AsyncSslSocket clone() const;
-        AsyncSslSocket clone(CoSchedulerHandle handle) const;
-        SSL* getSsl() const;
-        ~AsyncSslSocket();
-    private:
-        AsyncSslSocket(EventScheduler* scheduler, SSL* ssl);
-        GHandle getHandle() const;
-    private:
-        SSL* m_ssl = nullptr;
-        EventScheduler* m_scheduler = nullptr;
-
-        // Event member variables to avoid frequent allocations
-        details::AcceptEvent m_acceptEvent;
-        details::ConnectEvent m_connectEvent;
-        details::SslConnectEvent m_sslConnectEvent;
-        details::SslAcceptEvent m_sslAcceptEvent;
-        details::SslRecvEvent m_sslRecvEvent;
-        details::SslSendEvent m_sslSendEvent;
-        details::SslCloseEvent m_sslCloseEvent;
     };
 
 

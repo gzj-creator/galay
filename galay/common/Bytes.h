@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <string_view>
 #include <variant>
-#include "galay/common/Buffer.h"
+#include "Buffer.h"
 
 namespace galay 
 { 

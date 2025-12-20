@@ -1,6 +1,7 @@
 #ifndef __GALAY_BASE_H__
 #define __GALAY_BASE_H__
-#include <bitset>
+#include <concepts>
+#include <optional>
 #if defined(__linux__)
 
 #define FLAGS_BITS  16
@@ -114,6 +115,10 @@ private:
 #define _MAKE_DEFER_(line) DeferClass _CONCAT(defer_placeholder, line) = [&]()
 #define DEFER _MAKE_DEFER_(__LINE__)
 
+using nil = std::monostate;
 
+
+template <typename T>
+concept CoType = !std::is_void_v<T> && std::is_default_constructible_v<T> && std::is_move_assignable_v<T>;
 
 #endif
