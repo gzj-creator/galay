@@ -1,6 +1,62 @@
-build
-.vscode
-.gitignore
-.tmp
+# OS files
 .DS_Store
-.cache
+Thumbs.db
+
+# Editor and IDE state
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Local caches and scratch files
+.cache/
+.tmp/
+.code-review-graph/
+
+# CMake build output
+build/
+build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+CTestTestfile.cmake
+Testing/
+
+# Bazel output
+bazel-*
+
+# Native build output
+*.o
+*.obj
+*.lo
+*.a
+*.lib
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.dSYM/
+
+# Generated test and coverage output
+*.gcda
+*.gcno
+*.gcov
+coverage/
+*.profraw
+*.profdata
+
+# Logs
+*.log
+logs/
+
+# Rust build output used by local comparison tools
+target/
+
+# Local planning docs
+docs/plans/

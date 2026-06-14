@@ -1,0 +1,13 @@
+function(galay_add_redis_benchmark target_name source_file)
+    add_executable(${target_name} ${source_file})
+    set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
+    target_link_libraries(${target_name} PRIVATE galay::redis)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/redis)
+    set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
+endfunction()
+
+galay_add_redis_benchmark(benchmark_redis_async_client_throughput b1_async_client_throughput.cc)
+galay_add_redis_benchmark(benchmark_redis_connection_pool_throughput b2_connection_pool_throughput.cc)
+if(GALAY_BUILD_SSL)
+    galay_add_redis_benchmark(benchmark_redis_tls_client_throughput b3_tls_client_throughput.cc)
+endif()

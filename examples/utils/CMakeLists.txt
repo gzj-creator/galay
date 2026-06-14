@@ -1,0 +1,18 @@
+function(galay_add_utils_example target_name source_file)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::utils)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+endfunction()
+
+function(galay_add_utils_import_example target_name source_file)
+    if(NOT TARGET galay-utils-modules)
+        return()
+    endif()
+    galay_add_utils_example(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay-utils-modules)
+    set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
+endfunction()
+
+galay_add_utils_example(example_utils_include_basic_usage include/e1_basic_usage.cc)
+galay_add_utils_import_example(example_utils_import_basic_usage import/e1_basic_usage.cc)

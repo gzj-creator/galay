@@ -1,187 +1,155 @@
-cmake_minimum_required(VERSION 3.21)
-project(Galay VERSION 1.0)
+cmake_minimum_required(VERSION 3.20)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-set(HEADER_SRC_DIR galay)
-set(HEADER_DST_DIR include)
+project(galay VERSION 6.0.0 LANGUAGES CXX)
 
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(cmake/option.cmake)
+include(cmake/dependencies.cmake)
 include(GNUInstallDirs)
-include(CMakePackageConfigHelpers) 
-#查找依赖
-include(cmake/dependency.cmake)
+include(CMakePackageConfigHelpers)
 
-if(ENABLE_INSTALL_SYSTEM)
-    set(CMAKE_INSTALL_PREFIX /usr/local)
-else()
-    set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR}/install)
+if(NOT DEFINED BUILD_TESTING)
+    set(BUILD_TESTING OFF CACHE BOOL "Build tests" FORCE)
 endif()
-message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
+include(CTest)
 
-# 检测编译器类型
-if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
-    set(COMPILER_IS_CLANG ON)
-    message(STATUS "Using Clang compiler")
-elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
-    set(COMPILER_IS_GCC ON)
-    message(STATUS "Using GCC compiler")
+if(GALAY_BUILD_UTILS)
+    add_subdirectory(src/utils)
 endif()
-
-
-if(ENABLE_DEBUG)
-    set(CMAKE_BUILD_TYPE Debug)
-
-    # 根据编译器设置不同的调试选项
-    if(COMPILER_IS_CLANG)
-        set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 -ggdb3 -gdwarf-4 -fstandalone-debug -Wall -Wextra" CACHE STRING "Debug flags" FORCE)
-        set(CMAKE_C_FLAGS_DEBUG "-g3 -O0 -ggdb3 -gdwarf-4 -fstandalone-debug -Wall -Wextra" CACHE STRING "Debug flags" FORCE)
-    else()
-        set(CMAKE_CXX_FLAGS_DEBUG "-g3 -O0 -ggdb3 -gdwarf-4 -Wall -Wextra" CACHE STRING "Debug flags" FORCE)
-        set(CMAKE_C_FLAGS_DEBUG "-g3 -O0 -ggdb3 -gdwarf-4 -Wall -Wextra" CACHE STRING "Debug flags" FORCE)
-    endif()
-    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "-g" CACHE STRING "Debug linker flags" FORCE)
-    set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "-g" CACHE STRING "Debug linker flags" FORCE)
-    message(STATUS "Debug mode enabled")
-else()
-    set(CMAKE_BUILD_TYPE Release)
-    message(STATUS "Release mode enabled")
+if(GALAY_BUILD_KERNEL)
+    add_subdirectory(src/kernel)
 endif()
-
-if(${ENABLE_DEFAULT_USE_EPOLL}) 
-  message(STATUS "Enable default use epoll, add -DENABLE_DEFAULT_USE_EPOLL to cmake")
-  add_definitions(-DENABLE_DEFAULT_USE_EPOLL)
+if(GALAY_BUILD_SSL)
+    add_subdirectory(src/ssl)
 endif()
-
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-set(DEPEND_LIBS kernel utils algorithm common)
-
-
-add_compile_options(-fPIC)
-
-include_directories(${PROJECT_SOURCE_DIR})
-
-if(ENABLE_DEBUG)
-    # 根据编译器设置全局编译选项
-    if(COMPILER_IS_CLANG)
-        add_compile_options(-g3 -O0 -fstandalone-debug)
-    else()
-        add_compile_options(-g3 -O0)
-    endif()
-    add_link_options(-g)
+if(GALAY_BUILD_HTTP)
+    add_subdirectory(src/http)
+endif()
+if(GALAY_BUILD_WS)
+    add_subdirectory(src/ws)
+endif()
+if(GALAY_BUILD_HTTP2)
+    add_subdirectory(src/http2)
+endif()
+if(GALAY_BUILD_REDIS)
+    add_subdirectory(src/redis)
+endif()
+if(GALAY_BUILD_RPC)
+    add_subdirectory(src/rpc)
+endif()
+if(GALAY_BUILD_MYSQL)
+    add_subdirectory(src/mysql)
+endif()
+if(GALAY_BUILD_MONGO)
+    add_subdirectory(src/mongo)
+endif()
+if(GALAY_BUILD_ETCD)
+    add_subdirectory(src/etcd)
+endif()
+if(GALAY_BUILD_MCP)
+    add_subdirectory(src/mcp)
+endif()
+if(GALAY_BUILD_TRACING)
+    add_subdirectory(src/tracing)
 endif()
 
-#添加子目录
-add_subdirectory(galay)
-
-# 初始化对象库列表
-set(OBJECT_LIBS)
-
-foreach(depend_lib ${DEPEND_LIBS})
-    message(STATUS "Processing dependency: ${depend_lib}")
-    if(TARGET ${depend_lib})
-        list(APPEND OBJECT_LIBS $<TARGET_OBJECTS:${depend_lib}>)
-    else()
-        message(FATAL_ERROR "Target ${depend_lib}_obj does not exist")
+set(GALAY_INSTALL_TARGETS)
+foreach(_galay_target IN ITEMS
+    utils kernel ssl http ws http2 redis rpc mysql mongo etcd mcp tracing
+    galay-tracing-spdlog galay-tracing-kernel
+)
+    if(TARGET ${_galay_target})
+        list(APPEND GALAY_INSTALL_TARGETS ${_galay_target})
     endif()
 endforeach()
 
-
-if(${BUILD_STATIC})
-    # 创建静态库
-    add_library(galay STATIC ${OBJECT_LIBS})
-    target_link_libraries(galay PRIVATE ${DEPEND_LIBS})
-    if(ENABLE_DEBUG)
-        target_compile_options(galay PRIVATE 
-                            $<$<CONFIG:Debug>:-g>
-                            $<$<CONFIG:RealWithDebInfo>:-g>)
-    endif()
-else()
-    # 创建共享库
-    add_library(galay SHARED ${OBJECT_LIBS})
-    target_link_libraries(galay PRIVATE ${DEPEND_LIBS})
-    if(ENABLE_DEBUG)
-        target_compile_options(galay PRIVATE 
-                            $<$<CONFIG:Debug>:-g>
-                            $<$<CONFIG:RealWithDebInfo>:-g>)
-    endif()
-endif()
-
-if(ENABLE_DEBUG)
-    # 根据编译器为目标库设置编译选项
-    if(COMPILER_IS_CLANG)
-        target_compile_options(galay PRIVATE 
-            $<$<CONFIG:Debug>:-g3 -O0 -ggdb3 -gdwarf-4 -fstandalone-debug -Wall -Wextra>
-        )
-    else()
-        target_compile_options(galay PRIVATE 
-            $<$<CONFIG:Debug>:-g3 -O0 -ggdb3 -gdwarf-4 -Wall -Wextra>
-        )
-    endif()
-    target_link_options(galay PRIVATE 
-        $<$<CONFIG:Debug>:-g>
+if(GALAY_INSTALL_TARGETS)
+    install(TARGETS ${GALAY_INSTALL_TARGETS}
+        EXPORT galayTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
 endif()
 
-set_target_properties(galay PROPERTIES
-        CXX_STANDARD 23
-        CXX_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS OFF
-)
-
-
-install(TARGETS galay DESTINATION lib EXPORT ${PROJECT_NAME}Targets)
-
-# 生成版本配置文件
-write_basic_package_version_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
-        VERSION ${PROJECT_VERSION}
-        COMPATIBILITY AnyNewerVersion
-)
-
-configure_package_config_file(${PROJECT_NAME}Config.cmake.in
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
-        INSTALL_DESTINATION
-        ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}/
-)
-
-install(EXPORT
-        ${PROJECT_NAME}Targets
-        FILE
-        ${PROJECT_NAME}Targets.cmake
-        NAMESPACE
-        "${PROJECT_NAME}::"
-        DESTINATION
-        ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-        COMPONENT
-        Devel
-)
-
-install(
-        FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}ConfigVersion.cmake
-        DESTINATION
-        ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME}
-        COMPONENT
-        Devel
-)
-
-install(DIRECTORY ${HEADER_SRC_DIR}
-        DESTINATION ${HEADER_DST_DIR}
-        COMPONENT devel
-        FILES_MATCHING
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING
         PATTERN "*.h"
         PATTERN "*.hpp"
         PATTERN "*.inl"
-        PATTERN "*.tcc"
+        PATTERN "*.cppm"
 )
 
+set(GALAY_CONFIG_NEEDS_THREADS ON)
+set(GALAY_CONFIG_NEEDS_OPENSSL ${GALAY_BUILD_SSL})
 
+configure_package_config_file(
+    ${PROJECT_SOURCE_DIR}/cmake/galayConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/galayConfig.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
+)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/galayConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
 
-add_subdirectory(test)
-add_subdirectory(benchmark)
+install(EXPORT galayTargets
+    NAMESPACE galay::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
+    FILE galayTargets.cmake
+)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/galayConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/galayConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
+)
 
+foreach(_galay_package IN ITEMS
+    galay-utils
+    galay-kernel
+    galay-ssl
+    galay-http
+    galay-ws
+    galay-websocket
+    galay-http2
+    galay-redis
+    galay-rpc
+    galay-mysql
+    galay-mongo
+    galay-etcd
+    galay-mcp
+    galay-tracing
+)
+    configure_package_config_file(
+        ${PROJECT_SOURCE_DIR}/cmake/galay-module-config.cmake.in
+        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}Config.cmake
+        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_galay_package}
+    )
+    write_basic_package_version_file(
+        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}ConfigVersion.cmake
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+    install(FILES
+        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}Config.cmake
+        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}ConfigVersion.cmake
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_galay_package}
+    )
+endforeach()
 
-
-
-
+if(BUILD_TESTING)
+    add_subdirectory(test)
+endif()
+if(GALAY_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+if(GALAY_BUILD_BENCHMARKS)
+    add_subdirectory(benchmark)
+endif()

@@ -1,0 +1,12 @@
+function(galay_add_rpc_benchmark target_name source_file)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::rpc)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+endfunction()
+
+galay_add_rpc_benchmark(benchmark_rpc_unary_rpc_throughput b1_unary_rpc_throughput.cc)
+galay_add_rpc_benchmark(benchmark_rpc_streaming_rpc_throughput b2_streaming_rpc_throughput.cc)
+galay_add_rpc_benchmark(benchmark_rpc_service_discovery_latency b3_service_discovery_latency.cc)
+galay_add_rpc_benchmark(benchmark_rpc_server_stream_throughput b4_server_stream_throughput.cc)
+galay_add_rpc_benchmark(benchmark_rpc_bidirectional_stream_throughput b5_bidirectional_stream_throughput.cc)

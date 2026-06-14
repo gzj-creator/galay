@@ -1,0 +1,23 @@
+function(galay_add_tracing_example target_name source_file)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::tracing)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+endfunction()
+
+function(galay_add_tracing_import_example target_name source_file)
+    if(NOT TARGET galay-tracing::galay-tracing-modules)
+        return()
+    endif()
+    galay_add_tracing_example(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay-tracing::galay-tracing-modules)
+    set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
+endfunction()
+
+galay_add_tracing_example(example_tracing_include_log_context include/e1_log_context.cc)
+galay_add_tracing_example(example_tracing_include_traceparent include/e2_traceparent.cc)
+galay_add_tracing_example(example_tracing_include_otlp_exporter include/e3_otlp_exporter.cc)
+
+galay_add_tracing_import_example(example_tracing_import_log_context import/e1_log_context.cc)
+galay_add_tracing_import_example(example_tracing_import_traceparent import/e2_traceparent.cc)
+galay_add_tracing_import_example(example_tracing_import_otlp_exporter import/e3_otlp_exporter.cc)

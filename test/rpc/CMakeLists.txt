@@ -1,0 +1,18 @@
+function(galay_add_rpc_test target_name source_file label)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::rpc)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")
+    add_test(NAME "rpc.${scenario_name}" COMMAND $<TARGET_FILE:${target_name}>)
+    set_tests_properties("rpc.${scenario_name}" PROPERTIES LABELS "rpc;${label}")
+endfunction()
+
+add_library(result_writer INTERFACE)
+target_include_directories(result_writer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
+galay_add_rpc_test(t1_protocol t1_protocol.cc unit)
+galay_add_rpc_test(t2_server t2_server.cc integration)
+galay_add_rpc_test(t3_client t3_client.cc integration)
+galay_add_rpc_test(t4_awaitable_surface t4_awaitable_surface.cc surface)
+galay_add_rpc_test(t5_runtime_io_scheduler_compat t5_runtime_io_scheduler_compat.cc unit)
+galay_add_rpc_test(t6_rpc_log t6_rpc_log.cc unit)

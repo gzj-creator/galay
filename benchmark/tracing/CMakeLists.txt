@@ -1,0 +1,18 @@
+function(galay_add_tracing_benchmark target_name source_file)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::tracing)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+endfunction()
+
+galay_add_tracing_benchmark(benchmark_tracing_disabled_log_throughput b1_disabled_log.cc)
+galay_add_tracing_benchmark(benchmark_tracing_enabled_log_throughput b2_enabled_log.cc)
+galay_add_tracing_benchmark(benchmark_tracing_span_scope_throughput b3_span_scope.cc)
+galay_add_tracing_benchmark(benchmark_tracing_traceparent_throughput b4_traceparent.cc)
+galay_add_tracing_benchmark(benchmark_tracing_otlp_json_exporter_throughput b5_otlp_json_exporter.cc)
+galay_add_tracing_benchmark(benchmark_tracing_structured_event_throughput b6_structured_event.cc)
+galay_add_tracing_benchmark(benchmark_tracing_batch_processor_schedule_throughput b7_batch_processor_schedule.cc)
+
+add_executable(benchmark_tracing_moodycamel_batch_queue_throughput b8_moodycamel_batch_queue.cc)
+target_include_directories(benchmark_tracing_moodycamel_batch_queue_throughput SYSTEM PRIVATE "${MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR}")
+set_target_properties(benchmark_tracing_moodycamel_batch_queue_throughput PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)

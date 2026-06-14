@@ -1,0 +1,25 @@
+function(galay_add_kernel_benchmark target_name source_file)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::kernel)
+    target_include_directories(${target_name}
+        PRIVATE
+            ${PROJECT_SOURCE_DIR}
+            ${PROJECT_SOURCE_DIR}/src
+    )
+    set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+endfunction()
+
+galay_add_kernel_benchmark(benchmark_kernel_compute_scheduler_throughput b1_compute_scheduler_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_tcp_server_throughput b2_tcp_server_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_tcp_client_throughput b3_tcp_client_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_udp_server_throughput b4_udp_server_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_udp_client_throughput b5_udp_client_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_udp_socket_throughput b6_udp_socket_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_file_io_throughput b7_file_io_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_mpsc_channel_throughput b8_mpsc_channel_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_unsafe_channel_throughput b9_unsafe_channel_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_ring_buffer_throughput b10_ring_buffer_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_tcp_iov_server_throughput b11_tcp_iov_server_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_tcp_iov_client_throughput b12_tcp_iov_client_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_sendfile_throughput b13_sendfile_throughput.cc)
+galay_add_kernel_benchmark(benchmark_kernel_scheduler_wakeup_latency b14_scheduler_wakeup_latency.cc)

@@ -1,0 +1,12 @@
+function(galay_add_utils_benchmark target_name source_file)
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::utils)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
+endfunction()
+
+galay_add_utils_benchmark(benchmark_utils_lru_cache_throughput b1_lru_cache_throughput.cc)
+galay_add_utils_benchmark(benchmark_utils_byte_queue_view_throughput b2_byte_queue_view_throughput.cc)
+galay_add_utils_benchmark(benchmark_utils_ring_buffer_throughput b3_ring_buffer_throughput.cc)
+galay_add_utils_benchmark(benchmark_utils_bloom_filter_throughput b4_bloom_filter_throughput.cc)
+galay_add_utils_benchmark(benchmark_utils_circuit_breaker_throughput b5_circuit_breaker_throughput.cc)
