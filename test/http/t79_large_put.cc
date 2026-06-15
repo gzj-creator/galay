@@ -21,11 +21,11 @@
 #include <type_traits>
 #include <unistd.h>
 
-#include "http/kernel/http_conn.h"
-#include "http/server/http_server.h"
-#include "http2/protoc/http2_error.h"
-#include "ws/protoc/ws_error.h"
-#include "http/builder/http_builder.h"
+#include "galay-http/kernel/http_conn.h"
+#include "galay-http/server/http_server.h"
+#include "galay-http2/protoc/http2_error.h"
+#include "galay-ws/protoc/ws_error.h"
+#include "galay-http/builder/http_builder.h"
 
 using namespace galay::http;
 using namespace galay::kernel;

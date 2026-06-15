@@ -50,7 +50,7 @@
 - 自述摘要：
   - 新增 `BaseLogger` 虚基类、`LoggerRegistry` 全局注册中心和 `GALAY_LOG_*` 宏族，提供零开销可插拔日志基础设施。未设置 logger 时仅执行 atomic load + null check，不进入格式化。
   - 支持 `LogLevel` 五级过滤（kTrace/kDebug/kInfo/kWarn/kError），低级别消息在 `std::format` 前被截断。
-  - 为全部 68 个源文件（common/kernel/async/concurrency）添加完整中文 Doxygen 注释，覆盖文件级、类级和方法级文档。
+  - 为全部 68 个源文件（common/galay-kernel/async/concurrency）添加完整中文 Doxygen 注释，覆盖文件级、类级和方法级文档。
   - 导出 `logger.h` 到 C++23 module `galay.kernel`。
 
 ## v5.0.0 - 2026-05-20

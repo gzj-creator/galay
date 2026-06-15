@@ -5,8 +5,8 @@
 
 #include <iostream>
 #include <cassert>
-#include "http/server/http_router.h"
-#include "http/protoc/http_request.h"
+#include "galay-http/server/http_router.h"
+#include "galay-http/protoc/http_request.h"
 
 using namespace galay::http;
 using namespace galay::kernel;

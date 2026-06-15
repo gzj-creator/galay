@@ -3,8 +3,8 @@
  * @brief 验证 owner 线程上的 deferred 本地任务仍保持 FIFO 语义。
  */
 
-#include "kernel/kernel/io_scheduler.hpp"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/io_scheduler.hpp"
+#include "galay-kernel/core/task.h"
 
 #include <coroutine>
 #include <cstdint>

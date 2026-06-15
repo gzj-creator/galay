@@ -5,9 +5,9 @@
  * 通过条件：超时任务返回 timeout，持锁任务释放后新的 probe 任务仍能成功获取锁。
  */
 
-#include "kernel/concurrency/async_mutex.h"
-#include "kernel/concurrency/async_waiter.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/concurrency/async_mutex.h"
+#include "galay-kernel/concurrency/async_waiter.h"
+#include "galay-kernel/core/task.h"
 
 #include <atomic>
 #include <chrono>
@@ -17,13 +17,13 @@
 #include <thread>
 
 #ifdef USE_EPOLL
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #elif defined(USE_IOURING)
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

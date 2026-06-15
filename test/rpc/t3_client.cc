@@ -4,8 +4,8 @@
  */
 
 #include "result_writer.h"
-#include "rpc/kernel/rpc_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-rpc/kernel/rpc_client.h"
+#include "galay-kernel/core/runtime.h"
 #include <atomic>
 #include <iostream>
 #include <thread>

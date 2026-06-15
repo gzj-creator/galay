@@ -1,6 +1,6 @@
-#include "rpc/utils/runtime_compat.h"
-#include "kernel/kernel/runtime.h"
-#include "kernel/kernel/task.h"
+#include "galay-rpc/utils/runtime_compat.h"
+#include "galay-kernel/core/runtime.h"
+#include "galay-kernel/core/task.h"
 
 #include <atomic>
 #include <chrono>

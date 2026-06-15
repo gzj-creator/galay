@@ -1,6 +1,6 @@
-#include "etcd/async/client.h"
+#include "galay-etcd/async/client.h"
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>
@@ -26,7 +26,7 @@ Task<void> runExample(IOScheduler* scheduler,
         done->store(true, std::memory_order_release);
     };
 
-    const std::string key = "/etcd/examples/async/" + std::to_string(
+    const std::string key = "/galay-etcd/examples/async/" + std::to_string(
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch()).count());
     const std::string value = "hello-async";

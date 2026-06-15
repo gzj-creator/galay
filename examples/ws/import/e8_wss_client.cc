@@ -1,5 +1,5 @@
 #include "common/example_common.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 
 #include <chrono>
 #include <cstdlib>

@@ -3,7 +3,7 @@
  * @brief Outbound scheduler flow-control contract test
  */
 
-#include "http2/kernel/out_sched.h"
+#include "galay-http2/kernel/out_sched.h"
 #include <cassert>
 #include <iostream>
 

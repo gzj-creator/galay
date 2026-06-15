@@ -11,8 +11,8 @@
 #include <thread>
 #include <csignal>
 #include "benchmark/wss_stats.h"
-#include "ws/client/ws_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-ws/client/ws_client.h"
+#include "galay-kernel/core/runtime.h"
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 

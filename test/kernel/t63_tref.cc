@@ -5,8 +5,8 @@
  * 通过条件：编译期静态断言全部通过，测试返回 0。
  */
 
-#include "kernel/kernel/scheduler.hpp"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/scheduler.hpp"
+#include "galay-kernel/core/task.h"
 
 #include <concepts>
 #include <type_traits>

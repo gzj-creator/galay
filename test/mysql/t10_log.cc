@@ -3,7 +3,7 @@
  * @brief 验证 galay-mysql 库级日志入口与空 logger 过滤路径。
  */
 
-#include "mysql/base/mysql_log.h"
+#include "galay-mysql/base/mysql_log.h"
 
 #include <cstdlib>
 #include <string>

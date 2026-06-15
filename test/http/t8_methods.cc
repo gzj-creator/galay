@@ -3,8 +3,8 @@
  * @brief 测试 HttpClient 的所有 HTTP 方法
  */
 
-#include "http/client/http_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http/client/http_client.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <chrono>
 

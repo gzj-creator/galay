@@ -5,8 +5,8 @@
  * 通过条件：批量接收不会停滞且统计符合预期，测试返回 0。
  */
 
-#include "kernel/concurrency/mpsc_channel.h"
-#include "kernel/kernel/compute_scheduler.h"
+#include "galay-kernel/concurrency/mpsc_channel.h"
+#include "galay-kernel/core/compute_scheduler.h"
 
 #include <atomic>
 #include <chrono>

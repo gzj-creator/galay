@@ -24,7 +24,7 @@ file(REMOVE_RECURSE "${smoke_root}")
 file(MAKE_DIRECTORY "${consumer_source_dir}")
 
 file(WRITE "${consumer_source_dir}/main.cc"
-    "#include <mysql/sync/mysql_client.h>\n"
+    "#include <galay-mysql/sync/mysql_client.h>\n"
     "int main() { return 0; }\n")
 
 configure_file(

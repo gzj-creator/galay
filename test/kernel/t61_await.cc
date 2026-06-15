@@ -5,8 +5,8 @@
  * 通过条件：测试可编译运行，`co_await childTask()` 返回值正确且进程退出码为 0。
  */
 
-#include "kernel/kernel/runtime.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/runtime.h"
+#include "galay-kernel/core/task.h"
 
 #include <cassert>
 

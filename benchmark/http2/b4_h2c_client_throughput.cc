@@ -5,8 +5,8 @@
  *          使用 StreamManager 进行帧分发，每个流通过 stream->getFrame() 协程接收响应
  */
 
-#include "http2/client/h2c_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http2/client/h2c_client.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <atomic>
 #include <chrono>

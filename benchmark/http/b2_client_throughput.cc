@@ -4,8 +4,8 @@
  * @details 类似 wrk 的持续压测，测试服务器的真实 QPS
  */
 
-#include "http/client/http_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http/client/http_client.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <atomic>
 #include <chrono>

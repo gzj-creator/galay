@@ -1,6 +1,6 @@
 import galay.utils;
 
-#include <utils/tool/rate_limiter.hpp>
+#include <galay-utils/tool/rate_limiter.hpp>
 
 #include <cassert>
 #include <chrono>

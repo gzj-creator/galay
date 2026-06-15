@@ -1,11 +1,11 @@
-#include "tracing/adapters/kernel_context.h"
+#include "galay-tracing/adapters/kernel_context.h"
 
-#include "tracing/context/context_storage.h"
-#include "tracing/log/logger.h"
-#include "tracing/log/log_sink.h"
+#include "galay-tracing/context/context_storage.h"
+#include "galay-tracing/log/logger.h"
+#include "galay-tracing/log/log_sink.h"
 
-#include "kernel/kernel/runtime.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/runtime.h"
+#include "galay-kernel/core/task.h"
 
 #include <cassert>
 #include <memory>

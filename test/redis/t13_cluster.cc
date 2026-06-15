@@ -1,4 +1,4 @@
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <cctype>
@@ -10,8 +10,8 @@
 #include <string>
 #include <thread>
 
-#include "redis/async/redis_client.h"
-#include "redis/async/topology_client.h"
+#include "galay-redis/async/redis_client.h"
+#include "galay-redis/async/topology_client.h"
 
 using namespace galay::kernel;
 using namespace galay::redis;

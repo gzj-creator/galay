@@ -3,7 +3,7 @@
  * @brief 验证 galay-mongo 库级日志入口与空 logger 过滤路径。
  */
 
-#include "mongo/base/mongo_log.h"
+#include "galay-mongo/base/mongo_log.h"
 
 #include <cstdlib>
 #include <string>

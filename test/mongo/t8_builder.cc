@@ -2,8 +2,8 @@
 #include <iostream>
 #include <string>
 
-#include "mongo/protoc/builder.h"
-#include "mongo/protoc/mongo_protocol.h"
+#include "galay-mongo/protoc/builder.h"
+#include "galay-mongo/protoc/mongo_protocol.h"
 
 using namespace galay::mongo;
 using namespace galay::mongo::protocol;

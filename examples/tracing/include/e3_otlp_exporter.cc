@@ -1,6 +1,6 @@
-#include "tracing/context/trace_context.h"
-#include "tracing/kernel/otlp_http_exporter.h"
-#include "tracing/kernel/span.h"
+#include "galay-tracing/context/trace_context.h"
+#include "galay-tracing/kernel/otlp_http_exporter.h"
+#include "galay-tracing/kernel/span.h"
 
 #include <chrono>
 #include <iostream>

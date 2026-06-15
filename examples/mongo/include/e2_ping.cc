@@ -3,10 +3,11 @@
 #include <iostream>
 #include <thread>
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
+#include "common/async_result.h"
 #include "common/config.h"
-#include "mongo/async/client.h"
+#include "galay-mongo/async/client.h"
 
 using namespace galay::kernel;
 using namespace galay::mongo;
@@ -30,7 +31,9 @@ Task<void> run(IOScheduler* scheduler,
 {
     auto client = AsyncMongoClientBuilder().scheduler(scheduler).config(cfg.async).build();
 
-    const std::expected<bool, MongoError> conn_result = co_await client.connect(cfg.mongo);
+    const std::expected<bool, MongoError> conn_result =
+        mongo_example::unwrapMongoTaskResult(co_await client.connect(cfg.mongo),
+                                             MONGO_ERROR_CONNECTION);
     if (!conn_result) {
         state->ok.store(false, std::memory_order_relaxed);
         state->error = conn_result.error().message();
@@ -38,7 +41,9 @@ Task<void> run(IOScheduler* scheduler,
         co_return;
     }
 
-    const std::expected<MongoReply, MongoError> ping_result = co_await client.ping(cfg.mongo.database);
+    const std::expected<MongoReply, MongoError> ping_result =
+        mongo_example::unwrapMongoTaskResult(co_await client.ping(cfg.mongo.database),
+                                             MONGO_ERROR_COMMAND);
     if (!ping_result) {
         state->ok.store(false, std::memory_order_relaxed);
         state->error = ping_result.error().message();

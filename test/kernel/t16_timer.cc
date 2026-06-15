@@ -12,7 +12,7 @@
 #include <cassert>
 #include <vector>
 #include <random>
-#include "kernel/kernel/timer_scheduler.h"
+#include "galay-kernel/core/timer_scheduler.h"
 #include "result_writer.h"
 
 using namespace galay::kernel;

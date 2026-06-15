@@ -3,8 +3,8 @@
  * @brief HTTPS 服务器测试 - 支持 keep-alive
  */
 
-#include "http/server/http_server.h"
-#include "http/builder/http_builder.h"
+#include "galay-http/server/http_server.h"
+#include "galay-http/builder/http_builder.h"
 #include <iostream>
 #include <thread>
 #include <chrono>

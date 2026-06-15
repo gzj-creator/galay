@@ -8,10 +8,10 @@
  *   默认: localhost 8080 5
  */
 
-#include "ws/client/ws_client.h"
-#include "kernel/kernel/runtime.h"
-#include "ws/kernel/reader_cfg.h"
-#include "ws/kernel/writer_cfg.h"
+#include "galay-ws/client/ws_client.h"
+#include "galay-kernel/core/runtime.h"
+#include "galay-ws/kernel/reader_cfg.h"
+#include "galay-ws/kernel/writer_cfg.h"
 #include <iostream>
 #include <atomic>
 

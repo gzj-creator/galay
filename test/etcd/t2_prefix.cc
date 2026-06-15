@@ -1,4 +1,4 @@
-#include "etcd/sync/etcd_client.h"
+#include "galay-etcd/sync/etcd_client.h"
 
 #include <chrono>
 #include <iostream>
@@ -38,7 +38,7 @@ int main(int argc, char** argv)
         return fail("connect failed: " + conn.error().message());
     }
 
-    const std::string prefix = "/etcd/prefix/" + nowSuffix() + "/";
+    const std::string prefix = "/galay-etcd/prefix/" + nowSuffix() + "/";
     const std::vector<std::pair<std::string, std::string>> kvs = {
         {prefix + "a", "1"},
         {prefix + "b", "2"},

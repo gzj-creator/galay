@@ -1,7 +1,7 @@
 #include <chrono>
 #include <iostream>
 
-#include "mongo/sync/mongo_client.h"
+#include "galay-mongo/sync/mongo_client.h"
 #include "config.h"
 
 using namespace galay::mongo;

@@ -14,9 +14,9 @@
 #include <mutex>
 #include <numeric>
 #include "benchmark/benchmark_sync.h"
-#include "kernel/concurrency/mpsc_channel.h"
-#include "kernel/kernel/task.h"
-#include "kernel/kernel/compute_scheduler.h"
+#include "galay-kernel/concurrency/mpsc_channel.h"
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/core/compute_scheduler.h"
 #include "test/stdout_log.h"
 
 using namespace galay::kernel;

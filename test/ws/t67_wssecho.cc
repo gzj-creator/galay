@@ -7,12 +7,12 @@
 #include <sstream>
 
 #define private public
-#include "ws/kernel/ws_conn.h"
+#include "galay-ws/kernel/ws_conn.h"
 #undef private
-#include "ws/protoc/ws_frame.h"
-#include <utils/cache/bytes.hpp>
-#include <utils/cache/ring_buffer.hpp>
-#include "ssl/async/ssl_socket.h"
+#include "galay-ws/protoc/ws_frame.h"
+#include <galay-utils/cache/bytes.hpp>
+#include <galay-utils/cache/ring_buffer.hpp>
+#include "galay-ssl/async/ssl_socket.h"
 #endif
 
 namespace {

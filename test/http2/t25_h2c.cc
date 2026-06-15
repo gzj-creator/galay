@@ -8,8 +8,8 @@
  *   默认: localhost 9080 10
  */
 
-#include "http2/client/h2c_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http2/client/h2c_client.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <atomic>
 #include <cstdlib>

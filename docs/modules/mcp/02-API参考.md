@@ -15,8 +15,7 @@
 - `galay-mcp/common/schema_builder.h`
 - `galay-mcp/common/json_parser.h`
 - `galay-mcp/common/protocol_utils.h`
-- `galay-mcp/client/stdio_client.h`
-- `galay-mcp/client/http_client.h`
+- `galay-mcp/client/client.h`
 - `galay-mcp/server/stdio_server.h`
 - `galay-mcp/server/http_server.h`
 - `galay-mcp/module/module_prelude.hpp`
@@ -462,15 +461,17 @@ public:
 - 服务端回归程序：`test/t2_stdio.cc`
 - 双向管道联调脚本：`scripts/S4-RunIntegrationTest.sh`
 
-## 8. `McpStdioClient`
+## 8. `McpClient` stdio 模式
 
-来源：`galay-mcp/client/stdio_client.h`
+来源：`galay-mcp/client/client.h`
 
 ```cpp
-class McpStdioClient {
+class McpClient {
 public:
-    McpStdioClient();
-    ~McpStdioClient();
+    explicit McpClient(McpStdioClientConfig config = {});
+    ~McpClient();
+
+    McpClientMode mode() const;
 
     std::expected<void, McpError> initialize(const std::string& clientName, const std::string& clientVersion);
     std::expected<JsonString, McpError> callTool(const std::string& toolName, const JsonString& arguments);
@@ -480,8 +481,9 @@ public:
     std::expected<std::vector<Prompt>, McpError> listPrompts();
     std::expected<JsonString, McpError> getPrompt(const std::string& name, const JsonString& arguments);
     std::expected<void, McpError> ping();
-    void disconnect();
+    std::expected<void, McpError> disconnect();
 
+    bool isConnected() const;
     bool isInitialized() const;
     const ServerInfo& getServerInfo() const;
     const ServerCapabilities& getServerCapabilities() const;
@@ -490,13 +492,16 @@ public:
 
 说明：
 
+- `McpClient` 是唯一公开 MCP 客户端；默认构造配置为 stdio 模式。
 - 拷贝 / 移动被禁用。
 - 请求 / 响应解析直接依赖 `json_parser.h` 中的解析 helper。
+- HTTP 模式对象调用这些同步 stdio API 会返回 `InvalidTransportMode`。
 
 ### 入口、前置条件与返回
 
 | 入口 | 参数 | 成功结果 | 失败 / 边界 |
 | --- | --- | --- | --- |
+| `McpClient(McpStdioClientConfig{})` | 可选输入 / 输出流指针 | 构造 stdio 模式客户端 | 空流指针允许构造，但读写协议 API 会在解引用前返回 `InvalidParams` |
 | `initialize(clientName, clientVersion)` | 客户端名、版本号 | `void`；缓存 `serverInfo` / `serverCapabilities` | 已初始化时返回 `AlreadyInitialized`；初始化响应无法解析时返回 `InitializationFailed` |
 | `callTool(toolName, arguments)` | 工具名、原始 JSON 参数 | 返回 `ToolCallResult.content` 的**第一条文本内容**；若内容为空或第一项不是文本则返回 `{}` | 未初始化返回 `NotInitialized`；服务端 `isError=true` 时返回 `ToolExecutionFailed("Tool returned error")` |
 | `listTools()` | 无 | `std::vector<Tool>` | 未初始化返回 `NotInitialized`；缺失 `tools` 字段时返回空数组 |
@@ -506,13 +511,13 @@ public:
 | `getPrompt(name, arguments)` | 提示名、可选原始 JSON 参数 | 返回服务端 `result` 原始 JSON | 未初始化返回 `NotInitialized` |
 | `ping()` | 无 | `void` | 未初始化返回 `NotInitialized` |
 | `disconnect()` | 无 | `void` | 只清空本地 `m_initialized` 标志，不发送协议级 `disconnect` 消息 |
-| `isInitialized()` / `getServerInfo()` / `getServerCapabilities()` | 无 | 本地缓存状态 / 信息 | 仅反映当前实例缓存，不触发 I/O |
+| `isConnected()` / `isInitialized()` / `getServerInfo()` / `getServerCapabilities()` | 无 | 本地缓存状态 / 信息 | stdio 模式下 `isConnected()` 等同 `isInitialized()`；这些查询不触发 I/O |
 
 ### 生命周期与并发语义
 
 - `initialize(...)` 会先发送 `initialize` 请求，成功后再发送 `notifications/initialized` 通知。
 - 传输层采用“一行一条 JSON-RPC 消息”的 `stdin/stdout` 协议；`readMessage()` 会跳过空行并持续读取到第一条非空消息。
-- 同一 `McpStdioClient` 实例应视为**串行调用对象**：源码虽然给输入 / 输出分别加锁，但 `sendRequest()` 会在单一输入流上直接消费响应并忽略“不是当前 request id”的消息，这会让并发请求互相吞掉对方响应。
+- 同一 `McpClient` 实例应视为**串行调用对象**：源码虽然给输入 / 输出分别加锁，但 `sendRequest()` 会在单一输入流上直接消费响应并忽略“不是当前 request id”的消息，这会让并发请求互相吞掉对方响应。
 
 ### 示例与测试锚点
 
@@ -585,17 +590,19 @@ public:
 - 服务端回归程序：`test/t4_http.cc`
 - HTTP 集成脚本：`scripts/S7-RunHttpIntegrationTest.sh`
 
-## 10. `McpHttpClient`
+## 10. `McpClient` HTTP 模式
 
-来源：`galay-mcp/client/http_client.h`
+来源：`galay-mcp/client/client.h`
 
 ```cpp
-class McpHttpClient {
+class McpClient {
 public:
-    explicit McpHttpClient(kernel::Runtime& runtime);
-    ~McpHttpClient();
+    McpClient(kernel::Runtime& runtime, McpHttpClientConfig config);
+    ~McpClient();
 
-    ConnectAwaitable connect(const std::string& url);
+    McpClientMode mode() const;
+    ConnectAwaitable connect();
+    ConnectAwaitable connect(std::string url);
 
     kernel::Coroutine initialize(std::string clientName, std::string clientVersion, std::expected<void, McpError>& result);
     kernel::Coroutine callTool(std::string toolName, JsonString arguments, std::expected<JsonString, McpError>& result);
@@ -605,7 +612,7 @@ public:
     kernel::Coroutine listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
     kernel::Coroutine getPrompt(std::string name, JsonString arguments, std::expected<JsonString, McpError>& result);
     kernel::Coroutine ping(std::expected<void, McpError>& result);
-    CloseAwaitable disconnect();
+    CloseAwaitable disconnectAsync();
 
     bool isConnected() const;
     bool isInitialized() const;
@@ -617,29 +624,31 @@ public:
 调用模型：
 
 - 先创建 `kernel::Runtime`。
-- `connect()` / `disconnect()` 返回 awaitable。
+- 构造时通过 `McpHttpClientConfig{.url = url}` 选择 HTTP 模式并设置默认 URL。
+- `connect()` / `connect(url)` / `disconnectAsync()` 返回 awaitable。
 - 其余 RPC 通过 `kernel::Coroutine` 把结果写回调用方提供的 `std::expected<...>&`。
+- stdio 模式对象调用这些 HTTP 协程 API 会在冷任务被调度后写入 `InvalidTransportMode`。
 
 ### 入口、前置条件与返回
 
 | 入口 | 参数 | 成功结果 | 失败 / 边界 |
 | --- | --- | --- | --- |
-| `McpHttpClient(runtime)` | `kernel::Runtime&` | 构造实例 | 运行时生命周期需覆盖整个客户端对象 |
-| `connect(url)` | 服务端 URL，例如 `http://127.0.0.1:8080/mcp` | `ConnectAwaitable` | 该入口也是唯一的“公开设定 URL”方式；返回类型与底层 `http::HttpClient::connect()` 保持一致；后续 RPC 会复用这里保存的 URL |
+| `McpClient(runtime, McpHttpClientConfig{.url = url})` | `kernel::Runtime&` 与服务端 URL | 构造实例 | 运行时生命周期需覆盖整个客户端对象 |
+| `connect()` / `connect(url)` | 服务端 URL，例如 `http://127.0.0.1:8080/mcp` | `ConnectAwaitable` | 返回类型与底层 `http::HttpClient::connect()` 保持一致；`connect(url)` 会更新后续 RPC 使用的 URL |
 | `initialize(clientName, clientVersion, result)` | 客户端名、版本号、结果引用 | `result = {}` 并缓存 `serverInfo` / `serverCapabilities` | 解析初始化响应失败时写入 `InitializationFailed` |
 | `callTool(toolName, arguments, result)` | 工具名、原始 JSON 参数、结果引用 | `result` 写入第一条文本内容；无文本时写入 `{}` | 未初始化写入 `NotInitialized`；`isError=true` 时写入 `ToolExecutionFailed("Tool returned error")` |
 | `listTools(result)` / `listResources(result)` / `listPrompts(result)` | 结果引用 | 写入相应对象数组 | 未初始化写入 `NotInitialized`；缺失列表字段时写入空数组 |
 | `readResource(uri, result)` | URI、结果引用 | 写入第一条文本内容；无文本时为空字符串 | 未初始化写入 `NotInitialized` |
 | `getPrompt(name, arguments, result)` | 提示名、可选原始 JSON 参数、结果引用 | 写入服务端 `result` 原始 JSON | 未初始化写入 `NotInitialized` |
 | `ping(result)` | 结果引用 | 写入空成功结果 | 未初始化写入 `NotInitialized` |
-| `disconnect()` | 无 | `CloseAwaitable` | 先清理本地 `m_initialized` / `m_connected` 标志，再返回与底层 `http::HttpClient::close()` 一致的关闭等待体 |
+| `disconnectAsync()` | 无 | `CloseAwaitable` | 先清理本地 `m_initialized` / `m_connected` 标志，再返回与底层 `http::HttpClient::close()` 一致的关闭等待体 |
 | `isConnected()` / `isInitialized()` / `getServerInfo()` / `getServerCapabilities()` | 无 | 读取本地状态 / 缓存 | 不触发网络 I/O |
 
 ### 生命周期与并发语义
 
-- 实践顺序是：创建 `Runtime` → `co_await connect(url)` → `co_await initialize(...).wait()` → 其余 RPC → `co_await disconnect()`。
+- 实践顺序是：创建 `Runtime` → `co_await connect()` → `co_await initialize(...)` → 其余 RPC → `co_await disconnectAsync()`。
 - `sendRequest(...)` 在 `m_connected == false` 时会自动重连；HTTP 连接若收到 `Connection: close` 或非 keep-alive 响应，也会把本地连接状态清为 `false`。
-- 当前 `isConnected()` 反映的是“最近一次成功 RPC 后的连接状态”；单独 `co_await connect(url)` 不会直接把该标志置为 `true`。
+- 当前 `isConnected()` 反映的是“最近一次成功 RPC 后的连接状态”；单独 `co_await connect()` 不会直接把该标志置为 `true`。
 - HTTP 状态码不是 `200 OK` 时会被包装成 `connectionError("HTTP error: <code>")`；JSON-RPC `id` 不匹配时返回 `invalidResponse("Mismatched response id")`。
 - 公开头文件和测试都没有给出“同一客户端实例可被多个线程 / 协程并发复用”的保证；如需稳妥，调用方应自行串行化。
 
@@ -663,8 +672,7 @@ public:
 - `json_parser.h`
 - `schema_builder.h`
 - `protocol_utils.h`
-- `stdio_client.h`
-- `http_client.h`
+- `client.h`
 - `stdio_server.h`
 - `http_server.h`
 

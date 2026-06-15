@@ -11,8 +11,8 @@
  *   ./e1_echo 9000
  */
 
-#include "rpc/kernel/rpc_server.h"
-#include "rpc/kernel/rpc_service.h"
+#include "galay-rpc/kernel/rpc_server.h"
+#include "galay-rpc/kernel/rpc_service.h"
 #include <iostream>
 #include <csignal>
 #include <atomic>

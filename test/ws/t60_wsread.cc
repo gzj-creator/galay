@@ -7,11 +7,11 @@
 #include <sstream>
 
 #define private public
-#include "ws/kernel/ws_reader.h"
+#include "galay-ws/kernel/ws_reader.h"
 #undef private
 
-#include "ws/protoc/ws_frame.h"
-#include <utils/cache/ring_buffer.hpp>
+#include "galay-ws/protoc/ws_frame.h"
+#include <galay-utils/cache/ring_buffer.hpp>
 
 using galay::utils::RingBuffer;
 using namespace galay::websocket;

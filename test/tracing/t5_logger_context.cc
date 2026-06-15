@@ -1,6 +1,6 @@
-#include "tracing/context/context_storage.h"
-#include "tracing/log/logger.h"
-#include "tracing/log/log_sink.h"
+#include "galay-tracing/context/context_storage.h"
+#include "galay-tracing/log/logger.h"
+#include "galay-tracing/log/log_sink.h"
 
 #include <cassert>
 #include <format>

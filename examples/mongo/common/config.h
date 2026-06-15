@@ -1,7 +1,7 @@
 #ifndef GALAY_MONGO_EXAMPLE_CONFIG_H
 #define GALAY_MONGO_EXAMPLE_CONFIG_H
 
-#include "mongo/base/mongo_config.h"
+#include "galay-mongo/base/mongo_config.h"
 
 #include <chrono>
 #include <cstdlib>

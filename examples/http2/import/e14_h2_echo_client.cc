@@ -1,5 +1,5 @@
 #include "common/example_common.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 
 #include <cstdlib>
 #include <iostream>
@@ -17,9 +17,19 @@ Task<void> runClient(const std::string& host, uint16_t port) {
         .verifyPeer(false)
         .build());
 
-    auto connect_result = co_await client.connect(host, port);
-    if (!connect_result) {
-        std::cerr << "Connect failed: " << static_cast<int>(connect_result.error()) << "\n";
+    auto connect_task_result = co_await client.connect(host, port);
+    if (!connect_task_result) {
+        std::cerr << "Connect failed: " << connect_task_result.error().message() << "\n";
+        co_return;
+    }
+
+    auto connect_result = std::move(connect_task_result.value());
+    if (!connect_result || !connect_result.value()) {
+        if (!connect_result) {
+            std::cerr << "Connect failed: " << static_cast<int>(connect_result.error()) << "\n";
+        } else {
+            std::cerr << "Connect failed: false\n";
+        }
         co_return;
     }
 

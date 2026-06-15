@@ -5,7 +5,7 @@
  * 通过条件：阻塞任务结果正确返回，测试返回 0。
  */
 
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 #include <cassert>
 #include <chrono>
 #include <iostream>

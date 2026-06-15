@@ -4,8 +4,8 @@
  * @details 测试基于标准输入输出的MCP协议性能，包括吞吐量、延迟等指标
  */
 
-#include "mcp/client/stdio_client.h"
-#include "mcp/server/stdio_server.h"
+#include "galay-mcp/client/client.h"
+#include "galay-mcp/server/stdio_server.h"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -93,7 +93,7 @@ struct PerformanceStats {
 };
 
 // 测试工具调用性能
-void benchmarkToolCall(McpStdioClient& client, size_t iterations) {
+void benchmarkToolCall(McpClient& client, size_t iterations) {
     PerformanceStats stats;
 
     std::cerr << "\nBenchmarking tool calls (" << iterations << " iterations)..." << std::endl;
@@ -130,7 +130,7 @@ void benchmarkToolCall(McpStdioClient& client, size_t iterations) {
 }
 
 // 测试资源读取性能
-void benchmarkResourceRead(McpStdioClient& client, size_t iterations) {
+void benchmarkResourceRead(McpClient& client, size_t iterations) {
     PerformanceStats stats;
 
     std::cerr << "\nBenchmarking resource reads (" << iterations << " iterations)..." << std::endl;
@@ -158,7 +158,7 @@ void benchmarkResourceRead(McpStdioClient& client, size_t iterations) {
 }
 
 // 测试列表操作性能
-void benchmarkListOperations(McpStdioClient& client, size_t iterations) {
+void benchmarkListOperations(McpClient& client, size_t iterations) {
     PerformanceStats toolsStats;
     PerformanceStats resourcesStats;
     PerformanceStats promptsStats;
@@ -211,7 +211,7 @@ void benchmarkListOperations(McpStdioClient& client, size_t iterations) {
 }
 
 // 测试Ping性能
-void benchmarkPing(McpStdioClient& client, size_t iterations) {
+void benchmarkPing(McpClient& client, size_t iterations) {
     PerformanceStats stats;
 
     std::cerr << "\nBenchmarking ping (" << iterations << " iterations)..." << std::endl;
@@ -262,7 +262,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "This benchmark requires a running MCP server on stdin/stdout" << std::endl;
     std::cerr << "Run with: ./B1-StdioPerformance [iterations] | ./T2-StdioServer" << std::endl;
 
-    McpStdioClient client;
+    McpClient client(McpStdioClientConfig{});
 
     // 初始化
     std::cerr << "\nInitializing client..." << std::endl;

@@ -19,12 +19,12 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "kernel/async/tcp_socket.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/async/tcp_socket.h"
+#include "galay-kernel/core/task.h"
 #include "test/stdout_log.h"
 
 #ifdef USE_EPOLL
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 #endif
 
 using namespace galay::async;

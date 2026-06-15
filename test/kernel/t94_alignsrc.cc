@@ -1,7 +1,7 @@
 /**
  * @file t94_alignsrc.cc
  * @brief 用途：锁定运行时修复、平台声明和构建入口的源码收口结果。
- * 关键覆盖点：Timer 原子 flag、Windows/IOCP 收口、Bazel BUILD、concurrentqueue 建模、
+ * 关键覆盖点：Timer 原子 flag、Windogalay-ws/IOCP 收口、Bazel BUILD、concurrentqueue 建模、
  * AioCommitAwaitable 的 scheduler 空指针保护、宏污染清理。
  * 通过条件：关键源码 token 与顺序满足预期，测试返回 0。
  */
@@ -143,7 +143,7 @@ int main() {
     requireContains(failures,
                     option_cmake,
                     option_content,
-                    "message(FATAL_ERROR \"Windows/IOCP backend not yet implemented\")",
+                    "message(FATAL_ERROR \"Windogalay-ws/IOCP backend not yet implemented\")",
                     "expected Windows backend to fail at configure time");
     requireNotContains(failures,
                        root_cmake,
@@ -160,7 +160,7 @@ int main() {
                     kernel_build,
                     kernel_build_content,
                     "cc_library(",
-                    "expected kernel/BUILD to define a cc_library");
+                    "expected galay-kernel/BUILD to define a cc_library");
     requireContains(failures,
                     kernel_build,
                     kernel_build_content,

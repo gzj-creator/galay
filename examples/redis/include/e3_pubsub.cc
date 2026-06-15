@@ -1,7 +1,7 @@
 #include "common/config.h"
-#include "redis/async/redis_client.h"
-#include "redis/async/topology_client.h"
-#include <kernel/kernel/runtime.h>
+#include "galay-redis/async/redis_client.h"
+#include "galay-redis/async/topology_client.h"
+#include <galay-kernel/core/runtime.h>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>

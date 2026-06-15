@@ -1,8 +1,8 @@
-#include "redis/async/redis_client.h"
-#include "redis/async/conn_pool.h"
-#include "redis/async/topology_client.h"
+#include "galay-redis/async/redis_client.h"
+#include "galay-redis/async/conn_pool.h"
+#include "galay-redis/async/topology_client.h"
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -179,7 +179,8 @@ Task<void> runRedissPoolAndTopologySmoke(IOScheduler* scheduler, TestState* stat
 
         auto refresh_result = co_await ms.refreshFromSentinel();
         if (!refresh_result) {
-            finish(*state, false, "tls sentinel refresh failed: " + refresh_result.error().message());
+            finish(*state, false, std::string("tls sentinel refresh failed: ") +
+                                      std::string(refresh_result.error().message()));
             co_return;
         }
     }
@@ -203,7 +204,8 @@ Task<void> runRedissPoolAndTopologySmoke(IOScheduler* scheduler, TestState* stat
 
         auto refresh_result = co_await cluster.refreshSlots();
         if (!refresh_result) {
-            finish(*state, false, "tls cluster refresh failed: " + refresh_result.error().message());
+            finish(*state, false, std::string("tls cluster refresh failed: ") +
+                                      std::string(refresh_result.error().message()));
             co_return;
         }
     }

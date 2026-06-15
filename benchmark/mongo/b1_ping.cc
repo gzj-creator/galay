@@ -1,5 +1,5 @@
-#include "benchmark/common/bench_common.h"
-#include "mongo/sync/mongo_client.h"
+#include "common/bench_common.h"
+#include "galay-mongo/sync/mongo_client.h"
 
 #include <atomic>
 #include <chrono>

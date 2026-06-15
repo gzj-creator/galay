@@ -1,6 +1,6 @@
 #include "common/example_common.h"
-#include "http/server/http_router.h"
-#include "http/server/http_server.h"
+#include "galay-http/server/http_router.h"
+#include "galay-http/server/http_server.h"
 #include <algorithm>
 #include <cctype>
 #include <iostream>

@@ -5,10 +5,10 @@
  * 通过条件：服务端与客户端 sequence 全部完成，无超时。
  */
 
-#include "kernel/kernel/task.h"
-#include "kernel/kernel/io_scheduler.hpp"
-#include "kernel/kernel/awaitable.h"
-#include "kernel/common/host.hpp"
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/core/io_scheduler.hpp"
+#include "galay-kernel/core/awaitable.h"
+#include "galay-kernel/common/host.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -24,13 +24,13 @@
 #include <unistd.h>
 
 #ifdef USE_IOURING
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

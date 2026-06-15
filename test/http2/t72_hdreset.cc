@@ -5,7 +5,7 @@
 #include <sstream>
 
 #define private public
-#include "http/protoc/http_header.h"
+#include "galay-http/protoc/http_header.h"
 #undef private
 
 int main()

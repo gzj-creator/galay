@@ -5,14 +5,14 @@
 #include <vector>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include <utils/cache/bytes.hpp>
-#include "kernel/kernel/runtime.h"
-#include "ssl/common/error.h"
+#include <galay-utils/cache/bytes.hpp>
+#include "galay-kernel/core/runtime.h"
+#include "galay-ssl/common/error.h"
 
 #include <sstream>
 
 #define private public
-#include "http2/kernel/stream_mgr.h"
+#include "galay-http2/kernel/stream_mgr.h"
 #undef private
 
 using namespace galay::http2;

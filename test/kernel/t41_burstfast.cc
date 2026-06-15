@@ -5,7 +5,7 @@
  * 通过条件：突发注入任务都被正确消费，测试返回 0。
  */
 
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/task.h"
 #include "test/sched_access.h"
 
 #include <atomic>

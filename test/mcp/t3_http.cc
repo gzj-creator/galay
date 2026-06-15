@@ -1,11 +1,11 @@
 /**
  * @file T3-HttpClient.cc
  * @brief HTTP MCP Client 测试示例
- * @details 演示如何使用 McpHttpClient 连接到HTTP MCP服务器并调用功能
+ * @details 演示如何使用 McpClient 连接到HTTP MCP服务器并调用功能
  */
 
-#include "mcp/client/http_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-mcp/client/client.h"
+#include "galay-kernel/core/runtime.h"
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -27,7 +27,7 @@ void printError(const McpError& error) {
 }
 
 // 测试协程
-Coroutine runTest(McpHttpClient& client,
+Coroutine runTest(McpClient& client,
                   const std::string& url,
                   int& exitCode,
                   std::atomic<bool>& done) {
@@ -38,7 +38,7 @@ Coroutine runTest(McpHttpClient& client,
 
     // 连接到服务器
     std::cout << "Connecting to server...\n";
-    auto connectResult = co_await client.connect(url);
+    auto connectResult = co_await client.connect();
     if (!connectResult) {
         std::cerr << "Connect error: " << connectResult.error().message() << "\n";
         finish(1);
@@ -185,7 +185,7 @@ Coroutine runTest(McpHttpClient& client,
     // 断开连接
     printSeparator();
     std::cout << "Disconnecting...\n";
-    co_await client.disconnect();
+    co_await client.disconnectAsync();
     std::cout << "Disconnected\n\n";
 
     finish(0);
@@ -217,7 +217,7 @@ int main(int argc, char* argv[]) {
         std::cout << "Runtime started\n\n";
 
         // 创建客户端
-        McpHttpClient client(runtime);
+        McpClient client(runtime, McpHttpClientConfig{.url = url});
 
         // 在IO调度器上运行测试协程
         auto* scheduler = runtime.getNextIOScheduler();

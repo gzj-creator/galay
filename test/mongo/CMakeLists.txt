@@ -1,11 +1,19 @@
+function(galay_mongo_configure_test_target target_name)
+    set_target_properties(${target_name} PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+endfunction()
+
 function(add_mongo_test target_name source_file)
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::mongo)
     target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
-    galay_mongo_apply_cxx(${target_name})
-    string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")
-    add_test(NAME "mongo.${scenario_name}" COMMAND $<TARGET_FILE:${target_name}>)
-    set_tests_properties("mongo.${scenario_name}" PROPERTIES LABELS "mongo;unit")
+    galay_mongo_configure_test_target(${target_name})
+    set(test_name "mongo.${target_name}")
+    add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${target_name}>)
+    set_tests_properties(${test_name} PROPERTIES LABELS "mongo;unit")
 endfunction()
 
 add_mongo_test(t1_bson t1_bson.cc)

@@ -5,19 +5,19 @@
  * 通过条件：文件变更事件被正确观察到，测试按预期返回 0。
  */
 
-#include "kernel/async/file_watcher.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/async/file_watcher.h"
+#include "galay-kernel/core/task.h"
 #include "result_writer.h"
 #include "test/stdout_log.h"
 
 #ifdef USE_IOURING
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

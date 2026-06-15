@@ -1,6 +1,6 @@
-#include "kernel/kernel/runtime.h"
-#include "kernel/common/sleep.hpp"
-#include "kernel/concurrency/unsafe_channel.h"
+#include "galay-kernel/core/runtime.h"
+#include "galay-kernel/common/sleep.hpp"
+#include "galay-kernel/concurrency/unsafe_channel.h"
 
 #include <atomic>
 #include <chrono>

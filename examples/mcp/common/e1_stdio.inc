@@ -67,7 +67,7 @@ void runSimpleServer() {
  * 创建一个MCP客户端，连接到服务器并调用功能
  */
 void runSimpleClient() {
-    McpStdioClient client;
+    McpClient client(McpStdioClientConfig{});
 
     // 初始化连接
     std::cout << "Initializing client..." << std::endl;

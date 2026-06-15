@@ -1,6 +1,6 @@
-#include "tracing/context/context_storage.h"
-#include "tracing/kernel/sampler.h"
-#include "tracing/kernel/span_guard.h"
+#include "galay-tracing/context/context_storage.h"
+#include "galay-tracing/kernel/sampler.h"
+#include "galay-tracing/kernel/span_guard.h"
 
 #include <cassert>
 #include <type_traits>

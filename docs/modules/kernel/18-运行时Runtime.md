@@ -28,8 +28,8 @@
 
 ## 源码 / 验证锚点
 
-- 源码：`galay-kernel/kernel/runtime.h`、`galay-kernel/kernel/runtime.cc`
-- 关联类型：`galay-kernel/kernel/task.h`、`galay-kernel/kernel/compute_scheduler.h`、`galay-kernel/kernel/io_scheduler.hpp`
+- 源码：`galay-kernel/core/runtime.h`、`galay-kernel/core/runtime.cc`
+- 关联类型：`galay-kernel/core/task.h`、`galay-kernel/core/compute_scheduler.h`、`galay-kernel/core/io_scheduler.hpp`
 - 测试：`test/t10_compute.cc`、`test/t11_mixed.cc`、`test/t22_runtime.cc`、`test/t37_rtcounts.cc`、`test/t46_blockres.cc`、`test/t48_joinhandle.cc`、`test/t49_handle.cc`、`test/t50_spawnblk.cc`
 - 示例：`examples/include/e2_echo.cc`、`examples/include/e3_tcp.cc`、`examples/include/e4_task.cc`
 

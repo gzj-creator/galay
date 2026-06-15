@@ -11,7 +11,7 @@
 #include <atomic>
 #include <cassert>
 #include <vector>
-#include "kernel/common/timer_manager.hpp"
+#include "galay-kernel/common/timer_manager.hpp"
 #include "result_writer.h"
 
 using namespace galay::kernel;

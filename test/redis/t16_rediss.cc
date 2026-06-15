@@ -1,6 +1,6 @@
-#include "redis/async/redis_client.h"
-#include "redis/async/topology_client.h"
-#include <kernel/kernel/task.h>
+#include "galay-redis/async/redis_client.h"
+#include "galay-redis/async/topology_client.h"
+#include <galay-kernel/core/task.h>
 #include <chrono>
 #include <concepts>
 #include <iostream>

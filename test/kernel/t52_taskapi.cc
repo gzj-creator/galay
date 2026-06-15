@@ -5,7 +5,7 @@
  * 通过条件：编译期与运行期检查全部通过，测试返回 0。
  */
 
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 
 #include <concepts>
 #include <cstdlib>

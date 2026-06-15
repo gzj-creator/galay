@@ -4,9 +4,9 @@
  * @details Use multiple connections and concurrent requests to measure throughput and latency.
  */
 
-#include "mcp/client/http_client.h"
-#include "kernel/common/sleep.hpp"
-#include "kernel/kernel/runtime.h"
+#include "galay-mcp/client/client.h"
+#include "galay-kernel/common/sleep.hpp"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -136,7 +136,7 @@ static void printSystemInfo() {
     std::cout << "C++ Standard: " << __cplusplus << std::endl;
 }
 
-Coroutine workerCoroutine(McpHttpClient& client,
+Coroutine workerCoroutine(McpClient& client,
                           const std::string& url,
                           Operation op,
                           size_t requestsPerWorker,
@@ -148,7 +148,7 @@ Coroutine workerCoroutine(McpHttpClient& client,
                           std::atomic<bool>& benchmarkStarted,
                           std::atomic<bool>& benchmarkAborted,
                           size_t workerId) {
-    auto connectResult = co_await client.connect(url);
+    auto connectResult = co_await client.connect();
     if (!connectResult) {
         stats.addError();
         startupFailures++;
@@ -163,7 +163,7 @@ Coroutine workerCoroutine(McpHttpClient& client,
         stats.addError();
         startupFailures++;
         finishedWorkers++;
-        co_await client.disconnect();
+        co_await client.disconnectAsync();
         disconnectedWorkers++;
         co_return;
     }
@@ -177,7 +177,7 @@ Coroutine workerCoroutine(McpHttpClient& client,
 
     if (benchmarkAborted.load(std::memory_order_acquire)) {
         finishedWorkers++;
-        co_await client.disconnect();
+        co_await client.disconnectAsync();
         disconnectedWorkers++;
         co_return;
     }
@@ -241,13 +241,13 @@ Coroutine workerCoroutine(McpHttpClient& client,
     }
 
     finishedWorkers++;
-    co_await client.disconnect();
+    co_await client.disconnectAsync();
     disconnectedWorkers++;
     co_return;
 }
 
 static void runConcurrentTest(Runtime& runtime,
-                              std::vector<std::unique_ptr<McpHttpClient>>& clients,
+                              std::vector<std::unique_ptr<McpClient>>& clients,
                               const std::string& url,
                               Operation op,
                               size_t requestsPerWorker) {
@@ -381,10 +381,10 @@ int main(int argc, char* argv[]) {
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(ioSchedulers).computeSchedulerCount(computeSchedulers).build();
     runtime.start();
 
-    std::vector<std::unique_ptr<McpHttpClient>> clients;
+    std::vector<std::unique_ptr<McpClient>> clients;
     clients.reserve(connections);
     for (size_t i = 0; i < connections; ++i) {
-        clients.push_back(std::make_unique<McpHttpClient>(runtime));
+        clients.push_back(std::make_unique<McpClient>(runtime, McpHttpClientConfig{.url = url}));
     }
 
     runConcurrentTest(runtime, clients, url, Operation::Ping, requestsPerConn);

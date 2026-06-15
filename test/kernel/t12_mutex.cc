@@ -10,19 +10,19 @@
 #include <chrono>
 #include <thread>
 #include <vector>
-#include "kernel/concurrency/async_mutex.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/concurrency/async_mutex.h"
+#include "galay-kernel/core/task.h"
 #include "test/stdout_log.h"
 #include "result_writer.h"
 
 #ifdef USE_EPOLL
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #elif defined(USE_IOURING)
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

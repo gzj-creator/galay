@@ -2,20 +2,22 @@ set(GALAY_MYSQL_TEST_SKIP_RETURN_CODE 125)
 
 function(add_mysql_test target_name source_file)
     cmake_parse_arguments(ARG "INTEGRATION" "" "LABELS" ${ARGN})
-    add_executable(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay::mysql)
-    target_include_directories(${target_name} PRIVATE ${CMAKE_SOURCE_DIR})
-    set_target_properties(${target_name} PROPERTIES
+    set(executable_name "mysql_${target_name}")
+    add_executable(${executable_name} ${source_file})
+    target_link_libraries(${executable_name} PRIVATE galay::mysql)
+    target_include_directories(${executable_name} PRIVATE ${CMAKE_SOURCE_DIR})
+    set_target_properties(${executable_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
-    add_test(NAME ${target_name} COMMAND $<TARGET_FILE:${target_name}>)
+    set(test_name "mysql.${target_name}")
+    add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${executable_name}>)
 
     set(test_labels mysql)
     if(ARG_INTEGRATION)
         list(APPEND test_labels integration requires-mysql)
-        set_tests_properties(${target_name} PROPERTIES SKIP_RETURN_CODE ${GALAY_MYSQL_TEST_SKIP_RETURN_CODE})
+        set_tests_properties(${test_name} PROPERTIES SKIP_RETURN_CODE ${GALAY_MYSQL_TEST_SKIP_RETURN_CODE})
     else()
         list(APPEND test_labels unit)
     endif()
@@ -24,7 +26,7 @@ function(add_mysql_test target_name source_file)
         list(APPEND test_labels ${ARG_LABELS})
     endif()
 
-    set_tests_properties(${target_name} PROPERTIES
+    set_tests_properties(${test_name} PROPERTIES
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         LABELS "${test_labels}"
         TIMEOUT 30

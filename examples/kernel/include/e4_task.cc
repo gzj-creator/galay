@@ -5,8 +5,8 @@
  * 通过条件：关键演示路径全部执行完成并返回 0。
  */
 
-#include "kernel/kernel/task.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/core/runtime.h"
 #include "test/stdout_log.h"
 #include <cassert>
 #include <atomic>

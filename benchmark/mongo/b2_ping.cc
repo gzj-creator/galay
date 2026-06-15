@@ -1,8 +1,8 @@
-#include "benchmark/common/bench_common.h"
-#include "mongo/async/client.h"
-#include "mongo/protoc/builder.h"
+#include "common/bench_common.h"
+#include "galay-mongo/async/client.h"
+#include "galay-mongo/protoc/builder.h"
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>
@@ -157,7 +157,9 @@ Task<void> runWorker(IOScheduler* scheduler,
     local_lat.reserve((cfg.total_requests / worker_count) + 8);
 
     const std::expected<bool, MongoError> conn_result =
-        co_await client.connect(mongo_bench::toMongoConfig(cfg));
+        mongo_bench::unwrapMongoTaskResult(
+            co_await client.connect(mongo_bench::toMongoConfig(cfg)),
+            MONGO_ERROR_CONNECTION);
     if (!conn_result) {
         state->error.fetch_add(1, std::memory_order_relaxed);
         state->setFirstError("connect failed: " + conn_result.error().message());
@@ -209,7 +211,9 @@ Task<void> runWorker(IOScheduler* scheduler,
                 ? alloc_stats::snapshot()
                 : alloc_stats::Snapshot{};
             const auto t0 = std::chrono::steady_clock::now();
-            const std::expected<MongoReply, MongoError> cmd_result = co_await client.ping(cfg.database);
+            const std::expected<MongoReply, MongoError> cmd_result =
+                mongo_bench::unwrapMongoTaskResult(co_await client.ping(cfg.database),
+                                                   MONGO_ERROR_COMMAND);
             const auto t1 = std::chrono::steady_clock::now();
             const auto alloc_after = cfg.alloc_stats
                 ? alloc_stats::snapshot()
@@ -252,7 +256,9 @@ Task<void> runWorker(IOScheduler* scheduler,
             : alloc_stats::Snapshot{};
         const auto t0 = std::chrono::steady_clock::now();
         const std::expected<std::vector<MongoPipelineResponse>, MongoError> pipe_result =
-            co_await client.pipeline(cfg.database, pipeline_commands);
+            mongo_bench::unwrapMongoTaskResult(
+                co_await client.pipeline(cfg.database, pipeline_commands),
+                MONGO_ERROR_COMMAND);
         const auto t1 = std::chrono::steady_clock::now();
         const auto alloc_after = cfg.alloc_stats
             ? alloc_stats::snapshot()

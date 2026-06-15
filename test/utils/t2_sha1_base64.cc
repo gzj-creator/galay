@@ -3,8 +3,8 @@
 #include <iostream>
 #include <string>
 
-#include <utils/crypto/sha1.hpp>
-#include <utils/encoding/base64.hpp>
+#include <galay-utils/crypto/sha1.hpp>
+#include <galay-utils/encoding/base64.hpp>
 
 int main()
 {

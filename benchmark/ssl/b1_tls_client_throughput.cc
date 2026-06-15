@@ -3,10 +3,10 @@
  * @brief SSL 客户端性能测试
  */
 
-#include "ssl/async/ssl_socket.h"
-#include "ssl/ssl/ssl_context.h"
+#include "galay-ssl/async/ssl_socket.h"
+#include "galay-ssl/ssl/ssl_context.h"
 #include "ssl_stats.h"
-#include <kernel/kernel/task.h>
+#include <galay-kernel/core/task.h>
 #include <iostream>
 #include <atomic>
 #include <csignal>
@@ -18,13 +18,13 @@
 #include <string>
 
 #ifdef USE_KQUEUE
-#include <kernel/kernel/kqueue_scheduler.h>
+#include <galay-kernel/core/kqueue_scheduler.h>
 using TestScheduler = galay::kernel::KqueueScheduler;
 #elif defined(USE_IOURING)
-#include <kernel/kernel/io_uring_scheduler.h>
+#include <galay-kernel/core/io_uring_scheduler.h>
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include <kernel/kernel/epoll_scheduler.h>
+#include <galay-kernel/core/epoll_scheduler.h>
 using TestScheduler = galay::kernel::EpollScheduler;
 #endif
 

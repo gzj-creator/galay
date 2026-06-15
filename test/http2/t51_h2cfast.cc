@@ -6,9 +6,9 @@
 #include <sstream>
 
 #define private public
-#include "http2/kernel/stream_mgr.h"
+#include "galay-http2/kernel/stream_mgr.h"
 #undef private
-#include "http2/protoc/http2_frame.h"
+#include "galay-http2/protoc/http2_frame.h"
 
 #include <cassert>
 #include <iostream>

@@ -7,8 +7,8 @@
 #include <cassert>
 #include <filesystem>
 #include <fstream>
-#include "http/server/http_router.h"
-#include "http/server/static_cfg.h"
+#include "galay-http/server/http_router.h"
+#include "galay-http/server/static_cfg.h"
 
 using namespace galay::http;
 namespace fs = std::filesystem;

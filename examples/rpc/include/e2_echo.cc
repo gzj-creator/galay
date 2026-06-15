@@ -11,8 +11,8 @@
  *   ./e2_echo 127.0.0.1 9000
  */
 
-#include "rpc/kernel/rpc_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-rpc/kernel/rpc_client.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <thread>
 #include <string>

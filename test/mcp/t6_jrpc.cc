@@ -3,7 +3,7 @@
  * @brief 锁定 JSON-RPC HTTP 请求体快速构造 helper 的输出格式，避免热路径优化改坏协议序列化。
  */
 
-#include "mcp/common/protocol_utils.h"
+#include "galay-mcp/common/protocol_utils.h"
 
 #include <iostream>
 #include <optional>

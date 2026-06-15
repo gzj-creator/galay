@@ -5,9 +5,9 @@
  * 通过条件：TaskRef 调度路径命中预期断言，测试返回 0。
  */
 
-#include "kernel/kernel/scheduler.hpp"
-#include "kernel/kernel/task.h"
-#include "kernel/kernel/waker.h"
+#include "galay-kernel/core/scheduler.hpp"
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/core/waker.h"
 #include <iostream>
 
 using namespace galay::kernel;

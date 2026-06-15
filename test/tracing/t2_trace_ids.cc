@@ -1,5 +1,5 @@
-#include "tracing/common/span_id.h"
-#include "tracing/common/trace_id.h"
+#include "galay-tracing/common/span_id.h"
+#include "galay-tracing/common/trace_id.h"
 
 #include <array>
 #include <cassert>

@@ -4,7 +4,7 @@
  * @details 单独测量 HPACK encode/decode 吞吐，排除网络 IO 开销
  */
 
-#include "http2/protoc/http2_hpack.h"
+#include "galay-http2/protoc/http2_hpack.h"
 #include <chrono>
 #include <iostream>
 #include <vector>
@@ -35,7 +35,7 @@ static std::vector<Http2HeaderField> makeResponseHeaders(int variant) {
     h.push_back({":status", "200"});
     h.push_back({"content-type", "application/json; charset=utf-8"});
     h.push_back({"content-length", std::to_string(256 + variant)});
-    h.push_back({"server", "http2/1.0"});
+    h.push_back({"server", "galay-http2/1.0"});
     h.push_back({"date", "Sat, 08 Feb 2026 12:00:00 GMT"});
     h.push_back({"cache-control", "max-age=3600"});
     h.push_back({"x-trace-id", "trace-" + std::to_string(variant) + "-0987654321fedcba"});

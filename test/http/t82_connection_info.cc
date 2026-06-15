@@ -1,4 +1,4 @@
-#include "http/plugin/common/conn_info_storage.hpp"
+#include "galay-http/plugin/common/conn_info_storage.hpp"
 
 #include <concepts>
 #include <cstdlib>

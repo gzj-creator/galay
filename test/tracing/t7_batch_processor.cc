@@ -1,5 +1,5 @@
-#include "tracing/kernel/batch_span_processor.h"
-#include "tracing/kernel/span_exporter.h"
+#include "galay-tracing/kernel/batch_span_processor.h"
+#include "galay-tracing/kernel/span_exporter.h"
 
 #include <cassert>
 #include <atomic>

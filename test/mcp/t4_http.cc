@@ -3,8 +3,8 @@
  * @brief HTTP MCP Server 测试示例
  */
 
-#include "mcp/server/http_server.h"
-#include "mcp/common/schema_builder.h"
+#include "galay-mcp/server/http_server.h"
+#include "galay-mcp/common/schema_builder.h"
 #include <iostream>
 #include <string>
 #include <signal.h>

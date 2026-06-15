@@ -3,7 +3,7 @@
  * @brief H2 (HTTP/2 over TLS) 客户端测试程序
  */
 
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <atomic>
 #include <thread>
@@ -11,7 +11,7 @@
 #include <cstdlib>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include "http2/client/h2_client.h"
+#include "galay-http2/client/h2_client.h"
 #endif
 
 using namespace galay::kernel;
@@ -27,9 +27,20 @@ Task<void> runClient(const std::string& host, uint16_t port, int num_requests) {
         .verifyPeer(false)
         .build());
 
-    auto connect_result = co_await client.connect(host, port);
-    if (!connect_result) {
-        std::cerr << "[connect-fail] " << static_cast<int>(connect_result.error()) << "\n";
+    auto connect_task_result = co_await client.connect(host, port);
+    if (!connect_task_result) {
+        std::cerr << "[connect-fail] " << connect_task_result.error().message() << "\n";
+        g_fail += num_requests;
+        co_return;
+    }
+
+    auto connect_result = std::move(connect_task_result.value());
+    if (!connect_result || !connect_result.value()) {
+        if (!connect_result) {
+            std::cerr << "[connect-fail] " << static_cast<int>(connect_result.error()) << "\n";
+        } else {
+            std::cerr << "[connect-fail] false\n";
+        }
         g_fail += num_requests;
         co_return;
     }

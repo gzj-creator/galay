@@ -14,11 +14,11 @@
 #include <cassert>
 #include <cstring>
 #include <vector>
-#include "http/common/iovec_utils.h"
-#include "http/protoc/http_request.h"
-#include "http/protoc/http_response.h"
-#include "http/protoc/http_error.h"
-#include <utils/cache/ring_buffer.hpp>
+#include "galay-http/common/iovec_utils.h"
+#include "galay-http/protoc/http_request.h"
+#include "galay-http/protoc/http_response.h"
+#include "galay-http/protoc/http_error.h"
+#include <galay-utils/cache/ring_buffer.hpp>
 
 using namespace galay::http;
 using namespace galay::kernel;

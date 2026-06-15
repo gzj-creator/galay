@@ -35,7 +35,7 @@
    - [rpc_message.h - 消息定义](#rpcmessageh)
    - [rpc_codec.h - 编解码器](#rpccodech)
    - [rpc_error.h - 错误处理](#rpcerrorh)
-2. [内核层 (kernel/)](#内核层)
+2. [内核层 (galay-kernel/)](#内核层)
    - [rpc_service.h - 服务定义](#rpcserviceh)
    - [rpc_await.h - Awaitable 基类](#rpcawaith)
    - [rpc_conn.h - 连接封装](#rpcconnh)
@@ -660,7 +660,7 @@ struct RpcServerConfig {
 };
 ```
 
-`GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 定义在 `galay-kernel/kernel/runtime.h`。这里的默认值与上游 Runtime 对齐：`0` 不是“自动”，而是“禁用对应 scheduler”。
+`GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 定义在 `galay-kernel/core/runtime.h`。这里的默认值与上游 Runtime 对齐：`0` 不是“自动”，而是“禁用对应 scheduler”。
 
 #### RpcServerBuilder
 

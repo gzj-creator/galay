@@ -5,9 +5,9 @@
 #include <optional>
 #include <string>
 #include <thread>
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 #include "common/config.h"
-#include "mysql/async/conn_pool.h"
+#include "galay-mysql/async/conn_pool.h"
 
 using namespace galay::kernel;
 using namespace galay::mysql;

@@ -1,9 +1,9 @@
 #ifndef GALAY_TEST_SCHEDULER_TEST_ACCESS_H
 #define GALAY_TEST_SCHEDULER_TEST_ACCESS_H
 
-#include "kernel/kernel/kqueue_scheduler.h"
-#include "kernel/kernel/epoll_scheduler.h"
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 
 namespace galay::kernel {
 

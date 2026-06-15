@@ -1,6 +1,6 @@
-#include "etcd/async/client.h"
+#include "galay-etcd/async/client.h"
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>
@@ -58,7 +58,7 @@ Task<void> runSmoke(IOScheduler* scheduler,
     }
     std::cout << "[OK] connect\n";
 
-    const std::string key = "/etcd/async-smoke/" + nowSuffix();
+    const std::string key = "/galay-etcd/async-smoke/" + nowSuffix();
     const std::string value = "v-" + nowSuffix();
     auto watch_state = std::make_shared<ThreadWatchState>();
 

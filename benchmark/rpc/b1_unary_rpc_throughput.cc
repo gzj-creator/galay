@@ -3,9 +3,9 @@
  * @brief RPC压测服务端
  */
 
-#include "rpc/kernel/rpc_server.h"
-#include "rpc/kernel/rpc_service.h"
-#include "rpc/utils/runtime_compat.h"
+#include "galay-rpc/kernel/rpc_server.h"
+#include "galay-rpc/kernel/rpc_service.h"
+#include "galay-rpc/utils/runtime_compat.h"
 #include <iostream>
 #include <csignal>
 #include <atomic>

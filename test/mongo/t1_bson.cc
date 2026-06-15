@@ -1,8 +1,8 @@
 #include <iostream>
 #include <string>
 
-#include "mongo/protoc/bson.h"
-#include "mongo/protoc/mongo_protocol.h"
+#include "galay-mongo/protoc/bson.h"
+#include "galay-mongo/protoc/mongo_protocol.h"
 
 using namespace galay::mongo;
 using namespace galay::mongo::protocol;

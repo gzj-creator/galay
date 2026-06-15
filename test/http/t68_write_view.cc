@@ -5,10 +5,10 @@
 #include <sstream>
 
 #define private public
-#include "http/kernel/http_writer.h"
+#include "galay-http/kernel/http_writer.h"
 #undef private
 
-#include "kernel/async/tcp_socket.h"
+#include "galay-kernel/async/tcp_socket.h"
 
 int main() {
     using namespace galay::http;

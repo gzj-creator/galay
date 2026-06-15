@@ -5,7 +5,7 @@
  * 通过条件：编译期静态断言与运行期链式调用全部通过，测试返回 0。
  */
 
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/task.h"
 
 #include <concepts>
 #include <type_traits>

@@ -186,7 +186,7 @@ void runHttpServer() {
 }
 
 // 客户端测试协程
-Coroutine runClientTest(McpHttpClient& client,
+Coroutine runClientTest(McpClient& client,
                         const std::string& url,
                         int& exitCode,
                         ClientRunState* state) {
@@ -197,7 +197,7 @@ Coroutine runClientTest(McpHttpClient& client,
 
     // 连接到服务器
     std::cout << "Connecting to " << url << "..." << std::endl;
-    auto connectResult = co_await client.connect(url);
+    auto connectResult = co_await client.connect();
     if (!connectResult) {
         std::cerr << "Failed to connect: " << connectResult.error().message() << std::endl;
         finish(1);
@@ -310,7 +310,7 @@ Coroutine runClientTest(McpHttpClient& client,
     }
 
     // 断开连接
-    co_await client.disconnect();
+    co_await client.disconnectAsync();
     std::cout << "\nClient disconnected." << std::endl;
 
     finish(0);
@@ -328,7 +328,7 @@ int runHttpClient(const std::string& url) {
     runtime.start();
 
     // 创建客户端
-    McpHttpClient client(runtime);
+    McpClient client(runtime, McpHttpClientConfig{.url = url});
 
     int exitCode = 0;
     ClientRunState state;

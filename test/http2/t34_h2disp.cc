@@ -3,7 +3,7 @@
  * @brief Dispatcher state machine contract test
  */
 
-#include "http2/kernel/frame_disp.h"
+#include "galay-http2/kernel/frame_disp.h"
 #include <cassert>
 #include <iostream>
 

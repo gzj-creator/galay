@@ -1,6 +1,6 @@
-#include "etcd/async/client.h"
+#include "galay-etcd/async/client.h"
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>
@@ -51,7 +51,7 @@ Task<void> runPipelineCase(IOScheduler* scheduler,
         co_return;
     }
 
-    const std::string base = "/etcd/async-pipeline/" + nowSuffix();
+    const std::string base = "/galay-etcd/async-pipeline/" + nowSuffix();
     const std::string k1 = base + "/k1";
     const std::string k2 = base + "/k2";
     const std::string v1 = "seed";

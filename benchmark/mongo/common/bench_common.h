@@ -1,7 +1,10 @@
 #ifndef GALAY_MONGO_BENCH_COMMON_H
 #define GALAY_MONGO_BENCH_COMMON_H
 
-#include "mongo/base/mongo_config.h"
+#include "galay-mongo/base/mongo_config.h"
+#include "galay-mongo/base/mongo_error.h"
+
+#include <galay-kernel/core/task.h>
 
 #include <algorithm>
 #include <cerrno>
@@ -9,6 +12,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <expected>
 #include <iostream>
 #include <optional>
 #include <ostream>
@@ -18,6 +22,20 @@
 
 namespace mongo_bench
 {
+
+template <typename T>
+std::expected<T, galay::mongo::MongoError>
+unwrapMongoTaskResult(std::expected<std::expected<T, galay::mongo::MongoError>,
+                                    galay::kernel::detail::TaskResultError>&& task_result,
+                      galay::mongo::MongoErrorType fallback = galay::mongo::MONGO_ERROR_INTERNAL)
+{
+    if (!task_result) {
+        return std::unexpected(galay::mongo::MongoError(
+            fallback,
+            std::string(task_result.error().message())));
+    }
+    return std::move(task_result.value());
+}
 
 enum class BenchMode
 {

@@ -5,7 +5,7 @@
  * 通过条件：预期 RuntimeError 被成功返回，测试返回 0。
  */
 
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 #include <cassert>
 #include <iostream>
 #include <stdexcept>

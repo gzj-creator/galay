@@ -13,9 +13,9 @@
 #include <sys/uio.h>
 
 #define private public
-#include "http2/kernel/http2_stream.h"
+#include "galay-http2/kernel/http2_stream.h"
 #undef private
-#include "http2/protoc/http2_frame.h"
+#include "galay-http2/protoc/http2_frame.h"
 
 using namespace galay::http2;
 

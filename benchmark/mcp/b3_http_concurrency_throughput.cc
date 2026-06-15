@@ -4,9 +4,9 @@
  * @details 测试MCP服务器在高并发场景下的性能表现
  */
 
-#include "mcp/client/http_client.h"
-#include "kernel/common/sleep.hpp"
-#include "kernel/kernel/runtime.h"
+#include "galay-mcp/client/client.h"
+#include "galay-kernel/common/sleep.hpp"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <chrono>
 #include <vector>
@@ -98,7 +98,7 @@ private:
 };
 
 // 工作协程
-Coroutine workerCoroutine(McpHttpClient& client, const std::string& url,
+Coroutine workerCoroutine(McpClient& client, const std::string& url,
                           size_t requestsPerWorker, ConcurrentStats& stats,
                           std::atomic<int>& readyWorkers,
                           std::atomic<int>& finishedWorkers,
@@ -107,7 +107,7 @@ Coroutine workerCoroutine(McpHttpClient& client, const std::string& url,
                           std::atomic<bool>& benchmarkStarted,
                           std::atomic<bool>& benchmarkAborted) {
     // 连接并初始化
-    auto connectResult = co_await client.connect(url);
+    auto connectResult = co_await client.connect();
     if (!connectResult) {
         stats.addError();
         startupFailures++;
@@ -122,7 +122,7 @@ Coroutine workerCoroutine(McpHttpClient& client, const std::string& url,
         stats.addError();
         startupFailures++;
         finishedWorkers++;
-        co_await client.disconnect();
+        co_await client.disconnectAsync();
         disconnectedWorkers++;
         co_return;
     }
@@ -136,7 +136,7 @@ Coroutine workerCoroutine(McpHttpClient& client, const std::string& url,
 
     if (benchmarkAborted.load(std::memory_order_acquire)) {
         finishedWorkers++;
-        co_await client.disconnect();
+        co_await client.disconnectAsync();
         disconnectedWorkers++;
         co_return;
     }
@@ -164,7 +164,7 @@ Coroutine workerCoroutine(McpHttpClient& client, const std::string& url,
     }
 
     finishedWorkers++;
-    co_await client.disconnect();
+    co_await client.disconnectAsync();
     disconnectedWorkers++;
     co_return;
 }
@@ -190,9 +190,9 @@ void runConcurrentTest(const std::string& url, size_t numWorkers, size_t request
     runtime.start();
 
     // 创建客户端和协程
-    std::vector<std::unique_ptr<McpHttpClient>> clients;
+    std::vector<std::unique_ptr<McpClient>> clients;
     for (size_t i = 0; i < numWorkers; ++i) {
-        clients.push_back(std::make_unique<McpHttpClient>(runtime));
+        clients.push_back(std::make_unique<McpClient>(runtime, McpHttpClientConfig{.url = url}));
     }
 
     // 开始测试

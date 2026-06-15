@@ -1,4 +1,4 @@
-#include "mcp/client/stdio_client.h"
+#include "galay-mcp/client/client.h"
 #include <iostream>
 #include <string>
 
@@ -9,7 +9,7 @@ void printError(const McpError& error) {
 }
 
 int main() {
-    McpStdioClient client;
+    McpClient client(McpStdioClientConfig{});
 
     std::cerr << "=== MCP Client Test ===" << std::endl;
 

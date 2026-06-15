@@ -4,9 +4,10 @@
 #include <string>
 #include <thread>
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
-#include "mongo/async/client.h"
+#include "galay-mongo/async/client.h"
+#include "async_result_helper.h"
 #include "config.h"
 #include "reply_helper.h"
 
@@ -136,13 +137,17 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     const std::string collection = "galay_mongo_async_functional";
     const int64_t doc_id = makeUniqueId();
 
-    const std::expected<bool, MongoError> connected = co_await client.connect(cfg.mongo);
+    const std::expected<bool, MongoError> connected =
+        mongo_test::unwrapMongoTaskResult(co_await client.connect(cfg.mongo),
+                                          MONGO_ERROR_CONNECTION);
     if (!connected) {
         setFailure(state, "connect failed: " + connected.error().message());
         co_return;
     }
 
-    const std::expected<MongoReply, MongoError> ping = co_await client.ping(database);
+    const std::expected<MongoReply, MongoError> ping =
+        mongo_test::unwrapMongoTaskResult(co_await client.ping(database),
+                                          MONGO_ERROR_COMMAND);
     if (!ping) {
         setFailure(state, "ping failed: " + ping.error().message());
         co_return;
@@ -151,7 +156,8 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     MongoDocument ping_cmd;
     ping_cmd.append("ping", int32_t(1));
     const std::expected<MongoReply, MongoError> ping_by_command =
-        co_await client.command(database, std::move(ping_cmd));
+        mongo_test::unwrapMongoTaskResult(co_await client.command(database, std::move(ping_cmd)),
+                                          MONGO_ERROR_COMMAND);
     if (!ping_by_command) {
         setFailure(state, "command(ping) failed: " + ping_by_command.error().message());
         co_return;
@@ -160,7 +166,8 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     MongoDocument invalid_cmd;
     invalid_cmd.append("galayUnknownCommand", int32_t(1));
     const std::expected<MongoReply, MongoError> invalid_reply =
-        co_await client.command(database, std::move(invalid_cmd));
+        mongo_test::unwrapMongoTaskResult(co_await client.command(database, std::move(invalid_cmd)),
+                                          MONGO_ERROR_COMMAND);
     if (invalid_reply) {
         setFailure(state, "invalid command should fail but succeeded");
         co_return;
@@ -171,7 +178,8 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     }
 
     const std::expected<std::vector<MongoPipelineResponse>, MongoError> empty_pipeline =
-        co_await client.pipeline(database, {});
+        mongo_test::unwrapMongoTaskResult(co_await client.pipeline(database, {}),
+                                          MONGO_ERROR_COMMAND);
     if (empty_pipeline) {
         setFailure(state, "empty pipeline should fail but succeeded");
         co_return;
@@ -197,7 +205,8 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     commands.push_back(std::move(c3));
 
     const std::expected<std::vector<MongoPipelineResponse>, MongoError> mixed_pipeline =
-        co_await client.pipeline(database, std::move(commands));
+        mongo_test::unwrapMongoTaskResult(co_await client.pipeline(database, std::move(commands)),
+                                          MONGO_ERROR_COMMAND);
     if (!mixed_pipeline) {
         setFailure(state, "mixed pipeline failed: " + mixed_pipeline.error().message());
         co_return;
@@ -230,14 +239,18 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     }
 
     const std::expected<MongoReply, MongoError> inserted =
-        co_await client.command(database, makeInsertCommand(collection, doc_id, 1, "created"));
+        mongo_test::unwrapMongoTaskResult(
+            co_await client.command(database, makeInsertCommand(collection, doc_id, 1, "created")),
+            MONGO_ERROR_COMMAND);
     if (!inserted) {
         setFailure(state, "insert command failed: " + inserted.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> found1 =
-        co_await client.command(database, makeFindCommand(collection, doc_id));
+        mongo_test::unwrapMongoTaskResult(
+            co_await client.command(database, makeFindCommand(collection, doc_id)),
+            MONGO_ERROR_COMMAND);
     if (!found1) {
         setFailure(state, "find command(after insert) failed: " + found1.error().message());
         co_return;
@@ -266,14 +279,18 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     }
 
     const std::expected<MongoReply, MongoError> updated =
-        co_await client.command(database, makeUpdateCommand(collection, doc_id, 2, "updated"));
+        mongo_test::unwrapMongoTaskResult(
+            co_await client.command(database, makeUpdateCommand(collection, doc_id, 2, "updated")),
+            MONGO_ERROR_COMMAND);
     if (!updated) {
         setFailure(state, "update command failed: " + updated.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> found2 =
-        co_await client.command(database, makeFindCommand(collection, doc_id));
+        mongo_test::unwrapMongoTaskResult(
+            co_await client.command(database, makeFindCommand(collection, doc_id)),
+            MONGO_ERROR_COMMAND);
     if (!found2) {
         setFailure(state, "find command(after update) failed: " + found2.error().message());
         co_return;
@@ -292,14 +309,18 @@ Task<void> runAsyncFunctional(IOScheduler* scheduler,
     }
 
     const std::expected<MongoReply, MongoError> deleted =
-        co_await client.command(database, makeDeleteCommand(collection, doc_id));
+        mongo_test::unwrapMongoTaskResult(
+            co_await client.command(database, makeDeleteCommand(collection, doc_id)),
+            MONGO_ERROR_COMMAND);
     if (!deleted) {
         setFailure(state, "delete command failed: " + deleted.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> found3 =
-        co_await client.command(database, makeFindCommand(collection, doc_id));
+        mongo_test::unwrapMongoTaskResult(
+            co_await client.command(database, makeFindCommand(collection, doc_id)),
+            MONGO_ERROR_COMMAND);
     if (!found3) {
         setFailure(state, "find command(after delete) failed: " + found3.error().message());
         co_return;

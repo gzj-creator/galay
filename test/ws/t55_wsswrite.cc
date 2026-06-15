@@ -7,10 +7,10 @@
 #include <sstream>
 
 #define private public
-#include "ws/kernel/ws_writer.h"
+#include "galay-ws/kernel/ws_writer.h"
 #undef private
-#include "ws/protoc/ws_frame.h"
-#include "ssl/async/ssl_socket.h"
+#include "galay-ws/protoc/ws_frame.h"
+#include "galay-ssl/async/ssl_socket.h"
 #endif
 
 int main() {

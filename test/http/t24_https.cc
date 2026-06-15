@@ -3,9 +3,9 @@
  * @brief 简单的 HTTPS 测试 - 用于调试
  */
 
-#include "http/client/http_client.h"
-#include "http/builder/http_builder.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http/client/http_client.h"
+#include "galay-http/builder/http_builder.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <atomic>
 

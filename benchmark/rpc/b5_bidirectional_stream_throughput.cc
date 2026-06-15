@@ -3,11 +3,11 @@
  * @brief 真实流式 RPC 压测客户端
  */
 
-#include "rpc/kernel/rpc_client.h"
-#include "rpc/kernel/rpc_stream.h"
-#include "rpc/utils/runtime_compat.h"
-#include "kernel/common/sleep.hpp"
-#include "kernel/kernel/runtime.h"
+#include "galay-rpc/kernel/rpc_client.h"
+#include "galay-rpc/kernel/rpc_stream.h"
+#include "galay-rpc/utils/runtime_compat.h"
+#include "galay-kernel/common/sleep.hpp"
+#include "galay-kernel/core/runtime.h"
 #include <algorithm>
 #include <atomic>
 #include <chrono>

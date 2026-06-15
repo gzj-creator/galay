@@ -1,9 +1,9 @@
 #include "common/example_common.h"
-#include "http/builder/http_builder.h"
-#include "http/plugin/blacklist/blacklist.hpp"
-#include "http/protoc/http_request.h"
-#include "http/server/http_router.h"
-#include "http/server/http_server.h"
+#include "galay-http/builder/http_builder.h"
+#include "galay-http/plugin/blacklist/blacklist.hpp"
+#include "galay-http/protoc/http_request.h"
+#include "galay-http/server/http_router.h"
+#include "galay-http/server/http_server.h"
 
 #include <chrono>
 #include <cstdlib>

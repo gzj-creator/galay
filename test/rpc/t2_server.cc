@@ -4,8 +4,8 @@
  */
 
 #include "result_writer.h"
-#include "rpc/kernel/rpc_server.h"
-#include "rpc/kernel/rpc_service.h"
+#include "galay-rpc/kernel/rpc_server.h"
+#include "galay-rpc/kernel/rpc_service.h"
 #include <iostream>
 #include <thread>
 #include <chrono>

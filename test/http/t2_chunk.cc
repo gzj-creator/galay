@@ -6,7 +6,7 @@
 #include <iostream>
 #include <cassert>
 #include <cstring>
-#include "http/protoc/http_chunk.h"
+#include "galay-http/protoc/http_chunk.h"
 
 using namespace galay::http;
 

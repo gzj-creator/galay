@@ -8,13 +8,13 @@
  *   默认端口: 8080
  */
 
-#include "http/server/http_server.h"
-#include "ws/server/ws_upgrade.h"
-#include "ws/kernel/ws_conn.h"
-#include "http/protoc/http_request.h"
-#include "http/protoc/http_response.h"
-#include "http/builder/http_builder.h"
-#include "ws/kernel/writer_cfg.h"
+#include "galay-http/server/http_server.h"
+#include "galay-ws/server/ws_upgrade.h"
+#include "galay-ws/kernel/ws_conn.h"
+#include "galay-http/protoc/http_request.h"
+#include "galay-http/protoc/http_response.h"
+#include "galay-http/builder/http_builder.h"
+#include "galay-ws/kernel/writer_cfg.h"
 #include <iostream>
 #include <atomic>
 #include <csignal>

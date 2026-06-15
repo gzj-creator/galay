@@ -5,9 +5,9 @@
  * 通过条件：服务端 accept 到全部连接，客户端 connect await 也全部完成且无超时。
  */
 
-#include "kernel/common/host.hpp"
-#include "kernel/kernel/task.h"
-#include "kernel/async/tcp_socket.h"
+#include "galay-kernel/common/host.hpp"
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/async/tcp_socket.h"
 
 #include <atomic>
 #include <chrono>
@@ -22,13 +22,13 @@
 #include <vector>
 
 #ifdef USE_IOURING
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

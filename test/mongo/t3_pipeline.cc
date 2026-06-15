@@ -4,10 +4,11 @@
 #include <string>
 #include <thread>
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
-#include "mongo/async/client.h"
-#include "mongo/protoc/builder.h"
+#include "galay-mongo/async/client.h"
+#include "galay-mongo/protoc/builder.h"
+#include "async_result_helper.h"
 #include "config.h"
 
 using namespace galay::kernel;
@@ -36,7 +37,8 @@ Task<void> runPipelineTest(IOScheduler* scheduler,
         .build();
 
     const std::expected<bool, MongoError> conn_result =
-        co_await client.connect(std::move(cfg.mongo));
+        mongo_test::unwrapMongoTaskResult(co_await client.connect(std::move(cfg.mongo)),
+                                          MONGO_ERROR_CONNECTION);
     if (!conn_result) {
         state->ok.store(false, std::memory_order_relaxed);
         state->error = "connect failed: " + conn_result.error().message();
@@ -51,7 +53,8 @@ Task<void> runPipelineTest(IOScheduler* scheduler,
     commands.append("ping", int32_t(1));
 
     const std::expected<std::vector<MongoPipelineResponse>, MongoError> pipeline_result =
-        co_await client.pipeline("admin", commands.commands());
+        mongo_test::unwrapMongoTaskResult(co_await client.pipeline("admin", commands.commands()),
+                                          MONGO_ERROR_COMMAND);
     if (!pipeline_result) {
         state->ok.store(false, std::memory_order_relaxed);
         state->error = "pipeline failed: " + pipeline_result.error().message();

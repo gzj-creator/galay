@@ -3,10 +3,10 @@
  * @brief RPC压测客户端（含P99延迟统计）
  */
 
-#include "rpc/kernel/rpc_conn.h"
-#include "rpc/utils/runtime_compat.h"
-#include "kernel/common/sleep.hpp"
-#include "kernel/kernel/runtime.h"
+#include "galay-rpc/kernel/rpc_conn.h"
+#include "galay-rpc/utils/runtime_compat.h"
+#include "galay-kernel/common/sleep.hpp"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <atomic>
 #include <chrono>

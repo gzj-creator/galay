@@ -5,7 +5,7 @@
  * 通过条件：目标成功编译，静态断言成立，测试返回 0。
  */
 
-#include "kernel/kernel/awaitable.h"
+#include "galay-kernel/core/awaitable.h"
 #include <expected>
 #include <type_traits>
 

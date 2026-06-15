@@ -51,7 +51,7 @@ ConcurrentAcquireResult runConcurrentAcquire(size_t threadCount, size_t attempts
 
 void testRateLimiterUsesLockFreeNonBlockingState() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
-    std::ifstream input(sourceRoot / "utils/tool/rate_limiter.hpp");
+    std::ifstream input(sourceRoot / "galay-utils/tool/rate_limiter.hpp");
     assert(input.good());
 
     std::ostringstream buffer;

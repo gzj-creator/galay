@@ -5,20 +5,20 @@
  * 通过条件：观察到本地优先语义且断言成立，测试返回 0。
  */
 
-#include "kernel/concurrency/async_waiter.h"
-#include "kernel/common/timer_manager.hpp"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/concurrency/async_waiter.h"
+#include "galay-kernel/common/timer_manager.hpp"
+#include "galay-kernel/core/task.h"
 
 #if defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 static constexpr const char* kSchedulerName = "kqueue";
 #elif defined(USE_IOURING)
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 static constexpr const char* kSchedulerName = "io_uring";
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using IOSchedulerType = galay::kernel::EpollScheduler;
 static constexpr const char* kSchedulerName = "epoll";
 #else

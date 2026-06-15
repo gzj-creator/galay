@@ -6,8 +6,8 @@
  * 通过条件：状态机入口运行成功，且链式 build 的类型桥接静态断言成立。
  */
 
-#include "kernel/kernel/awaitable.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/awaitable.h"
+#include "galay-kernel/core/task.h"
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -21,13 +21,13 @@
 #include <unistd.h>
 
 #ifdef USE_IOURING
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

@@ -4,8 +4,8 @@
 
 void testCacheHeadersMovedToCache() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
-    assert(!std::filesystem::exists(sourceRoot / "utils/tool/lru_cache.hpp"));
-    assert(std::filesystem::exists(sourceRoot / "utils/cache/lru_cache.hpp"));
+    assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool/lru_cache.hpp"));
+    assert(std::filesystem::exists(sourceRoot / "galay-utils/cache/lru_cache.hpp"));
 }
 
 void testLruCache() {

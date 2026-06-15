@@ -3,7 +3,7 @@
  * @brief 验证 galay-etcd 库级日志入口与空 logger 过滤路径。
  */
 
-#include "etcd/base/etcd_log.h"
+#include "galay-etcd/base/etcd_log.h"
 
 #include <cstdlib>
 #include <string>

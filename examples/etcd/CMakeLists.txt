@@ -1,9 +1,17 @@
+function(galay_etcd_configure_example_target target_name)
+    set_target_properties(${target_name} PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+endfunction()
+
 function(galay_add_etcd_example target_name source_file)
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::etcd)
     target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
     set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
-    galay_etcd_apply_cxx(${target_name})
+    galay_etcd_configure_example_target(${target_name})
 endfunction()
 
 function(galay_add_etcd_import_example target_name source_file)

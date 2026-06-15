@@ -18,8 +18,8 @@
 #include <vector>
 #include <unordered_map>
 
-#include "utils/galay_utils.hpp"
-#include <utils/tool/rate_limiter.hpp>
+#include "galay-utils/galay_utils.hpp"
+#include <galay-utils/tool/rate_limiter.hpp>
 
 using namespace galay::utils;
 

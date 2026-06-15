@@ -6,11 +6,11 @@
  */
 
 #define private public
-#include "ssl/async/ssl_await.h"
-#include "ssl/async/ssl_socket.h"
+#include "galay-ssl/async/ssl_await.h"
+#include "galay-ssl/async/ssl_socket.h"
 #undef private
 
-#include "ssl/ssl/ssl_context.h"
+#include "galay-ssl/ssl/ssl_context.h"
 
 #include <algorithm>
 #include <array>

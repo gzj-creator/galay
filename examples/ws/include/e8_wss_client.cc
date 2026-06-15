@@ -6,9 +6,9 @@
 
 #include <iostream>
 #include <chrono>
-#include "ws/client/ws_client.h"
-#include "ws/protoc/ws_frame.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-ws/client/ws_client.h"
+#include "galay-ws/protoc/ws_frame.h"
+#include "galay-kernel/core/runtime.h"
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 

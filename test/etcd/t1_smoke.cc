@@ -1,4 +1,4 @@
-#include "etcd/sync/etcd_client.h"
+#include "galay-etcd/sync/etcd_client.h"
 
 #include <chrono>
 #include <iostream>
@@ -41,7 +41,7 @@ int main(int argc, char** argv)
     }
     std::cout << "[OK] connect" << std::endl;
 
-    const std::string key = "/etcd/smoke/" + nowSuffix();
+    const std::string key = "/galay-etcd/smoke/" + nowSuffix();
     const std::string value = "v-" + nowSuffix();
 
     auto put = session.put(key, value);

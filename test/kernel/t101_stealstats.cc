@@ -5,18 +5,18 @@
  * 通过条件：统计结构可读取，且至少一个 scheduler 记录到成功 stealing。
  */
 
-#include "kernel/common/timer_manager.hpp"
-#include "kernel/kernel/runtime.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/common/timer_manager.hpp"
+#include "galay-kernel/core/runtime.h"
+#include "galay-kernel/core/task.h"
 
 #if defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #else
 #error "T101-RuntimeIOStealStats requires kqueue, epoll, or io_uring"

@@ -21,7 +21,7 @@
 
 当前仓库没有 `ENABLE_LOG` 选项，也没有 `spdlog` 依赖链路。
 
-当前不支持 Windows/IOCP 后端；Windows 配置阶段会直接失败并提示 `Windows/IOCP backend not yet implemented`。
+当前不支持 Windogalay-ws/IOCP 后端；Windows 配置阶段会直接失败并提示 `Windogalay-ws/IOCP backend not yet implemented`。
 
 ## 安装包头文件边界
 
@@ -39,16 +39,16 @@
 按模块归类的公开安装面：
 
 - Runtime / 调度：
-  - `galay-kernel/kernel/runtime.h`
-  - `galay-kernel/kernel/task.h`
-  - `galay-kernel/kernel/scheduler.hpp`
-  - `galay-kernel/kernel/io_scheduler.hpp`
-  - `galay-kernel/kernel/compute_scheduler.h`
-  - `galay-kernel/kernel/epoll_scheduler.h`
-  - `galay-kernel/kernel/kqueue_scheduler.h`
-  - `galay-kernel/kernel/uring_scheduler.h`
-  - `galay-kernel/kernel/timer_scheduler.h`
-  - `galay-kernel/kernel/awaitable.h`（仅当你要做底层组合 Awaitable / 协议扩展）
+  - `galay-kernel/core/runtime.h`
+  - `galay-kernel/core/task.h`
+  - `galay-kernel/core/scheduler.hpp`
+  - `galay-kernel/core/io_scheduler.hpp`
+  - `galay-kernel/core/compute_scheduler.h`
+  - `galay-kernel/core/epoll_scheduler.h`
+  - `galay-kernel/core/kqueue_scheduler.h`
+  - `galay-kernel/core/uring_scheduler.h`
+  - `galay-kernel/core/timer_scheduler.h`
+  - `galay-kernel/core/awaitable.h`（仅当你要做底层组合 Awaitable / 协议扩展）
 - 网络与文件：
   - `galay-kernel/async/tcp_socket.h`
   - `galay-kernel/async/udp_socket.h`
@@ -280,15 +280,15 @@
 
 头文件：
 
-- `galay-kernel/kernel/runtime.h`
-- `galay-kernel/kernel/compute_scheduler.h`
-- `galay-kernel/kernel/epoll_scheduler.h`
-- `galay-kernel/kernel/kqueue_scheduler.h`
-- `galay-kernel/kernel/uring_scheduler.h`
-- `galay-kernel/kernel/task.h`
-- `galay-kernel/kernel/scheduler.hpp`
-- `galay-kernel/kernel/io_scheduler.hpp`
-- `galay-kernel/kernel/timer_scheduler.h`
+- `galay-kernel/core/runtime.h`
+- `galay-kernel/core/compute_scheduler.h`
+- `galay-kernel/core/epoll_scheduler.h`
+- `galay-kernel/core/kqueue_scheduler.h`
+- `galay-kernel/core/uring_scheduler.h`
+- `galay-kernel/core/task.h`
+- `galay-kernel/core/scheduler.hpp`
+- `galay-kernel/core/io_scheduler.hpp`
+- `galay-kernel/core/timer_scheduler.h`
 - `galay-kernel/common/timer.hpp`
 - `galay-kernel/common/sleep.hpp`
 
@@ -421,7 +421,7 @@
 
 头文件：
 
-- `galay-kernel/kernel/awaitable.h`
+- `galay-kernel/core/awaitable.h`
 - `galay-utils/cache/byte_queue_view.hpp`
 
 公开类型：
@@ -524,7 +524,7 @@ builder iovec 公开面：
 内部说明：
 
 - `TaskRef`、`ComputeTask`、调度器绑定 / resume plumbing 已降级为 runtime/scheduler 内核实现细节，不再作为公开工作流 API 描述
-- 需要排障或读实现时，以 `galay-kernel/kernel/task.h`、`scheduler.hpp` 与相关测试为准，不建议业务代码直接依赖这些内部类型
+- 需要排障或读实现时，以 `galay-kernel/core/task.h`、`scheduler.hpp` 与相关测试为准，不建议业务代码直接依赖这些内部类型
 
 语义说明：
 
@@ -619,7 +619,7 @@ builder iovec 公开面：
 - `galay-kernel/async/async_file.h`
 - `galay-kernel/async/aio_file.h`
 - `galay-kernel/async/file_watcher.h`
-- `galay-kernel/kernel/watch_defs.hpp`
+- `galay-kernel/core/watch_defs.hpp`
 
 `AsyncFile`：
 

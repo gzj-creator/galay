@@ -10,9 +10,9 @@
 #include <chrono>
 #include <vector>
 #include <cmath>
-#include "kernel/kernel/compute_scheduler.h"
-#include "kernel/kernel/task.h"
-#include "kernel/concurrency/async_waiter.h"
+#include "galay-kernel/core/compute_scheduler.h"
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/concurrency/async_waiter.h"
 #include "test/stdout_log.h"
 #include "result_writer.h"
 

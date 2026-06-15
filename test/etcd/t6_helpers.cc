@@ -1,4 +1,4 @@
-#include "etcd/base/etcd_internal.h"
+#include "galay-etcd/base/etcd_internal.h"
 
 #include <iostream>
 #include <string>

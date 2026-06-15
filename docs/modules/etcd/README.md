@@ -24,7 +24,7 @@
 
 - `00-快速开始`：构建前置条件、最短运行路径、module/import 前提
 - `01-架构设计`：模块边界、同步/异步链路、pipeline 语义
-- `02-API参考`：对齐 `etcd/*.h` 的公开类型与方法，也覆盖 `galay::etcd::log::set/get`、`ETCD_LOG_*`、`galay::etcd::internal`、`parseEndpoint()` 与 awaitable 细节
+- `02-API参考`：对齐 `galay-etcd/*.h` 的公开类型与方法，也覆盖 `galay::etcd::log::set/get`、`ETCD_LOG_*`、`galay::etcd::internal`、`parseEndpoint()` 与 awaitable 细节
 - `03-使用指南`：配置、错误处理、超时与常见操作模式
 - `04-示例代码`：真实文件、真实 target、真实运行命令
 - `05-性能测试`：真实 benchmark target 与结果状态说明

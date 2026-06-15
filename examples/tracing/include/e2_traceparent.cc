@@ -1,7 +1,7 @@
-#include "tracing/context/context_storage.h"
-#include "tracing/context/traceparent.h"
-#include "tracing/kernel/span_guard.h"
-#include "tracing/log/logger.h"
+#include "galay-tracing/context/context_storage.h"
+#include "galay-tracing/context/traceparent.h"
+#include "galay-tracing/kernel/span_guard.h"
+#include "galay-tracing/log/logger.h"
 
 #include <iostream>
 

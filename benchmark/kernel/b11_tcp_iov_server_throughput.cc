@@ -13,17 +13,17 @@
 #include <thread>
 #include <csignal>
 #include <vector>
-#include "kernel/async/tcp_socket.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/async/tcp_socket.h"
+#include "galay-kernel/core/task.h"
 #include "benchmark/benchmark_sync.h"
 #include "test/stdout_log.h"
 
 #ifdef USE_KQUEUE
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 #elif defined(USE_IOURING)
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 #endif
 
 using namespace galay::async;

@@ -1,5 +1,5 @@
-#include "ssl/async/awaitable.h"
-#include "ssl/async/ssl_socket.h"
+#include "galay-ssl/async/awaitable.h"
+#include "galay-ssl/async/ssl_socket.h"
 #include <expected>
 #include <iostream>
 #include <sys/wait.h>

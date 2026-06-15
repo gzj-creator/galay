@@ -1,4 +1,4 @@
-#include "tracing/kernel/otlp_http_exporter.h"
+#include "galay-tracing/kernel/otlp_http_exporter.h"
 
 #include <chrono>
 #include <iostream>

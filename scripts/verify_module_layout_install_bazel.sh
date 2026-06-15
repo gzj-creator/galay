@@ -11,14 +11,14 @@ consumer_build="${build}/consumer-build"
 cd "${root}"
 
 required_dirs=(
-  "src/kernel/kernel"
-  "src/http/protoc"
-  "src/http2/protoc"
-  "src/ws/protoc"
-  "src/rpc/protoc"
-  "src/redis/protoc"
-  "src/mysql/protoc"
-  "src/mongo/protoc"
+  "src/galay-kernel/core"
+  "src/galay-http/protoc"
+  "src/galay-http2/protoc"
+  "src/galay-ws/protoc"
+  "src/galay-rpc/protoc"
+  "src/galay-redis/protoc"
+  "src/galay-mysql/protoc"
+  "src/galay-mongo/protoc"
 )
 for dir in "${required_dirs[@]}"; do
   if [[ ! -d "${dir}" ]]; then
@@ -27,13 +27,33 @@ for dir in "${required_dirs[@]}"; do
   fi
 done
 
-if [[ -d "${root}/src/tracing/internal" ]] && ! find "${root}/src/tracing/internal" -type f | grep -q .; then
-  echo "empty accidental source directory remains: src/tracing/internal" >&2
+if [[ -d "${root}/src/galay-tracing/internal" ]] && ! find "${root}/src/galay-tracing/internal" -type f | grep -q .; then
+  echo "empty accidental source directory remains: src/galay-tracing/internal" >&2
   exit 1
 fi
 
-if rg -n 'http/protocol|http2/protocol|ws/protocol|rpc/protocol|redis/protocol|mysql/protocol|mongo/protocol|kernel/core|src/kernel/core' \
-  src test examples benchmark docs CMakeLists.txt cmake 2>/dev/null; then
+active_scan_paths=(
+  src
+  test/etcd
+  test/http
+  test/http2
+  test/kernel
+  test/mongo
+  test/mysql
+  test/redis
+  test/rpc
+  test/ssl
+  test/tracing
+  test/utils
+  test/ws
+  examples
+  benchmark
+  CMakeLists.txt
+  cmake
+)
+
+if rg -n 'http/protocol|http2/protocol|ws/protocol|rpc/protocol|redis/protocol|mysql/protocol|mongo/protocol|src/(utils|kernel|http|http2|ws|rpc|redis|mysql|mongo)(/|\b)|<(utils|kernel|http|http2|ws|rpc|redis|mysql|mongo)/' \
+  "${active_scan_paths[@]}" 2>/dev/null; then
   echo "stale protocol layout references remain" >&2
   exit 1
 fi
@@ -63,11 +83,11 @@ cmake --install "${build}"
 test -f "${prefix}/lib/cmake/galay/galayConfig.cmake"
 test -f "${prefix}/lib/cmake/galay/galayTargets.cmake"
 test -f "${prefix}/lib/cmake/galay-kernel/galay-kernelConfig.cmake"
-test -f "${prefix}/include/kernel/kernel/runtime.h"
-test -f "${prefix}/include/http/protoc/http_request.h"
-test -f "${prefix}/include/ws/protoc/ws_frame.h"
-test -f "${prefix}/include/rpc/protoc/rpc_message.h"
-test -f "${prefix}/include/redis/protoc/redis_protocol.h"
+test -f "${prefix}/include/galay-kernel/core/runtime.h"
+test -f "${prefix}/include/galay-http/protoc/http_request.h"
+test -f "${prefix}/include/galay-ws/protoc/ws_frame.h"
+test -f "${prefix}/include/galay-rpc/protoc/rpc_message.h"
+test -f "${prefix}/include/galay-redis/protoc/redis_protocol.h"
 
 mkdir -p "${consumer}"
 cat > "${consumer}/CMakeLists.txt" <<'EOF'
@@ -77,14 +97,16 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(galay CONFIG REQUIRED)
 add_executable(galay_consumer main.cc)
+set_target_properties(galay_consumer PROPERTIES NO_SYSTEM_FROM_IMPORTED ON)
+target_include_directories(galay_consumer BEFORE PRIVATE "${CMAKE_PREFIX_PATH}/include")
 target_link_libraries(galay_consumer PRIVATE galay::kernel galay::http galay::redis)
 EOF
 
 cat > "${consumer}/main.cc" <<'EOF'
-#include <http/protoc/http_request.h>
-#include <kernel/kernel/runtime.h>
-#include <redis/base/redis_config.h>
-#include <redis/protoc/redis_protocol.h>
+#include <galay-http/protoc/http_request.h>
+#include <galay-kernel/core/runtime.h>
+#include <galay-redis/base/redis_config.h>
+#include <galay-redis/protoc/redis_protocol.h>
 
 int main()
 {
@@ -100,11 +122,11 @@ cmake --build "${consumer_build}" -j "${jobs}"
 
 test -f MODULE.bazel
 test -f BUILD.bazel
-test -f src/utils/BUILD
-test -f src/kernel/BUILD
-test -f src/http/BUILD
+test -f src/galay-utils/BUILD
+test -f src/galay-kernel/BUILD
+test -f src/galay-http/BUILD
 
 if command -v bazel >/dev/null 2>&1; then
   bazel query //src/... >/dev/null
-  bazel build //src/utils:galay-utils //src/kernel:galay-kernel >/dev/null
+  bazel build //src/galay-utils:galay-utils //src/galay-kernel:galay-kernel >/dev/null
 fi

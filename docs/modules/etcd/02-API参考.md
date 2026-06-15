@@ -6,23 +6,23 @@
 
 当前安装包会安装这些头文件：
 
-- `etcd/base/network_cfg.h`
-- `etcd/base/etcd_config.h`
-- `etcd/base/etcd_error.h`
-- `etcd/base/etcd_log.h`
-- `etcd/base/etcd_value.h`
-- `etcd/base/etcd_types.h`
-- `etcd/async/client.h`
-- `etcd/module/module_prelude.hpp`
-- `src/etcd/module/` 下的 module 接口文件
-- `etcd/sync/etcd_client.h`
+- `galay-etcd/base/network_cfg.h`
+- `galay-etcd/base/etcd_config.h`
+- `galay-etcd/base/etcd_error.h`
+- `galay-etcd/base/etcd_log.h`
+- `galay-etcd/base/etcd_value.h`
+- `galay-etcd/base/etcd_types.h`
+- `galay-etcd/async/client.h`
+- `galay-etcd/module/module_prelude.hpp`
+- `src/galay-etcd/module/` 下的 module 接口文件
+- `galay-etcd/sync/etcd_client.h`
 
 安装面补充说明：
 
-- `src/etcd/base/etcd_internal.h` 是源码树内部 helper 头，不属于安装/export 契约
-- `etcd/base/etcd_log.h` 提供基于 `galay::kernel::BaseLogger` 的库级日志入口与 `ETCD_LOG_*` 埋点宏
-- `etcd/module/module_prelude.hpp` 是 module 接口的 global module fragment 支撑头，不是 header 模式下的首选入口
-- `src/etcd/module/` 下的 module 接口文件回答 module 模式下的公开导出边界
+- `src/galay-etcd/base/etcd_internal.h` 是源码树内部 helper 头，不属于安装/export 契约
+- `galay-etcd/base/etcd_log.h` 提供基于 `galay::kernel::BaseLogger` 的库级日志入口与 `ETCD_LOG_*` 埋点宏
+- `galay-etcd/module/module_prelude.hpp` 是 module 接口的 global module fragment 支撑头，不是 header 模式下的首选入口
+- `src/galay-etcd/module/` 下的 module 接口文件回答 module 模式下的公开导出边界
 
 构建接口：
 
@@ -32,7 +32,7 @@
 - 安装后 `find_package` 名称：`etcd`
 - C++ module：`galay.etcd`
 
-`galay.etcd` 的 module 导出边界，以 `src/etcd/module/` 下 module 接口文件中的 `export { ... }` 块为准：
+`galay.etcd` 的 module 导出边界，以 `src/galay-etcd/module/` 下 module 接口文件中的 `export { ... }` 块为准：
 
 - 会被 `import galay.etcd;` 直接导出的头：`etcd_config.h`、`etcd_error.h`、`etcd_log.h`、`etcd_value.h`、`etcd_types.h`、`network_cfg.h`、`client.h`、`etcd_client.h`
 - `module_prelude.hpp` 虽然在 global module fragment 中 `#include` 了更多头，但它不是额外的导出清单
@@ -188,11 +188,11 @@ ETCD_LOG_ERROR(tag, fmt, ...)
 
 - 用户负责实现 `galay::kernel::BaseLogger` 并通过 `galay::etcd::log::set()` 注入。
 - 日志标签统一带有 `[etcd]` 前缀，内部会继续追加 `[sync]`、`[async]`、`[watch]` 等子标签。
-- `galay.etcd` module 已导出 `etcd_log.h`；header 模式也可以直接 `#include "etcd/base/etcd_log.h"`。
+- `galay.etcd` module 已导出 `etcd_log.h`；header 模式也可以直接 `#include "galay-etcd/base/etcd_log.h"`。
 
 ## 3. 同步客户端
 
-`etcd/sync/etcd_client.h` 中的结果类型：
+`galay-etcd/sync/etcd_client.h` 中的结果类型：
 
 ```cpp
 using EtcdVoidResult = std::expected<void, EtcdError>;
@@ -270,7 +270,7 @@ public:
 
 ## 4. 异步客户端
 
-`etcd/base/etcd_types.h` 中公开了这些结果类型：
+`galay-etcd/base/etcd_types.h` 中公开了这些结果类型：
 
 ```cpp
 using EtcdVoidResult = std::expected<void, EtcdError>;
@@ -462,7 +462,7 @@ public:
 
 ## 5. `galay::etcd::internal` source-tree helper surface
 
-`src/etcd/base/etcd_internal.h` 是源码树内部 helper 集合（`galay::etcd::internal`），用于库实现与仓内测试。
+`src/galay-etcd/base/etcd_internal.h` 是源码树内部 helper 集合（`galay::etcd::internal`），用于库实现与仓内测试。
 
 使用边界：
 

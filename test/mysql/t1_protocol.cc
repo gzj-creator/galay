@@ -1,9 +1,9 @@
 #include <iostream>
 #include <cassert>
 #include <cstring>
-#include "mysql/protoc/builder.h"
-#include "mysql/protoc/mysql_protocol.h"
-#include "mysql/protoc/mysql_packet.h"
+#include "galay-mysql/protoc/builder.h"
+#include "galay-mysql/protoc/mysql_protocol.h"
+#include "galay-mysql/protoc/mysql_packet.h"
 
 using namespace galay::mysql::protocol;
 

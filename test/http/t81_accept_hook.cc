@@ -1,5 +1,5 @@
-#include "http/server/http_server.h"
-#include "http/builder/http_builder.h"
+#include "galay-http/server/http_server.h"
+#include "galay-http/builder/http_builder.h"
 
 #include <arpa/inet.h>
 #include <atomic>

@@ -1,4 +1,4 @@
-#include "etcd/sync/etcd_client.h"
+#include "galay-etcd/sync/etcd_client.h"
 
 #include <chrono>
 #include <iostream>
@@ -38,7 +38,7 @@ int main(int argc, char** argv)
         return fail("connect failed: " + conn.error().message());
     }
 
-    const std::string base = "/etcd/pipeline/" + nowSuffix();
+    const std::string base = "/galay-etcd/pipeline/" + nowSuffix();
     const std::string k1 = base + "/k1";
     const std::string k2 = base + "/k2";
     const std::string v1 = "seed";

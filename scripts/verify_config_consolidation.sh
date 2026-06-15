@@ -5,11 +5,11 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 build="${root}/build/verify-config-consolidation"
 jobs="${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
 
-if [[ -e "${root}/src/etcd/async/config.h" ||
-      -e "${root}/src/mysql/async/config.h" ||
-      -e "${root}/src/mongo/async/config.h" ||
-      -e "${root}/src/redis/async/config.h" ||
-      -e "${root}/src/redis/base/redis_config.cc" ]]; then
+if [[ -e "${root}/src/galay-etcd/async/config.h" ||
+      -e "${root}/src/galay-mysql/async/config.h" ||
+      -e "${root}/src/galay-mongo/async/config.h" ||
+      -e "${root}/src/galay-redis/async/config.h" ||
+      -e "${root}/src/galay-redis/base/redis_config.cc" ]]; then
   echo "obsolete config files still exist" >&2
   exit 1
 fi
@@ -35,10 +35,10 @@ run_obsolete_scan() {
 }
 
 config_scan_paths=(
-  "${root}/src/etcd"
-  "${root}/src/mysql"
-  "${root}/src/mongo"
-  "${root}/src/redis"
+  "${root}/src/galay-etcd"
+  "${root}/src/galay-mysql"
+  "${root}/src/galay-mongo"
+  "${root}/src/galay-redis"
   "${root}/test/etcd"
   "${root}/test/mysql"
   "${root}/test/mongo"
@@ -67,12 +67,12 @@ done
 if [[ "${#existing_config_paths[@]}" -gt 0 ]]; then
   run_obsolete_scan \
     "obsolete config include or compatibility API remains" \
-    'etcd/async/(config|client_cfg)\.h|mysql/async/config\.h|mongo/async/config\.h|redis/async/config\.h' \
+    'galay-etcd/async/(config|client_cfg)\.h|galay-mysql/async/config\.h|galay-mongo/async/config\.h|galay-redis/async/config\.h' \
     "${existing_config_paths[@]}"
 fi
 
 redis_scan_paths=(
-  "${root}/src/redis"
+  "${root}/src/galay-redis"
   "${root}/test/redis"
   "${root}/examples/redis"
   "${root}/benchmark/redis"

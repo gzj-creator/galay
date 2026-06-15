@@ -1,4 +1,4 @@
-#include "tracing/kernel/otlp_http_exporter.h"
+#include "galay-tracing/kernel/otlp_http_exporter.h"
 
 #include <cassert>
 #include <chrono>
@@ -11,7 +11,7 @@
 #include <vector>
 
 #if defined(GALAY_TRACING_ENABLE_OTLP_HTTP)
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 #endif
 
 namespace {

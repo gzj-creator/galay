@@ -1,4 +1,4 @@
-#include "tracing/common/trace_id.h"
+#include "galay-tracing/common/trace_id.h"
 
 int main() {
     auto id = galay::tracing::TraceId::zero();

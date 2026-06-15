@@ -1,4 +1,4 @@
-#include "tracing/context/traceparent.h"
+#include "galay-tracing/context/traceparent.h"
 
 #include <cassert>
 #include <string>

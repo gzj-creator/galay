@@ -3,7 +3,7 @@
  * @brief 验证 galay-rpc 库级日志入口与空 logger 过滤路径。
  */
 
-#include "rpc/common/rpc_log.h"
+#include "galay-rpc/common/rpc_log.h"
 
 #include <cstdlib>
 #include <string>

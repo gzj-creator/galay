@@ -1,23 +1,23 @@
 /**
- * @file t5_await.cc
- * @brief 锁定 McpHttpClient 的 connect/disconnect 公开 awaitable surface 与底层 HttpClient 保持一致。
+ * @brief 锁定 McpClient 的 HTTP awaitable surface 与底层 HttpClient 保持一致。
  */
 
-#include "mcp/client/http_client.h"
+#include "galay-mcp/client/client.h"
+#include "galay-http/client/http_client.h"
 
 #include <concepts>
 #include <string>
 #include <utility>
 
 using galay::http::HttpClient;
-using galay::mcp::McpHttpClient;
+using galay::mcp::McpClient;
 
-static_assert(requires(McpHttpClient& client, const std::string& url) {
+static_assert(requires(McpClient& client, const std::string& url) {
     {
         client.connect(url)
     } -> std::same_as<decltype(std::declval<HttpClient&>().connect(std::declval<const std::string&>()))>;
     {
-        client.disconnect()
+        client.disconnectAsync()
     } -> std::same_as<decltype(std::declval<HttpClient&>().close())>;
 });
 

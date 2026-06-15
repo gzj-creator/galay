@@ -2,13 +2,13 @@
 
 本页只记录当前公开头中存在且仍可从示例/测试验证的公共 API。若与旧文档冲突，以以下头文件与 `galay-http/CMakeLists.txt` 中的显式安装清单为准。
 
-- `galay-http/server/http/http_server.h`
-- `galay-http/client/http/http_client.h`
+- `galay-http/server/galay-http/http_server.h`
+- `galay-http/client/galay-http/http_client.h`
 - `galay-http/client/websocket/ws_client.h`
 - `galay-http/client/websocket/ws_session.h`
-- `galay-http/client/http2/h2c_client.h`
-- `galay-http/client/http2/h2_client.h`
-- `galay-http/server/http2/http2_server.h`
+- `galay-http/client/galay-http2/h2c_client.h`
+- `galay-http/client/galay-http2/h2_client.h`
+- `galay-http/server/galay-http2/http2_server.h`
 
 ## 头文件索引
 
@@ -19,44 +19,44 @@
 
 | 头文件 | 主要类型 | 说明 |
 | --- | --- | --- |
-| `galay-http/server/http/http_server.h` | `HttpServer`、`HttpServerBuilder`、`HttpsServer`、`HttpsServerBuilder` | HTTP/HTTPS 服务端 builder、启动与停止语义 |
-| `galay-http/client/http/http_client.h` | `HttpClient`、`HttpClientBuilder`、`HttpsClient`、`HttpsClientBuilder` | HTTP/HTTPS 客户端连接、握手与 `HttpSession` 入口 |
+| `galay-http/server/galay-http/http_server.h` | `HttpServer`、`HttpServerBuilder`、`HttpsServer`、`HttpsServerBuilder` | HTTP/HTTPS 服务端 builder、启动与停止语义 |
+| `galay-http/client/galay-http/http_client.h` | `HttpClient`、`HttpClientBuilder`、`HttpsClient`、`HttpsClientBuilder` | HTTP/HTTPS 客户端连接、握手与 `HttpSession` 入口 |
 | `galay-http/client/websocket/ws_client.h` | `WsClient`、`WsClientBuilder`、`WssClient`、`WssClientBuilder` | WebSocket / WSS 客户端连接与升级入口 |
 | `galay-http/client/websocket/ws_session.h` | `WsSessionImpl`、`WssSession` | `upgrade()`、`sendText()`、`getMessage()` 等会话能力 |
-| `galay-http/client/http2/h2c_client.h` | `H2cClient`、`H2cClientBuilder` | h2c 客户端连接、Upgrade、请求与关闭 |
-| `galay-http/client/http2/h2_client.h` | `H2Client`、`H2ClientBuilder` | h2 客户端连接、ALPN 校验、请求与关闭 |
-| `galay-http/server/http2/http2_server.h` | `H2cServer`、`H2cServerBuilder`、`H2Server`、`H2ServerBuilder` | h2c / h2 服务端与 fallback 入口 |
+| `galay-http/client/galay-http2/h2c_client.h` | `H2cClient`、`H2cClientBuilder` | h2c 客户端连接、Upgrade、请求与关闭 |
+| `galay-http/client/galay-http2/h2_client.h` | `H2Client`、`H2ClientBuilder` | h2 客户端连接、ALPN 校验、请求与关闭 |
+| `galay-http/server/galay-http2/http2_server.h` | `H2cServer`、`H2cServerBuilder`、`H2Server`、`H2ServerBuilder` | h2c / h2 服务端与 fallback 入口 |
 
 补充公开头分组：
 
 - 稳定 direct-include 入口：
-  - `galay-http/server/http/http_server.h`
-  - `galay-http/client/http/http_client.h`
+  - `galay-http/server/galay-http/http_server.h`
+  - `galay-http/client/galay-http/http_client.h`
   - `galay-http/client/websocket/ws_client.h`
   - `galay-http/client/websocket/ws_session.h`
-  - `galay-http/client/http2/h2c_client.h`
-  - `galay-http/client/http2/h2_client.h`
-  - `galay-http/server/http2/http2_server.h`
+  - `galay-http/client/galay-http2/h2c_client.h`
+  - `galay-http/client/galay-http2/h2_client.h`
+  - `galay-http/server/galay-http2/http2_server.h`
 - 其他稳定 direct-include 公共头：
-  - `galay-http/protoc/http/http_base.h`
-  - `galay-http/protoc/http/http_body.h`
-  - `galay-http/protoc/http/http_chunk.h`
-  - `galay-http/protoc/http/http_error.h`
-  - `galay-http/protoc/http/http_header.h`
-  - `galay-http/protoc/http/parse_utils.h`
-  - `galay-http/protoc/http/http_request.h`
-  - `galay-http/protoc/http/http_response.h`
-  - `galay-http/kernel/http/http_conn.h`
-  - `galay-http/kernel/http/http_session.h`
-  - `galay-http/kernel/http/http_reader.h`
-  - `galay-http/kernel/http/http_writer.h`
-  - `galay-http/kernel/http/reader_cfg.h`
-  - `galay-http/kernel/http/writer_cfg.h`
-  - `galay-http/server/http/http_router.h`
-  - `galay-http/server/http/file_descriptor.h`
-  - `galay-http/server/http/http_range.h`
-  - `galay-http/server/http/http_etag.h`
-  - `galay-http/server/http/static_cfg.h`
+  - `galay-http/protoc/galay-http/http_base.h`
+  - `galay-http/protoc/galay-http/http_body.h`
+  - `galay-http/protoc/galay-http/http_chunk.h`
+  - `galay-http/protoc/galay-http/http_error.h`
+  - `galay-http/protoc/galay-http/http_header.h`
+  - `galay-http/protoc/galay-http/parse_utils.h`
+  - `galay-http/protoc/galay-http/http_request.h`
+  - `galay-http/protoc/galay-http/http_response.h`
+  - `galay-http/kernel/galay-http/http_conn.h`
+  - `galay-http/kernel/galay-http/http_session.h`
+  - `galay-http/kernel/galay-http/http_reader.h`
+  - `galay-http/kernel/galay-http/http_writer.h`
+  - `galay-http/kernel/galay-http/reader_cfg.h`
+  - `galay-http/kernel/galay-http/writer_cfg.h`
+  - `galay-http/server/galay-http/http_router.h`
+  - `galay-http/server/galay-http/file_descriptor.h`
+  - `galay-http/server/galay-http/http_range.h`
+  - `galay-http/server/galay-http/http_etag.h`
+  - `galay-http/server/galay-http/static_cfg.h`
 - WebSocket：
   - `galay-http/protoc/websocket/ws_base.h`
   - `galay-http/protoc/websocket/ws_error.h`
@@ -69,37 +69,37 @@
   - `galay-http/kernel/websocket/writer_cfg.h`
   - `galay-http/server/websocket/ws_upgrade.h`
 - HTTP/2：
-  - `galay-http/protoc/http2/http2_base.h`
-  - `galay-http/protoc/http2/http2_error.h`
-  - `galay-http/protoc/http2/http2_frame.h`
-  - `galay-http/builder/http2/http2_frame_builder.h`
-  - `galay-http/protoc/http2/http2_hpack.h`
-  - `galay-http/kernel/http2/http2_conn.h`
-  - `galay-http/kernel/http2/h2_core.h`
-  - `galay-http/kernel/http2/frame_disp.h`
-  - `galay-http/kernel/http2/out_sched.h`
-  - `galay-http/kernel/http2/http2_stream.h`
-  - `galay-http/kernel/http2/stream_mgr.h`
+  - `galay-http/protoc/galay-http2/http2_base.h`
+  - `galay-http/protoc/galay-http2/http2_error.h`
+  - `galay-http/protoc/galay-http2/http2_frame.h`
+  - `galay-http/builder/galay-http2/http2_frame_builder.h`
+  - `galay-http/protoc/galay-http2/http2_hpack.h`
+  - `galay-http/kernel/galay-http2/http2_conn.h`
+  - `galay-http/kernel/galay-http2/h2_core.h`
+  - `galay-http/kernel/galay-http2/frame_disp.h`
+  - `galay-http/kernel/galay-http2/out_sched.h`
+  - `galay-http/kernel/galay-http2/http2_stream.h`
+  - `galay-http/kernel/galay-http2/stream_mgr.h`
 - 工具与模块：
   - `galay-http/common/http_log.h`
-  - `galay-http/builder/http/http_builder.h`
-  - `galay-http/utils/http2/h2_helper.h`
-  - `galay-http/utils/http/http_helper.h`
-  - `galay-http/utils/websocket/ws_helper.h`
+  - `galay-http/builder/galay-http/http_builder.h`
+  - `galay-http/galay-utils/galay-http2/h2_helper.h`
+  - `galay-http/galay-utils/galay-http/http_helper.h`
+  - `galay-http/galay-utils/websocket/ws_helper.h`
 - 安装支撑头：
   - `galay-http/common/iovec_utils.h`
   - `galay-http/common/http_log.h`
-  - `galay-http/protoc/http/parse_utils.h`
-  - `galay-http/protoc/http/http_request.inl`
-  - `galay-http/protoc/http/http_response.inl`
+  - `galay-http/protoc/galay-http/parse_utils.h`
+  - `galay-http/protoc/galay-http/http_request.inl`
+  - `galay-http/protoc/galay-http/http_response.inl`
   - `galay-http/module/module_prelude.hpp`
-  - `galay-http/module/http/galay_http.cppm`
-  - `galay-http/module/http2/galay_http2.cppm`
+  - `galay-http/module/galay-http/galay_http.cppm`
+  - `galay-http/module/galay-http2/galay_http2.cppm`
   - `galay-http/module/websocket/galay_websocket.cppm`
 
 ## 模块与导入边界
 
-来源：`galay-http/module/http/galay_http.cppm`、`galay-http/module/http2/galay_http2.cppm`、`galay-http/module/websocket/galay_websocket.cppm`
+来源：`galay-http/module/galay-http/galay_http.cppm`、`galay-http/module/galay-http2/galay_http2.cppm`、`galay-http/module/websocket/galay_websocket.cppm`
 
 ### `galay.http`
 
@@ -128,7 +128,7 @@
 
 ### `HttpServerConfig`
 
-来源：`galay-http/server/http/http_server.h`
+来源：`galay-http/server/galay-http/http_server.h`
 
 ```cpp
 struct HttpServerConfig {
@@ -146,7 +146,7 @@ struct HttpServerConfig {
 
 ### `HttpServerBuilder`
 
-`HttpServerBuilder` 的真实配置项来自 `galay-http/server/http/http_server.h`：
+`HttpServerBuilder` 的真实配置项来自 `galay-http/server/galay-http/http_server.h`：
 
 - `host(std::string)`
 - `port(uint16_t)`
@@ -203,7 +203,7 @@ server.addAcceptPlugin(
 
 ### `HttpsServerConfig`
 
-来源：`galay-http/server/http/http_server.h`
+来源：`galay-http/server/galay-http/http_server.h`
 
 ```cpp
 struct HttpsServerConfig {
@@ -260,7 +260,7 @@ server.start(handler);
 
 ### `HttpUrl`
 
-来源：`galay-http/client/http/http_client.h`
+来源：`galay-http/client/galay-http/http_client.h`
 
 ```cpp
 struct HttpUrl {
@@ -281,7 +281,7 @@ struct HttpUrl {
 
 ### `HttpClientConfig` / `HttpsClientConfig`
 
-来源：`galay-http/client/http/http_client.h`
+来源：`galay-http/client/galay-http/http_client.h`
 
 ```cpp
 struct HttpClientConfig {
@@ -356,7 +356,7 @@ auto session = client.getSession();
 
 ### `HttpSession`
 
-来源：`galay-http/kernel/http/http_session.h`
+来源：`galay-http/kernel/galay-http/http_session.h`
 
 `HttpSession` 是 `HttpClient::getSession()` / `HttpsClient::getSession()` 返回的 HTTP/1.x 会话层。
 
@@ -455,7 +455,7 @@ co_await upgrader();
 
 ### `H2cClientConfig`
 
-来源：`galay-http/client/http2/h2c_client.h`
+来源：`galay-http/client/galay-http2/h2c_client.h`
 
 ```cpp
 struct H2cClientConfig {
@@ -479,7 +479,7 @@ struct H2cClientConfig {
 
 ### `H2cClientBuilder`
 
-`galay-http/client/http2/h2c_client.h` 当前暴露的配置项：
+`galay-http/client/galay-http2/h2c_client.h` 当前暴露的配置项：
 
 - `maxConcurrentStreams(uint32_t)`
 - `initialWindowSize(uint32_t)`
@@ -512,7 +512,7 @@ co_await client.shutdown();
 
 ### `H2cServerConfig`
 
-来源：`galay-http/server/http2/http2_server.h`
+来源：`galay-http/server/galay-http2/http2_server.h`
 
 ```cpp
 struct H2cServerConfig {
@@ -546,7 +546,7 @@ struct H2cServerConfig {
 
 ### `H2cServerBuilder`
 
-`galay-http/server/http2/http2_server.h` 中的 `H2cServerBuilder` 暴露：
+`galay-http/server/galay-http2/http2_server.h` 中的 `H2cServerBuilder` 暴露：
 
 - `host` / `port` / `backlog`
 - `ioSchedulerCount` / `computeSchedulerCount`
@@ -573,7 +573,7 @@ struct H2cServerConfig {
 
 ### `H2ClientConfig`
 
-来源：`galay-http/client/http2/h2_client.h`
+来源：`galay-http/client/galay-http2/h2_client.h`
 
 ```cpp
 struct H2ClientConfig {
@@ -634,7 +634,7 @@ auto stream = client.post("/echo", "hello", "text/plain");
 
 ### `H2ServerConfig`
 
-来源：`galay-http/server/http2/http2_server.h`
+来源：`galay-http/server/galay-http2/http2_server.h`
 
 ```cpp
 struct H2ServerConfig {
@@ -711,7 +711,7 @@ struct H2ServerConfig {
 
 ## HttpRouter 与静态文件配置
 
-来源：`galay-http/server/http/http_router.h`、`galay-http/server/http/static_cfg.h`
+来源：`galay-http/server/galay-http/http_router.h`、`galay-http/server/galay-http/static_cfg.h`
 
 ### `FileTransferMode`
 
@@ -823,7 +823,7 @@ public:
 
 ### `HttpRangeParser`
 
-来源：`galay-http/server/http/http_range.h`
+来源：`galay-http/server/galay-http/http_range.h`
 
 ```cpp
 enum class RangeType {
@@ -858,7 +858,7 @@ public:
 
 ### `Http2ErrorCode`
 
-来源：`galay-http/protoc/http2/http2_base.h`、`galay-http/protoc/http2/http2_base.cc`
+来源：`galay-http/protoc/galay-http2/http2_base.h`、`galay-http/protoc/galay-http2/http2_base.cc`
 
 ```cpp
 enum class Http2ErrorCode : uint32_t {
@@ -900,11 +900,11 @@ std::string http2ErrorCodeToString(Http2ErrorCode code);
 
 当 RAG 问题已经落到“解析失败 / 升级失败 / path 安全 / range / hpack / frame”这类底层细节时，优先回到这些公开头：
 
-- HTTP/1.x：`galay-http/protoc/http/http_error.h`、`http_parse_utils.h`、`http_header.h`
-- HTTP/2：`galay-http/protoc/http2/http2_error.h`、`http2_frame.h`、`http2_hpack.h`
+- HTTP/1.x：`galay-http/protoc/galay-http/http_error.h`、`http_parse_utils.h`、`http_header.h`
+- HTTP/2：`galay-http/protoc/galay-http2/http2_error.h`、`http2_frame.h`、`http2_hpack.h`
 - WebSocket：`galay-http/protoc/websocket/ws_error.h`、`web_socket_frame.h`
 - 静态文件与安全边界：`http_range.h`、`http_e_tag.h`、`static_file_config.h`
-- 请求/响应快速构造：`galay-http/builder/http/http_builder.h`
+- 请求/响应快速构造：`galay-http/builder/galay-http/http_builder.h`
 
 这些头文件属于公开面，但不在主工作流里逐一展开。它们是回答协议级细节问题时的 canonical source。
 

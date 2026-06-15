@@ -1,10 +1,10 @@
-#include "http/server/file_descriptor.h"
-#include "http/client/http_client.h"
-#include "http/server/http_range.h"
-#include "http/protoc/http_chunk.h"
-#include "http/protoc/http_header.h"
-#include "ws/client/ws_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http/server/file_descriptor.h"
+#include "galay-http/client/http_client.h"
+#include "galay-http/server/http_range.h"
+#include "galay-http/protoc/http_chunk.h"
+#include "galay-http/protoc/http_header.h"
+#include "galay-ws/client/ws_client.h"
+#include "galay-kernel/core/runtime.h"
 
 #include <atomic>
 #include <chrono>

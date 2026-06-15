@@ -1,6 +1,6 @@
-#include "http2/server/http2_server.h"
-#include "http2/client/h2c_client.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http2/server/http2_server.h"
+#include "galay-http2/client/h2c_client.h"
+#include "galay-kernel/core/runtime.h"
 #include <atomic>
 #include <chrono>
 #include <cstdlib>

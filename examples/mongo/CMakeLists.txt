@@ -1,8 +1,16 @@
+function(galay_mongo_configure_example_target target_name)
+    set_target_properties(${target_name} PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+endfunction()
+
 function(galay_add_mongo_example target_name source_file)
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::mongo)
     target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})
-    galay_mongo_apply_cxx(${target_name})
+    galay_mongo_configure_example_target(${target_name})
 endfunction()
 
 function(galay_add_mongo_import_example target_name source_file)

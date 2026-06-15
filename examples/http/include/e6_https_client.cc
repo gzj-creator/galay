@@ -4,9 +4,9 @@
  * @details 演示如何使用 HttpsClient 发送 HTTPS 请求，支持 Keep-Alive 连接复用
  */
 
-#include "http/client/http_client.h"
-#include "http/builder/http_builder.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http/client/http_client.h"
+#include "galay-http/builder/http_builder.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 
 using namespace galay::http;

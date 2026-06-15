@@ -5,7 +5,7 @@
  * 通过条件：查询到的调度器数量与配置一致，测试返回 0。
  */
 
-#include "kernel/kernel/runtime.h"
+#include "galay-kernel/core/runtime.h"
 #include <cassert>
 #include <iostream>
 

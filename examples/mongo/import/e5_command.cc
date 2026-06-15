@@ -4,8 +4,9 @@
 #include <string>
 #include <thread>
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
+#include "common/async_result.h"
 #include "common/config.h"
 
 import galay.mongo;
@@ -131,35 +132,45 @@ Task<void> run(IOScheduler* scheduler,
     const std::string collection = "galay_mongo_example_async_command_crud";
     const int64_t doc_id = makeUniqueId();
 
-    const std::expected<bool, MongoError> conn_result = co_await client.connect(cfg.mongo);
+    const std::expected<bool, MongoError> conn_result =
+        mongo_example::unwrapMongoTaskResult(co_await client.connect(cfg.mongo),
+                                             MONGO_ERROR_CONNECTION);
     if (!conn_result) {
         setFailure(state, "connect failed: " + conn_result.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> inserted =
-        co_await client.command(cfg.mongo.database, makeInsertCommand(collection, doc_id, 1));
+        mongo_example::unwrapMongoTaskResult(
+            co_await client.command(cfg.mongo.database, makeInsertCommand(collection, doc_id, 1)),
+            MONGO_ERROR_COMMAND);
     if (!inserted) {
         setFailure(state, "insert failed: " + inserted.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> found =
-        co_await client.command(cfg.mongo.database, makeFindCommand(collection, doc_id));
+        mongo_example::unwrapMongoTaskResult(
+            co_await client.command(cfg.mongo.database, makeFindCommand(collection, doc_id)),
+            MONGO_ERROR_COMMAND);
     if (!found) {
         setFailure(state, "find failed: " + found.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> updated =
-        co_await client.command(cfg.mongo.database, makeUpdateCommand(collection, doc_id, 2));
+        mongo_example::unwrapMongoTaskResult(
+            co_await client.command(cfg.mongo.database, makeUpdateCommand(collection, doc_id, 2)),
+            MONGO_ERROR_COMMAND);
     if (!updated) {
         setFailure(state, "update failed: " + updated.error().message());
         co_return;
     }
 
     const std::expected<MongoReply, MongoError> deleted =
-        co_await client.command(cfg.mongo.database, makeDeleteCommand(collection, doc_id));
+        mongo_example::unwrapMongoTaskResult(
+            co_await client.command(cfg.mongo.database, makeDeleteCommand(collection, doc_id)),
+            MONGO_ERROR_COMMAND);
     if (!deleted) {
         setFailure(state, "delete failed: " + deleted.error().message());
         co_return;

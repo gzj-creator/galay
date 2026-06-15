@@ -3,7 +3,7 @@
  * @brief HTTP/2 runtime error model contract test
  */
 
-#include "http2/protoc/http2_error.h"
+#include "galay-http2/protoc/http2_error.h"
 #include <cassert>
 #include <iostream>
 

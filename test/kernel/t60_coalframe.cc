@@ -5,9 +5,9 @@
  * 通过条件：单次 recv 解析出两帧，且无需第二次底层 recv。
  */
 
-#include "kernel/kernel/task.h"
-#include "kernel/kernel/awaitable.h"
-#include <utils/cache/byte_queue_view.hpp>
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/core/awaitable.h"
+#include <galay-utils/cache/byte_queue_view.hpp>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -23,13 +23,13 @@
 #include <vector>
 
 #ifdef USE_IOURING
-#include "kernel/kernel/uring_scheduler.h"
+#include "galay-kernel/core/uring_scheduler.h"
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

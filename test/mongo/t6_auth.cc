@@ -4,10 +4,11 @@
 #include <string>
 #include <thread>
 
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/core/runtime.h>
 
-#include "mongo/async/client.h"
-#include "mongo/sync/mongo_client.h"
+#include "galay-mongo/async/client.h"
+#include "galay-mongo/sync/mongo_client.h"
+#include "async_result_helper.h"
 #include "config.h"
 
 using namespace galay::kernel;
@@ -42,13 +43,17 @@ Task<void> runAsyncAuth(IOScheduler* scheduler,
 {
     auto client = AsyncMongoClientBuilder().scheduler(scheduler).config(cfg.async).build();
 
-    const std::expected<bool, MongoError> connected = co_await client.connect(cfg.mongo);
+    const std::expected<bool, MongoError> connected =
+        mongo_test::unwrapMongoTaskResult(co_await client.connect(cfg.mongo),
+                                          MONGO_ERROR_CONNECTION);
     if (!connected) {
         setFailure(state, "async connect failed: " + connected.error().message());
         co_return;
     }
 
-    const std::expected<MongoReply, MongoError> ping = co_await client.ping(cfg.mongo.database);
+    const std::expected<MongoReply, MongoError> ping =
+        mongo_test::unwrapMongoTaskResult(co_await client.ping(cfg.mongo.database),
+                                          MONGO_ERROR_COMMAND);
     if (!ping) {
         setFailure(state, "async ping failed: " + ping.error().message());
         co_return;

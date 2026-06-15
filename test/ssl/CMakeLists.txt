@@ -1,6 +1,8 @@
 function(add_ssl_test target_name source_file)
     add_executable(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay-ssl)
+    target_link_libraries(${target_name} PRIVATE galay::ssl)
+    set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
+    target_include_directories(${target_name} BEFORE PRIVATE ${PROJECT_SOURCE_DIR}/src)
     add_test(NAME ${target_name} COMMAND ${target_name})
     set_tests_properties(${target_name} PROPERTIES WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
 endfunction()
@@ -22,7 +24,15 @@ add_ssl_test(t14_timeout t14_timeout.cc)
 target_compile_options(t14_timeout PRIVATE -Werror=switch)
 
 # 复制测试证书到 bin 目录和 build 根目录
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/certs
-     DESTINATION ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/certs
-     DESTINATION ${CMAKE_BINARY_DIR})
+set(_galay_ssl_cert_destinations
+    ${CMAKE_BINARY_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}
+)
+if(CMAKE_RUNTIME_OUTPUT_DIRECTORY)
+    list(APPEND _galay_ssl_cert_destinations ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+endif()
+list(REMOVE_DUPLICATES _galay_ssl_cert_destinations)
+foreach(_galay_ssl_cert_destination IN LISTS _galay_ssl_cert_destinations)
+    file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/certs
+         DESTINATION ${_galay_ssl_cert_destination})
+endforeach()

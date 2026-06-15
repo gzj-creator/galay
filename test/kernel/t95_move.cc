@@ -5,7 +5,7 @@
  * 通过条件：相关 static_assert 全部成立。
  */
 
-#include "kernel/kernel/io_controller.hpp"
+#include "galay-kernel/core/io_controller.hpp"
 
 #include <type_traits>
 #include <iostream>

@@ -4,10 +4,10 @@
 
 void testBufferHeadersMovedToCache() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
-    assert(!std::filesystem::exists(sourceRoot / "utils/tool/byte_queue_view.hpp"));
-    assert(!std::filesystem::exists(sourceRoot / "utils/tool/ring_buffer.hpp"));
-    assert(std::filesystem::exists(sourceRoot / "utils/cache/byte_queue_view.hpp"));
-    assert(std::filesystem::exists(sourceRoot / "utils/cache/ring_buffer.hpp"));
+    assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool/byte_queue_view.hpp"));
+    assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool/ring_buffer.hpp"));
+    assert(std::filesystem::exists(sourceRoot / "galay-utils/cache/byte_queue_view.hpp"));
+    assert(std::filesystem::exists(sourceRoot / "galay-utils/cache/ring_buffer.hpp"));
 }
 
 void testByteQueueView() {

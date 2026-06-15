@@ -1,10 +1,10 @@
 #include "bench_support.h"
 
-#include "etcd/sync/etcd_client.h"
-#include "etcd/async/client.h"
+#include "galay-etcd/sync/etcd_client.h"
+#include "galay-etcd/async/client.h"
 
-#include <kernel/common/sleep.hpp>
-#include <kernel/kernel/runtime.h>
+#include <galay-kernel/common/sleep.hpp>
+#include <galay-kernel/core/runtime.h>
 
 #include <algorithm>
 #include <atomic>
@@ -282,7 +282,7 @@ runAsyncBenchmark(const AsyncBenchmarkArgs& args)
 
     auto state = std::make_shared<SharedState>(args.workers);
     const std::string value = payloadOfSize(args.value_size);
-    const std::string key_prefix = "/etcd/bench/async/" + nowSuffix() + "/";
+    const std::string key_prefix = "/galay-etcd/bench/async/" + nowSuffix() + "/";
 
     for (int worker_id = 0; worker_id < args.workers; ++worker_id) {
         IOScheduler* scheduler = schedulers[static_cast<size_t>(worker_id % io_schedulers)];

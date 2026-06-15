@@ -5,8 +5,8 @@
  * 通过条件：辅助工具返回结果与状态均符合预期，测试返回 0。
  */
 
-#include "kernel/kernel/awaitable.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/awaitable.h"
+#include "galay-kernel/core/task.h"
 #include <cerrno>
 #include <cstdint>
 #include <iostream>

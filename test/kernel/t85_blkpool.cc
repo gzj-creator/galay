@@ -5,7 +5,7 @@
  * 通过条件：`max_workers = 2` 时，3 个阻塞任务峰值并发不超过 2，且总耗时体现两波执行。
  */
 
-#include "kernel/kernel/blocking_executor.h"
+#include "galay-kernel/core/blocking_executor.h"
 #include <atomic>
 #include <cassert>
 #include <chrono>

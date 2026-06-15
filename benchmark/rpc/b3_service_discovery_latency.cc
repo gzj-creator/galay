@@ -7,9 +7,9 @@
  * 注意：每个 worker 使用独立的 registry 实例，避免共享状态竞争。
  */
 
-#include "rpc/kernel/rpc_discovery.h"
-#include "rpc/utils/runtime_compat.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-rpc/kernel/rpc_discovery.h"
+#include "galay-rpc/utils/runtime_compat.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <atomic>
 #include <chrono>

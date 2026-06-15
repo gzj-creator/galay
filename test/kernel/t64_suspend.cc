@@ -1,10 +1,10 @@
-#include "kernel/common/sleep.hpp"
-#include "kernel/concurrency/async_mutex.h"
-#include "kernel/concurrency/async_waiter.h"
-#include "kernel/concurrency/mpsc_channel.h"
-#include "kernel/concurrency/unsafe_channel.h"
-#include "kernel/kernel/task.h"
-#include "kernel/kernel/waker.h"
+#include "galay-kernel/common/sleep.hpp"
+#include "galay-kernel/concurrency/async_mutex.h"
+#include "galay-kernel/concurrency/async_waiter.h"
+#include "galay-kernel/concurrency/mpsc_channel.h"
+#include "galay-kernel/concurrency/unsafe_channel.h"
+#include "galay-kernel/core/task.h"
+#include "galay-kernel/core/waker.h"
 #include <concepts>
 #include <coroutine>
 #include <type_traits>

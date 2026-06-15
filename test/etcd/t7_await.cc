@@ -9,8 +9,8 @@
  * 通过条件：目标成功编译，静态断言成立，程序返回 0。
  */
 
-#include "etcd/async/client.h"
-#include "etcd/sync/etcd_client.h"
+#include "galay-etcd/async/client.h"
+#include "galay-etcd/sync/etcd_client.h"
 
 #include <concepts>
 #include <functional>

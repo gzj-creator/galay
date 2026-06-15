@@ -5,9 +5,9 @@
  */
 
 #include <iostream>
-#include "ws/client/ws_client.h"
-#include "ws/kernel/writer_cfg.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-ws/client/ws_client.h"
+#include "galay-ws/kernel/writer_cfg.h"
+#include "galay-kernel/core/runtime.h"
 
 using namespace galay::http;
 using namespace galay::websocket;

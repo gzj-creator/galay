@@ -12,18 +12,18 @@
 #include <csignal>
 #include <vector>
 #include <cstring>
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/task.h"
 #include "test/stdout_log.h"
 
 #ifdef USE_KQUEUE
-#include "kernel/kernel/kqueue_scheduler.h"
-#include "kernel/async/async_file.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
+#include "galay-kernel/async/async_file.h"
 #elif defined(USE_IOURING)
-#include "kernel/kernel/uring_scheduler.h"
-#include "kernel/async/async_file.h"
+#include "galay-kernel/core/uring_scheduler.h"
+#include "galay-kernel/async/async_file.h"
 #elif defined(USE_EPOLL)
-#include "kernel/kernel/epoll_scheduler.h"
-#include "kernel/async/aio_file.h"
+#include "galay-kernel/core/epoll_scheduler.h"
+#include "galay-kernel/async/aio_file.h"
 #endif
 
 using namespace galay::kernel;

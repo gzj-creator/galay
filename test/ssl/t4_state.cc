@@ -5,7 +5,7 @@
  * 通过条件：目标成功编译，静态断言成立，测试返回 0。
  */
 
-#include "ssl/async/awaitable.h"
+#include "galay-ssl/async/awaitable.h"
 #include <concepts>
 #include <expected>
 #include <type_traits>

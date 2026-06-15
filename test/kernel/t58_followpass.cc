@@ -5,8 +5,8 @@
  * 通过条件：follow-up 任务在预期轮次内被继续处理，测试返回 0。
  */
 
-#include "kernel/kernel/scheduler_core.h"
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/scheduler_core.h"
+#include "galay-kernel/core/task.h"
 
 #include <iostream>
 

@@ -2,18 +2,18 @@
 
 本页对齐当前 monorepo 源码树中的 MySQL 公开 include surface：
 
-- `mysql/base/mysql_config.h`
-- `mysql/base/mysql_error.h`
-- `mysql/base/mysql_log.h`
-- `mysql/base/mysql_value.h`
-- `mysql/async/client.h`
-- `mysql/async/conn_pool.h`
-- `mysql/sync/mysql_client.h`
-- `mysql/protoc/builder.h`
-- `mysql/protoc/mysql_auth.h`
-- `mysql/protoc/mysql_packet.h`
-- `mysql/protoc/mysql_protocol.h`
-- `mysql/module/module_prelude.hpp`
+- `galay-mysql/base/mysql_config.h`
+- `galay-mysql/base/mysql_error.h`
+- `galay-mysql/base/mysql_log.h`
+- `galay-mysql/base/mysql_value.h`
+- `galay-mysql/async/client.h`
+- `galay-mysql/async/conn_pool.h`
+- `galay-mysql/sync/mysql_client.h`
+- `galay-mysql/protoc/builder.h`
+- `galay-mysql/protoc/mysql_auth.h`
+- `galay-mysql/protoc/mysql_packet.h`
+- `galay-mysql/protoc/mysql_protocol.h`
+- `galay-mysql/module/module_prelude.hpp`
 
 说明：
 
@@ -25,11 +25,11 @@
 
 | 主题 | 公开入口 | 主示例入口 | 主测试 / 验证入口 |
 | --- | --- | --- | --- |
-| 异步单连接客户端 | `mysql/async/client.h` | `examples/mysql/include/e1_query.cc`、`examples/mysql/include/e5_pipeline.cc` | `test/mysql/t3_client.cc`、`test/mysql/t6_transaction.cc`、`test/mysql/t7_stmt.cc` |
-| 异步连接池 | `mysql/async/conn_pool.h` | `examples/mysql/include/e3_pool.cc` | `test/mysql/t5_pool.cc` |
-| 同步客户端 | `mysql/sync/mysql_client.h` | `examples/mysql/include/e2_query.cc`、`examples/mysql/include/e4_prepared.cc` | `test/mysql/t4_client.cc` |
-| 协议编码 / 认证辅助 | `mysql/protoc/builder.h`、`mysql/protoc/mysql_auth.h`、`mysql/protoc/mysql_protocol.h`、`mysql/protoc/mysql_packet.h` | `examples/mysql/include/e5_pipeline.cc` | `test/mysql/t1_protocol.cc`、`test/mysql/t2_auth.cc` |
-| monorepo target | `src/mysql/CMakeLists.txt`、`galay::mysql` | 顶层 `CMakeLists.txt` 的 `GALAY_BUILD_MYSQL` | `test/mysql/CMakeLists.txt` |
+| 异步单连接客户端 | `galay-mysql/async/client.h` | `examples/mysql/include/e1_query.cc`、`examples/mysql/include/e5_pipeline.cc` | `test/mysql/t3_client.cc`、`test/mysql/t6_transaction.cc`、`test/mysql/t7_stmt.cc` |
+| 异步连接池 | `galay-mysql/async/conn_pool.h` | `examples/mysql/include/e3_pool.cc` | `test/mysql/t5_pool.cc` |
+| 同步客户端 | `galay-mysql/sync/mysql_client.h` | `examples/mysql/include/e2_query.cc`、`examples/mysql/include/e4_prepared.cc` | `test/mysql/t4_client.cc` |
+| 协议编码 / 认证辅助 | `galay-mysql/protoc/builder.h`、`galay-mysql/protoc/mysql_auth.h`、`galay-mysql/protoc/mysql_protocol.h`、`galay-mysql/protoc/mysql_packet.h` | `examples/mysql/include/e5_pipeline.cc` | `test/mysql/t1_protocol.cc`、`test/mysql/t2_auth.cc` |
+| monorepo target | `src/galay-mysql/CMakeLists.txt`、`galay::mysql` | 顶层 `CMakeLists.txt` 的 `GALAY_BUILD_MYSQL` | `test/mysql/CMakeLists.txt` |
 
 - 当 import / module 构建路径启用时，对应示例也存在于 `examples/mysql/import/`。
 - 回答“这个 API 在哪有真实消费者”时，应优先回到上表中的 examples / tests，再回到 Markdown 说明。
@@ -43,7 +43,7 @@ using MysqlBatchResult = std::expected<std::vector<MysqlResultSet>, MysqlError>;
 ```
 
 - `MysqlResult` / `MysqlVoidResult` 同时出现在异步与同步头文件中。
-- `MysqlBatchResult` 当前由 `mysql/sync/mysql_client.h` 导出，用于 `batch()` / `pipeline()` 的同步返回值。
+- `MysqlBatchResult` 当前由 `galay-mysql/sync/mysql_client.h` 导出，用于 `batch()` / `pipeline()` 的同步返回值。
 - 异步 `await_resume()` 则统一返回 `std::expected<std::optional<T>, MysqlError>`；当前实现中的成功路径都会构造有值 `optional`，示例与测试保留 `has_value()` 检查属于防御式消费方式。
 
 ## 配置类型
@@ -168,7 +168,7 @@ enum MysqlFieldFlags : uint16_t {
 };
 ```
 
-`MysqlFieldType` 与 `MysqlFieldFlags` 的完整取值和协议位定义见 `mysql/base/mysql_value.h`。
+`MysqlFieldType` 与 `MysqlFieldFlags` 的完整取值和协议位定义见 `galay-mysql/base/mysql_value.h`。
 
 ### `MysqlField` / `MysqlRow` / `MysqlResultSet`
 
@@ -604,7 +604,7 @@ public:
 
 ## `protocol::MysqlCommandView` 与 `MysqlCommandBuilder`
 
-当你需要使用 `batch()` 时，公开协议构建接口来自 `mysql/protoc/builder.h`：
+当你需要使用 `batch()` 时，公开协议构建接口来自 `galay-mysql/protoc/builder.h`：
 
 ```cpp
 enum class MysqlCommandKind : uint8_t {
@@ -667,7 +667,7 @@ public:
 
 ## `protocol::AuthPlugin`
 
-`mysql/protoc/mysql_auth.h` 暴露认证辅助：
+`galay-mysql/protoc/mysql_auth.h` 暴露认证辅助：
 
 ```cpp
 class AuthPlugin {
@@ -693,7 +693,7 @@ public:
 
 ## `protocol::MysqlPacket` 协议模型
 
-`mysql/protoc/mysql_packet.h` 中公开的协议常量 / 枚举 / 结构包括：
+`galay-mysql/protoc/mysql_packet.h` 中公开的协议常量 / 枚举 / 结构包括：
 
 - 常量：`MYSQL_PACKET_HEADER_SIZE`、`MYSQL_MAX_PACKET_SIZE`
 - 命令枚举：`CommandType`
@@ -785,7 +785,7 @@ struct StmtPrepareOkPacket {
 
 ## `protocol::MysqlParser` / `protocol::MysqlEncoder`
 
-`mysql/protoc/mysql_protocol.h` 暴露协议 helper、parser 与 encoder：
+`galay-mysql/protoc/mysql_protocol.h` 暴露协议 helper、parser 与 encoder：
 
 ```cpp
 std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, size_t& consumed);
@@ -857,7 +857,7 @@ public:
 
 ## `module_prelude.hpp`
 
-`mysql/module/module_prelude.hpp` 是 module facade 使用的聚合头文件，但它不是额外的 MySQL API 命名空间；它的职责是：
+`galay-mysql/module/module_prelude.hpp` 是 module facade 使用的聚合头文件，但它不是额外的 MySQL API 命名空间；它的职责是：
 
 - 为过渡期 C++23 module / import 构建集中放置系统头、第三方头和公开 MySQL 头
 - 供 `.cppm` 模块接口与 import 示例复用同一组 global module fragment 依赖
@@ -871,7 +871,7 @@ public:
 target_link_libraries(app PRIVATE galay::mysql)
 ```
 
-当前 `src/mysql/CMakeLists.txt` 定义 `mysql` target 和 `galay::mysql` alias；本页不把旧独立仓库安装包路径作为当前 monorepo 的事实。
+当前 `src/galay-mysql/CMakeLists.txt` 定义 `mysql` target 和 `galay::mysql` alias；本页不把旧独立仓库安装包路径作为当前 monorepo 的事实。
 
 ## 使用备注
 

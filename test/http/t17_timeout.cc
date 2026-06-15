@@ -3,11 +3,11 @@
  * @brief 完整测试所有 Awaitable 的超时功能
  */
 
-#include "http/client/http_client.h"
-#include "http/kernel/http_reader.h"
-#include "http/kernel/http_writer.h"
-#include "http/builder/http_builder.h"
-#include "kernel/kernel/runtime.h"
+#include "galay-http/client/http_client.h"
+#include "galay-http/kernel/http_reader.h"
+#include "galay-http/kernel/http_writer.h"
+#include "galay-http/builder/http_builder.h"
+#include "galay-kernel/core/runtime.h"
 #include <iostream>
 #include <chrono>
 

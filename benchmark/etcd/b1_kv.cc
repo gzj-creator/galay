@@ -1,4 +1,4 @@
-#include "etcd/sync/etcd_client.h"
+#include "galay-etcd/sync/etcd_client.h"
 
 #include <algorithm>
 #include <atomic>
@@ -201,7 +201,7 @@ int main(int argc, char** argv)
 {
     const Args args = parseArgs(argc, argv);
     const std::string value = payloadOfSize(args.value_size);
-    const std::string key_prefix = "/etcd/bench/" +
+    const std::string key_prefix = "/galay-etcd/bench/" +
         std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::high_resolution_clock::now().time_since_epoch()).count()) + "/";
 

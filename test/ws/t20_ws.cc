@@ -4,24 +4,24 @@
  */
 
 #include <string>
-#include "http/client/http_client.h"
-#include "ws/kernel/ws_conn.h"
-#include "http/builder/http_builder.h"
-#include "kernel/kernel/runtime.h"
-#include "kernel/common/sleep.hpp"
+#include "galay-http/client/http_client.h"
+#include "galay-ws/kernel/ws_conn.h"
+#include "galay-http/builder/http_builder.h"
+#include "galay-kernel/core/runtime.h"
+#include "galay-kernel/common/sleep.hpp"
 
 #ifdef USE_KQUEUE
-#include "kernel/kernel/kqueue_scheduler.h"
+#include "galay-kernel/core/kqueue_scheduler.h"
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #endif
 
 #ifdef USE_EPOLL
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #endif
 
 #ifdef USE_IOURING
-#include "kernel/kernel/io_uring_scheduler.h"
+#include "galay-kernel/core/io_uring_scheduler.h"
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

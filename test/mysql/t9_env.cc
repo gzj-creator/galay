@@ -1,5 +1,5 @@
-#include "benchmark/common/config.h"
-#include "examples/common/config.h"
+#include "benchmark/mysql/common/config.h"
+#include "examples/mysql/common/config.h"
 #include "config.h"
 
 #include <cstdlib>

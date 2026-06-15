@@ -1,5 +1,5 @@
-#include "mcp/server/stdio_server.h"
-#include "mcp/common/schema_builder.h"
+#include "galay-mcp/server/stdio_server.h"
+#include "galay-mcp/common/schema_builder.h"
 #include <iostream>
 #include <string>
 

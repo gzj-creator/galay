@@ -5,14 +5,14 @@
  * 通过条件：测试在超时前完成，第二次 read 成功返回并读回第一次 write 的内容。
  */
 
-#include "kernel/kernel/task.h"
+#include "galay-kernel/core/task.h"
 
 #include <iostream>
 
 #ifdef USE_EPOLL
 
-#include "kernel/async/aio_file.h"
-#include "kernel/kernel/epoll_scheduler.h"
+#include "galay-kernel/async/aio_file.h"
+#include "galay-kernel/core/epoll_scheduler.h"
 
 #include <atomic>
 #include <chrono>

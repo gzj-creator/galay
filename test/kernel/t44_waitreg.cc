@@ -5,7 +5,7 @@
  * 通过条件：等待注册状态转换全部正确，测试返回 0。
  */
 
-#include "kernel/kernel/wait_registration.h"
+#include "galay-kernel/core/wait_registration.h"
 
 #include <cstdint>
 #include <iostream>
