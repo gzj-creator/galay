@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Docs
+
+- 新增项目 `README.md`，介绍 galay 特性、13 个 `galay-*` 模块、环境要求、CMake 快速开始与目录结构。
+
 ## [v3.0.0] - 2026-06-15
 
 ### Changed
