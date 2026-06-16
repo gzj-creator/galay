@@ -14,7 +14,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -34,8 +34,8 @@ bool containsText(const std::string& haystack, const std::string& needle) {
 
 int main() {
     const auto root = projectRoot();
-    const auto task_h = root / "galay-kernel" / "kernel" / "task.h";
-    const auto task_cc = root / "galay-kernel" / "kernel" / "task.cc";
+    const auto task_h = root / "galay-kernel" / "core" / "task.h";
+    const auto task_cc = root / "galay-kernel" / "core" / "task.cc";
 
     const std::string task_h_text = readAll(task_h);
     const std::string task_cc_text = readAll(task_cc);

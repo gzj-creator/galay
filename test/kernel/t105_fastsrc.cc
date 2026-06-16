@@ -13,7 +13,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -33,10 +33,10 @@ bool containsText(const std::string& haystack, const std::string& needle) {
 
 int main() {
     const auto root = projectRoot();
-    const auto iohandlers = root / "galay-kernel" / "kernel" / "io_handlers.hpp";
-    const auto iocontroller = root / "galay-kernel" / "kernel" / "io_controller.hpp";
-    const auto iouring = root / "galay-kernel" / "kernel" / "uring_reactor.cc";
-    const auto kqueue = root / "galay-kernel" / "kernel" / "kqueue_reactor.cc";
+    const auto iohandlers = root / "galay-kernel" / "core" / "io_handlers.hpp";
+    const auto iocontroller = root / "galay-kernel" / "core" / "io_controller.hpp";
+    const auto iouring = root / "galay-kernel" / "core" / "uring_reactor.cc";
+    const auto kqueue = root / "galay-kernel" / "core" / "kqueue_reactor.cc";
 
     const std::string iohandlers_text = readAll(iohandlers);
     const std::string iocontroller_text = readAll(iocontroller);

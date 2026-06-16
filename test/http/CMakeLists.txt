@@ -11,10 +11,15 @@ set(GALAY_HTTP_MANUAL_TEST_TARGETS
     t22_https
     t23_https
     t24_https
+    t27_proxy
 )
 
 foreach(test_source ${GALAY_HTTP_TEST_SOURCES})
     get_filename_component(test_name "${test_source}" NAME_WE)
+    list(FIND GALAY_HTTP_MANUAL_TEST_TARGETS ${test_name} manual_index)
+    if(NOT manual_index EQUAL -1)
+        continue()
+    endif()
     add_executable(${test_name} ${test_source})
     target_link_libraries(${test_name} PRIVATE galay::http)
     file(READ "${test_source}" test_source_content)
@@ -36,17 +41,14 @@ foreach(test_source ${GALAY_HTTP_TEST_SOURCES})
         INSTALL_RPATH $ORIGIN/../lib
     )
     string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${test_name}")
-    list(FIND GALAY_HTTP_MANUAL_TEST_TARGETS ${test_name} manual_index)
-    if(manual_index EQUAL -1)
-        add_test(NAME "http.${scenario_name}"
-            COMMAND ${CMAKE_COMMAND}
-                -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
-                -DTEST_BINARY_NAME=${test_name}
-                -DTEST_WORKING_DIRECTORY=${PROJECT_SOURCE_DIR}
-                -P ${PROJECT_SOURCE_DIR}/cmake/RunTestBinary.cmake
-        )
-        set_tests_properties("http.${scenario_name}" PROPERTIES LABELS "http;unit")
-    endif()
+    add_test(NAME "http.${scenario_name}"
+        COMMAND ${CMAKE_COMMAND}
+            -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -DTEST_BINARY_NAME=${test_name}
+            -DTEST_WORKING_DIRECTORY=${PROJECT_SOURCE_DIR}
+            -P ${PROJECT_SOURCE_DIR}/cmake/RunTestBinary.cmake
+    )
+    set_tests_properties("http.${scenario_name}" PROPERTIES LABELS "http;unit")
 endforeach()
 
 if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-http-modules)

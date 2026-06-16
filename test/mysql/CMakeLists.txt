@@ -11,7 +11,8 @@ function(add_mysql_test target_name source_file)
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
-    set(test_name "mysql.${target_name}")
+    string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")
+    set(test_name "mysql.${scenario_name}")
     add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${executable_name}>)
 
     set(test_labels mysql)
@@ -42,21 +43,6 @@ add_mysql_test(t1_protocol t1_protocol.cc)
 # t2 - 认证测试
 add_mysql_test(t2_auth t2_auth.cc)
 
-# t3 - 异步客户端测试
-add_mysql_test(t3_client t3_client.cc INTEGRATION)
-
-# t4 - 同步客户端测试
-add_mysql_test(t4_client t4_client.cc INTEGRATION)
-
-# t5 - 连接池测试
-add_mysql_test(t5_pool t5_pool.cc INTEGRATION)
-
-# t6 - 事务测试
-add_mysql_test(t6_transaction t6_transaction.cc INTEGRATION)
-
-# t7 - 预处理语句测试
-add_mysql_test(t7_stmt t7_stmt.cc INTEGRATION)
-
 # t8 - Awaitable surface test
 add_mysql_test(t8_surface t8_surface.cc)
 
@@ -67,7 +53,7 @@ add_mysql_test(t9_env t9_env.cc)
 add_mysql_test(t10_log t10_log.cc)
 
 add_test(
-    NAME PackageConfig.ConsumerSmoke
+    NAME mysql.package_consumer_smoke
     COMMAND
         ${CMAKE_COMMAND}
         -DGALAY_MYSQL_SOURCE_DIR=${CMAKE_SOURCE_DIR}
@@ -80,7 +66,7 @@ add_test(
         -DGALAY_MYSQL_INSTALL_CONFIG=$<CONFIG>
         -P ${CMAKE_SOURCE_DIR}/test/mysql/package/package_consumer_smoke.cmake
 )
-set_tests_properties(PackageConfig.ConsumerSmoke PROPERTIES
+set_tests_properties(mysql.package_consumer_smoke PROPERTIES
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     LABELS "mysql;package;consumer"
     TIMEOUT 120

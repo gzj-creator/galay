@@ -13,7 +13,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -58,8 +58,8 @@ std::string extractFunction(const std::string& content,
 
 int main() {
     const auto root = projectRoot();
-    const auto iocontroller = root / "galay-kernel" / "kernel" / "io_controller.hpp";
-    const auto iouring = root / "galay-kernel" / "kernel" / "uring_reactor.cc";
+    const auto iocontroller = root / "galay-kernel" / "core" / "io_controller.hpp";
+    const auto iouring = root / "galay-kernel" / "core" / "uring_reactor.cc";
 
     const std::string iocontroller_text = readAll(iocontroller);
     const std::string iouring_text = readAll(iouring);

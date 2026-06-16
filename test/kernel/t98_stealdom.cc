@@ -19,7 +19,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -94,8 +94,8 @@ std::string extractBracedSection(const std::string& content,
 
 int main() {
     const auto root = projectRoot();
-    const auto runtime = root / "galay-kernel" / "kernel" / "runtime.cc";
-    const auto ioscheduler = root / "galay-kernel" / "kernel" / "io_scheduler.hpp";
+    const auto runtime = root / "galay-kernel" / "core" / "runtime.cc";
+    const auto ioscheduler = root / "galay-kernel" / "core" / "io_scheduler.hpp";
 
     std::vector<std::string> failures;
 
@@ -165,9 +165,9 @@ int main() {
     }
 
     const std::vector<std::filesystem::path> scheduler_headers = {
-        root / "galay-kernel" / "kernel" / "epoll_scheduler.h",
-        root / "galay-kernel" / "kernel" / "kqueue_scheduler.h",
-        root / "galay-kernel" / "kernel" / "uring_scheduler.h",
+        root / "galay-kernel" / "core" / "epoll_scheduler.h",
+        root / "galay-kernel" / "core" / "kqueue_scheduler.h",
+        root / "galay-kernel" / "core" / "uring_scheduler.h",
     };
 
     for (const auto& scheduler_path : scheduler_headers) {

@@ -14,8 +14,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    auto path = std::filesystem::path(__FILE__).parent_path().parent_path();
-    return path.lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 bool containsText(const std::filesystem::path& path, const std::string& needle) {
@@ -46,7 +45,7 @@ bool containsAnyText(const std::filesystem::path& path,
 
 int main() {
     const auto root = projectRoot();
-    const auto kernel_dir = root / "galay-kernel" / "kernel";
+    const auto kernel_dir = root / "galay-kernel" / "core";
 
     const std::vector<std::filesystem::path> required_files = {
         kernel_dir / "backend_reactor.h",

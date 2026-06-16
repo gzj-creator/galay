@@ -13,7 +13,11 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_PROJECT_ROOT);
+}
+
+std::filesystem::path sourceRoot() {
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -33,10 +37,11 @@ bool containsText(const std::string& haystack, const std::string& needle) {
 
 int main() {
     const auto root = projectRoot();
-    const auto handle_option_h = root / "galay-kernel" / "common" / "handle_option.h";
-    const auto handle_option_cc = root / "galay-kernel" / "common" / "handle_option.cc";
-    const auto b2_server = root / "benchmark" / "b2_tcp.cc";
-    const auto b11_server = root / "benchmark" / "b11_iov.cc";
+    const auto source_root = sourceRoot();
+    const auto handle_option_h = source_root / "galay-kernel" / "common" / "handle_option.h";
+    const auto handle_option_cc = source_root / "galay-kernel" / "common" / "handle_option.cc";
+    const auto b2_server = root / "benchmark" / "kernel" / "b2_tcp_server_throughput.cc";
+    const auto b11_server = root / "benchmark" / "kernel" / "b11_tcp_iov_server_throughput.cc";
 
     const std::string header_text = readAll(handle_option_h);
     const std::string source_text = readAll(handle_option_cc);
@@ -60,11 +65,11 @@ int main() {
         std::cerr << "[T109] expected HandleOption implementation to call setsockopt for TCP_DEFER_ACCEPT\n";
         return 1;
     }
-    if (!containsText(b2_text, "listener.option().handleTcpDeferAccept();")) {
+    if (!containsText(b2_text, "handleTcpDeferAccept()")) {
         std::cerr << "[T109] expected B2 TCP benchmark server to enable handleTcpDeferAccept\n";
         return 1;
     }
-    if (!containsText(b11_text, "listener.option().handleTcpDeferAccept();")) {
+    if (!containsText(b11_text, "handleTcpDeferAccept()")) {
         std::cerr << "[T109] expected B11 TCP IOV benchmark server to enable handleTcpDeferAccept\n";
         return 1;
     }

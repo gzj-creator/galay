@@ -18,6 +18,9 @@ std::string resolveStaticDir() {
     namespace fs = std::filesystem;
 
     const std::string candidates[] = {
+        "./test/http/static_files",
+        "../test/http/static_files",
+        "../../test/http/static_files",
         "./test/static_files",
         "./static_files",
         "../test/static_files",
@@ -30,7 +33,7 @@ std::string resolveStaticDir() {
         }
     }
 
-    return "./test/static_files";
+    return "./test/http/static_files";
 }
 
 } // namespace

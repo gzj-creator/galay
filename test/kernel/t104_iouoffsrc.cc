@@ -13,7 +13,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -32,8 +32,8 @@ bool contains(const std::string& haystack, const std::string& needle) {
 
 int main() {
     const auto root = projectRoot();
-    const auto ioscheduler = root / "galay-kernel" / "kernel" / "io_scheduler.hpp";
-    const auto io_uring_scheduler = root / "galay-kernel" / "kernel" / "uring_scheduler.cc";
+    const auto ioscheduler = root / "galay-kernel" / "core" / "io_scheduler.hpp";
+    const auto io_uring_scheduler = root / "galay-kernel" / "core" / "uring_scheduler.cc";
 
     std::vector<std::string> failures;
 

@@ -36,8 +36,8 @@ int main()
     const std::filesystem::path source_root = GALAY_MONGO_SOURCE_DIR;
     const auto socket_options_path = source_root / "galay-mongo" / "base" / "socket_options.h";
     const auto mongo_config = readFile(source_root / "galay-mongo" / "base" / "mongo_config.h");
-    const auto connection = readFile(source_root / "galay-mongo" / "protocol" / "connection.cc");
-    const auto connection_header = readFile(source_root / "galay-mongo" / "protocol" / "connection.h");
+    const auto connection = readFile(source_root / "galay-mongo" / "protoc" / "connection.cc");
+    const auto connection_header = readFile(source_root / "galay-mongo" / "protoc" / "connection.h");
     const auto async_client = readFile(source_root / "galay-mongo" / "async" / "client.cc");
 
     if (std::filesystem::exists(socket_options_path)) {

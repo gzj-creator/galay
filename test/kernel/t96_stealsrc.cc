@@ -23,7 +23,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -170,7 +170,7 @@ void requireRoutesThroughSharedLoop(std::vector<std::string>& failures,
 // until the work-stealing wiring exists.
 int main() {
     const auto root = projectRoot();
-    const auto ioscheduler = root / "galay-kernel" / "kernel" / "io_scheduler.hpp";
+    const auto ioscheduler = root / "galay-kernel" / "core" / "io_scheduler.hpp";
 
     std::vector<std::string> failures;
     const std::string ioscheduler_content = readAll(ioscheduler);
@@ -227,7 +227,7 @@ int main() {
                         "expected ChaseLevTaskRing to declare a fixed capacity of 256");
     }
 
-    const auto event_loop = root / "galay-kernel" / "kernel" / "sched_loop.hpp";
+    const auto event_loop = root / "galay-kernel" / "core" / "sched_loop.hpp";
     const std::string event_loop_content = readAll(event_loop);
     if (event_loop_content.empty()) {
         failures.push_back(event_loop.string() + ": failed to read sched_loop.hpp");
@@ -277,13 +277,13 @@ int main() {
     }
 
     requireRoutesThroughSharedLoop(failures,
-                                   root / "galay-kernel" / "kernel" / "epoll_scheduler.cc",
+                                   root / "galay-kernel" / "core" / "epoll_scheduler.cc",
                                    "EpollScheduler::eventLoop");
     requireRoutesThroughSharedLoop(failures,
-                                   root / "galay-kernel" / "kernel" / "kqueue_scheduler.cc",
+                                   root / "galay-kernel" / "core" / "kqueue_scheduler.cc",
                                    "KqueueScheduler::eventLoop");
     requireRoutesThroughSharedLoop(failures,
-                                   root / "galay-kernel" / "kernel" / "uring_scheduler.cc",
+                                   root / "galay-kernel" / "core" / "uring_scheduler.cc",
                                    "IOUringScheduler::eventLoop");
 
     if (!failures.empty()) {

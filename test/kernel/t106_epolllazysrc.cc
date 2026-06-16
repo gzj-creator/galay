@@ -13,7 +13,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -58,9 +58,9 @@ std::string extractFunction(const std::string& content,
 
 int main() {
     const auto root = projectRoot();
-    const auto epoll_header = root / "galay-kernel" / "kernel" / "epoll_reactor.h";
-    const auto epoll_source = root / "galay-kernel" / "kernel" / "epoll_reactor.cc";
-    const auto epoll_scheduler = root / "galay-kernel" / "kernel" / "epoll_scheduler.cc";
+    const auto epoll_header = root / "galay-kernel" / "core" / "epoll_reactor.h";
+    const auto epoll_source = root / "galay-kernel" / "core" / "epoll_reactor.cc";
+    const auto epoll_scheduler = root / "galay-kernel" / "core" / "epoll_scheduler.cc";
 
     const std::string epoll_header_text = readAll(epoll_header);
     const std::string epoll_source_text = readAll(epoll_source);

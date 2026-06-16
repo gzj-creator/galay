@@ -6,10 +6,11 @@ function(galay_add_utils_test target_name source_file)
        target_name STREQUAL "t8_concurrency_pool_waiter" OR
        target_name STREQUAL "t12_resilience_rate_circuit")
         target_compile_definitions("${target_name}" PRIVATE
-            GALAY_UTILS_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/.."
+            GALAY_UTILS_SOURCE_DIR="${PROJECT_SOURCE_DIR}/src"
         )
     endif()
     string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")
+    string(REGEX REPLACE "^t_" "" scenario_name "${scenario_name}")
     string(REGEX REPLACE "_test$" "" scenario_name "${scenario_name}")
     add_test(NAME "utils.${scenario_name}" COMMAND "${target_name}")
     set_tests_properties("utils.${scenario_name}" PROPERTIES LABELS "utils;unit")

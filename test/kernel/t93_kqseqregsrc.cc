@@ -14,7 +14,7 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -48,7 +48,7 @@ std::string extractSection(const std::string& content,
 
 int main() {
     const auto source =
-        projectRoot() / "galay-kernel" / "kernel" / "kqueue_reactor.cc";
+        projectRoot() / "galay-kernel" / "core" / "kqueue_reactor.cc";
     const std::string content = readAll(source);
     if (content.empty()) {
         std::cerr << "[T93] failed to read source file: " << source << '\n';

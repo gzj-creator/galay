@@ -11,10 +11,6 @@
 
 ## [Unreleased]
 
-### Docs
-
-- 新增项目 `README.md`，介绍 galay 特性、13 个 `galay-*` 模块、环境要求、CMake 快速开始与目录结构。
-
 ## [v3.0.0] - 2026-06-15
 
 ### Changed
@@ -32,6 +28,9 @@
 - ringbuffer 改造，mpsc 队列支持模板与批处理以提升性能。
 - `AsyncChannel` 出队使用移动语义；`AsyncResult` 每个类拥有各自的等待体。
 - 大幅扩充 `.gitignore`，并将本地规划文档 `docs/plans/` 排除出版本控制。
+- **测试构建改造**：统一各测试模块 CTest 命名为 `<module>.<scenario>` 场景名（剥离 `tNN_` 前缀），替代原目标名/文件名，并新增 `cmake/RunTestBinary.cmake` 测试二进制运行辅助脚本。
+- **测试路径解析**：kernel 测试引入 `GALAY_PROJECT_ROOT` / `GALAY_SOURCE_ROOT` 编译宏，源码对齐类测试改用编译期宏解析工程路径，替代基于 `__FILE__` 的运行时路径推算，并同步适配 `kernel/kernel/` → `galay-kernel/core/` 等模块结构调整后的路径。
+- mcp 测试改用显式源文件列表替代 `file(GLOB)`，移除过时的 stdio/http 集成测试（`t1_stdio`、`t2_stdio`、`t3_http`、`t4_http`）；移除 `t94` 中已失效的 iocp / concurrentqueue / Bazel alias 断言。
 
 ### Added
 
@@ -62,3 +61,7 @@
 - 修复 io_uring 宏与 linux aio 事件的编译报错。
 - 修复头文件依赖告警。
 - 修复协程状态竞态问题。
+
+### Docs
+
+- 新增项目 `README.md`，介绍 galay 特性、13 个 `galay-*` 模块、环境要求、CMake 快速开始与目录结构。

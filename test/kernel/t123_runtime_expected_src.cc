@@ -16,7 +16,7 @@ namespace {
 
 std::filesystem::path projectRoot()
 {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path)
@@ -64,12 +64,12 @@ int main()
 {
     const auto root = projectRoot();
     const std::vector<std::filesystem::path> source_paths = {
-        root / "galay-kernel" / "kernel" / "runtime.h",
-        root / "galay-kernel" / "kernel" / "runtime.cc",
-        root / "galay-kernel" / "kernel" / "task.h",
-        root / "galay-kernel" / "kernel" / "task.cc",
-        root / "galay-kernel" / "kernel" / "blocking_executor.h",
-        root / "galay-kernel" / "kernel" / "blocking_executor.cc",
+        root / "galay-kernel" / "core" / "runtime.h",
+        root / "galay-kernel" / "core" / "runtime.cc",
+        root / "galay-kernel" / "core" / "task.h",
+        root / "galay-kernel" / "core" / "task.cc",
+        root / "galay-kernel" / "core" / "blocking_executor.h",
+        root / "galay-kernel" / "core" / "blocking_executor.cc",
     };
 
     std::vector<std::string> failures;

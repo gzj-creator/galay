@@ -11,6 +11,10 @@ set(GALAY_WS_MANUAL_TEST_TARGETS
 
 foreach(test_source ${GALAY_WS_TEST_SOURCES})
     get_filename_component(test_name "${test_source}" NAME_WE)
+    list(FIND GALAY_WS_MANUAL_TEST_TARGETS ${test_name} manual_index)
+    if(NOT manual_index EQUAL -1)
+        continue()
+    endif()
     add_executable(${test_name} ${test_source})
     target_link_libraries(${test_name} PRIVATE galay::ws)
     target_include_directories(${test_name}
@@ -29,15 +33,12 @@ foreach(test_source ${GALAY_WS_TEST_SOURCES})
         INSTALL_RPATH $ORIGIN/../lib
     )
     string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${test_name}")
-    list(FIND GALAY_WS_MANUAL_TEST_TARGETS ${test_name} manual_index)
-    if(manual_index EQUAL -1)
-        add_test(NAME "ws.${scenario_name}"
-            COMMAND ${CMAKE_COMMAND}
-                -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
-                -DTEST_BINARY_NAME=${test_name}
-                -DTEST_WORKING_DIRECTORY=${PROJECT_SOURCE_DIR}
-                -P ${PROJECT_SOURCE_DIR}/cmake/RunTestBinary.cmake
-        )
-        set_tests_properties("ws.${scenario_name}" PROPERTIES LABELS "ws;unit")
-    endif()
+    add_test(NAME "ws.${scenario_name}"
+        COMMAND ${CMAKE_COMMAND}
+            -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
+            -DTEST_BINARY_NAME=${test_name}
+            -DTEST_WORKING_DIRECTORY=${PROJECT_SOURCE_DIR}
+            -P ${PROJECT_SOURCE_DIR}/cmake/RunTestBinary.cmake
+    )
+    set_tests_properties("ws.${scenario_name}" PROPERTIES LABELS "ws;unit")
 endforeach()

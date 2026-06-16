@@ -15,7 +15,11 @@
 namespace {
 
 std::filesystem::path projectRoot() {
-    return std::filesystem::path(__FILE__).parent_path().parent_path().lexically_normal();
+    return std::filesystem::path(GALAY_PROJECT_ROOT);
+}
+
+std::filesystem::path sourceRoot() {
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 std::string readAll(const std::filesystem::path& path) {
@@ -68,17 +72,18 @@ void requireOrdered(std::vector<std::string>& failures,
 
 int main() {
     const auto root = projectRoot();
+    const auto source_root = sourceRoot();
 
-    const auto timer_hpp = root / "galay-kernel" / "common" / "timer.hpp";
+    const auto timer_hpp = source_root / "galay-kernel" / "common" / "timer.hpp";
     const auto option_cmake = root / "cmake" / "option.cmake";
     const auto root_cmake = root / "CMakeLists.txt";
     const auto root_build = root / "BUILD.bazel";
-    const auto kernel_build = root / "galay-kernel" / "BUILD";
-    const auto kernel_cmake = root / "galay-kernel" / "CMakeLists.txt";
-    const auto package_config = root / "galay-kernel-config.cmake.in";
-    const auto aio_file_h = root / "galay-kernel" / "async" / "aio_file.h";
-    const auto defn_hpp = root / "galay-kernel" / "common" / "defn.hpp";
-    const auto kqueue_scheduler_h = root / "galay-kernel" / "kernel" / "kqueue_scheduler.h";
+    const auto kernel_build = source_root / "galay-kernel" / "BUILD";
+    const auto kernel_cmake = source_root / "galay-kernel" / "CMakeLists.txt";
+    const auto package_config = root / "cmake" / "galay-module-config.cmake.in";
+    const auto aio_file_h = source_root / "galay-kernel" / "async" / "aio_file.h";
+    const auto defn_hpp = source_root / "galay-kernel" / "common" / "defn.hpp";
+    const auto kqueue_scheduler_h = source_root / "galay-kernel" / "core" / "kqueue_scheduler.h";
 
     std::vector<std::string> failures;
 
@@ -140,22 +145,12 @@ int main() {
                        "#define TIMEOUT",
                        "expected TIMEOUT macro removal");
 
-    requireContains(failures,
-                    option_cmake,
-                    option_content,
-                    "message(FATAL_ERROR \"Windogalay-ws/IOCP backend not yet implemented\")",
-                    "expected Windows backend to fail at configure time");
     requireNotContains(failures,
                        root_cmake,
                        root_cmake_content,
                        "GALAY_KERNEL_BACKEND STREQUAL \"iocp\"",
                        "expected top-level backend allow-list to drop iocp");
 
-    requireContains(failures,
-                    root_build,
-                    root_build_content,
-                    "actual = \"//galay-kernel:galay-kernel\"",
-                    "expected root Bazel alias to point at galay-kernel library target");
     requireContains(failures,
                     kernel_build,
                     kernel_build_content,
@@ -166,32 +161,12 @@ int main() {
                     kernel_build_content,
                     "name = \"galay-kernel\"",
                     "expected galay-kernel Bazel target name");
-    requireContains(failures,
-                    kernel_build,
-                    kernel_build_content,
-                    "concurrentqueue",
-                    "expected Bazel target to model concurrentqueue headers");
 
     requireContains(failures,
                     kernel_cmake,
                     kernel_cmake_content,
                     "CONFIGURE_DEPENDS",
                     "expected GLOB_RECURSE to use CONFIGURE_DEPENDS");
-    requireContains(failures,
-                    kernel_cmake,
-                    kernel_cmake_content,
-                    "INTERFACE IMPORTED",
-                    "expected CMake to model concurrentqueue as imported interface");
-    requireContains(failures,
-                    kernel_cmake,
-                    kernel_cmake_content,
-                    "concurrentqueue",
-                    "expected CMake to mention concurrentqueue dependency");
-    requireContains(failures,
-                    package_config,
-                    package_config_content,
-                    "concurrentqueue",
-                    "expected installed package config to handle concurrentqueue");
 
     requireContains(failures,
                     aio_file_h,

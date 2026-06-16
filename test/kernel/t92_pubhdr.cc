@@ -15,8 +15,7 @@ namespace {
 
 std::filesystem::path projectRoot()
 {
-    auto path = std::filesystem::path(__FILE__).parent_path().parent_path();
-    return path.lexically_normal();
+    return std::filesystem::path(GALAY_SOURCE_ROOT);
 }
 
 bool fileContainsPattern(const std::filesystem::path& path, const std::string& pattern)

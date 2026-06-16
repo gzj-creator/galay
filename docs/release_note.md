@@ -3,12 +3,12 @@
 ## v3.0.0 - 2026-06-15
 
 - **版本级别**：大版本（major）
-- **Git 提交消息**：`refactor: 将 src 模块命名空间化为 galay-* 前缀并补齐 MCP 客户端`
+- **Git 提交消息**：`refactor: 统一测试 CTest 场景命名并改用编译宏解析工程路径`
 - **Git tag**：`v3.0.0`
 
 ### 变更摘要
 
-本次为自 `v2.2.1` 以来的大版本重构发版，核心是将原有的单体 `galay/` 目录全面重构为按模块划分的 `src/` 多模块结构，并引入 Bazel 构建体系。本版本在初版发版后进一步将 `src/` 下各模块目录命名空间化为 `galay-` 前缀，归整内部目录，并将全部模块与测试/示例/基准的构建开关默认开启。
+本次为自 `v2.2.1` 以来的大版本重构发版，核心是将原有的单体 `galay/` 目录全面重构为按模块划分的 `src/` 多模块结构，并引入 Bazel 构建体系。本版本在初版发版后进一步将 `src/` 下各模块目录命名空间化为 `galay-` 前缀，归整内部目录，并将全部模块与测试/示例/基准的构建开关默认开启。同期统一了测试 CTest 场景命名、改用编译宏解析工程路径，并新增项目 README。
 
 #### 架构与目录重构
 
@@ -39,8 +39,16 @@
 - `AsyncChannel` 出队使用移动语义；ringbuffer 改造；mpsc 队列支持模板与批处理。
 - 优化网络与文件 IO 事件的对象成员变量，减少每次调用接口的内存分配。
 
+#### 测试基础设施
+
+- 统一各测试模块 CTest 命名为 `<module>.<scenario>` 场景名（剥离 `tNN_` 前缀），替代原目标名/文件名，便于按场景阅读测试输出。
+- 新增 `cmake/RunTestBinary.cmake` 测试二进制运行辅助脚本，统一工作目录与退出码校验。
+- kernel 测试引入 `GALAY_PROJECT_ROOT` / `GALAY_SOURCE_ROOT` 编译宏，源码对齐类测试改用编译期宏解析工程路径，替代基于 `__FILE__` 的运行时路径推算，并适配 `kernel/kernel/` → `galay-kernel/core/` 等结构调整后的路径。
+- mcp 测试改用显式源文件列表替代 `file(GLOB)`，移除过时的 stdio/http 集成测试（`t1_stdio`、`t2_stdio`、`t3_http`、`t4_http`）；移除 `t94` 中已失效的 iocp / concurrentqueue / Bazel alias 断言。
+
 #### 文档与工程
 
+- 新增项目 `README.md`，介绍 galay 特性、13 个 `galay-*` 模块、环境要求、CMake 快速开始与目录结构。
 - 新增 `docs/modules/` 模块文档体系，覆盖快速开始、架构设计、API 参考、使用指南、示例代码、性能测试、高级主题与常见问题。
 - 新增 `examples/`、`scripts/` 目录。
 - 大幅扩充 `.gitignore`，并将 `docs/plans/` 排除出版本控制。

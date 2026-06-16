@@ -118,7 +118,7 @@ private:
 
     std::expected<Bytes, galay::ssl::SslError> consumeRecv(char*, size_t) {
         ++m_recv_call_count;
-        return std::unexpected(galay::ssl::SslError(galay::ssl::SslErrorCode::kTimeout));
+        return std::unexpected(galay::ssl::SslError(galay::ssl::SslErrorCode::kPeerClosed));
     }
 
     std::vector<std::expected<size_t, galay::ssl::SslError>> m_send_results;
@@ -165,6 +165,12 @@ int main() {
 
     if (!waiter1->isReady() || !waiter2->isReady()) {
         std::cerr << "[T54] ssl owner loop should notify all queued waiters even when batched send fails\n";
+        return 1;
+    }
+
+    if (conn.socket().sendCallCount() != 1) {
+        std::cerr << "[T54] expected one coalesced SSL send attempt, got "
+                  << conn.socket().sendCallCount() << "\n";
         return 1;
     }
 

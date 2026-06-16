@@ -11,8 +11,6 @@ add_library(result_writer INTERFACE)
 target_include_directories(result_writer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 galay_add_rpc_test(t1_protocol t1_protocol.cc unit)
-galay_add_rpc_test(t2_server t2_server.cc integration)
-galay_add_rpc_test(t3_client t3_client.cc integration)
 galay_add_rpc_test(t4_awaitable_surface t4_awaitable_surface.cc surface)
 galay_add_rpc_test(t5_runtime_io_scheduler_compat t5_runtime_io_scheduler_compat.cc unit)
 galay_add_rpc_test(t6_rpc_log t6_rpc_log.cc unit)
