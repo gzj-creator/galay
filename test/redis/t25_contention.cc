@@ -32,7 +32,7 @@ struct SharedState {
     std::unordered_set<RedisClient*> connected_clients;
 };
 
-Coroutine workerTask(RedisConnectionPool* pool,
+Task<void> workerTask(RedisConnectionPool* pool,
                      SharedState* state,
                      int worker_id,
                      std::shared_ptr<std::atomic<int>> remaining,
@@ -100,7 +100,7 @@ Coroutine workerTask(RedisConnectionPool* pool,
     }
 }
 
-Coroutine runTest(IOScheduler* scheduler, std::promise<int>* exit_code)
+Task<void> runTest(IOScheduler* scheduler, std::promise<int>* exit_code)
 {
     auto config = ConnectionPoolConfig::create("127.0.0.1", 6379, kMinConnections, kMaxConnections);
     config.initial_connections = kMinConnections;

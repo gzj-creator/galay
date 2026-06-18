@@ -24,7 +24,6 @@
 namespace galay {
 namespace mcp {
 
-using Coroutine = galay::kernel::Task<void>; ///< 协程任务类型别名
 
 constexpr const char* MCP_VERSION = "2024-11-05"; ///< MCP协议版本号
 constexpr const char* JSONRPC_VERSION = "2.0"; ///< JSON-RPC协议版本号

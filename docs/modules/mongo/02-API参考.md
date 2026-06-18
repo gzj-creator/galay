@@ -194,7 +194,7 @@ auto rsp = s.command("admin", ping);
 ```cpp
 #include "galay-mongo/async/client.h"
 
-Coroutine run(galay::kernel::IOScheduler* sched) {
+Task<void> run(galay::kernel::IOScheduler* sched) {
     galay::mongo::AsyncMongoClient client(sched);
     galay::mongo::MongoConfig cfg;
 
@@ -217,7 +217,7 @@ Coroutine run(galay::kernel::IOScheduler* sched) {
 ```cpp
 #include "galay-mongo/async/client.h"
 
-Coroutine run(galay::kernel::IOScheduler* sched) {
+Task<void> run(galay::kernel::IOScheduler* sched) {
     galay::mongo::AsyncMongoClient client(sched);
     galay::mongo::MongoConfig cfg;
 

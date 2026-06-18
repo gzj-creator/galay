@@ -62,7 +62,7 @@ void signalHandler(int) {
     g_running.store(false, std::memory_order_relaxed);
 }
 
-Coroutine benchWorker(const BenchConfig& config, uint32_t worker_id) {
+Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
     const size_t client_ring_buffer_size =
         std::max<size_t>(kDefaultRpcRingBufferSize,
                          config.payload_size * config.frames_per_stream * 2 + RPC_HEADER_SIZE * 64);

@@ -8,7 +8,7 @@
  *
  * @example
  * @code
- * Coroutine callEcho(Runtime& runtime) {
+ * Task<void> callEcho(Runtime& runtime) {
  *     RpcClient client;
  *     auto connect_result = co_await client.connect("127.0.0.1", 9000);
  *     if (!connect_result) {

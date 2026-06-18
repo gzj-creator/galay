@@ -34,7 +34,7 @@ public:
         registerStreamMethod("echo", &StreamBenchService::echo);
     }
 
-    Coroutine echo(RpcStream& stream) {
+    Task<void> echo(RpcStream& stream) {
         StreamMessage msg;
         while (true) {
             auto recv_result = co_await stream.read(msg);

@@ -32,7 +32,7 @@ void signalHandler(int) {
 /**
  * @brief 压测协程 - 每个 worker 使用独立的 registry
  */
-Coroutine benchWorker(size_t worker_id) {
+Task<void> benchWorker(size_t worker_id) {
     // 每个 worker 独立的 registry，避免共享状态竞争
     AsyncLocalServiceRegistry registry;
 

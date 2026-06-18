@@ -81,9 +81,9 @@ struct BenchmarkState {
     }
 };
 
-Coroutine runWorker(IOScheduler* scheduler,
+Task<void> runWorker(IOScheduler* scheduler,
                     BenchmarkState* state,
-                    mysql_benchmark::MysqlBenchmarkConfig cfg)
+                    mysql_benchmark::DbBenchmarkConfig cfg)
 {
     auto client = AsyncMysqlClientBuilder()
         .scheduler(scheduler)
@@ -249,7 +249,7 @@ Coroutine runWorker(IOScheduler* scheduler,
     state->finished_clients.fetch_add(1, std::memory_order_release);
 }
 
-void printSummary(const mysql_benchmark::MysqlBenchmarkConfig& cfg,
+void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
                   BenchmarkState& state,
                   std::chrono::steady_clock::time_point started,
                   std::chrono::steady_clock::time_point finished)
@@ -306,7 +306,7 @@ void printSummary(const mysql_benchmark::MysqlBenchmarkConfig& cfg,
 
 int main(int argc, char* argv[])
 {
-    auto cfg = mysql_benchmark::loadMysqlBenchmarkConfig();
+    auto cfg = mysql_benchmark::loadDbBenchmarkConfig();
     if (!mysql_benchmark::parseArgs(cfg, argc, argv, std::cerr)) {
         mysql_benchmark::printUsage(argv[0]);
         return 2;

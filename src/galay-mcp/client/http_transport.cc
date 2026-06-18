@@ -27,7 +27,7 @@ HttpClientTransport::CloseAwaitable HttpClientTransport::disconnectAsync() {
     return m_httpClient->close();
 }
 
-Coroutine HttpClientTransport::initialize(std::string clientName,
+galay::kernel::Task<void> HttpClientTransport::initialize(std::string clientName,
                                           std::string clientVersion,
                                           std::expected<void, McpError>& result) {
     m_clientName = std::move(clientName);
@@ -60,7 +60,7 @@ Coroutine HttpClientTransport::initialize(std::string clientName,
     co_return;
 }
 
-Coroutine HttpClientTransport::callTool(std::string toolName,
+galay::kernel::Task<void> HttpClientTransport::callTool(std::string toolName,
                                         JsonString arguments,
                                         std::expected<JsonString, McpError>& result) {
     if (!m_initialized) {
@@ -83,7 +83,7 @@ Coroutine HttpClientTransport::callTool(std::string toolName,
     co_return;
 }
 
-Coroutine HttpClientTransport::listTools(std::expected<std::vector<Tool>, McpError>& result) {
+galay::kernel::Task<void> HttpClientTransport::listTools(std::expected<std::vector<Tool>, McpError>& result) {
     if (!m_initialized) {
         result = std::unexpected(McpError::notInitialized());
         co_return;
@@ -103,7 +103,7 @@ Coroutine HttpClientTransport::listTools(std::expected<std::vector<Tool>, McpErr
     co_return;
 }
 
-Coroutine HttpClientTransport::listResources(std::expected<std::vector<Resource>, McpError>& result) {
+galay::kernel::Task<void> HttpClientTransport::listResources(std::expected<std::vector<Resource>, McpError>& result) {
     if (!m_initialized) {
         result = std::unexpected(McpError::notInitialized());
         co_return;
@@ -123,7 +123,7 @@ Coroutine HttpClientTransport::listResources(std::expected<std::vector<Resource>
     co_return;
 }
 
-Coroutine HttpClientTransport::readResource(std::string uri,
+galay::kernel::Task<void> HttpClientTransport::readResource(std::string uri,
                                             std::expected<std::string, McpError>& result) {
     if (!m_initialized) {
         result = std::unexpected(McpError::notInitialized());
@@ -147,7 +147,7 @@ Coroutine HttpClientTransport::readResource(std::string uri,
     co_return;
 }
 
-Coroutine HttpClientTransport::listPrompts(std::expected<std::vector<Prompt>, McpError>& result) {
+galay::kernel::Task<void> HttpClientTransport::listPrompts(std::expected<std::vector<Prompt>, McpError>& result) {
     if (!m_initialized) {
         result = std::unexpected(McpError::notInitialized());
         co_return;
@@ -167,7 +167,7 @@ Coroutine HttpClientTransport::listPrompts(std::expected<std::vector<Prompt>, Mc
     co_return;
 }
 
-Coroutine HttpClientTransport::getPrompt(std::string name,
+galay::kernel::Task<void> HttpClientTransport::getPrompt(std::string name,
                                          JsonString arguments,
                                          std::expected<JsonString, McpError>& result) {
     if (!m_initialized) {
@@ -196,7 +196,7 @@ Coroutine HttpClientTransport::getPrompt(std::string name,
     co_return;
 }
 
-Coroutine HttpClientTransport::ping(std::expected<void, McpError>& result) {
+galay::kernel::Task<void> HttpClientTransport::ping(std::expected<void, McpError>& result) {
     if (!m_initialized) {
         result = std::unexpected(McpError::notInitialized());
         co_return;
@@ -229,7 +229,7 @@ const ServerCapabilities& HttpClientTransport::getServerCapabilities() const {
     return m_serverCapabilities;
 }
 
-Coroutine HttpClientTransport::sendRequest(std::string_view method,
+galay::kernel::Task<void> HttpClientTransport::sendRequest(std::string_view method,
                                            std::optional<JsonString> params,
                                            std::expected<JsonString, McpError>& result) {
     const int64_t requestId = generateRequestId();

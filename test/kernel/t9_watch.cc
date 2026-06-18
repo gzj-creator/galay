@@ -40,7 +40,7 @@ std::atomic<int> g_event_count{0};
 
 // 测试1: 监控所有事件
 std::atomic<int> g_test1_events{0};
-Task<void> watchAllEventsCoroutine([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
+Task<void> watchAllEventsTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
     FileWatcher watcher;
 
@@ -68,7 +68,7 @@ Task<void> watchAllEventsCoroutine([[maybe_unused]] IOScheduler* scheduler, cons
 // 测试2: 只监控 Modify 事件
 std::atomic<int> g_test2_modify_events{0};
 std::atomic<int> g_test2_attrib_events{0};
-Task<void> watchModifyOnlyCoroutine([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
+Task<void> watchModifyOnlyTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
     FileWatcher watcher;
 
@@ -101,7 +101,7 @@ Task<void> watchModifyOnlyCoroutine([[maybe_unused]] IOScheduler* scheduler, con
 // 测试3: 只监控 Attrib 事件
 std::atomic<int> g_test3_modify_events{0};
 std::atomic<int> g_test3_attrib_events{0};
-Task<void> watchAttribOnlyCoroutine([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
+Task<void> watchAttribOnlyTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
     FileWatcher watcher;
 
@@ -249,9 +249,9 @@ int main()
     std::thread opThread(fileOperationThread, testFile1, testFile2, testFile3);
 
     // 启动监控协程
-    scheduleTask(scheduler, watchAllEventsCoroutine(&scheduler, testFile1));
-    scheduleTask(scheduler, watchModifyOnlyCoroutine(&scheduler, testFile2));
-    scheduleTask(scheduler, watchAttribOnlyCoroutine(&scheduler, testFile3));
+    scheduleTask(scheduler, watchAllEventsTask(&scheduler, testFile1));
+    scheduleTask(scheduler, watchModifyOnlyTask(&scheduler, testFile2));
+    scheduleTask(scheduler, watchAttribOnlyTask(&scheduler, testFile3));
 
     opThread.join();
 

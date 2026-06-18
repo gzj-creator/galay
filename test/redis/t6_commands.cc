@@ -12,7 +12,7 @@ using namespace galay::kernel;
  * @brief 测试RedisClient的所有命令
  * @details 全面测试所有Redis命令的功能
  */
-Coroutine testAllRedisCommands(IOScheduler* scheduler)
+Task<void> test_all_redis_commands(IOScheduler* scheduler)
 {
     std::cout << "\n========================================" << std::endl;
     std::cout << "Starting comprehensive Redis command tests" << std::endl;
@@ -474,7 +474,7 @@ Coroutine testAllRedisCommands(IOScheduler* scheduler)
 /**
  * @brief 测试execute通用命令接口
  */
-Coroutine testExecuteCommand(IOScheduler* scheduler)
+Task<void> test_execute_command(IOScheduler* scheduler)
 {
     std::cout << "\n=== Testing Generic EXECUTE Command ===" << std::endl;
 
@@ -536,10 +536,10 @@ int main()
         }
 
         // 运行所有命令测试
-        scheduleTask(scheduler, testAllRedisCommands(scheduler));
+        scheduleTask(scheduler, test_all_redis_commands(scheduler));
 
         // 运行通用execute命令测试
-        scheduleTask(scheduler, testExecuteCommand(scheduler));
+        scheduleTask(scheduler, test_execute_command(scheduler));
 
         // 等待测试完成
         std::this_thread::sleep_for(std::chrono::seconds(15));

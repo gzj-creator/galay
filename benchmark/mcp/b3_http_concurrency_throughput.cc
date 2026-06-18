@@ -98,7 +98,7 @@ private:
 };
 
 // 工作协程
-Coroutine workerCoroutine(McpClient& client, const std::string& url,
+galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
                           size_t requestsPerWorker, ConcurrentStats& stats,
                           std::atomic<int>& readyWorkers,
                           std::atomic<int>& finishedWorkers,
@@ -201,7 +201,7 @@ void runConcurrentTest(const std::string& url, size_t numWorkers, size_t request
         auto* scheduler = runtime.getNextIOScheduler();
         if (!scheduler ||
             !scheduleTask(scheduler,
-                          workerCoroutine(*clients[i],
+                          workerTask(*clients[i],
                                           url,
                                           requestsPerWorker,
                                           stats,

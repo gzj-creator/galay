@@ -67,21 +67,21 @@ public:
                                                   const JsonString& arguments);
     std::expected<void, McpError> ping();
 
-    Coroutine initialize(std::string clientName,
+    galay::kernel::Task<void> initialize(std::string clientName,
                          std::string clientVersion,
                          std::expected<void, McpError>& result);
-    Coroutine callTool(std::string toolName,
+    galay::kernel::Task<void> callTool(std::string toolName,
                        JsonString arguments,
                        std::expected<JsonString, McpError>& result);
-    Coroutine listTools(std::expected<std::vector<Tool>, McpError>& result);
-    Coroutine listResources(std::expected<std::vector<Resource>, McpError>& result);
-    Coroutine readResource(std::string uri,
+    galay::kernel::Task<void> listTools(std::expected<std::vector<Tool>, McpError>& result);
+    galay::kernel::Task<void> listResources(std::expected<std::vector<Resource>, McpError>& result);
+    galay::kernel::Task<void> readResource(std::string uri,
                            std::expected<std::string, McpError>& result);
-    Coroutine listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
-    Coroutine getPrompt(std::string name,
+    galay::kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
+    galay::kernel::Task<void> getPrompt(std::string name,
                         JsonString arguments,
                         std::expected<JsonString, McpError>& result);
-    Coroutine ping(std::expected<void, McpError>& result);
+    galay::kernel::Task<void> ping(std::expected<void, McpError>& result);
 
     bool isConnected() const;
     bool isInitialized() const;

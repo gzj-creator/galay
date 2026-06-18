@@ -170,7 +170,7 @@ void countCommandResult(
     ++error;
 }
 
-Coroutine poolWorker(
+Task<void> poolWorker(
     std::shared_ptr<RedisConnectionPool> pool,
     const BenchmarkOptions* options,
     SharedStats* stats,
@@ -246,7 +246,7 @@ Coroutine poolWorker(
     }
 }
 
-Coroutine runBenchmark(
+Task<void> runBenchmark(
     IOScheduler* scheduler,
     const BenchmarkOptions* options,
     BenchmarkResult* result,

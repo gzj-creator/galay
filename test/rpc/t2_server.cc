@@ -24,13 +24,13 @@ public:
         registerMethod("uppercase", &EchoService::uppercase);
     }
 
-    Coroutine echo(RpcContext& ctx) {
+    Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
         ctx.setPayload(req.payloadView());
         co_return;
     }
 
-    Coroutine uppercase(RpcContext& ctx) {
+    Task<void> uppercase(RpcContext& ctx) {
         auto& req = ctx.request();
         std::string data(req.payload().begin(), req.payload().end());
         for (auto& c : data) {
@@ -50,7 +50,7 @@ public:
         registerMethod("add", &CalcService::add);
     }
 
-    Coroutine add(RpcContext& ctx) {
+    Task<void> add(RpcContext& ctx) {
         auto& payload = ctx.request().payload();
         if (payload.size() >= 8) {
             int32_t a, b;

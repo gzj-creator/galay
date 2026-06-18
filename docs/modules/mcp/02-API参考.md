@@ -532,9 +532,9 @@ public:
 ```cpp
 class McpHttpServer {
 public:
-    using ToolHandler = std::function<kernel::Coroutine(const JsonElement&, std::expected<JsonString, McpError>&)>;
-    using ResourceReader = std::function<kernel::Coroutine(const std::string&, std::expected<std::string, McpError>&)>;
-    using PromptGetter = std::function<kernel::Coroutine(const std::string&, const JsonElement&, std::expected<JsonString, McpError>&)>;
+    using ToolHandler = std::function<kernel::Task<void>(const JsonElement&, std::expected<JsonString, McpError>&)>;
+    using ResourceReader = std::function<kernel::Task<void>(const std::string&, std::expected<std::string, McpError>&)>;
+    using PromptGetter = std::function<kernel::Task<void>(const std::string&, const JsonElement&, std::expected<JsonString, McpError>&)>;
 
     McpHttpServer(const std::string& host = "0.0.0.0",
                   int port = 8080,
@@ -604,14 +604,14 @@ public:
     ConnectAwaitable connect();
     ConnectAwaitable connect(std::string url);
 
-    kernel::Coroutine initialize(std::string clientName, std::string clientVersion, std::expected<void, McpError>& result);
-    kernel::Coroutine callTool(std::string toolName, JsonString arguments, std::expected<JsonString, McpError>& result);
-    kernel::Coroutine listTools(std::expected<std::vector<Tool>, McpError>& result);
-    kernel::Coroutine listResources(std::expected<std::vector<Resource>, McpError>& result);
-    kernel::Coroutine readResource(std::string uri, std::expected<std::string, McpError>& result);
-    kernel::Coroutine listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
-    kernel::Coroutine getPrompt(std::string name, JsonString arguments, std::expected<JsonString, McpError>& result);
-    kernel::Coroutine ping(std::expected<void, McpError>& result);
+    kernel::Task<void> initialize(std::string clientName, std::string clientVersion, std::expected<void, McpError>& result);
+    kernel::Task<void> callTool(std::string toolName, JsonString arguments, std::expected<JsonString, McpError>& result);
+    kernel::Task<void> listTools(std::expected<std::vector<Tool>, McpError>& result);
+    kernel::Task<void> listResources(std::expected<std::vector<Resource>, McpError>& result);
+    kernel::Task<void> readResource(std::string uri, std::expected<std::string, McpError>& result);
+    kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
+    kernel::Task<void> getPrompt(std::string name, JsonString arguments, std::expected<JsonString, McpError>& result);
+    kernel::Task<void> ping(std::expected<void, McpError>& result);
     CloseAwaitable disconnectAsync();
 
     bool isConnected() const;
@@ -626,7 +626,7 @@ public:
 - 先创建 `kernel::Runtime`。
 - 构造时通过 `McpHttpClientConfig{.url = url}` 选择 HTTP 模式并设置默认 URL。
 - `connect()` / `connect(url)` / `disconnectAsync()` 返回 awaitable。
-- 其余 RPC 通过 `kernel::Coroutine` 把结果写回调用方提供的 `std::expected<...>&`。
+- 其余 RPC 通过 `kernel::Task<void>` 把结果写回调用方提供的 `std::expected<...>&`。
 - stdio 模式对象调用这些 HTTP 协程 API 会在冷任务被调度后写入 `InvalidTransportMode`。
 
 ### 入口、前置条件与返回

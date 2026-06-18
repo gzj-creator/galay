@@ -72,8 +72,8 @@ concept HasThreadId = requires(Task<T> task) {
 };
 
 template <typename T>
-concept HasAsCoroutine = requires(Task<T> task) {
-    task.asCoroutine();
+concept HasAsTask = requires(Task<T> task) {
+    task.asTask();
 };
 
 template <typename T>
@@ -142,7 +142,7 @@ static_assert(!HasTaskRef<int>);
 static_assert(!HasBelongSchedulerGetter<int>);
 static_assert(!HasBelongSchedulerSetter<int>);
 static_assert(!HasThreadId<int>);
-static_assert(!HasAsCoroutine<int>);
+static_assert(!HasAsTask<int>);
 static_assert(HasJoinHandleWait<int>);
 static_assert(HasJoinHandleJoinExpected<int>);
 static_assert(HasRuntimeHandleCurrent<>);

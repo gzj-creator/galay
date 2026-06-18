@@ -7,7 +7,7 @@ namespace galay::mcp {
 namespace {
 
 template <typename T>
-Coroutine makeWrongModeTask(std::expected<T, McpError>& result, std::string_view message) {
+galay::kernel::Task<void> makeWrongModeTask(std::expected<T, McpError>& result, std::string_view message) {
     result = std::unexpected(McpError::invalidTransportMode(std::string(message)));
     co_return;
 }
@@ -138,7 +138,7 @@ std::expected<void, McpError> McpClient::ping() {
     return m_impl->stdioTransport->ping();
 }
 
-Coroutine McpClient::initialize(std::string clientName,
+galay::kernel::Task<void> McpClient::initialize(std::string clientName,
                                 std::string clientVersion,
                                 std::expected<void, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
@@ -148,7 +148,7 @@ Coroutine McpClient::initialize(std::string clientName,
     co_await m_impl->httpTransport->initialize(std::move(clientName), std::move(clientVersion), result);
 }
 
-Coroutine McpClient::callTool(std::string toolName,
+galay::kernel::Task<void> McpClient::callTool(std::string toolName,
                               JsonString arguments,
                               std::expected<JsonString, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
@@ -158,7 +158,7 @@ Coroutine McpClient::callTool(std::string toolName,
     co_await m_impl->httpTransport->callTool(std::move(toolName), std::move(arguments), result);
 }
 
-Coroutine McpClient::listTools(std::expected<std::vector<Tool>, McpError>& result) {
+galay::kernel::Task<void> McpClient::listTools(std::expected<std::vector<Tool>, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
         co_await makeWrongModeTask(result, "HTTP API called on stdio client");
         co_return;
@@ -166,7 +166,7 @@ Coroutine McpClient::listTools(std::expected<std::vector<Tool>, McpError>& resul
     co_await m_impl->httpTransport->listTools(result);
 }
 
-Coroutine McpClient::listResources(std::expected<std::vector<Resource>, McpError>& result) {
+galay::kernel::Task<void> McpClient::listResources(std::expected<std::vector<Resource>, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
         co_await makeWrongModeTask(result, "HTTP API called on stdio client");
         co_return;
@@ -174,7 +174,7 @@ Coroutine McpClient::listResources(std::expected<std::vector<Resource>, McpError
     co_await m_impl->httpTransport->listResources(result);
 }
 
-Coroutine McpClient::readResource(std::string uri,
+galay::kernel::Task<void> McpClient::readResource(std::string uri,
                                   std::expected<std::string, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
         co_await makeWrongModeTask(result, "HTTP API called on stdio client");
@@ -183,7 +183,7 @@ Coroutine McpClient::readResource(std::string uri,
     co_await m_impl->httpTransport->readResource(std::move(uri), result);
 }
 
-Coroutine McpClient::listPrompts(std::expected<std::vector<Prompt>, McpError>& result) {
+galay::kernel::Task<void> McpClient::listPrompts(std::expected<std::vector<Prompt>, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
         co_await makeWrongModeTask(result, "HTTP API called on stdio client");
         co_return;
@@ -191,7 +191,7 @@ Coroutine McpClient::listPrompts(std::expected<std::vector<Prompt>, McpError>& r
     co_await m_impl->httpTransport->listPrompts(result);
 }
 
-Coroutine McpClient::getPrompt(std::string name,
+galay::kernel::Task<void> McpClient::getPrompt(std::string name,
                                JsonString arguments,
                                std::expected<JsonString, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
@@ -201,7 +201,7 @@ Coroutine McpClient::getPrompt(std::string name,
     co_await m_impl->httpTransport->getPrompt(std::move(name), std::move(arguments), result);
 }
 
-Coroutine McpClient::ping(std::expected<void, McpError>& result) {
+galay::kernel::Task<void> McpClient::ping(std::expected<void, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
         co_await makeWrongModeTask(result, "HTTP API called on stdio client");
         co_return;

@@ -11,7 +11,7 @@ using namespace galay::kernel;
  * @brief 测试RedisClient的超时功能
  * @details 演示如何使用timeout()方法为Redis命令设置超时
  */
-Coroutine testRedisClientWithTimeout(IOScheduler* scheduler)
+Task<void> test_redis_client_with_timeout(IOScheduler* scheduler)
 {
     // 创建RedisClient
     auto client = RedisClientBuilder().scheduler(scheduler).build();
@@ -121,7 +121,7 @@ Coroutine testRedisClientWithTimeout(IOScheduler* scheduler)
 /**
  * @brief 测试并发执行多个Redis命令
  */
-Coroutine testConcurrentCommands(IOScheduler* scheduler, int client_id)
+Task<void> test_concurrent_commands(IOScheduler* scheduler, int client_id)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).build();
     RedisCommandBuilder command_builder;
@@ -175,12 +175,12 @@ int main()
 
         // 测试1: 基本超时功能
         std::cout << "\n### Running basic timeout tests ###\n" << std::endl;
-        scheduleTask(scheduler, testRedisClientWithTimeout(scheduler));
+        scheduleTask(scheduler, test_redis_client_with_timeout(scheduler));
 
         // 测试2: 并发客户端
         std::cout << "\n### Running concurrent client tests ###\n" << std::endl;
         for (int i = 0; i < 3; ++i) {
-            scheduleTask(scheduler, testConcurrentCommands(scheduler, i));
+            scheduleTask(scheduler, test_concurrent_commands(scheduler, i));
         }
 
         // 等待一段时间让测试完成

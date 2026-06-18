@@ -278,7 +278,7 @@ void storeClientResult(int client_id,
     slot.latencies = std::move(local_latencies);
 }
 
-Coroutine benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
     auto client = RedissClientBuilder()
                       .scheduler(scheduler)
@@ -335,7 +335,7 @@ Coroutine benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* option
     markClientCompleted();
 }
 
-Coroutine benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
     auto client = RedissClientBuilder()
                       .scheduler(scheduler)

@@ -29,7 +29,7 @@ void markClientCompleted()
 /**
  * @brief 单个客户端的性能测试
  */
-Coroutine benchmarkClient(IOScheduler* scheduler, int client_id, int operations_per_client, bool verbose)
+Task<void> benchmarkClient(IOScheduler* scheduler, int client_id, int operations_per_client, bool verbose)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).build();
     RedisCommandBuilder command_builder;
@@ -104,7 +104,7 @@ Coroutine benchmarkClient(IOScheduler* scheduler, int client_id, int operations_
 /**
  * @brief Pipeline性能测试
  */
-Coroutine benchmarkPipeline(IOScheduler* scheduler, int client_id, int batch_size, int batches, bool verbose)
+Task<void> benchmarkPipeline(IOScheduler* scheduler, int client_id, int batch_size, int batches, bool verbose)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).build();
 

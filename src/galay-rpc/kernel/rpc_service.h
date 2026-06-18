@@ -14,7 +14,7 @@
  *         registerMethod("echo", &EchoService::echo);
  *     }
  *
- *     Coroutine echo(RpcContext& ctx) {
+ *     Task<void> echo(RpcContext& ctx) {
  *         auto& req = ctx.request();
  *         ctx.response().payload(req.payload().data(), req.payload().size());
  *         co_return;
@@ -44,9 +44,9 @@ class RpcContext;
  * @brief RPC方法处理函数类型
  */
 /// @brief RPC方法处理函数类型
-using RpcMethodHandler = std::function<Coroutine(RpcContext&)>;
+using RpcMethodHandler = std::function<Task<void>(RpcContext&)>;
 /// @brief RPC流处理函数类型
-using RpcStreamHandler = std::function<Coroutine(RpcStream&)>;
+using RpcStreamHandler = std::function<Task<void>(RpcStream&)>;
 
 /**
  * @brief RPC服务基类
@@ -159,7 +159,7 @@ protected:
      * @param method 成员函数指针
      */
     template<typename T>
-    void registerMethod(std::string_view name, Coroutine (T::*method)(RpcContext&)) {
+    void registerMethod(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         registerUnaryMethod(name, method);
     }
 
@@ -185,25 +185,25 @@ protected:
 
     /// @brief 注册一元成员方法
     template<typename T>
-    void registerUnaryMethod(std::string_view name, Coroutine (T::*method)(RpcContext&)) {
+    void registerUnaryMethod(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         registerMemberMethod(name, RpcCallMode::UNARY, method);
     }
 
     /// @brief 注册客户端流成员方法
     template<typename T>
-    void registerClientStreamingMethod(std::string_view name, Coroutine (T::*method)(RpcContext&)) {
+    void registerClientStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         registerMemberMethod(name, RpcCallMode::CLIENT_STREAMING, method);
     }
 
     /// @brief 注册服务端流成员方法
     template<typename T>
-    void registerServerStreamingMethod(std::string_view name, Coroutine (T::*method)(RpcContext&)) {
+    void registerServerStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         registerMemberMethod(name, RpcCallMode::SERVER_STREAMING, method);
     }
 
     /// @brief 注册双向流成员方法
     template<typename T>
-    void registerBidiStreamingMethod(std::string_view name, Coroutine (T::*method)(RpcContext&)) {
+    void registerBidiStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&)) {
         registerMemberMethod(name, RpcCallMode::BIDI_STREAMING, method);
     }
 
@@ -223,9 +223,9 @@ protected:
      * @param method 成员函数指针
      */
     template<typename T>
-    void registerStreamMethod(std::string_view name, Coroutine (T::*method)(RpcStream&)) {
+    void registerStreamMethod(std::string_view name, Task<void> (T::*method)(RpcStream&)) {
         m_stream_session_methods[std::string(name)] =
-            [this, method](RpcStream& stream) -> Coroutine {
+            [this, method](RpcStream& stream) -> Task<void> {
                 return (static_cast<T*>(this)->*method)(stream);
             };
     }
@@ -269,10 +269,10 @@ private:
     template<typename T>
     void registerMemberMethod(std::string_view name,
                               RpcCallMode mode,
-                              Coroutine (T::*method)(RpcContext&)) {
+                              Task<void> (T::*method)(RpcContext&)) {
         registerMethodByMode(name,
                              mode,
-                             [this, method](RpcContext& ctx) -> Coroutine {
+                             [this, method](RpcContext& ctx) -> Task<void> {
                                  return (static_cast<T*>(this)->*method)(ctx);
                              });
     }

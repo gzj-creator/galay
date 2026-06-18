@@ -41,7 +41,7 @@ using namespace galay::kernel;
  * @example
  * @code
  * // SSL 服务端
- * Coroutine sslServer(SslContext* ctx) {
+ * Task<void> sslServer(SslContext* ctx) {
  *     SslSocket listener(ctx);
  *     listener.option().handleReuseAddr();
  *     listener.option().handleNonBlock();
@@ -58,7 +58,7 @@ using namespace galay::kernel;
  * }
  *
  * // SSL 客户端
- * Coroutine sslClient(SslContext* ctx) {
+ * Task<void> sslClient(SslContext* ctx) {
  *     SslSocket socket(ctx);
  *     socket.option().handleNonBlock();
  *

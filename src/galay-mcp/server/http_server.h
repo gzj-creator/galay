@@ -32,9 +32,9 @@ namespace mcp {
  */
 class McpHttpServer {
 public:
-    using ToolHandler = std::function<Coroutine(const JsonElement&, std::expected<JsonString, McpError>&)>; ///< 工具处理函数类型（协程）
-    using ResourceReader = std::function<Coroutine(const std::string&, std::expected<std::string, McpError>&)>; ///< 资源读取函数类型（协程）
-    using PromptGetter = std::function<Coroutine(const std::string&, const JsonElement&, std::expected<JsonString, McpError>&)>; ///< 提示获取函数类型（协程）
+    using ToolHandler = std::function<galay::kernel::Task<void>(const JsonElement&, std::expected<JsonString, McpError>&)>; ///< 工具处理函数类型（协程）
+    using ResourceReader = std::function<galay::kernel::Task<void>(const std::string&, std::expected<std::string, McpError>&)>; ///< 资源读取函数类型（协程）
+    using PromptGetter = std::function<galay::kernel::Task<void>(const std::string&, const JsonElement&, std::expected<JsonString, McpError>&)>; ///< 提示获取函数类型（协程）
 
     /**
      * @brief 构造HTTP MCP服务器
@@ -110,7 +110,7 @@ private:
      * @param responseJson 响应JSON字符串
      * @return 协程任务
      */
-    Coroutine sendJsonResponse(http::HttpConn& conn, const JsonString& responseJson);
+    galay::kernel::Task<void> sendJsonResponse(http::HttpConn& conn, const JsonString& responseJson);
 
     /**
      * @brief 处理JSON-RPC请求（协程）
@@ -119,7 +119,7 @@ private:
      * @param connectionInitialized [out] 连接初始化状态
      * @return 协程任务
      */
-    Coroutine processRequest(const std::string& requestBody, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> processRequest(const std::string& requestBody, JsonString& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理initialize方法
@@ -144,7 +144,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    Coroutine handleToolsCall(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handleToolsCall(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理resources/list方法
@@ -161,7 +161,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    Coroutine handleResourcesRead(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handleResourcesRead(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理prompts/list方法
@@ -178,7 +178,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    Coroutine handlePromptsGet(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handlePromptsGet(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理ping方法

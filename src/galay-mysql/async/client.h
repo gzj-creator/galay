@@ -51,7 +51,6 @@ using galay::kernel::IOError;
 using galay::kernel::IPType;
 using galay::kernel::Task;
 
-using Coroutine = Task<void>; ///< 协程类型别名
 
 // 类型别名
 using MysqlResult = std::expected<MysqlResultSet, MysqlError>;     ///< 查询结果类型
@@ -700,10 +699,10 @@ private:
 
 /**
  * @brief 异步MySQL客户端
- * @details 所有异步接口返回自定义Awaitable值对象（而非Coroutine）
+ * @details 所有异步接口返回自定义Awaitable值对象（而非Task<void>）
  *
  * @code
- * Coroutine testMysql(IOScheduler* scheduler) {
+ * Task<void> testMysql(IOScheduler* scheduler) {
  *     AsyncMysqlClient client(scheduler);
  *     auto config = MysqlConfig::create("127.0.0.1", 3306, "root", "password", "test_db");
  *     auto connect_result = co_await client.connect(config);

@@ -51,7 +51,7 @@ inline void markFailure(AsyncTestState* state, const std::string& msg) {
         if (!_r->has_value()) { markFailure(state, std::string("Query awaitable resumed without value [") + sql + "]"); co_return; } \
     }
 
-Coroutine testTransaction(IOScheduler* scheduler, AsyncTestState* state, mysql_test::MysqlTestConfig db_cfg)
+Task<void> test_transaction(IOScheduler* scheduler, AsyncTestState* state, mysql_test::DbTestConfig db_cfg)
 {
     std::cout << "Testing MySQL transactions..." << std::endl;
 
@@ -117,12 +117,12 @@ Coroutine testTransaction(IOScheduler* scheduler, AsyncTestState* state, mysql_t
 int main()
 {
     std::cout << "=== T6: Transaction Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadMysqlTestConfig();
-    if (const int skip_code = mysql_test::requireMysqlTestConfigOrSkip(db_cfg, "t6_transaction");
+    const auto db_cfg = mysql_test::loadDbTestConfig();
+    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "t6_transaction");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printMysqlTestConfig(db_cfg);
+    mysql_test::printDbTestConfig(db_cfg);
 
     try {
         Runtime runtime;
@@ -130,7 +130,7 @@ int main()
         auto* scheduler = runtime.getNextIOScheduler();
         if (!scheduler) { std::cerr << "No scheduler" << std::endl; return 1; }
         AsyncTestState state;
-        if (!scheduleTask(scheduler, testTransaction(scheduler, &state, db_cfg))) {
+        if (!scheduleTask(scheduler, test_transaction(scheduler, &state, db_cfg))) {
             std::cerr << "Failed to schedule transaction test task on IO scheduler" << std::endl;
             runtime.stop();
             return 1;

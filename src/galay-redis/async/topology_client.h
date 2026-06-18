@@ -197,11 +197,11 @@ namespace galay::redis
             bool connected = false;                            ///< 连接状态
         };
 
-        Task<RedisCommandResult> executeAutoCoroutine(bool prefer_read,
-                                                      std::string cmd,
-                                                      std::vector<std::string> args,
-                                                      size_t max_attempts); ///< 自动重试执行协程
-        Task<RedisCommandResult> refreshSentinelCoroutine(); ///< Sentinel 刷新协程
+        Task<RedisCommandResult> runAutoTask(bool prefer_read,
+                                             std::string cmd,
+                                             std::vector<std::string> args,
+                                             size_t max_attempts); ///< 自动重试执行协程
+        Task<RedisCommandResult> refreshSentinelTask(); ///< Sentinel 刷新协程
 
         bool isRetryableConnectionError(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
         RedisClient* chooseReadClient(); ///< 选择读客户端（轮询从节点）
@@ -405,13 +405,13 @@ namespace galay::redis
             int32_t port = 0;        ///< 目标端口
         };
 
-        Task<RedisCommandResult> refreshSlotsCoroutine(); ///< 刷新槽位协程
-        Task<RedisCommandResult> executeAutoCoroutine(std::string routing_key,
-                                                      std::string cmd,
-                                                      std::vector<std::string> args,
-                                                      bool force_key_routing,
-                                                      bool allow_auto_refresh,
-                                                      size_t max_attempts); ///< 自动重试执行协程
+        Task<RedisCommandResult> refreshSlotsTask(); ///< 刷新槽位协程
+        Task<RedisCommandResult> runAutoTask(std::string routing_key,
+                                             std::string cmd,
+                                             std::vector<std::string> args,
+                                             bool force_key_routing,
+                                             bool allow_auto_refresh,
+                                             size_t max_attempts); ///< 自动重试执行协程
 
         static uint16_t crc16(const uint8_t* data, size_t len); ///< CRC16 校验和计算
         static std::string extractHashTag(const std::string& key); ///< 提取哈希标签
@@ -553,11 +553,11 @@ namespace galay::redis
             bool connected = false;                            ///< 连接状态
         };
 
-        Task<RedisCommandResult> executeAutoCoroutine(bool prefer_read,
-                                                      std::string cmd,
-                                                      std::vector<std::string> args,
-                                                      size_t max_attempts); ///< 自动重试执行协程
-        Task<RedisCommandResult> refreshSentinelCoroutine(); ///< Sentinel 刷新协程
+        Task<RedisCommandResult> runAutoTask(bool prefer_read,
+                                             std::string cmd,
+                                             std::vector<std::string> args,
+                                             size_t max_attempts); ///< 自动重试执行协程
+        Task<RedisCommandResult> refreshSentinelTask(); ///< Sentinel 刷新协程
 
         bool isRetryableConnectionError(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
         RedissClient* chooseReadClient(); ///< 选择读客户端
@@ -715,13 +715,13 @@ namespace galay::redis
             int32_t port = 0;        ///< 目标端口
         };
 
-        Task<RedisCommandResult> refreshSlotsCoroutine(); ///< 刷新槽位协程
-        Task<RedisCommandResult> executeAutoCoroutine(std::string routing_key,
-                                                      std::string cmd,
-                                                      std::vector<std::string> args,
-                                                      bool force_key_routing,
-                                                      bool allow_auto_refresh,
-                                                      size_t max_attempts); ///< 自动重试执行协程
+        Task<RedisCommandResult> refreshSlotsTask(); ///< 刷新槽位协程
+        Task<RedisCommandResult> runAutoTask(std::string routing_key,
+                                             std::string cmd,
+                                             std::vector<std::string> args,
+                                             bool force_key_routing,
+                                             bool allow_auto_refresh,
+                                             size_t max_attempts); ///< 自动重试执行协程
 
         static uint16_t crc16(const uint8_t* data, size_t len); ///< CRC16 校验和计算
         static std::string extractHashTag(const std::string& key); ///< 提取哈希标签

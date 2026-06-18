@@ -122,7 +122,7 @@ void McpHttpServer::start() {
 
     auto* serverPtr = this;
     m_router->addHandler<http::HttpMethod::POST>("/mcp",
-        [serverPtr](http::HttpConn& conn, http::HttpRequest req) -> Coroutine {
+        [serverPtr](http::HttpConn& conn, http::HttpRequest req) -> galay::kernel::Task<void> {
             // 每个连接独立的初始化状态（若已有全局初始化则允许短连接复用）
             bool connectionInitialized = false;
 
@@ -202,7 +202,7 @@ bool McpHttpServer::isRunning() const {
     return m_running;
 }
 
-Coroutine McpHttpServer::sendJsonResponse(http::HttpConn& conn, const JsonString& responseJson) {
+galay::kernel::Task<void> McpHttpServer::sendJsonResponse(http::HttpConn& conn, const JsonString& responseJson) {
     JsonString wireBytes;
     const std::string serverHeader = m_serverName + "/" + m_serverVersion;
     const std::string contentLength = std::to_string(responseJson.size());
@@ -225,7 +225,7 @@ Coroutine McpHttpServer::sendJsonResponse(http::HttpConn& conn, const JsonString
     co_return;
 }
 
-Coroutine McpHttpServer::processRequest(const std::string& requestBody, JsonString& responseJson, bool& connectionInitialized) {
+galay::kernel::Task<void> McpHttpServer::processRequest(const std::string& requestBody, JsonString& responseJson, bool& connectionInitialized) {
     try {
         auto parsed = parseJsonRpcRequest(requestBody);
         if (!parsed) {
@@ -331,7 +331,7 @@ JsonString McpHttpServer::handleToolsList(const JsonRpcRequestView& request, boo
     return MakeResultResponse(request.id.value(), getToolsListResult());
 }
 
-Coroutine McpHttpServer::handleToolsCall(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
+galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
     if (!request.id.has_value()) {
         responseJson = EmptyObjectString();
         co_return;
@@ -430,7 +430,7 @@ JsonString McpHttpServer::handleResourcesList(const JsonRpcRequestView& request,
     return MakeResultResponse(request.id.value(), getResourcesListResult());
 }
 
-Coroutine McpHttpServer::handleResourcesRead(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
+galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
     if (!request.id.has_value()) {
         responseJson = EmptyObjectString();
         co_return;
@@ -529,7 +529,7 @@ JsonString McpHttpServer::handlePromptsList(const JsonRpcRequestView& request, b
     return MakeResultResponse(request.id.value(), getPromptsListResult());
 }
 
-Coroutine McpHttpServer::handlePromptsGet(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
+galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
     if (!request.id.has_value()) {
         responseJson = EmptyObjectString();
         co_return;

@@ -90,7 +90,7 @@ void signalHandler(int) {
     g_running.store(false);
 }
 
-Coroutine benchWorker(const BenchConfig& config) {
+Task<void> benchWorker(const BenchConfig& config) {
     const size_t ring_buffer_size =
         std::max<size_t>(kDefaultRpcRingBufferSize, config.payload_size + RPC_HEADER_SIZE + kClientRingBufferHeadroom);
     const size_t pipeline_depth = std::max<size_t>(1, config.pipeline_depth);

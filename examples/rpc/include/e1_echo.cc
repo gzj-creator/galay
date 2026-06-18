@@ -41,7 +41,7 @@ public:
     /**
      * @brief Echo方法 - 原样返回输入
      */
-    Coroutine echo(RpcContext& ctx) {
+    Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
         ctx.setPayload(req.payloadView());
         co_return;
@@ -50,7 +50,7 @@ public:
     /**
      * @brief Reverse方法 - 反转字符串
      */
-    Coroutine reverse(RpcContext& ctx) {
+    Task<void> reverse(RpcContext& ctx) {
         auto& payload = ctx.request().payload();
         std::string data(payload.begin(), payload.end());
         std::reverse(data.begin(), data.end());
@@ -61,7 +61,7 @@ public:
     /**
      * @brief Length方法 - 返回字符串长度
      */
-    Coroutine length(RpcContext& ctx) {
+    Task<void> length(RpcContext& ctx) {
         auto& payload = ctx.request().payload();
         uint32_t len = static_cast<uint32_t>(payload.size());
         ctx.setPayload(reinterpret_cast<char*>(&len), sizeof(len));

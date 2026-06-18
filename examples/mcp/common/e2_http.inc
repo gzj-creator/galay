@@ -27,7 +27,7 @@ void runHttpServer() {
         "calculate",
         "执行基本的数学计算",
         calcSchema,
-        [](const JsonElement& args, std::expected<JsonString, McpError>& result) -> Coroutine {
+        [](const JsonElement& args, std::expected<JsonString, McpError>& result) -> galay::kernel::Task<void> {
             JsonObject obj;
             if (!JsonHelper::GetObject(args, obj)) {
                 result = std::unexpected(McpError(
@@ -125,7 +125,7 @@ void runHttpServer() {
         "current-time",
         "获取当前时间",
         "text/plain",
-        [](const std::string& uri, std::expected<std::string, McpError>& result) -> Coroutine {
+        [](const std::string& uri, std::expected<std::string, McpError>& result) -> galay::kernel::Task<void> {
             auto now = std::chrono::system_clock::now();
             auto time_t = std::chrono::system_clock::to_time_t(now);
             result = std::ctime(&time_t);
@@ -141,7 +141,7 @@ void runHttpServer() {
         "code_review",
         "生成代码审查提示",
         promptArgs,
-        [](const std::string& name, const JsonElement& args, std::expected<JsonString, McpError>& result) -> Coroutine {
+        [](const std::string& name, const JsonElement& args, std::expected<JsonString, McpError>& result) -> galay::kernel::Task<void> {
             JsonObject obj;
             if (!JsonHelper::GetObject(args, obj)) {
                 result = std::unexpected(McpError(
@@ -186,7 +186,7 @@ void runHttpServer() {
 }
 
 // 客户端测试协程
-Coroutine runClientTest(McpClient& client,
+galay::kernel::Task<void> runClientTest(McpClient& client,
                         const std::string& url,
                         int& exitCode,
                         ClientRunState* state) {

@@ -23,7 +23,7 @@ struct AsyncTestState {
     }
 };
 
-Coroutine testConnectionPool(IOScheduler* scheduler, AsyncTestState* state, mysql_test::MysqlTestConfig db_cfg)
+Task<void> test_connection_pool(IOScheduler* scheduler, AsyncTestState* state, mysql_test::DbTestConfig db_cfg)
 {
     std::cout << "Testing MySQL connection pool..." << std::endl;
 
@@ -93,12 +93,12 @@ Coroutine testConnectionPool(IOScheduler* scheduler, AsyncTestState* state, mysq
 int main()
 {
     std::cout << "=== T5: Connection Pool Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadMysqlTestConfig();
-    if (const int skip_code = mysql_test::requireMysqlTestConfigOrSkip(db_cfg, "T5-ConnectionPool");
+    const auto db_cfg = mysql_test::loadDbTestConfig();
+    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T5-ConnectionPool");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printMysqlTestConfig(db_cfg);
+    mysql_test::printDbTestConfig(db_cfg);
 
     try {
         Runtime runtime;
@@ -111,7 +111,7 @@ int main()
         }
 
         AsyncTestState state;
-        if (!scheduleTask(scheduler, testConnectionPool(scheduler, &state, db_cfg))) {
+        if (!scheduleTask(scheduler, test_connection_pool(scheduler, &state, db_cfg))) {
             std::cerr << "Failed to schedule connection pool test task on IO scheduler" << std::endl;
             runtime.stop();
             return 1;

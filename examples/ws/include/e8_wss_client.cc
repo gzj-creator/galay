@@ -19,7 +19,7 @@ using namespace galay::kernel;
 /**
  * @brief WSS 客户端协程
  */
-Task<bool> wssClientCoroutine(const std::string& url, int message_count) {
+Task<bool> wssClientTask(const std::string& url, int message_count) {
     try {
         constexpr auto kOpTimeout = std::chrono::milliseconds(3000);
 
@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
         runtime.start();
 
-        auto join = runtime.spawn(wssClientCoroutine(url, message_count));
+        auto join = runtime.spawn(wssClientTask(url, message_count));
         bool ok = false;
         if (join) {
             auto result = join->join();

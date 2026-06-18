@@ -15,7 +15,7 @@ using namespace galay::kernel;
 /**
  * @brief 测试连接池基本功能
  */
-Coroutine testBasicConnectionPool(IOScheduler* scheduler)
+Task<void> test_basic_connection_pool(IOScheduler* scheduler)
 {
     std::cout << "\n========================================" << std::endl;
     std::cout << "Test 1: Basic Connection Pool" << std::endl;
@@ -98,7 +98,7 @@ Coroutine testBasicConnectionPool(IOScheduler* scheduler)
 /**
  * @brief 测试 RAII 风格的连接获取
  */
-Coroutine testScopedConnection(IOScheduler* scheduler)
+Task<void> test_scoped_connection(IOScheduler* scheduler)
 {
     std::cout << "\n========================================" << std::endl;
     std::cout << "Test 2: Scoped Connection (RAII)" << std::endl;
@@ -152,7 +152,7 @@ Coroutine testScopedConnection(IOScheduler* scheduler)
 /**
  * @brief 测试并发获取连接
  */
-Coroutine testConcurrentAcquire(IOScheduler* scheduler,
+Task<void> test_concurrent_acquire(IOScheduler* scheduler,
                                 int client_id,
                                 RedisConnectionPool& pool,
                                 std::shared_ptr<std::atomic<int>> failure_count,
@@ -190,7 +190,7 @@ Coroutine testConcurrentAcquire(IOScheduler* scheduler,
     }
 }
 
-Coroutine testConcurrency(IOScheduler* scheduler)
+Task<void> test_concurrency(IOScheduler* scheduler)
 {
     std::cout << "\n========================================" << std::endl;
     std::cout << "Test 3: Concurrent Connection Acquisition" << std::endl;
@@ -215,7 +215,7 @@ Coroutine testConcurrency(IOScheduler* scheduler)
     // 启动多个并发客户端
     for (int i = 0; i < kConcurrentClients; ++i) {
         scheduleTask(scheduler,
-                     testConcurrentAcquire(scheduler, i, pool, failure_count, remaining, done_waiter));
+                     test_concurrent_acquire(scheduler, i, pool, failure_count, remaining, done_waiter));
     }
 
     auto all_done = co_await done_waiter->wait().timeout(std::chrono::seconds(10));
@@ -250,7 +250,7 @@ Coroutine testConcurrency(IOScheduler* scheduler)
 /**
  * @brief 测试连接池扩容
  */
-Coroutine testPoolExpansion(IOScheduler* scheduler)
+Task<void> test_pool_expansion(IOScheduler* scheduler)
 {
     std::cout << "\n========================================" << std::endl;
     std::cout << "Test 4: Pool Expansion" << std::endl;
@@ -314,7 +314,7 @@ Coroutine testPoolExpansion(IOScheduler* scheduler)
 /**
  * @brief 测试健康检查
  */
-Coroutine testHealthCheck(IOScheduler* scheduler)
+Task<void> test_health_check(IOScheduler* scheduler)
 {
     std::cout << "\n========================================" << std::endl;
     std::cout << "Test 5: Health Check" << std::endl;
@@ -362,7 +362,7 @@ Coroutine testHealthCheck(IOScheduler* scheduler)
 /**
  * @brief 测试统计信息
  */
-Coroutine testStatistics(IOScheduler* scheduler)
+Task<void> test_statistics(IOScheduler* scheduler)
 {
     std::cout << "\n========================================" << std::endl;
     std::cout << "Test 6: Statistics" << std::endl;
@@ -416,14 +416,14 @@ Coroutine testStatistics(IOScheduler* scheduler)
     std::cout << "========================================\n" << std::endl;
 }
 
-Coroutine runAllConnectionPoolTests(IOScheduler* scheduler, std::promise<void>* all_done)
+Task<void> runAllConnectionPoolTests(IOScheduler* scheduler, std::promise<void>* all_done)
 {
-    co_await testBasicConnectionPool(scheduler);
-    co_await testScopedConnection(scheduler);
-    co_await testConcurrency(scheduler);
-    co_await testPoolExpansion(scheduler);
-    co_await testHealthCheck(scheduler);
-    co_await testStatistics(scheduler);
+    co_await test_basic_connection_pool(scheduler);
+    co_await test_scoped_connection(scheduler);
+    co_await test_concurrency(scheduler);
+    co_await test_pool_expansion(scheduler);
+    co_await test_health_check(scheduler);
+    co_await test_statistics(scheduler);
 
     all_done->set_value();
 }

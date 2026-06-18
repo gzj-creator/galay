@@ -34,7 +34,7 @@ public:
         registerStreamMethod("echo", &StreamExampleService::echo);
     }
 
-    Coroutine echo(RpcStream& stream) {
+    Task<void> echo(RpcStream& stream) {
         uint64_t frames = 0;
         uint64_t bytes = 0;
 

@@ -195,7 +195,7 @@ private:
         return handler;
     }
 
-    Coroutine acceptLoop() {
+    Task<void> acceptLoop() {
         m_last_error.reset();
 
         TcpSocket listener(IPType::IPV4);
@@ -276,7 +276,7 @@ private:
         co_return;
     }
 
-    Coroutine handleConnection(GHandle handle) {
+    Task<void> handleConnection(GHandle handle) {
         TcpSocket socket(handle);
         auto non_block_result = socket.option().handleNonBlock();
         if (!non_block_result) {

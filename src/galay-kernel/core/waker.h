@@ -1,6 +1,6 @@
 /**
  * @file waker.h
- * @brief Coroutine wake-up handle
+ * @brief Task<void> wake-up handle
  * @author galay-kernel
  * @version 1.0.0
  *

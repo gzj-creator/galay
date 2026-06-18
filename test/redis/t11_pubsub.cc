@@ -78,7 +78,7 @@ namespace
     }
 }
 
-Coroutine runTopologyAndPubSubTests(IOScheduler* scheduler)
+Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
 {
     auto subscriber = RedisClientBuilder().scheduler(scheduler).build();
     auto publisher = RedisClientBuilder().scheduler(scheduler).build();

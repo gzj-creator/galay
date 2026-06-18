@@ -136,7 +136,7 @@ static void printSystemInfo() {
     std::cout << "C++ Standard: " << __cplusplus << std::endl;
 }
 
-Coroutine workerCoroutine(McpClient& client,
+galay::kernel::Task<void> workerTask(McpClient& client,
                           const std::string& url,
                           Operation op,
                           size_t requestsPerWorker,
@@ -273,7 +273,7 @@ static void runConcurrentTest(Runtime& runtime,
         auto* scheduler = runtime.getNextIOScheduler();
         if (!scheduler ||
             !scheduleTask(scheduler,
-                          workerCoroutine(*clients[i],
+                          workerTask(*clients[i],
                                           url,
                                           op,
                                           requestsPerWorker,

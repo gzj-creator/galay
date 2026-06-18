@@ -21,7 +21,7 @@ struct AsyncState {
     std::string error;
 };
 
-Coroutine run(IOScheduler* scheduler, AsyncState* state, const mysql_example::MysqlExampleConfig& cfg)
+Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::DbExampleConfig& cfg)
 {
     auto client = AsyncMysqlClientBuilder().scheduler(scheduler).build();
 
@@ -70,8 +70,8 @@ Coroutine run(IOScheduler* scheduler, AsyncState* state, const mysql_example::My
 
 int main()
 {
-    const auto cfg = mysql_example::loadMysqlExampleConfig();
-    mysql_example::printMysqlExampleConfig(cfg);
+    const auto cfg = mysql_example::loadDbExampleConfig();
+    mysql_example::printDbExampleConfig(cfg);
 
     Runtime runtime;
     runtime.start();

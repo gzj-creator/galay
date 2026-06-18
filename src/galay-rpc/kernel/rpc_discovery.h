@@ -221,7 +221,7 @@ static_assert(ServiceRegistry<LocalServiceRegistry>, "LocalServiceRegistry must 
  * @brief 异步服务注册中心 Concept
  *
  * @details 定义异步服务注册中心必须实现的接口，用于协程环境。
- * 所有方法返回Coroutine，支持co_await。
+ * 所有方法返回Task<void>，支持co_await。
  */
 template<typename T>
 concept AsyncServiceRegistry = requires(T registry,
@@ -229,19 +229,19 @@ concept AsyncServiceRegistry = requires(T registry,
                                         const ServiceEndpoint& endpoint,
                                         ServiceWatchCallback callback) {
     // 异步注册服务
-    { registry.registerServiceAsync(endpoint) } -> std::same_as<Coroutine>;
+    { registry.registerServiceAsync(endpoint) } -> std::same_as<Task<void>>;
 
     // 异步注销服务
-    { registry.deregisterServiceAsync(endpoint) } -> std::same_as<Coroutine>;
+    { registry.deregisterServiceAsync(endpoint) } -> std::same_as<Task<void>>;
 
     // 异步发现服务
-    { registry.discoverServiceAsync(service_name) } -> std::same_as<Coroutine>;
+    { registry.discoverServiceAsync(service_name) } -> std::same_as<Task<void>>;
 
     // 异步监听服务变更
-    { registry.watchServiceAsync(service_name, callback) } -> std::same_as<Coroutine>;
+    { registry.watchServiceAsync(service_name, callback) } -> std::same_as<Task<void>>;
 
     // 异步取消监听
-    { registry.unwatchServiceAsync(service_name) } -> std::same_as<Coroutine>;
+    { registry.unwatchServiceAsync(service_name) } -> std::same_as<Task<void>>;
 
     // 获取最后一次操作的结果
     { registry.lastError() } -> std::same_as<DiscoveryError>;
@@ -262,7 +262,7 @@ public:
     /**
      * @brief 异步注册服务
      */
-    Coroutine registerServiceAsync(const ServiceEndpoint& endpoint) {
+    Task<void> registerServiceAsync(const ServiceEndpoint& endpoint) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -287,7 +287,7 @@ public:
     /**
      * @brief 异步注销服务
      */
-    Coroutine deregisterServiceAsync(const ServiceEndpoint& endpoint) {
+    Task<void> deregisterServiceAsync(const ServiceEndpoint& endpoint) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -332,7 +332,7 @@ public:
     /**
      * @brief 异步发现服务
      */
-    Coroutine discoverServiceAsync(const std::string& service_name) {
+    Task<void> discoverServiceAsync(const std::string& service_name) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -355,7 +355,7 @@ public:
     /**
      * @brief 异步监听服务变更
      */
-    Coroutine watchServiceAsync(const std::string& service_name, ServiceWatchCallback callback) {
+    Task<void> watchServiceAsync(const std::string& service_name, ServiceWatchCallback callback) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");
@@ -371,7 +371,7 @@ public:
     /**
      * @brief 异步取消监听
      */
-    Coroutine unwatchServiceAsync(const std::string& service_name) {
+    Task<void> unwatchServiceAsync(const std::string& service_name) {
         auto lock_result = co_await m_mutex.lock();
         if (!lock_result) {
             m_last_error = DiscoveryError(DiscoveryError::LOCK_TIMEOUT, "Lock timeout");

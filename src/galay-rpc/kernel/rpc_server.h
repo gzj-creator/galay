@@ -333,7 +333,7 @@ private:
     /**
      * @brief 接受连接循环
      */
-    Coroutine acceptLoop() {
+    Task<void> acceptLoop() {
         m_last_error.reset();
 
         TcpSocket listener(IPType::IPV4);
@@ -418,7 +418,7 @@ private:
     /**
      * @brief 处理连接
      */
-    Coroutine handleConnection(GHandle handle) {
+    Task<void> handleConnection(GHandle handle) {
         RpcConn conn(handle, RpcReaderSetting{}, RpcWriterSetting{}, m_config.ring_buffer_size);
         auto reader = conn.getReader();
         auto writer = conn.getWriter();

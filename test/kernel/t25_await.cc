@@ -71,7 +71,7 @@ inline void SendThenRecvFlow::onRecv(SequenceOps<SequenceResult, 4>& ops, RecvIO
     ops.complete(std::move(recv_ctx.m_result));
 }
 
-Task<void> serverCoroutine([[maybe_unused]] IOScheduler* scheduler, int listen_fd)
+Task<void> serverTask([[maybe_unused]] IOScheduler* scheduler, int listen_fd)
 {
     g_total++;
 
@@ -130,7 +130,7 @@ Task<void> serverCoroutine([[maybe_unused]] IOScheduler* scheduler, int listen_f
     co_return;
 }
 
-Task<void> clientCoroutine([[maybe_unused]] IOScheduler* scheduler, const char* ip, int port)
+Task<void> clientTask([[maybe_unused]] IOScheduler* scheduler, const char* ip, int port)
 {
     g_total++;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -220,8 +220,8 @@ int main()
 
     TestScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, serverCoroutine(&scheduler, listen_fd));
-    scheduleTask(scheduler, clientCoroutine(&scheduler, "127.0.0.1", PORT));
+    scheduleTask(scheduler, serverTask(&scheduler, listen_fd));
+    scheduleTask(scheduler, clientTask(&scheduler, "127.0.0.1", PORT));
     std::this_thread::sleep_for(std::chrono::seconds(3));
     scheduler.stop();
     close(listen_fd);

@@ -230,7 +230,7 @@ API 规则：
   - `find_package(galay-ssl REQUIRED)`
   - 链接 `galay-ssl::galay-ssl`
   - 增加 TLS 编译宏
-- `module_prelude.hpp` 去掉对 `Coroutine.h` 的探测
+- `module_prelude.hpp` 去掉对旧协程头的探测
 - 改为显式纳入：
   - `task.h`
   - `awaitable.h`
@@ -260,7 +260,7 @@ API 规则：
 
 ### 编译与表面
 
-- `task.h` / 模块前导无 `Coroutine.h`
+- `task.h` / 模块前导不再依赖旧协程头
 - `GALAY_BUILD_SSL=ON/OFF` 都可配置；Redis TLS facade 由内部 `GALAY_SSL_FEATURE_ENABLED` 控制
 - `RedisCommandResultAwaitable` 不再存在
 - topology 接口改成 `Task<...>`

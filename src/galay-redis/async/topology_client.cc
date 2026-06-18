@@ -211,7 +211,7 @@ namespace galay::redis
 
     Task<RedisCommandResult> RedisMasterSlaveClient::refreshFromSentinel()
     {
-        co_return unwrapRedisCommandTask(co_await refreshSentinelCoroutine());
+        co_return unwrapRedisCommandTask(co_await refreshSentinelTask());
     }
 
     Task<RedisCommandResult> RedisMasterSlaveClient::execute(
@@ -221,7 +221,7 @@ namespace galay::redis
         bool auto_retry)
     {
         const size_t max_attempts = auto_retry ? std::max<size_t>(1, m_auto_retry_attempts) : size_t(1);
-        co_return unwrapRedisCommandTask(co_await executeAutoCoroutine(prefer_read, cmd, args, max_attempts));
+        co_return unwrapRedisCommandTask(co_await runAutoTask(prefer_read, cmd, args, max_attempts));
     }
 
     RedisExchangeOperation RedisMasterSlaveClient::batch(
@@ -370,7 +370,7 @@ namespace galay::redis
         return true;
     }
 
-    Task<RedisCommandResult> RedisMasterSlaveClient::refreshSentinelCoroutine()
+    Task<RedisCommandResult> RedisMasterSlaveClient::refreshSentinelTask()
     {
         if (m_sentinels.empty()) {
             co_return std::unexpected(
@@ -459,7 +459,7 @@ namespace galay::redis
         co_return std::move(master_values);
     }
 
-    Task<RedisCommandResult> RedisMasterSlaveClient::executeAutoCoroutine(
+    Task<RedisCommandResult> RedisMasterSlaveClient::runAutoTask(
         bool prefer_read,
         std::string cmd,
         std::vector<std::string> args,
@@ -583,7 +583,7 @@ namespace galay::redis
 
     Task<RedisCommandResult> RedisClusterClient::refreshSlots()
     {
-        co_return unwrapRedisCommandTask(co_await refreshSlotsCoroutine());
+        co_return unwrapRedisCommandTask(co_await refreshSlotsTask());
     }
 
     Task<RedisCommandResult> RedisClusterClient::execute(
@@ -597,12 +597,12 @@ namespace galay::redis
         }
         const bool force_key_routing = !routing_key.empty();
         const size_t max_attempts = auto_retry ? size_t(5) : size_t(1);
-        co_return unwrapRedisCommandTask(co_await executeAutoCoroutine(routing_key,
-                                                                       cmd,
-                                                                       args,
-                                                                       force_key_routing,
-                                                                       auto_retry,
-                                                                       max_attempts));
+        co_return unwrapRedisCommandTask(co_await runAutoTask(routing_key,
+                                                                   cmd,
+                                                                   args,
+                                                                   force_key_routing,
+                                                                   auto_retry,
+                                                                   max_attempts));
     }
 
     RedisExchangeOperation RedisClusterClient::batch(
@@ -825,7 +825,7 @@ namespace galay::redis
         return (now - m_last_refresh_time) >= m_auto_refresh_interval;
     }
 
-    Task<RedisCommandResult> RedisClusterClient::refreshSlotsCoroutine()
+    Task<RedisCommandResult> RedisClusterClient::refreshSlotsTask()
     {
         if (m_nodes.empty()) {
             co_return std::unexpected(
@@ -872,7 +872,7 @@ namespace galay::redis
         co_return std::move(values);
     }
 
-    Task<RedisCommandResult> RedisClusterClient::executeAutoCoroutine(
+    Task<RedisCommandResult> RedisClusterClient::runAutoTask(
         std::string routing_key,
         std::string cmd,
         std::vector<std::string> args,
@@ -1093,7 +1093,7 @@ namespace galay::redis
 
     Task<RedisCommandResult> RedissMasterSlaveClient::refreshFromSentinel()
     {
-        co_return unwrapRedisCommandTask(co_await refreshSentinelCoroutine());
+        co_return unwrapRedisCommandTask(co_await refreshSentinelTask());
     }
 
     Task<RedisCommandResult> RedissMasterSlaveClient::execute(
@@ -1103,7 +1103,7 @@ namespace galay::redis
         bool auto_retry)
     {
         const size_t max_attempts = auto_retry ? std::max<size_t>(1, m_auto_retry_attempts) : size_t(1);
-        co_return unwrapRedisCommandTask(co_await executeAutoCoroutine(prefer_read, cmd, args, max_attempts));
+        co_return unwrapRedisCommandTask(co_await runAutoTask(prefer_read, cmd, args, max_attempts));
     }
 
     detail::RedissExchangeOperation RedissMasterSlaveClient::batch(
@@ -1242,7 +1242,7 @@ namespace galay::redis
         return true;
     }
 
-    Task<RedisCommandResult> RedissMasterSlaveClient::refreshSentinelCoroutine()
+    Task<RedisCommandResult> RedissMasterSlaveClient::refreshSentinelTask()
     {
         if (m_sentinels.empty()) {
             co_return std::unexpected(
@@ -1331,7 +1331,7 @@ namespace galay::redis
         co_return std::move(master_values);
     }
 
-    Task<RedisCommandResult> RedissMasterSlaveClient::executeAutoCoroutine(
+    Task<RedisCommandResult> RedissMasterSlaveClient::runAutoTask(
         bool prefer_read,
         std::string cmd,
         std::vector<std::string> args,
@@ -1458,7 +1458,7 @@ namespace galay::redis
 
     Task<RedisCommandResult> RedissClusterClient::refreshSlots()
     {
-        co_return unwrapRedisCommandTask(co_await refreshSlotsCoroutine());
+        co_return unwrapRedisCommandTask(co_await refreshSlotsTask());
     }
 
     Task<RedisCommandResult> RedissClusterClient::execute(
@@ -1472,12 +1472,12 @@ namespace galay::redis
         }
         const bool force_key_routing = !routing_key.empty();
         const size_t max_attempts = auto_retry ? size_t(5) : size_t(1);
-        co_return unwrapRedisCommandTask(co_await executeAutoCoroutine(routing_key,
-                                                                       cmd,
-                                                                       args,
-                                                                       force_key_routing,
-                                                                       auto_retry,
-                                                                       max_attempts));
+        co_return unwrapRedisCommandTask(co_await runAutoTask(routing_key,
+                                                                   cmd,
+                                                                   args,
+                                                                   force_key_routing,
+                                                                   auto_retry,
+                                                                   max_attempts));
     }
 
     detail::RedissExchangeOperation RedissClusterClient::batch(
@@ -1700,7 +1700,7 @@ namespace galay::redis
         return (now - m_last_refresh_time) >= m_auto_refresh_interval;
     }
 
-    Task<RedisCommandResult> RedissClusterClient::refreshSlotsCoroutine()
+    Task<RedisCommandResult> RedissClusterClient::refreshSlotsTask()
     {
         if (m_nodes.empty()) {
             co_return std::unexpected(
@@ -1747,7 +1747,7 @@ namespace galay::redis
         co_return std::move(values);
     }
 
-    Task<RedisCommandResult> RedissClusterClient::executeAutoCoroutine(
+    Task<RedisCommandResult> RedissClusterClient::runAutoTask(
         std::string routing_key,
         std::string cmd,
         std::vector<std::string> args,

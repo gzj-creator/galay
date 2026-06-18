@@ -32,7 +32,7 @@ public:
         registerBidiStreamingMethod("echo", &BenchEchoService::echo);
     }
 
-    Coroutine echo(RpcContext& ctx) {
+    Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
         ctx.setPayload(req.payloadView());
         co_return;

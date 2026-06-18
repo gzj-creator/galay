@@ -67,7 +67,7 @@ inline void markFailure(AsyncTestState* state, const std::string& msg) {
         if (_r) { result_var = std::move(_r->value()); } \
     }
 
-Coroutine testPreparedStatement(IOScheduler* scheduler, AsyncTestState* state, mysql_test::MysqlTestConfig db_cfg)
+Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state, mysql_test::DbTestConfig db_cfg)
 {
     std::cout << "Testing MySQL prepared statements..." << std::endl;
 
@@ -157,12 +157,12 @@ Coroutine testPreparedStatement(IOScheduler* scheduler, AsyncTestState* state, m
 int main()
 {
     std::cout << "=== T7: Prepared Statement Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadMysqlTestConfig();
-    if (const int skip_code = mysql_test::requireMysqlTestConfigOrSkip(db_cfg, "T7-PreparedStatement");
+    const auto db_cfg = mysql_test::loadDbTestConfig();
+    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T7-PreparedStatement");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printMysqlTestConfig(db_cfg);
+    mysql_test::printDbTestConfig(db_cfg);
 
     try {
         Runtime runtime;
@@ -170,7 +170,7 @@ int main()
         auto* scheduler = runtime.getNextIOScheduler();
         if (!scheduler) { std::cerr << "No scheduler" << std::endl; return 1; }
         AsyncTestState state;
-        if (!scheduleTask(scheduler, testPreparedStatement(scheduler, &state, db_cfg))) {
+        if (!scheduleTask(scheduler, test_prepared_statement(scheduler, &state, db_cfg))) {
             std::cerr << "Failed to schedule prepared statement test task on IO scheduler" << std::endl;
             runtime.stop();
             return 1;

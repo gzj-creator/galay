@@ -33,7 +33,6 @@ using namespace galay::kernel;
 using namespace galay::async;
 using ::galay::utils::RingBuffer;
 
-using Coroutine = Task<void>;
 
 // 前向声明
 template<typename SocketType> class RpcConnImpl;

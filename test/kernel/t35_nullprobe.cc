@@ -69,7 +69,7 @@ struct TestState {
     std::atomic<int> null_probes{0};
 };
 
-Task<void> sendCoroutine(TestState* state, int fd, const char* msg, size_t len) {
+Task<void> sendTask(TestState* state, int fd, const char* msg, size_t len) {
     IOController controller(GHandle{.fd = fd});
     ProbeFlow flow(msg, len);
     auto sequence = flow.make(&controller);
@@ -131,7 +131,7 @@ int main() {
     TestState state;
     IOUringScheduler scheduler;
     scheduler.start();
-    scheduleTask(scheduler, sendCoroutine(&state, fds[0], payload, sizeof(payload) - 1));
+    scheduleTask(scheduler, sendTask(&state, fds[0], payload, sizeof(payload) - 1));
 
     const bool coroutine_done = waitUntil(state.done);
     scheduler.stop();

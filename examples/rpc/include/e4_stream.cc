@@ -28,7 +28,7 @@ constexpr uint16_t kDefaultPort = 9100;
 constexpr size_t kDefaultFrameCount = 1000;
 constexpr size_t kDefaultPayloadSize = 128;
 
-Coroutine runStreamClient(const std::string& host,
+Task<void> runStreamClient(const std::string& host,
                           uint16_t port,
                           size_t frame_count,
                           size_t payload_size) {

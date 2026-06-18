@@ -9,7 +9,7 @@
  * 使用方式（单次co_await等待完整发送/接收）：
  * @code
  * // 客户端双向流
- * Coroutine biStreamExample(RpcStream& stream) {
+ * Task<void> biStreamExample(RpcStream& stream) {
  *     auto& writer = stream.getWriter();
  *     auto& reader = stream.getReader();
  *

@@ -32,7 +32,7 @@ const char* callModeToString(RpcCallMode mode) {
 }
 
 template<typename CallFn>
-Coroutine callEchoWithMode(std::string_view title,
+Task<void> callEchoWithMode(std::string_view title,
                            RpcCallMode expected_mode,
                            const std::string& payload,
                            CallFn&& call_fn) {
@@ -72,7 +72,7 @@ Coroutine callEchoWithMode(std::string_view title,
 
 } // namespace
 
-Coroutine runClient(Runtime& runtime, const std::string& host, uint16_t port) {
+Task<void> runClient(Runtime& runtime, const std::string& host, uint16_t port) {
     (void)runtime;
     std::cout << "Connecting to " << host << ":" << port << "...\n";
 

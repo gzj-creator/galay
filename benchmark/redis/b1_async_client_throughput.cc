@@ -323,7 +323,7 @@ void countBatchResult(
     error += count;
 }
 
-Coroutine benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).bufferSize(options->buffer_size).build();
     protocol::RespEncoder encoder;
@@ -409,7 +409,7 @@ Coroutine benchmarkNormal(IOScheduler* scheduler, const BenchmarkOptions* option
     markClientCompleted();
 }
 
-Coroutine benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).bufferSize(options->buffer_size).build();
     std::int64_t local_success = 0;
@@ -486,7 +486,7 @@ Coroutine benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* opti
     markClientCompleted();
 }
 
-Coroutine benchmarkNormalBatch(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
+Task<void> benchmarkNormalBatch(IOScheduler* scheduler, const BenchmarkOptions* options, int client_id)
 {
     auto client = RedisClientBuilder().scheduler(scheduler).bufferSize(options->buffer_size).build();
     std::int64_t local_success = 0;

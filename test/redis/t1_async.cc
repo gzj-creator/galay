@@ -6,7 +6,7 @@
 using namespace galay::kernel;
 using namespace galay::redis;
 
-Coroutine testAsyncRedisClient(IOScheduler* scheduler)
+Task<void> test_async_redis_client(IOScheduler* scheduler)
 {
     std::cout << "Testing asynchronous RedisClient operations..." << std::endl;
 
@@ -75,7 +75,7 @@ int main()
             return 1;
         }
 
-        scheduleTask(scheduler, testAsyncRedisClient(scheduler));
+        scheduleTask(scheduler, test_async_redis_client(scheduler));
 
         std::this_thread::sleep_for(std::chrono::seconds(3));
         runtime.stop();

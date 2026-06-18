@@ -342,8 +342,8 @@ public:
 #### RpcMethodHandler
 
 ```cpp
-using RpcMethodHandler = std::function<kernel::Coroutine(RpcContext&)>;
-using RpcStreamHandler = std::function<kernel::Coroutine(RpcStream&)>;
+using RpcMethodHandler = std::function<kernel::Task<void>(RpcContext&)>;
+using RpcStreamHandler = std::function<kernel::Task<void>(RpcStream&)>;
 ```
 
 RPC 方法处理函数类型，接收 `RpcContext` 引用，返回协程。
@@ -375,7 +375,7 @@ protected:
     // 兼容旧接口：注册一元方法
     void registerMethod(std::string_view name, RpcMethodHandler handler);
     template<typename T>
-    void registerMethod(std::string_view name, Coroutine (T::*method)(RpcContext&));
+    void registerMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
 
     // 显式注册四种 RPC 模式
     void registerUnaryMethod(std::string_view name, RpcMethodHandler handler);
@@ -383,18 +383,18 @@ protected:
     void registerServerStreamingMethod(std::string_view name, RpcMethodHandler handler);
     void registerBidiStreamingMethod(std::string_view name, RpcMethodHandler handler);
     template<typename T>
-    void registerUnaryMethod(std::string_view name, Coroutine (T::*method)(RpcContext&));
+    void registerUnaryMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
     template<typename T>
-    void registerClientStreamingMethod(std::string_view name, Coroutine (T::*method)(RpcContext&));
+    void registerClientStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
     template<typename T>
-    void registerServerStreamingMethod(std::string_view name, Coroutine (T::*method)(RpcContext&));
+    void registerServerStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
     template<typename T>
-    void registerBidiStreamingMethod(std::string_view name, Coroutine (T::*method)(RpcContext&));
+    void registerBidiStreamingMethod(std::string_view name, Task<void> (T::*method)(RpcContext&));
 
     // 注册真实流方法（STREAM_* 协议）
     void registerStreamMethod(std::string_view name, RpcStreamHandler handler);
     template<typename T>
-    void registerStreamMethod(std::string_view name, Coroutine (T::*method)(RpcStream&));
+    void registerStreamMethod(std::string_view name, Task<void> (T::*method)(RpcStream&));
 };
 ```
 
@@ -414,7 +414,7 @@ public:
         registerMethod("echo", &EchoService::echo);
     }
 
-    Coroutine echo(RpcContext& ctx) {
+    Task<void> echo(RpcContext& ctx) {
         auto& req = ctx.request();
         ctx.setPayload(req.payload().data(), req.payload().size());
         co_return;
@@ -868,7 +868,7 @@ using CallResult = std::expected<std::optional<RpcResponse>, RpcError>;
 **使用示例：**
 
 ```cpp
-Coroutine example(RpcClient& client) {
+Task<void> example(RpcClient& client) {
     // 基本调用
     while (true) {
         auto result = co_await client.call("EchoService", "echo", "Hello");
@@ -1031,7 +1031,7 @@ public:
 **使用示例：**
 
 ```cpp
-Coroutine biStreamExample(RpcStream& stream) {
+Task<void> biStreamExample(RpcStream& stream) {
     // 发送数据
     while (true) {
         auto result = co_await stream.sendData("Hello");
@@ -1186,11 +1186,11 @@ concept AsyncServiceRegistry = requires(T registry,
                                         const std::string& service_name,
                                         const ServiceEndpoint& endpoint,
                                         ServiceWatchCallback callback) {
-    { registry.registerServiceAsync(endpoint) }   -> std::same_as<kernel::Coroutine>;
-    { registry.deregisterServiceAsync(endpoint) } -> std::same_as<kernel::Coroutine>;
-    { registry.discoverServiceAsync(service_name) } -> std::same_as<kernel::Coroutine>;
-    { registry.watchServiceAsync(service_name, callback) } -> std::same_as<kernel::Coroutine>;
-    { registry.unwatchServiceAsync(service_name) } -> std::same_as<kernel::Coroutine>;
+    { registry.registerServiceAsync(endpoint) }   -> std::same_as<kernel::Task<void>>;
+    { registry.deregisterServiceAsync(endpoint) } -> std::same_as<kernel::Task<void>>;
+    { registry.discoverServiceAsync(service_name) } -> std::same_as<kernel::Task<void>>;
+    { registry.watchServiceAsync(service_name, callback) } -> std::same_as<kernel::Task<void>>;
+    { registry.unwatchServiceAsync(service_name) } -> std::same_as<kernel::Task<void>>;
     { registry.lastError() }     -> std::same_as<DiscoveryError>;
     { registry.lastEndpoints() } -> std::same_as<std::vector<ServiceEndpoint>>;
 };
@@ -1220,19 +1220,19 @@ public:
 ```cpp
 class AsyncLocalServiceRegistry {
 public:
-    kernel::Coroutine registerServiceAsync(const ServiceEndpoint& endpoint);
-    kernel::Coroutine deregisterServiceAsync(const ServiceEndpoint& endpoint);
-    kernel::Coroutine discoverServiceAsync(const std::string& service_name);
-    kernel::Coroutine watchServiceAsync(const std::string& service_name,
+    kernel::Task<void> registerServiceAsync(const ServiceEndpoint& endpoint);
+    kernel::Task<void> deregisterServiceAsync(const ServiceEndpoint& endpoint);
+    kernel::Task<void> discoverServiceAsync(const std::string& service_name);
+    kernel::Task<void> watchServiceAsync(const std::string& service_name,
                                         ServiceWatchCallback callback);
-    kernel::Coroutine unwatchServiceAsync(const std::string& service_name);
+    kernel::Task<void> unwatchServiceAsync(const std::string& service_name);
 
     DiscoveryError lastError() const;
     std::vector<ServiceEndpoint> lastEndpoints() const;
 };
 ```
 
-**注意：** `AsyncLocalServiceRegistry` 返回 `Coroutine`（即 `Awaitable&`），同一实例的同一方法不能被多个调用者并发 `co_await`。多调用者场景应使用独立实例。
+**注意：** `AsyncLocalServiceRegistry` 返回 `Task<void>`，同一实例的同一方法不能被多个调用者并发 `co_await`。多调用者场景应使用独立实例。
 
 #### 负载均衡选择器
 

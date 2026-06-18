@@ -16,7 +16,7 @@ using namespace galay::kernel;
 
 test::TestResultWriter* g_writer = nullptr;
 
-Coroutine testEchoCall(RpcClient& client) {
+Task<void> test_echo_call(RpcClient& client) {
     std::string payload = "Hello, RPC!";
 
     while (true) {
@@ -40,7 +40,7 @@ Coroutine testEchoCall(RpcClient& client) {
     co_return;
 }
 
-Coroutine testUppercaseCall(RpcClient& client) {
+Task<void> test_uppercase_call(RpcClient& client) {
     std::string payload = "hello world";
 
     while (true) {
@@ -64,7 +64,7 @@ Coroutine testUppercaseCall(RpcClient& client) {
     co_return;
 }
 
-Coroutine testAddCall(RpcClient& client) {
+Task<void> test_add_call(RpcClient& client) {
     int32_t a = 100, b = 200;
     char payload[8];
     std::memcpy(payload, &a, 4);
@@ -95,7 +95,7 @@ Coroutine testAddCall(RpcClient& client) {
     co_return;
 }
 
-Coroutine testServiceNotFound(RpcClient& client) {
+Task<void> test_service_not_found(RpcClient& client) {
     while (true) {
         auto result = co_await client.call("NonExistentService", "method");
         if (!result) {
@@ -116,7 +116,7 @@ Coroutine testServiceNotFound(RpcClient& client) {
     co_return;
 }
 
-Coroutine testMethodNotFound(RpcClient& client) {
+Task<void> test_method_not_found(RpcClient& client) {
     while (true) {
         auto result = co_await client.call("EchoService", "nonExistentMethod");
         if (!result) {
@@ -137,7 +137,7 @@ Coroutine testMethodNotFound(RpcClient& client) {
     co_return;
 }
 
-Coroutine runAllTests(const std::string& host, uint16_t port, std::atomic<bool>* done) {
+Task<void> runAllTests(const std::string& host, uint16_t port, std::atomic<bool>* done) {
     RpcClient client;
 
     auto connect_result = co_await client.connect(host, port);
@@ -158,11 +158,11 @@ Coroutine runAllTests(const std::string& host, uint16_t port, std::atomic<bool>*
 
     std::cout << "Connected to server, running tests...\n";
 
-    co_await testEchoCall(client);
-    co_await testUppercaseCall(client);
-    co_await testAddCall(client);
-    co_await testServiceNotFound(client);
-    co_await testMethodNotFound(client);
+    co_await test_echo_call(client);
+    co_await test_uppercase_call(client);
+    co_await test_add_call(client);
+    co_await test_service_not_found(client);
+    co_await test_method_not_found(client);
 
     co_await client.close();
     std::cout << "Tests completed.\n";

@@ -26,8 +26,6 @@ concept HasProtocolRecvAwaitable = requires { typename T::ProtocolRecvAwaitable;
 template <typename T>
 concept HasCore = requires { typename T::Core; };
 
-static_assert(std::same_as<Coroutine, galay::kernel::Task<void>>);
-
 static_assert(!HasProtocolSendAwaitable<RedisExchangeOperation>);
 static_assert(!HasProtocolRecvAwaitable<RedisExchangeOperation>);
 static_assert(!HasCore<RedisExchangeOperation>);

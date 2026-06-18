@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- 移除旧协程任务别名与相关命名，统一改用 `Task<void>` 表达异步任务接口。
+
 ### Docs
 
 - 新增 `CLAUDE.md` 与 `AGENTS.md`，定义 LLM 代理在本仓库内的行为准则（编码前先思考、简洁优先、外科手术式修改、目标驱动执行），降低常见编码错误。
@@ -57,7 +61,7 @@
 
 - 移除旧的单体目录 `galay/`（含 `algorithm`、`common`、`kernel`、`utils` 及其全部子目录）。
 - 移除旧的 `test/`、`benchmark/`、`doc/` 目录与旧的 `README.md`、`README_CN.md`、`LICENSE`、`GalayConfig.cmake.in`。
-- 移除 `CoroutineVisitor` 类。
+- 移除旧访问器类。
 - 移除 http2 相关旧函数。
 
 ### Fixed

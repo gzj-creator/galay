@@ -156,7 +156,7 @@ namespace
     }
 }
 
-Coroutine runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
+Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
 {
     RedisCommandBuilder command_builder;
     do {

@@ -52,7 +52,6 @@ namespace galay::redis
     using galay::kernel::Task;
     using galay::kernel::TaskRef;
 
-    using Coroutine = Task<void>;
 
     // 类型别名
     using RedisResult = std::expected<std::vector<RedisValue>, RedisError>; ///< Redis 命令结果类型
