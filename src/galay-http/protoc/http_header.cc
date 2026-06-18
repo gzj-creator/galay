@@ -262,9 +262,9 @@ namespace galay::http
         }
     }
 
-    bool headerValueContainsToken(std::string_view value, std::string_view token)
+    bool containsCommaSeparatedHeaderValue(std::string_view value, std::string_view expected)
     {
-        if (value.empty() || token.empty()) {
+        if (value.empty() || expected.empty()) {
             return false;
         }
 
@@ -284,7 +284,7 @@ namespace galay::http
                 --right;
             }
 
-            if (right > left && equalsIgnoreCaseAscii(value.substr(left, right - left), token)) {
+            if (right > left && equalsIgnoreCaseAscii(value.substr(left, right - left), expected)) {
                 return true;
             }
 
@@ -1256,10 +1256,10 @@ namespace galay::http
         if (conn == nullptr || conn->empty()) {
             return m_version == HttpVersion::HttpVersion_1_1;
         }
-        if (headerValueContainsToken(*conn, "close")) {
+        if (containsCommaSeparatedHeaderValue(*conn, "close")) {
             return false;
         }
-        if (headerValueContainsToken(*conn, "keep-alive")) {
+        if (containsCommaSeparatedHeaderValue(*conn, "keep-alive")) {
             return true;
         }
         return m_version == HttpVersion::HttpVersion_1_1;
@@ -1268,7 +1268,7 @@ namespace galay::http
     bool HttpRequestHeader::isChunked() const
     {
         if (const auto* te = m_headerPairs.getValuePtr("transfer-encoding"); te != nullptr) {
-            return headerValueContainsToken(*te, "chunked");
+            return containsCommaSeparatedHeaderValue(*te, "chunked");
         }
         return false;
     }
@@ -1276,7 +1276,7 @@ namespace galay::http
     bool HttpRequestHeader::isConnectionClose() const
     {
         if (const auto* conn = m_headerPairs.getValuePtr("connection"); conn != nullptr) {
-            return headerValueContainsToken(*conn, "close");
+            return containsCommaSeparatedHeaderValue(*conn, "close");
         }
         return false;
     }
@@ -1592,10 +1592,10 @@ namespace galay::http
         if (conn == nullptr || conn->empty()) {
             return m_version == HttpVersion::HttpVersion_1_1;
         }
-        if (headerValueContainsToken(*conn, "close")) {
+        if (containsCommaSeparatedHeaderValue(*conn, "close")) {
             return false;
         }
-        if (headerValueContainsToken(*conn, "keep-alive")) {
+        if (containsCommaSeparatedHeaderValue(*conn, "keep-alive")) {
             return true;
         }
         return m_version == HttpVersion::HttpVersion_1_1;
@@ -1604,7 +1604,7 @@ namespace galay::http
     bool HttpResponseHeader::isChunked() const
     {
         if (const auto* te = m_headerPairs.getValuePtr("transfer-encoding"); te != nullptr) {
-            return headerValueContainsToken(*te, "chunked");
+            return containsCommaSeparatedHeaderValue(*te, "chunked");
         }
         return false;
     }
@@ -1612,7 +1612,7 @@ namespace galay::http
     bool HttpResponseHeader::isConnectionClose() const
     {
         if (const auto* conn = m_headerPairs.getValuePtr("connection"); conn != nullptr) {
-            return headerValueContainsToken(*conn, "close");
+            return containsCommaSeparatedHeaderValue(*conn, "close");
         }
         return false;
     }

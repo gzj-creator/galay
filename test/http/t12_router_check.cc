@@ -12,11 +12,11 @@ using namespace galay::http;
 using namespace galay::kernel;
 
 // 测试用的处理器
-Task<void> testHandler(HttpConn& conn, HttpRequest req) {
+Task<void> test_handler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
-void testValidPaths() {
+void test_valid_paths() {
 
     HttpRouter router;
 
@@ -42,7 +42,7 @@ void testValidPaths() {
     size_t successCount = 0;
     for (const auto& path : validPaths) {
         size_t beforeSize = router.size();
-        router.addHandler<HttpMethod::GET>(path, testHandler);
+        router.addHandler<HttpMethod::GET>(path, test_handler);
         size_t afterSize = router.size();
 
         if (afterSize > beforeSize) {
@@ -54,7 +54,7 @@ void testValidPaths() {
     assert(successCount == validPaths.size());
 }
 
-void testInvalidPaths() {
+void test_invalid_paths() {
 
     HttpRouter router;
 
@@ -84,7 +84,7 @@ void testInvalidPaths() {
     size_t rejectedCount = 0;
     for (const auto& [path, reason] : invalidPaths) {
         size_t beforeSize = router.size();
-        router.addHandler<HttpMethod::GET>(path, testHandler);
+        router.addHandler<HttpMethod::GET>(path, test_handler);
         size_t afterSize = router.size();
 
         if (afterSize == beforeSize) {
@@ -96,29 +96,29 @@ void testInvalidPaths() {
     assert(rejectedCount == invalidPaths.size());
 }
 
-void testDuplicateRoutes() {
+void test_duplicate_routes() {
 
     HttpRouter router;
 
     // 第一次添加
-    router.addHandler<HttpMethod::GET>("/api/users", testHandler);
+    router.addHandler<HttpMethod::GET>("/api/users", test_handler);
     size_t size1 = router.size();
 
     // 第二次添加相同路由（应该覆盖并警告）
-    router.addHandler<HttpMethod::GET>("/api/users", testHandler);
+    router.addHandler<HttpMethod::GET>("/api/users", test_handler);
     size_t size2 = router.size();
 
     // 大小应该相同（覆盖而不是新增）
     assert(size1 == size2);
 }
 
-void testParameterExtraction() {
+void test_parameter_extraction() {
 
     HttpRouter router;
 
     // 注册带参数的路由
-    router.addHandler<HttpMethod::GET>("/user/:id", testHandler);
-    router.addHandler<HttpMethod::GET>("/user/:userId/posts/:postId", testHandler);
+    router.addHandler<HttpMethod::GET>("/user/:id", test_handler);
+    router.addHandler<HttpMethod::GET>("/user/:userId/posts/:postId", test_handler);
 
     // 测试参数提取
     auto match1 = router.findHandler(HttpMethod::GET, "/user/123");
@@ -134,12 +134,12 @@ void testParameterExtraction() {
 
 }
 
-void testEdgeCases() {
+void test_edge_cases() {
 
     HttpRouter router;
 
     // 根路径
-    router.addHandler<HttpMethod::GET>("/", testHandler);
+    router.addHandler<HttpMethod::GET>("/", test_handler);
     auto match1 = router.findHandler(HttpMethod::GET, "/");
     assert(match1.handler != nullptr);
 
@@ -148,22 +148,22 @@ void testEdgeCases() {
     for (int i = 0; i < 50; ++i) {
         longPath += "/segment" + std::to_string(i);
     }
-    router.addHandler<HttpMethod::GET>(longPath, testHandler);
+    router.addHandler<HttpMethod::GET>(longPath, test_handler);
     auto match2 = router.findHandler(HttpMethod::GET, longPath);
     assert(match2.handler != nullptr);
 
     // 多个参数
-    router.addHandler<HttpMethod::GET>("/a/:p1/b/:p2/c/:p3/d/:p4", testHandler);
+    router.addHandler<HttpMethod::GET>("/a/:p1/b/:p2/c/:p3/d/:p4", test_handler);
     auto match3 = router.findHandler(HttpMethod::GET, "/a/1/b/2/c/3/d/4");
     assert(match3.handler != nullptr);
     assert(match3.params.size() == 4);
 
 }
 
-void testHttpRequestIntegration() {
+void test_http_request_integration() {
 
     HttpRouter router;
-    router.addHandler<HttpMethod::GET>("/user/:id/posts/:postId", testHandler);
+    router.addHandler<HttpMethod::GET>("/user/:id/posts/:postId", test_handler);
 
     // 模拟路由匹配和参数设置
     auto match = router.findHandler(HttpMethod::GET, "/user/123/posts/456");
@@ -186,12 +186,12 @@ void testHttpRequestIntegration() {
 int main() {
 
     try {
-        testValidPaths();
-        testInvalidPaths();
-        testDuplicateRoutes();
-        testParameterExtraction();
-        testEdgeCases();
-        testHttpRequestIntegration();
+        test_valid_paths();
+        test_invalid_paths();
+        test_duplicate_routes();
+        test_parameter_extraction();
+        test_edge_cases();
+        test_http_request_integration();
 
         return 0;
     } catch (const std::exception& e) {

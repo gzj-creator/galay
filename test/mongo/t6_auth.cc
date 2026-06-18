@@ -17,7 +17,7 @@ using namespace galay::mongo;
 namespace
 {
 
-struct AsyncAuthState
+struct AsyncCredentialState
 {
     std::atomic<bool> done{false};
     std::atomic<bool> ok{true};
@@ -30,15 +30,15 @@ struct AsyncClientConfig
     AsyncMongoConfig async;
 };
 
-void setFailure(AsyncAuthState* state, std::string message)
+void setFailure(AsyncCredentialState* state, std::string message)
 {
     state->ok.store(false, std::memory_order_relaxed);
     state->error = std::move(message);
     state->done.store(true, std::memory_order_release);
 }
 
-Task<void> runAsyncAuth(IOScheduler* scheduler,
-                        AsyncAuthState* state,
+Task<void> runAsyncCredentialCase(IOScheduler* scheduler,
+                        AsyncCredentialState* state,
                         AsyncClientConfig cfg)
 {
     auto client = AsyncMongoClientBuilder().scheduler(scheduler).config(cfg.async).build();
@@ -114,9 +114,9 @@ int main()
         return 1;
     }
 
-    AsyncAuthState state;
+    AsyncCredentialState state;
     if (!scheduleTask(scheduler,
-                      runAsyncAuth(scheduler,
+                      runAsyncCredentialCase(scheduler,
                                    &state,
                                    AsyncClientConfig{cfg, mongo_test::loadAsyncMongoTestConfig()}))) {
         std::cerr << "FAIL: failed to schedule async auth task" << std::endl;

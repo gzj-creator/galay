@@ -24,7 +24,7 @@ std::atomic<bool> g_done{false};
 /**
  * @brief 客户端测试协程
  */
-Task<void> testClient(const std::string& host, uint16_t port, int num_requests) {
+Task<void> test_client(const std::string& host, uint16_t port, int num_requests) {
     H2cClient client(H2cClientBuilder().build());
 
     std::cout << "Connecting to " << host << ":" << port << "..." << std::endl;
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
         runtime.start();
 
-        auto join = runtime.spawn(testClient(host, port, num_requests));
+        auto join = runtime.spawn(test_client(host, port, num_requests));
         if (!join) {
             std::cerr << "Failed to spawn client coroutine: " << join.error().message() << "\n";
             runtime.stop();

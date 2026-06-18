@@ -2,7 +2,7 @@
  * @file t110_iourecvsrc.cc
  * @brief 用途：锁定 io_uring multishot recv + provided buffer ring 的源码边界。
  * 关键覆盖点：provided buffer ring 建立、buffer select、multishot recv 提交、controller 侧 ready recv queue。
- * 通过条件：源码包含目标 token，并且 recv completion 路径开始解析 buffer id。
+ * 通过条件：源码包含目标 handle，并且 recv completion 路径开始解析 buffer id。
  */
 
 #include <filesystem>
@@ -53,8 +53,8 @@ int main() {
         std::cerr << "[T110] expected IOController to track multishot recv armed state\n";
         return 1;
     }
-    if (!containsText(iocontroller_text, "m_recv_multishot_token")) {
-        std::cerr << "[T110] expected IOController to track active multishot recv token\n";
+    if (!containsText(iocontroller_text, "m_recv_multishot_handle")) {
+        std::cerr << "[T110] expected IOController to track active multishot recv handle\n";
         return 1;
     }
 

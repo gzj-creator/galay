@@ -39,7 +39,7 @@ std::string resolveStaticDir() {
 } // namespace
 
 // 测试用的简单处理器
-galay::kernel::Task<void> testHandler(HttpConn& conn, HttpRequest req) {
+galay::kernel::Task<void> test_handler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
@@ -59,14 +59,14 @@ galay::kernel::Task<void> filesHandler(HttpConn& conn, HttpRequest req) {
     co_return;
 }
 
-void testExactMatch() {
+void test_exact_match() {
 
     HttpRouter router;
 
     // 添加精确匹配路由
-    router.addHandler<HttpMethod::GET>("/api/users", testHandler);
+    router.addHandler<HttpMethod::GET>("/api/users", test_handler);
     router.addHandler<HttpMethod::POST>("/api/users", postHandler);
-    router.addHandler<HttpMethod::GET>("/api/posts", testHandler);
+    router.addHandler<HttpMethod::GET>("/api/posts", test_handler);
 
     // 测试精确匹配
     auto match1 = router.findHandler(HttpMethod::GET, "/api/users");
@@ -88,7 +88,7 @@ void testExactMatch() {
 
 }
 
-void testPathParameters() {
+void test_path_parameters() {
 
     HttpRouter router;
 
@@ -122,7 +122,7 @@ void testPathParameters() {
 
 }
 
-void testWildcard() {
+void test_wildcard() {
 
     HttpRouter router;
 
@@ -150,12 +150,12 @@ void testWildcard() {
 
 }
 
-void testMultipleMethods() {
+void test_multiple_methods() {
 
     HttpRouter router;
 
     // 为同一路径添加多个方法
-    router.addHandler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT>("/api/resource", testHandler);
+    router.addHandler<HttpMethod::GET, HttpMethod::POST, HttpMethod::PUT>("/api/resource", test_handler);
 
     auto match1 = router.findHandler(HttpMethod::GET, "/api/resource");
     assert(match1.handler != nullptr);
@@ -171,12 +171,12 @@ void testMultipleMethods() {
 
 }
 
-void testPriorityMatching() {
+void test_priority_matching() {
 
     HttpRouter router;
 
     // 添加不同优先级的路由
-    router.addHandler<HttpMethod::GET>("/api/users", testHandler);      // 精确匹配
+    router.addHandler<HttpMethod::GET>("/api/users", test_handler);      // 精确匹配
     router.addHandler<HttpMethod::GET>("/api/:resource", userHandler);  // 参数匹配
     router.addHandler<HttpMethod::GET>("/api/*", staticHandler);        // 通配符匹配
 
@@ -193,14 +193,14 @@ void testPriorityMatching() {
 
 }
 
-void testRouterOperations() {
+void test_router_operations() {
 
     HttpRouter router;
 
     // 测试 size
     assert(router.size() == 0);
 
-    router.addHandler<HttpMethod::GET>("/api/users", testHandler);
+    router.addHandler<HttpMethod::GET>("/api/users", test_handler);
     router.addHandler<HttpMethod::POST>("/api/users", postHandler);
     router.addHandler<HttpMethod::GET>("/user/:id", userHandler);
 
@@ -223,12 +223,12 @@ void testRouterOperations() {
 
 }
 
-void testEdgeCases() {
+void test_edge_cases() {
 
     HttpRouter router;
 
     // 根路径
-    router.addHandler<HttpMethod::GET>("/", testHandler);
+    router.addHandler<HttpMethod::GET>("/", test_handler);
     auto match1 = router.findHandler(HttpMethod::GET, "/");
     assert(match1.handler != nullptr);
 
@@ -243,7 +243,7 @@ void testEdgeCases() {
 
 }
 
-void testProxyMounting() {
+void test_proxy_mounting() {
 
     HttpRouter router;
 
@@ -268,7 +268,7 @@ void testProxyMounting() {
 
 }
 
-void testTryFilesMounting() {
+void test_try_files_mounting() {
 
     HttpRouter router;
     router.tryFiles("/static", resolveStaticDir(), "127.0.0.1", 8080);
@@ -284,7 +284,7 @@ void testTryFilesMounting() {
 
 }
 
-void testFallbackProxyConfig() {
+void test_fallback_proxy_config() {
 
     HttpRouter router;
     router.proxy("/", "127.0.0.1", 8080, ProxyMode::Http);
@@ -296,16 +296,16 @@ void testFallbackProxyConfig() {
 int main() {
 
     try {
-        testExactMatch();
-        testPathParameters();
-        testWildcard();
-        testMultipleMethods();
-        testPriorityMatching();
-        testRouterOperations();
-        testEdgeCases();
-        testProxyMounting();
-        testTryFilesMounting();
-        testFallbackProxyConfig();
+        test_exact_match();
+        test_path_parameters();
+        test_wildcard();
+        test_multiple_methods();
+        test_priority_matching();
+        test_router_operations();
+        test_edge_cases();
+        test_proxy_mounting();
+        test_try_files_mounting();
+        test_fallback_proxy_config();
 
         return 0;
     } catch (const std::exception& e) {

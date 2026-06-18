@@ -1,6 +1,6 @@
 #include "test_common.hpp"
 
-void testSystem() {
+void test_system() {
     std::cout << "=== Testing System ===" << std::endl;
 
     // File operations
@@ -60,7 +60,7 @@ void testSystem() {
 
 // ==================== Time Utility Tests ====================
 
-void testBackTrace() {
+void test_back_trace() {
     std::cout << "=== Testing BackTrace ===" << std::endl;
 
     auto frames = BackTrace::getStackTrace(10, 0);
@@ -75,7 +75,7 @@ void testBackTrace() {
 
 // ==================== SignalHandler Tests ====================
 
-void testSignalHandler() {
+void test_signal_handler() {
     std::cout << "=== Testing SignalHandler ===" << std::endl;
 
     auto& handler = SignalHandler::instance();
@@ -99,7 +99,7 @@ void testSignalHandler() {
 
 // ==================== Pool Tests ====================
 
-void testProcess() {
+void test_process() {
     std::cout << "=== Testing Process ===" << std::endl;
 
     // Current process info
@@ -128,10 +128,10 @@ void testProcess() {
 int main() {
     std::cout << "\n=== platform_test ===" << std::endl;
     try {
-        testSystem();
-        testBackTrace();
-        testSignalHandler();
-        testProcess();
+        test_system();
+        test_back_trace();
+        test_signal_handler();
+        test_process();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

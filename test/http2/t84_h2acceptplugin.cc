@@ -198,7 +198,7 @@ private:
     bool m_result;
 };
 
-void testH2cAcceptPluginBlocksBeforeDownstreamPlugin()
+void test_h2c_accept_plugin_blocks_before_downstream_plugin()
 {
     std::atomic<int> gate_count{0};
     std::atomic<int> downstream_count{0};
@@ -250,7 +250,7 @@ void testH2cAcceptPluginBlocksBeforeDownstreamPlugin()
 }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-void testH2AcceptPluginBlocksBeforeDownstreamPlugin()
+void test_h2_accept_plugin_blocks_before_downstream_plugin()
 {
     std::atomic<int> gate_count{0};
     std::atomic<int> downstream_count{0};
@@ -308,9 +308,9 @@ void testH2AcceptPluginBlocksBeforeDownstreamPlugin()
 
 int main()
 {
-    testH2cAcceptPluginBlocksBeforeDownstreamPlugin();
+    test_h2c_accept_plugin_blocks_before_downstream_plugin();
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    testH2AcceptPluginBlocksBeforeDownstreamPlugin();
+    test_h2_accept_plugin_blocks_before_downstream_plugin();
 #endif
     std::cout << "T84-H2AcceptPlugin PASS\n";
     return 0;

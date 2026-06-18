@@ -7,7 +7,7 @@
 
 using namespace galay::mysql::protocol;
 
-void testReadWriteIntegers()
+void test_read_write_integers()
 {
     std::cout << "Testing integer read/write..." << std::endl;
 
@@ -46,7 +46,7 @@ void testReadWriteIntegers()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testLenEncInt()
+void test_len_enc_int()
 {
     std::cout << "Testing length-encoded integer..." << std::endl;
 
@@ -97,7 +97,7 @@ void testLenEncInt()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testLenEncString()
+void test_len_enc_string()
 {
     std::cout << "Testing length-encoded string..." << std::endl;
 
@@ -112,7 +112,7 @@ void testLenEncString()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testPacketHeader()
+void test_packet_header()
 {
     std::cout << "Testing packet header parse..." << std::endl;
 
@@ -136,7 +136,7 @@ void testPacketHeader()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testEncoder()
+void test_encoder()
 {
     std::cout << "Testing encoder..." << std::endl;
 
@@ -165,7 +165,7 @@ void testEncoder()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testCommandBuilder()
+void test_command_builder()
 {
     std::cout << "Testing command builder..." << std::endl;
 
@@ -211,7 +211,7 @@ void testCommandBuilder()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testOkPacketParse()
+void test_ok_packet_parse()
 {
     std::cout << "Testing OK packet parse..." << std::endl;
 
@@ -235,7 +235,7 @@ void testOkPacketParse()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testErrPacketParse()
+void test_err_packet_parse()
 {
     std::cout << "Testing ERR packet parse..." << std::endl;
 
@@ -262,14 +262,14 @@ int main()
 {
     std::cout << "=== T1: MySQL Protocol Tests ===" << std::endl;
 
-    testReadWriteIntegers();
-    testLenEncInt();
-    testLenEncString();
-    testPacketHeader();
-    testEncoder();
-    testCommandBuilder();
-    testOkPacketParse();
-    testErrPacketParse();
+    test_read_write_integers();
+    test_len_enc_int();
+    test_len_enc_string();
+    test_packet_header();
+    test_encoder();
+    test_command_builder();
+    test_ok_packet_parse();
+    test_err_packet_parse();
 
     std::cout << "\nAll protocol tests PASSED!" << std::endl;
     return 0;

@@ -4,7 +4,7 @@
 #include <fstream>
 #include <sstream>
 
-void testConcurrencyHeadersMovedToTool() {
+void test_concurrency_headers_moved_to_tool() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
     assert(!std::filesystem::exists(sourceRoot / "galay-utils/concurrency/pool.hpp"));
     assert(!std::filesystem::exists(sourceRoot / "galay-utils/concurrency/thread.hpp"));
@@ -12,7 +12,7 @@ void testConcurrencyHeadersMovedToTool() {
     assert(std::filesystem::exists(sourceRoot / "galay-utils/tool/thread.hpp"));
 }
 
-void testPool() {
+void test_pool() {
     std::cout << "=== Testing Pool ===" << std::endl;
 
     // Basic object pool
@@ -45,7 +45,7 @@ void testPool() {
 
 // ==================== Thread Tests ====================
 
-void testThreadPoolUsesConcurrentQueueWithoutMutex() {
+void test_thread_pool_uses_concurrent_queue_without_mutex() {
     std::ifstream input(std::string(GALAY_UTILS_SOURCE_DIR) + "/galay-utils/tool/thread.hpp");
     assert(input.good());
 
@@ -77,7 +77,7 @@ void testThreadPoolUsesConcurrentQueueWithoutMutex() {
     assert(waiterSource.find("unique_lock") == std::string::npos);
 }
 
-void testThread() {
+void test_thread() {
     std::cout << "=== Testing Thread ===" << std::endl;
 
     ThreadPool pool(4);
@@ -140,7 +140,7 @@ void testThread() {
 
 // ==================== RateLimiter Tests ====================
 
-void stressTestPool() {
+void test_stress_pool() {
     std::cout << "=== Stress Testing Pool ===" << std::endl;
 
     BlockingObjectPool<int> pool(100);
@@ -185,7 +185,7 @@ void stressTestPool() {
     std::cout << "Pool stress test passed!" << std::endl;
 }
 
-void stressTestThreadPool() {
+void test_stress_thread_pool() {
     std::cout << "=== Stress Testing ThreadPool ===" << std::endl;
 
     ThreadPool pool(8);
@@ -223,12 +223,12 @@ void stressTestThreadPool() {
 int main() {
     std::cout << "\n=== concurrency_test ===" << std::endl;
     try {
-        testConcurrencyHeadersMovedToTool();
-        testPool();
-        testThreadPoolUsesConcurrentQueueWithoutMutex();
-        testThread();
-        stressTestPool();
-        stressTestThreadPool();
+        test_concurrency_headers_moved_to_tool();
+        test_pool();
+        test_thread_pool_uses_concurrent_queue_without_mutex();
+        test_thread();
+        test_stress_pool();
+        test_stress_thread_pool();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

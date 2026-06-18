@@ -13,7 +13,7 @@ using namespace galay::async;
 /**
  * @brief 测试 GET 请求
  */
-Task<void> testGet(IOScheduler* scheduler)
+Task<void> test_get(IOScheduler* scheduler)
 {
 
     // 创建socket并连接
@@ -67,7 +67,7 @@ Task<void> testGet(IOScheduler* scheduler)
 /**
  * @brief 测试 POST 请求
  */
-Task<void> testPost(IOScheduler* scheduler)
+Task<void> test_post(IOScheduler* scheduler)
 {
 
     // 创建socket并连接
@@ -119,7 +119,7 @@ Task<void> testPost(IOScheduler* scheduler)
 /**
  * @brief 测试多个连续请求
  */
-Task<void> testMultipleRequests(IOScheduler* scheduler)
+Task<void> test_multiple_requests(IOScheduler* scheduler)
 {
 
     // 创建socket并连接
@@ -186,13 +186,13 @@ int main()
         }
 
         // 运行测试
-        scheduleTask(scheduler, testGet(scheduler));
+        scheduleTask(scheduler, test_get(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, testPost(scheduler));
+        scheduleTask(scheduler, test_post(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, testMultipleRequests(scheduler));
+        scheduleTask(scheduler, test_multiple_requests(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
         runtime.stop();

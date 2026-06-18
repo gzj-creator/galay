@@ -2,7 +2,7 @@
 
 #include <filesystem>
 
-void testBufferHeadersMovedToCache() {
+void test_buffer_headers_moved_to_cache() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
     assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool/byte_queue_view.hpp"));
     assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool/ring_buffer.hpp"));
@@ -10,7 +10,7 @@ void testBufferHeadersMovedToCache() {
     assert(std::filesystem::exists(sourceRoot / "galay-utils/cache/ring_buffer.hpp"));
 }
 
-void testByteQueueView() {
+void test_byte_queue_view() {
     std::cout << "=== Testing ByteQueueView ===" << std::endl;
 
     ByteQueueView queue;
@@ -70,7 +70,7 @@ void testByteQueueView() {
 
 // ==================== RingBuffer Tests ====================
 
-void testRingBuffer() {
+void test_ring_buffer() {
     std::cout << "=== Testing RingBuffer ===" << std::endl;
 
     {
@@ -206,7 +206,7 @@ void testRingBuffer() {
     std::cout << "RingBuffer tests passed!" << std::endl;
 }
 
-void testByteMetaDataHelpers() {
+void test_byte_meta_data_helpers() {
     std::cout << "=== Testing ByteMetaData helpers ===" << std::endl;
 
     ByteMetaData meta = mallocBytes(8);
@@ -244,7 +244,7 @@ void testByteMetaDataHelpers() {
     std::cout << "ByteMetaData helper tests passed!" << std::endl;
 }
 
-void testBytesContainer() {
+void test_bytes_container() {
     std::cout << "=== Testing Bytes ===" << std::endl;
 
     std::string source = "hello";
@@ -291,11 +291,11 @@ void testBytesContainer() {
 int main() {
     std::cout << "\n=== buffer_test ===" << std::endl;
     try {
-        testBufferHeadersMovedToCache();
-        testByteMetaDataHelpers();
-        testBytesContainer();
-        testByteQueueView();
-        testRingBuffer();
+        test_buffer_headers_moved_to_cache();
+        test_byte_meta_data_helpers();
+        test_bytes_container();
+        test_byte_queue_view();
+        test_ring_buffer();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

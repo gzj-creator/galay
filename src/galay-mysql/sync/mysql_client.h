@@ -166,7 +166,7 @@ private:
     std::expected<Packet, MysqlError> recvPacket(); ///< 接收一个完整的MySQL包
 
     MysqlResult receiveResultSet(); ///< 接收完整结果集
-    MysqlVoidResult executeSimple(const std::string& sql); ///< 执行简单SQL语句
+    MysqlVoidResult runSimpleStatement(const std::string& sql); ///< 执行简单SQL语句
 
     int m_socket_fd;                             ///< 套接字文件描述符
     bool m_connected;                            ///< 是否已连接

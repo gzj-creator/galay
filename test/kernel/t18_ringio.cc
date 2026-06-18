@@ -46,7 +46,7 @@ std::string collectReadable(const RingBuffer& buffer) {
     return collected;
 }
 
-void testBasicOperations() {
+void test_basic_operations() {
     LogInfo("=== Test: Basic Operations ===");
 
     RingBuffer buf(100);
@@ -75,7 +75,7 @@ void testBasicOperations() {
     LogInfo("Test: Basic Operations PASSED");
 }
 
-void testWrapAround() {
+void test_wrap_around() {
     LogInfo("=== Test: Wrap Around ===");
 
     RingBuffer buf(20);
@@ -110,7 +110,7 @@ void testWrapAround() {
     LogInfo("Test: Wrap Around PASSED");
 }
 
-void testGetWriteIovecs() {
+void test_get_write_iovecs() {
     LogInfo("=== Test: getWriteIovecs ===");
 
     RingBuffer buf(20);
@@ -143,7 +143,7 @@ void testGetWriteIovecs() {
     LogInfo("Test: getWriteIovecs PASSED");
 }
 
-void testGetReadIovecs() {
+void test_get_read_iovecs() {
     LogInfo("=== Test: getReadIovecs ===");
 
     RingBuffer buf(20);
@@ -173,7 +173,7 @@ void testGetReadIovecs() {
     LogInfo("Test: getReadIovecs PASSED");
 }
 
-void testFullAndEmpty() {
+void test_full_and_empty() {
     LogInfo("=== Test: Full and Empty ===");
 
     RingBuffer buf(10);
@@ -198,7 +198,7 @@ void testFullAndEmpty() {
     LogInfo("Test: Full and Empty PASSED");
 }
 
-void testMoveSemantics() {
+void test_move_semantics() {
     LogInfo("=== Test: Move Semantics ===");
 
     RingBuffer buf1(100);
@@ -378,12 +378,12 @@ int main() {
     LogInfo("=== RingBuffer Unit Tests ===");
 
     // 运行单元测试
-    testBasicOperations();
-    testWrapAround();
-    testGetWriteIovecs();
-    testGetReadIovecs();
-    testFullAndEmpty();
-    testMoveSemantics();
+    test_basic_operations();
+    test_wrap_around();
+    test_get_write_iovecs();
+    test_get_read_iovecs();
+    test_full_and_empty();
+    test_move_semantics();
 
     LogInfo("=== All Unit Tests PASSED ===");
     LogInfo("");

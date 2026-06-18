@@ -2,7 +2,7 @@
 
 #include <limits>
 
-void testString() {
+void test_string() {
     std::cout << "=== Testing String ===" << std::endl;
 
     // Split
@@ -136,7 +136,7 @@ void testString() {
 
 // ==================== Random Tests ====================
 
-void testRandom() {
+void test_random() {
     std::cout << "=== Testing Random ===" << std::endl;
 
     auto& rng = Randomizer::instance();
@@ -226,7 +226,7 @@ void testRandom() {
 
 // ==================== System Tests ====================
 
-void testTimeUtilities() {
+void test_time_utilities() {
     std::cout << "=== Testing Time Utilities ===" << std::endl;
 
     const int64_t ms = Time::currentTimeMs();
@@ -328,7 +328,7 @@ void testTimeUtilities() {
 
 // ==================== ByteQueueView Tests ====================
 
-void testTypeName() {
+void test_type_name() {
     std::cout << "=== Testing TypeName ===" << std::endl;
 
     std::string intName = getTypeName<int>();
@@ -355,10 +355,10 @@ void testTypeName() {
 int main() {
     std::cout << "\n=== core_test ===" << std::endl;
     try {
-        testString();
-        testRandom();
-        testTimeUtilities();
-        testTypeName();
+        test_string();
+        test_random();
+        test_time_utilities();
+        test_type_name();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

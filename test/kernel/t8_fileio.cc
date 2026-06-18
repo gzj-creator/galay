@@ -75,7 +75,7 @@ void cleanupTestFile() {
 
 #ifdef USE_KQUEUE
 // Kqueue 平台测试 - 所有测试在一个协程中完成
-Task<void> testKqueueFileIO(std::atomic<bool>* done) {
+Task<void> test_kqueue_file_io(std::atomic<bool>* done) {
     LogInfo("=== Kqueue (macOS) File IO Test ===");
 
     // 测试1: 读取已有文件
@@ -172,7 +172,7 @@ void runKqueueTest() {
     scheduler.start();
 
     std::atomic<bool> done{false};
-    scheduleTask(scheduler, testKqueueFileIO(&done));
+    scheduleTask(scheduler, test_kqueue_file_io(&done));
 
     if (!waitForDone(done, std::chrono::seconds(5))) {
         LogError("[Kqueue] Test timed out waiting for file IO task completion");
@@ -185,7 +185,7 @@ void runKqueueTest() {
 
 #ifdef USE_EPOLL
 // Epoll 平台测试 - 所有测试在一个协程中完成
-Task<void> testEpollFileIO(std::atomic<bool>* done) {
+Task<void> test_epoll_file_io(std::atomic<bool>* done) {
     LogInfo("=== Epoll (Linux libaio) File IO Test ===");
 
     // 创建测试文件用于 O_DIRECT
@@ -359,7 +359,7 @@ void runEpollTest() {
     scheduler.start();
 
     std::atomic<bool> done{false};
-    scheduleTask(scheduler, testEpollFileIO(&done));
+    scheduleTask(scheduler, test_epoll_file_io(&done));
 
     if (!waitForDone(done, std::chrono::seconds(5))) {
         LogError("[Epoll/AIO] Test timed out waiting for file IO task completion");
@@ -372,7 +372,7 @@ void runEpollTest() {
 
 #ifdef USE_IOURING
 // io_uring 平台测试 - 所有测试在一个协程中完成
-Task<void> testIOUringFileIO(std::atomic<bool>* done) {
+Task<void> test_io_uring_file_io(std::atomic<bool>* done) {
     LogInfo("=== io_uring (Linux) File IO Test ===");
 
     // 测试1: 读取已有文件
@@ -469,7 +469,7 @@ void runIOUringTest() {
     scheduler.start();
 
     std::atomic<bool> done{false};
-    scheduleTask(scheduler, testIOUringFileIO(&done));
+    scheduleTask(scheduler, test_io_uring_file_io(&done));
 
     if (!waitForDone(done, std::chrono::seconds(5))) {
         LogError("[io_uring] Test timed out waiting for file IO task completion");

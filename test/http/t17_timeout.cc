@@ -19,7 +19,7 @@ using namespace std::chrono_literals;
 /**
  * @brief 测试 HttpClientAwaitable 超时
  */
-Task<void> testHttpClientAwaitableTimeout(IOScheduler* scheduler)
+Task<void> test_http_client_awaitable_timeout(IOScheduler* scheduler)
 {
     std::cout << "=== Test 1: HttpClientAwaitable Timeout ===" << std::endl;
 
@@ -77,7 +77,7 @@ Task<void> testHttpClientAwaitableTimeout(IOScheduler* scheduler)
 /**
  * @brief 测试 SendResponseAwaitable 和 GetResponseAwaitable 超时
  */
-Task<void> testReaderWriterAwaitableTimeout(IOScheduler* scheduler)
+Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
 {
     std::cout << "=== Test 2: SendResponseAwaitable & GetResponseAwaitable Timeout ===" << std::endl;
 
@@ -162,7 +162,7 @@ Task<void> testReaderWriterAwaitableTimeout(IOScheduler* scheduler)
 /**
  * @brief 测试 GetRequestAwaitable 超时
  */
-Task<void> testGetRequestAwaitableTimeout(IOScheduler* scheduler)
+Task<void> test_get_request_awaitable_timeout(IOScheduler* scheduler)
 {
     std::cout << "=== Test 3: GetRequestAwaitable Timeout ===" << std::endl;
     std::cout << "✓ GetRequestAwaitable now supports .timeout()" << std::endl;
@@ -174,7 +174,7 @@ Task<void> testGetRequestAwaitableTimeout(IOScheduler* scheduler)
 /**
  * @brief 测试 GetChunkAwaitable 超时
  */
-Task<void> testGetChunkAwaitableTimeout(IOScheduler* scheduler)
+Task<void> test_get_chunk_awaitable_timeout(IOScheduler* scheduler)
 {
     std::cout << "=== Test 4: GetChunkAwaitable Timeout ===" << std::endl;
     std::cout << "✓ GetChunkAwaitable now supports .timeout()" << std::endl;
@@ -186,7 +186,7 @@ Task<void> testGetChunkAwaitableTimeout(IOScheduler* scheduler)
 /**
  * @brief 测试底层 TcpSocket Awaitable 超时
  */
-Task<void> testTcpSocketAwaitableTimeout(IOScheduler* scheduler)
+Task<void> test_tcp_socket_awaitable_timeout(IOScheduler* scheduler)
 {
     std::cout << "=== Test 5: TcpSocket Awaitable Timeout ===" << std::endl;
 
@@ -257,19 +257,19 @@ int main()
         }
 
         // 运行所有测试
-        scheduleTask(scheduler, testTcpSocketAwaitableTimeout(scheduler));
+        scheduleTask(scheduler, test_tcp_socket_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(4));
 
-        scheduleTask(scheduler, testHttpClientAwaitableTimeout(scheduler));
+        scheduleTask(scheduler, test_http_client_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, testReaderWriterAwaitableTimeout(scheduler));
+        scheduleTask(scheduler, test_reader_writer_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, testGetRequestAwaitableTimeout(scheduler));
+        scheduleTask(scheduler, test_get_request_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testGetChunkAwaitableTimeout(scheduler));
+        scheduleTask(scheduler, test_get_chunk_awaitable_timeout(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         runtime.stop();

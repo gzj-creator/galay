@@ -153,9 +153,9 @@ private:
      * @param check_ok 是否检查响应的 ok 字段
      * @return 响应文档或 MongoError
      */
-    MongoResult executeCommand(const std::string& database,
-                               const MongoDocument& command,
-                               bool check_ok);
+    MongoResult runCommandRequest(const std::string& database,
+                                  const MongoDocument& command,
+                                  bool check_ok);
 
     /**
      * @brief 根据配置决定是否执行 SCRAM-SHA-256 认证

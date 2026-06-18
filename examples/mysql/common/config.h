@@ -10,7 +10,7 @@
 namespace mysql_example
 {
 
-struct MysqlExampleConfig {
+struct DbExampleConfig {
     std::string host = "127.0.0.1";
     uint16_t port = 3306;
     std::string user = "root";
@@ -61,9 +61,9 @@ inline uint16_t getEnvPortOrDefault(const char* key1, const char* key2, uint16_t
     return default_value;
 }
 
-inline MysqlExampleConfig loadMysqlExampleConfig()
+inline DbExampleConfig loadDbExampleConfig()
 {
-    MysqlExampleConfig cfg;
+    DbExampleConfig cfg;
     cfg.host = getEnvOrDefault("GALAY_MYSQL_HOST", "MYSQL_HOST", cfg.host);
     cfg.port = getEnvPortOrDefault("GALAY_MYSQL_PORT", "MYSQL_PORT", cfg.port);
     cfg.user = getEnvOrDefault("GALAY_MYSQL_USER", "MYSQL_USER", cfg.user);
@@ -72,7 +72,7 @@ inline MysqlExampleConfig loadMysqlExampleConfig()
     return cfg;
 }
 
-inline void printMysqlExampleConfig(const MysqlExampleConfig& cfg)
+inline void printDbExampleConfig(const DbExampleConfig& cfg)
 {
     std::cout << "MySQL config: host=" << cfg.host
               << ", port=" << cfg.port

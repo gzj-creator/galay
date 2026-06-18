@@ -17,7 +17,7 @@ bool failCase(const std::string& message)
     return false;
 }
 
-bool testBuilderPipelineEncode()
+bool test_builder_pipeline_encode()
 {
     std::cout << "Testing MongoCommandBuilder pipeline encode..." << std::endl;
 
@@ -81,7 +81,7 @@ bool testBuilderPipelineEncode()
     return true;
 }
 
-bool testAppendOpMsgWithDatabase()
+bool test_append_op_msg_with_database()
 {
     std::cout << "Testing MongoProtocol::appendOpMsgWithDatabase..." << std::endl;
 
@@ -132,10 +132,10 @@ bool testAppendOpMsgWithDatabase()
 int main()
 {
     std::cout << "=== T8: Mongo Protocol Builder Tests ===" << std::endl;
-    if (!testBuilderPipelineEncode()) {
+    if (!test_builder_pipeline_encode()) {
         return 1;
     }
-    if (!testAppendOpMsgWithDatabase()) {
+    if (!test_append_op_msg_with_database()) {
         return 1;
     }
     std::cout << "\nAll protocol builder tests PASSED!" << std::endl;

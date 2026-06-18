@@ -32,7 +32,7 @@ namespace {
 
 constexpr int kImmediateReady = 1;
 
-inline auto wakeToken() -> void* {
+inline auto wakeUserData() -> void* {
     return reinterpret_cast<void*>(static_cast<intptr_t>(-1));
 }
 
@@ -76,12 +76,12 @@ inline bool resolveSequenceSlot(IOEventType type, IOController::Index& slot) {
     return false;
 }
 
-struct TokenRecycleGuard {
-    SqeRequestToken* token = nullptr;
+struct HandleRecycleGuard {
+    SqeRequestHandle* handle = nullptr;
 
-    ~TokenRecycleGuard() {
-        if (token != nullptr) {
-            token->recycle();
+    ~HandleRecycleGuard() {
+        if (handle != nullptr) {
+            handle->recycle();
         }
     }
 };
@@ -264,15 +264,15 @@ bool IOUringReactor::shouldUseSendZc(size_t length) const noexcept {
 }
 
 void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
-                                    SqeRequestToken* token,
+                                    SqeRequestHandle* handle,
                                     int fd,
                                     const void* buffer,
                                     size_t length,
                                     int flags) {
-    if (token != nullptr) {
-        token->notify_expected = false;
-        token->notify_received = false;
-        token->result_completed = false;
+    if (handle != nullptr) {
+        handle->notify_expected = false;
+        handle->notify_received = false;
+        handle->result_completed = false;
     }
 
     if (shouldUseSendZc(length)) {
@@ -282,8 +282,8 @@ void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
                               length,
                               flags,
                               IORING_SEND_ZC_REPORT_USAGE);
-        if (token != nullptr) {
-            token->notify_expected = true;
+        if (handle != nullptr) {
+            handle->notify_expected = true;
         }
         return;
     }
@@ -309,16 +309,16 @@ int IOUringReactor::submitMultishotAccept(IOController* controller) {
     }
 
     // 每次重新挂载 multishot 请求都切换一次 request epoch，
-    // 让旧 request 的晚到 CQE 无法误命中新 token。
+    // 让旧 request 的晚到 CQE 无法误命中新 handle。
     controller->advanceSqeGeneration(IOController::READ);
-    auto* token = controller->makeSqeRequest(IOController::READ);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::READ);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -327,9 +327,9 @@ int IOUringReactor::submitMultishotAccept(IOController* controller) {
                                    nullptr,
                                    nullptr,
                                    SOCK_NONBLOCK | SOCK_CLOEXEC);
-    io_uring_sqe_set_data(sqe, token);
-    token->persistent = true;
-    controller->m_accept_multishot_token = token;
+    io_uring_sqe_set_data(sqe, handle);
+    handle->persistent = true;
+    controller->m_accept_multishot_handle = handle;
     controller->m_accept_multishot_armed = true;
     return 0;
 }
@@ -337,14 +337,14 @@ int IOUringReactor::submitMultishotAccept(IOController* controller) {
 int IOUringReactor::addConnect(IOController* controller) {
     auto* awaitable = controller->getAwaitable<ConnectAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::WRITE);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -352,7 +352,7 @@ int IOUringReactor::addConnect(IOController* controller) {
                           controller->m_handle.fd,
                           awaitable->m_host.sockAddr(),
                           *awaitable->m_host.addrLen());
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
@@ -378,26 +378,26 @@ int IOUringReactor::submitMultishotRecv(IOController* controller) {
         return -EINVAL;
     }
 
-    // awaitable 切换不应使持久 recv token 失效，但每次真正重挂
+    // awaitable 切换不应使持久 recv handle 失效，但每次真正重挂
     // multishot recv SQE 时必须推进 request epoch 以隔离旧 CQE。
     controller->advanceSqeGeneration(IOController::READ);
-    auto* token = controller->makeSqeRequest(IOController::READ);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::READ);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
     io_uring_prep_recv_multishot(sqe, controller->m_handle.fd, nullptr, 0, 0);
     sqe->flags |= IOSQE_BUFFER_SELECT;
     sqe->buf_group = kRecvBufferGroup;
-    io_uring_sqe_set_data(sqe, token);
-    token->persistent = true;
-    controller->m_recv_multishot_token = token;
+    io_uring_sqe_set_data(sqe, handle);
+    handle->persistent = true;
+    controller->m_recv_multishot_handle = handle;
     controller->m_recv_multishot_armed = true;
     return 0;
 }
@@ -405,38 +405,38 @@ int IOUringReactor::submitMultishotRecv(IOController* controller) {
 int IOUringReactor::addSend(IOController* controller) {
     auto* awaitable = controller->getAwaitable<SendAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::WRITE);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
     prepareSendSqe(sqe,
-                   token,
+                   handle,
                    controller->m_handle.fd,
                    awaitable->m_buffer,
                    awaitable->m_length,
                    0);
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
 int IOUringReactor::addReadv(IOController* controller) {
     auto* awaitable = controller->getAwaitable<ReadvAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::READ);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::READ);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -450,21 +450,21 @@ int IOUringReactor::addReadv(IOController* controller) {
     } else {
         io_uring_prep_recvmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, 0);
     }
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
 int IOUringReactor::addWritev(IOController* controller) {
     auto* awaitable = controller->getAwaitable<WritevAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::WRITE);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -478,26 +478,26 @@ int IOUringReactor::addWritev(IOController* controller) {
     } else {
         io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, 0);
     }
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
 int IOUringReactor::addSendFile(IOController* controller) {
     auto* awaitable = controller->getAwaitable<SendFileAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::WRITE);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
     io_uring_prep_poll_add(sqe, controller->m_handle.fd, POLLOUT);
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
@@ -533,14 +533,14 @@ int IOUringReactor::addClose(IOController* controller) {
 int IOUringReactor::addFileRead(IOController* controller) {
     auto* awaitable = controller->getAwaitable<FileReadAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::READ);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::READ);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -549,21 +549,21 @@ int IOUringReactor::addFileRead(IOController* controller) {
                        awaitable->m_buffer,
                        awaitable->m_length,
                        awaitable->m_offset);
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
 int IOUringReactor::addFileWrite(IOController* controller) {
     auto* awaitable = controller->getAwaitable<FileWriteAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::WRITE);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -572,21 +572,21 @@ int IOUringReactor::addFileWrite(IOController* controller) {
                         awaitable->m_buffer,
                         awaitable->m_length,
                         awaitable->m_offset);
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
 int IOUringReactor::addRecvFrom(IOController* controller) {
     auto* awaitable = controller->getAwaitable<RecvFromAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::READ);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::READ);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -601,21 +601,21 @@ int IOUringReactor::addRecvFrom(IOController* controller) {
     awaitable->m_msg.msg_namelen = sizeof(awaitable->m_addr);
 
     io_uring_prep_recvmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, 0);
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
 int IOUringReactor::addSendTo(IOController* controller) {
     auto* awaitable = controller->getAwaitable<SendToAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::WRITE);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::WRITE);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -628,21 +628,21 @@ int IOUringReactor::addSendTo(IOController* controller) {
     awaitable->m_msg.msg_namelen = *awaitable->m_to.addrLen();
 
     io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, 0);
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
 int IOUringReactor::addFileWatch(IOController* controller) {
     auto* awaitable = controller->getAwaitable<FileWatchAwaitable>();
     if (awaitable == nullptr) return -1;
-    auto* token = controller->makeSqeRequest(IOController::READ);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(IOController::READ);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -651,7 +651,7 @@ int IOUringReactor::addFileWatch(IOController* controller) {
                        awaitable->m_buffer,
                        awaitable->m_buffer_size,
                        0);
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
@@ -728,14 +728,14 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
         }
     }
 
-    auto* token = controller->makeSqeRequest(slot);
-    if (token == nullptr) {
+    auto* handle = controller->makeSqeRequest(slot);
+    if (handle == nullptr) {
         return -ENOMEM;
     }
 
     auto* sqe = io_uring_get_sqe(&m_ring);
     if (!sqe) {
-        token->recycle();
+        handle->recycle();
         return -EAGAIN;
     }
 
@@ -747,7 +747,7 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
     }
     case SEND: {
         auto* c = static_cast<SendIOContext*>(ctx);
-        prepareSendSqe(sqe, token, controller->m_handle.fd, c->m_buffer, c->m_length, 0);
+        prepareSendSqe(sqe, handle, controller->m_handle.fd, c->m_buffer, c->m_length, 0);
         break;
     }
     case ACCEPT: {
@@ -829,13 +829,13 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
         break;
     }
     default:
-        token->recycle();
+        handle->recycle();
         return -EINVAL;
     }
 
     owner->m_sqe_type = SEQUENCE;
     controller->m_awaitable[slot] = owner;
-    io_uring_sqe_set_data(sqe, token);
+    io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
 
@@ -865,7 +865,7 @@ void IOUringReactor::ensureWakeReadArmed() {
     }
 
     io_uring_prep_read(sqe, m_event_fd, &m_eventfd_buf, sizeof(m_eventfd_buf), 0);
-    io_uring_sqe_set_data(sqe, wakeToken());
+    io_uring_sqe_set_data(sqe, wakeUserData());
     m_wake_read_armed = true;
 }
 
@@ -893,7 +893,7 @@ void IOUringReactor::poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator
 
     io_uring_for_each_cqe(&m_ring, head, cqe) {
         void* user_data = io_uring_cqe_get_data(cqe);
-        if (user_data == wakeToken()) {
+        if (user_data == wakeUserData()) {
             wake_triggered = true;
             m_wake_read_armed = false;
         } else if (user_data != nullptr) {
@@ -918,35 +918,35 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
         return;
     }
 
-    auto* token = static_cast<SqeRequestToken*>(data);
-    TokenRecycleGuard recycle_guard{token};
+    auto* handle = static_cast<SqeRequestHandle*>(data);
+    HandleRecycleGuard recycle_guard{handle};
     const bool notification = (cqe->flags & IORING_CQE_F_NOTIF) != 0;
     const bool more = (cqe->flags & IORING_CQE_F_MORE) != 0;
     if (notification) {
-        token->notify_received = true;
-        if (!token->result_completed) {
-            recycle_guard.token = nullptr;
+        handle->notify_received = true;
+        if (!handle->result_completed) {
+            recycle_guard.handle = nullptr;
         }
-    } else if (token->persistent) {
+    } else if (handle->persistent) {
         if (more) {
-            recycle_guard.token = nullptr;
+            recycle_guard.handle = nullptr;
         } else {
-            token->persistent = false;
+            handle->persistent = false;
         }
-    } else if (token->notify_expected) {
-        token->result_completed = true;
-        if (!token->notify_received) {
-            recycle_guard.token = nullptr;
+    } else if (handle->notify_expected) {
+        handle->result_completed = true;
+        if (!handle->notify_received) {
+            recycle_guard.handle = nullptr;
         }
     }
-    if (!token->state) {
+    if (!handle->state) {
         return;
     }
-    if (token->state->generation.load(std::memory_order_acquire) != token->generation) {
+    if (handle->state->generation.load(std::memory_order_acquire) != handle->generation) {
         return;
     }
 
-    auto* controller = token->state->owner.load(std::memory_order_acquire);
+    auto* controller = handle->state->owner.load(std::memory_order_acquire);
     if (!controller) {
         return;
     }
@@ -955,7 +955,7 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
         return;
     }
 
-    const auto slot = static_cast<IOController::Index>(token->state->slot);
+    const auto slot = static_cast<IOController::Index>(handle->state->slot);
     auto* base = static_cast<AwaitableBase*>(controller->m_awaitable[slot]);
     if (!base) {
         if (slot == IOController::READ) {
@@ -1197,7 +1197,7 @@ void IOUringReactor::processAcceptCompletion(IOController* controller,
         return;
     }
 
-    controller->m_accept_multishot_token = nullptr;
+    controller->m_accept_multishot_handle = nullptr;
     controller->m_accept_multishot_armed = false;
     if (controller->m_handle == GHandle::invalid()) {
         return;
@@ -1289,7 +1289,7 @@ void IOUringReactor::processRecvCompletion(IOController* controller,
         return;
     }
 
-    controller->m_recv_multishot_token = nullptr;
+    controller->m_recv_multishot_handle = nullptr;
     controller->m_recv_multishot_armed = false;
 }
 

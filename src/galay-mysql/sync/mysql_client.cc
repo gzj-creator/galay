@@ -875,7 +875,7 @@ MysqlVoidResult MysqlClient::stmtClose(uint32_t stmt_id)
     return sendAll(cmd);
 }
 
-MysqlVoidResult MysqlClient::executeSimple(const std::string& sql)
+MysqlVoidResult MysqlClient::runSimpleStatement(const std::string& sql)
 {
     auto result = query(sql);
     if (!result) {
@@ -884,11 +884,11 @@ MysqlVoidResult MysqlClient::executeSimple(const std::string& sql)
     return {};
 }
 
-MysqlVoidResult MysqlClient::beginTransaction() { return executeSimple("BEGIN"); }
-MysqlVoidResult MysqlClient::commit() { return executeSimple("COMMIT"); }
-MysqlVoidResult MysqlClient::rollback() { return executeSimple("ROLLBACK"); }
-MysqlVoidResult MysqlClient::ping() { return executeSimple("SELECT 1"); }
-MysqlVoidResult MysqlClient::useDatabase(const std::string& database) { return executeSimple("USE " + database); }
+MysqlVoidResult MysqlClient::beginTransaction() { return runSimpleStatement("BEGIN"); }
+MysqlVoidResult MysqlClient::commit() { return runSimpleStatement("COMMIT"); }
+MysqlVoidResult MysqlClient::rollback() { return runSimpleStatement("ROLLBACK"); }
+MysqlVoidResult MysqlClient::ping() { return runSimpleStatement("SELECT 1"); }
+MysqlVoidResult MysqlClient::useDatabase(const std::string& database) { return runSimpleStatement("USE " + database); }
 
 void MysqlClient::close()
 {

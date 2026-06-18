@@ -41,7 +41,7 @@ inline std::optional<BenchmarkMode> parseMode(std::string_view mode)
     return std::nullopt;
 }
 
-struct MysqlBenchmarkConfig {
+struct DbBenchmarkConfig {
     std::string host = "127.0.0.1";
     uint16_t port = 3306;
     std::string user = "root";
@@ -139,9 +139,9 @@ inline bool parseBoolOrDefault(const char* value, bool default_value)
     return default_value;
 }
 
-inline MysqlBenchmarkConfig loadMysqlBenchmarkConfig()
+inline DbBenchmarkConfig loadDbBenchmarkConfig()
 {
-    MysqlBenchmarkConfig cfg;
+    DbBenchmarkConfig cfg;
 
     cfg.host = getEnvOrDefault("GALAY_MYSQL_HOST", "MYSQL_HOST", cfg.host);
     cfg.port = getEnvPortOrDefault("GALAY_MYSQL_PORT", "MYSQL_PORT", cfg.port);
@@ -184,7 +184,7 @@ inline bool parsePositiveSizeArg(int argc, char* argv[], int& i, size_t& out)
     return true;
 }
 
-inline bool parseArgs(MysqlBenchmarkConfig& cfg, int argc, char* argv[], std::ostream& err)
+inline bool parseArgs(DbBenchmarkConfig& cfg, int argc, char* argv[], std::ostream& err)
 {
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg(argv[i]);
@@ -291,7 +291,7 @@ inline void printUsage(const char* prog)
         << "  GALAY_MYSQL_BENCH_ALLOC_STATS\n";
 }
 
-inline void printConfig(const MysqlBenchmarkConfig& cfg)
+inline void printConfig(const DbBenchmarkConfig& cfg)
 {
     std::cout
         << "MySQL config: host=" << cfg.host

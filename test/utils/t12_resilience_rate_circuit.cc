@@ -49,7 +49,7 @@ ConcurrentAcquireResult runConcurrentAcquire(size_t threadCount, size_t attempts
     };
 }
 
-void testRateLimiterUsesLockFreeNonBlockingState() {
+void test_rate_limiter_uses_lock_free_non_blocking_state() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
     std::ifstream input(sourceRoot / "galay-utils/tool/rate_limiter.hpp");
     assert(input.good());
@@ -69,7 +69,7 @@ void testRateLimiterUsesLockFreeNonBlockingState() {
     assert(limiterSource.find("std::deque") == std::string::npos);
 }
 
-void testRateLimiter() {
+void test_rate_limiter() {
     std::cout << "=== Testing RateLimiter ===" << std::endl;
 
     // Counting semaphore - 使用 tryAcquire 测试基本功能
@@ -137,7 +137,7 @@ void testRateLimiter() {
 
 // ==================== CircuitBreaker Tests ====================
 
-void testCircuitBreaker() {
+void test_circuit_breaker() {
     std::cout << "=== Testing CircuitBreaker ===" << std::endl;
 
     CircuitBreakerConfig config;
@@ -172,7 +172,7 @@ void testCircuitBreaker() {
     std::cout << "CircuitBreaker tests passed!" << std::endl;
 }
 
-void testCircuitBreakerExpectedExecution() {
+void test_circuit_breaker_expected_execution() {
     std::cout << "=== Testing CircuitBreaker expected execution ===" << std::endl;
 
     using Error = std::variant<CircuitBreakerTestError, CircuitBreakerError>;
@@ -228,7 +228,7 @@ void testCircuitBreakerExpectedExecution() {
     std::cout << "CircuitBreaker expected execution tests passed!" << std::endl;
 }
 
-void testCircuitBreakerExpectedFallback() {
+void test_circuit_breaker_expected_fallback() {
     std::cout << "=== Testing CircuitBreaker expected fallback ===" << std::endl;
 
     using Result = std::expected<int, CircuitBreakerTestError>;
@@ -276,7 +276,7 @@ void testCircuitBreakerExpectedFallback() {
     std::cout << "CircuitBreaker expected fallback tests passed!" << std::endl;
 }
 
-void testCircuitBreakerManualClockTimeout() {
+void test_circuit_breaker_manual_clock_timeout() {
     std::cout << "=== Testing CircuitBreaker manual clock timeout ===" << std::endl;
 
     ManualClock::reset();
@@ -302,7 +302,7 @@ void testCircuitBreakerManualClockTimeout() {
     std::cout << "CircuitBreaker manual clock timeout tests passed!" << std::endl;
 }
 
-void testCircuitBreakerHalfOpenProbeLimit() {
+void test_circuit_breaker_half_open_probe_limit() {
     std::cout << "=== Testing CircuitBreaker half-open probe limit ===" << std::endl;
 
     ManualClock::reset();
@@ -333,7 +333,7 @@ void testCircuitBreakerHalfOpenProbeLimit() {
     std::cout << "CircuitBreaker half-open probe limit tests passed!" << std::endl;
 }
 
-void testCircuitBreakerForceOpenUsesCurrentTime() {
+void test_circuit_breaker_force_open_uses_current_time() {
     std::cout << "=== Testing CircuitBreaker force open timestamp ===" << std::endl;
 
     ManualClock::reset();
@@ -362,7 +362,7 @@ void testCircuitBreakerForceOpenUsesCurrentTime() {
 
 // ==================== ConsistentHash Tests ====================
 
-void stressTestCircuitBreaker() {
+void test_stress_circuit_breaker() {
     std::cout << "=== Stress Testing CircuitBreaker ===" << std::endl;
 
     CircuitBreakerConfig config;
@@ -420,7 +420,7 @@ void stressTestCircuitBreaker() {
     std::cout << "CircuitBreaker stress test passed!" << std::endl;
 }
 
-void stressTestRateLimiterCorrectness() {
+void test_stress_rate_limiter_correctness() {
     std::cout << "=== Stress Testing RateLimiter correctness ===" << std::endl;
 
     constexpr size_t threadCount = 16;
@@ -497,7 +497,7 @@ void stressTestRateLimiterCorrectness() {
     std::cout << "RateLimiter correctness stress test passed!" << std::endl;
 }
 
-void stressTestRateLimiter() {
+void test_stress_rate_limiter() {
     std::cout << "=== Stress Testing RateLimiter ===" << std::endl;
 
     const int threadCount = 4;
@@ -613,17 +613,17 @@ void stressTestRateLimiter() {
 int main() {
     std::cout << "\n=== resilience_test ===" << std::endl;
     try {
-        testRateLimiterUsesLockFreeNonBlockingState();
-        testRateLimiter();
-        testCircuitBreaker();
-        testCircuitBreakerExpectedExecution();
-        testCircuitBreakerExpectedFallback();
-        testCircuitBreakerManualClockTimeout();
-        testCircuitBreakerHalfOpenProbeLimit();
-        testCircuitBreakerForceOpenUsesCurrentTime();
-        stressTestCircuitBreaker();
-        stressTestRateLimiterCorrectness();
-        stressTestRateLimiter();
+        test_rate_limiter_uses_lock_free_non_blocking_state();
+        test_rate_limiter();
+        test_circuit_breaker();
+        test_circuit_breaker_expected_execution();
+        test_circuit_breaker_expected_fallback();
+        test_circuit_breaker_manual_clock_timeout();
+        test_circuit_breaker_half_open_probe_limit();
+        test_circuit_breaker_force_open_uses_current_time();
+        test_stress_circuit_breaker();
+        test_stress_rate_limiter_correctness();
+        test_stress_rate_limiter();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

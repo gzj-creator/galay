@@ -22,7 +22,7 @@ std::atomic<int> g_totalTests{0};
 std::atomic<int> g_passedTests{0};
 
 // 测试1：基本功能测试
-void testBasicFunctionality() {
+void test_basic_functionality() {
     std::cout << "\n[Test 1] Testing basic functionality..." << std::endl;
     g_totalTests++;
 
@@ -49,7 +49,7 @@ void testBasicFunctionality() {
 }
 
 // 测试2：多线程并发添加定时器
-void testConcurrentAdd() {
+void test_concurrent_add() {
     std::cout << "\n[Test 2] Testing concurrent timer addition..." << std::endl;
     g_totalTests++;
 
@@ -96,7 +96,7 @@ void testConcurrentAdd() {
 }
 
 // 测试3：高并发压力测试
-void testHighConcurrency() {
+void test_high_concurrency() {
     std::cout << "\n[Test 3] Testing high concurrency stress..." << std::endl;
     g_totalTests++;
 
@@ -164,7 +164,7 @@ void testHighConcurrency() {
 }
 
 // 测试4：定时器取消测试
-void testTimerCancellation() {
+void test_timer_cancellation() {
     std::cout << "\n[Test 4] Testing timer cancellation..." << std::endl;
     g_totalTests++;
 
@@ -207,7 +207,7 @@ void testTimerCancellation() {
 }
 
 // 测试5：批量添加测试
-void testBatchAdd() {
+void test_batch_add() {
     std::cout << "\n[Test 5] Testing batch timer addition..." << std::endl;
     g_totalTests++;
 
@@ -251,7 +251,7 @@ void testBatchAdd() {
 }
 
 // 测试6：启动停止测试
-void testStartStop() {
+void test_start_stop() {
     std::cout << "\n[Test 6] Testing start/stop cycles..." << std::endl;
     g_totalTests++;
 
@@ -281,7 +281,7 @@ void testStartStop() {
 }
 
 // 测试7：边界条件测试
-void testEdgeCases() {
+void test_edge_cases() {
     std::cout << "\n[Test 7] Testing edge cases..." << std::endl;
     g_totalTests++;
 
@@ -311,7 +311,7 @@ void testEdgeCases() {
 }
 
 // 测试8：并发添加和取消
-void testConcurrentAddAndCancel() {
+void test_concurrent_add_and_cancel() {
     std::cout << "\n[Test 8] Testing concurrent add and cancel..." << std::endl;
     g_totalTests++;
 
@@ -367,14 +367,14 @@ int main() {
     std::cout << "==========================================" << std::endl;
 
     try {
-        testBasicFunctionality();
-        testConcurrentAdd();
-        testHighConcurrency();
-        testTimerCancellation();
-        testBatchAdd();
-        testStartStop();
-        testEdgeCases();
-        testConcurrentAddAndCancel();
+        test_basic_functionality();
+        test_concurrent_add();
+        test_high_concurrency();
+        test_timer_cancellation();
+        test_batch_add();
+        test_start_stop();
+        test_edge_cases();
+        test_concurrent_add_and_cancel();
     } catch (const std::exception& e) {
         std::cerr << "\n✗ Test failed with exception: " << e.what() << std::endl;
         return 1;

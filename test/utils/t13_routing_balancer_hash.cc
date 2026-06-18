@@ -1,6 +1,6 @@
 #include "test_common.hpp"
 
-void testConsistentHash() {
+void test_consistent_hash() {
     std::cout << "=== Testing ConsistentHash ===" << std::endl;
 
     ConsistentHash hash(100);
@@ -35,7 +35,7 @@ void testConsistentHash() {
 
 // ==================== TrieTree Tests ====================
 
-void testLoadBalancer() {
+void test_load_balancer() {
     std::cout << "=== Testing LoadBalancer ===" << std::endl;
 
     std::vector<std::string> nodes = {"node1", "node2", "node3"};
@@ -116,8 +116,8 @@ void testLoadBalancer() {
 int main() {
     std::cout << "\n=== routing_test ===" << std::endl;
     try {
-        testConsistentHash();
-        testLoadBalancer();
+        test_consistent_hash();
+        test_load_balancer();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

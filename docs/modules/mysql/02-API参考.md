@@ -597,7 +597,7 @@ public:
 - 同步 `prepare()` 只返回 `{statement_id, num_columns, num_params}`；参数列 / 结果列元数据会被内部读取掉，但不会像异步 `PrepareResult` 那样向调用方暴露。
 - 同步 `stmtExecute()` 同样把缺省的 `param_types` 视为“剩余参数按 `MysqlFieldType::VAR_STRING` 编码”。
 - `stmtClose()` 只发送 `COM_STMT_CLOSE`，不会等待服务端响应。
-- `beginTransaction()` / `commit()` / `rollback()` / `ping()` / `useDatabase()` 都是对 `executeSimple()` 的薄封装；其中 `ping()` 同样执行 `SELECT 1`。
+- `beginTransaction()` / `commit()` / `rollback()` / `ping()` / `useDatabase()` 都复用同步简单语句请求路径；其中 `ping()` 同样执行 `SELECT 1`。
 - `close()` 是 best-effort：若当前已连接，会先尝试发送 `QUIT`，无论发送是否成功都继续关闭 socket。
 - 从公开头与实现可见，`MysqlClient` 没有对外声明任何线程同步策略；当前 examples / tests 也只按单线程、串行调用方式使用它。
 - 真实消费入口：`examples/mysql/include/e2_query.cc`、`examples/mysql/include/e4_prepared.cc`、`test/mysql/t4_client.cc`。

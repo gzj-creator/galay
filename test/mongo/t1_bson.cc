@@ -18,7 +18,7 @@ bool failCase(const std::string& message)
 
 } // namespace
 
-bool testBsonEncodeDecode()
+bool test_bson_encode_decode()
 {
     std::cout << "Testing BSON encode/decode..." << std::endl;
 
@@ -74,7 +74,7 @@ bool testBsonEncodeDecode()
     return true;
 }
 
-bool testOpMsgEncodeDecode()
+bool test_op_msg_encode_decode()
 {
     std::cout << "Testing OP_MSG encode/decode..." << std::endl;
 
@@ -112,10 +112,10 @@ bool testOpMsgEncodeDecode()
 int main()
 {
     std::cout << "=== T1: BSON & Mongo Protocol Tests ===" << std::endl;
-    if (!testBsonEncodeDecode()) {
+    if (!test_bson_encode_decode()) {
         return 1;
     }
-    if (!testOpMsgEncodeDecode()) {
+    if (!test_op_msg_encode_decode()) {
         return 1;
     }
     std::cout << "\nAll protocol tests PASSED!" << std::endl;

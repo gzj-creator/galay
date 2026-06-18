@@ -1,9 +1,9 @@
 /**
  * @file t116_sqestatesrc.cc
  * @brief 用途：锁定 IOController 中 SqeState 所有权收口后的源码边界。
- * 关键覆盖点：m_sqe_state 不再使用 shared_ptr，SqeRequestToken 与 IOController
- * 仅借用 token arena 内部的稳定 SqeState 地址，token arena 继续用 shared_ptr 自保活。
- * 通过条件：源码包含目标 token，且移除了 SqeState 的 shared_ptr 所有权层。
+ * 关键覆盖点：m_sqe_state 不再使用 shared_ptr，SqeRequestHandle 与 IOController
+ * 仅借用 handle arena 内部的稳定 SqeState 地址，handle arena 继续用 shared_ptr 自保活。
+ * 通过条件：源码包含目标 handle，且移除了 SqeState 的 shared_ptr 所有权层。
  */
 
 #include <filesystem>
@@ -46,19 +46,19 @@ int main() {
         return 1;
     }
     if (!containsText(text, "SqeState* state = nullptr;")) {
-        std::cerr << "[T116] expected SqeRequestToken to borrow SqeState via raw pointer\n";
+        std::cerr << "[T116] expected SqeRequestHandle to borrow SqeState via raw pointer\n";
         return 1;
     }
     if (!containsText(text, "SqeState m_state;")) {
-        std::cerr << "[T116] expected SqeTokenArena to embed a stable SqeState\n";
+        std::cerr << "[T116] expected SqeHandleArena to embed a stable SqeState\n";
         return 1;
     }
     if (!containsText(text, "SqeState* m_sqe_state[SIZE] = {nullptr, nullptr};")) {
         std::cerr << "[T116] expected IOController to borrow SqeState via raw pointers\n";
         return 1;
     }
-    if (!containsText(text, "std::shared_ptr<SqeTokenArena> m_sqe_token_pool[SIZE]")) {
-        std::cerr << "[T116] expected token arena shared ownership to remain for late CQE safety\n";
+    if (!containsText(text, "std::shared_ptr<SqeHandleArena> m_sqe_handle_pool[SIZE]")) {
+        std::cerr << "[T116] expected handle arena shared ownership to remain for late CQE safety\n";
         return 1;
     }
 

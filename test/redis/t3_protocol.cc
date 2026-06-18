@@ -4,7 +4,7 @@
 using namespace galay::redis::protocol;
 
 // 测试协议解析器
-void testParser() {
+void test_parser() {
     std::cout << "=== Testing RESP Parser ===" << std::endl;
 
     RespParser parser;
@@ -118,7 +118,7 @@ void testParser() {
 }
 
 // 测试协议编码器
-void testEncoder() {
+void test_encoder() {
     std::cout << "=== Testing RESP Encoder ===" << std::endl;
 
     RespEncoder encoder;
@@ -170,7 +170,7 @@ void testEncoder() {
 }
 
 // 测试编码解码往返
-void testRoundTrip() {
+void test_round_trip() {
     std::cout << "=== Testing Round Trip (Encode -> Decode) ===" << std::endl;
 
     RespEncoder encoder;
@@ -224,13 +224,13 @@ int main(int argc, char* argv[]) {
 
     try {
         // 测试协议解析器
-        testParser();
+        test_parser();
 
         // 测试协议编码器
-        testEncoder();
+        test_encoder();
 
         // 测试往返编解码
-        testRoundTrip();
+        test_round_trip();
 
         // 测试Redis客户端（默认跳过，需要实际的Redis服务器）
         bool runOnlineTest = (argc > 1 && std::string(argv[1]) == "--online");

@@ -70,7 +70,7 @@ private:
     int submitMultishotRecv(IOController* controller);  ///< 为 socket 提交持久 multishot recv SQE
     bool shouldUseSendZc(size_t length) const noexcept;  ///< 当前 send 请求是否应走 send_zc 路径
     void prepareSendSqe(struct io_uring_sqe* sqe,
-                        SqeRequestToken* token,
+                        SqeRequestHandle* handle,
                         int fd,
                         const void* buffer,
                         size_t length,

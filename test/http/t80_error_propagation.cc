@@ -125,7 +125,7 @@ Task<void> runClientErrorPropagationChecks(TestState* state)
     co_return;
 }
 
-bool testFileDescriptorErrorPropagation()
+bool test_file_descriptor_error_propagation()
 {
     try {
         FileDescriptor fd;
@@ -146,7 +146,7 @@ bool testFileDescriptorErrorPropagation()
     }
 }
 
-bool testParserErrorPropagation()
+bool test_parser_error_propagation()
 {
     try {
         auto huge_range = HttpRangeParser::parse(
@@ -203,10 +203,10 @@ bool testParserErrorPropagation()
 
 int main()
 {
-    if (!testFileDescriptorErrorPropagation()) {
+    if (!test_file_descriptor_error_propagation()) {
         return 1;
     }
-    if (!testParserErrorPropagation()) {
+    if (!test_parser_error_propagation()) {
         return 1;
     }
 

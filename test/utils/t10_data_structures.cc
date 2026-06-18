@@ -16,7 +16,7 @@ uint64_t stableBloomTestHash(uint64_t value) {
     return value ^ (value >> 31);
 }
 
-void testTrieTree() {
+void test_trie_tree() {
     std::cout << "=== Testing TrieTree ===" << std::endl;
 
     TrieTree trie;
@@ -50,7 +50,7 @@ void testTrieTree() {
 
 // ==================== Huffman Tests ====================
 
-void testHuffman() {
+void test_huffman() {
     std::cout << "=== Testing Huffman ===" << std::endl;
 
     // Build table from data
@@ -81,7 +81,7 @@ void testHuffman() {
 
 // ==================== MVCC Tests ====================
 
-void testMvcc() {
+void test_mvcc() {
     std::cout << "=== Testing MVCC ===" << std::endl;
 
     Mvcc<std::string> mvcc;
@@ -129,7 +129,7 @@ void testMvcc() {
 
 // ==================== Bloom Filter Tests ====================
 
-void testBloomFilter() {
+void test_bloom_filter() {
     std::cout << "=== Testing BloomFilter ===" << std::endl;
 
     static_assert(!HasPreciseContains<BloomFilter<int>>);
@@ -246,10 +246,10 @@ void testBloomFilter() {
 int main() {
     std::cout << "\n=== data_test ===" << std::endl;
     try {
-        testTrieTree();
-        testHuffman();
-        testMvcc();
-        testBloomFilter();
+        test_trie_tree();
+        test_huffman();
+        test_mvcc();
+        test_bloom_filter();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

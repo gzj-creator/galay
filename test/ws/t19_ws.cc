@@ -24,7 +24,7 @@ std::atomic<int> fail_count{0};
 /**
  * @brief 客户端测试协程
  */
-Task<void> testClient(const std::string& host, uint16_t port, int num_messages) {
+Task<void> test_client(const std::string& host, uint16_t port, int num_messages) {
     auto client = WsClientBuilder().build();
 
     // 构建 WebSocket URL
@@ -179,7 +179,7 @@ int main(int argc, char* argv[]) {
         runtime.start();
 
         auto* scheduler = runtime.getNextIOScheduler();
-        scheduleTask(scheduler, testClient(host, port, num_messages));
+        scheduleTask(scheduler, test_client(host, port, num_messages));
 
         // Wait for completion (max 30 seconds)
         for (int i = 0; i < 300; i++) {

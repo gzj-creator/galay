@@ -32,7 +32,7 @@ using namespace galay::kernel;
 /**
  * @brief WebSocket 客户端测试
  */
-Task<void> testWebSocketClient(IOScheduler* scheduler) {
+Task<void> test_web_socket_client(IOScheduler* scheduler) {
 
     // 创建 socket 并连接
     TcpSocket socket(IPType::IPV4);
@@ -171,7 +171,7 @@ int main() {
         return 1;
     }
 
-    scheduleTask(scheduler, testWebSocketClient(scheduler));
+    scheduleTask(scheduler, test_web_socket_client(scheduler));
 
     // 等待测试完成（这里简单地等待一段时间）
     std::this_thread::sleep_for(std::chrono::seconds(30));

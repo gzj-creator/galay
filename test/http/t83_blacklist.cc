@@ -339,7 +339,7 @@ void expectResponseBlocked(const std::string& response, const char* message)
     }
 }
 
-void testCountLimitCompatibility()
+void test_count_limit_compatibility()
 {
     BlackList<TcpSocket>::clearConnInfo();
     ScenarioResult result = runScenario(
@@ -357,7 +357,7 @@ void testCountLimitCompatibility()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testIntervalBlockPolicyUnblocksAndResetsCounter()
+void test_interval_block_policy_unblocks_and_resets_counter()
 {
     BlackList<TcpSocket>::clearConnInfo();
     BlackListConfig config;
@@ -384,7 +384,7 @@ void testIntervalBlockPolicyUnblocksAndResetsCounter()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testIntervalBlockPolicyBlocksAllWhenLimitIsZero()
+void test_interval_block_policy_blocks_all_when_limit_is_zero()
 {
     BlackList<TcpSocket>::clearConnInfo();
     BlackListConfig config;
@@ -409,7 +409,7 @@ void testIntervalBlockPolicyBlocksAllWhenLimitIsZero()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testIntervalBlockPolicyExpiresWindowWithoutBlocking()
+void test_interval_block_policy_expires_window_without_blocking()
 {
     BlackList<TcpSocket>::clearConnInfo();
     BlackListConfig config;
@@ -434,7 +434,7 @@ void testIntervalBlockPolicyExpiresWindowWithoutBlocking()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testDecayCounterPolicyRestoresAccessAfterDecay()
+void test_decay_counter_policy_restores_access_after_decay()
 {
     BlackList<TcpSocket>::clearConnInfo();
     BlackListConfig config;
@@ -462,7 +462,7 @@ void testDecayCounterPolicyRestoresAccessAfterDecay()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testDecayCounterPolicyDoesNotDecayBeforeFullInterval()
+void test_decay_counter_policy_does_not_decay_before_full_interval()
 {
     BlackList<TcpSocket>::clearConnInfo();
     BlackListConfig config;
@@ -488,7 +488,7 @@ void testDecayCounterPolicyDoesNotDecayBeforeFullInterval()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testSeparatePluginInstancesShareBlacklistState()
+void test_separate_plugin_instances_share_blacklist_state()
 {
     BlackList<TcpSocket>::clearConnInfo();
 
@@ -518,7 +518,7 @@ void testSeparatePluginInstancesShareBlacklistState()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testConcurrentPressureSharesLimitAcrossServerLoops()
+void test_concurrent_pressure_shares_limit_across_server_loops()
 {
     BlackList<TcpSocket>::clearConnInfo();
 
@@ -549,7 +549,7 @@ void testConcurrentPressureSharesLimitAcrossServerLoops()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testDecayCounterPolicyConcurrentPressureSharesLimitAcrossServerLoops()
+void test_decay_counter_policy_concurrent_pressure_shares_limit_across_server_loops()
 {
     BlackList<TcpSocket>::clearConnInfo();
 
@@ -581,7 +581,7 @@ void testDecayCounterPolicyConcurrentPressureSharesLimitAcrossServerLoops()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testExcludedIpBypassesBlacklistButContinuesPluginChain()
+void test_excluded_ip_bypasses_blacklist_but_continues_plugin_chain()
 {
     BlackList<TcpSocket>::clearConnInfo();
 
@@ -635,7 +635,7 @@ void testExcludedIpBypassesBlacklistButContinuesPluginChain()
     BlackList<TcpSocket>::clearConnInfo();
 }
 
-void testBlacklistStopsDownstreamAcceptPluginAndHandler()
+void test_blacklist_stops_downstream_accept_plugin_and_handler()
 {
     BlackList<TcpSocket>::clearConnInfo();
 
@@ -690,17 +690,17 @@ void testBlacklistStopsDownstreamAcceptPluginAndHandler()
 
 int main()
 {
-    testCountLimitCompatibility();
-    testIntervalBlockPolicyUnblocksAndResetsCounter();
-    testIntervalBlockPolicyBlocksAllWhenLimitIsZero();
-    testIntervalBlockPolicyExpiresWindowWithoutBlocking();
-    testDecayCounterPolicyRestoresAccessAfterDecay();
-    testDecayCounterPolicyDoesNotDecayBeforeFullInterval();
-    testSeparatePluginInstancesShareBlacklistState();
-    testConcurrentPressureSharesLimitAcrossServerLoops();
-    testDecayCounterPolicyConcurrentPressureSharesLimitAcrossServerLoops();
-    testExcludedIpBypassesBlacklistButContinuesPluginChain();
-    testBlacklistStopsDownstreamAcceptPluginAndHandler();
+    test_count_limit_compatibility();
+    test_interval_block_policy_unblocks_and_resets_counter();
+    test_interval_block_policy_blocks_all_when_limit_is_zero();
+    test_interval_block_policy_expires_window_without_blocking();
+    test_decay_counter_policy_restores_access_after_decay();
+    test_decay_counter_policy_does_not_decay_before_full_interval();
+    test_separate_plugin_instances_share_blacklist_state();
+    test_concurrent_pressure_shares_limit_across_server_loops();
+    test_decay_counter_policy_concurrent_pressure_shares_limit_across_server_loops();
+    test_excluded_ip_bypasses_blacklist_but_continues_plugin_chain();
+    test_blacklist_stops_downstream_accept_plugin_and_handler();
 
     std::cout << "T83-BlackList PASS\n";
     return 0;

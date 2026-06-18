@@ -8,8 +8,8 @@ using namespace galay::mysql;
 
 int main()
 {
-    const auto cfg = mysql_example::loadMysqlExampleConfig();
-    mysql_example::printMysqlExampleConfig(cfg);
+    const auto cfg = mysql_example::loadDbExampleConfig();
+    mysql_example::printDbExampleConfig(cfg);
 
     MysqlClient session;
     auto conn = session.connect(cfg.host, cfg.port, cfg.user, cfg.password, cfg.database);

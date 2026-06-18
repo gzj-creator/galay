@@ -29,7 +29,7 @@ std::atomic<int> g_total{0};
 std::atomic<bool> g_test1_done{false};
 std::atomic<int> g_test1_received{0};
 
-Task<void> testBasicSendRecv(MpscChannel<int>* channel) {
+Task<void> test_basic_send_recv(MpscChannel<int>* channel) {
     auto value = co_await channel->recv();
     if (value && *value == 42) {
         g_test1_received = *value;
@@ -45,7 +45,7 @@ std::atomic<int> g_test2_sum{0};
 std::atomic<bool> g_test2_done{false};
 constexpr int TEST2_COUNT = 10;
 
-Task<void> testMultipleSendRecv(MpscChannel<int>* channel) {
+Task<void> test_multiple_send_recv(MpscChannel<int>* channel) {
     for (int i = 0; i < TEST2_COUNT; ++i) {
         auto value = co_await channel->recv();
         if (value) {
@@ -62,7 +62,7 @@ Task<void> testMultipleSendRecv(MpscChannel<int>* channel) {
 std::atomic<int> g_test3_total{0};
 std::atomic<bool> g_test3_done{false};
 
-Task<void> testBatchSendRecv(MpscChannel<int>* channel) {
+Task<void> test_batch_send_recv(MpscChannel<int>* channel) {
     auto batch = co_await channel->recvBatch(100);
     if (batch) {
         for (int v : *batch) {
@@ -79,7 +79,7 @@ Task<void> testBatchSendRecv(MpscChannel<int>* channel) {
 std::atomic<bool> g_test4_done{false};
 std::atomic<int> g_test4_value{0};
 
-Task<void> testTryRecv(MpscChannel<int>* channel) {
+Task<void> test_try_recv(MpscChannel<int>* channel) {
     // 先尝试接收（应该有数据，因为主线程已经发送了）
     auto value = channel->tryRecv();
     if (value) {
@@ -106,7 +106,7 @@ std::atomic<bool> g_test5_done{false};
 constexpr int TEST5_PRODUCER_COUNT = 5;
 constexpr int TEST5_MSG_PER_PRODUCER = 10;
 
-Task<void> testMultiProducerConsumer(MpscChannel<int>* channel) {
+Task<void> test_multi_producer_consumer(MpscChannel<int>* channel) {
     int expected = TEST5_PRODUCER_COUNT * TEST5_MSG_PER_PRODUCER;
     while (g_test5_recv_count < expected) {
         auto value = co_await channel->recv();
@@ -133,7 +133,7 @@ std::atomic<bool> g_test6_waiting{false};
 std::atomic<bool> g_test6_received{false};
 std::atomic<bool> g_test6_done{false};
 
-Task<void> testEmptyChannelWait(MpscChannel<int>* channel) {
+Task<void> test_empty_channel_wait(MpscChannel<int>* channel) {
     g_test6_waiting = true;
     auto value = co_await channel->recv();
     g_test6_received = value.has_value();
@@ -146,7 +146,7 @@ Task<void> testEmptyChannelWait(MpscChannel<int>* channel) {
 // ============================================================================
 std::atomic<bool> g_test7_done{false};
 
-Task<void> testSizeAndEmpty(MpscChannel<int>* channel) {
+Task<void> test_size_and_empty(MpscChannel<int>* channel) {
     // 消费所有数据
     while (!channel->empty()) {
         co_await channel->recv();
@@ -162,7 +162,7 @@ std::atomic<int> g_test8_total{0};
 std::atomic<int> g_test8_count{0};
 std::atomic<bool> g_test8_done{false};
 
-Task<void> testBatchSend(MpscChannel<int>* channel) {
+Task<void> test_batch_send(MpscChannel<int>* channel) {
     // 接收所有数据（总共 10 个元素，分 3 批发送）
     int total_received = 0;
     while (total_received < 10) {
@@ -185,7 +185,7 @@ Task<void> testBatchSend(MpscChannel<int>* channel) {
 std::atomic<bool> g_test9_done{false};
 std::string g_test9_result;
 
-Task<void> testStringChannel(MpscChannel<std::string>* channel) {
+Task<void> test_string_channel(MpscChannel<std::string>* channel) {
     auto value = co_await channel->recv();
     if (value) {
         g_test9_result = *value;
@@ -202,7 +202,7 @@ std::atomic<int> g_test10_received{0};
 std::atomic<bool> g_test10_done{false};
 constexpr int TEST10_TOTAL = 1000;
 
-Task<void> testHighConcurrency(MpscChannel<int>* channel) {
+Task<void> test_high_concurrency(MpscChannel<int>* channel) {
     while (g_test10_received < TEST10_TOTAL) {
         auto value = co_await channel->recv();
         if (value) {
@@ -229,7 +229,7 @@ std::atomic<bool> g_test11_producer_done{false};
 std::atomic<bool> g_test11_consumer_done{false};
 constexpr int TEST11_MSG_COUNT = 50;
 
-Task<void> testCrossSchedulerProducer(MpscChannel<int>* channel) {
+Task<void> test_cross_scheduler_producer(MpscChannel<int>* channel) {
 
     for (int i = 1; i <= TEST11_MSG_COUNT; ++i) {
         channel->send(i);
@@ -239,7 +239,7 @@ Task<void> testCrossSchedulerProducer(MpscChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testCrossSchedulerConsumer(MpscChannel<int>* channel) {
+Task<void> test_cross_scheduler_consumer(MpscChannel<int>* channel) {
     while (g_test11_count < TEST11_MSG_COUNT) {
         auto value = co_await channel->recv();
         if (value) {
@@ -261,7 +261,7 @@ std::atomic<bool> g_test12_consumer_done{false};
 constexpr int TEST12_PRODUCER_COUNT = 3;
 constexpr int TEST12_MSG_PER_PRODUCER = 20;
 
-Task<void> testMultiSchedulerProducer(MpscChannel<int>* channel, int id) {
+Task<void> test_multi_scheduler_producer(MpscChannel<int>* channel, int id) {
 
     for (int i = 0; i < TEST12_MSG_PER_PRODUCER; ++i) {
         channel->send(id * 100 + i);
@@ -271,7 +271,7 @@ Task<void> testMultiSchedulerProducer(MpscChannel<int>* channel, int id) {
     co_return;
 }
 
-Task<void> testMultiSchedulerConsumer(MpscChannel<int>* channel) {
+Task<void> test_multi_scheduler_consumer(MpscChannel<int>* channel) {
     int expected = TEST12_PRODUCER_COUNT * TEST12_MSG_PER_PRODUCER;
     while (g_test12_count < expected) {
         auto value = co_await channel->recv();
@@ -293,7 +293,7 @@ std::atomic<bool> g_test13_done{false};
 constexpr int TEST13_MSG_COUNT = 100;
 
 // 生产者协程 - 在同一调度器线程中发送数据
-Task<void> testSameThreadProducer(MpscChannel<int>* channel, int startValue, int count) {
+Task<void> test_same_thread_producer(MpscChannel<int>* channel, int startValue, int count) {
 
     for (int i = 0; i < count; ++i) {
         channel->send(startValue + i);
@@ -303,7 +303,7 @@ Task<void> testSameThreadProducer(MpscChannel<int>* channel, int startValue, int
 }
 
 // 消费者协程 - 在同一调度器线程中接收数据
-Task<void> testSameThreadConsumer(MpscChannel<int>* channel, int expectedCount) {
+Task<void> test_same_thread_consumer(MpscChannel<int>* channel, int expectedCount) {
     while (g_test13_count < expectedCount) {
         auto value = co_await channel->recv();
         if (value) {
@@ -332,7 +332,7 @@ void runTests() {
         MpscChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testBasicSendRecv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_basic_send_recv(&channel)));
 
         channel.send(42);
 
@@ -363,7 +363,7 @@ void runTests() {
         MpscChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testMultipleSendRecv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_multiple_send_recv(&channel)));
 
         // 发送数据
         int expected_sum = 0;
@@ -405,7 +405,7 @@ void runTests() {
         channel.sendBatch(data);
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testBatchSendRecv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_send_recv(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test3_done) {
@@ -439,7 +439,7 @@ void runTests() {
         // 先发送数据，确保数据在协程启动前就在 channel 中
         channel.send(99);
 
-        scheduler.schedule(detail::TaskAccess::detachTask(testTryRecv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_try_recv(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test4_done) {
@@ -469,7 +469,7 @@ void runTests() {
         MpscChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testMultiProducerConsumer(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_multi_producer_consumer(&channel)));
 
         // 启动多个生产者线程
         std::vector<std::thread> producers;
@@ -511,7 +511,7 @@ void runTests() {
         MpscChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testEmptyChannelWait(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_empty_channel_wait(&channel)));
 
         // 等待消费者开始等待
         auto start = std::chrono::steady_clock::now();
@@ -558,7 +558,7 @@ void runTests() {
         bool not_empty = !channel.empty();
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testSizeAndEmpty(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_size_and_empty(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test7_done) {
@@ -589,7 +589,7 @@ void runTests() {
         MpscChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testBatchSend(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_send(&channel)));
 
         // 批量发送
         std::vector<int> batch1 = {1, 2, 3};
@@ -632,7 +632,7 @@ void runTests() {
         MpscChannel<std::string> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testStringChannel(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_string_channel(&channel)));
 
         channel.send(std::string("Hello, Channel!"));
 
@@ -663,7 +663,7 @@ void runTests() {
         MpscChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testHighConcurrency(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_high_concurrency(&channel)));
 
         // 多线程发送
         std::vector<std::thread> senders;
@@ -710,7 +710,7 @@ void runTests() {
         // 启动消费者调度器和协程
         std::thread consumerThread([&]() {
             consumerScheduler.start();
-            consumerScheduler.schedule(detail::TaskAccess::detachTask(testCrossSchedulerConsumer(&channel)));
+            consumerScheduler.schedule(detail::TaskAccess::detachTask(test_cross_scheduler_consumer(&channel)));
 
             auto start = std::chrono::steady_clock::now();
             while (!g_test11_consumer_done) {
@@ -723,7 +723,7 @@ void runTests() {
         // 启动生产者调度器和协程
         std::thread producerThread([&]() {
             producerScheduler.start();
-            producerScheduler.schedule(detail::TaskAccess::detachTask(testCrossSchedulerProducer(&channel)));
+            producerScheduler.schedule(detail::TaskAccess::detachTask(test_cross_scheduler_producer(&channel)));
 
             auto start = std::chrono::steady_clock::now();
             while (!g_test11_producer_done) {
@@ -771,7 +771,7 @@ void runTests() {
         // 启动消费者
         std::thread consumerThread([&]() {
             consumerScheduler.start();
-            consumerScheduler.schedule(detail::TaskAccess::detachTask(testMultiSchedulerConsumer(&channel)));
+            consumerScheduler.schedule(detail::TaskAccess::detachTask(test_multi_scheduler_consumer(&channel)));
 
             auto start = std::chrono::steady_clock::now();
             while (!g_test12_consumer_done) {
@@ -790,7 +790,7 @@ void runTests() {
         for (int i = 0; i < TEST12_PRODUCER_COUNT; ++i) {
             producerThreads.emplace_back([&producerSchedulers, &channel, i]() {
                 producerSchedulers[i]->start();
-                producerSchedulers[i]->schedule(detail::TaskAccess::detachTask(testMultiSchedulerProducer(&channel, i)));
+                producerSchedulers[i]->schedule(detail::TaskAccess::detachTask(test_multi_scheduler_producer(&channel, i)));
 
                 auto start = std::chrono::steady_clock::now();
                 while (g_test12_producers_done <= i) {
@@ -840,14 +840,14 @@ void runTests() {
         // 在同一个调度器中启动消费者和多个生产者
         // 这样 send 时 waiterScheduler->threadId() == std::this_thread::get_id()
         // 会走直接 resume 的高性能路径
-        scheduler.schedule(detail::TaskAccess::detachTask(testSameThreadConsumer(&channel, TEST13_MSG_COUNT)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_consumer(&channel, TEST13_MSG_COUNT)));
 
         // 启动多个生产者协程，每个发送一部分数据
         int perProducer = TEST13_MSG_COUNT / 4;
-        scheduler.schedule(detail::TaskAccess::detachTask(testSameThreadProducer(&channel, 0, perProducer)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testSameThreadProducer(&channel, perProducer, perProducer)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testSameThreadProducer(&channel, perProducer * 2, perProducer)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testSameThreadProducer(&channel, perProducer * 3, perProducer)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, 0, perProducer)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, perProducer, perProducer)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, perProducer * 2, perProducer)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, perProducer * 3, perProducer)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test13_done) {

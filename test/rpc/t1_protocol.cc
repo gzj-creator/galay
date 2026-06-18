@@ -12,7 +12,7 @@
 
 using namespace galay::rpc;
 
-void testRpcHeader(test::TestResultWriter& writer) {
+void test_rpc_header(test::TestResultWriter& writer) {
     RpcHeader header;
     header.m_type = static_cast<uint8_t>(RpcMessageType::REQUEST);
     header.m_request_id = 12345;
@@ -33,7 +33,7 @@ void testRpcHeader(test::TestResultWriter& writer) {
         parsed.m_body_length == 100);
 }
 
-void testRpcRequest(test::TestResultWriter& writer) {
+void test_rpc_request(test::TestResultWriter& writer) {
     RpcRequest request(1001, "TestService", "testMethod");
     std::string payload = "Hello, RPC!";
     request.payload(payload.data(), payload.size());
@@ -50,7 +50,7 @@ void testRpcRequest(test::TestResultWriter& writer) {
         std::string(result->payload().data(), result->payload().size()) == payload);
 }
 
-void testRpcResponse(test::TestResultWriter& writer) {
+void test_rpc_response(test::TestResultWriter& writer) {
     RpcResponse response(2001, RpcErrorCode::OK);
     std::string payload = "Response data";
     response.payload(payload.data(), payload.size());
@@ -66,7 +66,7 @@ void testRpcResponse(test::TestResultWriter& writer) {
         std::string(result->payload().data(), result->payload().size()) == payload);
 }
 
-void testRpcResponseError(test::TestResultWriter& writer) {
+void test_rpc_response_error(test::TestResultWriter& writer) {
     RpcResponse response(3001, RpcErrorCode::SERVICE_NOT_FOUND);
 
     auto serialized = response.serialize();
@@ -79,7 +79,7 @@ void testRpcResponseError(test::TestResultWriter& writer) {
         !result->isOk());
 }
 
-void testMessageLength(test::TestResultWriter& writer) {
+void test_message_length(test::TestResultWriter& writer) {
     RpcRequest request(100, "Svc", "Method");
     auto serialized = request.serialize();
 
@@ -89,7 +89,7 @@ void testMessageLength(test::TestResultWriter& writer) {
         len == serialized.size());
 }
 
-void testInvalidHeader(test::TestResultWriter& writer) {
+void test_invalid_header(test::TestResultWriter& writer) {
     char invalid_data[RPC_HEADER_SIZE] = {0};
 
     RpcHeader header;
@@ -98,7 +98,7 @@ void testInvalidHeader(test::TestResultWriter& writer) {
     writer.writeTestCase("Invalid header detection", !success);
 }
 
-void testIncompleteData(test::TestResultWriter& writer) {
+void test_incomplete_data(test::TestResultWriter& writer) {
     char partial_data[8] = {0};
 
     RpcHeader header;
@@ -108,7 +108,7 @@ void testIncompleteData(test::TestResultWriter& writer) {
         result == DecodeResult::INCOMPLETE);
 }
 
-void testEmptyPayload(test::TestResultWriter& writer) {
+void test_empty_payload(test::TestResultWriter& writer) {
     RpcRequest request(500, "EmptyService", "emptyMethod");
     auto serialized = request.serialize();
 
@@ -119,7 +119,7 @@ void testEmptyPayload(test::TestResultWriter& writer) {
         result->payload().empty());
 }
 
-void testLargePayload(test::TestResultWriter& writer) {
+void test_large_payload(test::TestResultWriter& writer) {
     RpcRequest request(600, "LargeService", "largeMethod");
     std::vector<char> large_payload(1024 * 1024, 'X');  // 1MB
     request.payload(large_payload.data(), large_payload.size());
@@ -132,7 +132,7 @@ void testLargePayload(test::TestResultWriter& writer) {
         result->payload().size() == large_payload.size());
 }
 
-void testRpcCallModeFlags(test::TestResultWriter& writer) {
+void test_rpc_call_mode_flags(test::TestResultWriter& writer) {
     const std::string payload = "stream-frame";
 
     RpcRequest request(700, "StreamService", "upload");
@@ -174,7 +174,7 @@ void testRpcCallModeFlags(test::TestResultWriter& writer) {
         std::string(response_decoded->payload().data(), response_decoded->payload().size()) == payload);
 }
 
-void testStreamMessageBorrowedPayload(test::TestResultWriter& writer) {
+void test_stream_message_borrowed_payload(test::TestResultWriter& writer) {
     static const char segment1[] = "hello";
     static const char segment2[] = "world";
 
@@ -196,7 +196,7 @@ void testStreamMessageBorrowedPayload(test::TestResultWriter& writer) {
         std::string(message.payload().data(), message.payload().size()) == "helloworld");
 }
 
-void testStreamMessageBorrowedPayloadSerialize(test::TestResultWriter& writer) {
+void test_stream_message_borrowed_payload_serialize(test::TestResultWriter& writer) {
     static const char segment1[] = "hello";
     static const char segment2[] = "world";
 
@@ -230,7 +230,7 @@ void testStreamMessageBorrowedPayloadSerialize(test::TestResultWriter& writer) {
              ", body=" + body));
 }
 
-void testStreamMessageCtorOwnsPayload(test::TestResultWriter& writer) {
+void test_stream_message_ctor_owns_payload(test::TestResultWriter& writer) {
     const std::string payload = "ctor-payload";
     StreamMessage message(901, payload.data(), payload.size());
 
@@ -245,19 +245,19 @@ int main() {
 
     std::cout << "Running RPC Protocol Tests...\n";
 
-    testRpcHeader(writer);
-    testRpcRequest(writer);
-    testRpcResponse(writer);
-    testRpcResponseError(writer);
-    testMessageLength(writer);
-    testInvalidHeader(writer);
-    testIncompleteData(writer);
-    testEmptyPayload(writer);
-    testLargePayload(writer);
-    testRpcCallModeFlags(writer);
-    testStreamMessageBorrowedPayload(writer);
-    testStreamMessageBorrowedPayloadSerialize(writer);
-    testStreamMessageCtorOwnsPayload(writer);
+    test_rpc_header(writer);
+    test_rpc_request(writer);
+    test_rpc_response(writer);
+    test_rpc_response_error(writer);
+    test_message_length(writer);
+    test_invalid_header(writer);
+    test_incomplete_data(writer);
+    test_empty_payload(writer);
+    test_large_payload(writer);
+    test_rpc_call_mode_flags(writer);
+    test_stream_message_borrowed_payload(writer);
+    test_stream_message_borrowed_payload_serialize(writer);
+    test_stream_message_ctor_owns_payload(writer);
 
     writer.writeSummary();
 

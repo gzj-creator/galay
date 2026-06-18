@@ -7,12 +7,12 @@ using namespace galay::mysql;
 int main()
 {
     std::cout << "=== T4: Sync MySQL Client Tests ===" << std::endl;
-    const auto db_cfg = mysql_test::loadMysqlTestConfig();
-    if (const int skip_code = mysql_test::requireMysqlTestConfigOrSkip(db_cfg, "T4-SyncMysqlClient");
+    const auto db_cfg = mysql_test::loadDbTestConfig();
+    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T4-SyncMysqlClient");
         skip_code != 0) {
         return skip_code;
     }
-    mysql_test::printMysqlTestConfig(db_cfg);
+    mysql_test::printDbTestConfig(db_cfg);
 
     MysqlClient session;
 

@@ -82,7 +82,7 @@ void rememberFirstError(SharedState* state, const std::string& error)
     }
 }
 
-bool warmupSession(EtcdClient& session, const std::string& warmup_key, SharedState* state)
+bool warmupClient(EtcdClient& session, const std::string& warmup_key, SharedState* state)
 {
     auto warmup = session.get(warmup_key);
     if (!warmup.has_value()) {
@@ -135,7 +135,7 @@ void runWorker(std::string endpoint,
         return;
     }
 
-    if (!warmupSession(session, key_prefix + "warmup/" + std::to_string(worker_id), state)) {
+    if (!warmupClient(session, key_prefix + "warmup/" + std::to_string(worker_id), state)) {
         state->startup_failures.fetch_add(1, std::memory_order_release);
         (void)session.close();
         return;

@@ -1,6 +1,6 @@
 #include "test_common.hpp"
 
-void testParser() {
+void test_parser() {
     std::cout << "=== Testing Parser ===" << std::endl;
 
     // Config parser
@@ -223,7 +223,7 @@ ports = [8080, 8081]
 
 // ==================== App (Args) Tests ====================
 
-void testApp() {
+void test_app() {
     std::cout << "=== Testing App ===" << std::endl;
 
     App app("test-app", "Test application");
@@ -260,8 +260,8 @@ void testApp() {
 int main() {
     std::cout << "\n=== app_test ===" << std::endl;
     try {
-        testParser();
-        testApp();
+        test_parser();
+        test_app();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

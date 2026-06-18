@@ -5,7 +5,7 @@
 
 int main()
 {
-    const mysql_test::MysqlTestConfig defaults{};
+    const mysql_test::DbTestConfig defaults{};
 
     const auto require_empty = [](std::string_view field, const std::string& value) -> bool {
         if (!value.empty()) {

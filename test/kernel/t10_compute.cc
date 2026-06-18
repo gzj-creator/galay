@@ -34,7 +34,7 @@ void requireSchedule(SchedulerT& scheduler, Task<T>&& task)
 // 测试1：基本任务执行
 std::atomic<bool> g_test1_done{false};
 
-Task<void> testBasicExecution() {
+Task<void> test_basic_execution() {
     g_test1_done = true;
     co_return;
 }
@@ -43,7 +43,7 @@ Task<void> testBasicExecution() {
 std::atomic<int> g_test2_counter{0};
 constexpr int TEST2_COUNT = 100;
 
-Task<void> testConcurrentTask() {
+Task<void> test_concurrent_task() {
     g_test2_counter.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
@@ -52,7 +52,7 @@ Task<void> testConcurrentTask() {
 std::atomic<int> g_test3_counter{0};
 constexpr int TEST3_COUNT = 10;
 
-Task<void> testComputeIntensive() {
+Task<void> test_compute_intensive() {
     // 模拟 CPU 密集型计算
     volatile double result = 0;
     for (int i = 0; i < 100000; ++i) {
@@ -65,7 +65,7 @@ Task<void> testComputeIntensive() {
 // 测试5：调度器启停
 std::atomic<int> g_test5_counter{0};
 
-Task<void> testStartStop() {
+Task<void> test_start_stop() {
     g_test5_counter.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
@@ -109,7 +109,7 @@ void runTests() {
 
         ComputeScheduler scheduler;
         scheduler.start();
-        requireSchedule(scheduler, testBasicExecution());
+        requireSchedule(scheduler, test_basic_execution());
         // 使用调度器的空闲等待
         scheduler.stop();
 
@@ -135,10 +135,10 @@ void runTests() {
         for (int i = 0; i < TEST2_COUNT; ++i) {
             // 轮询分发到4个调度器
             switch (i % 4) {
-                case 0: requireSchedule(scheduler1, testConcurrentTask()); break;
-                case 1: requireSchedule(scheduler2, testConcurrentTask()); break;
-                case 2: requireSchedule(scheduler3, testConcurrentTask()); break;
-                case 3: requireSchedule(scheduler4, testConcurrentTask()); break;
+                case 0: requireSchedule(scheduler1, test_concurrent_task()); break;
+                case 1: requireSchedule(scheduler2, test_concurrent_task()); break;
+                case 2: requireSchedule(scheduler3, test_concurrent_task()); break;
+                case 3: requireSchedule(scheduler4, test_concurrent_task()); break;
             }
         }
 
@@ -171,10 +171,10 @@ void runTests() {
 
         for (int i = 0; i < TEST3_COUNT; ++i) {
             switch (i % 4) {
-                case 0: requireSchedule(scheduler1, testComputeIntensive()); break;
-                case 1: requireSchedule(scheduler2, testComputeIntensive()); break;
-                case 2: requireSchedule(scheduler3, testComputeIntensive()); break;
-                case 3: requireSchedule(scheduler4, testComputeIntensive()); break;
+                case 0: requireSchedule(scheduler1, test_compute_intensive()); break;
+                case 1: requireSchedule(scheduler2, test_compute_intensive()); break;
+                case 2: requireSchedule(scheduler3, test_compute_intensive()); break;
+                case 3: requireSchedule(scheduler4, test_compute_intensive()); break;
             }
         }
 
@@ -211,7 +211,7 @@ void runTests() {
 
         // 第一次启停
         scheduler.start();
-        requireSchedule(scheduler, testStartStop());
+        requireSchedule(scheduler, test_start_stop());
         // 使用调度器的空闲等待
         scheduler.stop();
 
@@ -219,7 +219,7 @@ void runTests() {
 
         // 第二次启停
         scheduler.start();
-        requireSchedule(scheduler, testStartStop());
+        requireSchedule(scheduler, test_start_stop());
         // 使用调度器的空闲等待
         scheduler.stop();
 

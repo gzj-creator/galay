@@ -283,7 +283,7 @@ void waitForCount(const std::atomic<int>& value, int expected, const char* messa
     fail(message);
 }
 
-void testStartFailureStopsAlreadyStartedPlugins()
+void test_start_failure_stops_already_started_plugins()
 {
     TestState state;
     std::atomic<int> failing_stop_count{0};
@@ -321,7 +321,7 @@ void testStartFailureStopsAlreadyStartedPlugins()
 
 int main()
 {
-    testStartFailureStopsAlreadyStartedPlugins();
+    test_start_failure_stops_already_started_plugins();
 
     TestState state;
 

@@ -20,7 +20,7 @@ constexpr uint16_t TEST_PORT = 8080;
 /**
  * @brief 测试 GET 方法
  */
-Task<void> testGetMethod(IOScheduler* scheduler)
+Task<void> test_get_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 1: GET Method ===" << std::endl;
 
@@ -76,7 +76,7 @@ Task<void> testGetMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 POST 方法
  */
-Task<void> testPostMethod(IOScheduler* scheduler)
+Task<void> test_post_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 2: POST Method ===" << std::endl;
 
@@ -133,7 +133,7 @@ Task<void> testPostMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 PUT 方法
  */
-Task<void> testPutMethod(IOScheduler* scheduler)
+Task<void> test_put_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 3: PUT Method ===" << std::endl;
 
@@ -190,7 +190,7 @@ Task<void> testPutMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 DELETE 方法
  */
-Task<void> testDeleteMethod(IOScheduler* scheduler)
+Task<void> test_delete_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 4: DELETE Method ===" << std::endl;
 
@@ -245,7 +245,7 @@ Task<void> testDeleteMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 HEAD 方法
  */
-Task<void> testHeadMethod(IOScheduler* scheduler)
+Task<void> test_head_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 5: HEAD Method ===" << std::endl;
 
@@ -301,7 +301,7 @@ Task<void> testHeadMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 OPTIONS 方法
  */
-Task<void> testOptionsMethod(IOScheduler* scheduler)
+Task<void> test_options_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 6: OPTIONS Method ===" << std::endl;
 
@@ -363,7 +363,7 @@ Task<void> testOptionsMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 PATCH 方法
  */
-Task<void> testPatchMethod(IOScheduler* scheduler)
+Task<void> test_patch_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 7: PATCH Method ===" << std::endl;
 
@@ -420,7 +420,7 @@ Task<void> testPatchMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 TRACE 方法
  */
-Task<void> testTraceMethod(IOScheduler* scheduler)
+Task<void> test_trace_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 8: TRACE Method ===" << std::endl;
 
@@ -475,7 +475,7 @@ Task<void> testTraceMethod(IOScheduler* scheduler)
 /**
  * @brief 测试 CONNECT 方法
  */
-Task<void> testConnectMethod(IOScheduler* scheduler)
+Task<void> test_connect_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 9: CONNECT Method ===" << std::endl;
 
@@ -548,31 +548,31 @@ int main()
         }
 
         // 运行所有测试
-        scheduleTask(scheduler, testGetMethod(scheduler));
+        scheduleTask(scheduler, test_get_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testPostMethod(scheduler));
+        scheduleTask(scheduler, test_post_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testPutMethod(scheduler));
+        scheduleTask(scheduler, test_put_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testDeleteMethod(scheduler));
+        scheduleTask(scheduler, test_delete_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testHeadMethod(scheduler));
+        scheduleTask(scheduler, test_head_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testOptionsMethod(scheduler));
+        scheduleTask(scheduler, test_options_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testPatchMethod(scheduler));
+        scheduleTask(scheduler, test_patch_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testTraceMethod(scheduler));
+        scheduleTask(scheduler, test_trace_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        scheduleTask(scheduler, testConnectMethod(scheduler));
+        scheduleTask(scheduler, test_connect_method(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         runtime.stop();

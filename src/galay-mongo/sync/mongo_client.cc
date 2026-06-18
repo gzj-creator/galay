@@ -102,7 +102,7 @@ MongoVoidResult MongoClient::connect(const MongoConfig& config)
     hello.append("helloOk", true);
     hello.append("client", buildClientMetadata(config.app_name));
     const std::string hello_db = config.hello_database.empty() ? "admin" : config.hello_database;
-    auto hello_result = executeCommand(hello_db, hello, true);
+    auto hello_result = runCommandRequest(hello_db, hello, true);
     if (!hello_result) {
         close();
         return std::unexpected(hello_result.error());
@@ -127,14 +127,14 @@ MongoVoidResult MongoClient::connect(const std::string& host,
 
 MongoResult MongoClient::command(const std::string& database, const MongoDocument& command)
 {
-    return executeCommand(database, command, true);
+    return runCommandRequest(database, command, true);
 }
 
 MongoResult MongoClient::ping(const std::string& database)
 {
     MongoDocument command;
     command.append("ping", int32_t(1));
-    return executeCommand(database, command, true);
+    return runCommandRequest(database, command, true);
 }
 
 MongoResult MongoClient::findOne(const std::string& database,
@@ -149,7 +149,7 @@ MongoResult MongoClient::findOne(const std::string& database,
     if (!projection.empty()) {
         command.append("projection", projection);
     }
-    return executeCommand(database, command, true);
+    return runCommandRequest(database, command, true);
 }
 
 MongoResult MongoClient::insertOne(const std::string& database,
@@ -163,7 +163,7 @@ MongoResult MongoClient::insertOne(const std::string& database,
     command.append("insert", collection);
     command.append("documents", documents);
     command.append("ordered", true);
-    return executeCommand(database, command, true);
+    return runCommandRequest(database, command, true);
 }
 
 MongoResult MongoClient::updateOne(const std::string& database,
@@ -185,7 +185,7 @@ MongoResult MongoClient::updateOne(const std::string& database,
     command.append("update", collection);
     command.append("updates", updates);
     command.append("ordered", true);
-    return executeCommand(database, command, true);
+    return runCommandRequest(database, command, true);
 }
 
 MongoResult MongoClient::deleteOne(const std::string& database,
@@ -203,7 +203,7 @@ MongoResult MongoClient::deleteOne(const std::string& database,
     command.append("delete", collection);
     command.append("deletes", deletes);
     command.append("ordered", true);
-    return executeCommand(database, command, true);
+    return runCommandRequest(database, command, true);
 }
 
 void MongoClient::close()
@@ -211,9 +211,9 @@ void MongoClient::close()
     m_connection.disconnect();
 }
 
-MongoResult MongoClient::executeCommand(const std::string& database,
-                                         const MongoDocument& command,
-                                         bool check_ok)
+MongoResult MongoClient::runCommandRequest(const std::string& database,
+                                           const MongoDocument& command,
+                                           bool check_ok)
 {
     if (!m_connection.isConnected()) {
         return std::unexpected(MongoError(MONGO_ERROR_CONNECTION_CLOSED, "Not connected"));
@@ -303,7 +303,7 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
     sasl_start.append("payload", std::move(first_payload));
     sasl_start.append("autoAuthorize", int32_t(1));
 
-    auto start_reply = executeCommand(auth_db, sasl_start, true);
+    auto start_reply = runCommandRequest(auth_db, sasl_start, true);
     if (!start_reply) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, start_reply.error().message()));
     }
@@ -415,7 +415,7 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
     sasl_continue.append("conversationId", conversation_id);
     sasl_continue.append("payload", std::move(continue_payload));
 
-    auto continue_reply = executeCommand(auth_db, sasl_continue, true);
+    auto continue_reply = runCommandRequest(auth_db, sasl_continue, true);
     if (!continue_reply) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, continue_reply.error().message()));
     }
@@ -456,7 +456,7 @@ MongoVoidResult MongoClient::authenticateScramSha256(const MongoConfig& config)
         final_continue.append("conversationId", conversation_id);
         final_continue.append("payload", MongoValue::Binary{});
 
-        auto final_reply = executeCommand(auth_db, final_continue, true);
+        auto final_reply = runCommandRequest(auth_db, final_continue, true);
         if (!final_reply) {
             return std::unexpected(MongoError(MONGO_ERROR_AUTH, final_reply.error().message()));
         }

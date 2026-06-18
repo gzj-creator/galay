@@ -14,7 +14,7 @@ void printHex(const std::string& data, const std::string& label)
     std::cout << std::dec << std::endl;
 }
 
-void testSha1()
+void test_sha1()
 {
     std::cout << "Testing SHA1..." << std::endl;
     auto hash = AuthPlugin::sha1("hello");
@@ -23,7 +23,7 @@ void testSha1()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testSha256()
+void test_sha256()
 {
     std::cout << "Testing SHA256..." << std::endl;
     auto hash = AuthPlugin::sha256("hello");
@@ -32,7 +32,7 @@ void testSha256()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testXorStrings()
+void test_xor_strings()
 {
     std::cout << "Testing XOR strings..." << std::endl;
     std::string a = "\x01\x02\x03\x04";
@@ -46,7 +46,7 @@ void testXorStrings()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testNativePasswordAuth()
+void test_native_password_auth()
 {
     std::cout << "Testing mysql_native_password auth..." << std::endl;
     std::string salt = "12345678901234567890";
@@ -61,7 +61,7 @@ void testNativePasswordAuth()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testCachingSha2Auth()
+void test_caching_sha2_auth()
 {
     std::cout << "Testing caching_sha2_password auth..." << std::endl;
     std::string salt = "12345678901234567890";
@@ -75,7 +75,7 @@ void testCachingSha2Auth()
     std::cout << "  PASSED" << std::endl;
 }
 
-void testCachingSha2FullAuth()
+void test_caching_sha2_full_auth()
 {
     std::cout << "Testing caching_sha2_password full auth..." << std::endl;
 
@@ -107,12 +107,12 @@ int main()
 {
     std::cout << "=== T2: MySQL Auth Tests ===" << std::endl;
 
-    testSha1();
-    testSha256();
-    testXorStrings();
-    testNativePasswordAuth();
-    testCachingSha2Auth();
-    testCachingSha2FullAuth();
+    test_sha1();
+    test_sha256();
+    test_xor_strings();
+    test_native_password_auth();
+    test_caching_sha2_auth();
+    test_caching_sha2_full_auth();
 
     std::cout << "\nAll auth tests PASSED!" << std::endl;
     return 0;

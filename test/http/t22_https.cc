@@ -19,7 +19,7 @@ static std::atomic<bool> g_done{false};
 static std::atomic<bool> g_success{false};
 static std::atomic<bool> g_failed{false};
 
-Task<void> testHttpsClient() {
+Task<void> test_https_client() {
     std::cout << "=== HTTPS Client Test ===" << std::endl;
 
     HttpsClient client(HttpsClientBuilder()
@@ -148,7 +148,7 @@ int main() {
         return 1;
     }
 
-    scheduleTask(scheduler, testHttpsClient());
+    scheduleTask(scheduler, test_https_client());
 
     // 等待测试完成
     while (!g_done) {

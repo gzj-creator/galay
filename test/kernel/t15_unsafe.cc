@@ -36,7 +36,7 @@ std::atomic<int> g_total{0};
 std::atomic<bool> g_test1_done{false};
 int g_test1_received{0};
 
-Task<void> testBasicSendRecv(UnsafeChannel<int>* channel) {
+Task<void> test_basic_send_recv(UnsafeChannel<int>* channel) {
     auto value = co_await channel->recv();
     if (value && *value == 42) {
         g_test1_received = *value;
@@ -45,7 +45,7 @@ Task<void> testBasicSendRecv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testBasicSender(UnsafeChannel<int>* channel) {
+Task<void> test_basic_sender(UnsafeChannel<int>* channel) {
     channel->send(42);
     co_return;
 }
@@ -57,7 +57,7 @@ int g_test2_sum{0};
 std::atomic<bool> g_test2_done{false};
 constexpr int TEST2_COUNT = 10;
 
-Task<void> testMultipleRecv(UnsafeChannel<int>* channel) {
+Task<void> test_multiple_recv(UnsafeChannel<int>* channel) {
     for (int i = 0; i < TEST2_COUNT; ++i) {
         auto value = co_await channel->recv();
         if (value) {
@@ -68,7 +68,7 @@ Task<void> testMultipleRecv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testMultipleSend(UnsafeChannel<int>* channel) {
+Task<void> test_multiple_send(UnsafeChannel<int>* channel) {
     for (int i = 0; i < TEST2_COUNT; ++i) {
         channel->send(i + 1);
         co_yield true;
@@ -82,7 +82,7 @@ Task<void> testMultipleSend(UnsafeChannel<int>* channel) {
 int g_test3_total{0};
 std::atomic<bool> g_test3_done{false};
 
-Task<void> testBatchRecv(UnsafeChannel<int>* channel) {
+Task<void> test_batch_recv(UnsafeChannel<int>* channel) {
     auto batch = co_await channel->recvBatch(100);
     if (batch) {
         for (int v : *batch) {
@@ -93,7 +93,7 @@ Task<void> testBatchRecv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testBatchSend(UnsafeChannel<int>* channel) {
+Task<void> test_batch_send(UnsafeChannel<int>* channel) {
     std::vector<int> data = {1, 2, 3, 4, 5};
     channel->sendBatch(data);
     co_return;
@@ -105,7 +105,7 @@ Task<void> testBatchSend(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test4_done{false};
 int g_test4_value{0};
 
-Task<void> testTryRecv(UnsafeChannel<int>* channel) {
+Task<void> test_try_recv(UnsafeChannel<int>* channel) {
     // 先尝试接收（应该为空）
     auto empty = channel->tryRecv();
     if (empty) {
@@ -122,7 +122,7 @@ Task<void> testTryRecv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testTryRecvSender(UnsafeChannel<int>* channel) {
+Task<void> test_try_recv_sender(UnsafeChannel<int>* channel) {
     co_yield true;  // 让消费者先执行
     channel->send(99);
     co_return;
@@ -137,7 +137,7 @@ std::atomic<bool> g_test5_done{false};
 constexpr int TEST5_PRODUCER_COUNT = 5;
 constexpr int TEST5_MSG_PER_PRODUCER = 10;
 
-Task<void> testMultiProducerConsumer(UnsafeChannel<int>* channel) {
+Task<void> test_multi_producer_consumer(UnsafeChannel<int>* channel) {
     int expected = TEST5_PRODUCER_COUNT * TEST5_MSG_PER_PRODUCER;
     while (g_test5_recv_count < expected) {
         auto value = co_await channel->recv();
@@ -150,7 +150,7 @@ Task<void> testMultiProducerConsumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testProducer(UnsafeChannel<int>* channel, int id) {
+Task<void> test_producer(UnsafeChannel<int>* channel, int id) {
     for (int i = 0; i < TEST5_MSG_PER_PRODUCER; ++i) {
         channel->send(id * 100 + i);
         co_yield true;
@@ -165,7 +165,7 @@ std::atomic<bool> g_test6_waiting{false};
 std::atomic<bool> g_test6_received{false};
 std::atomic<bool> g_test6_done{false};
 
-Task<void> testEmptyChannelWait(UnsafeChannel<int>* channel) {
+Task<void> test_empty_channel_wait(UnsafeChannel<int>* channel) {
     g_test6_waiting = true;
     auto value = co_await channel->recv();
     g_test6_received = value.has_value();
@@ -173,7 +173,7 @@ Task<void> testEmptyChannelWait(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testDelayedSend(UnsafeChannel<int>* channel) {
+Task<void> test_delayed_send(UnsafeChannel<int>* channel) {
     // 等待消费者开始等待
     while (!g_test6_waiting) {
         co_yield true;
@@ -187,7 +187,7 @@ Task<void> testDelayedSend(UnsafeChannel<int>* channel) {
 // ============================================================================
 std::atomic<bool> g_test7_done{false};
 
-Task<void> testSizeAndEmpty(UnsafeChannel<int>* channel) {
+Task<void> test_size_and_empty(UnsafeChannel<int>* channel) {
     // 消费所有数据
     while (!channel->empty()) {
         co_await channel->recv();
@@ -203,7 +203,7 @@ int g_test8_total{0};
 int g_test8_count{0};
 std::atomic<bool> g_test8_done{false};
 
-Task<void> testBatchRecvMultiple(UnsafeChannel<int>* channel) {
+Task<void> test_batch_recv_multiple(UnsafeChannel<int>* channel) {
     // 接收所有数据
     for (int i = 0; i < 3; ++i) {
         auto batch = co_await channel->recvBatch(100);
@@ -218,7 +218,7 @@ Task<void> testBatchRecvMultiple(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testBatchSendMultiple(UnsafeChannel<int>* channel) {
+Task<void> test_batch_send_multiple(UnsafeChannel<int>* channel) {
     std::vector<int> batch1 = {1, 2, 3};
     std::vector<int> batch2 = {4, 5, 6, 7};
     std::vector<int> batch3 = {8, 9, 10};
@@ -237,7 +237,7 @@ Task<void> testBatchSendMultiple(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test9_done{false};
 std::string g_test9_result;
 
-Task<void> testStringRecv(UnsafeChannel<std::string>* channel) {
+Task<void> test_string_recv(UnsafeChannel<std::string>* channel) {
     auto value = co_await channel->recv();
     if (value) {
         g_test9_result = *value;
@@ -246,7 +246,7 @@ Task<void> testStringRecv(UnsafeChannel<std::string>* channel) {
     co_return;
 }
 
-Task<void> testStringSend(UnsafeChannel<std::string>* channel) {
+Task<void> test_string_send(UnsafeChannel<std::string>* channel) {
     channel->send(std::string("Hello, UnsafeChannel!"));
     co_return;
 }
@@ -259,7 +259,7 @@ int g_test10_received_count{0};
 int g_test10_sum{0};
 constexpr int TEST10_LIMIT = 10;
 
-Task<void> testRecvBatchedLimit(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_limit(UnsafeChannel<int>* channel) {
     auto result = co_await channel->recvBatched(TEST10_LIMIT);
     if (result) {
         g_test10_received_count = result->size();
@@ -271,7 +271,7 @@ Task<void> testRecvBatchedLimit(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testRecvBatchedSender(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_sender(UnsafeChannel<int>* channel) {
     // 逐个发送，当达到 limit 时应该唤醒消费者
     for (int i = 1; i <= TEST10_LIMIT; ++i) {
         channel->send(i);
@@ -287,7 +287,7 @@ std::atomic<bool> g_test11_done{false};
 int g_test11_received_count{0};
 int g_test11_sum{0};
 
-Task<void> testRecvBatchedTimeout(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_timeout(UnsafeChannel<int>* channel) {
     // 等待 100 条或 100ms 超时
     auto result = co_await channel->recvBatched(100).timeout(100ms);
     if (!result) {
@@ -304,7 +304,7 @@ Task<void> testRecvBatchedTimeout(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testRecvBatchedTimeoutSender(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_timeout_sender(UnsafeChannel<int>* channel) {
     // 只发送 5 条，不足 100 条，会超时
     for (int i = 1; i <= 5; ++i) {
         channel->send(i);
@@ -319,7 +319,7 @@ Task<void> testRecvBatchedTimeoutSender(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test12_done{false};
 bool g_test12_got_error{false};
 
-Task<void> testRecvBatchedTimeoutEmpty(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_timeout_empty(UnsafeChannel<int>* channel) {
     // 等待 100 条或 50ms 超时，但没有数据发送
     auto result = co_await channel->recvBatched(100).timeout(50ms);
     if (!result) {
@@ -335,7 +335,7 @@ Task<void> testRecvBatchedTimeoutEmpty(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test13_done{false};
 int g_test13_received_count{0};
 
-Task<void> testRecvBatchedReady(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_ready(UnsafeChannel<int>* channel) {
     // 队列已有 20 条数据，limit 是 10，应该立即返回所有数据
     auto result = co_await channel->recvBatched(10);
     if (result) {
@@ -352,7 +352,7 @@ std::atomic<bool> g_test14_done{false};
 int g_test14_batched_count{0};
 int g_test14_single_value{0};
 
-Task<void> testRecvBatchedMixed(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_mixed(UnsafeChannel<int>* channel) {
     // 先用 recvBatched 接收
     auto batch = co_await channel->recvBatched(5);
     if (batch) {
@@ -369,7 +369,7 @@ Task<void> testRecvBatchedMixed(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testRecvBatchedMixedSender(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_mixed_sender(UnsafeChannel<int>* channel) {
     // 发送 5 条触发 recvBatched
     for (int i = 1; i <= 5; ++i) {
         channel->send(i);
@@ -387,7 +387,7 @@ int g_test15_received{0};
 std::atomic<bool> g_test15_done{false};
 constexpr int TEST15_TOTAL = 1000;
 
-Task<void> testHighConcurrencyConsumer(UnsafeChannel<int>* channel) {
+Task<void> test_high_concurrency_consumer(UnsafeChannel<int>* channel) {
     while (g_test15_received < TEST15_TOTAL) {
         auto value = co_await channel->recv();
         if (value) {
@@ -398,7 +398,7 @@ Task<void> testHighConcurrencyConsumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testHighConcurrencyProducer(UnsafeChannel<int>* channel, int start, int count) {
+Task<void> test_high_concurrency_producer(UnsafeChannel<int>* channel, int start, int count) {
     for (int i = 0; i < count; ++i) {
         channel->send(start + i);
         if (i % 10 == 0) {
@@ -415,7 +415,7 @@ std::atomic<bool> g_test16_done{false};
 int g_test16_received_count{0};
 int g_test16_sum{0};
 
-Task<void> testSendImmediatelyConsumer(UnsafeChannel<int>* channel) {
+Task<void> test_send_immediately_consumer(UnsafeChannel<int>* channel) {
     // 使用 recvBatched(100)，正常情况下需要等到 100 条
     auto result = co_await channel->recvBatched(100).timeout(100ms);
     if (result) {
@@ -428,7 +428,7 @@ Task<void> testSendImmediatelyConsumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testSendImmediatelySender(UnsafeChannel<int>* channel) {
+Task<void> test_send_immediately_sender(UnsafeChannel<int>* channel) {
     // 只发送 5 条，但最后一条使用 immediately=true
     for (int i = 1; i <= 4; ++i) {
         channel->send(i, false);  // 不立即唤醒
@@ -445,7 +445,7 @@ Task<void> testSendImmediatelySender(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test17_done{false};
 int g_test17_received_count{0};
 
-Task<void> testSendBatchImmediatelyConsumer(UnsafeChannel<int>* channel) {
+Task<void> test_send_batch_immediately_consumer(UnsafeChannel<int>* channel) {
     auto result = co_await channel->recvBatched(100).timeout(100ms);
     if (result) {
         g_test17_received_count = result->size();
@@ -454,7 +454,7 @@ Task<void> testSendBatchImmediatelyConsumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testSendBatchImmediatelySender(UnsafeChannel<int>* channel) {
+Task<void> test_send_batch_immediately_sender(UnsafeChannel<int>* channel) {
     std::vector<int> batch = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     // 批量发送 10 条，使用 immediately=true 立即唤醒
     channel->sendBatch(batch, true);
@@ -467,7 +467,7 @@ Task<void> testSendBatchImmediatelySender(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test18_done{false};
 int g_test18_received_count{0};
 
-Task<void> testImmediatelyCompareConsumer(UnsafeChannel<int>* channel) {
+Task<void> test_immediately_compare_consumer(UnsafeChannel<int>* channel) {
     // 使用普通 recv，不使用 recvBatched
     int count = 0;
     for (int i = 0; i < 3; ++i) {
@@ -481,7 +481,7 @@ Task<void> testImmediatelyCompareConsumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testImmediatelyCompareSender(UnsafeChannel<int>* channel) {
+Task<void> test_immediately_compare_sender(UnsafeChannel<int>* channel) {
     // 发送 3 条数据，第 3 条使用 immediately=true
     channel->send(1, false);  // 不立即唤醒
     co_yield true;
@@ -498,7 +498,7 @@ std::atomic<bool> g_test19_done{false};
 int g_test19_received_count{0};
 int g_test19_sum{0};
 
-Task<void> testTimeoutAutoReturn(UnsafeChannel<int>* channel) {
+Task<void> test_timeout_auto_return(UnsafeChannel<int>* channel) {
     // 尝试等待 100 条数据，但只会收到 5 条，超时后返回错误
     auto result = co_await channel->recvBatched(100).timeout(50ms);
 
@@ -517,7 +517,7 @@ Task<void> testTimeoutAutoReturn(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> testTimeoutAutoReturnSender(UnsafeChannel<int>* channel) {
+Task<void> test_timeout_auto_return_sender(UnsafeChannel<int>* channel) {
     // 一次性发送 5 条数据，不足 100 条，immediately=false 不会唤醒
     for (int i = 1; i <= 5; ++i) {
         channel->send(i, false);
@@ -544,8 +544,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testBasicSendRecv(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testBasicSender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_basic_send_recv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_basic_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test1_done) {
@@ -573,8 +573,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testMultipleRecv(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testMultipleSend(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_multiple_recv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_multiple_send(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test2_done) {
@@ -604,8 +604,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testBatchRecv(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testBatchSend(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_recv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_send(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test3_done) {
@@ -635,8 +635,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testTryRecv(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testTryRecvSender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_try_recv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_try_recv_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test4_done) {
@@ -665,11 +665,11 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testMultiProducerConsumer(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_multi_producer_consumer(&channel)));
 
         // 启动多个生产者协程（同一调度器内）
         for (int i = 0; i < TEST5_PRODUCER_COUNT; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(testProducer(&channel, i)));
+            scheduler.schedule(detail::TaskAccess::detachTask(test_producer(&channel, i)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -700,8 +700,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testEmptyChannelWait(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testDelayedSend(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_empty_channel_wait(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_delayed_send(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test6_done) {
@@ -737,7 +737,7 @@ void runTests() {
         bool not_empty = !channel.empty();
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testSizeAndEmpty(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_size_and_empty(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test7_done) {
@@ -767,8 +767,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testBatchRecvMultiple(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testBatchSendMultiple(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_recv_multiple(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_send_multiple(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test8_done) {
@@ -801,8 +801,8 @@ void runTests() {
         UnsafeChannel<std::string> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testStringRecv(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testStringSend(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_string_recv(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_string_send(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test9_done) {
@@ -830,8 +830,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedLimit(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedSender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_limit(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test10_done) {
@@ -861,8 +861,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedTimeout(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedTimeoutSender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_timeout(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_timeout_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test11_done) {
@@ -891,7 +891,7 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedTimeoutEmpty(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_timeout_empty(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test12_done) {
@@ -923,7 +923,7 @@ void runTests() {
         }
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedReady(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_ready(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test13_done) {
@@ -951,8 +951,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedMixed(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testRecvBatchedMixedSender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_mixed(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_mixed_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test14_done) {
@@ -980,12 +980,12 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testHighConcurrencyConsumer(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_high_concurrency_consumer(&channel)));
 
         // 启动多个生产者协程
         int per_producer = TEST15_TOTAL / 4;
         for (int i = 0; i < 4; ++i) {
-            scheduler.schedule(detail::TaskAccess::detachTask(testHighConcurrencyProducer(&channel, i * per_producer, per_producer)));
+            scheduler.schedule(detail::TaskAccess::detachTask(test_high_concurrency_producer(&channel, i * per_producer, per_producer)));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -1015,8 +1015,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testSendImmediatelyConsumer(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testSendImmediatelySender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_send_immediately_consumer(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_send_immediately_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test16_done) {
@@ -1045,8 +1045,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testSendBatchImmediatelyConsumer(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testSendBatchImmediatelySender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_send_batch_immediately_consumer(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_send_batch_immediately_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test17_done) {
@@ -1073,8 +1073,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testImmediatelyCompareConsumer(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testImmediatelyCompareSender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_immediately_compare_consumer(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_immediately_compare_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test18_done) {
@@ -1101,8 +1101,8 @@ void runTests() {
         UnsafeChannel<int> channel;
 
         scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(testTimeoutAutoReturn(&channel)));
-        scheduler.schedule(detail::TaskAccess::detachTask(testTimeoutAutoReturnSender(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_timeout_auto_return(&channel)));
+        scheduler.schedule(detail::TaskAccess::detachTask(test_timeout_auto_return_sender(&channel)));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test19_done) {

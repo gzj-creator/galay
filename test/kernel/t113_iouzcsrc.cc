@@ -2,7 +2,7 @@
  * @file t113_iouzcsrc.cc
  * @brief 用途：锁定 io_uring send_zc 的源码边界。
  * 关键覆盖点：能力探测、send_zc 提交、notification CQE 处理、零拷贝发送阈值门控。
- * 通过条件：源码包含目标 token，且 send 路径不再只有普通 prep_send。
+ * 通过条件：源码包含目标 handle，且 send 路径不再只有普通 prep_send。
  */
 
 #include <filesystem>
@@ -46,7 +46,7 @@ int main() {
     }
 
     if (!containsText(controller_text, "notify_expected = false;")) {
-        std::cerr << "[T113] expected SqeRequestToken to track zero-copy notification state\n";
+        std::cerr << "[T113] expected SqeRequestHandle to track zero-copy notification state\n";
         return 1;
     }
     if (!containsText(reactor_h_text, "kSendZcThreshold")) {

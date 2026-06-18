@@ -80,7 +80,7 @@ struct CountingRecvAwaitable : public RecvAwaitable {
 };
 
 // 服务端：用 CountingRecvAwaitable 接收数据
-Task<void> testServer([[maybe_unused]] IOScheduler* scheduler, int listen_fd, int reject_count)
+Task<void> test_server([[maybe_unused]] IOScheduler* scheduler, int listen_fd, int reject_count)
 {
     g_total++;
 
@@ -128,7 +128,7 @@ Task<void> testServer([[maybe_unused]] IOScheduler* scheduler, int listen_fd, in
 }
 
 // 客户端：多次发送数据，触发服务端多次事件
-Task<void> testClient([[maybe_unused]] IOScheduler* scheduler, const char* ip, int port, int send_count)
+Task<void> test_client([[maybe_unused]] IOScheduler* scheduler, const char* ip, int port, int send_count)
 {
     g_total++;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -230,10 +230,10 @@ int main()
     scheduler.start();
 
     // 启动服务端（reject_count=3，前3次 handleComplete 返回 false）
-    scheduleTask(scheduler, testServer(&scheduler, listen_fd, REJECT_COUNT));
+    scheduleTask(scheduler, test_server(&scheduler, listen_fd, REJECT_COUNT));
 
     // 启动客户端（发送 reject_count+1 次数据，确保触发足够多的事件）
-    scheduleTask(scheduler, testClient(&scheduler, "127.0.0.1", PORT, REJECT_COUNT + 1));
+    scheduleTask(scheduler, test_client(&scheduler, "127.0.0.1", PORT, REJECT_COUNT + 1));
 
     std::this_thread::sleep_for(std::chrono::seconds(3));
 

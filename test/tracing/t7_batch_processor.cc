@@ -44,7 +44,7 @@ galay::tracing::Span makeSpan(std::string_view name, bool sampled = true) {
     return span;
 }
 
-galay::tracing::BatchSpanProcessorConfig testConfig() {
+galay::tracing::BatchSpanProcessorConfig test_config() {
     return {
         .queue_capacity = 8,
         .max_batch_size = 8,
@@ -66,7 +66,7 @@ bool waitForExportedSize(const RecordingExporter& exporter, std::size_t expected
 void sampledSpansAreExported() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
-    galay::tracing::BatchSpanProcessor processor(std::move(exporter), testConfig());
+    galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
     processor.onEnd(makeSpan("sampled", true));
 
@@ -78,7 +78,7 @@ void sampledSpansAreExported() {
 void unsampledSpansAreNotExported() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
-    galay::tracing::BatchSpanProcessor processor(std::move(exporter), testConfig());
+    galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
     processor.onEnd(makeSpan("unsampled", false));
 
@@ -87,7 +87,7 @@ void unsampledSpansAreNotExported() {
 }
 
 void fullQueueDropsNewSpans() {
-    auto config = testConfig();
+    auto config = test_config();
     config.queue_capacity = 1;
     config.max_batch_size = 8;
     auto exporter = std::make_unique<RecordingExporter>();
@@ -106,7 +106,7 @@ void fullQueueDropsNewSpans() {
 void forceFlushExportsQueuedSpans() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
-    galay::tracing::BatchSpanProcessor processor(std::move(exporter), testConfig());
+    galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
     processor.onEnd(makeSpan("one"));
     processor.onEnd(makeSpan("two"));
@@ -116,7 +116,7 @@ void forceFlushExportsQueuedSpans() {
 }
 
 void timedScheduleDoesNotWakeOnEverySpan() {
-    auto config = testConfig();
+    auto config = test_config();
     config.schedule_mode = galay::tracing::BatchSpanScheduleMode::kTimed;
     config.flush_interval = std::chrono::hours(1);
     auto exporter = std::make_unique<RecordingExporter>();
@@ -131,7 +131,7 @@ void timedScheduleDoesNotWakeOnEverySpan() {
 }
 
 void onEndScheduleWakesForEachSpan() {
-    auto config = testConfig();
+    auto config = test_config();
     config.schedule_mode = galay::tracing::BatchSpanScheduleMode::kOnEnd;
     config.flush_interval = std::chrono::hours(1);
     auto exporter = std::make_unique<RecordingExporter>();
@@ -144,7 +144,7 @@ void onEndScheduleWakesForEachSpan() {
 }
 
 void batchScheduleWakesWhenThresholdReached() {
-    auto config = testConfig();
+    auto config = test_config();
     config.schedule_mode = galay::tracing::BatchSpanScheduleMode::kBatchSize;
     config.max_batch_size = 3;
     config.flush_interval = std::chrono::hours(1);
@@ -163,7 +163,7 @@ void batchScheduleWakesWhenThresholdReached() {
 void concurrentOnEndFlushesAllSampledSpans() {
     constexpr auto kThreadCount = 4;
     constexpr auto kSpansPerThread = 64;
-    auto config = testConfig();
+    auto config = test_config();
     config.queue_capacity = kThreadCount * kSpansPerThread;
     config.max_batch_size = 16;
     auto exporter = std::make_unique<RecordingExporter>();
@@ -191,7 +191,7 @@ void concurrentOnEndFlushesAllSampledSpans() {
 void shutdownFlushesAndStops() {
     auto exporter = std::make_unique<RecordingExporter>();
     auto* raw = exporter.get();
-    galay::tracing::BatchSpanProcessor processor(std::move(exporter), testConfig());
+    galay::tracing::BatchSpanProcessor processor(std::move(exporter), test_config());
 
     processor.onEnd(makeSpan("before-shutdown"));
 

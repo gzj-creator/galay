@@ -14,7 +14,7 @@ using namespace galay::async;
 /**
  * @brief 测试1: 连接失败
  */
-Task<void> testConnectionFailure(IOScheduler* scheduler)
+Task<void> test_connection_failure(IOScheduler* scheduler)
 {
 
     TcpSocket socket(IPType::IPV4);
@@ -34,7 +34,7 @@ Task<void> testConnectionFailure(IOScheduler* scheduler)
 /**
  * @brief 测试2: 服务器关闭连接
  */
-Task<void> testServerCloseConnection(IOScheduler* scheduler)
+Task<void> test_server_close_connection(IOScheduler* scheduler)
 {
 
     TcpSocket socket(IPType::IPV4);
@@ -79,7 +79,7 @@ Task<void> testServerCloseConnection(IOScheduler* scheduler)
 /**
  * @brief 测试3: 多个连续请求
  */
-Task<void> testMultipleRequests(IOScheduler* scheduler)
+Task<void> test_multiple_requests(IOScheduler* scheduler)
 {
 
     TcpSocket socket(IPType::IPV4);
@@ -130,7 +130,7 @@ Task<void> testMultipleRequests(IOScheduler* scheduler)
 /**
  * @brief 测试4: 大请求体
  */
-Task<void> testLargeRequestBody(IOScheduler* scheduler)
+Task<void> test_large_request_body(IOScheduler* scheduler)
 {
 
     TcpSocket socket(IPType::IPV4);
@@ -228,7 +228,7 @@ Task<void> test404NotFound(IOScheduler* scheduler)
 /**
  * @brief 测试6: 空响应体
  */
-Task<void> testEmptyResponse(IOScheduler* scheduler)
+Task<void> test_empty_response(IOScheduler* scheduler)
 {
 
     TcpSocket socket(IPType::IPV4);
@@ -283,22 +283,22 @@ int main()
         }
 
         // 运行边界测试
-        scheduleTask(scheduler, testConnectionFailure(scheduler));
+        scheduleTask(scheduler, test_connection_failure(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, testServerCloseConnection(scheduler));
+        scheduleTask(scheduler, test_server_close_connection(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, testMultipleRequests(scheduler));
+        scheduleTask(scheduler, test_multiple_requests(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
-        scheduleTask(scheduler, testLargeRequestBody(scheduler));
+        scheduleTask(scheduler, test_large_request_body(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
         scheduleTask(scheduler, test404NotFound(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        scheduleTask(scheduler, testEmptyResponse(scheduler));
+        scheduleTask(scheduler, test_empty_response(scheduler));
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
         runtime.stop();

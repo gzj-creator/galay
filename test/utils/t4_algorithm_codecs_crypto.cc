@@ -1,6 +1,6 @@
 #include "test_common.hpp"
 
-void testBase64() {
+void test_base64() {
     std::cout << "=== Testing Base64 ===" << std::endl;
 
     // Basic encoding
@@ -164,7 +164,7 @@ void testBase64() {
 
 // ==================== MD5 Tests ====================
 
-void testMD5() {
+void test_md5() {
     std::cout << "=== Testing MD5 ===" << std::endl;
 
     // Test empty string
@@ -277,7 +277,7 @@ void testMD5() {
 
 // ==================== MurmurHash3 Tests ====================
 
-void testMurmurHash3() {
+void test_murmur_hash3() {
     std::cout << "=== Testing MurmurHash3 ===" << std::endl;
 
     // Test 32-bit hash with empty string
@@ -444,7 +444,7 @@ void testMurmurHash3() {
 
 // ==================== Salt Generator Tests ====================
 
-void testSaltGenerator() {
+void test_salt_generator() {
     std::cout << "=== Testing Salt Generator ===" << std::endl;
 
     // Test hex salt generation
@@ -599,10 +599,10 @@ void testSaltGenerator() {
 int main() {
     std::cout << "\n=== algorithm_test ===" << std::endl;
     try {
-        testBase64();
-        testMD5();
-        testMurmurHash3();
-        testSaltGenerator();
+        test_base64();
+        test_md5();
+        test_murmur_hash3();
+        test_salt_generator();
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Test failed with exception: " << e.what() << std::endl;

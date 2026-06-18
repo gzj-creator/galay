@@ -116,8 +116,8 @@ struct BenchmarkState {
     }
 };
 
-bool executeOne(MysqlClient& client,
-                const mysql_benchmark::MysqlBenchmarkConfig& cfg,
+bool runSingleQuery(MysqlClient& client,
+                const mysql_benchmark::DbBenchmarkConfig& cfg,
                 uint64_t& elapsed_ns,
                 uint64_t& alloc_count_delta,
                 uint64_t& alloc_bytes_delta)
@@ -142,7 +142,7 @@ bool executeOne(MysqlClient& client,
     return query_result.has_value();
 }
 
-void runWorker(const mysql_benchmark::MysqlBenchmarkConfig& cfg, BenchmarkState* state)
+void runWorker(const mysql_benchmark::DbBenchmarkConfig& cfg, BenchmarkState* state)
 {
     MysqlClient client;
     auto connect_result = client.connect(cfg.host, cfg.port, cfg.user, cfg.password, cfg.database);
@@ -239,7 +239,7 @@ void runWorker(const mysql_benchmark::MysqlBenchmarkConfig& cfg, BenchmarkState*
                 uint64_t elapsed_ns = 0;
                 uint64_t alloc_count_delta = 0;
                 uint64_t alloc_bytes_delta = 0;
-                const bool ok = executeOne(client, cfg, elapsed_ns, alloc_count_delta, alloc_bytes_delta);
+                const bool ok = runSingleQuery(client, cfg, elapsed_ns, alloc_count_delta, alloc_bytes_delta);
 
                 batch_elapsed += elapsed_ns;
                 batch_alloc_count += alloc_count_delta;
@@ -281,7 +281,7 @@ void runWorker(const mysql_benchmark::MysqlBenchmarkConfig& cfg, BenchmarkState*
     }
 }
 
-void printSummary(const mysql_benchmark::MysqlBenchmarkConfig& cfg,
+void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
                   BenchmarkState& state,
                   std::chrono::steady_clock::time_point started,
                   std::chrono::steady_clock::time_point finished)
@@ -338,7 +338,7 @@ void printSummary(const mysql_benchmark::MysqlBenchmarkConfig& cfg,
 
 int main(int argc, char* argv[])
 {
-    auto cfg = mysql_benchmark::loadMysqlBenchmarkConfig();
+    auto cfg = mysql_benchmark::loadDbBenchmarkConfig();
     if (!mysql_benchmark::parseArgs(cfg, argc, argv, std::cerr)) {
         mysql_benchmark::printUsage(argv[0]);
         return 2;

@@ -104,7 +104,7 @@ bool parseExpectedResponseSize(const std::string& response, size_t& expected_siz
 }
 
 // 客户端测试
-Task<void> testClient(int test_id, std::string path) {
+Task<void> test_client(int test_id, std::string path) {
 
     TcpSocket client;
     client.option().handleNonBlock();
@@ -194,19 +194,19 @@ Task<void> runAllTests(IOScheduler* scheduler) {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     // 启动所有测试（并发执行）
-    scheduleTask(scheduler, testClient(1, "/test"));
+    scheduleTask(scheduler, test_client(1, "/test"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, testClient(2, "/api/users?id=123"));
+    scheduleTask(scheduler, test_client(2, "/api/users?id=123"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, testClient(3, "/very/long/path/to/resource"));
+    scheduleTask(scheduler, test_client(3, "/very/long/path/to/resource"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, testClient(4, "/"));
+    scheduleTask(scheduler, test_client(4, "/"));
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-    scheduleTask(scheduler, testClient(5, "/test%20path"));
+    scheduleTask(scheduler, test_client(5, "/test%20path"));
 
     // 等待所有测试完成
     std::this_thread::sleep_for(std::chrono::seconds(2));

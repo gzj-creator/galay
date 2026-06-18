@@ -10,7 +10,7 @@
 namespace mysql_test
 {
 
-struct MysqlTestConfig {
+struct DbTestConfig {
     std::string host;
     uint16_t port = 3306;
     std::string user;
@@ -66,9 +66,9 @@ inline uint16_t getEnvPortOrDefault(const char* key1, const char* key2, uint16_t
     return default_value;
 }
 
-inline MysqlTestConfig loadMysqlTestConfig()
+inline DbTestConfig loadDbTestConfig()
 {
-    MysqlTestConfig cfg;
+    DbTestConfig cfg;
     cfg.host = getEnvOrDefault("GALAY_MYSQL_HOST", "MYSQL_HOST", cfg.host);
     cfg.port = getEnvPortOrDefault("GALAY_MYSQL_PORT", "MYSQL_PORT", cfg.port);
     cfg.user = getEnvOrDefault("GALAY_MYSQL_USER", "MYSQL_USER", cfg.user);
@@ -77,16 +77,16 @@ inline MysqlTestConfig loadMysqlTestConfig()
     return cfg;
 }
 
-inline bool hasRequiredMysqlTestConfig(const MysqlTestConfig& cfg)
+inline bool hasRequiredDbTestConfig(const DbTestConfig& cfg)
 {
     return !cfg.host.empty()
         && !cfg.user.empty()
         && !cfg.database.empty();
 }
 
-inline int requireMysqlTestConfigOrSkip(const MysqlTestConfig& cfg, const char* test_name)
+inline int requireDbTestConfigOrSkip(const DbTestConfig& cfg, const char* test_name)
 {
-    if (hasRequiredMysqlTestConfig(cfg)) {
+    if (hasRequiredDbTestConfig(cfg)) {
         return 0;
     }
 
@@ -97,7 +97,7 @@ inline int requireMysqlTestConfigOrSkip(const MysqlTestConfig& cfg, const char* 
     return kMysqlTestSkippedExitCode;
 }
 
-inline void printMysqlTestConfig(const MysqlTestConfig& cfg)
+inline void printDbTestConfig(const DbTestConfig& cfg)
 {
     std::cout << "MySQL config: host=" << cfg.host
               << ", port=" << cfg.port

@@ -1,8 +1,8 @@
 /**
  * @file t105_fastsrc.cc
  * @brief 用途：锁定第一批运行时 fast path 优化的源码边界。
- * 关键覆盖点：`accept4` + socket flags、kqueue `EVFILT_USER` 唤醒、io_uring 稳定 token 池。
- * 通过条件：源码包含目标 token，且不再保留旧的堆分配/pipe 唤醒路径。
+ * 关键覆盖点：`accept4` + socket flags、kqueue `EVFILT_USER` 唤醒、io_uring 稳定 handle 池。
+ * 通过条件：源码包含目标 handle，且不再保留旧的堆分配/pipe 唤醒路径。
  */
 
 #include <filesystem>
@@ -77,16 +77,16 @@ int main() {
         return 1;
     }
 
-    if (containsText(iocontroller_text, "new (std::nothrow) SqeRequestToken")) {
-        std::cerr << "[T105] expected IOController to stop heap allocating SqeRequestToken\n";
+    if (containsText(iocontroller_text, "new (std::nothrow) SqeRequestHandle")) {
+        std::cerr << "[T105] expected IOController to stop heap allocating SqeRequestHandle\n";
         return 1;
     }
-    if (!containsText(iocontroller_text, "std::shared_ptr<SqeTokenArena> m_sqe_token_pool[SIZE]")) {
-        std::cerr << "[T105] expected IOController to keep per-slot stable SqeTokenArena pools\n";
+    if (!containsText(iocontroller_text, "std::shared_ptr<SqeHandleArena> m_sqe_handle_pool[SIZE]")) {
+        std::cerr << "[T105] expected IOController to keep per-slot stable SqeHandleArena pools\n";
         return 1;
     }
-    if (containsText(iouring_text, "std::unique_ptr<SqeRequestToken> token")) {
-        std::cerr << "[T105] expected IOUringReactor completion path to stop owning token via unique_ptr\n";
+    if (containsText(iouring_text, "std::unique_ptr<SqeRequestHandle> handle")) {
+        std::cerr << "[T105] expected IOUringReactor completion path to stop owning handle via unique_ptr\n";
         return 1;
     }
 

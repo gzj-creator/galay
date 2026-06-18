@@ -22,7 +22,7 @@ std::atomic<int> g_totalTests{0};
 std::atomic<int> g_passedTests{0};
 
 // 测试1：基本功能测试 - 单个定时器
-void testBasicTimer() {
+void test_basic_timer() {
     std::cout << "\n[Test 1] Testing basic timer functionality..." << std::endl;
     g_totalTests++;
 
@@ -51,7 +51,7 @@ void testBasicTimer() {
 }
 
 // 测试2：第1层时间轮测试（0-255ms）
-void testWheel1() {
+void test_wheel1() {
     std::cout << "\n[Test 2] Testing Wheel 1 (0-255ms)..." << std::endl;
     g_totalTests++;
 
@@ -90,7 +90,7 @@ void testWheel1() {
 }
 
 // 测试3：第2层时间轮测试（256ms-16s）
-void testWheel2() {
+void test_wheel2() {
     std::cout << "\n[Test 3] Testing Wheel 2 (256ms-16s)..." << std::endl;
     g_totalTests++;
 
@@ -123,7 +123,7 @@ void testWheel2() {
 }
 
 // 测试4：第3层时间轮测试（16s-17分钟）
-void testWheel3() {
+void test_wheel3() {
     std::cout << "\n[Test 4] Testing Wheel 3 (16s-17min)..." << std::endl;
     g_totalTests++;
 
@@ -153,7 +153,7 @@ void testWheel3() {
 }
 
 // 测试5：级联测试 - 从第2层降级到第1层
-void testCascadeWheel2ToWheel1() {
+void test_cascade_wheel2_to_wheel1() {
     std::cout << "\n[Test 5] Testing cascade from Wheel 2 to Wheel 1..." << std::endl;
     g_totalTests++;
 
@@ -178,7 +178,7 @@ void testCascadeWheel2ToWheel1() {
 }
 
 // 测试6：级联测试 - 从第3层降级到第2层
-void testCascadeWheel3ToWheel2() {
+void test_cascade_wheel3_to_wheel2() {
     std::cout << "\n[Test 6] Testing cascade from Wheel 3 to Wheel 2..." << std::endl;
     g_totalTests++;
 
@@ -198,7 +198,7 @@ void testCascadeWheel3ToWheel2() {
 }
 
 // 测试7：混合层级测试
-void testMixedWheels() {
+void test_mixed_wheels() {
     std::cout << "\n[Test 7] Testing mixed wheels..." << std::endl;
     g_totalTests++;
 
@@ -234,7 +234,7 @@ void testMixedWheels() {
 }
 
 // 测试8：边界值测试
-void testBoundaryValues() {
+void test_boundary_values() {
     std::cout << "\n[Test 8] Testing boundary values..." << std::endl;
     g_totalTests++;
 
@@ -274,7 +274,7 @@ void testBoundaryValues() {
 }
 
 // 测试9：超出范围的定时器测试
-void testOutOfRangeTimer() {
+void test_out_of_range_timer() {
     std::cout << "\n[Test 9] Testing out-of-range timer..." << std::endl;
     g_totalTests++;
 
@@ -299,7 +299,7 @@ void testOutOfRangeTimer() {
 }
 
 // 测试10：子 tick 延迟定时器（向上取整到下一 tick 后触发）
-void testExpiredTimer() {
+void test_expired_timer() {
     std::cout << "\n[Test 10] Testing zero-delay timer..." << std::endl;
     g_totalTests++;
 
@@ -324,7 +324,7 @@ void testExpiredTimer() {
 }
 
 // 测试11：自动重置测试
-void testAutoReset() {
+void test_auto_reset() {
     std::cout << "\n[Test 11] Testing auto reset..." << std::endl;
     g_totalTests++;
 
@@ -354,7 +354,7 @@ void testAutoReset() {
 }
 
 // 测试12：取消定时器测试
-void testCancelTimer() {
+void test_cancel_timer() {
     std::cout << "\n[Test 12] Testing timer cancellation..." << std::endl;
     g_totalTests++;
 
@@ -380,7 +380,7 @@ void testCancelTimer() {
 }
 
 // 测试14：大量定时器性能测试
-void testManyTimers() {
+void test_many_timers() {
     std::cout << "\n[Test 14] Testing many timers (performance)..." << std::endl;
     g_totalTests++;
 
@@ -423,7 +423,7 @@ void testManyTimers() {
 }
 
 // 测试15：级联过程中的定时器清理
-void testCascadeCleanup() {
+void test_cascade_cleanup() {
     std::cout << "\n[Test 15] Testing cascade cleanup..." << std::endl;
     g_totalTests++;
 
@@ -457,7 +457,7 @@ void testCascadeCleanup() {
 }
 
 // 测试16：边界条件测试
-void testEdgeCases() {
+void test_edge_cases() {
     std::cout << "\n[Test 16] Testing edge cases..." << std::endl;
     g_totalTests++;
 
@@ -478,7 +478,7 @@ void testEdgeCases() {
 }
 
 // 测试17：不同精度测试
-void testDifferentPrecisions() {
+void test_different_precisions() {
     std::cout << "\n[Test 17] Testing different precisions..." << std::endl;
     g_totalTests++;
 
@@ -526,22 +526,22 @@ int main() {
     std::cout << "========================================" << std::endl;
 
     try {
-        testBasicTimer();
-        testWheel1();
-        testWheel2();
-        testWheel3();
-        testCascadeWheel2ToWheel1();
-        testCascadeWheel3ToWheel2();
-        testMixedWheels();
-        testBoundaryValues();
-        testOutOfRangeTimer();
-        testExpiredTimer();
-        testAutoReset();
-        testCancelTimer();
-        testManyTimers();
-        testCascadeCleanup();
-        testEdgeCases();
-        testDifferentPrecisions();
+        test_basic_timer();
+        test_wheel1();
+        test_wheel2();
+        test_wheel3();
+        test_cascade_wheel2_to_wheel1();
+        test_cascade_wheel3_to_wheel2();
+        test_mixed_wheels();
+        test_boundary_values();
+        test_out_of_range_timer();
+        test_expired_timer();
+        test_auto_reset();
+        test_cancel_timer();
+        test_many_timers();
+        test_cascade_cleanup();
+        test_edge_cases();
+        test_different_precisions();
     } catch (const std::exception& e) {
         std::cerr << "\n✗ Test failed with exception: " << e.what() << std::endl;
         return 1;
