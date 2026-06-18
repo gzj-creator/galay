@@ -192,7 +192,8 @@ void waitForServerReady(TestState& state) {
 
 void waitForClients(TestState& state) {
     const auto deadline = std::chrono::steady_clock::now() + 20s;
-    while (state.client_done.load(std::memory_order_relaxed) < kClients) {
+    while (state.client_done.load(std::memory_order_relaxed) < kClients ||
+           state.accepted.load(std::memory_order_relaxed) < kTotalConnections) {
         if (state.failed.load(std::memory_order_acquire)) {
             std::lock_guard<std::mutex> lock(state.failure_mu);
             throw std::runtime_error(state.failure.empty() ? "connect stress failed" : state.failure);

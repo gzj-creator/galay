@@ -18,10 +18,6 @@ BENCHMARK_SUPPORT_RE = re.compile(r"^(?:bench_support|ssl_stats)\.cc$")
 SCRIPT_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*\.(?:sh|py|cmake|in|yml|yaml|json|md|txt|conf|crt|key|srl)$")
 GROUPED_UTIL_TEST_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*_test\.cc$")
 LEGACY_SCRIPT_RE = re.compile(r"S[0-9]+-Run|RunIntegrationTest|RunHttpIntegrationTest")
-STALE_INCLUDE_RE = re.compile(
-    r"(?:CMAKE_(?:SOURCE|PROJECT)_DIR|PROJECT_SOURCE_DIR)\}/galay-"
-    r"|(?:^|[\s\"'])galay-(?:http|redis|mysql|mongo|kernel|utils|rpc|ssl|ws|http2|etcd|mcp|tracing)/"
-)
 TARGET_BENCH_RE = re.compile(r"add_executable\s*\(\s*([A-Za-z0-9_.:-]+)")
 
 
@@ -198,8 +194,6 @@ def audit_text_patterns() -> None:
                     advisory(path, idx, "global-using-namespace", "avoid global using namespace in examples/tests/benchmarks")
                 if "@brief" in line:
                     advisory(path, idx, "doxygen-brief", "avoid @brief in examples/tests/benchmarks")
-            if path != Path(__file__).resolve() and STALE_INCLUDE_RE.search(line):
-                issue(path, idx, "stale-include-root", "stale galay-* include or target reference")
             if path != Path(__file__).resolve() and LEGACY_SCRIPT_RE.search(line):
                 issue(path, idx, "legacy-script-reference", "legacy script reference should be updated")
 

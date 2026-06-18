@@ -158,18 +158,25 @@ public:
             return false;
         }
         const size_t index = static_cast<size_t>(head & kMask);
-        TaskState* const candidate = m_slots[index].load(std::memory_order_acquire);
-        if (candidate == nullptr ||
-            candidate->m_resume_owner_only.load(std::memory_order_acquire)) {
-            return false;
-        }
         if (!m_head.compare_exchange_strong(head, head + 1,
                                             std::memory_order_seq_cst,
                                             std::memory_order_relaxed)) {
             return false;
         }
         TaskState* const state = m_slots[index].exchange(nullptr, std::memory_order_relaxed);
-        out = detail::TaskRefStorageAccess::adoptState(state);
+        if (state == nullptr) {
+            return false;
+        }
+
+        TaskRef task = detail::TaskRefStorageAccess::adoptState(state);
+        if (state->m_resume_owner_only.load(std::memory_order_acquire)) {
+            if (auto* scheduler = task.belongScheduler()) {
+                scheduler->schedule(std::move(task));
+            }
+            return false;
+        }
+
+        out = std::move(task);
         return true;
     }
 

@@ -79,6 +79,14 @@ int registerIOSchedulerClose(Scheduler* scheduler,
     return static_cast<IOScheduler*>(scheduler)->addClose(controller);
 }
 
+int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller) noexcept
+{
+    if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
+        return 0;
+    }
+    return static_cast<IOScheduler*>(scheduler)->remove(controller);
+}
+
 } // namespace detail
 
 /**

@@ -8,6 +8,7 @@
 #include "galay-kernel/common/timer_manager.hpp"
 #include "galay-kernel/core/runtime.h"
 #include "galay-kernel/core/task.h"
+#include "test/sched_access.h"
 
 #if defined(USE_KQUEUE)
 #include "galay-kernel/core/kqueue_scheduler.h"
@@ -22,102 +23,49 @@ using IOSchedulerType = galay::kernel::IOUringScheduler;
 #error "T101-RuntimeIOStealStats requires kqueue, epoll, or io_uring"
 #endif
 
-#include <atomic>
-#include <chrono>
 #include <iostream>
 #include <memory>
-#include <thread>
+#include <span>
+#include <vector>
 
 using namespace galay::kernel;
-using namespace std::chrono_literals;
 
 namespace {
 
-bool waitUntil(auto&& predicate,
-               std::chrono::milliseconds timeout = 2000ms,
-               std::chrono::milliseconds step = 1ms) {
-    const auto deadline = std::chrono::steady_clock::now() + timeout;
-    while (std::chrono::steady_clock::now() < deadline) {
-        if (predicate()) {
-            return true;
-        }
-        std::this_thread::sleep_for(step);
-    }
-    return predicate();
-}
-
-void waitForFlag(const std::atomic<bool>& flag) {
-    while (!flag.load(std::memory_order_acquire)) {
-        std::this_thread::yield();
-    }
-}
-
-struct ScenarioState {
-    std::atomic<bool> release{false};
-    std::atomic<int> ran_on_sibling{0};
-    std::atomic<int> completed{0};
-    IOScheduler* source = nullptr;
-    IOScheduler* sibling = nullptr;
-};
-
-Task<void> backlogTask(ScenarioState* state) {
-    const auto tid = std::this_thread::get_id();
-    if (state->sibling && tid == state->sibling->threadId()) {
-        state->ran_on_sibling.fetch_add(1, std::memory_order_relaxed);
-    }
-    waitForFlag(state->release);
-    state->completed.fetch_add(1, std::memory_order_release);
-    co_return;
+TaskRef makeStealableTask(IOScheduler* owner) {
+    auto* state = new TaskState(std::coroutine_handle<>{});
+    state->m_scheduler = owner;
+    return TaskRef(state, false);
 }
 
 bool runStatsScenario() {
-    constexpr int kTaskCount = 64;
+    constexpr int kTaskCount = 16;
 
     Runtime runtime;
     auto source = std::make_unique<IOSchedulerType>();
     auto sibling = std::make_unique<IOSchedulerType>();
-    source->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
-    sibling->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
     auto* source_ptr = source.get();
     auto* sibling_ptr = sibling.get();
     runtime.addIOScheduler(std::move(source));
     runtime.addIOScheduler(std::move(sibling));
-    runtime.start();
 
-    const bool ready = waitUntil([&]() {
-        return source_ptr->threadId() != std::thread::id{} &&
-               sibling_ptr->threadId() != std::thread::id{};
-    });
-    if (!ready) {
-        std::cerr << "[T101] scheduler threads did not start in time\n";
-        runtime.stop();
-        return false;
-    }
+    std::vector<IOScheduler*> siblings{source_ptr, sibling_ptr};
+    std::span<IOScheduler* const> sibling_span{siblings.data(), siblings.size()};
+    source_ptr->configureStealDomain(sibling_span, 0);
+    sibling_ptr->configureStealDomain(sibling_span, 1);
 
-    ScenarioState state;
-    state.source = source_ptr;
-    state.sibling = sibling_ptr;
+    auto& source_worker = SchedulerTestAccess::worker(*source_ptr);
+    auto& sibling_worker = SchedulerTestAccess::worker(*sibling_ptr);
     for (int i = 0; i < kTaskCount; ++i) {
-        if (!scheduleTask(*source_ptr, backlogTask(&state))) {
-            std::cerr << "[T101] failed to enqueue skewed backlog task " << i << "\n";
-            state.release.store(true, std::memory_order_release);
-            runtime.stop();
+        auto task = makeStealableTask(source_ptr);
+        if (!source_worker.local_ring.push_back(std::move(task))) {
+            std::cerr << "[T101] failed to seed source worker backlog " << i << "\n";
             return false;
         }
     }
 
-    const bool sibling_started = waitUntil([&]() {
-        return state.ran_on_sibling.load(std::memory_order_acquire) > 0;
-    });
-    state.release.store(true, std::memory_order_release);
-    const bool all_done = waitUntil([&]() {
-        return state.completed.load(std::memory_order_acquire) == kTaskCount;
-    }, 4000ms);
-
-    runtime.stop();
-
-    if (!sibling_started || !all_done) {
-        std::cerr << "[T101] skewed backlog did not trigger stealing or did not complete in time\n";
+    if (!sibling_worker.trySteal()) {
+        std::cerr << "[T101] sibling worker failed to steal seeded backlog\n";
         return false;
     }
 

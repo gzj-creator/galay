@@ -369,32 +369,51 @@ void KqueueReactor::processEvent(struct kevent& ev) {
     }
 
     const uint32_t t = static_cast<uint32_t>(controller->m_type);
+    const auto complete_one_shot = [this, controller](auto* awaitable,
+                                                      IOEventType event_type,
+                                                      int16_t filter) {
+        if (awaitable == nullptr || !awaitable->handleComplete(controller->m_handle)) {
+            return;
+        }
+
+        const int fd = controller->m_handle.fd;
+        controller->removeAwaitable(event_type);
+
+        struct kevent delete_event;
+        EV_SET(&delete_event, fd, filter, EV_DELETE, 0, 0, nullptr);
+        (void)kevent(m_kqueue_fd, &delete_event, 1, nullptr, 0, nullptr);
+
+        if (controller->m_type == IOEventType::INVALID) {
+            retireRegistrationEntry(controller);
+        }
+        awaitable->m_waker.wakeUp();
+    };
 
     if (ev.filter == EVFILT_READ) {
         if (t & ACCEPT) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<AcceptAwaitable>());
+            complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT, EVFILT_READ);
         } else if (t & RECV) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<RecvAwaitable>());
+            complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV, EVFILT_READ);
         } else if (t & READV) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<ReadvAwaitable>());
+            complete_one_shot(controller->getAwaitable<ReadvAwaitable>(), READV, EVFILT_READ);
         } else if (t & RECVFROM) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<RecvFromAwaitable>());
+            complete_one_shot(controller->getAwaitable<RecvFromAwaitable>(), RECVFROM, EVFILT_READ);
         } else if (t & FILEREAD) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<FileReadAwaitable>());
+            complete_one_shot(controller->getAwaitable<FileReadAwaitable>(), FILEREAD, EVFILT_READ);
         }
     } else if (ev.filter == EVFILT_WRITE) {
         if (t & CONNECT) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<ConnectAwaitable>());
+            complete_one_shot(controller->getAwaitable<ConnectAwaitable>(), CONNECT, EVFILT_WRITE);
         } else if (t & SEND) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<SendAwaitable>());
+            complete_one_shot(controller->getAwaitable<SendAwaitable>(), SEND, EVFILT_WRITE);
         } else if (t & WRITEV) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<WritevAwaitable>());
+            complete_one_shot(controller->getAwaitable<WritevAwaitable>(), WRITEV, EVFILT_WRITE);
         } else if (t & SENDTO) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<SendToAwaitable>());
+            complete_one_shot(controller->getAwaitable<SendToAwaitable>(), SENDTO, EVFILT_WRITE);
         } else if (t & FILEWRITE) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<FileWriteAwaitable>());
+            complete_one_shot(controller->getAwaitable<FileWriteAwaitable>(), FILEWRITE, EVFILT_WRITE);
         } else if (t & SENDFILE) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<SendFileAwaitable>());
+            complete_one_shot(controller->getAwaitable<SendFileAwaitable>(), SENDFILE, EVFILT_WRITE);
         }
     } else if (ev.filter == EVFILT_VNODE) {
         if (t & FILEWATCH) {
@@ -412,7 +431,18 @@ void KqueueReactor::processEvent(struct kevent& ev) {
                 result.event = static_cast<FileWatchEvent>(mask);
 
                 awaitable->m_result = std::move(result);
-                awaitable->handleComplete(controller->m_handle);
+                const bool completed = awaitable->handleComplete(controller->m_handle);
+                const int fd = controller->m_handle.fd;
+                controller->removeAwaitable(FILEWATCH);
+                struct kevent delete_event;
+                EV_SET(&delete_event, fd, EVFILT_VNODE, EV_DELETE, 0, 0, nullptr);
+                (void)kevent(m_kqueue_fd, &delete_event, 1, nullptr, 0, nullptr);
+                if (controller->m_type == IOEventType::INVALID) {
+                    retireRegistrationEntry(controller);
+                }
+                if (!completed) {
+                    return;
+                }
                 awaitable->m_waker.wakeUp();
             }
         }

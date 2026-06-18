@@ -25,6 +25,14 @@
 namespace galay::kernel 
 {
 
+class IOController;
+
+namespace detail {
+
+int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller) noexcept;
+
+}  // namespace detail
+
 class TimeoutTimer final: public Timer
 {
 public:
@@ -84,6 +92,7 @@ template<typename Awaitable>
 struct WithTimeout {
     Awaitable m_inner;
     TimeoutTimer::ptr m_timer;
+    Scheduler* m_scheduler = nullptr;
 
     WithTimeout(Awaitable&& inner, std::chrono::milliseconds timeout)
         : m_inner(std::move(inner)), m_timer(std::make_shared<TimeoutTimer>(timeout)) {}
@@ -101,14 +110,20 @@ struct WithTimeout {
             return false;
         }
         auto waker = Waker(handle);
+        m_scheduler = waker.getScheduler();
         m_timer->setWaker(Waker(handle));
-        waker.getScheduler()->addTimer(m_timer);
+        m_scheduler->addTimer(m_timer);
         return true;
     }
 
     auto await_resume() -> decltype(m_inner.await_resume()) {
         // 检查是否超时
         if (m_timer->timeouted()) [[unlikely]] {
+            if constexpr (requires(Awaitable& awaitable) {
+                awaitable.m_controller;
+            }) {
+                (void)detail::removeTimedOutIORegistration(m_scheduler, m_inner.m_controller);
+            }
             if constexpr (requires(Awaitable& awaitable) {
                 awaitable.markTimeout();
             }) {
