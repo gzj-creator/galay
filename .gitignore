@@ -60,3 +60,7 @@ target/
 
 # Local planning docs
 docs/plans/
+
+# agent
+.claude/
+.codex/
