@@ -78,6 +78,8 @@ void TimerScheduler::stop()
     if (m_thread.joinable()) {
         m_thread.join();
     }
+
+    m_timerManager.clear();
 }
 
 /**

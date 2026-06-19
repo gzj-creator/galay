@@ -468,6 +468,7 @@ void KqueueReactor::processEvent(struct kevent& ev) {
 
         const auto progress = owner->onActiveEvent(controller->m_handle);
         if (progress == SequenceProgress::kCompleted) {
+            owner->onCompleted();
             (void)detail::syncSequenceInterestMask(controller);
             owner->m_waker.wakeUp();
             return;
@@ -475,12 +476,16 @@ void KqueueReactor::processEvent(struct kevent& ev) {
 
         const int ret = addSequence(controller);
         if (ret == 1) {
+            owner->onCompleted();
+            (void)detail::syncSequenceInterestMask(controller);
             owner->m_waker.wakeUp();
         } else if (ret < 0) {
             const uint32_t sys = (ret != -1)
                 ? static_cast<uint32_t>(-ret)
                 : static_cast<uint32_t>(errno);
             detail::storeBackendError(m_last_error_code, kNotReady, sys);
+            owner->onCompleted();
+            (void)detail::syncSequenceInterestMask(controller);
             owner->m_waker.wakeUp();
         }
     }

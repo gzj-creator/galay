@@ -175,7 +175,6 @@ inline bool finalizeAwaitableAddResult(int ret,
 
 template <IOEventType Event, typename AwaitableT>
 inline auto resumeIOAwaitable(AwaitableT& awaitable) -> decltype(std::move(awaitable.m_result)) {
-#ifdef USE_IOURING
     const bool owns_read =
         sequenceEventUsesSlot(Event, IOController::READ) &&
         awaitable.m_controller->m_awaitable[IOController::READ] == &awaitable;
@@ -185,9 +184,6 @@ inline auto resumeIOAwaitable(AwaitableT& awaitable) -> decltype(std::move(await
     if (owns_read || owns_write) {
         awaitable.m_controller->removeAwaitable(Event);
     }
-#else
-    awaitable.m_controller->removeAwaitable(Event);
-#endif
     return std::move(awaitable.m_result);
 }
 
@@ -208,10 +204,20 @@ inline bool suspendRegisteredAwaitable(AwaitableT& awaitable, std::coroutine_han
     auto* scheduler = awaitable.m_waker.getScheduler();
     if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
         awaitable.m_result = std::unexpected(IOError(kNotRunningOnIOScheduler, errno));
+        awaitable.m_controller->removeAwaitable(Event);
         return false;
     }
     const int ret = registerIOSchedulerEvent(scheduler, Event, awaitable.m_controller);
-    return finalizeAwaitableAddResult(ret, ErrorCode, awaitable.m_result);
+    if (ret == 1) {
+        awaitable.m_controller->removeAwaitable(Event);
+        return false;
+    }
+    if (ret < 0) {
+        awaitable.m_result = std::unexpected(IOError(ErrorCode, normalizeAwaitableErrno(ret)));
+        awaitable.m_controller->removeAwaitable(Event);
+        return false;
+    }
+    return true;
 }
 
 template <typename Promise>

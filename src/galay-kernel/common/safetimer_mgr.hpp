@@ -177,6 +177,27 @@ public:
     }
 
     /**
+     * @brief 清空所有待处理和已入轮的定时器
+     * @details 应在没有 tick()/push() 并发访问时调用，典型场景是调度器线程停止后重置全局定时器。
+     */
+    void clear()
+    {
+        Timer::ptr timer;
+        while (m_pendingQueue.try_dequeue(timer)) {
+        }
+
+        for (auto* wheel : {&m_wheel1, &m_wheel2, &m_wheel3, &m_wheel4, &m_wheel5}) {
+            for (auto& slot : *wheel) {
+                slot.clear();
+            }
+        }
+
+        m_pendingSize.store(0, std::memory_order_relaxed);
+        m_wheelSize.store(0, std::memory_order_relaxed);
+        reset();
+    }
+
+    /**
      * @brief 推进时间轮（单线程调用）
      *
      * 该方法会：

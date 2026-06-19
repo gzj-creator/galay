@@ -103,6 +103,41 @@ int EpollReactor::wakeReadFdForTest() const {
     return m_event_fd;
 }
 
+EpollReactor::RegistrationEntry* EpollReactor::registrationEntryForController(IOController* controller) {
+    if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
+        return nullptr;
+    }
+
+    const int fd = controller->m_handle.fd;
+    auto it = m_registration_entries.find(fd);
+    if (it == m_registration_entries.end()) {
+        auto entry = std::make_unique<RegistrationEntry>();
+        entry->controller = controller;
+        auto* raw = entry.get();
+        m_registration_entries.emplace(fd, std::move(entry));
+        return raw;
+    }
+
+    it->second->controller = controller;
+    return it->second.get();
+}
+
+void EpollReactor::retireRegistrationEntry(IOController* controller) {
+    if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
+        return;
+    }
+
+    const int fd = controller->m_handle.fd;
+    auto it = m_registration_entries.find(fd);
+    if (it == m_registration_entries.end()) {
+        return;
+    }
+
+    it->second->controller = nullptr;
+    m_retired_entries.push_back(std::move(it->second));
+    m_registration_entries.erase(it);
+}
+
 size_t EpollReactor::findPendingChangeIndex(IOController* controller) const {
     for (size_t index = 0; index < m_pending_changes.size(); ++index) {
         if (m_pending_changes[index].controller == controller) {
@@ -201,6 +236,7 @@ int EpollReactor::flushPendingChanges() {
 
             if (ret == 0 || errno == ENOENT) {
                 controller->m_registered_events = 0;
+                retireRegistrationEntry(controller);
                 erasePendingChange(index);
                 continue;
             }
@@ -211,7 +247,11 @@ int EpollReactor::flushPendingChanges() {
 
         struct epoll_event ev;
         ev.events = events;
-        ev.data.ptr = controller;
+        ev.data.ptr = registrationEntryForController(controller);
+        if (ev.data.ptr == nullptr) {
+            erasePendingChange(index);
+            continue;
+        }
 
         int ret = -1;
         if (controller->m_registered_events == 0) {
@@ -320,6 +360,7 @@ int EpollReactor::addClose(IOController* controller) {
     controller->m_sequence_owner[IOController::WRITE] = nullptr;
     detail::clearSequenceInterestMask(controller);
     controller->m_registered_events = 0;
+    retireRegistrationEntry(controller);
 
     close(fd);
     controller->m_handle = GHandle::invalid();
@@ -425,22 +466,37 @@ void EpollReactor::poll(int timeout_ms, WakeCoordinator& wake_coordinator) {
 }
 
 void EpollReactor::processEvent(struct epoll_event& ev) {
-    auto* controller = static_cast<IOController*>(ev.data.ptr);
-    if (!controller || controller->m_type == IOEventType::INVALID) {
+    auto* entry = static_cast<RegistrationEntry*>(ev.data.ptr);
+    auto* controller = entry ? entry->controller : nullptr;
+    if (!controller ||
+        controller->m_type == IOEventType::INVALID ||
+        controller->m_handle == GHandle::invalid()) {
         return;
     }
 
     const uint32_t t = static_cast<uint32_t>(controller->m_type);
+    const auto complete_one_shot = [this, controller](auto* awaitable,
+                                                      IOEventType event_type) {
+        if (awaitable == nullptr || !awaitable->handleComplete(controller->m_handle)) {
+            return;
+        }
+
+        Waker waker = awaitable->m_waker;
+        controller->removeAwaitable(event_type);
+        syncEvents(controller);
+        (void)flushPendingChanges();
+        waker.wakeUp();
+    };
 
     if (ev.events & EPOLLIN) {
         if (t & ACCEPT) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<AcceptAwaitable>());
+            complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT);
         } else if (t & RECV) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<RecvAwaitable>());
+            complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV);
         } else if (t & READV) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<ReadvAwaitable>());
+            complete_one_shot(controller->getAwaitable<ReadvAwaitable>(), READV);
         } else if (t & RECVFROM) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<RecvFromAwaitable>());
+            complete_one_shot(controller->getAwaitable<RecvFromAwaitable>(), RECVFROM);
         } else if (t & FILEREAD) {
             auto* aio_awaitable =
                 static_cast<galay::async::AioCommitAwaitable*>(controller->m_awaitable[IOController::READ]);
@@ -477,11 +533,11 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
                     aio_awaitable->m_result = std::unexpected(IOError(kReadFailed, errno));
                 }
 
-                if (applyEvents(controller, EPOLLET) < 0 && errno != ENOENT) {
-                    detail::storeBackendError(
-                        m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
-                }
-                aio_awaitable->m_waker.wakeUp();
+                Waker waker = aio_awaitable->m_waker;
+                controller->removeAwaitable(FILEREAD);
+                syncEvents(controller);
+                (void)flushPendingChanges();
+                waker.wakeUp();
             }
         } else if (t & FILEWATCH) {
             auto* awaitable = controller->getAwaitable<FileWatchAwaitable>();
@@ -518,58 +574,82 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
                         std::unexpected(IOError(kReadFailed, static_cast<uint32_t>(errno)));
                 }
 
-                awaitable->handleComplete(controller->m_handle);
-                awaitable->m_waker.wakeUp();
+                const bool completed = awaitable->handleComplete(controller->m_handle);
+                Waker waker = awaitable->m_waker;
+                controller->removeAwaitable(FILEWATCH);
+                syncEvents(controller);
+                (void)flushPendingChanges();
+                if (!completed) {
+                    return;
+                }
+                waker.wakeUp();
             }
         }
     }
 
+    const uint32_t after_read_type = static_cast<uint32_t>(controller->m_type);
     if (ev.events & EPOLLOUT) {
-        if (t & CONNECT) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<ConnectAwaitable>());
-        } else if (t & SEND) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<SendAwaitable>());
-        } else if (t & WRITEV) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<WritevAwaitable>());
-        } else if (t & SENDTO) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<SendToAwaitable>());
-        } else if (t & FILEWRITE) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<FileWriteAwaitable>());
-        } else if (t & SENDFILE) {
-            completeAwaitableAndWake(controller, controller->getAwaitable<SendFileAwaitable>());
+        if (after_read_type & CONNECT) {
+            complete_one_shot(controller->getAwaitable<ConnectAwaitable>(), CONNECT);
+        } else if (after_read_type & SEND) {
+            complete_one_shot(controller->getAwaitable<SendAwaitable>(), SEND);
+        } else if (after_read_type & WRITEV) {
+            complete_one_shot(controller->getAwaitable<WritevAwaitable>(), WRITEV);
+        } else if (after_read_type & SENDTO) {
+            complete_one_shot(controller->getAwaitable<SendToAwaitable>(), SENDTO);
+        } else if (after_read_type & FILEWRITE) {
+            complete_one_shot(controller->getAwaitable<FileWriteAwaitable>(), FILEWRITE);
+        } else if (after_read_type & SENDFILE) {
+            complete_one_shot(controller->getAwaitable<SendFileAwaitable>(), SENDFILE);
         }
     }
 
-    if (t & SEQUENCE) {
-        const auto dispatch_owner = [this, controller](SequenceAwaitableBase* owner) {
+    if (static_cast<uint32_t>(controller->m_type) & SEQUENCE) {
+        const auto dispatch_owner = [this, controller](SequenceAwaitableBase* owner) -> bool {
             if (owner == nullptr) {
-                return;
+                return false;
             }
 
             const auto progress = owner->onActiveEvent(controller->m_handle);
             if (progress == SequenceProgress::kCompleted) {
+                owner->onCompleted();
                 (void)detail::syncSequenceInterestMask(controller);
+                syncEvents(controller);
+                (void)flushPendingChanges();
                 owner->m_waker.wakeUp();
-                return;
+                return true;
             }
 
             const int ret = addSequence(controller);
             if (ret == kImmediateReady) {
+                owner->onCompleted();
+                (void)detail::syncSequenceInterestMask(controller);
+                syncEvents(controller);
+                (void)flushPendingChanges();
                 owner->m_waker.wakeUp();
+                return true;
             } else if (ret < 0) {
                 const uint32_t sys = (ret != -1)
                     ? static_cast<uint32_t>(-ret)
                     : static_cast<uint32_t>(errno);
                 detail::storeBackendError(m_last_error_code, kNotReady, sys);
+                owner->onCompleted();
+                (void)detail::syncSequenceInterestMask(controller);
+                syncEvents(controller);
+                (void)flushPendingChanges();
                 owner->m_waker.wakeUp();
+                return true;
             }
+            return false;
         };
 
         SequenceAwaitableBase* dispatched = nullptr;
         if ((ev.events & EPOLLIN) != 0) {
             auto* owner = controller->m_sequence_owner[IOController::READ];
             if (owner != nullptr && owner->waitsOn(IOController::READ)) {
-                dispatch_owner(owner);
+                if (dispatch_owner(owner)) {
+                    return;
+                }
                 dispatched = owner;
             }
         }
@@ -578,7 +658,9 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
             if (owner != nullptr &&
                 owner != dispatched &&
                 owner->waitsOn(IOController::WRITE)) {
-                dispatch_owner(owner);
+                if (dispatch_owner(owner)) {
+                    return;
+                }
             }
         }
     }

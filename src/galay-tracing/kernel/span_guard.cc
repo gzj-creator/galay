@@ -12,6 +12,7 @@
 
 #include "galay-tracing/context/context_storage.h"
 #include "galay-tracing/kernel/sampler.h"
+#include "galay-tracing/kernel/tracer_provider.h"
 
 #include <cstdint>
 #include <string>
@@ -101,6 +102,14 @@ void SpanGuard::restore() noexcept {
     }
 
     end();
+    if (m_span.spanContext().sampled()) {
+        if (auto* processor = currentSpanProcessor(); processor != nullptr) {
+            try {
+                processor->onEnd(std::move(m_span));
+            } catch (...) {
+            }
+        }
+    }
     try {
         detail::setCurrentContextState(detail::CurrentContextState{
             .spanContext = std::move(m_previousContext),

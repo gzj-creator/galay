@@ -20,6 +20,8 @@
 #include <sys/epoll.h>
 
 #include <atomic>
+#include <memory>
+#include <unordered_map>
 #include <vector>
 
 namespace galay::kernel {
@@ -60,6 +62,10 @@ public:
     void poll(int timeout_ms, WakeCoordinator& wake_coordinator);  ///< 轮询事件并通过 wake coordinator 分发唤醒
 
 private:
+    struct RegistrationEntry {
+        IOController* controller = nullptr;  ///< 当前 fd 绑定的控制器；退役后置空过滤晚到事件
+    };
+
     struct PendingChange {
         IOController* controller = nullptr;  ///< 对应控制器
         uint32_t events = EPOLLET;  ///< 目标事件掩码；仅 EPOLLET 表示删除注册
@@ -73,6 +79,8 @@ private:
     size_t findPendingChangeIndex(IOController* controller) const;  ///< 查找控制器对应的 pending change
     void erasePendingChange(size_t index);  ///< 删除指定下标的 pending change
     void discardPendingChange(IOController* controller);  ///< 丢弃控制器对应的 pending change
+    RegistrationEntry* registrationEntryForController(IOController* controller);  ///< 获取 fd 对应的稳定注册入口
+    void retireRegistrationEntry(IOController* controller);  ///< 退役 fd 对应注册入口，保留地址过滤晚到事件
 
     static constexpr size_t BATCH_THRESHOLD = 32;  ///< 累积到一定数量时主动 flush，避免队列无限增长
 
@@ -81,6 +89,8 @@ private:
     int m_max_events = 0;  ///< 单次 poll 处理的最大事件数
     std::vector<struct epoll_event> m_events;  ///< epoll_wait 复用缓冲区
     std::vector<PendingChange> m_pending_changes;  ///< 待批量提交的 epoll 事件变更
+    std::unordered_map<int, std::unique_ptr<RegistrationEntry>> m_registration_entries;  ///< fd 到稳定注册入口的映射
+    std::vector<std::unique_ptr<RegistrationEntry>> m_retired_entries;  ///< 已退役但保留地址的注册入口
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
 };
 

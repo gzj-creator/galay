@@ -5,6 +5,8 @@
  * 通过条件：send 挂起后读回对端 TLS record，不会得到 `kWriteFailed`，且密文会被成功喂回引擎。
  */
 
+#include <sstream>
+
 #define private public
 #include "galay-ssl/async/ssl_await.h"
 #include "galay-ssl/async/ssl_socket.h"

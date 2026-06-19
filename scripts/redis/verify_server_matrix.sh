@@ -47,6 +47,39 @@ wait_redis()
   return 1
 }
 
+print_cluster_debug()
+{
+  local port=$1
+  echo "[DEBUG] CLUSTER INFO from ${port}" >&2
+  redis-cli -h 127.0.0.1 -p "${port}" CLUSTER INFO >&2 || true
+  echo "[DEBUG] CLUSTER NODES from ${port}" >&2
+  redis-cli -h 127.0.0.1 -p "${port}" CLUSTER NODES >&2 || true
+}
+
+wait_cluster_ready()
+{
+  local port=$1
+  local expected_size=$2
+  local deadline=$((SECONDS + 30))
+  while (( SECONDS < deadline )); do
+    local info
+    if info=$(redis-cli -h 127.0.0.1 -p "${port}" CLUSTER INFO 2>/dev/null); then
+      local state
+      local size
+      state=$(printf '%s\n' "${info}" | awk -F: '/^cluster_state:/ { gsub(/\r/, "", $2); print $2 }')
+      size=$(printf '%s\n' "${info}" | awk -F: '/^cluster_size:/ { gsub(/\r/, "", $2); print $2 }')
+      if [[ "${state}" == "ok" && "${size}" == "${expected_size}" ]]; then
+        return 0
+      fi
+    fi
+    sleep 0.5
+  done
+
+  echo "redis cluster on port ${port} did not become ready with cluster_size=${expected_size}" >&2
+  print_cluster_debug "${port}"
+  return 1
+}
+
 start_redis()
 {
   local conf=$1
@@ -71,6 +104,7 @@ start_redis "${acl_dir}/redis.conf"
 wait_redis 16379 --user galay -a galay_redis_pass_123
 run redis-cli -h 127.0.0.1 -p 16379 --user galay -a galay_redis_pass_123 ACL WHOAMI
 run env \
+  GALAY_IT_ENABLE=1 \
   GALAY_REDIS_AUTH_URL=redis://galay:galay_redis_pass_123@127.0.0.1:16379/0 \
   GALAY_REDIS_AUTH_WRONG_URL=redis://galay:bad_password@127.0.0.1:16379/0 \
   "${build_dir}/test/redis/redis_t27_auth"
@@ -118,6 +152,7 @@ for _ in $(seq 1 80); do
 done
 run redis-cli --tls --cacert "${tls_dir}/ca.crt" -h localhost -p 16380 PING
 run env \
+  GALAY_IT_ENABLE=1 \
   GALAY_REDIS_TLS_URL=rediss://localhost:16380/0 \
   GALAY_REDIS_TLS_LOCALHOST_URL=rediss://localhost:16380/0 \
   GALAY_REDIS_TLS_CA="${tls_dir}/ca.crt" \
@@ -125,6 +160,7 @@ run env \
   GALAY_REDIS_TLS_SERVER_NAME=localhost \
   "${build_dir}/test/redis/redis_t17_tls"
 run env \
+  GALAY_IT_ENABLE=1 \
   GALAY_REDIS_TLS_URL=rediss://localhost:16380/0 \
   GALAY_REDIS_TLS_LOCALHOST_URL=rediss://localhost:16380/0 \
   GALAY_REDIS_TLS_CA="${tls_dir}/ca.crt" \
@@ -132,6 +168,7 @@ run env \
   GALAY_REDIS_TLS_SERVER_NAME=localhost \
   "${build_dir}/test/redis/redis_t18_url"
 run env \
+  GALAY_IT_ENABLE=1 \
   GALAY_REDIS_TLS_URL=rediss://localhost:16380/0 \
   GALAY_REDIS_TLS_CA="${tls_dir}/ca.crt" \
   GALAY_REDIS_TLS_VERIFY_PEER=1 \
@@ -170,6 +207,7 @@ redis-cli --cluster create \
   127.0.0.1:17002 \
   --cluster-yes >/tmp/galay-redis-cluster-create.log
 run redis-cli -h 127.0.0.1 -p 17000 CLUSTER INFO
+wait_cluster_ready 17000 3
 
 sentinel_dir="${base_dir}/sentinel"
 mkdir -p "${sentinel_dir}"

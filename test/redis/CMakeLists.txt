@@ -47,7 +47,7 @@ foreach(SRC ${SRC_LIST})
 endforeach()
 
 function(add_redis_integration_target target_name source_file test_name)
-    add_executable(${target_name} EXCLUDE_FROM_ALL ${source_file})
+    add_executable(${target_name} ${source_file})
     set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
     target_link_libraries(${target_name} PRIVATE galay::redis)
     target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)

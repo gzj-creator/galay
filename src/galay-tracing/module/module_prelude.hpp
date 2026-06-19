@@ -26,6 +26,7 @@
 #include "galay-tracing/kernel/span_guard.h"
 #include "galay-tracing/kernel/span_exporter.h"
 #include "galay-tracing/kernel/span_processor.h"
+#include "galay-tracing/kernel/tracer_provider.h"
 #include "galay-tracing/log/console_sink.h"
 #include "galay-tracing/log/log_level.h"
 #include "galay-tracing/log/log_record.h"

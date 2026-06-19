@@ -24,6 +24,8 @@
 - 新增 MySQL 真实服务端连接恢复测试，覆盖错误端口连接失败后的恢复，以及服务端 `KILL CONNECTION` 后的新连接恢复。
 - 新增 MySQL 异步连接池协程来源检查、等待者唤醒集成测试与连接池压力基准，覆盖连接池无阻塞等待路径。
 - 新增 etcd、Mongo、Redis 真实服务端验证脚本，并补齐 Redis ACL 认证兼容测试。
+- 新增 Redis 拓扑客户端读路由、重试、刷新配置与统计快照接口，并覆盖普通 Redis 与 Rediss 主从/集群构建路径。
+- 新增 tracing 进程级 `SpanProcessor` 配置入口与 `SpanProcessorScope`，SpanGuard 结束采样 span 时可提交给当前处理器。
 
 ### Changed
 
@@ -32,6 +34,7 @@
 - etcd 与 Redis 集成测试中的轮询等待改为协程等待/睡眠，减少 IO 调度线程上的阻塞等待。
 - 移除旧协程任务别名与相关命名，统一改用 `Task<void>` 表达异步任务接口。
 - 继续整理剩余命名、注释与示例表述，统一任务与句柄相关术语，并同步修正文档。
+- 调整 HTTP、Mongo、Redis 集成测试构建规则，按可选模块和集成测试二进制需求决定目标注册与构建。
 
 ### Fixed
 
@@ -40,6 +43,9 @@
 - 修复 `MurmurHash3Util` 字符串字面量重载误匹配裸指针长度接口导致的越界读取。
 - 修复 kernel work-stealing、kqueue IO 完成/超时清理中的生命周期问题，避免 stale IO 注册与任务状态悬空访问。
 - 稳定 `kernel.stealstats` 与 `kernel.connbld` 测试同步条件，消除 sanitizer 和高并发建连场景下的时序误失败。
+- 修复 epoll IO 事件完成后 awaitable/注册入口清理不完整导致的晚到事件、复用 fd 与序列 IO 生命周期风险。
+- 修复跨线程注入任务 stealing 在 owner 首次搬运前抢占任务的问题，并在定时器调度器停止后清空遗留定时器。
+- 加固 etcd/Redis 服务端验证脚本，跳过未构建示例、等待 Redis 集群达到预期规模，并为集成测试显式启用运行开关。
 
 ### Docs
 

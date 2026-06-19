@@ -320,6 +320,7 @@ struct IOSchedulerWorkerState {
             local_ring.push_back(std::move(inject_buffer[i - 1]));
         }
         if (count > 0) {
+            owner_drained_injected_once.store(true, std::memory_order_release);
             injected_outstanding.fetch_sub(count, std::memory_order_acq_rel);
         }
         polls_since_inject = 0;
@@ -332,6 +333,14 @@ struct IOSchedulerWorkerState {
      */
     bool hasPendingInjected() const {
         return injected_outstanding.load(std::memory_order_acquire) > 0;
+    }
+
+    /**
+     * @brief 判断 owner 线程是否已经至少处理过一批跨线程注入任务
+     * @details stealing 只能旁路后续积压，不能抢走 victim 首次注入批次的 owner-first 执行机会。
+     */
+    bool hasOwnerDrainedInjected() const {
+        return owner_drained_injected_once.load(std::memory_order_acquire);
     }
 
     /**
@@ -432,6 +441,7 @@ struct IOSchedulerWorkerState {
     std::mt19937 random_seed{std::random_device{}()};  ///< 用于 victim 选择的随机器
 
     std::atomic<uint64_t> injected_outstanding{0};  ///< 尚未搬运到本地队列的注入任务数
+    std::atomic<bool> owner_drained_injected_once{false};  ///< owner 线程是否已处理过注入队列
     uint32_t consecutive_lifo_polls = 0;  ///< 连续命中 lifo_slot 的次数
     uint32_t lifo_poll_limit = 8;  ///< 允许连续走 LIFO 的最大次数
     uint32_t polls_since_inject = 0;  ///< 距离上次检查 inject_queue 已轮询的任务数
@@ -778,22 +788,52 @@ inline bool IOSchedulerWorkerState::trySteal() {
             continue;
         }
 
+        size_t stolen = 0;
         const size_t victim_size = victim->local_ring.size();
-        if (victim_size == 0) {
-            continue;
+        if (victim_size > 0) {
+            const size_t steal_target =
+                std::min(local_capacity, std::max<size_t>(1, victim_size / 2));
+            for (; stolen < steal_target; ++stolen) {
+                TaskRef task;
+                if (!victim->stealFront(task)) {
+                    break;
+                }
+                if (!local_ring.push_back(std::move(task))) {
+                    break;
+                }
+            }
+        } else if (victim->hasOwnerDrainedInjected() && victim->hasPendingInjected()) {
+            size_t attempts = 0;
+            while (stolen < local_capacity && attempts < local_capacity) {
+                ++attempts;
+                TaskRef task;
+                if (!victim->inject_queue.try_dequeue(task)) {
+                    break;
+                }
+                victim->injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
+                if (!task.isValid()) {
+                    continue;
+                }
+                auto* const state = task.state();
+                if (state != nullptr &&
+                    state->m_resume_owner_only.load(std::memory_order_acquire)) {
+                    if (auto* scheduler = task.belongScheduler()) {
+                        scheduler->schedule(std::move(task));
+                    }
+                    continue;
+                }
+                if (!local_ring.push_back(std::move(task))) {
+                    if (auto* scheduler = task.belongScheduler()) {
+                        scheduler->schedule(std::move(task));
+                    }
+                    break;
+                }
+                ++stolen;
+            }
         }
 
-        const size_t steal_target =
-            std::min(local_capacity, std::max<size_t>(1, victim_size / 2));
-        size_t stolen = 0;
-        for (; stolen < steal_target; ++stolen) {
-            TaskRef task;
-            if (!victim->stealFront(task)) {
-                break;
-            }
-            if (!local_ring.push_back(std::move(task))) {
-                break;
-            }
+        if (stolen == 0) {
+            continue;
         }
 
         if (stolen > 0) {
@@ -810,24 +850,48 @@ inline bool IOSchedulerWorkerState::trySteal() {
 
 
 inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
-    m_type |= type;
+    constexpr uint32_t kReadSlotMask =
+        static_cast<uint32_t>(IOEventType::ACCEPT) |
+        static_cast<uint32_t>(IOEventType::RECV) |
+        static_cast<uint32_t>(IOEventType::READV) |
+        static_cast<uint32_t>(IOEventType::FILEREAD) |
+        static_cast<uint32_t>(IOEventType::FILEWATCH) |
+        static_cast<uint32_t>(IOEventType::RECVFROM);
+    constexpr uint32_t kWriteSlotMask =
+        static_cast<uint32_t>(IOEventType::CONNECT) |
+        static_cast<uint32_t>(IOEventType::SEND) |
+        static_cast<uint32_t>(IOEventType::WRITEV) |
+        static_cast<uint32_t>(IOEventType::SENDFILE) |
+        static_cast<uint32_t>(IOEventType::FILEWRITE) |
+        static_cast<uint32_t>(IOEventType::SENDTO);
+
     switch (type) {
     case IOEventType::RECV:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
         m_awaitable[READ] = awaitable;
         break;
     case IOEventType::READV:
     case IOEventType::FILEREAD:
     case IOEventType::RECVFROM:
     case IOEventType::FILEWATCH:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
         m_awaitable[READ] = awaitable;
 #ifdef USE_IOURING
         advanceSqeGeneration(READ);
 #endif
         break;
     case IOEventType::ACCEPT:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
         m_awaitable[READ] = awaitable;
         break;
     case IOEventType::SEQUENCE:
+        m_type |= type;
 #ifdef USE_IOURING
         m_awaitable[READ] = awaitable;
         advanceSqeGeneration(READ);
@@ -839,6 +903,9 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
     case IOEventType::FILEWRITE:
     case IOEventType::SENDTO:
     case IOEventType::CONNECT:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kWriteSlotMask) |
+            static_cast<uint32_t>(type));
         m_awaitable[WRITE] = awaitable;
 #ifdef USE_IOURING
         advanceSqeGeneration(WRITE);

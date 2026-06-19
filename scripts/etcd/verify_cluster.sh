@@ -79,14 +79,31 @@ run "${build_dir}/test/etcd/T3-EtcdPipeline" "${endpoint}"
 run "${build_dir}/test/etcd/T4-AsyncEtcdSmoke" "${endpoint}"
 run "${build_dir}/test/etcd/T5-AsyncEtcdPipeline" "${endpoint}"
 run "${build_dir}/test/etcd/T9-AsyncEtcdTaskWatch" "${endpoint}"
-run "${build_dir}/examples/etcd/example_etcd_include_sync_basic" "${endpoint}"
-run "${build_dir}/examples/etcd/example_etcd_include_async_basic" "${endpoint}"
 
-if "${build_dir}/examples/etcd/example_etcd_include_sync_basic" "https://127.0.0.1:12379"; then
-  echo "https etcd endpoint unexpectedly succeeded" >&2
-  exit 1
+sync_example="${build_dir}/examples/etcd/example_etcd_include_sync_basic"
+async_example="${build_dir}/examples/etcd/example_etcd_include_async_basic"
+sync_example_available=0
+
+if [[ -f "${sync_example}" ]]; then
+  run "${sync_example}" "${endpoint}"
+  sync_example_available=1
 else
-  echo "etcd https endpoint rejected as expected"
+  echo "[SKIP] examples disabled or not built: ${sync_example}"
+fi
+
+if [[ -f "${async_example}" ]]; then
+  run "${async_example}" "${endpoint}"
+else
+  echo "[SKIP] examples disabled or not built: ${async_example}"
+fi
+
+if [[ "${sync_example_available}" -eq 1 ]]; then
+  if "${sync_example}" "https://127.0.0.1:12379"; then
+    echo "https etcd endpoint unexpectedly succeeded" >&2
+    exit 1
+  else
+    echo "etcd https endpoint rejected as expected"
+  fi
 fi
 
 echo "etcd temporary 3-node HTTP cluster verification completed"
