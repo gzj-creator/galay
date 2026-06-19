@@ -50,6 +50,16 @@ target_link_libraries(T11-http_headers PRIVATE galay-tracing::galay-tracing)
 
 add_test(NAME tracing.http_headers COMMAND T11-http_headers)
 
+add_executable(T12-span_events_links t12_span_events_links.cc)
+target_link_libraries(T12-span_events_links PRIVATE galay-tracing::galay-tracing)
+
+add_test(NAME tracing.span_events_links COMMAND T12-span_events_links)
+
+add_executable(T13-tracer_provider t13_tracer_provider.cc)
+target_link_libraries(T13-tracer_provider PRIVATE galay-tracing::galay-tracing)
+
+add_test(NAME tracing.tracer_provider COMMAND T13-tracer_provider)
+
 if(GALAY_TRACING_ENABLE_KERNEL)
     add_executable(T8-kernel_context t8_kernel_context.cc)
     target_link_libraries(T8-kernel_context PRIVATE galay-tracing::galay-tracing-kernel)

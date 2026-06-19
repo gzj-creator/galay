@@ -18,9 +18,65 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 namespace galay::mongo
 {
+
+/**
+ * @brief MongoDB 服务器端点
+ * @details 用于 replica set seed list 和后续拓扑选择；host 不拥有外部缓冲区，始终保存为值。
+ */
+struct MongoEndpoint
+{
+    std::string host = "127.0.0.1"; ///< 服务器地址
+    uint16_t port = 27017;          ///< 服务器端口
+};
+
+/**
+ * @brief MongoDB 读偏好
+ */
+enum class MongoReadPreference
+{
+    kPrimary,            ///< 只选择 primary
+    kPrimaryPreferred,   ///< 优先 primary，必要时 secondary
+    kSecondary,          ///< 只选择 secondary
+    kSecondaryPreferred, ///< 优先 secondary，必要时 primary
+    kNearest,            ///< 选择延迟窗口内最近节点
+};
+
+/**
+ * @brief MongoDB 重试策略配置
+ * @details 仅描述调用者意图；实际重试边界由 retry policy 层决定。
+ */
+struct MongoRetryConfig
+{
+    bool retry_reads = false;      ///< 是否允许安全读重试
+    bool retry_writes = false;     ///< 是否允许可证明安全的写重试
+    uint32_t max_attempts = 1;     ///< 最大尝试次数，1 表示不重试
+};
+
+/**
+ * @brief MongoDB 连接池配置
+ */
+struct MongoPoolConfig
+{
+    size_t min_size = 0;                                      ///< 每个服务器的最小连接数
+    size_t max_size = 1;                                      ///< 每个服务器的最大连接数
+    std::chrono::milliseconds wait_queue_timeout{5000};       ///< checkout 等待超时
+    std::chrono::milliseconds max_idle_time{60000};           ///< 空闲连接最大保留时间
+};
+
+/**
+ * @brief MongoDB 拓扑与 server selection 配置
+ */
+struct MongoTopologyConfig
+{
+    std::string replica_set_name;                             ///< 期望的 replica set 名称，空表示不校验
+    MongoReadPreference read_preference = MongoReadPreference::kPrimary; ///< 默认 primary
+    std::chrono::milliseconds server_selection_timeout{30000}; ///< server selection 超时
+    std::chrono::milliseconds local_threshold{15};             ///< nearest 延迟窗口
+};
 
 /**
  * @brief MongoDB 连接配置，包含地址、认证、超时等参数
@@ -40,6 +96,7 @@ struct MongoConfig
 
     std::string host = kDefaultHost;               ///< 服务器地址
     uint16_t port = kDefaultPort;                  ///< 服务器端口
+    std::vector<MongoEndpoint> seeds;              ///< replica set seed list；为空时使用 host/port 兼容路径
 
     std::string username;                          ///< 认证用户名（为空则跳过认证）
     std::string password;                          ///< 认证密码
@@ -53,6 +110,9 @@ struct MongoConfig
     bool tcp_nodelay = kDefaultTcpNoDelay;                  ///< 是否启用 TCP_NODELAY
     uint32_t connect_timeout_ms = kDefaultConnectTimeoutMs; ///< TCP 连接超时（毫秒）
     size_t recv_buffer_size = kDefaultRecvBufferSize;       ///< 同步连接接收缓冲区大小（字节）
+    MongoRetryConfig retry;                                 ///< 重试策略配置
+    MongoPoolConfig pool;                                   ///< 连接池配置
+    MongoTopologyConfig topology;                           ///< 拓扑与 server selection 配置
 
     /**
      * @brief 返回全部使用默认值的配置

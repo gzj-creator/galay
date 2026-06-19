@@ -84,6 +84,33 @@ inline bool hasRequiredDbTestConfig(const DbTestConfig& cfg)
         && !cfg.database.empty();
 }
 
+inline bool isIntegrationEnabled()
+{
+    const char* value = getEnvNonEmpty("GALAY_IT_ENABLE");
+    if (value == nullptr) {
+        return false;
+    }
+
+    const std::string enabled_value(value);
+    return enabled_value == "1"
+        || enabled_value == "true"
+        || enabled_value == "TRUE"
+        || enabled_value == "yes"
+        || enabled_value == "YES";
+}
+
+inline int requireIntegrationEnabledOrSkip(const char* test_name)
+{
+    if (isIntegrationEnabled()) {
+        return 0;
+    }
+
+    std::cerr << test_name
+              << " skipped: set GALAY_IT_ENABLE=1 to run external MySQL integration tests."
+              << std::endl;
+    return kMysqlTestSkippedExitCode;
+}
+
 inline int requireDbTestConfigOrSkip(const DbTestConfig& cfg, const char* test_name)
 {
     if (hasRequiredDbTestConfig(cfg)) {

@@ -153,6 +153,11 @@ int main()
 {
     std::cout << "=== T12: MySQL Resilience Integration ===" << std::endl;
 
+    if (const int skip_code = mysql_test::requireIntegrationEnabledOrSkip("T12-MySQLResilience");
+        skip_code != 0) {
+        return skip_code;
+    }
+
     const auto cfg = mysql_test::loadDbTestConfig();
     if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(cfg, "T12-MySQLResilience");
         skip_code != 0) {

@@ -311,6 +311,11 @@ int main()
 {
     std::cout << "=== T11: MySQL Auth Plugin Matrix ===" << std::endl;
 
+    if (const int skip_code = mysql_test::requireIntegrationEnabledOrSkip("T11-MySQLAuthPlugins");
+        skip_code != 0) {
+        return skip_code;
+    }
+
     const auto cfg = loadAuthMatrixConfig();
     if (const int skip_code = requireAuthMatrixConfigOrSkip(cfg); skip_code != 0) {
         return skip_code;

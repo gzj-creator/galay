@@ -39,6 +39,17 @@ std::string getenvOrDefault(const char* name, const std::string& fallback)
     return value;
 }
 
+bool integrationEnabled()
+{
+    const char* value = std::getenv("GALAY_IT_ENABLE");
+    if (value == nullptr) {
+        return false;
+    }
+    const std::string enabled(value);
+    return enabled == "1" || enabled == "true" || enabled == "TRUE" || enabled == "yes" ||
+           enabled == "YES" || enabled == "on" || enabled == "ON";
+}
+
 bool expectStatus(const std::expected<RedisValue, RedisError>& result,
                   const std::string& expected,
                   const std::string& label)
@@ -205,6 +216,11 @@ Task<void> runAsyncCase(IOScheduler* scheduler,
 
 int main()
 {
+    if (!integrationEnabled()) {
+        std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run Redis auth integration test" << std::endl;
+        return 0;
+    }
+
     const std::string url = getenvOrDefault("GALAY_REDIS_AUTH_URL", "");
     const std::string wrong_url = getenvOrDefault("GALAY_REDIS_AUTH_WRONG_URL", "");
     if (url.empty() || wrong_url.empty()) {

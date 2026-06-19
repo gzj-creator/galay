@@ -31,6 +31,12 @@ static_assert(!HasProtocolRecvAwaitable<RedisExchangeOperation>);
 static_assert(!HasCore<RedisExchangeOperation>);
 static_assert(!HasCore<RedisConnectOperation>);
 
+static_assert(std::is_enum_v<RedisReadPolicy>);
+static_assert(std::is_enum_v<RedisAccessMode>);
+static_assert(std::is_class_v<RedisTopologyRetryConfig>);
+static_assert(std::is_class_v<RedisTopologyRefreshConfig>);
+static_assert(std::is_class_v<RedisTopologyStats>);
+
 static_assert(requires(RedisClient& client,
                        RedisEncodedCommand encoded,
                        std::span<const RedisCommandView> commands,
@@ -47,6 +53,42 @@ static_assert(requires(RedisClient& client,
     { pool.initialize().timeout(std::chrono::milliseconds(1)) };
     { pool.acquire().timeout(std::chrono::milliseconds(1)) };
 });
+
+static_assert(requires(RedisMasterSlaveClientBuilder ms_builder,
+                       RedisClusterClientBuilder cluster_builder,
+                       RedisTopologyRetryConfig retry_config,
+                       RedisTopologyRefreshConfig refresh_config,
+                       RedisReadPolicy read_policy,
+                       RedisMasterSlaveClient& ms_client,
+                       RedisClusterClient& cluster_client) {
+    { ms_builder.retryConfig(retry_config) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
+    { ms_builder.refreshConfig(refresh_config) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
+    { ms_builder.readPolicy(read_policy) } -> std::same_as<RedisMasterSlaveClientBuilder&>;
+    { cluster_builder.retryConfig(retry_config) } -> std::same_as<RedisClusterClientBuilder&>;
+    { cluster_builder.refreshConfig(refresh_config) } -> std::same_as<RedisClusterClientBuilder&>;
+    { cluster_builder.readPolicy(read_policy) } -> std::same_as<RedisClusterClientBuilder&>;
+    { ms_client.getStats() } -> std::same_as<RedisTopologyStats>;
+    { cluster_client.getStats() } -> std::same_as<RedisTopologyStats>;
+});
+
+#ifdef GALAY_SSL_FEATURE_ENABLED
+static_assert(requires(RedissMasterSlaveClientBuilder ms_builder,
+                       RedissClusterClientBuilder cluster_builder,
+                       RedisTopologyRetryConfig retry_config,
+                       RedisTopologyRefreshConfig refresh_config,
+                       RedisReadPolicy read_policy,
+                       RedissMasterSlaveClient& ms_client,
+                       RedissClusterClient& cluster_client) {
+    { ms_builder.retryConfig(retry_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
+    { ms_builder.refreshConfig(refresh_config) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
+    { ms_builder.readPolicy(read_policy) } -> std::same_as<RedissMasterSlaveClientBuilder&>;
+    { cluster_builder.retryConfig(retry_config) } -> std::same_as<RedissClusterClientBuilder&>;
+    { cluster_builder.refreshConfig(refresh_config) } -> std::same_as<RedissClusterClientBuilder&>;
+    { cluster_builder.readPolicy(read_policy) } -> std::same_as<RedissClusterClientBuilder&>;
+    { ms_client.getStats() } -> std::same_as<RedisTopologyStats>;
+    { cluster_client.getStats() } -> std::same_as<RedisTopologyStats>;
+});
+#endif
 
 namespace {
 

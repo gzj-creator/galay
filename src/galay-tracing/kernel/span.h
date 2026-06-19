@@ -159,6 +159,27 @@ struct SpanAttribute {
 };
 
 /**
+ * @brief Span 事件
+ * @details 事件名称和属性拥有其字符串存储，便于 Span 结束后异步导出。
+ * timestamp 仅在 Span 时间策略启用时记录；默认值表示未记录事件时间。
+ */
+struct SpanEvent {
+    std::string name;                              ///< 事件名称
+    std::vector<SpanAttribute> attributes;         ///< 事件属性
+    std::chrono::steady_clock::time_point timestamp{}; ///< 可选事件时间戳
+};
+
+/**
+ * @brief Span 链接
+ * @details 表示当前 Span 与另一条追踪上下文的关系，属性拥有其字符串存储。
+ */
+struct SpanLink {
+    SpanContext context;                   ///< 被链接的 Span 上下文
+    std::string tracestate;                ///< 被链接上下文的 tracestate
+    std::vector<SpanAttribute> attributes; ///< 链接属性
+};
+
+/**
  * @brief 创建 int64 类型的 Span 属性
  * @param name 属性名称
  * @param value 属性值
@@ -245,6 +266,10 @@ class Span {
 public:
     using Clock = std::chrono::steady_clock; ///< 时钟类型
     static constexpr std::size_t kMaxAttributes = 32; ///< 单个 Span 最大属性数量
+    static constexpr std::size_t kMaxEvents = 64; ///< 单个 Span 最大事件数量
+    static constexpr std::size_t kMaxEventAttributes = 32; ///< 单个事件最大属性数量
+    static constexpr std::size_t kMaxLinks = 32; ///< 单个 Span 最大链接数量
+    static constexpr std::size_t kMaxLinkAttributes = 32; ///< 单个链接最大属性数量
 
     Span() = default;
 
@@ -415,6 +440,42 @@ public:
     [[nodiscard]] bool setAttribute(std::string_view name, const char* value);
 
     /**
+     * @brief 添加 Span 事件
+     * @param name 事件名称
+     * @param attributes 事件属性；超过 kMaxEventAttributes 的尾部属性会被丢弃
+     * @return 成功添加返回 true，已达事件上限返回 false
+     */
+    [[nodiscard]] bool addEvent(std::string_view name, std::vector<SpanAttribute> attributes = {});
+
+    /**
+     * @brief 获取所有事件
+     * @return 事件列表的只读视图
+     */
+    [[nodiscard]] std::span<const SpanEvent> events() const noexcept {
+        return std::span<const SpanEvent>(m_events.data(), m_events.size());
+    }
+
+    /**
+     * @brief 添加 Span 链接
+     * @param context 被链接的 Span 上下文
+     * @param tracestate 被链接上下文的 tracestate
+     * @param attributes 链接属性；超过 kMaxLinkAttributes 的尾部属性会被丢弃
+     * @return 成功添加返回 true，已达链接上限返回 false
+     */
+    [[nodiscard]] bool addLink(
+        SpanContext context,
+        std::string tracestate = {},
+        std::vector<SpanAttribute> attributes = {});
+
+    /**
+     * @brief 获取所有链接
+     * @return 链接列表的只读视图
+     */
+    [[nodiscard]] std::span<const SpanLink> links() const noexcept {
+        return std::span<const SpanLink>(m_links.data(), m_links.size());
+    }
+
+    /**
      * @brief 获取 Span 开始时间
      * @return 开始时间点
      */
@@ -450,6 +511,8 @@ private:
     SpanKind m_kind{SpanKind::kInternal};       ///< Span 类型
     SpanStatus m_status;                        ///< Span 状态
     std::vector<SpanAttribute> m_attributes;    ///< 属性列表
+    std::vector<SpanEvent> m_events;            ///< 事件列表
+    std::vector<SpanLink> m_links;              ///< 链接列表
     Clock::time_point m_startedAt{};            ///< 开始时间戳
     Clock::time_point m_endedAt{};              ///< 结束时间戳
     bool m_ended{false};                        ///< 是否已结束

@@ -60,6 +60,7 @@ target/
 
 # Local planning docs
 docs/plans/
+docs/modules/*/plans
 
 # agent
 .claude/

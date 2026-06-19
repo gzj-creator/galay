@@ -105,6 +105,11 @@ Task<void> runPoolWaiterCase(IOScheduler* scheduler,
 int main()
 {
     std::cout << "=== T14: MySQL Pool Waiter Coroutine Test ===" << std::endl;
+    if (const int skip_code = mysql_test::requireIntegrationEnabledOrSkip("T14-MySQLPoolWaiter");
+        skip_code != 0) {
+        return skip_code;
+    }
+
     const auto db_cfg = mysql_test::loadDbTestConfig();
     if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T14-MySQLPoolWaiter");
         skip_code != 0) {

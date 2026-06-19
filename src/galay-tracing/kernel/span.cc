@@ -201,4 +201,34 @@ bool Span::setAttribute(std::string_view name, const char* value) {
     return setAttribute(name, std::string_view(value == nullptr ? "" : value));
 }
 
+bool Span::addEvent(std::string_view name, std::vector<SpanAttribute> attributes) {
+    if (m_events.size() >= kMaxEvents) {
+        return false;
+    }
+    if (attributes.size() > kMaxEventAttributes) {
+        attributes.resize(kMaxEventAttributes);
+    }
+    m_events.push_back(SpanEvent{
+        .name = std::string(name),
+        .attributes = std::move(attributes),
+        .timestamp = m_startedAt == Clock::time_point{} ? Clock::time_point{} : Clock::now(),
+    });
+    return true;
+}
+
+bool Span::addLink(SpanContext context, std::string tracestate, std::vector<SpanAttribute> attributes) {
+    if (m_links.size() >= kMaxLinks) {
+        return false;
+    }
+    if (attributes.size() > kMaxLinkAttributes) {
+        attributes.resize(kMaxLinkAttributes);
+    }
+    m_links.push_back(SpanLink{
+        .context = std::move(context),
+        .tracestate = std::move(tracestate),
+        .attributes = std::move(attributes),
+    });
+    return true;
+}
+
 } // namespace galay::tracing

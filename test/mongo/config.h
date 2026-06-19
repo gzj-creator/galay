@@ -22,6 +22,7 @@ struct MongoTestConfig
     std::string auth_database = "admin";
     std::string hello_database = "admin";
     bool tcp_nodelay = true;
+    uint32_t connect_timeout_ms = galay::mongo::MongoConfig::kDefaultConnectTimeoutMs;
     size_t recv_buffer_size = 16384;
 };
 
@@ -49,6 +50,24 @@ inline uint16_t envPortOrDefault(const char* key, uint16_t fallback)
     }
 }
 
+inline uint32_t envUint32OrDefault(const char* key, uint32_t fallback)
+{
+    const char* value = std::getenv(key);
+    if (value == nullptr) {
+        return fallback;
+    }
+
+    try {
+        const unsigned long parsed = std::stoul(value);
+        if (parsed > std::numeric_limits<uint32_t>::max()) {
+            return fallback;
+        }
+        return static_cast<uint32_t>(parsed);
+    } catch (...) {
+        return fallback;
+    }
+}
+
 inline MongoTestConfig loadMongoTestConfig()
 {
     MongoTestConfig cfg;
@@ -60,6 +79,8 @@ inline MongoTestConfig loadMongoTestConfig()
     cfg.auth_database = envOrDefault("GALAY_MONGO_AUTH_DB", cfg.auth_database);
     cfg.hello_database = envOrDefault("GALAY_MONGO_HELLO_DB", cfg.hello_database);
     cfg.tcp_nodelay = envOrDefault("GALAY_MONGO_TCP_NODELAY", "1") != "0";
+    cfg.connect_timeout_ms = envUint32OrDefault("GALAY_MONGO_CONNECT_TIMEOUT_MS",
+                                                cfg.connect_timeout_ms);
 
     const char* recv_buffer_env = std::getenv("GALAY_MONGO_RECV_BUFFER_SIZE");
     if (recv_buffer_env != nullptr) {
@@ -86,6 +107,7 @@ inline galay::mongo::MongoConfig toMongoConfig(const MongoTestConfig& test_cfg)
     cfg.auth_database = test_cfg.auth_database;
     cfg.hello_database = test_cfg.hello_database;
     cfg.tcp_nodelay = test_cfg.tcp_nodelay;
+    cfg.connect_timeout_ms = test_cfg.connect_timeout_ms;
     cfg.recv_buffer_size = test_cfg.recv_buffer_size;
     return cfg;
 }
@@ -147,6 +169,7 @@ inline void printMongoTestConfig(const MongoTestConfig& cfg)
               << " auth_db=" << cfg.auth_database
               << " hello_db=" << cfg.hello_database
               << " tcp_nodelay=" << (cfg.tcp_nodelay ? "1" : "0")
+              << " connect_timeout_ms=" << cfg.connect_timeout_ms
               << " recv_buffer_size=" << cfg.recv_buffer_size
               << " user=" << (cfg.username.empty() ? "<empty>" : cfg.username)
               << std::endl;

@@ -24,6 +24,12 @@ function(add_mongo_integration_target target_name source_file)
     galay_mongo_configure_test_target(${target_name})
 endfunction()
 
+function(add_mongo_integration_test target_name source_file test_name)
+    add_mongo_integration_target(${target_name} ${source_file})
+    add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${target_name}>)
+    set_tests_properties(${test_name} PROPERTIES LABELS "mongo;integration")
+endfunction()
+
 add_mongo_test(t1_bson t1_bson.cc)
 add_mongo_test(t8_builder t8_builder.cc)
 add_mongo_test(t9_socket_options_source t9_socket_options_source.cc)
@@ -31,6 +37,7 @@ target_compile_definitions(t9_socket_options_source
     PRIVATE GALAY_MONGO_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src"
 )
 add_mongo_test(t10_log t10_log.cc)
+add_mongo_test(t12_uri_unit t12_uri_unit.cc)
 
 add_mongo_integration_target(mongo_t2_client t2_client.cc)
 add_mongo_integration_target(mongo_t3_pipeline t3_pipeline.cc)
@@ -38,3 +45,8 @@ add_mongo_integration_target(mongo_t4_func t4_func.cc)
 add_mongo_integration_target(mongo_t5_func t5_func.cc)
 add_mongo_integration_target(mongo_t6_auth t6_auth.cc)
 add_mongo_integration_target(mongo_t7_bridge t7_bridge.cc)
+
+add_mongo_integration_test(mongo_t11_replica_set_discovery_it
+    t11_replica_set_discovery_it.cc
+    mongo.it.replica_set_discovery
+)

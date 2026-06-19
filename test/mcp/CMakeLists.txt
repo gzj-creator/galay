@@ -4,6 +4,7 @@ set(GALAY_MCP_UNIT_TEST_SOURCES
     t7_log.cc
     t8_client_surface.cc
     t9_client_mode.cc
+    t10_protocol_validation.cc
 )
 
 foreach(test_source IN LISTS GALAY_MCP_UNIT_TEST_SOURCES)

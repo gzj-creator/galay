@@ -27,6 +27,8 @@
 namespace galay::mysql
 {
 
+class MysqlConnectionPool;
+
 namespace detail
 {
 
@@ -53,6 +55,38 @@ struct MysqlConnectionPoolConfig
     AsyncMysqlConfig async_config = AsyncMysqlConfig::noTimeout(); ///< 异步配置
     size_t min_connections = 2;  ///< 最小连接数
     size_t max_connections = 10; ///< 最大连接数
+};
+
+/**
+ * @brief MySQL连接池租约
+ * @details move-only RAII句柄，拥有一次从连接池借出的连接。析构时会以best-effort方式
+ *          将连接归还给原连接池；如需转交裸指针所有权，可调用dismiss()并由调用方负责归还。
+ * @note 析构和release()不执行异步清理，不阻塞调用线程。
+ */
+class MysqlPoolLease
+{
+public:
+    MysqlPoolLease() noexcept; ///< 构造空租约
+    MysqlPoolLease(MysqlPoolLease&& other) noexcept; ///< 移动构造，源租约失效
+    MysqlPoolLease& operator=(MysqlPoolLease&& other) noexcept; ///< 移动赋值，先归还当前连接
+    MysqlPoolLease(const MysqlPoolLease&) = delete; ///< 禁止拷贝
+    MysqlPoolLease& operator=(const MysqlPoolLease&) = delete; ///< 禁止拷贝赋值
+    ~MysqlPoolLease(); ///< 析构时归还仍持有的连接
+
+    AsyncMysqlClient* get() const noexcept; ///< 获取底层连接指针
+    AsyncMysqlClient& operator*() const noexcept; ///< 解引用底层连接
+    AsyncMysqlClient* operator->() const noexcept; ///< 访问底层连接
+    explicit operator bool() const noexcept; ///< 是否持有连接
+    void release() noexcept; ///< 立即归还连接；可重复调用
+    AsyncMysqlClient* dismiss() noexcept; ///< 放弃RAII归还责任并返回底层连接
+
+private:
+    friend class MysqlConnectionPool;
+
+    MysqlPoolLease(MysqlConnectionPool* pool, AsyncMysqlClient* client) noexcept;
+
+    MysqlConnectionPool* m_pool = nullptr; ///< 归还目标连接池
+    AsyncMysqlClient* m_client = nullptr;  ///< 当前持有连接
 };
 
 /**
@@ -159,10 +193,42 @@ public:
     };
 
     /**
+     * @brief 获取连接租约的Awaitable
+     * @details 包装现有acquire()路径，成功时返回RAII租约，租约析构会归还连接。
+     * @note 不阻塞调用线程；调用方需保证连接池在等待体和租约生命周期内保持存活。
+     */
+    class LeaseAwaitable
+    {
+    public:
+        explicit LeaseAwaitable(MysqlConnectionPool& pool);
+
+        bool await_ready() const noexcept;
+        template <typename Promise>
+        requires requires(const Promise& promise) {
+            { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
+        }
+        bool await_suspend(std::coroutine_handle<Promise> handle)
+        {
+            return m_acquire.await_suspend(handle);
+        }
+        std::expected<std::optional<MysqlPoolLease>, MysqlError> await_resume();
+
+    private:
+        MysqlConnectionPool& m_pool; ///< 生成租约的连接池
+        AcquireAwaitable m_acquire;  ///< 底层连接获取等待体
+    };
+
+    /**
      * @brief 获取一个连接
      * @return 连接获取等待体
      */
     AcquireAwaitable acquire();
+
+    /**
+     * @brief 获取一个RAII连接租约
+     * @return 连接租约获取等待体
+     */
+    LeaseAwaitable acquireLease();
 
     /**
      * @brief 归还连接到池中

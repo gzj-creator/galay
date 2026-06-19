@@ -4,6 +4,7 @@ module;
 #include "galay-mongo/base/mongo_config.h"
 #include "galay-mongo/base/mongo_error.h"
 #include "galay-mongo/base/mongo_log.h"
+#include "galay-mongo/base/mongo_uri.h"
 #include "galay-mongo/base/mongo_value.h"
 #include "galay-mongo/protoc/builder.h"
 #include "galay-mongo/async/client.h"
@@ -11,7 +12,13 @@ module;
 
 export module galay.mongo;
 
+export using ::galay::mongo::MongoEndpoint;
+export using ::galay::mongo::MongoReadPreference;
+export using ::galay::mongo::MongoRetryConfig;
+export using ::galay::mongo::MongoPoolConfig;
+export using ::galay::mongo::MongoTopologyConfig;
 export using ::galay::mongo::MongoConfig;
+export using ::galay::mongo::parseMongoUri;
 export using ::galay::mongo::MongoErrorType;
 export using ::galay::mongo::MongoError;
 export using ::galay::mongo::MongoValueType;

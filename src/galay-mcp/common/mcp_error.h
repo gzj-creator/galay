@@ -34,6 +34,11 @@ enum class McpErrorCode {
     InvalidMethod = 2002, ///< 无效方法
     InvalidParams = 2003, ///< 无效参数
     InvalidTransportMode = 2004, ///< 当前客户端模式不支持所调用的接口
+    Timeout = 2005, ///< 请求超时
+    Cancelled = 2006, ///< 请求已取消
+    Overload = 2007, ///< 请求过载或超过并发限制
+    Unauthorized = 2008, ///< 未授权
+    PayloadTooLarge = 2009, ///< 请求或响应负载过大
 
     ParseError = 3000, ///< JSON解析错误
     InvalidRequest = 3001, ///< 无效请求
@@ -178,6 +183,51 @@ public:
      */
     static McpError invalidTransportMode(const std::string& details = "") {
         return McpError(McpErrorCode::InvalidTransportMode, "Invalid transport mode", details);
+    }
+
+    /**
+     * @brief 创建请求超时错误
+     * @param details 错误详情
+     * @return 请求超时的McpError
+     */
+    static McpError timeout(const std::string& details = "") {
+        return McpError(McpErrorCode::Timeout, "Request timeout", details);
+    }
+
+    /**
+     * @brief 创建请求取消错误
+     * @param details 错误详情
+     * @return 请求取消的McpError
+     */
+    static McpError cancelled(const std::string& details = "") {
+        return McpError(McpErrorCode::Cancelled, "Request cancelled", details);
+    }
+
+    /**
+     * @brief 创建过载错误
+     * @param details 错误详情
+     * @return 过载的McpError
+     */
+    static McpError overload(const std::string& details = "") {
+        return McpError(McpErrorCode::Overload, "Overload", details);
+    }
+
+    /**
+     * @brief 创建未授权错误
+     * @param details 错误详情
+     * @return 未授权的McpError
+     */
+    static McpError unauthorized(const std::string& details = "") {
+        return McpError(McpErrorCode::Unauthorized, "Unauthorized", details);
+    }
+
+    /**
+     * @brief 创建负载过大错误
+     * @param details 错误详情
+     * @return 负载过大的McpError
+     */
+    static McpError payloadTooLarge(const std::string& details = "") {
+        return McpError(McpErrorCode::PayloadTooLarge, "Payload too large", details);
     }
 
     /**

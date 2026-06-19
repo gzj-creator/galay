@@ -176,6 +176,66 @@ void appendAttributes(std::string& out, std::span<const SpanAttribute> attribute
     appendAttributeArray(out, attributes);
 }
 
+void appendTimeUnixNano(std::string& out, Span::Clock::time_point timestamp) {
+    out.append("\"timeUnixNano\":\"");
+    appendNumber(out, std::chrono::duration_cast<std::chrono::nanoseconds>(timestamp.time_since_epoch()).count());
+    out.push_back('"');
+}
+
+void appendEvents(std::string& out, std::span<const SpanEvent> events) {
+    if (events.empty()) {
+        return;
+    }
+    out.append(",\"events\":[");
+    for (std::size_t i = 0; i < events.size(); ++i) {
+        if (i != 0) {
+            out.push_back(',');
+        }
+        out.push_back('{');
+        bool has_field = false;
+        if (events[i].timestamp != Span::Clock::time_point{}) {
+            appendTimeUnixNano(out, events[i].timestamp);
+            has_field = true;
+        }
+        if (has_field) {
+            out.push_back(',');
+        }
+        out.append("\"name\":");
+        appendJsonString(out, events[i].name);
+        if (!events[i].attributes.empty()) {
+            appendAttributes(out, events[i].attributes);
+        }
+        out.push_back('}');
+    }
+    out.push_back(']');
+}
+
+void appendLinks(std::string& out, std::span<const SpanLink> links) {
+    if (links.empty()) {
+        return;
+    }
+    out.append(",\"links\":[");
+    for (std::size_t i = 0; i < links.size(); ++i) {
+        if (i != 0) {
+            out.push_back(',');
+        }
+        out.append("{\"traceId\":\"");
+        appendHexId(out, links[i].context.traceId());
+        out.append("\",\"spanId\":\"");
+        appendHexId(out, links[i].context.spanId());
+        out.push_back('"');
+        if (!links[i].tracestate.empty()) {
+            out.append(",\"traceState\":");
+            appendJsonString(out, links[i].tracestate);
+        }
+        if (!links[i].attributes.empty()) {
+            appendAttributes(out, links[i].attributes);
+        }
+        out.push_back('}');
+    }
+    out.push_back(']');
+}
+
 void appendResource(std::string& out, std::span<const SpanAttribute> attributes) {
     if (attributes.empty()) {
         return;
@@ -236,6 +296,14 @@ void addAttributeEstimate(std::size_t& size, std::span<const SpanAttribute> attr
             size += span.status().message.size() + 64;
         }
         addAttributeEstimate(size, span.attributes());
+        for (const auto& event : span.events()) {
+            size += event.name.size() + 48;
+            addAttributeEstimate(size, event.attributes);
+        }
+        for (const auto& link : span.links()) {
+            size += 128 + link.tracestate.size();
+            addAttributeEstimate(size, link.attributes);
+        }
     }
     return size;
 }
@@ -275,6 +343,8 @@ void addAttributeEstimate(std::size_t& size, std::span<const SpanAttribute> attr
         if (!span.attributes().empty()) {
             appendAttributes(body, span.attributes());
         }
+        appendEvents(body, span.events());
+        appendLinks(body, span.links());
         appendStatus(body, span.status());
         body.push_back('}');
     }
@@ -358,17 +428,22 @@ galay::kernel::Task<OtlpHttpResponse> sendWithGalayHttp(OtlpHttpRequest request)
         }
 
         auto client = galay::http::HttpClientBuilder().build();
-        auto connect_result = co_await client.connect(endpoint).timeout(request.timeout);
+        auto connect_result = co_await client.connect(endpoint);
         if (!connect_result) {
-            co_return OtlpHttpResponse{.status_code = 0, .error = connect_result.error().message()};
+            co_return OtlpHttpResponse{.status_code = 0, .error = std::string(connect_result.error().message())};
         }
 
-        auto session = client.getSession();
-        auto result = co_await session.post(parsed->path, std::move(request.body), content_type, headers)
+        auto session_result = client.getSession();
+        if (!session_result) {
+            static_cast<void>(co_await client.close());
+            co_return OtlpHttpResponse{.status_code = 0, .error = std::string(session_result.error().message())};
+        }
+
+        auto result = co_await session_result.value()->post(parsed->path, std::move(request.body), content_type, headers)
             .timeout(request.timeout);
         if (!result) {
             static_cast<void>(co_await client.close());
-            co_return OtlpHttpResponse{.status_code = 0, .error = result.error().message()};
+            co_return OtlpHttpResponse{.status_code = 0, .error = std::string(result.error().message())};
         }
         if (!result.value().has_value()) {
             static_cast<void>(co_await client.close());
@@ -405,7 +480,14 @@ public:
         std::lock_guard lock(m_mutex);
         ensureRuntime();
         auto join = m_runtime->spawn(sendWithGalayHttp(std::move(request)));
-        return join.join();
+        if (!join) {
+            return OtlpHttpResponse{.status_code = 0, .error = "failed to spawn OTLP HTTP transport task"};
+        }
+        auto result = join->join();
+        if (!result) {
+            return OtlpHttpResponse{.status_code = 0, .error = "failed to join OTLP HTTP transport task"};
+        }
+        return std::move(result.value());
     }
 
 private:

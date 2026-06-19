@@ -67,6 +67,12 @@ target_compile_definitions(mysql_t13_pool_coroutine_source
 # t14 - Async pool waiter/resume integration
 add_mysql_test(t14_pool_waiter t14_pool_waiter.cc INTEGRATION LABELS pool_waiter)
 
+# t15 - Integration test opt-in gate
+add_mysql_test(t15_it_gate t15_it_gate.cc INTEGRATION LABELS it_gate)
+
+# t16 - RAII pool lease integration
+add_mysql_test(t16_pool_lease t16_pool_lease.cc INTEGRATION LABELS pool_lease)
+
 add_test(
     NAME mysql.package_consumer_smoke
     COMMAND

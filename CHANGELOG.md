@@ -13,6 +13,13 @@
 
 ### Added
 
+- 新增 MCP 生产运行策略值类型 `mcp_policy.h`（传输资源限制、超时、HTTP 会话与认证策略，默认构造保持兼容），并补齐 `Timeout`/`Cancelled`/`Overload`/`Unauthorized`/`PayloadTooLarge` 错误码及 JSON-RPC 映射。
+- 新增 MySQL RAII 连接租约 `MysqlPoolLease` 与 `acquireLease()` awaitable，借出连接在析构时自动归还，支持 `dismiss()` 转交所有权。
+- 新增 Tracing span events/links 序列化支持，`file_span_exporter` 与 `otlp_http_exporter` 输出事件与链接，模块导出 `SpanEvent`/`SpanLink`。
+- 新增 MongoDB replica set 拓扑、连接池、重试策略配置结构，以及 `mongodb://` URI 解析器 `parseMongoUri`，并扩展 `MongoConfig` 的 `seeds` seed list 字段。
+- 新增对应测试：MCP 协议与策略默认值校验（t10）、Mongo URI 单测（t12）与 replica set 发现集成（t11）、MySQL 集成开关（t15）与 RAII 租约集成（t16）、Tracing span events/links（t12）与 tracer provider（t13）。
+- 新增基准：MCP 策略默认值 smoke（b4）、MySQL 异步连接池租约压力（b4）。
+- Redis、Mongo、MySQL 集成测试统一在 CTest 注册带标签测试名，便于按标签过滤运行。
 - 新增 MySQL 真实服务端认证插件矩阵集成测试，覆盖 `mysql_native_password`、`caching_sha2_password` 成功路径与 `sha256_password` 不支持路径，并补充本机/CI 用户准备脚本和验证文档。
 - 新增 MySQL 真实服务端连接恢复测试，覆盖错误端口连接失败后的恢复，以及服务端 `KILL CONNECTION` 后的新连接恢复。
 - 新增 MySQL 异步连接池协程来源检查、等待者唤醒集成测试与连接池压力基准，覆盖连接池无阻塞等待路径。
@@ -43,6 +50,7 @@
 
 - 新增 `scripts/mysql/mysql_auth_matrix_setup.sh`，按模块目录管理 MySQL auth 矩阵测试用户准备脚本。
 - 扩充 `.gitignore`，新增 `.claude/`、`.codex/` 条目，避免代理本地配置目录进入版本控制。
+- 扩充 `.gitignore`，新增 `docs/modules/*/plans`，避免按模块拆分的本地规划文档进入版本控制。
 - 移除 examples/tests/benchmarks/scripts style 审计中的 `stale-include-root` 阻断规则，保留其他结构与命名检查。
 
 ## [v3.0.0] - 2026-06-15

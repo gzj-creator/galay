@@ -207,10 +207,13 @@ void galayHttpTransportRejectsSchedulerThreadBlocking() {
         .build();
     runtime.start();
 
-    auto result = runtime.spawn(exportOnSchedulerThread()).join();
+    auto join = runtime.spawn(exportOnSchedulerThread());
+    assert(join.has_value());
+    auto result = join->join();
     runtime.stop();
 
-    assert(result == galay::tracing::ExportResult::kFailure);
+    assert(result.has_value());
+    assert(result.value() == galay::tracing::ExportResult::kFailure);
 }
 
 void galayHttpTransportRejectsMalformedEndpoint() {

@@ -25,6 +25,10 @@ int McpError::toJsonRpcErrorCode() const {
             return ErrorCodes::METHOD_NOT_FOUND;
         case McpErrorCode::InvalidTransportMode:
             return ErrorCodes::INVALID_REQUEST;
+        case McpErrorCode::Unauthorized:
+            return ErrorCodes::INVALID_REQUEST;
+        case McpErrorCode::PayloadTooLarge:
+            return ErrorCodes::INVALID_REQUEST;
         case McpErrorCode::InvalidParams:
             return ErrorCodes::INVALID_PARAMS;
         case McpErrorCode::InternalError:
@@ -32,6 +36,9 @@ int McpError::toJsonRpcErrorCode() const {
         case McpErrorCode::InitializationFailed:
         case McpErrorCode::ReadError:
         case McpErrorCode::WriteError:
+        case McpErrorCode::Timeout:
+        case McpErrorCode::Cancelled:
+        case McpErrorCode::Overload:
             return ErrorCodes::INTERNAL_ERROR;
         default:
             return ErrorCodes::INTERNAL_ERROR;

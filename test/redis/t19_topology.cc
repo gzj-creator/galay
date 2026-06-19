@@ -46,6 +46,15 @@ std::optional<bool> parseBoolEnv(const char* value)
     return std::nullopt;
 }
 
+bool integrationEnabled()
+{
+    const char* value = std::getenv("GALAY_IT_ENABLE");
+    if (value == nullptr) return false;
+    std::string text(value);
+    return text == "1" || text == "true" || text == "TRUE" || text == "yes" ||
+           text == "YES" || text == "on" || text == "ON";
+}
+
 struct ParsedRedissUrl {
     std::string host;
     int32_t port = 6380;
@@ -223,6 +232,11 @@ int main()
     std::cout << "SKIP: GALAY_SSL_FEATURE_ENABLED not set\n";
     return 0;
 #else
+    if (!integrationEnabled()) {
+        std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run TLS topology integration test\n";
+        return 0;
+    }
+
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(1)
         .computeSchedulerCount(1)

@@ -5,6 +5,72 @@
 namespace galay::mysql
 {
 
+// ======================== MysqlPoolLease ========================
+
+MysqlPoolLease::MysqlPoolLease() noexcept = default;
+
+MysqlPoolLease::MysqlPoolLease(MysqlConnectionPool* pool, AsyncMysqlClient* client) noexcept
+    : m_pool(pool)
+    , m_client(client)
+{
+}
+
+MysqlPoolLease::MysqlPoolLease(MysqlPoolLease&& other) noexcept
+    : m_pool(std::exchange(other.m_pool, nullptr))
+    , m_client(std::exchange(other.m_client, nullptr))
+{
+}
+
+MysqlPoolLease& MysqlPoolLease::operator=(MysqlPoolLease&& other) noexcept
+{
+    if (this != &other) {
+        release();
+        m_pool = std::exchange(other.m_pool, nullptr);
+        m_client = std::exchange(other.m_client, nullptr);
+    }
+    return *this;
+}
+
+MysqlPoolLease::~MysqlPoolLease()
+{
+    release();
+}
+
+AsyncMysqlClient* MysqlPoolLease::get() const noexcept
+{
+    return m_client;
+}
+
+AsyncMysqlClient& MysqlPoolLease::operator*() const noexcept
+{
+    return *m_client;
+}
+
+AsyncMysqlClient* MysqlPoolLease::operator->() const noexcept
+{
+    return m_client;
+}
+
+MysqlPoolLease::operator bool() const noexcept
+{
+    return m_client != nullptr;
+}
+
+void MysqlPoolLease::release() noexcept
+{
+    auto* pool = std::exchange(m_pool, nullptr);
+    auto* client = std::exchange(m_client, nullptr);
+    if (pool != nullptr && client != nullptr) {
+        pool->release(client);
+    }
+}
+
+AsyncMysqlClient* MysqlPoolLease::dismiss() noexcept
+{
+    m_pool = nullptr;
+    return std::exchange(m_client, nullptr);
+}
+
 // ======================== MysqlConnectionPool ========================
 
 MysqlConnectionPool::MysqlConnectionPool(galay::kernel::IOScheduler* scheduler,
@@ -121,6 +187,8 @@ size_t MysqlConnectionPool::idleCount() const
 
 MysqlConnectionPool::AcquireAwaitable MysqlConnectionPool::acquire() { return AcquireAwaitable(*this); }
 
+MysqlConnectionPool::LeaseAwaitable MysqlConnectionPool::acquireLease() { return LeaseAwaitable(*this); }
+
 // ======================== AcquireAwaitable ========================
 
 MysqlConnectionPool::AcquireAwaitable::AcquireAwaitable(MysqlConnectionPool& pool)
@@ -187,6 +255,34 @@ MysqlConnectionPool::AcquireAwaitable::await_resume()
     m_connect_awaitable.reset();
     m_client = nullptr;
     return std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "Invalid acquire state"));
+}
+
+// ======================== LeaseAwaitable ========================
+
+MysqlConnectionPool::LeaseAwaitable::LeaseAwaitable(MysqlConnectionPool& pool)
+    : m_pool(pool)
+    , m_acquire(pool)
+{
+}
+
+bool MysqlConnectionPool::LeaseAwaitable::await_ready() const noexcept
+{
+    return m_acquire.await_ready();
+}
+
+std::expected<std::optional<MysqlPoolLease>, MysqlError>
+MysqlConnectionPool::LeaseAwaitable::await_resume()
+{
+    auto acquired = m_acquire.await_resume();
+    if (!acquired) {
+        return std::unexpected(acquired.error());
+    }
+    if (!acquired->has_value()) {
+        return std::optional<MysqlPoolLease>{};
+    }
+    std::optional<MysqlPoolLease> lease;
+    lease.emplace(MysqlPoolLease(&m_pool, acquired->value()));
+    return lease;
 }
 
 } // namespace galay::mysql
