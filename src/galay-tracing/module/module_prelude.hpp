@@ -14,6 +14,7 @@
 #include "galay-tracing/common/source_location.h"
 #include "galay-tracing/common/span_id.h"
 #include "galay-tracing/common/trace_id.h"
+#include "galay-tracing/adapters/http_headers.h"
 #include "galay-tracing/context/context_storage.h"
 #include "galay-tracing/context/trace_context.h"
 #include "galay-tracing/context/traceparent.h"

@@ -45,6 +45,11 @@ target_link_libraries(T10-base_logger PRIVATE galay-tracing::galay-tracing)
 
 add_test(NAME tracing.base_logger COMMAND T10-base_logger)
 
+add_executable(T11-http_headers t11_http_headers.cc)
+target_link_libraries(T11-http_headers PRIVATE galay-tracing::galay-tracing)
+
+add_test(NAME tracing.http_headers COMMAND T11-http_headers)
+
 if(GALAY_TRACING_ENABLE_KERNEL)
     add_executable(T8-kernel_context t8_kernel_context.cc)
     target_link_libraries(T8-kernel_context PRIVATE galay-tracing::galay-tracing-kernel)
