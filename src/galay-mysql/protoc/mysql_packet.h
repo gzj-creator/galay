@@ -164,6 +164,16 @@ struct HandshakeResponse41
 };
 
 /**
+ * @brief 认证插件切换请求包
+ * @details 服务端可在初始认证响应后请求客户端切换认证插件。
+ */
+struct AuthSwitchRequest
+{
+    std::string auth_plugin_name;        ///< 认证插件名称
+    std::string auth_plugin_data;        ///< 认证插件salt数据
+};
+
+/**
  * @brief OK包
  * @details 表示操作成功的响应包
  */

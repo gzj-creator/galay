@@ -43,6 +43,17 @@ public:
     static std::string cachingSha2Auth(const std::string& password, const std::string& salt);
 
     /**
+     * @brief 根据认证插件名计算认证响应
+     * @param plugin_name 认证插件名
+     * @param password 明文密码
+     * @param salt 服务器发送的 salt
+     * @return 认证响应数据，或不支持的插件错误
+     */
+    static std::expected<std::string, std::string> authResponseForPlugin(std::string_view plugin_name,
+                                                                         const std::string& password,
+                                                                         const std::string& salt);
+
+    /**
      * @brief caching_sha2_password 全量认证（RSA 公钥加密）
      * @details password + '\0' 与 handshake salt 异或后，用服务端 RSA 公钥做 OAEP 加密
      * @param password 明文密码

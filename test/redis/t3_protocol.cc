@@ -1,4 +1,5 @@
 #include <iostream>
+#include <cstring>
 #include "galay-redis/protoc/redis_protocol.h"
 
 using namespace galay::redis::protocol;

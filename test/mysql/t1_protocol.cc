@@ -258,6 +258,79 @@ void test_err_packet_parse()
     std::cout << "  PASSED" << std::endl;
 }
 
+void test_auth_switch_request_parse()
+{
+    std::cout << "Testing auth switch request parse..." << std::endl;
+
+    MysqlParser parser;
+    const std::string salt = "12345678901234567890";
+
+    std::string payload;
+    payload.push_back(static_cast<char>(0xFE));
+    payload.append("mysql_native_password");
+    payload.push_back('\0');
+    payload.append(salt);
+    payload.push_back('\0');
+
+    auto result = parser.parseAuthSwitchRequest(payload.data(), payload.size());
+    assert(result.has_value());
+    assert(result->auth_plugin_name == "mysql_native_password");
+    assert(result->auth_plugin_data == salt);
+
+    std::string binary_salt_payload;
+    binary_salt_payload.push_back(static_cast<char>(0xFE));
+    binary_salt_payload.append("caching_sha2_password");
+    binary_salt_payload.push_back('\0');
+    binary_salt_payload.append("ab");
+    binary_salt_payload.push_back('\0');
+    binary_salt_payload.append("cd");
+    binary_salt_payload.push_back('\0');
+    auto binary_salt_result = parser.parseAuthSwitchRequest(binary_salt_payload.data(),
+                                                            binary_salt_payload.size());
+    assert(binary_salt_result.has_value());
+    assert(binary_salt_result->auth_plugin_name == "caching_sha2_password");
+    assert(binary_salt_result->auth_plugin_data.size() == 5);
+    assert(binary_salt_result->auth_plugin_data == std::string("ab\0cd", 5));
+
+    std::string no_salt;
+    no_salt.push_back(static_cast<char>(0xFE));
+    no_salt.append("mysql_native_password");
+    no_salt.push_back('\0');
+    auto no_salt_result = parser.parseAuthSwitchRequest(no_salt.data(), no_salt.size());
+    assert(no_salt_result.has_value());
+    assert(no_salt_result->auth_plugin_name == "mysql_native_password");
+    assert(no_salt_result->auth_plugin_data.empty());
+
+    const std::string empty_plugin = std::string(1, static_cast<char>(0xFE)) + '\0';
+    auto empty_plugin_result = parser.parseAuthSwitchRequest(empty_plugin.data(), empty_plugin.size());
+    assert(empty_plugin_result.has_value());
+    assert(empty_plugin_result->auth_plugin_name.empty());
+    assert(empty_plugin_result->auth_plugin_data.empty());
+
+    std::string invalid = payload;
+    invalid[0] = '\0';
+    auto invalid_result = parser.parseAuthSwitchRequest(invalid.data(), invalid.size());
+    assert(!invalid_result.has_value());
+    assert(invalid_result.error() == ParseError::InvalidType);
+
+    const std::string empty_payload;
+    auto empty_result = parser.parseAuthSwitchRequest(empty_payload.data(), empty_payload.size());
+    assert(!empty_result.has_value());
+    assert(empty_result.error() == ParseError::Incomplete);
+
+    const std::string marker_only(1, static_cast<char>(0xFE));
+    auto marker_only_result = parser.parseAuthSwitchRequest(marker_only.data(), marker_only.size());
+    assert(!marker_only_result.has_value());
+    assert(marker_only_result.error() == ParseError::Incomplete);
+
+    const std::string incomplete = std::string(1, static_cast<char>(0xFE)) + "mysql_native_password";
+    auto incomplete_result = parser.parseAuthSwitchRequest(incomplete.data(), incomplete.size());
+    assert(!incomplete_result.has_value());
+    assert(incomplete_result.error() == ParseError::Incomplete);
+
+    std::cout << "  PASSED" << std::endl;
+}
+
 int main()
 {
     std::cout << "=== T1: MySQL Protocol Tests ===" << std::endl;
@@ -270,6 +343,7 @@ int main()
     test_command_builder();
     test_ok_packet_parse();
     test_err_packet_parse();
+    test_auth_switch_request_parse();
 
     std::cout << "\nAll protocol tests PASSED!" << std::endl;
     return 0;

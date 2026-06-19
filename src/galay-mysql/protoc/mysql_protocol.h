@@ -105,6 +105,13 @@ public:
     std::expected<HandshakeV10, ParseError> parseHandshake(const char* data, size_t len);
 
     /**
+     * @brief 解析AuthSwitchRequest包
+     * @param data payload数据（不含包头，含0xFE标识字节）
+     * @param len payload长度
+     */
+    std::expected<AuthSwitchRequest, ParseError> parseAuthSwitchRequest(const char* data, size_t len);
+
+    /**
      * @brief 判断响应类型
      * @param first_byte payload的第一个字节
      * @param payload_len payload长度

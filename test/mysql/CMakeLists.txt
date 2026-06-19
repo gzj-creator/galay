@@ -52,6 +52,12 @@ add_mysql_test(t9_env t9_env.cc)
 # t10 - MySQL 库级日志入口测试
 add_mysql_test(t10_log t10_log.cc)
 
+# t11 - Real server authentication plugin matrix
+add_mysql_test(t11_auth_plugins t11_auth_plugins.cc INTEGRATION LABELS auth_plugins)
+
+# t12 - Real server reconnect/failure recovery smoke
+add_mysql_test(t12_resilience t12_resilience.cc INTEGRATION LABELS resilience)
+
 add_test(
     NAME mysql.package_consumer_smoke
     COMMAND

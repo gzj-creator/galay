@@ -447,6 +447,8 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseHandshakeFr
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Failed to parse handshake packet body"));
     }
     m_state->handshake = std::move(hs.value());
+    m_state->auth_plugin_name = m_state->handshake.auth_plugin_name;
+    m_state->auth_plugin_data = m_state->handshake.auth_plugin_data;
 
     protocol::HandshakeResponse41 resp;
     resp.capability_flags = protocol::CLIENT_PROTOCOL_41
@@ -465,21 +467,20 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseHandshakeFr
     resp.character_set = protocol::CHARSET_UTF8MB4_GENERAL_CI;
     resp.username = m_state->config.username;
     resp.database = m_state->config.database;
-    resp.auth_plugin_name = m_state->handshake.auth_plugin_name;
+    resp.auth_plugin_name = m_state->auth_plugin_name;
 
-    if (m_state->handshake.auth_plugin_name == "mysql_native_password") {
-        resp.auth_response = protocol::AuthPlugin::nativePasswordAuth(
-            m_state->config.password,
-            m_state->handshake.auth_plugin_data);
-    } else if (m_state->handshake.auth_plugin_name == "caching_sha2_password") {
-        resp.auth_response = protocol::AuthPlugin::cachingSha2Auth(
-            m_state->config.password,
-            m_state->handshake.auth_plugin_data);
+    auto initial_auth = protocol::AuthPlugin::authResponseForPlugin(
+        m_state->auth_plugin_name,
+        m_state->config.password,
+        m_state->auth_plugin_data);
+    if (initial_auth) {
+        resp.auth_response = std::move(initial_auth.value());
     } else {
         resp.auth_response = protocol::AuthPlugin::nativePasswordAuth(
             m_state->config.password,
             m_state->handshake.auth_plugin_data);
         resp.auth_plugin_name = "mysql_native_password";
+        m_state->auth_plugin_name = resp.auth_plugin_name;
     }
 
     m_state->auth_stage = AuthStage::InitialResponse;
@@ -536,7 +537,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseAuthResultF
 
             auto encrypted = protocol::AuthPlugin::cachingSha2FullAuth(
                 m_state->config.password,
-                m_state->handshake.auth_plugin_data,
+                m_state->auth_plugin_data,
                 public_key);
             if (!encrypted) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, encrypted.error()));
@@ -572,7 +573,7 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseAuthResultF
             }
             if (pkt->payload_len == 2 &&
                 static_cast<uint8_t>(pkt->payload[1]) == 0x04 &&
-                m_state->handshake.auth_plugin_name == "caching_sha2_password") {
+                m_state->auth_plugin_name == "caching_sha2_password") {
                 static const std::string kPublicKeyRequest(1, '\x02');
                 m_state->auth_packet = detail::encodeRawPacket(kPublicKeyRequest, pkt->sequence_id + 1);
                 m_state->sent = 0;
@@ -586,7 +587,28 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseAuthResultF
         }
 
         if (first_byte == 0xFE) {
-            return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Auth switch is not supported"));
+            auto auth_switch = m_state->client->parser().parseAuthSwitchRequest(
+                pkt->payload,
+                pkt->payload_len);
+            if (!auth_switch) {
+                return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Failed to parse auth switch request"));
+            }
+
+            m_state->auth_plugin_name = std::move(auth_switch->auth_plugin_name);
+            m_state->auth_plugin_data = std::move(auth_switch->auth_plugin_data);
+            auto switched_auth = protocol::AuthPlugin::authResponseForPlugin(
+                m_state->auth_plugin_name,
+                m_state->config.password,
+                m_state->auth_plugin_data);
+            if (!switched_auth) {
+                return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, switched_auth.error()));
+            }
+
+            m_state->auth_packet = detail::encodeRawPacket(*switched_auth, pkt->sequence_id + 1);
+            m_state->sent = 0;
+            m_state->auth_stage = AuthStage::AwaitFinalResult;
+            m_state->phase = Phase::AuthWrite;
+            return true;
         }
 
         return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL, "Unexpected auth response packet"));

@@ -227,6 +227,8 @@ private:
         galay::kernel::Host host;                               ///< 主机地址
         Phase phase = Phase::Connect;                           ///< 当前阶段
         protocol::HandshakeV10 handshake;                       ///< 握手包数据
+        std::string auth_plugin_name;                           ///< 当前认证插件名
+        std::string auth_plugin_data;                           ///< 当前认证插件salt
         AuthStage auth_stage = AuthStage::InitialResponse;      ///< 认证阶段
         std::string auth_packet;                                ///< 认证数据包
         size_t sent = 0;                                        ///< 已发送字节数

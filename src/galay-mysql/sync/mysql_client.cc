@@ -250,13 +250,18 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
     resp.database = config.database;
     resp.auth_plugin_name = hs->auth_plugin_name;
 
-    if (hs->auth_plugin_name == "mysql_native_password") {
-        resp.auth_response = protocol::AuthPlugin::nativePasswordAuth(config.password, hs->auth_plugin_data);
-    } else if (hs->auth_plugin_name == "caching_sha2_password") {
-        resp.auth_response = protocol::AuthPlugin::cachingSha2Auth(config.password, hs->auth_plugin_data);
+    std::string auth_plugin_name = hs->auth_plugin_name;
+    std::string auth_plugin_data = hs->auth_plugin_data;
+    auto initial_auth = protocol::AuthPlugin::authResponseForPlugin(
+        auth_plugin_name,
+        config.password,
+        auth_plugin_data);
+    if (initial_auth) {
+        resp.auth_response = std::move(initial_auth.value());
     } else {
         resp.auth_response = protocol::AuthPlugin::nativePasswordAuth(config.password, hs->auth_plugin_data);
         resp.auth_plugin_name = "mysql_native_password";
+        auth_plugin_name = resp.auth_plugin_name;
     }
 
     auto auth_packet = m_encoder.encodeHandshakeResponse(resp, static_cast<uint8_t>(seq_id + 1));
@@ -265,54 +270,65 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
         return std::unexpected(send_result.error());
     }
 
-    auto auth_result = recvPacket();
-    if (!auth_result) {
-        return std::unexpected(auth_result.error());
-    }
-    auto& [auth_seq, auth_payload] = auth_result.value();
-    (void)auth_seq;
-
-    if (auth_payload.empty()) {
-        return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Empty auth response"));
-    }
-
-    const uint8_t first_byte = static_cast<uint8_t>(auth_payload[0]);
-    if (first_byte == 0x00) {
-        return {};
-    }
-
-    if (first_byte == 0xFF) {
-        auto err = m_parser.parseErr(auth_payload.data(), auth_payload.size(), m_server_capabilities);
-        if (err) {
-            return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, err->error_code, err->error_message));
+    while (true) {
+        auto auth_result = recvPacket();
+        if (!auth_result) {
+            return std::unexpected(auth_result.error());
         }
-        return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Authentication failed"));
-    }
+        auto& [auth_seq, auth_payload] = auth_result.value();
 
-    if (first_byte == 0x01) {
-        if (auth_payload.size() == 2 && static_cast<uint8_t>(auth_payload[1]) == 0x03) {
-            auto ok_result = recvPacket();
-            if (!ok_result) {
-                return std::unexpected(ok_result.error());
-            }
-            auto& [ok_seq, ok_payload] = ok_result.value();
-            (void)ok_seq;
-            if (!ok_payload.empty() && static_cast<uint8_t>(ok_payload[0]) == 0x00) {
-                return {};
-            }
-            if (!ok_payload.empty() && static_cast<uint8_t>(ok_payload[0]) == 0xFF) {
-                auto err = m_parser.parseErr(ok_payload.data(), ok_payload.size(), m_server_capabilities);
-                if (err) {
-                    return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, err->error_code, err->error_message));
-                }
-                return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Authentication failed"));
-            }
+        if (auth_payload.empty()) {
+            return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Empty auth response"));
+        }
+
+        const uint8_t first_byte = static_cast<uint8_t>(auth_payload[0]);
+        if (first_byte == 0x00) {
             return {};
+        }
+
+        if (first_byte == 0xFF) {
+            auto err = m_parser.parseErr(auth_payload.data(), auth_payload.size(), m_server_capabilities);
+            if (err) {
+                return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, err->error_code, err->error_message));
+            }
+            return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Authentication failed"));
+        }
+
+        if (first_byte == 0xFE) {
+            auto auth_switch = m_parser.parseAuthSwitchRequest(auth_payload.data(), auth_payload.size());
+            if (!auth_switch) {
+                return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Failed to parse auth switch request"));
+            }
+
+            auth_plugin_name = std::move(auth_switch->auth_plugin_name);
+            auth_plugin_data = std::move(auth_switch->auth_plugin_data);
+            auto switched_auth = protocol::AuthPlugin::authResponseForPlugin(
+                auth_plugin_name,
+                config.password,
+                auth_plugin_data);
+            if (!switched_auth) {
+                return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, switched_auth.error()));
+            }
+
+            auto switched_packet = encodeRawPacket(*switched_auth, static_cast<uint8_t>(auth_seq + 1));
+            auto switched_result = sendAll(switched_packet);
+            if (!switched_result) {
+                return std::unexpected(switched_result.error());
+            }
+            continue;
+        }
+
+        if (first_byte != 0x01) {
+            return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Unexpected auth response"));
+        }
+
+        if (auth_payload.size() == 2 && static_cast<uint8_t>(auth_payload[1]) == 0x03) {
+            continue;
         }
 
         if (auth_payload.size() == 2 &&
             static_cast<uint8_t>(auth_payload[1]) == 0x04 &&
-            hs->auth_plugin_name == "caching_sha2_password") {
+            auth_plugin_name == "caching_sha2_password") {
             const std::string public_key_request(1, '\x02');
             auto request_packet = encodeRawPacket(public_key_request, static_cast<uint8_t>(auth_seq + 1));
             auto request_result = sendAll(request_packet);
@@ -349,7 +365,7 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
             }
 
             auto encrypted = protocol::AuthPlugin::cachingSha2FullAuth(config.password,
-                                                                       hs->auth_plugin_data,
+                                                                       auth_plugin_data,
                                                                        public_key_data);
             if (!encrypted) {
                 return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, encrypted.error()));
@@ -361,36 +377,11 @@ MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
             if (!encrypted_result) {
                 return std::unexpected(encrypted_result.error());
             }
-
-            auto final_result = recvPacket();
-            if (!final_result) {
-                return std::unexpected(final_result.error());
-            }
-
-            auto& [final_seq, final_payload] = final_result.value();
-            (void)final_seq;
-
-            if (!final_payload.empty() && static_cast<uint8_t>(final_payload[0]) == 0x00) {
-                return {};
-            }
-            if (!final_payload.empty() && static_cast<uint8_t>(final_payload[0]) == 0xFF) {
-                auto err = m_parser.parseErr(final_payload.data(),
-                                             final_payload.size(),
-                                             m_server_capabilities);
-                if (err) {
-                    return std::unexpected(MysqlError(MYSQL_ERROR_AUTH,
-                                                      err->error_code,
-                                                      err->error_message));
-                }
-                return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Authentication failed"));
-            }
-            return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Unexpected full auth response"));
+            continue;
         }
 
         return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Full auth not supported"));
     }
-
-    return std::unexpected(MysqlError(MYSQL_ERROR_AUTH, "Unexpected auth response"));
 }
 
 MysqlVoidResult MysqlClient::connect(const std::string& host, uint16_t port,

@@ -70,6 +70,20 @@ std::string AuthPlugin::cachingSha2Auth(const std::string& password, const std::
     return xorStrings(hash1, hash3);
 }
 
+std::expected<std::string, std::string>
+AuthPlugin::authResponseForPlugin(std::string_view plugin_name,
+                                  const std::string& password,
+                                  const std::string& salt)
+{
+    if (plugin_name == "mysql_native_password") {
+        return nativePasswordAuth(password, salt);
+    }
+    if (plugin_name == "caching_sha2_password") {
+        return cachingSha2Auth(password, salt);
+    }
+    return std::unexpected("Unsupported auth plugin: " + std::string(plugin_name));
+}
+
 std::expected<std::string, std::string> AuthPlugin::cachingSha2FullAuth(const std::string& password,
                                                                         const std::string& salt,
                                                                         std::string_view pem_public_key)

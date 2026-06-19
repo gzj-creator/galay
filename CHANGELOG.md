@@ -11,23 +11,33 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 MySQL 真实服务端认证插件矩阵集成测试，覆盖 `mysql_native_password`、`caching_sha2_password` 成功路径与 `sha256_password` 不支持路径，并补充本机/CI 用户准备脚本和验证文档。
+- 新增 MySQL 真实服务端连接恢复测试，覆盖错误端口连接失败后的恢复，以及服务端 `KILL CONNECTION` 后的新连接恢复。
+
 ### Changed
 
+- MySQL 同步与异步客户端认证流程改为按当前认证插件状态循环处理，支持服务端 `AuthSwitchRequest` 后重算认证响应，并保留 `caching_sha2_password` fast/full auth 流程。
 - 移除旧协程任务别名与相关命名，统一改用 `Task<void>` 表达异步任务接口。
 - 继续整理剩余命名、注释与示例表述，统一任务与句柄相关术语，并同步修正文档。
 
 ### Fixed
 
+- 修复 MySQL 8 默认 `caching_sha2_password` 握手遇到 `mysql_native_password` 账号时返回 auth switch 导致连接失败的问题。
+- 补齐 MySQL 认证插件分发、AuthSwitchRequest 边界解析与 RSA full auth 负例测试；修复 Redis 协议测试在新编译器下缺少 `<cstring>` 的编译问题。
 - 修复 `MurmurHash3Util` 字符串字面量重载误匹配裸指针长度接口导致的越界读取。
 - 修复 kernel work-stealing、kqueue IO 完成/超时清理中的生命周期问题，避免 stale IO 注册与任务状态悬空访问。
 - 稳定 `kernel.stealstats` 与 `kernel.connbld` 测试同步条件，消除 sanitizer 和高并发建连场景下的时序误失败。
 
 ### Docs
 
+- 新增 MySQL 认证插件真实服务端验证说明，记录本机测试用户创建、集成测试运行和清理流程。
 - 新增 `CLAUDE.md` 与 `AGENTS.md`，定义 LLM 代理在本仓库内的行为准则（编码前先思考、简洁优先、外科手术式修改、目标驱动执行），降低常见编码错误。
 
 ### Chore
 
+- 新增 `scripts/mysql/mysql_auth_matrix_setup.sh`，按模块目录管理 MySQL auth 矩阵测试用户准备脚本。
 - 扩充 `.gitignore`，新增 `.claude/`、`.codex/` 条目，避免代理本地配置目录进入版本控制。
 - 移除 examples/tests/benchmarks/scripts style 审计中的 `stale-include-root` 阻断规则，保留其他结构与命名检查。
 

@@ -259,6 +259,30 @@ MysqlParser::parseHandshake(const char* data, size_t len)
     return hs;
 }
 
+std::expected<AuthSwitchRequest, ParseError>
+MysqlParser::parseAuthSwitchRequest(const char* data, size_t len)
+{
+    if (len < 2) return std::unexpected(ParseError::Incomplete);
+    if (static_cast<uint8_t>(data[0]) != 0xFE) {
+        return std::unexpected(ParseError::InvalidType);
+    }
+
+    size_t consumed = 0;
+    auto plugin_name = readNullTermString(data + 1, len - 1, consumed);
+    if (!plugin_name) return std::unexpected(plugin_name.error());
+
+    const size_t salt_pos = 1 + consumed;
+    AuthSwitchRequest request;
+    request.auth_plugin_name = std::move(plugin_name.value());
+    if (salt_pos < len) {
+        request.auth_plugin_data.assign(data + salt_pos, len - salt_pos);
+        if (!request.auth_plugin_data.empty() && request.auth_plugin_data.back() == '\0') {
+            request.auth_plugin_data.pop_back();
+        }
+    }
+    return request;
+}
+
 ResponseType MysqlParser::identifyResponse(uint8_t first_byte, uint32_t payload_len)
 {
     if (first_byte == 0x00 && payload_len >= 7) {
