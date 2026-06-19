@@ -14,33 +14,32 @@ MysqlConnectionPool::MysqlConnectionPool(galay::kernel::IOScheduler* scheduler,
     , m_async_config(std::move(config.async_config))
     , m_min_connections(config.min_connections)
     , m_max_connections(config.max_connections)
+    , m_idle_clients(m_max_connections == 0 ? 1 : m_max_connections)
+    , m_waiters(m_max_connections == 0 ? 1 : m_max_connections)
+    , m_all_clients(m_max_connections)
 {
+    (void)m_min_connections;
 }
 
 MysqlConnectionPool::~MysqlConnectionPool()
 {
-    std::queue<std::coroutine_handle<>> waiters_to_resume;
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        waiters_to_resume.swap(m_waiters);
-        while (!m_idle_clients.empty()) {
-            m_idle_clients.pop();
+    std::shared_ptr<detail::MysqlPoolWaiter> waiter;
+    while (m_waiters.try_dequeue(waiter)) {
+        if (waiter != nullptr) {
+            waiter->active.store(false, std::memory_order_release);
+            waiter->client.store(nullptr, std::memory_order_release);
+            waiter->waker.wakeUp();
         }
-        m_all_clients.clear();
     }
-    while (!waiters_to_resume.empty()) {
-        auto h = waiters_to_resume.front();
-        waiters_to_resume.pop();
-        h.resume();
-    }
+    AsyncMysqlClient* client = nullptr;
+    while (m_idle_clients.try_dequeue(client)) {}
 }
 
 AsyncMysqlClient* MysqlConnectionPool::tryAcquire()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (!m_idle_clients.empty()) {
-        auto* client = m_idle_clients.front();
-        m_idle_clients.pop();
+    AsyncMysqlClient* client = nullptr;
+    if (m_idle_clients.try_dequeue(client)) {
+        m_idle_connections.fetch_sub(1, std::memory_order_acq_rel);
         return client;
     }
     return nullptr;
@@ -48,39 +47,76 @@ AsyncMysqlClient* MysqlConnectionPool::tryAcquire()
 
 AsyncMysqlClient* MysqlConnectionPool::createClient()
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    if (m_total_connections.load(std::memory_order_relaxed) >= m_max_connections) {
-        return nullptr;
+    size_t slot = m_total_connections.load(std::memory_order_acquire);
+    while (slot < m_max_connections) {
+        if (m_total_connections.compare_exchange_weak(slot,
+                                                       slot + 1,
+                                                       std::memory_order_acq_rel,
+                                                       std::memory_order_acquire)) {
+            auto client = std::make_unique<AsyncMysqlClient>(m_scheduler, m_async_config);
+            auto* ptr = client.get();
+            m_all_clients[slot] = std::move(client);
+            return ptr;
+        }
     }
-    auto client = std::make_unique<AsyncMysqlClient>(m_scheduler, m_async_config);
-    auto* ptr = client.get();
-    m_all_clients.push_back(std::move(client));
-    m_total_connections.fetch_add(1, std::memory_order_relaxed);
-    return ptr;
+    return nullptr;
+}
+
+bool MysqlConnectionPool::enqueueWaiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter)
+{
+    return waiter != nullptr && m_waiters.enqueue(std::move(waiter));
+}
+
+bool MysqlConnectionPool::wakeOneWaiter()
+{
+    std::shared_ptr<detail::MysqlPoolWaiter> waiter;
+    while (m_idle_connections.load(std::memory_order_acquire) > 0 &&
+           m_waiters.try_dequeue(waiter)) {
+        if (waiter == nullptr) {
+            continue;
+        }
+
+        bool expected = true;
+        if (!waiter->active.compare_exchange_strong(expected,
+                                                    false,
+                                                    std::memory_order_acq_rel,
+                                                    std::memory_order_acquire)) {
+            continue;
+        }
+
+        auto* client = tryAcquire();
+        if (client == nullptr) {
+            waiter->active.store(true, std::memory_order_release);
+            auto requeued_waiter = waiter;
+            if (!enqueueWaiter(std::move(waiter)) && requeued_waiter != nullptr) {
+                requeued_waiter->active.store(false, std::memory_order_release);
+                requeued_waiter->waker.wakeUp();
+            }
+            return false;
+        }
+
+        waiter->client.store(client, std::memory_order_release);
+        waiter->waker.wakeUp();
+        return true;
+    }
+
+    return false;
 }
 
 void MysqlConnectionPool::release(AsyncMysqlClient* client)
 {
     if (!client) return;
 
-    std::coroutine_handle<> waiter_to_resume;
-    {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        if (!m_waiters.empty()) {
-            waiter_to_resume = m_waiters.front();
-            m_waiters.pop();
-        }
-        m_idle_clients.push(client);
+    if (!m_idle_clients.enqueue(client)) {
+        return;
     }
-    if (waiter_to_resume) {
-        waiter_to_resume.resume();
-    }
+    m_idle_connections.fetch_add(1, std::memory_order_acq_rel);
+    (void)wakeOneWaiter();
 }
 
 size_t MysqlConnectionPool::idleCount() const
 {
-    std::lock_guard<std::mutex> lock(m_mutex);
-    return m_idle_clients.size();
+    return m_idle_connections.load(std::memory_order_acquire);
 }
 
 MysqlConnectionPool::AcquireAwaitable MysqlConnectionPool::acquire() { return AcquireAwaitable(*this); }
@@ -130,17 +166,24 @@ MysqlConnectionPool::AcquireAwaitable::await_resume()
         return m_client;
     }
     else if (m_state == State::Waiting) {
-        // 被唤醒后，从池中获取连接
-        m_client = m_pool.tryAcquire();
+        m_client = m_waiter ? m_waiter->client.load(std::memory_order_acquire) : nullptr;
         m_state = State::Invalid;
+        m_waiter.reset();
         m_connect_awaitable.reset();
         if (m_client) {
             return m_client;
         }
         return std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "Failed to acquire connection after wakeup"));
     }
+    else if (m_state == State::EnqueueFailed) {
+        m_state = State::Invalid;
+        m_waiter.reset();
+        m_connect_awaitable.reset();
+        return std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "Failed to enqueue connection waiter"));
+    }
 
     m_state = State::Invalid;
+    m_waiter.reset();
     m_connect_awaitable.reset();
     m_client = nullptr;
     return std::unexpected(MysqlError(MYSQL_ERROR_INTERNAL, "Invalid acquire state"));

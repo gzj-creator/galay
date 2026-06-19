@@ -1,5 +1,6 @@
 #include "galay-etcd/async/client.h"
 
+#include <galay-kernel/concurrency/async_waiter.h>
 #include <galay-kernel/core/runtime.h>
 
 #include <atomic>
@@ -39,6 +40,7 @@ Task<void> runTaskWatch(IOScheduler* scheduler,
     struct TaskWatchState {
         std::atomic<bool> seen{false};
         std::atomic<bool> matched{false};
+        galay::kernel::AsyncWaiter<void> observed;
     };
 
     auto finish = [&](int code) {
@@ -71,6 +73,7 @@ Task<void> runTaskWatch(IOScheduler* scheduler,
                         response.events.front().kv.value == value,
                         std::memory_order_release);
                     watch_state->seen.store(true, std::memory_order_release);
+                    watch_state->observed.notify();
                 }
                 co_return;
             }));
@@ -85,17 +88,8 @@ Task<void> runTaskWatch(IOScheduler* scheduler,
         co_return;
     }
 
-    bool seen = watch_state->seen.load(std::memory_order_acquire);
-    for (int attempt = 0; attempt < 20 && !seen; ++attempt) {
-        auto probe = co_await client.get(key);
-        if (!probe.has_value()) {
-            finish(fail("probe get failed: " + probe.error().message()));
-            co_return;
-        }
-        seen = watch_state->seen.load(std::memory_order_acquire);
-    }
-
-    if (!seen) {
+    auto observed = co_await watch_state->observed.wait().timeout(std::chrono::seconds(3));
+    if (!observed || !watch_state->seen.load(std::memory_order_acquire)) {
         finish(fail("task watch did not observe put"));
         co_return;
     }

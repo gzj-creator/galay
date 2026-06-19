@@ -15,10 +15,14 @@
 
 - 新增 MySQL 真实服务端认证插件矩阵集成测试，覆盖 `mysql_native_password`、`caching_sha2_password` 成功路径与 `sha256_password` 不支持路径，并补充本机/CI 用户准备脚本和验证文档。
 - 新增 MySQL 真实服务端连接恢复测试，覆盖错误端口连接失败后的恢复，以及服务端 `KILL CONNECTION` 后的新连接恢复。
+- 新增 MySQL 异步连接池协程来源检查、等待者唤醒集成测试与连接池压力基准，覆盖连接池无阻塞等待路径。
+- 新增 etcd、Mongo、Redis 真实服务端验证脚本，并补齐 Redis ACL 认证兼容测试。
 
 ### Changed
 
 - MySQL 同步与异步客户端认证流程改为按当前认证插件状态循环处理，支持服务端 `AuthSwitchRequest` 后重算认证响应，并保留 `caching_sha2_password` fast/full auth 流程。
+- MySQL 异步连接池改用无锁队列与协程 waker 管理空闲连接和等待者，避免在协程获取连接路径中使用阻塞同步。
+- etcd 与 Redis 集成测试中的轮询等待改为协程等待/睡眠，减少 IO 调度线程上的阻塞等待。
 - 移除旧协程任务别名与相关命名，统一改用 `Task<void>` 表达异步任务接口。
 - 继续整理剩余命名、注释与示例表述，统一任务与句柄相关术语，并同步修正文档。
 

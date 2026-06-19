@@ -1,5 +1,7 @@
 #include "galay-etcd/async/client.h"
 
+#include <galay-kernel/common/sleep.hpp>
+#include <galay-kernel/concurrency/async_waiter.h>
 #include <galay-kernel/core/runtime.h>
 
 #include <atomic>
@@ -38,6 +40,7 @@ Task<void> runSmoke(IOScheduler* scheduler,
 {
     struct ThreadWatchState {
         std::atomic<bool> seen{false};
+        galay::kernel::AsyncWaiter<void> observed;
     };
 
     auto finish = [&](int code) {
@@ -69,6 +72,7 @@ Task<void> runSmoke(IOScheduler* scheduler,
                 return;
             }
             watch_state->seen.store(true, std::memory_order_release);
+            watch_state->observed.notify();
         });
     if (!watch_started.has_value()) {
         finish(fail("watch start failed: " + watch_started.error().message()));
@@ -81,12 +85,8 @@ Task<void> runSmoke(IOScheduler* scheduler,
         co_return;
     }
 
-    const auto watch_deadline = std::chrono::steady_clock::now() + std::chrono::seconds(3);
-    while (!watch_state->seen.load(std::memory_order_acquire) &&
-           std::chrono::steady_clock::now() < watch_deadline) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-    if (!watch_state->seen.load(std::memory_order_acquire)) {
+    auto observed = co_await watch_state->observed.wait().timeout(std::chrono::seconds(3));
+    if (!observed || !watch_state->seen.load(std::memory_order_acquire)) {
         finish(fail("watch did not observe put"));
         co_return;
     }
@@ -138,7 +138,7 @@ Task<void> runSmoke(IOScheduler* scheduler,
         co_return;
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    co_await galay::kernel::sleep(std::chrono::seconds(5));
     auto get_after_ttl = co_await client.get(lease_key);
     if (!get_after_ttl.has_value()) {
         finish(fail("get after ttl failed: " + get_after_ttl.error().message()));

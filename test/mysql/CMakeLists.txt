@@ -58,6 +58,15 @@ add_mysql_test(t11_auth_plugins t11_auth_plugins.cc INTEGRATION LABELS auth_plug
 # t12 - Real server reconnect/failure recovery smoke
 add_mysql_test(t12_resilience t12_resilience.cc INTEGRATION LABELS resilience)
 
+# t13 - Async pool coroutine source guard
+add_mysql_test(t13_pool_coroutine_source t13_pool_coroutine_source.cc)
+target_compile_definitions(mysql_t13_pool_coroutine_source
+    PRIVATE GALAY_MYSQL_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src"
+)
+
+# t14 - Async pool waiter/resume integration
+add_mysql_test(t14_pool_waiter t14_pool_waiter.cc INTEGRATION LABELS pool_waiter)
+
 add_test(
     NAME mysql.package_consumer_smoke
     COMMAND

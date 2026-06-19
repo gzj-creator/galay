@@ -1,4 +1,5 @@
 #include <galay-kernel/core/runtime.h>
+#include <galay-kernel/common/sleep.hpp>
 
 #include <atomic>
 #include <cctype>
@@ -8,7 +9,6 @@
 #include <iostream>
 #include <mutex>
 #include <string>
-#include <thread>
 
 #include "galay-redis/async/redis_client.h"
 #include "galay-redis/async/topology_client.h"
@@ -142,6 +142,30 @@ namespace
         return expectSingleStringReply(result.value(), out);
     }
 
+    bool tryAwaitedSingleStringReply(auto&& result, std::string* out)
+    {
+        if (!result || !result.value() || !result.value().has_value() ||
+            result.value()->empty()) {
+            return false;
+        }
+        const auto& first = result.value()->front();
+        if (first.isString()) {
+            *out = first.toString();
+            return true;
+        }
+        if (first.isStatus()) {
+            *out = first.toStatus();
+            return true;
+        }
+        return false;
+    }
+
+    bool tryAwaitedStatus(auto&& result, const std::string& expected)
+    {
+        std::string value;
+        return tryAwaitedSingleStringReply(result, &value) && value == expected;
+    }
+
     bool isAskErrorReply(const std::expected<std::optional<std::vector<RedisValue>>, RedisError>& result)
     {
         if (!result || !result.value().has_value() || result.value()->empty()) {
@@ -242,7 +266,7 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
                 sentinel_refresh_ok = true;
                 break;
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            co_await galay::kernel::sleep(std::chrono::milliseconds(500));
         }
         if (!sentinel_refresh_ok) {
             fail("Sentinel refresh failed after retries");
@@ -250,8 +274,12 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
         }
 
         auto write_before = co_await ms.execute("SET", {cfg.sentinel_test_key, "before-failover"});
-        if (!write_before) {
-            fail("Sentinel write(before) failed: " + std::string(write_before.error().message()));
+        if (!tryAwaitedStatus(write_before, "OK")) {
+            if (!write_before) {
+                fail("Sentinel write(before) failed: " + std::string(write_before.error().message()));
+            } else {
+                fail("Sentinel write(before) did not return OK");
+            }
             break;
         }
 
@@ -278,11 +306,11 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
                 (void)refresh;
                 auto write_after = co_await ms.execute("SET",
                                                        {cfg.sentinel_test_key, "after-failover"});
-                if (write_after) {
+                if (tryAwaitedStatus(write_after, "OK")) {
                     write_after_ok = true;
                     break;
                 }
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+                co_await galay::kernel::sleep(std::chrono::milliseconds(500));
             }
             if (!write_after_ok) {
                 fail("Sentinel auto-failover write retry exhausted");
@@ -292,15 +320,23 @@ Task<void> runIntegration(IOScheduler* scheduler, IntegrationConfig cfg)
 
         bool read_ok = false;
         for (int i = 0; i < 60; ++i) {
-            auto read_after = co_await ms.execute("GET", {cfg.sentinel_test_key}, true);
+            auto read_after = co_await ms.execute("GET", {cfg.sentinel_test_key}, false);
             std::string read_value;
-            if (expectAwaitedSingleStringReply(read_after, &read_value)) {
+            if (tryAwaitedSingleStringReply(read_after, &read_value)) {
                 if (read_value == "after-failover" || read_value == "before-failover") {
                     read_ok = true;
                     break;
                 }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            co_await galay::kernel::sleep(std::chrono::milliseconds(500));
+        }
+        if (!read_ok) {
+            auto read_master = co_await ms.execute("GET", {cfg.sentinel_test_key}, true);
+            std::string read_value;
+            if (tryAwaitedSingleStringReply(read_master, &read_value) &&
+                (read_value == "after-failover" || read_value == "before-failover")) {
+                read_ok = true;
+            }
         }
         if (!read_ok) {
             fail("Sentinel read after failover failed");

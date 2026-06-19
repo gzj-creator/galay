@@ -45,3 +45,24 @@ foreach(SRC ${SRC_LIST})
     add_test(NAME "redis.${SCENARIO_NAME}" COMMAND ${EXECUTABLE_NAME})
     set_tests_properties("redis.${SCENARIO_NAME}" PROPERTIES LABELS "unit;redis")
 endforeach()
+
+function(add_redis_integration_target target_name source_file)
+    add_executable(${target_name} EXCLUDE_FROM_ALL ${source_file})
+    set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
+    target_link_libraries(${target_name} PRIVATE galay::redis)
+    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    set_target_properties(${target_name} PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        INSTALL_RPATH $ORIGIN/../lib
+    )
+endfunction()
+
+add_redis_integration_target(redis_t13_cluster t13_cluster.cc)
+add_redis_integration_target(redis_t27_auth t27_auth.cc)
+
+if(GALAY_BUILD_SSL)
+    add_redis_integration_target(redis_t17_tls t17_tls.cc)
+    add_redis_integration_target(redis_t18_url t18_url.cc)
+    add_redis_integration_target(redis_t19_topology t19_topology.cc)
+endif()
