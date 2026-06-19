@@ -659,6 +659,11 @@ struct WsMessageReadState {
         , m_control_frame_callback(std::move(control_frame_callback))
         , m_enable_fast_path(enable_fast_path) {}
 
+    void rebindStorage(std::string& message, WsOpcode& opcode) noexcept {
+        m_message = &message;
+        m_opcode = &opcode;
+    }
+
     bool parseFromBuffer() {
         while (true) {
             auto read_iovecs = borrowReadIovecs(*m_ring_buffer);

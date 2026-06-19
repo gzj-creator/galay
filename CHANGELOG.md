@@ -38,6 +38,7 @@
 
 ### Fixed
 
+- 修复 WSS `echoLoopConsume()` 状态机移动后仍持有旧对象 `message`/`opcode` 指针的问题，避免 WSS benchmark 服务端在回显循环进入下一轮读取时段错误。
 - 修复 MySQL 8 默认 `caching_sha2_password` 握手遇到 `mysql_native_password` 账号时返回 auth switch 导致连接失败的问题。
 - 补齐 MySQL 认证插件分发、AuthSwitchRequest 边界解析与 RSA full auth 负例测试；修复 Redis 协议测试在新编译器下缺少 `<cstring>` 的编译问题。
 - 修复 `MurmurHash3Util` 字符串字面量重载误匹配裸指针长度接口导致的越界读取。

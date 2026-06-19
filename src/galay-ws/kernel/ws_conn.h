@@ -661,6 +661,49 @@ struct WsSslEchoLoopMachine {
                        nullptr)
         , m_writer(resolveWriterSetting(conn, writer_setting), conn->m_socket) {}
 
+    WsSslEchoLoopMachine(const WsSslEchoLoopMachine&) = delete;
+    WsSslEchoLoopMachine& operator=(const WsSslEchoLoopMachine&) = delete;
+
+    WsSslEchoLoopMachine(WsSslEchoLoopMachine&& other)
+        : m_conn(other.m_conn)
+        , m_reader_setting(std::move(other.m_reader_setting))
+        , m_message(std::move(other.m_message))
+        , m_opcode(other.m_opcode)
+        , m_read_state(std::move(other.m_read_state))
+        , m_writer(std::move(other.m_writer))
+        , m_direct_send(std::move(other.m_direct_send))
+        , m_control_buffer(std::move(other.m_control_buffer))
+        , m_control_sent_bytes(other.m_control_sent_bytes)
+        , m_close_after_send(other.m_close_after_send)
+        , m_stage(other.m_stage)
+        , m_write_mode(other.m_write_mode)
+        , m_result(std::move(other.m_result))
+    {
+        rebindOwnedReadState();
+    }
+
+    WsSslEchoLoopMachine& operator=(WsSslEchoLoopMachine&& other) {
+        if (this == &other) {
+            return *this;
+        }
+
+        m_conn = other.m_conn;
+        m_reader_setting = std::move(other.m_reader_setting);
+        m_message = std::move(other.m_message);
+        m_opcode = other.m_opcode;
+        m_read_state = std::move(other.m_read_state);
+        m_writer = std::move(other.m_writer);
+        m_direct_send = std::move(other.m_direct_send);
+        m_control_buffer = std::move(other.m_control_buffer);
+        m_control_sent_bytes = other.m_control_sent_bytes;
+        m_close_after_send = other.m_close_after_send;
+        m_stage = other.m_stage;
+        m_write_mode = other.m_write_mode;
+        m_result = std::move(other.m_result);
+        rebindOwnedReadState();
+        return *this;
+    }
+
     galay::ssl::SslMachineAction<result_type> advance() {
         if (m_result.has_value()) {
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
@@ -875,6 +918,9 @@ private:
                 m_result = true;
                 return galay::ssl::SslMachineAction<result_type>::complete(true);
         }
+
+        m_result = std::unexpected(WsError(kWsSendError, "Invalid SSL echo loop write mode"));
+        return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
     }
 
     bool tryPrepareZeroCopy() {
@@ -943,6 +989,10 @@ private:
         m_write_mode = WriteMode::kNone;
         m_stage = Stage::kRead;
         m_read_state.resetForNextMessage();
+    }
+
+    void rebindOwnedReadState() noexcept {
+        m_read_state.rebindStorage(m_message, m_opcode);
     }
 
     WsConnImpl<SocketType>* m_conn;
