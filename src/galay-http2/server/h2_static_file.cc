@@ -1,0 +1,185 @@
+#include "galay-http2/server/h2_static_file.h"
+
+#include "galay-http/protoc/http_base.h"
+#include "galay-http/server/http_etag.h"
+
+#include <chrono>
+#include <fstream>
+#include <sstream>
+
+namespace galay::http2
+{
+
+namespace {
+
+std::time_t toTimeT(std::filesystem::file_time_type file_time)
+{
+    const auto system_time = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        file_time - std::filesystem::file_time_type::clock::now() +
+        std::chrono::system_clock::now());
+    return std::chrono::system_clock::to_time_t(system_time);
+}
+
+std::string extensionToMime(const std::filesystem::path& path)
+{
+    auto ext = path.extension().string();
+    if (!ext.empty() && ext.front() == '.') {
+        ext.erase(ext.begin());
+    }
+    return galay::http::MimeType::convertToMimeType(ext);
+}
+
+std::shared_ptr<const std::string> readSmallFile(const std::filesystem::path& path,
+                                                 uintmax_t size)
+{
+    auto body = std::make_shared<std::string>();
+    body->resize(static_cast<size_t>(size));
+    std::ifstream in(path, std::ios::binary);
+    if (size > 0) {
+        in.read(body->data(), static_cast<std::streamsize>(body->size()));
+    }
+    return body;
+}
+
+} // namespace
+
+H2StaticFileCache::H2StaticFileCache(H2StaticFileConfig config)
+    : m_config(std::move(config))
+{
+    std::error_code ec;
+    m_root = std::filesystem::weakly_canonical(m_config.root, ec);
+    if (ec) {
+        m_root = std::filesystem::absolute(m_config.root, ec);
+    }
+}
+
+H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
+{
+    auto file_path = normalizeRequestPath(request.path);
+    if (file_path.empty()) {
+        return makeNotFound();
+    }
+
+    const auto key = file_path.string();
+    auto it = m_cache.find(key);
+    if (it == m_cache.end()) {
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(file_path, ec) || ec) {
+            return makeNotFound();
+        }
+        it = m_cache.emplace(key, loadEntry(file_path)).first;
+    }
+
+    const auto& entry = it->second;
+    if (m_config.enable_etag &&
+        !request.if_none_match.empty() &&
+        galay::http::ETagGenerator::matchIfNoneMatch(entry.etag, request.if_none_match)) {
+        return makeLookup(entry, 304);
+    }
+    return makeLookup(entry, 200);
+}
+
+std::filesystem::path H2StaticFileCache::normalizeRequestPath(
+    const std::string& request_path) const
+{
+    if (request_path.empty() || request_path.find('\0') != std::string::npos) {
+        return {};
+    }
+
+    std::string relative = request_path;
+    const auto query_pos = relative.find('?');
+    if (query_pos != std::string::npos) {
+        relative.resize(query_pos);
+    }
+    while (!relative.empty() && relative.front() == '/') {
+        relative.erase(relative.begin());
+    }
+    if (relative.empty()) {
+        relative = "index.html";
+    }
+
+    std::error_code ec;
+    auto candidate = (m_root / relative).lexically_normal();
+    if (!isInsideRoot(candidate)) {
+        return {};
+    }
+    if (!std::filesystem::exists(candidate, ec) || ec) {
+        return {};
+    }
+    auto canonical = std::filesystem::weakly_canonical(candidate, ec);
+    if (ec || !isInsideRoot(canonical)) {
+        return {};
+    }
+    return canonical;
+}
+
+bool H2StaticFileCache::isInsideRoot(const std::filesystem::path& path) const
+{
+    std::error_code ec;
+    auto relative = std::filesystem::relative(path, m_root, ec);
+    if (ec || relative.empty()) {
+        return false;
+    }
+    for (const auto& part : relative) {
+        if (part == "..") {
+            return false;
+        }
+    }
+    return true;
+}
+
+H2StaticFileLookup H2StaticFileCache::makeNotFound() const
+{
+    H2StaticFileLookup lookup;
+    lookup.status = 404;
+    lookup.headers.push_back({"content-length", "0"});
+    return lookup;
+}
+
+H2StaticFileLookup H2StaticFileCache::makeLookup(const Entry& entry, int status) const
+{
+    H2StaticFileLookup lookup;
+    lookup.status = status;
+    lookup.file_path = entry.file_path;
+    lookup.file_size = entry.file_size;
+    lookup.last_modified = entry.last_modified;
+    lookup.etag = entry.etag;
+    lookup.content_type = entry.content_type;
+    lookup.body_cached = status == 200 && entry.body_cached;
+    lookup.body = lookup.body_cached ? entry.body : nullptr;
+    lookup.headers.push_back({"content-length", std::to_string(entry.file_size)});
+    lookup.headers.push_back({"content-type", entry.content_type});
+    if (m_config.enable_etag && !entry.etag.empty()) {
+        lookup.headers.push_back({"etag", entry.etag});
+    }
+    return lookup;
+}
+
+H2StaticFileCache::Entry H2StaticFileCache::loadEntry(
+    const std::filesystem::path& file_path) const
+{
+    Entry entry;
+    entry.file_path = file_path;
+
+    std::error_code ec;
+    entry.file_size = std::filesystem::file_size(file_path, ec);
+    if (ec) {
+        entry.file_size = 0;
+    }
+    entry.last_modified = toTimeT(std::filesystem::last_write_time(file_path, ec));
+    if (ec) {
+        entry.last_modified = 0;
+    }
+    entry.content_type = extensionToMime(file_path);
+    if (m_config.enable_etag) {
+        entry.etag = galay::http::ETagGenerator::generateStrong(
+            file_path, static_cast<size_t>(entry.file_size), entry.last_modified);
+    }
+    if (entry.file_size <= m_config.small_file_threshold) {
+        entry.body = readSmallFile(file_path, entry.file_size);
+        entry.body_cached = true;
+    }
+    return entry;
+}
+
+} // namespace galay::http2

@@ -286,7 +286,7 @@ rtk git add <modified files>
 rtk git commit -m "feat: 支持 HTTP2 小响应 bytes 快路径"
 ```
 
-## [ ] Task 6: HTTP/2 静态文件 metadata 与小文件缓存
+## [x] Task 6: HTTP/2 静态文件 metadata 与小文件缓存
 
 **Files:**
 - Add: `src/galay-http2/server/h2_static_file.h`
