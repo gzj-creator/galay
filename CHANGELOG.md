@@ -41,6 +41,7 @@
 
 ### Changed
 
+- HTTP/2 静态文件普通 200 GET/HEAD fast path 改为使用 `lookupFast200()` 轻量查询，直接复用预编码 200 响应头与共享 body，避免构造完整 lookup 和扫描 `content-length`。
 - HTTP/2 静态文件 GET fast path 改为优先使用轻量 HPACK request target 解析，并携带 If-None-Match/Range 目标头，命中静态文件时避免全量 header vector 解码。
 - HTTP/2 静态文件 GET fast path 复用预编码响应头、连接私有静态文件 cache 与共享 DATA payload，减少静态文件路径中的 HPACK 编码、文件路径规范化和 body 拷贝成本。
 - HTTP/2 h2c accept 后的连接处理改为轮询分发到 IO scheduler，避免 macOS loopback/SO_REUSEPORT 哈希倾斜时压测连接集中到单个 worker。

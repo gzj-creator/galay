@@ -12,7 +12,9 @@
 #include <ctime>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -46,6 +48,14 @@ struct H2StaticFileLookup {
     uintmax_t range_end = 0;
 };
 
+struct H2StaticFileFastLookup {
+    std::filesystem::path file_path;
+    uintmax_t content_length = 0;
+    bool body_cached = false;
+    std::shared_ptr<const std::string> body;
+    std::shared_ptr<const std::string> encoded_headers;
+};
+
 class H2StaticFileCache;
 
 struct H2StaticFileMount {
@@ -72,6 +82,7 @@ public:
     explicit H2StaticFileCache(H2StaticFileConfig config);
 
     H2StaticFileLookup lookup(const H2StaticFileRequest& request);
+    std::optional<H2StaticFileFastLookup> lookupFast200(std::string_view request_path);
 
 private:
     struct Entry {
@@ -86,6 +97,8 @@ private:
         std::vector<Http2HeaderField> headers;
     };
 
+    // 返回指向内部缓存的临时视图；调用方必须在当前同步调用栈内消费，不能保存。
+    Entry* findOrLoadEntry(std::string_view request_path);
     std::filesystem::path normalizeRequestPath(const std::string& request_path) const;
     bool isInsideRoot(const std::filesystem::path& path) const;
     H2StaticFileLookup makeNotFound() const;

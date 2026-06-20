@@ -111,7 +111,81 @@ H2StaticFileCache::H2StaticFileCache(H2StaticFileConfig config)
 
 H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
 {
-    const auto cache_path = stripQuery(request.path);
+    auto* entry = findOrLoadEntry(request.path);
+    if (entry == nullptr) {
+        return makeNotFound();
+    }
+
+    if (m_config.enable_etag &&
+        !request.if_none_match.empty() &&
+        galay::http::ETagGenerator::matchIfNoneMatch(entry->etag, request.if_none_match)) {
+        return makeLookup(*entry, 304);
+    }
+
+    if (!request.range.empty()) {
+        auto range_result = galay::http::HttpRangeParser::parse(request.range, entry->file_size);
+        if (!range_result.isValid() ||
+            range_result.type != galay::http::RangeType::SINGLE_RANGE) {
+            auto lookup = makeLookup(*entry, 416);
+            lookup.headers.clear();
+            lookup.headers.push_back({"content-length", "0"});
+            lookup.headers.push_back({"content-range", "bytes */" + std::to_string(entry->file_size)});
+            if (m_config.enable_etag && !entry->etag.empty()) {
+                lookup.headers.push_back({"etag", entry->etag});
+            }
+            lookup.body = nullptr;
+            lookup.body_cached = false;
+            return lookup;
+        }
+
+        const auto& range = range_result.ranges.front();
+        auto lookup = makeLookup(*entry, 206);
+        lookup.range_start = range.start;
+        lookup.range_end = range.end;
+        const auto length = range.end - range.start + 1;
+        lookup.headers.clear();
+        lookup.headers.push_back({"content-length", std::to_string(length)});
+        lookup.headers.push_back({"content-type", entry->content_type});
+        lookup.headers.push_back({
+            "content-range",
+            galay::http::HttpRangeParser::makeContentRange(range, entry->file_size)});
+        lookup.headers.push_back({"accept-ranges", "bytes"});
+        if (m_config.enable_etag && !entry->etag.empty()) {
+            lookup.headers.push_back({"etag", entry->etag});
+        }
+        if (entry->body_cached && entry->body) {
+            lookup.body = std::make_shared<const std::string>(
+                entry->body->substr(static_cast<size_t>(range.start), static_cast<size_t>(length)));
+            lookup.body_cached = true;
+        } else {
+            lookup.body = readFileRange(entry->file_path, range.start, length);
+            lookup.body_cached = false;
+        }
+        return lookup;
+    }
+    return makeLookup(*entry, 200);
+}
+
+std::optional<H2StaticFileFastLookup> H2StaticFileCache::lookupFast200(
+    std::string_view request_path)
+{
+    auto* entry = findOrLoadEntry(request_path);
+    if (entry == nullptr) {
+        return std::nullopt;
+    }
+
+    H2StaticFileFastLookup lookup;
+    lookup.file_path = entry->file_path;
+    lookup.content_length = entry->file_size;
+    lookup.body_cached = entry->body_cached;
+    lookup.body = entry->body_cached ? entry->body : nullptr;
+    lookup.encoded_headers = entry->encoded_headers;
+    return lookup;
+}
+
+H2StaticFileCache::Entry* H2StaticFileCache::findOrLoadEntry(std::string_view request_path)
+{
+    const auto cache_path = stripQuery(request_path);
     std::string key;
     if (auto cached = m_request_path_cache.find(cache_path);
         cached != m_request_path_cache.end()) {
@@ -119,7 +193,7 @@ H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
     } else {
         auto file_path = normalizeRequestPath(cache_path);
         if (file_path.empty()) {
-            return makeNotFound();
+            return nullptr;
         }
         key = file_path.string();
         m_request_path_cache.emplace(cache_path, key);
@@ -130,60 +204,11 @@ H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
         std::filesystem::path file_path(key);
         std::error_code ec;
         if (!std::filesystem::is_regular_file(file_path, ec) || ec) {
-            return makeNotFound();
+            return nullptr;
         }
         it = m_cache.emplace(key, loadEntry(file_path)).first;
     }
-
-    const auto& entry = it->second;
-    if (m_config.enable_etag &&
-        !request.if_none_match.empty() &&
-        galay::http::ETagGenerator::matchIfNoneMatch(entry.etag, request.if_none_match)) {
-        return makeLookup(entry, 304);
-    }
-
-    if (!request.range.empty()) {
-        auto range_result = galay::http::HttpRangeParser::parse(request.range, entry.file_size);
-        if (!range_result.isValid() ||
-            range_result.type != galay::http::RangeType::SINGLE_RANGE) {
-            auto lookup = makeLookup(entry, 416);
-            lookup.headers.clear();
-            lookup.headers.push_back({"content-length", "0"});
-            lookup.headers.push_back({"content-range", "bytes */" + std::to_string(entry.file_size)});
-            if (m_config.enable_etag && !entry.etag.empty()) {
-                lookup.headers.push_back({"etag", entry.etag});
-            }
-            lookup.body = nullptr;
-            lookup.body_cached = false;
-            return lookup;
-        }
-
-        const auto& range = range_result.ranges.front();
-        auto lookup = makeLookup(entry, 206);
-        lookup.range_start = range.start;
-        lookup.range_end = range.end;
-        const auto length = range.end - range.start + 1;
-        lookup.headers.clear();
-        lookup.headers.push_back({"content-length", std::to_string(length)});
-        lookup.headers.push_back({"content-type", entry.content_type});
-        lookup.headers.push_back({
-            "content-range",
-            galay::http::HttpRangeParser::makeContentRange(range, entry.file_size)});
-        lookup.headers.push_back({"accept-ranges", "bytes"});
-        if (m_config.enable_etag && !entry.etag.empty()) {
-            lookup.headers.push_back({"etag", entry.etag});
-        }
-        if (entry.body_cached && entry.body) {
-            lookup.body = std::make_shared<const std::string>(
-                entry.body->substr(static_cast<size_t>(range.start), static_cast<size_t>(length)));
-            lookup.body_cached = true;
-        } else {
-            lookup.body = readFileRange(entry.file_path, range.start, length);
-            lookup.body_cached = false;
-        }
-        return lookup;
-    }
-    return makeLookup(entry, 200);
+    return &it->second;
 }
 
 std::filesystem::path H2StaticFileCache::normalizeRequestPath(

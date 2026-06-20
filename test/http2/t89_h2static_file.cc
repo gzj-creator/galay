@@ -125,6 +125,17 @@ Task<void> runIntegrationClient(uint16_t port)
         co_return;
     }
 
+    auto small_query = client.get("/files/small.txt?fast=1");
+    auto small_query_done = co_await small_query->waitResponseComplete();
+    if (!small_query_done || small_query->response().status != 200 ||
+        small_query->response().body != std::string(1024, 'a') ||
+        responseHeader(small_query, "content-length") != "1024") {
+        std::cerr << "[T89] GET query file failed status=" << small_query->response().status
+                  << " size=" << small_query->response().body.size() << "\n";
+        g_done = true;
+        co_return;
+    }
+
     auto medium = client.get("/files/medium.bin");
     auto medium_done = co_await medium->waitResponseComplete();
     if (!medium_done || medium->response().status != 200 ||
@@ -218,6 +229,11 @@ int main()
     assert(hit_query_b.encoded_headers == hit.encoded_headers);
     assert(hit_query_a.body == hit.body);
     assert(hit_query_b.body == hit.body);
+    auto fast_hit = cache.lookupFast200("/hello.txt?fast=1");
+    assert(fast_hit.has_value());
+    assert(fast_hit->content_length == 5);
+    assert(fast_hit->encoded_headers == hit.encoded_headers);
+    assert(fast_hit->body == hit.body);
     assert(headerValue(hit, "content-length") == "5");
     assert(headerValue(hit, "content-type") == "text/plain");
     assert(headerValue(hit, "etag") == hit.etag);

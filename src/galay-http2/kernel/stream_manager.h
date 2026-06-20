@@ -1956,6 +1956,45 @@ private:
         return true;
     }
 
+    bool sendStaticFileFastLookup(uint32_t stream_id,
+                                  std::string_view method,
+                                  const H2StaticFileFastLookup& lookup) {
+        if (!lookup.encoded_headers) {
+            return false;
+        }
+
+        const bool is_head = method == "HEAD";
+        const uintmax_t length = lookup.content_length;
+        const bool has_body = !is_head && length > 0;
+        if (has_body && !canSendStaticFileBodyNow(length)) {
+            return false;
+        }
+
+        std::vector<std::string> body_chunks;
+        if (has_body && !lookup.body) {
+            body_chunks = readStaticFileChunks(lookup.file_path, 0, length);
+            if (body_chunks.empty()) {
+                return false;
+            }
+        }
+
+        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+            stream_id, lookup.encoded_headers->size(), !has_body, true);
+        m_static_response_batch.push_back(
+            Http2OutgoingFrame::segmentedShared(
+                std::move(header_bytes), lookup.encoded_headers));
+        if (!has_body) {
+            return true;
+        }
+
+        if (lookup.body) {
+            appendStaticFileSharedDataFrames(stream_id, lookup.body);
+        } else {
+            appendStaticFileDataFrames(stream_id, std::move(body_chunks));
+        }
+        return true;
+    }
+
     bool trySendStaticFile(uint32_t stream_id,
                            std::string_view method,
                            std::string_view path,
@@ -1969,8 +2008,16 @@ private:
             return false;
         }
 
+        auto mounted_path = mountedStaticFilePath(path, *mount);
+        if (if_none_match.empty() && range.empty()) {
+            auto fast_lookup = mount->cache->lookupFast200(mounted_path);
+            if (fast_lookup.has_value()) {
+                return sendStaticFileFastLookup(stream_id, method, *fast_lookup);
+            }
+        }
+
         auto lookup = mount->cache->lookup(H2StaticFileRequest{
-            .path = mountedStaticFilePath(path, *mount),
+            .path = std::move(mounted_path),
             .if_none_match = std::string(if_none_match),
             .range = std::string(range),
         });
