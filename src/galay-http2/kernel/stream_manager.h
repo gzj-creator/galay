@@ -2226,18 +2226,30 @@ private:
             if (end_headers) {
                 auto payload = frame_view.payload();
                 if (end_stream && !m_conn.runtimeConfig().static_file_mounts.empty()) {
+                    auto decoder_snapshot = m_conn.decoder();
+                    auto target = m_conn.decoder().decodeRequestTarget(
+                        reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
+                    if (!target) {
+                        enqueueGoawayAction(target.error());
+                        return true;
+                    }
+                    if (trySendStaticResponse(stream_id, target->method, target->path) ||
+                        trySendStaticFile(stream_id,
+                                          target->method,
+                                          target->path,
+                                          target->if_none_match,
+                                          target->range)) {
+                        m_conn.setLastPeerStreamId(stream_id);
+                        return true;
+                    }
+                    m_conn.decoder() = std::move(decoder_snapshot);
+
                     auto fields = m_conn.decoder().decode(
                         reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
                     if (!fields) {
                         enqueueGoawayAction(fields.error());
                         return true;
                     }
-                    if (trySendStaticResponse(stream_id, *fields) ||
-                        trySendStaticFile(stream_id, *fields)) {
-                        m_conn.setLastPeerStreamId(stream_id);
-                        return true;
-                    }
-
                     stream = createStreamInternal(stream_id);
                     m_conn.setLastPeerStreamId(stream_id);
                     stream->onHeadersReceived(end_stream);

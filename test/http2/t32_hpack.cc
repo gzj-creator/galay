@@ -32,6 +32,20 @@ int main() {
     assert(target->method == "GET");
     assert(target->path == "/");
 
+    auto conditional_block = encoder.encodeStateless({
+        {":method", "GET"},
+        {":path", "/files/small.txt"},
+        {"if-none-match", "\"etag-1\""},
+        {"range", "bytes=0-99"},
+    });
+    HpackDecoder conditional_decoder;
+    auto conditional_target = conditional_decoder.decodeRequestTarget(conditional_block);
+    assert(conditional_target.has_value());
+    assert(conditional_target->method == "GET");
+    assert(conditional_target->path == "/files/small.txt");
+    assert(conditional_target->if_none_match == "\"etag-1\"");
+    assert(conditional_target->range == "bytes=0-99");
+
     // 2) Dynamic table size update contract
     encoder.setMaxTableSize(128);
     std::vector<Http2HeaderField> headers2 = {

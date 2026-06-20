@@ -204,6 +204,8 @@ public:
     struct RequestTarget {
         std::string method;
         std::string path;
+        std::string if_none_match;
+        std::string range;
     };
 
     HpackDecoder(size_t max_table_size = kDefaultHeaderTableSize);

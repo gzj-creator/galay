@@ -5459,6 +5459,10 @@ HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
             target.method = field.value;
         } else if (field.name == ":path") {
             target.path = field.value;
+        } else if (field.name == "if-none-match") {
+            target.if_none_match = field.value;
+        } else if (field.name == "range") {
+            target.range = field.value;
         }
         return {};
     };
