@@ -148,8 +148,10 @@ require_cmd h2load
 require_cmd nghttpd
 require_cmd ps
 
-if [[ "$MODE" != "--post-echo" && "$MODE" != "--galay-static-empty" ]]; then
-    echo "usage: $0 [--post-echo|--galay-static-empty]" >&2
+if [[ "$MODE" != "--post-echo" &&
+      "$MODE" != "--galay-static-empty" &&
+      "$MODE" != "--galay-static-small" ]]; then
+    echo "usage: $0 [--post-echo|--galay-static-empty|--galay-static-small]" >&2
     exit 2
 fi
 
@@ -158,7 +160,7 @@ if [[ "$MODE" == "--post-echo" && ! -x "$GALAY_SERVER" ]]; then
     echo "build it first: cmake --build build --target benchmark_http2_h2_multiplex_server_throughput" >&2
     exit 1
 fi
-if [[ "$MODE" == "--galay-static-empty" && ! -x "$GALAY_STATIC_SERVER" ]]; then
+if [[ "$MODE" != "--post-echo" && ! -x "$GALAY_STATIC_SERVER" ]]; then
     echo "missing executable: $GALAY_STATIC_SERVER" >&2
     echo "build it first: cmake --build build --target benchmark_http2_h2_static_fast_path" >&2
     exit 1
@@ -174,7 +176,11 @@ if [[ "$MODE" == "--post-echo" ]]; then
     echo "mode:    POST echo"
     echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS -d payload"
 else
-    echo "mode:    GET static empty"
+    if [[ "$MODE" == "--galay-static-small" ]]; then
+        echo "mode:    GET static 1KB"
+    else
+        echo "mode:    GET static empty"
+    fi
     echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS"
 fi
 echo "server:  $SERVER_IO_THREADS IO workers, max_streams=$SERVER_MAX_STREAMS"
@@ -206,7 +212,11 @@ else
         >"$TMP_DIR/galay-static.server.log" 2>&1 &
     GALAY_PID="$!"
     wait_for_port "$GALAY_PORT"
-    run_h2load_case "galay-static-empty" "$GALAY_PORT" "$GALAY_PID" "/echo" "GET"
+    if [[ "$MODE" == "--galay-static-small" ]]; then
+        run_h2load_case "galay-static-1kb" "$GALAY_PORT" "$GALAY_PID" "/small" "GET"
+    else
+        run_h2load_case "galay-static-empty" "$GALAY_PORT" "$GALAY_PID" "/echo" "GET"
+    fi
     kill "$GALAY_PID" 2>/dev/null || true
     wait "$GALAY_PID" 2>/dev/null || true
     GALAY_PID=""

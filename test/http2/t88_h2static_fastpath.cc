@@ -19,6 +19,7 @@ using namespace galay::kernel;
 
 namespace {
 
+const std::string kSmallBody(1024, 's');
 std::atomic<int> g_active_deliveries{0};
 std::atomic<bool> g_done{false};
 std::atomic<bool> g_ok{false};
@@ -72,6 +73,37 @@ bool isEmptyOkResponse(const Http2Stream::ptr& stream)
            stream->isResponseCompleted();
 }
 
+std::string responseHeader(const Http2Stream::ptr& stream, const std::string& name)
+{
+    if (!stream) {
+        return "";
+    }
+    for (const auto& header : stream->response().headers) {
+        if (header.name == name) {
+            return header.value;
+        }
+    }
+    return "";
+}
+
+bool isSmallOkResponse(const Http2Stream::ptr& stream)
+{
+    return stream &&
+           stream->response().status == 200 &&
+           stream->response().body == kSmallBody &&
+           responseHeader(stream, "content-length") == std::to_string(kSmallBody.size()) &&
+           stream->isResponseCompleted();
+}
+
+bool isSmallHeadOkResponse(const Http2Stream::ptr& stream)
+{
+    return stream &&
+           stream->response().status == 200 &&
+           stream->response().body.empty() &&
+           responseHeader(stream, "content-length") == std::to_string(kSmallBody.size()) &&
+           stream->isResponseCompleted();
+}
+
 Task<void> runClient(uint16_t port)
 {
     H2cClient client(H2cClientBuilder().build());
@@ -118,6 +150,42 @@ Task<void> runClient(uint16_t port)
         co_return;
     }
 
+    auto small_get_stream = client.get("/small");
+    if (!small_get_stream) {
+        std::cerr << "[T88] small GET stream allocation failed\n";
+        g_done = true;
+        co_return;
+    }
+    auto small_get_done = co_await small_get_stream->waitResponseComplete();
+    if (!small_get_done || !isSmallOkResponse(small_get_stream)) {
+        std::cerr << "[T88] GET /small did not receive 1KB static response, status="
+                  << (small_get_stream ? small_get_stream->response().status : 0)
+                  << " body_size="
+                  << (small_get_stream ? small_get_stream->response().body.size() : 0)
+                  << " content-length=" << responseHeader(small_get_stream, "content-length")
+                  << "\n";
+        g_done = true;
+        co_return;
+    }
+
+    auto small_head_stream = sendHead(client, port, "/small");
+    if (!small_head_stream) {
+        std::cerr << "[T88] small HEAD stream allocation failed\n";
+        g_done = true;
+        co_return;
+    }
+    auto small_head_done = co_await small_head_stream->waitResponseComplete();
+    if (!small_head_done || !isSmallHeadOkResponse(small_head_stream)) {
+        std::cerr << "[T88] HEAD /small did not receive headers-only 1KB metadata, status="
+                  << (small_head_stream ? small_head_stream->response().status : 0)
+                  << " body_size="
+                  << (small_head_stream ? small_head_stream->response().body.size() : 0)
+                  << " content-length=" << responseHeader(small_head_stream, "content-length")
+                  << "\n";
+        g_done = true;
+        co_return;
+    }
+
     auto shutdown_result = co_await client.shutdown();
     if (!shutdown_result) {
         std::cerr << "[T88] shutdown failed\n";
@@ -145,6 +213,11 @@ int main()
             .status = 200,
             .content_type = "text/plain",
             .body = "",
+        })
+        .staticResponse("/small", H2StaticResponse{
+            .status = 200,
+            .content_type = "text/plain",
+            .body = kSmallBody,
         })
         .activeConnHandler(fallbackActiveHandler)
         .build());

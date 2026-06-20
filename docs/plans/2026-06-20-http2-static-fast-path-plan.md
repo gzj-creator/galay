@@ -242,7 +242,7 @@ rtk git add src/galay-http2/server/http2_server.h src/galay-http2/kernel/stream_
 rtk git commit -m "feat: 实现 HTTP2 静态空响应快路径"
 ```
 
-## [ ] Task 5: 小 body 静态响应 bytes fast path
+## [x] Task 5: 小 body 静态响应 bytes fast path
 
 **Files:**
 - Modify: `src/galay-http2/server/http2_server.h`

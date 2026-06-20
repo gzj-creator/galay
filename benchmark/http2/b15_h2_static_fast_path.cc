@@ -23,6 +23,7 @@ namespace {
 volatile bool g_running = true;
 bool g_debug_log = false;
 std::atomic<int64_t> g_fallback_requests{0};
+const std::string kSmallBody(1024, 's');
 
 void signalHandler(int)
 {
@@ -75,6 +76,7 @@ int main(int argc, char* argv[])
     std::cout << "IO Threads: " << io_threads << "\n";
     std::cout << "Max Concurrent Streams: " << max_streams << "\n";
     std::cout << "Static Route: GET/HEAD /echo -> 200 empty body\n";
+    std::cout << "Static Route: GET/HEAD /small -> 200 1KB body\n";
     std::cout << "Debug Log: " << (g_debug_log ? "ON" : "OFF") << "\n";
     std::cout << "Press Ctrl+C to stop\n";
     std::cout << "========================================\n\n";
@@ -94,6 +96,11 @@ int main(int argc, char* argv[])
                 .status = 200,
                 .content_type = "text/plain",
                 .body = "",
+            })
+            .staticResponse("/small", H2StaticResponse{
+                .status = 200,
+                .content_type = "text/plain",
+                .body = kSmallBody,
             })
             .activeConnHandler(fallbackActiveHandler)
             .build());
