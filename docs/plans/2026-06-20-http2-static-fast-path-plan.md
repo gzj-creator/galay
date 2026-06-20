@@ -381,7 +381,7 @@ rtk git add <modified files>
 rtk git commit -m "feat: 支持 HTTP2 静态文件 GET HEAD Range"
 ```
 
-## [ ] Task 8: 写路径批处理与 ready queue 优化
+## [x] Task 8: 写路径批处理与 ready queue 优化
 
 **Files:**
 - Modify: `src/galay-http2/kernel/stream_manager.h`

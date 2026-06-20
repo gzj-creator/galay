@@ -9,6 +9,9 @@ GALAY_PORT="${GALAY_PORT:-9080}"
 NGHTTPD_PORT="${NGHTTPD_PORT:-9081}"
 HOST="${HOST:-127.0.0.1}"
 MODE="${1:---post-echo}"
+if [[ "$MODE" == "--static-empty" ]]; then
+    MODE="--galay-static-empty"
+fi
 
 DURATION="${DURATION:-10}"
 WARM_UP="${WARM_UP:-2}"
@@ -115,34 +118,31 @@ run_h2load_case() {
     sample_resources "$server_pid" "$samples" &
     sample_pid="$!"
 
-    local h2load_window_args=()
+    local h2load_args=()
+    h2load_args=(-t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS")
     if [[ -n "$H2LOAD_WINDOW_BITS" ]]; then
-        h2load_window_args=(-w"$H2LOAD_WINDOW_BITS")
+        h2load_args+=(-w"$H2LOAD_WINDOW_BITS")
     fi
 
     set +e
     if [[ -n "$H2LOAD_REQUESTS" ]]; then
         if [[ "$method" == "POST" ]]; then
             h2load -n"$H2LOAD_REQUESTS" --histogram \
-                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
-                "${h2load_window_args[@]}" \
+                "${h2load_args[@]}" \
                 -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
         else
             h2load -n"$H2LOAD_REQUESTS" --histogram \
-                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
-                "${h2load_window_args[@]}" \
+                "${h2load_args[@]}" \
                 "http://$HOST:$port$path" >"$output" 2>&1
         fi
     else
         if [[ "$method" == "POST" ]]; then
             h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
-                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
-                "${h2load_window_args[@]}" \
+                "${h2load_args[@]}" \
                 -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
         else
             h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
-                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
-                "${h2load_window_args[@]}" \
+                "${h2load_args[@]}" \
                 "http://$HOST:$port$path" >"$output" 2>&1
         fi
     fi
@@ -175,7 +175,7 @@ if [[ "$MODE" != "--post-echo" &&
       "$MODE" != "--galay-static-empty" &&
       "$MODE" != "--galay-static-small" &&
       "$MODE" != "--static-files" ]]; then
-    echo "usage: $0 [--post-echo|--galay-static-empty|--galay-static-small|--static-files]" >&2
+    echo "usage: $0 [--post-echo|--galay-static-empty|--static-empty|--galay-static-small|--static-files]" >&2
     exit 2
 fi
 
