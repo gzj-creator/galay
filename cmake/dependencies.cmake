@@ -128,6 +128,44 @@ function(galay_ensure_openssl)
         return()
     endif()
 
+    set(_galay_openssl_cache_stale OFF)
+    if(OPENSSL_INCLUDE_DIR AND NOT EXISTS "${OPENSSL_INCLUDE_DIR}/openssl/err.h")
+        set(_galay_openssl_cache_stale ON)
+    endif()
+    if(OPENSSL_SSL_LIBRARY AND NOT EXISTS "${OPENSSL_SSL_LIBRARY}")
+        set(_galay_openssl_cache_stale ON)
+    endif()
+    if(OPENSSL_CRYPTO_LIBRARY AND NOT EXISTS "${OPENSSL_CRYPTO_LIBRARY}")
+        set(_galay_openssl_cache_stale ON)
+    endif()
+
+    if(_galay_openssl_cache_stale)
+        message(STATUS "Discarding stale cached OpenSSL paths")
+        unset(OPENSSL_INCLUDE_DIR CACHE)
+        unset(OPENSSL_SSL_LIBRARY CACHE)
+        unset(OPENSSL_CRYPTO_LIBRARY CACHE)
+    endif()
+
+    if(OPENSSL_ROOT_DIR AND NOT EXISTS "${OPENSSL_ROOT_DIR}/include/openssl/err.h")
+        message(STATUS "Discarding stale cached OPENSSL_ROOT_DIR")
+        unset(OPENSSL_ROOT_DIR CACHE)
+    endif()
+
+    if(APPLE AND NOT OPENSSL_ROOT_DIR)
+        foreach(_galay_openssl_prefix IN ITEMS
+            /opt/homebrew/opt/openssl@3
+            /usr/local/opt/openssl@3
+            /opt/homebrew/opt/openssl
+            /usr/local/opt/openssl
+        )
+            if(EXISTS "${_galay_openssl_prefix}/include/openssl/err.h")
+                set(OPENSSL_ROOT_DIR "${_galay_openssl_prefix}" CACHE PATH
+                    "OpenSSL installation root" FORCE)
+                break()
+            endif()
+        endforeach()
+    endif()
+
     find_package(OpenSSL REQUIRED)
 
     if(NOT TARGET OpenSSL::SSL OR NOT TARGET OpenSSL::Crypto)
