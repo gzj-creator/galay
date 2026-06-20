@@ -422,7 +422,7 @@ rtk git add <modified files>
 rtk git commit -m "perf: 优化 HTTP2 ready stream 调度"
 ```
 
-## [ ] Task 9: 评估 h2c sendfile payload 特化
+## [x] Task 9: 评估 h2c sendfile payload 特化
 
 **Files:**
 - Modify only if benchmark proves useful: `src/galay-http2/kernel/stream_manager.h`
