@@ -4,9 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-"$ROOT_DIR/build"}"
 GALAY_SERVER="${GALAY_SERVER:-"$BUILD_DIR/benchmark/http2/benchmark_http2_h2_multiplex_server_throughput"}"
+GALAY_STATIC_SERVER="${GALAY_STATIC_SERVER:-"$BUILD_DIR/benchmark/http2/benchmark_http2_h2_static_fast_path"}"
 GALAY_PORT="${GALAY_PORT:-9080}"
 NGHTTPD_PORT="${NGHTTPD_PORT:-9081}"
 HOST="${HOST:-127.0.0.1}"
+MODE="${1:---post-echo}"
 
 DURATION="${DURATION:-10}"
 WARM_UP="${WARM_UP:-2}"
@@ -101,6 +103,8 @@ run_h2load_case() {
     local label="$1"
     local port="$2"
     local server_pid="$3"
+    local path="$4"
+    local method="$5"
     local output="$TMP_DIR/${label}.h2load.txt"
     local samples="$TMP_DIR/${label}.ps.txt"
     local sample_pid rc req_s p95 p99 failed errored timeout avg_cpu max_cpu max_rss
@@ -110,9 +114,15 @@ run_h2load_case() {
     sample_pid="$!"
 
     set +e
-    h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
-        -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
-        -d "$PAYLOAD_FILE" "http://$HOST:$port/echo" >"$output" 2>&1
+    if [[ "$method" == "POST" ]]; then
+        h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
+            -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
+            -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
+    else
+        h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
+            -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
+            "http://$HOST:$port$path" >"$output" 2>&1
+    fi
     rc="$?"
     set -e
 
@@ -138,9 +148,19 @@ require_cmd h2load
 require_cmd nghttpd
 require_cmd ps
 
-if [[ ! -x "$GALAY_SERVER" ]]; then
+if [[ "$MODE" != "--post-echo" && "$MODE" != "--galay-static-empty" ]]; then
+    echo "usage: $0 [--post-echo|--galay-static-empty]" >&2
+    exit 2
+fi
+
+if [[ "$MODE" == "--post-echo" && ! -x "$GALAY_SERVER" ]]; then
     echo "missing executable: $GALAY_SERVER" >&2
     echo "build it first: cmake --build build --target benchmark_http2_h2_multiplex_server_throughput" >&2
+    exit 1
+fi
+if [[ "$MODE" == "--galay-static-empty" && ! -x "$GALAY_STATIC_SERVER" ]]; then
+    echo "missing executable: $GALAY_STATIC_SERVER" >&2
+    echo "build it first: cmake --build build --target benchmark_http2_h2_static_fast_path" >&2
     exit 1
 fi
 
@@ -150,27 +170,44 @@ echo "HTTP/2 h2load external comparison"
 echo "h2load:  $(h2load --version)"
 echo "nghttpd: $(nghttpd --version)"
 echo "payload: $(wc -c <"$PAYLOAD_FILE" | tr -d ' ') bytes"
-echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS -d payload"
+if [[ "$MODE" == "--post-echo" ]]; then
+    echo "mode:    POST echo"
+    echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS -d payload"
+else
+    echo "mode:    GET static empty"
+    echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS"
+fi
 echo "server:  $SERVER_IO_THREADS IO workers, max_streams=$SERVER_MAX_STREAMS"
 echo
 printf "%-22s %12s %10s %10s %8s %8s %8s %10s %10s %12s %6s\n" \
     "scenario" "req/s" "p95" "p99" "failed" "errored" "timeout" \
     "avg_cpu%" "max_cpu%" "max_rss_mib" "rc"
 
-"$GALAY_SERVER" "$GALAY_PORT" "$SERVER_IO_THREADS" "$SERVER_MAX_STREAMS" 0 \
-    >"$TMP_DIR/galay.server.log" 2>&1 &
-GALAY_PID="$!"
-wait_for_port "$GALAY_PORT"
-run_h2load_case "galay-post-echo" "$GALAY_PORT" "$GALAY_PID"
-kill "$GALAY_PID" 2>/dev/null || true
-wait "$GALAY_PID" 2>/dev/null || true
-GALAY_PID=""
+if [[ "$MODE" == "--post-echo" ]]; then
+    "$GALAY_SERVER" "$GALAY_PORT" "$SERVER_IO_THREADS" "$SERVER_MAX_STREAMS" 0 \
+        >"$TMP_DIR/galay.server.log" 2>&1 &
+    GALAY_PID="$!"
+    wait_for_port "$GALAY_PORT"
+    run_h2load_case "galay-post-echo" "$GALAY_PORT" "$GALAY_PID" "/echo" "POST"
+    kill "$GALAY_PID" 2>/dev/null || true
+    wait "$GALAY_PID" 2>/dev/null || true
+    GALAY_PID=""
 
-nghttpd --no-tls -a "$HOST" -n "$SERVER_IO_THREADS" -m "$SERVER_MAX_STREAMS" \
-    --echo-upload "$NGHTTPD_PORT" >"$TMP_DIR/nghttpd.server.log" 2>&1 &
-NGHTTPD_PID="$!"
-wait_for_port "$NGHTTPD_PORT"
-run_h2load_case "nghttpd-echo-upload" "$NGHTTPD_PORT" "$NGHTTPD_PID"
-kill "$NGHTTPD_PID" 2>/dev/null || true
-wait "$NGHTTPD_PID" 2>/dev/null || true
-NGHTTPD_PID=""
+    nghttpd --no-tls -a "$HOST" -n "$SERVER_IO_THREADS" -m "$SERVER_MAX_STREAMS" \
+        --echo-upload "$NGHTTPD_PORT" >"$TMP_DIR/nghttpd.server.log" 2>&1 &
+    NGHTTPD_PID="$!"
+    wait_for_port "$NGHTTPD_PORT"
+    run_h2load_case "nghttpd-echo-upload" "$NGHTTPD_PORT" "$NGHTTPD_PID" "/echo" "POST"
+    kill "$NGHTTPD_PID" 2>/dev/null || true
+    wait "$NGHTTPD_PID" 2>/dev/null || true
+    NGHTTPD_PID=""
+else
+    "$GALAY_STATIC_SERVER" "$GALAY_PORT" "$SERVER_IO_THREADS" "$SERVER_MAX_STREAMS" 0 \
+        >"$TMP_DIR/galay-static.server.log" 2>&1 &
+    GALAY_PID="$!"
+    wait_for_port "$GALAY_PORT"
+    run_h2load_case "galay-static-empty" "$GALAY_PORT" "$GALAY_PID" "/echo" "GET"
+    kill "$GALAY_PID" 2>/dev/null || true
+    wait "$GALAY_PID" 2>/dev/null || true
+    GALAY_PID=""
+fi

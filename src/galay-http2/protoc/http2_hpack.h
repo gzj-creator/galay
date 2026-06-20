@@ -201,12 +201,21 @@ private:
 class HpackDecoder
 {
 public:
+    struct RequestTarget {
+        std::string method;
+        std::string path;
+    };
+
     HpackDecoder(size_t max_table_size = kDefaultHeaderTableSize);
 
     // 解码头部块
     std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> decode(const uint8_t* data, size_t length);
     std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> decode(const std::string& data) {
         return decode(reinterpret_cast<const uint8_t*>(data.data()), data.size());
+    }
+    std::expected<RequestTarget, Http2ErrorCode> decodeRequestTarget(const uint8_t* data, size_t length);
+    std::expected<RequestTarget, Http2ErrorCode> decodeRequestTarget(const std::string& data) {
+        return decodeRequestTarget(reinterpret_cast<const uint8_t*>(data.data()), data.size());
     }
 
     // 设置动态表最大大小

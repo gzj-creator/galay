@@ -230,6 +230,7 @@ struct Http2RuntimeConfig
     std::chrono::milliseconds graceful_shutdown_timeout{5000};
     uint32_t flow_control_target_window = kDefaultInitialWindowSize;
     Http2FlowControlStrategy flow_control_strategy;
+    std::vector<H2StaticRoute> static_routes;
 
     template<typename Config>
     void from(const Config& config) {
@@ -256,6 +257,12 @@ struct Http2RuntimeConfig
         }
         if constexpr (requires { config.flow_control_strategy; }) {
             flow_control_strategy = config.flow_control_strategy;
+        }
+        if constexpr (requires { config.static_routes; }) {
+            static_routes = config.static_routes;
+            for (auto& route : static_routes) {
+                prepareH2StaticRoute(route);
+            }
         }
     }
 };

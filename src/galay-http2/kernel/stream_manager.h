@@ -593,6 +593,10 @@ private:
         m_reject_new_streams = false;
         m_last_frame_recv_at = std::chrono::steady_clock::now();
         m_waiting_ping_ack = false;
+        m_static_response_batch.clear();
+        if (m_static_response_batch.capacity() < 64) {
+            m_static_response_batch.reserve(64);
+        }
 
         if (m_next_local_stream_id == 0) {
             m_next_local_stream_id = m_conn.isClient() ? 3 : 2;
@@ -954,6 +958,7 @@ private:
                         dispatchStreamFrame(std::move(*frame));
                     }
 
+                    flushStaticResponseBatch();
                     processPendingActions();
                     drainRetiredStreams();
                     flushActiveStreams();
@@ -1150,6 +1155,7 @@ private:
                         dispatchStreamFrame(std::move(*frame));
                     }
 
+                    flushStaticResponseBatch();
                     had_ready_active_streams = had_ready_active_streams || !m_active_batch.empty();
                     processPendingActions();
                     flushActiveStreams();
@@ -1739,9 +1745,107 @@ private:
         m_conn.setExpectingContinuation(false);
     }
 
-    void completeReceivedHeaders(const Http2Stream::ptr& stream, bool end_stream) {
-        decodeBufferedHeaders(stream);
+    const H2StaticRoute* findStaticRoute(std::string_view path) const {
+        const auto& routes = m_conn.runtimeConfig().static_routes;
+        for (const auto& route : routes) {
+            if (route.path == path) {
+                return &route;
+            }
+        }
+        return nullptr;
+    }
 
+    const H2StaticRoute* findStaticRoute(const Http2Request& request) const {
+        return findStaticRoute(request.path);
+    }
+
+    const H2StaticRoute* findStaticEmptyResponseRoute(std::string_view method,
+                                                      std::string_view path) const {
+        const bool is_get = method == "GET";
+        const bool is_head = method == "HEAD";
+        if (!is_get && !is_head) {
+            return nullptr;
+        }
+
+        const auto* route = findStaticRoute(path);
+        if (route == nullptr) {
+            return nullptr;
+        }
+        if (is_head && !route->response.allow_head) {
+            return nullptr;
+        }
+        if (!route->response.body.empty()) {
+            return nullptr;
+        }
+        return route;
+    }
+
+    bool trySendStaticEmptyResponse(uint32_t stream_id,
+                                    std::string_view method,
+                                    std::string_view path) {
+        const auto* route = findStaticEmptyResponseRoute(method, path);
+        if (route == nullptr) {
+            return false;
+        }
+
+        auto payload = route->encoded_headers
+            ? route->encoded_headers
+            : encodeH2StaticResponseHeaders(route->response);
+        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+            stream_id, payload->size(), true, true);
+        m_static_response_batch.push_back(
+            Http2OutgoingFrame::segmentedShared(std::move(header_bytes), std::move(payload)));
+        return true;
+    }
+
+    bool trySendStaticEmptyResponse(uint32_t stream_id,
+                                    const std::vector<Http2HeaderField>& fields) {
+        std::string_view method;
+        std::string_view path;
+        for (const auto& field : fields) {
+            if (field.name == ":method") {
+                method = field.value;
+            } else if (field.name == ":path") {
+                path = field.value;
+            }
+        }
+        if (method.empty() || path.empty()) {
+            return false;
+        }
+        return trySendStaticEmptyResponse(stream_id, method, path);
+    }
+
+    bool trySendStaticEmptyResponse(const Http2Stream::ptr& stream) {
+        if (m_conn.isClient() || !stream || !stream->isRequestCompleted()) {
+            return false;
+        }
+
+        const auto& request = stream->request();
+        const bool is_get = request.method == "GET";
+        const bool is_head = request.method == "HEAD";
+        if (!is_get && !is_head) {
+            return false;
+        }
+
+        const auto* route = findStaticRoute(request);
+        if (route == nullptr) {
+            return false;
+        }
+        if (is_head && !route->response.allow_head) {
+            return false;
+        }
+        if (!route->response.body.empty()) {
+            return false;
+        }
+
+        auto header_block = route->encoded_headers
+            ? route->encoded_headers
+            : encodeH2StaticResponseHeaders(route->response);
+        stream->sendEncodedHeaders(std::move(header_block), true, true);
+        return true;
+    }
+
+    void completeDecodedHeaders(const Http2Stream::ptr& stream, bool end_stream) {
         if (m_conn.isClient()) {
             stream->consumeDecodedHeadersAsResponse();
             auto events = Http2StreamEvent::HeadersReady;
@@ -1759,6 +1863,9 @@ private:
             stream->markRequestCompleted();
             events |= Http2StreamEvent::RequestComplete;
         }
+        if (trySendStaticEmptyResponse(stream)) {
+            return;
+        }
         if (m_active_conn_mode) {
             if (shouldDeferHeadersOnlyActiveDelivery(stream, end_stream)) {
                 stream->m_pending_events |= events;
@@ -1768,6 +1875,11 @@ private:
         } else {
             queueStreamHandler(stream);
         }
+    }
+
+    void completeReceivedHeaders(const Http2Stream::ptr& stream, bool end_stream) {
+        decodeBufferedHeaders(stream);
+        completeDecodedHeaders(stream, end_stream);
     }
 
     void applyRecvWindowUpdate(const Http2Stream::ptr& stream, uint32_t stream_id, size_t data_size) {
@@ -1837,7 +1949,60 @@ private:
             return false;
         }
 
-        auto stream = findOrCreateHeadersStream(stream_id);
+        auto stream = findAttachedStream(stream_id);
+        if (!stream) {
+            if (m_reject_new_streams ||
+                (m_conn.isGoawaySent() && m_conn.goawayLastStreamId() != kMaxStreamId)) {
+                enqueueRstStreamAction(stream_id, Http2ErrorCode::RefusedStream);
+                return true;
+            }
+            if (stream_id <= m_conn.lastPeerStreamId()) {
+                enqueueGoawayAction(Http2ErrorCode::ProtocolError);
+                return true;
+            }
+            if (m_conn.streamCount() >= m_conn.localSettings().max_concurrent_streams) {
+                enqueueRstStreamAction(stream_id, Http2ErrorCode::RefusedStream);
+                return true;
+            }
+
+            const bool end_headers = frame_view.endHeaders();
+            const bool end_stream = frame_view.endStream();
+            if (end_headers) {
+                auto payload = frame_view.payload();
+                if (end_stream && !m_conn.runtimeConfig().static_routes.empty()) {
+                    auto decoder_snapshot = m_conn.decoder();
+                    auto target = m_conn.decoder().decodeRequestTarget(
+                        reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
+                    if (!target) {
+                        enqueueGoawayAction(target.error());
+                        return true;
+                    }
+                    if (trySendStaticEmptyResponse(stream_id, target->method, target->path)) {
+                        m_conn.setLastPeerStreamId(stream_id);
+                        return true;
+                    }
+                    m_conn.decoder() = std::move(decoder_snapshot);
+                }
+
+                auto fields = m_conn.decoder().decode(
+                    reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
+                if (!fields) {
+                    enqueueGoawayAction(fields.error());
+                    return true;
+                }
+
+                stream = createStreamInternal(stream_id);
+                m_conn.setLastPeerStreamId(stream_id);
+                stream->onHeadersReceived(end_stream);
+                stream->setDecodedHeaders(std::move(*fields));
+                completeDecodedHeaders(stream, end_stream);
+                tryRetireClientStream(stream);
+                return true;
+            }
+
+            stream = createStreamInternal(stream_id);
+            m_conn.setLastPeerStreamId(stream_id);
+        }
         if (!stream) {
             return true;
         }
@@ -2155,6 +2320,14 @@ private:
         }
     }
 
+    void flushStaticResponseBatch() {
+        if (m_static_response_batch.empty()) {
+            return;
+        }
+        m_send_channel.sendBatch(std::move(m_static_response_batch));
+        m_static_response_batch.clear();
+    }
+
     /**
      * @brief 入队 GOAWAY 帧
      */
@@ -2319,6 +2492,7 @@ private:
 
     // 发送通道：空指针表示关闭信号
     MpscChannel<Http2OutgoingFrame> m_send_channel;
+    std::vector<Http2OutgoingFrame> m_static_response_batch;
 
     // 待处理动作队列
     std::deque<PendingAction> m_pending_actions;

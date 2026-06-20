@@ -5443,4 +5443,124 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
     return headers;
 }
 
+std::expected<HpackDecoder::RequestTarget, Http2ErrorCode>
+HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
+{
+    RequestTarget target;
+    const uint8_t* end = data + length;
+    size_t header_list_size = 0;
+
+    auto record_field = [&](const Http2HeaderField& field) -> std::expected<void, Http2ErrorCode> {
+        header_list_size += field.size();
+        if (header_list_size > m_max_header_list_size) {
+            return std::unexpected(Http2ErrorCode::CompressionError);
+        }
+        if (field.name == ":method") {
+            target.method = field.value;
+        } else if (field.name == ":path") {
+            target.path = field.value;
+        }
+        return {};
+    };
+
+    while (data < end) {
+        uint8_t byte = *data;
+
+        if (byte & 0x80) {
+            auto index_result = decodeInteger(data, end, 7);
+            if (!index_result) {
+                return std::unexpected(index_result.error());
+            }
+
+            const Http2HeaderField* field = getField(*index_result);
+            if (!field) {
+                return std::unexpected(Http2ErrorCode::CompressionError);
+            }
+            auto recorded = record_field(*field);
+            if (!recorded) {
+                return std::unexpected(recorded.error());
+            }
+        }
+        else if (byte & 0x40) {
+            auto index_result = decodeInteger(data, end, 6);
+            if (!index_result) {
+                return std::unexpected(index_result.error());
+            }
+
+            std::string name;
+            if (*index_result > 0) {
+                const Http2HeaderField* field = getField(*index_result);
+                if (!field) {
+                    return std::unexpected(Http2ErrorCode::CompressionError);
+                }
+                name = field->name;
+            } else {
+                auto name_result = decodeString(data, end);
+                if (!name_result) {
+                    return std::unexpected(name_result.error());
+                }
+                name = std::move(*name_result);
+            }
+
+            auto value_result = decodeString(data, end);
+            if (!value_result) {
+                return std::unexpected(value_result.error());
+            }
+
+            Http2HeaderField field{std::move(name), std::move(*value_result)};
+            auto recorded = record_field(field);
+            if (!recorded) {
+                return std::unexpected(recorded.error());
+            }
+            m_dynamic_table.add(field);
+        }
+        else if (byte & 0x20) {
+            auto size_result = decodeInteger(data, end, 5);
+            if (!size_result) {
+                return std::unexpected(size_result.error());
+            }
+
+            if (*size_result > m_max_table_size) {
+                return std::unexpected(Http2ErrorCode::CompressionError);
+            }
+
+            m_dynamic_table.setMaxSize(*size_result);
+        }
+        else {
+            auto index_result = decodeInteger(data, end, 4);
+            if (!index_result) {
+                return std::unexpected(index_result.error());
+            }
+
+            std::string name;
+            if (*index_result > 0) {
+                const Http2HeaderField* field = getField(*index_result);
+                if (!field) {
+                    return std::unexpected(Http2ErrorCode::CompressionError);
+                }
+                name = field->name;
+            } else {
+                auto name_result = decodeString(data, end);
+                if (!name_result) {
+                    return std::unexpected(name_result.error());
+                }
+                name = std::move(*name_result);
+            }
+
+            auto value_result = decodeString(data, end);
+            if (!value_result) {
+                return std::unexpected(value_result.error());
+            }
+
+            Http2HeaderField field{std::move(name), std::move(*value_result)};
+            auto recorded = record_field(field);
+            if (!recorded) {
+                return std::unexpected(recorded.error());
+            }
+        }
+    }
+
+    return target;
+}
+
 } // namespace galay::http2

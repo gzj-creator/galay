@@ -26,6 +26,12 @@ int main() {
     assert(decoded.has_value());
     assert(decoded.value() == headers);
 
+    HpackDecoder target_decoder;
+    auto target = target_decoder.decodeRequestTarget(block);
+    assert(target.has_value());
+    assert(target->method == "GET");
+    assert(target->path == "/");
+
     // 2) Dynamic table size update contract
     encoder.setMaxTableSize(128);
     std::vector<Http2HeaderField> headers2 = {
@@ -35,6 +41,9 @@ int main() {
     auto decoded2 = decoder.decode(block2);
     assert(decoded2.has_value());
     assert(decoder.dynamicTable().maxSize() == 128);
+    auto target2 = target_decoder.decodeRequestTarget(block2);
+    assert(target2.has_value());
+    assert(target_decoder.dynamicTable().maxSize() == 128);
 
     // 3) Header-list-size limit contract
     HpackDecoder limited_decoder;

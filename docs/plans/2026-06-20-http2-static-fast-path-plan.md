@@ -177,7 +177,7 @@ rtk git add src/galay-http2/server/http2_server.h test/http2/t87_h2static_surfac
 rtk git commit -m "feat: 增加 HTTP2 静态响应配置入口"
 ```
 
-## [ ] Task 4: 实现 HEADERS-only 静态空响应 fast path
+## [x] Task 4: 实现 HEADERS-only 静态空响应 fast path
 
 **Files:**
 - Modify: `src/galay-http2/server/http2_server.h`

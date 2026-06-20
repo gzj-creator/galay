@@ -103,30 +103,6 @@ inline Task<void> runDefaultHttp1FallbackLoop(const char* log_tag,
 using Http2ConnectionHandler = Http2StreamHandler;
 
 /**
- * @brief HTTP/2 静态响应配置。
- * @details 该结构仅描述 exact path 命中的预配置响应；具体发送路径由
- *          server/stream fast path 实现决定。body 由配置对象持有，builder
- *          会移动保存该字符串以避免额外拷贝。
- */
-struct H2StaticResponse
-{
-    int status = 200;                                     ///< HTTP status code，默认 200。
-    std::string content_type = "application/octet-stream"; ///< Content-Type，默认二进制。
-    std::string body;                                     ///< 静态响应 body，允许为空。
-    bool allow_head = true;                               ///< 是否允许 HEAD 复用该静态响应。
-};
-
-/**
- * @brief HTTP/2 exact path 静态路由配置。
- * @details path 按原始 `:path` 精确匹配，不在该配置层做 normalize 或 pattern match。
- */
-struct H2StaticRoute
-{
-    std::string path;             ///< 精确匹配的 request `:path`。
-    H2StaticResponse response;    ///< 命中后发送的静态响应。
-};
-
-/**
  * @brief h2c 服务器配置
  */
 struct H2cServerConfig
@@ -200,10 +176,7 @@ public:
      * @note 该接口只配置路由，不启动阻塞 I/O，也不改变 streamHandler/activeConnHandler API。
      */
     H2cServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
-        m_config.static_routes.push_back(H2StaticRoute{
-            .path = std::move(path),
-            .response = std::move(response),
-        });
+        m_config.static_routes.push_back(makeH2StaticRoute(std::move(path), std::move(response)));
         return *this;
     }
     H2cServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
@@ -564,9 +537,10 @@ private:
                 continue;
             }
 
-            // 阶段 13：把 h2c 连接处理任务投递到当前 IO 调度器
-            // Handle connection on the same scheduler
-            if (!scheduleTask(scheduler, handleConnection(std::move(client_socket)))) {
+            // 阶段 13：把 h2c 连接处理任务轮询分发到 IO 调度器，避免 loopback
+            // SO_REUSEPORT 哈希倾斜时所有连接集中在单个 accept scheduler。
+            auto* target_scheduler = m_runtime.getNextIOScheduler();
+            if (!scheduleTask(target_scheduler, handleConnection(std::move(client_socket)))) {
                 HTTP_LOG_ERROR("[h2c] [schedule-fail]", "handle-connection");
                 co_await client_socket.close();
             }
@@ -960,10 +934,7 @@ public:
      * @note TLS 路径始终经用户态加密；该配置入口不启用 kernel sendfile。
      */
     H2ServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
-        m_config.static_routes.push_back(H2StaticRoute{
-            .path = std::move(path),
-            .response = std::move(response),
-        });
+        m_config.static_routes.push_back(makeH2StaticRoute(std::move(path), std::move(response)));
         return *this;
     }
     H2Server build() const;

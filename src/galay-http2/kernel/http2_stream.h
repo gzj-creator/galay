@@ -399,6 +399,57 @@ matchHttp2RequestCommonHeader(std::string_view name) {
 } // namespace detail
 
 /**
+ * @brief HTTP/2 静态响应配置。
+ * @details 该结构描述 exact path 命中的预配置响应。body 由配置对象持有；
+ *          static fast path 会复用预编码 header block，避免热路径重复 HPACK 编码。
+ */
+struct H2StaticResponse
+{
+    int status = 200;                                      ///< HTTP status code，默认 200。
+    std::string content_type = "application/octet-stream"; ///< Content-Type，默认二进制。
+    std::string body;                                      ///< 静态响应 body，允许为空。
+    bool allow_head = true;                                ///< 是否允许 HEAD 复用该静态响应。
+};
+
+/**
+ * @brief HTTP/2 exact path 静态路由配置。
+ * @details path 按原始 `:path` 精确匹配；encoded_headers 由 builder/runtime config
+ *          预先填充，运行时只读复用。
+ */
+struct H2StaticRoute
+{
+    std::string path;                                      ///< 精确匹配的 request `:path`。
+    H2StaticResponse response;                             ///< 命中后发送的静态响应。
+    std::shared_ptr<const std::string> encoded_headers;     ///< 预编码 HPACK 响应头块。
+};
+
+inline std::shared_ptr<const std::string> encodeH2StaticResponseHeaders(
+    const H2StaticResponse& response) {
+    HpackEncoder encoder;
+    auto block = encoder.encodeStateless({
+        {":status", std::to_string(response.status)},
+        {"content-type", response.content_type},
+        {"content-length", std::to_string(response.body.size())},
+    });
+    return std::make_shared<const std::string>(std::move(block));
+}
+
+inline void prepareH2StaticRoute(H2StaticRoute& route) {
+    if (!route.encoded_headers) {
+        route.encoded_headers = encodeH2StaticResponseHeaders(route.response);
+    }
+}
+
+inline H2StaticRoute makeH2StaticRoute(std::string path, H2StaticResponse response) {
+    H2StaticRoute route{
+        .path = std::move(path),
+        .response = std::move(response),
+    };
+    prepareH2StaticRoute(route);
+    return route;
+}
+
+/**
  * @brief HTTP/2 请求结构
  */
 struct Http2Request
