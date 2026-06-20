@@ -598,7 +598,7 @@ constexpr bool hasHttp2StreamEvent(Http2StreamEvent events, Http2StreamEvent eve
     return (static_cast<U>(events & event) != 0);
 }
 
-class Http2Stream
+class Http2Stream : public std::enable_shared_from_this<Http2Stream>
 {
 public:
     using ptr = std::shared_ptr<Http2Stream>;
@@ -631,6 +631,35 @@ public:
 
     private:
         Http2OutgoingFrame::WaiterPtr m_waiter;
+        galay::kernel::AsyncWaiterAwaitable<void> m_wait_awaitable;
+    };
+
+    class CompletionAwaitable
+        : public galay::kernel::TimeoutSupport<CompletionAwaitable>
+    {
+    public:
+        CompletionAwaitable(std::shared_ptr<Http2Stream> keepalive,
+                            galay::kernel::AsyncWaiter<void>* waiter)
+            : m_keepalive(std::move(keepalive))
+            , m_wait_awaitable(waiter)
+        {
+        }
+
+        bool await_ready() const noexcept {
+            return m_wait_awaitable.await_ready();
+        }
+
+        template<typename Handle>
+        bool await_suspend(Handle handle) noexcept {
+            return m_wait_awaitable.await_suspend(handle);
+        }
+
+        std::expected<void, galay::kernel::IOError> await_resume() {
+            return m_wait_awaitable.await_resume();
+        }
+
+    private:
+        std::shared_ptr<Http2Stream> m_keepalive;
         galay::kernel::AsyncWaiterAwaitable<void> m_wait_awaitable;
     };
     
@@ -925,12 +954,12 @@ public:
         return m_response_completed;
     }
 
-    galay::kernel::AsyncWaiterAwaitable<void> waitRequestComplete() {
-        return m_request_waiter.wait();
+    CompletionAwaitable waitRequestComplete() {
+        return CompletionAwaitable(shared_from_this(), &m_request_waiter);
     }
 
-    galay::kernel::AsyncWaiterAwaitable<void> waitResponseComplete() {
-        return m_response_waiter.wait();
+    CompletionAwaitable waitResponseComplete() {
+        return CompletionAwaitable(shared_from_this(), &m_response_waiter);
     }
 
     // ==================== 发送接口 ====================
