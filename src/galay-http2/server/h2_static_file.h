@@ -40,6 +40,7 @@ struct H2StaticFileLookup {
     std::string content_type = "application/octet-stream";
     bool body_cached = false;
     std::shared_ptr<const std::string> body;
+    std::shared_ptr<const std::string> encoded_headers;
     std::vector<Http2HeaderField> headers;
     uintmax_t range_start = 0;
     uintmax_t range_end = 0;
@@ -54,6 +55,17 @@ struct H2StaticFileMount {
 };
 
 H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig config);
+
+/**
+ * @brief Encode an HTTP/2 static file response header block.
+ * @param status HTTP response status code.
+ * @param headers Already materialized response headers, without `:status`.
+ * @return Shared HPACK header block suitable for reuse by static file send paths.
+ * @note The encoder is stateless/no-index, so the returned block is connection-independent.
+ */
+std::shared_ptr<const std::string> encodeH2StaticFileHeaders(
+    int status,
+    const std::vector<Http2HeaderField>& headers);
 
 class H2StaticFileCache {
 public:
@@ -70,6 +82,8 @@ private:
         std::string content_type;
         bool body_cached = false;
         std::shared_ptr<const std::string> body;
+        std::shared_ptr<const std::string> encoded_headers;
+        std::vector<Http2HeaderField> headers;
     };
 
     std::filesystem::path normalizeRequestPath(const std::string& request_path) const;
@@ -80,6 +94,7 @@ private:
 
     H2StaticFileConfig m_config;
     std::filesystem::path m_root;
+    std::unordered_map<std::string, std::string> m_request_path_cache;
     std::unordered_map<std::string, Entry> m_cache;
 };
 

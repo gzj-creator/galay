@@ -41,6 +41,7 @@
 
 ### Changed
 
+- HTTP/2 静态文件 GET fast path 复用预编码响应头、连接私有静态文件 cache 与共享 DATA payload，减少静态文件路径中的 HPACK 编码、文件路径规范化和 body 拷贝成本。
 - HTTP/2 h2c accept 后的连接处理改为轮询分发到 IO scheduler，避免 macOS loopback/SO_REUSEPORT 哈希倾斜时压测连接集中到单个 worker。
 - HTTP/2 `frame_disp` 升级为 typed result/action 模型，补齐 frame stream id 约束、CONTINUATION 序列、WINDOW_UPDATE 0 增量、最小 stream lifecycle 与 GOAWAY 后新流拒绝策略。
 - HTTP/2 `out_sched` 改为 pending chunk queue + Deficit Round Robin 调度，避免 `std::sort(streams)` 改变调用方顺序和 `std::string::erase(0, chunk)` 搬移大 body，并新增 DATA bytes 调度路径提升热路径吞吐。
@@ -59,6 +60,7 @@
 
 ### Fixed
 
+- 修复 HTTP/2 静态文件 cache 共享可变状态在多 IO worker 下需要加锁的问题，改为每连接克隆 cache；同时归一化 query path cache key，避免长连接通过 query variant 放大缓存条目。
 - 修复 CMake OpenSSL 探测在 Homebrew 升级后复用失效 Cellar cache，导致 `openssl/err.h` 找不到的问题。
 - 修复 WSS `echoLoopConsume()` 状态机移动后仍持有旧对象 `message`/`opcode` 指针的问题，避免 WSS benchmark 服务端在回显循环进入下一轮读取时段错误。
 - 修复 MySQL 8 默认 `caching_sha2_password` 握手遇到 `mysql_native_password` 账号时返回 auth switch 导致连接失败的问题。

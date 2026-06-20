@@ -1823,18 +1823,6 @@ private:
         return relative;
     }
 
-    static std::shared_ptr<const std::string> encodeH2StaticFileHeaders(
-        int status,
-        const std::vector<Http2HeaderField>& headers) {
-        std::vector<Http2HeaderField> fields;
-        fields.reserve(headers.size() + 1);
-        fields.push_back({":status", std::to_string(status)});
-        fields.insert(fields.end(), headers.begin(), headers.end());
-        HpackEncoder encoder;
-        auto block = encoder.encodeStateless(fields);
-        return std::make_shared<const std::string>(std::move(block));
-    }
-
     static uintmax_t staticFileContentLength(const H2StaticFileLookup& lookup) {
         for (const auto& header : lookup.headers) {
             if (header.name != "content-length") {
@@ -1948,7 +1936,9 @@ private:
             }
         }
 
-        auto header_block = encodeH2StaticFileHeaders(lookup.status, lookup.headers);
+        auto header_block = lookup.encoded_headers
+            ? lookup.encoded_headers
+            : encodeH2StaticFileHeaders(lookup.status, lookup.headers);
         const bool headers_end_stream = !has_body;
         auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
             stream_id, header_block->size(), headers_end_stream, true);
@@ -2051,9 +2041,14 @@ private:
         m_static_response_batch.push_back(
             Http2OutgoingFrame::segmentedShared(std::move(header_bytes), std::move(payload)));
         if (!headers_end_stream) {
+            auto body = route->shared_body
+                ? route->shared_body
+                : std::make_shared<const std::string>(route->response.body);
+            auto data_header = Http2FrameBuilder::dataHeaderBytes(
+                stream_id, body->size(), true);
             m_static_response_batch.push_back(
-                Http2OutgoingFrame{Http2FrameBuilder::dataBytes(
-                    stream_id, route->response.body, true)});
+                Http2OutgoingFrame::segmentedShared(
+                    std::move(data_header), std::move(body)));
         }
         return true;
     }

@@ -268,6 +268,9 @@ struct Http2RuntimeConfig
         }
         if constexpr (requires { config.static_file_mounts; }) {
             static_file_mounts = config.static_file_mounts;
+            for (auto& mount : static_file_mounts) {
+                mount.cache = std::make_shared<H2StaticFileCache>(mount.config);
+            }
         }
     }
 };

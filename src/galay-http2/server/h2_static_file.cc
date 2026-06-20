@@ -7,6 +7,7 @@
 #include <chrono>
 #include <fstream>
 #include <sstream>
+#include <string_view>
 
 namespace galay::http2
 {
@@ -28,6 +29,15 @@ std::string extensionToMime(const std::filesystem::path& path)
         ext.erase(ext.begin());
     }
     return galay::http::MimeType::convertToMimeType(ext);
+}
+
+std::string stripQuery(std::string_view path)
+{
+    const auto query_pos = path.find('?');
+    if (query_pos == std::string_view::npos) {
+        return std::string(path);
+    }
+    return std::string(path.substr(0, query_pos));
 }
 
 std::shared_ptr<const std::string> readSmallFile(const std::filesystem::path& path,
@@ -76,6 +86,19 @@ H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig c
     return mount;
 }
 
+std::shared_ptr<const std::string> encodeH2StaticFileHeaders(
+    int status,
+    const std::vector<Http2HeaderField>& headers)
+{
+    std::vector<Http2HeaderField> fields;
+    fields.reserve(headers.size() + 1);
+    fields.push_back({":status", std::to_string(status)});
+    fields.insert(fields.end(), headers.begin(), headers.end());
+    HpackEncoder encoder;
+    auto block = encoder.encodeStateless(fields);
+    return std::make_shared<const std::string>(std::move(block));
+}
+
 H2StaticFileCache::H2StaticFileCache(H2StaticFileConfig config)
     : m_config(std::move(config))
 {
@@ -88,14 +111,23 @@ H2StaticFileCache::H2StaticFileCache(H2StaticFileConfig config)
 
 H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
 {
-    auto file_path = normalizeRequestPath(request.path);
-    if (file_path.empty()) {
-        return makeNotFound();
+    const auto cache_path = stripQuery(request.path);
+    std::string key;
+    if (auto cached = m_request_path_cache.find(cache_path);
+        cached != m_request_path_cache.end()) {
+        key = cached->second;
+    } else {
+        auto file_path = normalizeRequestPath(cache_path);
+        if (file_path.empty()) {
+            return makeNotFound();
+        }
+        key = file_path.string();
+        m_request_path_cache.emplace(cache_path, key);
     }
 
-    const auto key = file_path.string();
     auto it = m_cache.find(key);
     if (it == m_cache.end()) {
+        std::filesystem::path file_path(key);
         std::error_code ec;
         if (!std::filesystem::is_regular_file(file_path, ec) || ec) {
             return makeNotFound();
@@ -222,11 +254,16 @@ H2StaticFileLookup H2StaticFileCache::makeLookup(const Entry& entry, int status)
     lookup.content_type = entry.content_type;
     lookup.body_cached = status == 200 && entry.body_cached;
     lookup.body = lookup.body_cached ? entry.body : nullptr;
-    lookup.headers.push_back({"content-length", std::to_string(entry.file_size)});
-    lookup.headers.push_back({"content-type", entry.content_type});
-    lookup.headers.push_back({"accept-ranges", "bytes"});
-    if (m_config.enable_etag && !entry.etag.empty()) {
-        lookup.headers.push_back({"etag", entry.etag});
+    if (status == 200) {
+        lookup.headers = entry.headers;
+        lookup.encoded_headers = entry.encoded_headers;
+    } else {
+        lookup.headers.push_back({"content-length", std::to_string(entry.file_size)});
+        lookup.headers.push_back({"content-type", entry.content_type});
+        lookup.headers.push_back({"accept-ranges", "bytes"});
+        if (m_config.enable_etag && !entry.etag.empty()) {
+            lookup.headers.push_back({"etag", entry.etag});
+        }
     }
     return lookup;
 }
@@ -251,6 +288,13 @@ H2StaticFileCache::Entry H2StaticFileCache::loadEntry(
         entry.etag = galay::http::ETagGenerator::generateStrong(
             file_path, static_cast<size_t>(entry.file_size), entry.last_modified);
     }
+    entry.headers.push_back({"content-length", std::to_string(entry.file_size)});
+    entry.headers.push_back({"content-type", entry.content_type});
+    entry.headers.push_back({"accept-ranges", "bytes"});
+    if (m_config.enable_etag && !entry.etag.empty()) {
+        entry.headers.push_back({"etag", entry.etag});
+    }
+    entry.encoded_headers = encodeH2StaticFileHeaders(200, entry.headers);
     if (entry.file_size <= m_config.small_file_threshold) {
         entry.body = readSmallFile(file_path, entry.file_size);
         entry.body_cached = true;

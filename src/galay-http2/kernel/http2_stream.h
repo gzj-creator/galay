@@ -441,6 +441,7 @@ struct H2StaticRoute
     std::string path;                                      ///< 精确匹配的 request `:path`。
     H2StaticResponse response;                             ///< 命中后发送的静态响应。
     std::shared_ptr<const std::string> encoded_headers;     ///< 预编码 HPACK 响应头块。
+    std::shared_ptr<const std::string> shared_body;         ///< 预持有响应体，供 DATA frame 快路径复用。
 };
 
 inline std::shared_ptr<const std::string> encodeH2StaticResponseHeaders(
@@ -457,6 +458,9 @@ inline std::shared_ptr<const std::string> encodeH2StaticResponseHeaders(
 inline void prepareH2StaticRoute(H2StaticRoute& route) {
     if (!route.encoded_headers) {
         route.encoded_headers = encodeH2StaticResponseHeaders(route.response);
+    }
+    if (!route.response.body.empty() && !route.shared_body) {
+        route.shared_body = std::make_shared<const std::string>(route.response.body);
     }
 }
 

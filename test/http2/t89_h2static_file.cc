@@ -207,6 +207,17 @@ int main()
     assert(hit.body_cached);
     assert(hit.body && *hit.body == "hello");
     assert(!hit.etag.empty());
+    auto hit_again = cache.lookup(H2StaticFileRequest{.path = "/hello.txt"});
+    assert(hit.encoded_headers != nullptr);
+    assert(hit_again.encoded_headers == hit.encoded_headers);
+    auto hit_query_a = cache.lookup(H2StaticFileRequest{.path = "/hello.txt?x=1"});
+    auto hit_query_b = cache.lookup(H2StaticFileRequest{.path = "/hello.txt?x=2"});
+    assert(hit_query_a.status == 200);
+    assert(hit_query_b.status == 200);
+    assert(hit_query_a.encoded_headers == hit.encoded_headers);
+    assert(hit_query_b.encoded_headers == hit.encoded_headers);
+    assert(hit_query_a.body == hit.body);
+    assert(hit_query_b.body == hit.body);
     assert(headerValue(hit, "content-length") == "5");
     assert(headerValue(hit, "content-type") == "text/plain");
     assert(headerValue(hit, "etag") == hit.etag);
@@ -227,6 +238,40 @@ int main()
     auto escaped = cache.lookup(H2StaticFileRequest{.path = "/../secret.txt"});
     assert(escaped.status == 404);
     assert(escaped.body == nullptr);
+
+    H2cServerConfig static_config;
+    static_config.static_file_mounts.push_back(
+        makeH2StaticFileMount("/files", H2StaticFileConfig{.root = root}));
+    Http2RuntimeConfig runtime_a;
+    Http2RuntimeConfig runtime_b;
+    runtime_a.from(static_config);
+    runtime_b.from(static_config);
+    assert(runtime_a.static_file_mounts.size() == 1);
+    assert(runtime_b.static_file_mounts.size() == 1);
+    assert(static_config.static_file_mounts[0].cache != nullptr);
+    assert(runtime_a.static_file_mounts[0].cache != nullptr);
+    assert(runtime_b.static_file_mounts[0].cache != nullptr);
+    assert(runtime_a.static_file_mounts[0].cache != static_config.static_file_mounts[0].cache);
+    assert(runtime_b.static_file_mounts[0].cache != static_config.static_file_mounts[0].cache);
+    assert(runtime_a.static_file_mounts[0].cache != runtime_b.static_file_mounts[0].cache);
+
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    H2ServerConfig tls_static_config;
+    tls_static_config.static_file_mounts.push_back(
+        makeH2StaticFileMount("/files", H2StaticFileConfig{.root = root}));
+    Http2RuntimeConfig tls_runtime_a;
+    Http2RuntimeConfig tls_runtime_b;
+    tls_runtime_a.from(tls_static_config);
+    tls_runtime_b.from(tls_static_config);
+    assert(tls_runtime_a.static_file_mounts.size() == 1);
+    assert(tls_runtime_b.static_file_mounts.size() == 1);
+    assert(tls_static_config.static_file_mounts[0].cache != nullptr);
+    assert(tls_runtime_a.static_file_mounts[0].cache != nullptr);
+    assert(tls_runtime_b.static_file_mounts[0].cache != nullptr);
+    assert(tls_runtime_a.static_file_mounts[0].cache != tls_static_config.static_file_mounts[0].cache);
+    assert(tls_runtime_b.static_file_mounts[0].cache != tls_static_config.static_file_mounts[0].cache);
+    assert(tls_runtime_a.static_file_mounts[0].cache != tls_runtime_b.static_file_mounts[0].cache);
+#endif
 
     std::ofstream(root / "small.txt") << std::string(1024, 'a');
     std::ofstream(root / "medium.bin") << std::string(16 * 1024, 'm');
