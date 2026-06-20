@@ -147,6 +147,14 @@ H2OutboundSelection Http2ConnectionCore::flushOutbound(H2OutboundBudget budget,
     return selection;
 }
 
+H2OutboundBytesSelection Http2ConnectionCore::flushOutboundBytes(H2OutboundBudget budget,
+                                                                 H2SchedulerConfig config)
+{
+    auto selection = Http2OutboundScheduler::pickSendableBytes(budget, m_outbound_queues, config);
+    m_outbound_ready = hasOutboundWork();
+    return selection;
+}
+
 galay::kernel::Task<void> Http2ConnectionCore::run()
 {
     if (state() == State::Idle) {

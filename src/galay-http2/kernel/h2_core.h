@@ -130,6 +130,16 @@ public:
      */
     H2OutboundSelection flushOutbound(H2OutboundBudget budget, H2SchedulerConfig config = {});
 
+    /**
+     * @brief 立即调度当前出站队列并返回已序列化帧 bytes
+     * @details control/headers 从现有帧对象序列化，DATA 走 bytes 调度热路径；
+     *          不执行 I/O，不阻塞，适合生产写路径减少 DATA frame 对象分配。
+     * @param budget 本次发送预算
+     * @param config DRR 调度配置
+     * @return 本次选出的已序列化帧 bytes
+     */
+    H2OutboundBytesSelection flushOutboundBytes(H2OutboundBudget budget, H2SchedulerConfig config = {});
+
     galay::kernel::Task<void> run();
 
 private:

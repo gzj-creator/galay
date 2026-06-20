@@ -4,6 +4,7 @@
  */
 
 #include "galay-http2/kernel/h2_core.h"
+#include "galay-http2/builder/http2_frame_builder.h"
 #include <cassert>
 #include <iostream>
 
@@ -60,6 +61,31 @@ int main() {
     assert(unblocked.frames.size() == 1);
     assert(unblocked.frames[0]->isData());
     assert(unblocked.total_data_bytes == 4);
+
+    Http2ConnectionCore bytes_core;
+    bytes_core.enqueueData(3, "abcdefgh", true);
+    auto bytes = bytes_core.flushOutboundBytes(H2OutboundBudget{
+        .conn_window = 8,
+        .max_frame_size = 4
+    });
+    assert(bytes.frames.size() == 2);
+    assert(bytes.frames[0] == Http2FrameBuilder::dataBytes(3, "abcd", false));
+    assert(bytes.frames[1] == Http2FrameBuilder::dataBytes(3, "efgh", true));
+    assert(bytes.total_data_bytes == 8);
+    assert(!bytes_core.hasOutboundWork());
+
+    Http2ConnectionCore control_bytes_core;
+    Http2DataFrame invalid_data;
+    invalid_data.header().stream_id = 0;
+    auto invalid_result = control_bytes_core.receiveFrame(invalid_data);
+    assert(!invalid_result.ok);
+    auto control_bytes = control_bytes_core.flushOutboundBytes(H2OutboundBudget{
+        .conn_window = 0,
+        .max_frame_size = 4
+    });
+    assert(control_bytes.frames.size() == 1);
+    assert(control_bytes.frames[0].size() >= kHttp2FrameHeaderLength);
+    assert(!control_bytes_core.hasOutboundWork());
 
     std::cout << "T33-H2ConnectionCoreLifecycle PASS\n";
     return 0;

@@ -5,6 +5,7 @@
 
 #include "galay-http2/kernel/flow_control.h"
 #include "galay-http2/kernel/frame_disp.h"
+#include "galay-http2/kernel/h2_core.h"
 #include "galay-http2/kernel/out_sched.h"
 #include <chrono>
 #include <cstdint>
@@ -26,12 +27,20 @@ struct BenchResult
     size_t bytes_scheduler_bytes = 0;
     size_t bytes_scheduler_frames = 0;
     size_t bytes_scheduler_streams = 0;
+    size_t core_frame_bytes = 0;
+    size_t core_frame_frames = 0;
+    size_t core_frame_streams = 0;
+    size_t core_bytes_bytes = 0;
+    size_t core_bytes_frames = 0;
+    size_t core_bytes_streams = 0;
     size_t flow_ops = 0;
     size_t flow_rounds = 0;
     size_t dispatch_frames = 0;
     double elapsed_ms = 0.0;
     double scheduler_ms = 0.0;
     double bytes_scheduler_ms = 0.0;
+    double core_frame_ms = 0.0;
+    double core_bytes_ms = 0.0;
     double flow_ms = 0.0;
     double dispatch_ms = 0.0;
 };
@@ -97,6 +106,49 @@ bool runSchedulerPressure(size_t streams_count,
     return true;
 }
 
+bool runCoreFramePressure(size_t streams_count,
+                          size_t payload_bytes,
+                          size_t frame_bytes,
+                          BenchResult& result)
+{
+    Http2ConnectionCore core;
+    for (size_t i = 0; i < streams_count; ++i) {
+        core.enqueueData(static_cast<uint32_t>(1 + i * 2),
+                         std::string(payload_bytes, static_cast<char>('a' + (i % 26))),
+                         false,
+                         static_cast<uint8_t>((i % 4) + 1));
+    }
+
+    const size_t expected_bytes = streams_count * payload_bytes;
+    while (result.core_frame_bytes < expected_bytes) {
+        auto selected = core.flushOutbound(H2OutboundBudget{
+            .conn_window = static_cast<int32_t>(streams_count * frame_bytes),
+            .max_frame_size = static_cast<uint32_t>(frame_bytes)
+        }, H2SchedulerConfig{
+            .base_quantum = frame_bytes
+        });
+        if (selected.frames.empty()) {
+            std::cerr << "core frame flush made no progress\n";
+            return false;
+        }
+
+        result.core_frame_bytes += selected.total_data_bytes;
+        result.core_frame_frames += selected.frames.size();
+        for (const auto& frame : selected.frames) {
+            if (!frame->isData()) {
+                std::cerr << "core frame flush emitted non-DATA frame in DATA benchmark\n";
+                return false;
+            }
+        }
+    }
+    if (core.hasOutboundWork()) {
+        std::cerr << "core frame flush left outbound work after expected bytes\n";
+        return false;
+    }
+    result.core_frame_streams = streams_count;
+    return true;
+}
+
 bool runBytesSchedulerPressure(size_t streams_count,
                                size_t payload_bytes,
                                size_t frame_bytes,
@@ -126,6 +178,49 @@ bool runBytesSchedulerPressure(size_t streams_count,
         }
     }
     result.bytes_scheduler_streams = streams_count;
+    return true;
+}
+
+bool runCoreBytesPressure(size_t streams_count,
+                          size_t payload_bytes,
+                          size_t frame_bytes,
+                          BenchResult& result)
+{
+    Http2ConnectionCore core;
+    for (size_t i = 0; i < streams_count; ++i) {
+        core.enqueueData(static_cast<uint32_t>(1 + i * 2),
+                         std::string(payload_bytes, static_cast<char>('a' + (i % 26))),
+                         false,
+                         static_cast<uint8_t>((i % 4) + 1));
+    }
+
+    const size_t expected_bytes = streams_count * payload_bytes;
+    while (result.core_bytes_bytes < expected_bytes) {
+        auto selected = core.flushOutboundBytes(H2OutboundBudget{
+            .conn_window = static_cast<int32_t>(streams_count * frame_bytes),
+            .max_frame_size = static_cast<uint32_t>(frame_bytes)
+        }, H2SchedulerConfig{
+            .base_quantum = frame_bytes
+        });
+        if (selected.frames.empty()) {
+            std::cerr << "core bytes flush made no progress\n";
+            return false;
+        }
+
+        result.core_bytes_bytes += selected.total_data_bytes;
+        result.core_bytes_frames += selected.frames.size();
+        for (const auto& frame_bytes_out : selected.frames) {
+            if (frame_bytes_out.size() < kHttp2FrameHeaderLength) {
+                std::cerr << "core bytes flush emitted truncated frame\n";
+                return false;
+            }
+        }
+    }
+    if (core.hasOutboundWork()) {
+        std::cerr << "core bytes flush left outbound work after expected bytes\n";
+        return false;
+    }
+    result.core_bytes_streams = streams_count;
     return true;
 }
 
@@ -207,8 +302,18 @@ BenchResult runBench(size_t streams_count, size_t payload_bytes, size_t flow_rou
         runBytesSchedulerPressure(streams_count, payload_bytes, 16, result);
     const auto bytes_scheduler_end = std::chrono::steady_clock::now();
 
+    const auto core_frame_start = std::chrono::steady_clock::now();
+    const bool core_frame_ok = bytes_scheduler_ok &&
+        runCoreFramePressure(streams_count, payload_bytes, 16, result);
+    const auto core_frame_end = std::chrono::steady_clock::now();
+
+    const auto core_bytes_start = std::chrono::steady_clock::now();
+    const bool core_bytes_ok = core_frame_ok &&
+        runCoreBytesPressure(streams_count, payload_bytes, 16, result);
+    const auto core_bytes_end = std::chrono::steady_clock::now();
+
     const auto flow_start = std::chrono::steady_clock::now();
-    const bool flow_ok = bytes_scheduler_ok && runFlowPressure(streams_count, flow_rounds, result);
+    const bool flow_ok = core_bytes_ok && runFlowPressure(streams_count, flow_rounds, result);
     const auto flow_end = std::chrono::steady_clock::now();
 
     const auto dispatch_start = std::chrono::steady_clock::now();
@@ -218,6 +323,8 @@ BenchResult runBench(size_t streams_count, size_t payload_bytes, size_t flow_rou
     const auto end = std::chrono::steady_clock::now();
     result.scheduler_ms = std::chrono::duration<double, std::milli>(scheduler_end - scheduler_start).count();
     result.bytes_scheduler_ms = std::chrono::duration<double, std::milli>(bytes_scheduler_end - bytes_scheduler_start).count();
+    result.core_frame_ms = std::chrono::duration<double, std::milli>(core_frame_end - core_frame_start).count();
+    result.core_bytes_ms = std::chrono::duration<double, std::milli>(core_bytes_end - core_bytes_start).count();
     result.flow_ms = std::chrono::duration<double, std::milli>(flow_end - flow_start).count();
     result.dispatch_ms = std::chrono::duration<double, std::milli>(dispatch_end - dispatch_start).count();
     result.elapsed_ms = std::chrono::duration<double, std::milli>(end - start).count();
@@ -309,6 +416,16 @@ int main(int argc, char* argv[])
               << " bytes_scheduler_mib_per_s="
               << mibPerSecond(result.bytes_scheduler_bytes, result.bytes_scheduler_ms)
               << "\n";
+    std::cout << "core_frame_ms=" << result.core_frame_ms
+              << " core_frame_stream_qps=" << perSecond(result.core_frame_streams, result.core_frame_ms)
+              << " core_frame_frame_qps=" << perSecond(result.core_frame_frames, result.core_frame_ms)
+              << " core_frame_mib_per_s=" << mibPerSecond(result.core_frame_bytes, result.core_frame_ms)
+              << "\n";
+    std::cout << "core_bytes_ms=" << result.core_bytes_ms
+              << " core_bytes_stream_qps=" << perSecond(result.core_bytes_streams, result.core_bytes_ms)
+              << " core_bytes_frame_qps=" << perSecond(result.core_bytes_frames, result.core_bytes_ms)
+              << " core_bytes_mib_per_s=" << mibPerSecond(result.core_bytes_bytes, result.core_bytes_ms)
+              << "\n";
     std::cout << "flow_ms=" << result.flow_ms
               << " flow_round_qps=" << perSecond(result.flow_rounds, result.flow_ms)
               << " flow_ops_per_s=" << perSecond(result.flow_ops, result.flow_ms)
@@ -321,6 +438,12 @@ int main(int argc, char* argv[])
               << "\n";
     std::cout << "bytes_scheduler_bytes=" << result.bytes_scheduler_bytes
               << " bytes_scheduler_frames=" << result.bytes_scheduler_frames
+              << "\n";
+    std::cout << "core_frame_bytes=" << result.core_frame_bytes
+              << " core_frame_frames=" << result.core_frame_frames
+              << "\n";
+    std::cout << "core_bytes_bytes=" << result.core_bytes_bytes
+              << " core_bytes_frames=" << result.core_bytes_frames
               << "\n";
     std::cout << "flow_ops=" << result.flow_ops
               << " flow_rounds=" << result.flow_rounds << "\n";

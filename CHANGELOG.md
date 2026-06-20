@@ -16,6 +16,7 @@
 - 新增 HTTP/2 kernel 层 `flow_control` 发送窗口控制器，覆盖连接/stream 窗口消耗、WINDOW_UPDATE、SETTINGS_INITIAL_WINDOW_SIZE delta 与窗口溢出错误。
 - 新增 HTTP/2 dispatcher/outbound scheduler 压力回归测试 `t85_h2pressure`，覆盖 1000 streams 公平调度、大 body 分片、频繁 WINDOW_UPDATE 与 GOAWAY 后新流拒绝。
 - 新增 HTTP/2 kernel 压力基准 `benchmark_http2_h2_kernel_pressure`，分阶段输出 scheduler/bytes scheduler/flow control/dispatcher QPS 与瓶颈阶段。
+- 新增 `Http2ConnectionCore::flushOutboundBytes()` 生产出站入口与 `Http2OutboundScheduler::pickSendableBytes(H2OutboundBudget, H2OutboundQueues&, ...)` 重载，control/headers 复用现有 frame 对象序列化、DATA 走 bytes 热路径，并补充 `t33_h2core` bytes flush 用例与 `b14_h2_kernel_pressure` core frame/bytes 压测场景。
 - 新增 `galay-kernel/common/file_descriptor.h`，将 POSIX 文件描述符 RAII 封装迁移到 kernel 模块，并补充 kernel 边界测试覆盖打开失败、移动所有权与 release 语义。
 - 新增 MCP 生产运行策略值类型 `mcp_policy.h`（传输资源限制、超时、HTTP 会话与认证策略，默认构造保持兼容），并补齐 `Timeout`/`Cancelled`/`Overload`/`Unauthorized`/`PayloadTooLarge` 错误码及 JSON-RPC 映射。
 - 新增 MySQL RAII 连接租约 `MysqlPoolLease` 与 `acquireLease()` awaitable，借出连接在析构时自动归还，支持 `dismiss()` 转交所有权。

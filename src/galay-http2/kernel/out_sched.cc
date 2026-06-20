@@ -83,6 +83,14 @@ void drainFrameQueue(std::deque<Http2Frame::uptr>& queue, H2OutboundSelection& o
     }
 }
 
+void drainFrameQueueBytes(std::deque<Http2Frame::uptr>& queue, H2OutboundBytesSelection& out)
+{
+    while (!queue.empty()) {
+        out.frames.push_back(queue.front()->serialize());
+        queue.pop_front();
+    }
+}
+
 } // namespace
 
 H2OutboundSelection Http2OutboundScheduler::pickSendableFrames(H2OutboundBudget budget,
@@ -184,6 +192,25 @@ H2OutboundSelection Http2OutboundScheduler::pickSendableFrames(H2OutboundBudget 
     drainFrameQueue(queues.header_frames, out);
 
     auto data = pickSendableFrames(budget, queues.data_streams, config);
+    out.total_data_bytes = data.total_data_bytes;
+    for (auto& frame : data.frames) {
+        out.frames.push_back(std::move(frame));
+    }
+    return out;
+}
+
+H2OutboundBytesSelection Http2OutboundScheduler::pickSendableBytes(H2OutboundBudget budget,
+                                                                    H2OutboundQueues& queues,
+                                                                    H2SchedulerConfig config)
+{
+    H2OutboundBytesSelection out;
+    out.frames.reserve(saturatedAdd(
+        saturatedAdd(queues.control_frames.size(), queues.header_frames.size()),
+        estimateDataFrameReserve(budget)));
+    drainFrameQueueBytes(queues.control_frames, out);
+    drainFrameQueueBytes(queues.header_frames, out);
+
+    auto data = pickSendableBytes(budget, queues.data_streams, config);
     out.total_data_bytes = data.total_data_bytes;
     for (auto& frame : data.frames) {
         out.frames.push_back(std::move(frame));

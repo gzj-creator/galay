@@ -677,6 +677,29 @@ Expected: 输出优化后 scheduler QPS；将结果追加到 `docs/modules/http2
 - WINDOW_UPDATE、SETTINGS_INITIAL_WINDOW_SIZE、DATA 窗口扣减测试必须覆盖。
 - benchmark 中 flow control QPS 不得退化，scheduler 路径不得引入额外重复计算。
 
+## [x] Task 17: 接入 bytes 调度到 h2_core 生产出站入口
+
+**Files:**
+- Modify: `src/galay-http2/kernel/out_sched.h`
+- Modify: `src/galay-http2/kernel/out_sched.cc`
+- Modify: `src/galay-http2/kernel/h2_core.h`
+- Modify: `src/galay-http2/kernel/h2_core.cc`
+- Modify: `test/http2/t33_h2core.cc`
+- Modify: `benchmark/http2/b14_h2_kernel_pressure.cc`
+- Modify: `docs/modules/http2/05-性能测试.md`
+
+**优化方案:**
+- 保留现有 `Http2ConnectionCore::flushOutbound()` frame 对象兼容入口。
+- 新增 `Http2ConnectionCore::flushOutboundBytes()`，生产写路径可直接取得已序列化 HTTP/2 frame bytes。
+- 新增 `Http2OutboundScheduler::pickSendableBytes(H2OutboundBudget, H2OutboundQueues&, ...)`，control/headers 从既有 frame 对象序列化，DATA 走 `dataBytes()` 热路径。
+- 不移除 `Http2FrameBuilder::data()` 或 `Http2DataFrame::data()`；当前瓶颈可通过生产 bytes flush 绕开，直接拆 public data API 风险高且收益未被证明更高。
+
+**验证:**
+- TDD RED：`t33_h2core` 先因缺少 `flushOutboundBytes()` 编译失败。
+- GREEN：新增 core bytes flush 后 `http2.h2core` 通过。
+- 回归：`http2.h2core`、`http2.h2flow`、`http2.h2pressure` 和全量 `http2.*` 通过。
+- 压测：`benchmark_http2_h2_kernel_pressure 10000 1024 200000` 中 core bytes flush 从约 `2.53M` 提升到约 `3.18M frames/s`，约 `+26.0%`。
+
 ## 验收标准
 
 - `frame_disp` 能明确区分 connection error、stream error、可继续分发动作。

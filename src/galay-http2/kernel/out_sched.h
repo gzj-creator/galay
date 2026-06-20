@@ -111,6 +111,10 @@ public:
                                                   H2SchedulerConfig config = {});
 
     static H2OutboundBytesSelection pickSendableBytes(H2OutboundBudget budget,
+                                                      H2OutboundQueues& queues,
+                                                      H2SchedulerConfig config = {});
+
+    static H2OutboundBytesSelection pickSendableBytes(H2OutboundBudget budget,
                                                       std::vector<H2StreamSendState>& streams,
                                                       H2SchedulerConfig config = {});
 };
