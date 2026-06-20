@@ -19,6 +19,7 @@ endfunction()
 
 galay_add_http2_example(example_http2_include_h2c_echo_server include/e9_h2c_echo_server.cc)
 galay_add_http2_example(example_http2_include_h2c_echo_client include/e10_h2c_echo_client.cc)
+galay_add_http2_example(example_http2_include_h2c_static_server include/e15_h2c_static_server.cc)
 
 if(GALAY_SSL_FEATURE_ENABLED)
     galay_add_http2_example(example_http2_include_h2_echo_server include/e13_h2_echo_server.cc)
@@ -27,6 +28,7 @@ endif()
 
 galay_add_http2_import_example(example_http2_import_h2c_echo_server import/e9_h2c_echo_server.cc)
 galay_add_http2_import_example(example_http2_import_h2c_echo_client import/e10_h2c_echo_client.cc)
+galay_add_http2_import_example(example_http2_import_h2c_static_server import/e15_h2c_static_server.cc)
 
 if(GALAY_SSL_FEATURE_ENABLED)
     galay_add_http2_import_example(example_http2_import_h2_echo_server import/e13_h2_echo_server.cc)
