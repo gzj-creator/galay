@@ -191,7 +191,7 @@ public:
 内置 `BlackList` accept 插件按客户端 IP 统计连接次数；超过阈值后关闭当前 socket 并返回 `false`：
 
 ```cpp
-#include "galay-http/plugin/blacklist/blacklist.hpp"
+#include <galay/cpp/galay-http/plugin/blacklist/blacklist.hpp>
 
 server.addAcceptPlugin(
     std::make_unique<galay::http::plugin::BlackList<TcpSocket>>(100));

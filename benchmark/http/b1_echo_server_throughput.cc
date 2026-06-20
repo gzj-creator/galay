@@ -14,9 +14,9 @@
  *   wrk -t8 -c500 -d30s --latency http://127.0.0.1:8080/
  */
 
-#include "galay-http/server/http_server.h"
-#include "galay-http/kernel/http_conn.h"
-#include "galay-http/protoc/http_request.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-http/kernel/http_conn.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
 #include <iostream>
 #include <csignal>
 #include <string_view>

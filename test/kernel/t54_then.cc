@@ -5,8 +5,8 @@
  * 通过条件：链式 continuation 成功执行且顺序符合预期，测试返回 0。
  */
 
-#include "galay-kernel/core/compute_scheduler.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <atomic>
 #include <cassert>

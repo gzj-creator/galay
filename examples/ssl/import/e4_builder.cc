@@ -3,8 +3,8 @@
  * @brief 模块导入版本的 SSL Builder 协议流示例。
  */
 
-#include <galay-utils/cache/byte_queue_view.hpp>
-#include <galay-kernel/core/task.h>
+#include <galay/cpp/galay-utils/cache/byte_queue_view.hpp>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -16,13 +16,13 @@
 import galay.ssl;
 
 #ifdef USE_KQUEUE
-#include <galay-kernel/core/kqueue_scheduler.h>
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using ExampleScheduler = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include <galay-kernel/core/epoll_scheduler.h>
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using ExampleScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include <galay-kernel/core/io_uring_scheduler.h>
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using ExampleScheduler = galay::kernel::IOUringScheduler;
 #endif
 

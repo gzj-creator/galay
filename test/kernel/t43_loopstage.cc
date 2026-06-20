@@ -5,7 +5,7 @@
  * 通过条件：阶段顺序与预期完全一致，测试打印 PASS 并返回 0。
  */
 
-#include "galay-kernel/core/scheduler_core.h"
+#include <galay/cpp/galay-kernel/core/scheduler_core.h>
 
 #include <iostream>
 #include <vector>

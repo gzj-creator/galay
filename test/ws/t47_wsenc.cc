@@ -1,4 +1,4 @@
-#include "galay-ws/protoc/ws_frame.h"
+#include <galay/cpp/galay-ws/protoc/ws_frame.h>
 #include <array>
 #include <cassert>
 #include <cstring>

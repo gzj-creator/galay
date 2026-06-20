@@ -4,9 +4,9 @@
 #include <sstream>
 
 #define private public
-#include "galay-ws/kernel/ws_reader.h"
+#include <galay/cpp/galay-ws/kernel/ws_reader.h>
 #undef private
-#include "galay-ssl/async/ssl_socket.h"
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
 #endif
 
 int main() {

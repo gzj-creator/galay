@@ -5,7 +5,7 @@
  * 通过条件：`JoinHandle` 正确返回结果且测试返回 0。
  */
 
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <atomic>
 #include <cassert>
 #include <iostream>

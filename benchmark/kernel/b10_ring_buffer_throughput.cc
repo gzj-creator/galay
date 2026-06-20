@@ -13,7 +13,7 @@
 #include <iostream>
 #include <vector>
 #include <thread>
-#include "galay-kernel/common/buffer.h"
+#include <galay/cpp/galay-kernel/common/buffer.h>
 #include "test/stdout_log.h"
 
 using namespace galay::kernel;

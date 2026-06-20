@@ -5,7 +5,7 @@
 
 import galay.rpc;
 
-#include "galay-rpc/utils/runtime_compat.h"
+#include <galay/cpp/galay-rpc/utils/runtime_compat.h>
 #include <atomic>
 #include <chrono>
 #include <csignal>

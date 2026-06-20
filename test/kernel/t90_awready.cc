@@ -5,9 +5,9 @@
  * 通过条件：`Runtime::blockOn(...)` 返回预期值且测试返回 0。
  */
 
-#include "galay-kernel/core/awaitable.h"
-#include "galay-kernel/core/runtime.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <chrono>
 #include <expected>

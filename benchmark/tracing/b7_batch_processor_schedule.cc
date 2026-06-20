@@ -1,4 +1,4 @@
-#include "galay-tracing/kernel/batch_span_processor.h"
+#include <galay/cpp/galay-tracing/kernel/batch_span_processor.h>
 
 #include <atomic>
 #include <chrono>

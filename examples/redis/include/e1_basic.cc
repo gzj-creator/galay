@@ -1,6 +1,6 @@
 #include "common/config.h"
-#include "galay-redis/async/redis_client.h"
-#include <galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-redis/async/redis_client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>

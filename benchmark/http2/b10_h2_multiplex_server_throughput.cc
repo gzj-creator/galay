@@ -12,7 +12,7 @@
  *   ./B11-H2cMuxClient localhost 9080 10 100 50
  */
 
-#include "galay-http2/server/http2_server.h"
+#include <galay/cpp/galay-http2/server/http2_server.h>
 #include <iostream>
 #include <csignal>
 #include <atomic>

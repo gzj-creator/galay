@@ -13,8 +13,8 @@
  *   ./B11-H2cMuxClient localhost 9080 50 200 10  # 50连接 × 200并发流 × 10轮 = 100000请求
  */
 
-#include "galay-http2/client/h2c_client.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http2/client/h2c_client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <atomic>
 #include <chrono>

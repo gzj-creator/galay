@@ -13,26 +13,26 @@
 #include <thread>
 #include <cstdlib>
 #include <string_view>
-#include "galay-kernel/concurrency/async_mutex.h"
-#include "galay-http/client/http_client.h"
-#include "galay-ws/kernel/ws_conn.h"
-#include "galay-http/builder/http_builder.h"
-#include "galay-kernel/core/runtime.h"
-#include "galay-ws/client/ws_client.h"
-#include "galay-ws/kernel/writer_cfg.h"
+#include <galay/cpp/galay-kernel/concurrency/async_mutex.h>
+#include <galay/cpp/galay-http/client/http_client.h>
+#include <galay/cpp/galay-ws/kernel/ws_conn.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-ws/client/ws_client.h>
+#include <galay/cpp/galay-ws/kernel/writer_cfg.h>
 
 #ifdef USE_KQUEUE
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #endif
 
 #ifdef USE_EPOLL
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #endif
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/io_uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

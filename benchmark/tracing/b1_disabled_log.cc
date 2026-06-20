@@ -1,5 +1,5 @@
-#include "galay-tracing/log/logger.h"
-#include "galay-tracing/log/log_sink.h"
+#include <galay/cpp/galay-tracing/log/logger.h>
+#include <galay/cpp/galay-tracing/log/log_sink.h>
 
 #include <chrono>
 #include <iostream>

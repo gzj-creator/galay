@@ -3,7 +3,7 @@
  * @brief HTTP/2 frame codec contract test
  */
 
-#include "galay-http2/protoc/http2_frame.h"
+#include <galay/cpp/galay-http2/protoc/http2_frame.h>
 #include <cassert>
 #include <cstring>
 #include <iostream>

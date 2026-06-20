@@ -3,8 +3,8 @@
  * @brief 用途：验证日志注册槽按库隔离，且 kernel 自身使用 log::set/get 入口。
  */
 
-#include "galay-kernel/common/log_macro.h"
-#include "galay-kernel/common/logger.h"
+#include <galay/cpp/galay-kernel/common/log_macro.h>
+#include <galay/cpp/galay-kernel/common/logger.h>
 
 #include <cstdlib>
 #include <string>

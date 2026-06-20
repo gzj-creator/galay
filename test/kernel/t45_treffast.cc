@@ -5,8 +5,8 @@
  * 通过条件：TaskRef 快速路径命中预期并返回 0。
  */
 
-#include "galay-kernel/core/compute_scheduler.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <atomic>
 #include <concepts>

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <atomic>
-#include <galay-kernel/core/runtime.h>
-#include "galay-mysql/async/conn_pool.h"
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-mysql/async/conn_pool.h>
 #include "config.h"
 
 using namespace galay::kernel;

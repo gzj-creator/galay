@@ -1,5 +1,5 @@
-#include "galay-tracing/kernel/file_span_exporter.h"
-#include "galay-tracing/kernel/otlp_http_exporter.h"
+#include <galay/cpp/galay-tracing/kernel/file_span_exporter.h>
+#include <galay/cpp/galay-tracing/kernel/otlp_http_exporter.h>
 
 #include <cassert>
 #include <filesystem>

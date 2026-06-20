@@ -1,6 +1,6 @@
-#include "galay-redis/async/redis_client.h"
-#include "galay-redis/async/conn_pool.h"
-#include <galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-redis/async/redis_client.h>
+#include <galay/cpp/galay-redis/async/conn_pool.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 using namespace galay::kernel;
 using namespace galay::redis;

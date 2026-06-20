@@ -3,7 +3,7 @@
  * @brief 验证 galay-redis 库级日志入口与空 logger 过滤路径。
  */
 
-#include "galay-redis/base/redis_log.h"
+#include <galay/cpp/galay-redis/base/redis_log.h>
 
 #include <cstdlib>
 #include <string>

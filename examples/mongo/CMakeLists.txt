@@ -9,7 +9,7 @@ endfunction()
 function(galay_add_mongo_example target_name source_file)
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::mongo)
-    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR})
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR})
     galay_mongo_configure_example_target(${target_name})
 endfunction()
 

@@ -1,6 +1,6 @@
-#include "galay-mcp/client/client.h"
-#include "galay-mcp/common/mcp_error.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-mcp/client/client.h>
+#include <galay/cpp/galay-mcp/common/mcp_error.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <expected>
 #include <iostream>

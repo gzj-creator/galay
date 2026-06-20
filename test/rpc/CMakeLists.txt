@@ -1,7 +1,7 @@
 function(galay_add_rpc_test target_name source_file label)
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::rpc)
-    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")
     add_test(NAME "rpc.${scenario_name}" COMMAND $<TARGET_FILE:${target_name}>)
     set_tests_properties("rpc.${scenario_name}" PROPERTIES LABELS "rpc;${label}")

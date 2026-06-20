@@ -5,10 +5,10 @@
  * 通过条件：16 个连接持续 echo 1024B 负载，全部完成，无 send/recv/peer-closed/mismatch。
  */
 
-#include "galay-ssl/async/ssl_socket.h"
-#include "galay-ssl/ssl/ssl_context.h"
-#include <galay-kernel/common/sleep.hpp>
-#include <galay-kernel/core/task.h>
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
+#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
+#include <galay/cpp/galay-kernel/common/sleep.hpp>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -19,13 +19,13 @@
 #include <vector>
 
 #ifdef USE_KQUEUE
-#include <galay-kernel/core/kqueue_scheduler.h>
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using TestScheduler = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include <galay-kernel/core/epoll_scheduler.h>
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include <galay-kernel/core/io_uring_scheduler.h>
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using TestScheduler = galay::kernel::IOUringScheduler;
 #endif
 

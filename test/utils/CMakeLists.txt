@@ -1,12 +1,13 @@
 function(galay_add_utils_test target_name source_file)
     add_executable("${target_name}" "${source_file}")
     target_link_libraries("${target_name}" PRIVATE galay::utils)
+    target_include_directories("${target_name}" PRIVATE ${CMAKE_BINARY_DIR}/include)
     if(target_name STREQUAL "t6_buffer_queue_ring" OR
        target_name STREQUAL "t7_cache_lru" OR
        target_name STREQUAL "t8_concurrency_pool_waiter" OR
        target_name STREQUAL "t12_resilience_rate_circuit")
         target_compile_definitions("${target_name}" PRIVATE
-            GALAY_UTILS_SOURCE_DIR="${PROJECT_SOURCE_DIR}/src"
+            GALAY_UTILS_SOURCE_DIR="${PROJECT_SOURCE_DIR}/src/cpp"
         )
     endif()
     string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")

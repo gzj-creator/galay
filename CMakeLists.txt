@@ -14,44 +14,53 @@ include(CMakePackageConfigHelpers)
 
 include(CTest)
 
+file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include/galay)
+file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/include/galay/cpp)
+file(CREATE_LINK
+    ${PROJECT_SOURCE_DIR}/src/cpp
+    ${CMAKE_BINARY_DIR}/include/galay/cpp
+    SYMBOLIC
+    COPY_ON_ERROR
+)
+
 if(GALAY_BUILD_UTILS)
-    add_subdirectory(src/galay-utils)
+    add_subdirectory(src/cpp/galay-utils)
 endif()
 if(GALAY_BUILD_KERNEL)
-    add_subdirectory(src/galay-kernel)
+    add_subdirectory(src/cpp/galay-kernel)
 endif()
 if(GALAY_BUILD_SSL)
-    add_subdirectory(src/galay-ssl)
+    add_subdirectory(src/cpp/galay-ssl)
 endif()
 if(GALAY_BUILD_HTTP)
-    add_subdirectory(src/galay-http)
+    add_subdirectory(src/cpp/galay-http)
 endif()
 if(GALAY_BUILD_WS)
-    add_subdirectory(src/galay-ws)
+    add_subdirectory(src/cpp/galay-ws)
 endif()
 if(GALAY_BUILD_HTTP2)
-    add_subdirectory(src/galay-http2)
+    add_subdirectory(src/cpp/galay-http2)
 endif()
 if(GALAY_BUILD_REDIS)
-    add_subdirectory(src/galay-redis)
+    add_subdirectory(src/cpp/galay-redis)
 endif()
 if(GALAY_BUILD_RPC)
-    add_subdirectory(src/galay-rpc)
+    add_subdirectory(src/cpp/galay-rpc)
 endif()
 if(GALAY_BUILD_MYSQL)
-    add_subdirectory(src/galay-mysql)
+    add_subdirectory(src/cpp/galay-mysql)
 endif()
 if(GALAY_BUILD_MONGO)
-    add_subdirectory(src/galay-mongo)
+    add_subdirectory(src/cpp/galay-mongo)
 endif()
 if(GALAY_BUILD_ETCD)
-    add_subdirectory(src/galay-etcd)
+    add_subdirectory(src/cpp/galay-etcd)
 endif()
 if(GALAY_BUILD_MCP)
-    add_subdirectory(src/galay-mcp)
+    add_subdirectory(src/cpp/galay-mcp)
 endif()
 if(GALAY_BUILD_TRACING)
-    add_subdirectory(src/galay-tracing)
+    add_subdirectory(src/cpp/galay-tracing)
 endif()
 
 set(GALAY_INSTALL_TARGETS)
@@ -70,12 +79,11 @@ if(GALAY_INSTALL_TARGETS)
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     )
 endif()
 
-install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/cpp/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp
     FILES_MATCHING
         PATTERN "*.h"
         PATTERN "*.hpp"

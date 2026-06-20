@@ -11,8 +11,8 @@
  *   ./E10-H2cEchoClient localhost 8080
  */
 
-#include "galay-http2/client/h2c_client.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http2/client/h2c_client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <vector>
 

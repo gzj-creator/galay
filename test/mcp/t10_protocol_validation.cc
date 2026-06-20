@@ -3,8 +3,8 @@
  * @brief 锁定 MCP 生产策略默认值与生产级错误码 surface。
  */
 
-#include "galay-mcp/common/mcp_error.h"
-#include "galay-mcp/common/mcp_policy.h"
+#include <galay/cpp/galay-mcp/common/mcp_error.h>
+#include <galay/cpp/galay-mcp/common/mcp_policy.h>
 
 #include <chrono>
 #include <cstddef>

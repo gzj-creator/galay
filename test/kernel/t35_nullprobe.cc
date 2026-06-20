@@ -5,8 +5,8 @@
  * 通过条件：io_uring sequence 路径可用且测试返回 0。
  */
 
-#include "galay-kernel/core/task.h"
-#include "galay-kernel/core/awaitable.h"
+#include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <atomic>
 #include <chrono>
 #include <cstring>
@@ -14,7 +14,7 @@
 #include <thread>
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>

@@ -1,5 +1,5 @@
 add_executable(t_module_config_surface t_module_config_surface.cc)
-target_include_directories(t_module_config_surface PRIVATE ${PROJECT_SOURCE_DIR}/src)
+target_include_directories(t_module_config_surface PRIVATE ${CMAKE_BINARY_DIR}/include)
 add_test(NAME config.module_surface COMMAND t_module_config_surface)
 
 add_test(

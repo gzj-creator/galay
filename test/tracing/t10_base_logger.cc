@@ -3,7 +3,7 @@
  * @brief 验证 galay-tracing 库级 BaseLogger 入口与空 logger 过滤路径。
  */
 
-#include "galay-tracing/common/tracing_log.h"
+#include <galay/cpp/galay-tracing/common/tracing_log.h>
 
 #include <cstdlib>
 #include <string>

@@ -4,10 +4,10 @@
 #include <string>
 #include <thread>
 
-#include <galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
-#include "galay-mongo/async/client.h"
-#include "galay-mongo/sync/mongo_client.h"
+#include <galay/cpp/galay-mongo/async/client.h>
+#include <galay/cpp/galay-mongo/sync/mongo_client.h>
 #include "async_result_helper.h"
 #include "config.h"
 

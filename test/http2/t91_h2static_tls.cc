@@ -3,9 +3,9 @@
  * @brief HTTP/2 over TLS static file GET regression test
  */
 
-#include "galay-http2/client/h2_client.h"
-#include "galay-http2/server/http2_server.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http2/client/h2_client.h>
+#include <galay/cpp/galay-http2/server/http2_server.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>

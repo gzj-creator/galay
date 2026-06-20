@@ -3,7 +3,7 @@ function(galay_add_ws_benchmark target_name source_file)
     target_link_libraries(${target_name} PRIVATE galay::ws)
     target_include_directories(${target_name} PRIVATE
         ${PROJECT_SOURCE_DIR}
-        ${PROJECT_SOURCE_DIR}/src
+        ${CMAKE_BINARY_DIR}/include
     )
     if(GALAY_HTTP_COROUTINE_WORKAROUND_ENABLED)
         target_compile_options(${target_name} PRIVATE ${GALAY_HTTP_COROUTINE_WORKAROUND_FLAGS})

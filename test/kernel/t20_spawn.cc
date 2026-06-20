@@ -5,7 +5,7 @@
  * 通过条件：被提交任务确实执行完成，测试返回 0。
  */
 
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <atomic>
 #include <cassert>
 #include <chrono>

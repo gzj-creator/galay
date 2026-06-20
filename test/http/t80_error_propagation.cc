@@ -1,9 +1,9 @@
-#include "galay-http/client/http_client.h"
-#include "galay-http/server/http_range.h"
-#include "galay-http/protoc/http_chunk.h"
-#include "galay-http/protoc/http_header.h"
-#include "galay-ws/client/ws_client.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http/client/http_client.h>
+#include <galay/cpp/galay-http/server/http_range.h>
+#include <galay/cpp/galay-http/protoc/http_chunk.h>
+#include <galay/cpp/galay-http/protoc/http_header.h>
+#include <galay/cpp/galay-ws/client/ws_client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>

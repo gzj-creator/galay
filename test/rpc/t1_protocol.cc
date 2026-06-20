@@ -4,9 +4,9 @@
  */
 
 #include "result_writer.h"
-#include "galay-rpc/kernel/rpc_stream.h"
-#include "galay-rpc/protoc/rpc_message.h"
-#include "galay-rpc/protoc/rpc_codec.h"
+#include <galay/cpp/galay-rpc/kernel/rpc_stream.h>
+#include <galay/cpp/galay-rpc/protoc/rpc_message.h>
+#include <galay/cpp/galay-rpc/protoc/rpc_codec.h>
 #include <iostream>
 #include <cstring>
 

@@ -3,7 +3,7 @@
  * 关键覆盖点：Task<std::string> 的 return_value/takeResult 编译路径在 GCC 下不触发 -Wfree-nonheap-object。
  * 通过条件：测试目标可在开启 -Werror=free-nonheap-object 时完成编译并返回 0。
  */
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <expected>
 #include <string>

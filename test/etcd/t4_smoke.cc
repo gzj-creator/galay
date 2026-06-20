@@ -1,8 +1,8 @@
-#include "galay-etcd/async/client.h"
+#include <galay/cpp/galay-etcd/async/client.h>
 
-#include <galay-kernel/common/sleep.hpp>
-#include <galay-kernel/concurrency/async_waiter.h>
-#include <galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/common/sleep.hpp>
+#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>

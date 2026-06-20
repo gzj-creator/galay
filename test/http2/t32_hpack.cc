@@ -3,7 +3,7 @@
  * @brief HPACK contract test: round-trip + table-size update + header-list limit
  */
 
-#include "galay-http2/protoc/http2_hpack.h"
+#include <galay/cpp/galay-http2/protoc/http2_hpack.h>
 #include <cassert>
 #include <iostream>
 

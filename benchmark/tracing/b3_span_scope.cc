@@ -1,5 +1,5 @@
-#include "galay-tracing/context/context_storage.h"
-#include "galay-tracing/kernel/span_guard.h"
+#include <galay/cpp/galay-tracing/context/context_storage.h>
+#include <galay/cpp/galay-tracing/kernel/span_guard.h>
 
 #include <atomic>
 #include <chrono>

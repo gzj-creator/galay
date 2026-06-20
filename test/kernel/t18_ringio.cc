@@ -10,21 +10,21 @@
 #include <cstring>
 #include <cassert>
 #include <atomic>
-#include "galay-kernel/async/tcp_socket.h"
-#include "galay-kernel/common/buffer.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/common/buffer.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/stdout_log.h"
 
 #ifdef USE_KQUEUE
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 #endif
 
 #ifdef USE_EPOLL
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 #endif
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 #endif
 
 using namespace galay::async;

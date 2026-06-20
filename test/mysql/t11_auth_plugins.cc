@@ -8,11 +8,11 @@
 #include <string_view>
 #include <vector>
 
-#include <galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include "config.h"
-#include "galay-mysql/async/client.h"
-#include "galay-mysql/sync/mysql_client.h"
+#include <galay/cpp/galay-mysql/async/client.h>
+#include <galay/cpp/galay-mysql/sync/mysql_client.h>
 
 using namespace galay::kernel;
 using namespace galay::mysql;

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include <iomanip>
-#include "galay-mysql/protoc/mysql_auth.h"
+#include <galay/cpp/galay-mysql/protoc/mysql_auth.h>
 
 using namespace galay::mysql::protocol;
 

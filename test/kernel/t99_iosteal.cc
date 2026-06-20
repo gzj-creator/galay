@@ -5,20 +5,20 @@
  * 通过条件：两个场景都满足断言，测试返回 0。
  */
 
-#include "galay-kernel/common/timer_manager.hpp"
-#include "galay-kernel/core/runtime.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/common/timer_manager.hpp>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #if defined(USE_KQUEUE)
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 static constexpr const char* kBackendName = "kqueue";
 #elif defined(USE_EPOLL)
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 static constexpr const char* kBackendName = "epoll";
 #elif defined(USE_IOURING)
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 static constexpr const char* kBackendName = "io_uring";
 #else

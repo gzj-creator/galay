@@ -5,7 +5,7 @@
  * 通过条件：interest 收集与同步结果都符合预期，测试返回 0。
  */
 
-#include "galay-kernel/core/awaitable.h"
+#include <galay/cpp/galay-kernel/core/awaitable.h>
 
 #include <expected>
 #include <iostream>

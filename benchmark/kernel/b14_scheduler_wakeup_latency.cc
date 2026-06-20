@@ -13,19 +13,19 @@
 #include <vector>
 
 #include "benchmark/benchmark_sync.h"
-#include "galay-kernel/common/timer_manager.hpp"
-#include "galay-kernel/core/runtime.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/common/timer_manager.hpp>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/stdout_log.h"
 
 #ifdef USE_KQUEUE
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

@@ -3,7 +3,7 @@
  * @brief H2 (HTTP/2 over TLS) 客户端压测程序
  */
 
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <atomic>
 #include <chrono>
@@ -15,7 +15,7 @@
 #include <vector>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include "galay-http2/client/h2_client.h"
+#include <galay/cpp/galay-http2/client/h2_client.h>
 #endif
 
 #ifdef GALAY_SSL_FEATURE_ENABLED

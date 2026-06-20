@@ -13,7 +13,7 @@
 ## File structure
 
 - Modify: `galay-mongo/async/async_mongo_client.h`
-  - Add `#include <array>`, `#include <coroutine>`, `#include <sys/uio.h>`, and `#include <galay-kernel/kernel/awaitable.h>`.
+  - Add `#include <array>`, `#include <coroutine>`, `#include <sys/uio.h>`, and `#include <galay/cpp/galay-kernel/core/awaitable.h>`.
   - Replace the three `Task` aliases with explicit awaitable classes.
   - Keep `AsyncMongoClient` public method signatures unchanged.
 
@@ -40,12 +40,12 @@
 Replace the include block with this shape, preserving existing project includes:
 
 ```cpp
-#include <galay-kernel/async/tcp_socket.h>
-#include <galay-kernel/common/error.h>
-#include <galay-kernel/common/host.hpp>
-#include <galay-kernel/kernel/awaitable.h>
-#include <galay-kernel/kernel/io_scheduler.hpp>
-#include <galay-kernel/kernel/task.h>
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/common/error.h>
+#include <galay/cpp/galay-kernel/common/host.hpp>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <array>
 #include <coroutine>
@@ -1216,7 +1216,7 @@ void markTimeout() { m_inner.markTimeout(); }
 Add include if missing:
 
 ```cpp
-#include <galay-kernel/kernel/timeout.hpp>
+#include <galay/cpp/galay-kernel/core/timeout.hpp>
 ```
 
 - [ ] **Step 3: Keep timeout error mapping unchanged**

@@ -2,16 +2,16 @@
 #include <expected>
 #include <utility>
 
-#include "galay-kernel/core/compute_scheduler.h"
-#include "galay-kernel/core/runtime.h"
-#include "galay-kernel/core/scheduler.hpp"
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/scheduler.hpp>
 
 #ifdef USE_EPOLL
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 #elif defined(USE_KQUEUE)
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 #elif defined(USE_IOURING)
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 #endif
 
 using galay::kernel::ComputeScheduler;

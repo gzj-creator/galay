@@ -4,9 +4,9 @@
  * 通过条件：本地 loopback 下服务端 custom machine 完成 `handshake -> recv -> send -> shutdown`，客户端收回 `pong`。
  */
 
-#include "galay-ssl/async/ssl_socket.h"
-#include "galay-ssl/ssl/ssl_context.h"
-#include <galay-kernel/core/task.h>
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
+#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -14,13 +14,13 @@
 #include <thread>
 
 #ifdef USE_KQUEUE
-#include <galay-kernel/core/kqueue_scheduler.h>
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using ExampleScheduler = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include <galay-kernel/core/epoll_scheduler.h>
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using ExampleScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include <galay-kernel/core/io_uring_scheduler.h>
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using ExampleScheduler = galay::kernel::IOUringScheduler;
 #endif
 

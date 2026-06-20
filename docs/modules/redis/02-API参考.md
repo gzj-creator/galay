@@ -10,8 +10,8 @@
 | 安装后导入目标 | `galay-redis::galay-redis` | `find_package(galay-redis CONFIG REQUIRED)` 后可直接链接 |
 | 可选模块目标 | `galay-redis-modules` / `galay-redis::galay-redis-modules` | 只有满足模块工具链条件时才生成/导出 |
 | C++23 模块名 | `galay.redis` | 模块接口文件：`galay-redis/module/galay_redis.cppm` |
-| 安装头目录 | `include/galay-redis` | `galay-redis/CMakeLists.txt` 会安装公开 `.h` / `.hpp` / `.inl`，并排除 `sync/` 遗留目录 |
-| 条件安装模块目录 | `include/galay-redis/module` | `GALAY_REDIS_INSTALL_MODULE_INTERFACE=ON` 时安装 `.cppm` 接口文件 |
+| 安装头目录 | `include/galay/cpp/galay-redis` | `galay-redis/CMakeLists.txt` 会安装公开 `.h` / `.hpp` / `.inl`，并排除 `sync/` 遗留目录 |
+| 条件安装模块目录 | `include/galay/cpp/galay-redis/module` | `GALAY_REDIS_INSTALL_MODULE_INTERFACE=ON` 时安装 `.cppm` 接口文件 |
 
 与公开表面直接相关的事实：
 
@@ -41,7 +41,7 @@
 
 ## 已安装但不导出新类型的文件
 
-- `galay-redis/module/module_prelude.hpp`：模块构建用的预包含头，本身不声明业务 API，但会作为安装产物出现在 `include/galay-redis/module`
+- `galay-redis/module/module_prelude.hpp`：模块构建用的预包含头，本身不声明业务 API，但会作为安装产物出现在 `include/galay/cpp/galay-redis/module`
 
 ## `redis_base.h`
 

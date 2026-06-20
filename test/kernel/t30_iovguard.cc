@@ -14,7 +14,7 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include "galay-kernel/async/tcp_socket.h"
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
 
 using namespace galay::async;
 

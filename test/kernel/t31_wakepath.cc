@@ -5,10 +5,10 @@
  * 通过条件：核心唤醒路径断言全部成立，测试返回 0。
  */
 
-#include "galay-kernel/core/io_scheduler.hpp"
-#include "galay-kernel/core/runtime.h"
-#include "galay-kernel/core/task.h"
-#include "galay-kernel/core/waker.h"
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/waker.h>
 
 #include <cassert>
 #include <atomic>

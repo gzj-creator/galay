@@ -5,26 +5,26 @@
  */
 
 #include <chrono>
-#include "galay-http/server/http_server.h"
-#include "galay-ws/server/ws_upgrade.h"
-#include "galay-ws/kernel/ws_conn.h"
-#include "galay-ws/kernel/writer_cfg.h"
-#include "galay-http/protoc/http_request.h"
-#include "galay-http/protoc/http_response.h"
-#include "galay-http/builder/http_builder.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-ws/server/ws_upgrade.h>
+#include <galay/cpp/galay-ws/kernel/ws_conn.h>
+#include <galay/cpp/galay-ws/kernel/writer_cfg.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-http/protoc/http_response.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
 
 #ifdef USE_KQUEUE
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #endif
 
 #ifdef USE_EPOLL
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #endif
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/io_uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

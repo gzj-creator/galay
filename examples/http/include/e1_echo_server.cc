@@ -4,10 +4,10 @@
  * @details 演示如何使用 HttpServer 和 HttpRouter 创建一个简单的 Echo 服务器
  */
 
-#include "galay-http/server/http_server.h"
-#include "galay-http/server/http_router.h"
-#include "galay-http/protoc/http_request.h"
-#include "galay-http/builder/http_builder.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-http/server/http_router.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
 #include <iostream>
 #include <string>
 

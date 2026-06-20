@@ -3,9 +3,9 @@
  * @brief HTTP/2 buffered batch-frame parsing contract
  */
 
-#include "galay-http2/kernel/http2_conn.h"
-#include "galay-http2/protoc/http2_frame.h"
-#include "galay-http2/protoc/http2_base.h"
+#include <galay/cpp/galay-http2/kernel/http2_conn.h>
+#include <galay/cpp/galay-http2/protoc/http2_frame.h>
+#include <galay/cpp/galay-http2/protoc/http2_base.h>
 #include <expected>
 #include <iostream>
 #include <cassert>

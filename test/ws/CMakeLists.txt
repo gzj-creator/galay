@@ -20,7 +20,7 @@ foreach(test_source ${GALAY_WS_TEST_SOURCES})
     target_include_directories(${test_name}
         PRIVATE
             ${PROJECT_SOURCE_DIR}
-            ${PROJECT_SOURCE_DIR}/src
+            ${CMAKE_BINARY_DIR}/include
     )
     if(GALAY_HTTP_COROUTINE_WORKAROUND_ENABLED)
         target_compile_options(${test_name} PRIVATE ${GALAY_HTTP_COROUTINE_WORKAROUND_FLAGS})

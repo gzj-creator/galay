@@ -11,10 +11,10 @@
 #include <filesystem>
 #include <fstream>
 #include <chrono>
-#include "galay-http/server/http_router.h"
-#include "galay-http/kernel/http_conn.h"
-#include "galay-http/protoc/http_request.h"
-#include "galay-http/protoc/http_response.h"
+#include <galay/cpp/galay-http/server/http_router.h>
+#include <galay/cpp/galay-http/kernel/http_conn.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-http/protoc/http_response.h>
 
 using namespace galay::http;
 namespace fs = std::filesystem;

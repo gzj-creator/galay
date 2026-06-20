@@ -1,7 +1,7 @@
 #ifndef GALAY_TEST_MPSC_CHANNEL_TEST_ACCESS_H
 #define GALAY_TEST_MPSC_CHANNEL_TEST_ACCESS_H
 
-#include "galay-kernel/concurrency/mpsc_channel.h"
+#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
 
 namespace galay::kernel {
 

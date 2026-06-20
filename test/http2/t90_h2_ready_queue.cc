@@ -6,11 +6,11 @@
 #include <sstream>
 
 #define private public
-#include "galay-http2/kernel/stream_manager.h"
+#include <galay/cpp/galay-http2/kernel/stream_manager.h>
 #undef private
-#include "galay-http2/client/h2c_client.h"
-#include "galay-http2/server/http2_server.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http2/client/h2c_client.h>
+#include <galay/cpp/galay-http2/server/http2_server.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <cassert>

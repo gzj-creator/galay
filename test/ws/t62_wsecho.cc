@@ -6,7 +6,7 @@
 #include <sstream>
 
 #define private public
-#include "galay-ws/kernel/ws_conn.h"
+#include <galay/cpp/galay-ws/kernel/ws_conn.h>
 #undef private
 
 using galay::async::TcpSocket;

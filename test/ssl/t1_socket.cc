@@ -3,10 +3,10 @@
  * @brief SSL Socket 单元测试 (无 GTest 依赖)
  */
 
-#include "galay-ssl/async/ssl_socket.h"
-#include "galay-ssl/ssl/ssl_context.h"
-#include "galay-ssl/ssl/ssl_engine.h"
-#include "galay-ssl/common/error.h"
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
+#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
+#include <galay/cpp/galay-ssl/ssl/ssl_engine.h>
+#include <galay/cpp/galay-ssl/common/error.h>
 #include <iostream>
 #include <cassert>
 #include <string>

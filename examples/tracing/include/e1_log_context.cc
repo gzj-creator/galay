@@ -1,5 +1,5 @@
-#include "galay-tracing/kernel/span_guard.h"
-#include "galay-tracing/log/logger.h"
+#include <galay/cpp/galay-tracing/kernel/span_guard.h>
+#include <galay/cpp/galay-tracing/log/logger.h>
 
 int main() {
     auto span = galay::tracing::startSpan("checkout");

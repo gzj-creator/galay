@@ -4,8 +4,8 @@
  * @details 演示如何使用 HttpsServer 创建一个支持 Keep-Alive 的 HTTPS 服务器
  */
 
-#include "galay-http/server/http_server.h"
-#include "galay-http/builder/http_builder.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
 #include <iostream>
 #include <csignal>
 

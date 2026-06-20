@@ -171,7 +171,7 @@
 ### 5.1 Sync
 
 ```cpp
-#include "galay-mongo/sync/mongo_client.h"
+#include <galay/cpp/galay-mongo/sync/mongo_client.h>
 using namespace galay::mongo;
 
 MongoClient s;
@@ -192,7 +192,7 @@ auto rsp = s.command("admin", ping);
 ### 5.2 Async
 
 ```cpp
-#include "galay-mongo/async/client.h"
+#include <galay/cpp/galay-mongo/async/client.h>
 
 Task<void> run(galay::kernel::IOScheduler* sched) {
     galay::mongo::AsyncMongoClient client(sched);
@@ -215,7 +215,7 @@ Task<void> run(galay::kernel::IOScheduler* sched) {
 ### 5.3 Async Pipeline（单连接多 in-flight）
 
 ```cpp
-#include "galay-mongo/async/client.h"
+#include <galay/cpp/galay-mongo/async/client.h>
 
 Task<void> run(galay::kernel::IOScheduler* sched) {
     galay::mongo::AsyncMongoClient client(sched);

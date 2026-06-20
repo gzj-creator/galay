@@ -17,8 +17,8 @@
 #include <thread>
 #include <memory>
 #include "benchmark/benchmark_sync.h"
-#include "galay-kernel/core/compute_scheduler.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/stdout_log.h"
 
 using namespace galay::kernel;

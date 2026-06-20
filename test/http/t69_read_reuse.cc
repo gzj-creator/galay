@@ -4,10 +4,10 @@
 #include <sstream>
 
 #define private public
-#include "galay-http/kernel/http_reader.h"
+#include <galay/cpp/galay-http/kernel/http_reader.h>
 #undef private
 
-#include "galay-kernel/async/tcp_socket.h"
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
 
 int main() {
     using namespace galay::http;

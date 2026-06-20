@@ -2,7 +2,7 @@
 #include <iostream>
 #include <string>
 
-#include "galay-mongo/sync/mongo_client.h"
+#include <galay/cpp/galay-mongo/sync/mongo_client.h>
 #include "config.h"
 #include "reply_helper.h"
 

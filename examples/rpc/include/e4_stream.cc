@@ -8,9 +8,9 @@
  *   ./e4_stream [host] [port] [frame_count] [payload_size]
  */
 
-#include "galay-rpc/kernel/rpc_client.h"
-#include "galay-rpc/kernel/rpc_stream.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-rpc/kernel/rpc_client.h>
+#include <galay/cpp/galay-rpc/kernel/rpc_stream.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdint>

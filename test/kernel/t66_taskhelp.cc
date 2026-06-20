@@ -1,17 +1,17 @@
-#include "galay-kernel/core/compute_scheduler.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <concepts>
 #include <type_traits>
 
 #if defined(USE_KQUEUE)
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

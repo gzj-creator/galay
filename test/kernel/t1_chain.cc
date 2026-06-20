@@ -5,7 +5,7 @@
  * 通过条件：调用链按预期顺序执行，`blockOn` 正常返回且进程退出码为 0。
  */
 
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <cassert>
 #include <iostream>
 

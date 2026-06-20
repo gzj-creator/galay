@@ -4,13 +4,13 @@
  * @details 提供静态文件服务，支持 Range 请求和 ETag 验证，配合 HTML 前端测试
  */
 
-#include "galay-http/server/http_server.h"
-#include "galay-http/server/http_router.h"
-#include "galay-http/kernel/http_conn.h"
-#include "galay-http/server/file_settings.h"
-#include "galay-http/server/http_etag.h"
-#include "galay-http/server/http_range.h"
-#include "galay-http/builder/http_builder.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-http/server/http_router.h>
+#include <galay/cpp/galay-http/kernel/http_conn.h>
+#include <galay/cpp/galay-http/server/file_settings.h>
+#include <galay/cpp/galay-http/server/http_etag.h>
+#include <galay/cpp/galay-http/server/http_range.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
 #include <iostream>
 #include <filesystem>
 #include <fstream>

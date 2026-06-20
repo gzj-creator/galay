@@ -1,7 +1,7 @@
 function(galay_add_http_benchmark target_name source_file)
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::http)
-    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     if(GALAY_HTTP_COROUTINE_WORKAROUND_ENABLED)
         target_compile_options(${target_name} PRIVATE ${GALAY_HTTP_COROUTINE_WORKAROUND_FLAGS})
     endif()

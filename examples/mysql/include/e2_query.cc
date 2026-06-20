@@ -1,6 +1,6 @@
 #include <iostream>
 #include "common/config.h"
-#include "galay-mysql/sync/mysql_client.h"
+#include <galay/cpp/galay-mysql/sync/mysql_client.h>
 
 using namespace galay::mysql;
 

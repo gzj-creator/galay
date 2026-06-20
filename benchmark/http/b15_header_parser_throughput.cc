@@ -9,7 +9,7 @@
  * 4. BM_HeaderLookup_Common - 常见 header 查询性能（O(1) vs O(log n)）
  */
 
-#include "galay-http/protoc/http_header.h"
+#include <galay/cpp/galay-http/protoc/http_header.h>
 #include <chrono>
 #include <iostream>
 #include <iomanip>

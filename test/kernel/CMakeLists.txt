@@ -32,12 +32,12 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     target_include_directories(${TEST_NAME}
         PRIVATE
             ${CMAKE_SOURCE_DIR}
-            ${CMAKE_SOURCE_DIR}/src
+            ${CMAKE_BINARY_DIR}/include
     )
     target_compile_definitions(${TEST_NAME}
         PRIVATE
             GALAY_PROJECT_ROOT="${CMAKE_SOURCE_DIR}"
-            GALAY_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/src"
+            GALAY_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/src/cpp"
     )
     if(TEST_NAME STREQUAL "t121_taskresult_storage")
         target_compile_options(${TEST_NAME} PRIVATE

@@ -1,4 +1,4 @@
-#include <galay-utils/galay_utils.hpp>
+#include <galay/cpp/galay-utils/galay_utils.hpp>
 
 #include <iostream>
 

@@ -1,7 +1,7 @@
-#include "galay-tracing/kernel/sampler.h"
-#include "galay-tracing/kernel/span_guard.h"
-#include "galay-tracing/kernel/span_processor.h"
-#include "galay-tracing/kernel/tracer_provider.h"
+#include <galay/cpp/galay-tracing/kernel/sampler.h>
+#include <galay/cpp/galay-tracing/kernel/span_guard.h>
+#include <galay/cpp/galay-tracing/kernel/span_processor.h>
+#include <galay/cpp/galay-tracing/kernel/tracer_provider.h>
 
 #include <cassert>
 #include <chrono>

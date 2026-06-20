@@ -3,9 +3,9 @@
  * @brief HTTP/2 kernel dispatcher/scheduler pressure regression test
  */
 
-#include "galay-http2/kernel/flow_control.h"
-#include "galay-http2/kernel/frame_disp.h"
-#include "galay-http2/kernel/out_sched.h"
+#include <galay/cpp/galay-http2/kernel/flow_control.h>
+#include <galay/cpp/galay-http2/kernel/frame_disp.h>
+#include <galay/cpp/galay-http2/kernel/out_sched.h>
 #include <cassert>
 #include <iostream>
 #include <string>

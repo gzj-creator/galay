@@ -13,7 +13,7 @@
 #include <cassert>
 #include <vector>
 #include <string>
-#include "galay-http/protoc/http_header.h"
+#include <galay/cpp/galay-http/protoc/http_header.h>
 
 using namespace galay::http;
 

@@ -3,7 +3,7 @@
 #include <span>
 #include <utility>
 
-#include "galay-redis/async/redis_client.h"
+#include <galay/cpp/galay-redis/async/redis_client.h>
 
 using namespace galay::redis;
 

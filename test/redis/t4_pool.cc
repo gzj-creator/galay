@@ -1,6 +1,6 @@
-#include "galay-redis/async/conn_pool.h"
-#include <galay-kernel/core/runtime.h>
-#include <galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-redis/async/conn_pool.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
 #include <atomic>
 #include <iostream>
 #include <iomanip>

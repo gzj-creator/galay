@@ -1,5 +1,5 @@
-#include <galay-kernel/core/runtime.h>
-#include <galay-kernel/common/sleep.hpp>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/common/sleep.hpp>
 
 #include <atomic>
 #include <cctype>
@@ -10,8 +10,8 @@
 #include <mutex>
 #include <string>
 
-#include "galay-redis/async/redis_client.h"
-#include "galay-redis/async/topology_client.h"
+#include <galay/cpp/galay-redis/async/redis_client.h>
+#include <galay/cpp/galay-redis/async/topology_client.h>
 
 using namespace galay::kernel;
 using namespace galay::redis;

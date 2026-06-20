@@ -4,7 +4,7 @@
 #include <string>
 #include <sys/uio.h>
 
-#include <galay-utils/cache/ring_buffer.hpp>
+#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
 
 int main()
 {

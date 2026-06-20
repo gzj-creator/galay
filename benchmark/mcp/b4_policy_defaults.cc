@@ -3,7 +3,7 @@
  * @brief MCP生产策略值类型默认构造 smoke benchmark。
  */
 
-#include "galay-mcp/common/mcp_policy.h"
+#include <galay/cpp/galay-mcp/common/mcp_policy.h>
 
 #include <chrono>
 #include <cstddef>

@@ -3,9 +3,9 @@
  * @brief 真实流式 RPC 压测服务端
  */
 
-#include "galay-rpc/kernel/rpc_service.h"
-#include "galay-rpc/kernel/streamsvc.h"
-#include "galay-rpc/utils/runtime_compat.h"
+#include <galay/cpp/galay-rpc/kernel/rpc_service.h>
+#include <galay/cpp/galay-rpc/kernel/streamsvc.h>
+#include <galay/cpp/galay-rpc/utils/runtime_compat.h>
 #include <atomic>
 #include <chrono>
 #include <csignal>

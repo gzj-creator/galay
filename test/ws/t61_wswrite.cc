@@ -10,10 +10,10 @@ struct FakeTcpSocket {};
 #include <sstream>
 
 #define private public
-#include "galay-ws/kernel/ws_writer.h"
+#include <galay/cpp/galay-ws/kernel/ws_writer.h>
 #undef private
 
-#include "galay-ws/protoc/ws_frame.h"
+#include <galay/cpp/galay-ws/protoc/ws_frame.h>
 
 namespace galay::websocket {
 template<>

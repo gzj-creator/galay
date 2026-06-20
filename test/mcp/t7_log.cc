@@ -3,7 +3,7 @@
  * @brief 验证 galay-mcp 库级日志入口与空 logger 过滤路径。
  */
 
-#include "galay-mcp/common/mcp_log.h"
+#include <galay/cpp/galay-mcp/common/mcp_log.h>
 
 #include <cstdlib>
 #include <string>

@@ -8,21 +8,21 @@
 #include <thread>
 #include <chrono>
 #include <cctype>
-#include "galay-kernel/async/tcp_socket.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #ifdef USE_KQUEUE
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #endif
 
 #ifdef USE_EPOLL
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #endif
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/io_uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

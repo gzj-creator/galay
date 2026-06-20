@@ -5,7 +5,7 @@
  * 通过条件：执行预算行为与预期一致且测试返回 0。
  */
 
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/sched_access.h"
 
 #include <atomic>

@@ -3,9 +3,9 @@
  * @brief HTTPS 压力测试 - 使用 keep-alive 连接复用
  */
 
-#include "galay-http/client/http_client.h"
-#include "galay-http/builder/http_builder.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http/client/http_client.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <atomic>
 #include <chrono>

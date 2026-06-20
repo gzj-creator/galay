@@ -18,18 +18,18 @@
 #include <atomic>
 #include <cerrno>
 #include <cstring>
-#include "galay-ssl/async/ssl_socket.h"
-#include "galay-ssl/ssl/ssl_context.h"
-#include <galay-kernel/core/task.h>
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
+#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #ifdef USE_KQUEUE
-#include <galay-kernel/core/kqueue_scheduler.h>
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using IOSchedulerType = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include <galay-kernel/core/epoll_scheduler.h>
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include <galay-kernel/core/io_uring_scheduler.h>
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

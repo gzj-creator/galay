@@ -1,8 +1,8 @@
 #include "common/example_common.h"
-#include "galay-http/server/http_router.h"
-#include "galay-http/server/http_server.h"
-#include "galay-http/protoc/http_request.h"
-#include "galay-http/builder/http_builder.h"
+#include <galay/cpp/galay-http/server/http_router.h>
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
 #include <iostream>
 #include <thread>
 #include <chrono>

@@ -4,8 +4,8 @@
  * @details 测试基于标准输入输出的MCP协议性能，包括吞吐量、延迟等指标
  */
 
-#include "galay-mcp/client/client.h"
-#include "galay-mcp/server/stdio_server.h"
+#include <galay/cpp/galay-mcp/client/client.h>
+#include <galay/cpp/galay-mcp/server/stdio_server.h>
 #include <iostream>
 #include <chrono>
 #include <vector>

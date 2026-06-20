@@ -1,4 +1,4 @@
-#include "galay-tracing/adapters/http_headers.h"
+#include <galay/cpp/galay-tracing/adapters/http_headers.h>
 
 #include <cassert>
 #include <map>

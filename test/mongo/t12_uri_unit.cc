@@ -2,8 +2,8 @@
 #include <iostream>
 #include <string>
 
-#include "galay-mongo/base/mongo_error.h"
-#include "galay-mongo/base/mongo_uri.h"
+#include <galay/cpp/galay-mongo/base/mongo_error.h>
+#include <galay/cpp/galay-mongo/base/mongo_uri.h>
 
 using namespace galay::mongo;
 

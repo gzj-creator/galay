@@ -35,7 +35,7 @@ foreach(SRC ${SRC_LIST})
     add_executable(${EXECUTABLE_NAME} ${SRC})
     set_property(TARGET ${EXECUTABLE_NAME} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
     target_link_libraries(${EXECUTABLE_NAME} PRIVATE galay::redis)
-    target_include_directories(${EXECUTABLE_NAME} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    target_include_directories(${EXECUTABLE_NAME} PRIVATE ${CMAKE_BINARY_DIR}/include)
     set_target_properties(${EXECUTABLE_NAME} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
@@ -50,7 +50,7 @@ function(add_redis_integration_target target_name source_file test_name)
     add_executable(${target_name} ${source_file})
     set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
     target_link_libraries(${target_name} PRIVATE galay::redis)
-    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     set_target_properties(${target_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON

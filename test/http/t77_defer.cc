@@ -6,7 +6,7 @@
 #include <sstream>
 
 #define private public
-#include "galay-http2/kernel/stream_manager.h"
+#include <galay/cpp/galay-http2/kernel/stream_manager.h>
 #undef private
 
 #include <cassert>

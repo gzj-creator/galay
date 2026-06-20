@@ -1,4 +1,4 @@
-#include "galay-tracing/context/traceparent.h"
+#include <galay/cpp/galay-tracing/context/traceparent.h>
 
 #include <chrono>
 #include <iostream>

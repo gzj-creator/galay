@@ -10,7 +10,7 @@
  *   curl --http2-prior-knowledge http://127.0.0.1:8080/files/index.txt
  */
 
-#include "galay-http2/server/http2_server.h"
+#include <galay/cpp/galay-http2/server/http2_server.h>
 
 #include <atomic>
 #include <chrono>

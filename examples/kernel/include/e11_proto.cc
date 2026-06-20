@@ -5,10 +5,10 @@
  * 通过条件：长度前缀 `ping` 帧拆包送达后，builder 成功回写 `pong` 并返回 0。
  */
 
-#include "galay-kernel/core/awaitable.h"
-#include "galay-kernel/core/runtime.h"
-#include "galay-kernel/core/task.h"
-#include <galay-utils/cache/byte_queue_view.hpp>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-utils/cache/byte_queue_view.hpp>
 #include <array>
 #include <atomic>
 #include <cerrno>

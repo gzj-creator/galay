@@ -4,13 +4,13 @@
  * @details 配合 B4-WebsocketClient 进行 WebSocket 性能测试
  */
 
-#include "galay-http/server/http_server.h"
-#include "galay-ws/server/ws_upgrade.h"
-#include "galay-ws/kernel/ws_conn.h"
-#include "galay-http/protoc/http_request.h"
-#include "galay-http/protoc/http_response.h"
-#include "galay-http/builder/http_builder.h"
-#include "galay-ws/kernel/writer_cfg.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-ws/server/ws_upgrade.h>
+#include <galay/cpp/galay-ws/kernel/ws_conn.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-http/protoc/http_response.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
+#include <galay/cpp/galay-ws/kernel/writer_cfg.h>
 #include <iostream>
 #include <atomic>
 #include <signal.h>

@@ -5,9 +5,9 @@
  * 通过条件：continuation 恢复到预期调度器且测试返回 0。
  */
 
-#include "galay-kernel/core/scheduler.hpp"
-#include "galay-kernel/core/task.h"
-#include "galay-kernel/core/waker.h"
+#include <galay/cpp/galay-kernel/core/scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/waker.h>
 
 #include <cassert>
 #include <deque>

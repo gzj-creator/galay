@@ -1,5 +1,5 @@
-#include "galay-ssl/async/ssl_socket.h"
-#include "galay-ssl/ssl/ssl_context.h"
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
+#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
 
 #include <chrono>
 

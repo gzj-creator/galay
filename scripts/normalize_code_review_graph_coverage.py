@@ -94,14 +94,14 @@ def load_module_production_symbols(
         FROM nodes
         WHERE kind IN ('Function', 'Class')
           AND is_test = 0
-          AND file_path LIKE '%/src/galay-%/%'
+          AND file_path LIKE '%/src/cpp/galay-%/%'
         """
     ).fetchall()
 
     grouped: dict[tuple[str, str], set[str]] = {}
     for row in rows:
         file_path = row["file_path"]
-        marker = "/src/galay-"
+        marker = "/src/cpp/galay-"
         if marker not in file_path:
             continue
         module = file_path.split(marker, 1)[1].split("/", 1)[0]

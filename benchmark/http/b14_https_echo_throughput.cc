@@ -4,8 +4,8 @@
  * @details 提供 keep-alive 的 200 OK 文本响应，用于与 Go/Rust HTTPS 服务横向对比
  */
 
-#include "galay-http/server/http_server.h"
-#include "galay-http/protoc/http_request.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>

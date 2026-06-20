@@ -11,24 +11,24 @@
 #include <atomic>
 #include <string_view>
 #include <thread>
-#include "galay-kernel/common/defn.hpp"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/common/defn.hpp>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/stdout_log.h"
 #include "result_writer.h"
 
 #ifdef USE_KQUEUE
-#include "galay-kernel/core/kqueue_scheduler.h"
-#include "galay-kernel/async/async_file.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
+#include <galay/cpp/galay-kernel/async/async_file.h>
 #endif
 
 #ifdef USE_EPOLL
-#include "galay-kernel/core/epoll_scheduler.h"
-#include "galay-kernel/async/aio_file.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
+#include <galay/cpp/galay-kernel/async/aio_file.h>
 #endif
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/uring_scheduler.h"
-#include "galay-kernel/async/async_file.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
+#include <galay/cpp/galay-kernel/async/async_file.h>
 #endif
 
 using namespace galay::kernel;

@@ -1,10 +1,10 @@
 #include <chrono>
 #include <string>
 
-#include <galay-etcd/base/etcd_config.h>
-#include <galay-mongo/base/mongo_config.h>
-#include <galay-mysql/base/mysql_config.h>
-#include <galay-redis/base/redis_config.h>
+#include <galay/cpp/galay-etcd/base/etcd_config.h>
+#include <galay/cpp/galay-mongo/base/mongo_config.h>
+#include <galay/cpp/galay-mysql/base/mysql_config.h>
+#include <galay/cpp/galay-redis/base/redis_config.h>
 
 int main()
 {

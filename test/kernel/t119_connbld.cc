@@ -5,10 +5,10 @@
  * 通过条件：所有建连成功、服务端 accept 计数完整、无 connect 超时/失败。
  */
 
-#include "galay-kernel/async/tcp_socket.h"
-#include "galay-kernel/common/host.hpp"
-#include "galay-kernel/core/awaitable.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/common/host.hpp>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <atomic>
 #include <chrono>
@@ -20,13 +20,13 @@
 #include <thread>
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

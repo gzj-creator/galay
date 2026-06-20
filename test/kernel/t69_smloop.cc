@@ -5,8 +5,8 @@
  * 通过条件：状态机完成完整收发环并返回预期结果。
  */
 
-#include "galay-kernel/core/awaitable.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -19,13 +19,13 @@
 #include <unistd.h>
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

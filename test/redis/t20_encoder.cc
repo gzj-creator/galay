@@ -1,4 +1,4 @@
-#include "galay-redis/protoc/redis_protocol.h"
+#include <galay/cpp/galay-redis/protoc/redis_protocol.h>
 
 #include <array>
 #include <iostream>

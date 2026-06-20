@@ -5,9 +5,9 @@
 #include <string>
 #include <utility>
 
-#include <galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
-#include "galay-mongo/base/mongo_error.h"
+#include <galay/cpp/galay-mongo/base/mongo_error.h>
 
 namespace mongo_example
 {

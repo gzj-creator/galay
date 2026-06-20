@@ -4,8 +4,8 @@
  * @details 测试 HttpClientAwaitable 的超时功能和连接断开处理
  */
 
-#include "galay-http/client/http_client.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http/client/http_client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <chrono>
 #include <thread>
 

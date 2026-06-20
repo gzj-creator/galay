@@ -4,6 +4,7 @@ if(NOT TARGET PkgConfig::SIMDJSON)
 endif()
 
 function(galay_etcd_configure_test_target target_name)
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     set_target_properties(${target_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON

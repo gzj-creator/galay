@@ -5,7 +5,7 @@
  * 通过条件：边沿唤醒语义成立且测试返回 0。
  */
 
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/sched_access.h"
 
 #include <cerrno>

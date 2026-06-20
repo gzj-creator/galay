@@ -6,9 +6,9 @@
  * 通过条件：本地 `ping -> pong` 自闭环完成并返回 0。
  */
 
-#include "galay-kernel/core/awaitable.h"
-#include "galay-kernel/core/runtime.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include <array>
 #include <atomic>
 #include <cerrno>

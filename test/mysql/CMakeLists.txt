@@ -5,7 +5,7 @@ function(add_mysql_test target_name source_file)
     set(executable_name "mysql_${target_name}")
     add_executable(${executable_name} ${source_file})
     target_link_libraries(${executable_name} PRIVATE galay::mysql)
-    target_include_directories(${executable_name} PRIVATE ${CMAKE_SOURCE_DIR})
+    target_include_directories(${executable_name} PRIVATE ${CMAKE_BINARY_DIR}/include ${CMAKE_SOURCE_DIR})
     set_target_properties(${executable_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON
@@ -61,7 +61,7 @@ add_mysql_test(t12_resilience t12_resilience.cc INTEGRATION LABELS resilience)
 # t13 - Async pool coroutine source guard
 add_mysql_test(t13_pool_coroutine_source t13_pool_coroutine_source.cc)
 target_compile_definitions(mysql_t13_pool_coroutine_source
-    PRIVATE GALAY_MYSQL_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src"
+    PRIVATE GALAY_MYSQL_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src/cpp"
 )
 
 # t14 - Async pool waiter/resume integration

@@ -8,11 +8,11 @@
 #include <sstream>
 
 #define private public
-#include "galay-ssl/async/ssl_await.h"
-#include "galay-ssl/async/ssl_socket.h"
+#include <galay/cpp/galay-ssl/async/ssl_await.h>
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
 #undef private
 
-#include "galay-ssl/ssl/ssl_context.h"
+#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
 
 #include <algorithm>
 #include <array>

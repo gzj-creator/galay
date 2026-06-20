@@ -3,7 +3,7 @@
  * @brief HPACK stateless/no-index encode contract
  */
 
-#include "galay-http2/protoc/http2_hpack.h"
+#include <galay/cpp/galay-http2/protoc/http2_hpack.h>
 #include <cassert>
 #include <iostream>
 

@@ -4,7 +4,7 @@
  * @details 单独测量 HPACK encode/decode 吞吐，排除网络 IO 开销
  */
 
-#include "galay-http2/protoc/http2_hpack.h"
+#include <galay/cpp/galay-http2/protoc/http2_hpack.h>
 #include <chrono>
 #include <iostream>
 #include <vector>

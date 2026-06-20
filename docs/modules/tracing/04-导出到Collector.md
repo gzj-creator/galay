@@ -5,7 +5,7 @@
 ## 直接导出
 
 ```cpp
-#include "galay-tracing/kernel/otlp_http_exporter.h"
+#include <galay/cpp/galay-tracing/kernel/otlp_http_exporter.h>
 
 galay::tracing::OtlpHttpExporterConfig config{
     .endpoint = "http://collector.internal:4318/v1/traces",

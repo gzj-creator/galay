@@ -5,9 +5,9 @@
  * 通过条件：客户端与服务端在 loopback 中各自只 await 一次 handshake/shutdown 即完成收发。
  */
 
-#include "galay-ssl/async/ssl_socket.h"
-#include "galay-ssl/ssl/ssl_context.h"
-#include <galay-kernel/core/task.h>
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
+#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include <atomic>
 #include <chrono>
 #include <iostream>
@@ -16,13 +16,13 @@
 #include <thread>
 
 #ifdef USE_KQUEUE
-#include <galay-kernel/core/kqueue_scheduler.h>
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using TestScheduler = galay::kernel::KqueueScheduler;
 #elif defined(USE_EPOLL)
-#include <galay-kernel/core/epoll_scheduler.h>
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include <galay-kernel/core/io_uring_scheduler.h>
+#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
 using TestScheduler = galay::kernel::IOUringScheduler;
 #endif
 

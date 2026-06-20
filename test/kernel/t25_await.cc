@@ -5,21 +5,21 @@
  * 通过条件：显式 sequence 流程断言全部成立，测试返回 0。
  */
 
-#include "galay-kernel/core/task.h"
-#include "galay-kernel/core/io_scheduler.hpp"
-#include "galay-kernel/core/awaitable.h"
-#include "galay-kernel/common/host.hpp"
+#include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/common/host.hpp>
 #include "test/stdout_log.h"
 #include "result_writer.h"
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 using TestScheduler = galay::kernel::IOUringScheduler;
 #elif defined(USE_EPOLL)
-#include "galay-kernel/core/epoll_scheduler.h"
+#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_KQUEUE)
-#include "galay-kernel/core/kqueue_scheduler.h"
+#include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
 using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 

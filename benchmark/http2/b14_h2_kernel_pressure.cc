@@ -3,10 +3,10 @@
  * @brief HTTP/2 kernel dispatcher/flow/scheduler pressure benchmark
  */
 
-#include "galay-http2/kernel/flow_control.h"
-#include "galay-http2/kernel/frame_disp.h"
-#include "galay-http2/kernel/h2_core.h"
-#include "galay-http2/kernel/out_sched.h"
+#include <galay/cpp/galay-http2/kernel/flow_control.h>
+#include <galay/cpp/galay-http2/kernel/frame_disp.h>
+#include <galay/cpp/galay-http2/kernel/h2_core.h>
+#include <galay/cpp/galay-http2/kernel/out_sched.h>
 #include <chrono>
 #include <cstdint>
 #include <iostream>

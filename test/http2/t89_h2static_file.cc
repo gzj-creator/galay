@@ -3,10 +3,10 @@
  * @brief HTTP/2 static file metadata/cache tests
  */
 
-#include "galay-http2/server/h2_static_file.h"
-#include "galay-http2/client/h2c_client.h"
-#include "galay-http2/server/http2_server.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http2/server/h2_static_file.h>
+#include <galay/cpp/galay-http2/client/h2c_client.h>
+#include <galay/cpp/galay-http2/server/http2_server.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <cassert>

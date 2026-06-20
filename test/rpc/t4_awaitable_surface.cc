@@ -6,9 +6,9 @@
  * 通过条件：目标成功编译，静态断言成立，程序返回 0。
  */
 
-#include "galay-rpc/kernel/rpc_client.h"
-#include "galay-rpc/kernel/rpc_conn.h"
-#include "galay-rpc/kernel/rpc_stream.h"
+#include <galay/cpp/galay-rpc/kernel/rpc_client.h>
+#include <galay/cpp/galay-rpc/kernel/rpc_conn.h>
+#include <galay/cpp/galay-rpc/kernel/rpc_stream.h>
 
 #include <concepts>
 #include <type_traits>

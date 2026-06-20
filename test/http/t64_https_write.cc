@@ -6,10 +6,10 @@
 #include <sstream>
 
 #define private public
-#include "galay-http/kernel/http_writer.h"
+#include <galay/cpp/galay-http/kernel/http_writer.h>
 #undef private
-#include "galay-http/builder/http_builder.h"
-#include "galay-ssl/async/ssl_socket.h"
+#include <galay/cpp/galay-http/builder/http_builder.h>
+#include <galay/cpp/galay-ssl/async/ssl_socket.h>
 #endif
 
 int main() {

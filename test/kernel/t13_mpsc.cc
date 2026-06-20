@@ -10,9 +10,9 @@
 #include <chrono>
 #include <thread>
 #include <vector>
-#include "galay-kernel/concurrency/mpsc_channel.h"
-#include "galay-kernel/core/task.h"
-#include "galay-kernel/core/compute_scheduler.h"
+#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 #include "test/stdout_log.h"
 #include "result_writer.h"
 

@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 
-#include "galay-http/kernel/http_session.h"
+#include <galay/cpp/galay-http/kernel/http_session.h>
 
 int main()
 {

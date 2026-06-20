@@ -6,7 +6,7 @@
  * 通过条件：目标成功编译，静态断言成立，测试返回 0。
  */
 
-#include "galay-kernel/core/awaitable.h"
+#include <galay/cpp/galay-kernel/core/awaitable.h>
 
 #include <chrono>
 #include <concepts>

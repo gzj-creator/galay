@@ -3,7 +3,7 @@
  * @brief 验证 kernel FileDescriptor 的错误传播与所有权语义。
  */
 
-#include "galay-kernel/common/file_descriptor.h"
+#include <galay/cpp/galay-kernel/common/file_descriptor.h>
 
 #include <cerrno>
 #include <cstring>

@@ -29,7 +29,7 @@
 | 异步连接池 | `galay-mysql/async/conn_pool.h` | `examples/mysql/include/e3_pool.cc` | `test/mysql/t5_pool.cc` |
 | 同步客户端 | `galay-mysql/sync/mysql_client.h` | `examples/mysql/include/e2_query.cc`、`examples/mysql/include/e4_prepared.cc` | `test/mysql/t4_client.cc` |
 | 协议编码 / 认证辅助 | `galay-mysql/protoc/builder.h`、`galay-mysql/protoc/mysql_auth.h`、`galay-mysql/protoc/mysql_protocol.h`、`galay-mysql/protoc/mysql_packet.h` | `examples/mysql/include/e5_pipeline.cc` | `test/mysql/t1_protocol.cc`、`test/mysql/t2_auth.cc` |
-| monorepo target | `src/galay-mysql/CMakeLists.txt`、`galay::mysql` | 顶层 `CMakeLists.txt` 的 `GALAY_BUILD_MYSQL` | `test/mysql/CMakeLists.txt` |
+| monorepo target | `src/cpp/galay-mysql/CMakeLists.txt`、`galay::mysql` | 顶层 `CMakeLists.txt` 的 `GALAY_BUILD_MYSQL` | `test/mysql/CMakeLists.txt` |
 
 - 当 import / module 构建路径启用时，对应示例也存在于 `examples/mysql/import/`。
 - 回答“这个 API 在哪有真实消费者”时，应优先回到上表中的 examples / tests，再回到 Markdown 说明。
@@ -871,7 +871,7 @@ public:
 target_link_libraries(app PRIVATE galay::mysql)
 ```
 
-当前 `src/galay-mysql/CMakeLists.txt` 定义 `mysql` target 和 `galay::mysql` alias；本页不把旧独立仓库安装包路径作为当前 monorepo 的事实。
+当前 `src/cpp/galay-mysql/CMakeLists.txt` 定义 `mysql` target 和 `galay::mysql` alias；本页不把旧独立仓库安装包路径作为当前 monorepo 的事实。
 
 ## 使用备注
 

@@ -2,7 +2,7 @@ function(galay_add_redis_benchmark target_name source_file)
     add_executable(${target_name} ${source_file})
     set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
     target_link_libraries(${target_name} PRIVATE galay::redis)
-    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src ${PROJECT_SOURCE_DIR}/examples/redis)
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include ${PROJECT_SOURCE_DIR}/examples/redis)
     set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON CXX_EXTENSIONS OFF)
 endfunction()
 

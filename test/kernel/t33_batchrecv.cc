@@ -5,8 +5,8 @@
  * 通过条件：压力下无丢消息或卡死，测试返回 0。
  */
 
-#include "galay-kernel/concurrency/mpsc_channel.h"
-#include "galay-kernel/core/compute_scheduler.h"
+#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 
 #include <atomic>
 #include <chrono>

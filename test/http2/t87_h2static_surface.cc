@@ -3,7 +3,7 @@
  * @brief HTTP/2 静态响应配置入口 public surface 测试
  */
 
-#include "galay-http2/server/http2_server.h"
+#include <galay/cpp/galay-http2/server/http2_server.h>
 
 #include <cassert>
 #include <iostream>

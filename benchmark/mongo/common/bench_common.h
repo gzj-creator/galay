@@ -1,10 +1,10 @@
 #ifndef GALAY_MONGO_BENCH_COMMON_H
 #define GALAY_MONGO_BENCH_COMMON_H
 
-#include "galay-mongo/base/mongo_config.h"
-#include "galay-mongo/base/mongo_error.h"
+#include <galay/cpp/galay-mongo/base/mongo_config.h>
+#include <galay/cpp/galay-mongo/base/mongo_error.h>
 
-#include <galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <algorithm>
 #include <cerrno>

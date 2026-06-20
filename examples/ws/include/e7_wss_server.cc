@@ -11,12 +11,12 @@
 #include <chrono>
 #include <csignal>
 #include <iostream>
-#include "galay-http/server/http_server.h"
-#include "galay-ws/server/ws_upgrade.h"
-#include "galay-ws/protoc/ws_frame.h"
-#include "galay-http/protoc/http_request.h"
-#include "galay-http/protoc/http_response.h"
-#include "galay-http/builder/http_builder.h"
+#include <galay/cpp/galay-http/server/http_server.h>
+#include <galay/cpp/galay-ws/server/ws_upgrade.h>
+#include <galay/cpp/galay-ws/protoc/ws_frame.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-http/protoc/http_response.h>
+#include <galay/cpp/galay-http/builder/http_builder.h>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 

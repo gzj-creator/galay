@@ -5,8 +5,8 @@
  * 通过条件：延迟唤醒不导致丢消息或卡死，测试返回 0。
  */
 
-#include "galay-kernel/concurrency/unsafe_channel.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-kernel/concurrency/unsafe_channel.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <atomic>
 #include <chrono>
 #include <iostream>

@@ -9,10 +9,10 @@
 #include <chrono>
 #include <vector>
 #include "benchmark/benchmark_sync.h"
-#include "galay-kernel/concurrency/unsafe_channel.h"
-#include "galay-kernel/concurrency/mpsc_channel.h"
-#include "galay-kernel/core/task.h"
-#include "galay-kernel/core/compute_scheduler.h"
+#include <galay/cpp/galay-kernel/concurrency/unsafe_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 #include "test/stdout_log.h"
 
 using namespace galay::kernel;

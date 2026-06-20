@@ -4,7 +4,7 @@
 #include <sstream>
 
 #define private public
-#include "galay-ws/kernel/ws_reader.h"
+#include <galay/cpp/galay-ws/kernel/ws_reader.h>
 #undef private
 
 using galay::utils::RingBuffer;

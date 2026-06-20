@@ -1,6 +1,6 @@
-#include "galay-tracing/adapters/spdlog_sink.h"
+#include <galay/cpp/galay-tracing/adapters/spdlog_sink.h>
 
-#include "galay-tracing/log/log_record.h"
+#include <galay/cpp/galay-tracing/log/log_record.h>
 
 #include <cassert>
 #include <memory>

@@ -1,5 +1,5 @@
-#include "galay-mysql/async/client.h"
-#include <galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-mysql/async/client.h>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <concepts>
 #include <expected>
 #include <type_traits>

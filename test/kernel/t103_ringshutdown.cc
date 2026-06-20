@@ -3,8 +3,8 @@
  * @brief 验证 Chase-Lev ring 析构时会释放仍排队的任务引用。
  */
 
-#include "galay-kernel/core/io_scheduler.hpp"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/task.h>
 
 #include <iostream>
 

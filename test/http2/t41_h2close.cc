@@ -3,8 +3,8 @@
  * @brief HTTP/2 close path should stay in transport teardown scope
  */
 
-#include "galay-http2/kernel/h2_core.h"
-#include "galay-http2/kernel/http2_conn.h"
+#include <galay/cpp/galay-http2/kernel/h2_core.h>
+#include <galay/cpp/galay-http2/kernel/http2_conn.h>
 #include <cerrno>
 #include <chrono>
 #include <iostream>

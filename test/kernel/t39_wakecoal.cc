@@ -5,7 +5,7 @@
  * 通过条件：重复唤醒被成功压缩且任务仍能完整执行，测试返回 0。
  */
 
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/sched_access.h"
 
 #include <cerrno>

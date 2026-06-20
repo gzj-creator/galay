@@ -1,7 +1,7 @@
 #include <iostream>
 
 #include "common/config.h"
-#include "galay-mongo/sync/mongo_client.h"
+#include <galay/cpp/galay-mongo/sync/mongo_client.h>
 
 using namespace galay::mongo;
 

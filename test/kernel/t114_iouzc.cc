@@ -20,12 +20,12 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include "galay-kernel/async/tcp_socket.h"
-#include "galay-kernel/core/task.h"
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/core/task.h>
 #include "test/stdout_log.h"
 
 #ifdef USE_IOURING
-#include "galay-kernel/core/uring_scheduler.h"
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 #endif
 
 using namespace galay::async;

@@ -4,8 +4,8 @@
  * @details 演示如何使用 HttpClient 发送请求到 Echo 服务器
  */
 
-#include "galay-http/client/http_client.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http/client/http_client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <map>
 #include <string>

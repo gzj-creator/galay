@@ -4,8 +4,8 @@
  */
 
 #include <iostream>
-#include "galay-http/client/http_client.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-http/client/http_client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 using namespace galay::http;
 using namespace galay::kernel;

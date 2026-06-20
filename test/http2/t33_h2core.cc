@@ -3,8 +3,8 @@
  * @brief HTTP/2 connection core lifecycle contract test
  */
 
-#include "galay-http2/kernel/h2_core.h"
-#include "galay-http2/builder/http2_frame_builder.h"
+#include <galay/cpp/galay-http2/kernel/h2_core.h>
+#include <galay/cpp/galay-http2/builder/http2_frame_builder.h>
 #include <cassert>
 #include <iostream>
 

@@ -1,5 +1,5 @@
-#include "galay-mcp/client/client.h"
-#include "galay-kernel/core/runtime.h"
+#include <galay/cpp/galay-mcp/client/client.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <concepts>
 #include <expected>

@@ -1,4 +1,4 @@
-#include "galay-etcd/sync/etcd_client.h"
+#include <galay/cpp/galay-etcd/sync/etcd_client.h>
 
 #include <chrono>
 #include <iostream>

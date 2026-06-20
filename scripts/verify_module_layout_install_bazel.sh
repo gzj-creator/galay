@@ -11,14 +11,14 @@ consumer_build="${build}/consumer-build"
 cd "${root}"
 
 required_dirs=(
-  "src/galay-kernel/core"
-  "src/galay-http/protoc"
-  "src/galay-http2/protoc"
-  "src/galay-ws/protoc"
-  "src/galay-rpc/protoc"
-  "src/galay-redis/protoc"
-  "src/galay-mysql/protoc"
-  "src/galay-mongo/protoc"
+  "src/cpp/galay-kernel/core"
+  "src/cpp/galay-http/protoc"
+  "src/cpp/galay-http2/protoc"
+  "src/cpp/galay-ws/protoc"
+  "src/cpp/galay-rpc/protoc"
+  "src/cpp/galay-redis/protoc"
+  "src/cpp/galay-mysql/protoc"
+  "src/cpp/galay-mongo/protoc"
 )
 for dir in "${required_dirs[@]}"; do
   if [[ ! -d "${dir}" ]]; then
@@ -27,8 +27,8 @@ for dir in "${required_dirs[@]}"; do
   fi
 done
 
-if [[ -d "${root}/src/galay-tracing/internal" ]] && ! find "${root}/src/galay-tracing/internal" -type f | grep -q .; then
-  echo "empty accidental source directory remains: src/galay-tracing/internal" >&2
+if [[ -d "${root}/src/cpp/galay-tracing/internal" ]] && ! find "${root}/src/cpp/galay-tracing/internal" -type f | grep -q .; then
+  echo "empty accidental source directory remains: src/cpp/galay-tracing/internal" >&2
   exit 1
 fi
 
@@ -83,11 +83,11 @@ cmake --install "${build}"
 test -f "${prefix}/lib/cmake/galay/galayConfig.cmake"
 test -f "${prefix}/lib/cmake/galay/galayTargets.cmake"
 test -f "${prefix}/lib/cmake/galay-kernel/galay-kernelConfig.cmake"
-test -f "${prefix}/include/galay-kernel/core/runtime.h"
-test -f "${prefix}/include/galay-http/protoc/http_request.h"
-test -f "${prefix}/include/galay-ws/protoc/ws_frame.h"
-test -f "${prefix}/include/galay-rpc/protoc/rpc_message.h"
-test -f "${prefix}/include/galay-redis/protoc/redis_protocol.h"
+test -f "${prefix}/include/galay/cpp/galay-kernel/core/runtime.h"
+test -f "${prefix}/include/galay/cpp/galay-http/protoc/http_request.h"
+test -f "${prefix}/include/galay/cpp/galay-ws/protoc/ws_frame.h"
+test -f "${prefix}/include/galay/cpp/galay-rpc/protoc/rpc_message.h"
+test -f "${prefix}/include/galay/cpp/galay-redis/protoc/redis_protocol.h"
 
 mkdir -p "${consumer}"
 cat > "${consumer}/CMakeLists.txt" <<'EOF'
@@ -103,10 +103,10 @@ target_link_libraries(galay_consumer PRIVATE galay::kernel galay::http galay::re
 EOF
 
 cat > "${consumer}/main.cc" <<'EOF'
-#include <galay-http/protoc/http_request.h>
-#include <galay-kernel/core/runtime.h>
-#include <galay-redis/base/redis_config.h>
-#include <galay-redis/protoc/redis_protocol.h>
+#include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-redis/base/redis_config.h>
+#include <galay/cpp/galay-redis/protoc/redis_protocol.h>
 
 int main()
 {
@@ -122,11 +122,11 @@ cmake --build "${consumer_build}" -j "${jobs}"
 
 test -f MODULE.bazel
 test -f BUILD.bazel
-test -f src/galay-utils/BUILD
-test -f src/galay-kernel/BUILD
-test -f src/galay-http/BUILD
+test -f src/cpp/galay-utils/BUILD
+test -f src/cpp/galay-kernel/BUILD
+test -f src/cpp/galay-http/BUILD
 
 if command -v bazel >/dev/null 2>&1; then
   bazel query //src/... >/dev/null
-  bazel build //src/galay-utils:galay-utils //src/galay-kernel:galay-kernel >/dev/null
+  bazel build //src/cpp/galay-utils:galay-utils //src/cpp/galay-kernel:galay-kernel >/dev/null
 fi

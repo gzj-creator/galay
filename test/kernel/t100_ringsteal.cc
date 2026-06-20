@@ -5,7 +5,7 @@
  * 通过条件：10M 轮结束后消费总数等于生产总数，且没有重复消费。
  */
 
-#include "galay-kernel/core/io_scheduler.hpp"
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 
 #include <atomic>
 #include <coroutine>

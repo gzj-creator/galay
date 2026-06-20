@@ -1,7 +1,7 @@
 #include "config.h"
-#include "galay-mysql/async/conn_pool.h"
+#include <galay/cpp/galay-mysql/async/conn_pool.h>
 
-#include <galay-kernel/core/runtime.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>
 #include <chrono>

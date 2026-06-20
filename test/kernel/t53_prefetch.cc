@@ -5,7 +5,7 @@
  * 通过条件：预取优化下消息仍完整可见，测试返回 0。
  */
 
-#include "galay-kernel/concurrency/mpsc_channel.h"
+#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
 #include "test/mpsc_access.h"
 
 #include <iostream>

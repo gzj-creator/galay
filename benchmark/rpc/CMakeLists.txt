@@ -1,7 +1,7 @@
 function(galay_add_rpc_benchmark target_name source_file)
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::rpc)
-    target_include_directories(${target_name} PRIVATE ${PROJECT_SOURCE_DIR}/src)
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 endfunction()
 

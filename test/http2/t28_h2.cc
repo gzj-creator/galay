@@ -3,7 +3,7 @@
  * @brief H2 (HTTP/2 over TLS) 服务器测试程序
  */
 
-#include "galay-http2/server/http2_server.h"
+#include <galay/cpp/galay-http2/server/http2_server.h>
 #include <iostream>
 #include <atomic>
 #include <csignal>
