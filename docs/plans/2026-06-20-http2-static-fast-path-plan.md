@@ -64,7 +64,7 @@ rtk git add <cmake files>
 rtk git commit -m "fix: 修复 OpenSSL 构建探测"
 ```
 
-## [ ] Task 2: 建立 h2load 外部压测脚本与文档基线
+## [x] Task 2: 建立 h2load 外部压测脚本与文档基线
 
 **Files:**
 - Create: `scripts/http2_h2load_compare.sh`
