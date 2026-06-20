@@ -445,7 +445,7 @@ rtk git commit -m "perf: 优化 HTTP2 ready stream 调度"
 
 若收益低于 10% 或代码显著复杂，不合入，只记录“不做”的证据。
 
-## [ ] Task 10: 最终回归、对比报告与计划勾选
+## [x] Task 10: 最终回归、对比报告与计划勾选
 
 **Files:**
 - Modify: `docs/modules/http2/05-性能测试.md`

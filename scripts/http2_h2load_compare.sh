@@ -12,6 +12,13 @@ MODE="${1:---post-echo}"
 if [[ "$MODE" == "--static-empty" ]]; then
     MODE="--galay-static-empty"
 fi
+if [[ "$MODE" == "--all" ]]; then
+    "$0" --post-echo
+    "$0" --galay-static-empty
+    "$0" --galay-static-small
+    "$0" --static-files
+    exit 0
+fi
 
 DURATION="${DURATION:-10}"
 WARM_UP="${WARM_UP:-2}"
@@ -175,7 +182,7 @@ if [[ "$MODE" != "--post-echo" &&
       "$MODE" != "--galay-static-empty" &&
       "$MODE" != "--galay-static-small" &&
       "$MODE" != "--static-files" ]]; then
-    echo "usage: $0 [--post-echo|--galay-static-empty|--static-empty|--galay-static-small|--static-files]" >&2
+    echo "usage: $0 [--post-echo|--galay-static-empty|--static-empty|--galay-static-small|--static-files|--all]" >&2
     exit 2
 fi
 
