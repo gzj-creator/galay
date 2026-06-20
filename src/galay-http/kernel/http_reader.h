@@ -13,7 +13,7 @@
 #ifndef GALAY_HTTP_READER_H
 #define GALAY_HTTP_READER_H
 
-#include "reader_cfg.h"
+#include "reader_settings.h"
 #include "galay-http/common/iovec_utils.h"
 #include "galay-http/protoc/http_chunk.h"
 #include "galay-http/protoc/http_error.h"

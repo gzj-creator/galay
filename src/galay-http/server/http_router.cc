@@ -1,7 +1,7 @@
 #include "galay-http/server/http_router.h"
 #include "galay-http/client/http_client.h"
 #include "galay-http/common/http_log.h"
-#include "file_descriptor.h"
+#include "galay-kernel/common/file_descriptor.h"
 #include "http_etag.h"
 #include "http_range.h"
 #include "galay-http/protoc/http_response.h"
@@ -26,6 +26,8 @@
 
 namespace galay::http
 {
+
+using galay::kernel::FileDescriptor;
 
 namespace {
 
@@ -665,7 +667,7 @@ bool HttpRouter::validatePath(const std::string& path, std::string& error) const
 // ==================== 静态文件服务实现 ====================
 
 void HttpRouter::mount(const std::string& routePrefix, const std::string& dirPath,
-                       const StaticFileConfig& config)
+                       const StaticFileSetting& config)
 {
     namespace fs = std::filesystem;
 
@@ -714,7 +716,7 @@ void HttpRouter::mount(const std::string& routePrefix, const std::string& dirPat
 }
 
 void HttpRouter::mountHardly(const std::string& routePrefix, const std::string& dirPath,
-                             const StaticFileConfig& config)
+                             const StaticFileSetting& config)
 {
     namespace fs = std::filesystem;
 
@@ -734,7 +736,7 @@ void HttpRouter::tryFiles(const std::string& routePrefix,
                           const std::string& dirPath,
                           const std::string& upstreamHost,
                           uint16_t upstreamPort,
-                          const StaticFileConfig& config,
+                          const StaticFileSetting& config,
                           ProxyMode mode)
 {
     namespace fs = std::filesystem;
@@ -836,7 +838,7 @@ HttpRouteHandler* HttpRouter::fallbackProxyHandler()
 
 HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePrefix,
                                                      const std::string& dirPath,
-                                                     const StaticFileConfig& config,
+                                                     const StaticFileSetting& config,
                                                      HttpRouteHandler fallbackHandler)
 {
     namespace fs = std::filesystem;
@@ -954,7 +956,7 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
 
 void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
                                           const std::string& dirPath,
-                                          const StaticFileConfig& config,
+                                          const StaticFileSetting& config,
                                           const std::string& currentPath)
 {
     namespace fs = std::filesystem;
@@ -994,7 +996,7 @@ void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
 }
 
 HttpRouteHandler HttpRouter::createSingleFileHandler(const std::string& filePath,
-                                                     const StaticFileConfig& config)
+                                                     const StaticFileSetting& config)
 {
     // 捕获文件路径和配置
     return [filePath, config](HttpConn& conn, HttpRequest req) -> Task<void> {
@@ -1298,7 +1300,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                                        const std::string& filePath,
                                        size_t fileSize,
                                        const std::string& mimeType,
-                                       const StaticFileConfig& config)
+                                       const StaticFileSetting& config)
 {
     // 生成稳定 ETag（mtime + size + inode/路径哈希）
     namespace fs = std::filesystem;
@@ -1615,7 +1617,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
                                        const std::string& etag,
                                        const std::string& lastModified,
                                        const HttpRange& range,
-                                       const StaticFileConfig& config)
+                                       const StaticFileSetting& config)
 {
     auto writer = conn.getWriter();
 
@@ -1732,7 +1734,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
                                           const std::string& etag,
                                           const std::string& lastModified,
                                           const RangeParseResult& rangeResult,
-                                          const StaticFileConfig& config)
+                                          const StaticFileSetting& config)
 {
     auto writer = conn.getWriter();
 

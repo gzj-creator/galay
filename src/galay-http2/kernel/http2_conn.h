@@ -1322,7 +1322,7 @@ public:
         }
     }
 
-    // StreamManager 访问（需要 include stream_mgr.h 后才能使用）
+    // StreamManager 访问（需要 include stream_manager.h 后才能使用）
     Http2StreamManagerImpl<SocketType>* streamManager() { return m_stream_manager.get(); }
     void initStreamManager() {
         if (!m_stream_manager) {
@@ -1734,7 +1734,7 @@ using Http2sConn = Http2ConnImpl<galay::ssl::SslSocket>;
 } // namespace galay::http2
 
 // Http2StreamManager 的完整定义（解决 unique_ptr 析构需要完整类型的问题）
-#include "stream_mgr.h"
+#include "stream_manager.h"
 
 namespace galay::http2
 {

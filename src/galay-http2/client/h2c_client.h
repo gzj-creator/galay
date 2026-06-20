@@ -13,7 +13,7 @@
 
 #include "galay-http2/kernel/http2_conn.h"
 #include "galay-http2/kernel/http2_stream.h"
-#include "galay-http2/kernel/stream_mgr.h"
+#include "galay-http2/kernel/stream_manager.h"
 #include "galay-http/common/iovec_utils.h"
 #include "galay-http/protoc/http_request.h"
 #include "galay-http/protoc/http_response.h"

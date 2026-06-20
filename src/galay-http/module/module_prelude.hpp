@@ -179,8 +179,8 @@
 #if __has_include("galay-http2/kernel/http2_stream.h")
 #include "galay-http2/kernel/http2_stream.h"
 #endif
-#if __has_include("galay-http2/kernel/stream_mgr.h")
-#include "galay-http2/kernel/stream_mgr.h"
+#if __has_include("galay-http2/kernel/stream_manager.h")
+#include "galay-http2/kernel/stream_manager.h"
 #endif
 #if __has_include("galay-ws/client/ws_client.h")
 #include "galay-ws/client/ws_client.h"

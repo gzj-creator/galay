@@ -60,6 +60,7 @@
   - `galay-kernel/common/host.hpp`
   - `galay-kernel/common/sleep.hpp`
   - `galay-kernel/common/buffer.h`
+  - `galay-kernel/common/file_descriptor.h`
   - `galay-utils/cache/byte_queue_view.hpp`
   - `galay-kernel/common/error.h`
 - 并发：

@@ -8,7 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include "galay-http/server/http_router.h"
-#include "galay-http/server/static_cfg.h"
+#include "galay-http/server/file_settings.h"
 
 using namespace galay::http;
 namespace fs = std::filesystem;
@@ -48,7 +48,7 @@ void test_memory_mode() {
     createTestFiles(testDir);
 
     // 配置为 MEMORY 模式
-    StaticFileConfig config;
+    StaticFileSetting config;
     config.setTransferMode(FileTransferMode::MEMORY);
 
     router.mount("/memory", testDir, config);
@@ -75,7 +75,7 @@ void test_chunk_mode() {
     createTestFiles(testDir);
 
     // 配置为 CHUNK 模式
-    StaticFileConfig config;
+    StaticFileSetting config;
     config.setTransferMode(FileTransferMode::CHUNK);
     config.setChunkSize(32 * 1024);  // 32KB chunks
 
@@ -102,7 +102,7 @@ void test_sendfile_mode() {
     createTestFiles(testDir);
 
     // 配置为 SENDFILE 模式
-    StaticFileConfig config;
+    StaticFileSetting config;
     config.setTransferMode(FileTransferMode::SENDFILE);
     config.setSendFileChunkSize(1024 * 1024);  // 1MB per sendfile call
 
@@ -129,7 +129,7 @@ void test_auto_mode() {
     createTestFiles(testDir);
 
     // 配置为 AUTO 模式
-    StaticFileConfig config;
+    StaticFileSetting config;
     config.setTransferMode(FileTransferMode::AUTO);
     config.setSmallFileThreshold(64 * 1024);   // 64KB
     config.setLargeFileThreshold(1024 * 1024); // 1MB
@@ -168,7 +168,7 @@ void test_mountHardly_with_modes() {
     // 测试 MEMORY 模式
     {
         HttpRouter router;
-        StaticFileConfig config;
+        StaticFileSetting config;
         config.setTransferMode(FileTransferMode::MEMORY);
         router.mountHardly("/static1", testDir, config);
         assert(router.size() >= 3);
@@ -178,7 +178,7 @@ void test_mountHardly_with_modes() {
     // 测试 SENDFILE 模式
     {
         HttpRouter router;
-        StaticFileConfig config;
+        StaticFileSetting config;
         config.setTransferMode(FileTransferMode::SENDFILE);
         router.mountHardly("/static2", testDir, config);
         assert(router.size() >= 3);
@@ -188,7 +188,7 @@ void test_mountHardly_with_modes() {
     // 测试 AUTO 模式
     {
         HttpRouter router;
-        StaticFileConfig config;
+        StaticFileSetting config;
         config.setTransferMode(FileTransferMode::AUTO);
         router.mountHardly("/static3", testDir, config);
         assert(router.size() >= 3);
@@ -203,7 +203,7 @@ void test_mountHardly_with_modes() {
 void test_config_parameters() {
     std::cout << "\n=== Test 6: Configuration Parameters ===" << std::endl;
 
-    StaticFileConfig config;
+    StaticFileSetting config;
 
     // 测试默认值
     assert(config.getTransferMode() == FileTransferMode::AUTO);

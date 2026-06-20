@@ -13,6 +13,7 @@
 
 ### Added
 
+- 新增 `galay-kernel/common/file_descriptor.h`，将 POSIX 文件描述符 RAII 封装迁移到 kernel 模块，并补充 kernel 边界测试覆盖打开失败、移动所有权与 release 语义。
 - 新增 MCP 生产运行策略值类型 `mcp_policy.h`（传输资源限制、超时、HTTP 会话与认证策略，默认构造保持兼容），并补齐 `Timeout`/`Cancelled`/`Overload`/`Unauthorized`/`PayloadTooLarge` 错误码及 JSON-RPC 映射。
 - 新增 MySQL RAII 连接租约 `MysqlPoolLease` 与 `acquireLease()` awaitable，借出连接在析构时自动归还，支持 `dismiss()` 转交所有权。
 - 新增 Tracing span events/links 序列化支持，`file_span_exporter` 与 `otlp_http_exporter` 输出事件与链接，模块导出 `SpanEvent`/`SpanLink`。
@@ -29,12 +30,17 @@
 
 ### Changed
 
+- 统一 HTTP/HTTP2 内部头文件命名：`reader_cfg.h`/`writer_cfg.h` 改为 `reader_settings.h`/`writer_settings.h`，`static_cfg.h` 改为 `file_settings.h`，`stream_mgr.h` 改为 `stream_manager.h`，并同步更新源码、示例、测试与文档引用。
 - MySQL 同步与异步客户端认证流程改为按当前认证插件状态循环处理，支持服务端 `AuthSwitchRequest` 后重算认证响应，并保留 `caching_sha2_password` fast/full auth 流程。
 - MySQL 异步连接池改用无锁队列与协程 waker 管理空闲连接和等待者，避免在协程获取连接路径中使用阻塞同步。
 - etcd 与 Redis 集成测试中的轮询等待改为协程等待/睡眠，减少 IO 调度线程上的阻塞等待。
 - 移除旧协程任务别名与相关命名，统一改用 `Task<void>` 表达异步任务接口。
 - 继续整理剩余命名、注释与示例表述，统一任务与句柄相关术语，并同步修正文档。
 - 调整 HTTP、Mongo、Redis 集成测试构建规则，按可选模块和集成测试二进制需求决定目标注册与构建。
+
+### Removed
+
+- 移除 `galay-http/server/file_descriptor.h`，HTTP 静态文件发送路径改为直接使用 kernel 层 `FileDescriptor`。
 
 ### Fixed
 

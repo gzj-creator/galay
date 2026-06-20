@@ -13,7 +13,7 @@
 #define GALAY_HTTP_ROUTER_H
 
 #include "galay-http/kernel/http_conn.h"
-#include "static_cfg.h"
+#include "file_settings.h"
 #include "http_range.h"
 #include "galay-http/protoc/http_request.h"
 #include "galay-http/protoc/http_base.h"
@@ -157,7 +157,7 @@ public:
      * @brief 动态挂载静态文件目录（运行时查找）
      * @param routePrefix 路由前缀，例如 "/static"
      * @param dirPath 本地文件系统目录路径
-     * @param config 静态文件传输配置（可选）
+     * @param setting 静态文件传输配置（可选）
      * @details 注册一个模糊匹配路由，运行时动态查找文件系统中的文件
      *          例如：mount("/static", "./public")
      *          访问 /static/css/style.css 会查找 ./public/css/style.css
@@ -169,13 +169,13 @@ public:
      *          - AUTO: 根据文件大小自动选择（默认）
      */
     void mount(const std::string& routePrefix, const std::string& dirPath,
-               const StaticFileConfig& config = StaticFileConfig());
+               const StaticFileSetting& setting = StaticFileSetting());
 
     /**
      * @brief 静态挂载静态文件目录（启动时注册）
      * @param routePrefix 路由前缀，例如 "/static"
      * @param dirPath 本地文件系统目录路径
-     * @param config 静态文件传输配置（可选）
+     * @param setting 静态文件传输配置（可选）
      * @details 在调用时遍历目录，为所有文件创建精确路由并注册到 map
      *          例如：mountHardly("/static", "./public")
      *          会为 ./public 下的所有文件创建精确路由
@@ -183,7 +183,7 @@ public:
      *          支持三种传输模式（同 mount）
      */
     void mountHardly(const std::string& routePrefix, const std::string& dirPath,
-                     const StaticFileConfig& config = StaticFileConfig());
+                     const StaticFileSetting& setting = StaticFileSetting());
 
     /**
      * @brief Nginx 风格 try_files（静态命中优先，未命中回源代理）
@@ -191,7 +191,8 @@ public:
      * @param dirPath 本地文件系统目录路径
      * @param upstreamHost 上游主机
      * @param upstreamPort 上游端口
-     * @param config 静态文件传输配置（可选）
+     * @param setting 静态文件传输配置（可选）
+     * @param mode
      * @details 行为等价于：
      *          location /static/ { try_files $uri @upstream; }
      */
@@ -199,7 +200,7 @@ public:
                   const std::string& dirPath,
                   const std::string& upstreamHost,
                   uint16_t upstreamPort,
-                  const StaticFileConfig& config = StaticFileConfig(),
+                  const StaticFileSetting& setting = StaticFileSetting(),
                   ProxyMode mode = ProxyMode::Http);
 
     /**
@@ -207,6 +208,7 @@ public:
      * @param routePrefix 路由前缀，例如 "/api" 或 "/"（全量代理）
      * @param upstreamHost 上游主机
      * @param upstreamPort 上游端口
+     * @param mode
      * @details 注册一个通配符路由，将请求转发到上游 HTTP 服务
      *          例如：proxy("/api", "127.0.0.1", 8080)
      *          访问 /api/users 会转发为 http://127.0.0.1:8080/users
@@ -279,7 +281,7 @@ private:
      */
     HttpRouteHandler createStaticFileHandler(const std::string& routePrefix,
                                              const std::string& dirPath,
-                                             const StaticFileConfig& config,
+                                             const StaticFileSetting& config,
                                              HttpRouteHandler fallbackHandler = HttpRouteHandler());
 
     /**
@@ -291,7 +293,7 @@ private:
      */
     void registerFilesRecursively(const std::string& routePrefix,
                                    const std::string& dirPath,
-                                   const StaticFileConfig& config,
+                                   const StaticFileSetting& config,
                                    const std::string& currentPath = "");
 
     /**
@@ -301,7 +303,7 @@ private:
      * @return 处理函数
      */
     HttpRouteHandler createSingleFileHandler(const std::string& filePath,
-                                             const StaticFileConfig& config);
+                                             const StaticFileSetting& config);
 
     /**
      * @brief 创建反向代理处理器
@@ -330,7 +332,7 @@ private:
                                       const std::string& filePath,
                                       size_t fileSize,
                                       const std::string& mimeType,
-                                      const StaticFileConfig& config);
+                                      const StaticFileSetting& config);
 
     /**
      * @brief 发送单个 Range 响应（206 Partial Content）
@@ -353,7 +355,7 @@ private:
                                       const std::string& etag,
                                       const std::string& lastModified,
                                       const HttpRange& range,
-                                      const StaticFileConfig& config);
+                                      const StaticFileSetting& config);
 
     /**
      * @brief 发送多个 Range 响应（206 Partial Content with multipart/byteranges）
@@ -376,7 +378,7 @@ private:
                                          const std::string& etag,
                                          const std::string& lastModified,
                                          const RangeParseResult& rangeResult,
-                                         const StaticFileConfig& config);
+                                         const StaticFileSetting& config);
 
 private:
     // 精确匹配路由表：HttpMethod -> (path -> handler)

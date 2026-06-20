@@ -7,7 +7,7 @@
 #include "galay-http/server/http_server.h"
 #include "galay-http/server/http_router.h"
 #include "galay-http/kernel/http_conn.h"
-#include "galay-http/server/static_cfg.h"
+#include "galay-http/server/file_settings.h"
 #include "galay-http/server/http_etag.h"
 #include "galay-http/server/http_range.h"
 #include "galay-http/builder/http_builder.h"

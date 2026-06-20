@@ -13,7 +13,7 @@
 #define GALAY_HTTP2_SERVER_H
 
 #include "galay-http2/kernel/http2_conn.h"
-#include "galay-http2/kernel/stream_mgr.h"
+#include "galay-http2/kernel/stream_manager.h"
 #include "galay-http2/kernel/http2_stream.h"
 #include "galay-http/common/iovec_utils.h"
 #include "galay-http2/protoc/http2_base.h"

@@ -64,7 +64,7 @@ int main(int argc, char* argv[]) {
     if (mount_enabled) {
         if (use_nginx_try_files) {
             router.tryFiles(mount_prefix, mount_dir, upstream_host, upstream_port,
-                            StaticFileConfig(),
+                            StaticFileSetting(),
                             use_raw_proxy ? ProxyMode::Raw : ProxyMode::Http);
         } else if (use_mount_hardly) {
             router.mountHardly(mount_prefix, mount_dir);

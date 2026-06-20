@@ -1,4 +1,3 @@
-#include "galay-http/server/file_descriptor.h"
 #include "galay-http/client/http_client.h"
 #include "galay-http/server/http_range.h"
 #include "galay-http/protoc/http_chunk.h"
@@ -8,7 +7,6 @@
 
 #include <atomic>
 #include <chrono>
-#include <fcntl.h>
 #include <iostream>
 #include <sys/uio.h>
 #include <thread>
@@ -125,27 +123,6 @@ Task<void> runClientErrorPropagationChecks(TestState* state)
     co_return;
 }
 
-bool test_file_descriptor_error_propagation()
-{
-    try {
-        FileDescriptor fd;
-        auto result = fd.open("/tmp/galay-http-t80-missing-file", O_RDONLY);
-        if (!check(!result, "FileDescriptor::open should return an error for missing files")) {
-            return false;
-        }
-        if (!check(!fd.valid(), "FileDescriptor should remain invalid after failed open")) {
-            return false;
-        }
-        return true;
-    } catch (const std::exception& ex) {
-        std::cerr << "[T80] unexpected FileDescriptor exception: " << ex.what() << '\n';
-        return false;
-    } catch (...) {
-        std::cerr << "[T80] unexpected FileDescriptor non-standard exception\n";
-        return false;
-    }
-}
-
 bool test_parser_error_propagation()
 {
     try {
@@ -203,9 +180,6 @@ bool test_parser_error_propagation()
 
 int main()
 {
-    if (!test_file_descriptor_error_propagation()) {
-        return 1;
-    }
     if (!test_parser_error_propagation()) {
         return 1;
     }

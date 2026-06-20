@@ -7,6 +7,7 @@ export module galay.kernel;
 export {
 #include "galay-kernel/common/defn.hpp"
 #include "galay-kernel/common/error.h"
+#include "galay-kernel/common/file_descriptor.h"
 #include "galay-kernel/common/host.hpp"
 #include "galay-kernel/common/handle_option.h"
 #include <galay-utils/cache/bytes.hpp>

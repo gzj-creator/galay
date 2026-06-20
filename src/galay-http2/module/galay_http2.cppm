@@ -16,7 +16,7 @@ export {
 #include "galay-http2/kernel/http2_conn.h"
 #include "galay-http2/server/http2_server.h"
 #include "galay-http2/kernel/http2_stream.h"
-#include "galay-http2/kernel/stream_mgr.h"
+#include "galay-http2/kernel/stream_manager.h"
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include "galay-http2/client/h2_client.h"

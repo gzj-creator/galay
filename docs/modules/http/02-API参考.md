@@ -50,13 +50,12 @@
   - `galay-http/kernel/galay-http/http_session.h`
   - `galay-http/kernel/galay-http/http_reader.h`
   - `galay-http/kernel/galay-http/http_writer.h`
-  - `galay-http/kernel/galay-http/reader_cfg.h`
-  - `galay-http/kernel/galay-http/writer_cfg.h`
+  - `galay-http/kernel/galay-http/reader_settings.h`
+  - `galay-http/kernel/galay-http/writer_settings.h`
   - `galay-http/server/galay-http/http_router.h`
-  - `galay-http/server/galay-http/file_descriptor.h`
   - `galay-http/server/galay-http/http_range.h`
   - `galay-http/server/galay-http/http_etag.h`
-  - `galay-http/server/galay-http/static_cfg.h`
+  - `galay-http/server/galay-http/file_settings.h`
 - WebSocket：
   - `galay-http/protoc/websocket/ws_base.h`
   - `galay-http/protoc/websocket/ws_error.h`
@@ -65,8 +64,8 @@
   - `galay-http/kernel/websocket/ws_conn.h`
   - `galay-http/kernel/websocket/ws_reader.h`
   - `galay-http/kernel/websocket/ws_writer.h`
-  - `galay-http/kernel/websocket/reader_cfg.h`
-  - `galay-http/kernel/websocket/writer_cfg.h`
+  - `galay-http/kernel/websocket/reader_settings.h`
+  - `galay-http/kernel/websocket/writer_settings.h`
   - `galay-http/server/websocket/ws_upgrade.h`
 - HTTP/2：
   - `galay-http/protoc/galay-http2/http2_base.h`
@@ -79,7 +78,7 @@
   - `galay-http/kernel/galay-http2/frame_disp.h`
   - `galay-http/kernel/galay-http2/out_sched.h`
   - `galay-http/kernel/galay-http2/http2_stream.h`
-  - `galay-http/kernel/galay-http2/stream_mgr.h`
+  - `galay-http/kernel/galay-http2/stream_manager.h`
 - 工具与模块：
   - `galay-http/common/http_log.h`
   - `galay-http/builder/galay-http/http_builder.h`
@@ -711,7 +710,7 @@ struct H2ServerConfig {
 
 ## HttpRouter 与静态文件配置
 
-来源：`galay-http/server/galay-http/http_router.h`、`galay-http/server/galay-http/static_cfg.h`
+来源：`galay-http/server/galay-http/http_router.h`、`galay-http/server/galay-http/file_settings.h`
 
 ### `FileTransferMode`
 
@@ -729,12 +728,12 @@ enum class FileTransferMode {
 - `SENDFILE`：使用零拷贝 `sendfile`，适合大文件。
 - `AUTO`：按阈值自动选择；默认是小文件 `MEMORY`、中等文件 `CHUNK`、大文件 `SENDFILE`。
 
-### `StaticFileConfig`
+### `StaticFileSetting`
 
 ```cpp
-class StaticFileConfig {
+class StaticFileSetting {
 public:
-    StaticFileConfig();
+    StaticFileSetting();
 
     void setTransferMode(FileTransferMode mode);
     FileTransferMode getTransferMode() const;
@@ -764,7 +763,7 @@ public:
 };
 ```
 
-- `StaticFileConfig` 没有公开 `mode` 字段；示例代码必须使用 `setTransferMode(FileTransferMode::...)`。
+- `StaticFileSetting` 没有公开 `mode` 字段；示例代码必须使用 `setTransferMode(FileTransferMode::...)`。
 - 默认阈值是：小文件 `64KB`、大文件 `1MB`、chunk 大小 `64KB`、sendfile 分块 `10MB`。
 - `setEnableCache(...)` 仅对 `mountHardly(...)` 的启动期预加载缓存生效。
 - `decideTransferMode(...)` 只在 `AUTO` 模式下根据文件大小决策；其他模式直接返回显式设置值。
@@ -786,17 +785,17 @@ public:
 
     void mount(const std::string& routePrefix,
                const std::string& dirPath,
-               const StaticFileConfig& config = StaticFileConfig());
+               const StaticFileSetting& config = StaticFileSetting());
 
     void mountHardly(const std::string& routePrefix,
                      const std::string& dirPath,
-                     const StaticFileConfig& config = StaticFileConfig());
+                     const StaticFileSetting& config = StaticFileSetting());
 
     void tryFiles(const std::string& routePrefix,
                   const std::string& dirPath,
                   const std::string& upstreamHost,
                   uint16_t upstreamPort,
-                  const StaticFileConfig& config = StaticFileConfig(),
+                  const StaticFileSetting& config = StaticFileSetting(),
                   ProxyMode mode = ProxyMode::Http);
 
     void proxy(const std::string& routePrefix,

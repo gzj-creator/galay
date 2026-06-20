@@ -12,7 +12,7 @@
 #ifndef GALAY_HTTP_WRITER_H
 #define GALAY_HTTP_WRITER_H
 
-#include "writer_cfg.h"
+#include "writer_settings.h"
 #include "galay-http/common/http_log.h"
 #include "galay-http/common/iovec_utils.h"
 #include "galay-http/protoc/http_response.h"

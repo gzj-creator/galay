@@ -1,5 +1,5 @@
 /**
- * @file stream_mgr.h
+ * @file stream_manager.h
  * @brief HTTP/2 流管理器，管理多路复用流的生命周期
  * @author galay-http
  * @version 1.0.0
