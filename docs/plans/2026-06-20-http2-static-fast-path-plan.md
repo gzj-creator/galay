@@ -112,7 +112,7 @@ rtk git add scripts/http2_h2load_compare.sh docs/modules/http2/05-性能测试.m
 rtk git commit -m "test: 增加 HTTP2 h2load 外部对比基线"
 ```
 
-## [ ] Task 3: 设计 HTTP/2 静态响应 public surface
+## [x] Task 3: 设计 HTTP/2 静态响应 public surface
 
 **Files:**
 - Modify: `src/galay-http2/server/http2_server.h`

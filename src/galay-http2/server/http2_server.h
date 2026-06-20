@@ -103,6 +103,30 @@ inline Task<void> runDefaultHttp1FallbackLoop(const char* log_tag,
 using Http2ConnectionHandler = Http2StreamHandler;
 
 /**
+ * @brief HTTP/2 静态响应配置。
+ * @details 该结构仅描述 exact path 命中的预配置响应；具体发送路径由
+ *          server/stream fast path 实现决定。body 由配置对象持有，builder
+ *          会移动保存该字符串以避免额外拷贝。
+ */
+struct H2StaticResponse
+{
+    int status = 200;                                     ///< HTTP status code，默认 200。
+    std::string content_type = "application/octet-stream"; ///< Content-Type，默认二进制。
+    std::string body;                                     ///< 静态响应 body，允许为空。
+    bool allow_head = true;                               ///< 是否允许 HEAD 复用该静态响应。
+};
+
+/**
+ * @brief HTTP/2 exact path 静态路由配置。
+ * @details path 按原始 `:path` 精确匹配，不在该配置层做 normalize 或 pattern match。
+ */
+struct H2StaticRoute
+{
+    std::string path;             ///< 精确匹配的 request `:path`。
+    H2StaticResponse response;    ///< 命中后发送的静态响应。
+};
+
+/**
  * @brief h2c 服务器配置
  */
 struct H2cServerConfig
@@ -132,6 +156,7 @@ struct H2cServerConfig
     Http2FlowControlStrategy flow_control_strategy;
     Http2ConnectionHandler stream_handler;
     Http2ActiveConnHandler active_conn_handler;
+    std::vector<H2StaticRoute> static_routes;
 };
 
 class H2cServer;
@@ -165,6 +190,20 @@ public:
     }
     H2cServerBuilder& activeConnHandler(Http2ActiveConnHandler handler) {
         m_config.active_conn_handler = std::move(handler);
+        return *this;
+    }
+    /**
+     * @brief 注册 HTTP/2 exact path 静态响应配置。
+     * @param path 需要与 request `:path` 精确匹配的路径。
+     * @param response 由 builder 移动保存的静态响应配置。
+     * @return 当前 builder，支持链式调用。
+     * @note 该接口只配置路由，不启动阻塞 I/O，也不改变 streamHandler/activeConnHandler API。
+     */
+    H2cServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
+        m_config.static_routes.push_back(H2StaticRoute{
+            .path = std::move(path),
+            .response = std::move(response),
+        });
         return *this;
     }
     H2cServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
@@ -856,6 +895,7 @@ struct H2ServerConfig
     Http2FlowControlStrategy flow_control_strategy;
     Http2ConnectionHandler stream_handler;
     Http2ActiveConnHandler active_conn_handler;
+    std::vector<H2StaticRoute> static_routes;
 };
 
 class H2Server;
@@ -910,6 +950,20 @@ public:
     }
     H2ServerBuilder& activeConnHandler(Http2ActiveConnHandler handler) {
         m_config.active_conn_handler = std::move(handler);
+        return *this;
+    }
+    /**
+     * @brief 注册 HTTP/2 TLS exact path 静态响应配置。
+     * @param path 需要与 request `:path` 精确匹配的路径。
+     * @param response 由 builder 移动保存的静态响应配置。
+     * @return 当前 builder，支持链式调用。
+     * @note TLS 路径始终经用户态加密；该配置入口不启用 kernel sendfile。
+     */
+    H2ServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
+        m_config.static_routes.push_back(H2StaticRoute{
+            .path = std::move(path),
+            .response = std::move(response),
+        });
         return *this;
     }
     H2Server build() const;
