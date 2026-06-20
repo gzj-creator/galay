@@ -12,8 +12,11 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <thread>
+#include <unistd.h>
 
 using namespace galay::http2;
 using namespace galay::kernel;
@@ -24,6 +27,7 @@ volatile bool g_running = true;
 bool g_debug_log = false;
 std::atomic<int64_t> g_fallback_requests{0};
 const std::string kSmallBody(1024, 's');
+std::filesystem::path g_static_root;
 
 void signalHandler(int)
 {
@@ -54,6 +58,12 @@ Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
     co_return;
 }
 
+void writeFile(const std::filesystem::path& path, size_t size, char fill)
+{
+    std::ofstream out(path, std::ios::binary);
+    out << std::string(size, fill);
+}
+
 } // namespace
 
 int main(int argc, char* argv[])
@@ -77,6 +87,7 @@ int main(int argc, char* argv[])
     std::cout << "Max Concurrent Streams: " << max_streams << "\n";
     std::cout << "Static Route: GET/HEAD /echo -> 200 empty body\n";
     std::cout << "Static Route: GET/HEAD /small -> 200 1KB body\n";
+    std::cout << "Static Files: GET/HEAD /files/{0b,1kb,16kb,128kb,1mb}.bin\n";
     std::cout << "Debug Log: " << (g_debug_log ? "ON" : "OFF") << "\n";
     std::cout << "Press Ctrl+C to stop\n";
     std::cout << "========================================\n\n";
@@ -85,6 +96,15 @@ int main(int argc, char* argv[])
     std::signal(SIGTERM, signalHandler);
 
     try {
+        g_static_root = std::filesystem::temp_directory_path() /
+            ("galay-h2-static-bench-" + std::to_string(::getpid()));
+        std::filesystem::create_directories(g_static_root);
+        writeFile(g_static_root / "0b.bin", 0, '0');
+        writeFile(g_static_root / "1kb.bin", 1024, '1');
+        writeFile(g_static_root / "16kb.bin", 16 * 1024, '6');
+        writeFile(g_static_root / "128kb.bin", 128 * 1024, '8');
+        writeFile(g_static_root / "1mb.bin", 1024 * 1024, 'm');
+
         H2cServer server(H2cServerBuilder()
             .host("0.0.0.0")
             .port(port)
@@ -101,6 +121,10 @@ int main(int argc, char* argv[])
                 .status = 200,
                 .content_type = "text/plain",
                 .body = kSmallBody,
+            })
+            .staticFiles("/files", H2StaticFileConfig{
+                .root = g_static_root,
+                .small_file_threshold = 1024 * 1024,
             })
             .activeConnHandler(fallbackActiveHandler)
             .build());
@@ -124,8 +148,12 @@ int main(int argc, char* argv[])
 
         std::cout << "\nShutting down...\n";
         server.stop();
+        std::filesystem::remove_all(g_static_root);
         std::cout << "Server stopped.\n";
     } catch (const std::exception& e) {
+        if (!g_static_root.empty()) {
+            std::filesystem::remove_all(g_static_root);
+        }
         std::cerr << "Error: " << e.what() << "\n";
         return 1;
     }

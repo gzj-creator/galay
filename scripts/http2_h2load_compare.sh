@@ -15,6 +15,8 @@ WARM_UP="${WARM_UP:-2}"
 H2LOAD_THREADS="${H2LOAD_THREADS:-4}"
 H2LOAD_CLIENTS="${H2LOAD_CLIENTS:-20}"
 H2LOAD_MAX_STREAMS="${H2LOAD_MAX_STREAMS:-100}"
+H2LOAD_WINDOW_BITS="${H2LOAD_WINDOW_BITS:-}"
+H2LOAD_REQUESTS="${H2LOAD_REQUESTS:-}"
 SERVER_IO_THREADS="${SERVER_IO_THREADS:-4}"
 SERVER_MAX_STREAMS="${SERVER_MAX_STREAMS:-1000}"
 
@@ -113,15 +115,36 @@ run_h2load_case() {
     sample_resources "$server_pid" "$samples" &
     sample_pid="$!"
 
+    local h2load_window_args=()
+    if [[ -n "$H2LOAD_WINDOW_BITS" ]]; then
+        h2load_window_args=(-w"$H2LOAD_WINDOW_BITS")
+    fi
+
     set +e
-    if [[ "$method" == "POST" ]]; then
-        h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
-            -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
-            -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
+    if [[ -n "$H2LOAD_REQUESTS" ]]; then
+        if [[ "$method" == "POST" ]]; then
+            h2load -n"$H2LOAD_REQUESTS" --histogram \
+                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
+                "${h2load_window_args[@]}" \
+                -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
+        else
+            h2load -n"$H2LOAD_REQUESTS" --histogram \
+                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
+                "${h2load_window_args[@]}" \
+                "http://$HOST:$port$path" >"$output" 2>&1
+        fi
     else
-        h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
-            -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
-            "http://$HOST:$port$path" >"$output" 2>&1
+        if [[ "$method" == "POST" ]]; then
+            h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
+                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
+                "${h2load_window_args[@]}" \
+                -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
+        else
+            h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
+                -t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS" \
+                "${h2load_window_args[@]}" \
+                "http://$HOST:$port$path" >"$output" 2>&1
+        fi
     fi
     rc="$?"
     set -e
@@ -150,8 +173,9 @@ require_cmd ps
 
 if [[ "$MODE" != "--post-echo" &&
       "$MODE" != "--galay-static-empty" &&
-      "$MODE" != "--galay-static-small" ]]; then
-    echo "usage: $0 [--post-echo|--galay-static-empty|--galay-static-small]" >&2
+      "$MODE" != "--galay-static-small" &&
+      "$MODE" != "--static-files" ]]; then
+    echo "usage: $0 [--post-echo|--galay-static-empty|--galay-static-small|--static-files]" >&2
     exit 2
 fi
 
@@ -176,12 +200,28 @@ if [[ "$MODE" == "--post-echo" ]]; then
     echo "mode:    POST echo"
     echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS -d payload"
 else
-    if [[ "$MODE" == "--galay-static-small" ]]; then
+    if [[ "$MODE" == "--static-files" ]]; then
+        echo "mode:    GET static files 0B/1KB/16KB/128KB/1MB"
+        if [[ -z "$H2LOAD_WINDOW_BITS" ]]; then
+            H2LOAD_WINDOW_BITS=21
+        fi
+        if [[ -z "$H2LOAD_REQUESTS" ]]; then
+            H2LOAD_REQUESTS=2000
+        fi
+    elif [[ "$MODE" == "--galay-static-small" ]]; then
         echo "mode:    GET static 1KB"
     else
         echo "mode:    GET static empty"
     fi
-    echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS"
+    if [[ -n "$H2LOAD_REQUESTS" && -n "$H2LOAD_WINDOW_BITS" ]]; then
+        echo "h2load:  -n$H2LOAD_REQUESTS -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS -w$H2LOAD_WINDOW_BITS"
+    elif [[ -n "$H2LOAD_REQUESTS" ]]; then
+        echo "h2load:  -n$H2LOAD_REQUESTS -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS"
+    elif [[ -n "$H2LOAD_WINDOW_BITS" ]]; then
+        echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS -w$H2LOAD_WINDOW_BITS"
+    else
+        echo "h2load:  -D$DURATION --warm-up-time=$WARM_UP -t$H2LOAD_THREADS -c$H2LOAD_CLIENTS -m$H2LOAD_MAX_STREAMS"
+    fi
 fi
 echo "server:  $SERVER_IO_THREADS IO workers, max_streams=$SERVER_MAX_STREAMS"
 echo
@@ -212,7 +252,13 @@ else
         >"$TMP_DIR/galay-static.server.log" 2>&1 &
     GALAY_PID="$!"
     wait_for_port "$GALAY_PORT"
-    if [[ "$MODE" == "--galay-static-small" ]]; then
+    if [[ "$MODE" == "--static-files" ]]; then
+        run_h2load_case "galay-file-0b" "$GALAY_PORT" "$GALAY_PID" "/files/0b.bin" "GET"
+        run_h2load_case "galay-file-1kb" "$GALAY_PORT" "$GALAY_PID" "/files/1kb.bin" "GET"
+        run_h2load_case "galay-file-16kb" "$GALAY_PORT" "$GALAY_PID" "/files/16kb.bin" "GET"
+        run_h2load_case "galay-file-128kb" "$GALAY_PORT" "$GALAY_PID" "/files/128kb.bin" "GET"
+        run_h2load_case "galay-file-1mb" "$GALAY_PORT" "$GALAY_PID" "/files/1mb.bin" "GET"
+    elif [[ "$MODE" == "--galay-static-small" ]]; then
         run_h2load_case "galay-static-1kb" "$GALAY_PORT" "$GALAY_PID" "/small" "GET"
     else
         run_h2load_case "galay-static-empty" "$GALAY_PORT" "$GALAY_PID" "/echo" "GET"

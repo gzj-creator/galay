@@ -2,6 +2,7 @@
 
 #include "galay-http/protoc/http_base.h"
 #include "galay-http/server/http_etag.h"
+#include "galay-http/server/http_range.h"
 
 #include <chrono>
 #include <fstream>
@@ -41,7 +42,39 @@ std::shared_ptr<const std::string> readSmallFile(const std::filesystem::path& pa
     return body;
 }
 
+std::shared_ptr<const std::string> readFileRange(const std::filesystem::path& path,
+                                                 uintmax_t start,
+                                                 uintmax_t length)
+{
+    auto body = std::make_shared<std::string>();
+    body->resize(static_cast<size_t>(length));
+    std::ifstream in(path, std::ios::binary);
+    in.seekg(static_cast<std::streamoff>(start), std::ios::beg);
+    if (length > 0) {
+        in.read(body->data(), static_cast<std::streamsize>(body->size()));
+    }
+    return body;
+}
+
 } // namespace
+
+H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig config)
+{
+    if (prefix.empty()) {
+        prefix = "/";
+    }
+    if (prefix.front() != '/') {
+        prefix.insert(prefix.begin(), '/');
+    }
+    while (prefix.size() > 1 && prefix.back() == '/') {
+        prefix.pop_back();
+    }
+    H2StaticFileMount mount;
+    mount.prefix = std::move(prefix);
+    mount.config = std::move(config);
+    mount.cache = std::make_shared<H2StaticFileCache>(mount.config);
+    return mount;
+}
 
 H2StaticFileCache::H2StaticFileCache(H2StaticFileConfig config)
     : m_config(std::move(config))
@@ -75,6 +108,48 @@ H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
         !request.if_none_match.empty() &&
         galay::http::ETagGenerator::matchIfNoneMatch(entry.etag, request.if_none_match)) {
         return makeLookup(entry, 304);
+    }
+
+    if (!request.range.empty()) {
+        auto range_result = galay::http::HttpRangeParser::parse(request.range, entry.file_size);
+        if (!range_result.isValid() ||
+            range_result.type != galay::http::RangeType::SINGLE_RANGE) {
+            auto lookup = makeLookup(entry, 416);
+            lookup.headers.clear();
+            lookup.headers.push_back({"content-length", "0"});
+            lookup.headers.push_back({"content-range", "bytes */" + std::to_string(entry.file_size)});
+            if (m_config.enable_etag && !entry.etag.empty()) {
+                lookup.headers.push_back({"etag", entry.etag});
+            }
+            lookup.body = nullptr;
+            lookup.body_cached = false;
+            return lookup;
+        }
+
+        const auto& range = range_result.ranges.front();
+        auto lookup = makeLookup(entry, 206);
+        lookup.range_start = range.start;
+        lookup.range_end = range.end;
+        const auto length = range.end - range.start + 1;
+        lookup.headers.clear();
+        lookup.headers.push_back({"content-length", std::to_string(length)});
+        lookup.headers.push_back({"content-type", entry.content_type});
+        lookup.headers.push_back({
+            "content-range",
+            galay::http::HttpRangeParser::makeContentRange(range, entry.file_size)});
+        lookup.headers.push_back({"accept-ranges", "bytes"});
+        if (m_config.enable_etag && !entry.etag.empty()) {
+            lookup.headers.push_back({"etag", entry.etag});
+        }
+        if (entry.body_cached && entry.body) {
+            lookup.body = std::make_shared<const std::string>(
+                entry.body->substr(static_cast<size_t>(range.start), static_cast<size_t>(length)));
+            lookup.body_cached = true;
+        } else {
+            lookup.body = readFileRange(entry.file_path, range.start, length);
+            lookup.body_cached = false;
+        }
+        return lookup;
     }
     return makeLookup(entry, 200);
 }
@@ -149,6 +224,7 @@ H2StaticFileLookup H2StaticFileCache::makeLookup(const Entry& entry, int status)
     lookup.body = lookup.body_cached ? entry.body : nullptr;
     lookup.headers.push_back({"content-length", std::to_string(entry.file_size)});
     lookup.headers.push_back({"content-type", entry.content_type});
+    lookup.headers.push_back({"accept-ranges", "bytes"});
     if (m_config.enable_etag && !entry.etag.empty()) {
         lookup.headers.push_back({"etag", entry.etag});
     }

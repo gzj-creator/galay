@@ -33,7 +33,9 @@
 #include <cstring>
 #include <algorithm>
 #include <deque>
+#include <fstream>
 #include <limits>
+#include <sys/uio.h>
 
 namespace galay::http2
 {
@@ -735,6 +737,7 @@ public:
 
 private:
     static constexpr size_t kSslIoOwnerBatchSize = 64;
+    static constexpr size_t kMaxWritevIovecs = 1024;
     static constexpr auto kSslIoOwnerHotWaitInterval = std::chrono::milliseconds(1);
     static constexpr auto kSslIoOwnerActivePollInterval = std::chrono::milliseconds(5);
     static constexpr auto kSslIoOwnerIdlePollInterval = std::chrono::milliseconds(50);
@@ -1506,8 +1509,9 @@ private:
                 if constexpr (requires(SocketType& socket, std::vector<iovec>& vec) { socket.writev(vec); }) {
                     // 支持 writev 的 socket（如 TcpSocket）：一次批量发送
                     while (!write_state.empty()) {
+                        const auto iovec_count = std::min(write_state.count(), kMaxWritevIovecs);
                         auto result = co_await m_conn.socket().writev(
-                            std::span<const struct iovec>(write_state.data(), write_state.count()));
+                            std::span<const struct iovec>(write_state.data(), iovec_count));
                         if (!result) {
                             if (m_conn.isClosing() || m_conn.isPeerClosed() ||
                                 m_conn.isGoawaySent() || m_conn.isGoawayReceived()) {
@@ -1777,6 +1781,247 @@ private:
         return route;
     }
 
+    bool isStaticFileMethod(std::string_view method) const {
+        return method == "GET" || method == "HEAD";
+    }
+
+    static bool pathStartsWithMount(std::string_view path, std::string_view prefix) {
+        if (prefix == "/") {
+            return !path.empty() && path.front() == '/';
+        }
+        if (path == prefix) {
+            return true;
+        }
+        return path.size() > prefix.size() &&
+               path.compare(0, prefix.size(), prefix) == 0 &&
+               path[prefix.size()] == '/';
+    }
+
+    const H2StaticFileMount* findStaticFileMount(std::string_view path) const {
+        const H2StaticFileMount* best = nullptr;
+        const auto& mounts = m_conn.runtimeConfig().static_file_mounts;
+        for (const auto& mount : mounts) {
+            if (!pathStartsWithMount(path, mount.prefix)) {
+                continue;
+            }
+            if (best == nullptr || mount.prefix.size() > best->prefix.size()) {
+                best = &mount;
+            }
+        }
+        return best;
+    }
+
+    static std::string mountedStaticFilePath(std::string_view path,
+                                             const H2StaticFileMount& mount) {
+        if (mount.prefix == "/") {
+            return std::string(path);
+        }
+        std::string relative(path.substr(mount.prefix.size()));
+        if (relative.empty()) {
+            return "/";
+        }
+        return relative;
+    }
+
+    static std::shared_ptr<const std::string> encodeH2StaticFileHeaders(
+        int status,
+        const std::vector<Http2HeaderField>& headers) {
+        std::vector<Http2HeaderField> fields;
+        fields.reserve(headers.size() + 1);
+        fields.push_back({":status", std::to_string(status)});
+        fields.insert(fields.end(), headers.begin(), headers.end());
+        HpackEncoder encoder;
+        auto block = encoder.encodeStateless(fields);
+        return std::make_shared<const std::string>(std::move(block));
+    }
+
+    static uintmax_t staticFileContentLength(const H2StaticFileLookup& lookup) {
+        for (const auto& header : lookup.headers) {
+            if (header.name != "content-length") {
+                continue;
+            }
+            uintmax_t value = 0;
+            const auto* begin = header.value.data();
+            const auto* end = begin + header.value.size();
+            auto [ptr, ec] = std::from_chars(begin, end, value);
+            if (ec == std::errc{} && ptr == end) {
+                return value;
+            }
+        }
+        return 0;
+    }
+
+    std::vector<std::string> readStaticFileChunks(const std::filesystem::path& path,
+                                                  uintmax_t offset,
+                                                  uintmax_t length) const {
+        std::vector<std::string> chunks;
+        const auto frame_size = std::max<uint32_t>(m_conn.peerSettings().max_frame_size, 1);
+        chunks.reserve(static_cast<size_t>((length + frame_size - 1) / frame_size));
+
+        std::ifstream in(path, std::ios::binary);
+        if (!in) {
+            return {};
+        }
+        in.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
+
+        uintmax_t remaining = length;
+        while (remaining > 0) {
+            const auto chunk_size = static_cast<size_t>(
+                std::min<uintmax_t>(remaining, m_conn.peerSettings().max_frame_size));
+            std::string chunk(chunk_size, '\0');
+            in.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
+            const auto read_count = in.gcount();
+            if (read_count <= 0) {
+                return {};
+            }
+            chunk.resize(static_cast<size_t>(read_count));
+            remaining -= static_cast<uintmax_t>(chunk.size());
+            chunks.push_back(std::move(chunk));
+        }
+        return chunks;
+    }
+
+    bool canSendStaticFileBodyNow(uintmax_t length) const {
+        if (length == 0) {
+            return true;
+        }
+        const auto max_body = std::min<int64_t>(
+            m_conn.connSendWindow(),
+            static_cast<int64_t>(m_conn.peerSettings().initial_window_size));
+        return max_body >= 0 && length <= static_cast<uintmax_t>(max_body);
+    }
+
+    void appendStaticFileDataFrames(uint32_t stream_id,
+                                    std::vector<std::string>&& chunks) {
+        uintmax_t total = 0;
+        for (size_t i = 0; i < chunks.size(); ++i) {
+            auto& chunk = chunks[i];
+            const bool end_stream = i + 1 == chunks.size();
+            total += chunk.size();
+            m_static_response_batch.push_back(
+                Http2OutgoingFrame{Http2FrameBuilder::dataBytes(
+                    stream_id, chunk, end_stream)});
+        }
+        if (total > 0) {
+            m_conn.adjustConnSendWindow(-static_cast<int32_t>(total));
+        }
+    }
+
+    void appendStaticFileSharedDataFrames(uint32_t stream_id,
+                                          std::shared_ptr<const std::string> body) {
+        if (!body || body->empty()) {
+            return;
+        }
+
+        uintmax_t total = 0;
+        const auto frame_size = std::max<uint32_t>(m_conn.peerSettings().max_frame_size, 1);
+        size_t offset = 0;
+        while (offset < body->size()) {
+            const auto chunk_size = std::min<size_t>(body->size() - offset, frame_size);
+            const bool end_stream = offset + chunk_size == body->size();
+            auto data_header = Http2FrameBuilder::dataHeaderBytes(
+                stream_id, chunk_size, end_stream);
+            total += chunk_size;
+            m_static_response_batch.push_back(
+                Http2OutgoingFrame::segmentedShared(
+                    std::move(data_header), body, offset, chunk_size));
+            offset += chunk_size;
+        }
+        m_conn.adjustConnSendWindow(-static_cast<int32_t>(total));
+    }
+
+    bool sendStaticFileLookup(uint32_t stream_id,
+                              std::string_view method,
+                              const H2StaticFileLookup& lookup) {
+        const bool is_head = method == "HEAD";
+        const uintmax_t length = staticFileContentLength(lookup);
+        const bool has_body = !is_head && length > 0 &&
+            lookup.status != 304 && lookup.status != 416;
+        if (has_body && !canSendStaticFileBodyNow(length)) {
+            return false;
+        }
+        std::vector<std::string> body_chunks;
+        if (has_body && !lookup.body) {
+            body_chunks = readStaticFileChunks(lookup.file_path, 0, length);
+            if (body_chunks.empty()) {
+                return false;
+            }
+        }
+
+        auto header_block = encodeH2StaticFileHeaders(lookup.status, lookup.headers);
+        const bool headers_end_stream = !has_body;
+        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+            stream_id, header_block->size(), headers_end_stream, true);
+        m_static_response_batch.push_back(
+            Http2OutgoingFrame::segmentedShared(std::move(header_bytes), std::move(header_block)));
+        if (!has_body) {
+            return true;
+        }
+
+        if (lookup.body) {
+            appendStaticFileSharedDataFrames(stream_id, lookup.body);
+        } else {
+            appendStaticFileDataFrames(stream_id, std::move(body_chunks));
+        }
+        return true;
+    }
+
+    bool trySendStaticFile(uint32_t stream_id,
+                           std::string_view method,
+                           std::string_view path,
+                           std::string_view if_none_match,
+                           std::string_view range) {
+        if (!isStaticFileMethod(method)) {
+            return false;
+        }
+        const auto* mount = findStaticFileMount(path);
+        if (mount == nullptr || !mount->cache) {
+            return false;
+        }
+
+        auto lookup = mount->cache->lookup(H2StaticFileRequest{
+            .path = mountedStaticFilePath(path, *mount),
+            .if_none_match = std::string(if_none_match),
+            .range = std::string(range),
+        });
+        return sendStaticFileLookup(stream_id, method, lookup);
+    }
+
+    bool trySendStaticFile(uint32_t stream_id,
+                           const std::vector<Http2HeaderField>& fields) {
+        std::string_view method;
+        std::string_view path;
+        std::string_view if_none_match;
+        std::string_view range;
+        for (const auto& field : fields) {
+            if (field.name == ":method") {
+                method = field.value;
+            } else if (field.name == ":path") {
+                path = field.value;
+            } else if (field.name == "if-none-match") {
+                if_none_match = field.value;
+            } else if (field.name == "range") {
+                range = field.value;
+            }
+        }
+        if (method.empty() || path.empty()) {
+            return false;
+        }
+        return trySendStaticFile(stream_id, method, path, if_none_match, range);
+    }
+
+    bool trySendStaticFile(const Http2Stream::ptr& stream) {
+        if (m_conn.isClient() || !stream || !stream->isRequestCompleted()) {
+            return false;
+        }
+        const auto& request = stream->request();
+        return trySendStaticFile(stream->streamId(),
+                                 request.method,
+                                 request.path,
+                                 request.getHeader("if-none-match"),
+                                 request.getHeader("range"));
+    }
+
     bool canSendStaticBodyNow(const H2StaticResponse& response) const {
         if (response.body.empty()) {
             return true;
@@ -1877,6 +2122,9 @@ private:
             events |= Http2StreamEvent::RequestComplete;
         }
         if (trySendStaticResponse(stream)) {
+            return;
+        }
+        if (trySendStaticFile(stream)) {
             return;
         }
         if (m_active_conn_mode) {
@@ -1982,6 +2230,27 @@ private:
             const bool end_stream = frame_view.endStream();
             if (end_headers) {
                 auto payload = frame_view.payload();
+                if (end_stream && !m_conn.runtimeConfig().static_file_mounts.empty()) {
+                    auto fields = m_conn.decoder().decode(
+                        reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
+                    if (!fields) {
+                        enqueueGoawayAction(fields.error());
+                        return true;
+                    }
+                    if (trySendStaticResponse(stream_id, *fields) ||
+                        trySendStaticFile(stream_id, *fields)) {
+                        m_conn.setLastPeerStreamId(stream_id);
+                        return true;
+                    }
+
+                    stream = createStreamInternal(stream_id);
+                    m_conn.setLastPeerStreamId(stream_id);
+                    stream->onHeadersReceived(end_stream);
+                    stream->setDecodedHeaders(std::move(*fields));
+                    completeDecodedHeaders(stream, end_stream);
+                    tryRetireClientStream(stream);
+                    return true;
+                }
                 if (end_stream && !m_conn.runtimeConfig().static_routes.empty()) {
                     auto decoder_snapshot = m_conn.decoder();
                     auto target = m_conn.decoder().decodeRequestTarget(

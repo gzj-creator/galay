@@ -54,6 +54,8 @@ struct Http2OutgoingFrame {
     std::array<char, kHttp2FrameHeaderLength> header_bytes{};
     std::string owned_payload;
     std::shared_ptr<const std::string> shared_payload;
+    size_t shared_payload_offset = 0;
+    size_t shared_payload_length = static_cast<size_t>(-1);
     bool segmented_packet = false;
     WaiterPtr waiter;
 
@@ -89,6 +91,17 @@ struct Http2OutgoingFrame {
         frame.shared_payload = std::move(payload);
         frame.segmented_packet = true;
         frame.waiter = std::move(w);
+        return frame;
+    }
+
+    static Http2OutgoingFrame segmentedShared(std::array<char, kHttp2FrameHeaderLength> header,
+                                              std::shared_ptr<const std::string> payload,
+                                              size_t offset,
+                                              size_t length,
+                                              WaiterPtr w = nullptr) {
+        Http2OutgoingFrame frame = segmentedShared(std::move(header), std::move(payload), std::move(w));
+        frame.shared_payload_offset = offset;
+        frame.shared_payload_length = length;
         return frame;
     }
 
@@ -167,7 +180,10 @@ struct Http2OutgoingFrame {
 private:
     const char* payloadData() const {
         if (shared_payload) {
-            return shared_payload->data();
+            if (shared_payload_offset >= shared_payload->size()) {
+                return nullptr;
+            }
+            return shared_payload->data() + shared_payload_offset;
         }
         if (!owned_payload.empty()) {
             return owned_payload.data();
@@ -177,7 +193,11 @@ private:
 
     size_t payloadSize() const {
         if (shared_payload) {
-            return shared_payload->size();
+            if (shared_payload_offset >= shared_payload->size()) {
+                return 0;
+            }
+            const auto available = shared_payload->size() - shared_payload_offset;
+            return std::min(available, shared_payload_length);
         }
         return owned_payload.size();
     }

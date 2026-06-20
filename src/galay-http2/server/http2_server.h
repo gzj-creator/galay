@@ -15,6 +15,7 @@
 #include "galay-http2/kernel/http2_conn.h"
 #include "galay-http2/kernel/stream_manager.h"
 #include "galay-http2/kernel/http2_stream.h"
+#include "galay-http2/server/h2_static_file.h"
 #include "galay-http/common/iovec_utils.h"
 #include "galay-http2/protoc/http2_base.h"
 #include "galay-http2/protoc/http2_frame.h"
@@ -133,6 +134,7 @@ struct H2cServerConfig
     Http2ConnectionHandler stream_handler;
     Http2ActiveConnHandler active_conn_handler;
     std::vector<H2StaticRoute> static_routes;
+    std::vector<H2StaticFileMount> static_file_mounts;
 };
 
 class H2cServer;
@@ -177,6 +179,18 @@ public:
      */
     H2cServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
         m_config.static_routes.push_back(makeH2StaticRoute(std::move(path), std::move(response)));
+        return *this;
+    }
+    /**
+     * @brief 注册 HTTP/2 静态文件挂载点。
+     * @param prefix request `:path` 前缀，例如 `/assets`。
+     * @param config 静态文件根目录、缓存阈值和 ETag 配置。
+     * @return 当前 builder，支持链式调用。
+     * @note 该入口只启用 HTTP/2 DATA frame 用户态发送；h2 TLS 不使用 kernel sendfile。
+     */
+    H2cServerBuilder& staticFiles(std::string prefix, H2StaticFileConfig config) {
+        m_config.static_file_mounts.push_back(
+            makeH2StaticFileMount(std::move(prefix), std::move(config)));
         return *this;
     }
     H2cServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
@@ -870,6 +884,7 @@ struct H2ServerConfig
     Http2ConnectionHandler stream_handler;
     Http2ActiveConnHandler active_conn_handler;
     std::vector<H2StaticRoute> static_routes;
+    std::vector<H2StaticFileMount> static_file_mounts;
 };
 
 class H2Server;
@@ -935,6 +950,18 @@ public:
      */
     H2ServerBuilder& staticResponse(std::string path, H2StaticResponse response) {
         m_config.static_routes.push_back(makeH2StaticRoute(std::move(path), std::move(response)));
+        return *this;
+    }
+    /**
+     * @brief 注册 HTTP/2 TLS 静态文件挂载点。
+     * @param prefix request `:path` 前缀，例如 `/assets`。
+     * @param config 静态文件根目录、缓存阈值和 ETag 配置。
+     * @return 当前 builder，支持链式调用。
+     * @note TLS 路径始终经用户态加密发送 DATA frame，不启用 kernel sendfile。
+     */
+    H2ServerBuilder& staticFiles(std::string prefix, H2StaticFileConfig config) {
+        m_config.static_file_mounts.push_back(
+            makeH2StaticFileMount(std::move(prefix), std::move(config)));
         return *this;
     }
     H2Server build() const;

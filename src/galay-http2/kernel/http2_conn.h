@@ -14,6 +14,7 @@
 
 #include "http2_stream.h"
 #include "h2_core.h"
+#include "galay-http2/server/h2_static_file.h"
 #include "galay-http2/protoc/http2_base.h"
 #include "galay-http2/protoc/http2_frame.h"
 #include "galay-http2/protoc/http2_hpack.h"
@@ -231,6 +232,7 @@ struct Http2RuntimeConfig
     uint32_t flow_control_target_window = kDefaultInitialWindowSize;
     Http2FlowControlStrategy flow_control_strategy;
     std::vector<H2StaticRoute> static_routes;
+    std::vector<H2StaticFileMount> static_file_mounts;
 
     template<typename Config>
     void from(const Config& config) {
@@ -263,6 +265,9 @@ struct Http2RuntimeConfig
             for (auto& route : static_routes) {
                 prepareH2StaticRoute(route);
             }
+        }
+        if constexpr (requires { config.static_file_mounts; }) {
+            static_file_mounts = config.static_file_mounts;
         }
     }
 };

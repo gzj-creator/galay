@@ -28,6 +28,7 @@ struct H2StaticFileConfig {
 struct H2StaticFileRequest {
     std::string path;
     std::string if_none_match;
+    std::string range;
 };
 
 struct H2StaticFileLookup {
@@ -40,7 +41,19 @@ struct H2StaticFileLookup {
     bool body_cached = false;
     std::shared_ptr<const std::string> body;
     std::vector<Http2HeaderField> headers;
+    uintmax_t range_start = 0;
+    uintmax_t range_end = 0;
 };
+
+class H2StaticFileCache;
+
+struct H2StaticFileMount {
+    std::string prefix;
+    H2StaticFileConfig config;
+    std::shared_ptr<H2StaticFileCache> cache;
+};
+
+H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig config);
 
 class H2StaticFileCache {
 public:

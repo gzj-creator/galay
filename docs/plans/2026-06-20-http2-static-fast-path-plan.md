@@ -327,7 +327,7 @@ rtk git add src/galay-http2/server/h2_static_file.* src/galay-http2/CMakeLists.t
 rtk git commit -m "feat: 增加 HTTP2 静态文件元数据缓存"
 ```
 
-## [ ] Task 7: 静态文件 GET/HEAD/Range 集成
+## [x] Task 7: 静态文件 GET/HEAD/Range 集成
 
 **Files:**
 - Modify: `src/galay-http2/server/http2_server.h`
