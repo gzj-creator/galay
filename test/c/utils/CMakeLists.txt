@@ -1,0 +1,12 @@
+function(galay_add_c_utils_test target_name source_file)
+    add_executable("${target_name}" "${source_file}")
+    target_link_libraries("${target_name}" PRIVATE galay-c-utils)
+    target_include_directories("${target_name}" PRIVATE ${CMAKE_BINARY_DIR}/include)
+    set_target_properties("${target_name}" PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+    string(REGEX REPLACE "^test_c_utils_" "" scenario_name "${target_name}")
+    add_test(NAME "c.utils.${scenario_name}" COMMAND "${target_name}")
+    set_tests_properties("c.utils.${scenario_name}" PROPERTIES LABELS "c;utils;unit")
+endfunction()
+
+galay_add_c_utils_test(test_c_utils_header_smoke header_smoke.c)
+galay_add_c_utils_test(test_c_utils_lifecycle_codec_hash lifecycle_codec_hash_test.c)

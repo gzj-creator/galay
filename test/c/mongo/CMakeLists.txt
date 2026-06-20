@@ -1,0 +1,12 @@
+function(galay_add_c_mongo_test target_name source_file)
+    add_executable("${target_name}" "${source_file}")
+    target_link_libraries("${target_name}" PRIVATE galay::c-mongo)
+    target_include_directories("${target_name}" PRIVATE ${CMAKE_BINARY_DIR}/include)
+    set_target_properties("${target_name}" PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+    string(REGEX REPLACE "^test_c_mongo_" "" scenario_name "${target_name}")
+    add_test(NAME "c.mongo.${scenario_name}" COMMAND "${target_name}")
+    set_tests_properties("c.mongo.${scenario_name}" PROPERTIES LABELS "c;mongo;unit")
+endfunction()
+
+galay_add_c_mongo_test(test_c_mongo_header_smoke header_smoke.c)
+galay_add_c_mongo_test(test_c_mongo_bson_uri_client_surface bson_uri_client_surface_test.c)

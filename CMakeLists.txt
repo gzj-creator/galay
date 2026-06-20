@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(galay VERSION 6.0.0 LANGUAGES CXX)
+project(galay VERSION 6.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -22,6 +22,15 @@ file(CREATE_LINK
     SYMBOLIC
     COPY_ON_ERROR
 )
+if(GALAY_BUILD_C_API)
+    file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/include/galay/c)
+    file(CREATE_LINK
+        ${PROJECT_SOURCE_DIR}/src/c
+        ${CMAKE_BINARY_DIR}/include/galay/c
+        SYMBOLIC
+        COPY_ON_ERROR
+    )
+endif()
 
 if(GALAY_BUILD_UTILS)
     add_subdirectory(src/cpp/galay-utils)
@@ -62,11 +71,18 @@ endif()
 if(GALAY_BUILD_TRACING)
     add_subdirectory(src/cpp/galay-tracing)
 endif()
+if(GALAY_BUILD_C_API)
+    add_subdirectory(src/c)
+endif()
 
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
     utils kernel ssl http ws http2 redis rpc mysql mongo etcd mcp tracing
     galay-tracing-spdlog galay-tracing-kernel
+    galay-c-common
+    galay-c-utils galay-c-kernel galay-c-ssl galay-c-http galay-c-ws
+    galay-c-http2 galay-c-redis galay-c-rpc galay-c-mysql
+    galay-c-mongo galay-c-etcd galay-c-mcp galay-c-tracing
 )
     if(TARGET ${_galay_target})
         list(APPEND GALAY_INSTALL_TARGETS ${_galay_target})
@@ -90,6 +106,13 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/cpp/
         PATTERN "*.inl"
         PATTERN "*.cppm"
 )
+if(GALAY_BUILD_C_API)
+    install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/c/
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/c
+        FILES_MATCHING
+            PATTERN "*.h"
+    )
+endif()
 
 set(GALAY_CONFIG_NEEDS_THREADS ON)
 set(GALAY_CONFIG_NEEDS_OPENSSL ${GALAY_BUILD_SSL})
@@ -131,6 +154,20 @@ foreach(_galay_package IN ITEMS
     galay-etcd
     galay-mcp
     galay-tracing
+    galay-c-common
+    galay-c-utils
+    galay-c-kernel
+    galay-c-ssl
+    galay-c-http
+    galay-c-ws
+    galay-c-http2
+    galay-c-redis
+    galay-c-rpc
+    galay-c-mysql
+    galay-c-mongo
+    galay-c-etcd
+    galay-c-mcp
+    galay-c-tracing
 )
     configure_package_config_file(
         ${PROJECT_SOURCE_DIR}/cmake/galay-module-config.cmake.in

@@ -1,0 +1,13 @@
+function(galay_add_c_tracing_test target_name source_file)
+    add_executable("${target_name}" "${source_file}")
+    target_link_libraries("${target_name}" PRIVATE galay::c-tracing)
+    target_include_directories("${target_name}" PRIVATE ${CMAKE_BINARY_DIR}/include)
+    set_target_properties("${target_name}" PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
+    string(REGEX REPLACE "^test_c_tracing_" "" scenario_name "${target_name}")
+    add_test(NAME "c.tracing.${scenario_name}" COMMAND "${target_name}")
+    set_tests_properties("c.tracing.${scenario_name}" PROPERTIES LABELS "c;tracing;unit")
+endfunction()
+
+galay_add_c_tracing_test(test_c_tracing_header_smoke t1_header_smoke.c)
+galay_add_c_tracing_test(test_c_tracing_trace_ids_and_traceparent t2_trace_ids_and_traceparent.c)
+galay_add_c_tracing_test(test_c_tracing_span_lifecycle t3_span_lifecycle.c)

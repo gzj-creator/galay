@@ -11,11 +11,23 @@
 
 ## [Unreleased]
 
+### Added
+
+- **新增 C ABI 包装层 `src/c/`**：覆盖 utils/kernel/ssl/http/ws/http2/redis/rpc/mysql/mongo/etcd/mcp/tracing 共 13 个模块，以及通用 `galay-c` 包（含错误码与 ABI 宏），共 44 个文件；通过新增的 `GALAY_BUILD_C_API=ON` 构建选项启用，与既有 C++ 构建互不干扰。
+- **新增 C ABI 用例目录**：`benchmark/c/`、`examples/c/`、`test/c/`（共 99 个文件）提供各模块 C ABI 的 codec/builder/lifecycle smoke 基准、示例与回归测试入口。
+
 ### Changed
 
 - **源码目录归入 `src/cpp/`**：将 `src/` 下各模块（`galay-utils`/`kernel`/`ssl`/`http`/`ws`/`http2`/`redis`/`rpc`/`mysql`/`mongo`/`etcd`/`mcp`/`tracing`）统一迁入 `src/cpp/` 子目录，共 421 个文件纯移动，为后续多语言绑定预留 `galay/cpp/` 命名空间。
 - **头文件 include 路径统一**：所有 benchmark 与 test 源文件的 `#include "galay-xxx/..."` 改为 `#include <galay/cpp/galay-xxx/...>`，顶层 `CMakeLists.txt` 的 `add_subdirectory` 同步指向 `src/cpp/galay-*`，并在构建目录通过符号链接 `${CMAKE_BINARY_DIR}/include/galay/cpp -> src/cpp` 提供统一 include 根；头文件安装目录改为 `${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp`。
 - **测试/基准 include 根调整**：各 benchmark/test 的 CMakeLists 将私有 include 目录由 `${PROJECT_SOURCE_DIR}/src` 改为 `${CMAKE_BINARY_DIR}/include`，对齐新的符号链接布局。
+- **benchmark/examples/test 按语言分层**：三者的各模块子目录整体迁入 `cpp/` 子目录（如 `benchmark/kernel/` → `benchmark/cpp/kernel/`，examples/test 同），共 637 个文件纯移动；对应 `CMakeLists.txt` 由 `add_subdirectory(<module>)` 改为 `add_subdirectory(cpp/<module>)`，并在 `GALAY_BUILD_C_API=ON` 时额外 `add_subdirectory(c)`。
+- **顶层 `CMakeLists.txt` 启用 C 语言**：项目 `LANGUAGES` 改为 `C CXX`；`GALAY_BUILD_C_API=ON` 时新建 `${CMAKE_BINARY_DIR}/include/galay/c -> src/c` 符号链接、`add_subdirectory(src/c)`、安装 C 头文件到 `${CMAKE_INSTALL_INCLUDEDIR}/galay/c`，并生成 13 个 `galay-c-*` CMake config-package。
+- **新增 `GALAY_BUILD_C_API` 选项**：`cmake/option.cmake` 增加 ABI 构建开关（默认 OFF），不影响现有 C++ 默认构建行为。
+
+### Docs
+
+- kernel 模块常见问题文档中的测试日志头路径更新为 `test/cpp/common/stdout_log.h`，与新分层目录对齐。
 
 ## [v3.0.0] - 2026-06-20
 
