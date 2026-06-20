@@ -3,8 +3,10 @@
  * @brief HTTP/2 close path should stay in transport teardown scope
  */
 
+#include "galay-http2/kernel/h2_core.h"
 #include "galay-http2/kernel/http2_conn.h"
 #include <cerrno>
+#include <chrono>
 #include <iostream>
 
 using namespace galay::http2;
@@ -67,6 +69,37 @@ int main() {
         if (!check(errno == 0, "second initiateClose() should remain a no-op for invalid fd")) return 1;
 
         std::cout << "[T41] Scenario 2 PASS: repeated close initiation is safe\n";
+    }
+
+    {
+        std::cout << "[T41] Scenario 3: connection core exposes draining and forced close states\n";
+
+        using namespace std::chrono;
+        const auto base = steady_clock::now();
+        Http2ConnectionCore core;
+        core.setTimerConfig(Http2ConnectionCore::TimerConfig{
+            .settings_ack_timeout = 10ms,
+            .ping_interval = 0ms,
+            .ping_timeout = 10ms,
+            .graceful_shutdown_timeout = 20ms
+        });
+
+        core.beginGracefulShutdown(base);
+        if (!check(core.state() == Http2ConnectionCore::State::Draining,
+                   "beginGracefulShutdown() must enter draining state")) return 1;
+        if (!check(!core.acceptsNewStreams(),
+                   "draining core must reject new streams")) return 1;
+
+        auto timeout = core.checkTimers(base + 21ms);
+        if (!check(timeout == Http2ConnectionCore::TimerEvent::GracefulShutdownTimeout,
+                   "graceful shutdown timeout should be reported")) return 1;
+        core.applyTimerEvent(timeout);
+        if (!check(core.state() == Http2ConnectionCore::State::Closing,
+                   "graceful timeout must force closing state")) return 1;
+        if (!check(core.stopRequested(),
+                   "forced close must request run loop stop")) return 1;
+
+        std::cout << "[T41] Scenario 3 PASS: core close states are explicit\n";
     }
 
     std::cout << "[T41] All scenarios PASS\n";

@@ -1,10 +1,28 @@
 #include "h2_core.h"
-#include "frame_disp.h"
-#include "out_sched.h"
 #include "galay-kernel/common/sleep.hpp"
 
 namespace galay::http2
 {
+
+namespace
+{
+
+bool hasPendingData(const H2PendingData& pending)
+{
+    return pending.end_stream || !pending.chunks.empty();
+}
+
+bool hasQueuedData(const std::vector<H2StreamSendState>& streams)
+{
+    for (const auto& stream : streams) {
+        if (hasPendingData(stream.pending)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+} // namespace
 
 Http2ConnectionCore::TimerEvent Http2ConnectionCore::checkTimers(std::chrono::steady_clock::time_point now) noexcept
 {
@@ -35,23 +53,109 @@ Http2ConnectionCore::TimerEvent Http2ConnectionCore::checkTimers(std::chrono::st
     return TimerEvent::None;
 }
 
+bool Http2ConnectionCore::hasOutboundWork() const noexcept
+{
+    return !m_outbound_queues.control_frames.empty() ||
+           !m_outbound_queues.header_frames.empty() ||
+           hasQueuedData(m_outbound_queues.data_streams);
+}
+
+bool Http2ConnectionCore::acceptsNewStreams() const noexcept
+{
+    const auto current = state();
+    return current == State::Idle || current == State::Running;
+}
+
+void Http2ConnectionCore::applyTimerEvent(TimerEvent event) noexcept
+{
+    if (event == TimerEvent::SettingsAckTimeout ||
+        event == TimerEvent::PingAckTimeout ||
+        event == TimerEvent::GracefulShutdownTimeout) {
+        forceClose();
+    }
+}
+
+void Http2ConnectionCore::enqueueDispatchAction(const H2DispatchAction& action)
+{
+    switch (action.type) {
+        case H2DispatchActionType::SendGoaway: {
+            auto frame = std::make_unique<Http2GoAwayFrame>();
+            frame->setErrorCode(action.error_code);
+            m_outbound_queues.control_frames.push_back(std::move(frame));
+            m_outbound_ready = true;
+            break;
+        }
+        case H2DispatchActionType::SendRstStream:
+            m_outbound_queues.control_frames.push_back(
+                Http2FrameBuilder::rstStream(action.stream_id, action.error_code));
+            m_outbound_ready = true;
+            break;
+        case H2DispatchActionType::AckSettings: {
+            auto frame = std::make_unique<Http2SettingsFrame>();
+            frame->setAck(true);
+            m_outbound_queues.control_frames.push_back(std::move(frame));
+            m_outbound_ready = true;
+            break;
+        }
+        case H2DispatchActionType::AckPing: {
+            auto frame = std::make_unique<Http2PingFrame>();
+            frame->setAck(true);
+            m_outbound_queues.control_frames.push_back(std::move(frame));
+            m_outbound_ready = true;
+            break;
+        }
+        case H2DispatchActionType::UpdateWindow:
+            m_outbound_ready = true;
+            break;
+        case H2DispatchActionType::DeliverToStream:
+        case H2DispatchActionType::Ignore:
+            break;
+    }
+}
+
+H2DispatchResult Http2ConnectionCore::receiveFrame(const Http2Frame& frame)
+{
+    auto result = Http2FrameDispatcher::dispatch(frame, m_dispatch_state);
+    for (const auto& action : result.actions) {
+        enqueueDispatchAction(action);
+    }
+    return result;
+}
+
+void Http2ConnectionCore::enqueueData(uint32_t stream_id,
+                                      std::string data,
+                                      bool end_stream,
+                                      uint8_t weight)
+{
+    H2StreamSendState stream;
+    stream.stream_id = stream_id;
+    stream.stream_window = static_cast<int32_t>(kDefaultInitialWindowSize);
+    stream.pending.end_stream = end_stream;
+    stream.weight = weight;
+    if (!data.empty()) {
+        stream.pending.chunks.push_back(std::move(data));
+    }
+    m_outbound_queues.data_streams.push_back(std::move(stream));
+    m_outbound_ready = true;
+}
+
+H2OutboundSelection Http2ConnectionCore::flushOutbound(H2OutboundBudget budget,
+                                                       H2SchedulerConfig config)
+{
+    auto selection = Http2OutboundScheduler::pickSendableFrames(budget, m_outbound_queues, config);
+    m_outbound_ready = hasOutboundWork();
+    return selection;
+}
+
 galay::kernel::Task<void> Http2ConnectionCore::run()
 {
-    H2DispatcherConnectionState dispatch_state;
-    H2OutboundBudget budget;
-    std::vector<H2StreamSendState> pending_streams;
-    m_state.store(State::Running, std::memory_order_release);
+    if (state() == State::Idle) {
+        m_state.store(State::Running, std::memory_order_release);
+    }
     while (!m_stop_requested.load(std::memory_order_acquire)) {
-        // Skeleton loop: concrete read/dispatch/schedule stages will be added in later tasks.
-        // Keep dispatcher state alive so later tasks can wire in real frames.
-        (void)dispatch_state;
-        (void)Http2OutboundScheduler::pickSendableFrames(budget, pending_streams);
+        // Skeleton loop: actual I/O owners call receiveFrame()/flushOutbound() on events.
         const auto timer_event = checkTimers(std::chrono::steady_clock::now());
-        if (timer_event == TimerEvent::SettingsAckTimeout ||
-            timer_event == TimerEvent::PingAckTimeout ||
-            timer_event == TimerEvent::GracefulShutdownTimeout) {
-            requestStop();
-        }
+        applyTimerEvent(timer_event);
         co_await galay::kernel::sleep(std::chrono::milliseconds(1));
     }
     m_state.store(State::Stopped, std::memory_order_release);

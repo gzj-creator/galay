@@ -21,6 +21,20 @@ int main() {
     assert(!http2IsConnectionFatal(Http2RuntimeError::Timeout));
     assert(!http2IsConnectionFatal(Http2RuntimeError::PeerClosed));
 
+    H2CoreError protocol_error{
+        .kind = H2CoreError::Kind::Protocol,
+        .h2_code = Http2ErrorCode::ProtocolError
+    };
+    assert(protocol_error.kind == H2CoreError::Kind::Protocol);
+    assert(protocol_error.h2_code == Http2ErrorCode::ProtocolError);
+
+    H2CoreError timeout_error{
+        .kind = H2CoreError::Kind::Timeout,
+        .h2_code = Http2ErrorCode::NoError
+    };
+    assert(timeout_error.kind == H2CoreError::Kind::Timeout);
+    assert(!timeout_error.io_error.has_value());
+
     std::cout << "T30-H2ErrorModel PASS\n";
     return 0;
 }

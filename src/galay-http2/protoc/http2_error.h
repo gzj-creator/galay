@@ -13,6 +13,7 @@
 
 #include "http2_base.h"
 #include "galay-kernel/common/error.h"
+#include <optional>
 #include <string>
 #include <expected>
 
@@ -155,6 +156,25 @@ struct Http2GoAwayError
                " retryable=" + std::string(retryable ? "true" : "false") +
                (debug.empty() ? "" : (" debug=" + debug));
     }
+};
+
+/**
+ * @brief HTTP/2 core 边界错误
+ * @details 用于在连接核心边界区分协议、流控、I/O 与超时错误，避免用异常表达可恢复错误。
+ */
+struct H2CoreError
+{
+    enum class Kind
+    {
+        Protocol,    ///< HTTP/2 协议错误
+        FlowControl, ///< HTTP/2 流控错误
+        Io,          ///< 底层 I/O 错误
+        Timeout      ///< 定时器超时
+    };
+
+    Kind kind = Kind::Protocol;                               ///< 错误分类
+    Http2ErrorCode h2_code = Http2ErrorCode::NoError;         ///< HTTP/2 错误码
+    std::optional<galay::kernel::IOError> io_error;           ///< 可选 I/O 错误
 };
 
 } // namespace galay::http2

@@ -11,9 +11,12 @@
 #ifndef GALAY_HTTP2_CONNECTION_CORE_H
 #define GALAY_HTTP2_CONNECTION_CORE_H
 
+#include "frame_disp.h"
+#include "out_sched.h"
 #include "galay-kernel/core/task.h"
 #include <atomic>
 #include <chrono>
+#include <string>
 
 namespace galay::http2
 {
@@ -52,6 +55,8 @@ public:
     enum class State {
         Idle,       ///< 空闲
         Running,    ///< 运行中
+        Draining,   ///< 优雅关闭中，不再接受新流
+        Closing,    ///< 强制关闭中
         Stopped     ///< 已停止
     };
 
@@ -59,8 +64,15 @@ public:
 
     State state() const noexcept { return m_state.load(std::memory_order_acquire); }
     bool stopRequested() const noexcept { return m_stop_requested.load(std::memory_order_acquire); }
+    bool outboundReady() const noexcept { return m_outbound_ready; }
+    bool hasOutboundWork() const noexcept;
+    bool acceptsNewStreams() const noexcept;
 
     void requestStop() noexcept { m_stop_requested.store(true, std::memory_order_release); }
+    void forceClose() noexcept {
+        m_state.store(State::Closing, std::memory_order_release);
+        requestStop();
+    }
 
     void setTimerConfig(TimerConfig cfg) noexcept { m_timer_config = cfg; }
     const TimerConfig& timerConfig() const noexcept { return m_timer_config; }
@@ -86,13 +98,43 @@ public:
     void beginGracefulShutdown(std::chrono::steady_clock::time_point at) noexcept {
         m_graceful_shutdown_started = true;
         m_graceful_shutdown_started_at = at;
+        m_state.store(State::Draining, std::memory_order_release);
     }
 
     TimerEvent checkTimers(std::chrono::steady_clock::time_point now) noexcept;
+    void applyTimerEvent(TimerEvent event) noexcept;
+
+    /**
+     * @brief 处理一帧入站 HTTP/2 帧
+     * @details 调用 frame dispatcher 并将产生的控制动作写入出站队列；不执行 I/O，不阻塞。
+     * @param frame 入站帧，调用方负责保证其生命周期覆盖本次调用
+     * @return dispatcher 结果，错误通过作用域和 action 表达
+     */
+    H2DispatchResult receiveFrame(const Http2Frame& frame);
+
+    /**
+     * @brief 入队待发送 DATA
+     * @param stream_id stream ID
+     * @param data DATA payload
+     * @param end_stream 数据发送完后是否附带 END_STREAM
+     * @param weight stream 调度权重
+     */
+    void enqueueData(uint32_t stream_id, std::string data, bool end_stream, uint8_t weight = 16);
+
+    /**
+     * @brief 立即调度当前出站队列
+     * @details control/headers 立即出队，DATA 受 budget 和 DRR 限制；不执行 I/O。
+     * @param budget 本次发送预算
+     * @param config DRR 调度配置
+     * @return 本次选出的待发送帧
+     */
+    H2OutboundSelection flushOutbound(H2OutboundBudget budget, H2SchedulerConfig config = {});
 
     galay::kernel::Task<void> run();
 
 private:
+    void enqueueDispatchAction(const H2DispatchAction& action);
+
     std::atomic<State> m_state{State::Idle};
     std::atomic<bool> m_stop_requested{false};
     std::atomic<bool> m_settings_ack_pending{false};
@@ -103,6 +145,9 @@ private:
     bool m_waiting_ping_ack = false;
     bool m_graceful_shutdown_started = false;
     std::chrono::steady_clock::time_point m_graceful_shutdown_started_at{};
+    H2DispatcherConnectionState m_dispatch_state;
+    H2OutboundQueues m_outbound_queues;
+    bool m_outbound_ready = false;
 };
 
 } // namespace galay::http2

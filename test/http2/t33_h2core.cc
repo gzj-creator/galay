@@ -22,6 +22,45 @@ int main() {
     core.requestStop();
     assert(core.stopRequested());
 
+    Http2ConnectionCore event_core;
+    Http2DataFrame bad_data;
+    bad_data.header().stream_id = 0;
+    auto bad_result = event_core.receiveFrame(bad_data);
+    assert(!bad_result.ok);
+    assert(bad_result.error_scope == H2DispatchErrorScope::Connection);
+    assert(event_core.hasOutboundWork());
+
+    auto control = event_core.flushOutbound(H2OutboundBudget{
+        .conn_window = 0,
+        .max_frame_size = 4
+    });
+    assert(control.frames.size() == 1);
+    assert(control.frames[0]->isGoAway());
+    assert(!event_core.hasOutboundWork());
+
+    Http2ConnectionCore data_core;
+    data_core.enqueueData(1, "abcd", false);
+    auto blocked = data_core.flushOutbound(H2OutboundBudget{
+        .conn_window = 0,
+        .max_frame_size = 4
+    });
+    assert(blocked.frames.empty());
+
+    Http2WindowUpdateFrame window_update;
+    window_update.header().stream_id = 0;
+    window_update.setWindowSizeIncrement(4);
+    auto window_result = data_core.receiveFrame(window_update);
+    assert(window_result.ok);
+    assert(data_core.outboundReady());
+
+    auto unblocked = data_core.flushOutbound(H2OutboundBudget{
+        .conn_window = 4,
+        .max_frame_size = 4
+    });
+    assert(unblocked.frames.size() == 1);
+    assert(unblocked.frames[0]->isData());
+    assert(unblocked.total_data_bytes == 4);
+
     std::cout << "T33-H2ConnectionCoreLifecycle PASS\n";
     return 0;
 }

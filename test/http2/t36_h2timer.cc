@@ -26,6 +26,7 @@ int main() {
     core.markSettingsSent(base);
     auto e1 = core.checkTimers(base + 11ms);
     assert(e1 == Http2ConnectionCore::TimerEvent::SettingsAckTimeout);
+    assert(!core.hasOutboundWork());
 
     // PING send + PING ACK timeout
     Http2ConnectionCore core2;
@@ -38,8 +39,10 @@ int main() {
     core2.markFrameReceivedAt(base);
     auto e2 = core2.checkTimers(base + 6ms);
     assert(e2 == Http2ConnectionCore::TimerEvent::SendPing);
+    assert(!core2.hasOutboundWork());
     auto e3 = core2.checkTimers(base + 17ms);
     assert(e3 == Http2ConnectionCore::TimerEvent::PingAckTimeout);
+    assert(!core2.hasOutboundWork());
 
     // graceful shutdown timeout
     Http2ConnectionCore core3;
@@ -52,6 +55,7 @@ int main() {
     core3.beginGracefulShutdown(base);
     auto e4 = core3.checkTimers(base + 21ms);
     assert(e4 == Http2ConnectionCore::TimerEvent::GracefulShutdownTimeout);
+    assert(!core3.hasOutboundWork());
 
     std::cout << "T36-H2TimerBehavior PASS\n";
     return 0;
