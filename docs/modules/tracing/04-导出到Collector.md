@@ -24,7 +24,7 @@ galay::tracing::OtlpHttpExporterConfig config{
 galay::tracing::OtlpHttpExporter exporter(config);
 ```
 
-如果构建时启用了 `GALAY_TRACING_ENABLE_OTLP_HTTP`，默认 transport 使用 `galay-http`。否则需要传入自定义 transport，或者 exporter 会返回失败并带错误信息。
+`OtlpHttpExporter` 默认可用；如果构建时启用了 `GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT`，默认 transport 使用 `galay-http`。否则需要传入自定义 transport，或者 exporter 会返回失败并带错误信息。
 
 ## 自定义 Transport
 

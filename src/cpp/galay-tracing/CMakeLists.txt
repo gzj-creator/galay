@@ -26,7 +26,7 @@ set(GALAY_TRACING_SOURCES
     log/logger.cc
 )
 
-if(GALAY_TRACING_ENABLE_OTLP_HTTP)
+if(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
     if(TARGET galay::http)
         set(_galay_tracing_http_target galay::http)
     elseif(TARGET http)
@@ -61,7 +61,7 @@ target_include_directories(tracing
 )
 target_link_libraries(tracing PUBLIC ${_galay_tracing_kernel_target})
 
-if(GALAY_TRACING_ENABLE_OTLP_HTTP)
+if(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
     target_compile_definitions(tracing PUBLIC GALAY_TRACING_ENABLE_OTLP_HTTP=1)
     target_link_libraries(tracing PUBLIC ${_galay_tracing_http_target})
 endif()
@@ -83,15 +83,13 @@ if(GALAY_TRACING_ENABLE_SPDLOG)
     set_target_properties(galay-tracing-spdlog PROPERTIES EXPORT_NAME tracing-spdlog)
 endif()
 
-if(GALAY_TRACING_ENABLE_KERNEL)
-    add_library(galay-tracing-kernel INTERFACE)
-    add_library(galay-tracing::galay-tracing-kernel ALIAS galay-tracing-kernel)
-    target_compile_features(galay-tracing-kernel INTERFACE cxx_std_23)
-    target_include_directories(galay-tracing-kernel
-        INTERFACE
-            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
-            $<INSTALL_INTERFACE:include>
-    )
-    target_link_libraries(galay-tracing-kernel INTERFACE tracing ${_galay_tracing_kernel_target})
-    set_target_properties(galay-tracing-kernel PROPERTIES EXPORT_NAME tracing-kernel)
-endif()
+add_library(galay-tracing-kernel INTERFACE)
+add_library(galay-tracing::galay-tracing-kernel ALIAS galay-tracing-kernel)
+target_compile_features(galay-tracing-kernel INTERFACE cxx_std_23)
+target_include_directories(galay-tracing-kernel
+    INTERFACE
+        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(galay-tracing-kernel INTERFACE tracing ${_galay_tracing_kernel_target})
+set_target_properties(galay-tracing-kernel PROPERTIES EXPORT_NAME tracing-kernel)

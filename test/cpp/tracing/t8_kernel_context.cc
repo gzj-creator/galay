@@ -38,7 +38,10 @@ galay::kernel::Task<void> logWithoutContextTask() {
 galay::kernel::Task<void> yieldingExplicitContextTask(std::optional<galay::tracing::TraceContext> context) {
     assert(!galay::tracing::currentContext().has_value());
     galay::tracing::log(context).info("wrapped before yield");
-    galay::kernel::RuntimeHandle::current().spawn(logWithoutContextTask());
+    auto runtimeHandle = galay::kernel::RuntimeHandle::current();
+    assert(runtimeHandle.has_value());
+    auto spawned = runtimeHandle->spawn(logWithoutContextTask());
+    assert(spawned.has_value());
     co_yield true;
     assert(!galay::tracing::currentContext().has_value());
     galay::tracing::log(context).info("wrapped after yield");
@@ -108,7 +111,11 @@ void explicitContextSurvivesYieldWithoutLeakingToOtherTasks() {
         .build();
 
     auto wrappedHandle = runtime.spawn(std::move(wrapped));
-    wrappedHandle.join();
+    assert(wrappedHandle.has_value());
+    auto wrappedWait = wrappedHandle->wait();
+    assert(wrappedWait.has_value());
+    auto wrappedJoin = wrappedHandle->join();
+    assert(wrappedJoin.has_value());
 
     galay::tracing::setDefaultLogger(nullptr);
 

@@ -366,7 +366,7 @@ void addAttributeEstimate(std::size_t& size, std::span<const SpanAttribute> attr
     return [](OtlpHttpRequest) {
         return OtlpHttpResponse{
             .status_code = 0,
-            .error = "GALAY_TRACING_ENABLE_OTLP_HTTP is disabled and no custom OTLP transport was supplied",
+            .error = "built-in galay-http OTLP transport is disabled and no custom OTLP transport was supplied",
         };
     };
 }

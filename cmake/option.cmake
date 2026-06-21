@@ -23,8 +23,16 @@ option(GALAY_BUILD_SHARED_LIBS "Build non-header modules as shared libraries" ON
 option(GALAY_DISABLE_IOURING "Disable io_uring and use epoll on Linux" ON)
 
 option(GALAY_TRACING_ENABLE_SPDLOG "Enable the tracing spdlog adapter" OFF)
-option(GALAY_TRACING_ENABLE_KERNEL "Enable the tracing kernel adapter" OFF)
-option(GALAY_TRACING_ENABLE_OTLP_HTTP "Enable the tracing OTLP/HTTP exporter" OFF)
+option(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT "Enable the built-in galay-http OTLP transport" OFF)
+
+if(DEFINED GALAY_TRACING_ENABLE_OTLP_HTTP)
+    message(DEPRECATION
+        "GALAY_TRACING_ENABLE_OTLP_HTTP is deprecated; use "
+        "GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT.")
+    set(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT
+        "${GALAY_TRACING_ENABLE_OTLP_HTTP}"
+        CACHE BOOL "Enable the built-in galay-http OTLP transport" FORCE)
+endif()
 
 set(BUILD_SHARED_LIBS "${GALAY_BUILD_SHARED_LIBS}" CACHE BOOL "Build shared libraries" FORCE)
 set(ENABLE_CPP23_MODULES "${GALAY_ENABLE_CPP23_MODULES}" CACHE BOOL "Enable C++23 module targets" FORCE)

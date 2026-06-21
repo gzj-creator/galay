@@ -12,3 +12,13 @@ add_test(
         -D GALAY_INSTALL_CONFIG=$<CONFIG>
         -P ${CMAKE_CURRENT_SOURCE_DIR}/install_include_layout.cmake
 )
+
+add_test(
+    NAME config.tracing_options_surface
+    COMMAND ${CMAKE_COMMAND}
+        -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -D GALAY_BINARY_DIR=${CMAKE_BINARY_DIR}
+        -D GALAY_CMAKE_GENERATOR=${CMAKE_GENERATOR}
+        -D GALAY_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/tracing_options_surface.cmake
+)
