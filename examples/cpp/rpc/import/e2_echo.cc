@@ -5,6 +5,7 @@
 
 import galay.rpc;
 
+#include <atomic>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -15,6 +16,8 @@ using namespace galay::rpc;
 using namespace galay::kernel;
 
 namespace {
+
+std::atomic<bool> g_ok{true};
 
 const char* callModeToString(RpcCallMode mode) {
     switch (mode) {
@@ -31,28 +34,37 @@ const char* callModeToString(RpcCallMode mode) {
     }
 }
 
-template<typename CallFn>
+template<typename AwaitResult>
 Task<void> callEchoWithMode(std::string_view title,
                            RpcCallMode expected_mode,
                            const std::string& payload,
-                           CallFn&& call_fn) {
+                           AwaitResult result) {
     std::cout << "=== " << title << " ===\n";
     std::cout << "Input: " << payload << "\n";
 
-    auto result = co_await call_fn();
     if (!result) {
-        std::cerr << "Transport error: " << result.error().message() << "\n\n";
+        std::cerr << "Task error: " << result.error().message() << "\n\n";
+        g_ok.store(false, std::memory_order_release);
         co_return;
     }
 
-    if (!result.value().has_value()) {
+    RpcCallResult call_result = std::move(result.value());
+    if (!call_result.has_value()) {
+        std::cerr << "RPC error: " << rpcErrorCodeToString(call_result.error().code()) << "\n\n";
+        g_ok.store(false, std::memory_order_release);
+        co_return;
+    }
+
+    if (!call_result.value().has_value()) {
         std::cerr << "No response received\n\n";
+        g_ok.store(false, std::memory_order_release);
         co_return;
     }
 
-    const auto& response = result.value().value().value();
+    const auto& response = call_result.value().value();
     if (!response.isOk()) {
         std::cerr << "RPC error: " << rpcErrorCodeToString(response.errorCode()) << "\n\n";
+        g_ok.store(false, std::memory_order_release);
         co_return;
     }
 
@@ -64,6 +76,7 @@ Task<void> callEchoWithMode(std::string_view title,
     if (response.callMode() != expected_mode) {
         std::cerr << "Mode mismatch: expected=" << callModeToString(expected_mode)
                   << ", actual=" << callModeToString(response.callMode()) << "\n";
+        g_ok.store(false, std::memory_order_release);
     }
 
     std::cout << "\n";
@@ -81,6 +94,7 @@ Task<void> runClient(Runtime& runtime, const std::string& host, uint16_t port) {
     auto connect_result = co_await client.connect(host, port);
     if (!connect_result) {
         std::cerr << "Failed to connect: " << connect_result.error().message() << "\n";
+        g_ok.store(false, std::memory_order_release);
         co_return;
     }
 
@@ -91,41 +105,33 @@ Task<void> runClient(Runtime& runtime, const std::string& host, uint16_t port) {
     co_await callEchoWithMode("Unary Echo",
                               RpcCallMode::UNARY,
                               payload,
-                              [&]() {
-                                  return client.call("EchoService", "echo", payload);
-                              });
+                              co_await client.call("EchoService", "echo", payload));
 
     co_await callEchoWithMode("Client Streaming Echo (single frame)",
                               RpcCallMode::CLIENT_STREAMING,
                               payload,
-                              [&]() {
-                                  return client.callClientStreamFrame("EchoService",
-                                                                      "echo",
-                                                                      payload.data(),
-                                                                      payload.size(),
-                                                                      true);
-                              });
+                              co_await client.callClientStreamFrame("EchoService",
+                                                                    "echo",
+                                                                    payload.data(),
+                                                                    payload.size(),
+                                                                    true));
 
     co_await callEchoWithMode("Server Streaming Echo (single response frame)",
                               RpcCallMode::SERVER_STREAMING,
                               payload,
-                              [&]() {
-                                  return client.callServerStreamRequest("EchoService",
-                                                                        "echo",
-                                                                        payload.data(),
-                                                                        payload.size());
-                              });
+                              co_await client.callServerStreamRequest("EchoService",
+                                                                      "echo",
+                                                                      payload.data(),
+                                                                      payload.size()));
 
     co_await callEchoWithMode("Bidi Streaming Echo (single frame)",
                               RpcCallMode::BIDI_STREAMING,
                               payload,
-                              [&]() {
-                                  return client.callBidiStreamFrame("EchoService",
-                                                                    "echo",
-                                                                    payload.data(),
-                                                                    payload.size(),
-                                                                    true);
-                              });
+                              co_await client.callBidiStreamFrame("EchoService",
+                                                                  "echo",
+                                                                  payload.data(),
+                                                                  payload.size(),
+                                                                  true));
 
     co_await client.close();
     std::cout << "Client closed.\n";
@@ -155,5 +161,5 @@ int main(int argc, char* argv[]) {
 
     runtime.stop();
 
-    return 0;
+    return g_ok.load(std::memory_order_acquire) ? 0 : 1;
 }

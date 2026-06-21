@@ -16,14 +16,14 @@ int main()
 
     RpcEndpointCache cache;
     FakeEtcdServiceRegistry registry("/galay/rpc/examples");
-    auto registered = registry.registerEndpoint(endpoint);
-    if (!registered.has_value()) {
-        std::cerr << registered.error().message() << "\n";
-        return 1;
-    }
     auto watched = registry.watch("ExampleEcho", cache);
     if (!watched.has_value()) {
         std::cerr << watched.error().message() << "\n";
+        return 1;
+    }
+    auto registered = registry.registerEndpoint(endpoint);
+    if (!registered.has_value()) {
+        std::cerr << registered.error().message() << "\n";
         return 1;
     }
 
