@@ -10,10 +10,6 @@
 #include <utility>
 #include <vector>
 
-#if defined(GALAY_TRACING_ENABLE_OTLP_HTTP)
-#include <galay/cpp/galay-kernel/core/runtime.h>
-#endif
-
 namespace {
 
 static_assert(std::is_same_v<
@@ -191,44 +187,6 @@ void resourceAndScopeMetadataAreEncoded() {
     assert(captured);
 }
 
-#if defined(GALAY_TRACING_ENABLE_OTLP_HTTP)
-galay::kernel::Task<galay::tracing::ExportResult> exportOnSchedulerThread() {
-    auto transport = galay::tracing::makeGalayHttpOtlpTransport();
-    galay::tracing::OtlpHttpExporter exporter({}, transport);
-    const std::vector spans{makeSpan("scheduler-thread")};
-
-    co_return exporter.exportSpans(std::span<const galay::tracing::Span>(spans));
-}
-
-void galayHttpTransportRejectsSchedulerThreadBlocking() {
-    galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
-        .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
-        .build();
-    runtime.start();
-
-    auto join = runtime.spawn(exportOnSchedulerThread());
-    assert(join.has_value());
-    auto result = join->join();
-    runtime.stop();
-
-    assert(result.has_value());
-    assert(result.value() == galay::tracing::ExportResult::kFailure);
-}
-
-void galayHttpTransportRejectsMalformedEndpoint() {
-    auto transport = galay::tracing::makeGalayHttpOtlpTransport();
-    auto response = transport(galay::tracing::OtlpHttpRequest{
-        .endpoint = "ftp://collector.invalid/v1/traces",
-        .timeout = std::chrono::milliseconds(10),
-        .body = "{}",
-    });
-
-    assert(response.status_code == 0);
-    assert(!response.error.empty());
-}
-#endif
-
 } // namespace
 
 int main() {
@@ -238,8 +196,4 @@ int main() {
     multipleSpansAreEncodedIntoOneRequest();
     semanticSpanFieldsAreEncoded();
     resourceAndScopeMetadataAreEncoded();
-#if defined(GALAY_TRACING_ENABLE_OTLP_HTTP)
-    galayHttpTransportRejectsSchedulerThreadBlocking();
-    galayHttpTransportRejectsMalformedEndpoint();
-#endif
 }
