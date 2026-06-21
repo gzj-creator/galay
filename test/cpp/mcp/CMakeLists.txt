@@ -1,13 +1,6 @@
-set(GALAY_MCP_UNIT_TEST_SOURCES
-    t5_await.cc
-    t6_jrpc.cc
-    t7_log.cc
-    t8_client_surface.cc
-    t9_client_mode.cc
-    t10_protocol_validation.cc
-)
+file(GLOB GALAY_MCP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
-foreach(test_source IN LISTS GALAY_MCP_UNIT_TEST_SOURCES)
+foreach(test_source IN LISTS GALAY_MCP_TEST_SOURCES)
     get_filename_component(test_name "${test_source}" NAME_WE)
     add_executable(${test_name} ${test_source})
     target_link_libraries(${test_name} PRIVATE galay::mcp)
@@ -20,7 +13,7 @@ foreach(test_source IN LISTS GALAY_MCP_UNIT_TEST_SOURCES)
     string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${test_name}")
     set(ctest_name "mcp.${scenario_name}")
     add_test(NAME ${ctest_name} COMMAND $<TARGET_FILE:${test_name}>)
-    if(test_name STREQUAL "t5_await")
+    if(test_name STREQUAL "t1_await")
         set_tests_properties(${ctest_name} PROPERTIES LABELS "mcp;surface")
     else()
         set_tests_properties(${ctest_name} PROPERTIES LABELS "mcp;unit")

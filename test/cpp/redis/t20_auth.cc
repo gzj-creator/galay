@@ -2,6 +2,7 @@
 #include <galay/cpp/galay-redis/sync/redis_session.h>
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
+#include "integration_config.h"
 
 #include <atomic>
 #include <chrono>
@@ -218,14 +219,14 @@ int main()
 {
     if (!integrationEnabled()) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run Redis auth integration test" << std::endl;
-        return 0;
+        return redis_test::kRedisTestSkippedExitCode;
     }
 
     const std::string url = getenvOrDefault("GALAY_REDIS_AUTH_URL", "");
     const std::string wrong_url = getenvOrDefault("GALAY_REDIS_AUTH_WRONG_URL", "");
     if (url.empty() || wrong_url.empty()) {
         std::cout << "SKIP: set GALAY_REDIS_AUTH_URL and GALAY_REDIS_AUTH_WRONG_URL" << std::endl;
-        return 0;
+        return redis_test::kRedisTestSkippedExitCode;
     }
 
     const std::string key = getenvOrDefault("GALAY_REDIS_AUTH_KEY", "galay:redis:auth:test");

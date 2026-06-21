@@ -1,20 +1,7 @@
 file(GLOB GALAY_HTTP2_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
-set(GALAY_HTTP2_MANUAL_TEST_TARGETS
-    t25_h2c
-    t26_h2c
-    t28_h2
-    t29_h2
-    t76_h2tls
-    t84_h2acceptplugin
-)
-
 foreach(test_source ${GALAY_HTTP2_TEST_SOURCES})
     get_filename_component(test_name "${test_source}" NAME_WE)
-    list(FIND GALAY_HTTP2_MANUAL_TEST_TARGETS ${test_name} manual_index)
-    if(NOT manual_index EQUAL -1)
-        continue()
-    endif()
     add_executable(${test_name} ${test_source})
     target_link_libraries(${test_name} PRIVATE galay::http2)
     target_include_directories(${test_name} PRIVATE ${CMAKE_BINARY_DIR}/include)

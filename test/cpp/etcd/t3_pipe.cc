@@ -1,4 +1,5 @@
 #include <galay/cpp/galay-etcd/sync/etcd_client.h>
+#include "integration_config.h"
 
 #include <chrono>
 #include <iostream>
@@ -27,6 +28,11 @@ int fail(const std::string& message)
 
 int main(int argc, char** argv)
 {
+    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.pipe");
+        skip_code != 0) {
+        return skip_code;
+    }
+
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
 
     EtcdConfig config;

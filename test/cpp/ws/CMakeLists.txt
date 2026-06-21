@@ -1,20 +1,7 @@
 file(GLOB GALAY_WS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
-set(GALAY_WS_MANUAL_TEST_TARGETS
-    t18_ws
-    t19_ws
-    t20_ws
-    t63_wsscl
-    t65_wssread
-    t67_wssecho
-)
-
 foreach(test_source ${GALAY_WS_TEST_SOURCES})
     get_filename_component(test_name "${test_source}" NAME_WE)
-    list(FIND GALAY_WS_MANUAL_TEST_TARGETS ${test_name} manual_index)
-    if(NOT manual_index EQUAL -1)
-        continue()
-    endif()
     add_executable(${test_name} ${test_source})
     target_link_libraries(${test_name} PRIVATE galay::ws)
     target_include_directories(${test_name}

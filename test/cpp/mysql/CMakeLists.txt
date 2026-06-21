@@ -1,7 +1,20 @@
 set(GALAY_MYSQL_TEST_SKIP_RETURN_CODE 125)
+file(GLOB GALAY_MYSQL_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+
+set(GALAY_MYSQL_INTEGRATION_TESTS
+    t4_client
+    t5_client
+    t6_pool
+    t7_transaction
+    t8_stmt
+    t12_auth_plugins
+    t13_resilience
+    t15_pool_waiter
+    t16_it_gate
+    t17_pool_lease
+)
 
 function(add_mysql_test target_name source_file)
-    cmake_parse_arguments(ARG "INTEGRATION" "" "LABELS" ${ARGN})
     set(executable_name "mysql_${target_name}")
     add_executable(${executable_name} ${source_file})
     target_link_libraries(${executable_name} PRIVATE galay::mysql)
@@ -11,20 +24,16 @@ function(add_mysql_test target_name source_file)
         CXX_STANDARD_REQUIRED ON
         CXX_EXTENSIONS OFF
     )
-    string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")
+    string(REGEX REPLACE "_" "." scenario_name "${target_name}")
     set(test_name "mysql.${scenario_name}")
     add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${executable_name}>)
 
     set(test_labels mysql)
-    if(ARG_INTEGRATION)
+    if(target_name IN_LIST GALAY_MYSQL_INTEGRATION_TESTS)
         list(APPEND test_labels integration requires-mysql)
         set_tests_properties(${test_name} PROPERTIES SKIP_RETURN_CODE ${GALAY_MYSQL_TEST_SKIP_RETURN_CODE})
     else()
         list(APPEND test_labels unit)
-    endif()
-
-    if(ARG_LABELS)
-        list(APPEND test_labels ${ARG_LABELS})
     endif()
 
     set_tests_properties(${test_name} PROPERTIES
@@ -34,44 +43,15 @@ function(add_mysql_test target_name source_file)
     )
 endfunction()
 
-# t0 - 测试配置契约
-add_mysql_test(t0_config t0_config.cc)
-
-# t1 - 协议解析测试
-add_mysql_test(t1_protocol t1_protocol.cc)
-
-# t2 - 认证测试
-add_mysql_test(t2_auth t2_auth.cc)
-
-# t8 - Awaitable surface test
-add_mysql_test(t8_surface t8_surface.cc)
-
-# t9 - Config env override surface
-add_mysql_test(t9_env t9_env.cc)
-
-# t10 - MySQL 库级日志入口测试
-add_mysql_test(t10_log t10_log.cc)
-
-# t11 - Real server authentication plugin matrix
-add_mysql_test(t11_auth_plugins t11_auth_plugins.cc INTEGRATION LABELS auth_plugins)
-
-# t12 - Real server reconnect/failure recovery smoke
-add_mysql_test(t12_resilience t12_resilience.cc INTEGRATION LABELS resilience)
-
-# t13 - Async pool coroutine source guard
-add_mysql_test(t13_pool_coroutine_source t13_pool_coroutine_source.cc)
-target_compile_definitions(mysql_t13_pool_coroutine_source
-    PRIVATE GALAY_MYSQL_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src/cpp"
-)
-
-# t14 - Async pool waiter/resume integration
-add_mysql_test(t14_pool_waiter t14_pool_waiter.cc INTEGRATION LABELS pool_waiter)
-
-# t15 - Integration test opt-in gate
-add_mysql_test(t15_it_gate t15_it_gate.cc INTEGRATION LABELS it_gate)
-
-# t16 - RAII pool lease integration
-add_mysql_test(t16_pool_lease t16_pool_lease.cc INTEGRATION LABELS pool_lease)
+foreach(test_source IN LISTS GALAY_MYSQL_TEST_SOURCES)
+    get_filename_component(test_name "${test_source}" NAME_WE)
+    add_mysql_test(${test_name} ${test_source})
+    if(test_name STREQUAL "t14_pool_coroutine_source")
+        target_compile_definitions(mysql_t14_pool_coroutine_source
+            PRIVATE GALAY_MYSQL_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src/cpp"
+        )
+    endif()
+endforeach()
 
 add_test(
     NAME mysql.package_consumer_smoke

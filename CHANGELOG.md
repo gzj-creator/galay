@@ -15,6 +15,7 @@
 
 - **新增 C ABI 包装层 `src/c/`**：覆盖 utils/kernel/ssl/http/ws/http2/redis/rpc/mysql/mongo/etcd/mcp/tracing 共 13 个模块，以及通用 `galay-c` 包（含错误码与 ABI 宏），共 44 个文件；通过新增的 `GALAY_BUILD_C_API=ON` 构建选项启用，与既有 C++ 构建互不干扰。
 - **新增 C ABI 用例目录**：`benchmark/c/`、`examples/c/`、`test/c/`（共 99 个文件）提供各模块 C ABI 的 codec/builder/lifecycle smoke 基准、示例与回归测试入口。
+- **测试集成配置头**：新增 `test/cpp/{etcd,redis}/integration_config.h`，作为对应模块集成测试的统一配置入口。
 
 ### Changed
 
@@ -24,6 +25,8 @@
 - **benchmark/examples/test 按语言分层**：三者的各模块子目录整体迁入 `cpp/` 子目录（如 `benchmark/kernel/` → `benchmark/cpp/kernel/`，examples/test 同），共 637 个文件纯移动；对应 `CMakeLists.txt` 由 `add_subdirectory(<module>)` 改为 `add_subdirectory(cpp/<module>)`，并在 `GALAY_BUILD_C_API=ON` 时额外 `add_subdirectory(c)`。
 - **顶层 `CMakeLists.txt` 启用 C 语言**：项目 `LANGUAGES` 改为 `C CXX`；`GALAY_BUILD_C_API=ON` 时新建 `${CMAKE_BINARY_DIR}/include/galay/c -> src/c` 符号链接、`add_subdirectory(src/c)`、安装 C 头文件到 `${CMAKE_INSTALL_INCLUDEDIR}/galay/c`，并生成 13 个 `galay-c-*` CMake config-package。
 - **新增 `GALAY_BUILD_C_API` 选项**：`cmake/option.cmake` 增加 ABI 构建开关（默认 OFF），不影响现有 C++ 默认构建行为。
+- **测试用例统一重编号**：etcd/http/http2/kernel/mcp/mysql/redis/rpc/ssl/ws 共 10 个测试目录的 `t{n}_*.cc` 改为从 `t1` 起连续编号；同步更新 etcd/kernel/mcp/mysql/redis/ssl 各自 `CMakeLists.txt` 中硬编码的集成测试/TLS 测试/场景名清单；修复 kernel 目录 `t116_sqestatesrc.cc` 与 `t116_connfan.cc` 的序号冲突（冲突项起整体后移一位至 t125）。
+- **测试 CMake 改用 GLOB 自动发现**：mcp/mongo/tracing/utils 四个目录不再逐个 `add_executable`/`add_test`，统一改为 `file(GLOB ... CONFIGURE_DEPENDS)` + 循环派发；保留各模块原有的集成/单元分类、链接库差异、tracing 的 `T1-package_surface` 目标命名与 `t6_spdlog_sink` 条件编译等特例。
 
 ### Fixed
 
@@ -32,6 +35,10 @@
 ### Docs
 
 - kernel 模块常见问题文档中的测试日志头路径更新为 `test/cpp/common/stdout_log.h`，与新分层目录对齐。
+
+### Chore
+
+- **拆分 benchmark/examples 与 test**：将原本散落在 `test/cpp/` 下的基准与示例源码迁出到 `benchmark/cpp/*/b*.cc`（etcd/redis/ssl）与 `examples/cpp/*/include/manual/*.cc`（http/http2/redis/rpc/ws），让回归测试目录只保留真正的 `t{n}_*.cc` 用例。
 
 ## [v3.0.0] - 2026-06-20
 

@@ -1,4 +1,5 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
+#include "integration_config.h"
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -323,6 +324,11 @@ Task<void> runTopologyAndPubSubTests(IOScheduler* scheduler)
 
 int main()
 {
+    if (const int skip_code = redis_test::requireIntegrationEnabledOrSkip("redis.t11.pubsub");
+        skip_code != 0) {
+        return skip_code;
+    }
+
     std::cout << "Running topology and pubsub tests..." << std::endl;
 
     Runtime runtime;

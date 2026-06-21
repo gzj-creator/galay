@@ -1,5 +1,6 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
+#include "integration_config.h"
 
 #include <atomic>
 #include <cctype>
@@ -357,7 +358,7 @@ int main()
     const auto cfg = loadConfig();
     if (!cfg.enabled) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run cluster+sentinel integration test" << std::endl;
-        return 0;
+        return redis_test::kRedisTestSkippedExitCode;
     }
 
     std::cout << "Running real Redis Cluster + Sentinel integration test..." << std::endl;

@@ -3,6 +3,17 @@ if(NOT TARGET PkgConfig::SIMDJSON)
     pkg_check_modules(SIMDJSON REQUIRED IMPORTED_TARGET simdjson)
 endif()
 
+file(GLOB GALAY_ETCD_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+set(GALAY_ETCD_TEST_SKIP_RETURN_CODE 125)
+set(GALAY_ETCD_INTEGRATION_TESTS
+    t1_smoke
+    t2_prefix
+    t3_pipe
+    t4_smoke
+    t5_pipe
+    t8_task_watch
+)
+
 function(galay_etcd_configure_test_target target_name)
     target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     set_target_properties(${target_name} PROPERTIES
@@ -12,37 +23,28 @@ function(galay_etcd_configure_test_target target_name)
     )
 endfunction()
 
-function(galay_etcd_add_test_target target_name source_name)
+function(galay_etcd_add_test_target source_name)
+    get_filename_component(file_name "${source_name}" NAME_WE)
+    set(target_name "etcd_${file_name}")
     add_executable(${target_name} ${source_name})
     target_link_libraries(${target_name} PRIVATE galay-etcd)
+    if(file_name STREQUAL "t6_helpers")
+        target_link_libraries(${target_name} PRIVATE PkgConfig::SIMDJSON)
+    endif()
     set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
     galay_etcd_configure_test_target(${target_name})
-    get_filename_component(scenario_name "${source_name}" NAME_WE)
-    string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${scenario_name}")
+    string(REGEX REPLACE "_" "." scenario_name "${file_name}")
     add_test(NAME "etcd.${scenario_name}" COMMAND $<TARGET_FILE:${target_name}>)
+    if(file_name IN_LIST GALAY_ETCD_INTEGRATION_TESTS)
+        set_tests_properties("etcd.${scenario_name}" PROPERTIES
+            LABELS "etcd;integration;requires-etcd"
+            SKIP_RETURN_CODE ${GALAY_ETCD_TEST_SKIP_RETURN_CODE}
+        )
+    else()
+        set_tests_properties("etcd.${scenario_name}" PROPERTIES LABELS "etcd;unit")
+    endif()
 endfunction()
 
-function(galay_etcd_add_integration_target target_name source_name)
-    add_executable(${target_name} EXCLUDE_FROM_ALL ${source_name})
-    target_link_libraries(${target_name} PRIVATE galay-etcd)
-    set_property(TARGET ${target_name} PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
-    galay_etcd_configure_test_target(${target_name})
-endfunction()
-
-add_executable(T6-EtcdInternalHelpers t6_helpers.cc)
-target_link_libraries(T6-EtcdInternalHelpers PRIVATE galay-etcd)
-target_link_libraries(T6-EtcdInternalHelpers PRIVATE PkgConfig::SIMDJSON)
-set_property(TARGET T6-EtcdInternalHelpers PROPERTY NO_SYSTEM_FROM_IMPORTED ON)
-galay_etcd_configure_test_target(T6-EtcdInternalHelpers)
-add_test(NAME etcd.helpers COMMAND $<TARGET_FILE:T6-EtcdInternalHelpers>)
-
-galay_etcd_add_test_target(T7-EtcdAwaitableSurface t7_await.cc)
-
-galay_etcd_add_test_target(T10-EtcdLog t10_log.cc)
-
-galay_etcd_add_integration_target(T1-EtcdSmoke t1_smoke.cc)
-galay_etcd_add_integration_target(T2-EtcdPrefixOps t2_prefix.cc)
-galay_etcd_add_integration_target(T3-EtcdPipeline t3_pipe.cc)
-galay_etcd_add_integration_target(T4-AsyncEtcdSmoke t4_smoke.cc)
-galay_etcd_add_integration_target(T5-AsyncEtcdPipeline t5_pipe.cc)
-galay_etcd_add_integration_target(T9-AsyncEtcdTaskWatch t9_task_watch.cc)
+foreach(test_source IN LISTS GALAY_ETCD_TEST_SOURCES)
+    galay_etcd_add_test_target(${test_source})
+endforeach()

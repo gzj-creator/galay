@@ -39,7 +39,7 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
             GALAY_PROJECT_ROOT="${CMAKE_SOURCE_DIR}"
             GALAY_SOURCE_ROOT="${CMAKE_SOURCE_DIR}/src/cpp"
     )
-    if(TEST_NAME STREQUAL "t121_taskresult_storage")
+    if(TEST_NAME STREQUAL "t122_taskresult_storage")
         target_compile_options(${TEST_NAME} PRIVATE
             $<$<CXX_COMPILER_ID:GNU>:-Werror=free-nonheap-object>)
     endif()

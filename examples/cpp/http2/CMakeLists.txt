@@ -34,3 +34,17 @@ if(GALAY_SSL_FEATURE_ENABLED)
     galay_add_http2_import_example(example_http2_import_h2_echo_server import/e13_h2_echo_server.cc)
     galay_add_http2_import_example(example_http2_import_h2_echo_client import/e14_h2_echo_client.cc)
 endif()
+
+file(GLOB GALAY_HTTP2_MANUAL_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/manual/*.cc"
+)
+foreach(example_source IN LISTS GALAY_HTTP2_MANUAL_EXAMPLE_SOURCES)
+    get_filename_component(example_name "${example_source}" NAME_WE)
+    if((example_name MATCHES "_h2$" OR example_name MATCHES "h2tls") AND NOT GALAY_SSL_FEATURE_ENABLED)
+        continue()
+    endif()
+
+    set(example_target "example_http2_manual_${example_name}")
+    galay_add_http2_example(${example_target} ${example_source})
+    target_include_directories(${example_target} PRIVATE ${PROJECT_SOURCE_DIR})
+endforeach()

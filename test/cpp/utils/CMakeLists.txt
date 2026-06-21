@@ -17,27 +17,13 @@ function(galay_add_utils_test target_name source_file)
     set_tests_properties("utils.${scenario_name}" PROPERTIES LABELS "utils;unit")
 endfunction()
 
-set(GALAY_UTILS_TEST_GROUPS
-    t4_algorithm_codecs_crypto.cc
-    t5_app_cli_config.cc
-    t6_buffer_queue_ring.cc
-    t7_cache_lru.cc
-    t8_concurrency_pool_waiter.cc
-    t9_core_string_time_random.cc
-    t10_data_structures.cc
-    t11_platform_process_system.cc
-    t12_resilience_rate_circuit.cc
-    t13_routing_balancer_hash.cc
-)
+# Auto-discover numbered tests t{n}_*.cc; t_import_smoke is handled separately below.
+file(GLOB GALAY_UTILS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/t[0-9]*.cc")
 
-foreach(test_source IN LISTS GALAY_UTILS_TEST_GROUPS)
+foreach(test_source IN LISTS GALAY_UTILS_TEST_SOURCES)
     get_filename_component(test_name "${test_source}" NAME_WE)
     galay_add_utils_test("${test_name}" "${test_source}")
 endforeach()
-
-galay_add_utils_test(t1_ring_buffer_iovec t1_ring_buffer_iovec.cc)
-galay_add_utils_test(t2_sha1_base64 t2_sha1_base64.cc)
-galay_add_utils_test(t3_pbkdf2_hmac_sha256 t3_pbkdf2_hmac_sha256.cc)
 
 if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-utils-modules)
     galay_add_utils_test(t_import_smoke t_import_smoke.cc)

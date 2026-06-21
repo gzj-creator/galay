@@ -32,3 +32,17 @@ if(GALAY_SSL_FEATURE_ENABLED)
     galay_add_ws_import_example(example_ws_import_wss_server import/e7_wss_server.cc)
     galay_add_ws_import_example(example_ws_import_wss_client import/e8_wss_client.cc)
 endif()
+
+file(GLOB GALAY_WS_MANUAL_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/manual/*.cc"
+)
+foreach(example_source IN LISTS GALAY_WS_MANUAL_EXAMPLE_SOURCES)
+    get_filename_component(example_name "${example_source}" NAME_WE)
+    if(example_name MATCHES "wss" AND NOT GALAY_SSL_FEATURE_ENABLED)
+        continue()
+    endif()
+
+    set(example_target "example_ws_manual_${example_name}")
+    galay_add_ws_example(${example_target} ${example_source})
+    target_include_directories(${example_target} PRIVATE ${PROJECT_SOURCE_DIR})
+endforeach()

@@ -1,4 +1,5 @@
 #include <galay/cpp/galay-etcd/async/client.h>
+#include "integration_config.h"
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
@@ -123,6 +124,11 @@ Task<void> runPipelineCase(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
+    if (const int skip_code = etcd_test::requireIntegrationEnabledOrSkip("etcd.pipe");
+        skip_code != 0) {
+        return skip_code;
+    }
+
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();

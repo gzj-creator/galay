@@ -23,3 +23,13 @@ galay_add_rpc_import_example(example_rpc_import_echo_server import/e1_echo.cc)
 galay_add_rpc_import_example(example_rpc_import_echo_client import/e2_echo.cc)
 galay_add_rpc_import_example(example_rpc_import_stream_server import/e3_stream.cc)
 galay_add_rpc_import_example(example_rpc_import_stream_client import/e4_stream.cc)
+
+file(GLOB GALAY_RPC_MANUAL_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/manual/*.cc"
+)
+foreach(example_source IN LISTS GALAY_RPC_MANUAL_EXAMPLE_SOURCES)
+    get_filename_component(example_name "${example_source}" NAME_WE)
+    set(example_target "example_rpc_manual_${example_name}")
+    galay_add_rpc_example(${example_target} ${example_source})
+    target_include_directories(${example_target} PRIVATE ${PROJECT_SOURCE_DIR}/test/cpp/rpc)
+endforeach()

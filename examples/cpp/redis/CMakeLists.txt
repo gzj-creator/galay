@@ -27,3 +27,11 @@ galay_add_redis_example(example_redis_include_pubsub include/e3_pubsub.cc)
 galay_add_redis_import_example(example_redis_import_basic import/e1_basic.cc)
 galay_add_redis_import_example(example_redis_import_pipeline import/e2_pipeline.cc)
 galay_add_redis_import_example(example_redis_import_pubsub import/e3_pubsub.cc)
+
+file(GLOB GALAY_REDIS_MANUAL_EXAMPLE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/manual/*.cc"
+)
+foreach(example_source IN LISTS GALAY_REDIS_MANUAL_EXAMPLE_SOURCES)
+    get_filename_component(example_name "${example_source}" NAME_WE)
+    galay_add_redis_example(example_redis_manual_${example_name} ${example_source})
+endforeach()

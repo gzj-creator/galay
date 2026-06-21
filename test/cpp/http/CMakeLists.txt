@@ -1,25 +1,7 @@
 file(GLOB GALAY_HTTP_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 
-set(GALAY_HTTP_MANUAL_TEST_TARGETS
-    t3_rw
-    t4_rw
-    t5_http
-    t9_chunk
-    t10_chunk
-    t15_range_etag
-    t21_https
-    t22_https
-    t23_https
-    t24_https
-    t27_proxy
-)
-
 foreach(test_source ${GALAY_HTTP_TEST_SOURCES})
     get_filename_component(test_name "${test_source}" NAME_WE)
-    list(FIND GALAY_HTTP_MANUAL_TEST_TARGETS ${test_name} manual_index)
-    if(NOT manual_index EQUAL -1)
-        continue()
-    endif()
     file(READ "${test_source}" test_source_content)
     set(test_requires_http2 FALSE)
     set(test_requires_ws FALSE)
