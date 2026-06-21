@@ -145,6 +145,107 @@ static int test_null_service_rejected(void)
     return 0;
 }
 
+static int test_invalid_call_mode_rejected(void)
+{
+    galay_rpc_request_t request;
+    memset(&request, 0, sizeof(request));
+    request.request_id = 1;
+    request.call_mode = (galay_rpc_call_mode_t)99;
+    request.end_of_stream = GALAY_TRUE;
+    request.service = "echo";
+    request.service_len = strlen(request.service);
+    request.method = "Call";
+    request.method_len = strlen(request.method);
+
+    size_t encoded_size = 123;
+    REQUIRE_STATUS(galay_rpc_request_encoded_size(&request, &encoded_size), GALAY_INVALID_ARGUMENT);
+    REQUIRE_TRUE(encoded_size == 0);
+
+    uint8_t out[64];
+    size_t written = 123;
+    REQUIRE_STATUS(galay_rpc_encode_request(&request, out, sizeof(out), &written), GALAY_INVALID_ARGUMENT);
+    REQUIRE_TRUE(written == 0);
+    return 0;
+}
+
+static int test_empty_name_rejected(void)
+{
+    REQUIRE_TRUE(galay_rpc_name_is_valid("", 0) == GALAY_FALSE);
+
+    galay_rpc_request_t request;
+    memset(&request, 0, sizeof(request));
+    request.request_id = 1;
+    request.call_mode = GALAY_RPC_CALL_UNARY;
+    request.end_of_stream = GALAY_TRUE;
+    request.service = "";
+    request.service_len = 0;
+    request.method = "Call";
+    request.method_len = strlen(request.method);
+
+    size_t encoded_size = 123;
+    REQUIRE_STATUS(galay_rpc_request_encoded_size(&request, &encoded_size), GALAY_INVALID_ARGUMENT);
+    REQUIRE_TRUE(encoded_size == 0);
+    return 0;
+}
+
+static int test_too_long_service_or_method_rejected(void)
+{
+    enum { TOO_LONG = 65536 };
+    char* name = (char*)malloc(TOO_LONG);
+    REQUIRE_TRUE(name != NULL);
+    memset(name, 'a', TOO_LONG);
+
+    galay_rpc_request_t request;
+    memset(&request, 0, sizeof(request));
+    request.request_id = 1;
+    request.call_mode = GALAY_RPC_CALL_UNARY;
+    request.end_of_stream = GALAY_TRUE;
+    request.service = name;
+    request.service_len = TOO_LONG;
+    request.method = "Call";
+    request.method_len = strlen(request.method);
+
+    size_t encoded_size = 123;
+    REQUIRE_STATUS(galay_rpc_request_encoded_size(&request, &encoded_size), GALAY_INVALID_ARGUMENT);
+    REQUIRE_TRUE(encoded_size == 0);
+
+    request.service = "Service";
+    request.service_len = strlen(request.service);
+    request.method = name;
+    request.method_len = TOO_LONG;
+    encoded_size = 123;
+    REQUIRE_STATUS(galay_rpc_request_encoded_size(&request, &encoded_size), GALAY_INVALID_ARGUMENT);
+    REQUIRE_TRUE(encoded_size == 0);
+
+    free(name);
+    return 0;
+}
+
+static int test_output_buffer_too_small(void)
+{
+    const char payload[] = "payload";
+    galay_rpc_request_t request;
+    memset(&request, 0, sizeof(request));
+    request.request_id = 1;
+    request.call_mode = GALAY_RPC_CALL_UNARY;
+    request.end_of_stream = GALAY_TRUE;
+    request.service = "echo";
+    request.service_len = strlen(request.service);
+    request.method = "Call";
+    request.method_len = strlen(request.method);
+    request.payload = payload;
+    request.payload_len = sizeof(payload) - 1;
+
+    size_t encoded_size = 0;
+    REQUIRE_STATUS(galay_rpc_request_encoded_size(&request, &encoded_size), GALAY_OK);
+
+    uint8_t out[GALAY_RPC_HEADER_SIZE];
+    size_t written = 123;
+    REQUIRE_STATUS(galay_rpc_encode_request(&request, out, encoded_size - 1, &written), GALAY_OUT_OF_MEMORY);
+    REQUIRE_TRUE(written == 0);
+    return 0;
+}
+
 static int test_malformed_payload_rejected(void)
 {
     uint8_t raw[GALAY_RPC_HEADER_SIZE + 3] = {
@@ -183,13 +284,79 @@ static int test_decode_truncation_reports_protocol_error(void)
     return 0;
 }
 
+static int test_response_truncation_reports_protocol_error(void)
+{
+    const uint8_t payload[] = {5, 6, 7};
+    galay_rpc_response_t response;
+    memset(&response, 0, sizeof(response));
+    response.request_id = 9;
+    response.call_mode = GALAY_RPC_CALL_UNARY;
+    response.end_of_stream = GALAY_TRUE;
+    response.error_code = GALAY_RPC_ERROR_OK;
+    response.payload = payload;
+    response.payload_len = sizeof(payload);
+
+    uint8_t encoded[128];
+    size_t written = 0;
+    REQUIRE_STATUS(galay_rpc_encode_response(&response, encoded, sizeof(encoded), &written), GALAY_OK);
+
+    galay_rpc_response_t decoded;
+    memset(&decoded, 0, sizeof(decoded));
+    size_t consumed = 123;
+    galay_rpc_error_code_t rpc_error = GALAY_RPC_ERROR_OK;
+    REQUIRE_STATUS(galay_rpc_decode_response(encoded, written - 1, &decoded, &consumed, &rpc_error),
+                   GALAY_PROTOCOL_ERROR);
+    REQUIRE_TRUE(consumed == 0);
+    REQUIRE_TRUE(rpc_error == GALAY_RPC_ERROR_INVALID_RESPONSE);
+    return 0;
+}
+
+static int test_wrong_message_type_rejected(void)
+{
+    galay_rpc_response_t response;
+    memset(&response, 0, sizeof(response));
+    response.request_id = 10;
+    response.call_mode = GALAY_RPC_CALL_UNARY;
+    response.end_of_stream = GALAY_TRUE;
+    response.error_code = GALAY_RPC_ERROR_OK;
+
+    uint8_t encoded[64];
+    size_t written = 0;
+    REQUIRE_STATUS(galay_rpc_encode_response(&response, encoded, sizeof(encoded), &written), GALAY_OK);
+
+    galay_rpc_request_t decoded;
+    memset(&decoded, 0, sizeof(decoded));
+    size_t consumed = 123;
+    galay_rpc_error_code_t rpc_error = GALAY_RPC_ERROR_OK;
+    REQUIRE_STATUS(galay_rpc_decode_request(encoded, written, &decoded, &consumed, &rpc_error),
+                   GALAY_PROTOCOL_ERROR);
+    REQUIRE_TRUE(consumed == 0);
+    REQUIRE_TRUE(rpc_error == GALAY_RPC_ERROR_INVALID_REQUEST);
+    return 0;
+}
+
+static int test_unknown_error_code_stable_mapping(void)
+{
+    galay_rpc_error_code_t unknown = (galay_rpc_error_code_t)65000;
+    REQUIRE_STATUS(galay_rpc_error_to_status(unknown), GALAY_INTERNAL_ERROR);
+    REQUIRE_TRUE(strcmp(galay_rpc_error_string(unknown), "Unknown") == 0);
+    return 0;
+}
+
 int main(void)
 {
     if (test_request_round_trip() != 0) return 1;
     if (test_response_round_trip_and_status_conversion() != 0) return 1;
     if (test_invalid_method_name_rejected() != 0) return 1;
     if (test_null_service_rejected() != 0) return 1;
+    if (test_invalid_call_mode_rejected() != 0) return 1;
+    if (test_empty_name_rejected() != 0) return 1;
+    if (test_too_long_service_or_method_rejected() != 0) return 1;
+    if (test_output_buffer_too_small() != 0) return 1;
     if (test_malformed_payload_rejected() != 0) return 1;
     if (test_decode_truncation_reports_protocol_error() != 0) return 1;
+    if (test_response_truncation_reports_protocol_error() != 0) return 1;
+    if (test_wrong_message_type_rejected() != 0) return 1;
+    if (test_unknown_error_code_stable_mapping() != 0) return 1;
     return 0;
 }

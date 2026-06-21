@@ -13,10 +13,13 @@ export {
 #include "../protoc/rpc_codec.h"
 
 #include "../kernel/rpc_conn.h"
+#include "../kernel/rpc_policy.h"
+#include "../kernel/rpc_config.h"
 #include "../kernel/rpc_service.h"
 #include "../kernel/rpc_server.h"
 #include "../kernel/streamsvc.h"
 #include "../kernel/rpc_client.h"
+#include "../kernel/rpc_channel.h"
 #include "../kernel/rpc_stream.h"
 #include "../kernel/rpc_discovery.h"
 }

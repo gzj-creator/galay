@@ -13,6 +13,9 @@
 
 ### Added
 
+- **RPC 生产化基线与 `RpcChannel`**：新增连接级 `RpcChannel` facade，持有单条常驻连接，通过 owner/reader 协程维护 pending request table、串行写入、按 `request_id` 分发响应，支持 max outstanding 超限返回 `RESOURCE_EXHAUSTED`、幂等关闭、关闭/远端断开唤醒 pending 调用，并导出到 RPC module facade。
+- **RPC runtime config 与 route policy 快照**：新增 `rpc_config.h` / `rpc_policy.h`，提供不可变 `RpcRuntimeConfigSnapshot`、静态与 in-memory provider、配置校验、版本单调递增发布，以及 service/method/mode 粒度路由策略查找。
+- **RPC 回归测试与压测基线**：新增 C++ RPC t5-t10 覆盖 reader/writer 边界、service surface、真实 unary/stream loopback、channel 并发与配置快照；新增 b6-b10 benchmark 覆盖 unary/stream loopback latency、route lookup、channel 并发和 config snapshot 读取/查找开销。
 - **新增 C ABI 包装层 `src/c/`**：覆盖 utils/kernel/ssl/http/ws/http2/redis/rpc/mysql/mongo/etcd/mcp/tracing 共 13 个模块，以及通用 `galay-c` 包（含错误码与 ABI 宏），共 44 个文件；通过新增的 `GALAY_BUILD_C_API=ON` 构建选项启用，与既有 C++ 构建互不干扰。
 - **新增 C ABI 用例目录**：`benchmark/c/`、`examples/c/`、`test/c/`（共 99 个文件）提供各模块 C ABI 的 codec/builder/lifecycle smoke 基准、示例与回归测试入口。
 - **测试集成配置头**：新增 `test/cpp/{etcd,redis}/integration_config.h`，作为对应模块集成测试的统一配置入口。
@@ -20,6 +23,7 @@
 
 ### Changed
 
+- **RPC benchmark 自动发现**：`benchmark/cpp/rpc/CMakeLists.txt` 改为 `file(GLOB ... CONFIGURE_DEPENDS)` + `foreach` 自动注册 b*.cc benchmark，新增压测文件无需逐个维护 CMake 目标。
 - **源码目录归入 `src/cpp/`**：将 `src/` 下各模块（`galay-utils`/`kernel`/`ssl`/`http`/`ws`/`http2`/`redis`/`rpc`/`mysql`/`mongo`/`etcd`/`mcp`/`tracing`）统一迁入 `src/cpp/` 子目录，共 421 个文件纯移动，为后续多语言绑定预留 `galay/cpp/` 命名空间。
 - **头文件 include 路径统一**：所有 benchmark 与 test 源文件的 `#include "galay-xxx/..."` 改为 `#include <galay/cpp/galay-xxx/...>`，顶层 `CMakeLists.txt` 的 `add_subdirectory` 同步指向 `src/cpp/galay-*`，并在构建目录通过符号链接 `${CMAKE_BINARY_DIR}/include/galay/cpp -> src/cpp` 提供统一 include 根；头文件安装目录改为 `${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp`。
 - **测试/基准 include 根调整**：各 benchmark/test 的 CMakeLists 将私有 include 目录由 `${PROJECT_SOURCE_DIR}/src` 改为 `${CMAKE_BINARY_DIR}/include`，对齐新的符号链接布局。
@@ -31,10 +35,12 @@
 
 ### Fixed
 
+- 修复 RPC 服务端响应借用请求 RingBuffer payload 时可能在发送前悬空的问题，发送响应前显式 materialize payload；协议错误码补充 `RESOURCE_EXHAUSTED` 以表达 channel/流控超限。
 - 修复 kernel IO scheduler 的 work-stealing ring 槽位复用竞态，避免跨线程注入压力下 ready task 被覆盖丢失，并同步修正 kqueue/epoll/io_uring 注入失败返回；同时修正 TCP benchmark source-case 测试的 `benchmark/cpp/kernel` 路径。
 
 ### Docs
 
+- 新增 RPC 生产化实施计划，明确 Phase 0 测试压测基线、Phase 1 连接治理、Phase 2 配置快照以及后续服务发现、治理、流控、安全与观测路线。
 - kernel 模块常见问题文档中的测试日志头路径更新为 `test/cpp/common/stdout_log.h`，与新分层目录对齐。
 
 ### Chore

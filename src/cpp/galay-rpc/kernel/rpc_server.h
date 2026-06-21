@@ -489,6 +489,8 @@ private:
                 co_await (*handler)(ctx);
             }
 
+            response.materializePayload();
+
             // 发送响应（co_await直到完整发送）
             result = co_await writer.sendResponse(response);
             if (!result) {

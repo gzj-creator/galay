@@ -145,6 +145,7 @@ enum class RpcErrorCode : uint16_t {
     SERIALIZATION_ERROR = 8,     ///< 序列化错误
     DESERIALIZATION_ERROR = 9,   ///< 反序列化错误
     INTERNAL_ERROR = 10,         ///< 内部错误
+    RESOURCE_EXHAUSTED = 11,     ///< 资源耗尽
 };
 
 /**
@@ -163,6 +164,7 @@ inline const char* rpcErrorCodeToString(RpcErrorCode code) {
         case RpcErrorCode::SERIALIZATION_ERROR: return "Serialization error";
         case RpcErrorCode::DESERIALIZATION_ERROR: return "Deserialization error";
         case RpcErrorCode::INTERNAL_ERROR: return "Internal error";
+        case RpcErrorCode::RESOURCE_EXHAUSTED: return "Resource exhausted";
         default: return "Unknown";
     }
 }
