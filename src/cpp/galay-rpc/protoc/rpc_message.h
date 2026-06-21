@@ -534,6 +534,10 @@ public:
         }
         return m_payload_view;
     }
+    /// @brief 将借用payload实体化为自有缓冲，避免外部RingBuffer复用后悬空
+    void materializePayload() const {
+        materializePayloadIfNeeded();
+    }
     /**
      * @brief 设置payload（拷贝模式）
      * @param data 数据指针
