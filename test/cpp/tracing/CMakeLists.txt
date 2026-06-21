@@ -76,10 +76,8 @@ target_link_libraries(T13-tracer_provider PRIVATE galay-tracing::galay-tracing)
 
 add_test(NAME tracing.tracer_provider COMMAND T13-tracer_provider)
 
-if(GALAY_TRACING_ENABLE_KERNEL)
-    add_executable(T8-kernel_context t8_kernel_context.cc)
-    galay_add_tracing_test_include(T8-kernel_context)
-    target_link_libraries(T8-kernel_context PRIVATE galay-tracing::galay-tracing-kernel)
+add_executable(T8-kernel_context t8_kernel_context.cc)
+galay_add_tracing_test_include(T8-kernel_context)
+target_link_libraries(T8-kernel_context PRIVATE galay-tracing::galay-tracing-kernel)
 
-    add_test(NAME tracing.kernel_context COMMAND T8-kernel_context)
-endif()
+add_test(NAME tracing.kernel_context COMMAND T8-kernel_context)

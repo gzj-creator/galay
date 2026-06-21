@@ -50,7 +50,7 @@ Implement:
 - C++23 required, extensions off.
 - `BUILD_TESTING` defaults to `OFF`.
 - `BUILD_TESTS` compatibility alias.
-- `BUILD_EXAMPLES`, `BUILD_BENCHMARKS`, `GALAY_TRACING_ENABLE_SPDLOG`, `GALAY_TRACING_ENABLE_KERNEL`, `ENABLE_CPP23_MODULES`.
+- `BUILD_EXAMPLES`, `BUILD_BENCHMARKS`, `GALAY_TRACING_ENABLE_SPDLOG`, `ENABLE_CPP23_MODULES`.
 - Primary shared or static library target `galay-tracing`.
 - Install export `galay-tracing-targets.cmake` with namespace `galay-tracing::`.
 - Config files under `lib/cmake/galay-tracing`.
@@ -411,7 +411,7 @@ Schedule a coroutine task through `galay-kernel`, log inside the task, and asser
 Run:
 
 ```bash
-cmake -S . -B build-kernel -DBUILD_TESTING=ON -DGALAY_TRACING_ENABLE_KERNEL=ON
+cmake -S . -B build-kernel -DBUILD_TESTING=ON
 ```
 
 Expected: configure finds `galay-kernel::galay-kernel` or fails with a clear dependency error.

@@ -99,7 +99,7 @@ OtlpHttpTransport makeGalayHttpOtlpTransport(GalayHttpOtlpTransportConfig config
 /**
  * @brief OTLP/HTTP JSON Span 导出器
  * @details 将已采样的 Span 序列化为 OTLP JSON 格式并通过 HTTP POST
- * 发送到 OTLP 接收端。启用 GALAY_TRACING_ENABLE_OTLP_HTTP 时默认使用 galay-http 传输。
+ * 发送到 OTLP 接收端。启用内置 galay-http OTLP transport 时默认使用 galay-http 传输。
  */
 class OtlpHttpExporter final : public SpanExporter {
 public:

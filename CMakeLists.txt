@@ -116,6 +116,10 @@ endif()
 
 set(GALAY_CONFIG_NEEDS_THREADS ON)
 set(GALAY_CONFIG_NEEDS_OPENSSL ${GALAY_BUILD_SSL})
+set(GALAY_CONFIG_NEEDS_SPDLOG OFF)
+if(TARGET galay-tracing-spdlog)
+    set(GALAY_CONFIG_NEEDS_SPDLOG ON)
+endif()
 
 configure_package_config_file(
     ${PROJECT_SOURCE_DIR}/cmake/galayConfig.cmake.in

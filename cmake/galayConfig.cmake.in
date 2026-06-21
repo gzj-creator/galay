@@ -8,5 +8,45 @@ endif()
 if(@GALAY_CONFIG_NEEDS_OPENSSL@)
     find_dependency(OpenSSL)
 endif()
+if(@GALAY_CONFIG_NEEDS_SPDLOG@)
+    find_package(spdlog CONFIG QUIET)
+    if(NOT TARGET spdlog::spdlog)
+        find_path(GALAY_SPDLOG_INCLUDE_DIR
+            NAMES spdlog/spdlog.h
+            HINTS
+                "$ENV{SPDLOG_ROOT}/include"
+                /opt/homebrew/include
+                /usr/local/include
+                /usr/include
+        )
+        find_library(GALAY_SPDLOG_LIBRARY
+            NAMES spdlog
+            HINTS
+                "$ENV{SPDLOG_ROOT}/lib"
+                /opt/homebrew/lib
+                /usr/local/lib
+                /usr/lib
+                /usr/lib64
+        )
+
+        if(NOT GALAY_SPDLOG_INCLUDE_DIR)
+            message(FATAL_ERROR "galay tracing-spdlog target requires spdlog, but no spdlog CMake package or spdlog headers were found.")
+        endif()
+
+        if(GALAY_SPDLOG_LIBRARY)
+            add_library(spdlog::spdlog UNKNOWN IMPORTED)
+            set_target_properties(spdlog::spdlog PROPERTIES
+                IMPORTED_LOCATION "${GALAY_SPDLOG_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${GALAY_SPDLOG_INCLUDE_DIR}"
+            )
+        else()
+            add_library(spdlog::spdlog INTERFACE IMPORTED)
+            set_target_properties(spdlog::spdlog PROPERTIES
+                INTERFACE_INCLUDE_DIRECTORIES "${GALAY_SPDLOG_INCLUDE_DIR}"
+                INTERFACE_COMPILE_DEFINITIONS SPDLOG_HEADER_ONLY=1
+            )
+        endif()
+    endif()
+endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/galayTargets.cmake")
