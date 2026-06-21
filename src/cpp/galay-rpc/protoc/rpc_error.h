@@ -66,9 +66,9 @@ public:
      * @note 自动识别超时和连接断开错误并映射到对应的RPC错误码
      */
     static RpcError from(const kernel::IOError& io_error,
-                         RpcErrorCode default_code = RpcErrorCode::INTERNAL_ERROR) {
+        RpcErrorCode default_code = RpcErrorCode::INTERNAL_ERROR) {
         if (kernel::IOError::contains(io_error.code(), kernel::kTimeout)) {
-            return RpcError(RpcErrorCode::REQUEST_TIMEOUT, io_error.message());
+            return RpcError(RpcErrorCode::DEADLINE_EXCEEDED, io_error.message());
         }
         if (kernel::IOError::contains(io_error.code(), kernel::kDisconnectError)) {
             return RpcError(RpcErrorCode::CONNECTION_CLOSED, io_error.message());

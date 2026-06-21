@@ -30,17 +30,23 @@
 #define GALAY_RPC_CLIENT_H
 
 #include "../common/rpc_log.h"
+#include "rpc_channel.h"
+#include "rpc_call.h"
 #include "rpc_conn.h"
+#include "rpc_reconnect.h"
 #include "rpc_stream.h"
 #include "../protoc/rpc_error.h"
 #include "../protoc/rpc_message.h"
+#include "../../galay-kernel/common/sleep.hpp"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/timeout.hpp"
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <expected>
 #include <memory>
 #include <optional>
+#include <string>
 
 namespace galay::rpc
 {
@@ -189,6 +195,7 @@ struct RpcClientConfig {
     RpcReaderSetting reader_setting;            ///< 读取器配置
     RpcWriterSetting writer_setting;            ///< 写入器配置
     size_t ring_buffer_size = kDefaultRpcRingBufferSize;  ///< 环形缓冲区大小
+    RpcChannelOptions channel_options;          ///< 通道配置
 };
 
 /**
@@ -204,6 +211,8 @@ public:
     RpcClientBuilder& writerSetting(RpcWriterSetting setting) { m_config.writer_setting = std::move(setting); return *this; }
     /// @brief 设置环形缓冲区大小
     RpcClientBuilder& ringBufferSize(size_t size)             { m_config.ring_buffer_size = size; return *this; }
+    /// @brief 设置metrics回调
+    RpcClientBuilder& metricsCallback(RpcMetricCallback callback) { m_config.channel_options.metrics_callback = std::move(callback); return *this; }
     /// @brief 构建RpcClient实例
     RpcClientImpl<TcpSocket> build() const;
     /// @brief 仅导出配置
@@ -228,10 +237,12 @@ public:
      * @param config 客户端配置
      */
     explicit RpcClientImpl(const RpcClientConfig& config = RpcClientConfig())
-        : m_socket(nullptr)
-        , m_ring_buffer(nullptr)
+        : m_channel(std::make_unique<RpcChannelImpl<SocketType>>(
+              config.reader_setting,
+              config.writer_setting,
+              config.ring_buffer_size,
+              config.channel_options))
         , m_config(config)
-        , m_request_id(0)
         , m_stream_id(1)
     {
     }
@@ -248,21 +259,35 @@ public:
      * @brief 连接到服务器
      * @param host 服务器地址
      * @param port 服务器端口
-     * @return 连接等待体
+     * @return 连接任务；成功返回void，失败返回最后一次IOError
+     *
+     * @details 启用重连策略时会在失败后通过协程sleep异步退避并重试，不阻塞OS线程。
      */
-    ConnectAwaitable connect(const std::string& host, uint16_t port) {
+    Task<std::expected<void, IOError>> connect(const std::string& host, uint16_t port) {
         RPC_LOG_INFO("[client] [connect]", "host={} port={}", host, port);
-        m_socket = std::make_unique<SocketType>(IPType::IPV4);
+        m_host = host;
+        m_port = port;
+        m_has_endpoint = true;
+        auto result = co_await connectWithPolicy();
+        if (!result.has_value()) {
+            co_return std::unexpected(IOError(kConnectFailed, 0));
+        }
+        co_return std::move(result.value());
+    }
 
-        const size_t ring_buffer_size = m_config.ring_buffer_size == 0
-            ? kDefaultRpcRingBufferSize
-            : m_config.ring_buffer_size;
-        m_ring_buffer = std::make_unique<RingBuffer>(ring_buffer_size);
-
-        m_socket->option().handleNonBlock();
-
-        Host server_host(IPType::IPV4, host, port);
-        return m_socket->connect(server_host);
+    /**
+     * @brief 设置客户端重连策略
+     * @param policy 重连策略；max_attempts<=1表示保持默认不重试
+     * @return 当前客户端，便于链式配置
+     *
+     * @note 该策略只影响后续connect和新call前的重连，不会自动重放已发送的pending调用。
+     */
+    RpcClientImpl& reconnectPolicy(RpcReconnectPolicy policy) {
+        if (policy.max_attempts == 0) {
+            policy.max_attempts = 1;
+        }
+        m_reconnect_policy = policy;
+        return *this;
     }
 
     /**
@@ -291,69 +316,47 @@ public:
                                                   bool end_of_stream,
                                                   const char* payload,
                                                   size_t payload_len) {
-        if (!m_socket || !m_ring_buffer) {
-            RPC_LOG_WARN("[client] [call] [not-connected]",
-                         "service={} method={}",
-                         service,
-                         method);
+        if (auto reconnect_result = co_await ensureConnectedForNextCall(); !reconnect_result.has_value()) {
             co_return RpcCallResult(std::unexpected(
-                RpcError(RpcErrorCode::CONNECTION_CLOSED, "Client is not connected")));
-        }
-
-        uint32_t req_id = m_request_id.fetch_add(1, std::memory_order_relaxed);
-        RpcRequest request(req_id, service, method);
-        request.callMode(mode);
-        request.endOfStream(end_of_stream);
-        if (payload && payload_len > 0) {
-            request.payload(payload, payload_len);
-        }
-
-        auto writer = getWriter();
-        auto send_result = co_await writer.sendRequest(request);
-        if (!send_result.has_value()) {
-            RPC_LOG_WARN("[client] [send] [fail]",
-                         "service={} method={} request_id={} code={} error={}",
-                         service,
-                         method,
-                         req_id,
-                         static_cast<int>(send_result.error().code()),
-                         send_result.error().message());
-            co_return RpcCallResult(std::unexpected(send_result.error()));
-        }
-
-        auto reader = getReader();
-        RpcResponse response;
-        auto recv_result = co_await reader.getResponse(response);
-        if (!recv_result.has_value()) {
-            RPC_LOG_WARN("[client] [recv] [fail]",
-                         "service={} method={} request_id={} code={} error={}",
-                         service,
-                         method,
-                         req_id,
-                         static_cast<int>(recv_result.error().code()),
-                         recv_result.error().message());
-            co_return RpcCallResult(std::unexpected(recv_result.error()));
-        }
-
-        if (response.requestId() != request.requestId()) {
-            RPC_LOG_ERROR("[client] [recv] [mismatch-id]",
-                          "expected={} actual={}",
-                          request.requestId(),
-                          response.requestId());
+                RpcError(RpcErrorCode::UNAVAILABLE, "Failed to schedule RPC reconnect")));
+        } else if (!reconnect_result.value().has_value()) {
             co_return RpcCallResult(std::unexpected(
-                RpcError(RpcErrorCode::INVALID_RESPONSE, "Mismatched response request id")));
+                RpcError::from(reconnect_result.value().error(), RpcErrorCode::UNAVAILABLE)));
         }
-
-        if (response.callMode() != request.callMode()) {
-            RPC_LOG_ERROR("[client] [recv] [mismatch-mode]",
-                          "expected={} actual={}",
-                          static_cast<int>(request.callMode()),
-                          static_cast<int>(response.callMode()));
+        auto call_result = co_await m_channel->callWithMode(service, method, mode, end_of_stream, payload, payload_len);
+        if (!call_result.has_value()) {
             co_return RpcCallResult(std::unexpected(
-                RpcError(RpcErrorCode::INVALID_RESPONSE, "Mismatched response call mode")));
+                RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule RPC call")));
         }
+        markDisconnectedIfConnectionError(call_result.value());
+        co_return std::move(call_result.value());
+    }
 
-        co_return RpcCallResult(std::optional<RpcResponse>(std::move(response)));
+    /**
+     * @brief 按调用模式发送RPC帧并应用调用选项
+     * @param options deadline、取消和metadata等调用级选项
+     */
+    RpcCallAwaitableImpl<SocketType> callWithMode(const std::string& service,
+                                                  const std::string& method,
+                                                  RpcCallMode mode,
+                                                  bool end_of_stream,
+                                                  const char* payload,
+                                                  size_t payload_len,
+                                                  const RpcCallOptions& options) {
+        if (auto reconnect_result = co_await ensureConnectedForNextCall(); !reconnect_result.has_value()) {
+            co_return RpcCallResult(std::unexpected(
+                RpcError(RpcErrorCode::UNAVAILABLE, "Failed to schedule RPC reconnect")));
+        } else if (!reconnect_result.value().has_value()) {
+            co_return RpcCallResult(std::unexpected(
+                RpcError::from(reconnect_result.value().error(), RpcErrorCode::UNAVAILABLE)));
+        }
+        auto call_result = co_await m_channel->callWithMode(service, method, mode, end_of_stream, payload, payload_len, options);
+        if (!call_result.has_value()) {
+            co_return RpcCallResult(std::unexpected(
+                RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule RPC call")));
+        }
+        markDisconnectedIfConnectionError(call_result.value());
+        co_return std::move(call_result.value());
     }
 
     /**
@@ -366,11 +369,41 @@ public:
     }
 
     /**
+     * @brief 调用远程方法（字符串payload，带调用选项）
+     */
+    RpcCallAwaitableImpl<SocketType> call(const std::string& service,
+                                          const std::string& method,
+                                          const std::string& payload,
+                                          const RpcCallOptions& options) {
+        return callWithMode(service, method, RpcCallMode::UNARY, true, payload.data(), payload.size(), options);
+    }
+
+    /**
+     * @brief 调用远程方法（buffer payload，带调用选项）
+     */
+    RpcCallAwaitableImpl<SocketType> call(const std::string& service,
+                                          const std::string& method,
+                                          const char* payload,
+                                          size_t payload_len,
+                                          const RpcCallOptions& options) {
+        return callWithMode(service, method, RpcCallMode::UNARY, true, payload, payload_len, options);
+    }
+
+    /**
      * @brief 调用远程方法（无payload）
      */
     RpcCallAwaitableImpl<SocketType> call(const std::string& service,
                                           const std::string& method) {
         return call(service, method, nullptr, 0);
+    }
+
+    /**
+     * @brief 调用远程方法（无payload，带调用选项）
+     */
+    RpcCallAwaitableImpl<SocketType> call(const std::string& service,
+                                          const std::string& method,
+                                          const RpcCallOptions& options) {
+        return callWithMode(service, method, RpcCallMode::UNARY, true, nullptr, 0, options);
     }
 
     /**
@@ -406,6 +439,13 @@ public:
     }
 
     /**
+     * @brief 发送一次HEARTBEAT并等待pong
+     */
+    Task<RpcHeartbeatResult> sendHeartbeat() {
+        return m_channel->sendHeartbeat();
+    }
+
+    /**
      * @brief 创建流会话（自动分配 stream_id）
      *
      * @note 仅创建会话对象，不会自动执行 STREAM_INIT。
@@ -424,7 +464,7 @@ public:
     std::expected<RpcStreamImpl<SocketType>, RpcError> createStream(uint32_t stream_id,
                                                                      const std::string& service = {},
                                                                      const std::string& method = {}) {
-        if (!m_socket || !m_ring_buffer) {
+        if (!m_channel) {
             RPC_LOG_WARN("[client] [stream] [not-connected]",
                          "stream_id={} service={} method={}",
                          stream_id,
@@ -433,39 +473,47 @@ public:
             return std::unexpected(RpcError(RpcErrorCode::CONNECTION_CLOSED,
                                             "Client is not connected"));
         }
-        return RpcStreamImpl<SocketType>(*m_socket, *m_ring_buffer, stream_id, service, method);
+        return RpcStreamImpl<SocketType>(m_channel->socket(), m_channel->ringBuffer(), stream_id, service, method);
     }
 
     /**
      * @brief 关闭连接
      */
-    CloseAwaitable close() {
-        return m_socket->close();
+    Task<std::expected<void, IOError>> close() {
+        m_connected = false;
+        if (!m_channel) {
+            co_return std::expected<void, IOError>{};
+        }
+        auto result = co_await m_channel->close();
+        if (!result.has_value()) {
+            co_return std::unexpected(IOError(kDisconnectError, 0));
+        }
+        co_return std::move(result.value());
     }
 
     /**
      * @brief 获取读取器
      */
     RpcReaderImpl<SocketType> getReader() {
-        return RpcReaderImpl<SocketType>(*m_ring_buffer, m_config.reader_setting, *m_socket);
+        return m_channel->getReader();
     }
 
     /**
      * @brief 获取写入器
      */
     RpcWriterImpl<SocketType> getWriter() {
-        return RpcWriterImpl<SocketType>(m_config.writer_setting, *m_socket);
+        return m_channel->getWriter();
     }
 
     /**
      * @brief 获取底层socket
      */
-    SocketType& socket() { return *m_socket; }
+    SocketType& socket() { return m_channel->socket(); }
 
     /**
      * @brief 获取RingBuffer
      */
-    RingBuffer& ringBuffer() { return *m_ring_buffer; }
+    RingBuffer& ringBuffer() { return m_channel->ringBuffer(); }
 
     /**
      * @brief 获取读取配置
@@ -473,11 +521,73 @@ public:
     const RpcReaderSetting& readerSetting() const { return m_config.reader_setting; }
 
 private:
-    std::unique_ptr<SocketType> m_socket;         ///< 底层Socket
-    std::unique_ptr<RingBuffer> m_ring_buffer;    ///< 环形缓冲区
+    std::unique_ptr<RpcChannelImpl<SocketType>> makeChannel() const {
+        return std::make_unique<RpcChannelImpl<SocketType>>(
+            m_config.reader_setting,
+            m_config.writer_setting,
+            m_config.ring_buffer_size,
+            m_config.channel_options);
+    }
+
+    Task<std::expected<void, IOError>> connectWithPolicy() {
+        std::expected<void, IOError> last_error = {};
+        const size_t attempts = m_reconnect_policy.max_attempts == 0 ? 1 : m_reconnect_policy.max_attempts;
+        for (size_t attempt = 0; attempt < attempts; ++attempt) {
+            if (m_channel) {
+                auto close_result = co_await m_channel->close();
+                if (!close_result.has_value() || !close_result.value().has_value()) {
+                    co_return std::unexpected(IOError(kDisconnectError, 0));
+                }
+            }
+            auto channel = makeChannel();
+            auto result = co_await channel->connect(m_host, m_port);
+            if (result.has_value()) {
+                m_channel = std::move(channel);
+                m_connected = true;
+                co_return result;
+            }
+
+            last_error = std::unexpected(result.error());
+            m_connected = false;
+            if (attempt + 1 < attempts && m_reconnect_policy.backoff.count() > 0) {
+                co_await sleep(m_reconnect_policy.backoff);
+            }
+        }
+        co_return last_error;
+    }
+
+    Task<std::expected<void, IOError>> ensureConnectedForNextCall() {
+        if (m_connected) {
+            co_return std::expected<void, IOError>{};
+        }
+        if (!m_has_endpoint || m_reconnect_policy.max_attempts <= 1) {
+            co_return std::unexpected(IOError(kConnectFailed, 0));
+        }
+        auto result = co_await connectWithPolicy();
+        if (!result.has_value()) {
+            co_return std::unexpected(IOError(kConnectFailed, 0));
+        }
+        co_return std::move(result.value());
+    }
+
+    void markDisconnectedIfConnectionError(const RpcCallResult& result) {
+        if (result.has_value()) {
+            return;
+        }
+        const auto code = result.error().code();
+        if (code == RpcErrorCode::CONNECTION_CLOSED || code == RpcErrorCode::UNAVAILABLE) {
+            m_connected = false;
+        }
+    }
+
+    std::unique_ptr<RpcChannelImpl<SocketType>> m_channel;  ///< 一元RPC连接通道
     RpcClientConfig m_config;                     ///< 客户端配置
-    std::atomic<uint32_t> m_request_id;           ///< 自增请求ID
     std::atomic<uint32_t> m_stream_id;            ///< 自增流ID
+    RpcReconnectPolicy m_reconnect_policy;        ///< opt-in重连策略
+    std::string m_host;                            ///< 最近一次连接地址
+    uint16_t m_port = 0;                           ///< 最近一次连接端口
+    bool m_has_endpoint = false;                   ///< 是否已有可重连端点
+    bool m_connected = false;                      ///< 最近一次连接是否成功
 };
 
 /// @brief RPC调用等待体类型别名（TcpSocket）

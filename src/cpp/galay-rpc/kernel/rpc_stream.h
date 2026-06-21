@@ -42,8 +42,10 @@
 #include "rpc_conn.h"
 #include "../protoc/rpc_message.h"
 #include "../protoc/rpc_base.h"
+#include "../protoc/rpc_error.h"
 #include <array>
 #include <cstring>
+#include <expected>
 #include <string>
 #include <string_view>
 #include <span>
@@ -53,6 +55,13 @@ namespace galay::rpc
 {
 
 using namespace galay::kernel;
+
+/**
+ * @brief 流帧边界配置
+ */
+struct RpcStreamLimits {
+    size_t max_frame_bytes = RPC_MAX_BODY_SIZE;  ///< 单个STREAM_DATA/INIT帧body上限
+};
 
 /**
  * @brief 流消息
@@ -215,6 +224,19 @@ public:
         return true;
     }
 
+    /**
+     * @brief 校验流帧大小限制
+     * @param limits 流帧限制
+     * @return 成功或RESOURCE_EXHAUSTED
+     */
+    std::expected<void, RpcError> validate(const RpcStreamLimits& limits) const {
+        if (payloadSize() > limits.max_frame_bytes) {
+            return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
+                                            "RPC stream frame limit exceeded"));
+        }
+        return {};
+    }
+
 private:
     void materializePayloadIfNeeded() const {
         if (m_payload_owned) {
@@ -357,9 +379,12 @@ namespace detail {
 class StreamMessageReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult>
 {
 public:
-    StreamMessageReadState(RingBuffer& ring_buffer, StreamMessage& message)
+    StreamMessageReadState(RingBuffer& ring_buffer,
+                           StreamMessage& message,
+                           RpcStreamLimits limits = {})
         : RpcRingBufferReadStateBase<RpcAwaitableResult>(ring_buffer)
         , m_message(&message)
+        , m_limits(limits)
     {
     }
 
@@ -404,6 +429,13 @@ public:
                 return true;
             }
 
+            if (m_body_length > m_limits.max_frame_bytes) {
+                setReadError(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
+                                      "RPC stream frame limit exceeded"));
+                m_state = State::ReadHeader;
+                return true;
+            }
+
             m_state = State::ReadBody;
         }
 
@@ -439,6 +471,7 @@ private:
     State m_state = State::ReadHeader;    ///< 当前读取阶段
     RpcHeader m_header;                    ///< 临时头部
     size_t m_body_length = 0;             ///< 待读取的体长度
+    RpcStreamLimits m_limits;             ///< 流帧边界配置
 };
 
 /**
@@ -624,8 +657,11 @@ class GetStreamMessageAwaitable : public TimeoutSupport<GetStreamMessageAwaitabl
 public:
     using Result = detail::RpcAwaitableResult;
 
-    GetStreamMessageAwaitable(RingBuffer& ring_buffer, SocketType& socket, StreamMessage& msg)
-        : m_state(std::make_shared<detail::StreamMessageReadState>(ring_buffer, msg))
+    GetStreamMessageAwaitable(RingBuffer& ring_buffer,
+                              SocketType& socket,
+                              StreamMessage& msg,
+                              RpcStreamLimits limits = {})
+        : m_state(std::make_shared<detail::StreamMessageReadState>(ring_buffer, msg, limits))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
                 socket.controller(),
@@ -661,9 +697,10 @@ private:
 template<typename SocketType>
 class StreamReaderImpl {
 public:
-    StreamReaderImpl(RingBuffer& ring_buffer, SocketType& socket)
+    StreamReaderImpl(RingBuffer& ring_buffer, SocketType& socket, RpcStreamLimits limits = {})
         : m_ring_buffer(&ring_buffer)
         , m_socket(&socket)
+        , m_limits(limits)
     {}
 
     /**
@@ -672,12 +709,13 @@ public:
      * @return 等待体，co_await返回后表示一条完整流消息
      */
     GetStreamMessageAwaitable<SocketType> getMessage(StreamMessage& msg) {
-        return GetStreamMessageAwaitable<SocketType>(*m_ring_buffer, *m_socket, msg);
+        return GetStreamMessageAwaitable<SocketType>(*m_ring_buffer, *m_socket, msg, m_limits);
     }
 
 private:
     RingBuffer* m_ring_buffer = nullptr;  ///< 环形缓冲区指针
     SocketType* m_socket = nullptr;       ///< Socket指针
+    RpcStreamLimits m_limits;             ///< 流帧边界配置
 };
 
 /**

@@ -18,11 +18,17 @@ galay_add_rpc_example(example_rpc_include_echo_server include/e1_echo.cc)
 galay_add_rpc_example(example_rpc_include_echo_client include/e2_echo.cc)
 galay_add_rpc_example(example_rpc_include_stream_server include/e3_stream.cc)
 galay_add_rpc_example(example_rpc_include_stream_client include/e4_stream.cc)
+galay_add_rpc_example(example_rpc_include_managed_client include/e5_managed_client.cc)
+galay_add_rpc_example(example_rpc_include_tls_echo include/e7_tls_echo.cc)
+galay_add_rpc_example(example_rpc_include_etcd_discovery include/e6_etcd_discovery.cc)
 
 galay_add_rpc_import_example(example_rpc_import_echo_server import/e1_echo.cc)
 galay_add_rpc_import_example(example_rpc_import_echo_client import/e2_echo.cc)
 galay_add_rpc_import_example(example_rpc_import_stream_server import/e3_stream.cc)
 galay_add_rpc_import_example(example_rpc_import_stream_client import/e4_stream.cc)
+galay_add_rpc_import_example(example_rpc_import_managed_client import/e5_managed_client.cc)
+galay_add_rpc_import_example(example_rpc_import_tls_echo import/e7_tls_echo.cc)
+galay_add_rpc_import_example(example_rpc_import_etcd_discovery import/e6_etcd_discovery.cc)
 
 file(GLOB GALAY_RPC_MANUAL_EXAMPLE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/manual/*.cc"

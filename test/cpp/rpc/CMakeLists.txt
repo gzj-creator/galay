@@ -1,4 +1,5 @@
 file(GLOB GALAY_RPC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t92_module_smoke.cc")
 
 function(galay_add_rpc_test source_file)
     get_filename_component(target_name "${source_file}" NAME_WE)
@@ -20,3 +21,12 @@ target_include_directories(result_writer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 foreach(test_source IN LISTS GALAY_RPC_TEST_SOURCES)
     galay_add_rpc_test(${test_source})
 endforeach()
+
+if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-rpc-modules)
+    add_executable(t92_module_smoke t92_module_smoke.cc)
+    target_link_libraries(t92_module_smoke PRIVATE galay-rpc-modules)
+    target_include_directories(t92_module_smoke PRIVATE ${CMAKE_BINARY_DIR}/include)
+    set_target_properties(t92_module_smoke PROPERTIES CXX_SCAN_FOR_MODULES ON)
+    add_test(NAME rpc.t92.module.smoke COMMAND $<TARGET_FILE:t92_module_smoke>)
+    set_tests_properties(rpc.t92.module.smoke PROPERTIES LABELS "rpc;module")
+endif()

@@ -73,6 +73,9 @@ public:
         if (header.m_type != static_cast<uint8_t>(RpcMessageType::REQUEST)) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST, "Not a request message"));
         }
+        if ((header.m_reserved & static_cast<uint8_t>(~RPC_RESERVED_KNOWN_MASK)) != 0) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST, "Unsupported request reserved bits"));
+        }
 
         if (length < RPC_HEADER_SIZE + header.m_body_length) {
             return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST, "Incomplete body"));
@@ -83,7 +86,9 @@ public:
         request.callMode(rpcDecodeCallMode(header.m_flags));
         request.endOfStream(rpcIsEndStream(header.m_flags));
 
-        if (!request.deserializeBody(data + RPC_HEADER_SIZE, header.m_body_length)) {
+        if (!request.deserializeBody(data + RPC_HEADER_SIZE,
+                                     header.m_body_length,
+                                     (header.m_reserved & RPC_RESERVED_METADATA) != 0)) {
             return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Failed to parse request body"));
         }
 

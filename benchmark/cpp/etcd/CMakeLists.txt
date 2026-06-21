@@ -17,6 +17,7 @@ endfunction()
 file(GLOB GALAY_ETCD_BENCHMARK_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/b*.cc"
 )
+list(FILTER GALAY_ETCD_BENCHMARK_SOURCES EXCLUDE REGEX "/bench_support\\.cc$")
 foreach(benchmark_source IN LISTS GALAY_ETCD_BENCHMARK_SOURCES)
     get_filename_component(benchmark_name "${benchmark_source}" NAME_WE)
     set(extra_sources)

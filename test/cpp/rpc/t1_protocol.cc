@@ -89,6 +89,14 @@ void test_message_length(test::TestResultWriter& writer) {
         len == serialized.size());
 }
 
+void test_message_length_rejects_bad_header(test::TestResultWriter& writer) {
+    char invalid_data[RPC_HEADER_SIZE] = {0};
+
+    const size_t len = RpcCodec::messageLength(invalid_data, sizeof(invalid_data));
+
+    writer.writeTestCase("RpcCodec messageLength rejects bad header", len == 0);
+}
+
 void test_invalid_header(test::TestResultWriter& writer) {
     char invalid_data[RPC_HEADER_SIZE] = {0};
 
@@ -106,6 +114,51 @@ void test_incomplete_data(test::TestResultWriter& writer) {
 
     writer.writeTestCase("Incomplete data detection",
         result == DecodeResult::INCOMPLETE);
+}
+
+void test_decode_rejects_truncated_request_body(test::TestResultWriter& writer) {
+    RpcRequest request(810, "BoundaryService", "truncated");
+    const std::string payload = "payload";
+    request.payload(payload.data(), payload.size());
+
+    auto serialized = request.serialize();
+    serialized.pop_back();
+
+    auto result = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+
+    writer.writeTestCase("RpcCodec decodeRequest rejects truncated body",
+        !result.has_value());
+}
+
+void test_decode_rejects_too_short_response_body(test::TestResultWriter& writer) {
+    std::vector<char> serialized(RPC_HEADER_SIZE + 1, '\0');
+
+    RpcHeader header;
+    header.m_type = static_cast<uint8_t>(RpcMessageType::RESPONSE);
+    header.m_request_id = 811;
+    header.m_body_length = 1;
+    header.serialize(serialized.data());
+    serialized[RPC_HEADER_SIZE] = 0;
+
+    auto result = RpcCodec::decodeResponse(serialized.data(), serialized.size());
+
+    writer.writeTestCase("RpcCodec decodeResponse rejects too short body",
+        !result.has_value());
+}
+
+void test_decode_rejects_oversized_header_body(test::TestResultWriter& writer) {
+    char serialized[RPC_HEADER_SIZE] = {0};
+
+    RpcHeader header;
+    header.m_type = static_cast<uint8_t>(RpcMessageType::REQUEST);
+    header.m_request_id = 812;
+    header.m_body_length = RPC_MAX_BODY_SIZE + 1;
+    header.serialize(serialized);
+
+    auto result = RpcCodec::decodeRequest(serialized, sizeof(serialized));
+
+    writer.writeTestCase("RpcCodec decodeRequest rejects oversized body",
+        !result.has_value());
 }
 
 void test_empty_payload(test::TestResultWriter& writer) {
@@ -230,6 +283,89 @@ void test_stream_message_borrowed_payload_serialize(test::TestResultWriter& writ
              ", body=" + body));
 }
 
+void test_rpc_request_borrowed_payload_serialize(test::TestResultWriter& writer) {
+    static const char segment1[] = "hello";
+    static const char segment2[] = "rpc";
+
+    RpcRequest request(820, "BorrowedService", "request");
+    request.payloadView(RpcPayloadView{
+        segment1,
+        sizeof(segment1) - 1,
+        segment2,
+        sizeof(segment2) - 1
+    });
+
+    const auto serialized = request.serialize();
+    auto decoded = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    const bool passed =
+        decoded.has_value() &&
+        decoded->requestId() == 820 &&
+        decoded->serviceName() == "BorrowedService" &&
+        decoded->methodName() == "request" &&
+        std::string(decoded->payload().data(), decoded->payload().size()) == "hellorpc";
+
+    writer.writeTestCase("RpcRequest borrowed payload serialize", passed);
+}
+
+void test_rpc_request_metadata_round_trip(test::TestResultWriter& writer) {
+    RpcRequest request(830, "MetaService", "echo");
+    const std::string payload = "metadata-payload";
+    request.payload(payload.data(), payload.size());
+    auto inserted_auth = request.metadata().insert("authorization", "token");
+    auto inserted_trace = request.metadata().insert("traceparent", "00-abc-def-01");
+
+    const auto serialized = request.serialize();
+    auto decoded = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    auto auth = decoded.has_value() ? decoded->metadata().get("authorization") : std::nullopt;
+    auto trace = decoded.has_value() ? decoded->metadata().get("traceparent") : std::nullopt;
+    const bool passed =
+        inserted_auth.has_value() &&
+        inserted_trace.has_value() &&
+        decoded.has_value() &&
+        decoded->requestId() == 830 &&
+        decoded->serviceName() == "MetaService" &&
+        decoded->methodName() == "echo" &&
+        auth.has_value() && *auth == "token" &&
+        trace.has_value() && *trace == "00-abc-def-01" &&
+        std::string(decoded->payload().data(), decoded->payload().size()) == payload;
+
+    writer.writeTestCase("RpcRequest metadata round trip", passed);
+}
+
+void test_rpc_request_rejects_truncated_metadata(test::TestResultWriter& writer) {
+    RpcRequest request(831, "MetaService", "echo");
+    auto inserted = request.metadata().insert("authorization", "token");
+    auto serialized = request.serialize();
+    serialized.resize(serialized.size() - 5);
+
+    auto decoded = RpcCodec::decodeRequest(serialized.data(), serialized.size());
+    writer.writeTestCase("RpcRequest rejects truncated metadata",
+        inserted.has_value() && !decoded.has_value());
+}
+
+void test_rpc_response_borrowed_payload_serialize(test::TestResultWriter& writer) {
+    static const char segment1[] = "hello";
+    static const char segment2[] = "rpc";
+
+    RpcResponse response(821, RpcErrorCode::OK);
+    response.payloadView(RpcPayloadView{
+        segment1,
+        sizeof(segment1) - 1,
+        segment2,
+        sizeof(segment2) - 1
+    });
+
+    const auto serialized = response.serialize();
+    auto decoded = RpcCodec::decodeResponse(serialized.data(), serialized.size());
+    const bool passed =
+        decoded.has_value() &&
+        decoded->requestId() == 821 &&
+        decoded->errorCode() == RpcErrorCode::OK &&
+        std::string(decoded->payload().data(), decoded->payload().size()) == "hellorpc";
+
+    writer.writeTestCase("RpcResponse borrowed payload serialize", passed);
+}
+
 void test_stream_message_ctor_owns_payload(test::TestResultWriter& writer) {
     const std::string payload = "ctor-payload";
     StreamMessage message(901, payload.data(), payload.size());
@@ -250,13 +386,21 @@ int main() {
     test_rpc_response(writer);
     test_rpc_response_error(writer);
     test_message_length(writer);
+    test_message_length_rejects_bad_header(writer);
     test_invalid_header(writer);
     test_incomplete_data(writer);
+    test_decode_rejects_truncated_request_body(writer);
+    test_decode_rejects_too_short_response_body(writer);
+    test_decode_rejects_oversized_header_body(writer);
     test_empty_payload(writer);
     test_large_payload(writer);
     test_rpc_call_mode_flags(writer);
     test_stream_message_borrowed_payload(writer);
     test_stream_message_borrowed_payload_serialize(writer);
+    test_rpc_request_borrowed_payload_serialize(writer);
+    test_rpc_request_metadata_round_trip(writer);
+    test_rpc_request_rejects_truncated_metadata(writer);
+    test_rpc_response_borrowed_payload_serialize(writer);
     test_stream_message_ctor_owns_payload(writer);
 
     writer.writeSummary();

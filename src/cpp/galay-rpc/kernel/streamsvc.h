@@ -46,6 +46,7 @@ struct RpcStreamServerConfig {
     size_t compute_scheduler_count = 0;        ///< 计算调度器数量，0表示自动
     RuntimeAffinityConfig affinity;            ///< 绑核配置
     size_t ring_buffer_size = 128 * 1024;      ///< RingBuffer大小
+    RpcStreamLimits stream_limits;             ///< 流帧大小限制
 };
 
 class RpcStreamServer;
@@ -97,6 +98,8 @@ public:
     }
     /// @brief 设置环形缓冲区大小
     RpcStreamServerBuilder& ringBufferSize(size_t value)                    { m_config.ring_buffer_size = value; return *this; }
+    /// @brief 设置流帧大小上限
+    RpcStreamServerBuilder& maxFrameBytes(size_t value)                     { m_config.stream_limits.max_frame_bytes = value; return *this; }
     /// @brief 构建RpcStreamServer实例
     RpcStreamServer build() const;
     /// @brief 仅导出配置
@@ -295,7 +298,7 @@ private:
         }
 
         RingBuffer ring_buffer(m_config.ring_buffer_size == 0 ? 128 * 1024 : m_config.ring_buffer_size);
-        StreamReader reader(ring_buffer, socket);
+        StreamReader reader(ring_buffer, socket, m_config.stream_limits);
 
         while (m_running.load(std::memory_order_acquire)) {
             StreamMessage init_frame;

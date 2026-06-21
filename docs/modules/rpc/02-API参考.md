@@ -28,6 +28,8 @@
 - 条件模块 target：`galay-rpc::galay-rpc-modules`
 - module 名：`galay.rpc`
 
+`galay-rpc::galay-rpc-modules` 只有在 `GALAY_ENABLE_CPP23_MODULES=ON` 且 CMake/生成器/编译器都支持 C++ module dependency scanning 时生成。当前 AppleClang 构建会显式跳过该 target，include target 仍是稳定生产入口。
+
 ## 目录
 
 1. [协议层 (protoc/)](#协议层)
@@ -192,6 +194,7 @@ struct RpcHeader {
 ```
 
 **注意：** 所有多字节字段使用网络字节序（大端），内部自动转换。
+`m_reserved` 当前只定义 `RPC_RESERVED_METADATA = 0x01`，表示 REQUEST body 前缀包含 metadata 扩展；其它未知 reserved bit 会被 decoder/parser 拒绝为 `INVALID_REQUEST`。不携带 metadata 的旧格式 REQUEST body 仍按 service/method/payload 解析，携带 metadata 的请求需要对端支持该 reserved bit。
 
 #### RpcRequest
 

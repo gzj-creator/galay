@@ -98,6 +98,17 @@ if(GALAY_INSTALL_TARGETS)
     )
 endif()
 
+if(TARGET galay-rpc-modules)
+    install(TARGETS galay-rpc-modules
+        EXPORT galayTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-rpc/module
+        CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
+    )
+endif()
+
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/cpp/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp
     FILES_MATCHING
@@ -132,11 +143,20 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
-install(EXPORT galayTargets
-    NAMESPACE galay::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
-    FILE galayTargets.cmake
-)
+if(TARGET galay-rpc-modules)
+    install(EXPORT galayTargets
+        NAMESPACE galay::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
+        FILE galayTargets.cmake
+        CXX_MODULES_DIRECTORY cxx-modules
+    )
+else()
+    install(EXPORT galayTargets
+        NAMESPACE galay::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
+        FILE galayTargets.cmake
+    )
+endif()
 install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/galayConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/galayConfigVersion.cmake

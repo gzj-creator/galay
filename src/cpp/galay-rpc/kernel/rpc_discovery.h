@@ -11,6 +11,7 @@
 #ifndef GALAY_RPC_DISCOVERY_H
 #define GALAY_RPC_DISCOVERY_H
 
+#include "rpc_endpoint.h"
 #include "rpc_service.h"
 #include "../../galay-kernel/concurrency/async_mutex.h"
 #include "../../galay-kernel/common/async_strategy.hpp"
@@ -40,6 +41,36 @@ struct ServiceEndpoint {
         return host + ":" + std::to_string(port);
     }
 };
+
+/**
+ * @brief 将旧服务发现endpoint转换为Phase 7完整endpoint模型
+ */
+inline RpcEndpointInfo toRpcEndpointInfo(const ServiceEndpoint& endpoint) {
+    RpcEndpointInfo info;
+    info.host = endpoint.host;
+    info.port = endpoint.port;
+    info.service = endpoint.service_name;
+    info.instance_id = endpoint.instance_id;
+    info.weight = endpoint.weight;
+    info.status = endpoint.weight == 0 ? RpcEndpointStatus::Unavailable
+                                       : RpcEndpointStatus::Serving;
+    return info;
+}
+
+/**
+ * @brief 将Phase 7完整endpoint模型转换为旧服务发现endpoint
+ *
+ * @note version/zone/metadata/status没有旧字段承载，会在转换时丢弃。
+ */
+inline ServiceEndpoint toServiceEndpoint(const RpcEndpointInfo& endpoint) {
+    ServiceEndpoint service_endpoint;
+    service_endpoint.host = endpoint.host;
+    service_endpoint.port = endpoint.port;
+    service_endpoint.service_name = endpoint.service;
+    service_endpoint.instance_id = endpoint.instance_id;
+    service_endpoint.weight = endpoint.weight;
+    return service_endpoint;
+}
 
 /**
  * @brief 服务发现错误

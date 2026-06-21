@@ -27,6 +27,7 @@
 #include "../common/rpc_log.h"
 #include "rpc_service.h"
 #include "rpc_conn.h"
+#include "rpc_interceptor.h"
 #include "../utils/runtime_compat.h"
 #include "../../galay-kernel/core/runtime.h"
 #include "../../galay-kernel/async/tcp_socket.h"
@@ -60,6 +61,7 @@ struct RpcServerConfig {
     size_t compute_scheduler_count = 0; ///< 计算调度器数量，0表示自动
     RuntimeAffinityConfig affinity;     ///< 绑核配置
     size_t ring_buffer_size = kDefaultRpcRingBufferSize;  ///< RingBuffer大小
+    RpcServerInterceptor interceptor = AllowAllRpcInterceptor();  ///< 请求前置拦截器
 };
 
 class RpcServer;
@@ -111,6 +113,8 @@ public:
     }
     /// @brief 设置环形缓冲区大小
     RpcServerBuilder& ringBufferSize(size_t value)                       { m_config.ring_buffer_size = value; return *this; }
+    /// @brief 设置请求前置拦截器
+    RpcServerBuilder& interceptor(RpcServerInterceptor value)             { m_config.interceptor = std::move(value); return *this; }
     /// @brief 构建RpcServer实例
     RpcServer build() const;
     /// @brief 仅导出配置
@@ -433,7 +437,8 @@ private:
         while (m_running.load(std::memory_order_acquire)) {
             // 读取请求（co_await直到完整消息）
             RpcRequest request;
-            auto result = co_await reader.getRequest(request);
+            RpcHeader header;
+            auto result = co_await GetRpcHeaderAwaitable<TcpSocket>(conn.ringBuffer(), header, conn.socket());
             if (!result) {
                 // 错误，关闭连接
                 m_last_error = result.error();
@@ -451,10 +456,100 @@ private:
                 co_return;
             }
 
+            if (header.m_type == static_cast<uint8_t>(RpcMessageType::HEARTBEAT)) {
+                auto heartbeat_result = co_await SendRawDataAwaitable<TcpSocket>(
+                    rpcBuildHeartbeatFrame(header.m_request_id),
+                    conn.socket());
+                if (!heartbeat_result) {
+                    m_last_error = heartbeat_result.error();
+                    RPC_LOG_WARN("[server] [heartbeat] [send-fail]",
+                                 "request_id={} code={} error={}",
+                                 header.m_request_id,
+                                 static_cast<int>(m_last_error->code()),
+                                 m_last_error->message());
+                    auto close_result = co_await conn.close();
+                    if (!close_result) {
+                        m_last_error = RpcError::from(close_result.error());
+                    }
+                    co_return;
+                }
+                continue;
+            }
+
+            if (header.m_type != static_cast<uint8_t>(RpcMessageType::REQUEST)) {
+                m_last_error = RpcError(RpcErrorCode::INVALID_REQUEST, "Unexpected RPC message type");
+                auto close_result = co_await conn.close();
+                if (!close_result) {
+                    m_last_error = RpcError::from(close_result.error());
+                }
+                co_return;
+            }
+
+            if (header.m_body_length > RPC_MAX_BODY_SIZE) {
+                m_last_error = RpcError(RpcErrorCode::INVALID_REQUEST, "Message too large");
+                auto close_result = co_await conn.close();
+                if (!close_result) {
+                    m_last_error = RpcError::from(close_result.error());
+                }
+                co_return;
+            }
+            if ((header.m_reserved & static_cast<uint8_t>(~RPC_RESERVED_KNOWN_MASK)) != 0) {
+                m_last_error = RpcError(RpcErrorCode::INVALID_REQUEST, "Unsupported request reserved bits");
+                auto close_result = co_await conn.close();
+                if (!close_result) {
+                    m_last_error = RpcError::from(close_result.error());
+                }
+                co_return;
+            }
+
+            std::vector<char> request_body(header.m_body_length);
+            if (header.m_body_length > 0) {
+                result = co_await GetRpcBodyAwaitable<TcpSocket>(
+                    conn.ringBuffer(),
+                    request_body.data(),
+                    request_body.size(),
+                    conn.socket());
+                if (!result) {
+                    m_last_error = result.error();
+                    auto close_result = co_await conn.close();
+                    if (!close_result) {
+                        m_last_error = RpcError::from(close_result.error());
+                    }
+                    co_return;
+                }
+            }
+
+            request.requestId(header.m_request_id);
+            request.callMode(rpcDecodeCallMode(header.m_flags));
+            request.endOfStream(rpcIsEndStream(header.m_flags));
+            if (!request.deserializeBody(request_body.data(),
+                                         request_body.size(),
+                                         (header.m_reserved & RPC_RESERVED_METADATA) != 0)) {
+                m_last_error = RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Failed to parse request body");
+                auto close_result = co_await conn.close();
+                if (!close_result) {
+                    m_last_error = RpcError::from(close_result.error());
+                }
+                co_return;
+            }
+
             // 处理请求
             RpcResponse response(request.requestId());
             response.callMode(request.callMode());
             response.endOfStream(true);
+
+            auto intercept_result = m_config.interceptor(request);
+            if (!intercept_result.has_value()) {
+                response.errorCode(intercept_result.error().code());
+                result = co_await writer.sendResponse(response);
+                if (!result) {
+                    m_last_error = result.error();
+                    auto close_result = co_await conn.close();
+                    (void)close_result;
+                    co_return;
+                }
+                continue;
+            }
 
             const uint64_t route_hash = buildRouteHash(request.serviceName(),
                                                        request.methodName(),

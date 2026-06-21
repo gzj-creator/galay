@@ -49,3 +49,42 @@ target_link_libraries(rpc
 )
 
 set_target_properties(rpc PROPERTIES EXPORT_NAME rpc)
+
+set(GALAY_RPC_CPP23_MODULES_EFFECTIVE OFF)
+if(GALAY_ENABLE_CPP23_MODULES)
+    if(CMAKE_VERSION VERSION_LESS 3.28)
+        message(WARNING "GALAY_ENABLE_CPP23_MODULES=ON requires CMake >= 3.28 for galay-rpc-modules; skipping module target")
+    elseif(NOT CMAKE_GENERATOR MATCHES "Ninja|Visual Studio")
+        message(WARNING "GALAY_ENABLE_CPP23_MODULES=ON requires a C++ module-capable generator for galay-rpc-modules; skipping module target")
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang")
+        message(WARNING "GALAY_ENABLE_CPP23_MODULES=ON is not enabled for AppleClang in this project; skipping galay-rpc-modules")
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Clang" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 16)
+        message(WARNING "GALAY_ENABLE_CPP23_MODULES=ON requires Clang >= 16 for galay-rpc-modules; skipping module target")
+    elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS 14)
+        message(WARNING "GALAY_ENABLE_CPP23_MODULES=ON requires GCC >= 14 for galay-rpc-modules; skipping module target")
+    else()
+        set(GALAY_RPC_CPP23_MODULES_EFFECTIVE ON)
+    endif()
+endif()
+
+if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
+    add_library(galay-rpc-modules)
+    add_library(galay-rpc::galay-rpc-modules ALIAS galay-rpc-modules)
+    target_compile_features(galay-rpc-modules PUBLIC cxx_std_23)
+    target_link_libraries(galay-rpc-modules PUBLIC rpc)
+    target_include_directories(galay-rpc-modules
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+    )
+    target_sources(galay-rpc-modules
+        PUBLIC
+            FILE_SET CXX_MODULES
+            BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/module
+            FILES ${CMAKE_CURRENT_SOURCE_DIR}/module/galay_rpc.cppm
+    )
+    set_target_properties(galay-rpc-modules PROPERTIES
+        EXPORT_NAME galay-rpc-modules
+        CXX_SCAN_FOR_MODULES ON
+    )
+endif()

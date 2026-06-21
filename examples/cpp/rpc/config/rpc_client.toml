@@ -1,0 +1,47 @@
+[client]
+host = "127.0.0.1"
+port = 50051
+default_timeout_ms = 3000
+ring_buffer_size = 65536
+max_message_size = 1048576
+
+[pool]
+min_connections_per_endpoint = 0
+max_connections_per_endpoint = 4
+max_waiters_per_endpoint = 64
+idle_ttl_ms = 30000
+max_lifetime_ms = 300000
+
+[retry]
+max_attempts = 2
+require_idempotent = true
+initial_backoff_ms = 5
+max_backoff_ms = 50
+jitter_ratio = 0.2
+
+[governance.rate_limit]
+enabled = false
+capacity = 1024
+refill_per_second = 1024
+
+[governance.circuit_breaker]
+enabled = false
+failure_threshold = 5
+success_threshold = 1
+half_open_max_requests = 1
+reset_timeout_ms = 30000
+
+[discovery]
+kind = "local"
+prefix = "/galay/rpc"
+refresh_interval_ms = 5000
+lease_ttl_seconds = 10
+
+[benchmark]
+host = "127.0.0.1"
+port = 50051
+connections = 1
+concurrency = 1
+requests = 100
+payload_bytes = 128
+duration_seconds = 0

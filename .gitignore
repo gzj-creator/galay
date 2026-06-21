@@ -50,6 +50,7 @@ bazel-*
 coverage/
 *.profraw
 *.profdata
+benchmark/results/
 
 # Logs
 *.log

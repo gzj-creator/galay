@@ -84,6 +84,8 @@ enum class RpcCallMode : uint8_t {
  */
 constexpr uint8_t RPC_FLAG_MODE_MASK = 0x03;   ///< 调用模式掩码
 constexpr uint8_t RPC_FLAG_END_STREAM = 0x04;  ///< 流结束标志位
+constexpr uint8_t RPC_RESERVED_METADATA = 0x01; ///< header reserved位：请求体包含metadata扩展
+constexpr uint8_t RPC_RESERVED_KNOWN_MASK = RPC_RESERVED_METADATA; ///< 当前协议已定义的reserved位
 
 /**
  * @brief 编码flags字段
@@ -145,6 +147,14 @@ enum class RpcErrorCode : uint16_t {
     SERIALIZATION_ERROR = 8,     ///< 序列化错误
     DESERIALIZATION_ERROR = 9,   ///< 反序列化错误
     INTERNAL_ERROR = 10,         ///< 内部错误
+    CANCELLED = 11,              ///< 调用取消
+    DEADLINE_EXCEEDED = 12,      ///< 调用deadline超时
+    RESOURCE_EXHAUSTED = 13,     ///< 资源耗尽或限流前置拒绝
+    RATE_LIMITED = 14,           ///< 速率限制拒绝
+    CIRCUIT_OPEN = 15,           ///< 熔断器打开
+    UNAUTHENTICATED = 16,        ///< 未认证
+    PERMISSION_DENIED = 17,      ///< 无权限
+    UNAVAILABLE = 18,            ///< 服务或连接暂不可用
 };
 
 /**
@@ -163,6 +173,14 @@ inline const char* rpcErrorCodeToString(RpcErrorCode code) {
         case RpcErrorCode::SERIALIZATION_ERROR: return "Serialization error";
         case RpcErrorCode::DESERIALIZATION_ERROR: return "Deserialization error";
         case RpcErrorCode::INTERNAL_ERROR: return "Internal error";
+        case RpcErrorCode::CANCELLED: return "Cancelled";
+        case RpcErrorCode::DEADLINE_EXCEEDED: return "Deadline exceeded";
+        case RpcErrorCode::RESOURCE_EXHAUSTED: return "Resource exhausted";
+        case RpcErrorCode::RATE_LIMITED: return "Rate limited";
+        case RpcErrorCode::CIRCUIT_OPEN: return "Circuit open";
+        case RpcErrorCode::UNAUTHENTICATED: return "Unauthenticated";
+        case RpcErrorCode::PERMISSION_DENIED: return "Permission denied";
+        case RpcErrorCode::UNAVAILABLE: return "Unavailable";
         default: return "Unknown";
     }
 }

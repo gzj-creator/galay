@@ -1,0 +1,13 @@
+[server]
+host = "0.0.0.0"
+port = 50051
+io_scheduler_count = 1
+compute_scheduler_count = 0
+max_message_size = 1048576
+
+[stream]
+max_frame_bytes = 1048576
+
+[discovery]
+kind = "local"
+prefix = "/galay/rpc"

@@ -14,6 +14,8 @@
  * +--------+--------+--------+--------+--------+--------+--------+--------+
  *
  * Body格式 (Request):
+ * - optional metadata extension when header reserved bit marks it present:
+ *   metadata marker (2 bytes, 0xFFFF) + metadata_count + key/value pairs
  * - service_name_len (2 bytes) + service_name
  * - method_name_len (2 bytes) + method_name
  * - payload
@@ -27,12 +29,15 @@
 #define GALAY_RPC_MESSAGE_H
 
 #include "rpc_base.h"
+#include "../kernel/rpc_metadata.h"
 #include <cstring>
 #include <vector>
 #include <expected>
 
 namespace galay::rpc
 {
+
+inline constexpr uint16_t kRpcRequestMetadataMarker = 0xFFFF;  ///< 请求metadata扩展标记
 
 /**
  * @brief RPC payload 零拷贝视图（最多两段，适配环形缓冲区）
@@ -108,6 +113,22 @@ struct RpcHeader {
         return m_body_length <= RPC_MAX_BODY_SIZE;
     }
 };
+
+/**
+ * @brief 构造HEARTBEAT帧
+ * @param request_id 心跳ID，pong复用相同ID
+ * @return 完整HEARTBEAT消息字节
+ */
+inline std::vector<char> rpcBuildHeartbeatFrame(uint32_t request_id) {
+    std::vector<char> frame(RPC_HEADER_SIZE);
+    RpcHeader header;
+    header.m_type = static_cast<uint8_t>(RpcMessageType::HEARTBEAT);
+    header.m_flags = rpcEncodeFlags(RpcCallMode::UNARY, true);
+    header.m_request_id = request_id;
+    header.m_body_length = 0;
+    header.serialize(frame.data());
+    return frame;
+}
 
 /**
  * @brief RPC请求消息
@@ -222,23 +243,43 @@ public:
         m_payload_owned = false;
     }
 
+    /// @brief 获取可变metadata
+    RpcMetadata& metadata() { return m_metadata; }
+    /// @brief 获取只读metadata
+    const RpcMetadata& metadata() const { return m_metadata; }
+
+    /// @brief 请求体序列化后的字节数
+    size_t serializedBodySize() const {
+        return metadataWireSize() +
+               sizeof(uint16_t) + m_service_name.size() +
+               sizeof(uint16_t) + m_method_name.size() +
+               payloadSize();
+    }
+    /// @brief metadata wire编码字节数
+    size_t serializedMetadataSize() const { return metadataWireSize(); }
+
     /**
      * @brief 序列化请求
      */
     std::vector<char> serialize() const {
         RpcPayloadView payload_view = payloadView();
-        size_t body_size = 2 + m_service_name.size() + 2 + m_method_name.size() + payload_view.size();
+        size_t body_size = serializedBodySize();
         std::vector<char> buffer(RPC_HEADER_SIZE + body_size);
 
         RpcHeader header;
         header.m_type = static_cast<uint8_t>(RpcMessageType::REQUEST);
         header.m_flags = rpcEncodeFlags(m_call_mode, m_end_of_stream);
+        if (!m_metadata.empty()) {
+            header.m_reserved = RPC_RESERVED_METADATA;
+        }
         header.m_request_id = m_request_id;
         header.m_body_length = static_cast<uint32_t>(body_size);
         header.serialize(buffer.data());
 
         char* body = buffer.data() + RPC_HEADER_SIZE;
         size_t offset = 0;
+
+        offset += serializeMetadata(body + offset);
 
         // service name
         uint16_t service_len = rpcHtons(static_cast<uint16_t>(m_service_name.size()));
@@ -270,11 +311,52 @@ public:
      * @brief 反序列化请求体
      */
     bool deserializeBody(const char* body, size_t length) {
+        return deserializeBody(body, length, false);
+    }
+
+    /**
+     * @brief 反序列化请求体
+     * @param has_metadata header reserved位是否声明了metadata扩展
+     */
+    bool deserializeBody(const char* body, size_t length, bool has_metadata) {
         if (length < 4) return false;
 
         size_t offset = 0;
 
+        m_metadata.clear();
+        if (has_metadata) {
+            uint16_t possible_marker;
+            std::memcpy(&possible_marker, body, sizeof(possible_marker));
+            possible_marker = rpcNtohs(possible_marker);
+            if (possible_marker != kRpcRequestMetadataMarker) return false;
+            offset += sizeof(uint16_t);
+            uint16_t metadata_count;
+            std::memcpy(&metadata_count, body + offset, sizeof(metadata_count));
+            metadata_count = rpcNtohs(metadata_count);
+            offset += sizeof(uint16_t);
+            if (metadata_count > kRpcMetadataMaxEntries) return false;
+
+            for (uint16_t i = 0; i < metadata_count; ++i) {
+                if (offset + sizeof(uint16_t) + sizeof(uint16_t) > length) return false;
+                uint16_t key_len;
+                uint16_t value_len;
+                std::memcpy(&key_len, body + offset, sizeof(key_len));
+                offset += sizeof(uint16_t);
+                std::memcpy(&value_len, body + offset, sizeof(value_len));
+                offset += sizeof(uint16_t);
+                key_len = rpcNtohs(key_len);
+                value_len = rpcNtohs(value_len);
+                if (offset + key_len + value_len > length) return false;
+                std::string_view key(body + offset, key_len);
+                offset += key_len;
+                std::string_view value(body + offset, value_len);
+                offset += value_len;
+                if (!m_metadata.insert(key, value).has_value()) return false;
+            }
+        }
+
         // service name
+        if (offset + 2 > length) return false;
         uint16_t service_len;
         std::memcpy(&service_len, body + offset, 2);
         service_len = rpcNtohs(service_len);
@@ -315,6 +397,48 @@ public:
     }
 
 private:
+    size_t metadataWireSize() const {
+        if (m_metadata.empty()) {
+            return 0;
+        }
+
+        size_t size = sizeof(uint16_t) + sizeof(uint16_t);
+        for (const auto& [key, value] : m_metadata) {
+            size += sizeof(uint16_t) + sizeof(uint16_t) + key.size() + value.size();
+        }
+        if (size > kRpcMetadataMaxWireSize) {
+            return kRpcMetadataMaxWireSize + 1;
+        }
+        return size;
+    }
+
+    size_t serializeMetadata(char* body) const {
+        if (m_metadata.empty()) {
+            return 0;
+        }
+
+        size_t offset = 0;
+        uint16_t marker = rpcHtons(kRpcRequestMetadataMarker);
+        uint16_t count = rpcHtons(static_cast<uint16_t>(m_metadata.size()));
+        std::memcpy(body + offset, &marker, sizeof(marker));
+        offset += sizeof(marker);
+        std::memcpy(body + offset, &count, sizeof(count));
+        offset += sizeof(count);
+        for (const auto& [key, value] : m_metadata) {
+            uint16_t key_len = rpcHtons(static_cast<uint16_t>(key.size()));
+            uint16_t value_len = rpcHtons(static_cast<uint16_t>(value.size()));
+            std::memcpy(body + offset, &key_len, sizeof(key_len));
+            offset += sizeof(key_len);
+            std::memcpy(body + offset, &value_len, sizeof(value_len));
+            offset += sizeof(value_len);
+            std::memcpy(body + offset, key.data(), key.size());
+            offset += key.size();
+            std::memcpy(body + offset, value.data(), value.size());
+            offset += value.size();
+        }
+        return offset;
+    }
+
     void materializePayloadIfNeeded() const {
         if (m_payload_owned) {
             return;
@@ -346,6 +470,7 @@ private:
     bool m_end_of_stream = true;             ///< 流结束标志
     std::string m_service_name;              ///< 服务名
     std::string m_method_name;               ///< 方法名
+    RpcMetadata m_metadata;                  ///< 请求metadata
     mutable std::vector<char> m_payload;     ///< payload缓冲区
     mutable RpcPayloadView m_payload_view{}; ///< payload零拷贝视图
     mutable bool m_payload_owned = true;     ///< 是否拥有payload数据

@@ -170,6 +170,9 @@ inline std::expected<size_t, RpcError> tryParseRequestMessage(std::span<const io
     if (header.m_type != static_cast<uint8_t>(RpcMessageType::REQUEST)) {
         return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST, "Not a request message"));
     }
+    if ((header.m_reserved & static_cast<uint8_t>(~RPC_RESERVED_KNOWN_MASK)) != 0) {
+        return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST, "Unsupported request reserved bits"));
+    }
 
     const size_t msg_len = RPC_HEADER_SIZE + header.m_body_length;
     if (msg_len > max_message_size + RPC_HEADER_SIZE) {
@@ -180,54 +183,19 @@ inline std::expected<size_t, RpcError> tryParseRequestMessage(std::span<const io
         return 0;
     }
 
-    size_t cursor = RPC_HEADER_SIZE;
-    uint16_t service_len_net = 0;
-    if (!copyFromIovecs(iovecs, cursor, reinterpret_cast<char*>(&service_len_net), sizeof(service_len_net))) {
-        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid service length"));
-    }
-    const size_t service_len = rpcNtohs(service_len_net);
-    cursor += sizeof(service_len_net);
-
-    if (cursor + service_len > msg_len) {
-        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Service field out of range"));
-    }
-    std::string service_name(service_len, '\0');
-    if (service_len > 0 && !copyFromIovecs(iovecs, cursor, service_name.data(), service_len)) {
-        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid service field"));
-    }
-    cursor += service_len;
-
-    uint16_t method_len_net = 0;
-    if (!copyFromIovecs(iovecs, cursor, reinterpret_cast<char*>(&method_len_net), sizeof(method_len_net))) {
-        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid method length"));
-    }
-    const size_t method_len = rpcNtohs(method_len_net);
-    cursor += sizeof(method_len_net);
-
-    if (cursor + method_len > msg_len) {
-        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Method field out of range"));
-    }
-    std::string method_name(method_len, '\0');
-    if (method_len > 0 && !copyFromIovecs(iovecs, cursor, method_name.data(), method_len)) {
-        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid method field"));
-    }
-    cursor += method_len;
-
-    const size_t payload_len = msg_len - cursor;
-    RpcPayloadView payload_view;
-    if (!payloadViewFromIovecs(iovecs, cursor, payload_len, payload_view)) {
-        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid request payload view"));
-    }
-
     request.requestId(header.m_request_id);
     request.callMode(rpcDecodeCallMode(header.m_flags));
     request.endOfStream(rpcIsEndStream(header.m_flags));
-    // 直接move进request，避免再做一次字符串拷贝。
-    request.serviceName(std::move(service_name));
-    request.methodName(std::move(method_name));
-    // 借用RingBuffer中的payload内存，避免额外拷贝。
-    // 该视图在后续读取覆盖对应缓冲区前有效。
-    request.payloadView(payload_view);
+    std::vector<char> body(header.m_body_length);
+    if (header.m_body_length > 0 &&
+        !copyFromIovecs(iovecs, RPC_HEADER_SIZE, body.data(), body.size())) {
+        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid request body"));
+    }
+    if (!request.deserializeBody(body.data(),
+                                 body.size(),
+                                 (header.m_reserved & RPC_RESERVED_METADATA) != 0)) {
+        return std::unexpected(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid request body"));
+    }
     return msg_len;
 }
 
@@ -530,25 +498,29 @@ private:
     void rebuildIovecs()
     {
         RpcPayloadView payload_view = m_request->payloadView();
-        const size_t body_size =
-            sizeof(uint16_t) + m_request->serviceName().size() +
-            sizeof(uint16_t) + m_request->methodName().size() +
-            payload_view.size();
+        const size_t body_size = m_request->serializedBodySize();
 
         RpcHeader header;
         header.m_type = static_cast<uint8_t>(RpcMessageType::REQUEST);
         header.m_flags = rpcEncodeFlags(m_request->callMode(), m_request->endOfStream());
+        if (!m_request->metadata().empty()) {
+            header.m_reserved = RPC_RESERVED_METADATA;
+        }
         header.m_request_id = m_request->requestId();
         header.m_body_length = static_cast<uint32_t>(body_size);
         header.serialize(m_header.data());
 
         m_service_len = rpcHtons(static_cast<uint16_t>(m_request->serviceName().size()));
         m_method_len = rpcHtons(static_cast<uint16_t>(m_request->methodName().size()));
+        rebuildMetadataBuffer();
 
         auto& iovecs = mutableIovecs();
         iovecs.clear();
-        iovecs.reserve(6);
+        iovecs.reserve(7);
         iovecs.push_back(iovec{m_header.data(), RPC_HEADER_SIZE});
+        if (!m_metadata.empty()) {
+            iovecs.push_back(iovec{m_metadata.data(), m_metadata.size()});
+        }
         iovecs.push_back(iovec{&m_service_len, sizeof(m_service_len)});
 
         if (!m_request->serviceName().empty()) {
@@ -581,8 +553,43 @@ private:
         }
     }
 
+    void rebuildMetadataBuffer()
+    {
+        m_metadata.clear();
+        if (m_request->metadata().empty()) {
+            return;
+        }
+
+        size_t metadata_size = sizeof(uint16_t) + sizeof(uint16_t);
+        for (const auto& [key, value] : m_request->metadata()) {
+            metadata_size += sizeof(uint16_t) + sizeof(uint16_t) + key.size() + value.size();
+        }
+        m_metadata.resize(metadata_size);
+
+        size_t offset = 0;
+        uint16_t marker = rpcHtons(kRpcRequestMetadataMarker);
+        uint16_t count = rpcHtons(static_cast<uint16_t>(m_request->metadata().size()));
+        std::memcpy(m_metadata.data() + offset, &marker, sizeof(marker));
+        offset += sizeof(marker);
+        std::memcpy(m_metadata.data() + offset, &count, sizeof(count));
+        offset += sizeof(count);
+        for (const auto& [key, value] : m_request->metadata()) {
+            uint16_t key_len = rpcHtons(static_cast<uint16_t>(key.size()));
+            uint16_t value_len = rpcHtons(static_cast<uint16_t>(value.size()));
+            std::memcpy(m_metadata.data() + offset, &key_len, sizeof(key_len));
+            offset += sizeof(key_len);
+            std::memcpy(m_metadata.data() + offset, &value_len, sizeof(value_len));
+            offset += sizeof(value_len);
+            std::memcpy(m_metadata.data() + offset, key.data(), key.size());
+            offset += key.size();
+            std::memcpy(m_metadata.data() + offset, value.data(), value.size());
+            offset += value.size();
+        }
+    }
+
     const RpcRequest* m_request = nullptr;           ///< 请求对象指针
     std::array<char, RPC_HEADER_SIZE> m_header{};    ///< 序列化后的头部缓冲区
+    std::vector<char> m_metadata;                     ///< 序列化后的metadata缓冲区
     uint16_t m_service_len = 0;                       ///< 网络字节序的服务名长度
     uint16_t m_method_len = 0;                        ///< 网络字节序的方法名长度
 };
@@ -1197,6 +1204,11 @@ public:
      * @brief 获取底层socket
      */
     SocketType& socket() { return m_socket; }
+
+    /**
+     * @brief 获取RingBuffer
+     */
+    RingBuffer& ringBuffer() { return m_ring_buffer; }
 
     /**
      * @brief 关闭连接
