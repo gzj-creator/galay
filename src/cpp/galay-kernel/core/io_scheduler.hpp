@@ -112,8 +112,15 @@ public:
         if (tail - head >= kCapacity) {
             return false;
         }
-        TaskState* const state = detail::TaskRefStorageAccess::releaseState(task);
-        m_slots[tail & kMask].store(state, std::memory_order_relaxed);
+        const size_t index = static_cast<size_t>(tail & kMask);
+        TaskState* expected = nullptr;
+        TaskState* const state = task.state();
+        if (!m_slots[index].compare_exchange_strong(expected, state,
+                                                     std::memory_order_release,
+                                                     std::memory_order_acquire)) {
+            return false;
+        }
+        (void)detail::TaskRefStorageAccess::releaseState(task);
         std::atomic_thread_fence(std::memory_order_release);
         m_tail.store(tail + 1, std::memory_order_release);
         return true;
@@ -142,10 +149,16 @@ public:
             }
             m_tail.store(tail + 1, std::memory_order_relaxed);
             TaskState* const state = m_slots[index].exchange(nullptr, std::memory_order_relaxed);
+            if (state == nullptr) {
+                return false;
+            }
             out = detail::TaskRefStorageAccess::adoptState(state);
             return true;
         }
         TaskState* const state = m_slots[index].exchange(nullptr, std::memory_order_relaxed);
+        if (state == nullptr) {
+            return false;
+        }
         out = detail::TaskRefStorageAccess::adoptState(state);
         return true;
     }
@@ -287,16 +300,19 @@ struct IOSchedulerWorkerState {
 
     /**
      * @brief 从其他线程安全地注入任务
-     * @param task 待入队任务；无效任务会返回 false
-     * @return true 注入前队列为空，调用方通常应唤醒阻塞中的调度器；false 注入后无需额外唤醒
+     * @param task 待入队任务
+     * @return 有值表示注入成功，值为 true 时注入前队列为空；std::nullopt 表示任务无效或入队失败
      */
-    bool scheduleInjected(TaskRef task) {
+    std::optional<bool> scheduleInjected(TaskRef task) {
         if (!task.isValid()) {
-            return false;
+            return std::nullopt;
         }
         const bool was_empty =
             injected_outstanding.fetch_add(1, std::memory_order_acq_rel) == 0;
-        inject_queue.enqueue(std::move(task));
+        if (!inject_queue.enqueue(std::move(task))) {
+            injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
+            return std::nullopt;
+        }
         return was_empty;
     }
 
@@ -314,14 +330,18 @@ struct IOSchedulerWorkerState {
         }
         const size_t target = std::min(remaining, inject_buffer.size());
         const size_t count = inject_queue.try_dequeue_bulk(inject_buffer.data(), target);
-        // inject_queue 保持生产者顺序；逆序填充以使 owner 端 pop_back()
-        // 仍按最旧优先的 FIFO 语义处理延后和溢出任务。
-        for (size_t i = count; i > 0; --i) {
-            local_ring.push_back(std::move(inject_buffer[i - 1]));
-        }
         if (count > 0) {
             owner_drained_injected_once.store(true, std::memory_order_release);
             injected_outstanding.fetch_sub(count, std::memory_order_acq_rel);
+        }
+        // inject_queue 保持生产者顺序；逆序填充以使 owner 端 pop_back()
+        // 仍按最旧优先的 FIFO 语义处理延后和溢出任务。
+        for (size_t i = count; i > 0; --i) {
+            TaskRef task = std::move(inject_buffer[i - 1]);
+            if (local_ring.push_back(std::move(task))) {
+                continue;
+            }
+            fallbackToInject(std::move(task));
         }
         polls_since_inject = 0;
         return count;
@@ -460,7 +480,9 @@ private:
             fallbackToInject(std::move(task));
             return;
         }
-        local_ring.push_back(std::move(task));
+        if (!local_ring.push_back(std::move(task))) {
+            fallbackToInject(std::move(task));
+        }
     }
 
     void enqueueDeferredFifo(TaskRef task) {
@@ -799,6 +821,9 @@ inline bool IOSchedulerWorkerState::trySteal() {
                     break;
                 }
                 if (!local_ring.push_back(std::move(task))) {
+                    if (auto* scheduler = task.belongScheduler()) {
+                        scheduler->schedule(std::move(task));
+                    }
                     break;
                 }
             }

@@ -63,8 +63,8 @@ bool verifyServer(const std::filesystem::path& path, const std::string& text) {
 
 int main() {
     const auto root = projectRoot();
-    const auto b2 = root / "benchmark" / "kernel" / "b2_tcp_server_throughput.cc";
-    const auto b11 = root / "benchmark" / "kernel" / "b11_tcp_iov_server_throughput.cc";
+    const auto b2 = root / "benchmark" / "cpp" / "kernel" / "b2_tcp_server_throughput.cc";
+    const auto b11 = root / "benchmark" / "cpp" / "kernel" / "b11_tcp_iov_server_throughput.cc";
     const std::string b2_text = readAll(b2);
     const std::string b11_text = readAll(b11);
     if (b2_text.empty() || b11_text.empty()) {

@@ -149,8 +149,11 @@ bool KqueueScheduler::schedule(TaskRef task)
         return true;
     }
 
-    const bool queue_was_empty = m_worker.scheduleInjected(std::move(task));
-    m_wake_coordinator.requestWake(queue_was_empty, [this]() { notify(); });
+    const auto queue_was_empty = m_worker.scheduleInjected(std::move(task));
+    if (!queue_was_empty.has_value()) {
+        return false;
+    }
+    m_wake_coordinator.requestWake(*queue_was_empty, [this]() { notify(); });
     return true;
 }
 
@@ -165,8 +168,11 @@ bool KqueueScheduler::scheduleDeferred(TaskRef task)
         return true;
     }
 
-    const bool queue_was_empty = m_worker.scheduleInjected(std::move(task));
-    m_wake_coordinator.requestWake(queue_was_empty, [this]() { notify(); });
+    const auto queue_was_empty = m_worker.scheduleInjected(std::move(task));
+    if (!queue_was_empty.has_value()) {
+        return false;
+    }
+    m_wake_coordinator.requestWake(*queue_was_empty, [this]() { notify(); });
     return true;
 }
 

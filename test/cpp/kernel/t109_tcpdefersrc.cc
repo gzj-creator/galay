@@ -40,8 +40,8 @@ int main() {
     const auto source_root = sourceRoot();
     const auto handle_option_h = source_root / "galay-kernel" / "common" / "handle_option.h";
     const auto handle_option_cc = source_root / "galay-kernel" / "common" / "handle_option.cc";
-    const auto b2_server = root / "benchmark" / "kernel" / "b2_tcp_server_throughput.cc";
-    const auto b11_server = root / "benchmark" / "kernel" / "b11_tcp_iov_server_throughput.cc";
+    const auto b2_server = root / "benchmark" / "cpp" / "kernel" / "b2_tcp_server_throughput.cc";
+    const auto b11_server = root / "benchmark" / "cpp" / "kernel" / "b11_tcp_iov_server_throughput.cc";
 
     const std::string header_text = readAll(handle_option_h);
     const std::string source_text = readAll(handle_option_cc);
