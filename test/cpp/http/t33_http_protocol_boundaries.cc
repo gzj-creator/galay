@@ -20,6 +20,7 @@
 
 #include <galay/cpp/galay-http/kernel/http_conn.h>
 #include <galay/cpp/galay-http/kernel/http_reader.h>
+#include <galay/cpp/galay-http/kernel/http_session.h>
 #include <galay/cpp/galay-http/protoc/http_request.h>
 #include <galay/cpp/galay-http/server/http_router.h>
 #include <galay/cpp/galay-http/server/http_server.h>
@@ -176,6 +177,32 @@ void testRangeAmplificationCaps()
     }
     auto too_large_result = HttpRangeParser::parse(too_large, 16 * one_mib);
     check(!too_large_result.isValid(), "multipart Range parser should cap aggregate output bytes");
+}
+
+void testSessionRejectsOversizedResponseBody()
+{
+    TcpSocket socket;
+    HttpReaderSetting setting;
+    setting.setMaxBodySize(4);
+    HttpSession session(socket, 1024, setting);
+    galay::http::detail::HttpSessionState<galay::async::TcpSocket> state(
+        session, std::string("GET / HTTP/1.1\r\n\r\n"));
+
+    const std::string raw =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Length: 5\r\n"
+        "\r\n"
+        "12345";
+
+    check(session.getRingBuffer().write(raw.data(), raw.size()) == raw.size(),
+          "failed to seed oversized response body");
+    state.onBytesReceived(raw.size());
+
+    check(state.parseFromRingBuffer(), "oversized response body should complete with an error");
+    const auto result = state.takeResult();
+    check(!result.has_value(), "oversized response body should not parse successfully");
+    check(result.error().code() == kRequestEntityTooLarge,
+          "oversized response body should return kRequestEntityTooLarge");
 }
 
 uint16_t reserveFreePort()
@@ -336,6 +363,7 @@ int main()
     testFramingHeadersAreRejected();
     testTruncatedUriEscapesAreRejected();
     testRangeAmplificationCaps();
+    testSessionRejectsOversizedResponseBody();
     testMountHardlyRegistersHead();
     testStaticHeadDoesNotSendBody();
 

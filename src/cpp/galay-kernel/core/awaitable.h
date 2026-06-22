@@ -339,6 +339,20 @@ struct expected_traits<std::expected<T, E>> {
     using error_type = E;
 };
 
+template <typename ResultT>
+auto makeUnexpectedIOError(IOError error) -> ResultT
+{
+    if constexpr (is_expected_v<ResultT>) {
+        using ErrorT = typename expected_traits<std::remove_cvref_t<ResultT>>::error_type;
+        static_assert(std::is_constructible_v<ErrorT, IOError>,
+                      "sequence awaitable error result must be constructible from IOError");
+        return std::unexpected(ErrorT(std::move(error)));
+    } else {
+        static_assert(is_expected_v<ResultT>,
+                      "sequence awaitable error paths require std::expected result types");
+    }
+}
+
 }  // namespace detail
 
 // ==================== 第三层：IOContext + Awaitable ====================
@@ -1441,7 +1455,7 @@ public:
         : SequenceAwaitableBase(controller, requested_domain) {}
 
     bool await_ready() {
-        return m_result_set;
+        return m_result_set || m_error.has_value();
     }
 
     auto await_resume() -> ResultT {
@@ -1463,19 +1477,19 @@ public:
                 return std::unexpected(ErrorT(IOError(kNotReady, errno)));
             }
         }
-        std::abort();
+        return detail::makeUnexpectedIOError<ResultT>(IOError(kNotReady, errno));
     }
 
     template <typename StepT>
     StepT& queue(StepT& step) {
         static_assert(std::is_base_of_v<TaskBase, std::remove_cvref_t<StepT>>,
                       "SequenceAwaitable::queue requires a Sequence task");
-        emplaceTask(step.defaultEventType(), step.contextBase(), &step);
+        (void)emplaceTask(step.defaultEventType(), step.contextBase(), &step);
         return step;
     }
 
     TaskBase& queue(TaskBase& task) {
-        emplaceTask(task.defaultEventType(), task.contextBase(), &task);
+        (void)emplaceTask(task.defaultEventType(), task.contextBase(), &task);
         return task;
     }
 
@@ -1483,12 +1497,12 @@ public:
     StepT& queue(IOEventType type, StepT& step) {
         static_assert(std::is_base_of_v<TaskBase, std::remove_cvref_t<StepT>>,
                       "SequenceAwaitable::queue requires a Sequence task");
-        emplaceTask(type, step.contextBase(), &step);
+        (void)emplaceTask(type, step.contextBase(), &step);
         return step;
     }
 
     TaskBase& queue(IOEventType type, TaskBase& task) {
-        emplaceTask(type, task.contextBase(), &task);
+        (void)emplaceTask(type, task.contextBase(), &task);
         return task;
     }
 
@@ -1656,13 +1670,15 @@ public:
 #endif
 
 private:
-    void emplaceTask(IOEventType type, IOContextBase* context, TaskBase* task) {
+    bool emplaceTask(IOEventType type, IOContextBase* context, TaskBase* task) {
         if (m_size >= InlineN) {
-            std::abort();
+            fail(IOError(kParamInvalid, 0));
+            return false;
         }
         const size_t index = (m_head + m_size) % InlineN;
         m_tasks[index] = IOTask{type, task, context};
         ++m_size;
+        return true;
     }
 
     void consumeFrontIfSame(TaskBase* task) {
@@ -1767,6 +1783,12 @@ public:
                 using ErrorT = typename detail::expected_traits<result_type>::error_type;
                 if constexpr (std::is_constructible_v<ErrorT, IOError>) {
                     return std::unexpected(ErrorT(*m_error));
+                } else {
+                    deliverErrorToMachine(std::move(*m_error));
+                    m_error.reset();
+                    if (m_result_set) {
+                        return std::move(*m_result);
+                    }
                 }
             }
         }
@@ -1774,9 +1796,14 @@ public:
             using ErrorT = typename detail::expected_traits<result_type>::error_type;
             if constexpr (std::is_constructible_v<ErrorT, IOError>) {
                 return std::unexpected(ErrorT(IOError(kNotReady, errno)));
+            } else {
+                deliverErrorToMachine(IOError(kNotReady, errno));
+                if (m_result_set) {
+                    return std::move(*m_result);
+                }
             }
         }
-        std::abort();
+        std::unreachable();
     }
 
     IOTask* front() override {
@@ -2131,6 +2158,35 @@ private:
                 m_error = IOError(kParamInvalid, 0);
             }
         }
+    }
+
+    void deliverErrorToMachine(IOError error) {
+        const ActiveKind active_kind = m_active_kind;
+        clearActiveTask();
+
+        switch (active_kind) {
+        case ActiveKind::kRead:
+        case ActiveKind::kReadv:
+            m_machine.onRead(std::unexpected(std::move(error)));
+            break;
+        case ActiveKind::kWrite:
+        case ActiveKind::kWritev:
+            m_machine.onWrite(std::unexpected(std::move(error)));
+            break;
+        case ActiveKind::kConnect:
+            deliverConnect(std::unexpected(std::move(error)));
+            break;
+        case ActiveKind::kNone:
+            if (detail::sequenceOwnerDomainUsesSlot(m_requested_domain, IOController::WRITE) &&
+                !detail::sequenceOwnerDomainUsesSlot(m_requested_domain, IOController::READ)) {
+                m_machine.onWrite(std::unexpected(std::move(error)));
+            } else {
+                m_machine.onRead(std::unexpected(std::move(error)));
+            }
+            break;
+        }
+
+        (void)pump();
     }
 
     void clearActiveTask() {

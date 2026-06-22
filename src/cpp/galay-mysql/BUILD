@@ -4,10 +4,7 @@ package(default_visibility = ["//visibility:public"])
 
 cc_library(
     name = "galay-mysql",
-    srcs = glob(
-        ["**/*.cc"],
-        exclude = ["protoc/mysql_auth.cc"],
-    ),
+    srcs = glob(["**/*.cc"]),
     hdrs = glob([
         "**/*.h",
         "**/*.hpp",

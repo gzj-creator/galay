@@ -6,10 +6,7 @@ cc_library(
     name = "galay-tracing",
     srcs = glob(
         ["**/*.cc"],
-        exclude = [
-            "adapters/spdlog_sink.cc",
-            "galay-kernel/otlp_http_exporter.cc",
-        ],
+        exclude = ["adapters/spdlog_sink.cc"],
     ),
     hdrs = glob([
         "**/*.h",

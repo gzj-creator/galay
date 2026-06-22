@@ -210,6 +210,8 @@ private:
 
     static void appendPacketHeaderFast(std::string& out, uint32_t payload_len, uint8_t sequence_id); ///< 快速追加包头
     static size_t estimateSimplePacketBytes(size_t payload_size) noexcept; ///< 估算简单包字节数
+    void appendInvalid(MysqlCommandKind kind, uint8_t sequence_id); ///< 记录无法编码的命令槽位
+    [[nodiscard]] bool hasInvalidCommand() const noexcept; ///< 是否包含无法编码的命令
     void appendSimpleFast(CommandType cmd, std::string_view payload, uint8_t sequence_id, MysqlCommandKind kind); ///< 快速追加简单命令
     void rebuildViewsIfNeeded() const; ///< 按需重建命令视图
 

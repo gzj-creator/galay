@@ -1,4 +1,5 @@
 #include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-http/kernel/http_session.h>
 #include <galay/cpp/galay-http/server/http_range.h>
 
 #include <chrono>
@@ -27,6 +28,26 @@ std::pair<HttpErrorCode, ssize_t> parseRequest(std::string& raw)
     };
     HttpRequest request;
     return request.fromIOVec({iov});
+}
+
+bool sessionRejectsOversizedResponse(std::string& raw)
+{
+    galay::async::TcpSocket socket;
+    HttpReaderSetting setting;
+    setting.setMaxBodySize(4);
+    HttpSession session(socket, 1024, setting);
+    galay::http::detail::HttpSessionState<galay::async::TcpSocket> state(
+        session, std::string("GET / HTTP/1.1\r\n\r\n"));
+
+    require(session.getRingBuffer().write(raw.data(), raw.size()) == raw.size(),
+            "failed to seed oversized response fixture");
+    state.onBytesReceived(raw.size());
+    if (!state.parseFromRingBuffer()) {
+        return false;
+    }
+
+    auto result = state.takeResult();
+    return !result.has_value() && result.error().code() == kRequestEntityTooLarge;
 }
 
 template <typename Func>
@@ -59,11 +80,18 @@ int main()
         "0\r\n\r\n";
     std::string bad_uri = "GET /bad% HTTP/1.1\r\nHost: example.com\r\n\r\n";
     std::string range_header = "bytes=0-9,5-14,15-19";
+    std::string oversized_response =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Length: 5\r\n"
+        "\r\n"
+        "12345";
 
     require(parseRequest(te_cl).first == kBadRequest, "TE+CL fixture should be rejected");
     require(parseRequest(bad_uri).first == kUriEncodeError, "bad URI fixture should be rejected");
     require(HttpRangeParser::parse(range_header, 100).ranges.size() == 1,
             "range fixture should merge");
+    require(sessionRejectsOversizedResponse(oversized_response),
+            "oversized session response fixture should be rejected");
 
     runBench("BM_RejectTransferEncodingContentLength", kIterations, [&]() {
         return parseRequest(te_cl).first == kBadRequest;
@@ -73,6 +101,9 @@ int main()
     });
     runBench("BM_MergeSmallRanges", kIterations, [&]() {
         return HttpRangeParser::parse(range_header, 100).ranges.size() == 1;
+    });
+    runBench("BM_RejectOversizedSessionResponse", kIterations, [&]() {
+        return sessionRejectsOversizedResponse(oversized_response);
     });
 
     return 0;

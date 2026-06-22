@@ -57,6 +57,7 @@ MysqlCommandBuilder& MysqlCommandBuilder::appendSimple(CommandType cmd,
                                                        MysqlCommandKind kind)
 {
     if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
+        appendInvalid(kind, sequence_id);
         return *this;
     }
     m_encoded.reserve(m_encoded.size() + estimateSimplePacketBytes(payload.size()));
@@ -95,6 +96,9 @@ const std::string& MysqlCommandBuilder::encoded() const noexcept
 
 MysqlEncodedBatch MysqlCommandBuilder::build() const
 {
+    if (hasInvalidCommand()) {
+        return MysqlEncodedBatch{};
+    }
     return MysqlEncodedBatch{
         .encoded = m_encoded,
         .expected_responses = m_commands.size()
@@ -103,6 +107,14 @@ MysqlEncodedBatch MysqlCommandBuilder::build() const
 
 MysqlEncodedBatch MysqlCommandBuilder::release()
 {
+    if (hasInvalidCommand()) {
+        m_encoded.clear();
+        m_commands.clear();
+        m_command_views.clear();
+        m_views_dirty = true;
+        return MysqlEncodedBatch{};
+    }
+
     MysqlEncodedBatch out{
         .encoded = std::move(m_encoded),
         .expected_responses = m_commands.size()
@@ -127,12 +139,33 @@ size_t MysqlCommandBuilder::estimateSimplePacketBytes(size_t payload_size) noexc
     return MYSQL_PACKET_HEADER_SIZE + 1 + payload_size;
 }
 
+void MysqlCommandBuilder::appendInvalid(MysqlCommandKind kind, uint8_t sequence_id)
+{
+    m_commands.push_back(CommandMeta{
+        .encoded = Slice{m_encoded.size(), 0},
+        .kind = kind,
+        .sequence_id = sequence_id
+    });
+    m_views_dirty = true;
+}
+
+bool MysqlCommandBuilder::hasInvalidCommand() const noexcept
+{
+    for (const auto& command : m_commands) {
+        if (command.encoded.length == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void MysqlCommandBuilder::appendSimpleFast(CommandType cmd,
                                            std::string_view payload,
                                            uint8_t sequence_id,
                                            MysqlCommandKind kind)
 {
     if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
+        appendInvalid(kind, sequence_id);
         return;
     }
     const uint32_t payload_len = 1U + static_cast<uint32_t>(payload.size());

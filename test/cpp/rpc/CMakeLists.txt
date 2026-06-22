@@ -1,6 +1,7 @@
 file(GLOB GALAY_RPC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t92_module_smoke.cc")
 list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t64_etcd_real_chain.cc")
+list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t94_rpc_etcd_adapter_surface.cc")
 set(GALAY_RPC_TEST_SKIP_RETURN_CODE 125)
 
 function(galay_add_rpc_test source_file)
@@ -25,12 +26,20 @@ foreach(test_source IN LISTS GALAY_RPC_TEST_SOURCES)
 endforeach()
 
 if(TARGET galay::etcd)
+    if(NOT TARGET galay::rpc-etcd)
+        message(FATAL_ERROR "galay::rpc-etcd target is required when rpc and etcd are both enabled")
+    endif()
+
     galay_add_rpc_test("${CMAKE_CURRENT_SOURCE_DIR}/t64_etcd_real_chain.cc")
-    target_link_libraries(t64_etcd_real_chain PRIVATE galay::etcd)
+    target_link_libraries(t64_etcd_real_chain PRIVATE galay::rpc-etcd)
     set_tests_properties(rpc.t64.etcd.real.chain PROPERTIES
         LABELS "rpc;integration;requires-etcd"
         SKIP_RETURN_CODE ${GALAY_RPC_TEST_SKIP_RETURN_CODE}
     )
+
+    galay_add_rpc_test("${CMAKE_CURRENT_SOURCE_DIR}/t94_rpc_etcd_adapter_surface.cc")
+    target_link_libraries(t94_rpc_etcd_adapter_surface PRIVATE galay::rpc-etcd)
+    set_tests_properties(rpc.t94.rpc.etcd.adapter.surface PROPERTIES LABELS "rpc;surface")
 endif()
 
 if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-rpc-modules)

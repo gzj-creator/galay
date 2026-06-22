@@ -637,6 +637,13 @@ MysqlQueryAwaitable::SharedState::SharedState(AsyncMysqlClient& client, std::str
                                                    sql,
                                                    protocol::MysqlCommandKind::Query))
 {
+    if (encoded_cmd.empty()) {
+        result = std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
+                                            "MySQL query exceeds single-packet limit"));
+        phase = Phase::Invalid;
+        return;
+    }
+
     if (client.asyncConfig().result_row_reserve_hint > 0) {
         result_set.reserveRows(client.asyncConfig().result_row_reserve_hint);
     }
@@ -932,6 +939,11 @@ MysqlPrepareAwaitable::SharedState::SharedState(AsyncMysqlClient& client, std::s
                                                    sql,
                                                    protocol::MysqlCommandKind::StmtPrepare))
 {
+    if (encoded_cmd.empty()) {
+        result = std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
+                                            "MySQL prepare exceeds single-packet limit"));
+        phase = Phase::Invalid;
+    }
 }
 
 MysqlPrepareAwaitable::Machine::Machine(std::shared_ptr<SharedState> state)
@@ -1197,6 +1209,13 @@ MysqlStmtExecuteAwaitable::SharedState::SharedState(AsyncMysqlClient& client, st
     : client(&client)
     , encoded_cmd(std::move(encoded_cmd_in))
 {
+    if (encoded_cmd.empty()) {
+        result = std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
+                                            "MySQL statement execute exceeds single-packet limit"));
+        phase = Phase::Invalid;
+        return;
+    }
+
     if (client.asyncConfig().result_row_reserve_hint > 0) {
         result_set.reserveRows(client.asyncConfig().result_row_reserve_hint);
     }
@@ -1504,7 +1523,7 @@ MysqlPipelineAwaitable::SharedState::SharedState(
     for (const auto& cmd : commands) {
         if (cmd.encoded.empty()) {
             result = std::unexpected(
-                MysqlError(MYSQL_ERROR_PROTOCOL, "Pipeline command encoded payload is empty"));
+                MysqlError(MYSQL_ERROR_INVALID_PARAM, "Pipeline command encoded payload is empty"));
             phase = Phase::Invalid;
             return;
         }

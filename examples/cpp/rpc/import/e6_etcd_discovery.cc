@@ -1,4 +1,5 @@
 import galay.rpc;
+import galay.rpc.etcd;
 
 #include <iostream>
 

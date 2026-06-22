@@ -573,6 +573,10 @@ std::string encodeStmtExecuteImpl(uint32_t stmt_id,
         }
     }
 
+    if (payload.size() > MYSQL_MAX_PACKET_SIZE) {
+        return {};
+    }
+
     std::string packet;
     packet.reserve(MYSQL_PACKET_HEADER_SIZE + payload.size());
     writeUint24(packet, static_cast<uint32_t>(payload.size()));
@@ -585,6 +589,10 @@ std::string encodeStmtExecuteImpl(uint32_t stmt_id,
 
 std::string MysqlEncoder::wrapPacket(std::string_view payload, uint8_t sequence_id)
 {
+    if (payload.size() > MYSQL_MAX_PACKET_SIZE) {
+        return {};
+    }
+
     std::string packet;
     packet.reserve(MYSQL_PACKET_HEADER_SIZE + payload.size());
     writeUint24(packet, static_cast<uint32_t>(payload.size()));
@@ -595,6 +603,10 @@ std::string MysqlEncoder::wrapPacket(std::string_view payload, uint8_t sequence_
 
 std::string MysqlEncoder::encodeSimpleCommand(CommandType cmd, std::string_view payload, uint8_t sequence_id)
 {
+    if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
+        return {};
+    }
+
     const uint32_t payload_len = 1U + static_cast<uint32_t>(payload.size());
     std::string packet;
     packet.reserve(MYSQL_PACKET_HEADER_SIZE + payload_len);

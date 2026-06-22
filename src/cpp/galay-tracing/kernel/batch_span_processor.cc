@@ -113,6 +113,8 @@ struct BatchSpanProcessor::SpanQueue {
 };
 
 struct BatchSpanProcessor::WorkerControl {
+    using Clock = std::chrono::steady_clock;
+
     struct FlushRequest {
         explicit FlushRequest(std::chrono::milliseconds timeout)
             : timeout(timeout),
@@ -132,8 +134,19 @@ struct BatchSpanProcessor::WorkerControl {
     std::atomic<bool> shutdownDrainOk{true};
     std::atomic<std::size_t> activeFlushCallers{0};
     std::atomic<bool> signalPending{false};
+    std::atomic<Clock::rep> shutdownDeadlineTicks{
+        Clock::time_point::max().time_since_epoch().count()};
     std::counting_semaphore<> signal{0};
     moodycamel::ConcurrentQueue<std::shared_ptr<FlushRequest>> flushRequests;
+
+    void setShutdownDeadline(Clock::time_point deadline) noexcept {
+        shutdownDeadlineTicks.store(deadline.time_since_epoch().count(), std::memory_order_release);
+    }
+
+    [[nodiscard]] Clock::time_point shutdownDeadline() const noexcept {
+        return Clock::time_point(Clock::duration(
+            shutdownDeadlineTicks.load(std::memory_order_acquire)));
+    }
 
     void notify() noexcept {
         if (!signalPending.exchange(true, std::memory_order_acq_rel)) {
@@ -170,6 +183,9 @@ BatchSpanProcessor::BatchSpanProcessor(std::unique_ptr<SpanExporter> exporter, B
 
 BatchSpanProcessor::~BatchSpanProcessor() noexcept {
     static_cast<void>(shutdown(std::chrono::milliseconds(500)));
+    if (m_worker.joinable()) {
+        m_worker.join();
+    }
 }
 
 void BatchSpanProcessor::onEnd(Span&& span) {
@@ -246,6 +262,7 @@ bool BatchSpanProcessor::forceFlush(std::chrono::milliseconds timeout) {
 
 bool BatchSpanProcessor::shutdown(std::chrono::milliseconds timeout) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
+    m_control->setShutdownDeadline(deadline);
     m_control->shutdownRequested.store(true, std::memory_order_release);
     m_control->forceNotify();
 
@@ -291,8 +308,9 @@ void BatchSpanProcessor::workerLoop() {
 
     auto drainReadyBatches = [this, &batch](bool drainPartial) {
         bool ok = true;
-        while (m_queue->queuedCount() >= m_config.max_batch_size ||
-               (drainPartial && !m_queue->empty())) {
+        while (!m_control->shutdownRequested.load(std::memory_order_acquire) &&
+               (m_queue->queuedCount() >= m_config.max_batch_size ||
+                (drainPartial && !m_queue->empty()))) {
             const auto count = drainQueue(batch, m_config.max_batch_size);
             if (count == 0) {
                 break;
@@ -361,17 +379,18 @@ void BatchSpanProcessor::workerLoop() {
         }
 
         if (shutdownRequested) {
-            constexpr auto kShutdownDrainDeadline = std::chrono::steady_clock::time_point::max();
-            bool shutdownOk = drainUntilIdle(kShutdownDrainDeadline);
+            const auto shutdownDeadline = m_control->shutdownDeadline();
+            bool shutdownOk = drainUntilIdle(shutdownDeadline);
             completeFlushRequests();
+            const bool deadlineExpired = std::chrono::steady_clock::now() >= shutdownDeadline;
             if (shutdownRequested &&
                 m_control->activeFlushCallers.load(std::memory_order_acquire) == 0 &&
-                m_queue->empty() &&
+                (m_queue->empty() || deadlineExpired) &&
                 !completeFlushRequests()) {
-                if (m_exporter) {
-                    shutdownOk = m_exporter->forceFlush(std::chrono::milliseconds::zero()) && shutdownOk;
+                if (m_exporter && !deadlineExpired) {
+                    shutdownOk = m_exporter->forceFlush(remainingTimeout(shutdownDeadline)) && shutdownOk;
                 }
-                m_control->shutdownDrainOk.store(shutdownOk, std::memory_order_release);
+                m_control->shutdownDrainOk.store(shutdownOk && m_queue->empty(), std::memory_order_release);
                 break;
             }
             continue;

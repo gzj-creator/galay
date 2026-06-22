@@ -164,51 +164,6 @@
 #if __has_include("../kernel/http_writer.h")
 #include "../kernel/http_writer.h"
 #endif
-#if __has_include("../../galay-http2/client/h2_client.h")
-#include "../../galay-http2/client/h2_client.h"
-#endif
-#if __has_include("../../galay-http2/client/h2c_client.h")
-#include "../../galay-http2/client/h2c_client.h"
-#endif
-#if __has_include("../../galay-http2/kernel/http2_conn.h")
-#include "../../galay-http2/kernel/http2_conn.h"
-#endif
-#if __has_include("../../galay-http2/server/http2_server.h")
-#include "../../galay-http2/server/http2_server.h"
-#endif
-#if __has_include("../../galay-http2/kernel/http2_stream.h")
-#include "../../galay-http2/kernel/http2_stream.h"
-#endif
-#if __has_include("../../galay-http2/kernel/stream_manager.h")
-#include "../../galay-http2/kernel/stream_manager.h"
-#endif
-#if __has_include("../../galay-ws/client/ws_client.h")
-#include "../../galay-ws/client/ws_client.h"
-#endif
-#if __has_include("../../galay-ws/kernel/ws_conn.h")
-#include "../../galay-ws/kernel/ws_conn.h"
-#endif
-#if __has_include("../../galay-ws/kernel/ws_heartbeat.h")
-#include "../../galay-ws/kernel/ws_heartbeat.h"
-#endif
-#if __has_include("../../galay-ws/kernel/ws_reader.h")
-#include "../../galay-ws/kernel/ws_reader.h"
-#endif
-#if __has_include("../../galay-ws/kernel/reader_cfg.h")
-#include "../../galay-ws/kernel/reader_cfg.h"
-#endif
-#if __has_include("../../galay-ws/client/ws_session.h")
-#include "../../galay-ws/client/ws_session.h"
-#endif
-#if __has_include("../../galay-ws/server/ws_upgrade.h")
-#include "../../galay-ws/server/ws_upgrade.h"
-#endif
-#if __has_include("../../galay-ws/kernel/ws_writer.h")
-#include "../../galay-ws/kernel/ws_writer.h"
-#endif
-#if __has_include("../../galay-ws/kernel/writer_cfg.h")
-#include "../../galay-ws/kernel/writer_cfg.h"
-#endif
 #if __has_include("module_prelude.hpp")
 #include "module_prelude.hpp"
 #endif
@@ -232,39 +187,6 @@
 #endif
 #if __has_include("../protoc/http_response.h")
 #include "../protoc/http_response.h"
-#endif
-#if __has_include("../../galay-http2/protoc/http2_base.h")
-#include "../../galay-http2/protoc/http2_base.h"
-#endif
-#if __has_include("../../galay-http2/protoc/http2_error.h")
-#include "../../galay-http2/protoc/http2_error.h"
-#endif
-#if __has_include("../../galay-http2/protoc/http2_frame.h")
-#include "../../galay-http2/protoc/http2_frame.h"
-#endif
-#if __has_include("../../galay-http2/builder/http2_frame_builder.h")
-#include "../../galay-http2/builder/http2_frame_builder.h"
-#endif
-#if __has_include("../../galay-http2/protoc/http2_hpack.h")
-#include "../../galay-http2/protoc/http2_hpack.h"
-#endif
-#if __has_include("../../galay-http2/utils/h2_helper.h")
-#include "../../galay-http2/utils/h2_helper.h"
-#endif
-#if __has_include("../../galay-ws/protoc/ws_error.h")
-#include "../../galay-ws/protoc/ws_error.h"
-#endif
-#if __has_include("../../galay-ws/protoc/ws_frame.h")
-#include "../../galay-ws/protoc/ws_frame.h"
-#endif
-#if __has_include("../../galay-ws/builder/ws_frame_builder.h")
-#include "../../galay-ws/builder/ws_frame_builder.h"
-#endif
-#if __has_include("../../galay-ws/utils/ws_helper.h")
-#include "../../galay-ws/utils/ws_helper.h"
-#endif
-#if __has_include("../../galay-ws/protoc/ws_base.h")
-#include "../../galay-ws/protoc/ws_base.h"
 #endif
 #if __has_include("../builder/http_builder.h")
 #include "../builder/http_builder.h"

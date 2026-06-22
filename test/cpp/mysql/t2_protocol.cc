@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cassert>
+#include <cstdlib>
 #include <cstring>
 #include <limits>
 #include <galay/cpp/galay-mysql/protoc/builder.h>
@@ -7,6 +8,14 @@
 #include <galay/cpp/galay-mysql/protoc/mysql_packet.h>
 
 using namespace galay::mysql::protocol;
+
+void require(bool condition, const char* message)
+{
+    if (!condition) {
+        std::cerr << message << std::endl;
+        std::exit(1);
+    }
+}
 
 void test_read_write_integers()
 {
@@ -187,6 +196,19 @@ void test_encoder()
     std::cout << "  PASSED" << std::endl;
 }
 
+void test_encoder_rejects_oversized_packet()
+{
+    std::cout << "Testing encoder oversized packet rejection..." << std::endl;
+
+    MysqlEncoder encoder;
+    const std::string oversized_sql(MYSQL_MAX_PACKET_SIZE, 'x');
+
+    assert(encoder.encodeQuery(oversized_sql).empty());
+    assert(encoder.encodeStmtPrepare(oversized_sql).empty());
+
+    std::cout << "  PASSED" << std::endl;
+}
+
 void test_command_builder()
 {
     std::cout << "Testing command builder..." << std::endl;
@@ -239,11 +261,44 @@ void test_command_builder_rejects_oversized_packet()
 
     MysqlCommandBuilder builder;
     const std::string oversized_sql(MYSQL_MAX_PACKET_SIZE, 'x');
+    builder.appendQuery("SELECT 1");
     builder.appendQuery(oversized_sql);
+    builder.appendQuery("SELECT 2");
 
-    assert(builder.empty());
-    assert(builder.encoded().empty());
-    assert(builder.commands().empty());
+    require(builder.size() == 3, "oversized command must preserve an invalid command slot");
+    const auto views = builder.commands();
+    require(views.size() == 3, "oversized command view count mismatch");
+    require(!views[0].encoded.empty(), "first command should remain encoded");
+    require(views[1].encoded.empty(), "oversized command should be marked by an empty encoded view");
+    require(views[1].kind == MysqlCommandKind::Query, "oversized command kind should be preserved");
+    require(!views[2].encoded.empty(), "commands after oversized input should remain visible");
+
+    std::cout << "  PASSED" << std::endl;
+}
+
+void test_command_builder_invalid_batch_not_released()
+{
+    std::cout << "Testing command builder invalid batch release..." << std::endl;
+
+    const std::string oversized_sql(MYSQL_MAX_PACKET_SIZE, 'x');
+    MysqlCommandBuilder copy_builder;
+    copy_builder.appendQuery("SELECT 1");
+    copy_builder.appendQuery(oversized_sql);
+    copy_builder.appendQuery("SELECT 2");
+
+    auto copied = copy_builder.build();
+    require(copied.encoded.empty(), "invalid copied batch must not expose partial encoded commands");
+    require(copied.expected_responses == 0, "invalid copied batch must not expect unsent responses");
+
+    MysqlCommandBuilder release_builder;
+    release_builder.appendQuery("SELECT 1");
+    release_builder.appendQuery(oversized_sql);
+    release_builder.appendQuery("SELECT 2");
+
+    auto released = release_builder.release();
+    require(released.encoded.empty(), "invalid released batch must not expose partial encoded commands");
+    require(released.expected_responses == 0, "invalid released batch must not expect unsent responses");
+    require(release_builder.empty(), "release should still clear an invalid builder");
 
     std::cout << "  PASSED" << std::endl;
 }
@@ -378,8 +433,10 @@ int main()
     test_len_enc_string_overflow();
     test_packet_header();
     test_encoder();
+    test_encoder_rejects_oversized_packet();
     test_command_builder();
     test_command_builder_rejects_oversized_packet();
+    test_command_builder_invalid_batch_not_released();
     test_ok_packet_parse();
     test_err_packet_parse();
     test_auth_switch_request_parse();

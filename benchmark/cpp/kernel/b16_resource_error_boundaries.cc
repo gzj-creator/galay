@@ -12,10 +12,12 @@
 
 #include <array>
 #include <chrono>
+#include <expected>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <string>
 #include <sys/socket.h>
 #include <sys/uio.h>
@@ -24,6 +26,18 @@
 namespace {
 
 volatile std::size_t g_sink = 0;
+
+using SequenceBoundaryResult = std::expected<int, galay::kernel::IOError>;
+
+struct SequenceBoundaryFlow {
+    void onLocal(galay::kernel::SequenceOps<SequenceBoundaryResult, 1>&) {}
+};
+
+using SequenceBoundaryStep = galay::kernel::LocalSequenceStep<
+    SequenceBoundaryResult,
+    1,
+    SequenceBoundaryFlow,
+    &SequenceBoundaryFlow::onLocal>;
 
 template <typename Fn>
 void measure(const std::string& name, std::size_t iterations, Fn&& fn)
@@ -79,6 +93,26 @@ int main()
         auto writev = socket.writev(iovecs, 2);
         return static_cast<std::size_t>(readv.await_ready()) +
                static_cast<std::size_t>(writev.await_ready()) + (i & 1U);
+    });
+
+    measure("sequence overflow error", iterations, [](std::size_t i) {
+        galay::kernel::IOController controller(GHandle::invalid());
+        SequenceBoundaryFlow flow;
+        SequenceBoundaryStep first(&flow);
+        SequenceBoundaryStep second(&flow);
+        galay::kernel::SequenceAwaitable<SequenceBoundaryResult, 1> sequence(&controller);
+
+        sequence.queue(first);
+        sequence.queue(second);
+        if (!sequence.await_ready()) {
+            throw std::runtime_error("overflowed sequence did not become ready");
+        }
+        auto result = sequence.await_resume();
+        if (result.has_value() ||
+            !galay::kernel::IOError::contains(result.error().code(), galay::kernel::kParamInvalid)) {
+            throw std::runtime_error("overflowed sequence did not return kParamInvalid");
+        }
+        return static_cast<std::size_t>(1) + (i & 1U);
     });
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)

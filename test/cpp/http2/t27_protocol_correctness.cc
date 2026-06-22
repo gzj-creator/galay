@@ -20,6 +20,14 @@ using namespace galay::async;
 namespace
 {
 
+void require(bool condition, const char* message)
+{
+    if (!condition) {
+        std::cerr << message << std::endl;
+        std::exit(1);
+    }
+}
+
 std::string frameBytes(Http2FrameType type,
                        uint8_t flags,
                        uint32_t stream_id,
@@ -273,6 +281,29 @@ void testDataBuilderSplitsPayloadAtDefaultMaxFrameSize()
     assert(parsed->at(1)->asData()->isEndStream());
 }
 
+void testSendDataFrameRejectsInsufficientSendWindow()
+{
+    TcpSocket socket(GHandle{-1});
+    Http2Conn conn(std::move(socket));
+    auto stream = conn.createStream(19);
+    stream->setState(Http2StreamState::Open);
+    conn.adjustConnSendWindow(-conn.connSendWindow() + 1);
+
+    const int32_t conn_window_before = conn.connSendWindow();
+    const int32_t stream_window_before = stream->sendWindow();
+    auto write = conn.sendDataFrame(19, std::string("xx"), false);
+
+    require(conn.connSendWindow() == conn_window_before,
+            "connection window must not change on rejected DATA");
+    require(stream->sendWindow() == stream_window_before,
+            "stream window must not change on rejected DATA");
+    require(write.await_ready(), "flow-control rejection must be an immediate awaitable");
+    auto result = write.await_resume();
+    require(!result.has_value(), "flow-control rejection must return an error");
+    require(result.error() == Http2ErrorCode::FlowControlError,
+            "flow-control rejection must preserve FlowControlError");
+}
+
 } // namespace
 
 int main()
@@ -286,6 +317,7 @@ int main()
     testSettingsInitialWindowDeltaAppliesToExistingStreams();
     testUnknownExtensionFrameIsConsumedAndIgnored();
     testDataBuilderSplitsPayloadAtDefaultMaxFrameSize();
+    testSendDataFrameRejectsInsufficientSendWindow();
 
     std::cout << "t27_protocol_correctness PASS\n";
     return 0;

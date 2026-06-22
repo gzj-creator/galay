@@ -34,5 +34,4 @@ export {
 #include "../kernel/rpc_client.h"
 #include "../kernel/rpc_stream.h"
 #include "../kernel/rpc_discovery.h"
-#include "../discovery/etcd_service_registry.h"
 }

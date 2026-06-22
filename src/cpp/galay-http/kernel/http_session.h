@@ -100,7 +100,8 @@ struct HttpSessionState {
             return false;
         }
 
-        auto [error_code, consumed] = m_response.fromIOVec(m_parse_iovecs);
+        auto [error_code, consumed] =
+            m_response.fromIOVec(m_parse_iovecs, m_session->getReaderSetting().getMaxBodySize());
         if (consumed > 0) {
             m_session->getRingBuffer().consume(static_cast<size_t>(consumed));
         }

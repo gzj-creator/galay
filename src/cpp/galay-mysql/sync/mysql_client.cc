@@ -597,6 +597,11 @@ std::expected<MysqlClient::Packet, MysqlError> MysqlClient::recvPacket()
 MysqlResult MysqlClient::query(const std::string& sql)
 {
     auto cmd = m_encoder.encodeQuery(sql, 0);
+    if (cmd.empty()) {
+        return std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
+                                          "MySQL query exceeds single-packet limit"));
+    }
+
     auto send_result = sendAll(cmd);
     if (!send_result) {
         return std::unexpected(send_result.error());
@@ -615,7 +620,7 @@ MysqlBatchResult MysqlClient::batch(std::span<const protocol::MysqlCommandView> 
     iovecs.reserve(commands.size());
     for (const auto& cmd : commands) {
         if (cmd.encoded.empty()) {
-            return std::unexpected(MysqlError(MYSQL_ERROR_PROTOCOL,
+            return std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
                                               "Batch command encoded payload is empty"));
         }
         struct iovec iov{};
@@ -795,6 +800,11 @@ MysqlResult MysqlClient::receiveResultSet()
 std::expected<MysqlClient::PrepareResult, MysqlError> MysqlClient::prepare(const std::string& sql)
 {
     auto cmd = m_encoder.encodeStmtPrepare(sql, 0);
+    if (cmd.empty()) {
+        return std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
+                                          "MySQL prepare exceeds single-packet limit"));
+    }
+
     auto send_result = sendAll(cmd);
     if (!send_result) {
         return std::unexpected(send_result.error());
@@ -853,6 +863,11 @@ MysqlResult MysqlClient::stmtExecute(uint32_t stmt_id,
                                      const std::vector<uint8_t>& param_types)
 {
     auto cmd = m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0);
+    if (cmd.empty()) {
+        return std::unexpected(MysqlError(MYSQL_ERROR_INVALID_PARAM,
+                                          "MySQL statement execute exceeds single-packet limit"));
+    }
+
     auto send_result = sendAll(cmd);
     if (!send_result) {
         return std::unexpected(send_result.error());

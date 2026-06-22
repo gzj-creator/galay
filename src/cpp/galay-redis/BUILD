@@ -21,3 +21,21 @@ cc_library(
         "//src/cpp/galay-utils:galay-utils",
     ],
 )
+
+cc_library(
+    name = "galay-redis-tls",
+    srcs = ["async/client_tls.cc"],
+    hdrs = glob([
+        "**/*.h",
+        "**/*.hpp",
+        "**/*.inl",
+    ]),
+    strip_include_prefix = ".",
+    include_prefix = "galay/cpp/galay-redis",
+    copts = ["-std=c++23"],
+    defines = ["GALAY_SSL_FEATURE_ENABLED"],
+    deps = [
+        ":galay-redis",
+        "//src/cpp/galay-ssl:galay-ssl",
+    ],
+)

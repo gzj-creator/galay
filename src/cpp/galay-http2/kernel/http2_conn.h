@@ -1062,14 +1062,14 @@ auto buildReadOperation(SocketType& socket, StateT state) {
 }
 
 template<typename SocketType>
-auto buildWriteOperation(SocketType& socket, std::string data) {
+auto buildWriteStateOperation(SocketType& socket, Http2WriteState state) {
     using ResultType = Http2WriteState::ResultType;
     if constexpr (is_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
         return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
                    socket.controller(),
                    &socket,
-                   Http2SslWriteMachine(Http2WriteState(std::move(data))))
+                   Http2SslWriteMachine(std::move(state)))
             .build();
 #else
         static_assert(!sizeof(SocketType), "SSL support is disabled");
@@ -1077,9 +1077,40 @@ auto buildWriteOperation(SocketType& socket, std::string data) {
     } else {
         return AwaitableBuilder<ResultType>::fromStateMachine(
                    socket.controller(),
-                   Http2TcpWriteMachine(Http2WriteState(std::move(data))))
+                   Http2TcpWriteMachine(std::move(state)))
             .build();
     }
+}
+
+template<typename SocketType>
+using Http2WriteInnerOperationType =
+    decltype(buildWriteStateOperation(
+        std::declval<SocketType&>(),
+        Http2WriteState(std::string{})));
+
+template<typename SocketType>
+auto buildWriteOperation(SocketType& socket, std::string data) {
+    using ResultType = Http2WriteState::ResultType;
+    using InnerOperationT = Http2WriteInnerOperationType<SocketType>;
+
+    Http2WriteState state(std::move(data));
+    if (state.hasResult()) {
+        return BufferedFastPathOperation<ResultType, InnerOperationT>(
+            socket.controller(),
+            state.takeResult());
+    }
+    return BufferedFastPathOperation<ResultType, InnerOperationT>(
+        buildWriteStateOperation(socket, std::move(state)));
+}
+
+template<typename SocketType>
+auto buildWriteFailureOperation(SocketType& socket, Http2ErrorCode error) {
+    using ResultType = Http2WriteState::ResultType;
+    using InnerOperationT = Http2WriteInnerOperationType<SocketType>;
+
+    return BufferedFastPathOperation<ResultType, InnerOperationT>(
+        socket.controller(),
+        ResultType(std::unexpected(error)));
 }
 
 template<typename SocketType>
@@ -1656,18 +1687,29 @@ public:
     
     /**
      * @brief 发送 DATA 帧（单帧）
+     * @details 发送窗口不足时返回立即就绪的 FlowControlError，不挂起也不占用 WRITE 槽位。
      */
     auto sendDataFrame(
         uint32_t stream_id,
         const std::string& data,
         bool end_stream = false)
     {
-        auto bytes = Http2FrameBuilder::dataBytes(stream_id, data, end_stream);
-        
         auto stream = getStream(stream_id);
+        const size_t data_size = data.size();
+        if (data_size > 0) {
+            if (!stream ||
+                data_size > static_cast<size_t>(std::max<int32_t>(m_conn_send_window, 0)) ||
+                data_size > static_cast<size_t>(std::max<int32_t>(stream->sendWindow(), 0))) {
+                return detail::buildWriteFailureOperation(
+                    m_socket, Http2ErrorCode::FlowControlError);
+            }
+        }
+
+        auto bytes = Http2FrameBuilder::dataBytes(stream_id, data, end_stream);
         if (stream) {
-            m_conn_send_window -= data.size();
-            stream->adjustSendWindow(-static_cast<int32_t>(data.size()));
+            const auto delta = static_cast<int32_t>(data_size);
+            m_conn_send_window -= delta;
+            stream->adjustSendWindow(-delta);
             if (end_stream) {
                 stream->onDataSent(true);
             }

@@ -8,6 +8,7 @@
 #include <memory>
 #include <span>
 #include <string_view>
+#include <thread>
 #include <vector>
 
 namespace {
@@ -39,6 +40,24 @@ public:
     std::atomic<std::size_t> exported_spans{0};
     std::atomic<std::size_t> export_calls{0};
     std::atomic<std::size_t> observed_weight{0};
+};
+
+class BlockingFirstExporter final : public galay::tracing::SpanExporter {
+public:
+    galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span>) override {
+        const auto call = export_calls.fetch_add(1, std::memory_order_acq_rel) + 1;
+        if (call == 1) {
+            export_started.store(true, std::memory_order_release);
+            while (!release_first.load(std::memory_order_acquire)) {
+                std::this_thread::yield();
+            }
+        }
+        return galay::tracing::ExportResult::kSuccess;
+    }
+
+    std::atomic<std::size_t> export_calls{0};
+    std::atomic<bool> export_started{false};
+    std::atomic<bool> release_first{false};
 };
 
 [[nodiscard]] const char* buildType() {
@@ -166,10 +185,53 @@ void runSchedule(galay::tracing::BatchSpanScheduleMode mode) {
               << '\n';
 }
 
+void runShutdownTimeoutPressure() {
+    constexpr std::size_t kQueuedAfterBlockedExport = 64;
+    auto exporter = std::make_unique<BlockingFirstExporter>();
+    auto* rawExporter = exporter.get();
+    galay::tracing::BatchSpanProcessor processor(std::move(exporter), {
+        .queue_capacity = kQueuedAfterBlockedExport + 1,
+        .max_batch_size = 1,
+        .flush_interval = std::chrono::hours(1),
+        .schedule_mode = galay::tracing::BatchSpanScheduleMode::kBatchSize,
+    });
+
+    auto firstSpan = makeSpans(1);
+    processor.onEnd(std::move(firstSpan.front()));
+    while (!rawExporter->export_started.load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+
+    auto queued = makeSpans(kQueuedAfterBlockedExport);
+    for (auto& span : queued) {
+        processor.onEnd(std::move(span));
+    }
+
+    const auto start = std::chrono::steady_clock::now();
+    const bool shutdownOk = processor.shutdown(std::chrono::milliseconds(1));
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    const auto callsBeforeRelease = rawExporter->export_calls.load(std::memory_order_acquire);
+
+    rawExporter->release_first.store(true, std::memory_order_release);
+    while (rawExporter->export_calls.load(std::memory_order_acquire) == callsBeforeRelease &&
+           callsBeforeRelease == 0) {
+        std::this_thread::yield();
+    }
+
+    std::cout << "B7-BatchProcessorShutdownTimeout"
+              << " queued_after_blocked_export=" << kQueuedAfterBlockedExport
+              << " shutdown_ok=" << (shutdownOk ? 1 : 0)
+              << " elapsed_us="
+              << std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count()
+              << " export_calls_before_release=" << callsBeforeRelease
+              << '\n';
+}
+
 } // namespace
 
 int main() {
     runSchedule(galay::tracing::BatchSpanScheduleMode::kTimed);
     runSchedule(galay::tracing::BatchSpanScheduleMode::kOnEnd);
     runSchedule(galay::tracing::BatchSpanScheduleMode::kBatchSize);
+    runShutdownTimeoutPressure();
 }

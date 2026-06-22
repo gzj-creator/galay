@@ -1,11 +1,25 @@
 #include <galay/cpp/galay-mysql/async/client.h>
+#include <galay/cpp/galay-mysql/sync/mysql_client.h>
 #include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <cassert>
+#include <array>
 #include <concepts>
+#include <cstdlib>
 #include <expected>
+#include <iostream>
+#include <string>
 #include <type_traits>
 #include <utility>
 
 using namespace galay::mysql;
+
+void require(bool condition, const char* message)
+{
+    if (!condition) {
+        std::cerr << message << std::endl;
+        std::exit(1);
+    }
+}
 
 template <typename T>
 concept HasProtocolConnectAwaitable = requires { typename T::ProtocolConnectAwaitable; };
@@ -59,5 +73,24 @@ static_assert(requires(AsyncMysqlClient& client, MysqlConfig config) {
 
 int main()
 {
+    const std::string oversized_sql(protocol::MYSQL_MAX_PACKET_SIZE, 'x');
+
+    MysqlClient sync_client;
+    auto sync_result = sync_client.query(oversized_sql);
+    require(!sync_result.has_value(), "oversized sync query should fail before network IO");
+    require(sync_result.error().type() == MYSQL_ERROR_INVALID_PARAM,
+            "oversized sync query should return invalid param");
+    std::array<std::string_view, 1> oversized_pipeline{std::string_view(oversized_sql)};
+    auto sync_pipeline = sync_client.pipeline(oversized_pipeline);
+    require(!sync_pipeline.has_value(), "oversized sync pipeline should fail before network IO");
+    require(sync_pipeline.error().type() == MYSQL_ERROR_INVALID_PARAM,
+            "oversized sync pipeline should return invalid param");
+
+    AsyncMysqlClient async_client(nullptr);
+    auto async_query = async_client.query(oversized_sql);
+    require(async_query.isInvalid(), "oversized async query awaitable should be invalid");
+    auto async_pipeline = async_client.pipeline(oversized_pipeline);
+    require(async_pipeline.isInvalid(), "oversized async pipeline awaitable should be invalid");
+
     return 0;
 }

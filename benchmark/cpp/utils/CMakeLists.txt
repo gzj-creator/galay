@@ -5,9 +5,12 @@ function(galay_add_utils_benchmark target_name source_file)
     set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 endfunction()
 
-galay_add_utils_benchmark(benchmark_utils_lru_cache_throughput b1_lru_cache_throughput.cc)
-galay_add_utils_benchmark(benchmark_utils_byte_queue_view_throughput b2_byte_queue_view_throughput.cc)
-galay_add_utils_benchmark(benchmark_utils_ring_buffer_throughput b3_ring_buffer_throughput.cc)
-galay_add_utils_benchmark(benchmark_utils_bloom_filter_throughput b4_bloom_filter_throughput.cc)
-galay_add_utils_benchmark(benchmark_utils_circuit_breaker_throughput b5_circuit_breaker_throughput.cc)
-galay_add_utils_benchmark(benchmark_utils_resource_error_boundaries b6_resource_error_boundaries.cc)
+file(GLOB GALAY_UTILS_BENCHMARK_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/b*.cc"
+)
+
+foreach(benchmark_source IN LISTS GALAY_UTILS_BENCHMARK_SOURCES)
+    get_filename_component(benchmark_name "${benchmark_source}" NAME_WE)
+    string(REGEX REPLACE "^b[0-9]+_" "" scenario_name "${benchmark_name}")
+    galay_add_utils_benchmark(benchmark_utils_${scenario_name} ${benchmark_source})
+endforeach()

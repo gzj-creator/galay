@@ -18,3 +18,16 @@ cc_library(
         "//src/cpp/galay-utils:galay-utils",
     ],
 )
+
+cc_library(
+    name = "galay-rpc-etcd",
+    hdrs = ["discovery/etcd_service_registry.h"],
+    strip_include_prefix = ".",
+    include_prefix = "galay/cpp/galay-rpc",
+    copts = ["-std=c++23"],
+    defines = ["GALAY_RPC_HAS_ETCD"],
+    deps = [
+        ":galay-rpc",
+        "//src/cpp/galay-etcd:galay-etcd",
+    ],
+)

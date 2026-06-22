@@ -28,7 +28,10 @@ galay_add_rpc_import_example(example_rpc_import_stream_server import/e3_stream.c
 galay_add_rpc_import_example(example_rpc_import_stream_client import/e4_stream.cc)
 galay_add_rpc_import_example(example_rpc_import_managed_client import/e5_managed_client.cc)
 galay_add_rpc_import_example(example_rpc_import_tls_echo import/e7_tls_echo.cc)
-galay_add_rpc_import_example(example_rpc_import_etcd_discovery import/e6_etcd_discovery.cc)
+if(TARGET galay-rpc-etcd-modules)
+    galay_add_rpc_import_example(example_rpc_import_etcd_discovery import/e6_etcd_discovery.cc)
+    target_link_libraries(example_rpc_import_etcd_discovery PRIVATE galay-rpc-etcd-modules)
+endif()
 
 file(GLOB GALAY_RPC_MANUAL_EXAMPLE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/manual/*.cc"
