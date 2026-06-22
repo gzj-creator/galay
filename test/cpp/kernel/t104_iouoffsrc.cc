@@ -1,6 +1,6 @@
 /**
  * @file t104_iouoffsrc.cc
- * @brief 锁定 io_uring 后端禁用 work-stealing 的源码边界。
+ * @brief 锁定 IO 后端禁用 work-stealing 的源码边界。
  */
 
 #include <filesystem>
@@ -33,6 +33,8 @@ bool contains(const std::string& haystack, const std::string& needle) {
 int main() {
     const auto root = projectRoot();
     const auto ioscheduler = root / "galay-kernel" / "core" / "io_scheduler.hpp";
+    const auto kqueue_scheduler = root / "galay-kernel" / "core" / "kqueue_scheduler.cc";
+    const auto epoll_scheduler = root / "galay-kernel" / "core" / "epoll_scheduler.cc";
     const auto io_uring_scheduler = root / "galay-kernel" / "core" / "uring_scheduler.cc";
 
     std::vector<std::string> failures;
@@ -51,6 +53,22 @@ int main() {
     } else if (!contains(io_uring_src, "m_worker.setStealingEnabled(false);")) {
         failures.push_back(io_uring_scheduler.string() +
                            ": io_uring scheduler must disable sibling work-stealing");
+    }
+
+    const auto kqueue_src = readAll(kqueue_scheduler);
+    if (kqueue_src.empty()) {
+        failures.push_back(kqueue_scheduler.string() + ": failed to read kqueue_scheduler.cc");
+    } else if (!contains(kqueue_src, "m_worker.setStealingEnabled(false);")) {
+        failures.push_back(kqueue_scheduler.string() +
+                           ": kqueue scheduler must disable sibling work-stealing");
+    }
+
+    const auto epoll_src = readAll(epoll_scheduler);
+    if (epoll_src.empty()) {
+        failures.push_back(epoll_scheduler.string() + ": failed to read epoll_scheduler.cc");
+    } else if (!contains(epoll_src, "m_worker.setStealingEnabled(false);")) {
+        failures.push_back(epoll_scheduler.string() +
+                           ": epoll scheduler must disable sibling work-stealing");
     }
 
     if (!failures.empty()) {

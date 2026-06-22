@@ -1,5 +1,7 @@
 file(GLOB GALAY_RPC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
 list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t92_module_smoke.cc")
+list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t64_etcd_real_chain.cc")
+set(GALAY_RPC_TEST_SKIP_RETURN_CODE 125)
 
 function(galay_add_rpc_test source_file)
     get_filename_component(target_name "${source_file}" NAME_WE)
@@ -21,6 +23,15 @@ target_include_directories(result_writer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 foreach(test_source IN LISTS GALAY_RPC_TEST_SOURCES)
     galay_add_rpc_test(${test_source})
 endforeach()
+
+if(TARGET galay::etcd)
+    galay_add_rpc_test("${CMAKE_CURRENT_SOURCE_DIR}/t64_etcd_real_chain.cc")
+    target_link_libraries(t64_etcd_real_chain PRIVATE galay::etcd)
+    set_tests_properties(rpc.t64.etcd.real.chain PROPERTIES
+        LABELS "rpc;integration;requires-etcd"
+        SKIP_RETURN_CODE ${GALAY_RPC_TEST_SKIP_RETURN_CODE}
+    )
+endif()
 
 if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-rpc-modules)
     add_executable(t92_module_smoke t92_module_smoke.cc)

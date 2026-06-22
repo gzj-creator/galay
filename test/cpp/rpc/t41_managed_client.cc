@@ -96,6 +96,14 @@ Task<void> runManagedChecks(uint16_t port, TestState* state)
         co_return;
     }
 
+    client.markEndpointUnavailable(*selected_after_failure);
+    auto recovered_after_all_unavailable = client.selectEndpoint("ManagedService");
+    if (!recovered_after_all_unavailable.has_value()) {
+        fail(state, "all-unavailable endpoints were not reopened for transient recovery");
+        state->done.store(true, std::memory_order_release);
+        co_return;
+    }
+
     bool connected = false;
     for (int attempt = 0; attempt < 100; ++attempt) {
         auto result = co_await client.call("ManagedService", "echo", "managed");

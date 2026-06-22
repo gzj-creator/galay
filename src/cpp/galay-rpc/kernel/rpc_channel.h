@@ -575,6 +575,8 @@ public:
     const RpcReaderSetting& readerSetting() const { return m_reader_setting; }
     /// @brief 当前pending数量
     size_t pendingCount() const { return m_pending_count.load(std::memory_order_acquire); }
+    /// @brief 底层socket和RingBuffer是否已创建，可用于拒绝未连接的上层会话创建。
+    bool ready() const { return m_socket != nullptr && m_ring_buffer != nullptr; }
 
 private:
     struct OutboundCall {

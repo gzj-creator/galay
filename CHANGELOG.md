@@ -20,6 +20,9 @@
 - **新增 C ABI 用例目录**：`benchmark/c/`、`examples/c/`、`test/c/`（共 99 个文件）提供各模块 C ABI 的 codec/builder/lifecycle smoke 基准、示例与回归测试入口。
 - **测试集成配置头**：新增 `test/cpp/{etcd,redis}/integration_config.h`，作为对应模块集成测试的统一配置入口。
 - **tracing HTTP header / OTLP galay http transport 集成测试与基准**：新增 `test/cpp/tracing/t14_http_header_integration.cc`（验证 tracing adapter 与 galay-http header 互转，需 `galay::http`）、`t15_otlp_galay_http_transport_integration.cc`（验证基于 galay http 的 OTLP transport 行为，需 `GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT`）以及对应吞吐基准 `benchmark/cpp/tracing/b9_http_header_integration.cc`；同步把原 `t9_otlp_http_exporter.cc` 中与 galay-http-transport 强绑定的用例迁入 t15，让 t9 回归纯 OTLP HTTP exporter 单元测试。
+- **真实 etcd 服务发现集成**：`EtcdServiceRegistry` 在构建启用 `galay-etcd` 时走真实 etcd v3 KV 作为注册中心（`GALAY_RPC_HAS_ETCD`），覆盖 register/deregister/discover/heartbeat/integrationAvailable，支持 `{prefix}/{service}/{instance}` key 模板与脏值跳过；新增真实链路集成测试 `test/cpp/rpc/t64_etcd_real_chain.cc` 与压测基准 `benchmark/cpp/rpc/b12_etcd_managed_client_pressure.cc`，并按 `GALAY_IT_ENABLE` + `GALAY_ETCD_ENDPOINT` 门控。
+- **RPC C ABI 错误码扩展**：`galay_rpc_error_code_t` 新增 CANCELLED / DEADLINE_EXCEEDED / RESOURCE_EXHAUSTED / RATE_LIMITED / CIRCUIT_OPEN / UNAUTHENTICATED / PERMISSION_DENIED / UNAVAILABLE 八个错误码，并对齐 `galay_rpc_error_to_status` 映射。
+- **新增 await_suspend 竞态 / discovery selector / stream control body 回归测试**：`test/cpp/kernel/t126_await_suspend_race_source.cc`（源码边界，锁定 AsyncWaiter/Mutex/MpscChannel 的 await_suspend 只消费提前唤醒、不触碰 awaiter frame）、`test/cpp/rpc/t63_discovery_selector.cc`（round-robin 位置跨调用保持与 weighted selector 构造）、以及 `t70_stream_contract.cc` / `t1_protocol.cc` / `t1_envelope_codec.c` / `t100_boundary_matrix.cc` / `t41_managed_client.cc` 的相应扩充。
 
 ### Changed
 
@@ -35,6 +38,8 @@
 - **新增 `GALAY_BUILD_C_API` 选项**：`cmake/option.cmake` 增加 ABI 构建开关（默认 OFF），不影响现有 C++ 默认构建行为。
 - **测试用例统一重编号**：etcd/http/http2/kernel/mcp/mysql/redis/rpc/ssl/ws 共 10 个测试目录的 `t{n}_*.cc` 改为从 `t1` 起连续编号；同步更新 etcd/kernel/mcp/mysql/redis/ssl 各自 `CMakeLists.txt` 中硬编码的集成测试/TLS 测试/场景名清单；修复 kernel 目录 `t116_sqestatesrc.cc` 与 `t116_connfan.cc` 的序号冲突（冲突项起整体后移一位至 t125）。
 - **测试 CMake 改用 GLOB 自动发现**：mcp/mongo/tracing/utils 四个目录不再逐个 `add_executable`/`add_test`，统一改为 `file(GLOB ... CONFIGURE_DEPENDS)` + 循环派发；保留各模块原有的集成/单元分类、链接库差异、tracing 的 `T1-package_surface` 目标命名与 `t6_spdlog_sink` 条件编译等特例。
+- **具体 IOScheduler 关闭 sibling work-stealing**：epoll/kqueue reactor 的事件注册与删除必须保持 owner 线程亲和，被窃取的 IO 协程会在错误线程触碰 reactor；`EpollScheduler` / `KqueueScheduler` 构造时显式 `m_worker.setStealingEnabled(false)`，`t99_iosteal.cc` 由"验证会偷"改写为"验证不偷"，`t104_iouoffsrc.cc` 同步锁定 kqueue/epoll 源码边界。
+- **ServiceDiscoveryClient selector 状态跨调用保持**：selector 改为 `std::optional<Selector>` 并缓存对应 endpoint 快照，仅当 endpoint 列表真正变化时才重建；同时通过 `if constexpr` 探测 selector 是否接受 `(endpoints, weights)` 构造，兼容加权选择器。
 
 ### Fixed
 
@@ -43,6 +48,11 @@
 - 修复 RPC etcd discovery 示例把 `RpcError::message()` 误当字段访问导致全量构建失败的问题。
 - 修复 etcd benchmark CMake glob 把 `bench_support.cc` 注册成独立可执行目标导致缺少 `main` 链接失败的问题。
 - 修复 kernel IO scheduler 的 work-stealing ring 槽位复用竞态，避免跨线程注入压力下 ready task 被覆盖丢失，并同步修正 kqueue/epoll/io_uring 注入失败返回；同时修正 TCP benchmark source-case 测试的 `benchmark/cpp/kernel` 路径。
+- 修复 `AsyncWaiter` / `AsyncMutex` / `MpscChannel` 在 await_suspend 与 notify/wakeUp 之间的双恢复与丢失唤醒竞态：`AsyncWaiter` 改为 `kEmpty/kWaiting/kReady` 状态机 + 独立 `m_notified` 标志，`AsyncMutex` 发布 waiter 后只使用栈上本地副本并经 `wakeNextWaiterIfUnlocked` 转交锁，`MpscChannel` 注册 waiter 后只消费提前唤醒、不再同步收数据并写 awaiter frame。
+- 修复 `WaitRegistration` 在唤醒先于 waiter 注册到达时丢失唤醒的问题：新增 `m_pending_wake` 标志与 `consumePendingWake` / `clearPendingWake` 接口，`arm()` 未拿到 waiter 时记一次 pending，`publishWaiter` / `tryRecv` / `tryRecvBatch` 在对应路径消费或清理。
+- 修复 `RpcClient::call` / `RpcManagedClient::call` 在挂起协程中持有栈上 borrowed payload 的 use-after-free：payload 与 service/method 统一拷贝进 owned 存储 (`copyPayload` / `callWithModeOwned` / `callOwned`) 再进入重试与调度路径。
+- 修复 RPC stream 控制帧 (`STREAM_END` / `STREAM_CANCEL`) 携带 body 时未被拒绝、并污染后续帧解析的问题：新增 `DiscardInvalidControlBody` 状态，body 不完整时缓存已消费 header、就绪后整体丢弃并返回 `INVALID_REQUEST`。
+- 修复 `RpcHeader::deserialize` 未校验协议版本，以及 C ABI `galay_rpc_decode_request` 未跳过 metadata 扩展、未拒绝未知 reserved bit 的问题。
 
 ### Docs
 

@@ -47,6 +47,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 namespace galay::rpc
 {
@@ -316,20 +318,12 @@ public:
                                                   bool end_of_stream,
                                                   const char* payload,
                                                   size_t payload_len) {
-        if (auto reconnect_result = co_await ensureConnectedForNextCall(); !reconnect_result.has_value()) {
-            co_return RpcCallResult(std::unexpected(
-                RpcError(RpcErrorCode::UNAVAILABLE, "Failed to schedule RPC reconnect")));
-        } else if (!reconnect_result.value().has_value()) {
-            co_return RpcCallResult(std::unexpected(
-                RpcError::from(reconnect_result.value().error(), RpcErrorCode::UNAVAILABLE)));
-        }
-        auto call_result = co_await m_channel->callWithMode(service, method, mode, end_of_stream, payload, payload_len);
-        if (!call_result.has_value()) {
-            co_return RpcCallResult(std::unexpected(
-                RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule RPC call")));
-        }
-        markDisconnectedIfConnectionError(call_result.value());
-        co_return std::move(call_result.value());
+        return callWithModeOwned(std::string(service),
+                                 std::string(method),
+                                 mode,
+                                 end_of_stream,
+                                 copyPayload(payload, payload_len),
+                                 RpcCallOptions{});
     }
 
     /**
@@ -343,20 +337,12 @@ public:
                                                   const char* payload,
                                                   size_t payload_len,
                                                   const RpcCallOptions& options) {
-        if (auto reconnect_result = co_await ensureConnectedForNextCall(); !reconnect_result.has_value()) {
-            co_return RpcCallResult(std::unexpected(
-                RpcError(RpcErrorCode::UNAVAILABLE, "Failed to schedule RPC reconnect")));
-        } else if (!reconnect_result.value().has_value()) {
-            co_return RpcCallResult(std::unexpected(
-                RpcError::from(reconnect_result.value().error(), RpcErrorCode::UNAVAILABLE)));
-        }
-        auto call_result = co_await m_channel->callWithMode(service, method, mode, end_of_stream, payload, payload_len, options);
-        if (!call_result.has_value()) {
-            co_return RpcCallResult(std::unexpected(
-                RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule RPC call")));
-        }
-        markDisconnectedIfConnectionError(call_result.value());
-        co_return std::move(call_result.value());
+        return callWithModeOwned(std::string(service),
+                                 std::string(method),
+                                 mode,
+                                 end_of_stream,
+                                 copyPayload(payload, payload_len),
+                                 options);
     }
 
     /**
@@ -464,7 +450,7 @@ public:
     std::expected<RpcStreamImpl<SocketType>, RpcError> createStream(uint32_t stream_id,
                                                                      const std::string& service = {},
                                                                      const std::string& method = {}) {
-        if (!m_channel) {
+        if (!m_channel || !m_connected || !m_channel->ready()) {
             RPC_LOG_WARN("[client] [stream] [not-connected]",
                          "stream_id={} service={} method={}",
                          stream_id,
@@ -521,6 +507,42 @@ public:
     const RpcReaderSetting& readerSetting() const { return m_config.reader_setting; }
 
 private:
+    static std::vector<char> copyPayload(const char* payload, size_t payload_len) {
+        if (payload == nullptr || payload_len == 0) {
+            return {};
+        }
+        return std::vector<char>(payload, payload + payload_len);
+    }
+
+    RpcCallAwaitableImpl<SocketType> callWithModeOwned(std::string service,
+                                                       std::string method,
+                                                       RpcCallMode mode,
+                                                       bool end_of_stream,
+                                                       std::vector<char> payload,
+                                                       RpcCallOptions options) {
+        if (auto reconnect_result = co_await ensureConnectedForNextCall(); !reconnect_result.has_value()) {
+            co_return RpcCallResult(std::unexpected(
+                RpcError(RpcErrorCode::UNAVAILABLE, "Failed to schedule RPC reconnect")));
+        } else if (!reconnect_result.value().has_value()) {
+            co_return RpcCallResult(std::unexpected(
+                RpcError::from(reconnect_result.value().error(), RpcErrorCode::UNAVAILABLE)));
+        }
+        const char* payload_data = payload.empty() ? nullptr : payload.data();
+        auto call_result = co_await m_channel->callWithMode(service,
+                                                            method,
+                                                            mode,
+                                                            end_of_stream,
+                                                            payload_data,
+                                                            payload.size(),
+                                                            options);
+        if (!call_result.has_value()) {
+            co_return RpcCallResult(std::unexpected(
+                RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule RPC call")));
+        }
+        markDisconnectedIfConnectionError(call_result.value());
+        co_return std::move(call_result.value());
+    }
+
     std::unique_ptr<RpcChannelImpl<SocketType>> makeChannel() const {
         return std::make_unique<RpcChannelImpl<SocketType>>(
             m_config.reader_setting,

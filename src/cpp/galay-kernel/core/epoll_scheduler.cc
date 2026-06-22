@@ -24,6 +24,9 @@ EpollScheduler::EpollScheduler(int max_events, int batch_size)
     , m_core(m_worker, static_cast<size_t>(batch_size))
     , m_reactor(max_events, m_last_error_code)
 {
+    // epoll reactor 注册和删除事件必须保持 owner 线程亲和；被窃取的
+    // IO 协程仍会通过其所属 scheduler 的 reactor 提交，跨线程执行不安全。
+    m_worker.setStealingEnabled(false);
 }
 
 EpollScheduler::~EpollScheduler()

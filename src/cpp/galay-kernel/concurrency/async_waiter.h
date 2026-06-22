@@ -45,9 +45,16 @@
 #include <expected>
 #include <coroutine>
 #include <type_traits>
+#include <cstdint>
 
 namespace galay::kernel
 {
+
+enum class AsyncWaiterState : uint8_t {
+    kEmpty,
+    kWaiting,
+    kReady,
+};
 
 template<typename T>
 class AsyncWaiter;
@@ -146,21 +153,19 @@ public:
      * @note 允许由其他线程调用；成功后会把等待协程唤醒回其原调度器
      */
     bool notify(T result) {
-        // 防止重复通知
         bool expected = false;
-        if (!m_ready.compare_exchange_strong(expected, true,
-                                             std::memory_order_acq_rel,
-                                             std::memory_order_acquire)) {
-            return false;  // 已经通知过
+        if (!m_notified.compare_exchange_strong(expected, true,
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire)) {
+            return false;
         }
 
         m_result = std::move(result);
+        m_ready.store(true, std::memory_order_release);
 
-        // 唤醒等待的协程（如果有）
-        expected = true;
-        if (m_waiting.compare_exchange_strong(expected, false,
-                                              std::memory_order_acq_rel,
-                                              std::memory_order_acquire)) {
+        const auto previous = m_state.exchange(AsyncWaiterState::kReady,
+                                               std::memory_order_acq_rel);
+        if (previous == AsyncWaiterState::kWaiting) {
             m_waker.wakeUp();
         }
         return true;
@@ -171,7 +176,7 @@ public:
      * @return true 当前已有协程注册在该等待器上并处于挂起状态
      */
     bool isWaiting() const {
-        return m_waiting.load(std::memory_order_acquire);
+        return m_state.load(std::memory_order_acquire) == AsyncWaiterState::kWaiting;
     }
 
     /**
@@ -186,7 +191,8 @@ private:
     friend class AsyncWaiterAwaitable<T>;
 
     std::optional<T> m_result;                  ///< 结果
-    std::atomic<bool> m_waiting{false};         ///< 是否有协程在等待
+    std::atomic<AsyncWaiterState> m_state{AsyncWaiterState::kEmpty};  ///< 等待状态
+    std::atomic<bool> m_notified{false};        ///< 是否已经通知过
     std::atomic<bool> m_ready{false};           ///< 结果是否就绪
     Waker m_waker;
 };
@@ -220,19 +226,17 @@ public:
      * @note 允许由其他线程调用；成功后会把等待协程唤醒回其原调度器
      */
     bool notify() {
-        // 防止重复通知
         bool expected = false;
-        if (!m_ready.compare_exchange_strong(expected, true,
-                                             std::memory_order_acq_rel,
-                                             std::memory_order_acquire)) {
+        if (!m_notified.compare_exchange_strong(expected, true,
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire)) {
             return false;
         }
 
-        // 唤醒等待的协程（如果有）
-        expected = true;
-        if (m_waiting.compare_exchange_strong(expected, false,
-                                              std::memory_order_acq_rel,
-                                              std::memory_order_acquire)) {
+        m_ready.store(true, std::memory_order_release);
+        const auto previous = m_state.exchange(AsyncWaiterState::kReady,
+                                               std::memory_order_acq_rel);
+        if (previous == AsyncWaiterState::kWaiting) {
             m_waker.wakeUp();
         }
         return true;
@@ -243,7 +247,7 @@ public:
      * @return true 当前已有协程注册在该等待器上并处于挂起状态
      */
     bool isWaiting() const {
-        return m_waiting.load(std::memory_order_acquire);
+        return m_state.load(std::memory_order_acquire) == AsyncWaiterState::kWaiting;
     }
 
     /**
@@ -257,7 +261,8 @@ public:
 private:
     friend class AsyncWaiterAwaitable<void>;
 
-    std::atomic<bool> m_waiting{false};
+    std::atomic<AsyncWaiterState> m_state{AsyncWaiterState::kEmpty};
+    std::atomic<bool> m_notified{false};
     std::atomic<bool> m_ready{false};
     Waker m_waker;
 };
@@ -271,23 +276,21 @@ bool AsyncWaiterAwaitable<T>::await_ready() const noexcept {
 template<typename T>
 template <typename Promise>
 bool AsyncWaiterAwaitable<T>::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
-    m_waiter->m_waker = Waker(handle);
+    auto* waiter = m_waiter;
+    waiter->m_waker = Waker(handle);
 
-    // 设置等待状态
-    bool expected = false;
-    if (!m_waiter->m_waiting.compare_exchange_strong(expected, true,
-                                                     std::memory_order_acq_rel,
-                                                     std::memory_order_acquire)) {
-        // 已经有人在等待，或者已经 notify 过
+    if (waiter->m_ready.load(std::memory_order_acquire)) {
         return false;
     }
 
-    // 再次检查，防止在设置等待状态期间已经 notify
-    if (m_waiter->m_ready.load(std::memory_order_acquire)) {
-        m_waiter->m_waiting.store(false, std::memory_order_release);
-        return false;  // 不挂起，直接返回
+    AsyncWaiterState expected = AsyncWaiterState::kEmpty;
+    if (waiter->m_state.compare_exchange_strong(expected,
+                                                AsyncWaiterState::kWaiting,
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire)) {
+        return true;
     }
-    return true;  // 挂起
+    return false;
 }
 
 template<typename T>
@@ -305,19 +308,20 @@ inline bool AsyncWaiterAwaitable<void>::await_ready() const noexcept {
 
 template <typename Promise>
 inline bool AsyncWaiterAwaitable<void>::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
-    m_waiter->m_waker = Waker(handle);
-    bool expected = false;
-    if (!m_waiter->m_waiting.compare_exchange_strong(expected, true,
-                                                     std::memory_order_acq_rel,
-                                                     std::memory_order_acquire)) {
+    auto* waiter = m_waiter;
+    waiter->m_waker = Waker(handle);
+    if (waiter->m_ready.load(std::memory_order_acquire)) {
         return false;
     }
 
-    if (m_waiter->m_ready.load(std::memory_order_acquire)) {
-        m_waiter->m_waiting.store(false, std::memory_order_release);
-        return false;
+    AsyncWaiterState expected = AsyncWaiterState::kEmpty;
+    if (waiter->m_state.compare_exchange_strong(expected,
+                                                AsyncWaiterState::kWaiting,
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire)) {
+        return true;
     }
-    return true;
+    return false;
 }
 
 } // namespace galay::kernel

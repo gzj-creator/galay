@@ -56,6 +56,8 @@ bool runStatsScenario() {
 
     auto& source_worker = SchedulerTestAccess::worker(*source_ptr);
     auto& sibling_worker = SchedulerTestAccess::worker(*sibling_ptr);
+    source_worker.setStealingEnabled(true);
+    sibling_worker.setStealingEnabled(true);
     for (int i = 0; i < kTaskCount; ++i) {
         auto task = makeStealableTask(source_ptr);
         if (!source_worker.local_ring.push_back(std::move(task))) {

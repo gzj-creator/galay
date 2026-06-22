@@ -29,6 +29,18 @@ RpcEndpointInfo endpoint()
     return info;
 }
 
+bool integrationEnabled()
+{
+    const char* value = std::getenv("GALAY_IT_ENABLE");
+    if (value == nullptr || value[0] == '\0') {
+        return false;
+    }
+    const std::string enabled(value);
+    return enabled == "1" || enabled == "true" || enabled == "TRUE" ||
+           enabled == "yes" || enabled == "YES" || enabled == "on" ||
+           enabled == "ON";
+}
+
 } // namespace
 
 int main()
@@ -74,18 +86,22 @@ int main()
     }
 
     const char* endpoint_env = std::getenv("GALAY_ETCD_ENDPOINT");
-    if (endpoint_env == nullptr || endpoint_env[0] == '\0') {
-        std::cout << "RPC etcd real integration SKIP: GALAY_ETCD_ENDPOINT is not set\n";
+    if (endpoint_env == nullptr || endpoint_env[0] == '\0' || !integrationEnabled()) {
+        std::cout << "RPC etcd real integration SKIP: set GALAY_IT_ENABLE=1 and GALAY_ETCD_ENDPOINT\n";
         std::cout << "RPC etcd registry contract PASS\n";
         return 0;
     }
 
+#ifdef GALAY_RPC_HAS_ETCD
     EtcdServiceRegistry registry(RpcEtcdRegistryConfig{.endpoint = endpoint_env,
                                                        .prefix = "/galay/rpc/test"});
     auto real_result = registry.integrationAvailable();
     if (auto rc = expect(real_result.has_value(), "real etcd adapter reported unavailable")) {
         return rc;
     }
+#else
+    std::cout << "RPC etcd real integration SKIP: galay-rpc was built without galay-etcd\n";
+#endif
 
     std::cout << "RPC etcd registry contract PASS\n";
     return 0;

@@ -106,6 +106,26 @@ void test_invalid_header(test::TestResultWriter& writer) {
     writer.writeTestCase("Invalid header detection", !success);
 }
 
+void test_header_rejects_wrong_version(test::TestResultWriter& writer) {
+    char serialized[RPC_HEADER_SIZE] = {0};
+
+    RpcHeader header;
+    header.m_type = static_cast<uint8_t>(RpcMessageType::REQUEST);
+    header.m_request_id = 813;
+    header.m_body_length = 0;
+    header.serialize(serialized);
+    serialized[4] = static_cast<char>(RPC_VERSION + 1);
+
+    RpcHeader parsed;
+    const bool header_ok = parsed.deserialize(serialized);
+    const auto decoded = RpcCodec::decodeRequest(serialized, sizeof(serialized));
+
+    writer.writeTestCase("RpcHeader rejects wrong protocol version",
+        !header_ok &&
+        !decoded.has_value() &&
+        RpcCodec::messageLength(serialized, sizeof(serialized)) == 0);
+}
+
 void test_incomplete_data(test::TestResultWriter& writer) {
     char partial_data[8] = {0};
 
@@ -388,6 +408,7 @@ int main() {
     test_message_length(writer);
     test_message_length_rejects_bad_header(writer);
     test_invalid_header(writer);
+    test_header_rejects_wrong_version(writer);
     test_incomplete_data(writer);
     test_decode_rejects_truncated_request_body(writer);
     test_decode_rejects_too_short_response_body(writer);

@@ -75,6 +75,11 @@ if(GALAY_BUILD_C_API)
     add_subdirectory(src/c)
 endif()
 
+if(TARGET rpc AND TARGET etcd)
+    target_link_libraries(rpc PUBLIC galay::etcd)
+    target_compile_definitions(rpc PUBLIC GALAY_RPC_HAS_ETCD=1)
+endif()
+
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
     utils kernel ssl http ws http2 redis rpc mysql mongo etcd mcp tracing

@@ -162,6 +162,51 @@ galay_status_t decode_header(const void* data,
     return GALAY_OK;
 }
 
+bool skip_request_metadata(const char* body, size_t body_len, size_t& offset) noexcept
+{
+    if (offset + sizeof(uint16_t) + sizeof(uint16_t) > body_len) {
+        return false;
+    }
+
+    uint16_t marker = 0;
+    std::memcpy(&marker, body + offset, sizeof(marker));
+    marker = galay::rpc::rpcNtohs(marker);
+    offset += sizeof(marker);
+    if (marker != galay::rpc::kRpcRequestMetadataMarker) {
+        return false;
+    }
+
+    uint16_t metadata_count = 0;
+    std::memcpy(&metadata_count, body + offset, sizeof(metadata_count));
+    metadata_count = galay::rpc::rpcNtohs(metadata_count);
+    offset += sizeof(metadata_count);
+    if (metadata_count > galay::rpc::kRpcMetadataMaxEntries) {
+        return false;
+    }
+
+    for (uint16_t i = 0; i < metadata_count; ++i) {
+        if (offset + sizeof(uint16_t) + sizeof(uint16_t) > body_len) {
+            return false;
+        }
+
+        uint16_t key_len = 0;
+        uint16_t value_len = 0;
+        std::memcpy(&key_len, body + offset, sizeof(key_len));
+        offset += sizeof(key_len);
+        std::memcpy(&value_len, body + offset, sizeof(value_len));
+        offset += sizeof(value_len);
+        key_len = galay::rpc::rpcNtohs(key_len);
+        value_len = galay::rpc::rpcNtohs(value_len);
+
+        if (offset + key_len + value_len > body_len) {
+            return false;
+        }
+        offset += key_len + value_len;
+    }
+
+    return true;
+}
+
 } // namespace
 
 const char* galay_rpc_error_string(galay_rpc_error_code_t error)
@@ -184,7 +229,17 @@ galay_status_t galay_rpc_error_to_status(galay_rpc_error_code_t error)
         return GALAY_PROTOCOL_ERROR;
     case GALAY_RPC_ERROR_REQUEST_TIMEOUT:
     case GALAY_RPC_ERROR_CONNECTION_CLOSED:
+    case GALAY_RPC_ERROR_CANCELLED:
+    case GALAY_RPC_ERROR_DEADLINE_EXCEEDED:
+    case GALAY_RPC_ERROR_RATE_LIMITED:
+    case GALAY_RPC_ERROR_CIRCUIT_OPEN:
+    case GALAY_RPC_ERROR_UNAVAILABLE:
         return GALAY_IO_ERROR;
+    case GALAY_RPC_ERROR_RESOURCE_EXHAUSTED:
+        return GALAY_OUT_OF_MEMORY;
+    case GALAY_RPC_ERROR_UNAUTHENTICATED:
+    case GALAY_RPC_ERROR_PERMISSION_DENIED:
+        return GALAY_UNSUPPORTED;
     case GALAY_RPC_ERROR_UNKNOWN_ERROR:
     case GALAY_RPC_ERROR_INTERNAL_ERROR:
     default:
@@ -270,15 +325,25 @@ galay_status_t galay_rpc_decode_request(const void* data,
         if (status != GALAY_OK) {
             return status;
         }
+        if ((header.m_reserved & static_cast<uint8_t>(~galay::rpc::RPC_RESERVED_KNOWN_MASK)) != 0) {
+            set_rpc_error(rpc_error, GALAY_RPC_ERROR_INVALID_REQUEST);
+            return GALAY_PROTOCOL_ERROR;
+        }
 
         const char* body = static_cast<const char*>(data) + kRpcHeaderSize;
         const size_t body_len = header.m_body_length;
-        if (body_len < 4) {
+        size_t offset = 0;
+        if ((header.m_reserved & galay::rpc::RPC_RESERVED_METADATA) != 0 &&
+            !skip_request_metadata(body, body_len, offset)) {
             set_rpc_error(rpc_error, GALAY_RPC_ERROR_DESERIALIZATION_ERROR);
             return GALAY_PROTOCOL_ERROR;
         }
 
-        size_t offset = 0;
+        if (offset + 4 > body_len) {
+            set_rpc_error(rpc_error, GALAY_RPC_ERROR_DESERIALIZATION_ERROR);
+            return GALAY_PROTOCOL_ERROR;
+        }
+
         uint16_t service_len = 0;
         std::memcpy(&service_len, body + offset, sizeof(service_len));
         service_len = galay::rpc::rpcNtohs(service_len);

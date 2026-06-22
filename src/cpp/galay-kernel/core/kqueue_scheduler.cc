@@ -34,7 +34,12 @@ KqueueScheduler::KqueueScheduler(int max_events, int batch_size)
     , m_worker(static_cast<size_t>(batch_size))
     , m_wake_coordinator(m_sleeping, m_wakeup_pending)
     , m_core(m_worker, static_cast<size_t>(batch_size))
-    , m_reactor(max_events, m_last_error_code) {}
+    , m_reactor(max_events, m_last_error_code)
+{
+    // kqueue reactor 注册和删除事件必须保持 owner 线程亲和；被窃取的
+    // IO 协程仍会通过其所属 scheduler 的 reactor 提交，跨线程执行不安全。
+    m_worker.setStealingEnabled(false);
+}
 
 KqueueScheduler::~KqueueScheduler()
 {

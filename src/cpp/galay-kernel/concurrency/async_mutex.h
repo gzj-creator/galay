@@ -136,7 +136,7 @@ public:
      *
      * @note
      * - 不会阻塞底层线程，只会挂起当前协程
-     * - waiter 在 timeout 或入队后直接抢锁成功时会自动失效，避免残留唤醒
+     * - waiter 在 timeout 后会自动失效，避免残留唤醒
      */
     AsyncMutexAwaitable lock() {
         return AsyncMutexAwaitable(this);
@@ -151,33 +151,7 @@ public:
      */
     void unlock() {
         m_locked.store(false, std::memory_order_release);
-        std::shared_ptr<AsyncMutexWaiter> waiter;
-        while (m_waiters.try_dequeue(waiter))
-        {
-            if (!waiter) {
-                continue;
-            }
-
-            bool expected = true;
-            if (!waiter->active.compare_exchange_strong(expected, false,
-                                                        std::memory_order_acq_rel,
-                                                        std::memory_order_acquire)) {
-                continue;
-            }
-
-            // 尝试获取锁
-            if (tryLock())
-            {
-                // 成功获取锁，唤醒该协程
-                waiter->waker.wakeUp();
-                return;
-            } else {
-                // 在释放与唤醒之间如果锁被其他协程重新获取，恢复 waiter 并重新排队。
-                waiter->active.store(true, std::memory_order_release);
-                m_waiters.enqueue(std::move(waiter));
-                return;
-            }
-        }
+        wakeNextWaiterIfUnlocked();
     }
 
     /**
@@ -203,6 +177,41 @@ private:
                                                  std::memory_order_acquire);
     }
 
+    /**
+     * @brief 当锁空闲时把锁转交给等待队列中的下一个有效 waiter。
+     * @note 调用者不需要持锁；本函数不会阻塞线程。
+     */
+    void wakeNextWaiterIfUnlocked() {
+        if (m_locked.load(std::memory_order_acquire)) {
+            return;
+        }
+
+        std::shared_ptr<AsyncMutexWaiter> waiter;
+        while (m_waiters.try_dequeue(waiter))
+        {
+            if (!waiter) {
+                continue;
+            }
+
+            bool expected = true;
+            if (!waiter->active.compare_exchange_strong(expected, false,
+                                                        std::memory_order_acq_rel,
+                                                        std::memory_order_acquire)) {
+                continue;
+            }
+
+            if (tryLock())
+            {
+                waiter->waker.wakeUp();
+                return;
+            } else {
+                waiter->active.store(true, std::memory_order_release);
+                m_waiters.enqueue(std::move(waiter));
+                return;
+            }
+        }
+    }
+
     std::atomic<bool> m_locked{false};                      ///< 锁状态
     moodycamel::ConcurrentQueue<std::shared_ptr<AsyncMutexWaiter>> m_waiters;  ///< 无锁等待队列
 };
@@ -218,14 +227,11 @@ inline bool AsyncMutexAwaitable::await_ready() const noexcept {
 
 template <typename Promise>
 inline bool AsyncMutexAwaitable::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
+    auto* mutex = m_mutex;
     m_waiter = std::make_shared<AsyncMutexWaiter>(Waker(handle));
-    m_mutex->m_waiters.enqueue(m_waiter);
-    // 再次检查，防止在入队期间锁被释放
-    if (m_mutex->tryLock()) {
-        cancelWaiter();
-        m_result = {};
-        return false;  // 不挂起
-    }
+    auto waiter = m_waiter;
+    mutex->m_waiters.enqueue(std::move(waiter));
+    mutex->wakeNextWaiterIfUnlocked();
     return true;
 }
 

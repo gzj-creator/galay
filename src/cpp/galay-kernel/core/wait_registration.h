@@ -60,7 +60,28 @@ public:
      * @return 之前的等待者地址，若无注册则返回 nullptr
      */
     void* consumeWake() noexcept {
-        return m_waiter.exchange(nullptr, std::memory_order_acq_rel);
+        void* waiter = m_waiter.exchange(nullptr, std::memory_order_acq_rel);
+        if (waiter == nullptr) {
+            m_pending_wake.store(true, std::memory_order_release);
+        }
+        return waiter;
+    }
+
+    /**
+     * @brief 消费一次在 waiter 注册前到达的唤醒。
+     *
+     * @return true 表示有一次唤醒早于 arm() 到达，调用方应自行调度刚注册的等待者。
+     */
+    bool consumePendingWake() noexcept {
+        return m_pending_wake.exchange(false, std::memory_order_acq_rel);
+    }
+
+    /**
+     * @brief 清理过期的提前唤醒标记。
+     * @note 当等待者通过 await_ready()/tryRecv() 等同步路径直接拿到数据时调用。
+     */
+    void clearPendingWake() noexcept {
+        m_pending_wake.store(false, std::memory_order_release);
     }
 
     /**
@@ -82,6 +103,7 @@ public:
 private:
     std::atomic<void*> m_waiter{nullptr};  ///< 已注册的等待者地址
     std::atomic<uint64_t> m_generation{0};  ///< 每次 arm() 调用时递增
+    std::atomic<bool> m_pending_wake{false};  ///< waiter 注册前到达的一次唤醒
 };
 
 }  // namespace galay::kernel

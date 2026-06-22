@@ -18,3 +18,7 @@ galay_add_rpc_benchmark(benchmark_rpc_stream_loopback_latency b8_stream_loopback
 galay_add_rpc_benchmark(benchmark_rpc_pool_pressure b9_pool_pressure.cc)
 galay_add_rpc_benchmark(benchmark_rpc_managed_client_pressure b10_managed_client_pressure.cc)
 galay_add_rpc_benchmark(benchmark_rpc_payload_scaling b11_payload_scaling.cc)
+if(TARGET galay::etcd)
+    galay_add_rpc_benchmark(benchmark_rpc_etcd_managed_client_pressure b12_etcd_managed_client_pressure.cc)
+    target_link_libraries(benchmark_rpc_etcd_managed_client_pressure PRIVATE galay::etcd)
+endif()

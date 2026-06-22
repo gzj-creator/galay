@@ -1,5 +1,7 @@
 #include <galay/cpp/galay-rpc/kernel/rpc_call.h>
 #include <galay/cpp/galay-rpc/kernel/rpc_channel.h>
+#include <galay/cpp/galay-rpc/kernel/rpc_client.h>
+#include <galay/cpp/galay-rpc/kernel/rpc_managed_client.h>
 #include <galay/cpp/galay-rpc/protoc/rpc_codec.h>
 #include <galay/cpp/galay-rpc/protoc/rpc_message.h>
 
@@ -63,6 +65,36 @@ int main()
                          "oversized body header was accepted")) {
         return rc;
     }
+
+    RpcClient stream_client;
+    auto stream_before_connect = stream_client.createStream(1, "StreamService", "open");
+    if (auto rc = expect(!stream_before_connect.has_value() &&
+                             stream_before_connect.error().code() == RpcErrorCode::CONNECTION_CLOSED,
+                         "createStream before connect did not return connection closed")) {
+        return rc;
+    }
+
+    RpcCallOptions lifetime_options;
+    auto client_task = stream_client.call(std::string("LifetimeService"),
+                                          std::string("Echo"),
+                                          std::string("payload"),
+                                          lifetime_options);
+    (void)client_task;
+    const char borrowed_payload[] = "borrowed";
+    auto client_buffer_task = stream_client.call(std::string("LifetimeService"),
+                                                 std::string("Echo"),
+                                                 borrowed_payload,
+                                                 sizeof(borrowed_payload) - 1,
+                                                 RpcCallOptions{});
+    (void)client_buffer_task;
+
+    RpcStaticDiscovery lifetime_discovery;
+    RpcManagedClient managed_client(lifetime_discovery);
+    auto managed_task = managed_client.call(std::string("LifetimeService"),
+                                            std::string("Echo"),
+                                            std::string("payload"),
+                                            RpcCallOptions{});
+    (void)managed_task;
 
     auto truncated = max_wire;
     truncated.resize(truncated.size() - 1);

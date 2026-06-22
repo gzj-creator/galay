@@ -396,6 +396,17 @@ public:
         std::span<const struct iovec> read_iovecs(read_iovecs_storage.data(), read_iovecs_count);
         size_t total_readable = iovecsReadableBytes(read_iovecs);
 
+        if (m_state == State::DiscardInvalidControlBody) {
+            if (total_readable < m_body_length) {
+                return false;
+            }
+            rb.consume(m_body_length);
+            m_state = State::ReadHeader;
+            setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                  "RPC stream control frame must not carry a body"));
+            return true;
+        }
+
         if (m_state == State::ReadHeader) {
             if (total_readable < RPC_HEADER_SIZE) {
                 return false;
@@ -409,7 +420,6 @@ public:
                 return true;
             }
 
-            rb.consume(RPC_HEADER_SIZE);
             m_body_length = m_header.m_body_length;
             m_message->streamId(m_header.m_request_id);
 
@@ -417,6 +427,21 @@ public:
             m_message->messageType(msg_type);
 
             if (msg_type == RpcMessageType::STREAM_END || msg_type == RpcMessageType::STREAM_CANCEL) {
+                if (m_body_length != 0) {
+                    m_message->setEnd(true);
+                    m_message->payloadView(RpcPayloadView{});
+                    if (total_readable < RPC_HEADER_SIZE + m_body_length) {
+                        rb.consume(RPC_HEADER_SIZE);
+                        m_state = State::DiscardInvalidControlBody;
+                        return false;
+                    }
+                    rb.consume(RPC_HEADER_SIZE + m_body_length);
+                    m_state = State::ReadHeader;
+                    setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                          "RPC stream control frame must not carry a body"));
+                    return true;
+                }
+                rb.consume(RPC_HEADER_SIZE);
                 m_message->setEnd(true);
                 m_message->payloadView(RpcPayloadView{});
                 m_state = State::ReadHeader;
@@ -424,6 +449,7 @@ public:
             }
 
             if (m_body_length == 0) {
+                rb.consume(RPC_HEADER_SIZE);
                 m_message->payloadView(RpcPayloadView{});
                 m_state = State::ReadHeader;
                 return true;
@@ -436,6 +462,7 @@ public:
                 return true;
             }
 
+            rb.consume(RPC_HEADER_SIZE);
             m_state = State::ReadBody;
         }
 
@@ -463,8 +490,9 @@ public:
 
 private:
     enum class State {
-        ReadHeader,  ///< 读取头部阶段
-        ReadBody     ///< 读取消息体阶段
+        ReadHeader,                ///< 读取头部阶段
+        ReadBody,                  ///< 读取消息体阶段
+        DiscardInvalidControlBody  ///< 丢弃非法控制帧body
     };
 
     StreamMessage* m_message = nullptr;   ///< 输出消息对象

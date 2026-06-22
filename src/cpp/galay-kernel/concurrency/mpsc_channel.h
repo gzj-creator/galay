@@ -243,6 +243,7 @@ public:
         if (m_queue.try_dequeue(value)) {
             (void)tryPrefetchSingleRecvValues();
             m_size.fetch_sub(1, std::memory_order_acq_rel);
+            m_waiter_registration.clearPendingWake();
             return value;
         }
         return std::nullopt;
@@ -282,6 +283,7 @@ public:
             size_t count = m_queue.try_dequeue_bulk(values.data() + base, maxCount - base);
             if (count > 0) {
                 m_size.fetch_sub(static_cast<uint32_t>(count), std::memory_order_acq_rel);
+                m_waiter_registration.clearPendingWake();
                 values.resize(base + count);
             } else {
                 values.resize(base);
@@ -321,8 +323,11 @@ private:
         return m_waiter_registration.hasWaiter();
     }
 
-    void publishWaiter(TaskState* waiterState) noexcept {
-        (void)m_waiter_registration.arm(static_cast<void*>(waiterState));
+    bool publishWaiter(TaskState* waiterState) noexcept {
+        if (!m_waiter_registration.arm(static_cast<void*>(waiterState))) {
+            return false;
+        }
+        return m_waiter_registration.consumePendingWake();
     }
 
     bool clearWaiter(TaskState* waiterState) noexcept {
@@ -357,6 +362,7 @@ private:
             m_prefetchCount = 0;
         }
         m_size.fetch_sub(1, std::memory_order_acq_rel);
+        m_waiter_registration.clearPendingWake();
         return value;
     }
 
@@ -416,15 +422,11 @@ inline bool MpscRecvAwaitable<T>::await_suspend(
         return false;
     }
 
-    m_waiterState = handle.promise().taskRefView().state();
-    m_channel->publishWaiter(m_waiterState);
-
-    if (!tryReceiveNow()) {
-        return true;
-    }
-
-    if (m_channel->clearWaiter(m_waiterState)) {
-        return false;
+    auto* channel = m_channel;
+    TaskState* waiter_state = handle.promise().taskRefView().state();
+    m_waiterState = waiter_state;
+    if (channel->publishWaiter(waiter_state)) {
+        Waker(TaskRef(waiter_state, true)).wakeUp();
     }
 
     return true;
@@ -478,15 +480,11 @@ inline bool MpscRecvBatchAwaitable<T>::await_suspend(
         return false;
     }
 
-    m_waiterState = handle.promise().taskRefView().state();
-    m_channel->publishWaiter(m_waiterState);
-
-    if (!tryReceiveNow()) {
-        return true;
-    }
-
-    if (m_channel->clearWaiter(m_waiterState)) {
-        return false;
+    auto* channel = m_channel;
+    TaskState* waiter_state = handle.promise().taskRefView().state();
+    m_waiterState = waiter_state;
+    if (channel->publishWaiter(waiter_state)) {
+        Waker(TaskRef(waiter_state, true)).wakeUp();
     }
 
     return true;

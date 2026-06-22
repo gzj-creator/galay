@@ -99,6 +99,10 @@ struct RpcHeader {
         }
 
         m_version  = buffer[4];
+        if (m_version != RPC_VERSION) {
+            return false;
+        }
+
         m_type     = buffer[5];
         m_flags    = buffer[6];
         m_reserved = buffer[7];

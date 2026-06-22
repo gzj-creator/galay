@@ -22,6 +22,8 @@
 #include <expected>
 #include <concepts>
 #include <functional>
+#include <optional>
+#include <type_traits>
 
 namespace galay::rpc
 {
@@ -456,7 +458,7 @@ public:
      * @param registry 注册中心引用
      */
     explicit ServiceDiscoveryClient(Registry& registry)
-        : m_registry(registry), m_selector() {}
+        : m_registry(registry) {}
 
     /**
      * @brief 获取服务实例
@@ -472,9 +474,12 @@ public:
             return std::unexpected(DiscoveryError(DiscoveryError::NOT_FOUND, "No available instance"));
         }
 
-        // 更新选择器的节点列表并选择
-        m_selector = Selector(endpoints);
-        auto selected = m_selector.select();
+        if (!m_selector.has_value() || !sameEndpoints(m_selector_endpoints, endpoints)) {
+            emplaceSelector(endpoints);
+            m_selector_endpoints = endpoints;
+        }
+
+        auto selected = m_selector->select();
 
         if (!selected) {
             return std::unexpected(DiscoveryError(DiscoveryError::NOT_FOUND, "No available instance"));
@@ -498,8 +503,56 @@ public:
     }
 
 private:
+    static bool sameEndpoint(const ServiceEndpoint& lhs, const ServiceEndpoint& rhs) {
+        return lhs.host == rhs.host &&
+               lhs.port == rhs.port &&
+               lhs.service_name == rhs.service_name &&
+               lhs.instance_id == rhs.instance_id &&
+               lhs.weight == rhs.weight;
+    }
+
+    static bool sameEndpoints(const std::vector<ServiceEndpoint>& lhs,
+                              const std::vector<ServiceEndpoint>& rhs) {
+        if (lhs.size() != rhs.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < lhs.size(); ++i) {
+            if (!sameEndpoint(lhs[i], rhs[i])) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    static std::vector<uint32_t> endpointWeights(const std::vector<ServiceEndpoint>& endpoints) {
+        std::vector<uint32_t> weights;
+        weights.reserve(endpoints.size());
+        for (const auto& endpoint : endpoints) {
+            weights.push_back(endpoint.weight);
+        }
+        return weights;
+    }
+
+    void emplaceSelector(const std::vector<ServiceEndpoint>& endpoints) {
+        if constexpr (std::is_constructible_v<Selector, const std::vector<ServiceEndpoint>&>) {
+            m_selector.emplace(endpoints);
+        } else if constexpr (std::is_constructible_v<Selector,
+                                                     const std::vector<ServiceEndpoint>&,
+                                                     const std::vector<uint32_t>&>) {
+            auto weights = endpointWeights(endpoints);
+            m_selector.emplace(endpoints, weights);
+        } else {
+            static_assert(std::is_constructible_v<Selector, const std::vector<ServiceEndpoint>&> ||
+                              std::is_constructible_v<Selector,
+                                                      const std::vector<ServiceEndpoint>&,
+                                                      const std::vector<uint32_t>&>,
+                          "ServiceDiscoveryClient selector must be constructible from endpoints or endpoints+weights");
+        }
+    }
+
     Registry& m_registry;   ///< 注册中心引用
-    Selector m_selector;     ///< 负载均衡选择器
+    std::optional<Selector> m_selector;  ///< 负载均衡选择器
+    std::vector<ServiceEndpoint> m_selector_endpoints;  ///< selector对应的endpoint快照
 };
 
 } // namespace galay::rpc

@@ -140,6 +140,18 @@ public:
                 return endpoint;
             }
         }
+
+        for (const auto& endpoint : snapshot.endpoints) {
+            m_unavailable_endpoints.erase(endpoint.key());
+        }
+        for (size_t attempt = 0; attempt < count; ++attempt) {
+            const size_t index = snapshot.next_index % count;
+            snapshot.next_index = (snapshot.next_index + 1) % count;
+            const auto& endpoint = snapshot.endpoints[index];
+            if (!m_unavailable_endpoints.contains(endpoint.key())) {
+                return endpoint;
+            }
+        }
         return std::unexpected(RpcError(RpcErrorCode::UNAVAILABLE,
                                         "RPC service has no allowed endpoints"));
     }
@@ -177,33 +189,10 @@ public:
                                     const char* payload,
                                     size_t payload_len,
                                     const RpcCallOptions& options = {}) {
-        auto guarded = m_governance.tryAcquire();
-        if (!guarded.has_value()) {
-            co_return RpcManagedCallResult(std::unexpected(guarded.error()));
-        }
-
-        auto operation = [this, &service, &method, payload, payload_len, &options]() {
-            return callOnce(service, method, payload, payload_len, options);
-        };
-        auto retry_task_result = co_await RpcRetryController::runAsync<RpcManagedCallResult>(
-            m_config.retry,
-            options,
-            operation);
-        if (!retry_task_result.has_value()) {
-            m_governance.onFailure();
-            m_governance.release();
-            co_return RpcManagedCallResult(std::unexpected(
-                RpcError(RpcErrorCode::INTERNAL_ERROR, retry_task_result.error().message())));
-        }
-        auto result = std::move(retry_task_result.value());
-
-        if (result.has_value()) {
-            m_governance.onSuccess();
-        } else {
-            m_governance.onFailure();
-        }
-        m_governance.release();
-        co_return std::move(result);
+        return callOwned(std::string(service),
+                         std::string(method),
+                         copyPayload(payload, payload_len),
+                         options);
     }
 
     /// @brief 字符串payload一元调用
@@ -234,6 +223,52 @@ private:
         RpcEndpointList endpoints;
         size_t next_index = 0;
     };
+
+    static std::vector<char> copyPayload(const char* payload, size_t payload_len) {
+        if (payload == nullptr || payload_len == 0) {
+            return {};
+        }
+        return std::vector<char>(payload, payload + payload_len);
+    }
+
+    Task<RpcManagedCallResult> callOwned(std::string service,
+                                         std::string method,
+                                         std::vector<char> payload,
+                                         RpcCallOptions options) {
+        auto guarded = m_governance.tryAcquire();
+        if (!guarded.has_value()) {
+            co_return RpcManagedCallResult(std::unexpected(guarded.error()));
+        }
+
+        RpcCallOptions retry_options = options;
+        auto operation = [this,
+                          service = std::move(service),
+                          method = std::move(method),
+                          payload = std::move(payload),
+                          options = std::move(options)]() mutable {
+            const char* payload_data = payload.empty() ? nullptr : payload.data();
+            return callOnce(service, method, payload_data, payload.size(), options);
+        };
+        auto retry_task_result = co_await RpcRetryController::runAsync<RpcManagedCallResult>(
+            m_config.retry,
+            retry_options,
+            operation);
+        if (!retry_task_result.has_value()) {
+            m_governance.onFailure();
+            m_governance.release();
+            co_return RpcManagedCallResult(std::unexpected(
+                RpcError(RpcErrorCode::INTERNAL_ERROR, retry_task_result.error().message())));
+        }
+        auto result = std::move(retry_task_result.value());
+
+        if (result.has_value()) {
+            m_governance.onSuccess();
+        } else {
+            m_governance.onFailure();
+        }
+        m_governance.release();
+        co_return std::move(result);
+    }
 
     static bool isEndpointFailure(const RpcError& error) {
         return error.code() == RpcErrorCode::CONNECTION_CLOSED ||

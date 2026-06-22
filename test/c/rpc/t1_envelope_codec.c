@@ -335,6 +335,96 @@ static int test_wrong_message_type_rejected(void)
     return 0;
 }
 
+static int test_unknown_reserved_bit_rejected(void)
+{
+    galay_rpc_request_t request;
+    memset(&request, 0, sizeof(request));
+    request.request_id = 11;
+    request.call_mode = GALAY_RPC_CALL_UNARY;
+    request.end_of_stream = GALAY_TRUE;
+    request.service = "echo";
+    request.service_len = strlen(request.service);
+    request.method = "Call";
+    request.method_len = strlen(request.method);
+
+    uint8_t encoded[64];
+    size_t written = 0;
+    REQUIRE_STATUS(galay_rpc_encode_request(&request, encoded, sizeof(encoded), &written), GALAY_OK);
+    encoded[7] = 0x02;
+
+    galay_rpc_request_t decoded;
+    memset(&decoded, 0, sizeof(decoded));
+    size_t consumed = 123;
+    galay_rpc_error_code_t rpc_error = GALAY_RPC_ERROR_OK;
+    REQUIRE_STATUS(galay_rpc_decode_request(encoded, written, &decoded, &consumed, &rpc_error),
+                   GALAY_PROTOCOL_ERROR);
+    REQUIRE_TRUE(consumed == 0);
+    REQUIRE_TRUE(rpc_error == GALAY_RPC_ERROR_INVALID_REQUEST);
+    return 0;
+}
+
+static int test_metadata_request_decode_skips_extension(void)
+{
+    const uint8_t raw[] = {
+        0x47, 0x52, 0x50, 0x43,
+        0x01, 0x01, 0x04, 0x01,
+        0x00, 0x00, 0x00, 0x2a,
+        0x00, 0x00, 0x00, 0x2c,
+        0xff, 0xff,
+        0x00, 0x01,
+        0x00, 0x05,
+        0x00, 0x05,
+        't', 'r', 'a', 'c', 'e',
+        'a', 'b', 'c', 'd', 'e',
+        0x00, 0x0b,
+        'M', 'e', 't', 'a', 'S', 'e', 'r', 'v', 'i', 'c', 'e',
+        0x00, 0x04,
+        'E', 'c', 'h', 'o',
+        'p', 'a', 'y', 'l', 'o', 'a', 'd'
+    };
+
+    galay_rpc_request_t decoded;
+    memset(&decoded, 0, sizeof(decoded));
+    size_t consumed = 0;
+    galay_rpc_error_code_t rpc_error = GALAY_RPC_ERROR_UNKNOWN_ERROR;
+
+    REQUIRE_STATUS(galay_rpc_decode_request(raw, sizeof(raw), &decoded, &consumed, &rpc_error), GALAY_OK);
+    REQUIRE_TRUE(consumed == sizeof(raw));
+    REQUIRE_TRUE(rpc_error == GALAY_RPC_ERROR_OK);
+    REQUIRE_TRUE(decoded.request_id == 42);
+    REQUIRE_TRUE(decoded.service_len == strlen("MetaService"));
+    REQUIRE_TRUE(strncmp(decoded.service, "MetaService", decoded.service_len) == 0);
+    REQUIRE_TRUE(decoded.method_len == strlen("Echo"));
+    REQUIRE_TRUE(strncmp(decoded.method, "Echo", decoded.method_len) == 0);
+    REQUIRE_TRUE(decoded.payload_len == strlen("payload"));
+    REQUIRE_TRUE(memcmp(decoded.payload, "payload", decoded.payload_len) == 0);
+    return 0;
+}
+
+static int test_new_error_codes_aligned_with_cpp(void)
+{
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_CANCELLED == 11);
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_DEADLINE_EXCEEDED == 12);
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_RESOURCE_EXHAUSTED == 13);
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_RATE_LIMITED == 14);
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_CIRCUIT_OPEN == 15);
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_UNAUTHENTICATED == 16);
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_PERMISSION_DENIED == 17);
+    REQUIRE_TRUE((int)GALAY_RPC_ERROR_UNAVAILABLE == 18);
+
+    REQUIRE_TRUE(strcmp(galay_rpc_error_string(GALAY_RPC_ERROR_CANCELLED), "Cancelled") == 0);
+    REQUIRE_TRUE(strcmp(galay_rpc_error_string(GALAY_RPC_ERROR_UNAVAILABLE), "Unavailable") == 0);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_CANCELLED), GALAY_IO_ERROR);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_DEADLINE_EXCEEDED), GALAY_IO_ERROR);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_RESOURCE_EXHAUSTED), GALAY_OUT_OF_MEMORY);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_RATE_LIMITED), GALAY_IO_ERROR);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_CIRCUIT_OPEN), GALAY_IO_ERROR);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_UNAUTHENTICATED), GALAY_UNSUPPORTED);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_PERMISSION_DENIED), GALAY_UNSUPPORTED);
+    REQUIRE_STATUS(galay_rpc_error_to_status(GALAY_RPC_ERROR_UNAVAILABLE), GALAY_IO_ERROR);
+    return 0;
+}
+
 static int test_unknown_error_code_stable_mapping(void)
 {
     galay_rpc_error_code_t unknown = (galay_rpc_error_code_t)65000;
@@ -357,6 +447,9 @@ int main(void)
     if (test_decode_truncation_reports_protocol_error() != 0) return 1;
     if (test_response_truncation_reports_protocol_error() != 0) return 1;
     if (test_wrong_message_type_rejected() != 0) return 1;
+    if (test_unknown_reserved_bit_rejected() != 0) return 1;
+    if (test_metadata_request_decode_skips_extension() != 0) return 1;
+    if (test_new_error_codes_aligned_with_cpp() != 0) return 1;
     if (test_unknown_error_code_stable_mapping() != 0) return 1;
     return 0;
 }
