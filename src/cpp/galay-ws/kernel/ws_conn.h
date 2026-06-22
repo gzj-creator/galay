@@ -286,6 +286,11 @@ private:
             return false;
         }
 
+        if (view.payload_length > m_reader_setting.max_frame_size ||
+            view.payload_length > m_reader_setting.max_message_size) {
+            return false;
+        }
+
         if (view.opcode == WsOpcode::Text &&
             ((view.payload_iovecs.size() == 1)
                  ? !wsIsValidUtf8MaskedSpan(view.payload_data, view.payload_length, view.masking_key)
@@ -566,6 +571,11 @@ private:
         auto read_iovecs = borrowReadIovecs(m_conn->m_ring_buffer);
         WsConsumeFastPathView view;
         if (!bindWsConsumeFastPathView(read_iovecs.data(), read_iovecs.size(), m_conn->m_is_server, view)) {
+            return false;
+        }
+
+        if (view.payload_length > m_reader_setting.max_frame_size ||
+            view.payload_length > m_reader_setting.max_message_size) {
             return false;
         }
 
@@ -927,6 +937,11 @@ private:
         auto read_iovecs = borrowReadIovecs(m_conn->m_ring_buffer);
         WsConsumeFastPathView view;
         if (!bindWsConsumeFastPathView(read_iovecs.data(), read_iovecs.size(), m_conn->m_is_server, view)) {
+            return false;
+        }
+
+        if (view.payload_length > m_reader_setting.max_frame_size ||
+            view.payload_length > m_reader_setting.max_message_size) {
             return false;
         }
 

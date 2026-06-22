@@ -56,20 +56,22 @@ bool MongoCommandBuilder::empty() const noexcept
     return m_commands.empty();
 }
 
-std::string MongoCommandBuilder::encodePipeline(std::string_view database,
-                                                int32_t first_request_id,
-                                                size_t reserve_per_command) const
+std::expected<std::string, std::string>
+MongoCommandBuilder::encodePipeline(std::string_view database,
+                                    int32_t first_request_id,
+                                    size_t reserve_per_command) const
 {
     return encodePipeline(database, first_request_id, commands(), reserve_per_command);
 }
 
-std::string MongoCommandBuilder::encodePipeline(std::string_view database,
-                                                int32_t first_request_id,
-                                                std::span<const MongoDocument> commands,
-                                                size_t reserve_per_command)
+std::expected<std::string, std::string>
+MongoCommandBuilder::encodePipeline(std::string_view database,
+                                    int32_t first_request_id,
+                                    std::span<const MongoDocument> commands,
+                                    size_t reserve_per_command)
 {
     if (commands.empty()) {
-        return {};
+        return std::string{};
     }
 
     const size_t reserve_hint = std::max<size_t>(32, reserve_per_command) * commands.size();
@@ -90,7 +92,10 @@ std::string MongoCommandBuilder::encodePipeline(std::string_view database,
         const int32_t request_id = static_cast<int32_t>(request_id_i64);
 
         const MongoDocument& command = commands[i];
-        MongoProtocol::appendOpMsgWithDatabase(encoded, request_id, command, database);
+        auto appended = MongoProtocol::appendOpMsgWithDatabase(encoded, request_id, command, database);
+        if (!appended) {
+            return std::unexpected(appended.error());
+        }
     }
 
     return encoded;

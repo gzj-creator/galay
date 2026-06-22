@@ -14,6 +14,7 @@
 #include "../common/mcp_base.h"
 #include "../common/mcp_error.h"
 #include "../common/json_parser.h"
+#include "../common/mcp_policy.h"
 #include "../../galay-http/server/http_server.h"
 #include "../../galay-http/server/http_router.h"
 #include <functional>
@@ -60,6 +61,13 @@ public:
      * @param version 服务器版本
      */
     void setServerInfo(const std::string& name, const std::string& version);
+
+    /**
+     * @brief 设置生产运行策略
+     * @details 策略按值保存；应在 start() 前配置，运行中修改不保证并发可见性。
+     * @param policy 传输限制、超时和会话策略
+     */
+    void setProductionPolicy(McpProductionPolicy policy);
 
     /**
      * @brief 注册工具
@@ -259,6 +267,7 @@ private:
 
     std::atomic<bool> m_running; ///< 服务器运行状态
     std::atomic<bool> m_initialized; ///< 初始化状态
+    McpProductionPolicy m_policy; ///< 生产运行策略
 
     std::unique_ptr<http::HttpServer> m_httpServer; ///< HTTP服务器实例
     std::unique_ptr<http::HttpRouter> m_router; ///< HTTP路由器实例

@@ -31,10 +31,14 @@ AsyncFile::AsyncFile()
 }
 
 /**
- * @brief 析构函数；不会自动关闭文件
+ * @brief 析构函数；关闭仍由对象持有的文件
  */
 AsyncFile::~AsyncFile()
 {
+    if (m_controller.m_handle != GHandle::invalid()) {
+        galay_close(m_controller.m_handle.fd);
+        m_controller.m_handle = GHandle::invalid();
+    }
 }
 
 /**
@@ -55,7 +59,8 @@ AsyncFile& AsyncFile::operator=(AsyncFile&& other) noexcept
 {
     if (this != &other) {
         if (m_controller.m_handle != GHandle::invalid()) {
-            ::close(m_controller.m_handle.fd);
+            galay_close(m_controller.m_handle.fd);
+            m_controller.m_handle = GHandle::invalid();
         }
         m_controller = std::move(other.m_controller);
     }
@@ -76,6 +81,9 @@ std::expected<void, IOError> AsyncFile::open(const std::string& path, FileOpenMo
     int fd = ::open(path.c_str(), flags, permissions);
     if (fd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
+    }
+    if (m_controller.m_handle != GHandle::invalid()) {
+        galay_close(m_controller.m_handle.fd);
     }
     m_controller.m_handle.fd = fd;
     return {};

@@ -688,13 +688,17 @@ namespace galay::http
                     m_currentCommonHeaderIdx,
                     std::move(m_parseHeaderValue)
                 );
-            } else {
-                // 罕见 header，key 已经是小写
-                m_headerPairs.addNormalizedHeaderPair(
-                    std::move(m_parseHeaderKey),
-                    std::move(m_parseHeaderValue)
-                );
+        } else {
+            // 罕见 header，key 已经是小写；重复字段按逗号合并，供请求层做严格协议校验。
+            if (const auto* existing = m_headerPairs.getValuePtr(m_parseHeaderKey);
+                existing != nullptr) {
+                m_parseHeaderValue = *existing + ", " + m_parseHeaderValue;
             }
+            m_headerPairs.addNormalizedHeaderPair(
+                std::move(m_parseHeaderKey),
+                std::move(m_parseHeaderValue)
+            );
+        }
         } else {
             // Client 端：直接存 map，不转小写
             m_headerPairs.addHeaderPair(m_parseHeaderKey, m_parseHeaderValue);
@@ -733,6 +737,9 @@ namespace galay::http
         case RequestParseState::Uri:
             if (c == ' ') {
                 std::string full_uri = convertFromUri(m_parseUriStr, false);
+                if (m_uriDecodeError) {
+                    return kUriEncodeError;
+                }
                 parseArgs(full_uri);
                 if (m_uri.empty()) {
                     m_uri = full_uri;
@@ -991,6 +998,9 @@ namespace galay::http
                     }
 
                     std::string full_uri = convertFromUri(m_parseUriStr, false);
+                    if (m_uriDecodeError) {
+                        return {kUriEncodeError, -1};
+                    }
                     parseArgs(full_uri);
                     if (m_uri.empty()) {
                         m_uri = full_uri;
@@ -1305,6 +1315,8 @@ namespace galay::http
         m_parseHeaderKey.clear();
         m_parseHeaderValue.clear();
         m_parsedBytes = 0;
+        m_uriDecodeError = false;
+        m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon;
     }
 
     void HttpRequestHeader::parseArgs(std::string uri)
@@ -1354,40 +1366,41 @@ namespace galay::http
     std::string HttpRequestHeader::convertFromUri(std::string_view url, bool convert_plus_to_space)
     {
         std::string result;
+        m_uriDecodeError = false;
         for (size_t i = 0; i < url.size(); i++)
         {
-            if (url[i] == '%' && i + 1 < url.size())
+            if (url[i] == '%')
             {
+                if (i + 1 >= url.size()) {
+                    m_uriDecodeError = true;
+                    return {};
+                }
+
                 if (url[i + 1] == 'u')
                 {
                     auto val = 0;
-                    if (fromHexToI(url, i + 2, 4, val))
-                    {
-                        char buff[4];
-                        size_t len = toUtf8(val, buff);
-                        if (len > 0)
-                        {
-                            result.append(buff, len);
-                        }
-                        i += 5;
+                    if (!fromHexToI(url, i + 2, 4, val)) {
+                        m_uriDecodeError = true;
+                        return {};
                     }
-                    else
-                    {
-                        result += url[i];
+                    char buff[4];
+                    size_t len = toUtf8(val, buff);
+                    if (len == 0) {
+                        m_uriDecodeError = true;
+                        return {};
                     }
+                    result.append(buff, len);
+                    i += 5;
                 }
                 else
                 {
                     auto val = 0;
-                    if (fromHexToI(url, i + 1, 2, val))
-                    {
-                        result += static_cast<char>(val);
-                        i += 2;
+                    if (!fromHexToI(url, i + 1, 2, val)) {
+                        m_uriDecodeError = true;
+                        return {};
                     }
-                    else
-                    {
-                        result += url[i];
-                    }
+                    result += static_cast<char>(val);
+                    i += 2;
                 }
             }
             else if (convert_plus_to_space && url[i] == '+')
@@ -1520,7 +1533,7 @@ namespace galay::http
 
     bool HttpRequestHeader::fromHexToI(const std::string_view& s, size_t i, size_t cnt, int& val)
     {
-        if (i >= s.size())
+        if (i >= s.size() || cnt > s.size() - i)
         {
             return false;
         }
@@ -1528,10 +1541,6 @@ namespace galay::http
         val = 0;
         for (; cnt; i++, --cnt)
         {
-            if (!s[i])
-            {
-                return false;
-            }
             auto v = 0;
             if (isHex(s[i], v))
             {

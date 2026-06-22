@@ -34,7 +34,6 @@
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>
-#include <cstdio>
 #include <cstdlib>
 #include <expected>
 #include <span>
@@ -476,7 +475,8 @@ struct ReadvIOContext: public IOContextBase {
 
     template<size_t N>
     ReadvIOContext(std::array<struct iovec, N>& iovecs, size_t count)
-        : m_iovecs(iovecs.data(), validateBorrowedCountOrAbort(count, N, "readv")) {
+        : m_iovecs(iovecs.data(), boundedBorrowedCount(count, N)) {
+        markInvalidBorrowedCount(count, N);
 #ifdef USE_IOURING
         initMsghdr();
 #endif
@@ -484,7 +484,8 @@ struct ReadvIOContext: public IOContextBase {
 
     template<size_t N>
     ReadvIOContext(struct iovec (&iovecs)[N], size_t count)
-        : m_iovecs(iovecs, validateBorrowedCountOrAbort(count, N, "readv")) {
+        : m_iovecs(iovecs, boundedBorrowedCount(count, N)) {
+        markInvalidBorrowedCount(count, N);
 #ifdef USE_IOURING
         initMsghdr();
 #endif
@@ -496,20 +497,24 @@ struct ReadvIOContext: public IOContextBase {
     bool handleComplete(GHandle handle) override;  ///< 处理传统后端 readv 就绪事件
 #endif
 
-    static size_t validateBorrowedCountOrAbort(size_t count, size_t capacity, const char* op) {
-        if (count <= capacity) {
-            return count;
+    static size_t boundedBorrowedCount(size_t count, size_t capacity) noexcept {
+        return count <= capacity ? count : 0;
+    }
+
+    static bool borrowedCountValid(size_t count, size_t capacity) noexcept {
+        return count <= capacity;
+    }
+
+    void markInvalidBorrowedCount(size_t count, size_t capacity) {
+        if (!borrowedCountValid(count, capacity)) {
+            m_result = std::unexpected(IOError(kParamInvalid, 0));
+            m_immediate_result = true;
         }
-        std::fprintf(stderr,
-                     "invalid borrowed %s count: %zu > %zu\n",
-                     op,
-                     count,
-                     capacity);
-        std::abort();
     }
 
     std::span<const struct iovec> m_iovecs;  ///< 借用的 iovec 数组视图
     std::expected<size_t, IOError> m_result;  ///< 实际读取字节数或错误
+    bool m_immediate_result = false;  ///< 构造阶段即可返回的参数错误
 
 #ifdef USE_IOURING
     void initMsghdr() {
@@ -536,7 +541,7 @@ struct ReadvAwaitable: public ReadvIOContext, public TimeoutSupport<ReadvAwaitab
     ReadvAwaitable(IOController* controller, struct iovec (&iovecs)[N], size_t count)
         : ReadvIOContext(iovecs, count), m_controller(controller) {}
 
-    bool await_ready() { return false; }
+    bool await_ready() { return m_immediate_result; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         return detail::suspendRegisteredAwaitable<ReadvAwaitable, READV, kRecvFailed>(
@@ -563,7 +568,8 @@ struct WritevIOContext: public IOContextBase {
 
     template<size_t N>
     WritevIOContext(std::array<struct iovec, N>& iovecs, size_t count)
-        : m_iovecs(iovecs.data(), validateBorrowedCountOrAbort(count, N, "writev")) {
+        : m_iovecs(iovecs.data(), boundedBorrowedCount(count, N)) {
+        markInvalidBorrowedCount(count, N);
 #ifdef USE_IOURING
         initMsghdr();
 #endif
@@ -571,7 +577,8 @@ struct WritevIOContext: public IOContextBase {
 
     template<size_t N>
     WritevIOContext(struct iovec (&iovecs)[N], size_t count)
-        : m_iovecs(iovecs, validateBorrowedCountOrAbort(count, N, "writev")) {
+        : m_iovecs(iovecs, boundedBorrowedCount(count, N)) {
+        markInvalidBorrowedCount(count, N);
 #ifdef USE_IOURING
         initMsghdr();
 #endif
@@ -583,20 +590,24 @@ struct WritevIOContext: public IOContextBase {
     bool handleComplete(GHandle handle) override;  ///< 处理传统后端 writev 就绪事件
 #endif
 
-    static size_t validateBorrowedCountOrAbort(size_t count, size_t capacity, const char* op) {
-        if (count <= capacity) {
-            return count;
+    static size_t boundedBorrowedCount(size_t count, size_t capacity) noexcept {
+        return count <= capacity ? count : 0;
+    }
+
+    static bool borrowedCountValid(size_t count, size_t capacity) noexcept {
+        return count <= capacity;
+    }
+
+    void markInvalidBorrowedCount(size_t count, size_t capacity) {
+        if (!borrowedCountValid(count, capacity)) {
+            m_result = std::unexpected(IOError(kParamInvalid, 0));
+            m_immediate_result = true;
         }
-        std::fprintf(stderr,
-                     "invalid borrowed %s count: %zu > %zu\n",
-                     op,
-                     count,
-                     capacity);
-        std::abort();
     }
 
     std::span<const struct iovec> m_iovecs;  ///< 借用的 iovec 数组视图
     std::expected<size_t, IOError> m_result;  ///< 实际写入字节数或错误
+    bool m_immediate_result = false;  ///< 构造阶段即可返回的参数错误
 
 #ifdef USE_IOURING
     void initMsghdr() {
@@ -623,7 +634,7 @@ struct WritevAwaitable: public WritevIOContext, public TimeoutSupport<WritevAwai
     WritevAwaitable(IOController* controller, struct iovec (&iovecs)[N], size_t count)
         : WritevIOContext(iovecs, count), m_controller(controller) {}
 
-    bool await_ready() { return false; }
+    bool await_ready() { return m_immediate_result; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         return detail::suspendRegisteredAwaitable<WritevAwaitable, WRITEV, kSendFailed>(
@@ -2863,7 +2874,11 @@ public:
 
     template <auto Handler, size_t N>
     AwaitableBuilder& readv(std::array<struct iovec, N>& iovecs, size_t count = N) {
-        const size_t bounded = ReadvIOContext::validateBorrowedCountOrAbort(count, N, "readv");
+        if (!ReadvIOContext::borrowedCountValid(count, N)) {
+            m_nodes.push_back(MachineNode{});
+            return *this;
+        }
+        const size_t bounded = ReadvIOContext::boundedBorrowedCount(count, N);
         m_nodes.push_back(MachineT::template makeReadvNode<Handler>(iovecs.data(), bounded));
         m_last_recv_index = m_nodes.size() - 1;
         return *this;
@@ -2871,7 +2886,11 @@ public:
 
     template <auto Handler, size_t N>
     AwaitableBuilder& readv(struct iovec (&iovecs)[N], size_t count = N) {
-        const size_t bounded = ReadvIOContext::validateBorrowedCountOrAbort(count, N, "readv");
+        if (!ReadvIOContext::borrowedCountValid(count, N)) {
+            m_nodes.push_back(MachineNode{});
+            return *this;
+        }
+        const size_t bounded = ReadvIOContext::boundedBorrowedCount(count, N);
         m_nodes.push_back(MachineT::template makeReadvNode<Handler>(iovecs, bounded));
         m_last_recv_index = m_nodes.size() - 1;
         return *this;
@@ -2885,14 +2904,22 @@ public:
 
     template <auto Handler, size_t N>
     AwaitableBuilder& writev(std::array<struct iovec, N>& iovecs, size_t count = N) {
-        const size_t bounded = WritevIOContext::validateBorrowedCountOrAbort(count, N, "writev");
+        if (!WritevIOContext::borrowedCountValid(count, N)) {
+            m_nodes.push_back(MachineNode{});
+            return *this;
+        }
+        const size_t bounded = WritevIOContext::boundedBorrowedCount(count, N);
         m_nodes.push_back(MachineT::template makeWritevNode<Handler>(iovecs.data(), bounded));
         return *this;
     }
 
     template <auto Handler, size_t N>
     AwaitableBuilder& writev(struct iovec (&iovecs)[N], size_t count = N) {
-        const size_t bounded = WritevIOContext::validateBorrowedCountOrAbort(count, N, "writev");
+        if (!WritevIOContext::borrowedCountValid(count, N)) {
+            m_nodes.push_back(MachineNode{});
+            return *this;
+        }
+        const size_t bounded = WritevIOContext::boundedBorrowedCount(count, N);
         m_nodes.push_back(MachineT::template makeWritevNode<Handler>(iovecs, bounded));
         return *this;
     }

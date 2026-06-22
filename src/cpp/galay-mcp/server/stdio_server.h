@@ -14,6 +14,7 @@
 #include "../common/mcp_base.h"
 #include "../common/mcp_error.h"
 #include "../common/json_parser.h"
+#include "../common/mcp_policy.h"
 #include <functional>
 #include <unordered_map>
 #include <memory>
@@ -50,6 +51,21 @@ public:
      * @param version 服务器版本
      */
     void setServerInfo(const std::string& name, const std::string& version);
+
+    /**
+     * @brief 设置生产运行策略
+     * @details 策略按值保存；应在 run() 前配置，运行中修改不保证并发可见性。
+     * @param policy 传输限制、超时和会话策略
+     */
+    void setProductionPolicy(McpProductionPolicy policy);
+
+    /**
+     * @brief 注入 stdio 输入输出流
+     * @details 调用方必须保证 input/output 生命周期覆盖 run() 调用。
+     * @param input JSON-RPC line 输入流
+     * @param output JSON-RPC line 输出流
+     */
+    void setStreams(std::istream& input, std::ostream& output) noexcept;
 
     /**
      * @brief 添加工具
@@ -199,6 +215,7 @@ private:
 private:
     std::string m_serverName; ///< 服务器名称
     std::string m_serverVersion; ///< 服务器版本
+    McpProductionPolicy m_policy; ///< 生产运行策略
 
     /**
      * @brief 工具注册信息

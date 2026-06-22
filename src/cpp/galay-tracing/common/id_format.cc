@@ -4,8 +4,8 @@
  * @author galay-tracing
  * @version 1.0.0
  *
- * @details 实现十六进制字符串与字节数组的双向转换，以及基于 SplitMix64
- * 伪随机数生成器的 TraceId / SpanId 随机生成。
+ * @details 实现十六进制字符串与字节数组的双向转换，以及基于系统 CSPRNG
+ * 的 TraceId / SpanId 随机生成。
  */
 
 #include <galay/cpp/galay-tracing/common/id_format.h>
@@ -18,7 +18,8 @@
 #include <chrono>
 #include <cstdint>
 #include <cstring>
-#include <random>
+
+#include <openssl/rand.h>
 
 namespace galay::tracing::detail {
 
@@ -26,53 +27,40 @@ namespace {
 
 constexpr char kHexDigits[] = "0123456789abcdef";
 
-std::uint64_t fallbackSeed() noexcept {
+std::uint64_t fallbackWord() noexcept {
     static std::atomic<std::uint64_t> counter{0};
     const auto now = std::chrono::steady_clock::now().time_since_epoch().count();
-    return static_cast<std::uint64_t>(now) ^ (counter.fetch_add(1, std::memory_order_relaxed) + 0x9e3779b97f4a7c15ULL);
+    auto value = static_cast<std::uint64_t>(now) ^
+                 (counter.fetch_add(1, std::memory_order_relaxed) + 0x9e3779b97f4a7c15ULL);
+    value ^= value << 13U;
+    value ^= value >> 7U;
+    value ^= value << 17U;
+    return value;
 }
 
-std::uint64_t randomSeed() noexcept {
-    try {
-        std::random_device device;
-        const auto high = static_cast<std::uint64_t>(device());
-        const auto low = static_cast<std::uint64_t>(device());
-        return (high << 32U) ^ low ^ fallbackSeed();
-    } catch (...) {
-        return fallbackSeed();
+bool fillWithCsprng(std::byte* data, std::size_t size) noexcept {
+    if (data == nullptr || size == 0) {
+        return false;
     }
-}
-
-std::uint64_t nextRandom64() noexcept {
-    thread_local std::uint64_t state = randomSeed();
-    state += 0x9e3779b97f4a7c15ULL;
-    auto value = state;
-    value = (value ^ (value >> 30U)) * 0xbf58476d1ce4e5b9ULL;
-    value = (value ^ (value >> 27U)) * 0x94d049bb133111ebULL;
-    return value ^ (value >> 31U);
+    return RAND_priv_bytes(reinterpret_cast<unsigned char*>(data), static_cast<int>(size)) == 1;
 }
 
 template <std::size_t N>
 void fillRandomBytes(std::array<std::byte, N>& bytes) noexcept {
-    if constexpr (N == sizeof(std::uint64_t)) {
-        const auto chunk = nextRandom64();
-        std::memcpy(bytes.data(), &chunk, sizeof(chunk));
-    } else if constexpr (N == sizeof(std::uint64_t) * 2) {
-        const std::array chunks{nextRandom64(), nextRandom64()};
-        std::memcpy(bytes.data(), chunks.data(), sizeof(chunks));
-    } else {
-        std::uint64_t chunk = 0;
-        int remaining = 0;
+    if (fillWithCsprng(bytes.data(), bytes.size())) {
+        return;
+    }
 
-        for (auto& byte : bytes) {
-            if (remaining == 0) {
-                chunk = nextRandom64();
-                remaining = 8;
-            }
-            byte = static_cast<std::byte>(chunk & 0xffU);
-            chunk >>= 8U;
-            --remaining;
+    std::uint64_t chunk = 0;
+    int remaining = 0;
+    for (auto& byte : bytes) {
+        if (remaining == 0) {
+            chunk = fallbackWord();
+            remaining = 8;
         }
+        byte = static_cast<std::byte>(chunk & 0xffU);
+        chunk >>= 8U;
+        --remaining;
     }
 }
 

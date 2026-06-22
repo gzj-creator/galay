@@ -2,9 +2,35 @@
 #include "http_chunk.h"
 #include "parse_utils.h"
 #include <algorithm>
+#include <cctype>
+#include <string_view>
 
 namespace galay::http
 {
+    namespace {
+
+    std::string_view trimAscii(std::string_view value)
+    {
+        size_t begin = 0;
+        size_t end = value.size();
+        while (begin < end && std::isspace(static_cast<unsigned char>(value[begin]))) {
+            ++begin;
+        }
+        while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+            --end;
+        }
+        return value.substr(begin, end - begin);
+    }
+
+    bool isSingleHeaderToken(std::string_view value, std::string_view expected)
+    {
+        value = trimAscii(value);
+        return value.find(',') == std::string_view::npos &&
+               detail::equalsIgnoreCaseAscii(value, expected);
+    }
+
+    } // namespace
+
     HttpRequestHeader &HttpRequest::header()
     {
        return m_header;
@@ -81,16 +107,25 @@ namespace galay::http
             header_bytes = header_consumed;
             newly_consumed = header_consumed;
             m_headerParsed = true;
-            if (const auto* te = detail::getHeaderValuePtrLoose(m_header.headerPairs(), "transfer-encoding");
-                te != nullptr) {
-                is_chunked = detail::headerValueContainsToken(*te, "chunked");
+            const auto* transfer_encoding =
+                detail::getHeaderValuePtrLoose(m_header.headerPairs(), "transfer-encoding");
+            const auto* content_length =
+                detail::getHeaderValuePtrLoose(m_header.headerPairs(), "content-length");
+
+            if (transfer_encoding != nullptr) {
+                if (content_length != nullptr) {
+                    return {kBadRequest, -1};
+                }
+                if (!isSingleHeaderToken(*transfer_encoding, "chunked")) {
+                    return {kBadRequest, -1};
+                }
+                is_chunked = true;
             }
 
             if (is_chunked) {
                 // chunked body 继续往下解析
             } else {
                 // header解析完成，获取Content-Length
-                const auto* content_length = detail::getHeaderValuePtrLoose(m_header.headerPairs(), "content-length");
                 if (content_length == nullptr || content_length->empty()) {
                     // 没有body，解析完成
                     return {kNoError, newly_consumed};

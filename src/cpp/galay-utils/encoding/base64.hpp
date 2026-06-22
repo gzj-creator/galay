@@ -13,6 +13,7 @@
 
 #include <string>
 #include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 #if __cplusplus >= 201703L
@@ -148,12 +149,17 @@ namespace galay::utils
 
                 std::string copy(encoded_string);
 
-                copy.erase(std::remove(copy.begin(), copy.end(), '\n'), copy.end());
+                copy.erase(std::remove_if(copy.begin(), copy.end(), [](unsigned char ch) {
+                    return std::isspace(ch) != 0;
+                }), copy.end());
 
                 return Base64Decode(copy, false);
             }
 
             size_t length_of_string = encoded_string.length();
+            if (length_of_string % 4 == 1) {
+                throw std::runtime_error("Input is not valid base64-encoded data.");
+            }
             size_t pos = 0;
 
             //
@@ -168,6 +174,9 @@ namespace galay::utils
 
             while (pos < length_of_string)
             {
+                if (length_of_string - pos == 1) {
+                    throw std::runtime_error("Input is not valid base64-encoded data.");
+                }
                 //
                 // Iterate over encoded input string in chunks. The size of all
                 // chunks except the last one is 4 bytes.

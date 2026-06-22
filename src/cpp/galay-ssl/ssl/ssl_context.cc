@@ -2,22 +2,21 @@
 #include <galay/cpp/galay-ssl/common/ssl_log.h>
 #include <algorithm>
 #include <cstring>
+#include <mutex>
 
 namespace galay::ssl
 {
 
 namespace {
 
-// 全局初始化标志
-static bool g_ssl_initialized = false;
+std::once_flag g_ssl_init_once;
 
 void initializeOpenSSL() {
-    if (!g_ssl_initialized) {
+    std::call_once(g_ssl_init_once, [] {
         SSL_library_init();
         SSL_load_error_strings();
         OpenSSL_add_all_algorithms();
-        g_ssl_initialized = true;
-    }
+    });
 }
 
 const SSL_METHOD* getMethod(SslMethod method) {

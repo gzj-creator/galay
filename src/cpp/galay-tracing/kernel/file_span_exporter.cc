@@ -18,12 +18,42 @@ namespace galay::tracing {
 namespace {
 
 void appendJsonString(std::string& out, std::string_view value) {
+    static constexpr char kHex[] = "0123456789abcdef";
+
     out.push_back('"');
-    for (const char ch : value) {
-        if (ch == '"' || ch == '\\') {
-            out.push_back('\\');
+    for (const unsigned char ch : value) {
+        switch (ch) {
+        case '"':
+            out.append("\\\"");
+            break;
+        case '\\':
+            out.append("\\\\");
+            break;
+        case '\b':
+            out.append("\\b");
+            break;
+        case '\f':
+            out.append("\\f");
+            break;
+        case '\n':
+            out.append("\\n");
+            break;
+        case '\r':
+            out.append("\\r");
+            break;
+        case '\t':
+            out.append("\\t");
+            break;
+        default:
+            if (ch < 0x20) {
+                out.append("\\u00");
+                out.push_back(kHex[ch >> 4U]);
+                out.push_back(kHex[ch & 0x0FU]);
+            } else {
+                out.push_back(static_cast<char>(ch));
+            }
+            break;
         }
-        out.push_back(ch);
     }
     out.push_back('"');
 }

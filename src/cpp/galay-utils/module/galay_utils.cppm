@@ -21,6 +21,7 @@ export {
 #include "../cache/ring_buffer.hpp"
 #include "../tool/thread.hpp"
 #include "../tool/circuit_breaker.hpp"
+#include "../tool/rate_limiter.hpp"
 #include "../algorithm/consistent_hash.hpp"
 #include "../algorithm/bloom_filter.hpp"
 #include "../algorithm/trie.hpp"

@@ -7,42 +7,210 @@ namespace galay::redis
     // ======================== PoolInitializeAwaitable 实现 ========================
 
     PoolInitializeAwaitable::PoolInitializeAwaitable(RedisConnectionPool& pool)
-        : m_flow(std::make_unique<Flow>(pool))
-        , m_inner(galay::kernel::AwaitableBuilder<Result, 4, Flow>(&m_controller, *m_flow)
-                      .local<&Flow::run>()
-                      .build())
+        : m_result(pool.initializeSync())
     {
-    }
-
-    PoolInitializeAwaitable::Flow::Flow(RedisConnectionPool& pool)
-        : m_pool(&pool)
-    {
-    }
-
-    void PoolInitializeAwaitable::Flow::run(galay::kernel::SequenceOps<Result, 4>& ops)
-    {
-        ops.complete(m_pool->initializeSync());
     }
 
     // ======================== PoolAcquireAwaitable 实现 ========================
 
     PoolAcquireAwaitable::PoolAcquireAwaitable(RedisConnectionPool& pool)
-        : m_flow(std::make_unique<Flow>(pool))
-        , m_inner(galay::kernel::AwaitableBuilder<Result, 4, Flow>(&m_controller, *m_flow)
-                      .local<&Flow::run>()
-                      .build())
-    {
-    }
-
-    PoolAcquireAwaitable::Flow::Flow(RedisConnectionPool& pool)
         : m_pool(&pool)
         , m_start_time(std::chrono::steady_clock::now())
     {
     }
 
-    void PoolAcquireAwaitable::Flow::run(galay::kernel::SequenceOps<Result, 4>& ops)
+    PoolAcquireAwaitable::SuspendAction
+    PoolAcquireAwaitable::prepareSuspend(galay::kernel::Waker waiter_waker)
     {
-        ops.complete(m_pool->acquireSync(m_start_time));
+        m_start_time = std::chrono::steady_clock::now();
+        if (m_pool == nullptr) {
+            m_state = State::Error;
+            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is missing");
+            return SuspendAction::Error;
+        }
+        if (!m_pool->m_is_initialized) {
+            m_state = State::Error;
+            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool not initialized");
+            return SuspendAction::Error;
+        }
+        if (m_pool->m_is_shutting_down) {
+            m_state = State::Error;
+            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is shutting down");
+            return SuspendAction::Error;
+        }
+
+        {
+            std::lock_guard<std::mutex> lock(m_pool->m_mutex);
+            while (!m_pool->m_available_connections.empty()) {
+                auto conn = m_pool->m_available_connections.front();
+                m_pool->m_available_connections.pop();
+
+                if (conn && !conn->isClosed() && conn->isHealthy()) {
+                    conn->updateLastUsed();
+                    m_connection = std::move(conn);
+                    m_pool->m_total_acquired++;
+                    m_state = State::Ready;
+                    break;
+                }
+
+                auto it = std::find(m_pool->m_all_connections.begin(),
+                                    m_pool->m_all_connections.end(),
+                                    conn);
+                if (it != m_pool->m_all_connections.end()) {
+                    m_pool->m_all_connections.erase(it);
+                }
+                m_pool->m_total_destroyed++;
+            }
+
+            if (m_state == State::Ready) {
+                // 统计函数会自行加锁；先离开当前临界区再调用。
+            } else if (m_pool->m_all_connections.size() < m_pool->m_config.max_connections) {
+                auto client = std::make_shared<RedisClient>(m_pool->m_scheduler);
+                m_connection = std::make_shared<PooledConnection>(client, m_pool->m_scheduler);
+                m_pool->m_all_connections.push_back(m_connection);
+                m_pool->m_total_created++;
+                m_state = State::Creating;
+            } else {
+                m_waiter = std::make_shared<detail::RedisPoolWaiter>(std::move(waiter_waker));
+                if (m_waiter == nullptr) {
+                    m_state = State::EnqueueFailed;
+                    return SuspendAction::Error;
+                }
+                m_pool->m_waiters.push(m_waiter);
+                m_pool->m_waiting_requests.fetch_add(1);
+                m_wait_counted = true;
+                m_state = State::Waiting;
+                return SuspendAction::Wait;
+            }
+        }
+
+        if (m_state == State::Ready) {
+            m_pool->recordAcquireStats(m_start_time);
+            return SuspendAction::Ready;
+        }
+        if (m_state != State::Creating || !m_connection) {
+            m_state = State::Error;
+            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid connection acquire state");
+            return SuspendAction::Error;
+        }
+
+        RedisConnectOptions options;
+        options.username = m_pool->m_config.username;
+        options.password = m_pool->m_config.password;
+        options.db_index = m_pool->m_config.db_index;
+        m_connect_awaitable.emplace(
+            m_connection->get()->connect(m_pool->m_config.host, m_pool->m_config.port, std::move(options)));
+        return SuspendAction::Connect;
+    }
+
+    PoolAcquireAwaitable::Result PoolAcquireAwaitable::await_resume()
+    {
+        if (m_state == State::Ready) {
+            m_state = State::Invalid;
+            return std::move(m_connection);
+        }
+
+        if (m_state == State::Creating) {
+            if (!m_connect_awaitable.has_value() || !m_connection) {
+                m_state = State::Invalid;
+                return std::unexpected(RedisError(
+                    RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
+                    "Missing Redis connect awaitable"));
+            }
+
+            auto connect_result = m_connect_awaitable->await_resume();
+            m_connect_awaitable.reset();
+            if (!connect_result) {
+                if (m_pool != nullptr) {
+                    std::lock_guard<std::mutex> lock(m_pool->m_mutex);
+                    auto it = std::find(m_pool->m_all_connections.begin(),
+                                        m_pool->m_all_connections.end(),
+                                        m_connection);
+                    if (it != m_pool->m_all_connections.end()) {
+                        m_pool->m_all_connections.erase(it);
+                        m_pool->m_total_destroyed++;
+                    }
+                }
+                m_state = State::Invalid;
+                m_connection.reset();
+                return std::unexpected(connect_result.error());
+            }
+
+            m_connection->setHealthy(true);
+            m_connection->updateLastUsed();
+            if (m_pool != nullptr) {
+                m_pool->m_total_acquired++;
+                m_pool->recordAcquireStats(m_start_time);
+            }
+            m_state = State::Invalid;
+            return std::move(m_connection);
+        }
+
+        if (m_state == State::Waiting) {
+            if (m_wait_counted && m_pool != nullptr) {
+                m_pool->m_waiting_requests.fetch_sub(1);
+                m_wait_counted = false;
+            }
+
+            std::shared_ptr<PooledConnection> connection;
+            if (m_pool != nullptr && m_waiter != nullptr) {
+                std::lock_guard<std::mutex> lock(m_pool->m_mutex);
+                connection = std::move(m_waiter->connection);
+            }
+            m_waiter.reset();
+            m_state = State::Invalid;
+            if (connection) {
+                m_connection = std::move(connection);
+                return std::move(m_connection);
+            }
+            return std::unexpected(RedisError(
+                RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
+                "Failed to acquire connection after wakeup"));
+        }
+
+        if (m_state == State::TimedOut) {
+            m_state = State::Invalid;
+            return std::unexpected(RedisError(
+                RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR,
+                "Timed out waiting for Redis pool connection"));
+        }
+
+        if (m_state == State::EnqueueFailed) {
+            m_state = State::Invalid;
+            return std::unexpected(RedisError(
+                RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
+                "Failed to enqueue Redis pool waiter"));
+        }
+
+        if (m_state == State::Error && m_error.has_value()) {
+            auto error = std::move(*m_error);
+            m_error.reset();
+            m_state = State::Invalid;
+            return std::unexpected(std::move(error));
+        }
+
+        m_state = State::Invalid;
+        return std::unexpected(RedisError(
+            RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
+            "Invalid Redis pool acquire state"));
+    }
+
+    void PoolAcquireAwaitable::markTimeout()
+    {
+        if (m_state == State::Creating && m_connect_awaitable.has_value()) {
+            m_connect_awaitable->markTimeout();
+            return;
+        }
+        if (m_state == State::Waiting) {
+            if (m_waiter != nullptr) {
+                m_waiter->active.store(false, std::memory_order_release);
+            }
+            if (m_wait_counted && m_pool != nullptr) {
+                m_pool->m_waiting_requests.fetch_sub(1);
+                m_wait_counted = false;
+            }
+        }
+        m_state = State::TimedOut;
     }
 
     // ======================== RedisConnectionPool 实现 ========================
@@ -93,32 +261,8 @@ namespace galay::redis
             return {};
         }
 
-        size_t created_count = 0;
-        while (created_count < m_config.initial_connections) {
-            auto result = getConnectionSync();
-            if (!result) {
-                REDIS_LOG_ERROR("[client]", "Failed to create connection {}/{}: {}",
-                              created_count + 1, m_config.initial_connections,
-                              result.error().message());
-                break;
-            }
-
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
-            }
-            ++created_count;
-        }
-
-        if (created_count < m_config.min_connections) {
-            return std::unexpected(RedisError(
-                RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR,
-                "Failed to create minimum connections"
-            ));
-        }
-
         m_is_initialized = true;
-        REDIS_LOG_INFO("[client]", "Connection pool initialized with {} connections", created_count);
+        REDIS_LOG_INFO("[client]", "Connection pool initialized lazily");
         return {};
     }
 
@@ -200,7 +344,7 @@ namespace galay::redis
 
         return std::unexpected(RedisError(
             RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR,
-            "No available connections"
+            "Connection pool exhausted"
         ));
     }
 
@@ -241,38 +385,67 @@ namespace galay::redis
             return;
         }
 
-        std::lock_guard<std::mutex> lock(m_mutex);
+        std::shared_ptr<detail::RedisPoolWaiter> waiter_to_wake;
 
-        // 检查连接是否健康
-        if (conn->isClosed() || !conn->isHealthy()) {
-            REDIS_LOG_WARN("[client]", "Unhealthy connection released, removing from pool");
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+
+            // 检查连接是否健康
+            if (conn->isClosed() || !conn->isHealthy()) {
+                REDIS_LOG_WARN("[client]", "Unhealthy connection released, removing from pool");
+                auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
+                if (it != m_all_connections.end()) {
+                    m_all_connections.erase(it);
+                }
+                m_total_destroyed++;
+                return;
             }
-            m_total_destroyed++;
-            return;
+
+            // 如果连接数超过最大值，销毁连接
+            if (m_all_connections.size() > m_config.max_connections) {
+                REDIS_LOG_DEBUG("[client]", "Pool size exceeds max, destroying connection");
+                auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
+                if (it != m_all_connections.end()) {
+                    m_all_connections.erase(it);
+                }
+                m_total_destroyed++;
+                return;
+            }
+
+            while (!m_waiters.empty()) {
+                auto waiter = m_waiters.front();
+                m_waiters.pop();
+                if (waiter == nullptr) {
+                    continue;
+                }
+
+                bool expected = true;
+                if (!waiter->active.compare_exchange_strong(expected,
+                                                            false,
+                                                            std::memory_order_acq_rel,
+                                                            std::memory_order_acquire)) {
+                    continue;
+                }
+
+                conn->updateLastUsed();
+                waiter->connection = conn;
+                waiter_to_wake = std::move(waiter);
+                break;
+            }
+
+            if (!waiter_to_wake) {
+                // 归还到可用连接池
+                m_available_connections.push(conn);
+            }
+            m_total_released++;
+
+            REDIS_LOG_DEBUG("[client]", "Connection released to pool, available: {}, total: {}",
+                         m_available_connections.size(), m_all_connections.size());
         }
 
-        // 如果连接数超过最大值，销毁连接
-        if (m_all_connections.size() > m_config.max_connections) {
-            REDIS_LOG_DEBUG("[client]", "Pool size exceeds max, destroying connection");
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
-            }
-            m_total_destroyed++;
-            return;
+        if (waiter_to_wake) {
+            waiter_to_wake->waker.wakeUp();
         }
-
-        // 归还到可用连接池
-        m_available_connections.push(conn);
-        m_total_released++;
-
-        REDIS_LOG_DEBUG("[client]", "Connection released to pool, available: {}, total: {}",
-                     m_available_connections.size(), m_all_connections.size());
-
-        m_cv.notify_one();
     }
 
     std::expected<std::shared_ptr<PooledConnection>, RedisError>
@@ -293,9 +466,7 @@ namespace galay::redis
                 auto client = std::make_shared<RedisClient>(m_scheduler);
                 auto conn = std::make_shared<PooledConnection>(client, m_scheduler);
 
-                // 注意：这里需要在协程上下文中调用 co_await client->connect()
-                // 由于当前是同步方法，暂时创建未连接的客户端
-                // 实际使用时，连接会在第一次使用时建立
+                // 同步辅助路径只登记客户端槽位；协程 acquire 路径负责真实连接。
 
                 {
                     std::lock_guard<std::mutex> lock(m_mutex);
@@ -637,6 +808,7 @@ namespace galay::redis
         REDIS_LOG_INFO("[client]", "Shutting down connection pool");
 
         std::vector<std::shared_ptr<PooledConnection>> all_connections;
+        std::vector<std::shared_ptr<detail::RedisPoolWaiter>> waiters_to_wake;
 
         {
             std::lock_guard<std::mutex> lock(m_mutex);
@@ -647,6 +819,24 @@ namespace galay::redis
             while (!m_available_connections.empty()) {
                 m_available_connections.pop();
             }
+            while (!m_waiters.empty()) {
+                auto waiter = m_waiters.front();
+                m_waiters.pop();
+                if (waiter == nullptr) {
+                    continue;
+                }
+                bool expected = true;
+                if (waiter->active.compare_exchange_strong(expected,
+                                                           false,
+                                                           std::memory_order_acq_rel,
+                                                           std::memory_order_acquire)) {
+                    waiters_to_wake.push_back(std::move(waiter));
+                }
+            }
+        }
+
+        for (auto& waiter : waiters_to_wake) {
+            waiter->waker.wakeUp();
         }
 
         m_is_initialized = false;
@@ -703,7 +893,8 @@ namespace galay::redis
 
     void RedissPoolInitializeAwaitable::Flow::run(galay::kernel::SequenceOps<Result, 4>& ops)
     {
-        ops.complete(m_pool->initializeSync());
+        auto& pool = *m_pool;
+        ops.complete(pool.initializeSync());
     }
 
     RedissPoolAcquireAwaitable::RedissPoolAcquireAwaitable(RedissConnectionPool& pool)
@@ -722,7 +913,8 @@ namespace galay::redis
 
     void RedissPoolAcquireAwaitable::Flow::run(galay::kernel::SequenceOps<Result, 4>& ops)
     {
-        ops.complete(m_pool->acquireSync(m_start_time));
+        auto& pool = *m_pool;
+        ops.complete(pool.acquireSync(m_start_time));
     }
 
     RedissConnectionPool::RedissConnectionPool(IOScheduler* scheduler, RedissConnectionPoolConfig config)
@@ -946,7 +1138,6 @@ namespace galay::redis
         REDIS_LOG_DEBUG("[client]", "TLS connection released to pool, available: {}, total: {}",
                       m_available_connections.size(), m_all_connections.size());
 
-        m_cv.notify_one();
     }
 
     std::expected<std::shared_ptr<PooledRedissConnection>, RedisError>

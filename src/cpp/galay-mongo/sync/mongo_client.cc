@@ -234,7 +234,10 @@ MongoResult MongoClient::runCommandRequest(const std::string& database,
         ++m_next_request_id;
     }
     m_encoded_request_buffer.clear();
-    protocol::MongoProtocol::appendOpMsg(m_encoded_request_buffer, request_id, request);
+    auto encoded = protocol::MongoProtocol::appendOpMsg(m_encoded_request_buffer, request_id, request);
+    if (!encoded) {
+        return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
+    }
 
     auto sent = m_connection.send(m_encoded_request_buffer);
     if (!sent) {

@@ -59,6 +59,16 @@ std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
         EVP_PKEY_free(pkey);
         return std::unexpected("EVP_PKEY_CTX_set_rsa_padding failed: " + getOpenSslError());
     }
+    if (EVP_PKEY_CTX_set_rsa_oaep_md(ctx, EVP_sha256()) <= 0) {
+        EVP_PKEY_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        return std::unexpected("EVP_PKEY_CTX_set_rsa_oaep_md failed: " + getOpenSslError());
+    }
+    if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha256()) <= 0) {
+        EVP_PKEY_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+        return std::unexpected("EVP_PKEY_CTX_set_rsa_mgf1_md failed: " + getOpenSslError());
+    }
 
     size_t encrypted_size = 0;
     if (EVP_PKEY_encrypt(ctx,

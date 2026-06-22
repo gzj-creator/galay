@@ -143,8 +143,14 @@ namespace galay::redis
         // 选择数据库
         if (db_index != 0) {
             auto select_reply = selectDB(db_index);
-            if (!select_reply || select_reply->isNull() || !select_reply->isStatus()) {
-                return std::unexpected(select_reply.error());
+            if (!select_reply) {
+                auto error = select_reply.error();
+                return std::unexpected(std::move(error));
+            }
+            if (select_reply->isNull() || !select_reply->isStatus()) {
+                return std::unexpected(RedisError(
+                    RedisErrorType::REDIS_ERROR_TYPE_PARSE_ERROR,
+                    "Unexpected SELECT response"));
             }
         }
 

@@ -497,6 +497,12 @@ private:
     /// @brief 重建iovec数组
     void rebuildIovecs()
     {
+        auto validation = m_request->validateForWrite();
+        if (!validation.has_value()) {
+            setWriteError(validation.error());
+            return;
+        }
+
         RpcPayloadView payload_view = m_request->payloadView();
         const size_t body_size = m_request->serializedBodySize();
 
@@ -617,6 +623,12 @@ private:
     /// @brief 重建iovec数组
     void rebuildIovecs()
     {
+        auto validation = m_response->validateForWrite();
+        if (!validation.has_value()) {
+            setWriteError(validation.error());
+            return;
+        }
+
         RpcPayloadView payload_view = m_response->payloadView();
         const size_t body_size = sizeof(uint16_t) + payload_view.size();
 

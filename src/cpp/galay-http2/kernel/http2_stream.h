@@ -22,7 +22,10 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <algorithm>
 #include <charconv>
+#include <deque>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <array>
@@ -666,7 +669,7 @@ public:
         std::shared_ptr<Http2Stream> m_keepalive;
         galay::kernel::AsyncWaiterAwaitable<void> m_wait_awaitable;
     };
-    
+
     // 流 ID
     uint32_t streamId() const { return m_stream_id; }
     
@@ -807,6 +810,156 @@ public:
         notifyRetireIfClosed();
     }
 
+private:
+    struct PendingDataSend {
+        std::shared_ptr<const std::string> payload;
+        size_t offset = 0;
+        bool end_stream = false;
+        Http2OutgoingFrame::WaiterPtr waiter;
+    };
+
+    static uint32_t normalizeMaxFrameSize(uint32_t max_frame_size) {
+        if (max_frame_size < kDefaultMaxFrameSize) {
+            return kDefaultMaxFrameSize;
+        }
+        return std::min<uint32_t>(max_frame_size, kMaxFrameSize);
+    }
+
+    int32_t availableConnSendWindow() const {
+        return m_conn_send_window != nullptr
+            ? *m_conn_send_window
+            : std::numeric_limits<int32_t>::max();
+    }
+
+    void consumeDataSendWindow(size_t bytes) {
+        const auto delta = static_cast<int32_t>(bytes);
+        m_send_window -= delta;
+        if (m_conn_send_window != nullptr) {
+            *m_conn_send_window -= delta;
+        }
+    }
+
+    size_t availableDataChunkSize(const PendingDataSend& pending) const {
+        if (!pending.payload || pending.offset >= pending.payload->size()) {
+            return 0;
+        }
+        const auto stream_window = std::max<int32_t>(m_send_window, 0);
+        const auto conn_window = std::max<int32_t>(availableConnSendWindow(), 0);
+        if (stream_window == 0 || conn_window == 0) {
+            return 0;
+        }
+        return std::min<size_t>({
+            pending.payload->size() - pending.offset,
+            static_cast<size_t>(m_max_frame_size),
+            static_cast<size_t>(stream_window),
+            static_cast<size_t>(conn_window)
+        });
+    }
+
+    void enqueueOutgoingDataFrame(Http2OutgoingFrame&& frame) {
+        if (m_send_channel) {
+            m_send_channel->send(std::move(frame));
+            return;
+        }
+        if (m_send_queue) {
+            m_send_queue->push_back(std::move(frame));
+        }
+    }
+
+    enum class PendingDataFlushResult {
+        Blocked,
+        Progress,
+        Complete
+    };
+
+    PendingDataFlushResult flushPendingDataFront(PendingDataSend& pending) {
+        const size_t payload_size = pending.payload ? pending.payload->size() : 0;
+        if (payload_size == 0) {
+            auto header_bytes = Http2FrameBuilder::dataHeaderBytes(
+                m_stream_id, 0, pending.end_stream);
+            if (pending.end_stream) {
+                onDataSent(true);
+            }
+            auto payload = pending.payload
+                ? pending.payload
+                : std::make_shared<const std::string>();
+            enqueueOutgoingDataFrame(
+                Http2OutgoingFrame::segmentedShared(
+                    std::move(header_bytes), std::move(payload), pending.waiter));
+            return PendingDataFlushResult::Complete;
+        }
+
+        const size_t chunk_size = availableDataChunkSize(pending);
+        if (chunk_size == 0) {
+            return PendingDataFlushResult::Blocked;
+        }
+
+        const bool final_chunk = pending.offset + chunk_size == payload_size;
+        const bool frame_end_stream = pending.end_stream && final_chunk;
+        auto header_bytes = Http2FrameBuilder::dataHeaderBytes(
+            m_stream_id, chunk_size, frame_end_stream);
+        auto waiter = final_chunk ? pending.waiter : nullptr;
+        enqueueOutgoingDataFrame(
+            Http2OutgoingFrame::segmentedShared(
+                std::move(header_bytes),
+                pending.payload,
+                pending.offset,
+                chunk_size,
+                std::move(waiter)));
+
+        consumeDataSendWindow(chunk_size);
+        pending.offset += chunk_size;
+        if (frame_end_stream) {
+            onDataSent(true);
+        }
+        return final_chunk ? PendingDataFlushResult::Complete
+                           : PendingDataFlushResult::Progress;
+    }
+
+    bool flushPendingData() {
+        bool made_progress = false;
+        while (!m_pending_data.empty() && (m_send_queue || m_send_channel)) {
+            auto result = flushPendingDataFront(m_pending_data.front());
+            if (result == PendingDataFlushResult::Blocked) {
+                break;
+            }
+            made_progress = true;
+            if (result == PendingDataFlushResult::Complete) {
+                m_pending_data.pop_front();
+            }
+        }
+        return made_progress;
+    }
+
+    void notifyPendingDataWaiters() {
+        for (auto& pending : m_pending_data) {
+            if (pending.waiter) {
+                pending.waiter->notify();
+            }
+        }
+        m_pending_data.clear();
+    }
+
+    void queueDataForSend(std::shared_ptr<const std::string> payload,
+                          bool end_stream,
+                          const Http2OutgoingFrame::WaiterPtr& waiter) {
+        if (!m_send_queue && !m_send_channel) {
+            if (waiter) {
+                waiter->notify();
+            }
+            return;
+        }
+
+        m_pending_data.push_back(PendingDataSend{
+            .payload = payload ? std::move(payload) : std::make_shared<const std::string>(),
+            .offset = 0,
+            .end_stream = end_stream,
+            .waiter = waiter
+        });
+        flushPendingData();
+    }
+
+public:
     // ==================== 帧队列 ====================
 
     /**
@@ -825,6 +978,7 @@ public:
     void closeFrameQueue() {
         if (m_frame_queue_closed) return;
         m_frame_queue_closed = true;
+        notifyPendingDataWaiters();
         markRequestCompleted();
         markResponseCompleted();
         m_frame_channel.send(Http2Frame::uptr{});
@@ -1249,22 +1403,32 @@ private:
 
     void attachIO(std::vector<Http2OutgoingFrame>* send_queue,
                   HpackEncoder* encoder,
-                  HpackDecoder* decoder) {
+                  HpackDecoder* decoder,
+                  int32_t* conn_send_window = nullptr,
+                  uint32_t max_frame_size = kDefaultMaxFrameSize) {
         m_send_queue = send_queue;
         m_send_channel = nullptr;
         m_encoder = encoder;
         m_decoder = decoder;
+        m_conn_send_window = conn_send_window;
+        m_max_frame_size = normalizeMaxFrameSize(max_frame_size);
         m_io_attached = true;
+        flushPendingData();
     }
 
     void attachIO(galay::kernel::MpscChannel<Http2OutgoingFrame>* send_channel,
                   HpackEncoder* encoder,
-                  HpackDecoder* decoder) {
+                  HpackDecoder* decoder,
+                  int32_t* conn_send_window = nullptr,
+                  uint32_t max_frame_size = kDefaultMaxFrameSize) {
         m_send_channel = send_channel;
         m_send_queue = nullptr;
         m_encoder = encoder;
         m_decoder = decoder;
+        m_conn_send_window = conn_send_window;
+        m_max_frame_size = normalizeMaxFrameSize(max_frame_size);
         m_io_attached = true;
+        flushPendingData();
     }
 
     void setRetireCallback(std::function<void(uint32_t)> callback) {
@@ -1305,6 +1469,9 @@ private:
     std::vector<Http2OutgoingFrame>* m_send_queue = nullptr;
     HpackEncoder* m_encoder = nullptr;
     HpackDecoder* m_decoder = nullptr;
+    int32_t* m_conn_send_window = nullptr;
+    uint32_t m_max_frame_size = kDefaultMaxFrameSize;
+    std::deque<PendingDataSend> m_pending_data;
     bool m_io_attached = false;
     std::function<void(uint32_t)> m_retire_callback;
 
@@ -1357,6 +1524,9 @@ private:
         m_send_queue = nullptr;
         m_encoder = nullptr;
         m_decoder = nullptr;
+        m_conn_send_window = nullptr;
+        m_max_frame_size = kDefaultMaxFrameSize;
+        m_pending_data.clear();
         m_io_attached = false;
         m_retire_callback = nullptr;
     }
@@ -1450,65 +1620,20 @@ private:
     void sendDataInternal(const std::string& data,
                           bool end_stream,
                           const Http2OutgoingFrame::WaiterPtr& waiter) {
-        if (!m_send_queue && !m_send_channel) return;
-        if (m_send_window < static_cast<int32_t>(data.size())) return;
-        auto header_bytes = Http2FrameBuilder::dataHeaderBytes(m_stream_id, data.size(), end_stream);
-
-        m_send_window -= static_cast<int32_t>(data.size());
-        if (end_stream) {
-            onDataSent(true);
-        }
-        if (m_send_channel) {
-            m_send_channel->send(
-                Http2OutgoingFrame::segmented(std::move(header_bytes), std::string(data), waiter));
-        } else {
-            m_send_queue->push_back(
-                Http2OutgoingFrame::segmented(std::move(header_bytes), std::string(data), waiter));
-        }
+        queueDataForSend(std::make_shared<const std::string>(data), end_stream, waiter);
     }
 
     void sendDataInternal(std::string&& data,
                           bool end_stream,
                           const Http2OutgoingFrame::WaiterPtr& waiter) {
-        if (!m_send_queue && !m_send_channel) return;
-        if (m_send_window < static_cast<int32_t>(data.size())) return;
-
-        auto header_bytes = Http2FrameBuilder::dataHeaderBytes(m_stream_id, data.size(), end_stream);
-
-        m_send_window -= static_cast<int32_t>(data.size());
-        if (end_stream) {
-            onDataSent(true);
-        }
-        if (m_send_channel) {
-            m_send_channel->send(
-                Http2OutgoingFrame::segmented(std::move(header_bytes), std::move(data), waiter));
-        } else {
-            m_send_queue->push_back(
-                Http2OutgoingFrame::segmented(std::move(header_bytes), std::move(data), waiter));
-        }
+        queueDataForSend(
+            std::make_shared<const std::string>(std::move(data)), end_stream, waiter);
     }
 
     void sendDataInternal(std::shared_ptr<const std::string> data,
                           bool end_stream,
                           const Http2OutgoingFrame::WaiterPtr& waiter) {
-        if (!m_send_queue && !m_send_channel) return;
-
-        auto payload = data ? std::move(data) : emptySharedPayload();
-        if (m_send_window < static_cast<int32_t>(payload->size())) return;
-
-        auto header_bytes = Http2FrameBuilder::dataHeaderBytes(m_stream_id, payload->size(), end_stream);
-
-        m_send_window -= static_cast<int32_t>(payload->size());
-        if (end_stream) {
-            onDataSent(true);
-        }
-        if (m_send_channel) {
-            m_send_channel->send(
-                Http2OutgoingFrame::segmentedShared(std::move(header_bytes), std::move(payload), waiter));
-        } else {
-            m_send_queue->push_back(
-                Http2OutgoingFrame::segmentedShared(std::move(header_bytes), std::move(payload), waiter));
-        }
+        queueDataForSend(std::move(data), end_stream, waiter);
     }
 
     void sendRstStreamInternal(Http2ErrorCode error,

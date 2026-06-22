@@ -251,19 +251,27 @@ bool BatchSpanProcessor::shutdown(std::chrono::milliseconds timeout) {
 
     bool ok = true;
 
-    if (!m_control->joinClaimed.exchange(true, std::memory_order_acq_rel) && m_worker.joinable()) {
-        m_worker.join();
-    } else {
-        while (!m_control->workerStopped.load(std::memory_order_acquire) &&
-               std::chrono::steady_clock::now() <= deadline) {
-            std::this_thread::yield();
-        }
-        ok = ok && m_control->workerStopped.load(std::memory_order_acquire);
+    while (!m_control->workerStopped.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() <= deadline) {
+        std::this_thread::yield();
     }
+
+    const bool workerStopped = m_control->workerStopped.load(std::memory_order_acquire);
+    ok = ok && workerStopped;
+    if (workerStopped &&
+        !m_control->joinClaimed.exchange(true, std::memory_order_acq_rel) &&
+        m_worker.joinable()) {
+        m_worker.join();
+    }
+
     ok = m_control->shutdownDrainOk.load(std::memory_order_acquire) && ok;
 
-    if (m_exporter && !m_control->exporterShutdown.exchange(true, std::memory_order_acq_rel)) {
-        ok = m_exporter->shutdown(timeout) && ok;
+    if (workerStopped && m_exporter && !m_control->exporterShutdown.exchange(true, std::memory_order_acq_rel)) {
+        const auto now = std::chrono::steady_clock::now();
+        const auto remaining = now >= deadline
+            ? std::chrono::milliseconds::zero()
+            : std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now);
+        ok = m_exporter->shutdown(remaining) && ok;
     }
 
     if (!ok) {

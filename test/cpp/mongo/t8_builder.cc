@@ -35,7 +35,11 @@ bool test_builder_pipeline_encode()
     }
 
     const int32_t first_request_id = 100;
-    const std::string encoded = builder.encodePipeline("admin", first_request_id);
+    const auto encoded_or_err = builder.encodePipeline("admin", first_request_id);
+    if (!encoded_or_err) {
+        return failCase("encodePipeline failed: " + encoded_or_err.error());
+    }
+    const std::string& encoded = encoded_or_err.value();
 
     if (encoded.empty()) {
         return failCase("encoded pipeline is empty");
@@ -89,7 +93,10 @@ bool test_append_op_msg_with_database()
     ping_without_db.append("ping", int32_t(1));
 
     std::string encoded;
-    MongoProtocol::appendOpMsgWithDatabase(encoded, 101, ping_without_db, "admin");
+    auto appended = MongoProtocol::appendOpMsgWithDatabase(encoded, 101, ping_without_db, "admin");
+    if (!appended) {
+        return failCase("appendOpMsgWithDatabase failed: " + appended.error());
+    }
 
     size_t consumed = 0;
     auto parsed = MongoProtocol::extractMessage(encoded.data(), encoded.size(), consumed);
@@ -111,7 +118,10 @@ bool test_append_op_msg_with_database()
     ping_with_db.append("ping", int32_t(1));
     ping_with_db.append("$db", "custom_db");
     encoded.clear();
-    MongoProtocol::appendOpMsgWithDatabase(encoded, 102, ping_with_db, "admin");
+    appended = MongoProtocol::appendOpMsgWithDatabase(encoded, 102, ping_with_db, "admin");
+    if (!appended) {
+        return failCase("appendOpMsgWithDatabase(with $db) failed: " + appended.error());
+    }
 
     consumed = 0;
     parsed = MongoProtocol::extractMessage(encoded.data(), encoded.size(), consumed);

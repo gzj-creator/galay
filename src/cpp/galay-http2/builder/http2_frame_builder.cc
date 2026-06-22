@@ -2,6 +2,7 @@
 
 #include <galay/cpp/galay-http2/utils/h2_helper.h>
 
+#include <algorithm>
 #include <utility>
 
 namespace galay::http2
@@ -71,6 +72,24 @@ std::string Http2FrameBuilder::dataBytes(uint32_t stream_id,
                                          std::string_view payload,
                                          bool end_stream)
 {
+    if (payload.size() > kDefaultMaxFrameSize) {
+        const size_t frame_count =
+            (payload.size() + kDefaultMaxFrameSize - 1) / kDefaultMaxFrameSize;
+        std::string result;
+        result.reserve(payload.size() + frame_count * kHttp2FrameHeaderLength);
+
+        size_t offset = 0;
+        while (offset < payload.size()) {
+            const size_t chunk_size = std::min<size_t>(
+                payload.size() - offset, kDefaultMaxFrameSize);
+            const bool chunk_end_stream = end_stream && offset + chunk_size == payload.size();
+            result.append(dataBytes(
+                stream_id, payload.substr(offset, chunk_size), chunk_end_stream));
+            offset += chunk_size;
+        }
+        return result;
+    }
+
     uint8_t flags = 0;
     if (end_stream) {
         flags |= Http2FrameFlags::kEndStream;

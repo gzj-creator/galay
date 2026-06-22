@@ -114,7 +114,7 @@ bool waitUntil(const std::atomic<bool>& flag,
 
 Task<void> verifyPoolSurface(PoolSurfaceState* state, IOScheduler* scheduler)
 {
-    ConnectionPoolConfig config = ConnectionPoolConfig::create("127.0.0.1", 6379, 2, 5);
+    ConnectionPoolConfig config = ConnectionPoolConfig::create("127.0.0.1", 1, 2, 5);
     config.initial_connections = 2;
 
     RedisConnectionPool pool(scheduler, config);
@@ -127,47 +127,42 @@ Task<void> verifyPoolSurface(PoolSurfaceState* state, IOScheduler* scheduler)
     }
 
     const auto after_init = pool.getStats();
-    if (after_init.total_connections != config.initial_connections) {
-        state->failure = "initialize should create exactly initial_connections, got total=" +
+    if (after_init.total_connections != 0) {
+        state->failure = "initialize must not create disconnected placeholder connections, got total=" +
                          std::to_string(after_init.total_connections);
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    if (after_init.available_connections != config.initial_connections) {
-        state->failure = "initialize should make all initial connections immediately available, got available=" +
+    if (after_init.available_connections != 0) {
+        state->failure = "initialize must not expose placeholder connections as available, got available=" +
                          std::to_string(after_init.available_connections);
         state->done.store(true, std::memory_order_release);
         co_return;
     }
 
-    const auto acquire_result = co_await pool.acquire().timeout(100ms);
-    if (!acquire_result) {
-        state->failure = "acquire failed: " + acquire_result.error().message();
+    const auto acquire_result = co_await pool.acquire().timeout(500ms);
+    if (acquire_result) {
+        state->failure = "acquire against a closed local port should fail instead of returning a placeholder";
+        state->done.store(true, std::memory_order_release);
+        co_return;
+    }
+    if (acquire_result.error().type() == REDIS_ERROR_TYPE_INTERNAL_ERROR) {
+        state->failure = "closed-port acquire should propagate connection failure, not internal pool error";
         state->done.store(true, std::memory_order_release);
         co_return;
     }
 
-    auto conn = acquire_result.value();
     const auto after_acquire = pool.getStats();
-    if (after_acquire.total_connections != config.initial_connections) {
-        state->failure = "first acquire should reuse initialized connections instead of expanding the pool, got total=" +
-                         std::to_string(after_acquire.total_connections);
+    if (after_acquire.total_connections != 0 || after_acquire.available_connections != 0) {
+        state->failure = "failed acquire should remove pending connection, got total=" +
+                         std::to_string(after_acquire.total_connections) +
+                         " available=" + std::to_string(after_acquire.available_connections);
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    if (after_acquire.available_connections + 1 != config.initial_connections) {
-        state->failure = "acquire should consume exactly one available connection, got available=" +
-                         std::to_string(after_acquire.available_connections);
-        state->done.store(true, std::memory_order_release);
-        co_return;
-    }
-
-    pool.release(std::move(conn));
-
-    const auto after_release = pool.getStats();
-    if (after_release.available_connections != config.initial_connections) {
-        state->failure = "release should restore the available connection count, got available=" +
-                         std::to_string(after_release.available_connections);
+    if (after_acquire.waiting_requests != 0) {
+        state->failure = "failed acquire should not leave waiters counted, got waiting=" +
+                         std::to_string(after_acquire.waiting_requests);
         state->done.store(true, std::memory_order_release);
         co_return;
     }

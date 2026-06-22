@@ -58,7 +58,7 @@ public:
     AsyncFile();
 
     /**
-     * @brief 析构函数；不会自动关闭文件
+     * @brief 析构函数；同步关闭仍由对象持有的文件
      */
     ~AsyncFile();
 
@@ -85,6 +85,7 @@ public:
      * @param mode 打开模式（Read、Write、ReadWrite、Append、Truncate）
      * @param permissions 文件创建权限（默认 0644）
      * @return 成功返回 void，失败返回 IOError
+     * @note 若对象已持有文件，成功打开新文件前会先同步关闭旧 fd。
      */
     std::expected<void, galay::kernel::IOError> open(
         const std::string& path,

@@ -8,6 +8,8 @@ namespace galay::mongo::protocol
 namespace
 {
 
+constexpr int32_t kChecksumPresentFlag = 0x01;
+
 int32_t readInt32LE(const char* p)
 {
     return static_cast<int32_t>(
@@ -15,6 +17,27 @@ int32_t readInt32LE(const char* p)
         (static_cast<uint32_t>(static_cast<uint8_t>(p[1])) <<  8) |
         (static_cast<uint32_t>(static_cast<uint8_t>(p[2])) << 16) |
         (static_cast<uint32_t>(static_cast<uint8_t>(p[3])) << 24));
+}
+
+uint32_t readUint32LE(const char* p)
+{
+    return (static_cast<uint32_t>(static_cast<uint8_t>(p[0]))      ) |
+           (static_cast<uint32_t>(static_cast<uint8_t>(p[1])) <<  8) |
+           (static_cast<uint32_t>(static_cast<uint8_t>(p[2])) << 16) |
+           (static_cast<uint32_t>(static_cast<uint8_t>(p[3])) << 24);
+}
+
+uint32_t crc32c(const char* data, size_t len)
+{
+    uint32_t crc = 0xFFFFFFFFu;
+    for (size_t i = 0; i < len; ++i) {
+        crc ^= static_cast<uint8_t>(data[i]);
+        for (int bit = 0; bit < 8; ++bit) {
+            const uint32_t mask = 0u - (crc & 1u);
+            crc = (crc >> 1) ^ (0x82F63B78u & mask);
+        }
+    }
+    return ~crc;
 }
 
 void writeInt32LEAt(std::string& out, size_t pos, int32_t value)
@@ -37,19 +60,22 @@ void appendInt32LE(std::string& out, int32_t value)
 
 } // namespace
 
-std::string MongoProtocol::encodeOpMsg(int32_t request_id,
-                                       const MongoDocument& body,
-                                       int32_t flags)
+std::expected<std::string, std::string> MongoProtocol::encodeOpMsg(int32_t request_id,
+                                                                   const MongoDocument& body,
+                                                                   int32_t flags)
 {
     std::string out;
-    appendOpMsg(out, request_id, body, flags);
+    auto appended = appendOpMsg(out, request_id, body, flags);
+    if (!appended) {
+        return std::unexpected(appended.error());
+    }
     return out;
 }
 
-void MongoProtocol::appendOpMsg(std::string& out,
-                                int32_t request_id,
-                                const MongoDocument& body,
-                                int32_t flags)
+std::expected<void, std::string> MongoProtocol::appendOpMsg(std::string& out,
+                                                            int32_t request_id,
+                                                            const MongoDocument& body,
+                                                            int32_t flags)
 {
     const size_t base = out.size();
     out.reserve(base + 16 + 4 + 1 + 64);
@@ -57,19 +83,24 @@ void MongoProtocol::appendOpMsg(std::string& out,
 
     appendInt32LE(out, flags);
     out.push_back(static_cast<char>(0));
-    BsonCodec::appendDocument(out, body);
+    auto body_appended = BsonCodec::appendDocument(out, body);
+    if (!body_appended) {
+        out.resize(base);
+        return std::unexpected(body_appended.error());
+    }
 
     writeInt32LEAt(out, base + 0, static_cast<int32_t>(out.size() - base));
     writeInt32LEAt(out, base + 4, request_id);
     writeInt32LEAt(out, base + 8, 0); // responseTo for request
     writeInt32LEAt(out, base + 12, kMongoOpMsg);
+    return {};
 }
 
-void MongoProtocol::appendOpMsgWithDatabase(std::string& out,
-                                            int32_t request_id,
-                                            const MongoDocument& body,
-                                            std::string_view database,
-                                            int32_t flags)
+std::expected<void, std::string> MongoProtocol::appendOpMsgWithDatabase(std::string& out,
+                                                                        int32_t request_id,
+                                                                        const MongoDocument& body,
+                                                                        std::string_view database,
+                                                                        int32_t flags)
 {
     const size_t base = out.size();
     out.reserve(base + 16 + 4 + 1 + 64 + database.size());
@@ -77,12 +108,17 @@ void MongoProtocol::appendOpMsgWithDatabase(std::string& out,
 
     appendInt32LE(out, flags);
     out.push_back(static_cast<char>(0));
-    BsonCodec::appendDocumentWithDatabase(out, body, database);
+    auto body_appended = BsonCodec::appendDocumentWithDatabase(out, body, database);
+    if (!body_appended) {
+        out.resize(base);
+        return std::unexpected(body_appended.error());
+    }
 
     writeInt32LEAt(out, base + 0, static_cast<int32_t>(out.size() - base));
     writeInt32LEAt(out, base + 4, request_id);
     writeInt32LEAt(out, base + 8, 0); // responseTo for request
     writeInt32LEAt(out, base + 12, kMongoOpMsg);
+    return {};
 }
 
 std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char* data, size_t len)
@@ -121,9 +157,24 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
     pos += 4;
 
     // If checksumPresent bit is set, the last 4 bytes are a CRC32 checksum
-    const size_t parseable_end = (message.flags & 0x01)
-        ? static_cast<size_t>(message.header.message_length) - 4
-        : static_cast<size_t>(message.header.message_length);
+    const size_t message_size = static_cast<size_t>(message.header.message_length);
+    if (message.flags & kChecksumPresentFlag) {
+        if (message_size < 25) {
+            return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
+                                              "OP_MSG checksum missing"));
+        }
+
+        const uint32_t expected_checksum = readUint32LE(data + message_size - 4);
+        const uint32_t actual_checksum = crc32c(data, message_size - 4);
+        if (actual_checksum != expected_checksum) {
+            return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
+                                              "OP_MSG checksum mismatch"));
+        }
+    }
+
+    const size_t parseable_end = (message.flags & kChecksumPresentFlag)
+        ? message_size - 4
+        : message_size;
 
     bool body_found = false;
 

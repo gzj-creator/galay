@@ -120,7 +120,6 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/cpp/
         PATTERN "*.h"
         PATTERN "*.hpp"
         PATTERN "*.inl"
-        PATTERN "*.cppm"
 )
 if(GALAY_BUILD_C_API)
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/c/
@@ -131,7 +130,10 @@ if(GALAY_BUILD_C_API)
 endif()
 
 set(GALAY_CONFIG_NEEDS_THREADS ON)
-set(GALAY_CONFIG_NEEDS_OPENSSL ${GALAY_BUILD_SSL})
+set(GALAY_CONFIG_NEEDS_OPENSSL OFF)
+if(TARGET ssl OR TARGET tracing)
+    set(GALAY_CONFIG_NEEDS_OPENSSL ON)
+endif()
 set(GALAY_CONFIG_NEEDS_SPDLOG OFF)
 if(TARGET galay-tracing-spdlog)
     set(GALAY_CONFIG_NEEDS_SPDLOG ON)

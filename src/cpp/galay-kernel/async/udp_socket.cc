@@ -57,10 +57,14 @@ UdpSocket::UdpSocket(GHandle handle)
 }
 
 /**
- * @brief 析构函数；不会自动关闭套接字
+ * @brief 析构函数；关闭仍由对象持有的套接字
  */
 UdpSocket::~UdpSocket()
 {
+    if (m_controller.m_handle != GHandle::invalid()) {
+        galay_close(m_controller.m_handle.fd);
+        m_controller.m_handle = GHandle::invalid();
+    }
 }
 
 /**
@@ -81,7 +85,8 @@ UdpSocket& UdpSocket::operator=(UdpSocket&& other) noexcept
 {
     if (this != &other) {
         if (m_controller.m_handle != GHandle::invalid()) {
-            ::close(m_controller.m_handle.fd);
+            galay_close(m_controller.m_handle.fd);
+            m_controller.m_handle = GHandle::invalid();
         }
         m_controller = std::move(other.m_controller);
     }

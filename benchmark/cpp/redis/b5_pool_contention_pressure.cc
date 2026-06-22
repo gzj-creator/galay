@@ -8,9 +8,7 @@
 #include <future>
 #include <iostream>
 #include <memory>
-#include <mutex>
 #include <string>
-#include <unordered_set>
 
 using namespace galay::kernel;
 using namespace galay::redis;
@@ -28,8 +26,6 @@ struct SharedState {
     std::atomic<int> acquire_internal_errors{0};
     std::atomic<int> acquire_timeouts{0};
     std::atomic<int> command_failures{0};
-    std::mutex connected_mutex;
-    std::unordered_set<RedisClient*> connected_clients;
 };
 
 Task<void> workerTask(RedisConnectionPool* pool,
@@ -58,24 +54,6 @@ Task<void> workerTask(RedisConnectionPool* pool,
 
         auto conn = conn_result.value();
         auto* client = conn->get();
-
-        bool need_connect = false;
-        {
-            std::lock_guard<std::mutex> lock(state->connected_mutex);
-            need_connect = state->connected_clients.find(client) == state->connected_clients.end();
-        }
-
-        if (need_connect || client->isClosed()) {
-            auto connect_result = co_await client->connect("127.0.0.1", 6379).timeout(5s);
-            if (!connect_result) {
-                ++local_command_failures;
-                pool->release(conn);
-                continue;
-            }
-
-            std::lock_guard<std::mutex> lock(state->connected_mutex);
-            state->connected_clients.insert(client);
-        }
 
         const std::string key =
             "test:pool:acquire:" + std::to_string(worker_id) + ":" + std::to_string(i);

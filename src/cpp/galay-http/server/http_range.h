@@ -12,6 +12,7 @@
 #ifndef GALAY_HTTP_RANGE_H
 #define GALAY_HTTP_RANGE_H
 
+#include <algorithm>
 #include <charconv>
 #include <string>
 #include <string_view>
@@ -157,6 +158,9 @@ struct RangeParseResult
 class HttpRangeParser
 {
 public:
+    static constexpr size_t kMaxMultipartRanges = 16;                  ///< multipart Range 最大分片数
+    static constexpr uint64_t kMaxMultipartBodyBytes = 8ull * 1024 * 1024; ///< multipart Range 最大聚合内容字节数
+
     /**
      * @brief 解析 Range 请求头
      * @param rangeHeader Range 请求头的值（不包含 "Range: " 前缀）
@@ -181,7 +185,7 @@ public:
 
         // 解析范围
         auto ranges = splitRanges(rangesStr);
-        if (ranges.empty()) {
+        if (ranges.empty() || ranges.size() > kMaxMultipartRanges) {
             return result;  // 无效的 Range
         }
 
@@ -195,19 +199,32 @@ public:
             }
         } else {
             // 多个范围
-            result.type = RangeType::MULTIPLE_RANGES;
-            result.boundary = RangeParseResult::generateBoundary();
-
+            std::vector<HttpRange> parsed_ranges;
+            parsed_ranges.reserve(ranges.size());
             for (const auto& r : ranges) {
                 auto range = parseSingleRange(r, fileSize);
                 if (range.isValid()) {
-                    result.ranges.push_back(range);
+                    parsed_ranges.push_back(range);
                 }
             }
 
             // 如果所有范围都无效
-            if (result.ranges.empty()) {
+            if (parsed_ranges.empty()) {
+                return result;
+            }
+
+            result.ranges = mergeRanges(std::move(parsed_ranges));
+            if (result.ranges.empty() || !isAggregateRangeSizeAllowed(result.ranges)) {
                 result.type = RangeType::INVALID;
+                result.ranges.clear();
+                return result;
+            }
+
+            result.type = result.ranges.size() == 1
+                ? RangeType::SINGLE_RANGE
+                : RangeType::MULTIPLE_RANGES;
+            if (result.type == RangeType::MULTIPLE_RANGES) {
+                result.boundary = RangeParseResult::generateBoundary();
             }
         }
 
@@ -263,6 +280,48 @@ private:
         const char* end = begin + text.size();
         auto [ptr, ec] = std::from_chars(begin, end, value);
         return ec == std::errc{} && ptr == end;
+    }
+
+    static std::vector<HttpRange> mergeRanges(std::vector<HttpRange> ranges)
+    {
+        std::sort(ranges.begin(), ranges.end(), [](const HttpRange& lhs, const HttpRange& rhs) {
+            if (lhs.start != rhs.start) {
+                return lhs.start < rhs.start;
+            }
+            return lhs.end < rhs.end;
+        });
+
+        std::vector<HttpRange> merged;
+        merged.reserve(ranges.size());
+        for (const auto& range : ranges) {
+            if (merged.empty()) {
+                merged.push_back(range);
+                continue;
+            }
+
+            auto& tail = merged.back();
+            if (range.start <= tail.end ||
+                (tail.end != UINT64_MAX && range.start == tail.end + 1)) {
+                tail.end = std::max(tail.end, range.end);
+                tail.length = tail.end - tail.start + 1;
+                continue;
+            }
+            merged.push_back(range);
+        }
+        return merged;
+    }
+
+    static bool isAggregateRangeSizeAllowed(const std::vector<HttpRange>& ranges)
+    {
+        uint64_t total = 0;
+        for (const auto& range : ranges) {
+            if (range.length > kMaxMultipartBodyBytes ||
+                total > kMaxMultipartBodyBytes - range.length) {
+                return false;
+            }
+            total += range.length;
+        }
+        return true;
     }
 
     /**

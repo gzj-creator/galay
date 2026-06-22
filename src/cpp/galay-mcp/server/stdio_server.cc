@@ -43,6 +43,15 @@ void McpStdioServer::setServerInfo(const std::string& name, const std::string& v
     m_serverVersion = version;
 }
 
+void McpStdioServer::setProductionPolicy(McpProductionPolicy policy) {
+    m_policy = std::move(policy);
+}
+
+void McpStdioServer::setStreams(std::istream& input, std::ostream& output) noexcept {
+    m_input = &input;
+    m_output = &output;
+}
+
 void McpStdioServer::addTool(const std::string& name,
                              const std::string& description,
                              const JsonString& inputSchema,
@@ -115,6 +124,10 @@ void McpStdioServer::run() {
     while (m_running) {
         auto messageResult = readMessage();
         if (!messageResult) {
+            if (messageResult.error().code() == McpErrorCode::PayloadTooLarge) {
+                sendError(0, messageResult.error().toJsonRpcErrorCode(), messageResult.error().message(), "");
+                continue;
+            }
             // 读取失败，可能是EOF或错误
             if (m_input->eof()) {
                 MCP_LOG_INFO("[stdio_server]", "input reached eof");
@@ -329,7 +342,7 @@ void McpStdioServer::handleToolsCall(const JsonRpcRequestView& request) {
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[stdio_server]", "tools/call threw id={} error={}", request.id.value(), e.what());
         sendError(request.id.value(), ErrorCodes::INTERNAL_ERROR,
-                 "Internal error", e.what());
+                 "Internal error", "");
     }
 }
 
@@ -434,7 +447,7 @@ void McpStdioServer::handleResourcesRead(const JsonRpcRequestView& request) {
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[stdio_server]", "resources/read threw id={} error={}", request.id.value(), e.what());
         sendError(request.id.value(), ErrorCodes::INTERNAL_ERROR,
-                 "Internal error", e.what());
+                 "Internal error", "");
     }
 }
 
@@ -532,7 +545,7 @@ void McpStdioServer::handlePromptsGet(const JsonRpcRequestView& request) {
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[stdio_server]", "prompts/get threw id={} error={}", request.id.value(), e.what());
         sendError(request.id.value(), ErrorCodes::INTERNAL_ERROR,
-                 "Internal error", e.what());
+                 "Internal error", "");
     }
 }
 
@@ -548,7 +561,16 @@ void McpStdioServer::handlePing(const JsonRpcRequestView& request) {
 }
 
 void McpStdioServer::sendResponse(const JsonRpcResponse& response) {
-    auto result = writeMessage(response.toJson());
+    JsonString message = response.toJson();
+    if (message.size() > m_policy.transport.max_response_bytes) {
+        message = protocol::makeErrorResponse(
+            response.id,
+            ErrorCodes::INVALID_REQUEST,
+            "Payload too large",
+            "").toJson();
+    }
+
+    auto result = writeMessage(message);
     if (!result) {
         MCP_LOG_ERROR("[stdio_server]", "write response failed id={} error={}",
                       response.id,
@@ -582,6 +604,9 @@ std::expected<std::string, McpError> McpStdioServer::readMessage() {
 
     if (line.empty()) {
         return std::unexpected(McpError::invalidMessage("Empty message"));
+    }
+    if (line.size() > m_policy.transport.max_stdio_line_bytes) {
+        return std::unexpected(McpError::payloadTooLarge("stdio line exceeds configured limit"));
     }
 
     return line;

@@ -77,6 +77,12 @@ std::expected<void, SslError> SslEngine::initMemoryBIO()
     if (!m_ssl) {
         return std::unexpected(SslError(SslErrorCode::kSslCreateFailed));
     }
+    if (m_rbio && m_wbio) {
+        return {};
+    }
+    if (m_rbio || m_wbio) {
+        return std::unexpected(SslError(SslErrorCode::kSslCreateFailed));
+    }
 
     m_rbio = BIO_new(BIO_s_mem());
     m_wbio = BIO_new(BIO_s_mem());
@@ -124,7 +130,9 @@ std::expected<void, SslError> SslEngine::setHostname(const std::string& hostname
     }
 
     // 设置主机名验证
-    SSL_set1_host(m_ssl, hostname.c_str());
+    if (SSL_set1_host(m_ssl, hostname.c_str()) != 1) {
+        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kSNISetFailed));
+    }
 
     return {};
 }

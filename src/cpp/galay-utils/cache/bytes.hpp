@@ -336,14 +336,14 @@ public:
     /**
      * @brief Get data as a C string when storage can safely expose one
      * @return Pointer to character data, or nullptr when no data exists
-     * @note Writes a null terminator only when capacity is greater than size.
+     * @note Owned byte buffers created from byte ranges keep a hidden spare
+     *       byte for the terminator without changing size() or capacity().
      */
     [[nodiscard]] const char* c_str() const noexcept {
         if (m_meta.data == nullptr) {
             return nullptr;
         }
-        if (m_meta.size > 0 && m_meta.data[m_meta.size - 1] != '\0' &&
-            m_meta.size < m_meta.capacity) {
+        if (m_owned || m_meta.size < m_meta.capacity) {
             m_meta.data[m_meta.size] = '\0';
         }
         return reinterpret_cast<const char*>(m_meta.data);
@@ -443,9 +443,11 @@ private:
             return;
         }
 
-        m_meta = mallocBytes(length);
+        m_meta = mallocBytes(length + 1);
+        m_meta.capacity = length;
         std::memcpy(m_meta.data, data, length);
         m_meta.size = length;
+        m_meta.data[m_meta.size] = '\0';
         m_owned = true;
     }
 

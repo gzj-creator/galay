@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <expected>
 #include <span>
 #include <string>
 #include <string_view>
@@ -31,13 +32,13 @@ public:
     [[nodiscard]] size_t size() const noexcept;
     [[nodiscard]] bool empty() const noexcept;
 
-    [[nodiscard]] std::string encodePipeline(std::string_view database,
-                                             int32_t first_request_id,
-                                             size_t reserve_per_command = 96) const;
-    [[nodiscard]] static std::string encodePipeline(std::string_view database,
-                                                    int32_t first_request_id,
-                                                    std::span<const MongoDocument> commands,
-                                                    size_t reserve_per_command = 96);
+    [[nodiscard]] std::expected<std::string, std::string> encodePipeline(std::string_view database,
+                                                                         int32_t first_request_id,
+                                                                         size_t reserve_per_command = 96) const;
+    [[nodiscard]] static std::expected<std::string, std::string> encodePipeline(std::string_view database,
+                                                                                int32_t first_request_id,
+                                                                                std::span<const MongoDocument> commands,
+                                                                                size_t reserve_per_command = 96);
 
 private:
     std::vector<MongoDocument> m_commands;

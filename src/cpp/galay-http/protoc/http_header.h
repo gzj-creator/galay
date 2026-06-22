@@ -356,6 +356,7 @@ namespace galay::http {
         std::string m_parseHeaderKey;                         ///< 解析中的头部键名
         std::string m_parseHeaderValue;                       ///< 解析中的头部值
         size_t m_parsedBytes = 0;                             ///< 已解析的字节数
+        bool m_uriDecodeError = false;                        ///< URI 百分号解码是否失败
         CommonHeaderIndex m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon; ///< 当前解析的常见头部索引
     };
 

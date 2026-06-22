@@ -55,27 +55,29 @@ public:
     /**
      * @brief 将 MongoDocument 编码为 BSON 二进制数据
      * @param document 要编码的文档
-     * @return BSON 二进制字符串
+     * @return 成功时返回 BSON 二进制字符串；失败时返回错误描述
      */
-    static std::string encodeDocument(const MongoDocument& document);
+    static std::expected<std::string, std::string> encodeDocument(const MongoDocument& document);
 
     /**
      * @brief 将 MongoDocument 直接追加编码到现有缓冲区尾部
      * @param out 输出缓冲区
      * @param document 要编码的文档
+     * @return 成功时返回空值；失败时返回错误描述且不保留本次追加的部分数据
      * @note 避免中间临时字符串分配，适合批量编码场景
      */
-    static void appendDocument(std::string& out, const MongoDocument& document);
+    static std::expected<void, std::string> appendDocument(std::string& out, const MongoDocument& document);
 
     /**
      * @brief 将 MongoDocument 追加编码到缓冲区；若原文档缺少 `$db` 字段则按需补齐
      * @param out 输出缓冲区
      * @param document 要编码的文档
      * @param database 默认数据库名，当文档无 `$db` 字段时使用
+     * @return 成功时返回空值；失败时返回错误描述且不保留本次追加的部分数据
      */
-    static void appendDocumentWithDatabase(std::string& out,
-                                           const MongoDocument& document,
-                                           std::string_view database);
+    static std::expected<void, std::string> appendDocumentWithDatabase(std::string& out,
+                                                                       const MongoDocument& document,
+                                                                       std::string_view database);
 
     /**
      * @brief 从 BSON 二进制数据解码为 MongoDocument
@@ -100,14 +102,14 @@ private:
     static void writeInt32(std::string& out, int32_t value);       ///< 写入 32 位整数（小端序）
     static void writeInt64(std::string& out, int64_t value);       ///< 写入 64 位整数（小端序）
     static void writeDouble(std::string& out, double value);       ///< 写入双精度浮点数（小端序）
-    static void writeCString(std::string& out, std::string_view value); ///< 写入 C 风格字符串（无长度前缀）
+    static std::expected<void, std::string> writeCString(std::string& out, std::string_view value); ///< 写入 C 风格字符串（无长度前缀）
 
     static std::expected<int32_t, std::string> readInt32(const char* data, size_t len, size_t pos);       ///< 读取 32 位整数
     static std::expected<int64_t, std::string> readInt64(const char* data, size_t len, size_t pos);       ///< 读取 64 位整数
     static std::expected<double, std::string> readDouble(const char* data, size_t len, size_t pos);       ///< 读取双精度浮点数
     static std::expected<std::string, std::string> readCString(const char* data, size_t len, size_t& pos); ///< 读取 C 风格字符串
 
-    static void encodeElement(std::string& out, std::string_view key, const MongoValue& value);  ///< 编码单个 BSON 元素
+    static std::expected<void, std::string> encodeElement(std::string& out, std::string_view key, const MongoValue& value);  ///< 编码单个 BSON 元素
     static std::expected<MongoValue, std::string> decodeElementValue(BsonType type,               ///< 解码单个 BSON 元素值
                                                                       const char* data,
                                                                       size_t len,

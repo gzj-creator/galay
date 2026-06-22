@@ -15,3 +15,4 @@ endfunction()
 
 galay_add_mongo_benchmark(benchmark_mongo_sync_ping_throughput b1_ping.cc)
 galay_add_mongo_benchmark(benchmark_mongo_async_ping_throughput b2_ping.cc)
+galay_add_mongo_benchmark(benchmark_mongo_expected_error_boundaries b3_expected_error_boundaries.cc)

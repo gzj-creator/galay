@@ -1,6 +1,7 @@
 #include "redis_protocol.h"
 #include <cstring>
 #include <charconv>
+#include <limits>
 
 #if defined(__SSE2__)
 #include <immintrin.h>
@@ -13,6 +14,10 @@ namespace galay::redis::protocol
 {
     namespace
     {
+        constexpr int64_t kMaxRespBulkLength = 512LL * 1024LL * 1024LL;
+        constexpr int64_t kMaxRespAggregateLength = 512LL * 1024LL * 1024LL;
+        constexpr int64_t kMaxRespMapPairs = kMaxRespAggregateLength / 2;
+
         const char* findCRLFSimd(const char* begin, const char* end)
         {
 #if defined(__SSE2__)
@@ -56,6 +61,11 @@ namespace galay::redis::protocol
 #else
             return begin;
 #endif
+        }
+
+        bool addWouldOverflow(size_t lhs, size_t rhs)
+        {
+            return lhs > std::numeric_limits<size_t>::max() - rhs;
         }
     }
 
@@ -332,10 +342,20 @@ namespace galay::redis::protocol
         if (str_len < 0) {
             return std::unexpected(ParseError::InvalidLength);
         }
+        if (str_len > kMaxRespBulkLength) {
+            return std::unexpected(ParseError::InvalidLength);
+        }
 
         size_t content_start = *crlf_pos + 2;
-        size_t content_end = content_start + static_cast<size_t>(str_len);
-        if (content_end + 2 > length) {
+        const size_t str_size = static_cast<size_t>(str_len);
+        if (addWouldOverflow(content_start, str_size)) {
+            return std::unexpected(ParseError::BufferOverflow);
+        }
+        size_t content_end = content_start + str_size;
+        if (addWouldOverflow(content_end, 2)) {
+            return std::unexpected(ParseError::BufferOverflow);
+        }
+        if (str_size > length - content_start || content_end + 2 > length) {
             return std::unexpected(ParseError::Incomplete);
         }
         if (data[content_end] != '\r' || data[content_end + 1] != '\n') {
@@ -366,6 +386,9 @@ namespace galay::redis::protocol
             return *crlf_pos + 2;
         }
         if (array_len < 0) {
+            return std::unexpected(ParseError::InvalidLength);
+        }
+        if (array_len > kMaxRespAggregateLength) {
             return std::unexpected(ParseError::InvalidLength);
         }
 
@@ -449,6 +472,9 @@ namespace galay::redis::protocol
         if (map_size < 0) {
             return std::unexpected(ParseError::InvalidLength);
         }
+        if (map_size > kMaxRespMapPairs) {
+            return std::unexpected(ParseError::InvalidLength);
+        }
 
         std::vector<std::pair<RedisReply, RedisReply>> map_data;
         map_data.reserve(static_cast<size_t>(map_size));
@@ -496,6 +522,9 @@ namespace galay::redis::protocol
 
         int64_t set_size = *len_result;
         if (set_size < 0) {
+            return std::unexpected(ParseError::InvalidLength);
+        }
+        if (set_size > kMaxRespAggregateLength) {
             return std::unexpected(ParseError::InvalidLength);
         }
 

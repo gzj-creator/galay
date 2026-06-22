@@ -252,11 +252,15 @@ public:
         auto completion = std::make_shared<TaskCompletionState<Result>>();
         auto submitted = m_blockingExecutor.submit([runtime = this, completion, function = Fn(std::forward<F>(func))]() mutable {
             detail::CurrentRuntimeScope runtimeScope(runtime);
-            if constexpr (std::is_void_v<Result>) {
-                std::invoke(function);
-                completion->setValue();
-            } else {
-                completion->setValue(std::invoke(function));
+            try {
+                if constexpr (std::is_void_v<Result>) {
+                    std::invoke(function);
+                    completion->setValue();
+                } else {
+                    completion->setValue(std::invoke(function));
+                }
+            } catch (...) {
+                completion->setError(detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
             }
         });
         if (!submitted.has_value()) {

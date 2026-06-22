@@ -406,10 +406,13 @@ ChunkDecodeResult decodeChunkedBody(std::string_view raw)
             return result;
         }
 
-        if (chunk_size > static_cast<uint64_t>(std::numeric_limits<size_t>::max())) {
-            return make_error("chunk size too large");
+        if (chunk_size > static_cast<uint64_t>(std::numeric_limits<size_t>::max() - 2)) {
+            return make_error("chunk size overflows buffer bounds");
         }
         const size_t body_size = static_cast<size_t>(chunk_size);
+        if (pos > std::numeric_limits<size_t>::max() - body_size - 2) {
+            return make_error("chunk size overflows buffer bounds");
+        }
         if (raw.size() < pos + body_size + 2) {
             return result;
         }

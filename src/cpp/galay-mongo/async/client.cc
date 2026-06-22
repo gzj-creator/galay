@@ -481,10 +481,13 @@ struct AsyncMongoClientInternals
             hello.append("client", buildClientMetadata(config.app_name));
 
             encoded_request.clear();
-            protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::appendOpMsg(
                 encoded_request,
                 client.nextRequestId(),
                 hello);
+            if (!encoded) {
+                return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
+            }
             return {};
         }
 
@@ -532,10 +535,13 @@ struct AsyncMongoClientInternals
             sasl_start.append("$db", auth_db);
 
             encoded_request.clear();
-            protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::appendOpMsg(
                 encoded_request,
                 client.nextRequestId(),
                 sasl_start);
+            if (!encoded) {
+                return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
+            }
             auth_phase = AuthPhase::SaslStartReply;
             return false;
         }
@@ -643,10 +649,13 @@ struct AsyncMongoClientInternals
             sasl_continue.append("$db", auth_db);
 
             encoded_request.clear();
-            protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::appendOpMsg(
                 encoded_request,
                 client.nextRequestId(),
                 sasl_continue);
+            if (!encoded) {
+                return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
+            }
             auth_phase = AuthPhase::SaslContinueReply;
             return false;
         }
@@ -690,10 +699,13 @@ struct AsyncMongoClientInternals
             final_continue.append("$db", auth_db);
 
             encoded_request.clear();
-            protocol::MongoProtocol::appendOpMsg(
+            auto encoded = protocol::MongoProtocol::appendOpMsg(
                 encoded_request,
                 client.nextRequestId(),
                 final_continue);
+            if (!encoded) {
+                return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
+            }
             auth_phase = AuthPhase::SaslFinalReply;
             return false;
         }
@@ -957,11 +969,14 @@ struct AsyncMongoClientInternals
             if (client.m_ping_encoded_template.empty() || client.m_ping_template_db != database) {
                 client.m_ping_template_db = database;
                 client.m_ping_encoded_template.clear();
-                protocol::MongoProtocol::appendOpMsgWithDatabase(
+                auto encoded = protocol::MongoProtocol::appendOpMsgWithDatabase(
                     client.m_ping_encoded_template,
                     0,
                     command,
                     database);
+                if (!encoded) {
+                    co_return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
+                }
             }
 
             if (client.m_ping_encoded_template.size() < 8) {
@@ -977,11 +992,14 @@ struct AsyncMongoClientInternals
             };
             send_segment_count = 3;
         } else {
-            protocol::MongoProtocol::appendOpMsgWithDatabase(
+            auto encoded = protocol::MongoProtocol::appendOpMsgWithDatabase(
                 encoded_request,
                 request_id,
                 command,
                 database);
+            if (!encoded) {
+                co_return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded.error()));
+            }
             send_segments[0] = SendSegment{encoded_request.data(), encoded_request.size()};
             send_segment_count = 1;
         }
@@ -1045,14 +1063,17 @@ struct AsyncMongoClientInternals
                 static_cast<int64_t>(first_request_id) + static_cast<int64_t>(i));
         }
 
-        const std::string encoded_batch = protocol::MongoCommandBuilder::encodePipeline(
+        auto encoded_batch = protocol::MongoCommandBuilder::encodePipeline(
             database,
             first_request_id,
             commands,
             client.m_pipeline_reserve_per_command);
+        if (!encoded_batch) {
+            co_return std::unexpected(MongoError(MONGO_ERROR_INVALID_PARAM, encoded_batch.error()));
+        }
 
         const std::array<SendSegment, 1> send_segments{{
-            SendSegment{encoded_batch.data(), encoded_batch.size()}
+            SendSegment{encoded_batch->data(), encoded_batch->size()}
         }};
         auto send_result = flattenMongoTaskResult(
             co_await sendSegments(

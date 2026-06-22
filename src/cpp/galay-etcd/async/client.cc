@@ -29,6 +29,8 @@ using namespace internal;
 namespace
 {
 
+constexpr size_t kMaxWatchHeaderBytes = 64 * 1024;
+
 EtcdError mapHttpError(const galay::http::HttpError& error)
 {
     using galay::http::kConnectionClose;
@@ -404,6 +406,10 @@ public:
                     16);
                 if (size_ec != std::errc() || size_ptr != size_line.data() + size_line.size()) {
                     error = "invalid chunk size value";
+                    return false;
+                }
+                if (chunk_size > static_cast<uint64_t>(std::numeric_limits<size_t>::max() - 2)) {
+                    error = "chunk size overflows buffer bounds";
                     return false;
                 }
 
@@ -1378,6 +1384,12 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                     std::string_view incoming(buffer.data(), static_cast<size_t>(recv_bytes));
                     if (!headers.has_value()) {
                         raw_header.append(incoming.data(), incoming.size());
+                        if (raw_header.size() > kMaxWatchHeaderBytes) {
+                            ETCD_LOG_WARN("[async] [watch]", "watch response header too large key={} bytes={}",
+                                          watch_key,
+                                          raw_header.size());
+                            break;
+                        }
                         const size_t header_end = raw_header.find("\r\n\r\n");
                         if (header_end == std::string::npos) {
                             continue;

@@ -417,6 +417,20 @@ struct TaskCompletionState
     }
 
     /**
+     * @brief 写入任务错误并唤醒等待者
+     * @param error 要返回给 join() 的任务错误
+     */
+    void setError(detail::TaskResultError error)
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_error = std::move(error);
+            m_ready = true;
+        }
+        m_cv.notify_all();
+    }
+
+    /**
      * @brief 阻塞等待任务结束
      * @note 只等待完成，不消耗结果
      */
@@ -437,6 +451,10 @@ struct TaskCompletionState
         if (m_consumed) {
             return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kAlreadyConsumed));
         }
+        if (m_error.has_value()) {
+            m_consumed = true;
+            return std::unexpected(*m_error);
+        }
         if (!m_value.has_value()) {
             return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kResultUnavailable));
         }
@@ -448,6 +466,7 @@ private:
     mutable std::mutex m_mutex;
     mutable std::condition_variable m_cv;
     std::optional<T> m_value;
+    std::optional<detail::TaskResultError> m_error;
     bool m_ready = false;
     bool m_consumed = false;
 };
@@ -468,6 +487,16 @@ struct TaskCompletionState<void>
         m_cv.notify_all();
     }
 
+    void setError(detail::TaskResultError error)  ///< 写入任务错误并唤醒等待者
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_error = std::move(error);
+            m_ready = true;
+        }
+        m_cv.notify_all();
+    }
+
     void wait() const  ///< 阻塞等待任务结束，不消耗完成状态
     {
         std::unique_lock<std::mutex> lock(m_mutex);
@@ -481,6 +510,10 @@ struct TaskCompletionState<void>
         if (m_consumed) {
             return std::unexpected(detail::TaskResultError(detail::TaskResultErrorCode::kAlreadyConsumed));
         }
+        if (m_error.has_value()) {
+            m_consumed = true;
+            return std::unexpected(*m_error);
+        }
         m_consumed = true;
         return {};
     }
@@ -488,6 +521,7 @@ struct TaskCompletionState<void>
 private:
     mutable std::mutex m_mutex;
     mutable std::condition_variable m_cv;
+    std::optional<detail::TaskResultError> m_error;
     bool m_ready = false;
     bool m_consumed = false;
 };
@@ -797,15 +831,13 @@ public:
         if (childTask.belongScheduler() == nullptr) {
             detail::setTaskScheduler(childTask, scheduler);
         }
+        childTask.state()->m_next = std::move(waitingTask);
         if (!detail::scheduleTaskImmediately(childTask)) {
+            childTask.state()->m_next.reset();
             detail::storeTaskError(childTask, TaskResultError(TaskResultErrorCode::kScheduleFailed));
             detail::completeTaskState(childTask);
             return false;
         }
-        if (m_task.done()) {
-            return false;
-        }
-        childTask.state()->m_next = std::move(waitingTask);
         return true;
     }
 

@@ -1,10 +1,32 @@
 #include "mongo_value.h"
 
 #include <cmath>
-#include <stdexcept>
+#include <string_view>
 
 namespace galay::mongo
 {
+
+namespace
+{
+
+bool isHexObjectId(std::string_view oid) noexcept
+{
+    if (oid.size() != 24) {
+        return false;
+    }
+    for (const char ch : oid) {
+        const auto c = static_cast<unsigned char>(ch);
+        if ((c >= '0' && c <= '9') ||
+            (c >= 'a' && c <= 'f') ||
+            (c >= 'A' && c <= 'F')) {
+            continue;
+        }
+        return false;
+    }
+    return true;
+}
+
+} // namespace
 
 const std::string MongoValue::kEmptyString{};
 const MongoValue::Binary MongoValue::kEmptyBinary{};
@@ -82,8 +104,11 @@ MongoValue::MongoValue(TimestampTag, uint64_t ts)
 {
 }
 
-MongoValue MongoValue::fromObjectId(std::string oid)
+std::expected<MongoValue, std::string> MongoValue::fromObjectId(std::string oid)
 {
+    if (!isHexObjectId(oid)) {
+        return std::unexpected("ObjectId must be a 24-character hex string");
+    }
     return MongoValue(ObjectIdTag{}, std::move(oid));
 }
 
@@ -235,9 +260,12 @@ bool MongoArray::empty() const
     return m_values.empty();
 }
 
-const MongoValue& MongoArray::at(size_t index) const
+std::expected<std::reference_wrapper<const MongoValue>, std::string> MongoArray::at(size_t index) const
 {
-    return m_values.at(index);
+    if (index >= m_values.size()) {
+        return std::unexpected("MongoArray index out of range");
+    }
+    return std::cref(m_values[index]);
 }
 
 const MongoValue& MongoArray::operator[](size_t index) const
@@ -301,13 +329,13 @@ MongoValue* MongoDocument::find(const std::string& key)
     return nullptr;
 }
 
-const MongoValue& MongoDocument::at(const std::string& key) const
+std::expected<std::reference_wrapper<const MongoValue>, std::string> MongoDocument::at(const std::string& key) const
 {
     const auto* value = find(key);
     if (!value) {
-        throw std::out_of_range("MongoDocument key not found: " + key);
+        return std::unexpected("MongoDocument key not found: " + key);
     }
-    return *value;
+    return std::cref(*value);
 }
 
 std::string MongoDocument::getString(const std::string& key, std::string default_value) const

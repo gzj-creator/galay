@@ -135,6 +135,14 @@ if(installed_targets_content MATCHES "include/galay/cpp")
     message(FATAL_ERROR "Installed CMake targets must expose only the aggregate include root, not include/galay/cpp.")
 endif()
 
+file(GLOB_RECURSE installed_cppm_files
+    "${prefix_dir}/include/galay/cpp/*.cppm")
+if(installed_cppm_files)
+    message(FATAL_ERROR
+        "Installed .cppm files must be provided only by concrete CXX_MODULES targets, "
+        "not by the generic header install: ${installed_cppm_files}")
+endif()
+
 file(WRITE "${consumer_source_dir}/main.cc"
     "#include <galay/cpp/galay-kernel/core/runtime.h>\n"
     "#include <galay/cpp/galay-kernel/core/awaitable.h>\n"

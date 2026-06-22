@@ -39,11 +39,20 @@ McpHttpServer::McpHttpServer(const std::string& host,
     , m_serverVersion("1.0.0")
     , m_ioSchedulers(ioSchedulers)
     , m_computeSchedulers(computeSchedulers)
-    , m_toolsCacheDirty(true)
-    , m_resourcesCacheDirty(true)
-    , m_promptsCacheDirty(true)
+    , m_toolsCacheDirty(false)
+    , m_resourcesCacheDirty(false)
+    , m_promptsCacheDirty(false)
     , m_running(false)
     , m_initialized(false) {
+    m_toolsListCache = protocol::buildListResultFromMap(
+        m_tools, "tools",
+        [](const ToolInfo& info) -> const Tool& { return info.tool; });
+    m_resourcesListCache = protocol::buildListResultFromMap(
+        m_resources, "resources",
+        [](const ResourceInfo& info) -> const Resource& { return info.resource; });
+    m_promptsListCache = protocol::buildListResultFromMap(
+        m_prompts, "prompts",
+        [](const PromptInfo& info) -> const Prompt& { return info.prompt; });
 }
 
 McpHttpServer::~McpHttpServer() {
@@ -53,6 +62,10 @@ McpHttpServer::~McpHttpServer() {
 void McpHttpServer::setServerInfo(const std::string& name, const std::string& version) {
     m_serverName = name;
     m_serverVersion = version;
+}
+
+void McpHttpServer::setProductionPolicy(McpProductionPolicy policy) {
+    m_policy = std::move(policy);
 }
 
 void McpHttpServer::addTool(const std::string& name,
@@ -69,7 +82,10 @@ void McpHttpServer::addTool(const std::string& name,
     info.handler = handler;
 
     m_tools[name] = info;
-    m_toolsCacheDirty = true;
+    m_toolsListCache = protocol::buildListResultFromMap(
+        m_tools, "tools",
+        [](const ToolInfo& info) -> const Tool& { return info.tool; });
+    m_toolsCacheDirty = false;
 }
 
 void McpHttpServer::addResource(const std::string& uri,
@@ -88,7 +104,10 @@ void McpHttpServer::addResource(const std::string& uri,
     info.reader = reader;
 
     m_resources[uri] = info;
-    m_resourcesCacheDirty = true;
+    m_resourcesListCache = protocol::buildListResultFromMap(
+        m_resources, "resources",
+        [](const ResourceInfo& info) -> const Resource& { return info.resource; });
+    m_resourcesCacheDirty = false;
 }
 
 void McpHttpServer::addPrompt(const std::string& name,
@@ -105,7 +124,10 @@ void McpHttpServer::addPrompt(const std::string& name,
     info.getter = getter;
 
     m_prompts[name] = info;
-    m_promptsCacheDirty = true;
+    m_promptsListCache = protocol::buildListResultFromMap(
+        m_prompts, "prompts",
+        [](const PromptInfo& info) -> const Prompt& { return info.prompt; });
+    m_promptsCacheDirty = false;
 }
 
 void McpHttpServer::start() {
@@ -123,19 +145,33 @@ void McpHttpServer::start() {
     auto* serverPtr = this;
     m_router->addHandler<http::HttpMethod::POST>("/mcp",
         [serverPtr](http::HttpConn& conn, http::HttpRequest req) -> galay::kernel::Task<void> {
-            // 每个连接独立的初始化状态（若已有全局初始化则允许短连接复用）
+            // 每个连接独立保存初始化状态，禁止全局 initialized 授权其它连接。
             bool connectionInitialized = false;
+            std::size_t keepAliveRequests = 0;
 
             // 处理第一个请求
             {
                 const std::string& requestBody = req.bodyStr();
                 JsonString responseJson;
-                try {
-                    co_await serverPtr->processRequest(requestBody, responseJson, connectionInitialized);
-                } catch (const std::exception& e) {
-                    MCP_LOG_WARN("[http_server]", "initial request parse failed error={}", e.what());
-                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::PARSE_ERROR,
-                                                      "Parse error", e.what());
+                ++keepAliveRequests;
+                if (keepAliveRequests > serverPtr->m_policy.transport.max_keep_alive_requests) {
+                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INVALID_REQUEST,
+                                                                  "Keep-alive request limit exceeded", "");
+                } else if (requestBody.size() > serverPtr->m_policy.transport.max_http_body_bytes) {
+                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INVALID_REQUEST,
+                                                                  "Payload too large", "");
+                } else {
+                    try {
+                        co_await serverPtr->processRequest(requestBody, responseJson, connectionInitialized);
+                    } catch (const std::exception& e) {
+                        MCP_LOG_WARN("[http_server]", "initial request failed error={}", e.what());
+                        responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INTERNAL_ERROR,
+                                                                      "Internal error", "");
+                    }
+                }
+                if (responseJson.size() > serverPtr->m_policy.transport.max_response_bytes) {
+                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INVALID_REQUEST,
+                                                                  "Payload too large", "");
                 }
                 co_await serverPtr->sendJsonResponse(conn, responseJson);
             }
@@ -163,12 +199,25 @@ void McpHttpServer::start() {
                 const std::string& requestBody = nextReq.bodyStr();
 
                 JsonString responseJson;
-                try {
-                    co_await serverPtr->processRequest(requestBody, responseJson, connectionInitialized);
-                } catch (const std::exception& e) {
-                    MCP_LOG_WARN("[http_server]", "keepalive request parse failed error={}", e.what());
-                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::PARSE_ERROR,
-                                                      "Parse error", e.what());
+                ++keepAliveRequests;
+                if (keepAliveRequests > serverPtr->m_policy.transport.max_keep_alive_requests) {
+                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INVALID_REQUEST,
+                                                                  "Keep-alive request limit exceeded", "");
+                } else if (requestBody.size() > serverPtr->m_policy.transport.max_http_body_bytes) {
+                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INVALID_REQUEST,
+                                                                  "Payload too large", "");
+                } else {
+                    try {
+                        co_await serverPtr->processRequest(requestBody, responseJson, connectionInitialized);
+                    } catch (const std::exception& e) {
+                        MCP_LOG_WARN("[http_server]", "keepalive request failed error={}", e.what());
+                        responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INTERNAL_ERROR,
+                                                                      "Internal error", "");
+                    }
+                }
+                if (responseJson.size() > serverPtr->m_policy.transport.max_response_bytes) {
+                    responseJson = serverPtr->createErrorResponse(0, ErrorCodes::INVALID_REQUEST,
+                                                                  "Payload too large", "");
                 }
                 co_await serverPtr->sendJsonResponse(conn, responseJson);
             }
@@ -196,6 +245,11 @@ void McpHttpServer::stop() {
     }
     m_running = false;
     m_initialized = false;
+    if (m_httpServer) {
+        m_httpServer->stop();
+        m_httpServer.reset();
+    }
+    m_router.reset();
 }
 
 bool McpHttpServer::isRunning() const {
@@ -270,7 +324,7 @@ galay::kernel::Task<void> McpHttpServer::processRequest(const std::string& reque
     } catch (const std::exception& e) {
         MCP_LOG_WARN("[http_server]", "process request failed error={}", e.what());
         responseJson = createErrorResponse(0, ErrorCodes::INVALID_REQUEST,
-                                  "Invalid request", e.what());
+                                  "Invalid request", "");
     }
     co_return;
 }
@@ -308,7 +362,6 @@ JsonString McpHttpServer::handleInitialize(const JsonRpcRequestView& request, bo
         !m_prompts.empty());
 
     connectionInitialized = true;
-    m_initialized.store(true, std::memory_order_relaxed);
     MCP_LOG_INFO("[http_server]", "initialized id={} server={}/{}",
                  request.id.value(),
                  m_serverName,
@@ -322,7 +375,7 @@ JsonString McpHttpServer::handleToolsList(const JsonRpcRequestView& request, boo
         return EmptyObjectString();
     }
 
-    if (!connectionInitialized && !m_initialized.load(std::memory_order_relaxed)) {
+    if (!connectionInitialized) {
         MCP_LOG_WARN("[http_server]", "tools/list before initialization id={}", request.id.value());
         return createErrorResponse(request.id.value(), ErrorCodes::INVALID_REQUEST,
                                   "Not initialized", "");
@@ -337,7 +390,7 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
         co_return;
     }
 
-    if (!connectionInitialized && !m_initialized.load(std::memory_order_relaxed)) {
+    if (!connectionInitialized) {
         MCP_LOG_WARN("[http_server]", "tools/call before initialization id={}", request.id.value());
         responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_REQUEST,
                                   "Not initialized", "");
@@ -411,7 +464,7 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "tools/call threw id={} error={}", request.id.value(), e.what());
         responseJson = createErrorResponse(request.id.value(), ErrorCodes::INTERNAL_ERROR,
-                                  "Internal error", e.what());
+                                  "Internal error", "");
     }
     co_return;
 }
@@ -421,7 +474,7 @@ JsonString McpHttpServer::handleResourcesList(const JsonRpcRequestView& request,
         return EmptyObjectString();
     }
 
-    if (!connectionInitialized && !m_initialized.load(std::memory_order_relaxed)) {
+    if (!connectionInitialized) {
         MCP_LOG_WARN("[http_server]", "resources/list before initialization id={}", request.id.value());
         return createErrorResponse(request.id.value(), ErrorCodes::INVALID_REQUEST,
                                   "Not initialized", "");
@@ -436,7 +489,7 @@ galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcReques
         co_return;
     }
 
-    if (!connectionInitialized && !m_initialized.load(std::memory_order_relaxed)) {
+    if (!connectionInitialized) {
         MCP_LOG_WARN("[http_server]", "resources/read before initialization id={}", request.id.value());
         responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_REQUEST,
                                   "Not initialized", "");
@@ -510,7 +563,7 @@ galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcReques
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "resources/read threw id={} error={}", request.id.value(), e.what());
         responseJson = createErrorResponse(request.id.value(), ErrorCodes::INTERNAL_ERROR,
-                                  "Internal error", e.what());
+                                  "Internal error", "");
     }
     co_return;
 }
@@ -520,7 +573,7 @@ JsonString McpHttpServer::handlePromptsList(const JsonRpcRequestView& request, b
         return EmptyObjectString();
     }
 
-    if (!connectionInitialized && !m_initialized.load(std::memory_order_relaxed)) {
+    if (!connectionInitialized) {
         MCP_LOG_WARN("[http_server]", "prompts/list before initialization id={}", request.id.value());
         return createErrorResponse(request.id.value(), ErrorCodes::INVALID_REQUEST,
                                   "Not initialized", "");
@@ -535,7 +588,7 @@ galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestVi
         co_return;
     }
 
-    if (!connectionInitialized && !m_initialized.load(std::memory_order_relaxed)) {
+    if (!connectionInitialized) {
         MCP_LOG_WARN("[http_server]", "prompts/get before initialization id={}", request.id.value());
         responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_REQUEST,
                                   "Not initialized", "");
@@ -603,7 +656,7 @@ galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestVi
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "prompts/get threw id={} error={}", request.id.value(), e.what());
         responseJson = createErrorResponse(request.id.value(), ErrorCodes::INTERNAL_ERROR,
-                                  "Internal error", e.what());
+                                  "Internal error", "");
     }
     co_return;
 }
@@ -623,32 +676,14 @@ JsonString McpHttpServer::createErrorResponse(int64_t id, int code,
 }
 
 const JsonString& McpHttpServer::getToolsListResult() {
-    if (m_toolsCacheDirty) {
-        m_toolsListCache = protocol::buildListResultFromMap(
-            m_tools, "tools",
-            [](const ToolInfo& info) -> const Tool& { return info.tool; });
-        m_toolsCacheDirty = false;
-    }
     return m_toolsListCache;
 }
 
 const JsonString& McpHttpServer::getResourcesListResult() {
-    if (m_resourcesCacheDirty) {
-        m_resourcesListCache = protocol::buildListResultFromMap(
-            m_resources, "resources",
-            [](const ResourceInfo& info) -> const Resource& { return info.resource; });
-        m_resourcesCacheDirty = false;
-    }
     return m_resourcesListCache;
 }
 
 const JsonString& McpHttpServer::getPromptsListResult() {
-    if (m_promptsCacheDirty) {
-        m_promptsListCache = protocol::buildListResultFromMap(
-            m_prompts, "prompts",
-            [](const PromptInfo& info) -> const Prompt& { return info.prompt; });
-        m_promptsCacheDirty = false;
-    }
     return m_promptsListCache;
 }
 

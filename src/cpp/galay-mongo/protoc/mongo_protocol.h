@@ -67,11 +67,11 @@ public:
      * @param request_id 请求 ID
      * @param body       命令文档
      * @param flags      OP_MSG 标志位，默认 0
-     * @return OP_MSG 二进制字符串
+     * @return 成功时返回 OP_MSG 二进制字符串；失败时返回错误描述
      */
-    static std::string encodeOpMsg(int32_t request_id,
-                                   const MongoDocument& body,
-                                   int32_t flags = 0);
+    static std::expected<std::string, std::string> encodeOpMsg(int32_t request_id,
+                                                               const MongoDocument& body,
+                                                               int32_t flags = 0);
 
     /**
      * @brief 将命令文档追加编码到已有字符串缓冲区尾部
@@ -79,12 +79,13 @@ public:
      * @param request_id 请求 ID
      * @param body 命令文档
      * @param flags OP_MSG 标志位
+     * @return 成功时返回空值；失败时返回错误描述且不保留本次追加的部分数据
      * @note 减少临时字符串分配，适合批量编码场景
      */
-    static void appendOpMsg(std::string& out,
-                            int32_t request_id,
-                            const MongoDocument& body,
-                            int32_t flags = 0);
+    static std::expected<void, std::string> appendOpMsg(std::string& out,
+                                                        int32_t request_id,
+                                                        const MongoDocument& body,
+                                                        int32_t flags = 0);
 
     /**
      * @brief 将命令文档追加编码为 OP_MSG；若命令缺少 `$db` 字段则按需补齐
@@ -93,12 +94,13 @@ public:
      * @param body 命令文档
      * @param database 默认数据库名
      * @param flags OP_MSG 标志位
+     * @return 成功时返回空值；失败时返回错误描述且不保留本次追加的部分数据
      */
-    static void appendOpMsgWithDatabase(std::string& out,
-                                        int32_t request_id,
-                                        const MongoDocument& body,
-                                        std::string_view database,
-                                        int32_t flags = 0);
+    static std::expected<void, std::string> appendOpMsgWithDatabase(std::string& out,
+                                                                    int32_t request_id,
+                                                                    const MongoDocument& body,
+                                                                    std::string_view database,
+                                                                    int32_t flags = 0);
 
     /**
      * @brief 从完整消息二进制数据解码为 MongoMessage

@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstring>
+#include <string_view>
 
 namespace galay::websocket
 {
@@ -15,6 +16,47 @@ namespace galay::websocket
 using namespace galay::utils;
 
 // 简单的 SHA-1 实现（用于 WebSocket 握手）
+namespace {
+
+std::string_view trimAscii(std::string_view value)
+{
+    size_t begin = 0;
+    size_t end = value.size();
+    while (begin < end && std::isspace(static_cast<unsigned char>(value[begin]))) {
+        ++begin;
+    }
+    while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(begin, end - begin);
+}
+
+bool isBase64Char(char ch)
+{
+    return (ch >= 'A' && ch <= 'Z') ||
+           (ch >= 'a' && ch <= 'z') ||
+           (ch >= '0' && ch <= '9') ||
+           ch == '+' ||
+           ch == '/';
+}
+
+bool isWebSocketKey16ByteBase64(std::string_view key)
+{
+    key = trimAscii(key);
+    if (key.size() != 24 || key[22] != '=' || key[23] != '=') {
+        return false;
+    }
+
+    for (size_t i = 0; i < 22; ++i) {
+        if (!isBase64Char(key[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
 static void sha1(const unsigned char* data, size_t length, unsigned char* hash)
 {
     // 初始化哈希值
@@ -163,6 +205,9 @@ std::pair<bool, std::string> WsUpgrade::validateUpgradeRequest(HttpRequest& requ
     if (key.empty()) {
         return {false, "Sec-WebSocket-Key cannot be empty"};
     }
+    if (!isWebSocketKey16ByteBase64(key)) {
+        return {false, "Sec-WebSocket-Key must decode to 16 bytes"};
+    }
 
     return {true, ""};
 }
@@ -205,9 +250,10 @@ WsUpgradeResult WsUpgrade::handleUpgrade(HttpRequest& request)
 
     // 获取 Sec-WebSocket-Key
     std::string key = request.header().headerPairs().getValue("Sec-WebSocket-Key");
+    const std::string_view trimmed_key = trimAscii(key);
 
     // 生成 Sec-WebSocket-Accept
-    std::string accept_key = generateAcceptKey(key);
+    std::string accept_key = generateAcceptKey(std::string(trimmed_key));
 
     // 检查是否有子协议请求
     std::string subprotocol;

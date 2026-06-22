@@ -17,6 +17,7 @@
 #include "../common/error.h"
 #include "../common/timer.hpp"
 #include "../common/concepts.h"
+#include "io_controller.hpp"
 #include "waker.h"
 #include "scheduler.hpp"
 #include <memory>
@@ -30,6 +31,27 @@ class IOController;
 namespace detail {
 
 int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller) noexcept;
+
+template <typename Awaitable>
+bool awaitableStillOwnsIORegistration(Awaitable& awaitable) noexcept
+{
+    if constexpr (requires(Awaitable& value) { value.m_controller; }) {
+        auto* controller = awaitable.m_controller;
+        if (controller == nullptr) {
+            return false;
+        }
+        if constexpr (requires(Awaitable& value) { value.m_registered; }) {
+            if (awaitable.m_registered) {
+                return true;
+            }
+        }
+        const void* self = static_cast<const void*>(&awaitable);
+        return controller->m_awaitable[IOController::READ] == self ||
+               controller->m_awaitable[IOController::WRITE] == self;
+    } else {
+        return true;
+    }
+}
 
 }  // namespace detail
 
@@ -119,6 +141,10 @@ struct WithTimeout {
     auto await_resume() -> decltype(m_inner.await_resume()) {
         // 检查是否超时
         if (m_timer->timeouted()) [[unlikely]] {
+            if (!detail::awaitableStillOwnsIORegistration(m_inner)) {
+                m_timer->cancel();
+                return m_inner.await_resume();
+            }
             if constexpr (requires(Awaitable& awaitable) {
                 awaitable.m_controller;
             }) {

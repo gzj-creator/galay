@@ -1597,10 +1597,47 @@ private:
                 if (settings->isAck()) {
                     m_conn.markSettingsAckReceived();
                 } else {
-                    auto err = m_conn.peerSettings().applySettings(*settings);
+                    auto next_settings = m_conn.peerSettings();
+                    const uint32_t old_initial_window =
+                        m_conn.peerSettings().initial_window_size;
+                    auto err = next_settings.applySettings(*settings);
                     if (err != Http2ErrorCode::NoError) {
-                        enqueueGoaway(err);
+                        enqueueGoawayAction(err);
                         return;
+                    }
+                    const int64_t initial_window_delta =
+                        static_cast<int64_t>(next_settings.initial_window_size) -
+                        static_cast<int64_t>(old_initial_window);
+                    bool stream_window_overflow = false;
+                    if (initial_window_delta != 0) {
+                        m_conn.forEachStream([&](uint32_t, Http2Stream::ptr& stream) {
+                            if (!stream) {
+                                return;
+                            }
+                            const int64_t next_window =
+                                static_cast<int64_t>(stream->sendWindow()) +
+                                initial_window_delta;
+                            if (next_window > kMaxStreamId ||
+                                next_window < std::numeric_limits<int32_t>::min()) {
+                                stream_window_overflow = true;
+                            }
+                        });
+                    }
+                    if (stream_window_overflow) {
+                        enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+                        return;
+                    }
+
+                    m_conn.peerSettings() = next_settings;
+                    if (initial_window_delta != 0) {
+                        m_conn.forEachStream([&](uint32_t, Http2Stream::ptr& stream) {
+                            if (!stream) {
+                                return;
+                            }
+                            stream->adjustSendWindow(static_cast<int32_t>(initial_window_delta));
+                            stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
+                            stream->flushPendingData();
+                        });
                     }
                     m_conn.encoder().setMaxTableSize(m_conn.peerSettings().header_table_size);
 
@@ -1661,7 +1698,18 @@ private:
                     enqueueGoaway(Http2ErrorCode::ProtocolError);
                     return;
                 }
+                if (static_cast<int64_t>(m_conn.connSendWindow()) + increment > kMaxStreamId) {
+                    enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+                    return;
+                }
                 m_conn.adjustConnSendWindow(increment);
+                m_conn.forEachStream([this](uint32_t, Http2Stream::ptr& stream) {
+                    if (!stream) {
+                        return;
+                    }
+                    stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
+                    stream->flushPendingData();
+                });
                 break;
             }
 
@@ -2400,12 +2448,22 @@ private:
         }
 
         const auto payload = frame_view.payload();
-        const int32_t data_size = static_cast<int32_t>(payload.size());
+        const size_t data_size = payload.size();
+        if (data_size > static_cast<size_t>(std::max<int32_t>(m_conn.connRecvWindow(), 0))) {
+            enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+            return true;
+        }
+        if (data_size > static_cast<size_t>(std::max<int32_t>(stream->recvWindow(), 0))) {
+            enqueueRstStreamAction(stream_id, Http2ErrorCode::FlowControlError);
+            return true;
+        }
+
+        const int32_t data_size_delta = static_cast<int32_t>(data_size);
         stream->onDataReceived(frame_view.endStream());
 
-        m_conn.adjustConnRecvWindow(-data_size);
-        stream->adjustRecvWindow(-data_size);
-        applyRecvWindowUpdate(stream, stream_id, payload.size());
+        m_conn.adjustConnRecvWindow(-data_size_delta);
+        stream->adjustRecvWindow(-data_size_delta);
+        applyRecvWindowUpdate(stream, stream_id, data_size);
         appendStreamDataAndMarkEvents(stream, payload, frame_view.endStream());
 
         tryRetireClientStream(stream);
@@ -2499,12 +2557,22 @@ private:
         }
 
         auto* data = frame->asData();
-        const int32_t data_size = static_cast<int32_t>(data->data().size());
+        const size_t data_size = data->data().size();
+        if (data_size > static_cast<size_t>(std::max<int32_t>(m_conn.connRecvWindow(), 0))) {
+            enqueueGoawayAction(Http2ErrorCode::FlowControlError);
+            return;
+        }
+        if (data_size > static_cast<size_t>(std::max<int32_t>(stream->recvWindow(), 0))) {
+            enqueueRstStreamAction(stream_id, Http2ErrorCode::FlowControlError);
+            return;
+        }
+
+        const int32_t data_size_delta = static_cast<int32_t>(data_size);
         stream->onDataReceived(data->isEndStream());
 
-        m_conn.adjustConnRecvWindow(-data_size);
-        stream->adjustRecvWindow(-data_size);
-        applyRecvWindowUpdate(stream, stream_id, data->data().size());
+        m_conn.adjustConnRecvWindow(-data_size_delta);
+        stream->adjustRecvWindow(-data_size_delta);
+        applyRecvWindowUpdate(stream, stream_id, data_size);
         appendStreamDataAndMarkEvents(stream, data);
 
         pushStreamFrameIfNeeded(stream, std::move(frame));
@@ -2553,8 +2621,14 @@ private:
             enqueueRstStreamAction(stream_id, Http2ErrorCode::ProtocolError);
             return;
         }
+        if (static_cast<int64_t>(stream->sendWindow()) + increment > kMaxStreamId) {
+            enqueueRstStreamAction(stream_id, Http2ErrorCode::FlowControlError);
+            return;
+        }
 
         stream->adjustSendWindow(increment);
+        stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
+        stream->flushPendingData();
         markStreamActive(stream, Http2StreamEvent::WindowUpdated);
         pushStreamFrameIfNeeded(stream, std::move(frame));
     }
@@ -2780,7 +2854,11 @@ private:
             stream->m_decoder == decoder) {
             return;
         }
-        stream->attachIO(&m_send_channel, encoder, decoder);
+        stream->attachIO(&m_send_channel,
+                         encoder,
+                         decoder,
+                         &m_conn.m_conn_send_window,
+                         m_conn.peerSettings().max_frame_size);
         if (m_active_conn_mode && !m_conn.isClient()) {
             stream->setRetireCallback([this](uint32_t stream_id) {
                 enqueueRetireStream(stream_id);

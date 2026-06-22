@@ -53,6 +53,8 @@
 
 /// 熔断器
 #include "tool/circuit_breaker.hpp"
+/// 限流器
+#include "tool/rate_limiter.hpp"
 
 /// 一致性哈希
 #include "algorithm/consistent_hash.hpp"

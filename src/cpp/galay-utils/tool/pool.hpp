@@ -18,6 +18,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <utility>
 
 namespace galay::utils {
 
@@ -66,24 +67,19 @@ public:
                         size_t maxSize = 0,
                         Creator creator = nullptr,
                         Destroyer destroyer = nullptr)
-        : m_maxSize(maxSize)
-        , m_creator(creator ? std::move(creator) : []() { return new T(); })
-        , m_destroyer(destroyer ? std::move(destroyer) : [](T* p) { delete p; })
-        , m_totalCreated(0)
-        , m_poolSize(0) {
+        : m_state(std::make_shared<State>(
+              maxSize,
+              creator ? std::move(creator) : []() { return new T(); },
+              destroyer ? std::move(destroyer) : [](T* p) { delete p; })) {
         for (size_t i = 0; i < initialSize; ++i) {
-            m_pool.push(m_creator());
-            ++m_totalCreated;
-            ++m_poolSize;
+            m_state->pool.push(m_state->creator());
+            ++m_state->totalCreated;
+            ++m_state->poolSize;
         }
     }
 
     ~ObjectPool() {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        while (!m_pool.empty()) {
-            m_destroyer(m_pool.front());
-            m_pool.pop();
-        }
+        m_state->clear();
     }
 
     ObjectPool(const ObjectPool&) = delete;
@@ -93,25 +89,26 @@ public:
         T* obj = nullptr;
 
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            if (!m_pool.empty()) {
-                obj = m_pool.front();
-                m_pool.pop();
-                --m_poolSize;
+            std::lock_guard<std::mutex> lock(m_state->mutex);
+            if (!m_state->pool.empty()) {
+                obj = m_state->pool.front();
+                m_state->pool.pop();
+                --m_state->poolSize;
             }
         }
 
         if (!obj) {
-            obj = m_creator();
-            ++m_totalCreated;
+            obj = m_state->creator();
+            ++m_state->totalCreated;
         }
 
-        return Ptr(obj, [this](T* p) {
+        auto state = m_state;
+        return Ptr(obj, [state](T* p) {
             if (p) {
                 if constexpr (IsPoolable<T>) {
                     p->reset();
                 }
-                release(p);
+                state->release(p);
             }
         });
     }
@@ -124,11 +121,11 @@ public:
         T* obj = nullptr;
 
         {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            if (!m_pool.empty()) {
-                obj = m_pool.front();
-                m_pool.pop();
-                --m_poolSize;
+            std::lock_guard<std::mutex> lock(m_state->mutex);
+            if (!m_state->pool.empty()) {
+                obj = m_state->pool.front();
+                m_state->pool.pop();
+                --m_state->poolSize;
             }
         }
 
@@ -136,12 +133,13 @@ public:
             return nullptr;
         }
 
-        return Ptr(obj, [this](T* p) {
+        auto state = m_state;
+        return Ptr(obj, [state](T* p) {
             if (p) {
                 if constexpr (IsPoolable<T>) {
                     p->reset();
                 }
-                release(p);
+                state->release(p);
             }
         });
     }
@@ -151,8 +149,8 @@ public:
      * @return 可用对象数量
      */
     size_t size() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_pool.size();
+        std::lock_guard<std::mutex> lock(m_state->mutex);
+        return m_state->pool.size();
     }
 
     /**
@@ -160,7 +158,7 @@ public:
      * @return 总创建数量
      */
     size_t totalCreated() const {
-        return m_totalCreated.load();
+        return m_state->totalCreated.load();
     }
 
     /**
@@ -168,20 +166,15 @@ public:
      * @return 为空返回 true
      */
     bool empty() const {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        return m_pool.empty();
+        std::lock_guard<std::mutex> lock(m_state->mutex);
+        return m_state->pool.empty();
     }
 
     /**
      * @brief 清空对象池
      */
     void clear() {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        while (!m_pool.empty()) {
-            m_destroyer(m_pool.front());
-            m_pool.pop();
-        }
-        m_poolSize = 0;
+        m_state->clear();
     }
 
     /**
@@ -189,33 +182,55 @@ public:
      * @param targetSize 目标大小
      */
     void shrink(size_t targetSize) {
-        std::lock_guard<std::mutex> lock(m_mutex);
-        while (m_pool.size() > targetSize) {
-            m_destroyer(m_pool.front());
-            m_pool.pop();
-            --m_poolSize;
+        std::lock_guard<std::mutex> lock(m_state->mutex);
+        while (m_state->pool.size() > targetSize) {
+            m_state->destroyer(m_state->pool.front());
+            m_state->pool.pop();
+            --m_state->poolSize;
         }
     }
 
 private:
-    void release(T* obj) {
-        std::lock_guard<std::mutex> lock(m_mutex);
+    struct State {
+        State(size_t max_size, Creator create, Destroyer destroy)
+            : maxSize(max_size)
+            , creator(std::move(create))
+            , destroyer(std::move(destroy)) {}
 
-        if (m_maxSize == 0 || m_pool.size() < m_maxSize) {
-            m_pool.push(obj);
-            ++m_poolSize;
-        } else {
-            m_destroyer(obj);
+        ~State() {
+            clear();
         }
-    }
 
-    mutable std::mutex m_mutex;
-    std::queue<T*> m_pool;
-    size_t m_maxSize;
-    Creator m_creator;
-    Destroyer m_destroyer;
-    std::atomic<size_t> m_totalCreated;
-    std::atomic<size_t> m_poolSize;
+        void clear() {
+            std::lock_guard<std::mutex> lock(mutex);
+            while (!pool.empty()) {
+                destroyer(pool.front());
+                pool.pop();
+            }
+            poolSize = 0;
+        }
+
+        void release(T* obj) {
+            std::lock_guard<std::mutex> lock(mutex);
+
+            if (maxSize == 0 || pool.size() < maxSize) {
+                pool.push(obj);
+                ++poolSize;
+            } else {
+                destroyer(obj);
+            }
+        }
+
+        mutable std::mutex mutex;
+        std::queue<T*> pool;
+        size_t maxSize;
+        Creator creator;
+        Destroyer destroyer;
+        std::atomic<size_t> totalCreated{0};
+        std::atomic<size_t> poolSize{0};
+    };
+
+    std::shared_ptr<State> m_state;
 };
 
 /**

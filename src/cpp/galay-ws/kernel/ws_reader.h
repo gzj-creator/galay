@@ -294,6 +294,9 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
             return result;
         }
         payload_length = (static_cast<uint16_t>(len_buf[0]) << 8) | len_buf[1];
+        if (payload_length < 126) {
+            return result;
+        }
         header_length += sizeof(len_buf);
     } else if (payload_length == 127) {
         if (total_length < header_length + 8) {
@@ -305,9 +308,15 @@ inline WsFastPathPrefixResult scanWsMessageFastPathPrefix(const struct iovec* io
             result.status = WsMessageFastPathStatus::kNeedMore;
             return result;
         }
+        if ((len_buf[0] & 0x80) != 0) {
+            return result;
+        }
         payload_length = 0;
         for (size_t i = 0; i < sizeof(len_buf); ++i) {
             payload_length = (payload_length << 8) | len_buf[i];
+        }
+        if (payload_length <= 0xFFFF) {
+            return result;
         }
         header_length += sizeof(len_buf);
     }
@@ -714,6 +723,10 @@ struct WsMessageReadState {
             }
 
             m_ring_buffer->consume(parse_result.value());
+            if (frame.header.payload_length > m_setting.max_frame_size) {
+                setParseError(WsError(kWsMessageTooLarge, "Frame payload too large"));
+                return true;
+            }
 
             if (isControlFrame(frame.header.opcode)) {
                 if (!frame.header.fin) {
@@ -750,6 +763,10 @@ struct WsMessageReadState {
             }
 
             if (frame.header.fin) {
+                if (*m_opcode == WsOpcode::Text && !WsFrameParser::isValidUtf8(*m_message)) {
+                    setParseError(WsError(kWsInvalidUtf8));
+                    return true;
+                }
                 return true;
             }
 
@@ -779,6 +796,12 @@ struct WsMessageReadState {
         }
 
         const size_t payload_size = static_cast<size_t>(prefix.payload_length);
+        if (payload_size > m_setting.max_frame_size ||
+            payload_size > m_setting.max_message_size ||
+            m_message->size() > m_setting.max_message_size - payload_size) {
+            setParseError(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
+            return WsMessageFastPathStatus::kReturn;
+        }
         const size_t old_size = m_message->size();
         const bool replace_message = m_first_frame;
         const size_t write_offset = old_size;
@@ -820,6 +843,13 @@ struct WsMessageReadState {
 
         if (m_message->size() > m_setting.max_message_size) {
             setParseError(WsError(kWsMessageTooLarge, "Message size exceeds limit"));
+            return WsMessageFastPathStatus::kReturn;
+        }
+
+        if (prefix.fin &&
+            *m_opcode == WsOpcode::Text &&
+            !wsIsValidUtf8Span(m_message->data(), m_message->size())) {
+            setParseError(WsError(kWsInvalidUtf8));
             return WsMessageFastPathStatus::kReturn;
         }
 

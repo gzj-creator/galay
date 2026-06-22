@@ -280,11 +280,13 @@ struct HttpRequestReadState {
             return true;
         }
 
+        if (!m_request->header().isHeaderComplete() &&
+            m_total_received >= m_setting->getMaxHeaderSize()) {
+            setParseError(HttpError(kHeaderTooLarge));
+            return true;
+        }
+
         if (error_code == kHeaderInComplete || error_code == kIncomplete) {
-            if (m_total_received >= m_setting->getMaxHeaderSize() && !m_request->isComplete()) {
-                setParseError(HttpError(kHeaderTooLarge));
-                return true;
-            }
             return false;
         }
 
@@ -472,11 +474,13 @@ struct HttpResponseReadState {
             return true;
         }
 
+        if (!m_response->header().isHeaderComplete() &&
+            m_total_received >= m_setting->getMaxHeaderSize()) {
+            setParseError(HttpError(kHeaderTooLarge));
+            return true;
+        }
+
         if (error_code == kHeaderInComplete || error_code == kIncomplete) {
-            if (m_total_received >= m_setting->getMaxHeaderSize() && !m_response->isComplete()) {
-                setParseError(HttpError(kHeaderTooLarge));
-                return true;
-            }
             return false;
         }
 

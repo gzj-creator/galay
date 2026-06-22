@@ -12,6 +12,8 @@ else()
     message(FATAL_ERROR "tracing requires an in-tree kernel target")
 endif()
 
+galay_ensure_openssl()
+
 set(GALAY_TRACING_SOURCES
     common/id_format.cc
     context/context_storage.cc
@@ -59,7 +61,7 @@ target_include_directories(tracing
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(tracing PUBLIC ${_galay_tracing_kernel_target})
+target_link_libraries(tracing PUBLIC ${_galay_tracing_kernel_target} OpenSSL::Crypto)
 
 if(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
     target_compile_definitions(tracing PUBLIC GALAY_TRACING_ENABLE_OTLP_HTTP=1)

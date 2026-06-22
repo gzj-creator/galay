@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cassert>
 #include <cstring>
+#include <limits>
 #include <galay/cpp/galay-mysql/protoc/builder.h>
 #include <galay/cpp/galay-mysql/protoc/mysql_protocol.h>
 #include <galay/cpp/galay-mysql/protoc/mysql_packet.h>
@@ -112,6 +113,27 @@ void test_len_enc_string()
     std::cout << "  PASSED" << std::endl;
 }
 
+void test_len_enc_string_overflow()
+{
+    std::cout << "Testing length-encoded string overflow..." << std::endl;
+
+    std::string buf;
+    buf.push_back(static_cast<char>(0xFE));
+    writeUint64(buf, std::numeric_limits<uint64_t>::max());
+
+    size_t consumed = 0;
+    try {
+        auto result = readLenEncString(buf.data(), buf.size(), consumed);
+        assert(!result.has_value());
+        assert(result.error() == ParseError::BufferOverflow);
+        assert(consumed == 0);
+    } catch (...) {
+        assert(false && "readLenEncString must return BufferOverflow instead of throwing on overflow");
+    }
+
+    std::cout << "  PASSED" << std::endl;
+}
+
 void test_packet_header()
 {
     std::cout << "Testing packet header parse..." << std::endl;
@@ -207,6 +229,21 @@ void test_command_builder()
     assert(builder.empty());
     assert(released.expected_responses == 3);
     assert(!released.encoded.empty());
+
+    std::cout << "  PASSED" << std::endl;
+}
+
+void test_command_builder_rejects_oversized_packet()
+{
+    std::cout << "Testing command builder oversized packet rejection..." << std::endl;
+
+    MysqlCommandBuilder builder;
+    const std::string oversized_sql(MYSQL_MAX_PACKET_SIZE, 'x');
+    builder.appendQuery(oversized_sql);
+
+    assert(builder.empty());
+    assert(builder.encoded().empty());
+    assert(builder.commands().empty());
 
     std::cout << "  PASSED" << std::endl;
 }
@@ -338,9 +375,11 @@ int main()
     test_read_write_integers();
     test_len_enc_int();
     test_len_enc_string();
+    test_len_enc_string_overflow();
     test_packet_header();
     test_encoder();
     test_command_builder();
+    test_command_builder_rejects_oversized_packet();
     test_ok_packet_parse();
     test_err_packet_parse();
     test_auth_switch_request_parse();

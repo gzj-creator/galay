@@ -60,7 +60,8 @@ foreach(test_source IN LISTS GALAY_MONGO_TEST_SOURCES)
         add_mongo_integration_test(mongo_${test_name} ${test_source} "mongo.it.${scenario_suffix}")
     else()
         add_mongo_test(${test_name} ${test_source})
-        if(test_name STREQUAL "t9_socket_options_source")
+        if(test_name STREQUAL "t9_socket_options_source" OR
+           test_name STREQUAL "t13_expected_error_source")
             target_compile_definitions(${test_name}
                 PRIVATE GALAY_MONGO_SOURCE_DIR="${CMAKE_SOURCE_DIR}/src/cpp"
             )

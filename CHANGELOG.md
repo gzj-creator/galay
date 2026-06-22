@@ -13,9 +13,20 @@
 
 ### Added
 
+- 新增 C++ 模块审计修复的边界测试与源码守卫，覆盖 kernel task/timeout/iov/resource、HTTP/WS/HTTP2 协议边界、Redis/MySQL/Mongo/etcd 客户端边界、MCP/SSL/tracing 安全生命周期，以及 utils umbrella/resource 错误边界。
+- 新增对应压力/性能基准，覆盖 kernel task timeout/resource error、HTTP/WS 协议边界、Mongo expected 错误传播、utils resource error，以及 RPC payload scaling 等场景。
+
 ### Changed
 
+- Mongo BSON/ObjectId/OP_MSG 编码边界改为 `std::expected` 显式传播错误；非法 ObjectId、BSON key 与 OP_MSG 编码失败不再通过异常逃逸，客户端边界统一转换为 `MongoError`。
+- C++23 `.cppm` 安装策略改为保守模式：普通 header install 不再安装未验证 module facade，后续只允许具体 `CXX_MODULES FILE_SET` module target 安装自己的模块接口文件。
+- 多模块协议与资源路径补齐显式边界处理，包括 HTTP/WS/HTTP2/RPC framing、Redis pool wait/RESP limit、MySQL packet length、MCP transport limit、SSL init/hostname/OAEP 与 tracing shutdown/escaping。
+
 ### Fixed
+
+- 修复 kernel coroutine/resource 错误边界：`TaskAwaiter` 先绑定 continuation 再调度子任务，timeout 与 IO 完成做仲裁，`spawnBlocking()` 捕获 callable 异常并映射到 task error，非法 borrowed `readv/writev` count 返回 `IOError(kParamInvalid)` 而不是 abort。
+- 修复 socket/file RAII、ObjectPool late lease、Base64 malformed input、`Bytes::c_str()` NUL 结尾等资源生命周期和可恢复错误问题。
+- 修复 HTTP/WS/HTTP2/RPC/Redis/MySQL/Mongo/etcd/MCP/SSL/tracing 审计中发现的一批协议正确性、安全边界、错误传播和生命周期问题，并补齐对应 CTest 覆盖。
 
 ### Docs
 

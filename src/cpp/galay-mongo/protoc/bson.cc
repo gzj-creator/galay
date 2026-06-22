@@ -3,7 +3,6 @@
 #include <charconv>
 #include <array>
 #include <cstring>
-#include <stdexcept>
 
 namespace galay::mongo::protocol
 {
@@ -76,32 +75,41 @@ MongoArray decodeArrayFromDocument(const MongoDocument& array_as_document)
 
 } // namespace
 
-std::string BsonCodec::encodeDocument(const MongoDocument& document)
+std::expected<std::string, std::string> BsonCodec::encodeDocument(const MongoDocument& document)
 {
     std::string out;
     out.reserve(64);
-    appendDocument(out, document);
+    auto appended = appendDocument(out, document);
+    if (!appended) {
+        return std::unexpected(appended.error());
+    }
     return out;
 }
 
-void BsonCodec::appendDocument(std::string& out, const MongoDocument& document)
+std::expected<void, std::string> BsonCodec::appendDocument(std::string& out,
+                                                           const MongoDocument& document)
 {
     const size_t base = out.size();
     out.resize(base + 4, '\0');
 
     for (const auto& [key, value] : document.fields()) {
-        encodeElement(out, key, value);
+        auto encoded = encodeElement(out, key, value);
+        if (!encoded) {
+            out.resize(base);
+            return std::unexpected(encoded.error());
+        }
     }
 
     out.push_back('\0');
 
     const auto total_len = static_cast<int32_t>(out.size() - base);
     writeInt32LEAt(out, base, total_len);
+    return {};
 }
 
-void BsonCodec::appendDocumentWithDatabase(std::string& out,
-                                           const MongoDocument& document,
-                                           std::string_view database)
+std::expected<void, std::string> BsonCodec::appendDocumentWithDatabase(std::string& out,
+                                                                       const MongoDocument& document,
+                                                                       std::string_view database)
 {
     const size_t base = out.size();
     out.resize(base + 4, '\0');
@@ -111,12 +119,20 @@ void BsonCodec::appendDocumentWithDatabase(std::string& out,
         if (!has_db && key == "$db") {
             has_db = true;
         }
-        encodeElement(out, key, value);
+        auto encoded = encodeElement(out, key, value);
+        if (!encoded) {
+            out.resize(base);
+            return std::unexpected(encoded.error());
+        }
     }
 
     if (!has_db) {
         out.push_back(static_cast<char>(BsonType::String));
-        writeCString(out, "$db");
+        auto key_written = writeCString(out, "$db");
+        if (!key_written) {
+            out.resize(base);
+            return std::unexpected(key_written.error());
+        }
         writeInt32(out, static_cast<int32_t>(database.size() + 1));
         out.append(database.data(), database.size());
         out.push_back('\0');
@@ -126,6 +142,7 @@ void BsonCodec::appendDocumentWithDatabase(std::string& out,
 
     const auto total_len = static_cast<int32_t>(out.size() - base);
     writeInt32LEAt(out, base, total_len);
+    return {};
 }
 
 std::expected<MongoDocument, std::string> BsonCodec::decodeDocument(const char* data, size_t len)
@@ -195,13 +212,14 @@ void BsonCodec::writeDouble(std::string& out, double value)
     writeDoubleLE(out, value);
 }
 
-void BsonCodec::writeCString(std::string& out, std::string_view value)
+std::expected<void, std::string> BsonCodec::writeCString(std::string& out, std::string_view value)
 {
     if (value.find('\0') != std::string::npos) {
-        throw std::invalid_argument("BSON CString must not contain embedded NUL bytes");
+        return std::unexpected("BSON CString must not contain embedded NUL bytes");
     }
     out.append(value.data(), value.size());
     out.push_back('\0');
+    return {};
 }
 
 std::expected<int32_t, std::string> BsonCodec::readInt32(const char* data, size_t len, size_t pos)
@@ -253,17 +271,19 @@ std::expected<std::string, std::string> BsonCodec::readCString(const char* data,
     return value;
 }
 
-void BsonCodec::encodeElement(std::string& out, std::string_view key, const MongoValue& value)
+std::expected<void, std::string> BsonCodec::encodeElement(std::string& out,
+                                                          std::string_view key,
+                                                          const MongoValue& value)
 {
     switch (value.type()) {
     case MongoValueType::Double:
         out.push_back(static_cast<char>(BsonType::Double));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         writeDouble(out, value.toDouble());
         break;
     case MongoValueType::String: {
         out.push_back(static_cast<char>(BsonType::String));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         const auto& text = value.toString();
         writeInt32(out, static_cast<int32_t>(text.size() + 1));
         out.append(text);
@@ -272,13 +292,15 @@ void BsonCodec::encodeElement(std::string& out, std::string_view key, const Mong
     }
     case MongoValueType::Document: {
         out.push_back(static_cast<char>(BsonType::Document));
-        writeCString(out, key);
-        appendDocument(out, value.toDocument());
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
+        if (auto appended = appendDocument(out, value.toDocument()); !appended) {
+            return std::unexpected(appended.error());
+        }
         break;
     }
     case MongoValueType::Array: {
         out.push_back(static_cast<char>(BsonType::Array));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         const size_t base = out.size();
         out.resize(base + 4, '\0');
         const auto& values = value.toArray().values();
@@ -287,12 +309,14 @@ void BsonCodec::encodeElement(std::string& out, std::string_view key, const Mong
             const auto result =
                 std::to_chars(key_buf.data(), key_buf.data() + key_buf.size(), i);
             if (result.ec != std::errc()) {
-                throw std::runtime_error("failed to encode BSON array index");
+                return std::unexpected("failed to encode BSON array index");
             }
             const std::string_view index_key(
                 key_buf.data(),
                 static_cast<size_t>(result.ptr - key_buf.data()));
-            encodeElement(out, index_key, values[i]);
+            if (auto encoded = encodeElement(out, index_key, values[i]); !encoded) {
+                return std::unexpected(encoded.error());
+            }
         }
         out.push_back('\0');
         const auto total_len = static_cast<int32_t>(out.size() - base);
@@ -301,7 +325,7 @@ void BsonCodec::encodeElement(std::string& out, std::string_view key, const Mong
     }
     case MongoValueType::Binary: {
         out.push_back(static_cast<char>(BsonType::Binary));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         const auto& binary = value.toBinary();
         writeInt32(out, static_cast<int32_t>(binary.size()));
         out.push_back(static_cast<char>(kBinarySubtypeGeneric));
@@ -310,26 +334,26 @@ void BsonCodec::encodeElement(std::string& out, std::string_view key, const Mong
     }
     case MongoValueType::Bool:
         out.push_back(static_cast<char>(BsonType::Bool));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         out.push_back(value.toBool(false) ? 1 : 0);
         break;
     case MongoValueType::Null:
         out.push_back(static_cast<char>(BsonType::Null));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         break;
     case MongoValueType::Int32:
         out.push_back(static_cast<char>(BsonType::Int32));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         writeInt32(out, value.toInt32());
         break;
     case MongoValueType::Int64:
         out.push_back(static_cast<char>(BsonType::Int64));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         writeInt64(out, value.toInt64());
         break;
     case MongoValueType::ObjectId: {
         out.push_back(static_cast<char>(BsonType::ObjectId));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         // Decode 24-char hex string back to 12 raw bytes
         const auto& oid_hex = value.toString();
         for (size_t i = 0; i + 1 < oid_hex.size(); i += 2) {
@@ -347,15 +371,16 @@ void BsonCodec::encodeElement(std::string& out, std::string_view key, const Mong
     }
     case MongoValueType::DateTime:
         out.push_back(static_cast<char>(BsonType::DateTime));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         writeInt64(out, value.toInt64());
         break;
     case MongoValueType::Timestamp:
         out.push_back(static_cast<char>(BsonType::Timestamp));
-        writeCString(out, key);
+        if (auto written = writeCString(out, key); !written) return std::unexpected(written.error());
         writeInt64(out, value.toInt64());
         break;
     }
+    return {};
 }
 
 std::expected<MongoValue, std::string> BsonCodec::decodeElementValue(BsonType type,

@@ -1,7 +1,8 @@
 /**
  * @file t124_runtime_expected_src.cc
- * @brief 用途：锁定 kernel/C wrapper 公开边界通过 std::expected 返回错误，不使用 throw/try/catch。
- * 关键覆盖点：runtime、scheduler、socket、reactor 和 C wrapper 边界不包含显式异常源码。
+ * @brief 用途：锁定 kernel/C wrapper 公开边界通过 std::expected 返回错误。
+ * 关键覆盖点：runtime、scheduler、socket、reactor 和 C wrapper 边界不包含显式异常源码；
+ * `Runtime::spawnBlocking` 只允许在阻塞线程池 callable 边界隔离第三方异常并映射为任务错误。
  * 通过条件：kernel 启动与 socket 创建路径只通过返回值传播错误，测试返回 0。
  */
 
@@ -56,6 +57,29 @@ bool containsWord(const std::string& text, const std::string& word)
     return false;
 }
 
+std::string eraseAllowedRuntimeExceptionBoundary(const std::filesystem::path& path, const std::string& text)
+{
+    if (path.filename() != "runtime.h") {
+        return text;
+    }
+
+    const std::string start_marker = "auto submitted = m_blockingExecutor.submit(";
+    const std::string error_marker =
+        "completion->setError(detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));";
+    const std::string end_marker = "        });";
+
+    const size_t start = text.find(start_marker);
+    const size_t error = text.find(error_marker, start);
+    const size_t end = text.find(end_marker, error);
+    if (start == std::string::npos || error == std::string::npos || end == std::string::npos) {
+        return text;
+    }
+
+    std::string filtered = text;
+    filtered.replace(start, end + end_marker.size() - start, "spawnBlocking_exception_boundary_maps_to_kTaskException");
+    return filtered;
+}
+
 void checkRuntimeSource(const std::filesystem::path& path,
                         const std::string& text,
                         std::vector<std::string>& failures)
@@ -64,19 +88,20 @@ void checkRuntimeSource(const std::filesystem::path& path,
         failures.push_back(path.string() + ": failed to read source");
         return;
     }
-    if (containsWord(text, "throw")) {
+    const std::string checked_text = eraseAllowedRuntimeExceptionBoundary(path, text);
+    if (containsWord(checked_text, "throw")) {
         failures.push_back(path.string() + ": runtime API boundary must not throw");
     }
-    if (contains(text, "@throws")) {
+    if (contains(checked_text, "@throws")) {
         failures.push_back(path.string() + ": runtime API docs must not advertise throwing");
     }
-    if (contains(text, "std::runtime_error")) {
+    if (contains(checked_text, "std::runtime_error")) {
         failures.push_back(path.string() + ": runtime API boundary must not depend on runtime_error");
     }
-    if (containsWord(text, "try")) {
+    if (containsWord(checked_text, "try")) {
         failures.push_back(path.string() + ": runtime API boundary must not use try/catch");
     }
-    if (containsWord(text, "catch")) {
+    if (containsWord(checked_text, "catch")) {
         failures.push_back(path.string() + ": runtime API boundary must not catch exceptions");
     }
 }

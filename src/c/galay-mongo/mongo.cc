@@ -342,7 +342,11 @@ galay_status_t galay_mongo_document_encode(galay_mongo_document_t* document,
     *data = nullptr;
     *data_len = 0;
     return catch_boundary([&]() -> galay_status_t {
-        document->encoded = galay::mongo::protocol::BsonCodec::encodeDocument(document->document);
+        auto encoded = galay::mongo::protocol::BsonCodec::encodeDocument(document->document);
+        if (!encoded) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        document->encoded = std::move(encoded.value());
         *data = reinterpret_cast<const uint8_t*>(document->encoded.data());
         *data_len = document->encoded.size();
         return GALAY_OK;

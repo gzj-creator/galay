@@ -984,7 +984,7 @@ void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
                 auto handler = createSingleFileHandler(filePath, config);
 
                 // 注册路由
-                addHandler<HttpMethod::GET>(routePath, handler);
+                addHandler<HttpMethod::GET, HttpMethod::HEAD>(routePath, handler);
             }
         }
     } catch (const fs::filesystem_error& e) {
@@ -1344,6 +1344,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
     std::string lastModifiedStr = ETagGenerator::formatHttpDate(lastModified);
 
     auto writer = conn.getWriter();
+    const bool isHeadRequest = req.header().method() == HttpMethod::HEAD;
 
     // 1. 处理 If-Match (前置条件)
     std::string ifMatch = req.header().headerPairs().getValue("If-Match");
@@ -1399,11 +1400,21 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
         // 验证 Range 是否有效
         if (hasRange && !rangeResult.isValid()) {
             // Range 无效，返回 416 Range Not Satisfiable
+            const std::string body = "416 Range Not Satisfiable";
             auto response = Http1_1ResponseBuilder()
                 .status(HttpStatusCode::RangeNotSatisfiable_416)
                 .header("Content-Range", "bytes */" + std::to_string(fileSize))
-                .body("416 Range Not Satisfiable")
+                .header("Content-Length", std::to_string(body.size()))
+                .body(body)
                 .buildMove();
+            if (isHeadRequest) {
+                HttpResponseHeader header = response.header();
+                while (true) {
+                    auto send_result = co_await writer.sendHeader(std::move(header));
+                    if (!send_result || send_result.value()) break;
+                }
+                co_return;
+            }
             while (true) {
                 auto send_result = co_await writer.sendResponse(response);
                 if (!send_result || send_result.value()) break;
@@ -1443,6 +1454,24 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                    filePath,
                    fileSize,
                    static_cast<int>(mode));
+
+    if (isHeadRequest) {
+        response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(fileSize));
+        HttpResponseHeader header = response.header();
+        while (true) {
+            auto result = co_await writer.sendHeader(std::move(header));
+            if (!result) {
+                HTTP_LOG_ERROR("[send] [head-fail]",
+                               "error={}",
+                               result.error().message());
+                break;
+            }
+            if (result.value()) {
+                break;
+            }
+        }
+        co_return;
+    }
 
     switch (mode) {
         case FileTransferMode::MEMORY: {
@@ -1644,6 +1673,10 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
         co_return;
     }
 
+    if (req.header().method() == HttpMethod::HEAD) {
+        co_return;
+    }
+
     // 打开文件
     FileDescriptor fd;
     auto open_result = fd.open(filePath.c_str(), O_RDONLY);
@@ -1779,6 +1812,10 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
         HTTP_LOG_ERROR("[send] [header-fail]",
                        "error={}",
                        headerResult.error().message());
+        co_return;
+    }
+
+    if (req.header().method() == HttpMethod::HEAD) {
         co_return;
     }
 

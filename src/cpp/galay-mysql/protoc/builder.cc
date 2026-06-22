@@ -56,6 +56,9 @@ MysqlCommandBuilder& MysqlCommandBuilder::appendSimple(CommandType cmd,
                                                        uint8_t sequence_id,
                                                        MysqlCommandKind kind)
 {
+    if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
+        return *this;
+    }
     m_encoded.reserve(m_encoded.size() + estimateSimplePacketBytes(payload.size()));
     return appendFast(cmd, payload, sequence_id, kind);
 }
@@ -129,6 +132,9 @@ void MysqlCommandBuilder::appendSimpleFast(CommandType cmd,
                                            uint8_t sequence_id,
                                            MysqlCommandKind kind)
 {
+    if (payload.size() > MYSQL_MAX_PACKET_SIZE - 1U) {
+        return;
+    }
     const uint32_t payload_len = 1U + static_cast<uint32_t>(payload.size());
     const size_t begin = m_encoded.size();
 

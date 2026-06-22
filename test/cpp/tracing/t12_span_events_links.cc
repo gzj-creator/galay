@@ -129,6 +129,32 @@ void fileExporterEncodesEventsAndLinks() {
     std::filesystem::remove(path);
 }
 
+void fileExporterEscapesJsonlControlCharacters() {
+    const auto path = std::filesystem::temp_directory_path() / "galay-tracing-t12-control-chars.jsonl";
+    std::filesystem::remove(path);
+
+    galay::tracing::Span span("line\nname", makeContext());
+    assert(span.addEvent("tab\tand\x01" "control", {galay::tracing::spanAttribute("attr\nkey", "value\r\nnext")}));
+    span.end();
+
+    {
+        galay::tracing::FileSpanExporter exporter(path);
+        const std::vector spans{span};
+        assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
+        assert(exporter.forceFlush(std::chrono::milliseconds(0)));
+    }
+
+    std::ifstream in(path, std::ios::binary);
+    const std::string bytes{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+    assert(bytes.find("\"name\":\"line\\nname\"") != std::string::npos);
+    assert(bytes.find("\"name\":\"tab\\tand\\u0001control\"") != std::string::npos);
+    assert(bytes.find("\"key\":\"attr\\nkey\"") != std::string::npos);
+    assert(bytes.find("\"value\":\"value\\r\\nnext\"") != std::string::npos);
+    assert(bytes.find("line\nname") == std::string::npos);
+
+    std::filesystem::remove(path);
+}
+
 } // namespace
 
 int main() {
@@ -136,4 +162,5 @@ int main() {
     spanStoresBoundedLinksWithAttributes();
     otlpJsonExporterEncodesEventsAndLinks();
     fileExporterEncodesEventsAndLinks();
+    fileExporterEscapesJsonlControlCharacters();
 }

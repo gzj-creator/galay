@@ -23,6 +23,7 @@
 #include <memory>
 #include <atomic>
 #include <exception>
+#include <expected>
 #include <functional>
 #include <cstdint>
 #include <optional>
@@ -146,7 +147,6 @@ public:
                                    .build())
         , m_config(config)
         , m_handler(nullptr)
-        , m_listener(nullptr)
         , m_running(false)
     {
     }
@@ -282,17 +282,15 @@ public:
     void stop() {
         if (!m_running.load()) {
             stopStartedPlugins();
+            m_listeners.clear();
             return;
         }
 
         m_running.store(false);
 
-        if (m_listener) {
-            m_listener.reset();
-        }
-
         stopStartedPlugins();
         m_runtime.stop();
+        m_listeners.clear();
 
     }
 
@@ -335,15 +333,31 @@ protected:
             return false;
         }
 
+        size_t io_scheduler_count = m_runtime.getIOSchedulerCount();
+        m_listeners.clear();
+        m_listeners.reserve(io_scheduler_count);
+        for (size_t i = 0; i < io_scheduler_count; i++) {
+            auto listener = createListenerSocket();
+            if (!listener) {
+                HTTP_LOG_ERROR("[socket] [listen-fail]",
+                               "error={}",
+                               listener.error().message());
+                stopStartedPlugins();
+                m_runtime.stop();
+                m_listeners.clear();
+                return false;
+            }
+            m_listeners.emplace_back(std::move(*listener));
+        }
+
         m_running.store(true);
 
-        // 在每个 IO 调度器上启动一个 serverLoop，每个 serverLoop 创建自己的 listener
-        // 利用 SO_REUSEPORT 实现多线程 accept
-        size_t io_scheduler_count = m_runtime.getIOSchedulerCount();
+        // 在每个 IO 调度器上启动一个 serverLoop，每个 serverLoop 由 server 持有独立 listener。
+        // stop() 会先清空 m_listeners，同步关闭监听 fd，再停止 runtime。
         for (size_t i = 0; i < io_scheduler_count; i++) {
             auto* scheduler = m_runtime.getIOScheduler(i);
             if (scheduler) {
-                scheduleTask(scheduler, serverLoop(scheduler));
+                scheduleTask(scheduler, serverLoop(scheduler, &m_listeners[i]));
             }
         }
 
@@ -356,60 +370,16 @@ protected:
      * @details 每个 IO 调度器上运行一个独立的 serverLoop，
      *          创建独立的 listener socket，利用 SO_REUSEPORT 实现多线程 accept。
      */
-    virtual Task<void> serverLoop(IOScheduler* scheduler) {
-        // 阶段 1：创建当前 IO 调度器专属的 listener socket
-        // 每个 serverLoop 创建自己的 listener socket
-        std::optional<TcpSocket> listener_opt;
-        try {
-            listener_opt.emplace(IPType::IPV4);
-        } catch (...) {
-            HTTP_LOG_ERROR("[socket] [create-fail] [listener]", "tcp listener construction failed");
+    virtual Task<void> serverLoop(IOScheduler* scheduler, TcpSocket* listener) {
+        if (listener == nullptr) {
             co_return;
-        }
-        TcpSocket& listener = *listener_opt;
-
-        // 阶段 2：配置 listener 复用地址，允许快速重启绑定同一地址
-        {
-            if (auto result = listener.option().handleReuseAddr(); !result) {
-                co_return;
-            }
-        }
-
-        // 阶段 3：配置 listener 复用端口，支持多 IO 调度器并行 accept
-        // 设置 SO_REUSEPORT 以支持多线程 accept
-        {
-            if (auto result = listener.option().handleReusePort(); !result) {
-                co_return;
-            }
-        }
-
-        // 阶段 4：设置 listener 为非阻塞模式，交给协程调度器驱动 IO
-        {
-            if (auto result = listener.option().handleNonBlock(); !result) {
-                co_return;
-            }
-        }
-
-        // 阶段 5：绑定监听地址和端口
-        {
-            Host bind_host(IPType::IPV4, m_config.host, m_config.port);
-            if (auto result = listener.bind(bind_host); !result) {
-                co_return;
-            }
-        }
-
-        // 阶段 6：进入 listen 状态，准备接收客户端连接
-        {
-            if (auto result = listener.listen(m_config.backlog); !result) {
-                co_return;
-            }
         }
 
 
         // 阶段 7：主 accept 循环，运行期间持续等待新连接
         while (m_running.load()) {
             Host client_host;
-            auto accept_result = co_await listener.accept(&client_host);
+            auto accept_result = co_await listener->accept(&client_host);
 
             // 阶段 8：处理 accept 失败，服务器仍运行时记录告警并继续循环
             if (!accept_result) {
@@ -518,6 +488,30 @@ protected:
         co_return true;
     }
 
+    std::expected<TcpSocket, IOError> createListenerSocket() {
+        auto listener = TcpSocket::create(IPType::IPV4);
+        if (!listener) {
+            return std::unexpected(listener.error());
+        }
+        if (auto result = listener->option().handleReuseAddr(); !result) {
+            return std::unexpected(result.error());
+        }
+        if (auto result = listener->option().handleReusePort(); !result) {
+            return std::unexpected(result.error());
+        }
+        if (auto result = listener->option().handleNonBlock(); !result) {
+            return std::unexpected(result.error());
+        }
+        Host bind_host(IPType::IPV4, m_config.host, m_config.port);
+        if (auto result = listener->bind(bind_host); !result) {
+            return std::unexpected(result.error());
+        }
+        if (auto result = listener->listen(m_config.backlog); !result) {
+            return std::unexpected(result.error());
+        }
+        return std::move(*listener);
+    }
+
 protected:
     Runtime m_runtime;                      ///< 内部 Runtime 实例
     HttpServerConfig m_config;              ///< 服务器配置
@@ -525,7 +519,7 @@ protected:
     std::vector<std::unique_ptr<plugin::AcceptPlugin<SocketType>>> m_accept_plugins; ///< accept 后顺序执行的插件列表
     std::size_t m_started_plugin_count = 0;  ///< 已成功启动且需要反序停止的插件数量
     std::optional<HttpRouter> m_router;     ///< 路由表（路由模式下使用）
-    std::unique_ptr<TcpSocket> m_listener;  ///< 监听 Socket（已弃用，每个 loop 独立创建）
+    std::vector<TcpSocket> m_listeners;     ///< 每个 IO 调度器独立 listener，stop() 同步关闭
     std::atomic<bool> m_running;            ///< 运行状态标志
 };
 
@@ -642,54 +636,15 @@ protected:
         }
     }
 
-    Task<void> serverLoop(IOScheduler* scheduler) override {
-        // 阶段 1：创建当前 IO 调度器专属的 TCP listener socket
-        // 每个 serverLoop 创建自己的 listener socket
-        std::optional<TcpSocket> listener_opt;
-        try {
-            listener_opt.emplace(IPType::IPV4);
-        } catch (...) {
-            HTTP_LOG_ERROR("[socket] [create-fail] [listener]", "tcp listener construction failed");
-            co_return;
-        }
-        TcpSocket& listener = *listener_opt;
-
-        // 阶段 2：配置 listener 复用地址，允许快速重启绑定同一地址
-        auto reuse_result = listener.option().handleReuseAddr();
-        if (!reuse_result) {
-            co_return;
-        }
-
-        // 阶段 3：配置 listener 复用端口，支持多 IO 调度器并行 accept
-        // 设置 SO_REUSEPORT 以支持多线程 accept
-        auto reuse_port_result = listener.option().handleReusePort();
-        if (!reuse_port_result) {
-            co_return;
-        }
-
-        // 阶段 4：设置 listener 为非阻塞模式，交给协程调度器驱动 IO
-        auto nonblock_result = listener.option().handleNonBlock();
-        if (!nonblock_result) {
-            co_return;
-        }
-
-        // 阶段 5：绑定监听地址和端口
-        Host bind_host(IPType::IPV4, m_config.host, m_config.port);
-        auto bind_result = listener.bind(bind_host);
-        if (!bind_result) {
-            co_return;
-        }
-
-        // 阶段 6：进入 listen 状态，准备接收客户端 TLS 连接
-        auto listen_result = listener.listen(m_config.backlog);
-        if (!listen_result) {
+    Task<void> serverLoop(IOScheduler* scheduler, TcpSocket* listener) override {
+        if (listener == nullptr) {
             co_return;
         }
 
         // 阶段 7：主 accept 循环，运行期间持续等待新连接
         while (m_running.load()) {
             Host client_host;
-            auto accept_result = co_await listener.accept(&client_host);
+            auto accept_result = co_await listener->accept(&client_host);
 
             // 阶段 8：处理 accept 失败，服务器仍运行时记录告警并继续循环
             if (!accept_result) {

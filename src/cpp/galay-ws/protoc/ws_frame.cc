@@ -64,16 +64,20 @@ void applyMaskBytesImpl(char* data, size_t len, const uint8_t masking_key[4]) {
         std::memcpy(reinterpret_cast<uint8_t*>(&mask64) + 4, masking_key, 4);
 
         for (; i + 8 <= len; i += 8) {
-            uint64_t* data64 = reinterpret_cast<uint64_t*>(ptr + i);
-            *data64 ^= mask64;
+            uint64_t chunk;
+            std::memcpy(&chunk, ptr + i, sizeof(chunk));
+            chunk ^= mask64;
+            std::memcpy(ptr + i, &chunk, sizeof(chunk));
         }
     }
 
     if (i + 4 <= len) {
         uint32_t mask32;
         std::memcpy(&mask32, masking_key, 4);
-        uint32_t* data32 = reinterpret_cast<uint32_t*>(ptr + i);
-        *data32 ^= mask32;
+        uint32_t chunk;
+        std::memcpy(&chunk, ptr + i, sizeof(chunk));
+        chunk ^= mask32;
+        std::memcpy(ptr + i, &chunk, sizeof(chunk));
         i += 4;
     }
 
@@ -227,15 +231,24 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
             return std::unexpected(WsError(kWsIncomplete));
         }
         const uint16_t extended_len = (static_cast<uint16_t>(len_buf[0]) << 8) | len_buf[1];
+        if (extended_len < 126) {
+            return std::unexpected(WsError(kWsInvalidPayloadLength));
+        }
         frame.header.payload_length = extended_len;
     } else {
         uint8_t len_buf[8];
         if (!cursor.readBytes(len_buf, sizeof(len_buf))) {
             return std::unexpected(WsError(kWsIncomplete));
         }
+        if ((len_buf[0] & 0x80) != 0) {
+            return std::unexpected(WsError(kWsInvalidPayloadLength));
+        }
         uint64_t extended_len = 0;
         for (size_t i = 0; i < sizeof(len_buf); ++i) {
             extended_len = (extended_len << 8) | len_buf[i];
+        }
+        if (extended_len <= 0xFFFF) {
+            return std::unexpected(WsError(kWsInvalidPayloadLength));
         }
         frame.header.payload_length = extended_len;
     }
@@ -270,6 +283,30 @@ WsFrameParser::fromIOVec(const struct iovec* iovecs, size_t iovec_count, WsFrame
     // 如果有掩码，解除掩码
     if (frame.header.mask) {
         applyMask(frame.payload, frame.header.masking_key);
+    }
+
+    if (frame.header.opcode == WsOpcode::Close) {
+        if (payload_size == 1) {
+            return std::unexpected(WsError(kWsInvalidPayloadLength));
+        }
+        if (payload_size >= 2) {
+            const uint16_t code =
+                (static_cast<uint16_t>(static_cast<uint8_t>(frame.payload[0])) << 8) |
+                static_cast<uint8_t>(frame.payload[1]);
+            const bool valid_code =
+                (code >= 1000 && code <= 4999) &&
+                code != 1004 &&
+                code != 1005 &&
+                code != 1006 &&
+                code != 1015;
+            if (!valid_code) {
+                return std::unexpected(WsError(kWsInvalidCloseCode));
+            }
+            if (payload_size > 2 &&
+                !isValidUtf8Bytes(frame.payload.data() + 2, payload_size - 2)) {
+                return std::unexpected(WsError(kWsInvalidUtf8));
+            }
+        }
     }
 
     // 验证文本帧的UTF-8编码

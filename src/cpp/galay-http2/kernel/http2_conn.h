@@ -316,6 +316,24 @@ inline bool decodeFrameHeader(const struct iovec* iovecs,
     return true;
 }
 
+inline bool isKnownHttp2FrameType(Http2FrameType type) {
+    switch (type) {
+        case Http2FrameType::Data:
+        case Http2FrameType::Headers:
+        case Http2FrameType::Priority:
+        case Http2FrameType::RstStream:
+        case Http2FrameType::Settings:
+        case Http2FrameType::PushPromise:
+        case Http2FrameType::Ping:
+        case Http2FrameType::GoAway:
+        case Http2FrameType::WindowUpdate:
+        case Http2FrameType::Continuation:
+            return true;
+        default:
+            return false;
+    }
+}
+
 inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer& ring_buffer,
                                                      uint32_t max_frame_size) {
     Http2BufferedFrameStatus status;
@@ -346,41 +364,47 @@ inline std::expected<Http2Frame::uptr, Http2ErrorCode>
 parseSingleBufferedFrame(RingBuffer& ring_buffer,
                          uint32_t max_frame_size,
                          std::vector<uint8_t>& scratch) {
-    const auto status = inspectBufferedFrame(ring_buffer, max_frame_size);
-    if (status.error.has_value()) {
-        return std::unexpected(*status.error);
-    }
-    if (!status.complete) {
-        return std::unexpected(Http2ErrorCode::NoError);
-    }
-
-    const auto read_iovecs = borrowReadIovecs(ring_buffer);
-    const auto* first_segment = IoVecWindow::firstNonEmpty(read_iovecs);
-
-    std::expected<Http2Frame::uptr, Http2ErrorCode> frame_result;
-    if (first_segment != nullptr && first_segment->iov_len >= status.total_frame_size) {
-        frame_result = Http2FrameParser::parseFrame(
-            static_cast<const uint8_t*>(first_segment->iov_base),
-            status.total_frame_size);
-    } else {
-        if (scratch.size() < status.total_frame_size) {
-            scratch.resize(status.total_frame_size);
+    while (true) {
+        const auto status = inspectBufferedFrame(ring_buffer, max_frame_size);
+        if (status.error.has_value()) {
+            return std::unexpected(*status.error);
         }
-        if (IoVecBytes::copyPrefix(read_iovecs.data(),
-                                   read_iovecs.size(),
-                                   scratch.data(),
-                                   status.total_frame_size) < status.total_frame_size) {
-            return std::unexpected(Http2ErrorCode::ProtocolError);
+        if (!status.complete) {
+            return std::unexpected(Http2ErrorCode::NoError);
         }
-        frame_result = Http2FrameParser::parseFrame(scratch.data(), status.total_frame_size);
-    }
+        if (!isKnownHttp2FrameType(status.header.type)) {
+            ring_buffer.consume(status.total_frame_size);
+            continue;
+        }
 
-    if (!frame_result.has_value()) {
-        return std::unexpected(frame_result.error());
-    }
+        const auto read_iovecs = borrowReadIovecs(ring_buffer);
+        const auto* first_segment = IoVecWindow::firstNonEmpty(read_iovecs);
 
-    ring_buffer.consume(status.total_frame_size);
-    return frame_result;
+        std::expected<Http2Frame::uptr, Http2ErrorCode> frame_result;
+        if (first_segment != nullptr && first_segment->iov_len >= status.total_frame_size) {
+            frame_result = Http2FrameParser::parseFrame(
+                static_cast<const uint8_t*>(first_segment->iov_base),
+                status.total_frame_size);
+        } else {
+            if (scratch.size() < status.total_frame_size) {
+                scratch.resize(status.total_frame_size);
+            }
+            if (IoVecBytes::copyPrefix(read_iovecs.data(),
+                                       read_iovecs.size(),
+                                       scratch.data(),
+                                       status.total_frame_size) < status.total_frame_size) {
+                return std::unexpected(Http2ErrorCode::ProtocolError);
+            }
+            frame_result = Http2FrameParser::parseFrame(scratch.data(), status.total_frame_size);
+        }
+
+        if (!frame_result.has_value()) {
+            return std::unexpected(frame_result.error());
+        }
+
+        ring_buffer.consume(status.total_frame_size);
+        return frame_result;
+    }
 }
 
 inline std::expected<std::vector<Http2Frame::uptr>, Http2ErrorCode>
@@ -402,6 +426,10 @@ parseBufferedFrameBatch(RingBuffer& ring_buffer,
         }
         if (!status.complete) {
             break;
+        }
+        if (!isKnownHttp2FrameType(status.header.type)) {
+            ring_buffer.consume(status.total_frame_size);
+            continue;
         }
 
         const auto read_iovecs = borrowReadIovecs(ring_buffer);
@@ -454,6 +482,10 @@ parseBufferedFrameViewBatch(RingBuffer& ring_buffer,
         }
         if (!status.complete) {
             break;
+        }
+        if (!isKnownHttp2FrameType(status.header.type)) {
+            ring_buffer.consume(status.total_frame_size);
+            continue;
         }
 
         const auto read_iovecs = borrowReadIovecs(ring_buffer);
@@ -1430,6 +1462,13 @@ public:
                 break;  // 不完整的帧，停止解析
             }
 
+            // RFC 9113: unknown extension frames are ignored, but their
+            // payload bytes must still be consumed to keep the stream aligned.
+            if (!detail::isKnownHttp2FrameType(header.type)) {
+                m_ring_buffer.consume(total_frame_size);
+                continue;
+            }
+
             // 解析完整帧
             std::expected<Http2Frame::uptr, Http2ErrorCode> frame_result;
 
@@ -1695,6 +1734,9 @@ public:
     }
 
 private:
+    template<typename>
+    friend class Http2StreamManagerImpl;
+
     SocketType m_socket;
     RingBuffer m_ring_buffer;
     std::vector<uint8_t> m_parse_buffer;  // 用于跨 iovec 边界的帧解析

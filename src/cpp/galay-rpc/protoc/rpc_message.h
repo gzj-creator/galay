@@ -29,15 +29,21 @@
 #define GALAY_RPC_MESSAGE_H
 
 #include "rpc_base.h"
+#include "rpc_error.h"
 #include "../kernel/rpc_metadata.h"
 #include <cstring>
-#include <vector>
 #include <expected>
+#include <limits>
+#include <vector>
 
 namespace galay::rpc
 {
 
 inline constexpr uint16_t kRpcRequestMetadataMarker = 0xFFFF;  ///< 请求metadata扩展标记
+
+inline bool rpcHeartbeatBodyIsValid(uint8_t type, uint32_t body_length) {
+    return type != static_cast<uint8_t>(RpcMessageType::HEARTBEAT) || body_length == 0;
+}
 
 /**
  * @brief RPC payload 零拷贝视图（最多两段，适配环形缓冲区）
@@ -51,8 +57,13 @@ struct RpcPayloadView {
     const char* segment2 = nullptr;   ///< 第二段数据指针
     size_t segment2_len = 0;          ///< 第二段数据长度
 
-    /// @brief 获取payload总字节数
-    size_t size() const { return segment1_len + segment2_len; }
+    /// @brief 获取payload总字节数；溢出时饱和到size_t最大值以便上层边界校验拒绝
+    size_t size() const {
+        if (segment1_len > std::numeric_limits<size_t>::max() - segment2_len) {
+            return std::numeric_limits<size_t>::max();
+        }
+        return segment1_len + segment2_len;
+    }
     /// @brief 判断payload是否为空
     bool empty() const { return size() == 0; }
 };
@@ -114,7 +125,8 @@ struct RpcHeader {
         m_request_id  = rpcNtohl(request_id);
         m_body_length = rpcNtohl(body_length);
 
-        return m_body_length <= RPC_MAX_BODY_SIZE;
+        return m_body_length <= RPC_MAX_BODY_SIZE &&
+               rpcHeartbeatBodyIsValid(m_type, m_body_length);
     }
 };
 
@@ -263,9 +275,39 @@ public:
     size_t serializedMetadataSize() const { return metadataWireSize(); }
 
     /**
+     * @brief 校验请求是否可安全写入协议帧
+     * @return 成功或INVALID_REQUEST
+     *
+     * @note 写入侧必须先校验16位长度字段和body上限，避免截断后生成歧义帧。
+     */
+    std::expected<void, RpcError> validateForWrite() const {
+        if (m_service_name.size() > std::numeric_limits<uint16_t>::max()) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                            "RPC service name too large"));
+        }
+        if (m_method_name.size() > std::numeric_limits<uint16_t>::max()) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                            "RPC method name too large"));
+        }
+        if (serializedMetadataSize() > kRpcMetadataMaxWireSize) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                            "RPC metadata too large"));
+        }
+        if (payloadSize() > RPC_MAX_BODY_SIZE || serializedBodySize() > RPC_MAX_BODY_SIZE) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                            "RPC request body too large"));
+        }
+        return {};
+    }
+
+    /**
      * @brief 序列化请求
      */
     std::vector<char> serialize() const {
+        if (!validateForWrite().has_value()) {
+            return {};
+        }
+
         RpcPayloadView payload_view = payloadView();
         size_t body_size = serializedBodySize();
         std::vector<char> buffer(RPC_HEADER_SIZE + body_size);
@@ -587,9 +629,29 @@ public:
     bool isOk() const { return m_error_code == RpcErrorCode::OK; }
 
     /**
+     * @brief 校验响应是否可安全写入协议帧
+     * @return 成功或INVALID_RESPONSE
+     *
+     * @note 响应body包含2字节错误码，写入侧必须把该字段计入上限。
+     */
+    std::expected<void, RpcError> validateForWrite() const {
+        const auto payload_size = payloadSize();
+        if (payload_size > RPC_MAX_BODY_SIZE ||
+            payload_size > RPC_MAX_BODY_SIZE - sizeof(uint16_t)) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_RESPONSE,
+                                            "RPC response body too large"));
+        }
+        return {};
+    }
+
+    /**
      * @brief 序列化响应
      */
     std::vector<char> serialize() const {
+        if (!validateForWrite().has_value()) {
+            return {};
+        }
+
         RpcPayloadView payload_view = payloadView();
         size_t body_size = 2 + payload_view.size();
         std::vector<char> buffer(RPC_HEADER_SIZE + body_size);

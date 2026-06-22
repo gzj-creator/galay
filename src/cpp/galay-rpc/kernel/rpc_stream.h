@@ -46,6 +46,7 @@
 #include <array>
 #include <cstring>
 #include <expected>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <span>
@@ -565,7 +566,22 @@ public:
         : m_service(service)
         , m_method(method)
     {
+        if (m_service.size() > std::numeric_limits<uint16_t>::max()) {
+            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                   "RPC stream service name too large"));
+            return;
+        }
+        if (m_method.size() > std::numeric_limits<uint16_t>::max()) {
+            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                   "RPC stream method name too large"));
+            return;
+        }
         const size_t body_size = 2 + m_service.size() + 2 + m_method.size();
+        if (body_size > RPC_MAX_BODY_SIZE) {
+            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                   "RPC stream init body too large"));
+            return;
+        }
 
         RpcHeader header;
         header.m_type = static_cast<uint8_t>(RpcMessageType::STREAM_INIT);
@@ -604,6 +620,12 @@ private:
 
     void buildDataFrame(uint32_t stream_id, const RpcPayloadView& payload_view)
     {
+        if (payload_view.size() > RPC_MAX_BODY_SIZE) {
+            setWriteError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                   "RPC stream data body too large"));
+            return;
+        }
+
         RpcHeader header;
         header.m_type = static_cast<uint8_t>(RpcMessageType::STREAM_DATA);
         header.m_request_id = stream_id;

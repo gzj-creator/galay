@@ -69,7 +69,7 @@ namespace galay::async
  *
  * @note
  * - 不可拷贝，仅支持移动语义
- * - 析构时不会自动关闭socket，需显式调用close()
+ * - 析构时会同步关闭仍由对象持有的 socket
  * - 所有异步操作需要在任务中使用 co_await
  * - UDP是无连接协议，不需要listen/accept/connect操作
  *
@@ -103,7 +103,7 @@ public:
 
     /**
      * @brief 析构函数
-     * @note 不会自动关闭socket，需显式调用close()
+     * @note 同步关闭仍由对象持有的 socket；协程路径仍可显式 co_await close() 获取错误。
      */
     ~UdpSocket();
 

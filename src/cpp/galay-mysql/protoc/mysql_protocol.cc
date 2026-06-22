@@ -2,6 +2,7 @@
 #include <cstring>
 #include <algorithm>
 #include <concepts>
+#include <limits>
 
 namespace galay::mysql::protocol
 {
@@ -120,10 +121,17 @@ std::expected<std::string, ParseError> readLenEncString(const char* data, size_t
     if (!int_result) return std::unexpected(int_result.error());
 
     uint64_t str_len = int_result.value();
-    if (len < int_consumed + str_len) return std::unexpected(ParseError::Incomplete);
+    if (str_len > std::numeric_limits<size_t>::max()) {
+        return std::unexpected(ParseError::BufferOverflow);
+    }
+    const size_t str_size = static_cast<size_t>(str_len);
+    if (str_size > std::numeric_limits<size_t>::max() - int_consumed) {
+        return std::unexpected(ParseError::BufferOverflow);
+    }
+    if (str_size > len - int_consumed) return std::unexpected(ParseError::Incomplete);
 
-    consumed = int_consumed + str_len;
-    return std::string(data + int_consumed, str_len);
+    consumed = int_consumed + str_size;
+    return std::string(data + int_consumed, str_size);
 }
 
 std::expected<std::string, ParseError> readNullTermString(const char* data, size_t len, size_t& consumed)

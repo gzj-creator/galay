@@ -16,6 +16,8 @@
 #define GALAY_MONGO_VALUE_H
 
 #include <cstdint>
+#include <expected>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -76,9 +78,9 @@ public:
     /**
      * @brief 从十六进制字符串创建 ObjectId 值
      * @param oid 24 字符的十六进制 ObjectId 字符串
-     * @return 类型为 ObjectId 的 MongoValue
+     * @return 成功时返回类型为 ObjectId 的 MongoValue；失败时返回错误描述
      */
-    static MongoValue fromObjectId(std::string oid);
+    static std::expected<MongoValue, std::string> fromObjectId(std::string oid);
 
     /**
      * @brief 从毫秒时间戳创建 DateTime 值
@@ -247,10 +249,9 @@ public:
     /**
      * @brief 按索引访问（带边界检查）
      * @param index 元素索引
-     * @return 元素的只读引用
-     * @throws std::out_of_range 越界时抛出
+     * @return 成功时返回元素的只读引用；越界时返回错误描述
      */
-    const MongoValue& at(size_t index) const;
+    std::expected<std::reference_wrapper<const MongoValue>, std::string> at(size_t index) const;
 
     /**
      * @brief 按索引访问（不做边界检查）
@@ -329,12 +330,11 @@ public:
     MongoValue* find(const std::string& key);
 
     /**
-     * @brief 按键访问（未找到时抛出 std::out_of_range）
+     * @brief 按键访问
      * @param key 字段名
-     * @return 值的只读引用
-     * @throws std::out_of_range 键不存在时抛出
+     * @return 成功时返回值的只读引用；键不存在时返回错误描述
      */
-    const MongoValue& at(const std::string& key) const;
+    std::expected<std::reference_wrapper<const MongoValue>, std::string> at(const std::string& key) const;
 
     /// @name 便捷取值方法（键不存在或类型不匹配时返回默认值）
     /// @{

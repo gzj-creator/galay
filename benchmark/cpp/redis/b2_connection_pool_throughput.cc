@@ -9,7 +9,6 @@
 #include <iostream>
 #include <mutex>
 #include <string>
-#include <unordered_set>
 
 using namespace galay::kernel;
 using namespace galay::redis;
@@ -48,8 +47,6 @@ struct SharedStats {
     std::atomic<std::int64_t> success{0};
     std::atomic<std::int64_t> error{0};
     std::atomic<std::int64_t> timeout{0};
-    std::mutex connected_mutex;
-    std::unordered_set<RedisClient*> connected_clients;
 };
 
 bool parseInt(const std::string& text, int& value)
@@ -196,28 +193,6 @@ Task<void> poolWorker(
 
         auto conn = acquire_result.value();
         auto* client = conn->get();
-
-        bool need_connect = false;
-        {
-            std::lock_guard<std::mutex> lock(stats->connected_mutex);
-            need_connect = (stats->connected_clients.find(client) == stats->connected_clients.end());
-        }
-
-        if (need_connect) {
-            auto connect_result = co_await client->connect(options->host, options->port).timeout(std::chrono::seconds(5));
-            if (!connect_result) {
-                if (isTimeoutError(connect_result.error())) {
-                    ++local_timeout;
-                } else {
-                    ++local_error;
-                }
-                pool->release(conn);
-                continue;
-            }
-
-            std::lock_guard<std::mutex> lock(stats->connected_mutex);
-            stats->connected_clients.insert(client);
-        }
 
         const std::string key = "bench:pool:" + std::to_string(worker_id) + ":" + std::to_string(i);
         const std::string value = "value_" + std::to_string(i);
