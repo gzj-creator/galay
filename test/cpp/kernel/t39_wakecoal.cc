@@ -25,6 +25,16 @@ Task<void> pendingTask() {
     co_return;
 }
 
+template <typename SchedulerT>
+bool startWakeReactor(SchedulerT& scheduler) {
+    auto started = SchedulerTestAccess::startReactor(scheduler);
+    if (!started) {
+        std::cerr << "[T39] failed to start reactor: " << started.error().message() << "\n";
+        return false;
+    }
+    return true;
+}
+
 bool scheduleInjectedTasks(IOScheduler& scheduler, int count) {
     for (int i = 0; i < count; ++i) {
         Task<void> task = pendingTask();
@@ -66,6 +76,10 @@ bool readKqueueWakeEvents(int kqueue_fd, int& total) {
 bool verifyWakeupCoalescing() {
     KqueueScheduler scheduler;
 
+    if (!startWakeReactor(scheduler)) {
+        return false;
+    }
+
     if (!scheduleInjectedTasks(scheduler, 3)) {
         return false;
     }
@@ -85,6 +99,10 @@ bool verifyWakeupCoalescing() {
 #elif defined(USE_EPOLL)
 bool verifyWakeupCoalescing() {
     EpollScheduler scheduler;
+
+    if (!startWakeReactor(scheduler)) {
+        return false;
+    }
 
     if (!scheduleInjectedTasks(scheduler, 3)) {
         return false;
@@ -107,6 +125,10 @@ bool verifyWakeupCoalescing() {
 #elif defined(USE_IOURING)
 bool verifyWakeupCoalescing() {
     IOUringScheduler scheduler;
+
+    if (!startWakeReactor(scheduler)) {
+        return false;
+    }
 
     if (!scheduleInjectedTasks(scheduler, 3)) {
         return false;

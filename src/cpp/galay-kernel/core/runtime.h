@@ -85,7 +85,8 @@ enum class RuntimeErrorCode : uint8_t {
     kNoCurrentRuntime,      ///< 当前线程未绑定 Runtime 上下文
     kInvalidHandle,         ///< RuntimeHandle 未绑定有效 Runtime
     kTaskException,         ///< 根任务执行或取结果阶段产生异常
-    kBlockingSubmitFailed   ///< 阻塞线程池提交 callable 失败
+    kBlockingSubmitFailed,  ///< 阻塞线程池提交 callable 失败
+    kSchedulerStartFailed   ///< scheduler 或底层 reactor 启动失败
 };
 
 /**
@@ -105,13 +106,14 @@ public:
     RuntimeErrorCode code() const noexcept { return m_code; }  ///< 返回 Runtime 错误类别
     std::string_view message() const noexcept
     {
-        static constexpr std::array<std::string_view, static_cast<size_t>(RuntimeErrorCode::kBlockingSubmitFailed) + 1> kMessages = {{
+        static constexpr std::array<std::string_view, static_cast<size_t>(RuntimeErrorCode::kSchedulerStartFailed) + 1> kMessages = {{
             "runtime has no scheduler available for task execution",
             "runtime failed to submit the task to its scheduler",
             "current thread is not running inside a runtime context",
             "runtime handle is not bound to a runtime",
             "root task completed with an unhandled exception",
-            "runtime failed to submit the blocking task"
+            "runtime failed to submit the blocking task",
+            "runtime failed to start a scheduler"
         }};
 
         const auto index = static_cast<size_t>(m_code);
@@ -160,7 +162,7 @@ public:
      * 若未显式注册 scheduler，会按 `RuntimeConfig` 自动创建默认实例。
      * 重复调用安全，已运行时直接返回。
      */
-    void start();
+    std::expected<void, RuntimeError> start();
 
     /**
      * @brief 停止 runtime 及其管理的 scheduler。
@@ -180,13 +182,16 @@ public:
     template <typename T>
     auto blockOn(Task<T> task) -> std::expected<T, RuntimeError>
     {
-        Scheduler* scheduler = acquireDefaultScheduler();
-        if (scheduler == nullptr) {
+        auto scheduler = acquireDefaultScheduler();
+        if (!scheduler.has_value()) {
+            return std::unexpected(scheduler.error());
+        }
+        if (*scheduler == nullptr) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kNoSchedulerAvailable));
         }
 
         const TaskRef& taskRef = detail::TaskAccess::taskRef(task);
-        bindTaskToRuntime(taskRef, scheduler);
+        bindTaskToRuntime(taskRef, *scheduler);
         if (!submitTask(taskRef)) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kSubmitFailed));
         }
@@ -212,13 +217,16 @@ public:
     template <typename T>
     auto spawn(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
     {
-        Scheduler* scheduler = acquireDefaultScheduler();
-        if (scheduler == nullptr) {
+        auto scheduler = acquireDefaultScheduler();
+        if (!scheduler.has_value()) {
+            return std::unexpected(scheduler.error());
+        }
+        if (*scheduler == nullptr) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kNoSchedulerAvailable));
         }
 
         const TaskRef& taskRef = detail::TaskAccess::taskRef(task);
-        bindTaskToRuntime(taskRef, scheduler);
+        bindTaskToRuntime(taskRef, *scheduler);
         if (!submitTask(taskRef)) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kSubmitFailed));
         }
@@ -276,8 +284,8 @@ public:
 private:
     void createDefaultSchedulers();  ///< 按配置或 CPU 数生成默认 scheduler 集合
     void applyAffinityConfig();  ///< 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
-    void ensureStarted();  ///< 若 Runtime 尚未启动则触发一次启动
-    Scheduler* acquireDefaultScheduler();  ///< 为根任务选出一个默认调度器
+    std::expected<void, RuntimeError> ensureStarted();  ///< 若 Runtime 尚未启动则触发一次启动
+    std::expected<Scheduler*, RuntimeError> acquireDefaultScheduler();  ///< 为根任务选出一个默认调度器
     void bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler);  ///< 给根任务绑定 Runtime 与目标调度器
     bool submitTask(const TaskRef& task);  ///< 把根任务提交到其所属调度器
     static size_t getCPUCount();  ///< 返回当前机器可用 CPU 数量

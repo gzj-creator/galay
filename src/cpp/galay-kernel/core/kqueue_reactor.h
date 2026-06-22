@@ -22,6 +22,7 @@
 #include <sys/event.h>
 
 #include <atomic>
+#include <expected>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -32,17 +33,18 @@ namespace galay::kernel {
  * @brief kqueue 后端 reactor
  * @details 负责 macOS/BSD 上 kqueue 事件的注册、唤醒与分发。
  */
-class KqueueReactor : public BackendReactor
+class KqueueReactor
 {
 public:
     KqueueReactor(int max_events, std::atomic<uint64_t>& last_error_code);  ///< 构造 kqueue reactor，并绑定错误输出槽位
-    ~KqueueReactor() override;  ///< 释放 kqueue 与内部事件缓冲资源
+    ~KqueueReactor();  ///< 释放 kqueue 与内部事件缓冲资源
 
     KqueueReactor(const KqueueReactor&) = delete;
     KqueueReactor& operator=(const KqueueReactor&) = delete;
 
-    void notify() override;  ///< 从其他线程唤醒阻塞中的 kevent
-    int wakeReadFdForTest() const override;  ///< 返回测试可见的 kqueue 句柄，用于观察唤醒事件
+    void notify();  ///< 从其他线程唤醒阻塞中的 kevent
+    GHandle getHandle() const;  ///< 返回测试可见的 kqueue 句柄，用于观察唤醒事件
+    std::expected<void, IOError> start();  ///< 显式初始化 kqueue 和唤醒事件，失败时返回 IOError
 
     int addAccept(IOController* controller);  ///< 注册 accept 等待；1=立即完成，0=已登记，<0=错误
     int addConnect(IOController* controller);  ///< 注册 connect 等待；1=立即完成，0=已登记，<0=错误
@@ -91,6 +93,8 @@ private:
     std::vector<std::unique_ptr<RegistrationEntry>> m_retired_entries;  ///< 已退役但保留地址的注册入口
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
 };
+
+static_assert(ReactorType<KqueueReactor>);
 
 }  // namespace galay::kernel
 

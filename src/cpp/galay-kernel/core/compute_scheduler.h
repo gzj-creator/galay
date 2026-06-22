@@ -10,7 +10,7 @@
  * 使用方式：
  * @code
  * ComputeScheduler scheduler;
- * scheduler.start();
+ * (void)scheduler.start();
  * scheduler.schedule(myComputeTask());
  * // ...
  * scheduler.stop();
@@ -81,9 +81,10 @@ public:
 
     /**
      * @brief 启动调度器
+     * @return 成功返回 void；当前实现不会产生 IOError
      * @note 创建工作线程并开始处理任务
      */
-    void start() override;
+    std::expected<void, IOError> start() override;
 
     /**
      * @brief 停止调度器

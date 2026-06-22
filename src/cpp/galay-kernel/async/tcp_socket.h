@@ -79,9 +79,18 @@ public:
     /**
      * @brief 构造函数，创建Socket
      * @param type IP协议类型（IPV4/IPV6）
-     * @note 创建失败会抛出异常
+     * @note 兼容旧调用；创建失败时内部句柄保持 invalid。需要错误原因时请使用 create()。
      */
     explicit TcpSocket(galay::kernel::IPType type = galay::kernel::IPType::IPV4);
+
+    /**
+     * @brief 创建 TCP socket 并以返回值报告系统调用错误。
+     * @param type IP 协议类型（IPV4/IPV6）
+     * @return 成功返回可用 TcpSocket；socket() 失败时返回 IOError(kOpenFailed, errno)。
+     * @note 不启动任何协程，也不阻塞；适合 C ABI/FFI 边界显式映射错误。
+     */
+    static std::expected<TcpSocket, galay::kernel::IOError> create(
+        galay::kernel::IPType type = galay::kernel::IPType::IPV4);
 
     /**
      * @brief 从已有句柄构造Socket
@@ -409,7 +418,7 @@ public:
     galay::kernel::IOController* getController() { return &m_controller; }
 
 private:
-    GHandle create(galay::kernel::IPType type);  ///< 按协议版本创建底层 socket；失败时返回无效句柄
+    static std::expected<GHandle, galay::kernel::IOError> openHandle(galay::kernel::IPType type);  ///< 按协议版本创建底层 socket
 private:
     galay::kernel::IOController m_controller;  ///< IO事件控制器
 };

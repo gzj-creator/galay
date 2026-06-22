@@ -1,10 +1,10 @@
 /**
  * @file backend_reactor.h
- * @brief 平台无关的 IO 事件后端 reactor 抽象
+ * @brief 平台无关的 IO 事件后端 reactor 约束
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 定义所有具体 IO 后端（epoll、kqueue、io_uring）必须实现的 BackendReactor 接口，
+ * @details 定义所有具体 IO 后端（epoll、kqueue、io_uring）必须满足的 ReactorType concept，
  * 同时提供用于在原子槽位中存储和加载后端错误码的辅助函数。
  */
 
@@ -12,22 +12,22 @@
 #define GALAY_KERNEL_BACKEND_REACTOR_H
 
 #include "../common/error.h"
+#include "../common/defn.hpp"
 
 #include <atomic>
+#include <concepts>
 #include <optional>
 
 namespace galay::kernel {
 
 /**
- * @brief 平台后端 reactor 抽象基类
- * @details 由 epoll、kqueue、io_uring 等具体后端实现，用于向调度器提供统一唤醒接口。
+ * @brief 平台后端 reactor 编译期约束
+ * @details 由 epoll、kqueue、io_uring 等具体后端满足，用于向调度器提供统一唤醒接口。
  */
-class BackendReactor
-{
-public:
-    virtual ~BackendReactor() = default;  ///< 虚析构，允许通过基类指针安全释放具体后端
-    virtual void notify() = 0;  ///< 从其他线程唤醒阻塞中的 reactor
-    virtual int wakeReadFdForTest() const = 0;  ///< 返回测试可见的唤醒读端句柄；不可用时返回负值
+template <typename Reactor>
+concept ReactorType = requires(Reactor& reactor, const Reactor& const_reactor) {
+    { reactor.notify() } -> std::same_as<void>;
+    { const_reactor.getHandle() } -> std::same_as<GHandle>;
 };
 
 namespace detail {

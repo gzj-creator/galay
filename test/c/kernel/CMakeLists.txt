@@ -17,3 +17,6 @@ add_test(NAME c.kernel.runtime_lifecycle COMMAND test_c_kernel_runtime_lifecycle
 
 galay_add_c_kernel_test(test_c_kernel_config_and_socket_handles t3_config_and_socket_handles.c)
 add_test(NAME c.kernel.config_and_socket_handles COMMAND test_c_kernel_config_and_socket_handles)
+
+galay_add_c_kernel_test(test_c_kernel_tcp_accept_api t4_tcp_accept_api.c)
+add_test(NAME c.kernel.tcp_accept_api COMMAND test_c_kernel_tcp_accept_api)

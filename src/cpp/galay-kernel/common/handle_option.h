@@ -8,6 +8,7 @@
  * - 阻塞/非阻塞模式
  * - 地址复用（SO_REUSEADDR）
  * - 端口复用（SO_REUSEPORT）
+ * - IPv6-only / dual-stack 控制（IPV6_V6ONLY）
  * - 低延迟传输（TCP_NODELAY）
  *
  * @code
@@ -126,6 +127,21 @@ public:
      * @endcode
      */
     std::expected<void, IOError> handleReusePort();
+
+    /**
+     * @brief 设置 IPv6 socket 的 IPV6_V6ONLY 选项
+     *
+     * @param enabled true 表示仅接受 IPv6；false 表示允许系统支持的 IPv4-mapped IPv6 连接。
+     * @return std::expected<void, IOError> 成功返回 void，失败返回 IOError
+     *
+     * @details 该选项控制绑定到 IPv6 wildcard 地址（例如 "::"）的监听 socket 是否可同时接受 IPv4。
+     * 具体 dual-stack 行为仍受操作系统支持和全局配置影响。
+     *
+     * @note
+     * - 必须在 bind() 之前调用
+     * - 仅适用于 AF_INET6 socket；用于 IPv4 socket 会由系统调用返回错误
+     */
+    std::expected<void, IOError> handleIPv6Only(bool enabled = true);
 
     /**
      * @brief 通过 TCP_NODELAY 禁用 Nagle 算法

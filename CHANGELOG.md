@@ -13,6 +13,21 @@
 
 ### Added
 
+### Changed
+
+### Fixed
+
+### Docs
+
+### Chore
+
+## [v3.0.0] - 2026-06-22
+
+### Added
+
+- **新增 kernel TCP accept C ABI 异步接口**：`galay_kernel_tcp_accept_{start,wait,join,destroy}` 通过 runtime 调度的 `JoinHandle<AcceptResult>` 暴露异步 accept，`galay_kernel_tcp_socket_{bind,listen,local_endpoint}` 补齐服务端建链步骤，并经 peer/local host config 返回 IPv4/IPv6 地址与端口。
+- **新增 C ABI TCP accept 用例**：`test/c/kernel/t4_tcp_accept_api.c`（参数校验 + 完整建链到 accept 流程）、`examples/c/kernel/e2_tcp_accept.c`（含 POSIX 阻塞客户端的端到端示例）、`benchmark/c/kernel/b2_tcp_accept_smoke.c`（accept smoke 基准），并在对应 `CMakeLists.txt` 注册 CTest 入口。
+- **新增 IPv6 dual-stack socket 选项**：`HandleOption::handleIPv6Only(bool)` 显式设置 `IPV6_V6ONLY`；`TcpSocket::openHandle` / `UdpSocket::openHandle` 在 IPv6 场景默认调用 `handleIPv6Only(false)` 启用 dual-stack，并新增 `test/cpp/kernel/t127_ipv6only.cc` 锁定源码与运行时行为。
 - **补齐 galay-rpc 生产级能力**：新增调用级 metadata/options、错误码扩展、连接级 `RpcChannel`、并发 unary、deadline/cancel、heartbeat、reconnect、连接池、托管客户端、重试/治理/背压、配置/endpoint cache、etcd registry contract、stream 契约加固、server interceptor/TLS hook、metrics/tracing helper 等公共能力，并同步导出到 module facade。
 - **新增 RPC 边界测试与压测矩阵**：补齐 malformed/truncated/oversized 协议帧、borrowed payload、metadata wire round-trip、并发 unary、deadline/cancel、heartbeat/reconnect、连接池、托管客户端、治理/背压、stream、auth、TLS、metrics/tracing、综合边界矩阵等 CTest 覆盖；新增 unary latency、stream pressure、concurrent unary、pool pressure、managed client、payload scaling 等 benchmark。
 - **新增 RPC release benchmark 与开源对比脚本**：新增 `scripts/rpc_release_benchmark.sh`、`scripts/rpc_compare_open_source.sh`、`benchmark/cpp/rpc/README.md` 与 `docs/modules/rpc/performance-comparison.md`，记录 release 模式 QPS/latency、错误数和本地缺少开源 C++ RPC 基线工具链时的明确阻塞信息。
@@ -23,49 +38,6 @@
 - **真实 etcd 服务发现集成**：`EtcdServiceRegistry` 在构建启用 `galay-etcd` 时走真实 etcd v3 KV 作为注册中心（`GALAY_RPC_HAS_ETCD`），覆盖 register/deregister/discover/heartbeat/integrationAvailable，支持 `{prefix}/{service}/{instance}` key 模板与脏值跳过；新增真实链路集成测试 `test/cpp/rpc/t64_etcd_real_chain.cc` 与压测基准 `benchmark/cpp/rpc/b12_etcd_managed_client_pressure.cc`，并按 `GALAY_IT_ENABLE` + `GALAY_ETCD_ENDPOINT` 门控。
 - **RPC C ABI 错误码扩展**：`galay_rpc_error_code_t` 新增 CANCELLED / DEADLINE_EXCEEDED / RESOURCE_EXHAUSTED / RATE_LIMITED / CIRCUIT_OPEN / UNAUTHENTICATED / PERMISSION_DENIED / UNAVAILABLE 八个错误码，并对齐 `galay_rpc_error_to_status` 映射。
 - **新增 await_suspend 竞态 / discovery selector / stream control body 回归测试**：`test/cpp/kernel/t126_await_suspend_race_source.cc`（源码边界，锁定 AsyncWaiter/Mutex/MpscChannel 的 await_suspend 只消费提前唤醒、不触碰 awaiter frame）、`test/cpp/rpc/t63_discovery_selector.cc`（round-robin 位置跨调用保持与 weighted selector 构造）、以及 `t70_stream_contract.cc` / `t1_protocol.cc` / `t1_envelope_codec.c` / `t100_boundary_matrix.cc` / `t41_managed_client.cc` 的相应扩充。
-
-### Changed
-
-- **RPC 请求协议支持可选 metadata 扩展**：在请求体前增加向后兼容的 metadata marker 编码，旧格式请求仍按原 service/method/payload 解码；客户端真实 writev 发送路径和 direct serialization 保持一致，server interceptor 可读取真实跨网络 metadata。
-- **RPC 通道生命周期加固**：reader/writer/cancel watcher 统一纳入后台任务计数，`close()` 等待所有后台任务退出后返回；pending 计数改为原子快照，避免诊断读取与分发表更新竞争。
-- **RPC C++23 module target 显式门禁**：新增 guarded `galay-rpc-modules` 与 `rpc.t92.module.smoke`，仅在 CMake/生成器/编译器都支持 C++ module dependency scanning 时生成，当前 AppleClang 路径明确跳过。
-- **优化 RPC 热路径**：为 pending response/heartbeat dispatch 表按 `max_in_flight` 预留容量，并减少连接池重复 endpoint lookup，降低高并发 unary 和 pool pressure 场景中的分配与 hash 成本。
-- **源码目录归入 `src/cpp/`**：将 `src/` 下各模块（`galay-utils`/`kernel`/`ssl`/`http`/`ws`/`http2`/`redis`/`rpc`/`mysql`/`mongo`/`etcd`/`mcp`/`tracing`）统一迁入 `src/cpp/` 子目录，共 421 个文件纯移动，为后续多语言绑定预留 `galay/cpp/` 命名空间。
-- **头文件 include 路径统一**：所有 benchmark 与 test 源文件的 `#include "galay-xxx/..."` 改为 `#include <galay/cpp/galay-xxx/...>`，顶层 `CMakeLists.txt` 的 `add_subdirectory` 同步指向 `src/cpp/galay-*`，并在构建目录通过符号链接 `${CMAKE_BINARY_DIR}/include/galay/cpp -> src/cpp` 提供统一 include 根；头文件安装目录改为 `${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp`。
-- **测试/基准 include 根调整**：各 benchmark/test 的 CMakeLists 将私有 include 目录由 `${PROJECT_SOURCE_DIR}/src` 改为 `${CMAKE_BINARY_DIR}/include`，对齐新的符号链接布局。
-- **benchmark/examples/test 按语言分层**：三者的各模块子目录整体迁入 `cpp/` 子目录（如 `benchmark/kernel/` → `benchmark/cpp/kernel/`，examples/test 同），共 637 个文件纯移动；对应 `CMakeLists.txt` 由 `add_subdirectory(<module>)` 改为 `add_subdirectory(cpp/<module>)`，并在 `GALAY_BUILD_C_API=ON` 时额外 `add_subdirectory(c)`。
-- **顶层 `CMakeLists.txt` 启用 C 语言**：项目 `LANGUAGES` 改为 `C CXX`；`GALAY_BUILD_C_API=ON` 时新建 `${CMAKE_BINARY_DIR}/include/galay/c -> src/c` 符号链接、`add_subdirectory(src/c)`、安装 C 头文件到 `${CMAKE_INSTALL_INCLUDEDIR}/galay/c`，并生成 13 个 `galay-c-*` CMake config-package。
-- **新增 `GALAY_BUILD_C_API` 选项**：`cmake/option.cmake` 增加 ABI 构建开关（默认 OFF），不影响现有 C++ 默认构建行为。
-- **测试用例统一重编号**：etcd/http/http2/kernel/mcp/mysql/redis/rpc/ssl/ws 共 10 个测试目录的 `t{n}_*.cc` 改为从 `t1` 起连续编号；同步更新 etcd/kernel/mcp/mysql/redis/ssl 各自 `CMakeLists.txt` 中硬编码的集成测试/TLS 测试/场景名清单；修复 kernel 目录 `t116_sqestatesrc.cc` 与 `t116_connfan.cc` 的序号冲突（冲突项起整体后移一位至 t125）。
-- **测试 CMake 改用 GLOB 自动发现**：mcp/mongo/tracing/utils 四个目录不再逐个 `add_executable`/`add_test`，统一改为 `file(GLOB ... CONFIGURE_DEPENDS)` + 循环派发；保留各模块原有的集成/单元分类、链接库差异、tracing 的 `T1-package_surface` 目标命名与 `t6_spdlog_sink` 条件编译等特例。
-- **具体 IOScheduler 关闭 sibling work-stealing**：epoll/kqueue reactor 的事件注册与删除必须保持 owner 线程亲和，被窃取的 IO 协程会在错误线程触碰 reactor；`EpollScheduler` / `KqueueScheduler` 构造时显式 `m_worker.setStealingEnabled(false)`，`t99_iosteal.cc` 由"验证会偷"改写为"验证不偷"，`t104_iouoffsrc.cc` 同步锁定 kqueue/epoll 源码边界。
-- **ServiceDiscoveryClient selector 状态跨调用保持**：selector 改为 `std::optional<Selector>` 并缓存对应 endpoint 快照，仅当 endpoint 列表真正变化时才重建；同时通过 `if constexpr` 探测 selector 是否接受 `(endpoints, weights)` 构造，兼容加权选择器。
-
-### Fixed
-
-- 修复 RPC metadata 只存在于 `RpcCallOptions` 容器、未随请求跨网络传输的问题；同时限制 metadata value 最大长度，避免 wire 编码中的 `uint16_t` 长度字段静默截断。
-- 修复 RPC 请求 parser 对未知 reserved bit 缺少明确拒绝的问题；metadata 扩展位现在作为已知 reserved bit 处理，其它未知扩展位返回 `INVALID_REQUEST`。
-- 修复 RPC etcd discovery 示例把 `RpcError::message()` 误当字段访问导致全量构建失败的问题。
-- 修复 etcd benchmark CMake glob 把 `bench_support.cc` 注册成独立可执行目标导致缺少 `main` 链接失败的问题。
-- 修复 kernel IO scheduler 的 work-stealing ring 槽位复用竞态，避免跨线程注入压力下 ready task 被覆盖丢失，并同步修正 kqueue/epoll/io_uring 注入失败返回；同时修正 TCP benchmark source-case 测试的 `benchmark/cpp/kernel` 路径。
-- 修复 `AsyncWaiter` / `AsyncMutex` / `MpscChannel` 在 await_suspend 与 notify/wakeUp 之间的双恢复与丢失唤醒竞态：`AsyncWaiter` 改为 `kEmpty/kWaiting/kReady` 状态机 + 独立 `m_notified` 标志，`AsyncMutex` 发布 waiter 后只使用栈上本地副本并经 `wakeNextWaiterIfUnlocked` 转交锁，`MpscChannel` 注册 waiter 后只消费提前唤醒、不再同步收数据并写 awaiter frame。
-- 修复 `WaitRegistration` 在唤醒先于 waiter 注册到达时丢失唤醒的问题：新增 `m_pending_wake` 标志与 `consumePendingWake` / `clearPendingWake` 接口，`arm()` 未拿到 waiter 时记一次 pending，`publishWaiter` / `tryRecv` / `tryRecvBatch` 在对应路径消费或清理。
-- 修复 `RpcClient::call` / `RpcManagedClient::call` 在挂起协程中持有栈上 borrowed payload 的 use-after-free：payload 与 service/method 统一拷贝进 owned 存储 (`copyPayload` / `callWithModeOwned` / `callOwned`) 再进入重试与调度路径。
-- 修复 RPC stream 控制帧 (`STREAM_END` / `STREAM_CANCEL`) 携带 body 时未被拒绝、并污染后续帧解析的问题：新增 `DiscardInvalidControlBody` 状态，body 不完整时缓存已消费 header、就绪后整体丢弃并返回 `INVALID_REQUEST`。
-- 修复 `RpcHeader::deserialize` 未校验协议版本，以及 C ABI `galay_rpc_decode_request` 未跳过 metadata 扩展、未拒绝未知 reserved bit 的问题。
-
-### Docs
-
-- kernel 模块常见问题文档中的测试日志头路径更新为 `test/cpp/common/stdout_log.h`，与新分层目录对齐。
-
-### Chore
-
-- **拆分 benchmark/examples 与 test**：将原本散落在 `test/cpp/` 下的基准与示例源码迁出到 `benchmark/cpp/*/b*.cc`（etcd/redis/ssl）与 `examples/cpp/*/include/manual/*.cc`（http/http2/redis/rpc/ws），让回归测试目录只保留真正的 `t{n}_*.cc` 用例。
-
-## [v3.0.0] - 2026-06-20
-
-### Added
-
 - 新增 MCP 客户端（`McpClient`，含 stdio / http 两种配置）及对应客户端表面与模式测试（`t8_client_surface`、`t9_client_mode`），补齐 mcp 模块的客户端能力。
 - 新增 `tracing` 链路追踪模块（span、sampler、exporter、OTLP、日志关联等）。
 - 新增 Bazel 构建支持：顶层 `BUILD.bazel`、`MODULE.bazel` 以及各模块内的 `BUILD` 文件。
@@ -104,6 +76,23 @@
 
 ### Changed
 
+- **TcpSocket / UdpSocket 新增 `create(IPType)` 静态工厂**：返回 `std::expected<..., IOError>` 显式报告错误；原构造函数降级为兼容重载，失败时句柄保持 invalid；私有助手 `create` 更名为 `openHandle`，并在 IPv6 场景默认调用 `handleIPv6Only(false)` 启用 dual-stack。
+- **Scheduler / Runtime 启动边界改为 `std::expected`**：`Scheduler::start()` 与 `ComputeScheduler::start()` 返回 `std::expected<void, IOError>`；`Runtime::start` / `ensureStarted` / `acquireDefaultScheduler` 返回 `std::expected<..., RuntimeError>`，新增 `RuntimeErrorCode::kSchedulerStartFailed`，启动失败自动 `stop()` 已启动的 scheduler。
+- **Reactor 抽象改为 `ReactorType` concept**：移除虚基类 `BackendReactor`，改为基于 `notify()` + `getHandle()` 的编译期约束，epoll/kqueue/io_uring 三后端通过 `static_assert` 锁定；`wakeReadFdForTest()` 更名为 `getHandle()`，新增 `std::expected<void, IOError> start()` 显式初始化。
+- **RPC 请求协议支持可选 metadata 扩展**：在请求体前增加向后兼容的 metadata marker 编码，旧格式请求仍按原 service/method/payload 解码；客户端真实 writev 发送路径和 direct serialization 保持一致，server interceptor 可读取真实跨网络 metadata。
+- **RPC 通道生命周期加固**：reader/writer/cancel watcher 统一纳入后台任务计数，`close()` 等待所有后台任务退出后返回；pending 计数改为原子快照，避免诊断读取与分发表更新竞争。
+- **RPC C++23 module target 显式门禁**：新增 guarded `galay-rpc-modules` 与 `rpc.t92.module.smoke`，仅在 CMake/生成器/编译器都支持 C++ module dependency scanning 时生成，当前 AppleClang 路径明确跳过。
+- **优化 RPC 热路径**：为 pending response/heartbeat dispatch 表按 `max_in_flight` 预留容量，并减少连接池重复 endpoint lookup，降低高并发 unary 和 pool pressure 场景中的分配与 hash 成本。
+- **源码目录归入 `src/cpp/`**：将 `src/` 下各模块（`galay-utils`/`kernel`/`ssl`/`http`/`ws`/`http2`/`redis`/`rpc`/`mysql`/`mongo`/`etcd`/`mcp`/`tracing`）统一迁入 `src/cpp/` 子目录，共 421 个文件纯移动，为后续多语言绑定预留 `galay/cpp/` 命名空间。
+- **头文件 include 路径统一**：所有 benchmark 与 test 源文件的 `#include "galay-xxx/..."` 改为 `#include <galay/cpp/galay-xxx/...>`，顶层 `CMakeLists.txt` 的 `add_subdirectory` 同步指向 `src/cpp/galay-*`，并在构建目录通过符号链接 `${CMAKE_BINARY_DIR}/include/galay/cpp -> src/cpp` 提供统一 include 根；头文件安装目录改为 `${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp`。
+- **测试/基准 include 根调整**：各 benchmark/test 的 CMakeLists 将私有 include 目录由 `${PROJECT_SOURCE_DIR}/src` 改为 `${CMAKE_BINARY_DIR}/include`，对齐新的符号链接布局。
+- **benchmark/examples/test 按语言分层**：三者的各模块子目录整体迁入 `cpp/` 子目录（如 `benchmark/kernel/` → `benchmark/cpp/kernel/`，examples/test 同），共 637 个文件纯移动；对应 `CMakeLists.txt` 由 `add_subdirectory(<module>)` 改为 `add_subdirectory(cpp/<module>)`，并在 `GALAY_BUILD_C_API=ON` 时额外 `add_subdirectory(c)`。
+- **顶层 `CMakeLists.txt` 启用 C 语言**：项目 `LANGUAGES` 改为 `C CXX`；`GALAY_BUILD_C_API=ON` 时新建 `${CMAKE_BINARY_DIR}/include/galay/c -> src/c` 符号链接、`add_subdirectory(src/c)`、安装 C 头文件到 `${CMAKE_INSTALL_INCLUDEDIR}/galay/c`，并生成 13 个 `galay-c-*` CMake config-package。
+- **新增 `GALAY_BUILD_C_API` 选项**：`cmake/option.cmake` 增加 ABI 构建开关（默认 OFF），不影响现有 C++ 默认构建行为。
+- **测试用例统一重编号**：etcd/http/http2/kernel/mcp/mysql/redis/rpc/ssl/ws 共 10 个测试目录的 `t{n}_*.cc` 改为从 `t1` 起连续编号；同步更新 etcd/kernel/mcp/mysql/redis/ssl 各自 `CMakeLists.txt` 中硬编码的集成测试/TLS 测试/场景名清单；修复 kernel 目录 `t116_sqestatesrc.cc` 与 `t116_connfan.cc` 的序号冲突（冲突项起整体后移一位至 t125）。
+- **测试 CMake 改用 GLOB 自动发现**：mcp/mongo/tracing/utils 四个目录不再逐个 `add_executable`/`add_test`，统一改为 `file(GLOB ... CONFIGURE_DEPENDS)` + 循环派发；保留各模块原有的集成/单元分类、链接库差异、tracing 的 `T1-package_surface` 目标命名与 `t6_spdlog_sink` 条件编译等特例。
+- **具体 IOScheduler 关闭 sibling work-stealing**：epoll/kqueue reactor 的事件注册与删除必须保持 owner 线程亲和，被窃取的 IO 协程会在错误线程触碰 reactor；`EpollScheduler` / `KqueueScheduler` 构造时显式 `m_worker.setStealingEnabled(false)`，`t99_iosteal.cc` 由"验证会偷"改写为"验证不偷"，`t104_iouoffsrc.cc` 同步锁定 kqueue/epoll 源码边界。
+- **ServiceDiscoveryClient selector 状态跨调用保持**：selector 改为 `std::optional<Selector>` 并缓存对应 endpoint 快照，仅当 endpoint 列表真正变化时才重建；同时通过 `if constexpr` 探测 selector 是否接受 `(endpoints, weights)` 构造，兼容加权选择器。
 - **模块命名空间化**：将 `src/` 下各模块目录统一改为 `galay-` 前缀命名空间（`src/utils` → `src/galay-utils`、`src/kernel` → `src/galay-kernel` 等 13 个模块），消除模块名与公共短名冲突，便于安装布局与包依赖区分。
 - **内部目录归整**：`kernel/kernel/` 改名为 `galay-kernel/core/`，全仓库 include 路径（`kernel/kernel/runtime.h` → `galay-kernel/core/runtime.h`）与测试、示例、基准同步适配。
 - **默认构建策略调整**：`cmake/option.cmake` 中所有模块开关（`GALAY_BUILD_SSL`、`GALAY_BUILD_HTTP` 等）及 `BUILD_TESTING`、`GALAY_BUILD_EXAMPLES`、`GALAY_BUILD_BENCHMARKS` 默认改为 `ON`，开箱即构建完整套件。
@@ -145,6 +134,17 @@
 
 ### Fixed
 
+- **C ABI tcp/udp socket create 移除 try/catch**：`galay_kernel_tcp_socket_create` / `galay_kernel_udp_socket_create` 不再依赖异常映射，改为直接调用新 `create()` 工厂并按返回的 `IOError` 映射错误码，`galay_kernel_runtime_{create,start,stop,destroy}` 同步去掉 try/catch 并消费 `Runtime::start` 的 expected 返回。
+- 修复 RPC metadata 只存在于 `RpcCallOptions` 容器、未随请求跨网络传输的问题；同时限制 metadata value 最大长度，避免 wire 编码中的 `uint16_t` 长度字段静默截断。
+- 修复 RPC 请求 parser 对未知 reserved bit 缺少明确拒绝的问题；metadata 扩展位现在作为已知 reserved bit 处理，其它未知扩展位返回 `INVALID_REQUEST`。
+- 修复 RPC etcd discovery 示例把 `RpcError::message()` 误当字段访问导致全量构建失败的问题。
+- 修复 etcd benchmark CMake glob 把 `bench_support.cc` 注册成独立可执行目标导致缺少 `main` 链接失败的问题。
+- 修复 kernel IO scheduler 的 work-stealing ring 槽位复用竞态，避免跨线程注入压力下 ready task 被覆盖丢失，并同步修正 kqueue/epoll/io_uring 注入失败返回；同时修正 TCP benchmark source-case 测试的 `benchmark/cpp/kernel` 路径。
+- 修复 `AsyncWaiter` / `AsyncMutex` / `MpscChannel` 在 await_suspend 与 notify/wakeUp 之间的双恢复与丢失唤醒竞态：`AsyncWaiter` 改为 `kEmpty/kWaiting/kReady` 状态机 + 独立 `m_notified` 标志，`AsyncMutex` 发布 waiter 后只使用栈上本地副本并经 `wakeNextWaiterIfUnlocked` 转交锁，`MpscChannel` 注册 waiter 后只消费提前唤醒、不再同步收数据并写 awaiter frame。
+- 修复 `WaitRegistration` 在唤醒先于 waiter 注册到达时丢失唤醒的问题：新增 `m_pending_wake` 标志与 `consumePendingWake` / `clearPendingWake` 接口，`arm()` 未拿到 waiter 时记一次 pending，`publishWaiter` / `tryRecv` / `tryRecvBatch` 在对应路径消费或清理。
+- 修复 `RpcClient::call` / `RpcManagedClient::call` 在挂起协程中持有栈上 borrowed payload 的 use-after-free：payload 与 service/method 统一拷贝进 owned 存储 (`copyPayload` / `callWithModeOwned` / `callOwned`) 再进入重试与调度路径。
+- 修复 RPC stream 控制帧 (`STREAM_END` / `STREAM_CANCEL`) 携带 body 时未被拒绝、并污染后续帧解析的问题：新增 `DiscardInvalidControlBody` 状态，body 不完整时缓存已消费 header、就绪后整体丢弃并返回 `INVALID_REQUEST`。
+- 修复 `RpcHeader::deserialize` 未校验协议版本，以及 C ABI `galay_rpc_decode_request` 未跳过 metadata 扩展、未拒绝未知 reserved bit 的问题。
 - 修复 `coroutine.wait` 协程状态问题。
 - 修复 mpsc 队列 batch 操作无法唤醒的 bug。
 - 修复 `AsyncResult` 框架中的关键 bug。
@@ -166,6 +166,7 @@
 
 ### Docs
 
+- kernel 模块常见问题文档中的测试日志头路径更新为 `test/cpp/common/stdout_log.h`，与新分层目录对齐。
 - 新增项目 `README.md`，介绍 galay 特性、13 个 `galay-*` 模块、环境要求、CMake 快速开始与目录结构。
 - 补充 HTTP/2 静态文件 Release 对比校正文档，明确非 Release 构建不能与 Homebrew `nghttpd` 发布版作公平性能结论，并记录 0B/1KB 静态文件同参数 h2load 对照。
 - 新增 HTTP/2 性能测试文档，记录 kernel 压测环境、复现命令、QPS/MiB/s 指标、真实瓶颈和后续优化方向。
@@ -175,6 +176,7 @@
 
 ### Chore
 
+- **拆分 benchmark/examples 与 test**：将原本散落在 `test/cpp/` 下的基准与示例源码迁出到 `benchmark/cpp/*/b*.cc`（etcd/redis/ssl）与 `examples/cpp/*/include/manual/*.cc`（http/http2/redis/rpc/ws），让回归测试目录只保留真正的 `t{n}_*.cc` 用例。
 - 新增 `scripts/mysql/mysql_auth_matrix_setup.sh`，按模块目录管理 MySQL auth 矩阵测试用户准备脚本。
 - 扩充 `.gitignore`，新增 `.claude/`、`.codex/` 条目，避免代理本地配置目录进入版本控制。
 - 扩充 `.gitignore`，新增 `docs/modules/*/plans`，避免按模块拆分的本地规划文档进入版本控制。

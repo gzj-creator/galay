@@ -10,3 +10,4 @@ function(galay_add_c_kernel_example target_name source_file)
 endfunction()
 
 galay_add_c_kernel_example(example_c_kernel_runtime e1_runtime.c)
+galay_add_c_kernel_example(example_c_kernel_tcp_accept e2_tcp_accept.c)

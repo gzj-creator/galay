@@ -35,18 +35,24 @@ IOUringScheduler::~IOUringScheduler()
     stop();
 }
 
-void IOUringScheduler::start()
+std::expected<void, IOError> IOUringScheduler::start()
 {
     if (m_running.exchange(true, std::memory_order_acq_rel)) {
-        return;
+        return {};
     }
     m_last_error_code.store(0, std::memory_order_release);
+    auto reactor_ready = m_reactor.start();
+    if (!reactor_ready) {
+        m_running.store(false, std::memory_order_release);
+        return std::unexpected(reactor_ready.error());
+    }
 
     m_thread = std::thread([this]() {
         m_threadId = std::this_thread::get_id();
         (void)applyConfiguredAffinity();
         eventLoop();
     });
+    return {};
 }
 
 void IOUringScheduler::stop()

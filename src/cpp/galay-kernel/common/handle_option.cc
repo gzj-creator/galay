@@ -10,6 +10,7 @@
 #include <cerrno>
 
 #if defined(__linux__) || defined(__APPLE__)
+#include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #elif defined(_WIN32) || defined(_WIN64)
@@ -112,6 +113,36 @@ std::expected<void, IOError> HandleOption::handleReusePort()
     if (setsockopt(m_handle.fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) != 0) {
         return std::unexpected(IOError(kBindFailed, errno));
     }
+    return {};
+#endif
+}
+
+/**
+ * @brief 设置 IPv6 socket 的 IPV6_V6ONLY 选项
+ * @param enabled true 表示仅 IPv6；false 表示允许系统支持的 dual-stack
+ * @return 成功返回 void，失败返回 IOError
+ */
+std::expected<void, IOError> HandleOption::handleIPv6Only(bool enabled)
+{
+    if (m_handle.fd < 0) {
+        return std::unexpected(IOError(kParamInvalid, 0));
+    }
+
+#if !defined(IPV6_V6ONLY)
+    (void)enabled;
+    return std::unexpected(IOError(kParamInvalid, 0));
+#else
+    int opt = enabled ? 1 : 0;
+#if defined(_WIN32) || defined(_WIN64)
+    if (::setsockopt(m_handle.fd, IPPROTO_IPV6, IPV6_V6ONLY,
+                     reinterpret_cast<const char*>(&opt), sizeof(opt)) != 0) {
+        return std::unexpected(IOError(kBindFailed, WSAGetLastError()));
+    }
+#else
+    if (::setsockopt(m_handle.fd, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt)) != 0) {
+        return std::unexpected(IOError(kBindFailed, errno));
+    }
+#endif
     return {};
 #endif
 }

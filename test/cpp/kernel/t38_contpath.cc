@@ -30,7 +30,7 @@ struct ParentState {
 
 class ManualScheduler final : public Scheduler {
 public:
-    void start() override {}
+    std::expected<void, IOError> start() override { return {}; }
     void stop() override {}
 
     bool schedule(TaskRef task) override {

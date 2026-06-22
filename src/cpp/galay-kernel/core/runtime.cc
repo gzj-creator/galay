@@ -57,11 +57,11 @@ bool Runtime::addComputeScheduler(std::unique_ptr<ComputeScheduler> scheduler)
     return true;
 }
 
-void Runtime::start()
+std::expected<void, RuntimeError> Runtime::start()
 {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
-        return;
+        return {};
     }
 
     if (m_io_schedulers.empty() && m_compute_schedulers.empty()) {
@@ -73,11 +73,20 @@ void Runtime::start()
 
     TimerScheduler::getInstance()->start();
     for (auto& scheduler : m_io_schedulers) {
-        scheduler->start();
+        auto started = scheduler->start();
+        if (!started.has_value()) {
+            stop();
+            return std::unexpected(RuntimeError(RuntimeErrorCode::kSchedulerStartFailed));
+        }
     }
     for (auto& scheduler : m_compute_schedulers) {
-        scheduler->start();
+        auto started = scheduler->start();
+        if (!started.has_value()) {
+            stop();
+            return std::unexpected(RuntimeError(RuntimeErrorCode::kSchedulerStartFailed));
+        }
     }
+    return {};
 }
 
 void Runtime::stop()
@@ -138,16 +147,20 @@ ComputeScheduler* Runtime::getNextComputeScheduler()
     return m_compute_schedulers[m_compute_index.fetch_add(1, std::memory_order_relaxed) % m_compute_schedulers.size()].get();
 }
 
-void Runtime::ensureStarted()
+std::expected<void, RuntimeError> Runtime::ensureStarted()
 {
     if (!isRunning()) {
-        start();
+        return start();
     }
+    return {};
 }
 
-Scheduler* Runtime::acquireDefaultScheduler()
+std::expected<Scheduler*, RuntimeError> Runtime::acquireDefaultScheduler()
 {
-    ensureStarted();
+    auto started = ensureStarted();
+    if (!started.has_value()) {
+        return std::unexpected(started.error());
+    }
     if (auto* scheduler = getNextComputeScheduler()) {
         return scheduler;
     }

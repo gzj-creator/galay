@@ -26,6 +26,16 @@ Task<void> pendingTask() {
 }
 
 template <typename SchedulerT>
+bool startWakeReactor(SchedulerT& scheduler) {
+    auto started = SchedulerTestAccess::startReactor(scheduler);
+    if (!started) {
+        std::cerr << "[T42] failed to start reactor: " << started.error().message() << "\n";
+        return false;
+    }
+    return true;
+}
+
+template <typename SchedulerT>
 bool injectBurstFromEmptyQueue(SchedulerT& scheduler, int count) {
     SchedulerTestAccess::sleeping(scheduler).store(false, std::memory_order_release);
     SchedulerTestAccess::wakeupPending(scheduler).store(false, std::memory_order_release);
@@ -70,6 +80,10 @@ bool readKqueueWakeEvents(int kqueue_fd, int& total) {
 bool verifyQueueEdgeWakeup() {
     KqueueScheduler scheduler;
 
+    if (!startWakeReactor(scheduler)) {
+        return false;
+    }
+
     if (!injectBurstFromEmptyQueue(scheduler, 3)) {
         return false;
     }
@@ -89,6 +103,10 @@ bool verifyQueueEdgeWakeup() {
 #elif defined(USE_EPOLL)
 bool verifyQueueEdgeWakeup() {
     EpollScheduler scheduler;
+
+    if (!startWakeReactor(scheduler)) {
+        return false;
+    }
 
     if (!injectBurstFromEmptyQueue(scheduler, 3)) {
         return false;
@@ -111,6 +129,10 @@ bool verifyQueueEdgeWakeup() {
 #elif defined(USE_IOURING)
 bool verifyQueueEdgeWakeup() {
     IOUringScheduler scheduler;
+
+    if (!startWakeReactor(scheduler)) {
+        return false;
+    }
 
     if (!injectBurstFromEmptyQueue(scheduler, 3)) {
         return false;

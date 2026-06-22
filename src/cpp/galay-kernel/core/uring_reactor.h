@@ -4,7 +4,7 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 使用 Linux io_uring 实现高吞吐异步 IO 的 BackendReactor 接口。
+ * @details 使用 Linux io_uring 满足高吞吐异步 IO 的 ReactorType concept。
  * 支持 multishot accept/recv（配合 provided buffer ring）、
  * send_zc（用于大负载零拷贝发送）和 eventfd 跨线程唤醒。
  */
@@ -27,6 +27,7 @@
 
 #include <atomic>
 #include <cstdint>
+#include <expected>
 #include <memory>
 
 namespace galay::kernel {
@@ -35,17 +36,18 @@ namespace galay::kernel {
  * @brief io_uring 后端 reactor
  * @details 负责 Linux 上 io_uring 请求的提交、完成轮询和 eventfd 唤醒。
  */
-class IOUringReactor : public BackendReactor
+class IOUringReactor
 {
 public:
     IOUringReactor(int queue_depth, std::atomic<uint64_t>& last_error_code);  ///< 构造 io_uring reactor，并绑定错误输出槽位
-    ~IOUringReactor() override;  ///< 释放 io_uring ring 和唤醒 fd 资源
+    ~IOUringReactor();  ///< 释放 io_uring ring 和唤醒 fd 资源
 
     IOUringReactor(const IOUringReactor&) = delete;
     IOUringReactor& operator=(const IOUringReactor&) = delete;
 
-    void notify() override;  ///< 从其他线程唤醒阻塞中的 io_uring wait
-    int wakeReadFdForTest() const override;  ///< 返回测试可见的 eventfd 读端句柄
+    void notify();  ///< 从其他线程唤醒阻塞中的 io_uring wait
+    GHandle getHandle() const;  ///< 返回测试可见的 eventfd 读端句柄
+    std::expected<void, IOError> start();  ///< 显式初始化 eventfd、io_uring ring 和 recv buffer ring
 
     int addAccept(IOController* controller);  ///< 注册 accept 请求；1=立即完成，0=已提交，<0=错误
     int addConnect(IOController* controller);  ///< 注册 connect 请求；1=立即完成，0=已提交，<0=错误
@@ -98,11 +100,14 @@ private:
     int m_queue_depth = 0;  ///< ring 队列深度
     int m_event_fd = -1;  ///< 跨线程唤醒用 eventfd
     uint64_t m_eventfd_buf = 0;  ///< eventfd 读缓冲
+    bool m_ring_initialized = false;  ///< io_uring ring 是否已经初始化
     bool m_wake_read_armed = false;  ///< eventfd 读请求是否已挂到 ring
     bool m_send_zc_supported = false;  ///< 当前内核/liburing 是否支持 IORING_OP_SEND_ZC
     std::shared_ptr<void> m_recv_buffer_pool;  ///< recv provided buffer ring 的共享所有权
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
 };
+
+static_assert(ReactorType<IOUringReactor>);
 
 }  // namespace galay::kernel
 

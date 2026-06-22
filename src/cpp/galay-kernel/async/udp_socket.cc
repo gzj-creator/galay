@@ -12,7 +12,6 @@
 #include <galay/cpp/galay-kernel/common/defn.hpp>
 #include <galay/cpp/galay-kernel/common/host.hpp>
 #include <cerrno>
-#include <stdexcept>
 #include <unistd.h>
 
 namespace galay::async
@@ -24,14 +23,28 @@ using namespace galay::kernel;
  * @brief 为指定的 IP 协议版本构造 UDP 套接字
  *
  * @param type IP 协议类型（IPV4 或 IPV6）
- * @throws socket 创建失败时抛出 std::runtime_error
+ * @note 兼容旧调用；创建失败时内部句柄保持 invalid，错误原因通过 create() 返回。
  */
 UdpSocket::UdpSocket(IPType type)
-    : m_controller(create(type))
+    : m_controller([](IPType socket_type) {
+        auto opened = openHandle(socket_type);
+        return opened ? *opened : GHandle::invalid();
+    }(type))
 {
-    if(m_controller.m_handle == GHandle::invalid()) {
-        throw std::runtime_error(strerror(errno));
+}
+
+/**
+ * @brief 创建 UDP 套接字并返回显式错误。
+ * @param type IP 协议类型（IPV4 或 IPV6）
+ * @return 成功返回 UdpSocket；失败返回 IOError(kOpenFailed, errno)
+ */
+std::expected<UdpSocket, IOError> UdpSocket::create(IPType type)
+{
+    auto handle = openHandle(type);
+    if (!handle) {
+        return std::unexpected(handle.error());
     }
+    return UdpSocket(*handle);
 }
 
 /**
@@ -82,14 +95,21 @@ UdpSocket& UdpSocket::operator=(UdpSocket&& other) noexcept
  * @param type IP 协议类型（IPV4 映射到 AF_INET，IPV6 映射到 AF_INET6）
  * @return 成功时返回有效的 GHandle，失败时返回无效的 GHandle
  */
-GHandle UdpSocket::create(IPType type)
+std::expected<GHandle, IOError> UdpSocket::openHandle(IPType type)
 {
     int domain = (type == IPType::IPV4) ? AF_INET : AF_INET6;
     int fd = ::socket(domain, SOCK_DGRAM, 0);  // SOCK_DGRAM 用于 UDP
     if (fd < 0) {
-        return GHandle::invalid();
+        return std::unexpected(IOError(kOpenFailed, errno));
     }
-    return {.fd = fd};
+    if (type == IPType::IPV6) {
+        auto dual_stack = HandleOption(GHandle{.fd = fd}).handleIPv6Only(false);
+        if (!dual_stack) {
+            ::close(fd);
+            return std::unexpected(dual_stack.error());
+        }
+    }
+    return GHandle{.fd = fd};
 }
 
 /**

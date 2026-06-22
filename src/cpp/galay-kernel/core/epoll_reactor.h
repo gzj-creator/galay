@@ -4,7 +4,7 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 使用 Linux epoll、eventfd、inotify 和 libaio 实现 BackendReactor 接口。
+ * @details 使用 Linux epoll、eventfd、inotify 和 libaio 满足 ReactorType concept。
  * 通过待提交变更队列批量处理事件注册以减少系统调用。
  */
 
@@ -20,6 +20,7 @@
 #include <sys/epoll.h>
 
 #include <atomic>
+#include <expected>
 #include <memory>
 #include <unordered_map>
 #include <vector>
@@ -30,17 +31,18 @@ namespace galay::kernel {
  * @brief epoll 后端 reactor
  * @details 负责 Linux 上 epoll/eventfd/inotify/libaio 事件的注册、唤醒与分发。
  */
-class EpollReactor : public BackendReactor
+class EpollReactor
 {
 public:
     EpollReactor(int max_events, std::atomic<uint64_t>& last_error_code);  ///< 构造 epoll reactor，并绑定错误输出槽位
-    ~EpollReactor() override;  ///< 释放 epoll/eventfd 等底层资源
+    ~EpollReactor();  ///< 释放 epoll/eventfd 等底层资源
 
     EpollReactor(const EpollReactor&) = delete;
     EpollReactor& operator=(const EpollReactor&) = delete;
 
-    void notify() override;  ///< 从其他线程唤醒阻塞中的 epoll_wait
-    int wakeReadFdForTest() const override;  ///< 返回测试可见的 eventfd 读端句柄
+    void notify();  ///< 从其他线程唤醒阻塞中的 epoll_wait
+    GHandle getHandle() const;  ///< 返回测试可见的 eventfd 读端句柄
+    std::expected<void, IOError> start();  ///< 显式初始化 epoll 和 eventfd，失败时返回 IOError
 
     int addAccept(IOController* controller);  ///< 注册 accept 等待；1=立即完成，0=已登记，<0=错误
     int addConnect(IOController* controller);  ///< 注册 connect 等待；1=立即完成，0=已登记，<0=错误
@@ -93,6 +95,8 @@ private:
     std::vector<std::unique_ptr<RegistrationEntry>> m_retired_entries;  ///< 已退役但保留地址的注册入口
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
 };
+
+static_assert(ReactorType<EpollReactor>);
 
 }  // namespace galay::kernel
 

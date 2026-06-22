@@ -34,11 +34,11 @@ ComputeScheduler::~ComputeScheduler()
  * @details 原子地切换到运行状态并创建工作线程，线程在进入主循环前
  * 应用已配置的 CPU 亲和性。若已在运行则不做任何操作。
  */
-void ComputeScheduler::start()
+std::expected<void, IOError> ComputeScheduler::start()
 {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
-        return;  // 已经在运行
+        return {};  // 已经在运行
     }
 
     m_thread = std::thread([this]() {
@@ -46,6 +46,7 @@ void ComputeScheduler::start()
         (void)applyConfiguredAffinity();
         workerLoop();
     });
+    return {};
 }
 
 /**

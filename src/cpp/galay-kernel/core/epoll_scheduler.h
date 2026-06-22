@@ -60,7 +60,7 @@ public:
     EpollScheduler(const EpollScheduler&) = delete;
     EpollScheduler& operator=(const EpollScheduler&) = delete;
 
-    void start() override;   ///< 启动事件循环线程并初始化底层 reactor 资源
+    std::expected<void, IOError> start() override;   ///< 启动事件循环线程并初始化底层 reactor 资源
     void stop() override;    ///< 请求退出事件循环并等待工作线程结束
     void notify();           ///< 从其他线程唤醒可能阻塞在 epoll_wait 的调度器线程
 

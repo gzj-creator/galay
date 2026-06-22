@@ -19,7 +19,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <cerrno>
-#include <stdexcept>
 
 namespace galay::kernel
 {
@@ -28,9 +27,6 @@ KqueueScheduler::KqueueScheduler(int max_events, int batch_size)
     : m_running(false)
     , m_max_events(max_events)
     , m_batch_size(batch_size)
-    , m_last_error_code(0)
-    , m_sleeping(true)
-    , m_wakeup_pending(false)
     , m_worker(static_cast<size_t>(batch_size))
     , m_wake_coordinator(m_sleeping, m_wakeup_pending)
     , m_core(m_worker, static_cast<size_t>(batch_size))
@@ -43,21 +39,26 @@ KqueueScheduler::KqueueScheduler(int max_events, int batch_size)
 
 KqueueScheduler::~KqueueScheduler()
 {
-    stop();
+    KqueueScheduler::stop();
 }
 
-void KqueueScheduler::start()
+std::expected<void, IOError> KqueueScheduler::start()
 {
     if (m_running.exchange(true, std::memory_order_acq_rel)) {
-        return; // 已经在运行
+        return {}; // 已经在运行
     }
     m_last_error_code.store(0, std::memory_order_release);
+    if (auto reactor_ready = m_reactor.start(); !reactor_ready) {
+        m_running.store(false, std::memory_order_release);
+        return std::unexpected(reactor_ready.error());
+    }
 
     m_thread = std::thread([this]() {
         m_threadId = std::this_thread::get_id();  // 设置调度器线程ID
         (void)applyConfiguredAffinity();
         eventLoop();
     });
+    return {};
 }
 
 void KqueueScheduler::stop()

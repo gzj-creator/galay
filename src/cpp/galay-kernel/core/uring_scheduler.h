@@ -65,7 +65,7 @@ public:
     IOUringScheduler(const IOUringScheduler&) = delete;
     IOUringScheduler& operator=(const IOUringScheduler&) = delete;
 
-    void start() override;   ///< 初始化 io_uring 并启动事件循环线程
+    std::expected<void, IOError> start() override;   ///< 初始化 io_uring 并启动事件循环线程
     void stop() override;    ///< 请求退出事件循环并等待工作线程结束
     void notify();           ///< 从其他线程唤醒可能阻塞在 completion wait 的调度器线程
 

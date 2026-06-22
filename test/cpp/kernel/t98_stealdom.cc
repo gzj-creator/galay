@@ -103,7 +103,10 @@ int main() {
     if (runtime_src.empty()) {
         failures.push_back(runtime.string() + ": failed to read runtime.cc");
     } else {
-        const auto start_body = extractSection(runtime_src, "void Runtime::start()", "void Runtime::stop()");
+        const auto start_body = extractSection(
+            runtime_src,
+            "std::expected<void, RuntimeError> Runtime::start()",
+            "void Runtime::stop()");
         if (start_body.empty()) {
             failures.push_back(runtime.string() + ": failed to isolate Runtime::start()");
         } else {
@@ -124,7 +127,10 @@ int main() {
         }
 
         const auto helper_section =
-            extractSection(runtime_src, "void Runtime::configureIOSchedulerStealDomains()", "void Runtime::start()");
+            extractSection(
+                runtime_src,
+                "void Runtime::configureIOSchedulerStealDomains()",
+                "std::expected<void, RuntimeError> Runtime::start()");
         if (helper_section.empty()) {
             failures.push_back(runtime.string() + ": missing configureIOSchedulerStealDomains() definition");
         } else {

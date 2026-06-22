@@ -80,6 +80,36 @@ int main() {
         }
     }
 
+    const auto backend_reactor = kernel_dir / "backend_reactor.h";
+    if (!containsText(backend_reactor, "concept ReactorType")) {
+        std::cerr << "[T55] expected ReactorType to be a concept contract\n";
+        return 1;
+    }
+    if (containsText(backend_reactor, "BackendReactor") ||
+        containsText(backend_reactor, "class BackendReactor") ||
+        containsText(backend_reactor, "virtual ~BackendReactor") ||
+        containsText(backend_reactor, "virtual void notify()") ||
+        containsText(backend_reactor, "virtual GHandle getHandle()")) {
+        std::cerr << "[T55] expected ReactorType to replace the old BackendReactor name\n";
+        return 1;
+    }
+
+    const std::vector<std::filesystem::path> reactor_headers = {
+        kernel_dir / "kqueue_reactor.h",
+        kernel_dir / "epoll_reactor.h",
+        kernel_dir / "uring_reactor.h",
+    };
+    for (const auto& path : reactor_headers) {
+        if (containsText(path, "BackendReactor") ||
+            containsText(path, "public BackendReactor") ||
+            containsText(path, "void notify() override") ||
+            containsText(path, "GHandle getHandle() const override")) {
+            std::cerr << "[T55] expected " << path
+                      << " to satisfy ReactorType concept without virtual inheritance\n";
+            return 1;
+        }
+    }
+
     struct BackendBoundaryExpectation {
         std::filesystem::path scheduler_header;
         std::filesystem::path scheduler_source;

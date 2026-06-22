@@ -21,7 +21,6 @@
 
 #include <cerrno>
 #include <expected>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -57,17 +56,27 @@ uint32_t sequenceInterestToEpollEvents(detail::SequenceInterestMask mask) {
 }  // namespace
 
 EpollReactor::EpollReactor(int max_events, std::atomic<uint64_t>& last_error_code)
-    : m_epoll_fd(epoll_create1(EPOLL_CLOEXEC))
-    , m_event_fd(eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC))
-    , m_max_events(max_events)
-    , m_last_error_code(last_error_code) {
-    if (m_epoll_fd == -1) {
-        throw std::runtime_error("Failed to create epoll");
+    : m_max_events(max_events)
+    , m_last_error_code(last_error_code) {}
+
+std::expected<void, IOError> EpollReactor::start()
+{
+    if (m_epoll_fd != -1 && m_event_fd != -1) {
+        return {};
     }
 
+    m_epoll_fd = epoll_create1(EPOLL_CLOEXEC);
+    if (m_epoll_fd == -1) {
+        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
+    }
+
+    m_event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (m_event_fd == -1) {
         close(m_epoll_fd);
-        throw std::runtime_error("Failed to create eventfd");
+        m_epoll_fd = -1;
+        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
     }
 
     struct epoll_event ev;
@@ -76,10 +85,14 @@ EpollReactor::EpollReactor(int max_events, std::atomic<uint64_t>& last_error_cod
     if (epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_event_fd, &ev) == -1) {
         close(m_epoll_fd);
         close(m_event_fd);
-        throw std::runtime_error("Failed to add eventfd to epoll");
+        m_epoll_fd = -1;
+        m_event_fd = -1;
+        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
     }
 
     m_events.resize(m_max_events);
+    return {};
 }
 
 EpollReactor::~EpollReactor() {
@@ -99,8 +112,8 @@ void EpollReactor::notify() {
     }
 }
 
-int EpollReactor::wakeReadFdForTest() const {
-    return m_event_fd;
+GHandle EpollReactor::getHandle() const {
+    return {m_event_fd};
 }
 
 EpollReactor::RegistrationEntry* EpollReactor::registrationEntryForController(IOController* controller) {

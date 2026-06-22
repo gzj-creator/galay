@@ -29,20 +29,32 @@ struct SchedulerTestAccess {
     }
 
 #ifdef USE_EPOLL
+    static std::expected<void, IOError> startReactor(EpollScheduler& scheduler) {
+        return scheduler.m_reactor.start();
+    }
+
     static int wakeReadFd(EpollScheduler& scheduler) {
-        return scheduler.m_reactor.wakeReadFdForTest();
+        return scheduler.m_reactor.getHandle().fd;
     }
 #endif
 
 #ifdef USE_IOURING
+    static std::expected<void, IOError> startReactor(IOUringScheduler& scheduler) {
+        return scheduler.m_reactor.start();
+    }
+
     static int wakeReadFd(IOUringScheduler& scheduler) {
-        return scheduler.m_reactor.wakeReadFdForTest();
+        return scheduler.m_reactor.getHandle().fd;
     }
 #endif
 
 #ifdef USE_KQUEUE
+    static std::expected<void, IOError> startReactor(KqueueScheduler& scheduler) {
+        return scheduler.m_reactor.start();
+    }
+
     static int wakeReadFd(KqueueScheduler& scheduler) {
-        return scheduler.m_reactor.wakeReadFdForTest();
+        return scheduler.m_reactor.getHandle().fd;
     }
 #endif
 };

@@ -16,9 +16,11 @@
 #define GALAY_KERNEL_SCHEDULER_HPP
 
 #include "../common/timer.hpp"
+#include "../common/error.h"
 #include "task.h"
 #include <atomic>
 #include <cstdint>
+#include <expected>
 #include <optional>
 #include <thread>
 
@@ -73,9 +75,10 @@ public:
 
     /**
      * @brief 启动调度器
-     * @note 子类必须实现此方法
+     * @return 成功返回 void；底层初始化失败时返回 IOError
+     * @note 子类必须实现此方法；该接口不阻塞等待调度器退出。
      */
-    virtual void start() = 0;
+    virtual std::expected<void, IOError> start() = 0;
 
     /**
      * @brief 停止调度器

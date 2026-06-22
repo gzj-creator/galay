@@ -62,7 +62,7 @@ public:
     KqueueScheduler(const KqueueScheduler&) = delete;
     KqueueScheduler& operator=(const KqueueScheduler&) = delete;
 
-    void start() override;  ///< 启动 kqueue 事件循环线程并初始化底层资源
+    std::expected<void, IOError> start() override;  ///< 启动 kqueue 事件循环线程并初始化底层资源
     void stop() override;   ///< 请求退出事件循环并等待工作线程结束
 
     /**

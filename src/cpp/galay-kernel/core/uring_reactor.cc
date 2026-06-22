@@ -23,7 +23,6 @@
 #include <cstring>
 #include <expected>
 #include <memory>
-#include <stdexcept>
 #include <vector>
 
 namespace galay::kernel {
@@ -96,10 +95,16 @@ struct RecvBufferPool {
         , buffer_group(bgid)
         , buffer_size(buf_size)
         , mask(io_uring_buf_ring_mask(entries)) {
+    }
+
+    std::expected<void, IOError> initialize() {
         int ret = 0;
         buf_ring = io_uring_setup_buf_ring(ring, ring_entries, buffer_group, 0, &ret);
         if (buf_ring == nullptr || ret < 0) {
-            throw std::runtime_error("Failed to set up io_uring recv buffer ring");
+            const uint32_t system_code = ret < 0
+                ? static_cast<uint32_t>(-ret)
+                : static_cast<uint32_t>(errno);
+            return std::unexpected(IOError(kOpenFailed, system_code));
         }
 
         io_uring_buf_ring_init(buf_ring);
@@ -115,6 +120,7 @@ struct RecvBufferPool {
             buffers.push_back(std::move(storage));
         }
         io_uring_buf_ring_advance(buf_ring, ring_entries);
+        return {};
     }
 
     ~RecvBufferPool() = default;
@@ -202,10 +208,18 @@ inline bool tryImmediateReadv(int fd, ReadvIOContext* ctx, int& res) {
 
 IOUringReactor::IOUringReactor(int queue_depth, std::atomic<uint64_t>& last_error_code)
     : m_queue_depth(queue_depth)
-    , m_event_fd(eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC))
-    , m_last_error_code(last_error_code) {
+    , m_last_error_code(last_error_code) {}
+
+std::expected<void, IOError> IOUringReactor::start()
+{
+    if (m_ring_initialized) {
+        return {};
+    }
+
+    m_event_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (m_event_fd == -1) {
-        throw std::runtime_error("Failed to create eventfd");
+        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
     }
 
     struct io_uring_params params;
@@ -213,35 +227,58 @@ IOUringReactor::IOUringReactor(int queue_depth, std::atomic<uint64_t>& last_erro
     params.flags = IORING_SETUP_SQPOLL | IORING_SETUP_COOP_TASKRUN;
     params.sq_thread_idle = 1000;
 
-    if (io_uring_queue_init_params(m_queue_depth, &m_ring, &params) < 0) {
+    int init_result = io_uring_queue_init_params(m_queue_depth, &m_ring, &params);
+    if (init_result < 0) {
         std::memset(&params, 0, sizeof(params));
         params.flags = IORING_SETUP_COOP_TASKRUN;
-        if (io_uring_queue_init_params(m_queue_depth, &m_ring, &params) < 0) {
+        init_result = io_uring_queue_init_params(m_queue_depth, &m_ring, &params);
+        if (init_result < 0) {
             std::memset(&params, 0, sizeof(params));
-            if (io_uring_queue_init_params(m_queue_depth, &m_ring, &params) < 0) {
+            init_result = io_uring_queue_init_params(m_queue_depth, &m_ring, &params);
+            if (init_result < 0) {
+                const uint32_t system_code = static_cast<uint32_t>(-init_result);
                 close(m_event_fd);
-                throw std::runtime_error("Failed to initialize io_uring");
+                m_event_fd = -1;
+                detail::storeBackendError(m_last_error_code, kOpenFailed, system_code);
+                return std::unexpected(IOError(kOpenFailed, system_code));
             }
         }
     }
+    m_ring_initialized = true;
 
-    m_recv_buffer_pool = std::static_pointer_cast<void>(
-        std::make_shared<RecvBufferPool>(&m_ring,
-                                         kRecvBufferCount,
-                                         kRecvBufferGroup,
-                                         kRecvBufferSize));
+    auto recv_pool = std::make_shared<RecvBufferPool>(&m_ring,
+                                                      kRecvBufferCount,
+                                                      kRecvBufferGroup,
+                                                      kRecvBufferSize);
+    auto recv_pool_ready = recv_pool->initialize();
+    if (!recv_pool_ready) {
+        const auto error = recv_pool_ready.error();
+        detail::storeBackendError(
+            m_last_error_code,
+            ioErrorCodeFromError(error),
+            systemCodeFromError(error));
+        io_uring_queue_exit(&m_ring);
+        m_ring_initialized = false;
+        close(m_event_fd);
+        m_event_fd = -1;
+        return std::unexpected(error);
+    }
+    m_recv_buffer_pool = std::static_pointer_cast<void>(std::move(recv_pool));
 
     if (io_uring_probe* probe = io_uring_get_probe_ring(&m_ring); probe != nullptr) {
         m_send_zc_supported = io_uring_opcode_supported(probe, IORING_OP_SEND_ZC) != 0;
         io_uring_free_probe(probe);
     }
+    return {};
 }
 
 IOUringReactor::~IOUringReactor() {
     if (m_recv_buffer_pool) {
         recvBufferPool(m_recv_buffer_pool)->shutdown();
     }
-    io_uring_queue_exit(&m_ring);
+    if (m_ring_initialized) {
+        io_uring_queue_exit(&m_ring);
+    }
     if (m_event_fd != -1) {
         close(m_event_fd);
     }
@@ -255,8 +292,8 @@ void IOUringReactor::notify() {
     }
 }
 
-int IOUringReactor::wakeReadFdForTest() const {
-    return m_event_fd;
+GHandle IOUringReactor::getHandle() const {
+    return {m_event_fd};
 }
 
 bool IOUringReactor::shouldUseSendZc(size_t length) const noexcept {

@@ -15,7 +15,7 @@
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 
 #include <cerrno>
-#include <stdexcept>
+#include <expected>
 
 namespace galay::kernel {
 
@@ -63,21 +63,32 @@ void KqueueReactor::retireRegistrationEntry(IOController* controller) {
 }
 
 KqueueReactor::KqueueReactor(int max_events, std::atomic<uint64_t>& last_error_code)
-    : m_kqueue_fd(kqueue())
-    , m_max_events(max_events)
-    , m_last_error_code(last_error_code) {
+    : m_max_events(max_events)
+    , m_last_error_code(last_error_code) {}
+
+std::expected<void, IOError> KqueueReactor::start()
+{
+    if (m_kqueue_fd != -1) {
+        return {};
+    }
+
+    m_kqueue_fd = kqueue();
     if (m_kqueue_fd == -1) {
-        throw std::runtime_error("Failed to create kqueue");
+        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
     }
 
     struct kevent ev;
     EV_SET(&ev, WAKE_IDENT, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr);
     if (kevent(m_kqueue_fd, &ev, 1, nullptr, 0, nullptr) < 0) {
         galay_close(m_kqueue_fd);
-        throw std::runtime_error("Failed to register EVFILT_USER wake event");
+        m_kqueue_fd = -1;
+        detail::storeBackendError(m_last_error_code, kOpenFailed, static_cast<uint32_t>(errno));
+        return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
     }
 
     m_events.resize(m_max_events);
+    return {};
 }
 
 KqueueReactor::~KqueueReactor() {
@@ -95,8 +106,8 @@ void KqueueReactor::notify() {
     }
 }
 
-int KqueueReactor::wakeReadFdForTest() const {
-    return m_kqueue_fd;
+GHandle KqueueReactor::getHandle() const {
+    return {m_kqueue_fd};
 }
 
 int KqueueReactor::addAccept(IOController* controller) {

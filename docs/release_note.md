@@ -1,14 +1,29 @@
 # Release Note
 
-## v3.0.0 - 2026-06-20
+## v3.0.0 - 2026-06-22
 
 - **版本级别**：大版本（major）
-- **Git 提交消息**：`docs: 收束 v3.0.0 累计变更并将 tag 移至最新提交`
+- **Git 提交消息**：`feat: 新增 kernel TCP accept C ABI 异步接口并配套 expected 错误边界`
 - **Git tag**：`v3.0.0`
 
 ### 变更摘要
 
 本次为自 `v2.2.1` 以来的大版本重构发版，核心是将原有的单体 `galay/` 目录全面重构为按模块划分的 `src/` 多模块结构，并引入 Bazel 构建体系。本版本在初版发版后又进一步将 `src/` 下各模块目录命名空间化为 `galay-` 前缀，归整内部目录，并将全部模块与测试/示例/基准的构建开关默认开启；同期统一了测试 CTest 场景命名、改用编译宏解析工程路径，并新增项目 README。随后在此版本内持续推进 HTTP/2 静态文件快路径与 kernel 调度/流控的生产级打磨，补齐 MCP、MySQL、Mongo、Redis、Tracing 等客户端模块的生产策略与真实服务端集成验证，最终将 tag 与 Release 移至最新提交以收口本版本全部累计变更。
+
+### v3.0.0 tag 移至 2026-06-22 的增量
+
+本次 tag 移动主要吸收自初版 v3.0.0 以来的以下增量：
+
+- **kernel TCP accept C ABI 异步接口**：新增 `galay_kernel_tcp_accept_{start,wait,join,destroy}` 以及 `galay_kernel_tcp_socket_{bind,listen,local_endpoint}`，通过 runtime 调度的 `JoinHandle<AcceptResult>` 暴露异步 accept，并经 peer/local host config 返回 IPv4/IPv6 地址与端口；配套新增 `test/c/kernel/t4_tcp_accept_api`、`examples/c/kernel/e2_tcp_accept`、`benchmark/c/kernel/b2_tcp_accept_smoke`。
+- **底层启动/创建边界改为 `std::expected`**：`TcpSocket::create` / `UdpSocket::create` 新增返回 `std::expected` 的静态工厂；`Scheduler::start` / `Runtime::start` / `ensureStarted` / `acquireDefaultScheduler` 改为 `std::expected` 返回，新增 `RuntimeErrorCode::kSchedulerStartFailed`，启动失败自动 `stop()` 已启动的 scheduler。
+- **Reactor 抽象改为 `ReactorType` concept**：移除虚基类 `BackendReactor`，改为基于 `notify()` + `getHandle()` 的编译期约束，epoll/kqueue/io_uring 三后端通过 `static_assert` 锁定；新增 `Reactor::start()` 显式初始化。
+- **IPv6 dual-stack**：`HandleOption::handleIPv6Only(bool)` 显式设置 `IPV6_V6ONLY`，`TcpSocket::openHandle` / `UdpSocket::openHandle` 在 IPv6 场景默认调用 `handleIPv6Only(false)` 启用 dual-stack；新增 `test/cpp/kernel/t127_ipv6only`。
+- **C ABI tcp/udp socket create 移除 try/catch**：直接消费新 `create()` 工厂返回的 `IOError`。
+- **rpc 生产级能力与 etcd 服务发现**：补齐调用级 metadata/options、`RpcChannel`、deadline/cancel、heartbeat/reconnect、连接池、托管客户端、重试/治理/背压等公共能力，并在启用 `galay-etcd` 时走真实 etcd v3 KV 作为注册中心。
+- **源码/测试分层与 C ABI 用例**：`src/` 下各模块统一迁入 `src/cpp/`；benchmark/examples/test 按语言分层，新增 `benchmark/c/`、`examples/c/`、`test/c/`（99 个文件）作为 C ABI 回归入口；通过 `GALAY_BUILD_C_API=ON` 启用。
+- **协程与并发原语加固**：修复 `AsyncWaiter` / `AsyncMutex` / `MpscChannel` / `WaitRegistration` 的 await_suspend 竞态与丢失唤醒问题；修复 `RpcClient::call` / `RpcManagedClient::call` 在挂起协程中持有栈上 borrowed payload 的 use-after-free；修复 RPC stream 控制帧 body 校验。
+
+具体代码变更与边界用例细节请参见 `CHANGELOG.md` 的 `v3.0.0` 版本节。
 
 #### 架构与目录重构
 
