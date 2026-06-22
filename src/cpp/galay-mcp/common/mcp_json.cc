@@ -7,7 +7,7 @@
 namespace galay {
 namespace mcp {
 
-std::expected<JsonDocument, McpError> JsonDocument::Parse(std::string_view json) {
+std::expected<JsonDocument, McpError> JsonDocument::parse(std::string_view json) {
     JsonDocument doc;
     try {
         doc.m_parser = std::make_unique<simdjson::dom::parser>();
@@ -23,33 +23,33 @@ std::expected<JsonDocument, McpError> JsonDocument::Parse(std::string_view json)
     }
 }
 
-void JsonWriter::StartObject() {
-    WriteValuePrefix();
+void JsonWriter::startObject() {
+    writeValuePrefix();
     m_out.push_back('{');
     m_stack.push_back({ContextType::Object, true, false});
 }
 
-void JsonWriter::EndObject() {
+void JsonWriter::endObject() {
     m_out.push_back('}');
     if (!m_stack.empty()) {
         m_stack.pop_back();
     }
 }
 
-void JsonWriter::StartArray() {
-    WriteValuePrefix();
+void JsonWriter::startArray() {
+    writeValuePrefix();
     m_out.push_back('[');
     m_stack.push_back({ContextType::Array, true, false});
 }
 
-void JsonWriter::EndArray() {
+void JsonWriter::endArray() {
     m_out.push_back(']');
     if (!m_stack.empty()) {
         m_stack.pop_back();
     }
 }
 
-void JsonWriter::Key(const std::string& key) {
+void JsonWriter::key(const std::string& key) {
     if (m_stack.empty() || m_stack.back().type != ContextType::Object) {
         return;
     }
@@ -61,19 +61,19 @@ void JsonWriter::Key(const std::string& key) {
     m_stack.back().expectValue = true;
 
     m_out.push_back('\"');
-    AppendEscaped(m_out, key);
+    appendEscaped(m_out, key);
     m_out.append("\":");
 }
 
-void JsonWriter::String(const std::string& value) {
-    WriteValuePrefix();
+void JsonWriter::string(const std::string& value) {
+    writeValuePrefix();
     m_out.push_back('\"');
-    AppendEscaped(m_out, value);
+    appendEscaped(m_out, value);
     m_out.push_back('\"');
 }
 
-void JsonWriter::Number(int64_t value) {
-    WriteValuePrefix();
+void JsonWriter::number(int64_t value) {
+    writeValuePrefix();
     char buf[32];
     auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), value);
     if (ec == std::errc()) {
@@ -81,8 +81,8 @@ void JsonWriter::Number(int64_t value) {
     }
 }
 
-void JsonWriter::Number(uint64_t value) {
-    WriteValuePrefix();
+void JsonWriter::number(uint64_t value) {
+    writeValuePrefix();
     char buf[32];
     auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), value);
     if (ec == std::errc()) {
@@ -90,8 +90,8 @@ void JsonWriter::Number(uint64_t value) {
     }
 }
 
-void JsonWriter::Number(double value) {
-    WriteValuePrefix();
+void JsonWriter::number(double value) {
+    writeValuePrefix();
     char buf[64];
     auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), value);
     if (ec == std::errc()) {
@@ -101,26 +101,26 @@ void JsonWriter::Number(double value) {
     }
 }
 
-void JsonWriter::Bool(bool value) {
-    WriteValuePrefix();
+void JsonWriter::boolean(bool value) {
+    writeValuePrefix();
     m_out.append(value ? "true" : "false");
 }
 
-void JsonWriter::Null() {
-    WriteValuePrefix();
+void JsonWriter::nullValue() {
+    writeValuePrefix();
     m_out.append("null");
 }
 
-void JsonWriter::Raw(const std::string& json) {
-    WriteValuePrefix();
+void JsonWriter::raw(const std::string& json) {
+    writeValuePrefix();
     m_out.append(json);
 }
 
-std::string JsonWriter::TakeString() {
+std::string JsonWriter::takeString() {
     return std::move(m_out);
 }
 
-void JsonWriter::WriteValuePrefix() {
+void JsonWriter::writeValuePrefix() {
     if (m_stack.empty()) {
         return;
     }
@@ -139,7 +139,7 @@ void JsonWriter::WriteValuePrefix() {
     }
 }
 
-void JsonWriter::AppendEscaped(std::string& out, const std::string& value) {
+void JsonWriter::appendEscaped(std::string& out, const std::string& value) {
     for (char c : value) {
         switch (c) {
             case '\"': out.append("\\\""); break;
@@ -161,7 +161,7 @@ void JsonWriter::AppendEscaped(std::string& out, const std::string& value) {
     }
 }
 
-bool JsonHelper::GetObject(const JsonElement& element, JsonObject& out) {
+bool JsonHelper::getObject(const JsonElement& element, JsonObject& out) {
     auto obj = element.get_object();
     if (obj.error()) {
         return false;
@@ -170,7 +170,7 @@ bool JsonHelper::GetObject(const JsonElement& element, JsonObject& out) {
     return true;
 }
 
-bool JsonHelper::GetArray(const JsonElement& element, JsonArray& out) {
+bool JsonHelper::getArray(const JsonElement& element, JsonArray& out) {
     auto arr = element.get_array();
     if (arr.error()) {
         return false;
@@ -179,7 +179,7 @@ bool JsonHelper::GetArray(const JsonElement& element, JsonArray& out) {
     return true;
 }
 
-bool JsonHelper::GetStringValue(const JsonElement& element, std::string& out) {
+bool JsonHelper::getStringValue(const JsonElement& element, std::string& out) {
     auto str = element.get_string();
     if (str.error()) {
         return false;
@@ -188,7 +188,7 @@ bool JsonHelper::GetStringValue(const JsonElement& element, std::string& out) {
     return true;
 }
 
-bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
+bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
     JsonWriter writer;
     std::function<bool(const JsonElement&)> writeElement = [&](const JsonElement& value) -> bool {
         switch (value.type()) {
@@ -197,13 +197,13 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
                 if (arr.error()) {
                     return false;
                 }
-                writer.StartArray();
+                writer.startArray();
                 for (auto item : arr.value()) {
                     if (!writeElement(item)) {
                         return false;
                     }
                 }
-                writer.EndArray();
+                writer.endArray();
                 return true;
             }
             case simdjson::dom::element_type::OBJECT: {
@@ -211,14 +211,14 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
                 if (obj.error()) {
                     return false;
                 }
-                writer.StartObject();
+                writer.startObject();
                 for (auto field : obj.value()) {
-                    writer.Key(std::string(field.key));
+                    writer.key(std::string(field.key));
                     if (!writeElement(field.value)) {
                         return false;
                     }
                 }
-                writer.EndObject();
+                writer.endObject();
                 return true;
             }
             case simdjson::dom::element_type::STRING: {
@@ -226,7 +226,7 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
                 if (str.error()) {
                     return false;
                 }
-                writer.String(std::string(str.value()));
+                writer.string(std::string(str.value()));
                 return true;
             }
             case simdjson::dom::element_type::INT64: {
@@ -234,7 +234,7 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
                 if (num.error()) {
                     return false;
                 }
-                writer.Number(num.value());
+                writer.number(num.value());
                 return true;
             }
             case simdjson::dom::element_type::UINT64: {
@@ -242,7 +242,7 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
                 if (num.error()) {
                     return false;
                 }
-                writer.Number(num.value());
+                writer.number(num.value());
                 return true;
             }
             case simdjson::dom::element_type::DOUBLE: {
@@ -250,7 +250,7 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
                 if (num.error()) {
                     return false;
                 }
-                writer.Number(num.value());
+                writer.number(num.value());
                 return true;
             }
             case simdjson::dom::element_type::BOOL: {
@@ -258,11 +258,11 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
                 if (b.error()) {
                     return false;
                 }
-                writer.Bool(b.value());
+                writer.boolean(b.value());
                 return true;
             }
             case simdjson::dom::element_type::NULL_VALUE: {
-                writer.Null();
+                writer.nullValue();
                 return true;
             }
         }
@@ -272,19 +272,19 @@ bool JsonHelper::GetRawJson(const JsonElement& element, std::string& out) {
     if (!writeElement(element)) {
         return false;
     }
-    out = writer.TakeString();
+    out = writer.takeString();
     return true;
 }
 
-bool JsonHelper::GetString(const JsonObject& obj, const char* key, std::string& out) {
+bool JsonHelper::getString(const JsonObject& obj, const char* key, std::string& out) {
     auto val = obj[key];
     if (val.error()) {
         return false;
     }
-    return GetStringValue(val.value(), out);
+    return getStringValue(val.value(), out);
 }
 
-bool JsonHelper::GetInt64(const JsonObject& obj, const char* key, int64_t& out) {
+bool JsonHelper::getInt64(const JsonObject& obj, const char* key, int64_t& out) {
     auto val = obj[key];
     if (val.error()) {
         return false;
@@ -297,7 +297,7 @@ bool JsonHelper::GetInt64(const JsonObject& obj, const char* key, int64_t& out) 
     return true;
 }
 
-bool JsonHelper::GetBool(const JsonObject& obj, const char* key, bool& out) {
+bool JsonHelper::getBool(const JsonObject& obj, const char* key, bool& out) {
     auto val = obj[key];
     if (val.error()) {
         return false;
@@ -310,7 +310,7 @@ bool JsonHelper::GetBool(const JsonObject& obj, const char* key, bool& out) {
     return true;
 }
 
-bool JsonHelper::GetElement(const JsonObject& obj, const char* key, JsonElement& out) {
+bool JsonHelper::getElement(const JsonObject& obj, const char* key, JsonElement& out) {
     auto val = obj[key];
     if (val.error()) {
         return false;
@@ -319,31 +319,31 @@ bool JsonHelper::GetElement(const JsonObject& obj, const char* key, JsonElement&
     return true;
 }
 
-bool JsonHelper::GetObject(const JsonObject& obj, const char* key, JsonObject& out) {
+bool JsonHelper::getObject(const JsonObject& obj, const char* key, JsonObject& out) {
     auto val = obj[key];
     if (val.error()) {
         return false;
     }
-    return GetObject(val.value(), out);
+    return getObject(val.value(), out);
 }
 
-bool JsonHelper::GetArray(const JsonObject& obj, const char* key, JsonArray& out) {
+bool JsonHelper::getArray(const JsonObject& obj, const char* key, JsonArray& out) {
     auto val = obj[key];
     if (val.error()) {
         return false;
     }
-    return GetArray(val.value(), out);
+    return getArray(val.value(), out);
 }
 
-const JsonElement& JsonHelper::EmptyObject() {
+const JsonElement& JsonHelper::emptyObject() {
     static JsonDocument emptyDoc = []() {
-        auto parsed = JsonDocument::Parse("{}");
+        auto parsed = JsonDocument::parse("{}");
         if (!parsed) {
             return JsonDocument{};
         }
         return std::move(parsed.value());
     }();
-    return emptyDoc.Root();
+    return emptyDoc.root();
 }
 
 } // namespace mcp

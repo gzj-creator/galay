@@ -5,6 +5,9 @@ foreach(test_source IN LISTS GALAY_MCP_TEST_SOURCES)
     add_executable(${test_name} ${test_source})
     target_link_libraries(${test_name} PRIVATE galay::mcp)
     target_include_directories(${test_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
+    target_compile_definitions(${test_name} PRIVATE
+        GALAY_PROJECT_SOURCE_DIR="${PROJECT_SOURCE_DIR}"
+    )
     set_target_properties(${test_name} PROPERTIES
         CXX_STANDARD 23
         CXX_STANDARD_REQUIRED ON

@@ -37,7 +37,7 @@ galay::kernel::Task<void> HttpClientTransport::initialize(std::string clientName
     params.protocolVersion = MCP_VERSION;
     params.clientInfo.name = m_clientName;
     params.clientInfo.version = m_clientVersion;
-    params.capabilities = EmptyObjectString();
+    params.capabilities = emptyObjectString();
 
     std::expected<JsonString, McpError> response;
     co_await sendRequest(Methods::INITIALIZE, params.toJson(), response);
@@ -70,7 +70,7 @@ galay::kernel::Task<void> HttpClientTransport::callTool(std::string toolName,
 
     ToolCallParams params;
     params.name = std::move(toolName);
-    params.arguments = arguments.empty() ? EmptyObjectString() : std::move(arguments);
+    params.arguments = arguments.empty() ? emptyObjectString() : std::move(arguments);
 
     std::expected<JsonString, McpError> response;
     co_await sendRequest(Methods::TOOLS_CALL, params.toJson(), response);
@@ -90,7 +90,7 @@ galay::kernel::Task<void> HttpClientTransport::listTools(std::expected<std::vect
     }
 
     std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::TOOLS_LIST, EmptyObjectString(), response);
+    co_await sendRequest(Methods::TOOLS_LIST, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -110,7 +110,7 @@ galay::kernel::Task<void> HttpClientTransport::listResources(std::expected<std::
     }
 
     std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::RESOURCES_LIST, EmptyObjectString(), response);
+    co_await sendRequest(Methods::RESOURCES_LIST, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -131,13 +131,13 @@ galay::kernel::Task<void> HttpClientTransport::readResource(std::string uri,
     }
 
     JsonWriter paramsWriter;
-    paramsWriter.StartObject();
-    paramsWriter.Key("uri");
-    paramsWriter.String(std::move(uri));
-    paramsWriter.EndObject();
+    paramsWriter.startObject();
+    paramsWriter.key("uri");
+    paramsWriter.string(std::move(uri));
+    paramsWriter.endObject();
 
     std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::RESOURCES_READ, paramsWriter.TakeString(), response);
+    co_await sendRequest(Methods::RESOURCES_READ, paramsWriter.takeString(), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -154,7 +154,7 @@ galay::kernel::Task<void> HttpClientTransport::listPrompts(std::expected<std::ve
     }
 
     std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::PROMPTS_LIST, EmptyObjectString(), response);
+    co_await sendRequest(Methods::PROMPTS_LIST, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -176,17 +176,17 @@ galay::kernel::Task<void> HttpClientTransport::getPrompt(std::string name,
     }
 
     JsonWriter paramsWriter;
-    paramsWriter.StartObject();
-    paramsWriter.Key("name");
-    paramsWriter.String(std::move(name));
+    paramsWriter.startObject();
+    paramsWriter.key("name");
+    paramsWriter.string(std::move(name));
     if (!arguments.empty()) {
-        paramsWriter.Key("arguments");
-        paramsWriter.Raw(arguments);
+        paramsWriter.key("arguments");
+        paramsWriter.raw(arguments);
     }
-    paramsWriter.EndObject();
+    paramsWriter.endObject();
 
     std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::PROMPTS_GET, paramsWriter.TakeString(), response);
+    co_await sendRequest(Methods::PROMPTS_GET, paramsWriter.takeString(), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -203,7 +203,7 @@ galay::kernel::Task<void> HttpClientTransport::ping(std::expected<void, McpError
     }
 
     std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::PING, EmptyObjectString(), response);
+    co_await sendRequest(Methods::PING, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -349,14 +349,14 @@ galay::kernel::Task<void> HttpClientTransport::sendRequest(std::string_view meth
 
         if (view.hasResult) {
             std::string raw;
-            if (JsonHelper::GetRawJson(view.result, raw)) {
+            if (JsonHelper::getRawJson(view.result, raw)) {
                 result = std::move(raw);
             } else {
                 MCP_LOG_WARN("[http_client]", "result serialization failed method={} id={}", method, requestId);
                 result = std::unexpected(McpError::parseError("Failed to parse result"));
             }
         } else {
-            result = EmptyObjectString();
+            result = emptyObjectString();
         }
 
         co_return;

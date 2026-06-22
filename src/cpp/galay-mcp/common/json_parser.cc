@@ -7,13 +7,13 @@ namespace {
 
 bool hasJsonRpcVersion(const JsonObject& obj) {
     std::string version;
-    return JsonHelper::GetString(obj, "jsonrpc", version) && version == JSONRPC_VERSION;
+    return JsonHelper::getString(obj, "jsonrpc", version) && version == JSONRPC_VERSION;
 }
 
 } // namespace
 
 std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_view body) {
-    auto docExp = JsonDocument::Parse(body);
+    auto docExp = JsonDocument::parse(body);
     if (!docExp) {
         return std::unexpected(docExp.error());
     }
@@ -22,7 +22,7 @@ std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_vi
     parsed.document = std::move(docExp.value());
 
     JsonObject obj;
-    if (!JsonHelper::GetObject(parsed.document.Root(), obj)) {
+    if (!JsonHelper::getObject(parsed.document.root(), obj)) {
         return std::unexpected(McpError::invalidRequest("Expected JSON object"));
     }
     if (!hasJsonRpcVersion(obj)) {
@@ -61,7 +61,7 @@ std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_vi
 }
 
 std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_view body) {
-    auto docExp = JsonDocument::Parse(body);
+    auto docExp = JsonDocument::parse(body);
     if (!docExp) {
         return std::unexpected(docExp.error());
     }
@@ -70,7 +70,7 @@ std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_
     parsed.document = std::move(docExp.value());
 
     JsonObject obj;
-    if (!JsonHelper::GetObject(parsed.document.Root(), obj)) {
+    if (!JsonHelper::getObject(parsed.document.root(), obj)) {
         return std::unexpected(McpError::invalidResponse("Expected JSON object"));
     }
     if (!hasJsonRpcVersion(obj)) {

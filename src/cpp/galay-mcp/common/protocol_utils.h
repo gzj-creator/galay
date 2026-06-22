@@ -116,8 +116,8 @@ inline JsonRpcResponse makeErrorResponse(int64_t id,
     error.message = message;
     if (!details.empty()) {
         JsonWriter writer;
-        writer.String(details);
-        error.data = writer.TakeString();
+        writer.string(details);
+        error.data = writer.takeString();
     }
 
     JsonRpcResponse response;
@@ -138,15 +138,15 @@ inline JsonRpcResponse makeErrorResponse(int64_t id,
 template <typename MapType, typename Extractor>
 JsonString buildListResultFromMap(const MapType& map, const char* key, Extractor extractor) {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key(key);
-    writer.StartArray();
+    writer.startObject();
+    writer.key(key);
+    writer.startArray();
     for (const auto& [name, info] : map) {
-        writer.Raw(extractor(info).toJson());
+        writer.raw(extractor(info).toJson());
     }
-    writer.EndArray();
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endArray();
+    writer.endObject();
+    return writer.takeString();
 }
 
 } // namespace protocol

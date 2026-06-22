@@ -144,11 +144,11 @@ galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
     // 执行请求
     for (size_t i = 0; i < requestsPerWorker; ++i) {
         JsonWriter argsWriter;
-        argsWriter.StartObject();
-        argsWriter.Key("message");
-        argsWriter.String("Concurrent test " + std::to_string(i));
-        argsWriter.EndObject();
-        JsonString args = argsWriter.TakeString();
+        argsWriter.startObject();
+        argsWriter.key("message");
+        argsWriter.string("Concurrent test " + std::to_string(i));
+        argsWriter.endObject();
+        JsonString args = argsWriter.takeString();
 
         auto start = high_resolution_clock::now();
         std::expected<JsonString, McpError> callResult;

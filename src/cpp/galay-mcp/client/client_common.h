@@ -10,25 +10,25 @@
 
 namespace galay::mcp::detail {
 
-const JsonString& EmptyObjectString();
+const JsonString& emptyObjectString();
 
 template <typename T, typename ParseFn>
 std::expected<std::vector<T>, McpError> parseListField(std::string_view body,
                                                        const char* fieldName,
                                                        ParseFn&& parseFn) {
-    auto docExp = JsonDocument::Parse(body);
+    auto docExp = JsonDocument::parse(body);
     if (!docExp) {
         return std::unexpected(McpError::parseError(docExp.error().details()));
     }
 
     JsonObject obj;
-    if (!JsonHelper::GetObject(docExp.value().Root(), obj)) {
+    if (!JsonHelper::getObject(docExp.value().root(), obj)) {
         return std::unexpected(McpError::parseError("Expected JSON object"));
     }
 
     std::vector<T> values;
     JsonArray arr;
-    if (!JsonHelper::GetArray(obj, fieldName, arr)) {
+    if (!JsonHelper::getArray(obj, fieldName, arr)) {
         return values;
     }
 

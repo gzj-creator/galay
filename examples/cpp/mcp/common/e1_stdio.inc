@@ -21,7 +21,7 @@ void runSimpleServer() {
         echoSchema,
         [](const JsonElement& args) -> std::expected<JsonString, McpError> {
             JsonObject obj;
-            if (!JsonHelper::GetObject(args, obj)) {
+            if (!JsonHelper::getObject(args, obj)) {
                 return std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid arguments"
@@ -29,7 +29,7 @@ void runSimpleServer() {
             }
 
             std::string message;
-            if (!JsonHelper::GetString(obj, "message", message)) {
+            if (!JsonHelper::getString(obj, "message", message)) {
                 return std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Missing 'message' parameter"
@@ -37,11 +37,11 @@ void runSimpleServer() {
             }
 
             JsonWriter writer;
-            writer.StartObject();
-            writer.Key("echo");
-            writer.String(message);
-            writer.EndObject();
-            return writer.TakeString();
+            writer.startObject();
+            writer.key("echo");
+            writer.string(message);
+            writer.endObject();
+            return writer.takeString();
         }
     );
 
@@ -91,11 +91,11 @@ void runSimpleClient() {
     // 调用echo工具
     std::cout << "\nCalling echo tool..." << std::endl;
     JsonWriter argsWriter;
-    argsWriter.StartObject();
-    argsWriter.Key("message");
-    argsWriter.String("Hello, MCP!");
-    argsWriter.EndObject();
-    auto callResult = client.callTool("echo", argsWriter.TakeString());
+    argsWriter.startObject();
+    argsWriter.key("message");
+    argsWriter.string("Hello, MCP!");
+    argsWriter.endObject();
+    auto callResult = client.callTool("echo", argsWriter.takeString());
     if (callResult) {
         std::cout << "Result: " << callResult.value() << std::endl;
     }

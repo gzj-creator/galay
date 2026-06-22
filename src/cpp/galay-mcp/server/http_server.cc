@@ -7,11 +7,11 @@ namespace mcp {
 
 namespace {
 
-JsonString EmptyObjectString() {
+JsonString emptyObjectString() {
     return "{}";
 }
 
-JsonString MakeResultResponse(int64_t id, std::string_view resultJson) {
+JsonString makeResultResponse(int64_t id, std::string_view resultJson) {
     const std::string idString = std::to_string(id);
     JsonString response;
     response.reserve(32 + idString.size() + resultJson.size());
@@ -318,7 +318,7 @@ galay::kernel::Task<void> McpHttpServer::processRequest(const std::string& reque
                                          ErrorCodes::METHOD_NOT_FOUND,
                                          "Method not found", method);
             } else {
-                responseJson = EmptyObjectString();
+                responseJson = emptyObjectString();
             }
         }
     } catch (const std::exception& e) {
@@ -331,7 +331,7 @@ galay::kernel::Task<void> McpHttpServer::processRequest(const std::string& reque
 
 JsonString McpHttpServer::handleInitialize(const JsonRpcRequestView& request, bool& connectionInitialized) {
     if (!request.id.has_value()) {
-        return EmptyObjectString();
+        return emptyObjectString();
     }
 
     if (connectionInitialized) {
@@ -367,12 +367,12 @@ JsonString McpHttpServer::handleInitialize(const JsonRpcRequestView& request, bo
                  m_serverName,
                  m_serverVersion);
 
-    return MakeResultResponse(request.id.value(), result);
+    return makeResultResponse(request.id.value(), result);
 }
 
 JsonString McpHttpServer::handleToolsList(const JsonRpcRequestView& request, bool& connectionInitialized) {
     if (!request.id.has_value()) {
-        return EmptyObjectString();
+        return emptyObjectString();
     }
 
     if (!connectionInitialized) {
@@ -381,12 +381,12 @@ JsonString McpHttpServer::handleToolsList(const JsonRpcRequestView& request, boo
                                   "Not initialized", "");
     }
 
-    return MakeResultResponse(request.id.value(), getToolsListResult());
+    return makeResultResponse(request.id.value(), getToolsListResult());
 }
 
 galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
     if (!request.id.has_value()) {
-        responseJson = EmptyObjectString();
+        responseJson = emptyObjectString();
         co_return;
     }
 
@@ -406,7 +406,7 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
         }
 
         JsonObject paramsObj;
-        if (!JsonHelper::GetObject(request.params, paramsObj)) {
+        if (!JsonHelper::getObject(request.params, paramsObj)) {
             MCP_LOG_WARN("[http_server]", "tools/call params not object id={}", request.id.value());
             responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_PARAMS,
                                       "Invalid parameters", "Params must be object");
@@ -414,7 +414,7 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
         }
 
         std::string toolName;
-        if (!JsonHelper::GetString(paramsObj, "name", toolName)) {
+        if (!JsonHelper::getString(paramsObj, "name", toolName)) {
             MCP_LOG_WARN("[http_server]", "tools/call missing tool name id={}", request.id.value());
             responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_PARAMS,
                                       "Invalid parameters", "Missing tool name");
@@ -431,9 +431,9 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
 
         McpHttpServer::ToolHandler handler = it->second.handler;
 
-        JsonElement arguments = JsonHelper::EmptyObject();
+        JsonElement arguments = JsonHelper::emptyObject();
         JsonElement argsElement;
-        if (JsonHelper::GetElement(paramsObj, "arguments", argsElement)) {
+        if (JsonHelper::getElement(paramsObj, "arguments", argsElement)) {
             arguments = argsElement;
         }
 
@@ -459,7 +459,7 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
         content.text = result.value();
         callResult.content.push_back(content);
 
-        responseJson = MakeResultResponse(request.id.value(), callResult.toJson());
+        responseJson = makeResultResponse(request.id.value(), callResult.toJson());
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "tools/call threw id={} error={}", request.id.value(), e.what());
@@ -471,7 +471,7 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
 
 JsonString McpHttpServer::handleResourcesList(const JsonRpcRequestView& request, bool& connectionInitialized) {
     if (!request.id.has_value()) {
-        return EmptyObjectString();
+        return emptyObjectString();
     }
 
     if (!connectionInitialized) {
@@ -480,12 +480,12 @@ JsonString McpHttpServer::handleResourcesList(const JsonRpcRequestView& request,
                                   "Not initialized", "");
     }
 
-    return MakeResultResponse(request.id.value(), getResourcesListResult());
+    return makeResultResponse(request.id.value(), getResourcesListResult());
 }
 
 galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
     if (!request.id.has_value()) {
-        responseJson = EmptyObjectString();
+        responseJson = emptyObjectString();
         co_return;
     }
 
@@ -505,7 +505,7 @@ galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcReques
         }
 
         JsonObject paramsObj;
-        if (!JsonHelper::GetObject(request.params, paramsObj)) {
+        if (!JsonHelper::getObject(request.params, paramsObj)) {
             MCP_LOG_WARN("[http_server]", "resources/read params not object id={}", request.id.value());
             responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_PARAMS,
                                       "Invalid parameters", "Params must be object");
@@ -513,7 +513,7 @@ galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcReques
         }
 
         std::string uri;
-        if (!JsonHelper::GetString(paramsObj, "uri", uri)) {
+        if (!JsonHelper::getString(paramsObj, "uri", uri)) {
             MCP_LOG_WARN("[http_server]", "resources/read missing uri id={}", request.id.value());
             responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_PARAMS,
                                       "Invalid parameters", "Missing uri");
@@ -551,14 +551,14 @@ galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcReques
         content.text = result.value();
 
         JsonWriter resultWriter;
-        resultWriter.StartObject();
-        resultWriter.Key("contents");
-        resultWriter.StartArray();
-        resultWriter.Raw(content.toJson());
-        resultWriter.EndArray();
-        resultWriter.EndObject();
+        resultWriter.startObject();
+        resultWriter.key("contents");
+        resultWriter.startArray();
+        resultWriter.raw(content.toJson());
+        resultWriter.endArray();
+        resultWriter.endObject();
 
-        responseJson = MakeResultResponse(request.id.value(), resultWriter.TakeString());
+        responseJson = makeResultResponse(request.id.value(), resultWriter.takeString());
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "resources/read threw id={} error={}", request.id.value(), e.what());
@@ -570,7 +570,7 @@ galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcReques
 
 JsonString McpHttpServer::handlePromptsList(const JsonRpcRequestView& request, bool& connectionInitialized) {
     if (!request.id.has_value()) {
-        return EmptyObjectString();
+        return emptyObjectString();
     }
 
     if (!connectionInitialized) {
@@ -579,12 +579,12 @@ JsonString McpHttpServer::handlePromptsList(const JsonRpcRequestView& request, b
                                   "Not initialized", "");
     }
 
-    return MakeResultResponse(request.id.value(), getPromptsListResult());
+    return makeResultResponse(request.id.value(), getPromptsListResult());
 }
 
 galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized) {
     if (!request.id.has_value()) {
-        responseJson = EmptyObjectString();
+        responseJson = emptyObjectString();
         co_return;
     }
 
@@ -604,7 +604,7 @@ galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestVi
         }
 
         JsonObject paramsObj;
-        if (!JsonHelper::GetObject(request.params, paramsObj)) {
+        if (!JsonHelper::getObject(request.params, paramsObj)) {
             MCP_LOG_WARN("[http_server]", "prompts/get params not object id={}", request.id.value());
             responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_PARAMS,
                                       "Invalid parameters", "Params must be object");
@@ -612,16 +612,16 @@ galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestVi
         }
 
         std::string name;
-        if (!JsonHelper::GetString(paramsObj, "name", name)) {
+        if (!JsonHelper::getString(paramsObj, "name", name)) {
             MCP_LOG_WARN("[http_server]", "prompts/get missing name id={}", request.id.value());
             responseJson = createErrorResponse(request.id.value(), ErrorCodes::INVALID_PARAMS,
                                       "Invalid parameters", "Missing prompt name");
             co_return;
         }
 
-        JsonElement arguments = JsonHelper::EmptyObject();
+        JsonElement arguments = JsonHelper::emptyObject();
         JsonElement argsElement;
-        if (JsonHelper::GetElement(paramsObj, "arguments", argsElement)) {
+        if (JsonHelper::getElement(paramsObj, "arguments", argsElement)) {
             arguments = argsElement;
         }
 
@@ -651,7 +651,7 @@ galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestVi
             co_return;
         }
 
-        responseJson = MakeResultResponse(request.id.value(), result.value());
+        responseJson = makeResultResponse(request.id.value(), result.value());
 
     } catch (const std::exception& e) {
         MCP_LOG_ERROR("[http_server]", "prompts/get threw id={} error={}", request.id.value(), e.what());
@@ -663,10 +663,10 @@ galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestVi
 
 JsonString McpHttpServer::handlePing(const JsonRpcRequestView& request) {
     if (!request.id.has_value()) {
-        return EmptyObjectString();
+        return emptyObjectString();
     }
 
-    return MakeResultResponse(request.id.value(), EmptyObjectString());
+    return makeResultResponse(request.id.value(), emptyObjectString());
 }
 
 JsonString McpHttpServer::createErrorResponse(int64_t id, int code,

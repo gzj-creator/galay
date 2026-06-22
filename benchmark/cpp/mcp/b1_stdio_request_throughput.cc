@@ -100,13 +100,13 @@ void benchmarkToolCall(McpClient& client, size_t iterations) {
 
     for (size_t i = 0; i < iterations; ++i) {
         JsonWriter argsWriter;
-        argsWriter.StartObject();
-        argsWriter.Key("a");
-        argsWriter.Number(static_cast<int64_t>(i));
-        argsWriter.Key("b");
-        argsWriter.Number(static_cast<int64_t>(i + 1));
-        argsWriter.EndObject();
-        JsonString args = argsWriter.TakeString();
+        argsWriter.startObject();
+        argsWriter.key("a");
+        argsWriter.number(static_cast<int64_t>(i));
+        argsWriter.key("b");
+        argsWriter.number(static_cast<int64_t>(i + 1));
+        argsWriter.endObject();
+        JsonString args = argsWriter.takeString();
 
         auto start = high_resolution_clock::now();
         auto result = client.callTool("add", args);

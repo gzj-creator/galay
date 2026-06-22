@@ -2,18 +2,18 @@
 
 namespace galay::mcp::detail {
 
-const JsonString& EmptyObjectString() {
+const JsonString& emptyObjectString() {
     static const JsonString kEmptyObject = "{}";
     return kEmptyObject;
 }
 
 std::expected<InitializeResult, McpError> parseInitializeResult(std::string_view body) {
-    auto docExp = JsonDocument::Parse(body);
+    auto docExp = JsonDocument::parse(body);
     if (!docExp) {
         return std::unexpected(McpError::parseError(docExp.error().details()));
     }
 
-    auto initExp = InitializeResult::fromJson(docExp.value().Root());
+    auto initExp = InitializeResult::fromJson(docExp.value().root());
     if (!initExp) {
         return std::unexpected(McpError::initializationFailed(initExp.error().message()));
     }
@@ -22,12 +22,12 @@ std::expected<InitializeResult, McpError> parseInitializeResult(std::string_view
 }
 
 std::expected<JsonString, McpError> parseToolCallResult(std::string_view body) {
-    auto docExp = JsonDocument::Parse(body);
+    auto docExp = JsonDocument::parse(body);
     if (!docExp) {
         return std::unexpected(McpError::parseError(docExp.error().details()));
     }
 
-    auto callExp = ToolCallResult::fromJson(docExp.value().Root());
+    auto callExp = ToolCallResult::fromJson(docExp.value().root());
     if (!callExp) {
         return std::unexpected(McpError::parseError(callExp.error().message()));
     }
@@ -37,28 +37,28 @@ std::expected<JsonString, McpError> parseToolCallResult(std::string_view body) {
         return std::unexpected(McpError::toolExecutionFailed("Tool returned error"));
     }
     if (callResult.content.empty()) {
-        return EmptyObjectString();
+        return emptyObjectString();
     }
     if (callResult.content[0].type == ContentType::Text) {
         return callResult.content[0].text;
     }
-    return EmptyObjectString();
+    return emptyObjectString();
 }
 
 std::expected<std::string, McpError> parseFirstTextContent(std::string_view body,
                                                            const char* fieldName) {
-    auto docExp = JsonDocument::Parse(body);
+    auto docExp = JsonDocument::parse(body);
     if (!docExp) {
         return std::unexpected(McpError::parseError(docExp.error().details()));
     }
 
     JsonObject obj;
-    if (!JsonHelper::GetObject(docExp.value().Root(), obj)) {
+    if (!JsonHelper::getObject(docExp.value().root(), obj)) {
         return std::unexpected(McpError::parseError("Expected JSON object"));
     }
 
     JsonArray arr;
-    if (!JsonHelper::GetArray(obj, fieldName, arr)) {
+    if (!JsonHelper::getArray(obj, fieldName, arr)) {
         return std::string();
     }
 

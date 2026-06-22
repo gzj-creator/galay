@@ -195,11 +195,11 @@ galay::kernel::Task<void> workerTask(McpClient& client,
             }
             case Operation::ToolCall: {
                 JsonWriter argsWriter;
-                argsWriter.StartObject();
-                argsWriter.Key("message");
-                argsWriter.String("Benchmark test message " + std::to_string(i));
-                argsWriter.EndObject();
-                JsonString args = argsWriter.TakeString();
+                argsWriter.startObject();
+                argsWriter.key("message");
+                argsWriter.string("Benchmark test message " + std::to_string(i));
+                argsWriter.endObject();
+                JsonString args = argsWriter.takeString();
                 std::expected<JsonString, McpError> callResult;
                 co_await client.callTool("echo", args, callResult);
                 ok = callResult.has_value();

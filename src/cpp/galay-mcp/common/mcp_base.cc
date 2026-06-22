@@ -5,78 +5,78 @@ namespace mcp {
 
 namespace {
 
-std::expected<JsonObject, McpError> RequireObject(const JsonElement& element, const char* context) {
+std::expected<JsonObject, McpError> requireObject(const JsonElement& element, const char* context) {
     JsonObject obj;
-    if (!JsonHelper::GetObject(element, obj)) {
+    if (!JsonHelper::getObject(element, obj)) {
         return std::unexpected(McpError::invalidMessage(std::string("Expected object for ") + context));
     }
     return obj;
 }
 
-std::expected<std::string, McpError> RequireString(const JsonObject& obj, const char* key) {
+std::expected<std::string, McpError> requireString(const JsonObject& obj, const char* key) {
     std::string value;
-    if (!JsonHelper::GetString(obj, key, value)) {
+    if (!JsonHelper::getString(obj, key, value)) {
         return std::unexpected(McpError::invalidMessage(std::string("Missing or invalid ") + key));
     }
     return value;
 }
 
-std::expected<int64_t, McpError> RequireInt64(const JsonObject& obj, const char* key) {
+std::expected<int64_t, McpError> requireInt64(const JsonObject& obj, const char* key) {
     int64_t value = 0;
-    if (!JsonHelper::GetInt64(obj, key, value)) {
+    if (!JsonHelper::getInt64(obj, key, value)) {
         return std::unexpected(McpError::invalidMessage(std::string("Missing or invalid ") + key));
     }
     return value;
 }
 
-void WriteRawOrEmptyObject(JsonWriter& writer, const JsonString& raw) {
+void writeRawOrEmptyObject(JsonWriter& writer, const JsonString& raw) {
     if (raw.empty()) {
-        writer.StartObject();
-        writer.EndObject();
+        writer.startObject();
+        writer.endObject();
         return;
     }
-    writer.Raw(raw);
+    writer.raw(raw);
 }
 
 } // namespace
 
 JsonString Content::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
+    writer.startObject();
     switch (type) {
         case ContentType::Text:
-            writer.Key("type");
-            writer.String("text");
-            writer.Key("text");
-            writer.String(text);
+            writer.key("type");
+            writer.string("text");
+            writer.key("text");
+            writer.string(text);
             break;
         case ContentType::Image:
-            writer.Key("type");
-            writer.String("image");
-            writer.Key("data");
-            writer.String(data);
-            writer.Key("mimeType");
-            writer.String(mimeType);
+            writer.key("type");
+            writer.string("image");
+            writer.key("data");
+            writer.string(data);
+            writer.key("mimeType");
+            writer.string(mimeType);
             break;
         case ContentType::Resource:
-            writer.Key("type");
-            writer.String("resource");
-            writer.Key("uri");
-            writer.String(uri);
+            writer.key("type");
+            writer.string("resource");
+            writer.key("uri");
+            writer.string(uri);
             break;
     }
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<Content, McpError> Content::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "content");
+    auto objExp = requireObject(element, "content");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
-    auto typeStrExp = RequireString(obj, "type");
+    auto typeStrExp = requireString(obj, "type");
     if (!typeStrExp) {
         return std::unexpected(typeStrExp.error());
     }
@@ -85,18 +85,18 @@ std::expected<Content, McpError> Content::fromJson(const JsonElement& element) {
     const std::string& typeStr = typeStrExp.value();
     if (typeStr == "text") {
         c.type = ContentType::Text;
-        auto textExp = RequireString(obj, "text");
+        auto textExp = requireString(obj, "text");
         if (!textExp) {
             return std::unexpected(textExp.error());
         }
         c.text = textExp.value();
     } else if (typeStr == "image") {
         c.type = ContentType::Image;
-        auto dataExp = RequireString(obj, "data");
+        auto dataExp = requireString(obj, "data");
         if (!dataExp) {
             return std::unexpected(dataExp.error());
         }
-        auto mimeExp = RequireString(obj, "mimeType");
+        auto mimeExp = requireString(obj, "mimeType");
         if (!mimeExp) {
             return std::unexpected(mimeExp.error());
         }
@@ -104,7 +104,7 @@ std::expected<Content, McpError> Content::fromJson(const JsonElement& element) {
         c.mimeType = mimeExp.value();
     } else if (typeStr == "resource") {
         c.type = ContentType::Resource;
-        auto uriExp = RequireString(obj, "uri");
+        auto uriExp = requireString(obj, "uri");
         if (!uriExp) {
             return std::unexpected(uriExp.error());
         }
@@ -118,30 +118,30 @@ std::expected<Content, McpError> Content::fromJson(const JsonElement& element) {
 
 JsonString Tool::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("name");
-    writer.String(name);
-    writer.Key("description");
-    writer.String(description);
-    writer.Key("inputSchema");
-    WriteRawOrEmptyObject(writer, inputSchema);
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("name");
+    writer.string(name);
+    writer.key("description");
+    writer.string(description);
+    writer.key("inputSchema");
+    writeRawOrEmptyObject(writer, inputSchema);
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<Tool, McpError> Tool::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "tool");
+    auto objExp = requireObject(element, "tool");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     Tool t;
-    auto nameExp = RequireString(obj, "name");
+    auto nameExp = requireString(obj, "name");
     if (!nameExp) {
         return std::unexpected(nameExp.error());
     }
-    auto descExp = RequireString(obj, "description");
+    auto descExp = requireString(obj, "description");
     if (!descExp) {
         return std::unexpected(descExp.error());
     }
@@ -149,9 +149,9 @@ std::expected<Tool, McpError> Tool::fromJson(const JsonElement& element) {
     t.description = descExp.value();
 
     JsonElement schemaElement;
-    if (JsonHelper::GetElement(obj, "inputSchema", schemaElement)) {
+    if (JsonHelper::getElement(obj, "inputSchema", schemaElement)) {
         std::string raw;
-        if (JsonHelper::GetRawJson(schemaElement, raw)) {
+        if (JsonHelper::getRawJson(schemaElement, raw)) {
             t.inputSchema = std::move(raw);
         }
     }
@@ -161,40 +161,40 @@ std::expected<Tool, McpError> Tool::fromJson(const JsonElement& element) {
 
 JsonString Resource::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("uri");
-    writer.String(uri);
-    writer.Key("name");
-    writer.String(name);
-    writer.Key("description");
-    writer.String(description);
-    writer.Key("mimeType");
-    writer.String(mimeType);
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("uri");
+    writer.string(uri);
+    writer.key("name");
+    writer.string(name);
+    writer.key("description");
+    writer.string(description);
+    writer.key("mimeType");
+    writer.string(mimeType);
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<Resource, McpError> Resource::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "resource");
+    auto objExp = requireObject(element, "resource");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     Resource r;
-    auto uriExp = RequireString(obj, "uri");
+    auto uriExp = requireString(obj, "uri");
     if (!uriExp) {
         return std::unexpected(uriExp.error());
     }
-    auto nameExp = RequireString(obj, "name");
+    auto nameExp = requireString(obj, "name");
     if (!nameExp) {
         return std::unexpected(nameExp.error());
     }
-    auto descExp = RequireString(obj, "description");
+    auto descExp = requireString(obj, "description");
     if (!descExp) {
         return std::unexpected(descExp.error());
     }
-    auto mimeExp = RequireString(obj, "mimeType");
+    auto mimeExp = requireString(obj, "mimeType");
     if (!mimeExp) {
         return std::unexpected(mimeExp.error());
     }
@@ -208,30 +208,30 @@ std::expected<Resource, McpError> Resource::fromJson(const JsonElement& element)
 
 JsonString PromptArgument::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("name");
-    writer.String(name);
-    writer.Key("description");
-    writer.String(description);
-    writer.Key("required");
-    writer.Bool(required);
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("name");
+    writer.string(name);
+    writer.key("description");
+    writer.string(description);
+    writer.key("required");
+    writer.boolean(required);
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<PromptArgument, McpError> PromptArgument::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "prompt argument");
+    auto objExp = requireObject(element, "prompt argument");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     PromptArgument arg;
-    auto nameExp = RequireString(obj, "name");
+    auto nameExp = requireString(obj, "name");
     if (!nameExp) {
         return std::unexpected(nameExp.error());
     }
-    auto descExp = RequireString(obj, "description");
+    auto descExp = requireString(obj, "description");
     if (!descExp) {
         return std::unexpected(descExp.error());
     }
@@ -239,7 +239,7 @@ std::expected<PromptArgument, McpError> PromptArgument::fromJson(const JsonEleme
     arg.description = descExp.value();
 
     bool required = false;
-    if (JsonHelper::GetBool(obj, "required", required)) {
+    if (JsonHelper::getBool(obj, "required", required)) {
         arg.required = required;
     }
 
@@ -248,34 +248,34 @@ std::expected<PromptArgument, McpError> PromptArgument::fromJson(const JsonEleme
 
 JsonString Prompt::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("name");
-    writer.String(name);
-    writer.Key("description");
-    writer.String(description);
-    writer.Key("arguments");
-    writer.StartArray();
+    writer.startObject();
+    writer.key("name");
+    writer.string(name);
+    writer.key("description");
+    writer.string(description);
+    writer.key("arguments");
+    writer.startArray();
     for (const auto& arg : arguments) {
-        writer.Raw(arg.toJson());
+        writer.raw(arg.toJson());
     }
-    writer.EndArray();
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endArray();
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<Prompt, McpError> Prompt::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "prompt");
+    auto objExp = requireObject(element, "prompt");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     Prompt p;
-    auto nameExp = RequireString(obj, "name");
+    auto nameExp = requireString(obj, "name");
     if (!nameExp) {
         return std::unexpected(nameExp.error());
     }
-    auto descExp = RequireString(obj, "description");
+    auto descExp = requireString(obj, "description");
     if (!descExp) {
         return std::unexpected(descExp.error());
     }
@@ -283,7 +283,7 @@ std::expected<Prompt, McpError> Prompt::fromJson(const JsonElement& element) {
     p.description = descExp.value();
 
     JsonArray argsArray;
-    if (JsonHelper::GetArray(obj, "arguments", argsArray)) {
+    if (JsonHelper::getArray(obj, "arguments", argsArray)) {
         for (auto item : argsArray) {
             auto argExp = PromptArgument::fromJson(item);
             if (!argExp) {
@@ -298,28 +298,28 @@ std::expected<Prompt, McpError> Prompt::fromJson(const JsonElement& element) {
 
 JsonString ClientInfo::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("name");
-    writer.String(name);
-    writer.Key("version");
-    writer.String(version);
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("name");
+    writer.string(name);
+    writer.key("version");
+    writer.string(version);
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<ClientInfo, McpError> ClientInfo::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "clientInfo");
+    auto objExp = requireObject(element, "clientInfo");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     ClientInfo c;
-    auto nameExp = RequireString(obj, "name");
+    auto nameExp = requireString(obj, "name");
     if (!nameExp) {
         return std::unexpected(nameExp.error());
     }
-    auto versionExp = RequireString(obj, "version");
+    auto versionExp = requireString(obj, "version");
     if (!versionExp) {
         return std::unexpected(versionExp.error());
     }
@@ -330,30 +330,30 @@ std::expected<ClientInfo, McpError> ClientInfo::fromJson(const JsonElement& elem
 
 JsonString ServerInfo::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("name");
-    writer.String(name);
-    writer.Key("version");
-    writer.String(version);
-    writer.Key("capabilities");
-    WriteRawOrEmptyObject(writer, capabilities);
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("name");
+    writer.string(name);
+    writer.key("version");
+    writer.string(version);
+    writer.key("capabilities");
+    writeRawOrEmptyObject(writer, capabilities);
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<ServerInfo, McpError> ServerInfo::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "serverInfo");
+    auto objExp = requireObject(element, "serverInfo");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     ServerInfo s;
-    auto nameExp = RequireString(obj, "name");
+    auto nameExp = requireString(obj, "name");
     if (!nameExp) {
         return std::unexpected(nameExp.error());
     }
-    auto versionExp = RequireString(obj, "version");
+    auto versionExp = requireString(obj, "version");
     if (!versionExp) {
         return std::unexpected(versionExp.error());
     }
@@ -361,9 +361,9 @@ std::expected<ServerInfo, McpError> ServerInfo::fromJson(const JsonElement& elem
     s.version = versionExp.value();
 
     JsonElement capsElement;
-    if (JsonHelper::GetElement(obj, "capabilities", capsElement)) {
+    if (JsonHelper::getElement(obj, "capabilities", capsElement)) {
         std::string raw;
-        if (JsonHelper::GetRawJson(capsElement, raw)) {
+        if (JsonHelper::getRawJson(capsElement, raw)) {
             s.capabilities = std::move(raw);
         }
     }
@@ -373,33 +373,33 @@ std::expected<ServerInfo, McpError> ServerInfo::fromJson(const JsonElement& elem
 
 JsonString ServerCapabilities::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
+    writer.startObject();
     if (tools) {
-        writer.Key("tools");
-        writer.StartObject();
-        writer.EndObject();
+        writer.key("tools");
+        writer.startObject();
+        writer.endObject();
     }
     if (resources) {
-        writer.Key("resources");
-        writer.StartObject();
-        writer.EndObject();
+        writer.key("resources");
+        writer.startObject();
+        writer.endObject();
     }
     if (prompts) {
-        writer.Key("prompts");
-        writer.StartObject();
-        writer.EndObject();
+        writer.key("prompts");
+        writer.startObject();
+        writer.endObject();
     }
     if (logging) {
-        writer.Key("logging");
-        writer.StartObject();
-        writer.EndObject();
+        writer.key("logging");
+        writer.startObject();
+        writer.endObject();
     }
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "capabilities");
+    auto objExp = requireObject(element, "capabilities");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
@@ -420,33 +420,33 @@ std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(const J
 
 JsonString InitializeParams::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("protocolVersion");
-    writer.String(protocolVersion);
-    writer.Key("clientInfo");
-    writer.Raw(clientInfo.toJson());
-    writer.Key("capabilities");
-    WriteRawOrEmptyObject(writer, capabilities);
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("protocolVersion");
+    writer.string(protocolVersion);
+    writer.key("clientInfo");
+    writer.raw(clientInfo.toJson());
+    writer.key("capabilities");
+    writeRawOrEmptyObject(writer, capabilities);
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<InitializeParams, McpError> InitializeParams::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "initialize params");
+    auto objExp = requireObject(element, "initialize params");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     InitializeParams p;
-    auto protocolExp = RequireString(obj, "protocolVersion");
+    auto protocolExp = requireString(obj, "protocolVersion");
     if (!protocolExp) {
         return std::unexpected(protocolExp.error());
     }
     p.protocolVersion = protocolExp.value();
 
     JsonElement clientElement;
-    if (!JsonHelper::GetElement(obj, "clientInfo", clientElement)) {
+    if (!JsonHelper::getElement(obj, "clientInfo", clientElement)) {
         return std::unexpected(McpError::invalidMessage("Missing clientInfo"));
     }
     auto clientExp = ClientInfo::fromJson(clientElement);
@@ -456,9 +456,9 @@ std::expected<InitializeParams, McpError> InitializeParams::fromJson(const JsonE
     p.clientInfo = std::move(clientExp.value());
 
     JsonElement capsElement;
-    if (JsonHelper::GetElement(obj, "capabilities", capsElement)) {
+    if (JsonHelper::getElement(obj, "capabilities", capsElement)) {
         std::string raw;
-        if (JsonHelper::GetRawJson(capsElement, raw)) {
+        if (JsonHelper::getRawJson(capsElement, raw)) {
             p.capabilities = std::move(raw);
         }
     }
@@ -468,33 +468,33 @@ std::expected<InitializeParams, McpError> InitializeParams::fromJson(const JsonE
 
 JsonString InitializeResult::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("protocolVersion");
-    writer.String(protocolVersion);
-    writer.Key("serverInfo");
-    writer.Raw(serverInfo.toJson());
-    writer.Key("capabilities");
-    writer.Raw(capabilities.toJson());
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("protocolVersion");
+    writer.string(protocolVersion);
+    writer.key("serverInfo");
+    writer.raw(serverInfo.toJson());
+    writer.key("capabilities");
+    writer.raw(capabilities.toJson());
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<InitializeResult, McpError> InitializeResult::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "initialize result");
+    auto objExp = requireObject(element, "initialize result");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     InitializeResult r;
-    auto protocolExp = RequireString(obj, "protocolVersion");
+    auto protocolExp = requireString(obj, "protocolVersion");
     if (!protocolExp) {
         return std::unexpected(protocolExp.error());
     }
     r.protocolVersion = protocolExp.value();
 
     JsonElement serverElement;
-    if (!JsonHelper::GetElement(obj, "serverInfo", serverElement)) {
+    if (!JsonHelper::getElement(obj, "serverInfo", serverElement)) {
         return std::unexpected(McpError::invalidMessage("Missing serverInfo"));
     }
     auto serverExp = ServerInfo::fromJson(serverElement);
@@ -504,7 +504,7 @@ std::expected<InitializeResult, McpError> InitializeResult::fromJson(const JsonE
     r.serverInfo = std::move(serverExp.value());
 
     JsonElement capsElement;
-    if (!JsonHelper::GetElement(obj, "capabilities", capsElement)) {
+    if (!JsonHelper::getElement(obj, "capabilities", capsElement)) {
         return std::unexpected(McpError::invalidMessage("Missing capabilities"));
     }
     auto capsExp = ServerCapabilities::fromJson(capsElement);
@@ -518,33 +518,33 @@ std::expected<InitializeResult, McpError> InitializeResult::fromJson(const JsonE
 
 JsonString ToolCallParams::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("name");
-    writer.String(name);
-    writer.Key("arguments");
-    WriteRawOrEmptyObject(writer, arguments);
-    writer.EndObject();
-    return writer.TakeString();
+    writer.startObject();
+    writer.key("name");
+    writer.string(name);
+    writer.key("arguments");
+    writeRawOrEmptyObject(writer, arguments);
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<ToolCallParams, McpError> ToolCallParams::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "tool call params");
+    auto objExp = requireObject(element, "tool call params");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     ToolCallParams p;
-    auto nameExp = RequireString(obj, "name");
+    auto nameExp = requireString(obj, "name");
     if (!nameExp) {
         return std::unexpected(nameExp.error());
     }
     p.name = nameExp.value();
 
     JsonElement argsElement;
-    if (JsonHelper::GetElement(obj, "arguments", argsElement)) {
+    if (JsonHelper::getElement(obj, "arguments", argsElement)) {
         std::string raw;
-        if (JsonHelper::GetRawJson(argsElement, raw)) {
+        if (JsonHelper::getRawJson(argsElement, raw)) {
             p.arguments = std::move(raw);
         }
     }
@@ -554,23 +554,23 @@ std::expected<ToolCallParams, McpError> ToolCallParams::fromJson(const JsonEleme
 
 JsonString ToolCallResult::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("content");
-    writer.StartArray();
+    writer.startObject();
+    writer.key("content");
+    writer.startArray();
     for (const auto& item : content) {
-        writer.Raw(item.toJson());
+        writer.raw(item.toJson());
     }
-    writer.EndArray();
+    writer.endArray();
     if (isError) {
-        writer.Key("isError");
-        writer.Bool(true);
+        writer.key("isError");
+        writer.boolean(true);
     }
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<ToolCallResult, McpError> ToolCallResult::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "tool call result");
+    auto objExp = requireObject(element, "tool call result");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
@@ -579,7 +579,7 @@ std::expected<ToolCallResult, McpError> ToolCallResult::fromJson(const JsonEleme
     ToolCallResult r;
 
     JsonArray contentArray;
-    if (JsonHelper::GetArray(obj, "content", contentArray)) {
+    if (JsonHelper::getArray(obj, "content", contentArray)) {
         for (auto item : contentArray) {
             auto contentExp = Content::fromJson(item);
             if (!contentExp) {
@@ -590,7 +590,7 @@ std::expected<ToolCallResult, McpError> ToolCallResult::fromJson(const JsonEleme
     }
 
     bool isError = false;
-    if (JsonHelper::GetBool(obj, "isError", isError)) {
+    if (JsonHelper::getBool(obj, "isError", isError)) {
         r.isError = isError;
     }
 
@@ -599,68 +599,68 @@ std::expected<ToolCallResult, McpError> ToolCallResult::fromJson(const JsonEleme
 
 JsonString JsonRpcRequest::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("jsonrpc");
-    writer.String(jsonrpc);
+    writer.startObject();
+    writer.key("jsonrpc");
+    writer.string(jsonrpc);
     if (id.has_value()) {
-        writer.Key("id");
-        writer.Number(id.value());
+        writer.key("id");
+        writer.number(id.value());
     }
-    writer.Key("method");
-    writer.String(method);
+    writer.key("method");
+    writer.string(method);
     if (params.has_value()) {
-        writer.Key("params");
-        WriteRawOrEmptyObject(writer, params.value());
+        writer.key("params");
+        writeRawOrEmptyObject(writer, params.value());
     }
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endObject();
+    return writer.takeString();
 }
 
 JsonString JsonRpcResponse::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("jsonrpc");
-    writer.String(jsonrpc);
-    writer.Key("id");
-    writer.Number(id);
+    writer.startObject();
+    writer.key("jsonrpc");
+    writer.string(jsonrpc);
+    writer.key("id");
+    writer.number(id);
     if (result.has_value()) {
-        writer.Key("result");
-        WriteRawOrEmptyObject(writer, result.value());
+        writer.key("result");
+        writeRawOrEmptyObject(writer, result.value());
     }
     if (error.has_value()) {
-        writer.Key("error");
-        WriteRawOrEmptyObject(writer, error.value());
+        writer.key("error");
+        writeRawOrEmptyObject(writer, error.value());
     }
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<JsonRpcResponse, McpError> JsonRpcResponse::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "jsonrpc response");
+    auto objExp = requireObject(element, "jsonrpc response");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     JsonRpcResponse r;
-    auto idExp = RequireInt64(obj, "id");
+    auto idExp = requireInt64(obj, "id");
     if (!idExp) {
         return std::unexpected(idExp.error());
     }
     r.id = idExp.value();
 
     JsonElement resultElement;
-    if (JsonHelper::GetElement(obj, "result", resultElement)) {
+    if (JsonHelper::getElement(obj, "result", resultElement)) {
         std::string raw;
-        if (JsonHelper::GetRawJson(resultElement, raw)) {
+        if (JsonHelper::getRawJson(resultElement, raw)) {
             r.result = std::move(raw);
         }
     }
 
     JsonElement errorElement;
-    if (JsonHelper::GetElement(obj, "error", errorElement)) {
+    if (JsonHelper::getElement(obj, "error", errorElement)) {
         std::string raw;
-        if (JsonHelper::GetRawJson(errorElement, raw)) {
+        if (JsonHelper::getRawJson(errorElement, raw)) {
             r.error = std::move(raw);
         }
     }
@@ -670,57 +670,57 @@ std::expected<JsonRpcResponse, McpError> JsonRpcResponse::fromJson(const JsonEle
 
 JsonString JsonRpcNotification::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("jsonrpc");
-    writer.String(jsonrpc);
-    writer.Key("method");
-    writer.String(method);
+    writer.startObject();
+    writer.key("jsonrpc");
+    writer.string(jsonrpc);
+    writer.key("method");
+    writer.string(method);
     if (params.has_value()) {
-        writer.Key("params");
-        WriteRawOrEmptyObject(writer, params.value());
+        writer.key("params");
+        writeRawOrEmptyObject(writer, params.value());
     }
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endObject();
+    return writer.takeString();
 }
 
 JsonString JsonRpcError::toJson() const {
     JsonWriter writer;
-    writer.StartObject();
-    writer.Key("code");
-    writer.Number(static_cast<int64_t>(code));
-    writer.Key("message");
-    writer.String(message);
+    writer.startObject();
+    writer.key("code");
+    writer.number(static_cast<int64_t>(code));
+    writer.key("message");
+    writer.string(message);
     if (data.has_value()) {
-        writer.Key("data");
-        WriteRawOrEmptyObject(writer, data.value());
+        writer.key("data");
+        writeRawOrEmptyObject(writer, data.value());
     }
-    writer.EndObject();
-    return writer.TakeString();
+    writer.endObject();
+    return writer.takeString();
 }
 
 std::expected<JsonRpcError, McpError> JsonRpcError::fromJson(const JsonElement& element) {
-    auto objExp = RequireObject(element, "jsonrpc error");
+    auto objExp = requireObject(element, "jsonrpc error");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
     JsonObject obj = objExp.value();
 
     JsonRpcError e;
-    auto codeExp = RequireInt64(obj, "code");
+    auto codeExp = requireInt64(obj, "code");
     if (!codeExp) {
         return std::unexpected(codeExp.error());
     }
     e.code = static_cast<int>(codeExp.value());
-    auto msgExp = RequireString(obj, "message");
+    auto msgExp = requireString(obj, "message");
     if (!msgExp) {
         return std::unexpected(msgExp.error());
     }
     e.message = msgExp.value();
 
     JsonElement dataElement;
-    if (JsonHelper::GetElement(obj, "data", dataElement)) {
+    if (JsonHelper::getElement(obj, "data", dataElement)) {
         std::string raw;
-        if (JsonHelper::GetRawJson(dataElement, raw)) {
+        if (JsonHelper::getRawJson(dataElement, raw)) {
             e.data = std::move(raw);
         }
     }

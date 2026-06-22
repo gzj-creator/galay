@@ -40,11 +40,11 @@ public:
      * @param json 原始JSON字符串视图
      * @return 成功返回JsonDocument，失败返回McpError
      */
-    static std::expected<JsonDocument, McpError> Parse(std::string_view json);
+    static std::expected<JsonDocument, McpError> parse(std::string_view json);
 
-    const JsonElement& Root() const { return m_root; } ///< 获取根元素（只读）
-    JsonElement& Root() { return m_root; } ///< 获取根元素（可修改）
-    std::string_view Raw() const { return std::string_view(m_buffer.data(), m_buffer.size()); } ///< 获取原始JSON文本
+    const JsonElement& root() const { return m_root; } ///< 获取根元素（只读）
+    JsonElement& root() { return m_root; } ///< 获取根元素（可修改）
+    std::string_view raw() const { return std::string_view(m_buffer.data(), m_buffer.size()); } ///< 获取原始JSON文本
 
 private:
     std::unique_ptr<simdjson::dom::parser> m_parser; ///< simdjson解析器
@@ -58,24 +58,24 @@ private:
  */
 class JsonWriter {
 public:
-    void StartObject(); ///< 开始写入JSON对象
-    void EndObject(); ///< 结束JSON对象
-    void StartArray(); ///< 开始写入JSON数组
-    void EndArray(); ///< 结束JSON数组
-    void Key(const std::string& key); ///< 写入对象键名
-    void String(const std::string& value); ///< 写入字符串值
-    void Number(int64_t value); ///< 写入有符号整数值
-    void Number(uint64_t value); ///< 写入无符号整数值
-    void Number(double value); ///< 写入浮点数值
-    void Bool(bool value); ///< 写入布尔值
-    void Null(); ///< 写入null值
-    void Raw(const std::string& json); ///< 写入原始JSON片段
+    void startObject(); ///< 开始写入JSON对象
+    void endObject(); ///< 结束JSON对象
+    void startArray(); ///< 开始写入JSON数组
+    void endArray(); ///< 结束JSON数组
+    void key(const std::string& key); ///< 写入对象键名
+    void string(const std::string& value); ///< 写入字符串值
+    void number(int64_t value); ///< 写入有符号整数值
+    void number(uint64_t value); ///< 写入无符号整数值
+    void number(double value); ///< 写入浮点数值
+    void boolean(bool value); ///< 写入布尔值
+    void nullValue(); ///< 写入null值
+    void raw(const std::string& json); ///< 写入原始JSON片段
 
     /**
      * @brief 取出构建的JSON字符串并清空写入器状态
      * @return 完整的JSON字符串
      */
-    std::string TakeString();
+    std::string takeString();
 
 private:
     /**
@@ -95,15 +95,15 @@ private:
         bool expectValue = false; ///< 是否期望写入值（对象Key之后）
     };
 
-    void WriteValuePrefix(); ///< 写入值前缀
-    void WriteCommaIfNeeded(); ///< 按需写入逗号分隔符
+    void writeValuePrefix(); ///< 写入值前缀
+    void writeCommaIfNeeded(); ///< 按需写入逗号分隔符
 
     /**
      * @brief 将字符串转义后追加到输出
      * @param out 目标输出字符串
      * @param value 原始字符串值
      */
-    static void AppendEscaped(std::string& out, const std::string& value);
+    static void appendEscaped(std::string& out, const std::string& value);
 
     std::string m_out; ///< 输出缓冲区
     std::vector<Context> m_stack; ///< 嵌套上下文栈
@@ -115,19 +115,19 @@ private:
  */
 class JsonHelper {
 public:
-    static bool GetObject(const JsonElement& element, JsonObject& out); ///< 从元素获取JSON对象
-    static bool GetArray(const JsonElement& element, JsonArray& out); ///< 从元素获取JSON数组
-    static bool GetStringValue(const JsonElement& element, std::string& out); ///< 从元素获取字符串值
-    static bool GetRawJson(const JsonElement& element, std::string& out); ///< 从元素获取原始JSON文本
+    static bool getObject(const JsonElement& element, JsonObject& out); ///< 从元素获取JSON对象
+    static bool getArray(const JsonElement& element, JsonArray& out); ///< 从元素获取JSON数组
+    static bool getStringValue(const JsonElement& element, std::string& out); ///< 从元素获取字符串值
+    static bool getRawJson(const JsonElement& element, std::string& out); ///< 从元素获取原始JSON文本
 
-    static bool GetString(const JsonObject& obj, const char* key, std::string& out); ///< 从对象按键获取字符串
-    static bool GetInt64(const JsonObject& obj, const char* key, int64_t& out); ///< 从对象按键获取整数
-    static bool GetBool(const JsonObject& obj, const char* key, bool& out); ///< 从对象按键获取布尔值
-    static bool GetElement(const JsonObject& obj, const char* key, JsonElement& out); ///< 从对象按键获取元素
-    static bool GetObject(const JsonObject& obj, const char* key, JsonObject& out); ///< 从对象按键获取嵌套对象
-    static bool GetArray(const JsonObject& obj, const char* key, JsonArray& out); ///< 从对象按键获取数组
+    static bool getString(const JsonObject& obj, const char* key, std::string& out); ///< 从对象按键获取字符串
+    static bool getInt64(const JsonObject& obj, const char* key, int64_t& out); ///< 从对象按键获取整数
+    static bool getBool(const JsonObject& obj, const char* key, bool& out); ///< 从对象按键获取布尔值
+    static bool getElement(const JsonObject& obj, const char* key, JsonElement& out); ///< 从对象按键获取元素
+    static bool getObject(const JsonObject& obj, const char* key, JsonObject& out); ///< 从对象按键获取嵌套对象
+    static bool getArray(const JsonObject& obj, const char* key, JsonArray& out); ///< 从对象按键获取数组
 
-    static const JsonElement& EmptyObject(); ///< 获取空对象的静态引用
+    static const JsonElement& emptyObject(); ///< 获取空对象的静态引用
 };
 
 } // namespace mcp

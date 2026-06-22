@@ -191,16 +191,16 @@ public:
      */
     JsonString build() const {
         JsonWriter writer;
-        writer.StartObject();
-        writer.Key("type");
-        writer.String("object");
-        writer.Key("properties");
-        writer.StartObject();
+        writer.startObject();
+        writer.key("type");
+        writer.string("object");
+        writer.key("properties");
+        writer.startObject();
         for (const auto& prop : m_properties) {
-            writer.Key(prop.name);
+            writer.key(prop.name);
             writeProperty(writer, prop);
         }
-        writer.EndObject();
+        writer.endObject();
 
         bool hasRequired = false;
         for (const auto& prop : m_properties) {
@@ -210,17 +210,17 @@ public:
             }
         }
         if (hasRequired) {
-            writer.Key("required");
-            writer.StartArray();
+            writer.key("required");
+            writer.startArray();
             for (const auto& prop : m_properties) {
                 if (prop.required) {
-                    writer.String(prop.name);
+                    writer.string(prop.name);
                 }
             }
-            writer.EndArray();
+            writer.endArray();
         }
-        writer.EndObject();
-        return writer.TakeString();
+        writer.endObject();
+        return writer.takeString();
     }
 
 private:
@@ -258,87 +258,87 @@ private:
     static void writeProperty(JsonWriter& writer, const Property& prop) {
         if (prop.kind == PropertyKind::Object && !prop.objectSchema.empty()) {
             if (prop.description.empty()) {
-                writer.Raw(prop.objectSchema);
+                writer.raw(prop.objectSchema);
                 return;
             }
 
-            auto parsed = JsonDocument::Parse(prop.objectSchema);
+            auto parsed = JsonDocument::parse(prop.objectSchema);
             if (!parsed) {
-                writer.Raw(prop.objectSchema);
+                writer.raw(prop.objectSchema);
                 return;
             }
 
             JsonObject obj;
-            if (!JsonHelper::GetObject(parsed.value().Root(), obj)) {
-                writer.Raw(prop.objectSchema);
+            if (!JsonHelper::getObject(parsed.value().root(), obj)) {
+                writer.raw(prop.objectSchema);
                 return;
             }
 
             JsonWriter merged;
-            merged.StartObject();
-            merged.Key("description");
-            merged.String(prop.description);
+            merged.startObject();
+            merged.key("description");
+            merged.string(prop.description);
             for (auto field : obj) {
                 std::string raw;
-                if (JsonHelper::GetRawJson(field.value, raw)) {
-                    merged.Key(std::string(field.key));
-                    merged.Raw(raw);
+                if (JsonHelper::getRawJson(field.value, raw)) {
+                    merged.key(std::string(field.key));
+                    merged.raw(raw);
                 }
             }
-            merged.EndObject();
-            writer.Raw(merged.TakeString());
+            merged.endObject();
+            writer.raw(merged.takeString());
             return;
         }
 
-        writer.StartObject();
-        writer.Key("type");
+        writer.startObject();
+        writer.key("type");
         switch (prop.kind) {
             case PropertyKind::String:
-                writer.String("string");
+                writer.string("string");
                 break;
             case PropertyKind::Number:
-                writer.String("number");
+                writer.string("number");
                 break;
             case PropertyKind::Integer:
-                writer.String("integer");
+                writer.string("integer");
                 break;
             case PropertyKind::Boolean:
-                writer.String("boolean");
+                writer.string("boolean");
                 break;
             case PropertyKind::Array:
-                writer.String("array");
+                writer.string("array");
                 break;
             case PropertyKind::Enum:
-                writer.String("string");
+                writer.string("string");
                 break;
             case PropertyKind::Object:
-                writer.String("object");
+                writer.string("object");
                 break;
         }
 
         if (!prop.description.empty()) {
-            writer.Key("description");
-            writer.String(prop.description);
+            writer.key("description");
+            writer.string(prop.description);
         }
 
         if (prop.kind == PropertyKind::Array) {
-            writer.Key("items");
-            writer.StartObject();
-            writer.Key("type");
-            writer.String(prop.itemType.empty() ? "string" : prop.itemType);
-            writer.EndObject();
+            writer.key("items");
+            writer.startObject();
+            writer.key("type");
+            writer.string(prop.itemType.empty() ? "string" : prop.itemType);
+            writer.endObject();
         }
 
         if (prop.kind == PropertyKind::Enum) {
-            writer.Key("enum");
-            writer.StartArray();
+            writer.key("enum");
+            writer.startArray();
             for (const auto& value : prop.enumValues) {
-                writer.String(value);
+                writer.string(value);
             }
-            writer.EndArray();
+            writer.endArray();
         }
 
-        writer.EndObject();
+        writer.endObject();
     }
 
     std::vector<Property> m_properties; ///< 属性列表

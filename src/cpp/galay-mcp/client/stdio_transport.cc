@@ -34,7 +34,7 @@ std::expected<void, McpError> StdioClientTransport::initialize(const std::string
     params.protocolVersion = MCP_VERSION;
     params.clientInfo.name = clientName;
     params.clientInfo.version = clientVersion;
-    params.capabilities = EmptyObjectString();
+    params.capabilities = emptyObjectString();
 
     auto result = sendRequest(Methods::INITIALIZE, params.toJson());
     if (!result) {
@@ -51,7 +51,7 @@ std::expected<void, McpError> StdioClientTransport::initialize(const std::string
     m_serverCapabilities = std::move(initResult.capabilities);
     m_initialized = true;
 
-    auto notifyResult = sendNotification(Methods::INITIALIZED, EmptyObjectString());
+    auto notifyResult = sendNotification(Methods::INITIALIZED, emptyObjectString());
     if (!notifyResult) {
         return std::unexpected(notifyResult.error());
     }
@@ -70,7 +70,7 @@ std::expected<JsonString, McpError> StdioClientTransport::callTool(const std::st
 
     ToolCallParams params;
     params.name = toolName;
-    params.arguments = arguments.empty() ? EmptyObjectString() : arguments;
+    params.arguments = arguments.empty() ? emptyObjectString() : arguments;
 
     auto result = sendRequest(Methods::TOOLS_CALL, params.toJson());
     if (!result) {
@@ -88,7 +88,7 @@ std::expected<std::vector<Tool>, McpError> StdioClientTransport::listTools() {
         return std::unexpected(streamCheck.error());
     }
 
-    auto result = sendRequest(Methods::TOOLS_LIST, EmptyObjectString());
+    auto result = sendRequest(Methods::TOOLS_LIST, emptyObjectString());
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -107,7 +107,7 @@ std::expected<std::vector<Resource>, McpError> StdioClientTransport::listResourc
         return std::unexpected(streamCheck.error());
     }
 
-    auto result = sendRequest(Methods::RESOURCES_LIST, EmptyObjectString());
+    auto result = sendRequest(Methods::RESOURCES_LIST, emptyObjectString());
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -127,12 +127,12 @@ std::expected<std::string, McpError> StdioClientTransport::readResource(const st
     }
 
     JsonWriter paramsWriter;
-    paramsWriter.StartObject();
-    paramsWriter.Key("uri");
-    paramsWriter.String(uri);
-    paramsWriter.EndObject();
+    paramsWriter.startObject();
+    paramsWriter.key("uri");
+    paramsWriter.string(uri);
+    paramsWriter.endObject();
 
-    auto result = sendRequest(Methods::RESOURCES_READ, paramsWriter.TakeString());
+    auto result = sendRequest(Methods::RESOURCES_READ, paramsWriter.takeString());
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -148,7 +148,7 @@ std::expected<std::vector<Prompt>, McpError> StdioClientTransport::listPrompts()
         return std::unexpected(streamCheck.error());
     }
 
-    auto result = sendRequest(Methods::PROMPTS_LIST, EmptyObjectString());
+    auto result = sendRequest(Methods::PROMPTS_LIST, emptyObjectString());
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -169,16 +169,16 @@ std::expected<JsonString, McpError> StdioClientTransport::getPrompt(const std::s
     }
 
     JsonWriter paramsWriter;
-    paramsWriter.StartObject();
-    paramsWriter.Key("name");
-    paramsWriter.String(name);
+    paramsWriter.startObject();
+    paramsWriter.key("name");
+    paramsWriter.string(name);
     if (!arguments.empty()) {
-        paramsWriter.Key("arguments");
-        paramsWriter.Raw(arguments);
+        paramsWriter.key("arguments");
+        paramsWriter.raw(arguments);
     }
-    paramsWriter.EndObject();
+    paramsWriter.endObject();
 
-    auto result = sendRequest(Methods::PROMPTS_GET, paramsWriter.TakeString());
+    auto result = sendRequest(Methods::PROMPTS_GET, paramsWriter.takeString());
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -194,7 +194,7 @@ std::expected<void, McpError> StdioClientTransport::ping() {
         return std::unexpected(streamCheck.error());
     }
 
-    auto result = sendRequest(Methods::PING, EmptyObjectString());
+    auto result = sendRequest(Methods::PING, emptyObjectString());
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -254,7 +254,7 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
             return std::unexpected(readResult.error());
         }
 
-        auto docExp = JsonDocument::Parse(readResult.value());
+        auto docExp = JsonDocument::parse(readResult.value());
         if (!docExp) {
             MCP_LOG_WARN("[stdio_client]", "json parse failed method={} id={} error={}",
                          method,
@@ -264,7 +264,7 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
         }
 
         JsonObject obj;
-        if (!JsonHelper::GetObject(docExp.value().Root(), obj)) {
+        if (!JsonHelper::getObject(docExp.value().root(), obj)) {
             MCP_LOG_WARN("[stdio_client]", "invalid response object method={} id={}", method, requestId);
             return std::unexpected(McpError::invalidResponse("Invalid response object"));
         }
@@ -308,14 +308,14 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
         auto resultVal = obj["result"];
         if (!resultVal.error() && !resultVal.is_null()) {
             std::string raw;
-            if (!JsonHelper::GetRawJson(resultVal.value(), raw)) {
+            if (!JsonHelper::getRawJson(resultVal.value(), raw)) {
                 MCP_LOG_WARN("[stdio_client]", "result serialization failed method={} id={}", method, requestId);
                 return std::unexpected(McpError::parseError("Failed to parse result"));
             }
             return raw;
         }
 
-        return EmptyObjectString();
+        return emptyObjectString();
     }
 }
 

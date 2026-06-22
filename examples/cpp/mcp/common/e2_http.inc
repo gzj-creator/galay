@@ -29,7 +29,7 @@ void runHttpServer() {
         calcSchema,
         [](const JsonElement& args, std::expected<JsonString, McpError>& result) -> galay::kernel::Task<void> {
             JsonObject obj;
-            if (!JsonHelper::GetObject(args, obj)) {
+            if (!JsonHelper::getObject(args, obj)) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid arguments"
@@ -38,7 +38,7 @@ void runHttpServer() {
             }
 
             std::string op;
-            if (!JsonHelper::GetString(obj, "operation", op)) {
+            if (!JsonHelper::getString(obj, "operation", op)) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Missing required parameters"
@@ -108,13 +108,13 @@ void runHttpServer() {
             }
 
             JsonWriter resWriter;
-            resWriter.StartObject();
-            resWriter.Key("result");
-            resWriter.Number(answer);
-            resWriter.Key("operation");
-            resWriter.String(op);
-            resWriter.EndObject();
-            result = resWriter.TakeString();
+            resWriter.startObject();
+            resWriter.key("result");
+            resWriter.number(answer);
+            resWriter.key("operation");
+            resWriter.string(op);
+            resWriter.endObject();
+            result = resWriter.takeString();
             co_return;
         }
     );
@@ -143,7 +143,7 @@ void runHttpServer() {
         promptArgs,
         [](const std::string& name, const JsonElement& args, std::expected<JsonString, McpError>& result) -> galay::kernel::Task<void> {
             JsonObject obj;
-            if (!JsonHelper::GetObject(args, obj)) {
+            if (!JsonHelper::getObject(args, obj)) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid arguments"
@@ -152,7 +152,7 @@ void runHttpServer() {
             }
 
             std::string lang;
-            if (!JsonHelper::GetString(obj, "language", lang)) {
+            if (!JsonHelper::getString(obj, "language", lang)) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Missing 'language' parameter"
@@ -161,20 +161,20 @@ void runHttpServer() {
             }
 
             JsonWriter resWriter;
-            resWriter.StartObject();
-            resWriter.Key("description");
-            resWriter.String("Code review prompt for " + lang);
-            resWriter.Key("messages");
-            resWriter.StartArray();
-            resWriter.StartObject();
-            resWriter.Key("role");
-            resWriter.String("user");
-            resWriter.Key("content");
-            resWriter.String("Please review this " + lang + " code for best practices and potential issues.");
-            resWriter.EndObject();
-            resWriter.EndArray();
-            resWriter.EndObject();
-            result = resWriter.TakeString();
+            resWriter.startObject();
+            resWriter.key("description");
+            resWriter.string("Code review prompt for " + lang);
+            resWriter.key("messages");
+            resWriter.startArray();
+            resWriter.startObject();
+            resWriter.key("role");
+            resWriter.string("user");
+            resWriter.key("content");
+            resWriter.string("Please review this " + lang + " code for best practices and potential issues.");
+            resWriter.endObject();
+            resWriter.endArray();
+            resWriter.endObject();
+            result = resWriter.takeString();
             co_return;
         }
     );
@@ -229,21 +229,21 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     // 调用计算器工具
     std::cout << "\n=== Calling Calculator Tool ===" << std::endl;
     JsonWriter calcArgsWriter;
-    calcArgsWriter.StartObject();
-    calcArgsWriter.Key("operation");
-    calcArgsWriter.String("multiply");
-    calcArgsWriter.Key("a");
-    calcArgsWriter.Number(static_cast<int64_t>(12));
-    calcArgsWriter.Key("b");
-    calcArgsWriter.Number(static_cast<int64_t>(8));
-    calcArgsWriter.EndObject();
+    calcArgsWriter.startObject();
+    calcArgsWriter.key("operation");
+    calcArgsWriter.string("multiply");
+    calcArgsWriter.key("a");
+    calcArgsWriter.number(static_cast<int64_t>(12));
+    calcArgsWriter.key("b");
+    calcArgsWriter.number(static_cast<int64_t>(8));
+    calcArgsWriter.endObject();
     std::expected<JsonString, McpError> calcResult;
-    co_await client.callTool("calculate", calcArgsWriter.TakeString(), calcResult);
+    co_await client.callTool("calculate", calcArgsWriter.takeString(), calcResult);
     if (calcResult) {
-        auto docExp = JsonDocument::Parse(calcResult.value());
+        auto docExp = JsonDocument::parse(calcResult.value());
         if (docExp) {
             JsonObject obj;
-            if (JsonHelper::GetObject(docExp.value().Root(), obj)) {
+            if (JsonHelper::getObject(docExp.value().root(), obj)) {
                 auto resultVal = obj["result"];
                 if (!resultVal.error()) {
                     if (resultVal.is_double()) {
@@ -291,12 +291,12 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     // 获取提示
     std::cout << "\n=== Getting Code Review Prompt ===" << std::endl;
     JsonWriter promptArgsWriter;
-    promptArgsWriter.StartObject();
-    promptArgsWriter.Key("language");
-    promptArgsWriter.String("C++");
-    promptArgsWriter.EndObject();
+    promptArgsWriter.startObject();
+    promptArgsWriter.key("language");
+    promptArgsWriter.string("C++");
+    promptArgsWriter.endObject();
     std::expected<JsonString, McpError> promptResult;
-    co_await client.getPrompt("code_review", promptArgsWriter.TakeString(), promptResult);
+    co_await client.getPrompt("code_review", promptArgsWriter.takeString(), promptResult);
     if (promptResult) {
         std::cout << "Prompt: " << promptResult.value() << std::endl;
     }
