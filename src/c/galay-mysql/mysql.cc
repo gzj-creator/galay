@@ -77,11 +77,10 @@ galay_status_t make_buffer(std::string bytes, galay_mysql_buffer_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    auto* buffer = new (std::nothrow) galay_mysql_buffer();
+    auto* buffer = new (std::nothrow) galay_mysql_buffer{std::move(bytes)};
     if (buffer == nullptr) {
         return GALAY_OUT_OF_MEMORY;
     }
-    buffer->bytes = std::move(bytes);
     *out = buffer;
     return GALAY_OK;
 }
@@ -96,16 +95,12 @@ galay_status_t galay_mysql_config_create(galay_mysql_config_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        auto* config = new (std::nothrow) galay_mysql_config();
-        if (config == nullptr) {
-            return GALAY_OUT_OF_MEMORY;
-        }
-        *out = config;
-        return GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    auto* config = new (std::nothrow) galay_mysql_config();
+    if (config == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
     }
+    *out = config;
+    return GALAY_OK;
 }
 
 void galay_mysql_config_destroy(galay_mysql_config_t* config)
@@ -228,18 +223,14 @@ galay_status_t galay_mysql_auth_response_for_plugin(const char* plugin_name,
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        const char* salt_data = salt == nullptr ? "" : reinterpret_cast<const char*>(salt);
-        std::string salt_string(salt_data, salt_len);
-        auto result = galay::mysql::protocol::AuthPlugin::authResponseForPlugin(
-            plugin_name, password, salt_string);
-        if (!result) {
-            return GALAY_UNSUPPORTED;
-        }
-        return make_buffer(std::move(result.value()), out);
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    const char* salt_data = salt == nullptr ? "" : reinterpret_cast<const char*>(salt);
+    std::string salt_string(salt_data, salt_len);
+    auto result = galay::mysql::protocol::AuthPlugin::authResponseForPlugin(
+        plugin_name, password, salt_string);
+    if (!result) {
+        return GALAY_UNSUPPORTED;
     }
+    return make_buffer(std::move(result.value()), out);
 }
 
 galay_status_t galay_mysql_parse_packet_header(const void* data,
@@ -249,18 +240,14 @@ galay_status_t galay_mysql_parse_packet_header(const void* data,
     if ((data == nullptr && data_len != 0) || out == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        galay::mysql::protocol::MysqlParser parser;
-        auto result = parser.parseHeader(static_cast<const char*>(data), data_len);
-        if (!result) {
-            return GALAY_PROTOCOL_ERROR;
-        }
-        out->payload_length = result->length;
-        out->sequence_id = result->sequence_id;
-        return GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    galay::mysql::protocol::MysqlParser parser;
+    auto result = parser.parseHeader(static_cast<const char*>(data), data_len);
+    if (!result) {
+        return GALAY_PROTOCOL_ERROR;
     }
+    out->payload_length = result->length;
+    out->sequence_id = result->sequence_id;
+    return GALAY_OK;
 }
 
 galay_status_t galay_mysql_extract_packet(const void* data,
@@ -274,21 +261,17 @@ galay_status_t galay_mysql_extract_packet(const void* data,
     out->payload_len = 0;
     out->sequence_id = 0;
     out->consumed = 0;
-    try {
-        size_t consumed = 0;
-        galay::mysql::protocol::MysqlParser parser;
-        auto result = parser.extractPacket(static_cast<const char*>(data), data_len, consumed);
-        if (!result) {
-            return GALAY_PROTOCOL_ERROR;
-        }
-        out->payload = reinterpret_cast<const unsigned char*>(result->payload);
-        out->payload_len = result->payload_len;
-        out->sequence_id = result->sequence_id;
-        out->consumed = consumed;
-        return GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    size_t consumed = 0;
+    galay::mysql::protocol::MysqlParser parser;
+    auto result = parser.extractPacket(static_cast<const char*>(data), data_len, consumed);
+    if (!result) {
+        return GALAY_PROTOCOL_ERROR;
     }
+    out->payload = reinterpret_cast<const unsigned char*>(result->payload);
+    out->payload_len = result->payload_len;
+    out->sequence_id = result->sequence_id;
+    out->consumed = consumed;
+    return GALAY_OK;
 }
 
 galay_status_t galay_mysql_encode_query_packet(const char* sql,
@@ -299,12 +282,8 @@ galay_status_t galay_mysql_encode_query_packet(const char* sql,
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        galay::mysql::protocol::MysqlEncoder encoder;
-        return make_buffer(encoder.encodeQuery(sql, sequence_id), out);
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    galay::mysql::protocol::MysqlEncoder encoder;
+    return make_buffer(encoder.encodeQuery(sql, sequence_id), out);
 }
 
 galay_status_t galay_mysql_client_create(galay_mysql_client_t** out)
@@ -313,16 +292,12 @@ galay_status_t galay_mysql_client_create(galay_mysql_client_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        auto* client = new (std::nothrow) galay_mysql_client();
-        if (client == nullptr) {
-            return GALAY_OUT_OF_MEMORY;
-        }
-        *out = client;
-        return GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    auto* client = new (std::nothrow) galay_mysql_client();
+    if (client == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
     }
+    *out = client;
+    return GALAY_OK;
 }
 
 void galay_mysql_client_destroy(galay_mysql_client_t* client)
@@ -340,15 +315,11 @@ galay_status_t galay_mysql_client_connect(galay_mysql_client_t* client,
     if (status != GALAY_OK) {
         return status;
     }
-    try {
-        auto result = client->client.connect(config->config);
-        if (!result) {
-            return map_mysql_error(result.error().type());
-        }
-        return GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    auto result = client->client.connect(config->config);
+    if (!result) {
+        return map_mysql_error(result.error().type());
     }
+    return GALAY_OK;
 }
 
 void galay_mysql_client_close(galay_mysql_client_t* client)

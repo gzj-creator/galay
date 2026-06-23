@@ -54,20 +54,21 @@ galay_status_t galay_http2_ping_frame_create(const uint8_t* opaque_data,
         return GALAY_INVALID_ARGUMENT;
     }
     *out_frame = nullptr;
-    try {
-        auto ping = std::make_unique<galay::http2::Http2PingFrame>();
-        ping->setOpaqueData(opaque_data);
-        ping->setAck(ack != GALAY_FALSE);
-
-        auto handle = std::make_unique<galay_http2_frame>();
-        handle->frame = std::move(ping);
-        *out_frame = handle.release();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    auto* ping_ptr = new (std::nothrow) galay::http2::Http2PingFrame();
+    if (ping_ptr == nullptr) {
         return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
     }
+    std::unique_ptr<galay::http2::Http2PingFrame> ping(ping_ptr);
+    ping->setOpaqueData(opaque_data);
+    ping->setAck(ack != GALAY_FALSE);
+
+    auto* handle = new (std::nothrow) galay_http2_frame();
+    if (handle == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    handle->frame = std::move(ping);
+    *out_frame = handle;
+    return GALAY_OK;
 }
 
 void galay_http2_frame_destroy(galay_http2_frame_t* frame)
@@ -82,21 +83,15 @@ galay_status_t galay_http2_frame_encode(const galay_http2_frame_t* frame,
     if (frame == nullptr || frame->frame == nullptr || inout_length == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        const std::string encoded = galay::http2::Http2FrameCodec::encode(*frame->frame);
-        const size_t required = encoded.size();
-        if (out_bytes == nullptr || *inout_length < required) {
-            *inout_length = required;
-            return GALAY_INVALID_ARGUMENT;
-        }
-        std::memcpy(out_bytes, encoded.data(), required);
+    const std::string encoded = galay::http2::Http2FrameCodec::encode(*frame->frame);
+    const size_t required = encoded.size();
+    if (out_bytes == nullptr || *inout_length < required) {
         *inout_length = required;
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+        return GALAY_INVALID_ARGUMENT;
     }
+    std::memcpy(out_bytes, encoded.data(), required);
+    *inout_length = required;
+    return GALAY_OK;
 }
 
 galay_status_t galay_http2_frame_decode(const uint8_t* bytes,
@@ -111,22 +106,19 @@ galay_status_t galay_http2_frame_decode(const uint8_t* bytes,
         return length < galay::http2::kHttp2FrameHeaderLength ? GALAY_INVALID_ARGUMENT
                                                               : GALAY_PROTOCOL_ERROR;
     }
-    try {
-        const std::string_view view(reinterpret_cast<const char*>(bytes), length);
-        auto decoded = galay::http2::Http2FrameCodec::decode(view);
-        if (!decoded) {
-            return map_http2_error(decoded.error());
-        }
-
-        auto handle = std::make_unique<galay_http2_frame>();
-        handle->frame = std::move(*decoded);
-        *out_frame = handle.release();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    const std::string_view view(reinterpret_cast<const char*>(bytes), length);
+    auto decoded = galay::http2::Http2FrameCodec::decode(view);
+    if (!decoded) {
+        return map_http2_error(decoded.error());
     }
+
+    auto* handle = new (std::nothrow) galay_http2_frame();
+    if (handle == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    handle->frame = std::move(*decoded);
+    *out_frame = handle;
+    return GALAY_OK;
 }
 
 galay_http2_frame_type_t galay_http2_frame_type(const galay_http2_frame_t* frame)
@@ -165,14 +157,11 @@ galay_status_t galay_http2_headers_create(galay_http2_headers_t** out_headers)
         return GALAY_INVALID_ARGUMENT;
     }
     *out_headers = nullptr;
-    try {
-        *out_headers = new galay_http2_headers();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    *out_headers = new (std::nothrow) galay_http2_headers();
+    if (*out_headers == nullptr) {
         return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
     }
+    return GALAY_OK;
 }
 
 void galay_http2_headers_destroy(galay_http2_headers_t* headers)
@@ -187,14 +176,8 @@ galay_status_t galay_http2_headers_add(galay_http2_headers_t* headers,
     if (headers == nullptr || name == nullptr || value == nullptr || name[0] == '\0') {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        headers->fields.push_back({name, value});
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    headers->fields.push_back({name, value});
+    return GALAY_OK;
 }
 
 size_t galay_http2_headers_count(const galay_http2_headers_t* headers)
@@ -223,22 +206,16 @@ galay_status_t galay_http2_hpack_encode(const galay_http2_headers_t* headers,
     if (headers == nullptr || inout_length == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        galay::http2::HpackEncoder encoder;
-        const std::string block = encoder.encodeStateless(headers->fields);
-        const size_t required = block.size();
-        if (out_bytes == nullptr || *inout_length < required) {
-            *inout_length = required;
-            return GALAY_INVALID_ARGUMENT;
-        }
-        std::memcpy(out_bytes, block.data(), required);
+    galay::http2::HpackEncoder encoder;
+    const std::string block = encoder.encodeStateless(headers->fields);
+    const size_t required = block.size();
+    if (out_bytes == nullptr || *inout_length < required) {
         *inout_length = required;
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+        return GALAY_INVALID_ARGUMENT;
     }
+    std::memcpy(out_bytes, block.data(), required);
+    *inout_length = required;
+    return GALAY_OK;
 }
 
 galay_status_t galay_http2_hpack_decode(const uint8_t* bytes,
@@ -252,21 +229,18 @@ galay_status_t galay_http2_hpack_decode(const uint8_t* bytes,
     if (bytes == nullptr && length != 0) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        galay::http2::HpackDecoder decoder;
-        auto decoded = decoder.decode(bytes, length);
-        if (!decoded) {
-            return map_http2_error(decoded.error());
-        }
-        auto headers = std::make_unique<galay_http2_headers>();
-        headers->fields = std::move(*decoded);
-        *out_headers = headers.release();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    galay::http2::HpackDecoder decoder;
+    auto decoded = decoder.decode(bytes, length);
+    if (!decoded) {
+        return map_http2_error(decoded.error());
     }
+    auto* headers = new (std::nothrow) galay_http2_headers();
+    if (headers == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    headers->fields = std::move(*decoded);
+    *out_headers = headers;
+    return GALAY_OK;
 }
 
 galay_status_t galay_http2_stream_id_validate(uint32_t stream_id, galay_bool_t allow_zero)

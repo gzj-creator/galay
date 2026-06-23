@@ -14,7 +14,6 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
-#include <stdexcept>
 
 #if __cplusplus >= 201703L
 #include <string_view>
@@ -88,9 +87,17 @@ namespace galay::utils
          * @brief 对 Base64 字符串进行解码
          * @param s 待解码的 Base64 字符串
          * @param remove_linebreaks 是否在解码前移除换行符
-         * @return 解码后的字符串
+         * @return 解码后的字符串，输入无效时返回空字符串
          */
         static std::string Base64Decode(std::string const &s, bool remove_linebreaks = false);
+
+        /**
+         * @brief 检查 Base64 字符串是否可解码
+         * @param s 待检查的 Base64 字符串
+         * @param remove_linebreaks 是否在检查前移除换行符
+         * @return 输入可解码时返回 true
+         */
+        static bool Base64CanDecode(std::string const &s, bool remove_linebreaks = false);
 
         /**
          * @brief 对原始字节进行 Base64 编码
@@ -128,11 +135,21 @@ namespace galay::utils
          * @brief 对 string_view 进行 Base64 解码（C++17）
          * @param s 待解码的 Base64 字符串视图
          * @param remove_linebreaks 是否在解码前移除换行符
-         * @return 解码后的字符串
+         * @return 解码后的字符串，输入无效时返回空字符串
          */
         static std::string Base64DecodeView(std::string_view s, bool remove_linebreaks = false);
+
+        /**
+         * @brief 检查 string_view 是否为可解码的 Base64 输入（C++17）
+         * @param s 待检查的 Base64 字符串视图
+         * @param remove_linebreaks 是否在检查前移除换行符
+         * @return 输入可解码时返回 true
+         */
+        static bool Base64CanDecodeView(std::string_view s, bool remove_linebreaks = false);
 #endif
     private:
+        static constexpr unsigned int invalid_char = 0xffU;
+
         template <typename String>
         static std::string Decode(String const &encoded_string, bool remove_linebreaks)
         {
@@ -158,9 +175,13 @@ namespace galay::utils
 
             size_t length_of_string = encoded_string.length();
             if (length_of_string % 4 == 1) {
-                throw std::runtime_error("Input is not valid base64-encoded data.");
+                return std::string();
             }
             size_t pos = 0;
+
+            if (!CanDecode(encoded_string, false)) {
+                return std::string();
+            }
 
             //
             // The approximate length (bytes) of the decoded string might be one or
@@ -175,7 +196,7 @@ namespace galay::utils
             while (pos < length_of_string)
             {
                 if (length_of_string - pos == 1) {
-                    throw std::runtime_error("Input is not valid base64-encoded data.");
+                    return std::string();
                 }
                 //
                 // Iterate over encoded input string in chunks. The size of all
@@ -228,10 +249,62 @@ namespace galay::utils
         static inline unsigned int pos_of_char(const unsigned char chr)
         {
             unsigned char value = decode_table[chr];
-            if (value == 0xFF) {
-                throw std::runtime_error("Input is not valid base64-encoded data.");
+            return value == 0xFF ? invalid_char : value;
+        }
+
+        template <typename String>
+        static bool CanDecode(String const &encoded_string, bool remove_linebreaks)
+        {
+            if (encoded_string.empty()) {
+                return true;
             }
-            return value;
+            if (remove_linebreaks) {
+                std::string copy(encoded_string);
+                copy.erase(std::remove_if(copy.begin(), copy.end(), [](unsigned char ch) {
+                    return std::isspace(ch) != 0;
+                }), copy.end());
+                return CanDecode(copy, false);
+            }
+
+            const size_t length_of_string = encoded_string.length();
+            if (length_of_string % 4 == 1) {
+                return false;
+            }
+
+            size_t pos = 0;
+            while (pos < length_of_string) {
+                if (length_of_string - pos == 1) {
+                    return false;
+                }
+
+                const unsigned int first = pos_of_char(encoded_string.at(pos));
+                const unsigned int second = pos_of_char(encoded_string.at(pos + 1));
+                if (first == invalid_char || second == invalid_char) {
+                    return false;
+                }
+
+                if ((pos + 2 < length_of_string) &&
+                    encoded_string.at(pos + 2) != '=' &&
+                    encoded_string.at(pos + 2) != '.') {
+                    const unsigned int third = pos_of_char(encoded_string.at(pos + 2));
+                    if (third == invalid_char) {
+                        return false;
+                    }
+
+                    if ((pos + 3 < length_of_string) &&
+                        encoded_string.at(pos + 3) != '=' &&
+                        encoded_string.at(pos + 3) != '.') {
+                        const unsigned int fourth = pos_of_char(encoded_string.at(pos + 3));
+                        if (fourth == invalid_char) {
+                            return false;
+                        }
+                    }
+                }
+
+                pos += 4;
+            }
+
+            return true;
         }
 
         static std::string insert_linebreaks(std::string str, size_t distance)
@@ -363,6 +436,11 @@ namespace galay::utils
         return Decode(s, remove_linebreaks);
     }
 
+    inline bool Base64Util::Base64CanDecode(std::string const &s, bool remove_linebreaks)
+    {
+        return CanDecode(s, remove_linebreaks);
+    }
+
 #if __cplusplus >= 201703L
     // String view implementations
     inline std::string Base64Util::Base64EncodeView(std::string_view s, bool url)
@@ -383,6 +461,11 @@ namespace galay::utils
     inline std::string Base64Util::Base64DecodeView(std::string_view s, bool remove_linebreaks)
     {
         return Decode(s, remove_linebreaks);
+    }
+
+    inline bool Base64Util::Base64CanDecodeView(std::string_view s, bool remove_linebreaks)
+    {
+        return CanDecode(s, remove_linebreaks);
     }
 #endif
 

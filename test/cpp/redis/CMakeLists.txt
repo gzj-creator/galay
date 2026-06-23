@@ -6,6 +6,7 @@ set(GALAY_REDIS_TLS_TESTS
     t12_tls
     t13_url
     t14_topology
+    t25_rediss_pool_acquire_connected
 )
 
 set(GALAY_REDIS_INTEGRATION_TESTS
@@ -14,6 +15,7 @@ set(GALAY_REDIS_INTEGRATION_TESTS
     t17_fastpath
     t18_pipeline
     t20_auth
+    t24_pool_waiter_blackbox
 )
 
 if(GALAY_BUILD_SSL)

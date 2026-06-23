@@ -282,16 +282,14 @@ galay_status_t galay_tracing_trace_context_create(
     if (!cpp_trace_id.isValid() || !cpp_span_id.isValid()) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        *out = new galay_tracing_trace_context{
-            galay::tracing::TraceContext(cpp_trace_id, cpp_span_id, trace_flags, std::string(tracestate_view))
-        };
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    auto* handle = new (std::nothrow) galay_tracing_trace_context{
+        galay::tracing::TraceContext(cpp_trace_id, cpp_span_id, trace_flags, std::string(tracestate_view))
+    };
+    if (handle == nullptr) {
         return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
     }
+    *out = handle;
+    return GALAY_OK;
 }
 
 void galay_tracing_trace_context_destroy(galay_tracing_trace_context_t** context)
@@ -349,18 +347,16 @@ galay_status_t galay_tracing_traceparent_parse(
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        auto parsed = galay::tracing::extractTraceparent(traceparent_view, tracestate_view);
-        if (!parsed) {
-            return map_traceparent_error(parsed.error());
-        }
-        *out = new galay_tracing_trace_context{std::move(*parsed)};
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    auto parsed = galay::tracing::extractTraceparent(traceparent_view, tracestate_view);
+    if (!parsed) {
+        return map_traceparent_error(parsed.error());
     }
+    auto* handle = new (std::nothrow) galay_tracing_trace_context{std::move(*parsed)};
+    if (handle == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    *out = handle;
+    return GALAY_OK;
 }
 
 galay_status_t galay_tracing_traceparent_format(
@@ -384,12 +380,11 @@ galay_status_t galay_tracing_provider_create(galay_tracing_provider_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        *out = new galay_tracing_provider{};
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    *out = new (std::nothrow) galay_tracing_provider{};
+    if (*out == nullptr) {
         return GALAY_OUT_OF_MEMORY;
     }
+    return GALAY_OK;
 }
 
 void galay_tracing_provider_destroy(galay_tracing_provider_t** provider)
@@ -413,14 +408,12 @@ galay_status_t galay_tracing_tracer_create(
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        *out = new galay_tracing_tracer{provider, std::string(name_view)};
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    auto* handle = new (std::nothrow) galay_tracing_tracer{provider, std::string(name_view)};
+    if (handle == nullptr) {
         return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
     }
+    *out = handle;
+    return GALAY_OK;
 }
 
 void galay_tracing_tracer_destroy(galay_tracing_tracer_t** tracer)
@@ -446,14 +439,15 @@ galay_status_t galay_tracing_tracer_start_span(
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        *out = new galay_tracing_span{galay::tracing::Span(std::string(name_view), context->value), false};
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    auto* handle = new (std::nothrow) galay_tracing_span{
+        galay::tracing::Span(std::string(name_view), context->value),
+        false
+    };
+    if (handle == nullptr) {
         return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
     }
+    *out = handle;
+    return GALAY_OK;
 }
 
 galay_status_t galay_tracing_span_add_event(
@@ -472,16 +466,10 @@ galay_status_t galay_tracing_span_add_event(
     if (attr_status != GALAY_OK) {
         return attr_status;
     }
-    try {
-        if (!span->value.addEvent(name_view, make_attributes(attributes, attribute_count))) {
-            return GALAY_INVALID_ARGUMENT;
-        }
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    if (!span->value.addEvent(name_view, make_attributes(attributes, attribute_count))) {
+        return GALAY_INVALID_ARGUMENT;
     }
+    return GALAY_OK;
 }
 
 galay_status_t galay_tracing_span_end(galay_tracing_span_t* span)
@@ -492,11 +480,7 @@ galay_status_t galay_tracing_span_end(galay_tracing_span_t* span)
     span->value.end();
     span->ended = true;
     if (auto* processor = galay::tracing::currentSpanProcessor(); processor != nullptr) {
-        try {
-            processor->onEnd(std::move(span->value));
-        } catch (...) {
-            return GALAY_INTERNAL_ERROR;
-        }
+        processor->onEnd(std::move(span->value));
     }
     return GALAY_OK;
 }

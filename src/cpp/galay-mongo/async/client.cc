@@ -145,13 +145,11 @@ std::expected<std::vector<uint8_t>, MongoError> base64Decode(const std::string& 
         return std::vector<uint8_t>{};
     }
 
-    std::string decoded;
-    try {
-        decoded = galay::utils::Base64Util::Base64Decode(text);
-    } catch (const std::exception&) {
+    if (!galay::utils::Base64Util::Base64CanDecode(text)) {
         return std::unexpected(MongoError(MONGO_ERROR_AUTH, "base64 decode failed"));
     }
 
+    std::string decoded = galay::utils::Base64Util::Base64Decode(text);
     return std::vector<uint8_t>(decoded.begin(), decoded.end());
 }
 

@@ -3,7 +3,6 @@
 #include <galay/cpp/galay-utils/tool/pool.hpp>
 
 #include <cassert>
-#include <stdexcept>
 #include <string>
 
 namespace {
@@ -28,13 +27,8 @@ void test_object_pool_lease_can_outlive_pool()
 
 void test_base64_short_malformed_reports_decode_error()
 {
-    try {
-        (void)galay::utils::Base64Util::Base64Decode("A");
-        assert(false && "short malformed base64 should fail");
-    } catch (const std::out_of_range&) {
-        assert(false && "short malformed base64 must not throw out_of_range");
-    } catch (const std::runtime_error&) {
-    }
+    assert(!galay::utils::Base64Util::Base64CanDecode("A"));
+    assert(galay::utils::Base64Util::Base64Decode("A").empty());
 }
 
 void test_base64_crlf_whitespace_decode()

@@ -12,6 +12,7 @@
 #define GALAY_REDIS_CONNECTION_POOL_H
 
 #include "redis_client.h"
+#include "conn_pool_waiter_state.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/waker.h"
@@ -311,7 +312,7 @@ namespace galay::redis
 
             galay::kernel::Waker waker;
             std::shared_ptr<PooledConnection> connection;
-            std::atomic<bool> active{true};
+            std::atomic<PoolWaiterState> state{PoolWaiterState::Waiting};
         };
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -324,7 +325,7 @@ namespace galay::redis
 
             galay::kernel::Waker waker;
             std::shared_ptr<PooledRedissConnection> connection;
-            std::atomic<bool> active{true};
+            std::atomic<PoolWaiterState> state{PoolWaiterState::Waiting};
         };
 #endif
     } // namespace detail
@@ -483,32 +484,53 @@ namespace galay::redis
         RedissPoolAcquireAwaitable(RedissPoolAcquireAwaitable&&) noexcept = default;
         RedissPoolAcquireAwaitable& operator=(RedissPoolAcquireAwaitable&&) noexcept = default;
 
-        bool await_ready() { return m_inner.await_ready(); }
+        bool await_ready() const noexcept { return false; }
         template <typename Promise>
+        requires requires(const Promise& promise) {
+            { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
+        }
         bool await_suspend(std::coroutine_handle<Promise> handle)
         {
-            return m_inner.await_suspend(handle);
+            const auto action = prepareSuspend(galay::kernel::Waker(handle));
+            if (action == SuspendAction::Wait) {
+                return true;
+            }
+            if (action == SuspendAction::Connect && m_connect_awaitable.has_value()) {
+                return m_connect_awaitable->await_suspend(handle);
+            }
+            return false;
         }
-        Result await_resume() { return m_inner.await_resume(); }
-        void markTimeout() { m_inner.markTimeout(); }
+        Result await_resume();
+        void markTimeout();
 
     private:
-        struct Flow
-        {
-            explicit Flow(RedissConnectionPool& pool);
-
-            void run(galay::kernel::SequenceOps<Result, 4>& ops);
-
-            RedissConnectionPool* m_pool = nullptr;
-            std::chrono::steady_clock::time_point m_start_time;
+        enum class SuspendAction {
+            Ready,
+            Connect,
+            Wait,
+            Error,
         };
 
-        using InnerAwaitable =
-            galay::kernel::StateMachineAwaitable<typename galay::kernel::AwaitableBuilder<Result, 4, Flow>::MachineT>;
+        enum class State {
+            Invalid,
+            Ready,
+            Creating,
+            Waiting,
+            EnqueueFailed,
+            TimedOut,
+            Error,
+        };
 
-        galay::kernel::IOController m_controller{GHandle::invalid()};
-        std::unique_ptr<Flow> m_flow;
-        InnerAwaitable m_inner;
+        SuspendAction prepareSuspend(galay::kernel::Waker waiter_waker);
+
+        RedissConnectionPool* m_pool = nullptr;
+        State m_state = State::Invalid;
+        std::shared_ptr<PooledRedissConnection> m_connection;
+        std::shared_ptr<detail::RedissPoolWaiter> m_waiter;
+        std::optional<detail::RedissConnectOperation> m_connect_awaitable;
+        std::chrono::steady_clock::time_point m_start_time;
+        std::optional<RedisError> m_error;
+        bool m_wait_counted = false;
     };
 #endif
 
@@ -530,7 +552,7 @@ namespace galay::redis
         RedisConnectionPool(const RedisConnectionPool&) = delete;
         RedisConnectionPool& operator=(const RedisConnectionPool&) = delete;
 
-        // 禁止移动（因为包含 mutex）
+        // 禁止移动（内部状态需要稳定地址）
         RedisConnectionPool(RedisConnectionPool&&) = delete;
         RedisConnectionPool& operator=(RedisConnectionPool&&) = delete;
 
@@ -664,6 +686,7 @@ namespace galay::redis
         std::atomic<uint64_t> m_total_created{0};        ///< 总创建次数
         std::atomic<uint64_t> m_total_destroyed{0};      ///< 总销毁次数
         std::atomic<uint64_t> m_health_check_failures{0}; ///< 健康检查失败次数
+        std::atomic<size_t> m_active_connections{0};     ///< 当前借出的连接数
         std::atomic<size_t> m_waiting_requests{0};       ///< 等待中的请求数
         std::atomic<uint64_t> m_reconnect_attempts{0};   ///< 重连尝试次数
         std::atomic<uint64_t> m_reconnect_successes{0};  ///< 重连成功次数
@@ -730,6 +753,7 @@ namespace galay::redis
         IOScheduler* m_scheduler;                                                    ///< IO 调度器
         RedissConnectionPoolConfig m_config;                                         ///< 连接池配置
         std::queue<std::shared_ptr<PooledRedissConnection>> m_available_connections; ///< 可用连接队列
+        std::queue<std::shared_ptr<detail::RedissPoolWaiter>> m_waiters;             ///< 等待连接的协程队列
         std::vector<std::shared_ptr<PooledRedissConnection>> m_all_connections;      ///< 所有连接列表
         mutable std::mutex m_mutex;                                                  ///< 互斥锁
 
@@ -741,6 +765,7 @@ namespace galay::redis
         std::atomic<uint64_t> m_total_created{0};        ///< 总创建次数
         std::atomic<uint64_t> m_total_destroyed{0};      ///< 总销毁次数
         std::atomic<uint64_t> m_health_check_failures{0}; ///< 健康检查失败次数
+        std::atomic<size_t> m_active_connections{0};     ///< 当前借出的连接数
         std::atomic<size_t> m_waiting_requests{0};       ///< 等待中的请求数
         std::atomic<uint64_t> m_reconnect_attempts{0};   ///< 重连尝试次数
         std::atomic<uint64_t> m_reconnect_successes{0};  ///< 重连成功次数

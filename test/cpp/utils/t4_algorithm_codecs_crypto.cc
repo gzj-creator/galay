@@ -98,13 +98,8 @@ void test_base64() {
     assert(decodedWithBreaks == "Hello, World!");
 
     // Test invalid input handling
-    bool exceptionThrown = false;
-    try {
-        Base64Util::Base64Decode("Invalid@#$%");
-    } catch (const std::runtime_error&) {
-        exceptionThrown = true;
-    }
-    assert(exceptionThrown);
+    assert(!Base64Util::Base64CanDecode("Invalid@#$%"));
+    assert(Base64Util::Base64Decode("Invalid@#$%").empty());
 
     // Performance test with large data
     std::string largeData(10000, 'X');
@@ -598,14 +593,9 @@ void test_salt_generator() {
 
 int main() {
     std::cout << "\n=== algorithm_test ===" << std::endl;
-    try {
-        test_base64();
-        test_md5();
-        test_murmur_hash3();
-        test_salt_generator();
-        return 0;
-    } catch (const std::exception& e) {
-        std::cerr << "Test failed with exception: " << e.what() << std::endl;
-        return 1;
-    }
+    test_base64();
+    test_md5();
+    test_murmur_hash3();
+    test_salt_generator();
+    return 0;
 }

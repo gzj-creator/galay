@@ -151,12 +151,8 @@ galay_status_t galay_etcd_config_builder_create(galay_etcd_config_builder_t** ou
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        *out = new (std::nothrow) galay_etcd_config_builder();
-        return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    *out = new (std::nothrow) galay_etcd_config_builder();
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
 void galay_etcd_config_builder_destroy(galay_etcd_config_builder_t* builder)
@@ -170,12 +166,8 @@ galay_status_t galay_etcd_config_builder_set_endpoint(galay_etcd_config_builder_
     if (builder == nullptr || invalid_c_string(endpoint)) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        builder->config.endpoint = endpoint;
-        return GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    builder->config.endpoint = endpoint;
+    return GALAY_OK;
 }
 
 galay_status_t galay_etcd_config_builder_set_api_prefix(galay_etcd_config_builder_t* builder,
@@ -184,12 +176,8 @@ galay_status_t galay_etcd_config_builder_set_api_prefix(galay_etcd_config_builde
     if (builder == nullptr || invalid_c_string(api_prefix)) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        builder->config.api_prefix = api_prefix;
-        return GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    builder->config.api_prefix = api_prefix;
+    return GALAY_OK;
 }
 
 galay_status_t galay_etcd_config_builder_set_request_timeout_ms(galay_etcd_config_builder_t* builder,
@@ -229,22 +217,19 @@ galay_status_t galay_etcd_client_create(const galay_etcd_config_builder_t* build
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        galay::etcd::EtcdConfig config = builder == nullptr
-            ? galay::etcd::EtcdConfig()
-            : builder->config;
-        std::unique_ptr<galay_etcd_client_t> handle(new (std::nothrow) galay_etcd_client());
-        if (handle == nullptr) {
-            return GALAY_OUT_OF_MEMORY;
-        }
-        handle->client = std::make_unique<galay::etcd::EtcdClient>(std::move(config));
-        *out = handle.release();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    galay::etcd::EtcdConfig config = builder == nullptr
+        ? galay::etcd::EtcdConfig()
+        : builder->config;
+    std::unique_ptr<galay_etcd_client_t> handle(new (std::nothrow) galay_etcd_client());
+    if (handle == nullptr) {
         return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
     }
+    handle->client.reset(new (std::nothrow) galay::etcd::EtcdClient(std::move(config)));
+    if (handle->client == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    *out = handle.release();
+    return GALAY_OK;
 }
 
 void galay_etcd_client_destroy(galay_etcd_client_t* client)
@@ -260,16 +245,11 @@ galay_status_t galay_etcd_client_connect(galay_etcd_client_t* client,
         set_error_code(error_code, GALAY_ETCD_ERROR_INVALID_PARAM);
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        auto result = client->client->connect();
-        if (!result.has_value()) {
-            return status_from_error(result.error(), error_code);
-        }
-        return result.value() ? GALAY_OK : GALAY_INTERNAL_ERROR;
-    } catch (...) {
-        set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
-        return GALAY_INTERNAL_ERROR;
+    auto result = client->client->connect();
+    if (!result.has_value()) {
+        return status_from_error(result.error(), error_code);
     }
+    return result.value() ? GALAY_OK : GALAY_INTERNAL_ERROR;
 }
 
 galay_status_t galay_etcd_client_close(galay_etcd_client_t* client,
@@ -280,16 +260,11 @@ galay_status_t galay_etcd_client_close(galay_etcd_client_t* client,
         set_error_code(error_code, GALAY_ETCD_ERROR_INVALID_PARAM);
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        auto result = client->client->close();
-        if (!result.has_value()) {
-            return status_from_error(result.error(), error_code);
-        }
-        return result.value() ? GALAY_OK : GALAY_INTERNAL_ERROR;
-    } catch (...) {
-        set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
-        return GALAY_INTERNAL_ERROR;
+    auto result = client->client->close();
+    if (!result.has_value()) {
+        return status_from_error(result.error(), error_code);
     }
+    return result.value() ? GALAY_OK : GALAY_INTERNAL_ERROR;
 }
 
 galay_bool_t galay_etcd_client_connected(const galay_etcd_client_t* client)
@@ -297,11 +272,7 @@ galay_bool_t galay_etcd_client_connected(const galay_etcd_client_t* client)
     if (client == nullptr || client->client == nullptr) {
         return GALAY_FALSE;
     }
-    try {
-        return client->client->connected() ? GALAY_TRUE : GALAY_FALSE;
-    } catch (...) {
-        return GALAY_FALSE;
-    }
+    return client->client->connected() ? GALAY_TRUE : GALAY_FALSE;
 }
 
 galay_status_t galay_etcd_client_put(galay_etcd_client_t* client,
@@ -316,20 +287,12 @@ galay_status_t galay_etcd_client_put(galay_etcd_client_t* client,
         set_error_code(error_code, GALAY_ETCD_ERROR_INVALID_PARAM);
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        std::string value_string(static_cast<const char*>(value == nullptr ? "" : value), value_len);
-        auto result = client->client->put(key, value_string);
-        if (!result.has_value()) {
-            return status_from_error(result.error(), error_code);
-        }
-        return result.value() ? GALAY_OK : GALAY_INTERNAL_ERROR;
-    } catch (const std::bad_alloc&) {
-        set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
-        return GALAY_INTERNAL_ERROR;
+    std::string value_string(static_cast<const char*>(value == nullptr ? "" : value), value_len);
+    auto result = client->client->put(key, value_string);
+    if (!result.has_value()) {
+        return status_from_error(result.error(), error_code);
     }
+    return result.value() ? GALAY_OK : GALAY_INTERNAL_ERROR;
 }
 
 galay_status_t galay_etcd_client_get(galay_etcd_client_t* client,
@@ -348,27 +311,19 @@ galay_status_t galay_etcd_client_get(galay_etcd_client_t* client,
         set_error_code(error_code, GALAY_ETCD_ERROR_INVALID_PARAM);
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        auto result = client->client->get(key, prefix == GALAY_TRUE, optional_limit(limit));
-        if (!result.has_value()) {
-            return status_from_error(result.error(), error_code);
-        }
-        std::unique_ptr<galay_etcd_get_result_t> handle(new (std::nothrow) galay_etcd_get_result());
-        if (handle == nullptr) {
-            set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
-            return GALAY_OUT_OF_MEMORY;
-        }
-        handle->kvs = std::move(result.value());
-        const bool empty = handle->kvs.empty();
-        *out = handle.release();
-        return empty ? GALAY_NOT_FOUND : GALAY_OK;
-    } catch (const std::bad_alloc&) {
+    auto result = client->client->get(key, prefix == GALAY_TRUE, optional_limit(limit));
+    if (!result.has_value()) {
+        return status_from_error(result.error(), error_code);
+    }
+    std::unique_ptr<galay_etcd_get_result_t> handle(new (std::nothrow) galay_etcd_get_result());
+    if (handle == nullptr) {
         set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
         return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
-        return GALAY_INTERNAL_ERROR;
     }
+    handle->kvs = std::move(result.value());
+    const bool empty = handle->kvs.empty();
+    *out = handle.release();
+    return empty ? GALAY_NOT_FOUND : GALAY_OK;
 }
 
 galay_status_t galay_etcd_client_delete(galay_etcd_client_t* client,
@@ -386,17 +341,12 @@ galay_status_t galay_etcd_client_delete(galay_etcd_client_t* client,
         set_error_code(error_code, GALAY_ETCD_ERROR_INVALID_PARAM);
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        auto result = client->client->del(key, prefix == GALAY_TRUE);
-        if (!result.has_value()) {
-            return status_from_error(result.error(), error_code);
-        }
-        *deleted_count = result.value();
-        return GALAY_OK;
-    } catch (...) {
-        set_error_code(error_code, GALAY_ETCD_ERROR_INTERNAL);
-        return GALAY_INTERNAL_ERROR;
+    auto result = client->client->del(key, prefix == GALAY_TRUE);
+    if (!result.has_value()) {
+        return status_from_error(result.error(), error_code);
     }
+    *deleted_count = result.value();
+    return GALAY_OK;
 }
 
 galay_status_t galay_etcd_get_result_create_empty(galay_etcd_get_result_t** out)
@@ -405,12 +355,8 @@ galay_status_t galay_etcd_get_result_create_empty(galay_etcd_get_result_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        *out = new (std::nothrow) galay_etcd_get_result();
-        return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    *out = new (std::nothrow) galay_etcd_get_result();
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
 void galay_etcd_get_result_destroy(galay_etcd_get_result_t* result)

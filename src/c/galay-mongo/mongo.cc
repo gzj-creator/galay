@@ -101,35 +101,21 @@ galay_status_t map_mongo_error(const galay::mongo::MongoError& error) noexcept
     }
 }
 
-template <typename Fn>
-galay_status_t catch_boundary(Fn&& fn) noexcept
-{
-    try {
-        return fn();
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
-}
-
 galay_status_t append_value(galay_mongo_document_t* document,
                             const char* key,
                             galay::mongo::MongoValue value) noexcept
 {
-    return catch_boundary([&]() -> galay_status_t {
-        if (document == nullptr) {
-            return GALAY_INVALID_ARGUMENT;
-        }
-        std::string_view key_view;
-        const auto key_status = validate_key(key, &key_view);
-        if (key_status != GALAY_OK) {
-            return key_status;
-        }
-        document->document.append(std::string(key_view), std::move(value));
-        document->encoded.clear();
-        return GALAY_OK;
-    });
+    if (document == nullptr) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    std::string_view key_view;
+    const auto key_status = validate_key(key, &key_view);
+    if (key_status != GALAY_OK) {
+        return key_status;
+    }
+    document->document.append(std::string(key_view), std::move(value));
+    document->encoded.clear();
+    return GALAY_OK;
 }
 
 const galay::mongo::MongoValue* find_value(const galay_mongo_document_t* document,
@@ -182,10 +168,8 @@ galay_status_t galay_mongo_document_create(galay_mongo_document_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    return catch_boundary([&]() -> galay_status_t {
-        *out = new galay_mongo_document{};
-        return GALAY_OK;
-    });
+    *out = new (std::nothrow) galay_mongo_document{};
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
 void galay_mongo_document_destroy(galay_mongo_document_t* document)
@@ -341,16 +325,14 @@ galay_status_t galay_mongo_document_encode(galay_mongo_document_t* document,
     }
     *data = nullptr;
     *data_len = 0;
-    return catch_boundary([&]() -> galay_status_t {
-        auto encoded = galay::mongo::protocol::BsonCodec::encodeDocument(document->document);
-        if (!encoded) {
-            return GALAY_INVALID_ARGUMENT;
-        }
-        document->encoded = std::move(encoded.value());
-        *data = reinterpret_cast<const uint8_t*>(document->encoded.data());
-        *data_len = document->encoded.size();
-        return GALAY_OK;
-    });
+    auto encoded = galay::mongo::protocol::BsonCodec::encodeDocument(document->document);
+    if (!encoded) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    document->encoded = std::move(encoded.value());
+    *data = reinterpret_cast<const uint8_t*>(document->encoded.data());
+    *data_len = document->encoded.size();
+    return GALAY_OK;
 }
 
 galay_status_t galay_mongo_document_decode(const uint8_t* data,
@@ -361,18 +343,19 @@ galay_status_t galay_mongo_document_decode(const uint8_t* data,
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    return catch_boundary([&]() -> galay_status_t {
-        auto decoded = galay::mongo::protocol::BsonCodec::decodeDocument(
-            reinterpret_cast<const char*>(data),
-            data_len);
-        if (!decoded) {
-            return GALAY_PROTOCOL_ERROR;
-        }
-        auto* handle = new galay_mongo_document{};
-        handle->document = std::move(decoded.value());
-        *out = handle;
-        return GALAY_OK;
-    });
+    auto decoded = galay::mongo::protocol::BsonCodec::decodeDocument(
+        reinterpret_cast<const char*>(data),
+        data_len);
+    if (!decoded) {
+        return GALAY_PROTOCOL_ERROR;
+    }
+    auto* handle = new (std::nothrow) galay_mongo_document{};
+    if (handle == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    handle->document = std::move(decoded.value());
+    *out = handle;
+    return GALAY_OK;
 }
 
 galay_status_t galay_mongo_uri_parse(const char* uri, galay_mongo_uri_t** out)
@@ -381,20 +364,21 @@ galay_status_t galay_mongo_uri_parse(const char* uri, galay_mongo_uri_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    return catch_boundary([&]() -> galay_status_t {
-        const std::string_view uri_view(uri);
-        if (!uri_has_database(uri_view)) {
-            return GALAY_INVALID_ARGUMENT;
-        }
-        auto parsed = galay::mongo::parseMongoUri(uri_view);
-        if (!parsed) {
-            return map_mongo_error(parsed.error());
-        }
-        auto* handle = new galay_mongo_uri{};
-        handle->config = std::move(parsed.value());
-        *out = handle;
-        return GALAY_OK;
-    });
+    const std::string_view uri_view(uri);
+    if (!uri_has_database(uri_view)) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    auto parsed = galay::mongo::parseMongoUri(uri_view);
+    if (!parsed) {
+        return map_mongo_error(parsed.error());
+    }
+    auto* handle = new (std::nothrow) galay_mongo_uri{};
+    if (handle == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    handle->config = std::move(parsed.value());
+    *out = handle;
+    return GALAY_OK;
 }
 
 void galay_mongo_uri_destroy(galay_mongo_uri_t* uri)
@@ -437,10 +421,8 @@ galay_status_t galay_mongo_client_create(galay_mongo_client_t** out)
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    return catch_boundary([&]() -> galay_status_t {
-        *out = new galay_mongo_client{};
-        return GALAY_OK;
-    });
+    *out = new (std::nothrow) galay_mongo_client{};
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
 void galay_mongo_client_destroy(galay_mongo_client_t* client)
@@ -453,21 +435,19 @@ galay_status_t galay_mongo_client_connect_uri(galay_mongo_client_t* client, cons
     if (client == nullptr || uri == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    return catch_boundary([&]() -> galay_status_t {
-        const std::string_view uri_view(uri);
-        if (!uri_has_database(uri_view)) {
-            return GALAY_INVALID_ARGUMENT;
-        }
-        auto parsed = galay::mongo::parseMongoUri(uri_view);
-        if (!parsed) {
-            return map_mongo_error(parsed.error());
-        }
-        auto connected = client->client.connect(parsed.value());
-        if (!connected) {
-            return map_mongo_error(connected.error());
-        }
-        return GALAY_OK;
-    });
+    const std::string_view uri_view(uri);
+    if (!uri_has_database(uri_view)) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    auto parsed = galay::mongo::parseMongoUri(uri_view);
+    if (!parsed) {
+        return map_mongo_error(parsed.error());
+    }
+    auto connected = client->client.connect(parsed.value());
+    if (!connected) {
+        return map_mongo_error(connected.error());
+    }
+    return GALAY_OK;
 }
 
 galay_status_t galay_mongo_client_ping(galay_mongo_client_t* client, const char* database)
@@ -476,13 +456,11 @@ galay_status_t galay_mongo_client_ping(galay_mongo_client_t* client, const char*
         !client->client.isConnected()) {
         return GALAY_INVALID_ARGUMENT;
     }
-    return catch_boundary([&]() -> galay_status_t {
-        auto result = client->client.ping(database);
-        if (!result) {
-            return map_mongo_error(result.error());
-        }
-        return GALAY_OK;
-    });
+    auto result = client->client.ping(database);
+    if (!result) {
+        return map_mongo_error(result.error());
+    }
+    return GALAY_OK;
 }
 
 void galay_mongo_client_close(galay_mongo_client_t* client)

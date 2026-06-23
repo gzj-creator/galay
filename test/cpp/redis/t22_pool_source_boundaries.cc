@@ -25,10 +25,47 @@ bool contains(const std::string& text, const std::string& needle)
     return text.find(needle) != std::string::npos;
 }
 
+std::string bodyAfter(const std::string& text, const std::string& signature)
+{
+    const auto signature_pos = text.find(signature);
+    if (signature_pos == std::string::npos) {
+        std::cerr << "missing source boundary signature: " << signature << "\n";
+        std::exit(1);
+    }
+
+    const auto open_pos = text.find('{', signature_pos);
+    if (open_pos == std::string::npos) {
+        std::cerr << "missing source boundary body: " << signature << "\n";
+        std::exit(1);
+    }
+
+    size_t depth = 0;
+    for (size_t i = open_pos; i < text.size(); ++i) {
+        if (text[i] == '{') {
+            ++depth;
+        } else if (text[i] == '}') {
+            --depth;
+            if (depth == 0) {
+                return text.substr(open_pos, i - open_pos + 1);
+            }
+        }
+    }
+
+    std::cerr << "unterminated source boundary body: " << signature << "\n";
+    std::exit(1);
+}
+
 std::filesystem::path repoRoot()
 {
     std::filesystem::path file = __FILE__;
     return file.parent_path().parent_path().parent_path().parent_path();
+}
+
+bool hasBlockingLockToken(const std::string& text)
+{
+    return contains(text, "std::mutex") ||
+           contains(text, "std::lock_guard") ||
+           contains(text, "std::unique_lock");
 }
 
 } // namespace
@@ -37,6 +74,7 @@ int main()
 {
     const auto root = repoRoot();
     const auto pool_header = readFile(root / "src/cpp/galay-redis/async/conn_pool.h");
+    const auto waiter_state_header = readFile(root / "src/cpp/galay-redis/async/conn_pool_waiter_state.h");
     const auto pool_source = readFile(root / "src/cpp/galay-redis/async/conn_pool.cc");
     const auto session_source = readFile(root / "src/cpp/galay-redis/sync/redis_session.cc");
 
@@ -52,6 +90,54 @@ int main()
                       << forbidden << "\n";
             return 1;
         }
+    }
+
+    const auto redis_prepare_suspend =
+        bodyAfter(pool_source, "PoolAcquireAwaitable::prepareSuspend");
+    const auto redis_await_resume =
+        bodyAfter(pool_source, "PoolAcquireAwaitable::await_resume");
+    const auto redis_mark_timeout =
+        bodyAfter(pool_source, "PoolAcquireAwaitable::markTimeout");
+    const auto redis_await_suspend =
+        bodyAfter(pool_header, "bool await_suspend(std::coroutine_handle<Promise> handle)");
+    const auto rediss_prepare_suspend =
+        bodyAfter(pool_source, "RedissPoolAcquireAwaitable::prepareSuspend");
+    const auto rediss_await_resume =
+        bodyAfter(pool_source, "RedissPoolAcquireAwaitable::await_resume");
+    const auto rediss_mark_timeout =
+        bodyAfter(pool_source, "RedissPoolAcquireAwaitable::markTimeout");
+
+    for (const auto* forbidden : {"std::mutex", "std::lock_guard", "std::unique_lock"}) {
+        if (contains(redis_prepare_suspend, forbidden) ||
+            contains(redis_await_resume, forbidden) ||
+            contains(redis_mark_timeout, forbidden) ||
+            contains(redis_await_suspend, forbidden) ||
+            contains(rediss_prepare_suspend, forbidden) ||
+            contains(rediss_await_resume, forbidden) ||
+            contains(rediss_mark_timeout, forbidden)) {
+            std::cerr << "redis pool acquire coroutine path must not use blocking lock token: "
+                      << forbidden << "\n";
+            return 1;
+        }
+    }
+
+    if (contains(rediss_prepare_suspend, "acquireSync") ||
+        contains(rediss_await_resume, "acquireSync") ||
+        contains(rediss_mark_timeout, "acquireSync")) {
+        std::cerr << "RedissPoolAcquireAwaitable acquire path must not call acquireSync\n";
+        return 1;
+    }
+
+    if (!contains(waiter_state_header, "try_complete_waiter") ||
+        !contains(pool_source, "try_complete_waiter")) {
+        std::cerr << "redis pool waiter timeout/release must use try_complete_waiter ownership transfer\n";
+        return 1;
+    }
+
+    if (!contains(rediss_prepare_suspend, "connect(") &&
+        !contains(pool_header, "RedissConnectOperation")) {
+        std::cerr << "Rediss pool acquire path must run async connect before returning a new lease\n";
+        return 1;
     }
 
     if (contains(session_source, "return std::unexpected(select_reply.error())")) {

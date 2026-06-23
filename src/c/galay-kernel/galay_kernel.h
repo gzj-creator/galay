@@ -111,6 +111,14 @@ GALAY_C_API galay_status_t galay_kernel_tcp_accept_start(
 GALAY_C_API galay_status_t galay_kernel_tcp_accept_wait(galay_kernel_tcp_accept_t* accept);
 
 /**
+ * @brief 请求取消一次 pending TCP accept。
+ * @param accept 由 galay_kernel_tcp_accept_start 返回的 handle。
+ * @return 成功提交取消请求返回 GALAY_OK；参数无效返回 GALAY_INVALID_ARGUMENT；唤醒失败返回 GALAY_IO_ERROR。
+ * @note 非阻塞；取消后的 join 会返回 GALAY_IO_ERROR 作为当前通用状态集中最接近的取消结果。
+ */
+GALAY_C_API galay_status_t galay_kernel_tcp_accept_cancel(galay_kernel_tcp_accept_t* accept);
+
+/**
  * @brief 阻塞等待并消费 TCP accept 结果。
  * @param accept 由 galay_kernel_tcp_accept_start 返回的 handle。
  * @param out_socket 输出 accepted TCP socket；调用方通过 galay_kernel_tcp_socket_destroy 释放。
@@ -127,7 +135,7 @@ GALAY_C_API galay_status_t galay_kernel_tcp_accept_join(
  * @brief 销毁 TCP accept handle。
  * @param accept accept handle 指针地址；为空 handle 时返回 GALAY_OK。
  * @return 参数无效返回 GALAY_INVALID_ARGUMENT，否则返回 GALAY_OK 或内部错误。
- * @note 若内部 join handle 尚未完成，销毁可能为了释放任务所有权而阻塞等待；不承诺取消。
+ * @note 非阻塞；若内部 accept 尚未完成，destroy 会先请求取消并释放 C handle，不消费 join 结果。
  */
 GALAY_C_API galay_status_t galay_kernel_tcp_accept_destroy(galay_kernel_tcp_accept_t** accept);
 GALAY_C_API galay_status_t galay_kernel_udp_socket_create(

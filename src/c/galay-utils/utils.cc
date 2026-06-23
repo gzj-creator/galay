@@ -257,17 +257,12 @@ galay_utils_status_t galay_utils_base64_decode(
         return GALAY_UTILS_INVALID_ARGUMENT;
     }
 
-    try {
-        const std::string_view input(data == nullptr ? "" : data, length);
-        const std::string decoded = galay::utils::Base64Util::Base64DecodeView(input);
-        return copy_string_result(decoded, output, output_capacity, output_length);
-    } catch (const std::bad_alloc&) {
-        return GALAY_UTILS_OUT_OF_MEMORY;
-    } catch (const std::exception&) {
+    const std::string_view input(data == nullptr ? "" : data, length);
+    if (!galay::utils::Base64Util::Base64CanDecodeView(input)) {
         return GALAY_UTILS_INVALID_ARGUMENT;
-    } catch (...) {
-        return GALAY_UTILS_INTERNAL_ERROR;
     }
+    const std::string decoded = galay::utils::Base64Util::Base64DecodeView(input);
+    return copy_string_result(decoded, output, output_capacity, output_length);
 }
 
 galay_utils_status_t galay_utils_md5(

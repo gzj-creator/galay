@@ -229,13 +229,10 @@ inline std::string encodeBase64(std::string_view data)
  */
 inline std::optional<std::string> decodeBase64(std::string_view data)
 {
-    try {
-        return galay::utils::Base64Util::Base64DecodeView(data);
-    } catch (const std::bad_alloc&) {
-        throw;
-    } catch (...) {
+    if (!galay::utils::Base64Util::Base64CanDecodeView(data)) {
         return std::nullopt;
     }
+    return galay::utils::Base64Util::Base64DecodeView(data);
 }
 
 /**
@@ -288,11 +285,11 @@ inline std::expected<ParsedEndpoint, std::string> parseEndpoint(const std::strin
 
     int port = parsed.secure ? 443 : 80;
     if (matches[3].matched) {
-        try {
-            port = std::stoi(matches[3].str());
-        } catch (const std::bad_alloc&) {
-            throw;
-        } catch (...) {
+        const std::string port_text = matches[3].str();
+        const char* begin = port_text.data();
+        const char* end = begin + port_text.size();
+        const auto converted = std::from_chars(begin, end, port);
+        if (converted.ec != std::errc{} || converted.ptr != end) {
             return std::unexpected("invalid endpoint port: " + endpoint);
         }
         if (port <= 0 || port > 65535) {

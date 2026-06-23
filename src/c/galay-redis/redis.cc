@@ -217,12 +217,8 @@ galay_status_t galay_redis_command_builder_create(galay_redis_command_builder_t*
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        *out = new (std::nothrow) galay_redis_command_builder();
-        return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    *out = new (std::nothrow) galay_redis_command_builder();
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
 void galay_redis_command_builder_destroy(galay_redis_command_builder_t* builder)
@@ -243,24 +239,18 @@ galay_status_t galay_redis_command_builder_build(galay_redis_command_builder_t* 
     }
     *out_data = nullptr;
     *out_len = 0;
-    try {
-        galay_status_t status = build_encoded(builder->builder,
-                                              command,
-                                              args,
-                                              arg_lens,
-                                              arg_count,
-                                              builder->encoded);
-        if (status != GALAY_OK) {
-            return status;
-        }
-        *out_data = builder->encoded.data();
-        *out_len = builder->encoded.size();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    galay_status_t status = build_encoded(builder->builder,
+                                          command,
+                                          args,
+                                          arg_lens,
+                                          arg_count,
+                                          builder->encoded);
+    if (status != GALAY_OK) {
+        return status;
     }
+    *out_data = builder->encoded.data();
+    *out_len = builder->encoded.size();
+    return GALAY_OK;
 }
 
 galay_status_t galay_redis_parse_reply(const void* data,
@@ -273,28 +263,22 @@ galay_status_t galay_redis_parse_reply(const void* data,
     }
     *out_reply = nullptr;
     *consumed = 0;
-    try {
-        RespParser parser;
-        RedisReply reply;
-        auto result = parser.parseFast(static_cast<const char*>(data == nullptr ? "" : data),
-                                       data_len,
-                                       &reply);
-        if (!result) {
-            return result.error() == ParseError::Incomplete ? GALAY_PROTOCOL_ERROR
-                                                            : GALAY_PROTOCOL_ERROR;
-        }
-        auto* wrapped = new (std::nothrow) galay_redis_reply(std::move(reply));
-        if (wrapped == nullptr) {
-            return GALAY_OUT_OF_MEMORY;
-        }
-        *consumed = result.value();
-        *out_reply = wrapped;
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    RespParser parser;
+    RedisReply reply;
+    auto result = parser.parseFast(static_cast<const char*>(data == nullptr ? "" : data),
+                                   data_len,
+                                   &reply);
+    if (!result) {
+        return result.error() == ParseError::Incomplete ? GALAY_PROTOCOL_ERROR
+                                                        : GALAY_PROTOCOL_ERROR;
     }
+    auto* wrapped = new (std::nothrow) galay_redis_reply(std::move(reply));
+    if (wrapped == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    *consumed = result.value();
+    *out_reply = wrapped;
+    return GALAY_OK;
 }
 
 void galay_redis_reply_destroy(galay_redis_reply_t* reply)
@@ -325,16 +309,10 @@ galay_status_t galay_redis_reply_string(const galay_redis_reply_t* reply,
         type != GALAY_REDIS_RESP_BULK_STRING) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        reply->string_cache = reply->reply.asString();
-        *value = reply->string_cache.data();
-        *value_len = reply->string_cache.size();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    reply->string_cache = reply->reply.asString();
+    *value = reply->string_cache.data();
+    *value_len = reply->string_cache.size();
+    return GALAY_OK;
 }
 
 galay_status_t galay_redis_reply_integer(const galay_redis_reply_t* reply, int64_t* value)
@@ -398,21 +376,20 @@ galay_status_t galay_redis_reply_array_get(const galay_redis_reply_t* reply,
     if (index >= values.size()) {
         return GALAY_NOT_FOUND;
     }
-    try {
-        if (reply->element_cache.size() != values.size()) {
-            reply->element_cache.clear();
-            reply->element_cache.reserve(values.size());
-            for (const auto& value : values) {
-                reply->element_cache.push_back(std::make_unique<galay_redis_reply>(value));
+    if (reply->element_cache.size() != values.size()) {
+        reply->element_cache.clear();
+        reply->element_cache.reserve(values.size());
+        for (const auto& value : values) {
+            std::unique_ptr<galay_redis_reply> item(new (std::nothrow) galay_redis_reply(value));
+            if (item == nullptr) {
+                reply->element_cache.clear();
+                return GALAY_OUT_OF_MEMORY;
             }
+            reply->element_cache.push_back(std::move(item));
         }
-        *out = reply->element_cache[index].get();
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
     }
+    *out = reply->element_cache[index].get();
+    return GALAY_OK;
 }
 
 galay_status_t galay_redis_client_create(const galay_redis_client_config_t* config,
@@ -422,19 +399,13 @@ galay_status_t galay_redis_client_create(const galay_redis_client_config_t* conf
         return GALAY_INVALID_ARGUMENT;
     }
     *out = nullptr;
-    try {
-        RedisSessionConfig cfg;
-        galay_status_t status = validate_config(config, cfg);
-        if (status != GALAY_OK) {
-            return status;
-        }
-        *out = new (std::nothrow) galay_redis_client(std::move(cfg));
-        return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    RedisSessionConfig cfg;
+    galay_status_t status = validate_config(config, cfg);
+    if (status != GALAY_OK) {
+        return status;
     }
+    *out = new (std::nothrow) galay_redis_client(std::move(cfg));
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
 void galay_redis_client_destroy(galay_redis_client_t* client)
@@ -447,12 +418,8 @@ galay_status_t galay_redis_client_connect(galay_redis_client_t* client)
     if (client == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        auto result = client->session.connect();
-        return result ? GALAY_OK : map_redis_error(result.error());
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    auto result = client->session.connect();
+    return result ? GALAY_OK : map_redis_error(result.error());
 }
 
 galay_status_t galay_redis_client_disconnect(galay_redis_client_t* client)
@@ -460,12 +427,8 @@ galay_status_t galay_redis_client_disconnect(galay_redis_client_t* client)
     if (client == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    try {
-        auto result = client->session.disconnect();
-        return result ? GALAY_OK : map_redis_error(result.error());
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
-    }
+    auto result = client->session.disconnect();
+    return result ? GALAY_OK : map_redis_error(result.error());
 }
 
 galay_status_t galay_redis_client_command(galay_redis_client_t* client,
@@ -479,32 +442,26 @@ galay_status_t galay_redis_client_command(galay_redis_client_t* client,
         return GALAY_INVALID_ARGUMENT;
     }
     *out_reply = nullptr;
-    try {
-        std::string encoded;
-        galay_status_t status = build_encoded(client->builder,
-                                              command,
-                                              args,
-                                              arg_lens,
-                                              arg_count,
-                                              encoded);
-        if (status != GALAY_OK) {
-            return status;
-        }
-        auto result = client->session.redisCommand(encoded);
-        if (!result) {
-            return map_redis_error(result.error());
-        }
-        auto* wrapped = new (std::nothrow) galay_redis_reply(result->getReply());
-        if (wrapped == nullptr) {
-            return GALAY_OUT_OF_MEMORY;
-        }
-        *out_reply = wrapped;
-        return GALAY_OK;
-    } catch (const std::bad_alloc&) {
-        return GALAY_OUT_OF_MEMORY;
-    } catch (...) {
-        return GALAY_INTERNAL_ERROR;
+    std::string encoded;
+    galay_status_t status = build_encoded(client->builder,
+                                          command,
+                                          args,
+                                          arg_lens,
+                                          arg_count,
+                                          encoded);
+    if (status != GALAY_OK) {
+        return status;
     }
+    auto result = client->session.redisCommand(encoded);
+    if (!result) {
+        return map_redis_error(result.error());
+    }
+    auto* wrapped = new (std::nothrow) galay_redis_reply(result->getReply());
+    if (wrapped == nullptr) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    *out_reply = wrapped;
+    return GALAY_OK;
 }
 
 } // extern "C"
