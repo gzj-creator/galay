@@ -27,6 +27,8 @@
 #else
 #define GALAY_C_API __declspec(dllimport)
 #endif
+#elif defined(GALAY_C_SHARED) && (defined(__GNUC__) || defined(__clang__))
+#define GALAY_C_API __attribute__((visibility("default")))
 #else
 #define GALAY_C_API
 #endif

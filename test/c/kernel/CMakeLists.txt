@@ -20,3 +20,6 @@ add_test(NAME c.kernel.config_and_socket_handles COMMAND test_c_kernel_config_an
 
 galay_add_c_kernel_test(test_c_kernel_tcp_accept_api t4_tcp_accept_api.c)
 add_test(NAME c.kernel.tcp_accept_api COMMAND test_c_kernel_tcp_accept_api)
+
+galay_add_c_kernel_test(test_c_kernel_socket_lifetime_boundary t5_socket_lifetime_boundary.c)
+add_test(NAME c.kernel.socket_lifetime_boundary COMMAND test_c_kernel_socket_lifetime_boundary)

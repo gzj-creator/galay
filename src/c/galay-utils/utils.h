@@ -11,23 +11,20 @@
 #ifndef GALAY_C_GALAY_UTILS_UTILS_H
 #define GALAY_C_GALAY_UTILS_UTILS_H
 
-#include <stddef.h>
-#include <stdint.h>
+#include <galay/c/galay-c/common/galay_c_error.h>
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+GALAY_C_BEGIN_DECLS
 
 /**
- * @brief utils C API 状态码
+ * @brief utils 旧状态类型别名，保留源码兼容；新代码应直接使用 galay_status_t。
  */
-typedef enum galay_utils_status {
-    GALAY_UTILS_OK = 0,
-    GALAY_UTILS_INVALID_ARGUMENT = 1,
-    GALAY_UTILS_OUT_OF_MEMORY = 2,
-    GALAY_UTILS_BUFFER_TOO_SMALL = 3,
-    GALAY_UTILS_INTERNAL_ERROR = 4
-} galay_utils_status_t;
+typedef galay_status_t galay_utils_status_t;
+
+#define GALAY_UTILS_OK GALAY_OK
+#define GALAY_UTILS_INVALID_ARGUMENT GALAY_INVALID_ARGUMENT
+#define GALAY_UTILS_OUT_OF_MEMORY GALAY_OUT_OF_MEMORY
+#define GALAY_UTILS_BUFFER_TOO_SMALL GALAY_BUFFER_TOO_SMALL
+#define GALAY_UTILS_INTERNAL_ERROR GALAY_INTERNAL_ERROR
 
 typedef struct galay_utils_bytes galay_utils_bytes_t;
 typedef struct galay_utils_ring_buffer galay_utils_ring_buffer_t;
@@ -39,7 +36,7 @@ typedef struct galay_utils_ring_buffer galay_utils_ring_buffer_t;
  * @param out 输出 handle，成功后由调用方通过 galay_utils_bytes_destroy 释放
  * @return 状态码
  */
-galay_utils_status_t galay_utils_bytes_create(
+GALAY_C_API galay_status_t galay_utils_bytes_create(
     const void* data,
     size_t length,
     galay_utils_bytes_t** out);
@@ -48,28 +45,28 @@ galay_utils_status_t galay_utils_bytes_create(
  * @brief 销毁字节对象并将 handle 置空
  * @param bytes 指向 handle 的指针；NULL 或 *bytes 为 NULL 时无操作
  */
-void galay_utils_bytes_destroy(galay_utils_bytes_t** bytes);
+GALAY_C_API void galay_utils_bytes_destroy(galay_utils_bytes_t** bytes);
 
 /**
  * @brief 获取字节对象中的只读数据指针
  * @param bytes 字节对象
  * @return 只读数据指针；空对象或 NULL handle 返回 NULL
  */
-const uint8_t* galay_utils_bytes_data(const galay_utils_bytes_t* bytes);
+GALAY_C_API const uint8_t* galay_utils_bytes_data(const galay_utils_bytes_t* bytes);
 
 /**
  * @brief 获取可读字节数
  * @param bytes 字节对象
  * @return 可读字节数；NULL handle 返回 0
  */
-size_t galay_utils_bytes_size(const galay_utils_bytes_t* bytes);
+GALAY_C_API size_t galay_utils_bytes_size(const galay_utils_bytes_t* bytes);
 
 /**
  * @brief 获取容量
  * @param bytes 字节对象
  * @return 容量；NULL handle 返回 0
  */
-size_t galay_utils_bytes_capacity(const galay_utils_bytes_t* bytes);
+GALAY_C_API size_t galay_utils_bytes_capacity(const galay_utils_bytes_t* bytes);
 
 /**
  * @brief 创建固定容量环形缓冲区
@@ -77,7 +74,7 @@ size_t galay_utils_bytes_capacity(const galay_utils_bytes_t* bytes);
  * @param out 输出 handle，成功后由调用方通过 galay_utils_ring_buffer_destroy 释放
  * @return 状态码
  */
-galay_utils_status_t galay_utils_ring_buffer_create(
+GALAY_C_API galay_status_t galay_utils_ring_buffer_create(
     size_t capacity,
     galay_utils_ring_buffer_t** out);
 
@@ -85,11 +82,11 @@ galay_utils_status_t galay_utils_ring_buffer_create(
  * @brief 销毁环形缓冲区并将 handle 置空
  * @param ring 指向 handle 的指针；NULL 或 *ring 为 NULL 时无操作
  */
-void galay_utils_ring_buffer_destroy(galay_utils_ring_buffer_t** ring);
+GALAY_C_API void galay_utils_ring_buffer_destroy(galay_utils_ring_buffer_t** ring);
 
-size_t galay_utils_ring_buffer_capacity(const galay_utils_ring_buffer_t* ring);
-size_t galay_utils_ring_buffer_readable(const galay_utils_ring_buffer_t* ring);
-size_t galay_utils_ring_buffer_writable(const galay_utils_ring_buffer_t* ring);
+GALAY_C_API size_t galay_utils_ring_buffer_capacity(const galay_utils_ring_buffer_t* ring);
+GALAY_C_API size_t galay_utils_ring_buffer_readable(const galay_utils_ring_buffer_t* ring);
+GALAY_C_API size_t galay_utils_ring_buffer_writable(const galay_utils_ring_buffer_t* ring);
 
 /**
  * @brief 写入环形缓冲区
@@ -99,7 +96,7 @@ size_t galay_utils_ring_buffer_writable(const galay_utils_ring_buffer_t* ring);
  * @param written 实际写入字节数；可为 NULL
  * @return 全量写入返回 OK，空间不足返回 BUFFER_TOO_SMALL
  */
-galay_utils_status_t galay_utils_ring_buffer_write(
+GALAY_C_API galay_status_t galay_utils_ring_buffer_write(
     galay_utils_ring_buffer_t* ring,
     const void* data,
     size_t length,
@@ -113,13 +110,13 @@ galay_utils_status_t galay_utils_ring_buffer_write(
  * @param read_bytes 实际读取字节数；可为 NULL
  * @return 全量读取返回 OK，可读数据不足返回 BUFFER_TOO_SMALL
  */
-galay_utils_status_t galay_utils_ring_buffer_read(
+GALAY_C_API galay_status_t galay_utils_ring_buffer_read(
     galay_utils_ring_buffer_t* ring,
     void* data,
     size_t length,
     size_t* read_bytes);
 
-void galay_utils_ring_buffer_clear(galay_utils_ring_buffer_t* ring);
+GALAY_C_API void galay_utils_ring_buffer_clear(galay_utils_ring_buffer_t* ring);
 
 /**
  * @brief Base64 编码
@@ -130,7 +127,7 @@ void galay_utils_ring_buffer_clear(galay_utils_ring_buffer_t* ring);
  * @param output_length 成功时为实际长度，缓冲区不足时为所需长度
  * @return 状态码
  */
-galay_utils_status_t galay_utils_base64_encode(
+GALAY_C_API galay_status_t galay_utils_base64_encode(
     const void* data,
     size_t length,
     char* output,
@@ -146,33 +143,31 @@ galay_utils_status_t galay_utils_base64_encode(
  * @param output_length 成功时为实际长度，缓冲区不足时为所需长度
  * @return 状态码；非法 Base64 输入返回 INVALID_ARGUMENT
  */
-galay_utils_status_t galay_utils_base64_decode(
+GALAY_C_API galay_status_t galay_utils_base64_decode(
     const char* data,
     size_t length,
     void* output,
     size_t output_capacity,
     size_t* output_length);
 
-galay_utils_status_t galay_utils_md5(
+GALAY_C_API galay_status_t galay_utils_md5(
     const void* data,
     size_t length,
     uint8_t* output,
     size_t output_capacity);
 
-galay_utils_status_t galay_utils_sha1(
+GALAY_C_API galay_status_t galay_utils_sha1(
     const void* data,
     size_t length,
     uint8_t* output,
     size_t output_capacity);
 
-galay_utils_status_t galay_utils_murmur3_32(
+GALAY_C_API galay_status_t galay_utils_murmur3_32(
     const void* data,
     size_t length,
     uint32_t seed,
     uint32_t* output);
 
-#ifdef __cplusplus
-}
-#endif
+GALAY_C_END_DECLS
 
 #endif

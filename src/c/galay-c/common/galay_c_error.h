@@ -18,8 +18,13 @@ typedef enum galay_status {
     GALAY_PROTOCOL_ERROR = 4,
     GALAY_UNSUPPORTED = 5,
     GALAY_NOT_FOUND = 6,
-    GALAY_INTERNAL_ERROR = 7
+    GALAY_INTERNAL_ERROR = 7,
+    GALAY_BUFFER_TOO_SMALL = 8
 } galay_status_t;
+
+GALAY_C_API uint32_t galay_c_version_major(void);
+GALAY_C_API uint32_t galay_c_version_minor(void);
+GALAY_C_API uint32_t galay_c_version_patch(void);
 
 GALAY_C_API const char* galay_status_string(galay_status_t status);
 

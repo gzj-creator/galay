@@ -7,6 +7,8 @@
 #include <arpa/inet.h>
 #include <array>
 #include <cstring>
+#include <exception>
+#include <memory>
 #include <new>
 #include <optional>
 #include <sys/socket.h>
@@ -163,6 +165,30 @@ void close_if_valid(GHandle handle) noexcept
     }
 }
 
+template <typename Fn>
+galay_status_t catch_kernel_boundary(Fn&& fn) noexcept
+{
+    try {
+        return fn();
+    } catch (const std::bad_alloc&) {
+        return GALAY_OUT_OF_MEMORY;
+    } catch (const std::exception&) {
+        return GALAY_INTERNAL_ERROR;
+    } catch (...) {
+        return GALAY_INTERNAL_ERROR;
+    }
+}
+
+template <typename Fn>
+galay_bool_t catch_kernel_bool_boundary(Fn&& fn) noexcept
+{
+    try {
+        return fn();
+    } catch (...) {
+        return GALAY_FALSE;
+    }
+}
+
 galay::kernel::Task<AcceptResult> c_tcp_accept(galay::async::TcpSocket* listener)
 {
     if (listener == nullptr) {
@@ -202,61 +228,71 @@ galay_status_t galay_kernel_runtime_create(
     const galay_kernel_runtime_config_t* config,
     galay_kernel_runtime_t** out_runtime)
 {
-    if (config == nullptr || out_runtime == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (config == nullptr || out_runtime == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    *out_runtime = nullptr;
-    auto* runtime = new (std::nothrow) galay_kernel_runtime{
-        galay::kernel::Runtime(to_cpp_runtime_config(*config))
-    };
-    if (runtime == nullptr) {
-        return GALAY_OUT_OF_MEMORY;
-    }
-    *out_runtime = runtime;
-    return GALAY_OK;
+        *out_runtime = nullptr;
+        auto* runtime = new (std::nothrow) galay_kernel_runtime{
+            galay::kernel::Runtime(to_cpp_runtime_config(*config))
+        };
+        if (runtime == nullptr) {
+            return GALAY_OUT_OF_MEMORY;
+        }
+        *out_runtime = runtime;
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_runtime_start(galay_kernel_runtime_t* runtime)
 {
-    if (runtime == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (runtime == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    auto started = runtime->runtime.start();
-    return started ? GALAY_OK : GALAY_INTERNAL_ERROR;
+        auto started = runtime->runtime.start();
+        return started ? GALAY_OK : GALAY_INTERNAL_ERROR;
+    });
 }
 
 galay_status_t galay_kernel_runtime_stop(galay_kernel_runtime_t* runtime)
 {
-    if (runtime == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (runtime == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    runtime->runtime.stop();
-    return GALAY_OK;
+        runtime->runtime.stop();
+        return GALAY_OK;
+    });
 }
 
 galay_bool_t galay_kernel_runtime_is_running(const galay_kernel_runtime_t* runtime)
 {
-    if (runtime == nullptr) {
-        return GALAY_FALSE;
-    }
-    return runtime->runtime.isRunning() ? GALAY_TRUE : GALAY_FALSE;
+    return catch_kernel_bool_boundary([&]() -> galay_bool_t {
+        if (runtime == nullptr) {
+            return GALAY_FALSE;
+        }
+        return runtime->runtime.isRunning() ? GALAY_TRUE : GALAY_FALSE;
+    });
 }
 
 galay_status_t galay_kernel_runtime_destroy(galay_kernel_runtime_t** runtime)
 {
-    if (runtime == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
-    if (*runtime == nullptr) {
-        return GALAY_OK;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (runtime == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        if (*runtime == nullptr) {
+            return GALAY_OK;
+        }
 
-    delete *runtime;
-    *runtime = nullptr;
-    return GALAY_OK;
+        delete *runtime;
+        *runtime = nullptr;
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_tcp_host_config_validate(
@@ -281,99 +317,107 @@ galay_status_t galay_kernel_tcp_socket_create(
     galay_kernel_ip_type_t ip_type,
     galay_kernel_tcp_socket_t** out_socket)
 {
-    if (!is_valid_ip_type(ip_type) || out_socket == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (!is_valid_ip_type(ip_type) || out_socket == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    *out_socket = nullptr;
-    auto created = galay::async::TcpSocket::create(to_cpp_ip_type(ip_type));
-    if (!created) {
-        return GALAY_IO_ERROR;
-    }
+        *out_socket = nullptr;
+        auto created = galay::async::TcpSocket::create(to_cpp_ip_type(ip_type));
+        if (!created) {
+            return GALAY_IO_ERROR;
+        }
 
-    auto* socket = new (std::nothrow) galay_kernel_tcp_socket{
-        std::move(*created),
-        {}
-    };
-    if (socket == nullptr) {
-        close_if_valid(created->handle());
-        return GALAY_OUT_OF_MEMORY;
-    }
-    *out_socket = socket;
-    return GALAY_OK;
+        auto* socket = new (std::nothrow) galay_kernel_tcp_socket{
+            std::move(*created),
+            {}
+        };
+        if (socket == nullptr) {
+            return GALAY_OUT_OF_MEMORY;
+        }
+        *out_socket = socket;
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_tcp_socket_destroy(galay_kernel_tcp_socket_t** socket)
 {
-    if (socket == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
-    if (*socket == nullptr) {
-        return GALAY_OK;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (socket == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        if (*socket == nullptr) {
+            return GALAY_OK;
+        }
 
-    close_if_valid((*socket)->socket.handle());
-    delete *socket;
-    *socket = nullptr;
-    return GALAY_OK;
+        delete *socket;
+        *socket = nullptr;
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_tcp_socket_bind(
     galay_kernel_tcp_socket_t* socket,
     const galay_kernel_tcp_host_config_t* host)
 {
-    if (socket == nullptr || host == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
-    if (validate_host_config(host->ip_type, host->address) != GALAY_OK) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (socket == nullptr || host == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        if (validate_host_config(host->ip_type, host->address) != GALAY_OK) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    auto reuse_addr = socket->socket.option().handleReuseAddr();
-    if (!reuse_addr) {
-        return GALAY_IO_ERROR;
-    }
-    auto non_block = socket->socket.option().handleNonBlock();
-    if (!non_block) {
-        return GALAY_IO_ERROR;
-    }
-    auto bound = socket->socket.bind(to_cpp_host(*host));
-    if (!bound) {
-        return GALAY_IO_ERROR;
-    }
-    socket->endpoint_address[0] = '\0';
-    return GALAY_OK;
+        auto reuse_addr = socket->socket.option().handleReuseAddr();
+        if (!reuse_addr) {
+            return GALAY_IO_ERROR;
+        }
+        auto non_block = socket->socket.option().handleNonBlock();
+        if (!non_block) {
+            return GALAY_IO_ERROR;
+        }
+        auto bound = socket->socket.bind(to_cpp_host(*host));
+        if (!bound) {
+            return GALAY_IO_ERROR;
+        }
+        socket->endpoint_address[0] = '\0';
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_tcp_socket_listen(galay_kernel_tcp_socket_t* socket, int backlog)
 {
-    if (socket == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (socket == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    auto result = socket->socket.listen(backlog);
-    return result ? GALAY_OK : GALAY_IO_ERROR;
+        auto result = socket->socket.listen(backlog);
+        return result ? GALAY_OK : GALAY_IO_ERROR;
+    });
 }
 
 galay_status_t galay_kernel_tcp_socket_local_endpoint(
     const galay_kernel_tcp_socket_t* socket,
     galay_kernel_tcp_host_config_t* out_host)
 {
-    if (socket == nullptr || out_host == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (socket == nullptr || out_host == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    sockaddr_storage storage{};
-    socklen_t length = sizeof(storage);
-    if (::getsockname(socket->socket.handle().fd, reinterpret_cast<sockaddr*>(&storage), &length) != 0) {
-        return GALAY_IO_ERROR;
-    }
+        sockaddr_storage storage{};
+        socklen_t length = sizeof(storage);
+        if (::getsockname(socket->socket.handle().fd, reinterpret_cast<sockaddr*>(&storage), &length) != 0) {
+            return GALAY_IO_ERROR;
+        }
 
-    return assign_endpoint_config(
-        storage,
-        socket->endpoint_address.data(),
-        socket->endpoint_address.size(),
-        out_host);
+        return assign_endpoint_config(
+            storage,
+            socket->endpoint_address.data(),
+            socket->endpoint_address.size(),
+            out_host);
+    });
 }
 
 galay_status_t galay_kernel_tcp_accept_start(
@@ -381,55 +425,56 @@ galay_status_t galay_kernel_tcp_accept_start(
     galay_kernel_tcp_socket_t* listener,
     galay_kernel_tcp_accept_t** out_accept)
 {
-    if (runtime == nullptr || listener == nullptr || out_accept == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (runtime == nullptr || listener == nullptr || out_accept == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    *out_accept = nullptr;
-    auto* accept = new (std::nothrow) galay_kernel_tcp_accept{};
-    if (accept == nullptr) {
-        return GALAY_OUT_OF_MEMORY;
-    }
+        *out_accept = nullptr;
+        std::unique_ptr<galay_kernel_tcp_accept> accept(new (std::nothrow) galay_kernel_tcp_accept{});
+        if (accept == nullptr) {
+            return GALAY_OUT_OF_MEMORY;
+        }
 
-    auto started = runtime->runtime.start();
-    if (!started) {
-        delete accept;
-        return GALAY_INTERNAL_ERROR;
-    }
-    auto* scheduler = runtime->runtime.getNextIOScheduler();
-    if (scheduler == nullptr) {
-        delete accept;
-        return GALAY_INTERNAL_ERROR;
-    }
+        auto started = runtime->runtime.start();
+        if (!started) {
+            return GALAY_INTERNAL_ERROR;
+        }
+        auto* scheduler = runtime->runtime.getNextIOScheduler();
+        if (scheduler == nullptr) {
+            return GALAY_INTERNAL_ERROR;
+        }
 
-    auto task = c_tcp_accept(&listener->socket);
-    auto task_ref = galay::kernel::detail::TaskAccess::detachTask(std::move(task));
-    galay::kernel::detail::setTaskRuntime(task_ref, &runtime->runtime);
-    galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
-    if (!galay::kernel::detail::scheduleTask(task_ref)) {
-        delete accept;
-        return GALAY_INTERNAL_ERROR;
-    }
+        auto task = c_tcp_accept(&listener->socket);
+        auto task_ref = galay::kernel::detail::TaskAccess::detachTask(std::move(task));
+        galay::kernel::detail::setTaskRuntime(task_ref, &runtime->runtime);
+        galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
+        if (!galay::kernel::detail::scheduleTask(task_ref)) {
+            return GALAY_INTERNAL_ERROR;
+        }
 
-    accept->handle.emplace(galay::kernel::JoinHandle<AcceptResult>(std::move(task_ref)));
-    *out_accept = accept;
-    return GALAY_OK;
+        accept->handle.emplace(galay::kernel::JoinHandle<AcceptResult>(std::move(task_ref)));
+        *out_accept = accept.release();
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_tcp_accept_wait(galay_kernel_tcp_accept_t* accept)
 {
-    if (accept == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
-    if (accept->joined) {
-        return GALAY_OK;
-    }
-    if (!accept->handle.has_value()) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (accept == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        if (accept->joined) {
+            return GALAY_OK;
+        }
+        if (!accept->handle.has_value()) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    auto result = accept->handle->wait();
-    return result ? GALAY_OK : GALAY_INTERNAL_ERROR;
+        auto result = accept->handle->wait();
+        return result ? GALAY_OK : GALAY_INTERNAL_ERROR;
+    });
 }
 
 galay_status_t galay_kernel_tcp_accept_join(
@@ -437,116 +482,123 @@ galay_status_t galay_kernel_tcp_accept_join(
     galay_kernel_tcp_socket_t** out_socket,
     galay_kernel_tcp_host_config_t* out_peer)
 {
-    if (accept == nullptr || out_socket == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
-    if (accept->joined || !accept->handle.has_value()) {
-        *out_socket = nullptr;
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (out_socket != nullptr) {
+            *out_socket = nullptr;
+        }
+        if (accept == nullptr || out_socket == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        if (accept->joined || !accept->handle.has_value()) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    *out_socket = nullptr;
-    auto joined = accept->handle->join();
-    accept->joined = true;
-    accept->handle.reset();
-    if (!joined) {
-        return GALAY_INTERNAL_ERROR;
-    }
-    if (joined->status != GALAY_OK) {
-        return joined->status;
-    }
-    if (!joined->accepted_handle.has_value()) {
-        return GALAY_INTERNAL_ERROR;
-    }
+        auto joined = accept->handle->join();
+        accept->joined = true;
+        accept->handle.reset();
+        if (!joined) {
+            return GALAY_INTERNAL_ERROR;
+        }
+        if (joined->status != GALAY_OK) {
+            return joined->status;
+        }
+        if (!joined->accepted_handle.has_value()) {
+            return GALAY_INTERNAL_ERROR;
+        }
 
-    GHandle accepted_handle = joined->accepted_handle.value();
-    auto* socket = new (std::nothrow) galay_kernel_tcp_socket{
-        galay::async::TcpSocket(accepted_handle),
-        {}
-    };
-    if (socket == nullptr) {
-        close_if_valid(accepted_handle);
-        return GALAY_OUT_OF_MEMORY;
-    }
-
-    if (out_peer != nullptr) {
-        accept->peer_address = joined->peer_address;
-        *out_peer = galay_kernel_tcp_host_config_t{
-            joined->peer_ip_type,
-            accept->peer_address.data(),
-            joined->peer_port
+        GHandle accepted_handle = joined->accepted_handle.value();
+        auto* socket = new (std::nothrow) galay_kernel_tcp_socket{
+            galay::async::TcpSocket(accepted_handle),
+            {}
         };
-    }
+        if (socket == nullptr) {
+            close_if_valid(accepted_handle);
+            return GALAY_OUT_OF_MEMORY;
+        }
 
-    *out_socket = socket;
-    return GALAY_OK;
+        if (out_peer != nullptr) {
+            accept->peer_address = joined->peer_address;
+            *out_peer = galay_kernel_tcp_host_config_t{
+                joined->peer_ip_type,
+                accept->peer_address.data(),
+                joined->peer_port
+            };
+        }
+
+        *out_socket = socket;
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_tcp_accept_destroy(galay_kernel_tcp_accept_t** accept)
 {
-    if (accept == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
-    if (*accept == nullptr) {
-        return GALAY_OK;
-    }
-
-    galay_status_t status = GALAY_OK;
-    if (!(*accept)->joined && (*accept)->handle.has_value()) {
-        auto joined = (*accept)->handle->join();
-        (*accept)->joined = true;
-        (*accept)->handle.reset();
-        if (joined) {
-            if (joined->accepted_handle.has_value()) {
-                close_if_valid(joined->accepted_handle.value());
-            }
-        } else {
-            status = GALAY_INTERNAL_ERROR;
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (accept == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
         }
-    }
-    delete *accept;
-    *accept = nullptr;
-    return status;
+        if (*accept == nullptr) {
+            return GALAY_OK;
+        }
+
+        galay_status_t status = GALAY_OK;
+        if (!(*accept)->joined && (*accept)->handle.has_value()) {
+            auto joined = (*accept)->handle->join();
+            (*accept)->joined = true;
+            (*accept)->handle.reset();
+            if (joined) {
+                if (joined->accepted_handle.has_value()) {
+                    close_if_valid(joined->accepted_handle.value());
+                }
+            } else {
+                status = GALAY_INTERNAL_ERROR;
+            }
+        }
+        delete *accept;
+        *accept = nullptr;
+        return status;
+    });
 }
 
 galay_status_t galay_kernel_udp_socket_create(
     galay_kernel_ip_type_t ip_type,
     galay_kernel_udp_socket_t** out_socket)
 {
-    if (!is_valid_ip_type(ip_type) || out_socket == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (!is_valid_ip_type(ip_type) || out_socket == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
 
-    *out_socket = nullptr;
-    auto created = galay::async::UdpSocket::create(to_cpp_ip_type(ip_type));
-    if (!created) {
-        return GALAY_IO_ERROR;
-    }
+        *out_socket = nullptr;
+        auto created = galay::async::UdpSocket::create(to_cpp_ip_type(ip_type));
+        if (!created) {
+            return GALAY_IO_ERROR;
+        }
 
-    auto* socket = new (std::nothrow) galay_kernel_udp_socket{
-        std::move(*created)
-    };
-    if (socket == nullptr) {
-        close_if_valid(created->handle());
-        return GALAY_OUT_OF_MEMORY;
-    }
-    *out_socket = socket;
-    return GALAY_OK;
+        auto* socket = new (std::nothrow) galay_kernel_udp_socket{
+            std::move(*created)
+        };
+        if (socket == nullptr) {
+            return GALAY_OUT_OF_MEMORY;
+        }
+        *out_socket = socket;
+        return GALAY_OK;
+    });
 }
 
 galay_status_t galay_kernel_udp_socket_destroy(galay_kernel_udp_socket_t** socket)
 {
-    if (socket == nullptr) {
-        return GALAY_INVALID_ARGUMENT;
-    }
-    if (*socket == nullptr) {
-        return GALAY_OK;
-    }
+    return catch_kernel_boundary([&]() -> galay_status_t {
+        if (socket == nullptr) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        if (*socket == nullptr) {
+            return GALAY_OK;
+        }
 
-    close_if_valid((*socket)->socket.handle());
-    delete *socket;
-    *socket = nullptr;
-    return GALAY_OK;
+        delete *socket;
+        *socket = nullptr;
+        return GALAY_OK;
+    });
 }
 
 } // extern "C"

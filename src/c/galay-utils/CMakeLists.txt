@@ -1,7 +1,11 @@
 add_library(galay-c-utils utils.cc)
 add_library(galay::c-utils ALIAS galay-c-utils)
 
-target_link_libraries(galay-c-utils PUBLIC galay::utils)
+target_link_libraries(galay-c-utils
+    PUBLIC
+        galay::c-common
+        galay::utils
+)
 target_include_directories(galay-c-utils
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
