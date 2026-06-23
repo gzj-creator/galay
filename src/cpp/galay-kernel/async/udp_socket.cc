@@ -121,10 +121,13 @@ std::expected<GHandle, IOError> UdpSocket::openHandle(IPType type)
  * @brief 将套接字绑定到本地地址
  *
  * @param host 要绑定的本地地址（IP 和端口）
- * @return 成功返回 void，失败返回带 kBindFailed 的 IOError
+ * @return 成功返回 void；Host 非法返回 kParamInvalid；系统 bind 失败返回 kBindFailed
  */
 std::expected<void, IOError> UdpSocket::bind(const Host& host)
 {
+    if (!host.valid()) {
+        return std::unexpected(IOError(kParamInvalid, 0));
+    }
     if (::bind(m_controller.m_handle.fd, host.sockAddr(), host.addrLen()) < 0) {
         return std::unexpected(IOError(kBindFailed, errno));
     }

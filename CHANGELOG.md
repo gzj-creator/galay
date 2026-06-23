@@ -17,7 +17,8 @@
 - 新增对应压力/性能基准，覆盖 kernel task timeout/resource error、HTTP/WS 协议边界、Mongo expected 错误传播、utils resource error，以及 RPC payload scaling 等场景。
 - 新增 C API no-exception 源码边界守卫，覆盖 MySQL/Mongo/tracing/HTTP2/Redis/etcd C 包装层与 Base64 工具，防止异常控制流重新进入这些边界文件。
 - 新增 Redis 连接池 waiter 状态仲裁测试、黑盒等待者测试、Rediss acquire 连接态回归测试与压力基准，覆盖 release/timeout/cancel 竞争和等待者统计泄漏。
-- 新增 C ABI TCP accept cancel/destroy/join 边界测试与 cancel 基准，覆盖 pending accept 销毁、取消后 join 以及监听 socket 提前销毁场景。
+- 新增 C ABI TCP accept callback 边界测试、示例与 smoke 基准，覆盖持续 accept loop 通过回调交付 accepted socket 与 peer 信息。
+- 新增 `galay-kernel-c` 分层 C ABI：`core-c/runtime_c.*` 暴露 runtime 生命周期接口，`common-c/host.h` 定义 `C_Host` 值类型，`async-c/tcp_socket_c.*` 暴露 TCP socket 句柄、bind 和 accept callback 相关声明。
 - 新增 MCP 命名边界测试，递归扫描 `src/cpp/galay-mcp` 中的 C++ 源码符号，防止 MCP 自有函数/方法重新出现大写开头驼峰命名。
 - 新增 kernel sequence 错误边界、MySQL packet 边界、RPC core/etcd adapter 表面、tracing shutdown timeout 等回归测试与压力基准。
 - **C ABI 符号可见性与版本接口**：`src/c/CMakeLists.txt` 新增 `galay_configure_c_api_target`，为 14 个 `galay-c-*` 共享库 target 统一配置 `GALAY_C_SHARED` / `GALAY_C_BUILDING` 宏、hidden visibility 与 `VERSION` / `SOVERSION` 属性；`galay_c_defs.h` 新增 GCC/Clang 下 `visibility("default")` 导出属性；`galay_c_error.h/cc` 新增 `galay_c_version_{major,minor,patch}()` 与 `GALAY_BUFFER_TOO_SMALL` 状态码，并新增 `test/c/common/abi_version_smoke.c` 锁定编译期宏与运行期函数一致。
@@ -31,6 +32,12 @@
 - MCP 自有 JSON 文档、写入器、解析辅助函数及相关调用点统一改为小写开头驼峰命名，保留类型名、构造函数、协议字段和 JSON-RPC 方法字符串不变。
 - RPC 的 etcd adapter 从核心 `galay::rpc` 目标拆分为可选 `galay::rpc-etcd` / `galay.rpc.etcd` 表面，避免核心 RPC 消费者隐式暴露 `GALAY_RPC_HAS_ETCD`。
 - **统一 utils C ABI 状态码到 `galay_status_t`**：`galay_utils_status_t` 改为 `galay_status_t` 别名，`GALAY_UTILS_*` 宏映射到 `GALAY_*`；utils 全部导出函数签名统一返回 `galay_status_t` 并标注 `GALAY_C_API`，`utils.h` 改用 `GALAY_C_BEGIN_DECLS`；`test/c/utils/header_smoke.c` 增加 `_Static_assert` 锁定新签名，`galay-c-utils` 显式链接 `galay::c-common`。
+- kernel C API 实现按 runtime、TCP socket 拆分到 `core-c` 与 `async-c`，并将 runtime / TCP socket C 句柄调整为 FFI 可见的 `void*` 载荷结构。
+
+### Removed
+
+- 移除 C ABI TCP accept 单次 awaitable handle 接口 `galay_kernel_tcp_accept_{start,wait,join,cancel,destroy}`，改用 `galay_kernel_tcp_socket_accept` 启动 socket 绑定的 callback accept loop。
+- 移除旧 `src/c/galay-{c,utils,http,ws,http2,redis,rpc,mysql,mongo,etcd,mcp,ssl,tracing}` 包装层源码，当前 C API 构建入口仅保留 `galay-kernel-c`。
 
 ### Fixed
 
@@ -41,11 +48,14 @@
 - 修复 C API MySQL/Mongo/tracing/HTTP2/Redis/etcd 包装层中残留的异常边界路径，统一改为显式返回码、空指针检查和 no-fail 分配检查。
 - 修复 Redis/Rediss 连接池等待者 release、timeout、shutdown 之间的竞态，等待者完成状态只允许一次性转移，并修正 active/waiting 统计泄漏。
 - 修复 C ABI TCP accept 在 pending 状态下无法可靠取消的问题，通过共享监听状态和本地 cancel 连接唤醒 accept，避免 destroy/join 卡住。
-- **加固 C ABI kernel 异常边界**：`src/c/galay-kernel/galay_kernel.cc` 引入 `catch_kernel_boundary` / `catch_kernel_bool_boundary` 模板，系统化捕获 `std::bad_alloc` / `std::exception` / `...` 并映射到 `GALAY_OUT_OF_MEMORY` / `GALAY_INTERNAL_ERROR`；新增 `test/c/kernel/t5_socket_lifetime_boundary.c` 覆盖 runtime 与 tcp/udp socket 的创建、销毁、重复销毁与 accept 句柄销毁边界。该改动修正了 `e176cd0` 过度移除 try/catch 导致 `Runtime` 构造器异常越过 C ABI 边界的问题。
+- 加固 C ABI kernel 生命周期边界：`test/c/kernel/t5_socket_lifetime_boundary.c` 覆盖 runtime、tcp/udp socket 与 accept loop 的空指针、重复销毁和停止请求边界。
+- 加固 C++ `Host` 字符串构造与 TCP/UDP bind 边界：非法 IP 或协议类型会被标记为 invalid，bind 在系统调用前返回 `IOError(kParamInvalid)`，C ABI bind 将其映射为 `ParameterInvalid`。
 
 ### Docs
 
 ### Chore
+
+- 恢复 `src/c/CMakeLists.txt` 最小入口，`GALAY_BUILD_C_API=ON` 时只注册当前保留的 `galay-kernel-c` target。
 
 ## [v3.0.0] - 2026-06-22
 

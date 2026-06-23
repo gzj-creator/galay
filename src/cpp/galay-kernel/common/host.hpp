@@ -51,6 +51,7 @@ struct Host {
      * @param proto IPv4 或 IPv6
      * @param ip 点分十进制或冒号十六进制 IP 字符串
      * @param port 主机字节序的端口号
+     * @note 若协议版本或 IP 字符串非法，Host 会被标记为 invalid，可通过 valid() 查询。
      */
     Host(IPType proto, const std::string& ip, uint16_t port) {
         std::memset(&m_addr, 0, sizeof(m_addr));
@@ -58,14 +59,22 @@ struct Host {
             sockaddr_in* addr4 = reinterpret_cast<sockaddr_in*>(&m_addr);
             addr4->sin_family = AF_INET;
             addr4->sin_port = htons(port);
-            inet_pton(AF_INET, ip.c_str(), &addr4->sin_addr);
+            if (inet_pton(AF_INET, ip.c_str(), &addr4->sin_addr) != 1) {
+                markInvalid();
+                return;
+            }
             m_addr_len = sizeof(sockaddr_in);
-        } else {
+        } else if (proto == IPType::IPV6) {
             sockaddr_in6* addr6 = reinterpret_cast<sockaddr_in6*>(&m_addr);
             addr6->sin6_family = AF_INET6;
             addr6->sin6_port = htons(port);
-            inet_pton(AF_INET6, ip.c_str(), &addr6->sin6_addr);
+            if (inet_pton(AF_INET6, ip.c_str(), &addr6->sin6_addr) != 1) {
+                markInvalid();
+                return;
+            }
             m_addr_len = sizeof(sockaddr_in6);
+        } else {
+            markInvalid();
         }
     }
 
@@ -101,12 +110,15 @@ struct Host {
             host.m_addr_len = sizeof(sockaddr_in);
         } else if (addr.ss_family == AF_INET6) {
             host.m_addr_len = sizeof(sockaddr_in6);
+        } else {
+            host.markInvalid();
         }
         return host;
     }
 
-    bool isIPv4() const { return m_addr.ss_family == AF_INET; }   ///< 检查存储的地址是否为 IPv4
-    bool isIPv6() const { return m_addr.ss_family == AF_INET6; }  ///< 检查存储的地址是否为 IPv6
+    bool valid() const { return isIPv4() || isIPv6(); }           ///< 检查地址是否为合法 IPv4/IPv6。
+    bool isIPv4() const { return m_addr.ss_family == AF_INET && m_addr_len == sizeof(sockaddr_in); }   ///< 检查存储的地址是否为 IPv4
+    bool isIPv6() const { return m_addr.ss_family == AF_INET6 && m_addr_len == sizeof(sockaddr_in6); }  ///< 检查存储的地址是否为 IPv6
 
     /**
      * @brief 获取 IP 地址字符串
@@ -118,12 +130,13 @@ struct Host {
             char buf[INET_ADDRSTRLEN];
             inet_ntop(AF_INET, &addr4->sin_addr, buf, sizeof(buf));
             return buf;
-        } else {
+        } else if (isIPv6()) {
             const sockaddr_in6* addr6 = reinterpret_cast<const sockaddr_in6*>(&m_addr);
             char buf[INET6_ADDRSTRLEN];
             inet_ntop(AF_INET6, &addr6->sin6_addr, buf, sizeof(buf));
             return buf;
         }
+        return {};
     }
 
     /**
@@ -134,16 +147,24 @@ struct Host {
         if (isIPv4()) {
             const sockaddr_in* addr4 = reinterpret_cast<const sockaddr_in*>(&m_addr);
             return ntohs(addr4->sin_port);
-        } else {
+        } else if (isIPv6()) {
             const sockaddr_in6* addr6 = reinterpret_cast<const sockaddr_in6*>(&m_addr);
             return ntohs(addr6->sin6_port);
         }
+        return 0;
     }
 
     sockaddr* sockAddr() { return reinterpret_cast<sockaddr*>(&m_addr); }              ///< 获取用于系统调用的可变 sockaddr 指针
     const sockaddr* sockAddr() const { return reinterpret_cast<const sockaddr*>(&m_addr); } ///< 获取常量 sockaddr 指针
     socklen_t* addrLen() { return &m_addr_len; }           ///< 获取用于系统调用更新的可变长度指针
     socklen_t addrLen() const { return m_addr_len; }       ///< 获取当前地址结构长度
+
+private:
+    void markInvalid() {
+        std::memset(&m_addr, 0, sizeof(m_addr));
+        m_addr.ss_family = AF_UNSPEC;
+        m_addr_len = 0;
+    }
 };
 
 } // namespace galay::kernel

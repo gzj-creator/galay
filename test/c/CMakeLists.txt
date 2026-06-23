@@ -1,4 +1,6 @@
-add_subdirectory(common)
+if(TARGET galay::c-common AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/common/CMakeLists.txt")
+    add_subdirectory(common)
+endif()
 
 if(TARGET galay::c-utils AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/utils/CMakeLists.txt")
     add_subdirectory(utils)

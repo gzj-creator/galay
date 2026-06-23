@@ -10,5 +10,3 @@ function(galay_add_c_kernel_benchmark target_name source_file)
 endfunction()
 
 galay_add_c_kernel_benchmark(benchmark_c_kernel_runtime_lifecycle b1_runtime_lifecycle.c)
-galay_add_c_kernel_benchmark(benchmark_c_kernel_tcp_accept_smoke b2_tcp_accept_smoke.c)
-galay_add_c_kernel_benchmark(benchmark_c_kernel_tcp_accept_cancel b3_tcp_accept_cancel.c)
