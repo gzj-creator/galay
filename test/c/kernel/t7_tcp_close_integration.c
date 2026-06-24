@@ -28,13 +28,13 @@ static void on_accept(galay_kernel_tcp_accept_result_t* result, void* ctx)
 {
     AcceptState* state = (AcceptState*)ctx;
     if (result == 0) {
-        atomic_store(&state->code, (int)IOFailed);
+        atomic_store(&state->code, (int)C_TcpSocketIOFailed);
         atomic_store(&state->done, 1);
         return;
     }
 
     atomic_store(&state->code, (int)result->code);
-    if (result->code == Success) {
+    if (result->code == C_TcpSocketSuccess) {
         state->socket = result->socket;
     }
     atomic_store(&state->done, 1);
@@ -103,27 +103,27 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_tcp_socket_t listener = {0};
-    C_Host bind_host = {IPV4, "127.0.0.1", 0};
+    C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
     int client_fd = -1;
     int exit_code = 0;
 
     AcceptState accept_state;
     atomic_init(&accept_state.done, 0);
-    atomic_init(&accept_state.code, (int)IOFailed);
+    atomic_init(&accept_state.code, (int)C_TcpSocketIOFailed);
     accept_state.socket.socket = 0;
 
     CloseState close_state;
     atomic_init(&close_state.done, 0);
-    atomic_init(&close_state.code, (int)IOFailed);
+    atomic_init(&close_state.code, (int)C_TcpSocketIOFailed);
 
-    if (expect_status(galay_kernel_tcp_socket_close(0, &listener, on_close, &close_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_close(0, &listener, on_close, &close_state), C_TcpSocketParameterInvalid)) {
         return 1;
     }
-    if (expect_status(galay_kernel_tcp_socket_close(&runtime, 0, on_close, &close_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_close(&runtime, 0, on_close, &close_state), C_TcpSocketParameterInvalid)) {
         return 2;
     }
-    if (expect_status(galay_kernel_tcp_socket_close(&runtime, &listener, 0, &close_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_close(&runtime, &listener, 0, &close_state), C_TcpSocketParameterInvalid)) {
         return 3;
     }
 
@@ -134,23 +134,23 @@ int main(void)
         exit_code = 5;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_create(&listener, IPV4), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_create(&listener, C_IPTypeIPV4), C_TcpSocketSuccess)) {
         exit_code = 6;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_bind(&listener, &bind_host), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_bind(&listener, &bind_host), C_TcpSocketSuccess)) {
         exit_code = 7;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_listen(&listener, 16), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_listen(&listener, 16), C_TcpSocketSuccess)) {
         exit_code = 8;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&listener, &local), Success) || local.port == 0) {
+    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&listener, &local), C_TcpSocketSuccess) || local.port == 0) {
         exit_code = 9;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_accept(&runtime, &listener, on_accept, &accept_state), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_accept(&runtime, &listener, on_accept, &accept_state), C_TcpSocketSuccess)) {
         exit_code = 10;
         goto cleanup;
     }
@@ -161,19 +161,19 @@ int main(void)
         goto cleanup;
     }
     if (wait_done(&accept_state.done) != 0 ||
-        atomic_load(&accept_state.code) != (int)Success ||
+        atomic_load(&accept_state.code) != (int)C_TcpSocketSuccess ||
         accept_state.socket.socket == 0) {
         exit_code = 12;
         goto cleanup;
     }
 
     if (expect_status(galay_kernel_tcp_socket_close(
-            &runtime, &accept_state.socket, on_close, &close_state), Success)) {
+            &runtime, &accept_state.socket, on_close, &close_state), C_TcpSocketSuccess)) {
         exit_code = 13;
         goto cleanup;
     }
     if (wait_done(&close_state.done) != 0 ||
-        atomic_load(&close_state.code) != (int)Success) {
+        atomic_load(&close_state.code) != (int)C_TcpSocketSuccess) {
         exit_code = 14;
         goto cleanup;
     }

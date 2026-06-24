@@ -61,7 +61,7 @@ static int make_loopback_listener(C_Host* endpoint)
         return -1;
     }
 
-    endpoint->type = IPV4;
+    endpoint->type = C_IPTypeIPV4;
     strncpy(endpoint->address, "127.0.0.1", sizeof(endpoint->address));
     endpoint->address[sizeof(endpoint->address) - 1] = '\0';
     endpoint->port = ntohs(addr.sin_port);
@@ -73,7 +73,7 @@ static int wait_for_connect(ConnectState* state)
     struct timespec pause = {0, 1000000};
     for (int i = 0; i < 2000; ++i) {
         if (atomic_load(&state->done)) {
-            return atomic_load(&state->code) == (int)Success ? 0 : 1;
+            return atomic_load(&state->code) == (int)C_TcpSocketSuccess ? 0 : 1;
         }
         nanosleep(&pause, 0);
     }
@@ -102,15 +102,15 @@ static int test_connect_callback(galay_kernel_runtime_t* runtime)
     }
 
     galay_kernel_tcp_socket_t client = {0};
-    if (expect_status(galay_kernel_tcp_socket_create(&client, IPV4), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_create(&client, C_IPTypeIPV4), C_TcpSocketSuccess)) {
         close(server_fd);
         return 31;
     }
 
     ConnectState state;
     atomic_init(&state.done, 0);
-    atomic_init(&state.code, (int)IOFailed);
-    if (expect_status(galay_kernel_tcp_socket_connect(runtime, &client, &server, on_connect, &state), Success)) {
+    atomic_init(&state.code, (int)C_TcpSocketIOFailed);
+    if (expect_status(galay_kernel_tcp_socket_connect(runtime, &client, &server, on_connect, &state), C_TcpSocketSuccess)) {
         (void)galay_kernel_tcp_socket_destroy(&client);
         close(server_fd);
         return 32;
@@ -142,74 +142,74 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_tcp_socket_t tcp = {0};
-    C_Host invalid_host = {IPV4, "not-an-ip", 0};
-    C_Host bind_host = {IPV4, "127.0.0.1", 0};
+    C_Host invalid_host = {C_IPTypeIPV4, "not-an-ip", 0};
+    C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
 
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
         return 1;
     }
-    if (expect_status(galay_kernel_tcp_socket_create(&tcp, IPV4), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_create(&tcp, C_IPTypeIPV4), C_TcpSocketSuccess)) {
         return 2;
     }
     if (tcp.socket == 0) {
         return 3;
     }
-    if (expect_status(galay_kernel_tcp_socket_create(&tcp, (C_IPType)99), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_create(&tcp, (C_IPType)99), C_TcpSocketParameterInvalid)) {
         return 4;
     }
-    if (expect_status(galay_kernel_tcp_socket_create(0, IPV4), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_create(0, C_IPTypeIPV4), C_TcpSocketParameterInvalid)) {
         return 5;
     }
     if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
         return 6;
     }
-    if (expect_status(galay_kernel_tcp_socket_connect(0, &tcp, &bind_host, on_connect, 0), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_connect(0, &tcp, &bind_host, on_connect, 0), C_TcpSocketParameterInvalid)) {
         return 7;
     }
-    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, 0, &bind_host, on_connect, 0), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, 0, &bind_host, on_connect, 0), C_TcpSocketParameterInvalid)) {
         return 8;
     }
-    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, &tcp, 0, on_connect, 0), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, &tcp, 0, on_connect, 0), C_TcpSocketParameterInvalid)) {
         return 9;
     }
-    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, &tcp, &bind_host, 0, 0), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, &tcp, &bind_host, 0, 0), C_TcpSocketParameterInvalid)) {
         return 10;
     }
-    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, &tcp, &invalid_host, on_connect, 0), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_connect(&runtime, &tcp, &invalid_host, on_connect, 0), C_TcpSocketParameterInvalid)) {
         return 11;
     }
-    if (expect_status(galay_kernel_tcp_socket_bind(0, &bind_host), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_bind(0, &bind_host), C_TcpSocketParameterInvalid)) {
         return 12;
     }
-    if (expect_status(galay_kernel_tcp_socket_bind(&tcp, 0), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_bind(&tcp, 0), C_TcpSocketParameterInvalid)) {
         return 13;
     }
-    if (expect_status(galay_kernel_tcp_socket_bind(&tcp, &invalid_host), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_bind(&tcp, &invalid_host), C_TcpSocketParameterInvalid)) {
         return 14;
     }
-    if (expect_status(galay_kernel_tcp_socket_listen(0, 16), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_listen(0, 16), C_TcpSocketParameterInvalid)) {
         return 15;
     }
-    if (expect_status(galay_kernel_tcp_socket_bind(&tcp, &bind_host), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_bind(&tcp, &bind_host), C_TcpSocketSuccess)) {
         return 16;
     }
-    if (expect_status(galay_kernel_tcp_socket_listen(&tcp, 16), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_listen(&tcp, 16), C_TcpSocketSuccess)) {
         return 17;
     }
-    if (expect_status(galay_kernel_tcp_socket_local_endpoint(0, &local), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_local_endpoint(0, &local), C_TcpSocketParameterInvalid)) {
         return 18;
     }
-    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&tcp, 0), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&tcp, 0), C_TcpSocketParameterInvalid)) {
         return 19;
     }
-    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&tcp, &local), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&tcp, &local), C_TcpSocketSuccess)) {
         return 20;
     }
-    if (local.type != IPV4 || local.address[0] == '\0' || local.port == 0) {
+    if (local.type != C_IPTypeIPV4 || local.address[0] == '\0' || local.port == 0) {
         return 21;
     }
-    if (expect_status(galay_kernel_tcp_socket_destroy(&tcp), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_destroy(&tcp), C_TcpSocketSuccess)) {
         return 22;
     }
     int connect_result = test_connect_callback(&runtime);

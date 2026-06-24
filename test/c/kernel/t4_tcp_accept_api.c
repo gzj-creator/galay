@@ -23,14 +23,14 @@ static void on_accept(galay_kernel_tcp_accept_result_t* result, void* ctx)
 {
     AcceptState* state = (AcceptState*)ctx;
     if (result == 0) {
-        atomic_store(&state->code, (int)IOFailed);
+        atomic_store(&state->code, (int)C_TcpSocketIOFailed);
         atomic_store(&state->done, 1);
         return;
     }
 
     atomic_store(&state->code, (int)result->code);
     state->peer = result->peer;
-    if (result->code == Success) {
+    if (result->code == C_TcpSocketSuccess) {
         state->socket = result->socket;
     }
     atomic_store(&state->done, 1);
@@ -75,21 +75,21 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_tcp_socket_t listener = {0};
-    C_Host bind_host = {IPV4, "127.0.0.1", 0};
+    C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
     int client_fd = -1;
     int exit_code = 0;
 
     AcceptState state;
     atomic_init(&state.done, 0);
-    atomic_init(&state.code, (int)IOFailed);
+    atomic_init(&state.code, (int)C_TcpSocketIOFailed);
     state.socket.socket = 0;
     memset(&state.peer, 0, sizeof(state.peer));
 
-    if (expect_status(galay_kernel_tcp_socket_accept(0, &listener, on_accept, &state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_accept(0, &listener, on_accept, &state), C_TcpSocketParameterInvalid)) {
         return 1;
     }
-    if (expect_status(galay_kernel_tcp_socket_accept(&runtime, &listener, 0, &state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_accept(&runtime, &listener, 0, &state), C_TcpSocketParameterInvalid)) {
         return 2;
     }
 
@@ -100,23 +100,23 @@ int main(void)
         exit_code = 4;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_create(&listener, IPV4), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_create(&listener, C_IPTypeIPV4), C_TcpSocketSuccess)) {
         exit_code = 5;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_bind(&listener, &bind_host), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_bind(&listener, &bind_host), C_TcpSocketSuccess)) {
         exit_code = 6;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_listen(&listener, 16), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_listen(&listener, 16), C_TcpSocketSuccess)) {
         exit_code = 7;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&listener, &local), Success) || local.port == 0) {
+    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&listener, &local), C_TcpSocketSuccess) || local.port == 0) {
         exit_code = 8;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_accept(&runtime, &listener, on_accept, &state), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_accept(&runtime, &listener, on_accept, &state), C_TcpSocketSuccess)) {
         exit_code = 9;
         goto cleanup;
     }
@@ -127,9 +127,9 @@ int main(void)
         goto cleanup;
     }
     if (wait_done(&state.done) != 0 ||
-        atomic_load(&state.code) != (int)Success ||
+        atomic_load(&state.code) != (int)C_TcpSocketSuccess ||
         state.socket.socket == 0 ||
-        state.peer.type != IPV4 ||
+        state.peer.type != C_IPTypeIPV4 ||
         state.peer.address[0] == '\0' ||
         state.peer.port == 0) {
         exit_code = 11;

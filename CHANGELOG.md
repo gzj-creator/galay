@@ -31,6 +31,7 @@
 - C/C++ 示例、测试和 benchmark 的 CMake 注册方式批量改为 `file(GLOB ... CONFIGURE_DEPENDS)`，减少新增源文件时的手工 target 维护。
 - RPC / RPC-etcd C++23 module file set 改为通过 glob source 变量注册，保持模块入口文件与 CMake source list 规则一致。
 - 调整 C Kernel `TcpSocket` accept/recv/send 结果结构：accepted socket 直接随 `galay_kernel_tcp_accept_result_t` 返回，移除 `has_socket` 与 `take_socket`；recv/send 结果补充原始 buffer 与 length，便于 callback 链式处理。
+- C Kernel TCP/Host C enum 成员统一改为带前缀命名：`C_TcpSocket*` 与 `C_IPType*`，移除旧的无前缀 `Success` / `ParameterInvalid` / `IPV4` / `IPV6` 等枚举名，并同步更新测试、示例与 benchmark。
 - C Kernel 测试、示例和 benchmark CMake 改为 `file(GLOB ... CONFIGURE_DEPENDS)` 自动收集源文件，避免新增用例时逐个登记。
 - Mongo BSON/ObjectId/OP_MSG 编码边界改为 `std::expected` 显式传播错误；非法 ObjectId、BSON key 与 OP_MSG 编码失败不再通过异常逃逸，客户端边界统一转换为 `MongoError`。
 - C++23 `.cppm` 安装策略改为保守模式：普通 header install 不再安装未验证 module facade，后续只允许具体 `CXX_MODULES FILE_SET` module target 安装自己的模块接口文件。
@@ -57,6 +58,7 @@
 - 修复 C API MySQL/Mongo/tracing/HTTP2/Redis/etcd 包装层中残留的异常边界路径，统一改为显式返回码、空指针检查和 no-fail 分配检查。
 - 修复 Redis/Rediss 连接池等待者 release、timeout、shutdown 之间的竞态，等待者完成状态只允许一次性转移，并修正 active/waiting 统计泄漏。
 - 修复 C ABI TCP accept 在 pending 状态下无法可靠取消的问题，通过共享监听状态和本地 cancel 连接唤醒 accept，避免 destroy/join 卡住。
+- 修复 C Kernel TCP socket C ABI 错误语义：`galay_kernel_tcp_socket_destroy(NULL)` 返回 `C_TcpSocketParameterInvalid`，async submit API 在 runtime 停止时统一返回 `C_TcpSocketRuntimeNotRunning` 而不是继续提交任务。
 - 加固 C ABI kernel 生命周期边界：`test/c/kernel/t5_socket_lifetime_boundary.c` 覆盖 runtime、tcp/udp socket 与 accept loop 的空指针、重复销毁和停止请求边界。
 - 加固 C++ `Host` 字符串构造与 TCP/UDP bind 边界：非法 IP 或协议类型会被标记为 invalid，bind 在系统调用前返回 `IOError(kParamInvalid)`，C ABI bind 将其映射为 `ParameterInvalid`。
 
@@ -67,6 +69,7 @@
 ### Chore
 
 - 恢复 `src/c/CMakeLists.txt` 最小入口，`GALAY_BUILD_C_API=ON` 时只注册当前保留的 `galay-kernel-c` target。
+- 隐藏 C Kernel TCP socket C wrapper 内部 helper 与 coroutine task helper 的外部链接符号，减少 `libgalay-c-kernel` 符号污染。
 
 ## [v3.0.0] - 2026-06-22
 

@@ -35,8 +35,8 @@ typedef struct CloseState {
 static void on_accept(galay_kernel_tcp_accept_result_t* result, void* ctx)
 {
     AcceptState* state = (AcceptState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)IOFailed : (int)result->code);
-    if (result != 0 && result->code == Success) {
+    atomic_store(&state->code, result == 0 ? (int)C_TcpSocketIOFailed : (int)result->code);
+    if (result != 0 && result->code == C_TcpSocketSuccess) {
         state->socket = result->socket;
     }
     atomic_store(&state->done, 1);
@@ -45,7 +45,7 @@ static void on_accept(galay_kernel_tcp_accept_result_t* result, void* ctx)
 static void on_recv(galay_kernel_tcp_recv_result_t* result, void* ctx)
 {
     RecvState* state = (RecvState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)IOFailed : (int)result->code);
+    atomic_store(&state->code, result == 0 ? (int)C_TcpSocketIOFailed : (int)result->code);
     atomic_store(&state->bytes, result == 0 ? 0 : (int)result->bytes);
     atomic_store(&state->done, 1);
 }
@@ -53,7 +53,7 @@ static void on_recv(galay_kernel_tcp_recv_result_t* result, void* ctx)
 static void on_send(galay_kernel_tcp_send_result_t* result, void* ctx)
 {
     SendState* state = (SendState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)IOFailed : (int)result->code);
+    atomic_store(&state->code, result == 0 ? (int)C_TcpSocketIOFailed : (int)result->code);
     atomic_store(&state->bytes, result == 0 ? 0 : (int)result->bytes);
     atomic_store(&state->done, 1);
 }
@@ -116,7 +116,7 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_tcp_socket_t listener = {0};
-    C_Host bind_host = {IPV4, "127.0.0.1", 0};
+    C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
     int client_fd = -1;
     int exit_code = 0;
@@ -128,64 +128,64 @@ int main(void)
 
     AcceptState accept_state;
     atomic_init(&accept_state.done, 0);
-    atomic_init(&accept_state.code, (int)IOFailed);
+    atomic_init(&accept_state.code, (int)C_TcpSocketIOFailed);
     accept_state.socket.socket = 0;
 
     RecvState recv_state;
     atomic_init(&recv_state.done, 0);
-    atomic_init(&recv_state.code, (int)IOFailed);
+    atomic_init(&recv_state.code, (int)C_TcpSocketIOFailed);
     atomic_init(&recv_state.bytes, 0);
 
     SendState send_state;
     atomic_init(&send_state.done, 0);
-    atomic_init(&send_state.code, (int)IOFailed);
+    atomic_init(&send_state.code, (int)C_TcpSocketIOFailed);
     atomic_init(&send_state.bytes, 0);
 
     CloseState close_state;
     atomic_init(&close_state.done, 0);
-    atomic_init(&close_state.code, (int)IOFailed);
+    atomic_init(&close_state.code, (int)C_TcpSocketIOFailed);
 
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
         galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_tcp_socket_create(&listener, IPV4) != Success ||
-        galay_kernel_tcp_socket_bind(&listener, &bind_host) != Success ||
-        galay_kernel_tcp_socket_listen(&listener, 16) != Success ||
-        galay_kernel_tcp_socket_local_endpoint(&listener, &local) != Success ||
-        galay_kernel_tcp_socket_accept(&runtime, &listener, on_accept, &accept_state) != Success) {
+        galay_kernel_tcp_socket_create(&listener, C_IPTypeIPV4) != C_TcpSocketSuccess ||
+        galay_kernel_tcp_socket_bind(&listener, &bind_host) != C_TcpSocketSuccess ||
+        galay_kernel_tcp_socket_listen(&listener, 16) != C_TcpSocketSuccess ||
+        galay_kernel_tcp_socket_local_endpoint(&listener, &local) != C_TcpSocketSuccess ||
+        galay_kernel_tcp_socket_accept(&runtime, &listener, on_accept, &accept_state) != C_TcpSocketSuccess) {
         exit_code = 1;
         goto cleanup;
     }
 
     client_fd = connect_posix_client(local.port);
     if (client_fd < 0 || wait_done(&accept_state.done) != 0 ||
-        atomic_load(&accept_state.code) != (int)Success) {
+        atomic_load(&accept_state.code) != (int)C_TcpSocketSuccess) {
         exit_code = 2;
         goto cleanup;
     }
 
     if (galay_kernel_tcp_socket_recv(&runtime, &accept_state.socket,
-            recv_buffer, sizeof(recv_buffer), on_recv, &recv_state) != Success ||
+            recv_buffer, sizeof(recv_buffer), on_recv, &recv_state) != C_TcpSocketSuccess ||
         send(client_fd, request, sizeof(request) - 1, 0) != (ssize_t)(sizeof(request) - 1) ||
         wait_done(&recv_state.done) != 0 ||
-        atomic_load(&recv_state.code) != (int)Success ||
+        atomic_load(&recv_state.code) != (int)C_TcpSocketSuccess ||
         memcmp(recv_buffer, request, sizeof(request) - 1) != 0) {
         exit_code = 3;
         goto cleanup;
     }
 
     if (galay_kernel_tcp_socket_send(&runtime, &accept_state.socket,
-            response, sizeof(response) - 1, on_send, &send_state) != Success ||
+            response, sizeof(response) - 1, on_send, &send_state) != C_TcpSocketSuccess ||
         wait_done(&send_state.done) != 0 ||
-        atomic_load(&send_state.code) != (int)Success ||
+        atomic_load(&send_state.code) != (int)C_TcpSocketSuccess ||
         wait_and_read(client_fd, client_buffer, sizeof(client_buffer)) != (int)(sizeof(response) - 1) ||
         memcmp(client_buffer, response, sizeof(response) - 1) != 0) {
         exit_code = 4;
         goto cleanup;
     }
 
-    if (galay_kernel_tcp_socket_close(&runtime, &accept_state.socket, on_close, &close_state) != Success ||
+    if (galay_kernel_tcp_socket_close(&runtime, &accept_state.socket, on_close, &close_state) != C_TcpSocketSuccess ||
         wait_done(&close_state.done) != 0 ||
-        atomic_load(&close_state.code) != (int)Success) {
+        atomic_load(&close_state.code) != (int)C_TcpSocketSuccess) {
         exit_code = 5;
         goto cleanup;
     }

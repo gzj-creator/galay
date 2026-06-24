@@ -11,16 +11,19 @@
 #include <sys/socket.h>
 #include <utility>
 
+namespace
+{
+
 bool is_valid_c_ip_type(C_IPType ip_type) {
-    return ip_type == IPV4 || ip_type == IPV6;
+    return ip_type == C_IPTypeIPV4 || ip_type == C_IPTypeIPV6;
 }
 
 galay::kernel::IPType from_c_ip_type_to_cpp_ip_type(C_IPType ip_type) {
     switch (ip_type)
     {
-    case IPV4:
+    case C_IPTypeIPV4:
         return galay::kernel::IPType::IPV4;
-    case IPV6:
+    case C_IPTypeIPV6:
         return galay::kernel::IPType::IPV6;
     }
     return galay::kernel::IPType::IPV4;
@@ -53,7 +56,7 @@ bool assign_c_host_from_sockaddr(const sockaddr_storage& storage, C_Host* endpoi
         {
             return false;
         }
-        out.type = IPV4;
+        out.type = C_IPTypeIPV4;
         out.port = ntohs(addr->sin_port);
         *endpoint = out;
         return true;
@@ -65,7 +68,7 @@ bool assign_c_host_from_sockaddr(const sockaddr_storage& storage, C_Host* endpoi
         {
             return false;
         }
-        out.type = IPV6;
+        out.type = C_IPTypeIPV6;
         out.port = ntohs(addr->sin6_port);
         *endpoint = out;
         return true;
@@ -87,7 +90,7 @@ bool assign_c_host_from_cpp_host(const galay::kernel::Host& host, C_Host* endpoi
     }
 
     C_Host out{};
-    out.type = host.isIPv4() ? IPV4 : IPV6;
+    out.type = host.isIPv4() ? C_IPTypeIPV4 : C_IPTypeIPV6;
     std::memcpy(out.address, address.c_str(), address.size() + 1);
     out.port = host.port();
     *endpoint = out;
@@ -102,8 +105,8 @@ galay::kernel::Runtime* to_cpp_runtime(galay_kernel_runtime_t* runtime)
 C_TcpSocketResultCode from_cpp_io_error(const galay::kernel::IOError& error)
 {
     return galay::kernel::IOError::contains(error.code(), galay::kernel::kParamInvalid)
-        ? ParameterInvalid
-        : IOFailed;
+        ? C_TcpSocketParameterInvalid
+        : C_TcpSocketIOFailed;
 }
 
 galay::kernel::Task<void> c_api_connect(
@@ -113,7 +116,7 @@ galay::kernel::Task<void> c_api_connect(
     void* ctx)
 {
     auto connected = co_await socket->connect(host);
-    callback(connected ? Success : from_cpp_io_error(connected.error()), ctx);
+    callback(connected ? C_TcpSocketSuccess : from_cpp_io_error(connected.error()), ctx);
     co_return;
 }
 
@@ -137,7 +140,7 @@ galay::kernel::Task<void> c_api_accept(
     auto non_block = accepted_socket.option().handleNonBlock();
     if (!non_block || !assign_c_host_from_cpp_host(peer, &result.peer))
     {
-        result.code = IOFailed;
+        result.code = C_TcpSocketIOFailed;
         callback(&result, ctx);
         co_return;
     }
@@ -145,7 +148,7 @@ galay::kernel::Task<void> c_api_accept(
     auto* cpp_socket = new (std::nothrow) galay::async::TcpSocket(std::move(accepted_socket));
     if (cpp_socket == nullptr)
     {
-        result.code = MemoryAllocFailed;
+        result.code = C_TcpSocketMemoryAllocFailed;
         callback(&result, ctx);
         co_return;
     }
@@ -153,7 +156,7 @@ galay::kernel::Task<void> c_api_accept(
     auto c_socket = galay_kernel_tcp_socket_t{};
 
     c_socket.socket = cpp_socket;
-    result.code = Success;
+    result.code = C_TcpSocketSuccess;
     result.socket = c_socket;
     callback(&result, ctx);
     co_return;
@@ -181,7 +184,7 @@ galay::kernel::Task<void> c_api_accept_loop(
         auto non_block = accepted_socket.option().handleNonBlock();
         if (!non_block || !assign_c_host_from_cpp_host(peer, &result.peer))
         {
-            result.code = IOFailed;
+            result.code = C_TcpSocketIOFailed;
             (void)callback(&result, ctx);
             co_return;
         }
@@ -189,12 +192,12 @@ galay::kernel::Task<void> c_api_accept_loop(
         auto* cpp_socket = new (std::nothrow) galay::async::TcpSocket(std::move(accepted_socket));
         if (cpp_socket == nullptr)
         {
-            result.code = MemoryAllocFailed;
+            result.code = C_TcpSocketMemoryAllocFailed;
             (void)callback(&result, ctx);
             co_return;
         }
 
-        result.code = Success;
+        result.code = C_TcpSocketSuccess;
         result.socket.socket = cpp_socket;
         if (callback(&result, ctx) != 0)
         {
@@ -212,7 +215,7 @@ galay::kernel::Task<void> c_api_recv(
 {
     auto received = co_await socket->recv(buffer, length);
     galay_kernel_tcp_recv_result_t result{};
-    result.code = received ? Success : from_cpp_io_error(received.error());
+    result.code = received ? C_TcpSocketSuccess : from_cpp_io_error(received.error());
     result.buffer = buffer;
     result.length = length;
     result.bytes = received ? *received : 0;
@@ -231,7 +234,7 @@ galay::kernel::Task<void> c_api_recv_loop(
     {
         auto received = co_await socket->recv(buffer, length);
         galay_kernel_tcp_recv_result_t result{};
-        result.code = received ? Success : from_cpp_io_error(received.error());
+        result.code = received ? C_TcpSocketSuccess : from_cpp_io_error(received.error());
         result.buffer = buffer;
         result.length = length;
         result.bytes = received ? *received : 0;
@@ -252,7 +255,7 @@ galay::kernel::Task<void> c_api_send(
 {
     auto sent = co_await socket->send(buffer, length);
     galay_kernel_tcp_send_result_t result{};
-    result.code = sent ? Success : from_cpp_io_error(sent.error());
+    result.code = sent ? C_TcpSocketSuccess : from_cpp_io_error(sent.error());
     result.buffer = buffer;
     result.length = length;
     result.bytes = sent ? *sent : 0;
@@ -271,7 +274,7 @@ galay::kernel::Task<void> c_api_send_loop(
     {
         auto sent = co_await socket->send(buffer, length);
         galay_kernel_tcp_send_result_t result{};
-        result.code = sent ? Success : from_cpp_io_error(sent.error());
+        result.code = sent ? C_TcpSocketSuccess : from_cpp_io_error(sent.error());
         result.buffer = buffer;
         result.length = length;
         result.bytes = sent ? *sent : 0;
@@ -289,27 +292,29 @@ galay::kernel::Task<void> c_api_close(
     void* ctx)
 {
     auto closed = co_await socket->close();
-    callback(closed ? Success : from_cpp_io_error(closed.error()), ctx);
+    callback(closed ? C_TcpSocketSuccess : from_cpp_io_error(closed.error()), ctx);
     co_return;
 }
+
+} // namespace
 
 const char* galay_kernel_tcp_socket_get_error(C_TcpSocketResultCode code)
 {
     switch (code)
     {
-    case Success:
+    case C_TcpSocketSuccess:
         return "success";
-    case ParameterInvalid:
+    case C_TcpSocketParameterInvalid:
         return "parameter invalid";
-    case MemoryAllocFailed:
+    case C_TcpSocketMemoryAllocFailed:
         return "memory allocation failed";
-    case IOFailed:
+    case C_TcpSocketIOFailed:
         return "io failed";
-    case OperationInvalid:
+    case C_TcpSocketOperationInvalid:
         return "operation invalid";
-    case RuntimeNotRunning:
+    case C_TcpSocketRuntimeNotRunning:
         return "runtime not running";
-    case RuntimeSpawnFailed:
+    case C_TcpSocketRuntimeSpawnFailed:
         return "runtime spawn failed";
     }
     return "unknown tcp socket error";
@@ -319,32 +324,32 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_create(galay_kernel_tcp_socket_t* 
 {
     if (c_socket == nullptr || !is_valid_c_ip_type(type))
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
     }
 
     c_socket->socket = nullptr;
     auto result = galay::async::TcpSocket::create(from_c_ip_type_to_cpp_ip_type(type));
     if (!result)
     {
-        return MemoryAllocFailed;
+        return C_TcpSocketMemoryAllocFailed;
     }
 
     auto socket = new (std::nothrow) galay::async::TcpSocket(std::move(*result));
     if (socket == nullptr)
     {
-        return MemoryAllocFailed;
+        return C_TcpSocketMemoryAllocFailed;
     }
 
     c_socket->socket = socket;
-    return Success;
+    return C_TcpSocketSuccess;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_destroy(galay_kernel_tcp_socket_t* c_socket)
 {
-    if (c_socket == nullptr) return MemoryAllocFailed;
+    if (c_socket == nullptr) return C_TcpSocketParameterInvalid;
     delete static_cast<galay::async::TcpSocket*>(c_socket->socket);
     c_socket->socket = nullptr;
-    return Success;
+    return C_TcpSocketSuccess;
 }
 
 
@@ -354,40 +359,40 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_bind(
 {
     if (c_socket == nullptr || c_socket->socket == nullptr || host == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
     auto reuse_addr = socket->option().handleReuseAddr();
     if (!reuse_addr)
     {
-        return IOFailed;
+        return C_TcpSocketIOFailed;
     }
     auto non_block = socket->option().handleNonBlock();
     if (!non_block)
     {
-        return IOFailed;
+        return C_TcpSocketIOFailed;
     }
     auto bound = socket->bind(from_c_host_to_cpp_host(*host));
     if (!bound)
     {
         return galay::kernel::IOError::contains(bound.error().code(), galay::kernel::kParamInvalid)
-            ? ParameterInvalid
-            : IOFailed;
+            ? C_TcpSocketParameterInvalid
+            : C_TcpSocketIOFailed;
     }
-    return Success;
+    return C_TcpSocketSuccess;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_listen(galay_kernel_tcp_socket_t* c_socket, int backlog)
 {
     if (c_socket == nullptr || c_socket->socket == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
     auto listened = socket->listen(backlog);
-    return listened ? Success : IOFailed;
+    return listened ? C_TcpSocketSuccess : C_TcpSocketIOFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_local_endpoint(
@@ -396,7 +401,7 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_local_endpoint(
 {
     if (c_socket == nullptr || c_socket->socket == nullptr || endpoint == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
     }
 
     const auto* socket = static_cast<const galay::async::TcpSocket*>(c_socket->socket);
@@ -404,10 +409,10 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_local_endpoint(
     socklen_t length = sizeof(storage);
     if (::getsockname(socket->handle().fd, reinterpret_cast<sockaddr*>(&storage), &length) != 0)
     {
-        return IOFailed;
+        return C_TcpSocketIOFailed;
     }
 
-    return assign_c_host_from_sockaddr(storage, endpoint) ? Success : IOFailed;
+    return assign_c_host_from_sockaddr(storage, endpoint) ? C_TcpSocketSuccess : C_TcpSocketIOFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_connect(
@@ -421,24 +426,30 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_connect(
         c_socket == nullptr || c_socket->socket == nullptr ||
         host == nullptr || callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
     }
 
     auto cpp_host = from_c_host_to_cpp_host(*host);
     if (!cpp_host.valid())
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* runtime = to_cpp_runtime(c_runtime);
+    if (!runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
     auto non_block = socket->option().handleNonBlock();
     if (!non_block)
     {
-        return IOFailed;
+        return C_TcpSocketIOFailed;
     }
 
-    auto spawned = to_cpp_runtime(c_runtime)->spawn(c_api_connect(socket, cpp_host, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = runtime->spawn(c_api_connect(socket, cpp_host, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_accept(
@@ -451,12 +462,18 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_accept(
         listener == nullptr || listener->socket == nullptr ||
         callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(listener->socket);
-    auto spawned = to_cpp_runtime(runtime)->spawn(c_api_accept(socket, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = cpp_runtime->spawn(c_api_accept(socket, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_accept_loop(
@@ -469,12 +486,18 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_accept_loop(
         listener == nullptr || listener->socket == nullptr ||
         callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(listener->socket);
-    auto spawned = to_cpp_runtime(runtime)->spawn(c_api_accept_loop(socket, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = cpp_runtime->spawn(c_api_accept_loop(socket, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_recv(
@@ -489,12 +512,18 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_recv(
         c_socket == nullptr || c_socket->socket == nullptr ||
         buffer == nullptr || length == 0 || callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
-    auto spawned = to_cpp_runtime(runtime)->spawn(c_api_recv(socket, buffer, length, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = cpp_runtime->spawn(c_api_recv(socket, buffer, length, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_recv_loop(
@@ -509,12 +538,18 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_recv_loop(
         c_socket == nullptr || c_socket->socket == nullptr ||
         buffer == nullptr || length == 0 || callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
-    auto spawned = to_cpp_runtime(runtime)->spawn(c_api_recv_loop(socket, buffer, length, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = cpp_runtime->spawn(c_api_recv_loop(socket, buffer, length, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_send(
@@ -529,12 +564,18 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_send(
         c_socket == nullptr || c_socket->socket == nullptr ||
         buffer == nullptr || length == 0 || callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
-    auto spawned = to_cpp_runtime(runtime)->spawn(c_api_send(socket, buffer, length, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = cpp_runtime->spawn(c_api_send(socket, buffer, length, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_send_loop(
@@ -549,12 +590,18 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_send_loop(
         c_socket == nullptr || c_socket->socket == nullptr ||
         buffer == nullptr || length == 0 || callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
-    auto spawned = to_cpp_runtime(runtime)->spawn(c_api_send_loop(socket, buffer, length, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = cpp_runtime->spawn(c_api_send_loop(socket, buffer, length, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }
 
 C_TcpSocketResultCode galay_kernel_tcp_socket_close(
@@ -567,10 +614,16 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_close(
         c_socket == nullptr || c_socket->socket == nullptr ||
         callback == nullptr)
     {
-        return ParameterInvalid;
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_TcpSocketRuntimeNotRunning;
     }
 
     auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
-    auto spawned = to_cpp_runtime(runtime)->spawn(c_api_close(socket, callback, ctx));
-    return spawned ? Success : RuntimeSpawnFailed;
+    auto spawned = cpp_runtime->spawn(c_api_close(socket, callback, ctx));
+    return spawned ? C_TcpSocketSuccess : C_TcpSocketRuntimeSpawnFailed;
 }

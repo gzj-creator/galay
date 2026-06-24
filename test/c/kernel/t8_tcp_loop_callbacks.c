@@ -119,7 +119,7 @@ static int read_exact(int fd, char* buffer, size_t length)
 static int on_accept_loop(galay_kernel_tcp_accept_result_t* result, void* ctx)
 {
     AcceptLoopState* state = (AcceptLoopState*)ctx;
-    if (result == 0 || result->code != Success || result->socket.socket == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->socket.socket == 0) {
         atomic_store(&state->terminal, 1);
         atomic_fetch_add(&state->errors, 1);
         return 1;
@@ -141,7 +141,7 @@ static int on_accept_loop(galay_kernel_tcp_accept_result_t* result, void* ctx)
 static int on_recv_loop(galay_kernel_tcp_recv_result_t* result, void* ctx)
 {
     RecvLoopState* state = (RecvLoopState*)ctx;
-    if (result == 0 || result->code != Success || result->bytes == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
         atomic_store(&state->terminal, 1);
         return 1;
     }
@@ -170,7 +170,7 @@ static int on_recv_loop(galay_kernel_tcp_recv_result_t* result, void* ctx)
 static int on_send_loop(galay_kernel_tcp_send_result_t* result, void* ctx)
 {
     SendLoopState* state = (SendLoopState*)ctx;
-    if (result == 0 || result->code != Success || result->bytes == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
         atomic_store(&state->terminal, 1);
         return 1;
     }
@@ -201,7 +201,7 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_tcp_socket_t listener = {0};
-    C_Host bind_host = {IPV4, "127.0.0.1", 0};
+    C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
     int recv_client = -1;
     int send_client = -1;
@@ -234,36 +234,36 @@ int main(void)
 
     CloseState close_state;
     atomic_init(&close_state.done, 0);
-    atomic_init(&close_state.code, (int)IOFailed);
+    atomic_init(&close_state.code, (int)C_TcpSocketIOFailed);
 
-    if (expect_status(galay_kernel_tcp_socket_accept_loop(0, &listener, on_accept_loop, &accept_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_accept_loop(0, &listener, on_accept_loop, &accept_state), C_TcpSocketParameterInvalid)) {
         return 1;
     }
-    if (expect_status(galay_kernel_tcp_socket_accept_loop(&runtime, &listener, 0, &accept_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_accept_loop(&runtime, &listener, 0, &accept_state), C_TcpSocketParameterInvalid)) {
         return 2;
     }
-    if (expect_status(galay_kernel_tcp_socket_recv_loop(0, &listener, recv_buffer, sizeof(recv_buffer), on_recv_loop, &recv_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_recv_loop(0, &listener, recv_buffer, sizeof(recv_buffer), on_recv_loop, &recv_state), C_TcpSocketParameterInvalid)) {
         return 3;
     }
-    if (expect_status(galay_kernel_tcp_socket_recv_loop(&runtime, &listener, 0, sizeof(recv_buffer), on_recv_loop, &recv_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_recv_loop(&runtime, &listener, 0, sizeof(recv_buffer), on_recv_loop, &recv_state), C_TcpSocketParameterInvalid)) {
         return 4;
     }
-    if (expect_status(galay_kernel_tcp_socket_recv_loop(&runtime, &listener, recv_buffer, 0, on_recv_loop, &recv_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_recv_loop(&runtime, &listener, recv_buffer, 0, on_recv_loop, &recv_state), C_TcpSocketParameterInvalid)) {
         return 5;
     }
-    if (expect_status(galay_kernel_tcp_socket_recv_loop(&runtime, &listener, recv_buffer, sizeof(recv_buffer), 0, &recv_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_recv_loop(&runtime, &listener, recv_buffer, sizeof(recv_buffer), 0, &recv_state), C_TcpSocketParameterInvalid)) {
         return 6;
     }
-    if (expect_status(galay_kernel_tcp_socket_send_loop(0, &listener, send_payload, sizeof(send_payload) - 1, on_send_loop, &send_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_send_loop(0, &listener, send_payload, sizeof(send_payload) - 1, on_send_loop, &send_state), C_TcpSocketParameterInvalid)) {
         return 7;
     }
-    if (expect_status(galay_kernel_tcp_socket_send_loop(&runtime, &listener, 0, sizeof(send_payload) - 1, on_send_loop, &send_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_send_loop(&runtime, &listener, 0, sizeof(send_payload) - 1, on_send_loop, &send_state), C_TcpSocketParameterInvalid)) {
         return 8;
     }
-    if (expect_status(galay_kernel_tcp_socket_send_loop(&runtime, &listener, send_payload, 0, on_send_loop, &send_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_send_loop(&runtime, &listener, send_payload, 0, on_send_loop, &send_state), C_TcpSocketParameterInvalid)) {
         return 9;
     }
-    if (expect_status(galay_kernel_tcp_socket_send_loop(&runtime, &listener, send_payload, sizeof(send_payload) - 1, 0, &send_state), ParameterInvalid)) {
+    if (expect_status(galay_kernel_tcp_socket_send_loop(&runtime, &listener, send_payload, sizeof(send_payload) - 1, 0, &send_state), C_TcpSocketParameterInvalid)) {
         return 10;
     }
 
@@ -274,23 +274,23 @@ int main(void)
         exit_code = 12;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_create(&listener, IPV4), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_create(&listener, C_IPTypeIPV4), C_TcpSocketSuccess)) {
         exit_code = 13;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_bind(&listener, &bind_host), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_bind(&listener, &bind_host), C_TcpSocketSuccess)) {
         exit_code = 14;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_listen(&listener, 16), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_listen(&listener, 16), C_TcpSocketSuccess)) {
         exit_code = 15;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&listener, &local), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_local_endpoint(&listener, &local), C_TcpSocketSuccess)) {
         exit_code = 16;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_tcp_socket_accept_loop(&runtime, &listener, on_accept_loop, &accept_state), Success)) {
+    if (expect_status(galay_kernel_tcp_socket_accept_loop(&runtime, &listener, on_accept_loop, &accept_state), C_TcpSocketSuccess)) {
         exit_code = 17;
         goto cleanup;
     }
@@ -306,7 +306,7 @@ int main(void)
             recv_buffer,
             sizeof(recv_buffer),
             on_recv_loop,
-            &recv_state), Success)) {
+            &recv_state), C_TcpSocketSuccess)) {
         exit_code = 19;
         goto cleanup;
     }
@@ -339,7 +339,7 @@ int main(void)
             send_payload,
             sizeof(send_payload) - 1,
             on_send_loop,
-            &send_state), Success)) {
+            &send_state), C_TcpSocketSuccess)) {
         exit_code = 23;
         goto cleanup;
     }

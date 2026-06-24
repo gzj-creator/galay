@@ -59,7 +59,7 @@ static void signal_handler(int signum)
 static void on_close(C_TcpSocketResultCode code, void* ctx)
 {
     ServerSession* session = (ServerSession*)ctx;
-    if (code != Success) {
+    if (code != C_TcpSocketSuccess) {
         atomic_fetch_add(&session->server->total_errors, 1);
     }
     (void)galay_kernel_tcp_socket_destroy(&session->socket);
@@ -74,7 +74,7 @@ static void close_session(ServerSession* session)
     }
     session->closing = 1;
     if (session->socket.socket != 0 &&
-        galay_kernel_tcp_socket_close(&session->server->runtime, &session->socket, on_close, session) == Success) {
+        galay_kernel_tcp_socket_close(&session->server->runtime, &session->socket, on_close, session) == C_TcpSocketSuccess) {
         return;
     }
     if (session->socket.socket != 0) {
@@ -87,7 +87,7 @@ static void close_session(ServerSession* session)
 static void on_send(galay_kernel_tcp_send_result_t* result, void* ctx)
 {
     ServerSession* session = (ServerSession*)ctx;
-    if (result == 0 || result->code != Success || result->bytes == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
         atomic_fetch_add(&session->server->total_errors, 1);
         close_session(session);
         return;
@@ -117,7 +117,7 @@ static void post_send(ServerSession* session)
             session->buffer + session->send_offset,
             remaining,
             on_send,
-            session) != Success) {
+            session) != C_TcpSocketSuccess) {
         atomic_fetch_add(&session->server->total_errors, 1);
         close_session(session);
     }
@@ -130,7 +130,7 @@ static void on_recv(galay_kernel_tcp_recv_result_t* result, void* ctx)
         close_session(session);
         return;
     }
-    if (result == 0 || result->code != Success || result->bytes == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
         close_session(session);
         return;
     }
@@ -155,7 +155,7 @@ static void post_recv(ServerSession* session)
             session->buffer,
             sizeof(session->buffer),
             on_recv,
-            session) != Success) {
+            session) != C_TcpSocketSuccess) {
         atomic_fetch_add(&session->server->total_errors, 1);
         close_session(session);
     }
@@ -165,13 +165,13 @@ static int on_accept(galay_kernel_tcp_accept_result_t* result, void* ctx)
 {
     ServerState* server = (ServerState*)ctx;
     if (!atomic_load(&server->running)) {
-        if (result != 0 && result->code == Success) {
+        if (result != 0 && result->code == C_TcpSocketSuccess) {
             (void)galay_kernel_tcp_socket_destroy(&result->socket);
         }
         return 1;
     }
 
-    if (result == 0 || result->code != Success || result->socket.socket == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->socket.socket == 0) {
         atomic_fetch_add(&server->total_errors, 1);
         return 1;
     }
@@ -268,7 +268,7 @@ int main(int argc, char** argv)
     config.io_scheduler_count = io_schedulers;
     config.compute_scheduler_count = 0;
 
-    C_Host bind_host = {IPV4, "0.0.0.0", server.port};
+    C_Host bind_host = {C_IPTypeIPV4, "0.0.0.0", server.port};
     pthread_t stats_thread;
     int stats_started = 0;
     int exit_code = 0;
@@ -279,9 +279,9 @@ int main(int argc, char** argv)
 
     if (galay_kernel_runtime_create(&config, &server.runtime) != C_RuntimeSuccess ||
         galay_kernel_runtime_start(&server.runtime) != C_RuntimeSuccess ||
-        galay_kernel_tcp_socket_create(&server.listener, IPV4) != Success ||
-        galay_kernel_tcp_socket_bind(&server.listener, &bind_host) != Success ||
-        galay_kernel_tcp_socket_listen(&server.listener, 1024) != Success) {
+        galay_kernel_tcp_socket_create(&server.listener, C_IPTypeIPV4) != C_TcpSocketSuccess ||
+        galay_kernel_tcp_socket_bind(&server.listener, &bind_host) != C_TcpSocketSuccess ||
+        galay_kernel_tcp_socket_listen(&server.listener, 1024) != C_TcpSocketSuccess) {
         return 1;
     }
 
@@ -289,7 +289,7 @@ int main(int argc, char** argv)
         stats_started = 1;
     }
 
-    if (galay_kernel_tcp_socket_accept_loop(&server.runtime, &server.listener, on_accept, &server) != Success) {
+    if (galay_kernel_tcp_socket_accept_loop(&server.runtime, &server.listener, on_accept, &server) != C_TcpSocketSuccess) {
         atomic_fetch_add(&server.total_errors, 1);
         exit_code = 2;
         atomic_store(&server.running, 0);

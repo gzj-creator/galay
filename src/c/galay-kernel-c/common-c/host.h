@@ -23,8 +23,8 @@ extern "C" {
  * @note 枚举值与 C++ galay::kernel::IPType 保持一致。
  */
 typedef enum C_IPType {
-    IPV4 = 0,   ///< IPv4 地址族。
-    IPV6 = 1    ///< IPv6 地址族。
+    C_IPTypeIPV4 = 0,   ///< IPv4 地址族。
+    C_IPTypeIPV6 = 1    ///< IPv6 地址族。
 } C_IPType;
 
 /**

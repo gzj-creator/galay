@@ -41,32 +41,32 @@ int main(void)
         return 6;
     }
 
-    if (expect_socket_status(galay_kernel_tcp_socket_destroy(0), MemoryAllocFailed)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(0), C_TcpSocketParameterInvalid)) {
         return 7;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), Success)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), C_TcpSocketSuccess)) {
         return 8;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_close(0, &tcp, on_close, 0), ParameterInvalid)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_close(0, &tcp, on_close, 0), C_TcpSocketParameterInvalid)) {
         return 9;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_close(&runtime, &tcp, on_close, 0), ParameterInvalid)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_close(&runtime, &tcp, on_close, 0), C_TcpSocketParameterInvalid)) {
         return 10;
     }
 
-    if (expect_socket_status(galay_kernel_tcp_socket_create(&tcp, IPV4), Success)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_create(&tcp, C_IPTypeIPV4), C_TcpSocketSuccess)) {
         return 11;
     }
     if (tcp.socket == 0) {
         return 12;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), Success)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), C_TcpSocketSuccess)) {
         return 13;
     }
     if (tcp.socket != 0) {
         return 14;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), Success)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), C_TcpSocketSuccess)) {
         return 15;
     }
 

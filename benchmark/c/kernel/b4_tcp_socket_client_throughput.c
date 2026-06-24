@@ -71,7 +71,7 @@ static void close_session(ClientSession* session);
 static void on_close(C_TcpSocketResultCode code, void* ctx)
 {
     ClientSession* session = (ClientSession*)ctx;
-    if (code != Success) {
+    if (code != C_TcpSocketSuccess) {
         ++session->errors;
     }
     (void)galay_kernel_tcp_socket_destroy(&session->socket);
@@ -86,7 +86,7 @@ static void close_session(ClientSession* session)
     }
     session->closing = 1;
     if (session->socket.socket != 0 &&
-        galay_kernel_tcp_socket_close(&session->state->runtime, &session->socket, on_close, session) == Success) {
+        galay_kernel_tcp_socket_close(&session->state->runtime, &session->socket, on_close, session) == C_TcpSocketSuccess) {
         return;
     }
     if (session->socket.socket != 0) {
@@ -102,7 +102,7 @@ static int on_recv(galay_kernel_tcp_recv_result_t* result, void* ctx)
     if (session->closing) {
         return 1;
     }
-    if (result == 0 || result->code != Success || result->bytes == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
         ++session->errors;
         close_session(session);
         return 1;
@@ -149,7 +149,7 @@ static void start_recv_loop(ClientSession* session)
             session->recv_buffer,
             session->state->config.payload_bytes,
             on_recv,
-            session) != Success) {
+            session) != C_TcpSocketSuccess) {
         ++session->errors;
         close_session(session);
     }
@@ -158,7 +158,7 @@ static void start_recv_loop(ClientSession* session)
 static void on_send(galay_kernel_tcp_send_result_t* result, void* ctx)
 {
     ClientSession* session = (ClientSession*)ctx;
-    if (result == 0 || result->code != Success || result->bytes == 0) {
+    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
         ++session->errors;
         close_session(session);
         return;
@@ -188,7 +188,7 @@ static void post_send(ClientSession* session)
             session->request + session->send_offset,
             remaining,
             on_send,
-            session) != Success) {
+            session) != C_TcpSocketSuccess) {
         ++session->errors;
         close_session(session);
     }
@@ -213,7 +213,7 @@ static void start_session(ClientSession* session)
 static void on_connect(C_TcpSocketResultCode code, void* ctx)
 {
     ClientSession* session = (ClientSession*)ctx;
-    if (code != Success) {
+    if (code != C_TcpSocketSuccess) {
         ++session->errors;
         close_session(session);
         return;
@@ -235,11 +235,11 @@ static void init_request(ClientSession* session)
 
 static int connect_session(ClientSession* session)
 {
-    C_Host host = {IPV4, {0}, session->state->config.port};
+    C_Host host = {C_IPTypeIPV4, {0}, session->state->config.port};
     strncpy(host.address, session->state->config.host, sizeof(host.address) - 1);
 
-    if (galay_kernel_tcp_socket_create(&session->socket, IPV4) != Success ||
-        galay_kernel_tcp_socket_connect(&session->state->runtime, &session->socket, &host, on_connect, session) != Success) {
+    if (galay_kernel_tcp_socket_create(&session->socket, C_IPTypeIPV4) != C_TcpSocketSuccess ||
+        galay_kernel_tcp_socket_connect(&session->state->runtime, &session->socket, &host, on_connect, session) != C_TcpSocketSuccess) {
         ++session->errors;
         close_session(session);
         return 1;
