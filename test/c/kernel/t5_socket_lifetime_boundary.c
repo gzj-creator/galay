@@ -1,66 +1,72 @@
-#include <galay/c/galay-kernel/galay_kernel.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
 
-#include <stdint.h>
-
-static int expect_status(galay_status_t actual, galay_status_t expected)
+static int expect_runtime_status(C_RuntimeResultCode actual, C_RuntimeResultCode expected)
 {
     return actual == expected ? 0 : 1;
 }
 
+static int expect_socket_status(C_TcpSocketResultCode actual, C_TcpSocketResultCode expected)
+{
+    return actual == expected ? 0 : 1;
+}
+
+static void on_close(C_TcpSocketResultCode code, void* ctx)
+{
+    (void)code;
+    (void)ctx;
+}
+
 int main(void)
 {
-    galay_kernel_runtime_config_t config = galay_kernel_runtime_config_default();
-    galay_kernel_runtime_t* runtime = 0;
-    galay_kernel_tcp_accept_t* accept = 0;
-    galay_kernel_tcp_socket_t* accepted = (galay_kernel_tcp_socket_t*)(uintptr_t)1;
-    galay_kernel_tcp_socket_t* tcp = 0;
-    galay_kernel_udp_socket_t* udp = 0;
+    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    galay_kernel_runtime_t runtime = {0};
+    galay_kernel_tcp_socket_t tcp = {0};
 
-    if (expect_status(galay_kernel_runtime_create(&config, &runtime), GALAY_OK)) {
+    if (expect_runtime_status(galay_kernel_runtime_create(&config, &runtime), C_RuntimeSuccess)) {
         return 1;
     }
-    if (runtime == 0) {
+    if (runtime.runtime == 0) {
         return 2;
     }
-    if (expect_status(galay_kernel_runtime_destroy(&runtime), GALAY_OK)) {
+    if (expect_runtime_status(galay_kernel_runtime_destroy(&runtime), C_RuntimeSuccess)) {
         return 3;
     }
-    if (runtime != 0) {
+    if (runtime.runtime != 0) {
         return 4;
     }
-    if (expect_status(galay_kernel_runtime_destroy(&runtime), GALAY_OK)) {
+    if (expect_runtime_status(galay_kernel_runtime_destroy(&runtime), C_RuntimeSuccess)) {
         return 5;
     }
-
-    if (expect_status(galay_kernel_tcp_accept_join(0, &accepted, 0), GALAY_INVALID_ARGUMENT)) {
+    if (expect_runtime_status(galay_kernel_runtime_destroy(0), C_RuntimeParameterInvalid)) {
         return 6;
     }
-    if (accepted != 0) {
+
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(0), MemoryAllocFailed)) {
         return 7;
     }
-    if (expect_status(galay_kernel_tcp_accept_destroy(&accept), GALAY_OK)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), Success)) {
         return 8;
     }
-    if (expect_status(galay_kernel_tcp_accept_destroy(&accept), GALAY_OK)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_close(0, &tcp, on_close, 0), ParameterInvalid)) {
         return 9;
     }
-
-    if (expect_status(galay_kernel_tcp_socket_create(GALAY_KERNEL_IP_V4, &tcp), GALAY_OK)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_close(&runtime, &tcp, on_close, 0), ParameterInvalid)) {
         return 10;
     }
-    if (expect_status(galay_kernel_udp_socket_create(GALAY_KERNEL_IP_V4, &udp), GALAY_OK)) {
+
+    if (expect_socket_status(galay_kernel_tcp_socket_create(&tcp, IPV4), Success)) {
         return 11;
     }
-    if (expect_status(galay_kernel_tcp_socket_destroy(&tcp), GALAY_OK)) {
+    if (tcp.socket == 0) {
         return 12;
     }
-    if (expect_status(galay_kernel_tcp_socket_destroy(&tcp), GALAY_OK)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), Success)) {
         return 13;
     }
-    if (expect_status(galay_kernel_udp_socket_destroy(&udp), GALAY_OK)) {
+    if (tcp.socket != 0) {
         return 14;
     }
-    if (expect_status(galay_kernel_udp_socket_destroy(&udp), GALAY_OK)) {
+    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), Success)) {
         return 15;
     }
 

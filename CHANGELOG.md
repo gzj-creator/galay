@@ -13,6 +13,8 @@
 
 ### Added
 
+- 新增 C Kernel `TcpSocket` callback API，补齐 `connect` / `accept` / `recv` / `send` / `close`，并新增 `accept_loop` / `recv_loop` / `send_loop`，loop callback 可通过返回值控制是否继续。
+- 新增 C Kernel `TcpSocket` 回归、示例与 benchmark：覆盖 async callback、close 集成、loop callback、echo 示例、生命周期压测，以及双进程 TCP echo QPS/吞吐压测。
 - 新增 C++ 模块审计修复的边界测试与源码守卫，覆盖 kernel task/timeout/iov/resource、HTTP/WS/HTTP2 协议边界、Redis/MySQL/Mongo/etcd 客户端边界、MCP/SSL/tracing 安全生命周期，以及 utils umbrella/resource 错误边界。
 - 新增对应压力/性能基准，覆盖 kernel task timeout/resource error、HTTP/WS 协议边界、Mongo expected 错误传播、utils resource error，以及 RPC payload scaling 等场景。
 - 新增 C API no-exception 源码边界守卫，覆盖 MySQL/Mongo/tracing/HTTP2/Redis/etcd C 包装层与 Base64 工具，防止异常控制流重新进入这些边界文件。
@@ -25,6 +27,8 @@
 
 ### Changed
 
+- 调整 C Kernel `TcpSocket` accept/recv/send 结果结构：accepted socket 直接随 `galay_kernel_tcp_accept_result_t` 返回，移除 `has_socket` 与 `take_socket`；recv/send 结果补充原始 buffer 与 length，便于 callback 链式处理。
+- C Kernel 测试、示例和 benchmark CMake 改为 `file(GLOB ... CONFIGURE_DEPENDS)` 自动收集源文件，避免新增用例时逐个登记。
 - Mongo BSON/ObjectId/OP_MSG 编码边界改为 `std::expected` 显式传播错误；非法 ObjectId、BSON key 与 OP_MSG 编码失败不再通过异常逃逸，客户端边界统一转换为 `MongoError`。
 - C++23 `.cppm` 安装策略改为保守模式：普通 header install 不再安装未验证 module facade，后续只允许具体 `CXX_MODULES FILE_SET` module target 安装自己的模块接口文件。
 - 多模块协议与资源路径补齐显式边界处理，包括 HTTP/WS/HTTP2/RPC framing、Redis pool wait/RESP limit、MySQL packet length、MCP transport limit、SSL init/hostname/OAEP 与 tracing shutdown/escaping。
@@ -52,6 +56,8 @@
 - 加固 C++ `Host` 字符串构造与 TCP/UDP bind 边界：非法 IP 或协议类型会被标记为 invalid，bind 在系统调用前返回 `IOError(kParamInvalid)`，C ABI bind 将其映射为 `ParameterInvalid`。
 
 ### Docs
+
+- 新增 `docs/c/modules/kernel` 文档导航与性能页，记录 C `TcpSocket` Release 构建、回归命令、同参数 C/C++ loopback benchmark 数据和当前复现口径。
 
 ### Chore
 

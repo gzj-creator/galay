@@ -3,6 +3,7 @@
 
 #include "../common-c/host.h"
 #include "../core-c/runtime_c.h"
+#include <stddef.h>
 
 /**
  * @file tcp_socket_c.h
@@ -25,6 +26,8 @@ typedef enum C_TcpSocketResultCode {
     MemoryAllocFailed,      ///< 内存或底层 socket 资源创建失败。
     IOFailed,               ///< 底层 IO 操作失败。
     OperationInvalid,       ///< 当前 socket 状态不允许执行该操作。
+    RuntimeNotRunning,      ///< runtime 未启动。
+    RuntimeSpawnFailed,     ///< runtime 提交任务失败。
 } C_TcpSocketResultCode;
 
 /**
@@ -39,15 +42,33 @@ typedef struct galay_kernel_tcp_socket {
 /**
  * @brief TCP accept 回调结果。
  *
- * @note 回调只在 accept 完成后触发；若 has_socket 为非 0，调用方需要通过
- * galay_kernel_tcp_accept_result_take_socket 取得 socket 所有权。
+ * @note 成功时 socket 字段持有 accepted socket，调用方负责 destroy。
  */
 typedef struct galay_kernel_tcp_accept_result {
     C_TcpSocketResultCode code;             ///< accept 结果码。
-    int has_socket;                         ///< 非 0 表示 result 内持有 accepted socket。
     C_Host peer;                            ///< 对端地址信息。
-    galay_kernel_tcp_socket_t* socket;      ///< accepted TCP socket 句柄，调用方通过 destroy 释放。
+    galay_kernel_tcp_socket_t socket;       ///< accepted TCP socket 句柄
 } galay_kernel_tcp_accept_result_t;
+
+/**
+ * @brief TCP recv 回调结果。
+ */
+typedef struct galay_kernel_tcp_recv_result {
+    C_TcpSocketResultCode code;             ///< recv 结果码。
+    char* buffer;                           ///< 调用 recv 时传入的接收缓冲区。
+    size_t length;                          ///< 调用 recv 时请求的缓冲区长度。
+    size_t bytes;                           ///< 成功读取的字节数。
+} galay_kernel_tcp_recv_result_t;
+
+/**
+ * @brief TCP send 回调结果。
+ */
+typedef struct galay_kernel_tcp_send_result {
+    C_TcpSocketResultCode code;             ///< send 结果码。
+    const char* buffer;                     ///< 调用 send 时传入的发送缓冲区。
+    size_t length;                          ///< 调用 send 时请求发送的字节数。
+    size_t bytes;                           ///< 成功写入的字节数。
+} galay_kernel_tcp_send_result_t;
 
 /**
  * @brief TCP accept 完成回调。
@@ -57,6 +78,79 @@ typedef struct galay_kernel_tcp_accept_result {
  */
 typedef void (*galay_kernel_tcp_accept_callback_t)(
     galay_kernel_tcp_accept_result_t* result,
+    void* ctx);
+
+/**
+ * @brief TCP accept loop 回调。
+ *
+ * @param result accept 结果；只在回调期间有效。
+ * @param ctx 调用 galay_kernel_tcp_socket_accept_loop 时传入的用户上下文。
+ * @return 返回 0 继续下一轮 accept；返回非 0 在本次回调返回后停止 loop。
+ */
+typedef int (*galay_kernel_tcp_accept_loop_callback_t)(
+    galay_kernel_tcp_accept_result_t* result,
+    void* ctx);
+
+/**
+ * @brief TCP connect 完成回调。
+ *
+ * @param code connect 完成结果码；连接成功为 Success，连接失败为 IOFailed。
+ * @param ctx 调用 galay_kernel_tcp_socket_connect 时传入的用户上下文。
+ */
+typedef void (*galay_kernel_tcp_connect_callback_t)(
+    C_TcpSocketResultCode code,
+    void* ctx);
+
+/**
+ * @brief TCP recv 完成回调。
+ *
+ * @param result recv 结果；只在回调期间有效。
+ * @param ctx 调用 galay_kernel_tcp_socket_recv 时传入的用户上下文。
+ */
+typedef void (*galay_kernel_tcp_recv_callback_t)(
+    galay_kernel_tcp_recv_result_t* result,
+    void* ctx);
+
+/**
+ * @brief TCP recv loop 回调。
+ *
+ * @param result recv 结果；只在回调期间有效。
+ * @param ctx 调用 galay_kernel_tcp_socket_recv_loop 时传入的用户上下文。
+ * @return 返回 0 继续下一轮 recv；返回非 0 在本次回调返回后停止 loop。
+ */
+typedef int (*galay_kernel_tcp_recv_loop_callback_t)(
+    galay_kernel_tcp_recv_result_t* result,
+    void* ctx);
+
+/**
+ * @brief TCP send 完成回调。
+ *
+ * @param result send 结果；只在回调期间有效。
+ * @param ctx 调用 galay_kernel_tcp_socket_send 时传入的用户上下文。
+ */
+typedef void (*galay_kernel_tcp_send_callback_t)(
+    galay_kernel_tcp_send_result_t* result,
+    void* ctx);
+
+/**
+ * @brief TCP send loop 回调。
+ *
+ * @param result send 结果；只在回调期间有效。
+ * @param ctx 调用 galay_kernel_tcp_socket_send_loop 时传入的用户上下文。
+ * @return 返回 0 继续下一轮 send；返回非 0 在本次回调返回后停止 loop。
+ */
+typedef int (*galay_kernel_tcp_send_loop_callback_t)(
+    galay_kernel_tcp_send_result_t* result,
+    void* ctx);
+
+/**
+ * @brief TCP close 完成回调。
+ *
+ * @param code close 完成结果码；关闭成功为 Success，关闭失败为 IOFailed。
+ * @param ctx 调用 galay_kernel_tcp_socket_close 时传入的用户上下文。
+ */
+typedef void (*galay_kernel_tcp_close_callback_t)(
+    C_TcpSocketResultCode code,
     void* ctx);
 
 /**
@@ -124,27 +218,32 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_local_endpoint(
 /**
  * @brief 异步连接到远端地址。
  *
+ * @param runtime 用于驱动 connect 协程的 runtime；必须存活到 callback 完成。
  * @param c_socket 由 galay_kernel_tcp_socket_create 初始化的 socket 句柄。
  * @param host 远端地址配置；address 必须是合法 IPv4/IPv6 字符串。
+ * @param callback connect 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
  * @return 成功提交连接操作返回 Success；参数无效返回 ParameterInvalid；提交失败返回 IOFailed。
  *
- * @note 该接口对应底层 TcpSocket::connect，具体完成语义由实现侧 runtime/awaitable 处理。
+ * @note 该函数不会阻塞等待连接完成；最终连接结果通过 callback 上报，callback 在 runtime 调度线程上执行。
  */
 C_TcpSocketResultCode galay_kernel_tcp_socket_connect(
+    galay_kernel_runtime_t* c_runtime,
     galay_kernel_tcp_socket_t* c_socket,
-    const C_Host* host);
+    const C_Host* host,
+    galay_kernel_tcp_connect_callback_t callback,
+    void* ctx);
 
 /**
- * @brief 在 runtime 上启动 socket 绑定的 TCP accept callback loop。
+ * @brief 在 runtime 上异步接受一个 TCP 连接。
  *
- * @param runtime 已启动或可启动的 runtime；必须存活到 stop_accept 完成之后。
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
  * @param listener 已 bind/listen 的 TCP 监听 socket。
- * @param callback 每次 accept 完成时调用的回调；不能为空。
+ * @param callback accept 完成后调用的回调；不能为空。
  * @param ctx 原样传给 callback 的用户上下文。
  * @return 成功返回 Success；参数无效返回 ParameterInvalid；提交失败返回 IOFailed。
  *
- * @note 回调中的 result 只在回调期间有效；accepted socket 需通过
- * galay_kernel_tcp_accept_result_take_socket 转移所有权。
+ * @note 回调中的 result 只在回调期间有效；成功时 result->socket 由调用方负责 destroy。
  */
 C_TcpSocketResultCode galay_kernel_tcp_socket_accept(
     galay_kernel_runtime_t* runtime,
@@ -153,27 +252,129 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_accept(
     void* ctx);
 
 /**
- * @brief 请求停止 TCP accept callback loop。
+ * @brief 在 runtime 上循环接受 TCP 连接。
  *
- * @param listener 正在 accept 的监听 socket。
- * @return 成功返回 Success；参数无效返回 ParameterInvalid；唤醒或停止失败返回 IOFailed。
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param listener 已 bind/listen 的 TCP 监听 socket；必须存活到 loop 退出。
+ * @param callback 每次 accept 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 Success；参数无效返回 ParameterInvalid；提交失败返回 RuntimeSpawnFailed。
  *
- * @note 该函数只请求停止；是否阻塞等待由实现侧生命周期策略决定。
+ * @note 该函数只提交一个内部循环协程；每次接受到连接都会触发 callback。
+ *       成功时 result->socket 由调用方负责 destroy；accept 出错时会回调一次错误结果并退出 loop。
+ *       listener 必须存活到错误回调或 callback 返回非 0 使 loop 退出之后。
  */
-C_TcpSocketResultCode galay_kernel_tcp_socket_stop_accept(galay_kernel_tcp_socket_t* listener);
+C_TcpSocketResultCode galay_kernel_tcp_socket_accept_loop(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* listener,
+    galay_kernel_tcp_accept_loop_callback_t callback,
+    void* ctx);
 
 /**
- * @brief 从 accept result 中取出 accepted TCP socket。
+ * @brief 在 runtime 上异步接收 TCP 数据。
  *
- * @param result accept 回调收到的结果对象。
- * @param out_socket 输出 socket 句柄；成功后调用方负责 destroy。
- * @return 成功返回 Success；参数无效或没有 socket 返回 ParameterInvalid。
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket TCP socket 句柄；必须存活到 callback 完成。
+ * @param buffer 接收缓冲区；必须存活到 callback 完成。
+ * @param length 接收缓冲区长度，必须大于 0。
+ * @param callback recv 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 Success；参数无效返回 ParameterInvalid；runtime 未运行返回 RuntimeNotRunning；提交失败返回 RuntimeSpawnFailed。
  *
- * @note 成功调用后 result 不再持有该 socket，重复调用会返回 ParameterInvalid。
+ * @note 该函数不会阻塞等待数据；最终读取字节数通过 callback 上报。
  */
-C_TcpSocketResultCode galay_kernel_tcp_accept_result_take_socket(
-    galay_kernel_tcp_accept_result_t* result,
-    galay_kernel_tcp_socket_t* out_socket);
+C_TcpSocketResultCode galay_kernel_tcp_socket_recv(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    galay_kernel_tcp_recv_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上循环接收 TCP 数据。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param c_socket TCP socket 句柄；必须存活到 loop 退出。
+ * @param buffer 接收缓冲区；必须存活到 loop 退出。
+ * @param length 接收缓冲区长度，必须大于 0。
+ * @param callback 每次 recv 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 Success；参数无效返回 ParameterInvalid；提交失败返回 RuntimeSpawnFailed。
+ *
+ * @note 该函数只提交一个内部循环协程；每次读取完成都会触发 callback。
+ *       buffer 会被下一轮 recv 复用，callback 中需要立即处理或复制数据。
+ *       recv 出错或读取到 0 字节时会回调一次终态结果并退出 loop。
+ *       callback 返回非 0 会在当前回调返回后停止 loop。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_recv_loop(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    galay_kernel_tcp_recv_loop_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步发送 TCP 数据。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket TCP socket 句柄；必须存活到 callback 完成。
+ * @param buffer 发送缓冲区；必须存活到 callback 完成。
+ * @param length 发送字节数，必须大于 0。
+ * @param callback send 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 Success；参数无效返回 ParameterInvalid；runtime 未运行返回 RuntimeNotRunning；提交失败返回 RuntimeSpawnFailed。
+ *
+ * @note 该函数不会阻塞等待发送完成；最终写入字节数通过 callback 上报。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_send(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    galay_kernel_tcp_send_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上循环发送同一段 TCP 数据。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param c_socket TCP socket 句柄；必须存活到 loop 退出。
+ * @param buffer 发送缓冲区；必须存活到 loop 退出。
+ * @param length 每轮发送字节数，必须大于 0。
+ * @param callback 每次 send 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 Success；参数无效返回 ParameterInvalid；提交失败返回 RuntimeSpawnFailed。
+ *
+ * @note 该函数只提交一个内部循环协程；每轮都会发送同一个 buffer 并触发 callback。
+ *       send 出错或写入 0 字节时会回调一次终态结果并退出 loop。
+ *       callback 返回非 0 会在当前回调返回后停止 loop。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_send_loop(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    galay_kernel_tcp_send_loop_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步关闭 TCP socket。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket TCP socket 句柄；关闭后仍需调用 destroy 释放句柄对象。
+ * @param callback close 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 Success；参数无效返回 ParameterInvalid；提交失败返回 RuntimeSpawnFailed。
+ *
+ * @note 该函数只关闭底层 socket，不释放 c_socket 句柄对象；最终关闭结果通过 callback 上报。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_close(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    galay_kernel_tcp_close_callback_t callback,
+    void* ctx);
 
 #ifdef __cplusplus
 }
