@@ -90,6 +90,9 @@ if(TARGET rpc AND TARGET etcd)
     set_target_properties(rpc-etcd PROPERTIES EXPORT_NAME rpc-etcd)
 
     if(TARGET galay-rpc-modules)
+        file(GLOB GALAY_RPC_ETCD_MODULE_SOURCES CONFIGURE_DEPENDS
+            "${PROJECT_SOURCE_DIR}/src/cpp/galay-rpc/module/galay_rpc_etcd.cppm"
+        )
         add_library(galay-rpc-etcd-modules)
         add_library(galay-rpc::galay-rpc-etcd-modules ALIAS galay-rpc-etcd-modules)
         target_compile_features(galay-rpc-etcd-modules PUBLIC cxx_std_23)
@@ -103,7 +106,7 @@ if(TARGET rpc AND TARGET etcd)
             PUBLIC
                 FILE_SET CXX_MODULES
                 BASE_DIRS ${PROJECT_SOURCE_DIR}/src/cpp/galay-rpc/module
-                FILES ${PROJECT_SOURCE_DIR}/src/cpp/galay-rpc/module/galay_rpc_etcd.cppm
+                FILES ${GALAY_RPC_ETCD_MODULE_SOURCES}
         )
         set_target_properties(galay-rpc-etcd-modules PROPERTIES
             EXPORT_NAME galay-rpc-etcd-modules

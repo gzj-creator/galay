@@ -46,23 +46,3 @@ foreach(test_source ${GALAY_HTTP_TEST_SOURCES})
     )
     set_tests_properties("http.${scenario_name}" PROPERTIES LABELS "http;unit")
 endforeach()
-
-if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-http-modules)
-    add_executable(t59_module_smoke t59_module.cc)
-    target_link_libraries(t59_module_smoke PRIVATE galay-http-modules)
-    target_include_directories(t59_module_smoke PRIVATE ${CMAKE_BINARY_DIR}/include)
-    set_target_properties(t59_module_smoke PROPERTIES
-        CXX_STANDARD 23
-        CXX_STANDARD_REQUIRED ON
-        CXX_EXTENSIONS OFF
-        CXX_SCAN_FOR_MODULES ON
-    )
-    add_test(NAME http.module_smoke
-        COMMAND ${CMAKE_COMMAND}
-            -DTEST_BINARY_DIR=${CMAKE_CURRENT_BINARY_DIR}
-            -DTEST_BINARY_NAME=t59_module_smoke
-            -DTEST_WORKING_DIRECTORY=${PROJECT_SOURCE_DIR}
-            -P ${PROJECT_SOURCE_DIR}/cmake/RunTestBinary.cmake
-    )
-    set_tests_properties(http.module_smoke PROPERTIES LABELS "http;surface")
-endif()

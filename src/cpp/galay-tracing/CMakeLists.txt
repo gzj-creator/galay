@@ -14,18 +14,11 @@ endif()
 
 galay_ensure_openssl()
 
-set(GALAY_TRACING_SOURCES
-    common/id_format.cc
-    context/context_storage.cc
-    context/traceparent.cc
-    kernel/batch_span_processor.cc
-    kernel/file_span_exporter.cc
-    kernel/otlp_http_exporter.cc
-    kernel/sampler.cc
-    kernel/span.cc
-    kernel/span_guard.cc
-    log/console_sink.cc
-    log/logger.cc
+file(GLOB_RECURSE GALAY_TRACING_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/common/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/context/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/kernel/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/log/*.cc"
 )
 
 if(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
@@ -73,7 +66,8 @@ set_target_properties(tracing PROPERTIES EXPORT_NAME tracing)
 if(GALAY_TRACING_ENABLE_SPDLOG)
     galay_ensure_spdlog()
 
-    add_library(galay-tracing-spdlog adapters/spdlog_sink.cc)
+    file(GLOB GALAY_TRACING_SPDLOG_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/adapters/*spdlog*.cc")
+    add_library(galay-tracing-spdlog ${GALAY_TRACING_SPDLOG_SOURCES})
     add_library(galay-tracing::galay-tracing-spdlog ALIAS galay-tracing-spdlog)
     target_compile_features(galay-tracing-spdlog PUBLIC cxx_std_23)
     target_include_directories(galay-tracing-spdlog

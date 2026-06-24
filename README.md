@@ -77,6 +77,6 @@ galay/
 
 ## 文档
 
-每个模块的完整文档位于 [`docs/modules/`](docs/modules/)，覆盖快速开始、架构设计、API 参考、使用指南、示例代码、性能测试、高级主题与常见问题。
+每个模块的完整文档位于 [`docs/cpp/modules/`](docs/cpp/modules/)，覆盖快速开始、架构设计、API 参考、使用指南、示例代码、性能测试、高级主题与常见问题。
 
 版本与发版记录见 [CHANGELOG.md](CHANGELOG.md) 与 [docs/release_note.md](docs/release_note.md)。

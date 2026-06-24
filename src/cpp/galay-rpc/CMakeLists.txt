@@ -26,7 +26,8 @@ else()
     message(FATAL_ERROR "rpc requires an in-tree utils target")
 endif()
 
-add_library(rpc common/anchor.cc)
+file(GLOB GALAY_RPC_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/common/*.cc")
+add_library(rpc ${GALAY_RPC_SOURCES})
 add_library(galay::rpc ALIAS rpc)
 
 if(NOT TARGET galay-rpc)
@@ -68,6 +69,7 @@ if(GALAY_ENABLE_CPP23_MODULES)
 endif()
 
 if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
+    file(GLOB GALAY_RPC_MODULE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/module/galay_rpc.cppm")
     add_library(galay-rpc-modules)
     add_library(galay-rpc::galay-rpc-modules ALIAS galay-rpc-modules)
     target_compile_features(galay-rpc-modules PUBLIC cxx_std_23)
@@ -81,7 +83,7 @@ if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
         PUBLIC
             FILE_SET CXX_MODULES
             BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/module
-            FILES ${CMAKE_CURRENT_SOURCE_DIR}/module/galay_rpc.cppm
+            FILES ${GALAY_RPC_MODULE_SOURCES}
     )
     set_target_properties(galay-rpc-modules PROPERTIES
         EXPORT_NAME galay-rpc-modules

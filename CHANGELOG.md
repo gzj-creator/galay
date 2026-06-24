@@ -27,6 +27,9 @@
 
 ### Changed
 
+- C++ 模块文档目录从 `docs/modules` 收敛到 `docs/cpp/modules`，顶层 README、`.gitignore` 与模块文档导航同步改向新的 cpp 文档路径。
+- C/C++ 示例、测试和 benchmark 的 CMake 注册方式批量改为 `file(GLOB ... CONFIGURE_DEPENDS)`，减少新增源文件时的手工 target 维护。
+- RPC / RPC-etcd C++23 module file set 改为通过 glob source 变量注册，保持模块入口文件与 CMake source list 规则一致。
 - 调整 C Kernel `TcpSocket` accept/recv/send 结果结构：accepted socket 直接随 `galay_kernel_tcp_accept_result_t` 返回，移除 `has_socket` 与 `take_socket`；recv/send 结果补充原始 buffer 与 length，便于 callback 链式处理。
 - C Kernel 测试、示例和 benchmark CMake 改为 `file(GLOB ... CONFIGURE_DEPENDS)` 自动收集源文件，避免新增用例时逐个登记。
 - Mongo BSON/ObjectId/OP_MSG 编码边界改为 `std::expected` 显式传播错误；非法 ObjectId、BSON key 与 OP_MSG 编码失败不再通过异常逃逸，客户端边界统一转换为 `MongoError`。
@@ -40,6 +43,8 @@
 
 ### Removed
 
+- 移除旧 `docs/modules` 文档树，当前 C++ 模块文档统一从 `docs/cpp/modules` 进入。
+- 移除旧 C 跨模块 smoke 示例与 benchmark 目录，只保留当前已落地的 C Kernel TcpSocket 文档、测试、示例和压测资产。
 - 移除 C ABI TCP accept 单次 awaitable handle 接口 `galay_kernel_tcp_accept_{start,wait,join,cancel,destroy}`，改用 `galay_kernel_tcp_socket_accept` 启动 socket 绑定的 callback accept loop。
 - 移除旧 `src/c/galay-{c,utils,http,ws,http2,redis,rpc,mysql,mongo,etcd,mcp,ssl,tracing}` 包装层源码，当前 C API 构建入口仅保留 `galay-kernel-c`。
 

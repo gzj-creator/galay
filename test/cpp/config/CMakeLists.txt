@@ -1,6 +1,12 @@
-add_executable(t_module_config_surface t_module_config_surface.cc)
-target_include_directories(t_module_config_surface PRIVATE ${CMAKE_BINARY_DIR}/include)
-add_test(NAME config.module_surface COMMAND t_module_config_surface)
+file(GLOB GALAY_CONFIG_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/t*.cc")
+foreach(test_source IN LISTS GALAY_CONFIG_TEST_SOURCES)
+    get_filename_component(test_name "${test_source}" NAME_WE)
+    add_executable(${test_name} ${test_source})
+    target_include_directories(${test_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
+    string(REGEX REPLACE "^t_module_config_" "module_" scenario_name "${test_name}")
+    string(REGEX REPLACE "^t_" "" scenario_name "${scenario_name}")
+    add_test(NAME "config.${scenario_name}" COMMAND ${test_name})
+endforeach()
 
 add_test(
     NAME config.install_include_layout

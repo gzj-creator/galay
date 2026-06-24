@@ -20,13 +20,19 @@ function(galay_add_redis_import_example target_name source_file)
     set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
 endfunction()
 
-galay_add_redis_example(example_redis_include_basic include/e1_basic.cc)
-galay_add_redis_example(example_redis_include_pipeline include/e2_pipeline.cc)
-galay_add_redis_example(example_redis_include_pubsub include/e3_pubsub.cc)
+file(GLOB GALAY_REDIS_INCLUDE_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cc")
+foreach(example_source IN LISTS GALAY_REDIS_INCLUDE_EXAMPLE_SOURCES)
+    get_filename_component(example_name "${example_source}" NAME_WE)
+    string(REGEX REPLACE "^e[0-9]+_" "" scenario_name "${example_name}")
+    galay_add_redis_example(example_redis_include_${scenario_name} ${example_source})
+endforeach()
 
-galay_add_redis_import_example(example_redis_import_basic import/e1_basic.cc)
-galay_add_redis_import_example(example_redis_import_pipeline import/e2_pipeline.cc)
-galay_add_redis_import_example(example_redis_import_pubsub import/e3_pubsub.cc)
+file(GLOB GALAY_REDIS_IMPORT_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/import/*.cc")
+foreach(example_source IN LISTS GALAY_REDIS_IMPORT_EXAMPLE_SOURCES)
+    get_filename_component(example_name "${example_source}" NAME_WE)
+    string(REGEX REPLACE "^e[0-9]+_" "" scenario_name "${example_name}")
+    galay_add_redis_import_example(example_redis_import_${scenario_name} ${example_source})
+endforeach()
 
 file(GLOB GALAY_REDIS_MANUAL_EXAMPLE_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/include/manual/*.cc"

@@ -1,7 +1,4 @@
 file(GLOB GALAY_RPC_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
-list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t92_module_smoke.cc")
-list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t64_etcd_real_chain.cc")
-list(REMOVE_ITEM GALAY_RPC_TEST_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/t94_rpc_etcd_adapter_surface.cc")
 set(GALAY_RPC_TEST_SKIP_RETURN_CODE 125)
 
 function(galay_add_rpc_test source_file)
@@ -22,31 +19,33 @@ add_library(result_writer INTERFACE)
 target_include_directories(result_writer INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
 
 foreach(test_source IN LISTS GALAY_RPC_TEST_SOURCES)
-    galay_add_rpc_test(${test_source})
-endforeach()
-
-if(TARGET galay::etcd)
-    if(NOT TARGET galay::rpc-etcd)
-        message(FATAL_ERROR "galay::rpc-etcd target is required when rpc and etcd are both enabled")
+    get_filename_component(test_name "${test_source}" NAME_WE)
+    if(test_name STREQUAL "t92_module_smoke")
+        if(NOT GALAY_ENABLE_CPP23_MODULES OR NOT TARGET galay-rpc-modules)
+            continue()
+        endif()
+        galay_add_rpc_test(${test_source})
+        target_link_libraries(${test_name} PRIVATE galay-rpc-modules)
+        set_target_properties(${test_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
+        set_tests_properties(rpc.t92.module.smoke PROPERTIES LABELS "rpc;module")
+    elseif(test_name STREQUAL "t64_etcd_real_chain" OR test_name STREQUAL "t94_rpc_etcd_adapter_surface")
+        if(NOT TARGET galay::etcd)
+            continue()
+        endif()
+        if(NOT TARGET galay::rpc-etcd)
+            message(FATAL_ERROR "galay::rpc-etcd target is required when rpc and etcd are both enabled")
+        endif()
+        galay_add_rpc_test(${test_source})
+        target_link_libraries(${test_name} PRIVATE galay::rpc-etcd)
+        if(test_name STREQUAL "t64_etcd_real_chain")
+            set_tests_properties(rpc.t64.etcd.real.chain PROPERTIES
+                LABELS "rpc;integration;requires-etcd"
+                SKIP_RETURN_CODE ${GALAY_RPC_TEST_SKIP_RETURN_CODE}
+            )
+        else()
+            set_tests_properties(rpc.t94.rpc.etcd.adapter.surface PROPERTIES LABELS "rpc;surface")
+        endif()
+    else()
+        galay_add_rpc_test(${test_source})
     endif()
-
-    galay_add_rpc_test("${CMAKE_CURRENT_SOURCE_DIR}/t64_etcd_real_chain.cc")
-    target_link_libraries(t64_etcd_real_chain PRIVATE galay::rpc-etcd)
-    set_tests_properties(rpc.t64.etcd.real.chain PROPERTIES
-        LABELS "rpc;integration;requires-etcd"
-        SKIP_RETURN_CODE ${GALAY_RPC_TEST_SKIP_RETURN_CODE}
-    )
-
-    galay_add_rpc_test("${CMAKE_CURRENT_SOURCE_DIR}/t94_rpc_etcd_adapter_surface.cc")
-    target_link_libraries(t94_rpc_etcd_adapter_surface PRIVATE galay::rpc-etcd)
-    set_tests_properties(rpc.t94.rpc.etcd.adapter.surface PROPERTIES LABELS "rpc;surface")
-endif()
-
-if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-rpc-modules)
-    add_executable(t92_module_smoke t92_module_smoke.cc)
-    target_link_libraries(t92_module_smoke PRIVATE galay-rpc-modules)
-    target_include_directories(t92_module_smoke PRIVATE ${CMAKE_BINARY_DIR}/include)
-    set_target_properties(t92_module_smoke PROPERTIES CXX_SCAN_FOR_MODULES ON)
-    add_test(NAME rpc.t92.module.smoke COMMAND $<TARGET_FILE:t92_module_smoke>)
-    set_tests_properties(rpc.t92.module.smoke PROPERTIES LABELS "rpc;module")
-endif()
+endforeach()

@@ -27,14 +27,21 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/../../../src/c/galay-ssl src_c_galay_ssl)
 endif()
 
-add_executable(test_c_ssl_header_smoke header_smoke.c)
-target_link_libraries(test_c_ssl_header_smoke PRIVATE galay::c-ssl)
-add_test(NAME c.ssl.header_smoke COMMAND test_c_ssl_header_smoke)
+function(galay_add_c_ssl_test source_file)
+    get_filename_component(scenario_name "${source_file}" NAME_WE)
+    set(target_name "test_c_ssl_${scenario_name}")
+    add_executable(${target_name} ${source_file})
+    target_link_libraries(${target_name} PRIVATE galay::c-ssl)
+    if(scenario_name STREQUAL "context_boundary")
+        target_compile_definitions(${target_name}
+            PRIVATE
+                GALAY_SSL_TEST_CERT_DIR="${CMAKE_CURRENT_LIST_DIR}/../../cpp/ssl/certs"
+        )
+    endif()
+    add_test(NAME "c.ssl.${scenario_name}" COMMAND ${target_name})
+endfunction()
 
-add_executable(test_c_ssl_context_boundary context_boundary.c)
-target_link_libraries(test_c_ssl_context_boundary PRIVATE galay::c-ssl)
-target_compile_definitions(test_c_ssl_context_boundary
-    PRIVATE
-        GALAY_SSL_TEST_CERT_DIR="${CMAKE_CURRENT_LIST_DIR}/../../cpp/ssl/certs"
-)
-add_test(NAME c.ssl.context_boundary COMMAND test_c_ssl_context_boundary)
+file(GLOB GALAY_C_SSL_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+foreach(test_source IN LISTS GALAY_C_SSL_TEST_SOURCES)
+    galay_add_c_ssl_test(${test_source})
+endforeach()

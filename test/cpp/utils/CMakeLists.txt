@@ -17,17 +17,18 @@ function(galay_add_utils_test target_name source_file)
     set_tests_properties("utils.${scenario_name}" PROPERTIES LABELS "utils;unit")
 endfunction()
 
-# Auto-discover numbered tests t{n}_*.cc; t_import_smoke is handled separately below.
-file(GLOB GALAY_UTILS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/t[0-9]*.cc")
+file(GLOB GALAY_UTILS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/t*.cc")
 
 foreach(test_source IN LISTS GALAY_UTILS_TEST_SOURCES)
     get_filename_component(test_name "${test_source}" NAME_WE)
+    if(test_name STREQUAL "t_import_smoke" AND
+       (NOT GALAY_ENABLE_CPP23_MODULES OR NOT TARGET galay-utils-modules))
+        continue()
+    endif()
     galay_add_utils_test("${test_name}" "${test_source}")
+    if(test_name STREQUAL "t_import_smoke")
+        target_link_libraries(t_import_smoke PRIVATE galay-utils-modules)
+        set_target_properties(t_import_smoke PROPERTIES CXX_SCAN_FOR_MODULES ON)
+        set_tests_properties(utils.import_smoke PROPERTIES LABELS "utils;surface")
+    endif()
 endforeach()
-
-if(GALAY_ENABLE_CPP23_MODULES AND TARGET galay-utils-modules)
-    galay_add_utils_test(t_import_smoke t_import_smoke.cc)
-    target_link_libraries(t_import_smoke PRIVATE galay-utils-modules)
-    set_target_properties(t_import_smoke PROPERTIES CXX_SCAN_FOR_MODULES ON)
-    set_tests_properties(utils.import_smoke PROPERTIES LABELS "utils;surface")
-endif()

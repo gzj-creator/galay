@@ -4,8 +4,9 @@ file(GLOB_RECURSE UTILS_INTERFACE_SOURCES CONFIGURE_DEPENDS
     "*.inl"
     "*.cppm"
 )
+file(GLOB_RECURSE UTILS_SOURCES CONFIGURE_DEPENDS "*.cc")
 
-add_library(utils common/anchor.cc)
+add_library(utils ${UTILS_SOURCES})
 add_library(galay::utils ALIAS utils)
 add_library(galay::galay-utils ALIAS utils)
 

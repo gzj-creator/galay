@@ -61,7 +61,7 @@ target/
 
 # Local planning docs
 docs/plans/
-docs/modules/*/plans
+docs/cpp/modules/*/plans
 
 # agent
 .claude/
