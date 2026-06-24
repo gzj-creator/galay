@@ -13,6 +13,7 @@
 
 ### Added
 
+- 新增 C Kernel async/concurrency C ABI wrapper：补齐 UDP socket、AsyncFile、AioFile、FileWatcher、AsyncMutex、AsyncWaiter、MpscChannel、UnsafeChannel 的 `.h/.cc`、回归测试、示例与 benchmark smoke，并接入 `galay-c-kernel` 构建和 C Kernel 文档。
 - 新增 C Kernel `TcpSocket` callback API，补齐 `connect` / `accept` / `recv` / `send` / `close`，并新增 `accept_loop` / `recv_loop` / `send_loop`，loop callback 可通过返回值控制是否继续。
 - 新增 C Kernel `TcpSocket` 回归、示例与 benchmark：覆盖 async callback、close 集成、loop callback、echo 示例、生命周期压测，以及双进程 TCP echo QPS/吞吐压测。
 - 新增 C++ 模块审计修复的边界测试与源码守卫，覆盖 kernel task/timeout/iov/resource、HTTP/WS/HTTP2 协议边界、Redis/MySQL/Mongo/etcd 客户端边界、MCP/SSL/tracing 安全生命周期，以及 utils umbrella/resource 错误边界。
