@@ -4,6 +4,7 @@
 #include "../common-c/host.h"
 #include "../core-c/runtime_c.h"
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * @file udp_socket_c.h
@@ -28,6 +29,7 @@ typedef enum C_UdpSocketResultCode {
     C_UdpSocketOperationInvalid,       ///< 当前 socket 状态不允许执行该操作。
     C_UdpSocketRuntimeNotRunning,      ///< runtime 未启动。
     C_UdpSocketRuntimeSpawnFailed,     ///< runtime 提交任务失败。
+    C_UdpSocketTimeout,                ///< 操作超时。
 } C_UdpSocketResultCode;
 
 /**
@@ -192,6 +194,30 @@ C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom(
     void* ctx);
 
 /**
+ * @brief 在 runtime 上异步接收一个 UDP 数据报，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket UDP socket 句柄；必须存活到 callback 完成。
+ * @param buffer 接收缓冲区；length 非 0 时不能为空，且必须存活到 callback 完成。
+ * @param length 接收缓冲区长度；允许为 0。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback recvfrom 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_UdpSocketSuccess；参数无效返回 C_UdpSocketParameterInvalid；
+ * runtime 未运行返回 C_UdpSocketRuntimeNotRunning；提交失败返回 C_UdpSocketRuntimeSpawnFailed。
+ *
+ * @note 超时时 callback 收到 C_UdpSocketTimeout，bytes 为 0。
+ */
+C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
+    galay_kernel_udp_recvfrom_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上循环接收 UDP 数据报。
  *
  * @param runtime 已启动的 runtime；必须存活到 loop 退出。
@@ -211,6 +237,30 @@ C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom_loop(
     galay_kernel_udp_socket_t* c_socket,
     char* buffer,
     size_t length,
+    galay_kernel_udp_recvfrom_loop_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上循环接收 UDP 数据报，单轮 recvfrom 带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param c_socket UDP socket 句柄；必须存活到 loop 退出。
+ * @param buffer 接收缓冲区；length 非 0 时不能为空，且必须存活到 loop 退出。
+ * @param length 接收缓冲区长度；允许为 0。
+ * @param timeout_ms 每轮 recvfrom 的超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback 每次 recvfrom 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 C_UdpSocketSuccess；参数无效返回 C_UdpSocketParameterInvalid；
+ * runtime 未运行返回 C_UdpSocketRuntimeNotRunning；提交失败返回 C_UdpSocketRuntimeSpawnFailed。
+ *
+ * @note recvfrom 超时会回调一次 C_UdpSocketTimeout 并退出 loop。
+ */
+C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom_loop_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
     galay_kernel_udp_recvfrom_loop_callback_t callback,
     void* ctx);
 
@@ -235,6 +285,32 @@ C_UdpSocketResultCode galay_kernel_udp_socket_sendto(
     const char* buffer,
     size_t length,
     const C_Host* to,
+    galay_kernel_udp_sendto_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步发送一个 UDP 数据报，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket UDP socket 句柄；必须存活到 callback 完成。
+ * @param buffer 发送缓冲区；length 非 0 时不能为空，且必须存活到 callback 完成。
+ * @param length 发送字节数；允许为 0，此时 buffer 可为 NULL。
+ * @param to 目标地址配置；address 必须是合法 IPv4/IPv6 字符串。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback sendto 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_UdpSocketSuccess；参数无效返回 C_UdpSocketParameterInvalid；
+ * runtime 未运行返回 C_UdpSocketRuntimeNotRunning；提交失败返回 C_UdpSocketRuntimeSpawnFailed。
+ *
+ * @note 超时时 callback 收到 C_UdpSocketTimeout，bytes 为 0。
+ */
+C_UdpSocketResultCode galay_kernel_udp_socket_sendto_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    const C_Host* to,
+    uint64_t timeout_ms,
     galay_kernel_udp_sendto_callback_t callback,
     void* ctx);
 
@@ -264,6 +340,32 @@ C_UdpSocketResultCode galay_kernel_udp_socket_sendto_loop(
     void* ctx);
 
 /**
+ * @brief 在 runtime 上循环发送同一段 UDP 数据报，单轮 sendto 带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param c_socket UDP socket 句柄；必须存活到 loop 退出。
+ * @param buffer 发送缓冲区；length 非 0 时不能为空，且必须存活到 loop 退出。
+ * @param length 每轮发送字节数；允许为 0，此时 buffer 可为 NULL。
+ * @param to 目标地址配置；address 必须是合法 IPv4/IPv6 字符串。
+ * @param timeout_ms 每轮 sendto 的超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback 每次 sendto 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 C_UdpSocketSuccess；参数无效返回 C_UdpSocketParameterInvalid；
+ * runtime 未运行返回 C_UdpSocketRuntimeNotRunning；提交失败返回 C_UdpSocketRuntimeSpawnFailed。
+ *
+ * @note sendto 超时会回调一次 C_UdpSocketTimeout 并退出 loop。
+ */
+C_UdpSocketResultCode galay_kernel_udp_socket_sendto_loop_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    const C_Host* to,
+    uint64_t timeout_ms,
+    galay_kernel_udp_sendto_loop_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上异步关闭 UDP socket。
  *
  * @param runtime 已启动的 runtime；必须存活到 callback 完成。
@@ -278,6 +380,26 @@ C_UdpSocketResultCode galay_kernel_udp_socket_sendto_loop(
 C_UdpSocketResultCode galay_kernel_udp_socket_close(
     galay_kernel_runtime_t* runtime,
     galay_kernel_udp_socket_t* c_socket,
+    galay_kernel_udp_close_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步关闭 UDP socket，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket UDP socket 句柄；关闭后仍需调用 destroy 释放句柄对象。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback close 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_UdpSocketSuccess；参数无效返回 C_UdpSocketParameterInvalid；
+ * runtime 未运行返回 C_UdpSocketRuntimeNotRunning；提交失败返回 C_UdpSocketRuntimeSpawnFailed。
+ *
+ * @note 超时时 callback 收到 C_UdpSocketTimeout；该函数不释放 c_socket 句柄对象。
+ */
+C_UdpSocketResultCode galay_kernel_udp_socket_close_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    uint64_t timeout_ms,
     galay_kernel_udp_close_callback_t callback,
     void* ctx);
 

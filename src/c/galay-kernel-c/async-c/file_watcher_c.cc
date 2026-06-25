@@ -4,7 +4,10 @@
 #include "../../../cpp/galay-kernel/core/runtime.h"
 
 #include <cerrno>
+#include <chrono>
 #include <cstring>
+#include <cstdint>
+#include <limits>
 #include <new>
 #include <string>
 
@@ -22,6 +25,16 @@ bool is_valid_watch_events(C_FileWatchEvent events)
 {
     const auto bits = static_cast<unsigned int>(events);
     return bits != 0u && (bits & ~static_cast<unsigned int>(C_FileWatchEventAll)) == 0u;
+}
+
+bool timeout_fits_chrono(uint64_t timeout_ms)
+{
+    using Rep = std::chrono::milliseconds::rep;
+    if constexpr (std::numeric_limits<Rep>::is_signed)
+    {
+        return timeout_ms <= static_cast<uint64_t>(std::numeric_limits<Rep>::max());
+    }
+    return timeout_ms <= std::numeric_limits<Rep>::max();
 }
 
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
@@ -63,6 +76,15 @@ C_FileWatcherResultCode from_cpp_io_error(const galay::kernel::IOError& error)
     return C_FileWatcherIOFailed;
 }
 
+C_FileWatcherResultCode from_cpp_watch_timeout_error(const galay::kernel::IOError& error)
+{
+    if (galay::kernel::IOError::contains(error.code(), galay::kernel::kTimeout))
+    {
+        return C_FileWatcherTimeout;
+    }
+    return from_cpp_io_error(error);
+}
+
 void copy_name_to_result(const std::string& name, galay_kernel_file_watcher_watch_result_t* result)
 {
     const auto bytes = name.size() < sizeof(result->name) - 1
@@ -86,6 +108,30 @@ galay::kernel::Task<void> c_api_watch(
     if (!watched)
     {
         result.code = from_cpp_io_error(watched.error());
+        callback(&result, ctx);
+        co_return;
+    }
+
+    result.code = C_FileWatcherSuccess;
+    result.events = to_c_events(watched->event);
+    result.is_dir = watched->isDir;
+    copy_name_to_result(watched->name, &result);
+    callback(&result, ctx);
+    co_return;
+}
+
+galay::kernel::Task<void> c_api_watch_timeout(
+    galay::async::FileWatcher* watcher,
+    uint64_t timeout_ms,
+    galay_kernel_file_watcher_callback_t callback,
+    void* ctx)
+{
+    auto watched = co_await watcher->watch().timeout(std::chrono::milliseconds(timeout_ms));
+
+    galay_kernel_file_watcher_watch_result_t result{};
+    if (!watched)
+    {
+        result.code = from_cpp_watch_timeout_error(watched.error());
         callback(&result, ctx);
         co_return;
     }
@@ -122,6 +168,8 @@ const char* galay_kernel_file_watcher_get_error(C_FileWatcherResultCode code)
         return "runtime spawn failed";
     case C_FileWatcherOperationUnsupported:
         return "operation unsupported";
+    case C_FileWatcherTimeout:
+        return "timeout";
     }
     return "unknown file watcher error";
 }
@@ -297,6 +345,44 @@ C_FileWatcherResultCode galay_kernel_file_watcher_watch(
     }
 
     auto spawned = cpp_runtime->spawn(c_api_watch(to_cpp_watcher(c_watcher), callback, ctx));
+    return spawned ? C_FileWatcherSuccess : C_FileWatcherRuntimeSpawnFailed;
+#else
+    return C_FileWatcherOperationUnsupported;
+#endif
+}
+
+C_FileWatcherResultCode galay_kernel_file_watcher_watch_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_file_watcher_t* c_watcher,
+    uint64_t timeout_ms,
+    galay_kernel_file_watcher_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr || runtime->runtime == nullptr ||
+        c_watcher == nullptr || callback == nullptr || !timeout_fits_chrono(timeout_ms))
+    {
+        return C_FileWatcherParameterInvalid;
+    }
+
+    if (!kFileWatcherSupported)
+    {
+        return C_FileWatcherOperationUnsupported;
+    }
+
+#if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
+    if (c_watcher->watcher == nullptr)
+    {
+        return C_FileWatcherParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_FileWatcherRuntimeNotRunning;
+    }
+
+    auto spawned = cpp_runtime->spawn(
+        c_api_watch_timeout(to_cpp_watcher(c_watcher), timeout_ms, callback, ctx));
     return spawned ? C_FileWatcherSuccess : C_FileWatcherRuntimeSpawnFailed;
 #else
     return C_FileWatcherOperationUnsupported;

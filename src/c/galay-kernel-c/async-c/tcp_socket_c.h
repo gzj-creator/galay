@@ -4,6 +4,7 @@
 #include "../common-c/host.h"
 #include "../core-c/runtime_c.h"
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * @file tcp_socket_c.h
@@ -28,6 +29,7 @@ typedef enum C_TcpSocketResultCode {
     C_TcpSocketOperationInvalid,       ///< 当前 socket 状态不允许执行该操作。
     C_TcpSocketRuntimeNotRunning,      ///< runtime 未启动。
     C_TcpSocketRuntimeSpawnFailed,     ///< runtime 提交任务失败。
+    C_TcpSocketTimeout,                ///< 操作超时。
 } C_TcpSocketResultCode;
 
 /**
@@ -235,6 +237,27 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_connect(
     void* ctx);
 
 /**
+ * @brief 异步连接到远端地址，带毫秒级超时。
+ *
+ * @param runtime 用于驱动 connect 协程的 runtime；必须存活到 callback 完成。
+ * @param c_socket 由 galay_kernel_tcp_socket_create 初始化的 socket 句柄。
+ * @param host 远端地址配置；address 必须是合法 IPv4/IPv6 字符串。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback connect 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交连接操作返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note 该函数不会阻塞等待连接完成；超时通过 callback 上报 C_TcpSocketTimeout。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_connect_timeout(
+    galay_kernel_runtime_t* c_runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    const C_Host* host,
+    uint64_t timeout_ms,
+    galay_kernel_tcp_connect_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上异步接受一个 TCP 连接。
  *
  * @param runtime 已启动的 runtime；必须存活到 callback 完成。
@@ -248,6 +271,25 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_connect(
 C_TcpSocketResultCode galay_kernel_tcp_socket_accept(
     galay_kernel_runtime_t* runtime,
     galay_kernel_tcp_socket_t* listener,
+    galay_kernel_tcp_accept_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步接受一个 TCP 连接，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param listener 已 bind/listen 的 TCP 监听 socket。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback accept 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note 回调中的 result 只在回调期间有效；超时返回 C_TcpSocketTimeout。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_accept_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* listener,
+    uint64_t timeout_ms,
     galay_kernel_tcp_accept_callback_t callback,
     void* ctx);
 
@@ -271,6 +313,25 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_accept_loop(
     void* ctx);
 
 /**
+ * @brief 在 runtime 上循环接受 TCP 连接，单轮 accept 带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param listener 已 bind/listen 的 TCP 监听 socket；必须存活到 loop 退出。
+ * @param timeout_ms 每轮 accept 的超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback 每次 accept 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note accept 超时会回调一次 C_TcpSocketTimeout 并退出 loop。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_accept_loop_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* listener,
+    uint64_t timeout_ms,
+    galay_kernel_tcp_accept_loop_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上异步接收 TCP 数据。
  *
  * @param runtime 已启动的 runtime；必须存活到 callback 完成。
@@ -288,6 +349,29 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_recv(
     galay_kernel_tcp_socket_t* c_socket,
     char* buffer,
     size_t length,
+    galay_kernel_tcp_recv_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步接收 TCP 数据，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket TCP socket 句柄；必须存活到 callback 完成。
+ * @param buffer 接收缓冲区；必须存活到 callback 完成。
+ * @param length 接收缓冲区长度，必须大于 0。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback recv 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note 超时时 callback 收到 C_TcpSocketTimeout，bytes 为 0。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_recv_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
     galay_kernel_tcp_recv_callback_t callback,
     void* ctx);
 
@@ -316,6 +400,29 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_recv_loop(
     void* ctx);
 
 /**
+ * @brief 在 runtime 上循环接收 TCP 数据，单轮 recv 带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param c_socket TCP socket 句柄；必须存活到 loop 退出。
+ * @param buffer 接收缓冲区；必须存活到 loop 退出。
+ * @param length 接收缓冲区长度，必须大于 0。
+ * @param timeout_ms 每轮 recv 的超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback 每次 recv 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note recv 超时会回调一次 C_TcpSocketTimeout 并退出 loop。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_recv_loop_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
+    galay_kernel_tcp_recv_loop_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上异步发送 TCP 数据。
  *
  * @param runtime 已启动的 runtime；必须存活到 callback 完成。
@@ -333,6 +440,29 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_send(
     galay_kernel_tcp_socket_t* c_socket,
     const char* buffer,
     size_t length,
+    galay_kernel_tcp_send_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步发送 TCP 数据，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket TCP socket 句柄；必须存活到 callback 完成。
+ * @param buffer 发送缓冲区；必须存活到 callback 完成。
+ * @param length 发送字节数，必须大于 0。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback send 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note 超时时 callback 收到 C_TcpSocketTimeout，bytes 为 0。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_send_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
     galay_kernel_tcp_send_callback_t callback,
     void* ctx);
 
@@ -360,6 +490,29 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_send_loop(
     void* ctx);
 
 /**
+ * @brief 在 runtime 上循环发送同一段 TCP 数据，单轮 send 带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 loop 退出。
+ * @param c_socket TCP socket 句柄；必须存活到 loop 退出。
+ * @param buffer 发送缓冲区；必须存活到 loop 退出。
+ * @param length 每轮发送字节数，必须大于 0。
+ * @param timeout_ms 每轮 send 的超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback 每次 send 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交 loop 返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note send 超时会回调一次 C_TcpSocketTimeout 并退出 loop。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_send_loop_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
+    galay_kernel_tcp_send_loop_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上异步关闭 TCP socket。
  *
  * @param runtime 已启动的 runtime；必须存活到 callback 完成。
@@ -373,6 +526,25 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_send_loop(
 C_TcpSocketResultCode galay_kernel_tcp_socket_close(
     galay_kernel_runtime_t* runtime,
     galay_kernel_tcp_socket_t* c_socket,
+    galay_kernel_tcp_close_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步关闭 TCP socket，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_socket TCP socket 句柄；关闭后仍需调用 destroy 释放句柄对象。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback close 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_TcpSocketSuccess；参数无效返回 C_TcpSocketParameterInvalid；runtime 未运行返回 C_TcpSocketRuntimeNotRunning；提交失败返回 C_TcpSocketRuntimeSpawnFailed。
+ *
+ * @note 超时时 callback 收到 C_TcpSocketTimeout。
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_close_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_tcp_socket_t* c_socket,
+    uint64_t timeout_ms,
     galay_kernel_tcp_close_callback_t callback,
     void* ctx);
 

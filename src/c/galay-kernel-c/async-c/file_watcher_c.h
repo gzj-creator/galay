@@ -4,6 +4,7 @@
 #include "../core-c/runtime_c.h"
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * @file file_watcher_c.h
@@ -29,6 +30,7 @@ typedef enum C_FileWatcherResultCode {
     C_FileWatcherRuntimeNotRunning,     ///< runtime 未启动。
     C_FileWatcherRuntimeSpawnFailed,    ///< runtime 提交任务失败。
     C_FileWatcherOperationUnsupported,  ///< 当前构建后端不支持文件监控。
+    C_FileWatcherTimeout,               ///< watch 操作超时。
 } C_FileWatcherResultCode;
 
 /**
@@ -175,6 +177,28 @@ C_FileWatcherResultCode galay_kernel_file_watcher_get_path(
 C_FileWatcherResultCode galay_kernel_file_watcher_watch(
     galay_kernel_runtime_t* runtime,
     galay_kernel_file_watcher_t* c_watcher,
+    galay_kernel_file_watcher_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步等待一个文件系统事件，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_watcher FileWatcher 句柄；必须存活到 callback 完成。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback watch 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_FileWatcherSuccess；参数无效返回 C_FileWatcherParameterInvalid；
+ * runtime 未运行返回 C_FileWatcherRuntimeNotRunning；提交失败返回 C_FileWatcherRuntimeSpawnFailed；
+ * 后端不支持返回 C_FileWatcherOperationUnsupported。
+ *
+ * @note 该函数不会阻塞等待文件事件；超时通过 callback 上报 C_FileWatcherTimeout。
+ *       调用方不应在前一次 watch 完成前对同一 watcher 再次提交 watch。
+ */
+C_FileWatcherResultCode galay_kernel_file_watcher_watch_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_file_watcher_t* c_watcher,
+    uint64_t timeout_ms,
     galay_kernel_file_watcher_callback_t callback,
     void* ctx);
 

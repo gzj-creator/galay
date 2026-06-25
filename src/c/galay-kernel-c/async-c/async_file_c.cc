@@ -3,6 +3,7 @@
 #include "../../../cpp/galay-kernel/async/async_file.h"
 #include "../../../cpp/galay-kernel/core/runtime.h"
 
+#include <chrono>
 #include <limits>
 #include <new>
 #include <string>
@@ -84,6 +85,30 @@ C_AsyncFileResultCode from_cpp_io_error(const galay::kernel::IOError& error)
     return C_AsyncFileIOFailed;
 }
 
+C_AsyncFileResultCode from_cpp_timeout_io_error(const galay::kernel::IOError& error)
+{
+    if (galay::kernel::IOError::contains(error.code(), galay::kernel::kTimeout))
+    {
+        return C_AsyncFileTimeout;
+    }
+    return from_cpp_io_error(error);
+}
+
+bool timeout_fits_chrono(uint64_t timeout_ms)
+{
+    using Rep = std::chrono::milliseconds::rep;
+    if constexpr (std::numeric_limits<Rep>::is_signed)
+    {
+        return timeout_ms <= static_cast<uint64_t>(std::numeric_limits<Rep>::max());
+    }
+    return timeout_ms <= std::numeric_limits<Rep>::max();
+}
+
+std::chrono::milliseconds to_timeout(uint64_t timeout_ms)
+{
+    return std::chrono::milliseconds(static_cast<std::chrono::milliseconds::rep>(timeout_ms));
+}
+
 galay::kernel::Task<void> c_api_read(
     galay::async::AsyncFile* file,
     char* buffer,
@@ -95,6 +120,26 @@ galay::kernel::Task<void> c_api_read(
     auto received = co_await file->read(buffer, length, static_cast<off_t>(offset));
     galay_kernel_async_file_read_result_t result{};
     result.code = received ? C_AsyncFileSuccess : from_cpp_io_error(received.error());
+    result.buffer = buffer;
+    result.length = length;
+    result.offset = offset;
+    result.bytes = received ? *received : 0;
+    callback(&result, ctx);
+    co_return;
+}
+
+galay::kernel::Task<void> c_api_read_timeout(
+    galay::async::AsyncFile* file,
+    char* buffer,
+    size_t length,
+    size_t offset,
+    std::chrono::milliseconds timeout,
+    galay_kernel_async_file_read_callback_t callback,
+    void* ctx)
+{
+    auto received = co_await file->read(buffer, length, static_cast<off_t>(offset)).timeout(timeout);
+    galay_kernel_async_file_read_result_t result{};
+    result.code = received ? C_AsyncFileSuccess : from_cpp_timeout_io_error(received.error());
     result.buffer = buffer;
     result.length = length;
     result.offset = offset;
@@ -122,6 +167,26 @@ galay::kernel::Task<void> c_api_write(
     co_return;
 }
 
+galay::kernel::Task<void> c_api_write_timeout(
+    galay::async::AsyncFile* file,
+    const char* buffer,
+    size_t length,
+    size_t offset,
+    std::chrono::milliseconds timeout,
+    galay_kernel_async_file_write_callback_t callback,
+    void* ctx)
+{
+    auto sent = co_await file->write(buffer, length, static_cast<off_t>(offset)).timeout(timeout);
+    galay_kernel_async_file_write_result_t result{};
+    result.code = sent ? C_AsyncFileSuccess : from_cpp_timeout_io_error(sent.error());
+    result.buffer = buffer;
+    result.length = length;
+    result.offset = offset;
+    result.bytes = sent ? *sent : 0;
+    callback(&result, ctx);
+    co_return;
+}
+
 galay::kernel::Task<void> c_api_close(
     galay::async::AsyncFile* file,
     galay_kernel_async_file_close_callback_t callback,
@@ -129,6 +194,17 @@ galay::kernel::Task<void> c_api_close(
 {
     auto closed = co_await file->close();
     callback(closed ? C_AsyncFileSuccess : from_cpp_io_error(closed.error()), ctx);
+    co_return;
+}
+
+galay::kernel::Task<void> c_api_close_timeout(
+    galay::async::AsyncFile* file,
+    std::chrono::milliseconds timeout,
+    galay_kernel_async_file_close_callback_t callback,
+    void* ctx)
+{
+    auto closed = co_await file->close().timeout(timeout);
+    callback(closed ? C_AsyncFileSuccess : from_cpp_timeout_io_error(closed.error()), ctx);
     co_return;
 }
 
@@ -156,6 +232,8 @@ const char* galay_kernel_async_file_get_error(C_AsyncFileResultCode code)
         return "runtime not running";
     case C_AsyncFileRuntimeSpawnFailed:
         return "runtime spawn failed";
+    case C_AsyncFileTimeout:
+        return "operation timeout";
     }
     return "unknown async file error";
 }
@@ -327,6 +405,56 @@ C_AsyncFileResultCode galay_kernel_async_file_read(
 #endif
 }
 
+C_AsyncFileResultCode galay_kernel_async_file_read_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_async_file_t* c_file,
+    char* buffer,
+    size_t length,
+    size_t offset,
+    uint64_t timeout_ms,
+    galay_kernel_async_file_read_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr ||
+        c_file == nullptr ||
+        buffer == nullptr || length == 0 ||
+        callback == nullptr)
+    {
+        return C_AsyncFileParameterInvalid;
+    }
+
+#if defined(USE_KQUEUE) || defined(USE_IOURING)
+    if (runtime->runtime == nullptr ||
+        c_file->file == nullptr ||
+        !offset_fits_off_t(offset) ||
+        !timeout_fits_chrono(timeout_ms))
+    {
+        return C_AsyncFileParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_AsyncFileRuntimeNotRunning;
+    }
+
+    auto* file = to_cpp_file(c_file);
+    if (!is_file_open(file))
+    {
+        return C_AsyncFileOperationInvalid;
+    }
+
+    auto spawned = cpp_runtime->spawn(
+        c_api_read_timeout(file, buffer, length, offset, to_timeout(timeout_ms), callback, ctx));
+    return spawned ? C_AsyncFileSuccess : C_AsyncFileRuntimeSpawnFailed;
+#else
+    (void)offset;
+    (void)timeout_ms;
+    (void)ctx;
+    return C_AsyncFileOperationUnsupported;
+#endif
+}
+
 C_AsyncFileResultCode galay_kernel_async_file_write(
     galay_kernel_runtime_t* runtime,
     galay_kernel_async_file_t* c_file,
@@ -371,6 +499,56 @@ C_AsyncFileResultCode galay_kernel_async_file_write(
 #endif
 }
 
+C_AsyncFileResultCode galay_kernel_async_file_write_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_async_file_t* c_file,
+    const char* buffer,
+    size_t length,
+    size_t offset,
+    uint64_t timeout_ms,
+    galay_kernel_async_file_write_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr ||
+        c_file == nullptr ||
+        buffer == nullptr || length == 0 ||
+        callback == nullptr)
+    {
+        return C_AsyncFileParameterInvalid;
+    }
+
+#if defined(USE_KQUEUE) || defined(USE_IOURING)
+    if (runtime->runtime == nullptr ||
+        c_file->file == nullptr ||
+        !offset_fits_off_t(offset) ||
+        !timeout_fits_chrono(timeout_ms))
+    {
+        return C_AsyncFileParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_AsyncFileRuntimeNotRunning;
+    }
+
+    auto* file = to_cpp_file(c_file);
+    if (!is_file_open(file))
+    {
+        return C_AsyncFileOperationInvalid;
+    }
+
+    auto spawned = cpp_runtime->spawn(
+        c_api_write_timeout(file, buffer, length, offset, to_timeout(timeout_ms), callback, ctx));
+    return spawned ? C_AsyncFileSuccess : C_AsyncFileRuntimeSpawnFailed;
+#else
+    (void)offset;
+    (void)timeout_ms;
+    (void)ctx;
+    return C_AsyncFileOperationUnsupported;
+#endif
+}
+
 C_AsyncFileResultCode galay_kernel_async_file_close(
     galay_kernel_runtime_t* runtime,
     galay_kernel_async_file_t* c_file,
@@ -405,6 +583,49 @@ C_AsyncFileResultCode galay_kernel_async_file_close(
     auto spawned = cpp_runtime->spawn(c_api_close(file, callback, ctx));
     return spawned ? C_AsyncFileSuccess : C_AsyncFileRuntimeSpawnFailed;
 #else
+    (void)ctx;
+    return C_AsyncFileOperationUnsupported;
+#endif
+}
+
+C_AsyncFileResultCode galay_kernel_async_file_close_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_async_file_t* c_file,
+    uint64_t timeout_ms,
+    galay_kernel_async_file_close_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr ||
+        c_file == nullptr ||
+        callback == nullptr)
+    {
+        return C_AsyncFileParameterInvalid;
+    }
+
+#if defined(USE_KQUEUE) || defined(USE_IOURING)
+    if (runtime->runtime == nullptr ||
+        c_file->file == nullptr ||
+        !timeout_fits_chrono(timeout_ms))
+    {
+        return C_AsyncFileParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_AsyncFileRuntimeNotRunning;
+    }
+
+    auto* file = to_cpp_file(c_file);
+    if (!is_file_open(file))
+    {
+        return C_AsyncFileOperationInvalid;
+    }
+
+    auto spawned = cpp_runtime->spawn(c_api_close_timeout(file, to_timeout(timeout_ms), callback, ctx));
+    return spawned ? C_AsyncFileSuccess : C_AsyncFileRuntimeSpawnFailed;
+#else
+    (void)timeout_ms;
     (void)ctx;
     return C_AsyncFileOperationUnsupported;
 #endif

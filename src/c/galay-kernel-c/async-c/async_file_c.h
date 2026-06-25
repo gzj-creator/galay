@@ -3,6 +3,7 @@
 
 #include "../core-c/runtime_c.h"
 #include <stddef.h>
+#include <stdint.h>
 
 /**
  * @file async_file_c.h
@@ -30,6 +31,7 @@ typedef enum C_AsyncFileResultCode {
     C_AsyncFileOperationUnsupported,   ///< 当前 IO 后端不支持 AsyncFile。
     C_AsyncFileRuntimeNotRunning,      ///< runtime 未启动。
     C_AsyncFileRuntimeSpawnFailed,     ///< runtime 提交任务失败。
+    C_AsyncFileTimeout,                ///< 操作超时。
 } C_AsyncFileResultCode;
 
 /**
@@ -198,6 +200,33 @@ C_AsyncFileResultCode galay_kernel_async_file_read(
     void* ctx);
 
 /**
+ * @brief 在 runtime 上异步读取文件，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_file 已打开的 AsyncFile 句柄；必须存活到 callback 完成。
+ * @param buffer 接收缓冲区；必须存活到 callback 完成。
+ * @param length 接收缓冲区长度，必须大于 0。
+ * @param offset 文件读取偏移。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback read 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_AsyncFileSuccess；参数无效返回 C_AsyncFileParameterInvalid；
+ * runtime 未运行返回 C_AsyncFileRuntimeNotRunning；提交失败返回 C_AsyncFileRuntimeSpawnFailed；
+ * 当前 IO 后端不支持返回 C_AsyncFileOperationUnsupported。
+ *
+ * @note 该函数不会阻塞等待读取完成；超时通过 callback 上报 C_AsyncFileTimeout，bytes 为 0。
+ */
+C_AsyncFileResultCode galay_kernel_async_file_read_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_async_file_t* c_file,
+    char* buffer,
+    size_t length,
+    size_t offset,
+    uint64_t timeout_ms,
+    galay_kernel_async_file_read_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上异步写入文件。
  *
  * @param runtime 已启动的 runtime；必须存活到 callback 完成。
@@ -222,6 +251,33 @@ C_AsyncFileResultCode galay_kernel_async_file_write(
     void* ctx);
 
 /**
+ * @brief 在 runtime 上异步写入文件，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_file 已打开的 AsyncFile 句柄；必须存活到 callback 完成。
+ * @param buffer 写入缓冲区；必须存活到 callback 完成。
+ * @param length 写入字节数，必须大于 0。
+ * @param offset 文件写入偏移。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback write 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_AsyncFileSuccess；参数无效返回 C_AsyncFileParameterInvalid；
+ * runtime 未运行返回 C_AsyncFileRuntimeNotRunning；提交失败返回 C_AsyncFileRuntimeSpawnFailed；
+ * 当前 IO 后端不支持返回 C_AsyncFileOperationUnsupported。
+ *
+ * @note 该函数不会阻塞等待写入完成；超时通过 callback 上报 C_AsyncFileTimeout，bytes 为 0。
+ */
+C_AsyncFileResultCode galay_kernel_async_file_write_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_async_file_t* c_file,
+    const char* buffer,
+    size_t length,
+    size_t offset,
+    uint64_t timeout_ms,
+    galay_kernel_async_file_write_callback_t callback,
+    void* ctx);
+
+/**
  * @brief 在 runtime 上异步关闭文件。
  *
  * @param runtime 已启动的 runtime；必须存活到 callback 完成。
@@ -236,6 +292,27 @@ C_AsyncFileResultCode galay_kernel_async_file_write(
 C_AsyncFileResultCode galay_kernel_async_file_close(
     galay_kernel_runtime_t* runtime,
     galay_kernel_async_file_t* c_file,
+    galay_kernel_async_file_close_callback_t callback,
+    void* ctx);
+
+/**
+ * @brief 在 runtime 上异步关闭文件，带毫秒级超时。
+ *
+ * @param runtime 已启动的 runtime；必须存活到 callback 完成。
+ * @param c_file 已打开的 AsyncFile 句柄；关闭后仍需调用 destroy 释放句柄对象。
+ * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
+ * @param callback close 完成后调用的回调；不能为空。
+ * @param ctx 原样传给 callback 的用户上下文。
+ * @return 成功提交返回 C_AsyncFileSuccess；参数无效返回 C_AsyncFileParameterInvalid；
+ * runtime 未运行返回 C_AsyncFileRuntimeNotRunning；提交失败返回 C_AsyncFileRuntimeSpawnFailed；
+ * 当前 IO 后端不支持返回 C_AsyncFileOperationUnsupported。
+ *
+ * @note 该函数只关闭底层文件，不释放 c_file 句柄对象；超时通过 callback 上报 C_AsyncFileTimeout。
+ */
+C_AsyncFileResultCode galay_kernel_async_file_close_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_async_file_t* c_file,
+    uint64_t timeout_ms,
     galay_kernel_async_file_close_callback_t callback,
     void* ctx);
 

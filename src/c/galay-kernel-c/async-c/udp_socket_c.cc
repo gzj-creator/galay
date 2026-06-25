@@ -4,7 +4,10 @@
 #include "../../../cpp/galay-kernel/core/runtime.h"
 
 #include <arpa/inet.h>
+#include <chrono>
 #include <cstring>
+#include <cstdint>
+#include <limits>
 #include <netinet/in.h>
 #include <new>
 #include <string>
@@ -111,6 +114,30 @@ C_UdpSocketResultCode from_cpp_io_error(const galay::kernel::IOError& error)
         : C_UdpSocketIOFailed;
 }
 
+C_UdpSocketResultCode from_cpp_timeout_io_error(const galay::kernel::IOError& error)
+{
+    if (galay::kernel::IOError::contains(error.code(), galay::kernel::kTimeout))
+    {
+        return C_UdpSocketTimeout;
+    }
+    return from_cpp_io_error(error);
+}
+
+bool timeout_fits_chrono(uint64_t timeout_ms)
+{
+    using Rep = std::chrono::milliseconds::rep;
+    if constexpr (std::numeric_limits<Rep>::is_signed)
+    {
+        return timeout_ms <= static_cast<uint64_t>(std::numeric_limits<Rep>::max());
+    }
+    return timeout_ms <= std::numeric_limits<Rep>::max();
+}
+
+std::chrono::milliseconds to_timeout(uint64_t timeout_ms)
+{
+    return std::chrono::milliseconds(static_cast<std::chrono::milliseconds::rep>(timeout_ms));
+}
+
 bool data_buffer_valid(const void* buffer, size_t length)
 {
     return length == 0 || buffer != nullptr;
@@ -132,6 +159,35 @@ galay::kernel::Task<void> c_api_recvfrom(
     if (!received)
     {
         result.code = from_cpp_io_error(received.error());
+        callback(&result, ctx);
+        co_return;
+    }
+
+    result.bytes = *received;
+    result.code = assign_c_host_from_cpp_host(from, &result.from)
+        ? C_UdpSocketSuccess
+        : C_UdpSocketIOFailed;
+    callback(&result, ctx);
+    co_return;
+}
+
+galay::kernel::Task<void> c_api_recvfrom_timeout(
+    galay::async::UdpSocket* socket,
+    char* buffer,
+    size_t length,
+    std::chrono::milliseconds timeout,
+    galay_kernel_udp_recvfrom_callback_t callback,
+    void* ctx)
+{
+    galay::kernel::Host from;
+    auto received = co_await socket->recvfrom(buffer, length, &from).timeout(timeout);
+
+    galay_kernel_udp_recvfrom_result_t result{};
+    result.buffer = buffer;
+    result.length = length;
+    if (!received)
+    {
+        result.code = from_cpp_timeout_io_error(received.error());
         callback(&result, ctx);
         co_return;
     }
@@ -178,6 +234,41 @@ galay::kernel::Task<void> c_api_recvfrom_loop(
     }
 }
 
+galay::kernel::Task<void> c_api_recvfrom_loop_timeout(
+    galay::async::UdpSocket* socket,
+    char* buffer,
+    size_t length,
+    std::chrono::milliseconds timeout,
+    galay_kernel_udp_recvfrom_loop_callback_t callback,
+    void* ctx)
+{
+    while (true)
+    {
+        galay::kernel::Host from;
+        auto received = co_await socket->recvfrom(buffer, length, &from).timeout(timeout);
+
+        galay_kernel_udp_recvfrom_result_t result{};
+        result.buffer = buffer;
+        result.length = length;
+        if (!received)
+        {
+            result.code = from_cpp_timeout_io_error(received.error());
+            (void)callback(&result, ctx);
+            co_return;
+        }
+
+        result.bytes = *received;
+        result.code = assign_c_host_from_cpp_host(from, &result.from)
+            ? C_UdpSocketSuccess
+            : C_UdpSocketIOFailed;
+        const int should_stop = callback(&result, ctx);
+        if (should_stop != 0 || result.code != C_UdpSocketSuccess)
+        {
+            co_return;
+        }
+    }
+}
+
 galay::kernel::Task<void> c_api_sendto(
     galay::async::UdpSocket* socket,
     const char* buffer,
@@ -190,6 +281,27 @@ galay::kernel::Task<void> c_api_sendto(
     auto sent = co_await socket->sendto(buffer, length, to);
     galay_kernel_udp_sendto_result_t result{};
     result.code = sent ? C_UdpSocketSuccess : from_cpp_io_error(sent.error());
+    result.to = c_to;
+    result.buffer = buffer;
+    result.length = length;
+    result.bytes = sent ? *sent : 0;
+    callback(&result, ctx);
+    co_return;
+}
+
+galay::kernel::Task<void> c_api_sendto_timeout(
+    galay::async::UdpSocket* socket,
+    const char* buffer,
+    size_t length,
+    galay::kernel::Host to,
+    C_Host c_to,
+    std::chrono::milliseconds timeout,
+    galay_kernel_udp_sendto_callback_t callback,
+    void* ctx)
+{
+    auto sent = co_await socket->sendto(buffer, length, to).timeout(timeout);
+    galay_kernel_udp_sendto_result_t result{};
+    result.code = sent ? C_UdpSocketSuccess : from_cpp_timeout_io_error(sent.error());
     result.to = c_to;
     result.buffer = buffer;
     result.length = length;
@@ -224,6 +336,33 @@ galay::kernel::Task<void> c_api_sendto_loop(
     }
 }
 
+galay::kernel::Task<void> c_api_sendto_loop_timeout(
+    galay::async::UdpSocket* socket,
+    const char* buffer,
+    size_t length,
+    galay::kernel::Host to,
+    C_Host c_to,
+    std::chrono::milliseconds timeout,
+    galay_kernel_udp_sendto_loop_callback_t callback,
+    void* ctx)
+{
+    while (true)
+    {
+        auto sent = co_await socket->sendto(buffer, length, to).timeout(timeout);
+        galay_kernel_udp_sendto_result_t result{};
+        result.code = sent ? C_UdpSocketSuccess : from_cpp_timeout_io_error(sent.error());
+        result.to = c_to;
+        result.buffer = buffer;
+        result.length = length;
+        result.bytes = sent ? *sent : 0;
+        const int should_stop = callback(&result, ctx);
+        if (should_stop != 0 || !sent)
+        {
+            co_return;
+        }
+    }
+}
+
 galay::kernel::Task<void> c_api_close(
     galay::async::UdpSocket* socket,
     galay_kernel_udp_close_callback_t callback,
@@ -231,6 +370,17 @@ galay::kernel::Task<void> c_api_close(
 {
     auto closed = co_await socket->close();
     callback(closed ? C_UdpSocketSuccess : from_cpp_io_error(closed.error()), ctx);
+    co_return;
+}
+
+galay::kernel::Task<void> c_api_close_timeout(
+    galay::async::UdpSocket* socket,
+    std::chrono::milliseconds timeout,
+    galay_kernel_udp_close_callback_t callback,
+    void* ctx)
+{
+    auto closed = co_await socket->close().timeout(timeout);
+    callback(closed ? C_UdpSocketSuccess : from_cpp_timeout_io_error(closed.error()), ctx);
     co_return;
 }
 
@@ -254,6 +404,8 @@ const char* galay_kernel_udp_socket_get_error(C_UdpSocketResultCode code)
         return "runtime not running";
     case C_UdpSocketRuntimeSpawnFailed:
         return "runtime spawn failed";
+    case C_UdpSocketTimeout:
+        return "timeout";
     }
     return "unknown udp socket error";
 }
@@ -373,6 +525,35 @@ C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom(
     return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
 }
 
+C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
+    galay_kernel_udp_recvfrom_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr || runtime->runtime == nullptr ||
+        c_socket == nullptr || c_socket->socket == nullptr ||
+        !data_buffer_valid(buffer, length) || callback == nullptr ||
+        !timeout_fits_chrono(timeout_ms))
+    {
+        return C_UdpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_UdpSocketRuntimeNotRunning;
+    }
+
+    auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
+    auto spawned = cpp_runtime->spawn(
+        c_api_recvfrom_timeout(socket, buffer, length, to_timeout(timeout_ms), callback, ctx));
+    return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
+}
+
 C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom_loop(
     galay_kernel_runtime_t* runtime,
     galay_kernel_udp_socket_t* c_socket,
@@ -396,6 +577,35 @@ C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom_loop(
 
     auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
     auto spawned = cpp_runtime->spawn(c_api_recvfrom_loop(socket, buffer, length, callback, ctx));
+    return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
+}
+
+C_UdpSocketResultCode galay_kernel_udp_socket_recvfrom_loop_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    char* buffer,
+    size_t length,
+    uint64_t timeout_ms,
+    galay_kernel_udp_recvfrom_loop_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr || runtime->runtime == nullptr ||
+        c_socket == nullptr || c_socket->socket == nullptr ||
+        !data_buffer_valid(buffer, length) || callback == nullptr ||
+        !timeout_fits_chrono(timeout_ms))
+    {
+        return C_UdpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_UdpSocketRuntimeNotRunning;
+    }
+
+    auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
+    auto spawned = cpp_runtime->spawn(
+        c_api_recvfrom_loop_timeout(socket, buffer, length, to_timeout(timeout_ms), callback, ctx));
     return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
 }
 
@@ -432,6 +642,42 @@ C_UdpSocketResultCode galay_kernel_udp_socket_sendto(
     return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
 }
 
+C_UdpSocketResultCode galay_kernel_udp_socket_sendto_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    const C_Host* to,
+    uint64_t timeout_ms,
+    galay_kernel_udp_sendto_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr || runtime->runtime == nullptr ||
+        c_socket == nullptr || c_socket->socket == nullptr ||
+        !data_buffer_valid(buffer, length) || to == nullptr || callback == nullptr ||
+        !timeout_fits_chrono(timeout_ms))
+    {
+        return C_UdpSocketParameterInvalid;
+    }
+
+    auto cpp_to = from_c_host_to_cpp_host(*to);
+    if (!cpp_to.valid())
+    {
+        return C_UdpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_UdpSocketRuntimeNotRunning;
+    }
+
+    auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
+    auto spawned = cpp_runtime->spawn(
+        c_api_sendto_timeout(socket, buffer, length, cpp_to, *to, to_timeout(timeout_ms), callback, ctx));
+    return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
+}
+
 C_UdpSocketResultCode galay_kernel_udp_socket_sendto_loop(
     galay_kernel_runtime_t* runtime,
     galay_kernel_udp_socket_t* c_socket,
@@ -465,6 +711,42 @@ C_UdpSocketResultCode galay_kernel_udp_socket_sendto_loop(
     return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
 }
 
+C_UdpSocketResultCode galay_kernel_udp_socket_sendto_loop_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    const char* buffer,
+    size_t length,
+    const C_Host* to,
+    uint64_t timeout_ms,
+    galay_kernel_udp_sendto_loop_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr || runtime->runtime == nullptr ||
+        c_socket == nullptr || c_socket->socket == nullptr ||
+        !data_buffer_valid(buffer, length) || to == nullptr || callback == nullptr ||
+        !timeout_fits_chrono(timeout_ms))
+    {
+        return C_UdpSocketParameterInvalid;
+    }
+
+    auto cpp_to = from_c_host_to_cpp_host(*to);
+    if (!cpp_to.valid())
+    {
+        return C_UdpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_UdpSocketRuntimeNotRunning;
+    }
+
+    auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
+    auto spawned = cpp_runtime->spawn(
+        c_api_sendto_loop_timeout(socket, buffer, length, cpp_to, *to, to_timeout(timeout_ms), callback, ctx));
+    return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
+}
+
 C_UdpSocketResultCode galay_kernel_udp_socket_close(
     galay_kernel_runtime_t* runtime,
     galay_kernel_udp_socket_t* c_socket,
@@ -486,5 +768,30 @@ C_UdpSocketResultCode galay_kernel_udp_socket_close(
 
     auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
     auto spawned = cpp_runtime->spawn(c_api_close(socket, callback, ctx));
+    return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
+}
+
+C_UdpSocketResultCode galay_kernel_udp_socket_close_timeout(
+    galay_kernel_runtime_t* runtime,
+    galay_kernel_udp_socket_t* c_socket,
+    uint64_t timeout_ms,
+    galay_kernel_udp_close_callback_t callback,
+    void* ctx)
+{
+    if (runtime == nullptr || runtime->runtime == nullptr ||
+        c_socket == nullptr || c_socket->socket == nullptr ||
+        callback == nullptr || !timeout_fits_chrono(timeout_ms))
+    {
+        return C_UdpSocketParameterInvalid;
+    }
+
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (!cpp_runtime->isRunning())
+    {
+        return C_UdpSocketRuntimeNotRunning;
+    }
+
+    auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
+    auto spawned = cpp_runtime->spawn(c_api_close_timeout(socket, to_timeout(timeout_ms), callback, ctx));
     return spawned ? C_UdpSocketSuccess : C_UdpSocketRuntimeSpawnFailed;
 }

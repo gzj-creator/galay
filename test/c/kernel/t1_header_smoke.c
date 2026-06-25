@@ -35,14 +35,18 @@ int main(void)
         C_TcpSocketIOFailed,
         C_TcpSocketOperationInvalid,
         C_TcpSocketRuntimeNotRunning,
-        C_TcpSocketRuntimeSpawnFailed
+        C_TcpSocketRuntimeSpawnFailed,
+        C_TcpSocketTimeout
     };
     C_UdpSocketResultCode udp_code = C_UdpSocketSuccess;
+    C_UdpSocketResultCode udp_timeout_code = C_UdpSocketTimeout;
     C_AsyncFileResultCode async_file_code = C_AsyncFileSuccess;
+    C_AsyncFileResultCode async_file_timeout_code = C_AsyncFileTimeout;
     C_AsyncFileOpenMode async_file_mode = C_AsyncFileOpenModeReadWrite;
     C_AioFileResultCode aio_file_code = C_AioFileSuccess;
     C_AioFileOpenMode aio_file_mode = C_AioFileOpenModeReadWrite;
     C_FileWatcherResultCode file_watcher_code = C_FileWatcherSuccess;
+    C_FileWatcherResultCode file_watcher_timeout_code = C_FileWatcherTimeout;
     C_FileWatchEvent file_watch_event = C_FileWatchEventModify;
     C_AsyncMutexResultCode async_mutex_code = C_AsyncMutexSuccess;
     C_AsyncWaiterResultCode async_waiter_code = C_AsyncWaiterSuccess;
@@ -74,12 +78,16 @@ int main(void)
             codes[4] == C_TcpSocketOperationInvalid &&
             codes[5] == C_TcpSocketRuntimeNotRunning &&
             codes[6] == C_TcpSocketRuntimeSpawnFailed &&
+            codes[7] == C_TcpSocketTimeout &&
             udp_code == C_UdpSocketSuccess &&
+            udp_timeout_code == C_UdpSocketTimeout &&
             async_file_code == C_AsyncFileSuccess &&
+            async_file_timeout_code == C_AsyncFileTimeout &&
             async_file_mode == C_AsyncFileOpenModeReadWrite &&
             aio_file_code == C_AioFileSuccess &&
             aio_file_mode == C_AioFileOpenModeReadWrite &&
             file_watcher_code == C_FileWatcherSuccess &&
+            file_watcher_timeout_code == C_FileWatcherTimeout &&
             file_watch_event == C_FileWatchEventModify &&
             async_mutex_code == C_AsyncMutexSuccess &&
             async_waiter_code == C_AsyncWaiterSuccess &&
