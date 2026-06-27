@@ -92,16 +92,18 @@ typedef struct C_IOResult {
 - Modify: `test/c/kernel/CMakeLists.txt`
 
 **Required tests:**
-- [ ] New `galay_coro_*` implementation files do not contain `runtime->spawn(`.
-- [ ] New `galay_coro_*` implementation files do not contain `Task<void> c_api_`.
-- [ ] Legacy callback files may still contain the old bridge; boundary test is targeted.
+- [x] New `galay_coro_*` implementation files do not contain `runtime->spawn(`.
+- [x] New `galay_coro_*` implementation files do not contain `Task<void> c_api_`.
+- [x] Legacy callback files may still contain the old bridge; boundary test is targeted.
 
 **Verification:**
-- [ ] RED: `rtk ctest --test-dir build-coro -R t22_coro_source_boundaries --output-on-failure`
-- [ ] GREEN: same command passes after target registration.
+- [x] RED/registration baseline: `rtk ctest --test-dir build-coro -R t22_coro_source_boundaries --output-on-failure` reported `No tests were found!!!` before CMake registration. Current tree has no `src/c/galay-kernel-c/coro-c` or other C `*coro*` implementation files, so the meaningful source-boundary RED form is represented by the new test's legacy detector self-test: it must find existing `runtime->spawn(` and `Task<void> c_api_` bridge tokens in the old callback TCP C API before the future-coro negative scan can pass.
+- [x] Register/build: `rtk cmake -S . -B build-coro -DBUILD_TESTING=ON -DGALAY_BUILD_C_API=ON -DGALAY_BUILD_BENCHMARKS=ON -DGALAY_BUILD_EXAMPLES=ON` passed; `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries` passed.
+- [x] GREEN: `rtk ctest --test-dir build-coro -R t22_coro_source_boundaries --output-on-failure` passed.
+- [x] Test summary: `rtk ./build-coro/test/c/kernel/test_c_kernel_t22_coro_source_boundaries` passed with `checked 0 future C coroutine source file(s)`.
 
 **Completion:**
-- [ ] Completed and verified.
+- [x] Completed and verified.
 
 ---
 
