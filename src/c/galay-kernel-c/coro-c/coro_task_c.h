@@ -83,7 +83,7 @@ C_IOResult galay_coro_current(galay_coro_task_t* out_task);
  * `C_IOResultInvalid`.
  * @note `join` only waits on state; it never resumes a coroutine directly.
  * Calling it from a C coroutine or from any galay scheduler thread returns
- * `C_IOResultInvalid` until Task 5 adds cooperative wait suspension.
+ * `C_IOResultInvalid`; use request-based coroutine waits inside scheduler code.
  */
 C_IOResult galay_coro_join(galay_coro_task_t* task, int64_t timeout_ms);
 

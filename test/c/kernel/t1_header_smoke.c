@@ -7,6 +7,8 @@
 #include <galay/c/galay-kernel-c/concurrency-c/async_waiter_c.h>
 #include <galay/c/galay-kernel-c/concurrency-c/mpsc_channel_c.h>
 #include <galay/c/galay-kernel-c/concurrency-c/unsafe_channel_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_wait_c.h>
 
 int main(void)
 {
@@ -20,6 +22,9 @@ int main(void)
     galay_kernel_async_waiter_t async_waiter = {0};
     galay_kernel_mpsc_channel_t mpsc_channel = {0};
     galay_kernel_unsafe_channel_t unsafe_channel = {0};
+    galay_coro_task_t coro_task = {0};
+    C_CoroWaitRequest wait_request = {0};
+    C_CoroWaitEventToken wait_token = {0};
     C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
     C_Host tcp_host = {
         C_IPTypeIPV4,
@@ -66,6 +71,9 @@ int main(void)
             async_waiter.waiter == 0 &&
             mpsc_channel.channel == 0 &&
             unsafe_channel.channel == 0 &&
+            coro_task.task == 0 &&
+            wait_request.request == 0 &&
+            wait_token.token == 0 &&
             runtime_config.io_scheduler_count == C_RUNTIME_SCHEDULER_COUNT_AUTO &&
             tcp_host.type == C_IPTypeIPV4 &&
             ipv4_type == C_IPTypeIPV4 &&

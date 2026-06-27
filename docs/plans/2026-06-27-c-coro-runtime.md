@@ -278,32 +278,67 @@ typedef struct C_IOResult {
 **Purpose:** Provide the generic C wait primitive that stores results in request state and returns `C_IOResult` after resume.
 
 **Files:**
-- Create: `src/c/galay-kernel-c/coro-c/coro_result_c.h`
 - Create: `src/c/galay-kernel-c/coro-c/coro_wait_c.h`
 - Create: `src/c/galay-kernel-c/coro-c/coro_wait_c.cc`
+- Modify: `src/c/galay-kernel-c/coro-c/coro_task_c.h`
+- Modify: `src/c/galay-kernel-c/coro-c/coro_task_c.cc`
+- Modify: `src/c/galay-kernel-c/coro-c/coro_task_internal.hpp`
+- Modify: `test/c/kernel/CMakeLists.txt`
+- Modify: `test/c/kernel/t1_header_smoke.c`
 - Test: `test/c/kernel/t24_coro_result_wait.c`
+- Benchmark: `benchmark/c/kernel/b20_coro_wait_result_latency.c`
 
 **Design:**
-- [ ] `C_IOResult` is the public result struct.
-- [ ] `galay_coro_wait(request, timeout_ms)` yields current coroutine and returns `C_IOResult`.
-- [ ] Resume does not pass business results as parameters.
-- [ ] Timeout writes `C_IOResultTimeout`.
-- [ ] Cancel writes `C_IOResultCancelled`.
-- [ ] Late events are filtered by generation.
+- [x] `C_IOResult` is the public result struct.
+- [x] `galay_coro_wait(request, timeout_ms)` yields current coroutine and returns `C_IOResult`.
+- [x] Resume does not pass business results as parameters.
+- [x] Timeout writes `C_IOResultTimeout`.
+- [x] Cancel writes `C_IOResultCancelled`.
+- [x] Late events are filtered by generation.
+- [x] Backend `user_data` can use refcounted `C_CoroWaitEventToken` handles, so late completions do not depend on a still-live C request handle.
+- [x] Raw backend `void* user_data` can be detached from a token and completed/cancelled/released without keeping the outer C token wrapper alive.
+- [x] Wait uses two-phase task suspension to avoid lost wake: mark current C task Waiting, publish request waiter, then context-switch.
+- [x] Wait resume uses internal `WaitReady` task state so public `galay_coro_cancel()` cannot cancel a waiter during the wake handoff.
+- [x] Completion uses a `Completing` state and generation guard so post-resume cleanup cannot clear the next waiter's task pointer.
+- [x] Destroy rejects Pending/Waiting/Completing requests and Completed requests whose waiter has not consumed the result.
+- [x] C wait/task `extern "C"` result APIs catch C++ exceptions and return `C_IOResultError`.
+- [x] Positive timeout validation rejects values that would overflow the timer's nanosecond representation.
 
 **Tests:**
-- [ ] Immediate ready request returns without scheduling.
-- [ ] Suspended request resumes with OK result.
-- [ ] Timeout returns timeout result.
-- [ ] Cancel returns cancelled result.
-- [ ] Late completion after timeout is ignored.
+- [x] Immediate ready request returns without scheduling.
+- [x] Suspended request resumes with OK result.
+- [x] Timeout returns timeout result.
+- [x] Cancel returns cancelled result.
+- [x] Late completion after timeout is ignored.
+- [x] Late completion after cancel is ignored.
+- [x] Wrong generation and duplicate completion are rejected.
+- [x] Wait outside a C coroutine is rejected.
+- [x] Destroy while pending/waiting is rejected.
+- [x] Event token acquire/complete/cancel/release covers backend late-completion lifetime.
+- [x] Raw user_data token complete/cancel wake suspended waiters.
+- [x] External task cancel during wait wake handoff is rejected and does not strand the wait request.
+- [x] Oversized positive timeout returns `C_IOResultInvalid`.
+- [x] Suspended complete/cancel tests are driven by a peer C coroutine rather than a main-thread sleep window.
 
 **Verification:**
-- [ ] RED: `rtk ctest --test-dir build-coro -R t24_coro_result_wait --output-on-failure`
-- [ ] GREEN: same command passes.
+- [x] RED: `rtk cmake --build build-coro --target test_c_kernel_coro_result_wait` failed before implementation with missing `galay/c/galay-kernel-c/coro-c/coro_wait_c.h`.
+- [x] RED: after adding `C_CoroWaitEventToken` tests, `rtk cmake --build build-coro --target test_c_kernel_coro_result_wait` failed with undeclared token/API errors.
+- [x] Review RED: `rtk ./build-coro/test/c/kernel/test_c_kernel_coro_result_wait` exited `12` before timeout generation fix.
+- [x] Review RED: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_wait_result_latency` exposed a lost-wake race where previous completion cleanup cleared the next iteration waiter.
+- [x] Review fix: peer-coroutine tests now cover successful `C_CoroWaitEventToken` complete and cancel wakeups, not only stale-token rejection.
+- [x] Review fix: `WaitReady` task state prevents public `galay_coro_cancel()` from cancelling a wait-resume handoff; `t24_coro_result_wait` covers the handoff.
+- [x] Review fix: `LLONG_MAX` positive timeout is rejected before timer construction; `t24_coro_result_wait` covers the overflow boundary.
+- [x] Review fix: raw user_data token APIs are documented and covered by suspended complete/cancel wakeup tests.
+- [x] GREEN: `rtk cmake --build build-coro --target test_c_kernel_coro_result_wait benchmark_c_kernel_coro_wait_result_latency` passed.
+- [x] GREEN: `rtk ctest --test-dir build-coro -R coro_result_wait --output-on-failure -V` passed 1/1.
+- [x] Regression build: `rtk cmake --build build-coro --target test_c_kernel_header_smoke test_c_kernel_coro_task test_c_kernel_coro_result_wait benchmark_c_kernel_coro_yield_requeue_latency benchmark_c_kernel_coro_wait_result_latency` passed.
+- [x] Regression: `rtk ctest --test-dir build-coro -R "c\\.kernel\\.(header_smoke|runtime_lifecycle|coro_task|coro_result_wait|t22_coro_source_boundaries)|kernel\\.(ready_entry_cpp_compat|resume_token_waker|c_coro_resume_token|wakepath)$" --output-on-failure` passed 9/9.
+- [x] Benchmark run: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_wait_result_latency` passed, `CoroWaitResultLatency mode=single_outstanding, samples=20000, qps=339795, avg=2.76us, p50=3.00us, p90=4.00us, p99=9.00us, errors=0`.
+- [x] Benchmark comparison guard: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_yield_requeue_latency` passed, `CoroSchedulerYieldLatency mode=owner_yield_requeue, samples=20000, qps=4607233, avg=0.19us, p50=0.00us, p90=1.00us, p99=1.00us, errors=0`.
+- [x] Diff hygiene: `rtk git diff --check` passed.
 
 **Completion:**
-- [ ] Completed and verified.
+- [x] Completed and verified after review fixes for timeout generation, event-token lifetime, C ABI exception boundaries, peer-coroutine suspended tests, and lost-wake cleanup.
 
 ---
 
