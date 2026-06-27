@@ -10,9 +10,11 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <memory>
 #include <thread>
 #include <vector>
@@ -62,6 +64,74 @@ struct SampleState {
     std::atomic<int64_t> latency_ns{0};
 };
 
+class ReusableWakeProducer {
+public:
+    ReusableWakeProducer()
+        : producer_([this]() { run(); })
+    {
+    }
+
+    ~ReusableWakeProducer() {
+        stop();
+    }
+
+    bool submit(SampleState* state) {
+        if (state == nullptr) {
+            return false;
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (stopping_ || pending_ != nullptr) {
+                return false;
+            }
+            pending_ = state;
+        }
+        cv_.notify_one();
+        return true;
+    }
+
+    void stop() {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (stopping_) {
+                return;
+            }
+            stopping_ = true;
+        }
+        cv_.notify_one();
+        if (producer_.joinable()) {
+            producer_.join();
+        }
+    }
+
+private:
+    void run() {
+        while (true) {
+            SampleState* state = nullptr;
+            {
+                std::unique_lock<std::mutex> lock(mutex_);
+                cv_.wait(lock, [this]() {
+                    return stopping_ || pending_ != nullptr;
+                });
+                if (stopping_ && pending_ == nullptr) {
+                    return;
+                }
+                state = pending_;
+                pending_ = nullptr;
+            }
+
+            state->submitted_ns.store(nowNanoseconds(), std::memory_order_release);
+            state->waker.wakeUp();
+        }
+    }
+
+    std::mutex mutex_;
+    std::condition_variable cv_;
+    SampleState* pending_ = nullptr;
+    bool stopping_ = false;
+    std::thread producer_;
+};
+
 struct ManualSuspendAwaitable {
     SampleState* state;
 
@@ -94,7 +164,10 @@ double percentileMicros(const std::vector<int64_t>& sorted_ns, double percentile
     return static_cast<double>(sorted_ns[index]) / 1000.0;
 }
 
-bool runSamples(IOScheduler* scheduler, int samples, std::vector<int64_t>* latencies) {
+bool runSamples(IOScheduler* scheduler,
+                ReusableWakeProducer& producer,
+                int samples,
+                std::vector<int64_t>* latencies) {
     for (int i = 0; i < samples; ++i) {
         SampleState state;
         if (!scheduleTask(*scheduler, measuredWakeTask(&state))) {
@@ -106,11 +179,10 @@ bool runSamples(IOScheduler* scheduler, int samples, std::vector<int64_t>* laten
             return false;
         }
 
-        std::thread producer([&]() {
-            state.submitted_ns.store(nowNanoseconds(), std::memory_order_release);
-            state.waker.wakeUp();
-        });
-        producer.join();
+        if (!producer.submit(&state)) {
+            std::cerr << "[B18] failed to submit sample wake to producer thread\n";
+            return false;
+        }
 
         if (!waitUntil([&]() { return state.done.load(std::memory_order_acquire); })) {
             std::cerr << "[B18] sample task did not resume\n";
@@ -151,7 +223,8 @@ int main() {
         return 1;
     }
 
-    if (!runSamples(scheduler_ptr, kWarmupSamples, nullptr)) {
+    ReusableWakeProducer producer;
+    if (!runSamples(scheduler_ptr, producer, kWarmupSamples, nullptr)) {
         runtime.stop();
         return 1;
     }
@@ -159,7 +232,7 @@ int main() {
     std::vector<int64_t> latencies;
     latencies.reserve(kMeasuredSamples);
     const auto bench_start = std::chrono::steady_clock::now();
-    if (!runSamples(scheduler_ptr, kMeasuredSamples, &latencies)) {
+    if (!runSamples(scheduler_ptr, producer, kMeasuredSamples, &latencies)) {
         runtime.stop();
         return 1;
     }
@@ -175,7 +248,9 @@ int main() {
     const double avg_us = latencies.empty()
         ? 0.0
         : static_cast<double>(sum) / static_cast<double>(latencies.size()) / 1000.0;
-    const double throughput = elapsed_ns > 0
+    producer.stop();
+
+    const double sampled_wakes_per_sec = elapsed_ns > 0
         ? static_cast<double>(latencies.size()) * 1'000'000'000.0 / static_cast<double>(elapsed_ns)
         : 0.0;
 
@@ -186,6 +261,7 @@ int main() {
               << ", p50=" << percentileMicros(latencies, 50.0) << "us"
               << ", p90=" << percentileMicros(latencies, 90.0) << "us"
               << ", p99=" << percentileMicros(latencies, 99.0) << "us"
-              << ", throughput=" << std::setprecision(0) << throughput << " wakes/s\n";
+              << ", sampled_wakes_per_sec=" << std::setprecision(0)
+              << sampled_wakes_per_sec << "\n";
     return 0;
 }

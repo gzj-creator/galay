@@ -52,7 +52,7 @@ void invokeReadyEntryResume(ResumeFn& resume_fn, ReadyEntry& entry)
         resume_fn(entry);
     } else if constexpr (std::is_invocable_v<ResumeFn&, TaskRef&>) {
         if (!entry.isCppTask()) {
-            releaseReadyEntry(entry);
+            (void)resumeReadyEntry(entry);
             return;
         }
         TaskRef task = readyEntryToTaskRef(entry);

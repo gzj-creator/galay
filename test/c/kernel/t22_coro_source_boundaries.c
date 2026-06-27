@@ -254,6 +254,11 @@ int main(void)
         return 1;
     }
 
+    if (scanned_files == 0) {
+        printf("T22-CoroSourceBoundaries SKIP; no future C coroutine source files found under src/c/galay-kernel-c, so bridge boundary checks are not active yet\n");
+        return 0;
+    }
+
     printf("T22-CoroSourceBoundaries PASS; checked %d future C coroutine source file(s)\n", scanned_files);
     return 0;
 }

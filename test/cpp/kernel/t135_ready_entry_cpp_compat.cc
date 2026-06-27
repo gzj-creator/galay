@@ -18,12 +18,14 @@
 using namespace galay::kernel;
 using namespace std::chrono_literals;
 
-static_assert(std::is_trivially_copyable_v<detail::ReadyEntry>,
-              "ReadyEntry must stay a low-cost queue item");
 static_assert(sizeof(detail::ReadyEntry) <= sizeof(void*) * 2,
               "ReadyEntry should fit in two machine words");
 static_assert(std::is_constructible_v<detail::ReadyEntry, TaskRef&&>,
               "TaskRef must have a fast ReadyEntry conversion path");
+static_assert(!std::is_copy_constructible_v<detail::ReadyEntry>,
+              "ReadyEntry owns a queued reference and must not be copyable");
+static_assert(std::is_nothrow_move_constructible_v<detail::ReadyEntry>,
+              "ReadyEntry must be cheaply movable across queues");
 
 namespace {
 
@@ -71,6 +73,7 @@ struct ManualWakeState {
     Waker waker;
     std::atomic<bool> armed{false};
     std::atomic<int> resumed{0};
+    std::thread::id resumed_thread;
 };
 
 struct ManualSuspendAwaitable {
@@ -90,12 +93,68 @@ struct ManualSuspendAwaitable {
 
 Task<void> parkedTask(ManualWakeState* state) {
     co_await ManualSuspendAwaitable{state};
+    state->resumed_thread = std::this_thread::get_id();
     state->resumed.fetch_add(1, std::memory_order_release);
     co_return;
 }
 
 TaskRef makeDummyTaskRef() {
     return TaskRef(new TaskState(std::coroutine_handle<>{}), false);
+}
+
+class NullScheduler final : public Scheduler {
+public:
+    std::expected<void, IOError> start() override { return {}; }
+    void stop() override {}
+    bool schedule(TaskRef) override { return false; }
+    bool scheduleDeferred(TaskRef) override { return false; }
+    bool scheduleImmediately(TaskRef) override { return false; }
+    bool addTimer(Timer::ptr) override { return false; }
+    SchedulerType type() override { return kComputeScheduler; }
+};
+
+struct FakeCoroState {
+    detail::ReadyEntryCoroHeader header;
+    Scheduler* owner = nullptr;
+    bool owner_only = false;
+    std::atomic<int>* resumed = nullptr;
+    std::atomic<int>* released = nullptr;
+};
+
+Scheduler* fakeOwnerScheduler(void* state) noexcept {
+    return static_cast<FakeCoroState*>(state)->owner;
+}
+
+bool fakeResumeOwnerOnly(void* state) noexcept {
+    auto* fake = static_cast<FakeCoroState*>(state);
+    return fake->owner_only;
+}
+
+bool fakeResume(void* state) noexcept {
+    auto* fake = static_cast<FakeCoroState*>(state);
+    if (fake->resumed != nullptr) {
+        fake->resumed->fetch_add(1, std::memory_order_release);
+    }
+    return true;
+}
+
+void fakeRelease(void* state) noexcept {
+    auto* fake = static_cast<FakeCoroState*>(state);
+    if (fake->released != nullptr) {
+        fake->released->fetch_add(1, std::memory_order_release);
+    }
+}
+
+constexpr detail::ReadyEntryHooks kFakeCoroHooks{
+    .owner_scheduler = fakeOwnerScheduler,
+    .resume_owner_only = fakeResumeOwnerOnly,
+    .resume = fakeResume,
+    .release = fakeRelease,
+};
+
+detail::ReadyEntry makeFakeCoroEntry(FakeCoroState* state) {
+    state->header.hooks = &kFakeCoroHooks;
+    return detail::ReadyEntry(detail::ReadyEntryKind::CCoroutine, state);
 }
 
 bool verifyReadyEntryTaskRefRoundTrip() {
@@ -120,6 +179,82 @@ bool verifyReadyEntryTaskRefRoundTrip() {
     return true;
 }
 
+bool verifyCCoroutineReadyEntryHooks() {
+    NullScheduler owner;
+    std::atomic<int> resumed{0};
+    std::atomic<int> released{0};
+    FakeCoroState state{
+        .owner = &owner,
+        .owner_only = true,
+        .resumed = &resumed,
+        .released = &released,
+    };
+
+    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
+    if (!entry.isValid() || entry.kind() != detail::ReadyEntryKind::CCoroutine) {
+        std::cerr << "[T135] C coroutine ReadyEntry should be valid\n";
+        return false;
+    }
+    if (detail::readyEntryScheduler(entry) != &owner) {
+        std::cerr << "[T135] C coroutine ReadyEntry should expose owner scheduler\n";
+        return false;
+    }
+    if (!detail::readyEntryResumeOwnerOnly(entry)) {
+        std::cerr << "[T135] C coroutine ReadyEntry should expose owner-only resume\n";
+        return false;
+    }
+    if (!detail::resumeReadyEntry(entry) ||
+        resumed.load(std::memory_order_acquire) != 1 ||
+        released.load(std::memory_order_acquire) != 1 ||
+        entry.isValid()) {
+        std::cerr << "[T135] C coroutine ReadyEntry should resume through hook and release ownership\n";
+        return false;
+    }
+
+    return true;
+}
+
+bool verifyCCoroutineScheduleRejectKeepsEntry() {
+    std::atomic<int> released{0};
+    FakeCoroState state{.released = &released};
+    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
+
+    if (detail::scheduleReadyEntry(entry) || !entry.isValid() ||
+        released.load(std::memory_order_acquire) != 0) {
+        std::cerr << "[T135] unsupported C coroutine schedule should reject without release\n";
+        return false;
+    }
+
+    detail::releaseReadyEntry(entry);
+    if (released.load(std::memory_order_acquire) != 1) {
+        std::cerr << "[T135] rejected C coroutine entry should remain owned by caller\n";
+        return false;
+    }
+    return true;
+}
+
+bool verifyCppScheduleRejectKeepsEntry() {
+    NullScheduler rejecting_scheduler;
+    TaskRef task = makeDummyTaskRef();
+    TaskState* const state = task.state();
+    detail::setTaskScheduler(task, &rejecting_scheduler);
+    detail::ReadyEntry entry(std::move(task));
+
+    if (detail::scheduleReadyEntry(entry) || !entry.isValid() ||
+        entry.taskState() != state) {
+        std::cerr << "[T135] rejected C++ schedule should keep ReadyEntry owned by caller\n";
+        return false;
+    }
+
+    TaskRef restored = detail::readyEntryToTaskRef(entry);
+    if (!restored.isValid() || restored.state() != state ||
+        restored.belongScheduler() != &rejecting_scheduler) {
+        std::cerr << "[T135] rejected C++ schedule should remain recoverable as TaskRef\n";
+        return false;
+    }
+    return true;
+}
+
 bool verifySchedulerCoreAcceptsReadyEntryResume() {
     IOSchedulerWorkerState worker;
     SchedulerCore core(worker, 4);
@@ -138,6 +273,96 @@ bool verifySchedulerCoreAcceptsReadyEntryResume() {
 
     if (ran != 1 || ready_entries != 1) {
         std::cerr << "[T135] SchedulerCore should expose ReadyEntry to compatible callbacks\n";
+        return false;
+    }
+    return true;
+}
+
+bool verifyOwnerOnlyCCoroutineEntryIsReturnedToCaller() {
+    std::atomic<int> released{0};
+    FakeCoroState state{
+        .owner_only = true,
+        .released = &released,
+    };
+    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
+    ChaseLevTaskRing ring;
+
+    if (!ring.push_back(entry) || entry.isValid()) {
+        std::cerr << "[T135] failed to queue fake C coroutine entry\n";
+        return false;
+    }
+
+    detail::ReadyEntry stolen;
+    if (ring.steal_front(stolen) || !stolen.isValid()) {
+        std::cerr << "[T135] owner-only C coroutine entry should be returned to caller after CAS\n";
+        detail::releaseReadyEntry(stolen);
+        return false;
+    }
+    if (ring.size() != 0 || released.load(std::memory_order_acquire) != 0) {
+        std::cerr << "[T135] ring should not pre-CAS peek or release owner-only C coroutine entry\n";
+        return false;
+    }
+
+    detail::releaseReadyEntry(stolen);
+    if (released.load(std::memory_order_acquire) != 1) {
+        std::cerr << "[T135] returned owner-only C coroutine entry should release exactly once\n";
+        return false;
+    }
+    return true;
+}
+
+bool verifyWorkerRequeuesOwnerOnlyEntryThroughInjectQueue() {
+    std::atomic<int> released{0};
+    FakeCoroState state{
+        .owner_only = true,
+        .released = &released,
+    };
+    detail::ReadyEntry entry = makeFakeCoroEntry(&state);
+    IOSchedulerWorkerState worker;
+
+    if (!worker.local_ring.push_back(entry)) {
+        std::cerr << "[T135] failed to queue worker owner-only probe\n";
+        return false;
+    }
+
+    detail::ReadyEntry stolen;
+    if (worker.stealFront(stolen) || stolen.isValid()) {
+        std::cerr << "[T135] worker owner-only probe must not be exposed to stealer\n";
+        detail::releaseReadyEntry(stolen);
+        return false;
+    }
+    if (!worker.hasPendingInjected() || worker.local_ring.size() != 0 ||
+        released.load(std::memory_order_acquire) != 0) {
+        std::cerr << "[T135] worker should requeue owner-only entry through inject queue\n";
+        return false;
+    }
+
+    if (worker.drainInjected() != 1 || !worker.popNext(stolen)) {
+        std::cerr << "[T135] owner should recover worker-requeued owner-only entry\n";
+        return false;
+    }
+    detail::releaseReadyEntry(stolen);
+    return released.load(std::memory_order_acquire) == 1;
+}
+
+bool verifyPendingReadyEntriesReleaseOnWorkerDestroy() {
+    std::atomic<int> released{0};
+    FakeCoroState ring_state{.released = &released};
+    FakeCoroState lifo_state{.released = &released};
+    FakeCoroState injected_state{.released = &released};
+    FakeCoroState buffer_state{.released = &released};
+
+    {
+        IOSchedulerWorkerState worker(2);
+        worker.scheduleLocal(makeFakeCoroEntry(&ring_state));
+        worker.scheduleLocal(makeFakeCoroEntry(&lifo_state));
+        worker.scheduleInjected(makeFakeCoroEntry(&injected_state));
+        worker.ready_inject_buffer[0] = makeFakeCoroEntry(&buffer_state);
+    }
+
+    if (released.load(std::memory_order_acquire) != 4) {
+        std::cerr << "[T135] pending ReadyEntry cleanup should release LIFO/ring/inject/buffer entries, released="
+                  << released.load(std::memory_order_acquire) << "\n";
         return false;
     }
     return true;
@@ -252,6 +477,10 @@ bool verifyCrossThreadWakeAndCoalescing() {
                   << state.resumed.load(std::memory_order_acquire) << "\n";
         return false;
     }
+    if (state.resumed_thread != scheduler->threadId()) {
+        std::cerr << "[T135] cross-thread wake resumed on non-owner scheduler thread\n";
+        return false;
+    }
     return true;
 }
 
@@ -261,7 +490,25 @@ int main() {
     if (!verifyReadyEntryTaskRefRoundTrip()) {
         return 1;
     }
+    if (!verifyCCoroutineReadyEntryHooks()) {
+        return 1;
+    }
+    if (!verifyCCoroutineScheduleRejectKeepsEntry()) {
+        return 1;
+    }
+    if (!verifyCppScheduleRejectKeepsEntry()) {
+        return 1;
+    }
     if (!verifySchedulerCoreAcceptsReadyEntryResume()) {
+        return 1;
+    }
+    if (!verifyOwnerOnlyCCoroutineEntryIsReturnedToCaller()) {
+        return 1;
+    }
+    if (!verifyWorkerRequeuesOwnerOnlyEntryThroughInjectQueue()) {
+        return 1;
+    }
+    if (!verifyPendingReadyEntriesReleaseOnWorkerDestroy()) {
         return 1;
     }
     if (!verifyRuntimeCppCompatibility()) {

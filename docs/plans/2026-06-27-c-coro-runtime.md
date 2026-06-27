@@ -12,7 +12,7 @@
 
 ## Non-Negotiable Requirements
 
-- [ ] Work only inside worktree: `/Users/gongzhijie/Desktop/projects/git/galay/.wroktree/c-coro-runtime`.
+- [x] Work only inside worktree: `/Users/gongzhijie/Desktop/projects/git/galay/.wroktree/c-coro-runtime`.
 - [ ] Do not regress existing C++ `Task<T>` / `co_await` public APIs.
 - [ ] Do not make C coroutine APIs spawn a C++ `Task<void>` per I/O operation.
 - [ ] Keep old C callback APIs working.
@@ -24,8 +24,8 @@
 
 ## Core Design Decisions
 
-- [ ] Scheduler ready queues store a language-neutral ready item, not only `TaskRef`.
-- [ ] C++ ready item resumes `TaskState::m_handle.resume()`.
+- [x] Scheduler ready queues store a language-neutral ready item, not only `TaskRef`.
+- [x] C++ ready item resumes `TaskState::m_handle.resume()`.
 - [ ] C ready item resumes a `C_CoroTask` using C context switching.
 - [ ] I/O completion writes an `IORequest` result slot, then schedules a ready item.
 - [ ] `resume()` does not carry business results; resumed coroutine reads its own result slot.
@@ -100,7 +100,8 @@ typedef struct C_IOResult {
 - [x] RED/registration baseline: `rtk ctest --test-dir build-coro -R t22_coro_source_boundaries --output-on-failure` reported `No tests were found!!!` before CMake registration. Current tree has no `src/c/galay-kernel-c/coro-c` or other C `*coro*` implementation files, so the meaningful source-boundary RED form is represented by the new test's legacy detector self-test: it must find existing `runtime->spawn(` and `Task<void> c_api_` bridge tokens in the old callback TCP C API before the future-coro negative scan can pass.
 - [x] Register/build: `rtk cmake -S . -B build-coro -DBUILD_TESTING=ON -DGALAY_BUILD_C_API=ON -DGALAY_BUILD_BENCHMARKS=ON -DGALAY_BUILD_EXAMPLES=ON` passed; `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries` passed.
 - [x] GREEN: `rtk ctest --test-dir build-coro -R t22_coro_source_boundaries --output-on-failure` passed.
-- [x] Test summary: `rtk ./build-coro/test/c/kernel/test_c_kernel_t22_coro_source_boundaries` passed with `checked 0 future C coroutine source file(s)`.
+- [x] Follow-up RED: `rtk ctest --test-dir build-coro -R t22_coro_source_boundaries --output-on-failure -V` previously returned 0 while printing `PASS; checked 0 future C coroutine source file(s)`, which was a false PASS.
+- [x] Follow-up GREEN: `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries && rtk ctest --test-dir build-coro -R t22_coro_source_boundaries --output-on-failure -V` passed and now prints `T22-CoroSourceBoundaries SKIP; no future C coroutine source files found under src/c/galay-kernel-c, so bridge boundary checks are not active yet`.
 
 **Completion:**
 - [x] Completed and verified.
@@ -122,7 +123,9 @@ typedef struct C_IOResult {
 
 **Design:**
 - [x] Add internal `ReadyEntry` equivalent with packed kind/state.
+- [x] Make `ReadyEntry` move-only RAII so queued references are released on destruction unless ownership is transferred.
 - [x] Keep a C++ fast path conversion from `TaskRef` to `ReadyEntry`.
+- [x] Define C coroutine ready-entry hooks for owner scheduler lookup, owner-only resume constraints, resume, and release.
 - [x] Keep `TaskRef` public behavior unchanged.
 - [x] Owner-thread resume still clears `m_queued` and `m_resume_owner_only` for C++ tasks.
 - [x] Avoid `std::function`, heap allocation, and virtual `Coroutine::resume()` on the hot path.
@@ -132,14 +135,25 @@ typedef struct C_IOResult {
 - [x] `Task<T>` result propagation still works.
 - [x] `co_await Task<T>` still resumes parent.
 - [x] `then()` still schedules continuation.
-- [x] Cross-thread schedule still wakes owner scheduler.
+- [x] Cross-thread schedule still wakes and resumes on the owner scheduler thread.
+- [x] Unsupported C coroutine schedule path rejects without releasing or invalidating the entry.
+- [x] Unsupported C++ `scheduleReadyEntry()` rejection preserves the caller-owned entry for fallback/release.
+- [x] Owner-only C coroutine `ReadyEntry` is not stolen; once the ring owns the slot, it returns the entry to the caller instead of peeking pre-CAS.
+- [x] Worker-level owner-only entries are requeued through the victim inject queue, not pushed back into the victim ring from a stealer thread.
+- [x] Pending `ReadyEntry` cleanup releases LIFO, ring, inject queue, and inject buffer entries.
 
 **Verification:**
-- [x] RED: `rtk cmake --build build-coro --target t135_ready_entry_cpp_compat` failed before production changes with missing `detail::ReadyEntry` / `readyEntryToTaskRef`.
-- [x] GREEN: `rtk ctest --test-dir build-coro -R "kernel\\.(ready_entry_cpp_compat|wakepath|wakecoal|ready|qwake|then_runtime|followpass|ringfb|ringsteal|stealstats|localfifo|ringshutdown|spawn|chain)$" --output-on-failure` passed 14/14.
-- [x] Broad plan command checked: `rtk ctest --test-dir build-coro -R "t135_ready_entry_cpp_compat|kernel" --output-on-failure` failed because many registered `c.kernel.*` / `kernel.*` executables were not built in this tree; `kernel.ready_entry_cpp_compat` itself passed in the narrow run above.
-- [x] Benchmark builds: `rtk cmake --build build-coro --target benchmark_kernel_ready_entry_wakeup_latency` passed.
-- [x] Benchmark run: `rtk ./build-coro/benchmark/cpp/kernel/benchmark_kernel_ready_entry_wakeup_latency` passed on kqueue, 5000 samples, avg 28.06us, p50 13.25us, p90 30.21us, p99 325.04us, throughput 635 wakes/s.
+- [x] RED: `rtk cmake --build build-coro --target t135_ready_entry_cpp_compat` failed before production changes after extending `t135` for move-only `ReadyEntry`, C coroutine hook APIs, owner-only stealing, and pending-entry cleanup.
+- [x] Implementation guardrail: `rtk cmake --build build-coro --target t135_ready_entry_cpp_compat` failed during the first RAII implementation on an attempted `ReadyEntry` copy assignment in `ChaseLevTaskRing::steal_front`, confirming move-only ownership was enforced by the compiler.
+- [x] RED: `rtk ctest --test-dir build-coro -R ready_entry_cpp_compat --output-on-failure` failed with `worker should requeue post-CAS owner-only race through inject queue` before moving post-CAS requeue out of `ChaseLevTaskRing` and into `IOSchedulerWorkerState`.
+- [x] Review RED: `rtk ctest --test-dir build-coro -R ready_entry_cpp_compat --output-on-failure` failed with `rejected C++ schedule should keep ReadyEntry owned by caller` before preserving C++ `scheduleReadyEntry()` false-return ownership.
+- [x] Review fix: removed the pre-CAS owner-only peek from `ChaseLevTaskRing::steal_front()` so owner-only hooks are queried only after the stealer owns the slot; `IOSchedulerWorkerState::stealFront()` now requeues returned owner-only entries through the victim inject queue.
+- [x] Build: `rtk cmake --build build-coro --target t135_ready_entry_cpp_compat test_c_kernel_t22_coro_source_boundaries benchmark_kernel_ready_entry_wakeup_latency` passed.
+- [x] GREEN: `rtk ctest --test-dir build-coro -R ready_entry_cpp_compat --output-on-failure` passed 1/1.
+- [x] Extended regression: `rtk ctest --test-dir build-coro -R "kernel\\.(ready_entry_cpp_compat|wakecoal|ready|qwake|then_runtime|followpass|ringfb|ringsteal|stealstats|localfifo|ringshutdown|spawn|chain)$|t22_coro_source_boundaries" --output-on-failure` passed 14/14.
+- [x] Benchmark run: `rtk ./build-coro/benchmark/cpp/kernel/benchmark_kernel_ready_entry_wakeup_latency` passed on kqueue, 5000 samples, avg 8.61us, p50 5.67us, p90 12.62us, p99 46.83us, sampled_wakes_per_sec 398. The benchmark uses one reusable producer thread, so the rate is a sequential sampled wake rate, not sustained wake throughput.
+- [x] Diff hygiene: `rtk git diff --check` passed.
+- [x] Review: spec re-review PASS; code-quality re-review PASS with no Critical/Important/Minor findings.
 
 **Completion:**
 - [x] Completed and verified.
@@ -151,30 +165,42 @@ typedef struct C_IOResult {
 **Purpose:** Let I/O completion schedule either C++ `TaskRef` or C `C_CoroTask` without knowing the language.
 
 **Files:**
+- Modify: `src/cpp/galay-kernel/core/task.h`
+- Modify: `src/cpp/galay-kernel/core/task.cc`
 - Modify: `src/cpp/galay-kernel/core/waker.h`
 - Modify: `src/cpp/galay-kernel/core/waker.cc`
-- Modify: `src/cpp/galay-kernel/core/awaitable.h`
-- Modify: `src/cpp/galay-kernel/core/io_scheduler.hpp`
+- Modify: `test/cpp/kernel/t31_wakepath.cc`
 - Test: `test/cpp/kernel/t136_resume_token_waker.cc`
+- Benchmark: `benchmark/cpp/kernel/b19_resume_token_waker_ops.cc`
 
 **Design:**
-- [ ] `Waker(TaskRef)` remains source-compatible.
-- [ ] Add internal `Waker(ReadyEntry)` or equivalent constructor.
-- [ ] `Waker::wakeUp()` schedules the ready item through owner scheduler.
-- [ ] Existing C++ awaitables still obtain scheduler from suspended C++ promise.
-- [ ] No public C++ coroutine API changes.
+- [x] `Waker(TaskRef)` remains source-compatible.
+- [x] Add internal copyable `detail::ResumeToken` and `Waker(detail::ResumeToken)` constructor.
+- [x] Keep `Waker` pointer-sized with low-bit tagged state encoding.
+- [x] `Waker::wakeUp()` requests resume through the token owner; C++ uses `requestTaskResumeState(TaskState*)`, C hook uses `request_resume`.
+- [x] Existing C++ awaitables still obtain scheduler from suspended C++ promise.
+- [x] No public C++ coroutine API changes.
 
 **Tests:**
-- [ ] C++ socket/timer awaitables wake through generalized waker.
-- [ ] Duplicate wake still coalesces for C++ tasks.
-- [ ] Invalid or done tasks are ignored safely.
+- [x] Fake C resume token hook exposes owner scheduler, requests resume, and retain/releases on Waker copy/destruction.
+- [x] Misaligned C resume token state is rejected before hook access and does not retain/release.
+- [x] C++ Waker still wakes through generalized token and resumes on owner scheduler thread.
+- [x] Duplicate wake still coalesces for C++ tasks.
+- [x] Invalid Waker is ignored safely.
+- [x] Existing wakepath static checks verify `sizeof(Waker) == sizeof(void*)` and ReadyEntry-backed worker fields.
 
 **Verification:**
-- [ ] RED: new generalized waker test fails before implementation.
-- [ ] GREEN: `rtk ctest --test-dir build-coro -R "t136_resume_token_waker|kernel" --output-on-failure`
+- [x] RED: `rtk cmake --build build-coro --target t136_resume_token_waker` failed before implementation with missing `detail::ResumeTokenHeader`, `detail::ResumeTokenHooks`, `detail::ResumeToken`, and `Waker(detail::ResumeToken)`.
+- [x] Guardrail RED: `rtk cmake --build build-coro --target t31_wakepath ...` failed while `Waker` was 24 bytes; implementation was changed to tagged pointer storage so `sizeof(Waker) == sizeof(void*)` remains true.
+- [x] Build: `rtk cmake --build build-coro --target t31_wakepath t136_resume_token_waker benchmark_kernel_resume_token_waker_ops` passed.
+- [x] GREEN: `rtk ctest --test-dir build-coro -R "kernel\\.(wakepath|resume_token_waker)$" --output-on-failure` passed 2/2.
+- [x] Extended Waker regression: `rtk ctest --test-dir build-coro -R "kernel\\.(wakepath|resume_token_waker|refpath|contpath|wakecoal|qwake|ready|ready_entry_cpp_compat|then_runtime|followpass|spawn|chain)$" --output-on-failure` passed 12/12.
+- [x] Benchmark run: `rtk ./build-coro/benchmark/cpp/kernel/benchmark_kernel_resume_token_waker_ops` passed, wake_only_qps 119832235, copy_wake_qps 25341289, wake_requests 1000000, wake_retains 1, copy_requests 1000000, copy_retains 1000001, copy_releases 1000001.
+- [x] Review fix: code-quality review found the initial C hook token did not retain before release; `ResumeToken::fromCCoroutine()` now acquires one hook reference on creation, and T136/B19 verify symmetric retain/release counts.
+- [x] Review fix: code-quality review found an encode-failure path after retain; `ResumeToken::fromCCoroutine()` now validates tagged-pointer encoding before hook access/retain, and T136 covers misaligned token rejection.
 
 **Completion:**
-- [ ] Completed and verified.
+- [x] Completed and verified.
 
 ---
 

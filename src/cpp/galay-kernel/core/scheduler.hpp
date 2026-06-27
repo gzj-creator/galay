@@ -152,7 +152,7 @@ protected:
     /**
      * @brief 在当前线程恢复 ready queue 中的就绪项
      * @param entry 待恢复的语言中立就绪项；C++ 任务会被转换回 TaskRef 后恢复
-     * @note 当前 Task 2 仅支持 C++ TaskState，未来 C 协程将在该边界接入
+     * @note C 协程通过 ReadyEntry hook 恢复；缺失 hook 时安全拒绝并保留 entry。
      */
     void resume(detail::ReadyEntry& entry);
 
@@ -173,14 +173,25 @@ namespace detail {
 
 inline bool scheduleReadyEntry(ReadyEntry& entry) noexcept
 {
-    if (!entry.isCppTask()) {
-        releaseReadyEntry(entry);
+    if (!entry.isValid()) {
         return false;
     }
 
-    TaskRef task = readyEntryToTaskRef(entry);
-    auto* scheduler = task.belongScheduler();
-    return scheduler != nullptr && scheduler->schedule(std::move(task));
+    if (entry.isCppTask()) {
+        auto* scheduler = readyEntryScheduler(entry);
+        if (scheduler == nullptr) {
+            return false;
+        }
+        TaskRef task = readyEntryToTaskRef(entry);
+        TaskRef scheduled_task(task);
+        if (scheduler->schedule(std::move(scheduled_task))) {
+            return true;
+        }
+        entry = ReadyEntry(std::move(task));
+        return false;
+    }
+
+    return false;
 }
 
 }  // namespace detail
@@ -200,31 +211,11 @@ inline bool Scheduler::bindTask(TaskRef& task) {
 
 inline void Scheduler::resume(TaskRef& task) {
     auto* state = task.state();
-    if (!state || !state->m_handle || state->m_done.load(std::memory_order_relaxed)) {
-        return;
-    }
-    state->m_queued.store(false, std::memory_order_relaxed);
-    state->m_resume_owner_only.store(false, std::memory_order_relaxed);
-    if (state->m_runtime == nullptr) {
-        state->m_handle.resume();
-        return;
-    }
-    if (state->m_runtime == detail::currentRuntime()) {
-        state->m_handle.resume();
-        return;
-    }
-    detail::CurrentRuntimeScope runtime_scope(state->m_runtime);
-    state->m_handle.resume();
+    (void)detail::resumeTaskState(state);
 }
 
 inline void Scheduler::resume(detail::ReadyEntry& entry) {
-    if (!entry.isCppTask()) {
-        detail::releaseReadyEntry(entry);
-        return;
-    }
-
-    TaskRef task = detail::readyEntryToTaskRef(entry);
-    resume(task);
+    (void)detail::resumeReadyEntry(entry);
 }
 
 /**

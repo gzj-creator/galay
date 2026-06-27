@@ -171,7 +171,11 @@ bool scheduleTaskImmediately(const TaskRef& task) noexcept
 
 bool requestTaskResume(const TaskRef& task) noexcept
 {
-    auto* state = task.state();
+    return requestTaskResumeState(task.state());
+}
+
+bool requestTaskResumeState(TaskState* state) noexcept
+{
     if (!state || !state->m_handle || !state->m_scheduler ||
         state->m_done.load(std::memory_order_relaxed)) {
         return false;
@@ -181,7 +185,7 @@ bool requestTaskResume(const TaskRef& task) noexcept
         return false;
     }
     state->m_resume_owner_only.store(true, std::memory_order_release);
-    if (state->m_scheduler->schedule(task)) {
+    if (state->m_scheduler->schedule(TaskRef(state, true))) {
         return true;
     }
 
