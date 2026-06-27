@@ -13,6 +13,7 @@
 
 ### Added
 
+- 新增 CMake 守卫 `config.kernel_internal_includes_relative`：递归扫描 `src/cpp/galay-kernel` 全部 `.cc/.h/.hpp/.inl` 源码，禁止内部实现通过 `galay/cpp/galay-kernel/` 公共 include 前缀引用自身头文件，强制改用相对路径。
 - 新增 C Kernel TCP/UDP/AsyncFile/FileWatcher timeout C ABI：补齐 connect/accept/accept_loop/recv/recv_loop/send/send_loop/close、recvfrom/sendto loop、AsyncFile read/write/close 与 FileWatcher watch 的毫秒级 timeout API，并新增对应 C 回归测试、timeout 示例、timeout smoke 和混合 API pressure benchmark。
 - 新增 C Kernel UDP 双进程 client/server 互压 benchmark：`benchmark_c_kernel_udp_socket_server_throughput` 与 `benchmark_c_kernel_udp_socket_client_throughput` 对齐 C++ UDP server/client 压测口径，支持独立 server/client 进程、显式端口、并发 client、消息数、payload、duration 与 IO scheduler 参数。
 - 新增 C Kernel async/concurrency C ABI wrapper：补齐 UDP socket、AsyncFile、AioFile、FileWatcher、AsyncMutex、AsyncWaiter、MpscChannel、UnsafeChannel 的 `.h/.cc`、回归测试、示例与 benchmark smoke，并接入 `galay-c-kernel` 构建和 C Kernel 文档。
@@ -30,6 +31,7 @@
 
 ### Changed
 
+- galay-kernel 内部源码 include 由公共前缀 `<galay/cpp/galay-kernel/...>` 统一改为相对路径（同目录直引、跨目录用 `../core/`、`../common/`），覆盖 async/core/common 下的 reactor、scheduler、socket、file、logger 等实现文件，避免内部实现依赖安装态公共 include 前缀。
 - C++ 模块文档目录从 `docs/modules` 收敛到 `docs/cpp/modules`，顶层 README、`.gitignore` 与模块文档导航同步改向新的 cpp 文档路径。
 - C/C++ 示例、测试和 benchmark 的 CMake 注册方式批量改为 `file(GLOB ... CONFIGURE_DEPENDS)`，减少新增源文件时的手工 target 维护。
 - RPC / RPC-etcd C++23 module file set 改为通过 glob source 变量注册，保持模块入口文件与 CMake source list 规则一致。

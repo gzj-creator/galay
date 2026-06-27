@@ -9,9 +9,9 @@
 
 #include "kqueue_scheduler.h"
 #include "sched_loop.hpp"
-#include <galay/cpp/galay-kernel/common/defn.hpp>
-#include <galay/cpp/galay-kernel/core/awaitable.h>
-#include <galay/cpp/galay-kernel/core/io_controller.hpp>
+#include "../common/defn.hpp"
+#include "awaitable.h"
+#include "io_controller.hpp"
 
 #ifdef USE_KQUEUE
 

@@ -9,7 +9,7 @@
  */
 
 #include "awaitable.h"
-#include <galay/cpp/galay-kernel/common/error.h>
+#include "../common/error.h"
 #include "io_scheduler.hpp"
 #include <cerrno>
 

@@ -13,7 +13,7 @@
 
 #ifdef USE_EPOLL
 
-#include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
+#include "../core/epoll_scheduler.h"
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/eventfd.h>

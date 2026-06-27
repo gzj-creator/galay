@@ -12,7 +12,7 @@
 
 #ifdef USE_IOURING
 
-#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include "awaitable.h"
 
 #include <sys/eventfd.h>
 #include <sys/poll.h>

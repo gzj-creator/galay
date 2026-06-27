@@ -12,7 +12,7 @@
 
 #ifdef USE_KQUEUE
 
-#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include "awaitable.h"
 
 #include <cerrno>
 #include <expected>

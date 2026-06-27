@@ -12,8 +12,8 @@
 
 #ifdef USE_EPOLL
 
-#include <galay/cpp/galay-kernel/core/awaitable.h>
-#include <galay/cpp/galay-kernel/async/aio_file.h>
+#include "awaitable.h"
+#include "../async/aio_file.h"
 
 #include <sys/eventfd.h>
 #include <sys/inotify.h>

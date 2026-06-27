@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-kernel/common/logger.h>
+#include "logger.h"
 
 namespace galay::kernel::log
 {

@@ -10,7 +10,7 @@
  */
 
 #include "tcp_socket.h"
-#include <galay/cpp/galay-kernel/common/defn.hpp>
+#include "../common/defn.hpp"
 #include <unistd.h>
 #include <cerrno>
 

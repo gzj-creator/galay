@@ -9,8 +9,8 @@
  */
 
 #include "udp_socket.h"
-#include <galay/cpp/galay-kernel/common/defn.hpp>
-#include <galay/cpp/galay-kernel/common/host.hpp>
+#include "../common/defn.hpp"
+#include "../common/host.hpp"
 #include <cerrno>
 #include <unistd.h>
 

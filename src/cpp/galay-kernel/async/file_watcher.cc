@@ -12,7 +12,7 @@
  */
 
 #include "file_watcher.h"
-#include <galay/cpp/galay-kernel/common/defn.hpp>
+#include "../common/defn.hpp"
 
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
 

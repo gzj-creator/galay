@@ -20,6 +20,13 @@ add_test(
 )
 
 add_test(
+    NAME config.kernel_internal_includes_relative
+    COMMAND ${CMAKE_COMMAND}
+        -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/kernel_internal_includes_relative.cmake
+)
+
+add_test(
     NAME config.tracing_options_surface
     COMMAND ${CMAKE_COMMAND}
         -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
