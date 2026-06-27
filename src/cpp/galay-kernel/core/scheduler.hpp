@@ -171,6 +171,23 @@ private:
 
 namespace detail {
 
+bool isSchedulerThread() noexcept;
+
+class SchedulerThreadScope
+{
+public:
+    SchedulerThreadScope() noexcept;
+    ~SchedulerThreadScope();
+
+    SchedulerThreadScope(const SchedulerThreadScope&) = delete;
+    SchedulerThreadScope& operator=(const SchedulerThreadScope&) = delete;
+
+private:
+    bool m_previous;
+};
+
+bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept;
+
 inline bool scheduleReadyEntry(ReadyEntry& entry) noexcept
 {
     if (!entry.isValid()) {
@@ -191,7 +208,8 @@ inline bool scheduleReadyEntry(ReadyEntry& entry) noexcept
         return false;
     }
 
-    return false;
+    auto* scheduler = readyEntryScheduler(entry);
+    return scheduler != nullptr && scheduleReadyEntryOnScheduler(scheduler, entry);
 }
 
 }  // namespace detail

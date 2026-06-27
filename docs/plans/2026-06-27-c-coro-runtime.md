@@ -6,7 +6,7 @@
 
 **Architecture:** Keep C++ and C coroutine objects separate, but unify their scheduling and I/O wakeup boundary through a low-overhead `ReadyEntry` / `ResumeToken` model. C++ keeps `co_await` and `std::coroutine_handle<>`; C gets `galay_coro_*` stackful APIs returning `C_IOResult` structs. The existing C callback ABI remains compatible and serves as the baseline comparison path.
 
-**Tech Stack:** C++23, C11 ABI wrappers, platform context switch assembly (`x86_64` first, `aarch64` later), CMake, CTest, existing galay kernel runtime, epoll/io_uring/kqueue reactors, benchmark targets under `benchmark/c/kernel` and `benchmark/cpp/kernel`.
+**Tech Stack:** C++23, C11 ABI wrappers, platform context switch assembly (Darwin arm64 in Task 4; Linux/x86_64 portability is a follow-up before final delivery), CMake, CTest, existing galay kernel runtime, epoll/io_uring/kqueue reactors, benchmark targets under `benchmark/c/kernel` and `benchmark/cpp/kernel`.
 
 ---
 
@@ -26,7 +26,7 @@
 
 - [x] Scheduler ready queues store a language-neutral ready item, not only `TaskRef`.
 - [x] C++ ready item resumes `TaskState::m_handle.resume()`.
-- [ ] C ready item resumes a `C_CoroTask` using C context switching.
+- [x] C ready item resumes a `C_CoroTask` using C context switching.
 - [ ] I/O completion writes an `IORequest` result slot, then schedules a ready item.
 - [ ] `resume()` does not carry business results; resumed coroutine reads its own result slot.
 - [ ] epoll/kqueue/io_uring `user_data` points to request/controller state with generation checks, not directly to a user coroutine task.
@@ -209,45 +209,67 @@ typedef struct C_IOResult {
 **Purpose:** Add first-class C stackful coroutine task objects and scheduler integration without I/O yet.
 
 **Files:**
+- Create: `src/c/galay-kernel-c/coro-c/coro_result_c.h`
 - Create: `src/c/galay-kernel-c/coro-c/coro_task_c.h`
+- Create: `src/c/galay-kernel-c/coro-c/coro_task_internal.hpp`
 - Create: `src/c/galay-kernel-c/coro-c/coro_task_c.cc`
-- Create: `src/c/galay-kernel-c/coro-c/coro_context_x86_64.S`
-- Create: `src/c/galay-kernel-c/coro-c/coro_context_aarch64.S` if platform support is needed in this pass
+- Create: `src/c/galay-kernel-c/coro-c/coro_context_aarch64.S`
 - Modify: `src/c/galay-kernel-c/CMakeLists.txt`
 - Test: `test/c/kernel/t23_coro_task.c`
-- Benchmark: `benchmark/c/kernel/b19_coro_scheduler_wakeup_latency.c`
+- Test: `test/cpp/kernel/t137_c_coro_resume_token.cc`
+- Benchmark: `benchmark/c/kernel/b19_coro_yield_requeue_latency.c`
 
 **C API shape:**
-- [ ] `galay_coro_spawn(runtime, entry_fn, arg, options, out_task)`
-- [ ] `galay_coro_yield()`
-- [ ] `galay_coro_current()`
-- [ ] `galay_coro_cancel(task)`
-- [ ] `galay_coro_join(task, timeout_ms)`
-- [ ] `galay_coro_destroy(task)`
+- [x] `galay_coro_spawn(runtime, entry_fn, arg, options, out_task)`
+- [x] `galay_coro_yield()`
+- [x] `galay_coro_current()`
+- [x] `galay_coro_cancel(task)`
+- [x] `galay_coro_join(task, timeout_ms)`
+- [x] `galay_coro_destroy(task)`
 
 **Runtime rules:**
-- [ ] Fixed owner scheduler for each C coroutine.
-- [ ] No cross-thread direct resume.
-- [ ] Stack allocated from a pool or explicit stack allocator.
-- [ ] Guard page when platform supports it.
-- [ ] `C_CoroTask` status: ready, running, suspended, done, cancelled.
-- [ ] Recoverable failures return typed C result codes.
-- [ ] No `abort`, `exit`, or hidden process termination.
+- [x] Fixed owner C coroutine runtime state for each C coroutine.
+- [x] No cross-thread direct resume in the core scheduler.
+- [x] Stack allocated from explicit `mmap` stack allocator.
+- [x] Guard page via `mprotect` on supported platform.
+- [x] `C_CoroTask` status: ready, running, done, cancelled. Wait-suspended state is deferred to Task 5.
+- [x] State transitions use CAS for `Ready -> Running` and `Ready -> Cancelled`.
+- [x] `galay_coro_current()` returns an owning handle; borrowed-current UAF is not exposed.
+- [x] C coroutine task exposes a real `ResumeToken` hook; `request_resume` reuses `request_ready()`.
+- [x] `join()` rejects calls from C coroutine / owner scheduler thread until Task 5 cooperative wait exists.
+- [x] `join()` rejects calls from any galay scheduler thread through `SchedulerThreadScope`, preventing blocking waits from C++ scheduler coroutines too.
+- [x] Context-switch tests and benchmarks are gated by `GALAY_C_CORO_CONTEXT_SUPPORTED` so non-Darwin-arm64 platforms can still build the C API library before portable assembly lands.
+- [x] Recoverable failures return typed `C_IOResult` structs.
+- [x] No `abort`, `exit`, or hidden process termination.
 
 **Tests:**
-- [ ] Spawn/yield/resume completes.
-- [ ] Multiple coroutines round-robin.
-- [ ] Cancel suspended coroutine.
-- [ ] Destroy after completion.
-- [ ] Invalid parameters return errors.
+- [x] Spawn/yield/resume completes.
+- [x] Multiple coroutines can yield/resume and complete; exact fairness order is not part of the Task 4 API.
+- [x] Cancel ready coroutine before join returns `C_IOResultCancelled`.
+- [x] Destroy after completion/cancel clears handles.
+- [x] Invalid parameters return errors.
+- [x] `galay_coro_current()` returns the current C coroutine from inside the coroutine.
+- [x] `galay_coro_join()` from inside a C coroutine returns `C_IOResultInvalid`.
+- [x] Destroying a running/not-yet-terminal task returns `C_IOResultInvalid`.
+- [x] Done task cancellation preserves the original result.
+- [x] C++ exceptions escaping a C entry are caught and reported as `C_IOResultError`.
+- [x] Real C coroutine task can construct a `ResumeToken` / `Waker` with the owner scheduler.
 
 **Verification:**
-- [ ] RED: `rtk ctest --test-dir build-coro -R t23_coro_task --output-on-failure`
-- [ ] GREEN: same command passes.
-- [ ] Benchmark builds: `rtk cmake --build build-coro --target benchmark_c_kernel_coro_scheduler_wakeup_latency`
+- [x] RED: `rtk cmake --build build-coro --target test_c_kernel_coro_task` failed before implementation with missing `galay/c/galay-kernel-c/coro-c/coro_task_c.h`.
+- [x] GREEN: `rtk cmake --build build-coro --target test_c_kernel_coro_task && rtk ctest --test-dir build-coro -R coro_task --output-on-failure` passed.
+- [x] Review RED: `rtk cmake --build build-coro --target test_c_kernel_coro_task t137_c_coro_resume_token` failed before fixes because `t137_c_coro_resume_token` could not include `src/c/galay-kernel-c/coro-c/coro_task_internal.hpp`; `rtk ctest --test-dir build-coro -R coro_task --output-on-failure` failed after adding owning-current/state-machine assertions.
+- [x] Review GREEN: `rtk ctest --test-dir build-coro -R "c\\.kernel\\.(header_smoke|runtime_lifecycle|coro_task|t22_coro_source_boundaries)|kernel\\.(ready_entry_cpp_compat|resume_token_waker|c_coro_resume_token|wakepath)$" --output-on-failure` passed 8/8.
+- [x] Review fix: IO/compute scheduler `start()` now waits until `m_threadId` is published before returning, and C task `owner_thread` is initialized once at spawn instead of being lazily written from `ready_resume()`.
+- [x] Review fix: scheduler worker threads now set `SchedulerThreadScope`; `t137_c_coro_resume_token` verifies `galay_coro_join()` is rejected from a compute scheduler coroutine.
+- [x] Review fix: `t23_coro_task`, `t137_c_coro_resume_token`, and `b19_coro_yield_requeue_latency` are only registered when `GALAY_C_CORO_CONTEXT_SUPPORTED` is true.
+- [x] Benchmark builds: `rtk cmake --build build-coro --target benchmark_c_kernel_coro_yield_requeue_latency` passed.
+- [x] Benchmark run: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_yield_requeue_latency` passed, `CoroSchedulerYieldLatency mode=owner_yield_requeue, samples=20000, qps=3955696, avg=0.22us, p50=0.00us, p90=1.00us, p99=1.00us, errors=0`.
+- [x] Diff hygiene: `rtk git diff --check` passed.
+- [x] Review: final spec review PASS; final code-quality review PASS with no Critical/Important/Minor findings.
 
 **Completion:**
-- [ ] Completed and verified.
+- [x] Completed and verified for Darwin arm64 stackful core after review fixes. x86_64/Linux assembly and wait-suspended state remain later portability/work-wait follow-ups.
 
 ---
 

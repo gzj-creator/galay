@@ -25,6 +25,9 @@ set(GALAY_KERNEL_SCENARIO_t90_awready awready_runtime)
 foreach(TEST_SOURCE ${TEST_SOURCES})
     # 获取文件名（不含路径和扩展名）
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
+    if(TEST_NAME STREQUAL "t137_c_coro_resume_token" AND NOT GALAY_C_CORO_CONTEXT_SUPPORTED)
+        continue()
+    endif()
 
     # 创建可执行文件
     add_executable(${TEST_NAME} ${TEST_SOURCE})
@@ -42,6 +45,9 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     if(TEST_NAME STREQUAL "t122_taskresult_storage")
         target_compile_options(${TEST_NAME} PRIVATE
             $<$<CXX_COMPILER_ID:GNU>:-Werror=free-nonheap-object>)
+    endif()
+    if(TEST_NAME STREQUAL "t137_c_coro_resume_token")
+        target_link_libraries(${TEST_NAME} PRIVATE galay::c-kernel)
     endif()
 
     string(REGEX REPLACE "^t[0-9]+_" "" SCENARIO_NAME "${TEST_NAME}")

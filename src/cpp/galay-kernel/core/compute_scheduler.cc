@@ -10,6 +10,8 @@
 
 #include "compute_scheduler.h"
 
+#include <future>
+
 namespace galay::kernel
 {
 
@@ -41,11 +43,16 @@ std::expected<void, IOError> ComputeScheduler::start()
         return {};  // 已经在运行
     }
 
-    m_thread = std::thread([this]() {
+    std::promise<void> thread_ready;
+    auto ready = thread_ready.get_future();
+    m_thread = std::thread([this, thread_ready = std::move(thread_ready)]() mutable {
+        detail::SchedulerThreadScope scheduler_thread_scope;
         m_threadId = std::this_thread::get_id();  // 设置调度器线程ID
+        thread_ready.set_value();
         (void)applyConfiguredAffinity();
         workerLoop();
     });
+    ready.wait();
     return {};
 }
 

@@ -13,6 +13,8 @@
 
 #ifdef USE_IOURING
 
+#include <future>
+
 namespace galay::kernel
 {
 
@@ -47,11 +49,16 @@ std::expected<void, IOError> IOUringScheduler::start()
         return std::unexpected(reactor_ready.error());
     }
 
-    m_thread = std::thread([this]() {
+    std::promise<void> thread_ready;
+    auto ready = thread_ready.get_future();
+    m_thread = std::thread([this, thread_ready = std::move(thread_ready)]() mutable {
+        detail::SchedulerThreadScope scheduler_thread_scope;
         m_threadId = std::this_thread::get_id();
+        thread_ready.set_value();
         (void)applyConfiguredAffinity();
         eventLoop();
     });
+    ready.wait();
     return {};
 }
 
@@ -165,6 +172,25 @@ bool IOUringScheduler::schedule(TaskRef task)
     }
 
     const auto queue_was_empty = m_worker.scheduleInjected(std::move(task));
+    if (!queue_was_empty.has_value()) {
+        return false;
+    }
+    m_wake_coordinator.requestWake(*queue_was_empty, [this]() { notify(); });
+    return true;
+}
+
+bool IOUringScheduler::scheduleReadyEntry(detail::ReadyEntry& entry)
+{
+    if (!entry.isValid() || detail::readyEntryScheduler(entry) != this) {
+        return false;
+    }
+
+    if (std::this_thread::get_id() == m_threadId) {
+        m_worker.scheduleLocal(std::move(entry));
+        return true;
+    }
+
+    const auto queue_was_empty = m_worker.scheduleInjected(std::move(entry));
     if (!queue_was_empty.has_value()) {
         return false;
     }

@@ -1,8 +1,20 @@
+enable_language(ASM)
+
+set(GALAY_C_CORO_CONTEXT_SUPPORTED OFF CACHE INTERNAL "C coroutine context switch support")
+
 file(GLOB galay_c_kernel_sources CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/core-c/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/async-c/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/concurrency-c/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/coro-c/*.cc"
 )
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
+    set(GALAY_C_CORO_CONTEXT_SUPPORTED ON CACHE INTERNAL "C coroutine context switch support" FORCE)
+    list(APPEND galay_c_kernel_sources
+        "${CMAKE_CURRENT_SOURCE_DIR}/coro-c/coro_context_aarch64.S"
+    )
+endif()
 
 add_library(galay-c-kernel ${galay_c_kernel_sources})
 add_library(galay::c-kernel ALIAS galay-c-kernel)
