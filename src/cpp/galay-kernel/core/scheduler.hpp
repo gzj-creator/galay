@@ -150,6 +150,13 @@ protected:
     void resume(TaskRef& task);
 
     /**
+     * @brief 在当前线程恢复 ready queue 中的就绪项
+     * @param entry 待恢复的语言中立就绪项；C++ 任务会被转换回 TaskRef 后恢复
+     * @note 当前 Task 2 仅支持 C++ TaskState，未来 C 协程将在该边界接入
+     */
+    void resume(detail::ReadyEntry& entry);
+
+    /**
      * @brief 将已配置的线程绑核设置应用到当前线程
      * @return true 绑核设置已成功应用或无需应用；false 平台调用失败
      * @note 只有在 setAffinity() 设定了具体 CPU 后该函数才会实际执行绑核
@@ -161,6 +168,22 @@ private:
     static constexpr int32_t kNoAffinity = -1;
     std::atomic<int32_t> m_affinity_cpu{kNoAffinity};
 };
+
+namespace detail {
+
+inline bool scheduleReadyEntry(ReadyEntry& entry) noexcept
+{
+    if (!entry.isCppTask()) {
+        releaseReadyEntry(entry);
+        return false;
+    }
+
+    TaskRef task = readyEntryToTaskRef(entry);
+    auto* scheduler = task.belongScheduler();
+    return scheduler != nullptr && scheduler->schedule(std::move(task));
+}
+
+}  // namespace detail
 
 inline bool Scheduler::bindTask(TaskRef& task) {
     auto* state = task.state();
@@ -192,6 +215,16 @@ inline void Scheduler::resume(TaskRef& task) {
     }
     detail::CurrentRuntimeScope runtime_scope(state->m_runtime);
     state->m_handle.resume();
+}
+
+inline void Scheduler::resume(detail::ReadyEntry& entry) {
+    if (!entry.isCppTask()) {
+        detail::releaseReadyEntry(entry);
+        return;
+    }
+
+    TaskRef task = detail::readyEntryToTaskRef(entry);
+    resume(task);
 }
 
 /**

@@ -121,26 +121,28 @@ typedef struct C_IOResult {
 - Benchmark: `benchmark/cpp/kernel/b18_ready_entry_wakeup_latency.cc`
 
 **Design:**
-- [ ] Add internal `ReadyEntry { kind, void* state }`.
-- [ ] Keep a C++ fast path conversion from `TaskRef` to `ReadyEntry`.
-- [ ] Keep `TaskRef` public behavior unchanged.
-- [ ] Owner-thread resume still clears `m_queued` and `m_resume_owner_only` for C++ tasks.
-- [ ] Avoid `std::function`, heap allocation, and virtual `Coroutine::resume()` on the hot path.
+- [x] Add internal `ReadyEntry` equivalent with packed kind/state.
+- [x] Keep a C++ fast path conversion from `TaskRef` to `ReadyEntry`.
+- [x] Keep `TaskRef` public behavior unchanged.
+- [x] Owner-thread resume still clears `m_queued` and `m_resume_owner_only` for C++ tasks.
+- [x] Avoid `std::function`, heap allocation, and virtual `Coroutine::resume()` on the hot path.
 
 **Tests:**
-- [ ] C++ `Task<void>` spawn still completes.
-- [ ] `Task<T>` result propagation still works.
-- [ ] `co_await Task<T>` still resumes parent.
-- [ ] `then()` still schedules continuation.
-- [ ] Cross-thread schedule still wakes owner scheduler.
+- [x] C++ `Task<void>` spawn still completes.
+- [x] `Task<T>` result propagation still works.
+- [x] `co_await Task<T>` still resumes parent.
+- [x] `then()` still schedules continuation.
+- [x] Cross-thread schedule still wakes owner scheduler.
 
 **Verification:**
-- [ ] RED: new compat test fails before production changes.
-- [ ] GREEN: `rtk ctest --test-dir build-coro -R "t135_ready_entry_cpp_compat|kernel" --output-on-failure`
-- [ ] Benchmark builds: `rtk cmake --build build-coro --target benchmark_kernel_ready_entry_wakeup_latency`
+- [x] RED: `rtk cmake --build build-coro --target t135_ready_entry_cpp_compat` failed before production changes with missing `detail::ReadyEntry` / `readyEntryToTaskRef`.
+- [x] GREEN: `rtk ctest --test-dir build-coro -R "kernel\\.(ready_entry_cpp_compat|wakepath|wakecoal|ready|qwake|then_runtime|followpass|ringfb|ringsteal|stealstats|localfifo|ringshutdown|spawn|chain)$" --output-on-failure` passed 14/14.
+- [x] Broad plan command checked: `rtk ctest --test-dir build-coro -R "t135_ready_entry_cpp_compat|kernel" --output-on-failure` failed because many registered `c.kernel.*` / `kernel.*` executables were not built in this tree; `kernel.ready_entry_cpp_compat` itself passed in the narrow run above.
+- [x] Benchmark builds: `rtk cmake --build build-coro --target benchmark_kernel_ready_entry_wakeup_latency` passed.
+- [x] Benchmark run: `rtk ./build-coro/benchmark/cpp/kernel/benchmark_kernel_ready_entry_wakeup_latency` passed on kqueue, 5000 samples, avg 28.06us, p50 13.25us, p90 30.21us, p99 325.04us, throughput 635 wakes/s.
 
 **Completion:**
-- [ ] Completed and verified.
+- [x] Completed and verified.
 
 ---
 

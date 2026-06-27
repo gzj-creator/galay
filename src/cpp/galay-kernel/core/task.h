@@ -54,6 +54,7 @@ namespace detail
 {
 
 struct TaskRefStorageAccess;  ///< 供固定容量调度 ring 在 TaskRef 与裸状态指针间转移所有权
+struct ReadyEntry;  ///< 调度器 ready queue 内部使用的语言中立就绪项
 
 /**
  * @brief 内部任务结果消费错误类别。
@@ -784,6 +785,110 @@ struct TaskRefStorageAccess
         return TaskRef(state, false);
     }
 };
+
+/**
+ * @brief ready queue 中的语言中立就绪项类别。
+ * @details 当前只恢复 C++ TaskState；后续 C 协程可复用相同队列槽位。
+ */
+enum class ReadyEntryKind : uintptr_t {
+    Empty = 0,
+    CppTask = 1,
+    CCoroutine = 2,
+};
+
+/**
+ * @brief 调度器 ready queue 的低开销就绪项。
+ * @details kind 被打包进 state 指针低位，避免热路径 std::function、堆分配或虚调用。
+ *          被入队的 state 必须至少 4 字节对齐；TaskState 已按 64 字节对齐。
+ */
+struct ReadyEntry
+{
+    static constexpr uintptr_t kKindMask = 0x3U;
+
+    constexpr ReadyEntry() noexcept = default;
+
+    explicit ReadyEntry(TaskRef&& task) noexcept
+        : ReadyEntry(ReadyEntryKind::CppTask, TaskRefStorageAccess::releaseState(task))
+    {
+    }
+
+    ReadyEntry(ReadyEntryKind kind, void* state) noexcept
+    {
+        if (state == nullptr || kind == ReadyEntryKind::Empty) {
+            m_encoded = 0;
+            return;
+        }
+        const auto raw = reinterpret_cast<uintptr_t>(state);
+        if ((raw & kKindMask) != 0) {
+            m_encoded = 0;
+            return;
+        }
+        m_encoded = (raw & ~kKindMask) | static_cast<uintptr_t>(kind);
+    }
+
+    static ReadyEntry fromEncoded(uintptr_t encoded) noexcept
+    {
+        ReadyEntry entry;
+        entry.m_encoded = encoded;
+        return entry;
+    }
+
+    bool isValid() const noexcept { return m_encoded != 0; }
+    ReadyEntryKind kind() const noexcept
+    {
+        return static_cast<ReadyEntryKind>(m_encoded & kKindMask);
+    }
+    bool isCppTask() const noexcept { return kind() == ReadyEntryKind::CppTask; }
+    void* state() const noexcept
+    {
+        return reinterpret_cast<void*>(m_encoded & ~kKindMask);
+    }
+    TaskState* taskState() const noexcept
+    {
+        return isCppTask() ? static_cast<TaskState*>(state()) : nullptr;
+    }
+    uintptr_t encoded() const noexcept { return m_encoded; }
+    void clear() noexcept { m_encoded = 0; }
+
+private:
+    uintptr_t m_encoded = 0;
+};
+
+inline ReadyEntry readyEntryFromTaskRef(TaskRef&& task) noexcept
+{
+    return ReadyEntry(std::move(task));
+}
+
+inline TaskRef readyEntryToTaskRef(ReadyEntry& entry) noexcept
+{
+    if (!entry.isCppTask()) {
+        return {};
+    }
+    auto* state = entry.taskState();
+    entry.clear();
+    return TaskRefStorageAccess::adoptState(state);
+}
+
+inline void releaseReadyEntry(ReadyEntry& entry) noexcept
+{
+    if (entry.isCppTask()) {
+        [[maybe_unused]] TaskRef released = readyEntryToTaskRef(entry);
+        return;
+    }
+    entry.clear();
+}
+
+inline Scheduler* readyEntryScheduler(const ReadyEntry& entry) noexcept
+{
+    auto* state = entry.taskState();
+    return state ? state->m_scheduler : nullptr;
+}
+
+inline bool readyEntryResumeOwnerOnly(const ReadyEntry& entry) noexcept
+{
+    auto* state = entry.taskState();
+    return state != nullptr && state->m_resume_owner_only.load(std::memory_order_acquire);
+}
 
 } // namespace detail
 
