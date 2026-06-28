@@ -56,6 +56,7 @@
 
 ### Fixed
 
+- 修复 epoll reactor 在 one-shot connect 完成后可能保留未注册删除 pending 的问题，避免 socket 析构后残留悬空 `IOController*` 导致后续 HTTPS/WSS closed-port connect 无法注册并卡住 `http.error_propagation`。
 - 修复 kernel coroutine/resource 错误边界：`TaskAwaiter` 先绑定 continuation 再调度子任务，timeout 与 IO 完成做仲裁，`spawnBlocking()` 捕获 callable 异常并映射到 task error，非法 borrowed `readv/writev` count 返回 `IOError(kParamInvalid)` 而不是 abort。
 - 修复 socket/file RAII、ObjectPool late lease、Base64 malformed input、`Bytes::c_str()` NUL 结尾等资源生命周期和可恢复错误问题。
 - 修复 HTTP/WS/HTTP2/RPC/Redis/MySQL/Mongo/etcd/MCP/SSL/tracing 审计中发现的一批协议正确性、安全边界、错误传播和生命周期问题，并补齐对应 CTest 覆盖。

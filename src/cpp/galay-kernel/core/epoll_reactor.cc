@@ -194,6 +194,14 @@ int EpollReactor::applyEvents(IOController* controller, uint32_t events) {
     }
 
     const size_t index = findPendingChangeIndex(controller);
+    // 未注册状态下的删除是 no-op，不能留下可能跨过 socket 析构的裸 controller 指针。
+    if (events == EPOLLET && controller->m_registered_events == 0) {
+        if (index != m_pending_changes.size()) {
+            erasePendingChange(index);
+        }
+        return 0;
+    }
+
     if (index != m_pending_changes.size()) {
         if (events == controller->m_registered_events) {
             erasePendingChange(index);
