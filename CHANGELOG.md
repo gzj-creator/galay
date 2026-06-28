@@ -64,6 +64,7 @@
 - 修复 direct C coroutine TCP bridge 在 timeout timer 注册失败路径中未撤销 reactor registration 的生命周期问题，避免返回错误后后端仍持有栈上 awaitable 或悬空 controller；新增 C++ 回归测试覆盖 kqueue/epoll 清理与 socket 复用。
 - 修复 C coroutine bridge 清理路径未完整传播返回值的问题，并加固 UDP bridge `user_data` 完成读取竞态，确保清理失败可合并为可观测错误而不是被静默丢弃。
 - 加固 C/C++ no-exception 与函数返回值必须处理规则：移除 C async 测试、示例、benchmark 和 bridge 中的裸调用/void-cast 忽略返回值路径，保持错误通过返回结构或错误码传播。
+- 修复 C Kernel timeout 示例合并冲突后的 cleanup 返回值处理，避免 direct coroutine 示例重复销毁任务句柄并保留清理失败错误码。
 - 修复 epoll reactor 在 one-shot connect 完成后可能保留未注册删除 pending 的问题，避免 socket 析构后残留悬空 `IOController*` 导致后续 HTTPS/WSS closed-port connect 无法注册并卡住 `http.error_propagation`。
 - 修复 kernel coroutine/resource 错误边界：`TaskAwaiter` 先绑定 continuation 再调度子任务，timeout 与 IO 完成做仲裁，`spawnBlocking()` 捕获 callable 异常并映射到 task error，非法 borrowed `readv/writev` count 返回 `IOError(kParamInvalid)` 而不是 abort。
 - 修复 socket/file RAII、ObjectPool late lease、Base64 malformed input、`Bytes::c_str()` NUL 结尾等资源生命周期和可恢复错误问题。
@@ -78,11 +79,13 @@
 
 ### Docs
 
+- 新增 `docs/文档审查报告.md`，记录 docs 目录 354 个 Markdown 文件的结构、链接、命名和完整性审查结果及修复优先级。
 - 更新 C Kernel 性能文档，按 C++ 性能文档结构记录 2026-06-25 Release fresh TCP/UDP 双进程 C/S 压测数据、timeout API pressure/smoke 输出、复现命令、target 清单和网络吞吐指标解释。
 - 新增 `docs/c/modules/kernel` 文档导航与性能页，记录 C `TcpSocket` Release 构建、回归命令、同参数 C/C++ loopback benchmark 数据和当前复现口径。
 
 ### Chore
 
+- `.gitignore` 新增 `.workbuddy/` 工作区记忆目录忽略规则，避免本地工作日志进入提交范围。
 - 恢复 `src/c/CMakeLists.txt` 最小入口，`GALAY_BUILD_C_API=ON` 时只注册当前保留的 `galay-kernel-c` target。
 - 隐藏 C Kernel TCP socket C wrapper 内部 helper 与 coroutine task helper 的外部链接符号，减少 `libgalay-c-kernel` 符号污染。
 

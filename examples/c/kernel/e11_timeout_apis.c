@@ -5,6 +5,7 @@
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -37,6 +38,24 @@ typedef struct AsyncFileState {
     C_AsyncFileResultCode sync_result;
     char read_buffer[16];
 } AsyncFileState;
+
+static void set_cleanup_error(int* exit_code, int cleanup_code)
+{
+    if (*exit_code == 0) {
+        *exit_code = cleanup_code;
+    }
+}
+
+static int unlink_if_exists(const char* path)
+{
+    if (path == 0 || path[0] == '\0') {
+        return 0;
+    }
+    if (unlink(path) == 0) {
+        return 0;
+    }
+    return errno == ENOENT ? 0 : 1;
+}
 
 static void tcp_accept_entry(void* ctx)
 {
@@ -83,7 +102,8 @@ static void async_file_entry(void* ctx)
 
 static int make_temp_path(char* path, size_t length, const char* prefix)
 {
-    if (snprintf(path, length, "/tmp/%s_XXXXXX", prefix) <= 0) {
+    int written = snprintf(path, length, "/tmp/%s_XXXXXX", prefix);
+    if (written <= 0 || (size_t)written >= length) {
         return 1;
     }
     int fd = mkstemp(path);
@@ -93,7 +113,7 @@ static int make_temp_path(char* path, size_t length, const char* prefix)
     if (close(fd) != 0) {
         return 2;
     }
-    if (unlink(path) != 0) {
+    if (unlink_if_exists(path) != 0) {
         return 3;
     }
     return 0;
@@ -146,6 +166,7 @@ int main(void)
         exit_code = 11;
         goto cleanup;
     }
+    task.task = 0;
     if (printf("tcp accept timeout: %d\n", (int)accept_state.result.code) < 0) {
         exit_code = 27;
         goto cleanup;
@@ -169,6 +190,7 @@ int main(void)
         exit_code = 12;
         goto cleanup;
     }
+    task.task = 0;
     if (printf("udp recvfrom timeout: %d\n", (int)udp_state.result.code) < 0) {
         exit_code = 28;
         goto cleanup;
@@ -198,6 +220,7 @@ int main(void)
                 exit_code = 14;
                 goto cleanup;
             }
+            task.task = 0;
             if (printf("file watcher timeout: %s\n",
                        galay_kernel_file_watcher_get_error(watch_state.watch_result.code)) < 0) {
                 exit_code = 29;
@@ -241,6 +264,7 @@ int main(void)
             exit_code = 15;
             goto cleanup;
         }
+        task.task = 0;
         if (printf("async file timeout API read bytes=%zu\n", file_state.read_result.bytes) < 0) {
             exit_code = 31;
             goto cleanup;
@@ -257,54 +281,53 @@ int main(void)
 
 cleanup:
     if (task.task != 0) {
-        if (galay_coro_destroy(&task).code != C_IOResultOk && exit_code == 0) {
-            exit_code = 16;
+        if (galay_coro_destroy(&task).code != C_IOResultOk) {
+            set_cleanup_error(&exit_code, 16);
         }
     }
     if (async_file.file != 0) {
-        if (galay_kernel_async_file_destroy(&async_file) != C_AsyncFileSuccess && exit_code == 0) {
-            exit_code = 17;
+        if (galay_kernel_async_file_destroy(&async_file) != C_AsyncFileSuccess) {
+            set_cleanup_error(&exit_code, 17);
         }
     }
     if (watcher.watcher != 0) {
         if (watch_descriptor >= 0) {
-            if (galay_kernel_file_watcher_remove_watch(&watcher, watch_descriptor) != C_FileWatcherSuccess &&
-                exit_code == 0) {
-                exit_code = 18;
+            if (galay_kernel_file_watcher_remove_watch(&watcher, watch_descriptor) != C_FileWatcherSuccess) {
+                set_cleanup_error(&exit_code, 18);
             }
         }
-        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess && exit_code == 0) {
-            exit_code = 19;
+        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess) {
+            set_cleanup_error(&exit_code, 19);
         }
     }
     if (udp.socket != 0) {
-        if (galay_kernel_udp_socket_destroy(&udp) != C_UdpSocketSuccess && exit_code == 0) {
-            exit_code = 20;
+        if (galay_kernel_udp_socket_destroy(&udp) != C_UdpSocketSuccess) {
+            set_cleanup_error(&exit_code, 20);
         }
     }
     if (listener.socket != 0) {
-        if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && exit_code == 0) {
-            exit_code = 21;
+        if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess) {
+            set_cleanup_error(&exit_code, 21);
         }
     }
     if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
-            exit_code = 22;
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess) {
+            set_cleanup_error(&exit_code, 22);
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
-            exit_code = 23;
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess) {
+            set_cleanup_error(&exit_code, 23);
         }
     }
     if (watch_fd >= 0) {
-        if (close(watch_fd) != 0 && exit_code == 0) {
-            exit_code = 24;
+        if (close(watch_fd) != 0) {
+            set_cleanup_error(&exit_code, 24);
         }
     }
-    if (watch_path_created && unlink(watch_path) != 0 && exit_code == 0) {
-        exit_code = 25;
+    if (watch_path_created && unlink_if_exists(watch_path) != 0) {
+        set_cleanup_error(&exit_code, 25);
     }
-    if (async_path_created && unlink(async_path) != 0 && exit_code == 0) {
-        exit_code = 26;
+    if (async_path_created && unlink_if_exists(async_path) != 0) {
+        set_cleanup_error(&exit_code, 26);
     }
     return exit_code;
 }

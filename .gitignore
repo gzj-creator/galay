@@ -67,3 +67,6 @@ docs/cpp/modules/*/plans
 # agent
 .claude/
 .codex/
+
+# workspace
+.workbuddy/
