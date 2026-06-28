@@ -18,6 +18,7 @@ foreach(benchmark_source IN LISTS GALAY_C_KERNEL_BENCHMARK_SOURCES)
         source_name STREQUAL "b20_coro_wait_result_latency" OR
         source_name STREQUAL "b21_coro_tcp_echo_throughput" OR
         source_name STREQUAL "b22_coro_tcp_vs_callback") AND NOT GALAY_C_CORO_CONTEXT_SUPPORTED)
+        message(STATUS "Skipping ${source_name}: ${GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON}")
         continue()
     endif()
     string(REGEX REPLACE "^b[0-9]+_" "" scenario_name "${source_name}")

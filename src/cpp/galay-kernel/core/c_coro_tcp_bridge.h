@@ -6,11 +6,10 @@
 
 /**
  * @file c_coro_tcp_bridge.h
- * @brief C coroutine TCP adapters exposed by the C++ kernel core.
+ * @brief C++ kernel core 暴露的 C 协程 TCP adapter。
  *
- * @details This is an internal C-style bridge used by the C ABI layer. It keeps
- * C++ awaitable/controller details inside the kernel core while letting the C
- * coroutine runtime provide wait and completion hooks.
+ * @details 这是 C ABI 层使用的内部 C 风格桥接。它将 C++ awaitable/controller
+ * 细节限制在 kernel core 内，同时允许 C coroutine runtime 提供 wait 和 completion hook。
  */
 
 #define GALAY_CORE_CORO_HOST_ADDRESS_MAX_LENGTH 46

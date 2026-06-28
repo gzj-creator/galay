@@ -1,13 +1,12 @@
 /**
  * @file waker.h
- * @brief Task<void> wake-up handle
+ * @brief Task<void> 唤醒句柄
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details Defines Waker, a lightweight handle that holds a TaskRef and can
- * request the task's scheduler to resume the associated coroutine. Used by
- * IO completion callbacks, timeouts, and other async events to re-schedule
- * a suspended coroutine.
+ * @details 定义 Waker 轻量句柄；它持有 TaskRef，并可请求任务所属 scheduler
+ * 恢复关联协程。IO completion callback、timeout 和其他异步事件通过它重新调度
+ * 已挂起的协程。
  */
 
 #ifndef GALAY_KERNEL_WAKER_H

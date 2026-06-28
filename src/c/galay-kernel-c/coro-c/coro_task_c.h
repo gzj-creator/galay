@@ -12,45 +12,44 @@ extern "C" {
 #endif
 
 /**
- * @brief C coroutine entry function.
- * @param arg User data pointer passed to `galay_coro_spawn`.
- * @note The entry runs on the selected owner IO scheduler thread. It must return
- * normally; C++ exceptions are converted to `C_IOResultError`. Process
- * termination and long blocking work are the caller's responsibility to avoid.
+ * @brief C 协程入口函数。
+ * @param arg 传给 `galay_coro_spawn` 的用户数据指针。
+ * @note 入口函数运行在选定的 owner IO scheduler 线程上，必须正常返回；
+ * C++ 异常会转换为 `C_IOResultError`。调用方负责避免进程终止和长时间阻塞工作。
  */
 typedef void (*galay_coro_entry_fn)(void* arg);
 
 /**
- * @brief C coroutine spawn options.
+ * @brief C 协程创建选项。
  */
 typedef struct C_CoroOptions {
-    size_t stack_size;  ///< Usable stack bytes. 0 selects the default.
+    size_t stack_size;  ///< 可用栈字节数；0 表示使用默认值。
 } C_CoroOptions;
 
 /**
- * @brief Opaque C coroutine task handle.
+ * @brief 不透明 C 协程任务句柄。
  */
 typedef struct galay_coro_task {
     void* task;
 } galay_coro_task_t;
 
 /**
- * @brief Return default C coroutine options.
- * @return Default stack size and scheduler settings.
+ * @brief 返回默认 C 协程选项。
+ * @return 默认栈大小和 scheduler 设置。
  */
 C_CoroOptions galay_coro_options_default(void);
 
 /**
- * @brief Spawn a stackful C coroutine on a running galay runtime.
- * @param runtime Running C runtime handle. The runtime must outlive the task.
- * @param entry Coroutine entry function. Must not be NULL.
- * @param arg User data passed to `entry`.
- * @param options Optional spawn options; NULL selects defaults.
- * @param out_task Output task handle. The caller must eventually destroy it.
- * @return `C_IOResultOk` on success; `C_IOResultInvalid` for invalid or stopped
- * runtime / parameters; `C_IOResultError` for allocation or unsupported platform.
- * @note The task is scheduled through the runtime's IO scheduler using the
- * internal ReadyEntry boundary. The API does not spawn a C++ Task wrapper.
+ * @brief 在运行中的 galay runtime 上创建有栈 C 协程。
+ * @param runtime 已运行的 C runtime 句柄；runtime 生命周期必须长于任务。
+ * @param entry 协程入口函数，不能为 NULL。
+ * @param arg 传给 `entry` 的用户数据。
+ * @param options 可选创建选项；NULL 表示使用默认值。
+ * @param out_task 输出任务句柄；调用方最终必须销毁它。
+ * @return 成功返回 `C_IOResultOk`；runtime/参数无效或已停止返回 `C_IOResultInvalid`；
+ * 分配失败或平台不支持返回 `C_IOResultError`。
+ * @note 任务通过 runtime 的 IO scheduler 和内部 ReadyEntry 边界调度。
+ * 该 API 不会创建 C++ Task wrapper。
  */
 C_IOResult galay_coro_spawn(galay_kernel_runtime_t* runtime,
                             galay_coro_entry_fn entry,
@@ -59,51 +58,45 @@ C_IOResult galay_coro_spawn(galay_kernel_runtime_t* runtime,
                             galay_coro_task_t* out_task);
 
 /**
- * @brief Yield the current C coroutine and requeue it on its owner scheduler.
- * @return `C_IOResultOk` after the coroutine is resumed; `C_IOResultInvalid`
- * outside a C coroutine; `C_IOResultError` if requeue fails.
- * @note This suspends the coroutine stack, not the calling OS thread.
+ * @brief 让出当前 C 协程，并将其重新入队到 owner scheduler。
+ * @return 协程恢复后返回 `C_IOResultOk`；不在 C 协程内调用返回 `C_IOResultInvalid`；
+ * 重新入队失败返回 `C_IOResultError`。
+ * @note 该函数挂起协程栈，不会阻塞调用线程。
  */
 C_IOResult galay_coro_yield(void);
 
 /**
- * @brief Get the currently running C coroutine.
- * @param out_task Output owning handle to the current coroutine. It must be
- * empty on entry and later released with `galay_coro_destroy` after completion.
- * @return `C_IOResultOk` inside a C coroutine; `C_IOResultInvalid` otherwise.
+ * @brief 获取当前正在运行的 C 协程。
+ * @param out_task 输出当前协程的拥有型句柄；进入时必须为空，完成后需用
+ * `galay_coro_destroy` 释放。
+ * @return 在 C 协程内调用返回 `C_IOResultOk`；否则返回 `C_IOResultInvalid`。
  */
 C_IOResult galay_coro_current(galay_coro_task_t* out_task);
 
 /**
- * @brief Wait until a C coroutine reaches done or cancelled state.
- * @param task Task handle returned by `galay_coro_spawn`.
- * @param timeout_ms Negative waits indefinitely, zero polls, positive waits up
- * to that many milliseconds.
- * @return Task result, `C_IOResultCancelled`, `C_IOResultTimeout`, or
- * `C_IOResultInvalid`.
- * @note `join` only waits on state; it never resumes a coroutine directly.
- * Calling it from a C coroutine or from any galay scheduler thread returns
- * `C_IOResultInvalid`; use request-based coroutine waits inside scheduler code.
+ * @brief 等待 C 协程进入完成或取消状态。
+ * @param task `galay_coro_spawn` 返回的任务句柄。
+ * @param timeout_ms 负数表示无限等待，0 表示轮询，正数表示最多等待对应毫秒数。
+ * @return 任务结果、`C_IOResultCancelled`、`C_IOResultTimeout` 或 `C_IOResultInvalid`。
+ * @note `join` 只等待状态，不会直接恢复协程。从 C 协程或任意 galay scheduler 线程
+ * 调用会返回 `C_IOResultInvalid`；scheduler 代码内应使用基于 request 的协程等待。
  */
 C_IOResult galay_coro_join(galay_coro_task_t* task, int64_t timeout_ms);
 
 /**
- * @brief Cooperatively cancel a non-running C coroutine.
- * @param task Task handle returned by `galay_coro_spawn`.
- * @return `C_IOResultCancelled` when cancellation is recorded;
- * the original task result when already done; `C_IOResultInvalid` for invalid
- * handles or a currently running task.
+ * @brief 协作式取消未运行中的 C 协程。
+ * @param task `galay_coro_spawn` 返回的任务句柄。
+ * @return 成功记录取消时返回 `C_IOResultCancelled`；任务已完成时返回原始任务结果；
+ * 句柄无效或任务正在运行时返回 `C_IOResultInvalid`。
  */
 C_IOResult galay_coro_cancel(galay_coro_task_t* task);
 
 /**
- * @brief Release a C coroutine task handle.
- * @param task Task handle. On success `task->task` is set to NULL.
- * @return `C_IOResultOk` on success, `C_IOResultInvalid` for invalid or
- * not-yet-terminal task.
- * @note Destroy all C coroutine tasks before destroying the owning runtime.
- * Destroying a queued task marks the handle reference released; the task storage
- * is reclaimed after any scheduler-held ready reference is released.
+ * @brief 释放 C 协程任务句柄。
+ * @param task 任务句柄；成功时 `task->task` 会被置为 NULL。
+ * @return 成功返回 `C_IOResultOk`；任务无效或尚未终止返回 `C_IOResultInvalid`。
+ * @note 销毁 owning runtime 前必须先销毁所有 C 协程任务。销毁已入队任务会标记
+ * handle 引用已释放；任务存储会在 scheduler 持有的 ready 引用释放后回收。
  */
 C_IOResult galay_coro_destroy(galay_coro_task_t* task);
 

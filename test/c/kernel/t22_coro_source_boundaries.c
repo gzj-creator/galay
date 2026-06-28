@@ -353,6 +353,41 @@ static int require_direct_tcp_timeout_arbitration(void)
                 "[T22] direct TCP guarded completion must reject CQE delivery after timeout/cancel\n");
         failed = 1;
     }
+    if (!contains_text(data, len, "static_cast<IOScheduler*>(scheduler)->remove(controller)")) {
+        fprintf(stderr,
+                "[T22] direct TCP timer registration failures must remove backend reactor registration before returning\n");
+        failed = 1;
+    }
+
+    free(data);
+    return failed;
+}
+
+static int require_explicit_linux_aarch64_coro_context_boundary(void)
+{
+    const char* relative_path = "src/c/galay-kernel-c/CMakeLists.txt";
+    char full_path[kMaxPath];
+    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+        return 1;
+    }
+
+    char* data = NULL;
+    size_t len = 0;
+    if (!read_file(full_path, &data, &len)) {
+        return 1;
+    }
+
+    int failed = 0;
+    if (!contains_text(data, len, "Linux/aarch64 stackful C coroutine context switch is not implemented")) {
+        fprintf(stderr,
+                "[T22] Linux/aarch64 C coroutine context support must be explicitly diagnosed at configure time\n");
+        failed = 1;
+    }
+    if (!contains_text(data, len, "GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON")) {
+        fprintf(stderr,
+                "[T22] unsupported C coroutine context platforms must expose a skip reason for tests/examples/benchmarks\n");
+        failed = 1;
+    }
 
     free(data);
     return failed;
@@ -403,6 +438,7 @@ int main(void)
     failed |= require_direct_tcp_c_api_uses_core_bridge();
     failed |= require_direct_tcp_iouring_result_flag_reset();
     failed |= require_direct_tcp_timeout_arbitration();
+    failed |= require_explicit_linux_aarch64_coro_context_boundary();
     failed |= require_iouring_accept_uses_direct_completion_arbitration();
 
     int scanned_files = 0;

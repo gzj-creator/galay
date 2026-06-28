@@ -36,6 +36,10 @@ struct SchedulerTestAccess {
     static int wakeReadFd(EpollScheduler& scheduler) {
         return scheduler.m_reactor.getHandle().fd;
     }
+
+    static int flushReactor(EpollScheduler& scheduler) {
+        return scheduler.m_reactor.flushPendingChanges();
+    }
 #endif
 
 #ifdef USE_IOURING
@@ -54,6 +58,10 @@ struct SchedulerTestAccess {
     }
 
     static int wakeReadFd(KqueueScheduler& scheduler) {
+        return scheduler.m_reactor.getHandle().fd;
+    }
+
+    static int kqueueFd(KqueueScheduler& scheduler) {
         return scheduler.m_reactor.getHandle().fd;
     }
 #endif

@@ -15,6 +15,7 @@ foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)
     if((source_name STREQUAL "t23_coro_task" OR
         source_name STREQUAL "t24_coro_result_wait" OR
         source_name STREQUAL "t25_coro_tcp") AND NOT GALAY_C_CORO_CONTEXT_SUPPORTED)
+        message(STATUS "Skipping ${source_name}: ${GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON}")
         continue()
     endif()
     string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${source_name}")

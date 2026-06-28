@@ -13,6 +13,7 @@ file(GLOB GALAY_C_KERNEL_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOUR
 foreach(example_source IN LISTS GALAY_C_KERNEL_EXAMPLE_SOURCES)
     get_filename_component(source_name "${example_source}" NAME_WE)
     if(source_name STREQUAL "e12_coro_tcp_echo" AND NOT GALAY_C_CORO_CONTEXT_SUPPORTED)
+        message(STATUS "Skipping ${source_name}: ${GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON}")
         continue()
     endif()
     string(REGEX REPLACE "^e[0-9]+_" "" scenario_name "${source_name}")

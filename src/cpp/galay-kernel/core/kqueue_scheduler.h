@@ -24,7 +24,7 @@
 #include <thread>
 #include <cstdint>
 
-// Scheduler configuration macros
+// Scheduler 配置宏
 #ifndef GALAY_SCHEDULER_MAX_EVENTS
 #define GALAY_SCHEDULER_MAX_EVENTS 1024
 #endif
@@ -115,7 +115,7 @@ protected:
     std::atomic<bool> m_running;
     std::thread m_thread;
 
-    // Configuration
+    // 配置
     int m_max_events;
     int m_batch_size;
 

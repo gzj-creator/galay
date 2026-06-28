@@ -200,7 +200,7 @@ struct ReadyRecvChunk {
 
     std::shared_ptr<void> owner;  ///< 持有底层 buffer pool 生命周期
     char* data = nullptr;  ///< buffer 起始地址
-    uint16_t bid = 0;  ///< provided buffer id
+    uint16_t bid = 0;  ///< provided buffer id 标识
     size_t offset = 0;  ///< 当前尚未消费数据的起始偏移
     size_t length = 0;  ///< 当前尚未消费数据长度
     Kind kind = Kind::Buffer;  ///< 片段类型
@@ -300,7 +300,7 @@ struct IOController {
         m_sqe_state[READ] = m_sqe_handle_pool[READ] ? m_sqe_handle_pool[READ]->state() : nullptr;
         m_sqe_state[WRITE] = m_sqe_handle_pool[WRITE] ? m_sqe_handle_pool[WRITE]->state() : nullptr;
         rebindSqeState();
-        // The moved-from controller must not invalidate states now owned by this controller.
+        // moved-from controller 不能失效当前 controller 已接管的状态。
         other.m_sqe_state[READ] = nullptr;
         other.m_sqe_state[WRITE] = nullptr;
 #endif
@@ -343,7 +343,7 @@ struct IOController {
             m_accept_result_assigned = other.m_accept_result_assigned;
             m_recv_result_assigned = other.m_recv_result_assigned;
             rebindSqeState();
-            // The moved-from controller must not invalidate states now owned by this controller.
+            // moved-from controller 不能失效当前 controller 已接管的状态。
             other.m_sqe_state[READ] = nullptr;
             other.m_sqe_state[WRITE] = nullptr;
 #endif

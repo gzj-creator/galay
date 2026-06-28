@@ -766,8 +766,8 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
                                       IOController* controller,
                                       SequenceAwaitableBase* owner) {
     if (type == READV) {
-        // Sequence READV is readiness-driven here; completion is produced by a
-        // nonblocking socket read so staged sequence progress cannot miss ready bytes.
+        // 这里的 Sequence READV 由就绪事件驱动；completion 由非阻塞 socket read 产生，
+        // 因此分阶段推进 sequence 不会漏掉已就绪字节。
         auto* readv_ctx = static_cast<ReadvIOContext*>(ctx);
         int immediate_res = 0;
         if (tryImmediateReadv(controller->m_handle.fd, readv_ctx, immediate_res)) {

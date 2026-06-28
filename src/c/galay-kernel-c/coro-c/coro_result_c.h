@@ -9,7 +9,7 @@ extern "C" {
 #endif
 
 /**
- * @brief C coroutine and I/O result code.
+ * @brief C 协程和 I/O 结果码。
  */
 typedef enum C_IOResultCode {
     C_IOResultOk,
@@ -21,9 +21,9 @@ typedef enum C_IOResultCode {
 } C_IOResultCode;
 
 /**
- * @brief C coroutine result struct.
- * @details Resume paths do not pass business results as arguments. The resumed
- * coroutine reads result structs from its own request/task state.
+ * @brief C 协程结果结构。
+ * @details 恢复路径不会通过参数传递业务结果。被恢复的协程从自己的
+ * request/task 状态中读取结果结构。
  */
 typedef struct C_IOResult {
     C_IOResultCode code;

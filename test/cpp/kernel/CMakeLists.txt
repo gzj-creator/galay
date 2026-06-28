@@ -26,6 +26,7 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     # 获取文件名（不含路径和扩展名）
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
     if(TEST_NAME STREQUAL "t137_c_coro_resume_token" AND NOT GALAY_C_CORO_CONTEXT_SUPPORTED)
+        message(STATUS "Skipping ${TEST_NAME}: ${GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON}")
         continue()
     endif()
 

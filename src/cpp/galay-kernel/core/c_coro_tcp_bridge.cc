@@ -748,6 +748,21 @@ C_IOResult perform_registered_io(IOController* controller,
     if (!validate_controller_owner(controller, scheduler)) {
         return operation.finishWithoutWait(make_result(C_IOResultInvalid));
     }
+
+    galay::kernel::Timer::ptr timeout_timer;
+    if (timeout_ms > 0) {
+        try {
+            timeout_timer = std::make_shared<galay::kernel::CBTimer>(
+                std::chrono::milliseconds(timeout_ms),
+                [state = operation.weakState()]() {
+                    CoroTcpOperationBase::requestTimeout(state);
+                });
+        } catch (...) {
+            clear_controller_owner_if_no_live_direct_operation(controller);
+            return operation.finishWithoutWait(make_result(C_IOResultError, ENOMEM));
+        }
+    }
+
     if (!controller->fillAwaitable(event, awaitable)) {
         clear_controller_owner_if_no_live_direct_operation(controller);
         return operation.finishWithoutWait(make_result(C_IOResultInvalid));
@@ -770,19 +785,13 @@ C_IOResult perform_registered_io(IOController* controller,
         return result;
     }
 
-    galay::kernel::Timer::ptr timeout_timer;
-    if (timeout_ms > 0) {
-        timeout_timer = std::make_shared<galay::kernel::CBTimer>(
-            std::chrono::milliseconds(timeout_ms),
-            [state = operation.weakState()]() {
-                CoroTcpOperationBase::requestTimeout(state);
-            });
-        if (!galay::kernel::TimerScheduler::getInstance()->addTimer(timeout_timer)) {
-            controller->removeAwaitable(event);
-            C_IOResult result = operation.finishWithoutWait(make_result(C_IOResultError));
-            clear_controller_owner_if_no_live_direct_operation(controller);
-            return result;
-        }
+    if (timeout_timer &&
+        !galay::kernel::TimerScheduler::getInstance()->addTimer(timeout_timer)) {
+        (void)static_cast<IOScheduler*>(scheduler)->remove(controller);
+        controller->removeAwaitable(event);
+        C_IOResult result = operation.finishWithoutWait(make_result(C_IOResultError));
+        clear_controller_owner_if_no_live_direct_operation(controller);
+        return result;
     }
 
     C_IOResult result = operation.wait(-1);
