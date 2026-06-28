@@ -12,6 +12,8 @@ set(GALAY_ETCD_INTEGRATION_TESTS
     t4_smoke
     t5_pipe
     t8_task_watch
+    t13_cluster_integration
+    t14_async_cluster_integration
 )
 
 function(galay_etcd_configure_test_target target_name)

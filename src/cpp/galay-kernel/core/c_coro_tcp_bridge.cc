@@ -3,6 +3,7 @@
 #include "../async/tcp_socket.h"
 #include "awaitable.h"
 #include "io_scheduler.hpp"
+#include "timer_scheduler.h"
 
 #include <atomic>
 #include <cerrno>
@@ -894,10 +895,15 @@ C_IOResult perform_registered_io(IOController* controller,
     if (!validate_controller_owner(controller, scheduler)) {
         return operation.finishWithoutWait(make_result(C_IOResultInvalid));
     }
-
     if (!controller->fillAwaitable(event, awaitable)) {
         clear_controller_owner_if_no_live_direct_operation(controller);
         return operation.finishWithoutWait(make_result(C_IOResultInvalid));
+    }
+    if (timeout_ms > 0 && !galay::kernel::TimerScheduler::getInstance()->isRunning()) {
+        controller->removeAwaitable(event);
+        C_IOResult result = operation.finishWithoutWait(make_result(C_IOResultError));
+        clear_controller_owner_if_no_live_direct_operation(controller);
+        return result;
     }
 
     const int registered = galay::kernel::detail::registerIOSchedulerEvent(
@@ -1201,9 +1207,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(void* socket_handle,
 
 GalayCoreCoroIOResult galay_core_coro_tcp_close(void* socket_handle,
                                                 void* scheduler_handle,
-                                                int64_t timeout_ms)
+                                                int64_t)
 {
-    (void)timeout_ms;
     auto* socket = to_cpp_socket(socket_handle);
     Scheduler* scheduler = to_io_scheduler(scheduler_handle);
     if (socket == nullptr || scheduler == nullptr) {

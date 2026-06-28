@@ -23,6 +23,7 @@
 #include "../../galay-http/kernel/http_conn.h"
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/encoding/base64.hpp"
 #include "../../galay-kernel/common/error.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/timeout.hpp"
@@ -1230,6 +1231,167 @@ public:
     Http2Settings& peerSettings() { return m_peer_settings; }
     Http2RuntimeConfig& runtimeConfig() { return m_runtime_config; }
     const Http2RuntimeConfig& runtimeConfig() const { return m_runtime_config; }
+
+    /**
+     * @brief 校验 SETTINGS 帧的连接级约束。
+     * @param frame 待处理的 SETTINGS 帧，必须位于 stream 0。
+     * @return 非 0 stream 返回 ProtocolError；ACK 携带负载返回 FrameSizeError。
+     */
+    static Http2ErrorCode validateSettingsFrame(const Http2SettingsFrame& frame) {
+        if (frame.streamId() != 0) {
+            return Http2ErrorCode::ProtocolError;
+        }
+        if (frame.isAck() && !frame.settings().empty()) {
+            return Http2ErrorCode::FrameSizeError;
+        }
+        return Http2ErrorCode::NoError;
+    }
+
+    /**
+     * @brief 归一化本地 SETTINGS 配置，避免序列化非法值。
+     * @param config 待归一化的配置副本。
+     * @return 满足 HTTP/2 SETTINGS 取值范围的配置副本。
+     */
+    template<typename Config>
+    static Config normalizeSettingsConfig(Config config) {
+        if constexpr (requires { config.initial_window_size; }) {
+            if (config.initial_window_size > 2147483647u) {
+                config.initial_window_size = 2147483647u;
+            }
+        }
+        if constexpr (requires { config.max_frame_size; }) {
+            if (config.max_frame_size < kMinFrameSize) {
+                config.max_frame_size = kMinFrameSize;
+            } else if (config.max_frame_size > kMaxFrameSize) {
+                config.max_frame_size = kMaxFrameSize;
+            }
+        }
+        return config;
+    }
+
+    /**
+     * @brief 从配置构造已归一化的 SETTINGS 帧。
+     * @param config 本地配置。
+     * @param enable_push_override 可选的 ENABLE_PUSH 覆盖值。
+     * @return 可直接发送或应用的 SETTINGS 帧。
+     */
+    template<typename Config>
+    static Http2SettingsFrame makeSettingsFrameFromConfig(
+        Config config,
+        std::optional<uint32_t> enable_push_override = std::nullopt) {
+        auto normalized = normalizeSettingsConfig(std::move(config));
+        Http2Settings settings;
+        settings.from(normalized);
+        if (enable_push_override.has_value()) {
+            settings.enable_push = *enable_push_override;
+        }
+        return settings.toFrame();
+    }
+
+    /**
+     * @brief 解码 h2c Upgrade 请求中的 HTTP2-Settings 头。
+     * @param header_value HTTP2-Settings 头值，格式为 base64url 编码的 SETTINGS payload。
+     * @return 成功时返回 SETTINGS 帧，失败时返回对应 HTTP/2 错误码。
+     */
+    static std::expected<Http2SettingsFrame, Http2ErrorCode>
+    decodeH2cUpgradeSettingsHeader(std::string_view header_value) {
+        std::string base64_value(header_value);
+        for (char& ch : base64_value) {
+            if (ch == '-') {
+                ch = '+';
+            } else if (ch == '_') {
+                ch = '/';
+            }
+        }
+        switch (base64_value.size() % 4) {
+            case 0:
+                break;
+            case 2:
+                base64_value.append("==");
+                break;
+            case 3:
+                base64_value.push_back('=');
+                break;
+            default:
+                return std::unexpected(Http2ErrorCode::ProtocolError);
+        }
+
+        if (!galay::utils::Base64Util::Base64CanDecode(base64_value)) {
+            return std::unexpected(Http2ErrorCode::ProtocolError);
+        }
+        std::string payload = galay::utils::Base64Util::Base64Decode(base64_value);
+        if (payload.size() % 6 != 0) {
+            return std::unexpected(Http2ErrorCode::ProtocolError);
+        }
+
+        Http2SettingsFrame frame;
+        frame.header().stream_id = 0;
+        for (size_t offset = 0; offset < payload.size(); offset += 6) {
+            const auto* bytes =
+                reinterpret_cast<const uint8_t*>(payload.data() + offset);
+            const auto id = static_cast<Http2SettingsId>(
+                (static_cast<uint16_t>(bytes[0]) << 8) |
+                static_cast<uint16_t>(bytes[1]));
+            const uint32_t value =
+                (static_cast<uint32_t>(bytes[2]) << 24) |
+                (static_cast<uint32_t>(bytes[3]) << 16) |
+                (static_cast<uint32_t>(bytes[4]) << 8) |
+                static_cast<uint32_t>(bytes[5]);
+            frame.addSetting(id, value);
+        }
+
+        Http2Settings validator;
+        auto error = validator.applySettings(frame);
+        if (error != Http2ErrorCode::NoError) {
+            return std::unexpected(error);
+        }
+        return frame;
+    }
+
+    /**
+     * @brief 应用本地 SETTINGS 并同步接收侧 HPACK 限制。
+     * @param frame 本端公布的 SETTINGS 帧；ACK 帧为无副作用成功。
+     * @return SETTINGS 值非法时返回对应 HTTP/2 错误码。
+     */
+    Http2ErrorCode applyLocalSettings(const Http2SettingsFrame& frame) {
+        auto frame_error = validateSettingsFrame(frame);
+        if (frame_error != Http2ErrorCode::NoError) {
+            return frame_error;
+        }
+        if (frame.isAck()) {
+            return Http2ErrorCode::NoError;
+        }
+
+        auto settings_error = m_local_settings.applySettings(frame);
+        if (settings_error != Http2ErrorCode::NoError) {
+            return settings_error;
+        }
+        m_decoder.setMaxTableSize(m_local_settings.header_table_size);
+        m_decoder.setMaxHeaderListSize(m_local_settings.max_header_list_size);
+        return Http2ErrorCode::NoError;
+    }
+
+    /**
+     * @brief 应用对端 SETTINGS 并同步发送侧 HPACK 限制。
+     * @param frame 对端发送的 SETTINGS 帧；ACK 帧为无副作用成功。
+     * @return SETTINGS 值非法时返回对应 HTTP/2 错误码。
+     */
+    Http2ErrorCode applyPeerSettings(const Http2SettingsFrame& frame) {
+        auto frame_error = validateSettingsFrame(frame);
+        if (frame_error != Http2ErrorCode::NoError) {
+            return frame_error;
+        }
+        if (frame.isAck()) {
+            return Http2ErrorCode::NoError;
+        }
+
+        auto settings_error = m_peer_settings.applySettings(frame);
+        if (settings_error != Http2ErrorCode::NoError) {
+            return settings_error;
+        }
+        m_encoder.setMaxTableSize(m_peer_settings.header_table_size);
+        return Http2ErrorCode::NoError;
+    }
     
     // HPACK 编解码器
     HpackEncoder& encoder() { return m_encoder; }
@@ -1445,7 +1607,7 @@ public:
      * @details
      * - 仅解析已缓冲的完整帧，不执行任何 socket recv
      * - 遇到不完整的尾部帧时停止（不报错）
-     * - 验证帧头 length <= peerSettings().max_frame_size
+     * - 验证帧头 length <= localSettings().max_frame_size
      * - 返回 FrameSizeError 如果帧过大
      */
     std::expected<std::vector<Http2Frame::uptr>, Http2ErrorCode>
@@ -1482,7 +1644,7 @@ public:
             }
 
             // 验证帧大小
-            if (header.length > m_peer_settings.max_frame_size) {
+            if (header.length > m_local_settings.max_frame_size) {
                 return std::unexpected(Http2ErrorCode::FrameSizeError);
             }
 

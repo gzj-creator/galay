@@ -12,7 +12,6 @@
 #include <set>
 #include <cctype>
 #include <memory>
-#include <string_view>
 #include <unordered_map>
 #include <vector>
 #include <chrono>
@@ -37,18 +36,6 @@ namespace {
 constexpr size_t kProxyMaxIdleConnectionsPerUpstream = 32;
 constexpr size_t kProxyRawRelayBufferSize = 16 * 1024;
 thread_local std::unordered_map<std::string, std::vector<std::unique_ptr<HttpClient>>> g_proxyClientPools;
-
-Task<void> closeHttpClientWithLog(HttpClient& client, std::string_view context)
-{
-    auto close_result = co_await client.close();
-    if (!close_result) {
-        HTTP_LOG_WARN("[proxy] [client-close-fail]",
-                      "context={} error={}",
-                      context,
-                      close_result.error().message());
-    }
-    co_return;
-}
 
 std::string toLowerAscii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -1160,7 +1147,12 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             auto session_result = client->getSession();
             if (!session_result) {
                 HTTP_LOG_ERROR("[proxy-raw] [session-fail]", "error={}", session_result.error().message());
-                co_await closeHttpClientWithLog(*client, "raw-session-fail");
+                auto close_result = co_await client->close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                                  "context=raw-session-fail error={}",
+                                  close_result.error().message());
+                }
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream session failed");
                 co_return;
@@ -1182,7 +1174,12 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             }
 
             if (!send_ok) {
-                co_await closeHttpClientWithLog(*client, "raw-send-fail");
+                auto close_result = co_await client->close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                                  "context=raw-send-fail error={}",
+                                  close_result.error().message());
+                }
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: send upstream failed");
                 co_return;
@@ -1193,7 +1190,12 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             auto upstream_socket = client->socket();
             if (!upstream_socket) {
                 HTTP_LOG_ERROR("[proxy-raw] [socket-fail]", "error={}", upstream_socket.error().message());
-                co_await closeHttpClientWithLog(*client, "raw-socket-fail");
+                auto close_result = co_await client->close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                                  "context=raw-socket-fail error={}",
+                                  close_result.error().message());
+                }
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream socket failed");
                 co_return;
@@ -1207,7 +1209,12 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                 HTTP_LOG_WARN("[proxy-raw] [relay-fail]", "error={}", relay_err);
             }
 
-            co_await closeHttpClientWithLog(*client, "raw-complete");
+            auto close_result = co_await client->close();
+            if (!close_result) {
+                HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                              "context=raw-complete error={}",
+                              close_result.error().message());
+            }
             co_return;
         }
         
@@ -1241,7 +1248,12 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             auto session_result = client->getSession();
             if (!session_result) {
                 HTTP_LOG_ERROR("[proxy] [session-fail]", "error={}", session_result.error().message());
-                co_await closeHttpClientWithLog(*client, "session-fail");
+                auto close_result = co_await client->close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                                  "context=session-fail error={}",
+                                  close_result.error().message());
+                }
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream session failed");
                 co_return;
@@ -1263,7 +1275,12 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             }
 
             if (!send_ok) {
-                co_await closeHttpClientWithLog(*client, "send-fail");
+                auto close_result = co_await client->close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                                  "context=send-fail error={}",
+                                  close_result.error().message());
+                }
                 if (borrowed_from_pool && !retried) {
                     retried = true;
                     borrowed_from_pool = false;
@@ -1303,7 +1320,12 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             }
 
             if (!recv_ok) {
-                co_await closeHttpClientWithLog(*client, "recv-fail");
+                auto close_result = co_await client->close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                                  "context=recv-fail error={}",
+                                  close_result.error().message());
+                }
                 if (borrowed_from_pool && !retried) {
                     retried = true;
                     borrowed_from_pool = false;
@@ -1353,10 +1375,20 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             if (idle.size() < kProxyMaxIdleConnectionsPerUpstream) {
                 idle.push_back(std::move(client));
             } else if (client) {
-                co_await closeHttpClientWithLog(*client, "pool-full");
+                auto close_result = co_await client->close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                                  "context=pool-full error={}",
+                                  close_result.error().message());
+                }
             }
         } else if (client) {
-            co_await closeHttpClientWithLog(*client, "not-keepalive");
+            auto close_result = co_await client->close();
+            if (!close_result) {
+                HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                              "context=not-keepalive error={}",
+                              close_result.error().message());
+            }
         }
 
         co_return;
@@ -1553,7 +1585,12 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                     .status(HttpStatusCode::InternalServerError_500)
                     .body("500 Internal Server Error")
                     .buildMove();
-                co_await writer.send(error_response.toString());
+                auto send_result = co_await writer.send(error_response.toString());
+                if (!send_result) {
+                    HTTP_LOG_ERROR("[send] [open-error-fail]",
+                                   "error={}",
+                                   send_result.error().message());
+                }
                 co_return;
             }
 

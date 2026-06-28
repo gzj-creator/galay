@@ -77,7 +77,9 @@ public:
         return *this;
     }
     H2cClient build() const;
-    H2cClientConfig buildConfig() const { return m_config; }
+    H2cClientConfig buildConfig() const {
+        return Http2Conn::normalizeSettingsConfig(m_config);
+    }
 private:
     H2cClientConfig m_config;
 };
@@ -92,7 +94,10 @@ class H2cClient
 {
 public:
     H2cClient(const H2cClientConfig& config = H2cClientConfig(), size_t ring_buffer_size = 65536)
-        : m_config(config), m_ring_buffer_size(ring_buffer_size), m_port(0), m_upgraded(false) {}
+        : m_config(Http2Conn::normalizeSettingsConfig(config))
+        , m_ring_buffer_size(ring_buffer_size)
+        , m_port(0)
+        , m_upgraded(false) {}
 
     ~H2cClient() = default;
     H2cClient(const H2cClient&) = delete;
@@ -108,14 +113,8 @@ public:
         m_host = host;
         m_port = port;
         m_authority = m_host + ":" + std::to_string(m_port);
-        try {
-            m_socket = std::make_unique<TcpSocket>(IPType::IPV4);
-            m_ring_buffer = std::make_unique<RingBuffer>(m_ring_buffer_size);
-        } catch (...) {
-            m_socket.reset();
-            m_ring_buffer.reset();
-            co_return std::unexpected(IOError(kOpenFailed, errno));
-        }
+        m_socket = std::make_unique<TcpSocket>(IPType::IPV4);
+        m_ring_buffer = std::make_unique<RingBuffer>(m_ring_buffer_size);
         auto r = m_socket->option().handleNonBlock();
         if (!r) {
             m_socket.reset();
@@ -148,6 +147,7 @@ private:
     std::unique_ptr<TcpSocket> m_socket;
     std::unique_ptr<RingBuffer> m_ring_buffer;
     std::unique_ptr<Http2ConnImpl<TcpSocket>> m_conn;
+    std::optional<Http2SettingsFrame> m_pending_peer_settings;
     bool m_upgraded;
     std::expected<bool, Http2Error> m_upgrade_result{true};
     std::expected<bool, Http2Error> m_shutdown_result{true};
@@ -169,6 +169,7 @@ struct H2cUpgradeMachine {
             return;
         }
 
+        client.m_pending_peer_settings.reset();
         prepareUpgradeRequest(path);
         preparePrefaceAndSettings();
         prepareAck();
@@ -317,12 +318,13 @@ private:
     }
 
     void prepareUpgradeRequest(const std::string& path) {
-        Http2SettingsFrame settings_frame;
-        settings_frame.addSetting(Http2SettingsId::MaxConcurrentStreams, m_client->m_config.max_concurrent_streams);
-        settings_frame.addSetting(Http2SettingsId::InitialWindowSize, m_client->m_config.initial_window_size);
+        auto settings_frame = Http2Conn::makeSettingsFrameFromConfig(
+            m_client->m_config,
+            0);
         std::string serialized = settings_frame.serialize();
         std::string base64_settings = galay::utils::Base64Util::Base64Encode(
-            reinterpret_cast<const unsigned char*>(serialized.data() + 9), serialized.size() - 9);
+            reinterpret_cast<const unsigned char*>(serialized.data() + kHttp2FrameHeaderLength),
+            serialized.size() - kHttp2FrameHeaderLength);
         for (char& c : base64_settings) {
             if (c == '+') {
                 c = '-';
@@ -343,9 +345,9 @@ private:
 
     void preparePrefaceAndSettings() {
         std::string preface(kHttp2ConnectionPreface.begin(), kHttp2ConnectionPreface.end());
-        Http2SettingsFrame settings;
-        settings.addSetting(Http2SettingsId::MaxConcurrentStreams, m_client->m_config.max_concurrent_streams);
-        settings.addSetting(Http2SettingsId::InitialWindowSize, m_client->m_config.initial_window_size);
+        auto settings = Http2Conn::makeSettingsFrameFromConfig(
+            m_client->m_config,
+            0);
         settings.header().stream_id = 0;
         m_preface_settings_buf = std::move(preface);
         m_preface_settings_buf.append(settings.serialize());
@@ -457,7 +459,38 @@ private:
             setProtocolError("expected SETTINGS, got " + http2FrameTypeToString(frame_header.type));
             return true;
         }
+        std::string frame_bytes(frame_size, '\0');
+        size_t copied_frame = 0;
+        for (const auto& iov : read_iovecs) {
+            const size_t take_count = std::min(frame_size - copied_frame, iov.iov_len);
+            std::memcpy(frame_bytes.data() + copied_frame, iov.iov_base, take_count);
+            copied_frame += take_count;
+            if (copied_frame >= frame_size) {
+                break;
+            }
+        }
+        auto frame_result = Http2FrameParser::parseFrame(
+            reinterpret_cast<const uint8_t*>(frame_bytes.data()),
+            frame_bytes.size());
         m_ring_buffer->consume(frame_size);
+        if (!frame_result.has_value() || !frame_result.value() || !frame_result.value()->isSettings()) {
+            setProtocolError("invalid SETTINGS frame");
+            return true;
+        }
+        auto* settings = frame_result.value()->asSettings();
+        Http2ErrorCode error = Http2ErrorCode::NoError;
+        if (m_client->m_conn == nullptr) {
+            error = Http2Conn::validateSettingsFrame(*settings);
+            if (error == Http2ErrorCode::NoError) {
+                m_client->m_pending_peer_settings = *settings;
+            }
+        } else {
+            error = m_client->m_conn->applyPeerSettings(*settings);
+        }
+        if (error != Http2ErrorCode::NoError) {
+            setProtocolError("invalid peer SETTINGS");
+            return true;
+        }
         return true;
     }
 
@@ -603,17 +636,29 @@ private:
     bool m_inner_completed = false;
 };
 
-inline H2cClient H2cClientBuilder::build() const { return H2cClient(m_config); }
+inline H2cClient H2cClientBuilder::build() const {
+    return H2cClient(Http2Conn::normalizeSettingsConfig(m_config));
+}
 
 inline void H2cUpgradeAwaitable::discardTransport(H2cClient& client) {
     if (client.m_conn != nullptr) {
         if (client.m_conn->socket().handle().fd >= 0) {
-            ::close(client.m_conn->socket().handle().fd);
+            int close_result = ::close(client.m_conn->socket().handle().fd);
+            if (close_result != 0) {
+                client.m_upgrade_result = std::unexpected(Http2Error(
+                    Http2ErrorCode::ConnectError,
+                    "failed to close upgraded h2c connection fd"));
+            }
         }
         client.m_conn.reset();
     }
     if (client.m_socket != nullptr && client.m_socket->handle().fd >= 0) {
-        ::close(client.m_socket->handle().fd);
+        int close_result = ::close(client.m_socket->handle().fd);
+        if (close_result != 0) {
+            client.m_upgrade_result = std::unexpected(Http2Error(
+                Http2ErrorCode::ConnectError,
+                "failed to close h2c socket fd"));
+        }
     }
     client.m_socket.reset();
     client.m_ring_buffer.reset();
@@ -627,7 +672,14 @@ inline bool H2cUpgradeAwaitable::finalizeTransport(H2cClient& client, Scheduler*
 
     client.m_conn = std::make_unique<Http2ConnImpl<TcpSocket>>(
         std::move(*client.m_socket), std::move(*client.m_ring_buffer));
-    client.m_conn->localSettings().from(client.m_config);
+    auto local_settings = Http2Conn::makeSettingsFrameFromConfig(client.m_config, 0);
+    if (client.m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
+        return false;
+    }
+    if (client.m_pending_peer_settings.has_value() &&
+        client.m_conn->applyPeerSettings(*client.m_pending_peer_settings) != Http2ErrorCode::NoError) {
+        return false;
+    }
     client.m_conn->runtimeConfig().from(client.m_config);
     client.m_conn->markSettingsSent();
     client.m_conn->setIsClient(true);
@@ -647,6 +699,7 @@ inline bool H2cUpgradeAwaitable::finalizeTransport(H2cClient& client, Scheduler*
 
     client.m_socket.reset();
     client.m_ring_buffer.reset();
+    client.m_pending_peer_settings.reset();
     client.m_upgraded = true;
     client.m_upgrade_result = true;
     return true;

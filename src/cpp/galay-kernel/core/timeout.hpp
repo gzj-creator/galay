@@ -122,6 +122,14 @@ struct WithTimeout {
     WithTimeout(Awaitable& inner, std::chrono::milliseconds timeout)
         : m_inner(std::move(inner)), m_timer(std::make_shared<TimeoutTimer>(timeout)) {}
 
+    auto timeout(std::chrono::milliseconds t) && {
+        return WithTimeout<Awaitable>{std::move(m_inner), t};
+    }
+
+    auto timeout(std::chrono::milliseconds t) & {
+        return WithTimeout<Awaitable>{m_inner, t};
+    }
+
     bool await_ready() { return m_inner.await_ready(); }
 
     template<typename Promise>
@@ -134,8 +142,27 @@ struct WithTimeout {
         auto waker = Waker(handle);
         m_scheduler = waker.getScheduler();
         m_timer->setWaker(Waker(handle));
-        m_scheduler->addTimer(m_timer);
-        return true;
+        const bool timer_added = m_scheduler->addTimer(m_timer);
+        if (timer_added) {
+            return true;
+        }
+        if constexpr (requires(Awaitable& awaitable) {
+            awaitable.m_controller;
+        }) {
+            const bool removed_registration =
+                detail::removeTimedOutIORegistration(m_scheduler, m_inner.m_controller);
+            if (!removed_registration) {
+                m_timer->cancel();
+            }
+        }
+        if constexpr (requires(Awaitable& awaitable) {
+            awaitable.markTimeout();
+        }) {
+            m_inner.markTimeout();
+        } else if constexpr (requires { m_inner.m_result; }) {
+            m_inner.m_result = std::unexpected(IOError(kTimeout, 0));
+        }
+        return false;
     }
 
     auto await_resume() -> decltype(m_inner.await_resume()) {
@@ -148,7 +175,11 @@ struct WithTimeout {
             if constexpr (requires(Awaitable& awaitable) {
                 awaitable.m_controller;
             }) {
-                (void)detail::removeTimedOutIORegistration(m_scheduler, m_inner.m_controller);
+                const bool removed_registration =
+                    detail::removeTimedOutIORegistration(m_scheduler, m_inner.m_controller);
+                if (!removed_registration) {
+                    m_timer->cancel();
+                }
             }
             if constexpr (requires(Awaitable& awaitable) {
                 awaitable.markTimeout();

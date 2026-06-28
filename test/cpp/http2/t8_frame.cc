@@ -153,8 +153,8 @@ int main() {
         TcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
-        // Get peer max_frame_size (default is 16384)
-        uint32_t max_size = conn.peerSettings().max_frame_size;
+        // Inbound frame parsing must obey local advertised max_frame_size.
+        uint32_t max_size = conn.localSettings().max_frame_size;
         assert(max_size == kDefaultMaxFrameSize && "Default max_frame_size should be 16384");
 
         // Build a frame with length = max_size + 1 (oversize)

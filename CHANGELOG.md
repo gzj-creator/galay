@@ -13,6 +13,8 @@
 
 ### Added
 
+- 新增 HTTP/2 production hardening 覆盖：补齐 SETTINGS 校验、h2c HTTP2-Settings 解码、peer/local settings 应用、HEADERS/CONTINUATION 与 DATA outbound limit 测试，覆盖 `MAX_FRAME_SIZE`、`MAX_HEADER_LIST_SIZE`、ACK payload、非 0 stream SETTINGS 和 decoder header-list limit。
+- 新增 C async API 补齐计划文档 `docs/c/modules/async_api_completion_plan.md`，明确当前非 kernel C target/async ABI 缺口，并按 HTTP/WS/HTTP2、Redis/MySQL/Mongo、Etcd/MCP/RPC、SSL/tracing 分阶段实现。
 - 新增 CMake 守卫 `config.kernel_internal_includes_relative`：递归扫描 `src/cpp/galay-kernel` 全部 `.cc/.h/.hpp/.inl` 源码，禁止内部实现通过 `galay/cpp/galay-kernel/` 公共 include 前缀引用自身头文件，强制改用相对路径。
 - 新增 C Kernel TCP/UDP/AsyncFile/FileWatcher timeout C ABI：补齐 connect/accept/accept_loop/recv/recv_loop/send/send_loop/close、recvfrom/sendto loop、AsyncFile read/write/close 与 FileWatcher watch 的毫秒级 timeout API，并新增对应 C 回归测试、timeout 示例、timeout smoke 和混合 API pressure benchmark。
 - 新增 HTTP/1.1 route-mode 生产策略与边界测试，覆盖请求头/URI/body 限制、Content-Length/Transfer-Encoding 冲突校验、keep-alive 生命周期、请求/响应超时和 sendfile 写超时路径。
@@ -33,6 +35,7 @@
 
 ### Changed
 
+- HTTP/2 server/client/h2c 路径移除异常兜底，错误通过返回值、GOAWAY/RST_STREAM 或日志可观测路径传播；HTTP close 清理路径改为 inline 处理 close 返回值，避免 coroutine close helper 过度拆分。
 - C Kernel TCP async C ABI 破坏式迁移为 direct C coroutine 形态：`tcp_socket_c` 直接提供 `C_IOResult` 返回的 accept/connect/recv/send/close 接口，移除 runtime callback/spawn 桥接路径，并同步更新 TCP C 测试、示例和 benchmark。
 - HTTP/1.1 route-mode 接入 `HttpServerPolicy`，将 reader/writer timeout、request limits、keep-alive idle timeout 和 response write timeout 统一由 server/router 策略驱动。
 - C Kernel async/concurrency C ABI 统一迁移到 direct coroutine 形态：测试、示例和 benchmark 不再依赖 callback/spawn wrapper，改为在 C coroutine 内直接调用 C async API 并显式处理返回值。
@@ -63,6 +66,8 @@
 
 ### Fixed
 
+- 修复 kernel timeout/C coroutine 边界：`WithTimeout` 处理 timer 注册失败返回值并立即传播错误，C TCP bridge 在 timeout 服务不可用时清理 awaitable/user_data 后返回错误，`AsyncWaiter`/`AsyncMutex` await_suspend 路径满足最终挂起状态发布约束。
+- 修复 etcd t13/t14 cluster integration CTest 注册遗漏，未启用 `GALAY_IT_ENABLE` 时按 `SKIP_RETURN_CODE` 统计为 skipped 而不是失败。
 - 修复 direct C coroutine TCP bridge 在 timeout timer 注册失败路径中未撤销 reactor registration 的生命周期问题，避免返回错误后后端仍持有栈上 awaitable 或悬空 controller；新增 C++ 回归测试覆盖 kqueue/epoll 清理与 socket 复用。
 - 修复 HTTP writer timeout 错误码映射为 `kSendTimeOut`，并加固 HTTP 静态文件与代理路径的返回值处理，避免 close/文件系统错误被静默丢弃。
 - 修复 C coroutine bridge 清理路径未完整传播返回值的问题，并加固 UDP bridge `user_data` 完成读取竞态，确保清理失败可合并为可观测错误而不是被静默丢弃。

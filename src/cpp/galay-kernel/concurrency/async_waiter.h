@@ -310,7 +310,20 @@ inline bool AsyncWaiterAwaitable<void>::await_ready() const noexcept {
 
 template <typename Promise>
 inline bool AsyncWaiterAwaitable<void>::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
-    return await_suspend(Waker(handle));
+    auto* waiter = m_waiter;
+    waiter->m_waker = Waker(handle);
+    if (waiter->m_ready.load(std::memory_order_acquire)) {
+        return false;
+    }
+
+    AsyncWaiterState expected = AsyncWaiterState::kEmpty;
+    if (waiter->m_state.compare_exchange_strong(expected,
+                                                AsyncWaiterState::kWaiting,
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire)) {
+        return true;
+    }
+    return false;
 }
 
 inline bool AsyncWaiterAwaitable<void>::await_suspend(Waker waker) noexcept {

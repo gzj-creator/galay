@@ -228,7 +228,12 @@ inline bool AsyncMutexAwaitable::await_ready() const noexcept {
 
 template <typename Promise>
 inline bool AsyncMutexAwaitable::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
-    return await_suspend(Waker(handle));
+    auto* mutex = m_mutex;
+    m_waiter = std::make_shared<AsyncMutexWaiter>(Waker(handle));
+    auto waiter = m_waiter;
+    mutex->m_waiters.enqueue(std::move(waiter));
+    mutex->wakeNextWaiterIfUnlocked();
+    return true;
 }
 
 inline bool AsyncMutexAwaitable::await_suspend(Waker waker) noexcept {

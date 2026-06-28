@@ -39,12 +39,18 @@ public:
                                                                         size_t header_block_length,
                                                                         bool end_stream = false,
                                                                         bool end_headers = true);
+    static std::array<char, kHttp2FrameHeaderLength> continuationHeaderBytes(uint32_t stream_id,
+                                                                             size_t header_block_length,
+                                                                             bool end_headers = true);
 
     static std::string dataBytes(uint32_t stream_id, std::string_view payload, bool end_stream = false);
     static std::string headersBytes(uint32_t stream_id,
                                     std::string_view header_block,
                                     bool end_stream = false,
                                     bool end_headers = true);
+    static std::string continuationBytes(uint32_t stream_id,
+                                         std::string_view header_block,
+                                         bool end_headers = true);
     static std::string rstStreamBytes(uint32_t stream_id, Http2ErrorCode error);
 };
 

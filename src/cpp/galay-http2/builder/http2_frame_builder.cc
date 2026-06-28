@@ -68,6 +68,19 @@ std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::headersHeaderBytes(
         Http2FrameType::Headers, flags, stream_id, static_cast<uint32_t>(header_block_length));
 }
 
+std::array<char, kHttp2FrameHeaderLength> Http2FrameBuilder::continuationHeaderBytes(
+    uint32_t stream_id,
+    size_t header_block_length,
+    bool end_headers)
+{
+    uint8_t flags = 0;
+    if (end_headers) {
+        flags |= Http2FrameFlags::kEndHeaders;
+    }
+    return buildH2FrameHeaderBytes(
+        Http2FrameType::Continuation, flags, stream_id, static_cast<uint32_t>(header_block_length));
+}
+
 std::string Http2FrameBuilder::dataBytes(uint32_t stream_id,
                                          std::string_view payload,
                                          bool end_stream)
@@ -110,6 +123,17 @@ std::string Http2FrameBuilder::headersBytes(uint32_t stream_id,
         flags |= Http2FrameFlags::kEndHeaders;
     }
     return buildH2FrameBytes(Http2FrameType::Headers, flags, stream_id, header_block);
+}
+
+std::string Http2FrameBuilder::continuationBytes(uint32_t stream_id,
+                                                 std::string_view header_block,
+                                                 bool end_headers)
+{
+    uint8_t flags = 0;
+    if (end_headers) {
+        flags |= Http2FrameFlags::kEndHeaders;
+    }
+    return buildH2FrameBytes(Http2FrameType::Continuation, flags, stream_id, header_block);
 }
 
 std::string Http2FrameBuilder::rstStreamBytes(uint32_t stream_id, Http2ErrorCode error)

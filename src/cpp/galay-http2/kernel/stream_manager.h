@@ -851,15 +851,7 @@ private:
     }
 
     Task<void> writerLoopThenNotify(AsyncWaiter<void>* done) {
-        try {
-            co_await writerLoop();
-        } catch (...) {
-            if (done) {
-                done->notify();
-            }
-            closeActiveStreamQueue();
-            co_return;
-        }
+        co_await writerLoop();
         if (done) {
             done->notify();
         }
@@ -867,15 +859,7 @@ private:
     }
 
     Task<void> monitorLoopThenNotify(AsyncWaiter<void>* done) {
-        try {
-            co_await monitorLoop();
-        } catch (...) {
-            if (done) {
-                done->notify();
-            }
-            closeActiveStreamQueue();
-            co_return;
-        }
+        co_await monitorLoop();
         if (done) {
             done->notify();
         }
@@ -1594,13 +1578,18 @@ private:
         switch (frame->type()) {
             case Http2FrameType::Settings: {
                 auto* settings = frame->asSettings();
+                auto err = Http2ConnImpl<SocketType>::validateSettingsFrame(*settings);
+                if (err != Http2ErrorCode::NoError) {
+                    enqueueGoawayAction(err);
+                    return;
+                }
                 if (settings->isAck()) {
                     m_conn.markSettingsAckReceived();
                 } else {
                     auto next_settings = m_conn.peerSettings();
                     const uint32_t old_initial_window =
                         m_conn.peerSettings().initial_window_size;
-                    auto err = next_settings.applySettings(*settings);
+                    err = next_settings.applySettings(*settings);
                     if (err != Http2ErrorCode::NoError) {
                         enqueueGoawayAction(err);
                         return;
@@ -1628,18 +1617,24 @@ private:
                         return;
                     }
 
-                    m_conn.peerSettings() = next_settings;
-                    if (initial_window_delta != 0) {
-                        m_conn.forEachStream([&](uint32_t, Http2Stream::ptr& stream) {
-                            if (!stream) {
-                                return;
-                            }
-                            stream->adjustSendWindow(static_cast<int32_t>(initial_window_delta));
-                            stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
-                            stream->flushPendingData();
-                        });
+                    err = m_conn.applyPeerSettings(*settings);
+                    if (err != Http2ErrorCode::NoError) {
+                        enqueueGoawayAction(err);
+                        return;
                     }
-                    m_conn.encoder().setMaxTableSize(m_conn.peerSettings().header_table_size);
+                    m_conn.forEachStream([&](uint32_t, Http2Stream::ptr& stream) {
+                        if (!stream) {
+                            return;
+                        }
+                        if (initial_window_delta != 0) {
+                            stream->adjustSendWindow(static_cast<int32_t>(initial_window_delta));
+                        }
+                        stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
+                        stream->m_max_header_list_size =
+                            m_conn.peerSettings().max_header_list_size;
+                        const bool made_progress = stream->flushPendingData();
+                        // made_progress only reports whether queued DATA was flushed now.
+                    });
 
                     Http2SettingsFrame ack;
                     ack.setAck(true);
@@ -1651,7 +1646,7 @@ private:
             case Http2FrameType::Ping: {
                 auto* ping = frame->asPing();
                 if (frame->streamId() != 0) {
-                    enqueueGoaway(Http2ErrorCode::ProtocolError);
+                    enqueueGoawayAction(Http2ErrorCode::ProtocolError);
                     return;
                 }
                 if (!ping->isAck()) {
@@ -1695,7 +1690,7 @@ private:
                 auto* wu = frame->asWindowUpdate();
                 uint32_t increment = wu->windowSizeIncrement();
                 if (increment == 0) {
-                    enqueueGoaway(Http2ErrorCode::ProtocolError);
+                    enqueueGoawayAction(Http2ErrorCode::ProtocolError);
                     return;
                 }
                 if (static_cast<int64_t>(m_conn.connSendWindow()) + increment > kMaxStreamId) {
@@ -1708,7 +1703,10 @@ private:
                         return;
                     }
                     stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
-                    stream->flushPendingData();
+                    stream->m_max_header_list_size =
+                        m_conn.peerSettings().max_header_list_size;
+                    const bool made_progress = stream->flushPendingData();
+                    // made_progress only reports whether queued DATA was flushed now.
                 });
                 break;
             }
@@ -2628,7 +2626,9 @@ private:
 
         stream->adjustSendWindow(increment);
         stream->m_max_frame_size = m_conn.peerSettings().max_frame_size;
-        stream->flushPendingData();
+        stream->m_max_header_list_size = m_conn.peerSettings().max_header_list_size;
+        const bool made_progress = stream->flushPendingData();
+        // made_progress only reports whether queued DATA was flushed now.
         markStreamActive(stream, Http2StreamEvent::WindowUpdated);
         pushStreamFrameIfNeeded(stream, std::move(frame));
     }
@@ -2858,7 +2858,8 @@ private:
                          encoder,
                          decoder,
                          &m_conn.m_conn_send_window,
-                         m_conn.peerSettings().max_frame_size);
+                         m_conn.peerSettings().max_frame_size,
+                         m_conn.peerSettings().max_header_list_size);
         if (m_active_conn_mode && !m_conn.isClient()) {
             stream->setRetireCallback([this](uint32_t stream_id) {
                 enqueueRetireStream(stream_id);

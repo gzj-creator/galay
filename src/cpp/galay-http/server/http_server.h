@@ -28,7 +28,6 @@
 #include <functional>
 #include <cstdint>
 #include <optional>
-#include <string_view>
 #include <vector>
 #if defined(__linux__)
 #include <pthread.h>
@@ -45,18 +44,6 @@ namespace galay::http
 
 using namespace galay::async;
 using namespace galay::kernel;
-
-template<typename Closeable>
-Task<void> closeWithLog(Closeable& closeable, std::string_view context) {
-    auto close_result = co_await closeable.close();
-    if (!close_result) {
-        HTTP_LOG_WARN("[socket] [close-fail]",
-                      "context={} error={}",
-                      context,
-                      close_result.error().message());
-    }
-    co_return;
-}
 
 // 前向声明
 template<typename SocketType>
@@ -312,7 +299,12 @@ public:
                 }
             }
 
-            co_await closeWithLog(conn, "route-connection");
+            auto close_result = co_await conn.close();
+            if (!close_result) {
+                HTTP_LOG_WARN("[socket] [close-fail]",
+                              "context=route-connection error={}",
+                              close_result.error().message());
+            }
             co_return;
         };
 
@@ -716,7 +708,12 @@ protected:
             auto continuing_result = co_await this->runAcceptPlugins(client_socket, client_host);
             bool continuing = continuing_result.value_or(false);
             if (!continuing) {
-                co_await closeWithLog(client_socket, "ssl-accept-plugin-stop");
+                auto close_result = co_await client_socket.close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[socket] [close-fail]",
+                                  "context=ssl-accept-plugin-stop error={}",
+                                  close_result.error().message());
+                }
                 continue;
             }
 
@@ -728,7 +725,12 @@ protected:
 
             // 阶段 13：投递 TLS 连接处理任务，投递失败时关闭客户端 socket
             if (!scheduleTask(target_scheduler, handleSslConnection(std::move(client_socket)))) {
-                co_await closeWithLog(client_socket, "ssl-schedule-fail");
+                auto close_result = co_await client_socket.close();
+                if (!close_result) {
+                    HTTP_LOG_WARN("[socket] [close-fail]",
+                                  "context=ssl-schedule-fail error={}",
+                                  close_result.error().message());
+                }
             }
         }
 
@@ -740,7 +742,12 @@ private:
         auto handshake_result = co_await socket.handshake();
         if (!handshake_result) {
             HTTP_LOG_WARN("[ssl] [handshake] [fail]", "error={}", handshake_result.error().message());
-            co_await closeWithLog(socket, "ssl-handshake-fail");
+            auto close_result = co_await socket.close();
+            if (!close_result) {
+                HTTP_LOG_WARN("[socket] [close-fail]",
+                              "context=ssl-handshake-fail error={}",
+                              close_result.error().message());
+            }
             co_return;
         }
 

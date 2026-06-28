@@ -104,7 +104,9 @@ public:
     H2ClientBuilder& verifyPeer(bool v)               { m_config.verify_peer = v; return *this; }
     H2ClientBuilder& caPath(std::string v)            { m_config.ca_path = std::move(v); return *this; }
     H2Client build() const;
-    H2ClientConfig buildConfig() const                { return m_config; }
+    H2ClientConfig buildConfig() const {
+        return Http2Conn::normalizeSettingsConfig(m_config);
+    }
 
 private:
     H2ClientConfig m_config;
@@ -413,15 +415,10 @@ private:
     }
 
     void preparePreface() {
-        Http2Settings local_settings;
-        local_settings.max_concurrent_streams = m_client->m_config.max_concurrent_streams;
-        local_settings.initial_window_size = m_client->m_config.initial_window_size;
-        local_settings.max_frame_size = m_client->m_config.max_frame_size;
-        local_settings.max_header_list_size = m_client->m_config.max_header_list_size;
-        local_settings.enable_push = 0;
-
         m_preface.assign(kHttp2ConnectionPreface.begin(), kHttp2ConnectionPreface.end());
-        auto settings = local_settings.toFrame();
+        auto settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+            m_client->m_config,
+            0);
         settings.header().stream_id = 0;
         m_preface.append(settings.serialize());
     }
@@ -467,7 +464,10 @@ public:
 private:
     static void discardSocket(std::unique_ptr<galay::ssl::SslSocket>& socket) {
         if (socket && socket->handle().fd >= 0) {
-            ::close(socket->handle().fd);
+            int close_result = ::close(socket->handle().fd);
+            if (close_result != 0) {
+                HTTP_LOG_WARN("[h2-client] [socket-close-fail]", "discard socket");
+            }
         }
         socket.reset();
     }
@@ -475,7 +475,10 @@ private:
     static void discardTransport(H2Client& client) {
         if (client.m_conn) {
             if (client.m_conn->socket().handle().fd >= 0) {
-                ::close(client.m_conn->socket().handle().fd);
+                int close_result = ::close(client.m_conn->socket().handle().fd);
+                if (close_result != 0) {
+                    client.m_close_result = std::unexpected(Http2ErrorCode::ConnectError);
+                }
             }
             client.m_conn.reset();
         }
@@ -489,20 +492,17 @@ private:
             return false;
         }
 
-        try {
-            client.m_conn =
-                std::make_unique<Http2ConnImpl<galay::ssl::SslSocket>>(std::move(*client.m_socket));
-        } catch (...) {
-            client.m_socket.reset();
-            return false;
-        }
+        client.m_conn =
+            std::make_unique<Http2ConnImpl<galay::ssl::SslSocket>>(std::move(*client.m_socket));
         client.m_socket.reset();
         client.m_conn->setIsClient(true);
-        client.m_conn->localSettings().max_concurrent_streams = client.m_config.max_concurrent_streams;
-        client.m_conn->localSettings().initial_window_size = client.m_config.initial_window_size;
-        client.m_conn->localSettings().max_frame_size = client.m_config.max_frame_size;
-        client.m_conn->localSettings().max_header_list_size = client.m_config.max_header_list_size;
-        client.m_conn->localSettings().enable_push = 0;
+        auto local_settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+            client.m_config,
+            0);
+        if (client.m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
+            client.m_conn.reset();
+            return false;
+        }
         client.m_conn->markSettingsSent();
         client.m_connected = true;
         client.m_connect_result = true;
@@ -525,13 +525,7 @@ public:
         m_client->m_connect_result = std::unexpected(Http2ErrorCode::ConnectError);
         m_client->m_close_result = true;
         m_client->m_conn.reset();
-        try {
-            m_client->m_socket = std::make_unique<galay::ssl::SslSocket>(&m_client->m_ssl_ctx);
-        } catch (...) {
-            discardTransport(*m_client);
-            m_ready = true;
-            return;
-        }
+        m_client->m_socket = std::make_unique<galay::ssl::SslSocket>(&m_client->m_ssl_ctx);
         m_controller = m_client->m_socket->controller();
 
         auto nonblock_result = m_client->m_socket->option().handleNonBlock();
@@ -919,13 +913,11 @@ private:
                     if (settings->isAck()) {
                         m_client->m_conn->markSettingsAckReceived();
                     } else {
-                        auto error = m_client->m_conn->peerSettings().applySettings(*settings);
+                        auto error = m_client->m_conn->applyPeerSettings(*settings);
                         if (error != Http2ErrorCode::NoError) {
                             m_error = error;
                             return true;
                         }
-                        m_client->m_conn->encoder().setMaxTableSize(
-                            m_client->m_conn->peerSettings().header_table_size);
                         scheduleSettingsAck();
                     }
                     continue;
@@ -1028,7 +1020,7 @@ inline auto buildRequestOperation(H2Client& client, Http2Request&& request) {
 } // namespace detail
 
 inline H2Client::H2Client(const H2ClientConfig& config)
-    : m_config(config)
+    : m_config(Http2ConnImpl<galay::ssl::SslSocket>::normalizeSettingsConfig(config))
     , m_connected(false)
     , m_next_stream_id(1)
     , m_ssl_ctx(galay::ssl::SslMethod::TLS_Client)
@@ -1050,7 +1042,10 @@ inline H2Client::H2Client(const H2ClientConfig& config)
 inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uint16_t port) {
     const auto discard_socket = [](std::unique_ptr<galay::ssl::SslSocket>& socket) {
         if (socket && socket->handle().fd >= 0) {
-            ::close(socket->handle().fd);
+            int close_result = ::close(socket->handle().fd);
+            if (close_result != 0) {
+                HTTP_LOG_WARN("[h2-client] [socket-close-fail]", "discard socket");
+            }
         }
         socket.reset();
     };
@@ -1058,7 +1053,10 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
     const auto discard_transport = [this, &discard_socket]() {
         if (m_conn) {
             if (m_conn->socket().handle().fd >= 0) {
-                ::close(m_conn->socket().handle().fd);
+                int close_result = ::close(m_conn->socket().handle().fd);
+                if (close_result != 0) {
+                    m_close_result = std::unexpected(Http2ErrorCode::ConnectError);
+                }
             }
             m_conn.reset();
         }
@@ -1072,19 +1070,16 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
             return false;
         }
 
-        try {
-            m_conn = std::make_unique<Http2ConnImpl<galay::ssl::SslSocket>>(std::move(*m_socket));
-        } catch (...) {
-            m_socket.reset();
-            return false;
-        }
+        m_conn = std::make_unique<Http2ConnImpl<galay::ssl::SslSocket>>(std::move(*m_socket));
         m_socket.reset();
         m_conn->setIsClient(true);
-        m_conn->localSettings().max_concurrent_streams = m_config.max_concurrent_streams;
-        m_conn->localSettings().initial_window_size = m_config.initial_window_size;
-        m_conn->localSettings().max_frame_size = m_config.max_frame_size;
-        m_conn->localSettings().max_header_list_size = m_config.max_header_list_size;
-        m_conn->localSettings().enable_push = 0;
+        auto local_settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+            m_config,
+            0);
+        if (m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
+            m_conn.reset();
+            return false;
+        }
         m_conn->markSettingsSent();
         m_connected = true;
         m_connect_result = true;
@@ -1100,12 +1095,7 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
     m_connect_result = std::unexpected(Http2ErrorCode::ConnectError);
     m_close_result = true;
     m_conn.reset();
-    try {
-        m_socket = std::make_unique<galay::ssl::SslSocket>(&m_ssl_ctx);
-    } catch (...) {
-        discard_transport();
-        co_return std::unexpected(Http2ErrorCode::ConnectError);
-    }
+    m_socket = std::make_unique<galay::ssl::SslSocket>(&m_ssl_ctx);
 
     co_await detail::CaptureSchedulerAwaitable(&m_scheduler);
     if (m_scheduler == nullptr) {
@@ -1156,15 +1146,10 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
         co_return std::unexpected(Http2ErrorCode::ConnectError);
     }
 
-    Http2Settings local_settings;
-    local_settings.max_concurrent_streams = m_config.max_concurrent_streams;
-    local_settings.initial_window_size = m_config.initial_window_size;
-    local_settings.max_frame_size = m_config.max_frame_size;
-    local_settings.max_header_list_size = m_config.max_header_list_size;
-    local_settings.enable_push = 0;
-
     std::string preface(kHttp2ConnectionPreface.begin(), kHttp2ConnectionPreface.end());
-    auto settings = local_settings.toFrame();
+    auto settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+        m_config,
+        0);
     settings.header().stream_id = 0;
     preface.append(settings.serialize());
 
@@ -1281,11 +1266,15 @@ inline Task<std::expected<bool, Http2ErrorCode>> H2Client::close() {
             co_await manager->shutdown(Http2ErrorCode::NoError);
         } else {
             auto close_result = co_await m_conn->close();
-            (void)close_result;
+            if (!close_result) {
+                m_close_result = std::unexpected(Http2ErrorCode::ConnectError);
+            }
         }
     } else if (m_socket) {
         auto close_result = co_await m_socket->close();
-        (void)close_result;
+        if (!close_result) {
+            m_close_result = std::unexpected(Http2ErrorCode::ConnectError);
+        }
     }
 
     m_conn.reset();
@@ -1293,7 +1282,9 @@ inline Task<std::expected<bool, Http2ErrorCode>> H2Client::close() {
     co_return m_close_result;
 }
 
-inline H2Client H2ClientBuilder::build() const { return H2Client(m_config); }
+inline H2Client H2ClientBuilder::build() const {
+    return H2Client(Http2Conn::normalizeSettingsConfig(m_config));
+}
 
 #endif // GALAY_SSL_FEATURE_ENABLED
 
