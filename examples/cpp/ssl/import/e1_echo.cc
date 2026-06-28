@@ -27,7 +27,7 @@ using IOSchedulerType = galay::kernel::KqueueScheduler;
 #include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using IOSchedulerType = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
-#include <galay/cpp/galay-kernel/core/io_uring_scheduler.h>
+#include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 using IOSchedulerType = galay::kernel::IOUringScheduler;
 #endif
 

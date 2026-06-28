@@ -124,7 +124,12 @@ int main()
     const auto project_root = projectRoot();
     const auto root = cppRoot();
     const std::vector<std::filesystem::path> source_paths = {
-        project_root / "src" / "c" / "galay-kernel" / "galay_kernel.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "core-c" / "runtime_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "tcp_socket_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "udp_socket_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_file_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "aio_file_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "file_watcher_c.cc",
         root / "galay-kernel" / "async" / "tcp_socket.h",
         root / "galay-kernel" / "async" / "tcp_socket.cc",
         root / "galay-kernel" / "async" / "udp_socket.h",

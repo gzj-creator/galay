@@ -21,7 +21,8 @@
 namespace
 {
 
-#if defined(__APPLE__) && defined(__aarch64__)
+#if (defined(__APPLE__) && defined(__aarch64__)) || \
+    (defined(__linux__) && defined(__x86_64__))
 #define GALAY_C_CORO_HAS_CONTEXT 1
 #else
 #define GALAY_C_CORO_HAS_CONTEXT 0
@@ -36,6 +37,7 @@ struct C_CoroResumeTokenState {
 };
 
 struct C_CoroMachineContext {
+#if defined(__APPLE__) && defined(__aarch64__)
     uint64_t x19 = 0;
     uint64_t x20 = 0;
     uint64_t x21 = 0;
@@ -57,9 +59,25 @@ struct C_CoroMachineContext {
     uint64_t d13 = 0;
     uint64_t d14 = 0;
     uint64_t d15 = 0;
+#elif defined(__linux__) && defined(__x86_64__)
+    uint64_t rbx = 0;
+    uint64_t rbp = 0;
+    uint64_t r12 = 0;
+    uint64_t r13 = 0;
+    uint64_t r14 = 0;
+    uint64_t r15 = 0;
+    uint64_t rip = 0;
+    uint64_t rsp = 0;
+#else
+    uint64_t reserved = 0;
+#endif
 };
 
+#if defined(__APPLE__) && defined(__aarch64__)
 static_assert(sizeof(C_CoroMachineContext) == 168);
+#elif defined(__linux__) && defined(__x86_64__)
+static_assert(sizeof(C_CoroMachineContext) == 64);
+#endif
 
 extern "C" void galay_coro_context_switch(C_CoroMachineContext* from,
                                            C_CoroMachineContext* to);
@@ -217,9 +235,15 @@ bool init_context(C_CoroTaskInternal* task)
     auto stack_top = reinterpret_cast<uintptr_t>(
         static_cast<unsigned char*>(task->stack_usable) + task->stack_usable_size);
     stack_top &= ~static_cast<uintptr_t>(0x0f);
+#if defined(__APPLE__) && defined(__aarch64__)
     task->context.sp = stack_top;
     task->context.pc = reinterpret_cast<uintptr_t>(&galay_coro_context_entry);
     task->context.x19 = reinterpret_cast<uintptr_t>(task);
+#elif defined(__linux__) && defined(__x86_64__)
+    task->context.rsp = stack_top;
+    task->context.rip = reinterpret_cast<uintptr_t>(&galay_coro_context_entry);
+    task->context.r12 = reinterpret_cast<uintptr_t>(task);
+#endif
     return true;
 #else
     (void)task;
@@ -608,6 +632,11 @@ detail::ResumeToken makeResumeToken(galay_coro_task_t task) noexcept
 C_CoroTaskInternal* currentTask() noexcept
 {
     return t_current_task;
+}
+
+Scheduler* currentTaskOwnerScheduler() noexcept
+{
+    return t_current_task != nullptr ? t_current_task->owner : nullptr;
 }
 
 void retainTask(C_CoroTaskInternal* task) noexcept

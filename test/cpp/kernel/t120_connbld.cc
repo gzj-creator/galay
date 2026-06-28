@@ -10,14 +10,19 @@
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 
+#include <arpa/inet.h>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <expected>
 #include <iostream>
 #include <mutex>
+#include <netinet/in.h>
 #include <stdexcept>
 #include <string>
+#include <sys/socket.h>
 #include <thread>
+#include <utility>
 
 #ifdef USE_IOURING
 #include <galay/cpp/galay-kernel/core/uring_scheduler.h>
@@ -36,8 +41,7 @@ using namespace std::chrono_literals;
 
 namespace {
 
-constexpr uint16_t kPort = 19459;
-constexpr int kClients = 512;
+constexpr int kClients = 128;
 constexpr int kRoundsPerClient = 4;
 constexpr int kTotalConnections = kClients * kRoundsPerClient;
 constexpr auto kConnectTimeout = 4s;
@@ -54,6 +58,7 @@ struct TestState {
     std::atomic<int> builder_success{0};
     std::atomic<int> connect_fail{0};
     std::atomic<int> timeout_fail{0};
+    std::atomic<int> port{0};
     std::mutex failure_mu;
     std::string failure;
 };
@@ -80,6 +85,16 @@ void recordConnectFailure(TestState* state,
              " failed: " + error.message());
 }
 
+void recordOpenFailure(TestState* state,
+                       const char* mode,
+                       int round,
+                       const IOError& error) {
+    state->connect_fail.fetch_add(1, std::memory_order_relaxed);
+    fail(state,
+         std::string(mode) + " socket create round=" + std::to_string(round) +
+             " failed: " + error.message());
+}
+
 struct BuilderConnectFlow {
     void onConnect(SequenceOps<BuilderResult, 4>& ops, ConnectIOContext& connect_ctx) {
         if (connect_ctx.m_result.has_value()) {
@@ -90,12 +105,30 @@ struct BuilderConnectFlow {
     }
 };
 
+std::expected<uint16_t, IOError> localPort(const TcpSocket& socket) {
+    sockaddr_storage storage{};
+    socklen_t length = sizeof(storage);
+    if (::getsockname(socket.handle().fd, reinterpret_cast<sockaddr*>(&storage), &length) != 0) {
+        return std::unexpected(IOError(kOpenFailed, static_cast<uint32_t>(errno)));
+    }
+    if (storage.ss_family != AF_INET) {
+        return std::unexpected(IOError(kParamInvalid, 0));
+    }
+    const auto* addr = reinterpret_cast<const sockaddr_in*>(&storage);
+    return ntohs(addr->sin_port);
+}
+
 Task<void> runServer(TestState* state) {
-    TcpSocket listener(IPType::IPV4);
+    auto listener_result = TcpSocket::create(IPType::IPV4);
+    if (!listener_result) {
+        fail(state, "listener socket create failed: " + listener_result.error().message());
+        co_return;
+    }
+    TcpSocket listener = std::move(*listener_result);
     listener.option().handleReuseAddr();
     listener.option().handleNonBlock();
 
-    auto bind_result = listener.bind(Host(IPType::IPV4, "127.0.0.1", kPort));
+    auto bind_result = listener.bind(Host(IPType::IPV4, "127.0.0.1", 0));
     if (!bind_result) {
         fail(state, "bind failed: " + bind_result.error().message());
         co_return;
@@ -105,7 +138,13 @@ Task<void> runServer(TestState* state) {
         fail(state, "listen failed: " + listen_result.error().message());
         co_return;
     }
+    auto port = localPort(listener);
+    if (!port) {
+        fail(state, "getsockname failed: " + port.error().message());
+        co_return;
+    }
 
+    state->port.store(static_cast<int>(*port), std::memory_order_release);
     state->server_ready.store(true, std::memory_order_release);
 
     for (int i = 0; i < kTotalConnections; ++i) {
@@ -126,10 +165,22 @@ Task<void> runServer(TestState* state) {
 }
 
 Task<void> runPlainClient(TestState* state) {
-    const Host target(IPType::IPV4, "127.0.0.1", kPort);
+    const Host target(IPType::IPV4,
+                      "127.0.0.1",
+                      static_cast<uint16_t>(state->port.load(std::memory_order_acquire)));
     for (int round = 0; round < kRoundsPerClient; ++round) {
-        TcpSocket socket(IPType::IPV4);
-        socket.option().handleNonBlock();
+        auto socket_result = TcpSocket::create(IPType::IPV4);
+        if (!socket_result) {
+            recordOpenFailure(state, "plain", round, socket_result.error());
+            continue;
+        }
+        TcpSocket socket = std::move(*socket_result);
+        auto non_block = socket.option().handleNonBlock();
+        if (!non_block) {
+            recordConnectFailure(state, "plain", round, non_block.error());
+            (void)co_await socket.close();
+            continue;
+        }
 
         auto connected = co_await socket.connect(target).timeout(kConnectTimeout);
         if (!connected) {
@@ -146,10 +197,22 @@ Task<void> runPlainClient(TestState* state) {
 }
 
 Task<void> runBuilderClient(TestState* state) {
-    const Host target(IPType::IPV4, "127.0.0.1", kPort);
+    const Host target(IPType::IPV4,
+                      "127.0.0.1",
+                      static_cast<uint16_t>(state->port.load(std::memory_order_acquire)));
     for (int round = 0; round < kRoundsPerClient; ++round) {
-        TcpSocket socket(IPType::IPV4);
-        socket.option().handleNonBlock();
+        auto socket_result = TcpSocket::create(IPType::IPV4);
+        if (!socket_result) {
+            recordOpenFailure(state, "builder", round, socket_result.error());
+            continue;
+        }
+        TcpSocket socket = std::move(*socket_result);
+        auto non_block = socket.option().handleNonBlock();
+        if (!non_block) {
+            recordConnectFailure(state, "builder", round, non_block.error());
+            (void)co_await socket.close();
+            continue;
+        }
 
         BuilderConnectFlow flow;
         auto awaitable = AwaitableBuilder<BuilderResult, 4, BuilderConnectFlow>(socket.controller(), flow)

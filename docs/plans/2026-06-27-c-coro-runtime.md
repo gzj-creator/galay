@@ -214,6 +214,7 @@ typedef struct C_IOResult {
 - Create: `src/c/galay-kernel-c/coro-c/coro_task_internal.hpp`
 - Create: `src/c/galay-kernel-c/coro-c/coro_task_c.cc`
 - Create: `src/c/galay-kernel-c/coro-c/coro_context_aarch64.S`
+- Create: `src/c/galay-kernel-c/coro-c/coro_context_x86_64.S`
 - Modify: `src/c/galay-kernel-c/CMakeLists.txt`
 - Test: `test/c/kernel/t23_coro_task.c`
 - Test: `test/cpp/kernel/t137_c_coro_resume_token.cc`
@@ -265,11 +266,14 @@ typedef struct C_IOResult {
 - [x] Review fix: `t23_coro_task`, `t137_c_coro_resume_token`, and `b19_coro_yield_requeue_latency` are only registered when `GALAY_C_CORO_CONTEXT_SUPPORTED` is true.
 - [x] Benchmark builds: `rtk cmake --build build-coro --target benchmark_c_kernel_coro_yield_requeue_latency` passed.
 - [x] Benchmark run: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_yield_requeue_latency` passed, `CoroSchedulerYieldLatency mode=owner_yield_requeue, samples=20000, qps=3955696, avg=0.22us, p50=0.00us, p90=1.00us, p99=1.00us, errors=0`.
+- [x] Linux x86_64 RED: on remote `tencent`, `rtk ssh tencent 'cmake --build /tmp/galay-coro-direct2-red.zJwCZ8/build-epoll --target test_c_kernel_coro_task --parallel 1'` failed before the Linux context implementation with `No rule to make target 'test_c_kernel_coro_task'`, because `GALAY_C_CORO_CONTEXT_SUPPORTED` was false and direct C coroutine targets were not generated.
+- [x] Linux x86_64 GREEN: added SysV x86_64 context switch assembly and CMake support; remote epoll and io_uring builds both compiled `coro_context_x86_64.S.o`, and `CTEST_PARALLEL_LEVEL=1 ctest --test-dir /tmp/galay-coro-direct2-red.zJwCZ8/build-{epoll,iouring} -R "c\\.kernel\\.(coro_task|coro_result_wait|coro_tcp|t22_coro_source_boundaries)$" --output-on-failure -V` passed `4/4` on both backends.
+- [x] Linux x86_64 benchmark smoke: epoll `benchmark_c_kernel_coro_yield_requeue_latency 20000` reported `qps=6152869 p99=0.21us errors=0`; io_uring reported `qps=6243427 p99=0.18us errors=0`.
 - [x] Diff hygiene: `rtk git diff --check` passed.
 - [x] Review: final spec review PASS; final code-quality review PASS with no Critical/Important/Minor findings.
 
 **Completion:**
-- [x] Completed and verified for Darwin arm64 stackful core after review fixes. x86_64/Linux assembly and wait-suspended state remain later portability/work-wait follow-ups.
+- [x] Completed and verified for Darwin arm64 and Linux x86_64 stackful core after review fixes. Other Linux architectures remain unsupported until platform-specific context assembly is added.
 
 ---
 
@@ -350,27 +354,97 @@ typedef struct C_IOResult {
 - Modify: `src/c/galay-kernel-c/CMakeLists.txt`
 - Test: `test/c/kernel/t25_coro_tcp.c`
 - Example: `examples/c/kernel/e12_coro_tcp_echo.c`
-- Benchmark: `benchmark/c/kernel/b20_coro_tcp_echo_throughput.c`
-- Benchmark: `benchmark/c/kernel/b21_coro_tcp_vs_callback.c`
+- Benchmark: `benchmark/c/kernel/b21_coro_tcp_echo_throughput.c`
+- Benchmark: `benchmark/c/kernel/b22_coro_tcp_vs_callback.c`
 
 **APIs:**
-- [ ] `C_IOResult galay_coro_tcp_accept(listener, out_socket, timeout_ms)`
-- [ ] `C_IOResult galay_coro_tcp_connect(socket, host, timeout_ms)`
-- [ ] `C_IOResult galay_coro_tcp_recv(socket, buffer, length, timeout_ms)`
-- [ ] `C_IOResult galay_coro_tcp_send(socket, buffer, length, timeout_ms)`
-- [ ] `C_IOResult galay_coro_tcp_close(socket, timeout_ms)`
+- [x] `C_IOResult galay_coro_tcp_accept(listener, out_socket, timeout_ms)`
+- [x] `C_IOResult galay_coro_tcp_connect(socket, host, timeout_ms)`
+- [x] `C_IOResult galay_coro_tcp_recv(socket, buffer, length, timeout_ms)`
+- [x] `C_IOResult galay_coro_tcp_send(socket, buffer, length, timeout_ms)`
+- [x] `C_IOResult galay_coro_tcp_close(socket, timeout_ms)`
 
 **Tests and metrics:**
-- [ ] Echo server one connection.
-- [ ] Partial recv/send.
-- [ ] Close while waiting.
-- [ ] Timeout while waiting.
-- [ ] Source boundary test confirms no C++ Task bridge.
-- [ ] Benchmarks report QPS, throughput MB/s, p50/p90/p99 latency, errors.
-- [ ] Compare against old `galay_kernel_tcp_socket_* callback` path.
+- [x] Echo server one connection.
+- [x] Partial recv/send.
+- [x] Close while waiting.
+- [x] Timeout while waiting.
+- [x] Source boundary test confirms no C++ Task bridge.
+- [x] Benchmarks report QPS, throughput MB/s, p50/p90/p99 latency, errors.
+- [x] Compare against old `galay_kernel_tcp_socket_* callback` path.
+
+**Verification:**
+- [x] RED: `rtk cmake -S . -B build-coro -DBUILD_TESTING=ON -DGALAY_BUILD_C_API=ON -DGALAY_BUILD_BENCHMARKS=ON -DGALAY_BUILD_EXAMPLES=ON && rtk cmake --build build-coro --target test_c_kernel_coro_tcp` failed before implementation with missing `galay/c/galay-kernel-c/async-c/tcp_socket_coro_c.h`.
+- [x] GREEN: `rtk ctest --test-dir build-coro -R coro_tcp --output-on-failure -V` passed 1/1.
+- [x] Header/source boundary regression: `rtk cmake --build build-coro --target test_c_kernel_header_smoke test_c_kernel_t22_coro_source_boundaries test_c_kernel_coro_tcp && rtk ctest --test-dir build-coro -R "c\\.kernel\\.(header_smoke|t22_coro_source_boundaries|coro_tcp)$" --output-on-failure -V` passed 3/3; T22 checked 8 future C coroutine source files and found no `runtime->spawn(` / `Task<void> c_api_` bridge.
+- [x] Example build/run: `rtk cmake -S . -B build-coro -DBUILD_TESTING=ON -DGALAY_BUILD_C_API=ON -DGALAY_BUILD_BENCHMARKS=ON -DGALAY_BUILD_EXAMPLES=ON && rtk cmake --build build-coro --target example_c_kernel_coro_tcp_echo && rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo` passed, output `coro_tcp_echo request=ping response=pong`.
+- [x] Direct benchmark build/run: `rtk cmake --build build-coro --target benchmark_c_kernel_coro_tcp_echo_throughput && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024` passed, output `requests=54511 qps=54510.51 throughput_mb_per_sec=106.466 p50_us=17.00 p90_us=20.00 p99_us=57.00 errors=0`.
+- [x] Callback comparison benchmark build/run: `rtk cmake --build build-coro --target benchmark_c_kernel_coro_tcp_vs_callback && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024` passed; direct mode `requests=55276 qps=55275.28 throughput_mb_per_sec=107.960 p50_us=17.00 p90_us=21.00 p99_us=43.00 errors=0`; callback bridge mode `requests=53676 qps=53675.14 throughput_mb_per_sec=104.834 p50_us=16.00 p90_us=24.00 p99_us=54.00 errors=0`; request delta `2.98%`.
+- [x] Final related regression: `rtk cmake --build build-coro --target test_c_kernel_header_smoke test_c_kernel_coro_task test_c_kernel_coro_result_wait test_c_kernel_coro_tcp test_c_kernel_t22_coro_source_boundaries benchmark_c_kernel_coro_yield_requeue_latency benchmark_c_kernel_coro_wait_result_latency benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback example_c_kernel_coro_tcp_echo && rtk ctest --test-dir build-coro -R "c\\.kernel\\.(header_smoke|runtime_lifecycle|coro_task|coro_result_wait|coro_tcp|t22_coro_source_boundaries)|kernel\\.(ready_entry_cpp_compat|resume_token_waker|c_coro_resume_token|wakepath)$" --output-on-failure` passed; CTest passed 10/10.
+- [x] Review fix regression: `rtk cmake -S . -B build-coro -DBUILD_TESTING=ON -DGALAY_BUILD_C_API=ON -DGALAY_BUILD_BENCHMARKS=ON -DGALAY_BUILD_EXAMPLES=ON && rtk cmake --build build-coro --target test_c_kernel_coro_tcp example_c_kernel_coro_tcp_echo benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback && rtk ctest --test-dir build-coro -R "c\\.kernel\\.(coro_tcp|t22_coro_source_boundaries)$" --output-on-failure && rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024 && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024 && rtk git diff --check` passed after setting io_uring SQE types, clearing IOController slots on normal direct completion, completing early-return wait requests before token release, guarding sequence-owned slots, rejecting cross-scheduler close of pending direct operations, stabilizing benchmark EOF handling, and guarding the TCP coroutine example on unsupported C coroutine context platforms.
+- [x] Bridge token scan: `rtk sh -c 'rg -n "runtime->spawn\\(|Task<void> c_api_" src/c/galay-kernel-c/coro-c src/c/galay-kernel-c/async-c -g "*coro*" || true'` produced no matches.
+- [x] Diff hygiene: `rtk git diff --check` passed.
+- RED zero-timeout connect reuse: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp && rtk ctest --test-dir build-coro -R "c\\.kernel\\.coro_tcp$" --output-on-failure -V` failed 0/1 before the connect zero-timeout guard; direct binary exit `247` mapped to `run_zero_timeout_connect` failure `503`, meaning `connect(timeout=0)` did not return `C_IOResultTimeout`.
+- GREEN zero-timeout connect reuse: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp && rtk ctest --test-dir build-coro -R "c\\.kernel\\.coro_tcp$" --output-on-failure -V` passed 1/1 after the connect zero-timeout guard.
+- Worker cleanup risk baseline: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp example_c_kernel_coro_tcp_echo benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback` passed before cleanup edits; the remaining risk was source-level cleanup lifetime, not a compile RED.
+- Worker GREEN cleanup/header build: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp example_c_kernel_coro_tcp_echo benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback` passed after moving cleanup-owned task/server state initialization before early `goto cleanup`, centralizing callback benchmark destroy paths, and documenting `galay_coro_tcp_close(timeout_ms)` as an ignored reserved parameter.
+- Worker GREEN close contract verification: `rtk ctest --test-dir build-coro -R "c\\.kernel\\.coro_tcp$" --output-on-failure -V` passed 1/1 using the current `t25_coro_tcp.c`; this worker did not edit `t25`.
+- Worker GREEN example smoke: `rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo` passed, output `coro_tcp_echo request=ping response=pong port=49288`.
+- Worker GREEN direct benchmark smoke: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024` passed, `requests=45881 qps=45880.86 throughput_mb_per_sec=89.611 p50_us=19.00 p90_us=31.00 p99_us=48.00 errors=0`.
+- Worker GREEN comparison benchmark smoke: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024` passed; direct mode `requests=45966 qps=45965.91 throughput_mb_per_sec=89.777 p50_us=19.00 p90_us=31.00 p99_us=49.00 errors=0`; callback mode `requests=60239 qps=60238.82 throughput_mb_per_sec=117.654 p50_us=16.00 p90_us=18.00 p99_us=33.00 errors=0`.
+- RED immediate accept ownership: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp && rtk ./build-coro/test/c/kernel/test_c_kernel_coro_tcp` exited `199`, mapping to `run_immediate_accept` failure `455`; immediate accept returned OK but did not publish `out_socket` because `finishWithoutWait()` rolled back an accepted result.
+- GREEN immediate accept ownership: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp && rtk ctest --test-dir build-coro -R "c\\.kernel\\.coro_tcp$" --output-on-failure -V` passed after `finishWithoutWait()` commits accepted results only when wait completion and business result are both OK.
+- RED positive connect timeout close: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp && rtk ./build-coro/test/c/kernel/test_c_kernel_coro_tcp` exited `11`, mapping to `run_connect_timeout_closes_socket` failure `523`; positive `connect` timeout left the fd queryable through `local_endpoint`.
+- GREEN positive connect timeout close: `rtk cmake --build build-coro --target test_c_kernel_coro_tcp && rtk sh -c 'for i in 1 2 3 4 5; do ./build-coro/test/c/kernel/test_c_kernel_coro_tcp || exit $?; done'` passed after timeout-winning direct connect closes the backend fd on the owner IO scheduler. The test uses a per-process link-local target to avoid route-cache flakiness.
+- GREEN send timeout contract property: `rtk ctest --test-dir build-coro -R "c\\.kernel\\.coro_tcp$" --output-on-failure -V` passed with a send-buffer pressure case that accepts reported `C_IOResultOk/bytes` only when the test byte is observed by the peer; `C_IOResultTimeout` means the coroutine stopped waiting and does not promise peer invisibility for bytes already accepted by the kernel.
+- GREEN io_uring reset source regression: `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries && rtk ctest --test-dir build-coro -R "c\\.kernel\\.t22_coro_source_boundaries$" --output-on-failure -V` passed; T22 now checks that direct TCP C accept/recv retain the io_uring `m_accept_result_assigned` / `m_recv_result_assigned` reset statements.
+- Final review-risk regression: `rtk cmake --build build-coro --target test_c_kernel_header_smoke test_c_kernel_coro_task test_c_kernel_coro_result_wait test_c_kernel_coro_tcp test_c_kernel_t22_coro_source_boundaries example_c_kernel_coro_tcp_echo benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback && rtk ctest --test-dir build-coro -R "c\\.kernel\\.(header_smoke|runtime_lifecycle|coro_task|coro_result_wait|coro_tcp|t22_coro_source_boundaries)|kernel\\.(ready_entry_cpp_compat|resume_token_waker|c_coro_resume_token|wakepath)$" --output-on-failure && rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024 && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024 && rtk sh -c 'rg -n "runtime->spawn\\(|Task<void> c_api_" src/c/galay-kernel-c/coro-c src/c/galay-kernel-c/async-c -g "*coro*" || true' && rtk git diff --check` passed. Benchmark smoke: direct throughput `requests=54653 qps=54652.23 throughput_mb_per_sec=106.743 p99_us=51.00 errors=0`; direct-vs-callback direct `requests=57262 qps=57261.89 throughput_mb_per_sec=111.840 p99_us=39.00 errors=0`; callback bridge `requests=55357 qps=55356.61 throughput_mb_per_sec=108.118 p99_us=43.00 errors=0`; direct delta `3.44%`.
 
 **Completion:**
-- [ ] Completed and verified.
+- [x] Completed and verified after review-risk remediation.
+
+**Review-risk remediation plan:**
+- [x] Timeout and late-completion arbitration is scheduler-ordered or otherwise prevents timeout from being returned after observable `recv` buffer mutation or successful `connect` side effects; `send` timeout is documented as a weaker io_uring/kernel contract that does not promise peer invisibility.
+- [x] `timeout_ms == 0` has an explicit non-submitting contract for direct TCP operations that cannot poll without starting irreversible work; tests prove `connect(timeout=0)` leaves the socket reusable.
+- [x] `galay_coro_tcp_close()` refuses or safely handles non-direct pending awaitables instead of clearing callback/C++ Task waiters without wakeup.
+- [x] Direct TCP operations validate socket/controller scheduler ownership so one socket is not registered, cancelled, or closed concurrently from multiple IO schedulers.
+- [x] io_uring direct accept/recv completion flags are reset on direct C result consumption, matching the C++ `await_resume()` path.
+- [x] Tests cover late completion after timeout/cancel, zero-timeout connect, mixed pending callback/C++ awaitable close behavior, and multi-IO-scheduler misuse.
+- [x] Example and benchmark early-return paths release runtime/socket/task resources before returning.
+- [x] `galay_coro_tcp_close()` timeout contract is either implemented or documented and tested as an ignored reserved parameter.
+- [x] Relevant narrow tests pass.
+- [x] Relevant benchmark/example smoke runs pass.
+
+## Gibbs follow-up remediation
+
+- [x] io_uring recv timeout/cancel does not consume cached CQE data into the timed-out direct C user buffer.
+- [x] io_uring accept timeout/cancel cannot leak or silently consume a raw accepted fd; late CQEs are either kept for a live waiter or closed when unsafe.
+- [x] Direct C TCP send timeout contract says timeout only means the coroutine stopped waiting; it does not guarantee peer invisibility of bytes already accepted by the kernel.
+- [x] Direct C TCP owner scheduler binding is cleared after immediate/error/no-live-operation paths and cannot permanently poison later operations.
+- [x] `test/c/kernel/t25_coro_tcp.c` avoids obvious blocking/flaky waits and has bounded diagnostics for this remediation.
+
+**Verification:**
+- RED source/behavior regression: `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries test_c_kernel_coro_tcp && rtk ctest --test-dir build-coro -R "c\\.kernel\\.(t22_coro_source_boundaries|coro_tcp)$" --output-on-failure -V` failed before production fixes. `t22` reported missing timeout/cancel CQE rejection and missing unsafe accepted-fd close; `t25` reported owner binding reuse failure after a failed send (`poison=5 connect=4`).
+- GREEN narrow regression: `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries test_c_kernel_coro_tcp && rtk ctest --test-dir build-coro -R "c\\.kernel\\.(t22_coro_source_boundaries|coro_tcp)$" --output-on-failure -V` passed 2/2.
+- GREEN related build: `rtk cmake --build build-coro --target test_c_kernel_header_smoke test_c_kernel_coro_task test_c_kernel_coro_result_wait test_c_kernel_coro_tcp test_c_kernel_t22_coro_source_boundaries example_c_kernel_coro_tcp_echo benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback` passed.
+- GREEN related CTest: `rtk ctest --test-dir build-coro -R "c\\.kernel\\.(header_smoke|coro_task|coro_result_wait|coro_tcp|t22_coro_source_boundaries)$" --output-on-failure` passed 5/5.
+- GREEN example smoke: `rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo` passed, output `coro_tcp_echo request=ping response=pong`.
+- GREEN benchmark smoke: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024` passed, `requests=46935 qps=46934.77 p99_us=45.00 errors=0`.
+- GREEN comparison benchmark smoke: `rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024` passed; direct `requests=46339 qps=46338.44 p99_us=56.00 errors=0`; callback `requests=56855 qps=56854.94 p99_us=41.00 errors=0`.
+- Hygiene: `rtk git diff --check` passed.
+- RED accept host preservation regression: `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries && rtk ctest --test-dir build-coro -R "c\\.kernel\\.t22_coro_source_boundaries$" --output-on-failure -V` failed after checking that io_uring accept completion must still use `tryConsumeAcceptedHandle()` after direct waiter arbitration, because the first Gibbs fix bypassed the controller accept delivery path.
+- GREEN accept host preservation regression: `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries && rtk ctest --test-dir build-coro -R "c\\.kernel\\.t22_coro_source_boundaries$" --output-on-failure -V` passed after `processAcceptCompletion()` only closes a rejected timed-out/cancelled fd and otherwise preserves the original controller accept delivery path.
+- Final main-agent verification after follow-up fixes: `rtk cmake --build build-coro --target test_c_kernel_header_smoke test_c_kernel_coro_task test_c_kernel_coro_result_wait test_c_kernel_coro_tcp test_c_kernel_t22_coro_source_boundaries example_c_kernel_coro_tcp_echo benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback && rtk ctest --test-dir build-coro -R "c\\.kernel\\.(header_smoke|runtime_lifecycle|coro_task|coro_result_wait|coro_tcp|t22_coro_source_boundaries)|kernel\\.(ready_entry_cpp_compat|resume_token_waker|c_coro_resume_token|wakepath)$" --output-on-failure && rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024 && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024 && rtk sh -c 'rg -n "runtime->spawn\\(|Task<void> c_api_" src/c/galay-kernel-c/coro-c src/c/galay-kernel-c/async-c -g "*coro*" || true' && rtk git diff --check` passed; CTest 10/10, example `coro_tcp_echo request=ping response=pong`, direct throughput `requests=56089 qps=56088.33 throughput_mb_per_sec=109.548 p99_us=47.00 errors=0`, direct-vs-callback direct `requests=57712 qps=57710.90 throughput_mb_per_sec=112.717 p99_us=38.00 errors=0`, callback `requests=55996 qps=55995.27 throughput_mb_per_sec=109.366 p99_us=44.00 errors=0`, direct delta `3.06%`.
+- TCP coroutine stability loop: `rtk sh -c 'for i in 1 2 3 4 5; do ./build-coro/test/c/kernel/test_c_kernel_coro_tcp || exit $?; done'` passed 5/5.
+- Linux x86_64 epoll/io_uring direct closure: remote `tencent` low-resource runs used `--parallel 1` and `CTEST_PARALLEL_LEVEL=1`. `test_c_kernel_t22_coro_source_boundaries`, `test_c_kernel_coro_task`, `test_c_kernel_coro_result_wait`, `test_c_kernel_coro_tcp`, `example_c_kernel_coro_tcp_echo`, `benchmark_c_kernel_coro_yield_requeue_latency`, `benchmark_c_kernel_coro_wait_result_latency`, and `benchmark_c_kernel_coro_tcp_echo_throughput` all built on both backends. CTest passed `4/4` on both backends; examples printed `coro_tcp_echo request=ping response=pong`.
+- Linux x86_64 direct benchmark smoke: epoll TCP direct `requests=22068 qps=22067.84 throughput_mb_per_sec=43.101 p50_us=42.73 p90_us=52.07 p99_us=68.35 errors=0`; io_uring TCP direct `requests=21325 qps=21324.80 throughput_mb_per_sec=41.650 p50_us=44.17 p90_us=54.39 p99_us=69.13 errors=0`.
+- Linux x86_64 C++ baseline reference: existing C++ coroutine TCP server/client benchmark with 1 scheduler, 1 connection, 1024B, 1s reported epoll `requests=21744 qps=21744 throughput=42.4688 MB/s errors=0 connect_p99=119us`; io_uring `requests=21169 qps=21169 throughput=41.3457 MB/s errors=0 connect_p99=92us`. This is a low-pressure reference because the C++ benchmark is a two-process server/client harness and does not emit request RTT p99.
+- Implementation 2 scope note: callback bridge comparison and fixes are intentionally deferred because implementation 1 is scheduled for deletion; the direct C coroutine path remains source-scanned with no `runtime->spawn(` or `Task<void> c_api_` in `src/c/galay-kernel-c/coro-c` and `src/c/galay-kernel-c/async-c/*coro*`.
+- Core C bridge refactor: direct TCP C coroutine public API now calls the C++ kernel internal C-style bridge `galay_core_coro_tcp_*`; `src/c/galay-kernel-c/async-c/tcp_socket_coro_c.cc` no longer directly references `AcceptAwaitable`/`ConnectAwaitable`/`RecvAwaitable`/`SendAwaitable`, `IOController`, `IOScheduler`, scheduler registration helpers, or controller private slots.
+- RED core bridge boundary: `rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries && rtk ctest --test-dir build-coro -R "c\\.kernel\\.t22_coro_source_boundaries$" --output-on-failure -V` failed before the bridge refactor. T22 reported missing `galay_core_coro_tcp_*` calls, direct C++ private symbol usage in `tcp_socket_coro_c.cc`, and missing `src/cpp/galay-kernel/core/c_coro_tcp_bridge.cc`.
+- GREEN core bridge boundary and TCP behavior: `rtk cmake -S . -B build-coro -DBUILD_TESTING=ON -DGALAY_BUILD_C_API=ON -DGALAY_BUILD_BENCHMARKS=ON -DGALAY_BUILD_EXAMPLES=ON && rtk cmake --build build-coro --target test_c_kernel_t22_coro_source_boundaries test_c_kernel_coro_tcp example_c_kernel_coro_tcp_echo benchmark_c_kernel_coro_tcp_echo_throughput benchmark_c_kernel_coro_tcp_vs_callback` passed; `rtk ctest --test-dir build-coro -R "c\\.kernel\\.(t22_coro_source_boundaries|coro_tcp)$" --output-on-failure -V` passed `2/2`; `rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024 && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024 && rtk git diff --check` passed. Smoke metrics: direct throughput `requests=52556 qps=52555.37 throughput_mb_per_sec=102.647 p99_us=54.00 errors=0`; direct-vs-callback direct `requests=56134 qps=56133.49 throughput_mb_per_sec=109.636 p99_us=38.00 errors=0`; callback bridge `requests=56860 qps=56859.20 throughput_mb_per_sec=111.053 p99_us=43.00 errors=0`; direct delta `-1.28%`.
+- Local full feature verification after rebuilding stale objects: `rtk cmake --build build-coro` passed; `rtk env CTEST_PARALLEL_LEVEL=1 ctest --test-dir build-coro --output-on-failure` passed `381/381` with `23` skipped; `rtk ./build-coro/examples/c/kernel/example_c_kernel_coro_tcp_echo && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_echo_throughput -d 1 -s 1024 && rtk ./build-coro/benchmark/c/kernel/benchmark_c_kernel_coro_tcp_vs_callback -d 1 -s 1024 && rtk git diff --check` passed. Smoke metrics: direct throughput `requests=56748 qps=56747.83 throughput_mb_per_sec=110.836 p99_us=48.00 errors=0`; direct-vs-callback direct `requests=57134 qps=57133.20 throughput_mb_per_sec=111.588 p99_us=39.00 errors=0`; callback bridge `requests=58892 qps=58891.18 throughput_mb_per_sec=115.022 p99_us=37.00 errors=0`; direct delta `-2.99%`.
+- Remote Linux post-bridge verification: synced current worktree to `/tmp/galay-coro-bridge-verify-1782625191/src` on `tencent`; epoll and io_uring Release builds both compiled `c_coro_tcp_bridge.cc`, `tcp_socket_coro_c.cc`, and `coro_context_x86_64.S`; `CTEST_PARALLEL_LEVEL=1 ctest --test-dir build-{epoll,iouring} -R "c\\.kernel\\.(t22_coro_source_boundaries|coro_task|coro_result_wait|coro_tcp)$" --output-on-failure` passed `4/4` on both backends; examples printed `coro_tcp_echo request=ping response=pong`. Benchmark smoke: epoll direct throughput `requests=21396 qps=21395.53 throughput_mb_per_sec=41.788 p99_us=67.28 errors=0`, direct-vs-callback direct `requests=21832 qps=21831.27 throughput_mb_per_sec=42.639 p99_us=66.30 errors=0`, callback `requests=22827 qps=22826.30 throughput_mb_per_sec=44.583 p99_us=64.61 errors=0`, delta `-4.36%`; io_uring direct throughput `requests=21057 qps=21056.76 throughput_mb_per_sec=41.126 p99_us=67.57 errors=0`, direct-vs-callback direct `requests=21227 qps=21226.43 throughput_mb_per_sec=41.458 p99_us=67.19 errors=0`, callback `requests=21651 qps=21650.44 throughput_mb_per_sec=42.286 p99_us=65.32 errors=0`, delta `-1.96%`.
 
 ---
 
@@ -487,7 +561,8 @@ typedef struct C_IOResult {
 - Create: `docs/c/modules/kernel/06-C协程性能对比.md`
 
 **Benchmark requirements:**
-- [ ] TCP coroutine vs callback/C++ Task bridge.
+- [x] TCP coroutine vs C++ coroutine baseline low-pressure reference for Linux epoll/io_uring.
+- [ ] TCP coroutine vs callback bridge is deferred while implementation 1 is out of scope and scheduled for deletion.
 - [ ] UDP coroutine vs callback/C++ Task bridge.
 - [ ] AIO coroutine vs callback/C++ Task bridge.
 - [ ] File I/O coroutine vs callback/C++ Task bridge.

@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <galay/cpp/galay-http2/builder/http2_frame_builder.h>
+#include <sstream>
 #define private public
 #include <galay/cpp/galay-http2/kernel/stream_manager.h>
 #undef private

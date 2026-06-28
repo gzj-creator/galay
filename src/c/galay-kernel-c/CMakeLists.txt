@@ -14,6 +14,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm
     list(APPEND galay_c_kernel_sources
         "${CMAKE_CURRENT_SOURCE_DIR}/coro-c/coro_context_aarch64.S"
     )
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+    set(GALAY_C_CORO_CONTEXT_SUPPORTED ON CACHE INTERNAL "C coroutine context switch support" FORCE)
+    list(APPEND galay_c_kernel_sources
+        "${CMAKE_CURRENT_SOURCE_DIR}/coro-c/coro_context_x86_64.S"
+    )
 endif()
 
 add_library(galay-c-kernel ${galay_c_kernel_sources})

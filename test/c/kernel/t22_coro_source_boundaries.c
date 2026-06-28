@@ -243,9 +243,167 @@ static int require_legacy_callback_bridge(void)
     return failed;
 }
 
+static int require_direct_tcp_c_api_uses_core_bridge(void)
+{
+    const char* relative_path = "src/c/galay-kernel-c/async-c/tcp_socket_coro_c.cc";
+    char full_path[kMaxPath];
+    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+        return 1;
+    }
+
+    char* data = NULL;
+    size_t len = 0;
+    if (!read_file(full_path, &data, &len)) {
+        return 1;
+    }
+
+    int failed = 0;
+    const char* required[] = {
+        "galay_core_coro_tcp_accept",
+        "galay_core_coro_tcp_connect",
+        "galay_core_coro_tcp_recv",
+        "galay_core_coro_tcp_send",
+        "galay_core_coro_tcp_close",
+    };
+    for (size_t i = 0; i < sizeof(required) / sizeof(required[0]); ++i) {
+        if (!contains_text(data, len, required[i])) {
+            fprintf(stderr, "[T22] direct TCP C API must call core bridge %s\n", required[i]);
+            failed = 1;
+        }
+    }
+
+    const char* forbidden[] = {
+        "AcceptAwaitable",
+        "ConnectAwaitable",
+        "RecvAwaitable",
+        "SendAwaitable",
+        "IOController",
+        "IOScheduler",
+        "registerIOSchedulerEvent",
+        "registerIOSchedulerClose",
+        "m_awaitable",
+        "m_sequence_owner",
+        "m_owner_scheduler",
+        "m_accept_result_assigned",
+        "m_recv_result_assigned",
+    };
+    for (size_t i = 0; i < sizeof(forbidden) / sizeof(forbidden[0]); ++i) {
+        if (contains_text(data, len, forbidden[i])) {
+            fprintf(stderr,
+                    "[T22] direct TCP C API must not directly depend on C++ private symbol %s; use the core C bridge instead\n",
+                    forbidden[i]);
+            failed = 1;
+        }
+    }
+
+    free(data);
+    return failed;
+}
+
+static int require_direct_tcp_iouring_result_flag_reset(void)
+{
+    const char* relative_path = "src/cpp/galay-kernel/core/c_coro_tcp_bridge.cc";
+    char full_path[kMaxPath];
+    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+        return 1;
+    }
+
+    char* data = NULL;
+    size_t len = 0;
+    if (!read_file(full_path, &data, &len)) {
+        return 1;
+    }
+
+    int failed = 0;
+    if (!contains_text(data, len, "m_controller->m_accept_result_assigned = false;")) {
+        fprintf(stderr, "[T22] direct TCP accept must reset io_uring accept result assignment on C result consumption\n");
+        failed = 1;
+    }
+    if (!contains_text(data, len, "m_controller->m_recv_result_assigned = false;")) {
+        fprintf(stderr, "[T22] direct TCP recv must reset io_uring recv result assignment on C result consumption\n");
+        failed = 1;
+    }
+
+    free(data);
+    return failed;
+}
+
+static int require_direct_tcp_timeout_arbitration(void)
+{
+    const char* relative_path = "src/cpp/galay-kernel/core/c_coro_tcp_bridge.cc";
+    char full_path[kMaxPath];
+    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+        return 1;
+    }
+
+    char* data = NULL;
+    size_t len = 0;
+    if (!read_file(full_path, &data, &len)) {
+        return 1;
+    }
+
+    int failed = 0;
+    if (!contains_text(data,
+                       len,
+                       "expected == CoroTcpCompletionPhase::TimedOut ||\n"
+                       "                expected == CoroTcpCompletionPhase::Cancelled) {\n"
+                       "                return false;\n"
+                       "            }")) {
+        fprintf(stderr,
+                "[T22] direct TCP guarded completion must reject CQE delivery after timeout/cancel\n");
+        failed = 1;
+    }
+
+    free(data);
+    return failed;
+}
+
+static int require_iouring_accept_uses_direct_completion_arbitration(void)
+{
+    const char* relative_path = "src/cpp/galay-kernel/core/uring_reactor.cc";
+    char full_path[kMaxPath];
+    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+        return 1;
+    }
+
+    char* data = NULL;
+    size_t len = 0;
+    if (!read_file(full_path, &data, &len)) {
+        return 1;
+    }
+
+    int failed = 0;
+    if (!contains_text(data, len, "awaitable->handleComplete(cqe, controller->m_handle)")) {
+        fprintf(stderr,
+                "[T22] io_uring accept completion must pass through awaitable arbitration before handing off an accepted fd\n");
+        failed = 1;
+    }
+    if (!contains_text(data,
+                       len,
+                       "if (awaitable->handleComplete(cqe, controller->m_handle)) {\n"
+                       "                controller->enqueueAcceptedHandle(*result);\n"
+                       "                if (controller->tryConsumeAcceptedHandle(awaitable->m_host, awaitable->m_result))")) {
+        fprintf(stderr,
+                "[T22] io_uring accept completion must still use controller accept delivery so C++ awaitables keep peer host semantics\n");
+        failed = 1;
+    }
+    if (!contains_text(data, len, "closeUndeliveredAcceptedHandle")) {
+        fprintf(stderr,
+                "[T22] io_uring accept completion must close an accepted fd when a timed-out/cancelled direct waiter rejects delivery\n");
+        failed = 1;
+    }
+
+    free(data);
+    return failed;
+}
+
 int main(void)
 {
     int failed = require_legacy_callback_bridge();
+    failed |= require_direct_tcp_c_api_uses_core_bridge();
+    failed |= require_direct_tcp_iouring_result_flag_reset();
+    failed |= require_direct_tcp_timeout_arbitration();
+    failed |= require_iouring_accept_uses_direct_completion_arbitration();
 
     int scanned_files = 0;
     failed |= scan_tree("src/c/galay-kernel-c", &scanned_files);

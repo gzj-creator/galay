@@ -18,6 +18,7 @@ struct C_CoroTaskInternal;
 detail::ResumeToken makeResumeToken(galay_coro_task_t task) noexcept;
 
 C_CoroTaskInternal* currentTask() noexcept;
+galay::kernel::Scheduler* currentTaskOwnerScheduler() noexcept;
 void retainTask(C_CoroTaskInternal* task) noexcept;
 void releaseTask(C_CoroTaskInternal* task) noexcept;
 bool prepareCurrentTaskWait() noexcept;

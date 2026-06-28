@@ -2,6 +2,7 @@
 #include <galay/c/galay-kernel-c/async-c/async_file_c.h>
 #include <galay/c/galay-kernel-c/async-c/file_watcher_c.h>
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket_coro_c.h>
 #include <galay/c/galay-kernel-c/async-c/udp_socket_c.h>
 #include <galay/c/galay-kernel-c/concurrency-c/async_mutex_c.h>
 #include <galay/c/galay-kernel-c/concurrency-c/async_waiter_c.h>
