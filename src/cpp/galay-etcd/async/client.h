@@ -22,6 +22,7 @@
 #include "../base/network_cfg.h"
 #include "../base/etcd_types.h"
 #include "../base/etcd_value.h"
+#include "../cluster/etcd_cluster_client.h"
 
 #include "../../galay-http/kernel/http_session.h"
 #include "../../galay-kernel/async/tcp_socket.h"
@@ -574,6 +575,17 @@ public:
     PipelineAwaitable pipeline(std::vector<PipelineOp> operations);
 
     /**
+     * @brief 获取统计快照
+     * @details 当前异步 client 暂未在普通单端点路径中累计指标，
+     *          返回值用于锁定公开 API 形状，后续生产 wrapper 会补齐计数。
+     * @return 当前统计快照
+     */
+    [[nodiscard]] EtcdClientStats getStats() const
+    {
+        return m_stats;
+    }
+
+    /**
      * @brief 为单个 key 启动异步 watch，并把每个事件批次投递给 `Task<void>` 处理器。
      * @note handler 参数按值传递，避免协程 frame 持有悬空引用。
      * @note watch 由后台线程维持长连接；处理器本身会被调度到 client 绑定的 `IOScheduler`。
@@ -631,6 +643,7 @@ private:
     bool m_connected = false;                                              ///< 是否已连接
 
     EtcdError m_last_error;                                                ///< 最后一次错误
+    EtcdClientStats m_stats{};                                             ///< 统计快照占位
     std::mutex m_watch_mutex;                                              ///< Watch 工作列表互斥锁
     std::vector<std::shared_ptr<WatchWorkerState>> m_watch_workers;        ///< Watch 工作线程状态列表
 };
@@ -681,6 +694,22 @@ public:
     AsyncEtcdClientBuilder& apiPrefix(std::string prefix)
     {
         m_config.api_prefix = std::move(prefix);
+        return *this;
+    }
+
+    /**
+     * @brief 设置生产模式配置
+     * @param config 多端点、重试与健康检查配置
+     * @return 构建器引用，支持链式调用
+     * @note 当前仅保存配置并在 endpoints 非空时同步首个 endpoint，
+     *       不改变现有单端点请求行为。
+     */
+    AsyncEtcdClientBuilder& productionConfig(EtcdProductionConfig config)
+    {
+        if (!config.endpoints.empty()) {
+            m_config.endpoint = config.endpoints.front();
+        }
+        m_config.production = std::move(config);
         return *this;
     }
 
@@ -738,7 +767,16 @@ public:
      * @brief 仅构建配置对象而不创建客户端
      * @return 配置好的 EtcdConfig 实例
      */
-    EtcdConfig buildConfig() const
+    EtcdConfig& buildConfig()
+    {
+        return m_config;
+    }
+
+    /**
+     * @brief 仅查看构建配置对象而不创建客户端
+     * @return 当前配置引用
+     */
+    const EtcdConfig& buildConfig() const
     {
         return m_config;
     }
@@ -748,11 +786,168 @@ private:
     EtcdConfig m_config{};                             ///< 客户端配置
 };
 
+/**
+ * @brief async cluster wrapper 单次尝试快照
+ * @details 仅承载离线 policy loop 需要的信息，不触发真实网络 I/O。
+ *          `config` 是调用侧随后真正发起 I/O 时应使用的 endpoint 绑定配置副本。
+ */
+struct AsyncEtcdClusterAttempt
+{
+    size_t endpoint_index = 0;                                           ///< 本次选择的 endpoint 下标
+    size_t attempt = 0;                                                  ///< 当前请求内的第几次尝试，从 0 开始
+    EtcdConfig config{};                                                 ///< 已绑定 endpoint 的配置副本
+    std::chrono::milliseconds backoff = std::chrono::milliseconds::zero(); ///< 当前尝试前应遵守的退避时间
+};
+
+/**
+ * @brief async etcd cluster client 的最小离线 wrapper
+ * @details 当前仅暴露 coroutine-friendly 的端点选择与重试控制面。
+ *          不做真实网络请求，不提供 async cluster `connect/put/get/del` API，
+ *          也不引入后台 health probe 线程。
+ */
+class AsyncEtcdClusterClient
+{
+public:
+    using Attempt = AsyncEtcdClusterAttempt;
+    using AttemptResult = std::expected<Attempt, EtcdError>;
+    using AttemptAwaitable = galay::kernel::ReadyAwaitable<AttemptResult>;
+
+    explicit AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler = nullptr,
+                                    EtcdConfig config = {});
+
+    /**
+     * @brief 开始一次离线 cluster 尝试规划
+     * @return 立即就绪的 AttemptAwaitable，成功时返回首个应尝试的 endpoint 配置
+     */
+    [[nodiscard]] AttemptAwaitable beginAttempt();
+
+    /**
+     * @brief 根据上一次错误规划下一次离线重试
+     * @param previous 上一次尝试快照
+     * @param error 上一次尝试对应的错误分类
+     * @return 立即就绪的 AttemptAwaitable；失败时直接返回 fail-fast 错误
+     * @note 调用侧负责使用返回的 `Attempt.config` 执行真实 I/O。
+     */
+    [[nodiscard]] AttemptAwaitable nextAttempt(const Attempt& previous, EtcdError error);
+
+    /**
+     * @brief 记录一次由调用侧完成的成功尝试
+     * @param attempt 成功的尝试快照
+     * @param when 成功时间
+     * @note 该方法只更新 health snapshot / stats，不执行任何网络操作。
+     */
+    void markSuccess(
+        const Attempt& attempt,
+        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+
+    [[nodiscard]] const std::vector<EtcdEndpointHealthSnapshot>& getEndpointSnapshots() const;
+    [[nodiscard]] EtcdClientStats getStats() const;
+    [[nodiscard]] galay::kernel::IOScheduler* scheduler() const;
+
+private:
+    [[nodiscard]] EtcdConfig configForEndpoint(size_t index) const;
+    [[nodiscard]] AttemptResult makeAttempt(
+        size_t attempt,
+        std::chrono::milliseconds backoff);
+
+private:
+    galay::kernel::IOScheduler* m_scheduler = nullptr;
+    EtcdConfig m_config{};
+    EtcdClusterState m_state;
+};
+
+/**
+ * @brief async cluster wrapper 构建器
+ * @details 保持与 `AsyncEtcdClientBuilder` 接近的配置 surface，
+ *          但当前 build 出来的对象只负责离线 policy loop，
+ *          不代表已经具备真实 async cluster KV I/O 能力。
+ */
+class AsyncEtcdClusterClientBuilder
+{
+public:
+    AsyncEtcdClusterClientBuilder()
+    {
+        m_config.endpoint.clear();
+    }
+
+    AsyncEtcdClusterClientBuilder& scheduler(galay::kernel::IOScheduler* scheduler)
+    {
+        m_scheduler = scheduler;
+        return *this;
+    }
+
+    AsyncEtcdClusterClientBuilder& endpoint(std::string endpoint)
+    {
+        m_config.endpoint = std::move(endpoint);
+        return *this;
+    }
+
+    AsyncEtcdClusterClientBuilder& apiPrefix(std::string prefix)
+    {
+        m_config.api_prefix = std::move(prefix);
+        return *this;
+    }
+
+    AsyncEtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config)
+    {
+        if (!config.endpoints.empty()) {
+            m_config.endpoint = config.endpoints.front();
+        }
+        m_config.production = std::move(config);
+        return *this;
+    }
+
+    AsyncEtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout)
+    {
+        m_config.request_timeout = timeout;
+        return *this;
+    }
+
+    AsyncEtcdClusterClientBuilder& bufferSize(size_t size)
+    {
+        m_config.buffer_size = size;
+        return *this;
+    }
+
+    AsyncEtcdClusterClientBuilder& keepAlive(bool enabled)
+    {
+        m_config.keepalive = enabled;
+        return *this;
+    }
+
+    AsyncEtcdClusterClientBuilder& config(EtcdConfig config)
+    {
+        m_config = std::move(config);
+        return *this;
+    }
+
+    AsyncEtcdClusterClient build() const;
+
+    EtcdConfig& buildConfig()
+    {
+        return m_config;
+    }
+
+    const EtcdConfig& buildConfig() const
+    {
+        return m_config;
+    }
+
+private:
+    galay::kernel::IOScheduler* m_scheduler = nullptr;
+    EtcdConfig m_config{};
+};
+
 } // namespace galay::etcd
 
 inline galay::etcd::AsyncEtcdClient galay::etcd::AsyncEtcdClientBuilder::build() const
 {
     return AsyncEtcdClient(m_scheduler, m_config);
+}
+
+inline galay::etcd::AsyncEtcdClusterClient galay::etcd::AsyncEtcdClusterClientBuilder::build() const
+{
+    return AsyncEtcdClusterClient(m_scheduler, m_config);
 }
 
 #endif // GALAY_ETCD_ASYNC_ETCD_CLIENT_H

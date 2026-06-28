@@ -45,6 +45,7 @@ galay_ensure_simdjson()
 file(GLOB GALAY_ETCD_SOURCES CONFIGURE_DEPENDS
     "base/*.cc"
     "async/*.cc"
+    "cluster/*.cc"
     "sync/*.cc"
 )
 

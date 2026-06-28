@@ -154,6 +154,24 @@ struct EtcdWatchResponse
     std::vector<EtcdWatchEvent> events;     ///< 事件列表
 };
 
+/**
+ * @brief etcd 客户端统计快照
+ * @details 当前单端点 client 先暴露稳定的零值快照结构，
+ *          后续生产 wrapper 会在相同公开类型上补充真实计数。
+ */
+struct EtcdClientStats
+{
+    uint64_t requests = 0;                   ///< 总请求数
+    uint64_t request_failures = 0;           ///< 请求失败数
+    uint64_t retries = 0;                    ///< 重试次数
+    uint64_t endpoint_switches = 0;          ///< 端点切换次数
+    uint64_t auth_refreshes = 0;             ///< 鉴权刷新次数
+    uint64_t watch_reconnects = 0;           ///< watch 重连次数
+    uint64_t watch_compactions = 0;          ///< watch compaction 次数
+    uint64_t lease_keepalive_successes = 0;  ///< lease keepalive 成功次数
+    uint64_t lease_keepalive_failures = 0;   ///< lease keepalive 失败次数
+};
+
 using EtcdVoidResult = std::expected<void, EtcdError>;                              ///< 无返回值操作结果
 using EtcdBoolResult = std::expected<bool, EtcdError>;                              ///< 布尔操作结果
 using EtcdGetResult = std::expected<std::vector<EtcdKeyValue>, EtcdError>;          ///< Get 操作结果

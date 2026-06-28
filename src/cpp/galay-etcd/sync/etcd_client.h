@@ -73,6 +73,22 @@ public:
     }
 
     /**
+     * @brief 设置生产模式配置
+     * @param config 多端点、重试与健康检查配置
+     * @return 构建器引用，支持链式调用
+     * @note 当前仅保存配置并在 endpoints 非空时同步首个 endpoint，
+     *       不改变现有单端点请求行为。
+     */
+    EtcdClientBuilder& productionConfig(EtcdProductionConfig config)
+    {
+        if (!config.endpoints.empty()) {
+            m_config.endpoint = config.endpoints.front();
+        }
+        m_config.production = std::move(config);
+        return *this;
+    }
+
+    /**
      * @brief 设置请求超时时间
      * @param timeout 超时时间
      * @return 构建器引用，支持链式调用
@@ -126,7 +142,16 @@ public:
      * @brief 仅构建配置对象而不创建客户端
      * @return 配置好的 EtcdConfig 实例
      */
-    EtcdConfig buildConfig() const
+    EtcdConfig& buildConfig()
+    {
+        return m_config;
+    }
+
+    /**
+     * @brief 仅查看构建配置对象而不创建客户端
+     * @return 当前配置引用
+     */
+    const EtcdConfig& buildConfig() const
     {
         return m_config;
     }
@@ -237,6 +262,17 @@ public:
      */
     [[nodiscard]] bool connected() const;
 
+    /**
+     * @brief 获取统计快照
+     * @details 当前同步 client 暂未在普通单端点路径中累计指标，
+     *          返回值用于锁定公开 API 形状，后续生产 wrapper 会补齐计数。
+     * @return 当前统计快照
+     */
+    [[nodiscard]] EtcdClientStats getStats() const
+    {
+        return m_stats;
+    }
+
 private:
     void resetLastOperation();
     void setError(EtcdErrorType type, const std::string& message);
@@ -268,6 +304,7 @@ private:
     std::vector<char> m_recv_buffer;                                    ///< 接收缓冲区
 
     EtcdError m_last_error;                                             ///< 最后一次错误
+    EtcdClientStats m_stats{};                                          ///< 统计快照占位
 };
 
 } // namespace galay::etcd

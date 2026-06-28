@@ -65,10 +65,79 @@ struct EtcdNetworkConfig {
 struct EtcdConfig : EtcdNetworkConfig {
     std::string endpoint = "http://127.0.0.1:2379";
     std::string api_prefix = "/v3";
+    EtcdProductionConfig production;
+    EtcdCredentialConfig credentials;
 
     static EtcdConfig withTimeout(std::chrono::milliseconds timeout);
 };
 ```
+
+补充语义：
+
+- `endpoint` 仍是当前 sync/async client 的实际请求地址
+- `production.endpoints` 为后续 cluster wrapper 预留；builder 收到非空 endpoints 时，会把首个地址同步回 `endpoint`，保持既有单端点行为不变
+- `credentials` 当前只提供配置承载与脱敏输出，不会自动启用 auth 流程
+
+### `EtcdEndpointPolicy` / `EtcdRetryDecision`
+
+```cpp
+enum class EtcdEndpointPolicy {
+    FirstHealthy,
+    RoundRobin,
+    StickyLeader,
+};
+
+enum class EtcdRetryDecision {
+    RetrySameEndpoint,
+    RetryNextEndpoint,
+    FailFast,
+};
+```
+
+### `EtcdRetryConfig`
+
+```cpp
+struct EtcdRetryConfig {
+    size_t attempts = 3;
+    std::chrono::milliseconds initial_backoff{25};
+    std::chrono::milliseconds max_backoff{500};
+    bool jitter = true;
+};
+```
+
+### `EtcdCredentialConfig`
+
+```cpp
+struct EtcdCredentialConfig {
+    std::string username;
+    std::string password;
+    std::string bearer_token;
+
+    std::string redactedString() const;
+};
+```
+
+语义：
+
+- `redactedString()` 可用于日志/调试输出，但不会返回明文 `password` 或 `bearer_token`
+- 当前模块没有自动登录或 token 刷新行为；这部分属于后续 auth task
+
+### `EtcdProductionConfig`
+
+```cpp
+struct EtcdProductionConfig {
+    std::vector<std::string> endpoints;
+    EtcdEndpointPolicy endpoint_policy = EtcdEndpointPolicy::FirstHealthy;
+    EtcdRetryConfig retry;
+    std::chrono::milliseconds health_interval{5000};
+    bool prefer_leader = false;
+};
+```
+
+语义：
+
+- `endpoints` 是 cluster policy 可选择的候选 endpoint 列表
+- `prefer_leader` 当前只影响 `StickyLeader` 下的“最近一次成功端点” hint；不是独立的 leader 探测机制
 
 ### `EtcdKeyValue`
 
@@ -126,6 +195,28 @@ struct PipelineItemResult {
     std::vector<EtcdKeyValue> kvs;
 };
 ```
+
+### `EtcdClientStats`
+
+```cpp
+struct EtcdClientStats {
+    uint64_t requests = 0;
+    uint64_t request_failures = 0;
+    uint64_t retries = 0;
+    uint64_t endpoint_switches = 0;
+    uint64_t auth_refreshes = 0;
+    uint64_t watch_reconnects = 0;
+    uint64_t watch_compactions = 0;
+    uint64_t lease_keepalive_successes = 0;
+    uint64_t lease_keepalive_failures = 0;
+};
+```
+
+语义：
+
+- `EtcdClient::getStats()` / `AsyncEtcdClient::getStats()` 当前返回只读快照
+- `AsyncEtcdClusterClient::getStats()` 返回 offline policy loop 的统计快照，不代表真实网络 I/O 已接入
+- 在本 task 完成后，普通单端点 client 默认仍返回零值；真实计数由后续生产 wrapper 接入
 
 ### `EtcdErrorType` 与 `EtcdError`
 
@@ -205,12 +296,14 @@ class EtcdClientBuilder {
 public:
     EtcdClientBuilder& endpoint(std::string endpoint);
     EtcdClientBuilder& apiPrefix(std::string prefix);
+    EtcdClientBuilder& productionConfig(EtcdProductionConfig config);
     EtcdClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
     EtcdClientBuilder& bufferSize(size_t size);
     EtcdClientBuilder& keepAlive(bool enabled);
     EtcdClientBuilder& config(EtcdConfig config);
     EtcdClient build() const;
-    EtcdConfig buildConfig() const;
+    EtcdConfig& buildConfig();
+    const EtcdConfig& buildConfig() const;
 };
 ```
 
@@ -247,6 +340,7 @@ public:
     EtcdLeaseGrantResult keepAliveOnce(int64_t lease_id);
     EtcdPipelineResult pipeline(std::span<const PipelineOp> operations);
     EtcdPipelineResult pipeline(std::vector<PipelineOp> operations);
+    EtcdClientStats getStats() const;
 
     bool connected() const;
 };
@@ -295,14 +389,86 @@ public:
     AsyncEtcdClientBuilder& scheduler(galay::kernel::IOScheduler* scheduler);
     AsyncEtcdClientBuilder& endpoint(std::string endpoint);
     AsyncEtcdClientBuilder& apiPrefix(std::string prefix);
+    AsyncEtcdClientBuilder& productionConfig(EtcdProductionConfig config);
     AsyncEtcdClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
     AsyncEtcdClientBuilder& bufferSize(size_t size);
     AsyncEtcdClientBuilder& keepAlive(bool enabled);
     AsyncEtcdClientBuilder& config(EtcdConfig config);
     AsyncEtcdClient build() const;
-    EtcdConfig buildConfig() const;
+    EtcdConfig& buildConfig();
+    const EtcdConfig& buildConfig() const;
 };
 ```
+
+### `AsyncEtcdClusterAttempt`
+
+```cpp
+struct AsyncEtcdClusterAttempt {
+    size_t endpoint_index = 0;
+    size_t attempt = 0;
+    EtcdConfig config{};
+    std::chrono::milliseconds backoff = std::chrono::milliseconds::zero();
+};
+```
+
+语义补充：
+
+- `config` 是已经注入 endpoint / `api_prefix` / timeout 等 builder 配置的副本
+- 它只描述“下一次应该怎么尝试”，不代表库已经替调用侧发起了网络请求
+
+### `AsyncEtcdClusterClientBuilder`
+
+```cpp
+class AsyncEtcdClusterClientBuilder {
+public:
+    AsyncEtcdClusterClientBuilder& scheduler(galay::kernel::IOScheduler* scheduler);
+    AsyncEtcdClusterClientBuilder& endpoint(std::string endpoint);
+    AsyncEtcdClusterClientBuilder& apiPrefix(std::string prefix);
+    AsyncEtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
+    AsyncEtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
+    AsyncEtcdClusterClientBuilder& bufferSize(size_t size);
+    AsyncEtcdClusterClientBuilder& keepAlive(bool enabled);
+    AsyncEtcdClusterClientBuilder& config(EtcdConfig config);
+    AsyncEtcdClusterClient build() const;
+    EtcdConfig& buildConfig();
+    const EtcdConfig& buildConfig() const;
+};
+```
+
+语义补充：
+
+- 该 builder 复用与 `AsyncEtcdClientBuilder` 接近的配置 surface
+- `build()` 返回的是 offline policy wrapper，不是具备 `put/get/delete` 的 async cluster KV client
+
+### `AsyncEtcdClusterClient`
+
+```cpp
+class AsyncEtcdClusterClient {
+public:
+    using Attempt = AsyncEtcdClusterAttempt;
+    using AttemptResult = std::expected<Attempt, EtcdError>;
+    using AttemptAwaitable = galay::kernel::ReadyAwaitable<AttemptResult>;
+
+    explicit AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler = nullptr,
+                                    EtcdConfig config = {});
+
+    AttemptAwaitable beginAttempt();
+    AttemptAwaitable nextAttempt(const Attempt& previous, EtcdError error);
+    void markSuccess(const Attempt& attempt,
+                     std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+
+    const std::vector<EtcdEndpointHealthSnapshot>& getEndpointSnapshots() const;
+    EtcdClientStats getStats() const;
+    galay::kernel::IOScheduler* scheduler() const;
+};
+```
+
+语义补充：
+
+- `beginAttempt()` / `nextAttempt()` 都是立即就绪的 awaitable，用来承载 coroutine-friendly 的离线重试决策
+- 调用侧需要拿着 `Attempt.config` 自己决定如何执行真实 I/O；库当前没有 async cluster `connect/put/get/del`
+- `markSuccess()` 只更新 snapshot / stats，并为 `StickyLeader` 留下最近一次成功端点 hint
+- `StickyLeader` 仍然不是 leader status 感知；这里只是重试策略表面
 
 ### `AsyncEtcdClient`
 
@@ -353,6 +519,7 @@ public:
     PipelineAwaitable pipeline(std::vector<PipelineOp> operations);
     EtcdBoolResult watch(const std::string& key, WatchTaskHandler handler);
     EtcdBoolResult watch(const std::string& key, WatchFunctionHandler handler);
+    EtcdClientStats getStats() const;
 
     bool connected() const;
 };

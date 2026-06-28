@@ -494,6 +494,100 @@ bool dispatchWatchLines(
 
 } // namespace
 
+AsyncEtcdClusterClient::AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler,
+                                               EtcdConfig config)
+    : m_scheduler(scheduler)
+    , m_config(std::move(config))
+    , m_state([this] {
+        EtcdProductionConfig production = m_config.production;
+        if (production.endpoints.empty() && !m_config.endpoint.empty()) {
+            production.endpoints.push_back(m_config.endpoint);
+        }
+        return production;
+    }())
+{
+}
+
+AsyncEtcdClusterClient::AttemptAwaitable AsyncEtcdClusterClient::beginAttempt()
+{
+    m_state.recordRequest();
+    return AttemptAwaitable(makeAttempt(0, std::chrono::milliseconds::zero()));
+}
+
+AsyncEtcdClusterClient::AttemptAwaitable AsyncEtcdClusterClient::nextAttempt(
+    const Attempt& previous,
+    EtcdError error)
+{
+    const EtcdRetryDecision decision = m_state.classifyRetry(error, previous.attempt);
+    m_state.markFailure(
+        previous.endpoint_index,
+        error,
+        decision == EtcdRetryDecision::RetryNextEndpoint);
+    if (decision == EtcdRetryDecision::FailFast) {
+        return AttemptAwaitable(std::unexpected(std::move(error)));
+    }
+
+    m_state.recordRetry();
+    const auto backoff = m_state.backoffForAttempt(previous.attempt);
+    if (decision == EtcdRetryDecision::RetrySameEndpoint) {
+        Attempt retry = previous;
+        retry.attempt = previous.attempt + 1;
+        retry.backoff = backoff;
+        return AttemptAwaitable(std::move(retry));
+    }
+
+    return AttemptAwaitable(makeAttempt(previous.attempt + 1, backoff));
+}
+
+void AsyncEtcdClusterClient::markSuccess(
+    const Attempt& attempt,
+    std::chrono::system_clock::time_point when)
+{
+    m_state.markSuccess(attempt.endpoint_index, when);
+}
+
+const std::vector<EtcdEndpointHealthSnapshot>& AsyncEtcdClusterClient::getEndpointSnapshots() const
+{
+    return m_state.getEndpointSnapshots();
+}
+
+EtcdClientStats AsyncEtcdClusterClient::getStats() const
+{
+    return m_state.getStats();
+}
+
+galay::kernel::IOScheduler* AsyncEtcdClusterClient::scheduler() const
+{
+    return m_scheduler;
+}
+
+EtcdConfig AsyncEtcdClusterClient::configForEndpoint(size_t index) const
+{
+    EtcdConfig config = m_config;
+    if (index < config.production.endpoints.size()) {
+        config.endpoint = config.production.endpoints[index];
+    }
+    return config;
+}
+
+AsyncEtcdClusterClient::AttemptResult AsyncEtcdClusterClient::makeAttempt(
+    size_t attempt,
+    std::chrono::milliseconds backoff)
+{
+    const std::optional<size_t> selected = m_state.selectEndpoint();
+    if (!selected.has_value()) {
+        return std::unexpected(
+            EtcdError(EtcdErrorType::InvalidEndpoint, "cluster endpoints are empty"));
+    }
+
+    return Attempt{
+        .endpoint_index = *selected,
+        .attempt = attempt,
+        .config = configForEndpoint(*selected),
+        .backoff = backoff,
+    };
+}
+
 struct AsyncEtcdClient::WatchWorkerState
 {
     std::atomic<bool> stop{false};

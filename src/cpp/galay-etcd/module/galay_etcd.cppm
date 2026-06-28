@@ -12,5 +12,6 @@ export {
 #include "../base/etcd_types.h"
 #include "../base/network_cfg.h"
 #include "../async/client.h"
+#include "../cluster/etcd_cluster_client.h"
 #include "../sync/etcd_client.h"
 }
