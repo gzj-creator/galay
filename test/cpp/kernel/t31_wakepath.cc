@@ -27,15 +27,17 @@ static_assert(sizeof(Waker) == sizeof(void*),
               "Waker must stay pointer-sized once the lightweight task core lands");
 static_assert(std::is_constructible_v<Waker, TaskRef>,
               "Waker must capture lightweight task refs directly");
-static_assert(std::is_same_v<decltype(IOSchedulerWorkerState{}.lifo_slot), std::optional<TaskRef>>,
-              "IOSchedulerWorkerState::lifo_slot must store TaskRef");
+static_assert(std::is_same_v<decltype(IOSchedulerWorkerState{}.ready_lifo_slot),
+                             std::optional<detail::ReadyEntry>>,
+              "IOSchedulerWorkerState::ready_lifo_slot must store ReadyEntry");
 static_assert(std::is_same_v<decltype(IOSchedulerWorkerState{}.local_ring), ChaseLevTaskRing>,
               "IOSchedulerWorkerState::local_ring must store the fixed-capacity Chase-Lev ring");
-static_assert(std::is_same_v<decltype(IOSchedulerWorkerState{}.inject_queue),
-                             moodycamel::ConcurrentQueue<TaskRef>>,
-              "IOSchedulerWorkerState::inject_queue must store TaskRef");
-static_assert(std::is_same_v<decltype(IOSchedulerWorkerState{}.inject_buffer), std::vector<TaskRef>>,
-              "IOSchedulerWorkerState::inject_buffer must store TaskRef");
+static_assert(std::is_same_v<decltype(IOSchedulerWorkerState{}.ready_inject_queue),
+                             moodycamel::ConcurrentQueue<detail::ReadyEntry>>,
+              "IOSchedulerWorkerState::ready_inject_queue must store ReadyEntry");
+static_assert(std::is_same_v<decltype(IOSchedulerWorkerState{}.ready_inject_buffer),
+                             std::vector<detail::ReadyEntry>>,
+              "IOSchedulerWorkerState::ready_inject_buffer must store ReadyEntry");
 
 namespace {
 

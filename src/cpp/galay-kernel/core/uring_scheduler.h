@@ -91,6 +91,7 @@ public:
     std::optional<IOError> lastError() const override;    ///< 返回最近一次内部错误；无错误时返回 std::nullopt
 
     bool schedule(TaskRef task) override;                 ///< 从任意线程注入任务；成功时必要时会唤醒事件循环
+    bool scheduleReadyEntry(detail::ReadyEntry& entry);   ///< 从任意线程注入语言中立 ready entry
     bool scheduleDeferred(TaskRef task) override;         ///< 以延后语义注入任务；当前仍使用同一注入队列
     bool scheduleImmediately(TaskRef task) override;      ///< 在调度器线程内立刻恢复任务；跨线程调用会失败
 

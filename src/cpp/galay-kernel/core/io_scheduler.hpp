@@ -94,7 +94,7 @@ public:
 
     ChaseLevTaskRing() {
         for (auto& slot : m_slots) {
-            slot.store(nullptr, std::memory_order_relaxed);
+            slot.store(0, std::memory_order_relaxed);
         }
     }
     ~ChaseLevTaskRing() {
@@ -103,8 +103,8 @@ public:
     ChaseLevTaskRing(const ChaseLevTaskRing&) = delete;
     ChaseLevTaskRing& operator=(const ChaseLevTaskRing&) = delete;
 
-    bool push_back(TaskRef&& task) {
-        if (!task.isValid()) {
+    bool push_back(detail::ReadyEntry& entry) {
+        if (!entry.isValid()) {
             return false;
         }
         const uint64_t tail = m_tail.load(std::memory_order_relaxed);
@@ -113,20 +113,32 @@ public:
             return false;
         }
         const size_t index = static_cast<size_t>(tail & kMask);
-        TaskState* expected = nullptr;
-        TaskState* const state = task.state();
-        if (!m_slots[index].compare_exchange_strong(expected, state,
+        uintptr_t expected = 0;
+        const uintptr_t encoded = entry.encoded();
+        if (!m_slots[index].compare_exchange_strong(expected, encoded,
                                                      std::memory_order_release,
                                                      std::memory_order_acquire)) {
             return false;
         }
-        (void)detail::TaskRefStorageAccess::releaseState(task);
+        entry.clear();
         std::atomic_thread_fence(std::memory_order_release);
         m_tail.store(tail + 1, std::memory_order_release);
         return true;
     }
 
-    bool pop_back(TaskRef& out) {
+    bool push_back(TaskRef&& task) {
+        if (!task.isValid()) {
+            return false;
+        }
+        detail::ReadyEntry entry(std::move(task));
+        if (push_back(entry)) {
+            return true;
+        }
+        task = detail::readyEntryToTaskRef(entry);
+        return false;
+    }
+
+    bool pop_back(detail::ReadyEntry& out) {
         uint64_t tail = m_tail.load(std::memory_order_relaxed);
         if (tail == 0) {
             return false;
@@ -148,22 +160,37 @@ public:
                 return false;
             }
             m_tail.store(tail + 1, std::memory_order_relaxed);
-            TaskState* const state = m_slots[index].exchange(nullptr, std::memory_order_relaxed);
-            if (state == nullptr) {
+            const uintptr_t encoded = m_slots[index].exchange(0, std::memory_order_relaxed);
+            if (encoded == 0) {
                 return false;
             }
-            out = detail::TaskRefStorageAccess::adoptState(state);
+            out = detail::ReadyEntry::fromEncoded(encoded);
             return true;
         }
-        TaskState* const state = m_slots[index].exchange(nullptr, std::memory_order_relaxed);
-        if (state == nullptr) {
+        const uintptr_t encoded = m_slots[index].exchange(0, std::memory_order_relaxed);
+        if (encoded == 0) {
             return false;
         }
-        out = detail::TaskRefStorageAccess::adoptState(state);
+        out = detail::ReadyEntry::fromEncoded(encoded);
         return true;
     }
 
-    bool steal_front(TaskRef& out) {
+    bool pop_back(TaskRef& out) {
+        detail::ReadyEntry entry;
+        if (!pop_back(entry)) {
+            return false;
+        }
+        if (!entry.isCppTask()) {
+            if (!push_back(entry)) {
+                detail::releaseReadyEntry(entry);
+            }
+            return false;
+        }
+        out = detail::readyEntryToTaskRef(entry);
+        return true;
+    }
+
+    bool steal_front(detail::ReadyEntry& out) {
         uint64_t head = m_head.load(std::memory_order_acquire);
         std::atomic_thread_fence(std::memory_order_seq_cst);
         uint64_t tail = m_tail.load(std::memory_order_acquire);
@@ -176,20 +203,36 @@ public:
                                             std::memory_order_relaxed)) {
             return false;
         }
-        TaskState* const state = m_slots[index].exchange(nullptr, std::memory_order_relaxed);
-        if (state == nullptr) {
+        const uintptr_t encoded = m_slots[index].exchange(0, std::memory_order_relaxed);
+        if (encoded == 0) {
             return false;
         }
 
-        TaskRef task = detail::TaskRefStorageAccess::adoptState(state);
-        if (state->m_resume_owner_only.load(std::memory_order_acquire)) {
-            if (auto* scheduler = task.belongScheduler()) {
-                scheduler->schedule(std::move(task));
+        detail::ReadyEntry entry = detail::ReadyEntry::fromEncoded(encoded);
+        if (detail::readyEntryResumeOwnerOnly(entry)) {
+            out = std::move(entry);
+            return false;
+        }
+
+        out = std::move(entry);
+        return true;
+    }
+
+    bool steal_front(TaskRef& out) {
+        detail::ReadyEntry entry;
+        if (!steal_front(entry)) {
+            if (entry.isValid() && !detail::scheduleReadyEntry(entry)) {
+                detail::releaseReadyEntry(entry);
             }
             return false;
         }
-
-        out = std::move(task);
+        if (!entry.isCppTask()) {
+            if (!detail::scheduleReadyEntry(entry)) {
+                detail::releaseReadyEntry(entry);
+            }
+            return false;
+        }
+        out = detail::readyEntryToTaskRef(entry);
         return true;
     }
 
@@ -212,18 +255,18 @@ public:
         const uint64_t head = m_head.load(std::memory_order_relaxed);
         const uint64_t tail = m_tail.load(std::memory_order_relaxed);
         for (uint64_t index = head; index < tail; ++index) {
-            TaskState* const state =
-                m_slots[index & kMask].exchange(nullptr, std::memory_order_relaxed);
-            if (state != nullptr) {
-                [[maybe_unused]] TaskRef released =
-                    detail::TaskRefStorageAccess::adoptState(state);
+            const uintptr_t encoded =
+                m_slots[index & kMask].exchange(0, std::memory_order_relaxed);
+            if (encoded != 0) {
+                detail::ReadyEntry entry = detail::ReadyEntry::fromEncoded(encoded);
+                detail::releaseReadyEntry(entry);
             }
         }
         m_head.store(tail, std::memory_order_relaxed);
     }
 
 private:
-    std::array<std::atomic<TaskState*>, kCapacity> m_slots{};
+    std::array<std::atomic<uintptr_t>, kCapacity> m_slots{};
     std::atomic<uint64_t> m_head{0};
     std::atomic<uint64_t> m_tail{0};
 };
@@ -242,7 +285,7 @@ struct IOSchedulerStealStats {
 /**
  * @brief IO 调度器执行线程的本地状态
  * @details 保存工作窃取缓冲、本地队列以及 LIFO 调度策略状态。
- * 该结构仅应在所属调度器线程内访问；`inject_queue` 允许其他线程安全地注入任务。
+ * 该结构仅应在所属调度器线程内访问；`ready_inject_queue` 允许其他线程安全地注入 ready entry。
  */
 struct IOSchedulerWorkerState {
     /**
@@ -254,10 +297,15 @@ struct IOSchedulerWorkerState {
     explicit IOSchedulerWorkerState(size_t inject_batch_size = GALAY_SCHEDULER_BATCH_SIZE,
                                     uint32_t lifo_limit = 8,
                                     uint32_t inject_interval = 8)
-        : inject_buffer(std::max<size_t>(1, inject_batch_size))
+        : ready_inject_buffer(std::max<size_t>(1, inject_batch_size))
         , lifo_poll_limit(lifo_limit)
         , inject_check_interval(inject_interval)
     {
+    }
+
+    ~IOSchedulerWorkerState()
+    {
+        clearPendingReadyEntries();
     }
 
     /**
@@ -265,7 +313,7 @@ struct IOSchedulerWorkerState {
      * @param inject_batch_size 目标批量大小；最小会被修正为 1
      */
     void resizeInjectBuffer(size_t inject_batch_size) {
-        inject_buffer.resize(std::max<size_t>(1, inject_batch_size));
+        ready_inject_buffer.resize(std::max<size_t>(1, inject_batch_size));
     }
 
     /**
@@ -277,14 +325,24 @@ struct IOSchedulerWorkerState {
         if (!task.isValid()) {
             return;
         }
-        if (lifo_enabled) {
-            if (lifo_slot.has_value()) {
-                enqueueDeferred(std::move(*lifo_slot));
-            }
-            lifo_slot = std::move(task);
+        scheduleLocal(detail::ReadyEntry(std::move(task)));
+    }
+
+    void scheduleLocal(detail::ReadyEntry entry) {
+        if (!entry.isValid()) {
             return;
         }
-        enqueueDeferred(std::move(task));
+        if (lifo_enabled) {
+            if (ready_lifo_slot.has_value()) {
+                detail::ReadyEntry deferred = std::move(*ready_lifo_slot);
+                enqueueDeferred(deferred);
+                ready_lifo_slot.reset();
+            }
+            ready_lifo_slot = std::move(entry);
+            return;
+        }
+        enqueueDeferred(entry);
+        detail::releaseReadyEntry(entry);
     }
 
     /**
@@ -295,7 +353,15 @@ struct IOSchedulerWorkerState {
         if (!task.isValid()) {
             return;
         }
-        enqueueDeferredFifo(std::move(task));
+        scheduleLocalDeferred(detail::ReadyEntry(std::move(task)));
+    }
+
+    void scheduleLocalDeferred(detail::ReadyEntry entry) {
+        if (!entry.isValid()) {
+            return;
+        }
+        enqueueDeferredFifo(entry);
+        detail::releaseReadyEntry(entry);
     }
 
     /**
@@ -307,10 +373,18 @@ struct IOSchedulerWorkerState {
         if (!task.isValid()) {
             return std::nullopt;
         }
+        return scheduleInjected(detail::ReadyEntry(std::move(task)));
+    }
+
+    std::optional<bool> scheduleInjected(detail::ReadyEntry entry) {
+        if (!entry.isValid()) {
+            return std::nullopt;
+        }
         const bool was_empty =
             injected_outstanding.fetch_add(1, std::memory_order_acq_rel) == 0;
-        if (!inject_queue.enqueue(std::move(task))) {
+        if (!ready_inject_queue.enqueue(std::move(entry))) {
             injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
+            detail::releaseReadyEntry(entry);
             return std::nullopt;
         }
         return was_empty;
@@ -321,27 +395,28 @@ struct IOSchedulerWorkerState {
      * @return 实际拉取并转移到本地队列的任务数量
      */
     size_t drainInjected() {
-        if (inject_buffer.empty()) {
+        if (ready_inject_buffer.empty()) {
             return 0;
         }
         const size_t remaining = local_ring.remainingCapacity();
         if (remaining == 0) {
             return 0;
         }
-        const size_t target = std::min(remaining, inject_buffer.size());
-        const size_t count = inject_queue.try_dequeue_bulk(inject_buffer.data(), target);
+        const size_t target = std::min(remaining, ready_inject_buffer.size());
+        const size_t count = ready_inject_queue.try_dequeue_bulk(ready_inject_buffer.data(), target);
         if (count > 0) {
             owner_drained_injected_once.store(true, std::memory_order_release);
             injected_outstanding.fetch_sub(count, std::memory_order_acq_rel);
         }
-        // inject_queue 保持生产者顺序；逆序填充以使 owner 端 pop_back()
+        // ready_inject_queue 保持生产者顺序；逆序填充以使 owner 端 pop_back()
         // 仍按最旧优先的 FIFO 语义处理延后和溢出任务。
         for (size_t i = count; i > 0; --i) {
-            TaskRef task = std::move(inject_buffer[i - 1]);
-            if (local_ring.push_back(std::move(task))) {
+            detail::ReadyEntry entry = std::move(ready_inject_buffer[i - 1]);
+            if (local_ring.push_back(entry)) {
                 continue;
             }
-            fallbackToInject(std::move(task));
+            fallbackToInject(entry);
+            detail::releaseReadyEntry(entry);
         }
         polls_since_inject = 0;
         return count;
@@ -376,7 +451,7 @@ struct IOSchedulerWorkerState {
      * @return true LIFO 槽位或 FIFO 队列中仍有待执行任务
      */
     bool hasLocalWork() const {
-        return lifo_slot.has_value() || !local_ring.empty();
+        return ready_lifo_slot.has_value() || !local_ring.empty();
     }
 
     /**
@@ -384,9 +459,11 @@ struct IOSchedulerWorkerState {
      * @details 当连续命中 LIFO 槽位过多时，将其回退到 FIFO 队列避免饥饿
      */
     void prepareForRun() {
-        if (lifo_enabled && lifo_slot.has_value() && consecutive_lifo_polls >= lifo_poll_limit) {
-            enqueueDeferred(std::move(*lifo_slot));
-            lifo_slot.reset();
+        if (lifo_enabled && ready_lifo_slot.has_value() && consecutive_lifo_polls >= lifo_poll_limit) {
+            detail::ReadyEntry deferred = std::move(*ready_lifo_slot);
+            enqueueDeferred(deferred);
+            detail::releaseReadyEntry(deferred);
+            ready_lifo_slot.reset();
             lifo_enabled = false;
             consecutive_lifo_polls = 0;
         }
@@ -397,12 +474,12 @@ struct IOSchedulerWorkerState {
      * @param out 成功时写入取出的任务
      * @return true 取到了任务；false 本地无任务可执行
      */
-    bool popNext(TaskRef& out) {
+    bool popNext(detail::ReadyEntry& out) {
         prepareForRun();
 
-        if (lifo_slot.has_value()) {
-            out = std::move(*lifo_slot);
-            lifo_slot.reset();
+        if (ready_lifo_slot.has_value()) {
+            out = std::move(*ready_lifo_slot);
+            ready_lifo_slot.reset();
             ++consecutive_lifo_polls;
             ++polls_since_inject;
             return true;
@@ -418,11 +495,43 @@ struct IOSchedulerWorkerState {
         return false;
     }
 
+    bool popNext(TaskRef& out) {
+        detail::ReadyEntry entry;
+        if (!popNext(entry)) {
+            return false;
+        }
+        if (!entry.isCppTask()) {
+            scheduleLocal(std::move(entry));
+            return false;
+        }
+        out = detail::readyEntryToTaskRef(entry);
+        return true;
+    }
+
     /**
      * @brief 供 stealing 路径调用的入口
      */
+    bool stealFront(detail::ReadyEntry& out) {
+        if (local_ring.steal_front(out)) {
+            return true;
+        }
+        if (out.isValid()) {
+            fallbackToInject(out);
+        }
+        return false;
+    }
+
     bool stealFront(TaskRef& out) {
-        return local_ring.steal_front(out);
+        detail::ReadyEntry entry;
+        if (!stealFront(entry)) {
+            return false;
+        }
+        if (!entry.isCppTask()) {
+            scheduleLocal(std::move(entry));
+            return false;
+        }
+        out = detail::readyEntryToTaskRef(entry);
+        return true;
     }
 
     /**
@@ -438,10 +547,10 @@ struct IOSchedulerWorkerState {
         };
     }
 
-    std::optional<TaskRef> lifo_slot;  ///< 最近一次入队的任务，优先以内联 LIFO 方式调度
+    std::optional<detail::ReadyEntry> ready_lifo_slot;  ///< 实际使用的语言中立 LIFO ready 槽位
     ChaseLevTaskRing local_ring;        ///< 调度器线程本地固定容量 Chase-Lev ring
-    moodycamel::ConcurrentQueue<TaskRef> inject_queue;  ///< 其他线程注入任务的无锁队列
-    std::vector<TaskRef> inject_buffer;  ///< 从 inject_queue 批量转移任务时复用的临时缓冲
+    moodycamel::ConcurrentQueue<detail::ReadyEntry> ready_inject_queue;  ///< 实际使用的语言中立跨线程注入队列
+    std::vector<detail::ReadyEntry> ready_inject_buffer;  ///< ready_inject_queue 批量转移缓冲
     size_t self_index = 0;  ///< worker 在 steal-domain 中的位置
     std::span<IOScheduler* const> siblings;  ///< steal-domain 的只读 sibling 视图
 
@@ -462,43 +571,60 @@ struct IOSchedulerWorkerState {
 
     std::atomic<uint64_t> injected_outstanding{0};  ///< 尚未搬运到本地队列的注入任务数
     std::atomic<bool> owner_drained_injected_once{false};  ///< owner 线程是否已处理过注入队列
-    uint32_t consecutive_lifo_polls = 0;  ///< 连续命中 lifo_slot 的次数
+    uint32_t consecutive_lifo_polls = 0;  ///< 连续命中 ready_lifo_slot 的次数
     uint32_t lifo_poll_limit = 8;  ///< 允许连续走 LIFO 的最大次数
-    uint32_t polls_since_inject = 0;  ///< 距离上次检查 inject_queue 已轮询的任务数
-    uint32_t inject_check_interval = 8;  ///< 检查 inject_queue 的轮询间隔
-    bool lifo_enabled = true;  ///< 是否允许优先从 lifo_slot 取任务
+    uint32_t polls_since_inject = 0;  ///< 距离上次检查 ready_inject_queue 已轮询的任务数
+    uint32_t inject_check_interval = 8;  ///< 检查 ready_inject_queue 的轮询间隔
+    bool lifo_enabled = true;  ///< 是否允许优先从 ready_lifo_slot 取任务
     bool stealing_enabled = true;  ///< 当前后端是否允许在 sibling 线程上恢复 stolen task
     uint64_t steal_attempts = 0;  ///< trySteal() 进入真实 sibling 探测的次数
     uint64_t steal_successes = 0;  ///< trySteal() 成功窃取至少一个任务的次数
 
 private:
-    void enqueueDeferred(TaskRef task) {
-        if (!task.isValid()) {
+    void clearPendingReadyEntries() noexcept {
+        ready_lifo_slot.reset();
+        local_ring.clear();
+
+        detail::ReadyEntry entry;
+        while (ready_inject_queue.try_dequeue(entry)) {
+            detail::releaseReadyEntry(entry);
+        }
+        for (auto& buffered : ready_inject_buffer) {
+            detail::releaseReadyEntry(buffered);
+        }
+        injected_outstanding.store(0, std::memory_order_release);
+    }
+
+    void enqueueDeferred(detail::ReadyEntry& entry) {
+        if (!entry.isValid()) {
             return;
         }
         if (local_ring.remainingCapacity() == 0) {
-            fallbackToInject(std::move(task));
+            fallbackToInject(entry);
             return;
         }
-        if (!local_ring.push_back(std::move(task))) {
-            fallbackToInject(std::move(task));
+        if (!local_ring.push_back(entry)) {
+            fallbackToInject(entry);
         }
     }
 
-    void enqueueDeferredFifo(TaskRef task) {
-        if (!task.isValid()) {
+    void enqueueDeferredFifo(detail::ReadyEntry& entry) {
+        if (!entry.isValid()) {
             return;
         }
-        injected_outstanding.fetch_add(1, std::memory_order_acq_rel);
-        inject_queue.enqueue(std::move(task));
+        fallbackToInject(entry);
     }
 
-    void fallbackToInject(TaskRef task) {
-        if (!task.isValid()) {
+    void fallbackToInject(detail::ReadyEntry& entry) {
+        if (!entry.isValid()) {
             return;
         }
         injected_outstanding.fetch_add(1, std::memory_order_acq_rel);
-        inject_queue.enqueue(std::move(task));
+        if (ready_inject_queue.enqueue(std::move(entry))) {
+            return;
+        }
+        injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
+        detail::releaseReadyEntry(entry);
     }
 };
 
@@ -816,13 +942,13 @@ inline bool IOSchedulerWorkerState::trySteal() {
             const size_t steal_target =
                 std::min(local_capacity, std::max<size_t>(1, victim_size / 2));
             for (; stolen < steal_target; ++stolen) {
-                TaskRef task;
-                if (!victim->stealFront(task)) {
+                detail::ReadyEntry entry;
+                if (!victim->stealFront(entry)) {
                     break;
                 }
-                if (!local_ring.push_back(std::move(task))) {
-                    if (auto* scheduler = task.belongScheduler()) {
-                        scheduler->schedule(std::move(task));
+                if (!local_ring.push_back(entry)) {
+                    if (!detail::scheduleReadyEntry(entry) && entry.isValid()) {
+                        victim->fallbackToInject(entry);
                     }
                     break;
                 }
@@ -831,25 +957,23 @@ inline bool IOSchedulerWorkerState::trySteal() {
             size_t attempts = 0;
             while (stolen < local_capacity && attempts < local_capacity) {
                 ++attempts;
-                TaskRef task;
-                if (!victim->inject_queue.try_dequeue(task)) {
+                detail::ReadyEntry entry;
+                if (!victim->ready_inject_queue.try_dequeue(entry)) {
                     break;
                 }
                 victim->injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
-                if (!task.isValid()) {
+                if (!entry.isValid()) {
                     continue;
                 }
-                auto* const state = task.state();
-                if (state != nullptr &&
-                    state->m_resume_owner_only.load(std::memory_order_acquire)) {
-                    if (auto* scheduler = task.belongScheduler()) {
-                        scheduler->schedule(std::move(task));
+                if (detail::readyEntryResumeOwnerOnly(entry)) {
+                    if (!detail::scheduleReadyEntry(entry) && entry.isValid()) {
+                        victim->fallbackToInject(entry);
                     }
                     continue;
                 }
-                if (!local_ring.push_back(std::move(task))) {
-                    if (auto* scheduler = task.belongScheduler()) {
-                        scheduler->schedule(std::move(task));
+                if (!local_ring.push_back(entry)) {
+                    if (!detail::scheduleReadyEntry(entry) && entry.isValid()) {
+                        victim->fallbackToInject(entry);
                     }
                     break;
                 }

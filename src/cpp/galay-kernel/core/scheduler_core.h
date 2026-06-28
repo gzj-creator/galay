@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <type_traits>
 #include <utility>
 
 namespace galay::kernel {
@@ -38,6 +39,31 @@ struct SchedulerReadyPassSummary {
     size_t drainedRemote = 0;  ///< 从跨线程注入队列拉取的任务数
     size_t passes = 0;  ///< 实际执行的 pass 数
 };
+
+namespace detail {
+
+template <typename>
+inline constexpr bool kUnsupportedReadyResumeCallback = false;
+
+template <typename ResumeFn>
+void invokeReadyEntryResume(ResumeFn& resume_fn, ReadyEntry& entry)
+{
+    if constexpr (std::is_invocable_v<ResumeFn&, ReadyEntry&>) {
+        resume_fn(entry);
+    } else if constexpr (std::is_invocable_v<ResumeFn&, TaskRef&>) {
+        if (!entry.isCppTask()) {
+            (void)resumeReadyEntry(entry);
+            return;
+        }
+        TaskRef task = readyEntryToTaskRef(entry);
+        resume_fn(task);
+    } else {
+        static_assert(kUnsupportedReadyResumeCallback<ResumeFn>,
+                      "ready pass callback must accept ReadyEntry& or TaskRef&");
+    }
+}
+
+}  // namespace detail
 
 class SchedulerCore
 {
@@ -86,7 +112,7 @@ public:
         const bool allow_injected_burst = !m_worker.hasLocalWork();
         size_t burst_credit = 0;
         SchedulerReadyPassSummary summary;
-        TaskRef next;
+        detail::ReadyEntry next;
         auto on_remote_collected = [&](size_t drained) {
             summary.drainedRemote += drained;
             on_remote_collected_fn(drained);
@@ -114,7 +140,8 @@ public:
                 }
             }
 
-            resume_fn(next);
+            detail::invokeReadyEntryResume(resume_fn, next);
+            detail::releaseReadyEntry(next);
             ++summary.ran;
             if (allow_injected_burst && burst_credit > 0) {
                 --burst_credit;

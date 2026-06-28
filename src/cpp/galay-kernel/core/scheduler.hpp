@@ -150,6 +150,13 @@ protected:
     void resume(TaskRef& task);
 
     /**
+     * @brief 在当前线程恢复 ready queue 中的就绪项
+     * @param entry 待恢复的语言中立就绪项；C++ 任务会被转换回 TaskRef 后恢复
+     * @note C 协程通过 ReadyEntry hook 恢复；缺失 hook 时安全拒绝并保留 entry。
+     */
+    void resume(detail::ReadyEntry& entry);
+
+    /**
      * @brief 将已配置的线程绑核设置应用到当前线程
      * @return true 绑核设置已成功应用或无需应用；false 平台调用失败
      * @note 只有在 setAffinity() 设定了具体 CPU 后该函数才会实际执行绑核
@@ -161,6 +168,51 @@ private:
     static constexpr int32_t kNoAffinity = -1;
     std::atomic<int32_t> m_affinity_cpu{kNoAffinity};
 };
+
+namespace detail {
+
+bool isSchedulerThread() noexcept;
+
+class SchedulerThreadScope
+{
+public:
+    SchedulerThreadScope() noexcept;
+    ~SchedulerThreadScope();
+
+    SchedulerThreadScope(const SchedulerThreadScope&) = delete;
+    SchedulerThreadScope& operator=(const SchedulerThreadScope&) = delete;
+
+private:
+    bool m_previous;
+};
+
+bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept;
+
+inline bool scheduleReadyEntry(ReadyEntry& entry) noexcept
+{
+    if (!entry.isValid()) {
+        return false;
+    }
+
+    if (entry.isCppTask()) {
+        auto* scheduler = readyEntryScheduler(entry);
+        if (scheduler == nullptr) {
+            return false;
+        }
+        TaskRef task = readyEntryToTaskRef(entry);
+        TaskRef scheduled_task(task);
+        if (scheduler->schedule(std::move(scheduled_task))) {
+            return true;
+        }
+        entry = ReadyEntry(std::move(task));
+        return false;
+    }
+
+    auto* scheduler = readyEntryScheduler(entry);
+    return scheduler != nullptr && scheduleReadyEntryOnScheduler(scheduler, entry);
+}
+
+}  // namespace detail
 
 inline bool Scheduler::bindTask(TaskRef& task) {
     auto* state = task.state();
@@ -177,21 +229,11 @@ inline bool Scheduler::bindTask(TaskRef& task) {
 
 inline void Scheduler::resume(TaskRef& task) {
     auto* state = task.state();
-    if (!state || !state->m_handle || state->m_done.load(std::memory_order_relaxed)) {
-        return;
-    }
-    state->m_queued.store(false, std::memory_order_relaxed);
-    state->m_resume_owner_only.store(false, std::memory_order_relaxed);
-    if (state->m_runtime == nullptr) {
-        state->m_handle.resume();
-        return;
-    }
-    if (state->m_runtime == detail::currentRuntime()) {
-        state->m_handle.resume();
-        return;
-    }
-    detail::CurrentRuntimeScope runtime_scope(state->m_runtime);
-    state->m_handle.resume();
+    (void)detail::resumeTaskState(state);
+}
+
+inline void Scheduler::resume(detail::ReadyEntry& entry) {
+    (void)detail::resumeReadyEntry(entry);
 }
 
 /**

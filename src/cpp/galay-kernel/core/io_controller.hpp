@@ -18,9 +18,10 @@
 #include "../common/error.h"
 #include "../common/host.hpp"
 
+#include <atomic>
+
 #ifdef USE_IOURING
 #include <algorithm>
-#include <atomic>
 #include <cstdint>
 #include <cstring>
 #include <deque>
@@ -31,6 +32,7 @@
 namespace galay::kernel
 {
 
+class Scheduler;
 struct SequenceAwaitableBase;
 
 /**
@@ -275,6 +277,7 @@ struct IOController {
         , m_sequence_owner{other.m_sequence_owner[READ], other.m_sequence_owner[WRITE]}
         , m_sequence_interest_mask(other.m_sequence_interest_mask)
         , m_sequence_armed_mask(other.m_sequence_armed_mask)
+        , m_owner_scheduler(other.m_owner_scheduler.load(std::memory_order_acquire))
 #ifdef USE_EPOLL
         , m_registered_events(other.m_registered_events)
 #endif
@@ -320,6 +323,8 @@ struct IOController {
             m_sequence_owner[WRITE] = other.m_sequence_owner[WRITE];
             m_sequence_interest_mask = other.m_sequence_interest_mask;
             m_sequence_armed_mask = other.m_sequence_armed_mask;
+            m_owner_scheduler.store(other.m_owner_scheduler.load(std::memory_order_acquire),
+                                    std::memory_order_release);
 #ifdef USE_EPOLL
             m_registered_events = other.m_registered_events;
 #endif
@@ -360,6 +365,7 @@ struct IOController {
         m_sequence_owner[WRITE] = nullptr;
         m_sequence_interest_mask = 0;
         m_sequence_armed_mask = 0;
+        m_owner_scheduler.store(nullptr, std::memory_order_release);
 #ifdef USE_EPOLL
         m_registered_events = 0;
 #endif
@@ -555,6 +561,7 @@ struct IOController {
     SequenceAwaitableBase* m_sequence_owner[IOController::SIZE] = {nullptr, nullptr};  ///< READ/WRITE 槽位所属的 sequence awaitable
     uint8_t m_sequence_interest_mask = 0;  ///< sequence 关心的 READ/WRITE 位掩码
     uint8_t m_sequence_armed_mask = 0;  ///< 已经向 reactor 注册的 READ/WRITE 位掩码
+    std::atomic<Scheduler*> m_owner_scheduler{nullptr};  ///< direct C TCP I/O 绑定的 owner scheduler；C++ awaitable 不依赖该字段
 #ifdef USE_EPOLL
     uint32_t m_registered_events = 0;          ///< epoll 已注册的事件掩码缓存
 #endif

@@ -13,6 +13,16 @@
 
 #include <cstddef>
 
+#if defined(USE_KQUEUE)
+#include "kqueue_scheduler.h"
+#endif
+#if defined(USE_EPOLL)
+#include "epoll_scheduler.h"
+#endif
+#if defined(USE_IOURING)
+#include "uring_scheduler.h"
+#endif
+
 #if defined(__linux__)
 #include <pthread.h>
 #include <sched.h>
@@ -20,6 +30,57 @@
 
 namespace galay::kernel
 {
+
+namespace detail
+{
+
+namespace
+{
+
+thread_local bool g_is_scheduler_thread = false;
+
+} // namespace
+
+bool isSchedulerThread() noexcept
+{
+    return g_is_scheduler_thread;
+}
+
+SchedulerThreadScope::SchedulerThreadScope() noexcept
+    : m_previous(g_is_scheduler_thread)
+{
+    g_is_scheduler_thread = true;
+}
+
+SchedulerThreadScope::~SchedulerThreadScope()
+{
+    g_is_scheduler_thread = m_previous;
+}
+
+bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept
+{
+    if (scheduler == nullptr || !entry.isValid()) {
+        return false;
+    }
+#if defined(USE_KQUEUE)
+    if (auto* kqueue = dynamic_cast<KqueueScheduler*>(scheduler)) {
+        return kqueue->scheduleReadyEntry(entry);
+    }
+#endif
+#if defined(USE_EPOLL)
+    if (auto* epoll = dynamic_cast<EpollScheduler*>(scheduler)) {
+        return epoll->scheduleReadyEntry(entry);
+    }
+#endif
+#if defined(USE_IOURING)
+    if (auto* uring = dynamic_cast<IOUringScheduler*>(scheduler)) {
+        return uring->scheduleReadyEntry(entry);
+    }
+#endif
+    return false;
+}
+
+} // namespace detail
 
 /**
  * @brief 配置或清除调度器的 CPU 亲和性目标

@@ -14,6 +14,12 @@ endfunction()
 file(GLOB GALAY_C_KERNEL_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
 foreach(benchmark_source IN LISTS GALAY_C_KERNEL_BENCHMARK_SOURCES)
     get_filename_component(source_name "${benchmark_source}" NAME_WE)
+    if((source_name STREQUAL "b19_coro_yield_requeue_latency" OR
+        source_name STREQUAL "b20_coro_wait_result_latency" OR
+        source_name STREQUAL "b21_coro_tcp_echo_throughput" OR
+        source_name STREQUAL "b22_coro_tcp_vs_callback") AND NOT GALAY_C_CORO_CONTEXT_SUPPORTED)
+        continue()
+    endif()
     string(REGEX REPLACE "^b[0-9]+_" "" scenario_name "${source_name}")
     galay_add_c_kernel_benchmark("benchmark_c_kernel_${scenario_name}" "${benchmark_source}")
 endforeach()

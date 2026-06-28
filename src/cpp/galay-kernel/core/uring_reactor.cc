@@ -30,6 +30,14 @@ namespace galay::kernel {
 namespace {
 
 constexpr int kImmediateReady = 1;
+constexpr int kSendNoSignalFlag =
+#ifdef MSG_NOSIGNAL
+    MSG_NOSIGNAL;
+#elif defined(__linux__)
+    0x4000;
+#else
+    0;
+#endif
 
 inline auto wakeUserData() -> void* {
     return reinterpret_cast<void*>(static_cast<intptr_t>(-1));
@@ -61,6 +69,13 @@ inline auto systemCodeFromError(const IOError& error) -> uint32_t {
 
 inline auto ioErrorCodeFromError(const IOError& error) -> IOErrorCode {
     return static_cast<IOErrorCode>(error.code() & 0xffffffffu);
+}
+
+inline void closeUndeliveredAcceptedHandle(std::expected<GHandle, IOError>& result) noexcept {
+    if (result && *result != GHandle::invalid()) {
+        galay_close((*result).fd);
+        result = GHandle::invalid();
+    }
 }
 
 inline bool resolveSequenceSlot(IOEventType type, IOController::Index& slot) {
@@ -312,12 +327,13 @@ void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
         handle->result_completed = false;
     }
 
+    const int send_flags = flags | kSendNoSignalFlag;
     if (shouldUseSendZc(length)) {
         io_uring_prep_send_zc(sqe,
                               fd,
                               buffer,
                               length,
-                              flags,
+                              send_flags,
                               IORING_SEND_ZC_REPORT_USAGE);
         if (handle != nullptr) {
             handle->notify_expected = true;
@@ -325,7 +341,7 @@ void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
         return;
     }
 
-    io_uring_prep_send(sqe, fd, buffer, length, flags);
+    io_uring_prep_send(sqe, fd, buffer, length, send_flags);
 }
 
 int IOUringReactor::addAccept(IOController* controller) {
@@ -511,9 +527,9 @@ int IOUringReactor::addWritev(IOController* controller) {
                            controller->m_handle.fd,
                            iov.iov_base,
                            static_cast<unsigned>(iov.iov_len),
-                           0);
+                           kSendNoSignalFlag);
     } else {
-        io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, 0);
+        io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, kSendNoSignalFlag);
     }
     io_uring_sqe_set_data(sqe, handle);
     return 0;
@@ -664,7 +680,7 @@ int IOUringReactor::addSendTo(IOController* controller) {
     awaitable->m_msg.msg_name = const_cast<sockaddr*>(awaitable->m_to.sockAddr());
     awaitable->m_msg.msg_namelen = *awaitable->m_to.addrLen();
 
-    io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, 0);
+    io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, kSendNoSignalFlag);
     io_uring_sqe_set_data(sqe, handle);
     return 0;
 }
@@ -816,9 +832,9 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
                                controller->m_handle.fd,
                                iov.iov_base,
                                static_cast<unsigned>(iov.iov_len),
-                               0);
+                               kSendNoSignalFlag);
         } else {
-            io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &c->m_msg, 0);
+            io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &c->m_msg, kSendNoSignalFlag);
         }
         break;
     }
@@ -854,7 +870,7 @@ int IOUringReactor::submitSequenceSqe(IOController::Index slot,
         c->m_msg.msg_iovlen = 1;
         c->m_msg.msg_name = const_cast<sockaddr*>(c->m_to.sockAddr());
         c->m_msg.msg_namelen = *c->m_to.addrLen();
-        io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &c->m_msg, 0);
+        io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &c->m_msg, kSendNoSignalFlag);
         break;
     }
     case SENDFILE:
@@ -1211,11 +1227,18 @@ void IOUringReactor::processAcceptCompletion(IOController* controller,
     auto result = io::handleAccept(cqe);
 
     if (result) {
-        controller->enqueueAcceptedHandle(*result);
-        if (awaitable != nullptr && !controller->m_accept_result_assigned &&
-            controller->tryConsumeAcceptedHandle(awaitable->m_host, awaitable->m_result)) {
-            controller->m_accept_result_assigned = true;
-            awaitable->m_waker.wakeUp();
+        if (awaitable != nullptr && !controller->m_accept_result_assigned) {
+            if (awaitable->handleComplete(cqe, controller->m_handle)) {
+                controller->enqueueAcceptedHandle(*result);
+                if (controller->tryConsumeAcceptedHandle(awaitable->m_host, awaitable->m_result)) {
+                    controller->m_accept_result_assigned = true;
+                    awaitable->m_waker.wakeUp();
+                }
+            } else {
+                closeUndeliveredAcceptedHandle(result);
+            }
+        } else {
+            controller->enqueueAcceptedHandle(*result);
         }
     } else if (!IOError::contains(result.error().code(), kNotReady)) {
         if (awaitable != nullptr && !controller->m_accept_result_assigned) {
@@ -1265,6 +1288,7 @@ void IOUringReactor::processRecvCompletion(IOController* controller,
     }
 
     const bool more = (cqe->flags & IORING_CQE_F_MORE) != 0;
+    const bool cancelled = (-cqe->res == ECANCELED);
     const bool buffer_exhausted = (-cqe->res == ENOBUFS);
     const bool transient =
         (-cqe->res == EAGAIN || -cqe->res == EWOULDBLOCK || -cqe->res == EINTR);
@@ -1297,14 +1321,14 @@ void IOUringReactor::processRecvCompletion(IOController* controller,
         chunk.kind = ReadyRecvChunk::Kind::Eof;
         chunk.result = static_cast<size_t>(0);
         controller->enqueueReadyRecv(std::move(chunk));
-    } else if (!transient && !buffer_exhausted) {
+    } else if (!transient && !buffer_exhausted && !cancelled) {
         ReadyRecvChunk chunk;
         chunk.kind = ReadyRecvChunk::Kind::Error;
         chunk.result = std::unexpected(IOError(kRecvFailed, static_cast<uint32_t>(-cqe->res)));
         controller->enqueueReadyRecv(std::move(chunk));
     }
 
-    if (awaitable != nullptr && !controller->m_recv_result_assigned) {
+    if (awaitable != nullptr && !cancelled && !controller->m_recv_result_assigned) {
         bool should_deliver = false;
         if (buffer_exhausted) {
             should_deliver = controller->tryConsumeReadyRecv(awaitable->m_buffer,

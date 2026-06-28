@@ -30,6 +30,15 @@
 namespace galay::kernel::io
 {
 
+inline constexpr int kSendNoSignalFlag =
+#ifdef MSG_NOSIGNAL
+    MSG_NOSIGNAL;
+#elif defined(__linux__)
+    0x4000;
+#else
+    0;
+#endif
+
 inline std::pair<std::expected<GHandle, IOError>, Host> handleAccept(GHandle listen_handle)
 {
     sockaddr_storage addr{};
@@ -69,7 +78,7 @@ inline std::expected<size_t, IOError> handleRecv(GHandle handle, char* buffer, s
 
 inline std::expected<size_t, IOError> handleSend(GHandle handle, const char* buffer, size_t length)
 {
-    ssize_t sentBytes = send(handle.fd, buffer, length, 0);
+    ssize_t sentBytes = send(handle.fd, buffer, length, kSendNoSignalFlag);
     if (sentBytes >= 0) {
         return static_cast<size_t>(sentBytes);
     } else {
@@ -140,7 +149,7 @@ inline std::pair<std::expected<size_t, IOError>, Host> handleRecvFrom(GHandle ha
 
 inline std::expected<size_t, IOError> handleSendTo(GHandle handle, const char* buffer, size_t length, const Host& to)
 {
-    ssize_t sentBytes = sendto(handle.fd, buffer, length, 0, to.sockAddr(), to.addrLen());
+    ssize_t sentBytes = sendto(handle.fd, buffer, length, kSendNoSignalFlag, to.sockAddr(), to.addrLen());
     if (sentBytes >= 0) {
         return static_cast<size_t>(sentBytes);
     } else {
