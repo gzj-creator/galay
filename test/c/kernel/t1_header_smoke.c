@@ -2,7 +2,6 @@
 #include <galay/c/galay-kernel-c/async-c/async_file_c.h>
 #include <galay/c/galay-kernel-c/async-c/file_watcher_c.h>
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_coro_c.h>
 #include <galay/c/galay-kernel-c/async-c/udp_socket_c.h>
 #include <galay/c/galay-kernel-c/concurrency-c/async_mutex_c.h>
 #include <galay/c/galay-kernel-c/concurrency-c/async_waiter_c.h>
@@ -39,10 +38,7 @@ int main(void)
         C_TcpSocketParameterInvalid,
         C_TcpSocketMemoryAllocFailed,
         C_TcpSocketIOFailed,
-        C_TcpSocketOperationInvalid,
-        C_TcpSocketRuntimeNotRunning,
-        C_TcpSocketRuntimeSpawnFailed,
-        C_TcpSocketTimeout
+        C_TcpSocketOperationInvalid
     };
     C_UdpSocketResultCode udp_code = C_UdpSocketSuccess;
     C_UdpSocketResultCode udp_timeout_code = C_UdpSocketTimeout;
@@ -85,9 +81,6 @@ int main(void)
             codes[2] == C_TcpSocketMemoryAllocFailed &&
             codes[3] == C_TcpSocketIOFailed &&
             codes[4] == C_TcpSocketOperationInvalid &&
-            codes[5] == C_TcpSocketRuntimeNotRunning &&
-            codes[6] == C_TcpSocketRuntimeSpawnFailed &&
-            codes[7] == C_TcpSocketTimeout &&
             udp_code == C_UdpSocketSuccess &&
             udp_timeout_code == C_UdpSocketTimeout &&
             async_file_code == C_AsyncFileSuccess &&

@@ -1,5 +1,4 @@
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_coro_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
@@ -22,13 +21,13 @@ static void server_entry(void* arg)
     static const char response[] = "pong";
     EchoExample* example = (EchoExample*)arg;
 
-    C_IOResult accepted = galay_coro_tcp_accept(example->listener, &example->accepted, 1000);
+    C_IOResult accepted = galay_kernel_tcp_socket_accept(example->listener, &example->accepted, NULL, 1000);
     if (accepted.code != C_IOResultOk) {
         example->server_result = accepted;
         return;
     }
 
-    C_IOResult received = galay_coro_tcp_recv(&example->accepted,
+    C_IOResult received = galay_kernel_tcp_socket_recv(&example->accepted,
                                               example->server_buffer,
                                               sizeof(example->server_buffer),
                                               1000);
@@ -37,12 +36,12 @@ static void server_entry(void* arg)
         return;
     }
 
-    C_IOResult sent = galay_coro_tcp_send(&example->accepted,
+    C_IOResult sent = galay_kernel_tcp_socket_send(&example->accepted,
                                           response,
                                           sizeof(response) - 1,
                                           1000);
     example->server_result = sent;
-    (void)galay_coro_tcp_close(&example->accepted, 1000);
+    (void)galay_kernel_tcp_socket_close(&example->accepted, 1000);
 }
 
 static void client_entry(void* arg)
@@ -55,13 +54,13 @@ static void client_entry(void* arg)
         return;
     }
 
-    C_IOResult connected = galay_coro_tcp_connect(&example->client, &example->peer, 1000);
+    C_IOResult connected = galay_kernel_tcp_socket_connect(&example->client, &example->peer, 1000);
     if (connected.code != C_IOResultOk) {
         example->client_result = connected;
         return;
     }
 
-    C_IOResult sent = galay_coro_tcp_send(&example->client,
+    C_IOResult sent = galay_kernel_tcp_socket_send(&example->client,
                                           request,
                                           sizeof(request) - 1,
                                           1000);
@@ -70,12 +69,12 @@ static void client_entry(void* arg)
         return;
     }
 
-    C_IOResult received = galay_coro_tcp_recv(&example->client,
+    C_IOResult received = galay_kernel_tcp_socket_recv(&example->client,
                                               example->client_buffer,
                                               sizeof(example->client_buffer),
                                               1000);
     example->client_result = received;
-    (void)galay_coro_tcp_close(&example->client, 1000);
+    (void)galay_kernel_tcp_socket_close(&example->client, 1000);
 }
 
 int main(void)

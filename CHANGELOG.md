@@ -31,6 +31,7 @@
 
 ### Changed
 
+- C Kernel TCP async C ABI 破坏式迁移为 direct C coroutine 形态：`tcp_socket_c` 直接提供 `C_IOResult` 返回的 accept/connect/recv/send/close 接口，移除 runtime callback/spawn 桥接路径，并同步更新 TCP C 测试、示例和 benchmark。
 - C 栈式协程 context 支持矩阵改为显式诊断：Linux/aarch64 当前不声明支持，CMake 会输出不支持原因，并让 direct C coroutine 测试、示例和 benchmark 带 skip reason 跳过。
 - galay-kernel 内部源码 include 由公共前缀 `<galay/cpp/galay-kernel/...>` 统一改为相对路径（同目录直引、跨目录用 `../core/`、`../common/`），覆盖 async/core/common 下的 reactor、scheduler、socket、file、logger 等实现文件，避免内部实现依赖安装态公共 include 前缀。
 - C++ 模块文档目录从 `docs/modules` 收敛到 `docs/cpp/modules`，顶层 README、`.gitignore` 与模块文档导航同步改向新的 cpp 文档路径。
@@ -50,6 +51,7 @@
 
 ### Removed
 
+- 移除独立的 `tcp_socket_coro_c.{h,cc}` direct coroutine TCP C API 文件，相关能力并入 `tcp_socket_c.{h,cc}`。
 - 移除旧 `docs/modules` 文档树，当前 C++ 模块文档统一从 `docs/cpp/modules` 进入。
 - 移除旧 C 跨模块 smoke 示例与 benchmark 目录，只保留当前已落地的 C Kernel TcpSocket 文档、测试、示例和压测资产。
 - 移除 C ABI TCP accept 单次 awaitable handle 接口 `galay_kernel_tcp_accept_{start,wait,join,cancel,destroy}`，改用 `galay_kernel_tcp_socket_accept` 启动 socket 绑定的 callback accept loop。

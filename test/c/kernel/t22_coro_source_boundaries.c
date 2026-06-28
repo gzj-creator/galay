@@ -117,6 +117,12 @@ static int is_coro_boundary_path(const char* relative_path)
            strstr(basename_ptr(relative_path), "coro") != NULL;
 }
 
+static int is_direct_c_async_boundary_path(const char* relative_path)
+{
+    return strstr(relative_path, "src/c/galay-kernel-c/async-c/") == relative_path ||
+           strstr(relative_path, "src/c/galay-kernel-c/concurrency-c/") == relative_path;
+}
+
 static int is_directory(const char* path)
 {
     struct stat st;
@@ -157,7 +163,41 @@ static int scan_coro_file(const char* full_path, const char* relative_path)
     return failed;
 }
 
-static int scan_tree(const char* relative_dir, int* scanned_files)
+static int scan_direct_c_async_file(const char* full_path, const char* relative_path)
+{
+    char* data = NULL;
+    size_t len = 0;
+    if (!read_file(full_path, &data, &len)) {
+        return 1;
+    }
+
+    int failed = 0;
+    const char* forbidden[] = {
+        "runtime->spawn(",
+        "cpp_runtime->spawn(",
+        "Task<void> c_api_",
+        "_callback_t",
+        "RuntimeSpawnFailed",
+        "RuntimeNotRunning",
+        "try {",
+        "catch (",
+        "catch (...)",
+    };
+    for (size_t i = 0; i < sizeof(forbidden) / sizeof(forbidden[0]); ++i) {
+        if (contains_text(data, len, forbidden[i])) {
+            fprintf(stderr,
+                    "[T22] %s must not expose legacy callback/spawn bridge token %s\n",
+                    relative_path,
+                    forbidden[i]);
+            failed = 1;
+        }
+    }
+
+    free(data);
+    return failed;
+}
+
+static int scan_tree(const char* relative_dir, int* scanned_files, int direct_async_scan)
 {
     char full_dir[kMaxPath];
     if (!join_path(full_dir, sizeof(full_dir), GALAY_SOURCE_DIR, relative_dir)) {
@@ -195,11 +235,20 @@ static int scan_tree(const char* relative_dir, int* scanned_files)
         }
 
         if (is_directory(child_full)) {
-            failed |= scan_tree(child_relative, scanned_files);
+            failed |= scan_tree(child_relative, scanned_files, direct_async_scan);
             continue;
         }
 
         if (!is_regular_file(child_full) || !is_source_file(child_relative)) {
+            continue;
+        }
+
+        if (direct_async_scan) {
+            if (!is_direct_c_async_boundary_path(child_relative)) {
+                continue;
+            }
+            ++(*scanned_files);
+            failed |= scan_direct_c_async_file(child_full, child_relative);
             continue;
         }
 
@@ -215,37 +264,9 @@ static int scan_tree(const char* relative_dir, int* scanned_files)
     return failed;
 }
 
-static int require_legacy_callback_bridge(void)
-{
-    const char* relative_path = "src/c/galay-kernel-c/async-c/tcp_socket_c.cc";
-    char full_path[kMaxPath];
-    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
-        return 1;
-    }
-
-    char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
-        return 1;
-    }
-
-    int failed = 0;
-    if (!contains_text(data, len, "runtime->spawn(")) {
-        fprintf(stderr, "[T22] legacy callback TCP bridge no longer exposes runtime->spawn( detector input\n");
-        failed = 1;
-    }
-    if (!contains_text(data, len, "Task<void> c_api_")) {
-        fprintf(stderr, "[T22] legacy callback TCP bridge no longer exposes Task<void> c_api_ detector input\n");
-        failed = 1;
-    }
-
-    free(data);
-    return failed;
-}
-
 static int require_direct_tcp_c_api_uses_core_bridge(void)
 {
-    const char* relative_path = "src/c/galay-kernel-c/async-c/tcp_socket_coro_c.cc";
+    const char* relative_path = "src/c/galay-kernel-c/async-c/tcp_socket_c.cc";
     char full_path[kMaxPath];
     if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
         return 1;
@@ -343,6 +364,18 @@ static int require_direct_tcp_timeout_arbitration(void)
     }
 
     int failed = 0;
+    if (contains_text(data, len, "try {") ||
+        contains_text(data, len, "catch (") ||
+        contains_text(data, len, "catch (...)")) {
+        fprintf(stderr,
+                "[T22] direct TCP core bridge must propagate errors through result values, not try/catch\n");
+        failed = 1;
+    }
+    if (contains_text(data, len, "std::make_shared")) {
+        fprintf(stderr,
+                "[T22] direct TCP core bridge must use nothrow allocation and return ENOMEM instead of std::make_shared\n");
+        failed = 1;
+    }
     if (!contains_text(data,
                        len,
                        "expected == CoroTcpCompletionPhase::TimedOut ||\n"
@@ -353,9 +386,10 @@ static int require_direct_tcp_timeout_arbitration(void)
                 "[T22] direct TCP guarded completion must reject CQE delivery after timeout/cancel\n");
         failed = 1;
     }
-    if (!contains_text(data, len, "static_cast<IOScheduler*>(scheduler)->remove(controller)")) {
+    if (!contains_text(data, len, "C_IOResult result = operation.wait(timeout_ms);") ||
+        !contains_text(data, len, "operation.markWaitTimeout();")) {
         fprintf(stderr,
-                "[T22] direct TCP timer registration failures must remove backend reactor registration before returning\n");
+                "[T22] direct TCP must propagate timeout through the C wait result and mark the operation timed out\n");
         failed = 1;
     }
 
@@ -434,25 +468,29 @@ static int require_iouring_accept_uses_direct_completion_arbitration(void)
 
 int main(void)
 {
-    int failed = require_legacy_callback_bridge();
-    failed |= require_direct_tcp_c_api_uses_core_bridge();
+    int failed = require_direct_tcp_c_api_uses_core_bridge();
     failed |= require_direct_tcp_iouring_result_flag_reset();
     failed |= require_direct_tcp_timeout_arbitration();
     failed |= require_explicit_linux_aarch64_coro_context_boundary();
     failed |= require_iouring_accept_uses_direct_completion_arbitration();
 
     int scanned_files = 0;
-    failed |= scan_tree("src/c/galay-kernel-c", &scanned_files);
+    failed |= scan_tree("src/c/galay-kernel-c", &scanned_files, 0);
+
+    int scanned_direct_async_files = 0;
+    failed |= scan_tree("src/c/galay-kernel-c", &scanned_direct_async_files, 1);
 
     if (failed) {
         return 1;
     }
 
-    if (scanned_files == 0) {
+    if (scanned_files == 0 || scanned_direct_async_files == 0) {
         printf("T22-CoroSourceBoundaries SKIP; no future C coroutine source files found under src/c/galay-kernel-c, so bridge boundary checks are not active yet\n");
         return 0;
     }
 
-    printf("T22-CoroSourceBoundaries PASS; checked %d future C coroutine source file(s)\n", scanned_files);
+    printf("T22-CoroSourceBoundaries PASS; checked %d C coroutine source file(s) and %d direct C async source/header file(s)\n",
+           scanned_files,
+           scanned_direct_async_files);
     return 0;
 }

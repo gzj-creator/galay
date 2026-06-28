@@ -1,5 +1,4 @@
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_coro_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
@@ -95,7 +94,7 @@ static int send_all_coro(galay_kernel_tcp_socket_t* socket, const char* data, si
 {
     size_t sent = 0;
     while (sent < length) {
-        C_IOResult result = galay_coro_tcp_send(socket, data + sent, length - sent, 1000);
+        C_IOResult result = galay_kernel_tcp_socket_send(socket, data + sent, length - sent, 1000);
         if (result.code != C_IOResultOk || result.bytes == 0) {
             return 1;
         }
@@ -108,7 +107,7 @@ static int recv_all_coro(galay_kernel_tcp_socket_t* socket, char* data, size_t l
 {
     size_t received = 0;
     while (received < length) {
-        C_IOResult result = galay_coro_tcp_recv(socket, data + received, length - received, 1000);
+        C_IOResult result = galay_kernel_tcp_socket_recv(socket, data + received, length - received, 1000);
         if (result.code == C_IOResultEof && received == 0) {
             return 2;
         }
@@ -123,7 +122,7 @@ static int recv_all_coro(galay_kernel_tcp_socket_t* socket, char* data, size_t l
 static void direct_server_entry(void* arg)
 {
     DirectServer* server = (DirectServer*)arg;
-    C_IOResult accepted = galay_coro_tcp_accept(server->listener, &server->accepted, 5000);
+    C_IOResult accepted = galay_kernel_tcp_socket_accept(server->listener, &server->accepted, NULL, 5000);
     if (accepted.code != C_IOResultOk) {
         ++server->errors;
         atomic_store(&server->ready, 1);
@@ -146,7 +145,7 @@ static void direct_server_entry(void* arg)
         }
     }
 
-    (void)galay_coro_tcp_close(&server->accepted, 1000);
+    (void)galay_kernel_tcp_socket_close(&server->accepted, 1000);
 }
 
 static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)

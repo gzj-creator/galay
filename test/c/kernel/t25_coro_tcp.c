@@ -1,5 +1,4 @@
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_coro_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
@@ -99,7 +98,7 @@ static void echo_server_entry(void* arg)
 {
     static const char response[] = "coro-pong-response";
     EchoState* state = (EchoState*)arg;
-    state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
+    state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
     if (state->accept_result.code != C_IOResultOk) {
         return;
     }
@@ -109,7 +108,7 @@ static void echo_server_entry(void* arg)
     while (received < expected) {
         const size_t remaining = expected - received;
         const size_t chunk = remaining < 5 ? remaining : 5;
-        C_IOResult result = galay_coro_tcp_recv(&state->accepted,
+        C_IOResult result = galay_kernel_tcp_socket_recv(&state->accepted,
                                                 state->server_buffer + received,
                                                 chunk,
                                                 1000);
@@ -125,7 +124,7 @@ static void echo_server_entry(void* arg)
     while (sent < length) {
         const size_t remaining = length - sent;
         const size_t chunk = remaining < 4 ? remaining : 4;
-        C_IOResult result = galay_coro_tcp_send(&state->accepted,
+        C_IOResult result = galay_kernel_tcp_socket_send(&state->accepted,
                                                 response + sent,
                                                 chunk,
                                                 1000);
@@ -136,7 +135,7 @@ static void echo_server_entry(void* arg)
         sent += result.bytes;
     }
 
-    state->server_close_result = galay_coro_tcp_close(&state->accepted, 1000);
+    state->server_close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
 }
 
 static void echo_client_entry(void* arg)
@@ -147,7 +146,7 @@ static void echo_client_entry(void* arg)
         state->connect_result.code = C_IOResultError;
         return;
     }
-    state->connect_result = galay_coro_tcp_connect(&state->client, &state->peer, 1000);
+    state->connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 1000);
     if (state->connect_result.code != C_IOResultOk) {
         return;
     }
@@ -157,7 +156,7 @@ static void echo_client_entry(void* arg)
     while (sent < request_len) {
         const size_t remaining = request_len - sent;
         const size_t chunk = remaining < 4 ? remaining : 4;
-        C_IOResult result = galay_coro_tcp_send(&state->client,
+        C_IOResult result = galay_kernel_tcp_socket_send(&state->client,
                                                 request + sent,
                                                 chunk,
                                                 1000);
@@ -173,7 +172,7 @@ static void echo_client_entry(void* arg)
     while (received < expected) {
         const size_t remaining = expected - received;
         const size_t chunk = remaining < 3 ? remaining : 3;
-        C_IOResult result = galay_coro_tcp_recv(&state->client,
+        C_IOResult result = galay_kernel_tcp_socket_recv(&state->client,
                                                 state->client_buffer + received,
                                                 chunk,
                                                 1000);
@@ -184,7 +183,7 @@ static void echo_client_entry(void* arg)
         received += result.bytes;
     }
 
-    state->client_close_result = galay_coro_tcp_close(&state->client, 1000);
+    state->client_close_result = galay_kernel_tcp_socket_close(&state->client, 1000);
 }
 
 typedef struct AcceptTimeoutState {
@@ -204,14 +203,14 @@ typedef struct AcceptTimeoutState {
 static void accept_timeout_entry(void* arg)
 {
     AcceptTimeoutState* state = (AcceptTimeoutState*)arg;
-    state->result = galay_coro_tcp_accept(state->listener, &state->accepted, 5);
+    state->result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 5);
 }
 
 static void accept_timeout_late_accept_entry(void* arg)
 {
     AcceptTimeoutState* state = (AcceptTimeoutState*)arg;
     state->late_accept_result =
-        galay_coro_tcp_accept(state->listener, &state->accepted_late, 1000);
+        galay_kernel_tcp_socket_accept(state->listener, &state->accepted_late, NULL, 1000);
 }
 
 static void accept_timeout_late_client_entry(void* arg)
@@ -226,9 +225,9 @@ static void accept_timeout_late_client_entry(void* arg)
         return;
     }
     state->late_connect_result =
-        galay_coro_tcp_connect(&state->late_client, &state->peer, 1000);
+        galay_kernel_tcp_socket_connect(&state->late_client, &state->peer, 1000);
     if (state->late_connect_result.code == C_IOResultOk) {
-        state->late_client_close_result = galay_coro_tcp_close(&state->late_client, 1000);
+        state->late_client_close_result = galay_kernel_tcp_socket_close(&state->late_client, 1000);
     }
 }
 
@@ -252,20 +251,20 @@ typedef struct RecvTimeoutState {
 static void recv_timeout_server_entry(void* arg)
 {
     RecvTimeoutState* state = (RecvTimeoutState*)arg;
-    state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
+    state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
     if (state->accept_result.code != C_IOResultOk) {
         return;
     }
-    state->recv_result = galay_coro_tcp_recv(&state->accepted,
+    state->recv_result = galay_kernel_tcp_socket_recv(&state->accepted,
                                              state->buffer,
                                              sizeof(state->buffer),
                                              5);
     atomic_store(&state->phase, 1);
-    state->late_recv_result = galay_coro_tcp_recv(&state->accepted,
+    state->late_recv_result = galay_kernel_tcp_socket_recv(&state->accepted,
                                                   state->late_buffer,
                                                   sizeof(state->late_buffer),
                                                   1000);
-    state->server_close_result = galay_coro_tcp_close(&state->accepted, 1000);
+    state->server_close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
 }
 
 static void recv_timeout_client_entry(void* arg)
@@ -275,15 +274,15 @@ static void recv_timeout_client_entry(void* arg)
         state->connect_result.code = C_IOResultError;
         return;
     }
-    state->connect_result = galay_coro_tcp_connect(&state->client, &state->peer, 1000);
+    state->connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 1000);
     if (state->connect_result.code != C_IOResultOk) {
         return;
     }
     while (atomic_load(&state->phase) != 1) {
         (void)galay_coro_yield();
     }
-    state->late_send_result = galay_coro_tcp_send(&state->client, "late", 4, 1000);
-    state->client_close_result = galay_coro_tcp_close(&state->client, 1000);
+    state->late_send_result = galay_kernel_tcp_socket_send(&state->client, "late", 4, 1000);
+    state->client_close_result = galay_kernel_tcp_socket_close(&state->client, 1000);
 }
 
 typedef struct CloseWaitingState {
@@ -299,13 +298,13 @@ typedef struct CloseWaitingState {
 static void close_waiting_server_entry(void* arg)
 {
     CloseWaitingState* state = (CloseWaitingState*)arg;
-    state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
+    state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
     if (state->accept_result.code != C_IOResultOk) {
         atomic_store(&state->phase, 3);
         return;
     }
     atomic_store(&state->phase, 1);
-    state->recv_result = galay_coro_tcp_recv(&state->accepted,
+    state->recv_result = galay_kernel_tcp_socket_recv(&state->accepted,
                                              state->buffer,
                                              sizeof(state->buffer),
                                              1000);
@@ -318,7 +317,7 @@ static void close_waiting_closer_entry(void* arg)
     while (atomic_load(&state->phase) != 1) {
         (void)galay_coro_yield();
     }
-    state->close_result = galay_coro_tcp_close(&state->accepted, 1000);
+    state->close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
 }
 
 typedef struct ZeroTimeoutConnectState {
@@ -361,7 +360,7 @@ typedef struct SendTimeoutState {
 static void immediate_accept_entry(void* arg)
 {
     ImmediateAcceptState* state = (ImmediateAcceptState*)arg;
-    state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
+    state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
 }
 
 static void connect_timeout_close_entry(void* arg)
@@ -372,7 +371,7 @@ static void connect_timeout_close_entry(void* arg)
         return;
     }
 
-    state->connect_result = galay_coro_tcp_connect(&state->client, &state->peer, 1);
+    state->connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 1);
     if (state->connect_result.code == C_IOResultTimeout) {
         C_Host endpoint = {0};
         state->endpoint_after_timeout =
@@ -383,7 +382,7 @@ static void connect_timeout_close_entry(void* arg)
 static void send_timeout_server_entry(void* arg)
 {
     SendTimeoutState* state = (SendTimeoutState*)arg;
-    state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
+    state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
     if (state->accept_result.code != C_IOResultOk) {
         return;
     }
@@ -414,8 +413,8 @@ static void send_timeout_server_entry(void* arg)
         return;
     }
 
-    state->send_result = galay_coro_tcp_send(&state->accepted, "z", 1, 1);
-    state->close_result = galay_coro_tcp_close(&state->accepted, 1000);
+    state->send_result = galay_kernel_tcp_socket_send(&state->accepted, "z", 1, 1);
+    state->close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
 }
 
 static void zero_timeout_connect_entry(void* arg)
@@ -426,51 +425,21 @@ static void zero_timeout_connect_entry(void* arg)
         return;
     }
 
-    state->zero_connect_result = galay_coro_tcp_connect(&state->client, &state->peer, 0);
+    state->zero_connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 0);
     state->zero_accept_probe_result =
-        galay_coro_tcp_accept(state->listener, &state->accepted_from_zero, 20);
+        galay_kernel_tcp_socket_accept(state->listener, &state->accepted_from_zero, NULL, 20);
     if (state->zero_accept_probe_result.code == C_IOResultOk) {
-        (void)galay_coro_tcp_close(&state->accepted_from_zero, 1000);
+        (void)galay_kernel_tcp_socket_close(&state->accepted_from_zero, 1000);
     }
 
-    state->connect_result = galay_coro_tcp_connect(&state->client, &state->peer, 1000);
+    state->connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 1000);
     if (state->connect_result.code == C_IOResultOk) {
         state->accept_result =
-            galay_coro_tcp_accept(state->listener, &state->accepted_after_connect, 1000);
+            galay_kernel_tcp_socket_accept(state->listener, &state->accepted_after_connect, NULL, 1000);
     }
     if (state->client.socket != 0) {
-        state->close_client_result = galay_coro_tcp_close(&state->client, 12345);
+        state->close_client_result = galay_kernel_tcp_socket_close(&state->client, 12345);
     }
-}
-
-typedef struct MixedPendingCloseState {
-    galay_kernel_runtime_t* runtime;
-    galay_kernel_tcp_socket_t* listener;
-    galay_kernel_tcp_socket_t accepted;
-    C_IOResult accept_result;
-    C_IOResult close_result;
-    atomic_int callback_called;
-    C_TcpSocketResultCode callback_code;
-    char callback_buffer[8];
-} MixedPendingCloseState;
-
-static void mixed_pending_accept_entry(void* arg)
-{
-    MixedPendingCloseState* state = (MixedPendingCloseState*)arg;
-    state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
-}
-
-static void mixed_pending_close_entry(void* arg)
-{
-    MixedPendingCloseState* state = (MixedPendingCloseState*)arg;
-    state->close_result = galay_coro_tcp_close(&state->accepted, 0);
-}
-
-static void mixed_pending_recv_callback(galay_kernel_tcp_recv_result_t* result, void* ctx)
-{
-    MixedPendingCloseState* state = (MixedPendingCloseState*)ctx;
-    state->callback_code = result != 0 ? result->code : C_TcpSocketIOFailed;
-    atomic_store(&state->callback_called, 1);
 }
 
 typedef struct MultiSchedulerMisuseState {
@@ -506,19 +475,19 @@ static void multi_scheduler_owner_entry(void* arg)
         atomic_store(&state->phase, 3);
         return;
     }
-    state->connect_result = galay_coro_tcp_connect(&state->client, &state->peer, 1000);
+    state->connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 1000);
     if (state->connect_result.code == C_IOResultOk) {
-        state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
+        state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
     }
     atomic_store(&state->phase, 1);
     while (atomic_load(&state->phase) == 1) {
         (void)galay_coro_yield();
     }
     if (state->client.socket != 0) {
-        state->owner_close_client_result = galay_coro_tcp_close(&state->client, 1000);
+        state->owner_close_client_result = galay_kernel_tcp_socket_close(&state->client, 1000);
     }
     if (state->accepted.socket != 0) {
-        state->owner_close_server_result = galay_coro_tcp_close(&state->accepted, 1000);
+        state->owner_close_server_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
     }
 }
 
@@ -529,7 +498,7 @@ static void multi_scheduler_misuse_entry(void* arg)
         (void)galay_coro_yield();
     }
     if (atomic_load(&state->phase) == 1) {
-        state->misuse_send_result = galay_coro_tcp_send(&state->client, "x", 1, 1000);
+        state->misuse_send_result = galay_kernel_tcp_socket_send(&state->client, "x", 1, 1000);
     }
     atomic_store(&state->phase, 2);
 }
@@ -541,21 +510,21 @@ static void owner_binding_poison_entry(void* arg)
         state->poison_send_result.code = C_IOResultError;
         return;
     }
-    state->poison_send_result = galay_coro_tcp_send(&state->client, "x", 1, 20);
+    state->poison_send_result = galay_kernel_tcp_socket_send(&state->client, "x", 1, 20);
 }
 
 static void owner_binding_reuse_entry(void* arg)
 {
     OwnerBindingPollutionState* state = (OwnerBindingPollutionState*)arg;
-    state->connect_result = galay_coro_tcp_connect(&state->client, &state->peer, 1000);
+    state->connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 1000);
     if (state->connect_result.code == C_IOResultOk) {
-        state->accept_result = galay_coro_tcp_accept(state->listener, &state->accepted, 1000);
+        state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
     }
     if (state->client.socket != 0) {
-        state->close_client_result = galay_coro_tcp_close(&state->client, 1000);
+        state->close_client_result = galay_kernel_tcp_socket_close(&state->client, 1000);
     }
     if (state->accepted.socket != 0) {
-        state->close_server_result = galay_coro_tcp_close(&state->accepted, 1000);
+        state->close_server_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
     }
 }
 
@@ -1015,92 +984,6 @@ static int run_connect_timeout_closes_socket(galay_kernel_runtime_t* runtime)
     return failed;
 }
 
-static int run_mixed_pending_close(galay_kernel_runtime_t* runtime)
-{
-    galay_kernel_tcp_socket_t listener = {0};
-    C_Host local = {0};
-    int client_fd = -1;
-    MixedPendingCloseState state;
-    memset(&state, 0, sizeof(state));
-    state.runtime = runtime;
-    state.listener = &listener;
-    atomic_init(&state.callback_called, 0);
-
-    if (create_listener(&listener, &local) != 0) {
-        return 601;
-    }
-
-    galay_coro_task_t accept_task = {0};
-    if (expect_code(galay_coro_spawn(runtime, mixed_pending_accept_entry, &state, 0, &accept_task),
-                    C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
-        return 602;
-    }
-    client_fd = connect_posix_client(local.port);
-    if (client_fd < 0) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
-        return 603;
-    }
-    if (expect_code(galay_coro_join(&accept_task, 2000), C_IOResultOk) ||
-        state.accept_result.code != C_IOResultOk) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
-        return 604;
-    }
-
-    if (galay_kernel_tcp_socket_recv(runtime,
-                                     &state.accepted,
-                                     state.callback_buffer,
-                                     sizeof(state.callback_buffer),
-                                     mixed_pending_recv_callback,
-                                     &state) != C_TcpSocketSuccess) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
-        return 605;
-    }
-
-    galay_coro_task_t close_task = {0};
-    if (expect_code(galay_coro_spawn(runtime, mixed_pending_close_entry, &state, 0, &close_task),
-                    C_IOResultOk) ||
-        expect_code(galay_coro_join(&close_task, 2000), C_IOResultOk)) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
-        return 606;
-    }
-
-    if (state.close_result.code != C_IOResultInvalid) {
-        close(client_fd);
-        (void)galay_coro_destroy(&accept_task);
-        (void)galay_coro_destroy(&close_task);
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
-        return 607;
-    }
-
-    if (write(client_fd, "z", 1) != 1) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
-        return 608;
-    }
-    for (int i = 0; i < 1000 && atomic_load(&state.callback_called) == 0; ++i) {
-        usleep(1000);
-    }
-    const int failed =
-        atomic_load(&state.callback_called) == 0 ||
-        state.callback_code != C_TcpSocketSuccess ||
-        state.callback_buffer[0] != 'z';
-
-    close(client_fd);
-    (void)galay_coro_destroy(&accept_task);
-    (void)galay_coro_destroy(&close_task);
-    (void)galay_kernel_tcp_socket_destroy(&state.accepted);
-    (void)galay_kernel_tcp_socket_destroy(&listener);
-    return failed ? 609 : 0;
-}
-
 static int run_multi_scheduler_misuse(void)
 {
     C_RuntimeConfig config = galay_kernel_runtime_config_default();
@@ -1238,17 +1121,17 @@ int main(void)
     C_Host host = {C_IPTypeIPV4, "127.0.0.1", 1};
     char buffer[8] = {0};
 
-    if (expect_code(galay_coro_tcp_accept(0, &out_socket, 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_accept(&invalid_socket, 0, 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_connect(0, &host, 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_connect(&invalid_socket, 0, 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_recv(0, buffer, sizeof(buffer), 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_recv(&invalid_socket, 0, sizeof(buffer), 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_recv(&invalid_socket, buffer, 0, 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_send(0, buffer, sizeof(buffer), 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_send(&invalid_socket, 0, sizeof(buffer), 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_send(&invalid_socket, buffer, 0, 0), C_IOResultInvalid) ||
-        expect_code(galay_coro_tcp_close(0, 0), C_IOResultInvalid)) {
+    if (expect_code(galay_kernel_tcp_socket_accept(0, &out_socket, NULL, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_accept(&invalid_socket, 0, NULL, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_connect(0, &host, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_connect(&invalid_socket, 0, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_recv(0, buffer, sizeof(buffer), 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_recv(&invalid_socket, 0, sizeof(buffer), 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_recv(&invalid_socket, buffer, 0, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_send(0, buffer, sizeof(buffer), 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_send(&invalid_socket, 0, sizeof(buffer), 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_send(&invalid_socket, buffer, 0, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_close(0, 0), C_IOResultInvalid)) {
         return 1;
     }
 
@@ -1287,10 +1170,6 @@ int main(void)
     if (result == 0) {
         result = run_connect_timeout_closes_socket(&runtime);
     }
-    if (result == 0) {
-        result = run_mixed_pending_close(&runtime);
-    }
-
     (void)galay_kernel_runtime_stop(&runtime);
     if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 4;

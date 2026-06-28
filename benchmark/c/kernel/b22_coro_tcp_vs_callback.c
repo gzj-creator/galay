@@ -1,5 +1,4 @@
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_coro_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
@@ -196,7 +195,7 @@ static int send_all_coro(galay_kernel_tcp_socket_t* socket, const char* data, si
 {
     size_t sent = 0;
     while (sent < length) {
-        C_IOResult result = galay_coro_tcp_send(socket, data + sent, length - sent, 1000);
+        C_IOResult result = galay_kernel_tcp_socket_send(socket, data + sent, length - sent, 1000);
         if (result.code != C_IOResultOk || result.bytes == 0) {
             return 1;
         }
@@ -209,7 +208,7 @@ static int recv_all_coro(galay_kernel_tcp_socket_t* socket, char* data, size_t l
 {
     size_t received = 0;
     while (received < length) {
-        C_IOResult result = galay_coro_tcp_recv(socket, data + received, length - received, 1000);
+        C_IOResult result = galay_kernel_tcp_socket_recv(socket, data + received, length - received, 1000);
         if (result.code == C_IOResultEof && received == 0) {
             return 2;
         }
@@ -224,7 +223,7 @@ static int recv_all_coro(galay_kernel_tcp_socket_t* socket, char* data, size_t l
 static void direct_server_entry(void* arg)
 {
     DirectServer* server = (DirectServer*)arg;
-    C_IOResult accepted = galay_coro_tcp_accept(server->listener, &server->accepted, 5000);
+    C_IOResult accepted = galay_kernel_tcp_socket_accept(server->listener, &server->accepted, NULL, 5000);
     if (accepted.code != C_IOResultOk) {
         ++server->errors;
         return;
@@ -244,7 +243,7 @@ static void direct_server_entry(void* arg)
             break;
         }
     }
-    (void)galay_coro_tcp_close(&server->accepted, 1000);
+    (void)galay_kernel_tcp_socket_close(&server->accepted, 1000);
 }
 
 static int run_direct_mode(const BenchConfig* config,
@@ -316,133 +315,6 @@ cleanup:
     return exit_code;
 }
 
-typedef struct CallbackServer {
-    galay_kernel_runtime_t* runtime;
-    galay_kernel_tcp_socket_t* listener;
-    galay_kernel_tcp_socket_t accepted;
-    char* buffer;
-    size_t payload_bytes;
-    atomic_int done;
-    uint64_t errors;
-} CallbackServer;
-
-static void callback_post_recv(CallbackServer* server);
-
-static void callback_on_send(galay_kernel_tcp_send_result_t* result, void* ctx)
-{
-    CallbackServer* server = (CallbackServer*)ctx;
-    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
-        ++server->errors;
-        atomic_store(&server->done, 1);
-        return;
-    }
-    callback_post_recv(server);
-}
-
-static int callback_on_recv(galay_kernel_tcp_recv_result_t* result, void* ctx)
-{
-    CallbackServer* server = (CallbackServer*)ctx;
-    if (result == 0 || result->code != C_TcpSocketSuccess || result->bytes == 0) {
-        atomic_store(&server->done, 1);
-        return 1;
-    }
-    if (galay_kernel_tcp_socket_send(server->runtime,
-                                     &server->accepted,
-                                     result->buffer,
-                                     result->bytes,
-                                     callback_on_send,
-                                     server) != C_TcpSocketSuccess) {
-        ++server->errors;
-        atomic_store(&server->done, 1);
-    }
-    return 1;
-}
-
-static void callback_post_recv(CallbackServer* server)
-{
-    if (galay_kernel_tcp_socket_recv_loop(server->runtime,
-                                          &server->accepted,
-                                          server->buffer,
-                                          server->payload_bytes,
-                                          callback_on_recv,
-                                          server) != C_TcpSocketSuccess) {
-        ++server->errors;
-        atomic_store(&server->done, 1);
-    }
-}
-
-static void callback_on_accept(galay_kernel_tcp_accept_result_t* result, void* ctx)
-{
-    CallbackServer* server = (CallbackServer*)ctx;
-    if (result == 0 || result->code != C_TcpSocketSuccess) {
-        ++server->errors;
-        atomic_store(&server->done, 1);
-        return;
-    }
-    server->accepted = result->socket;
-    callback_post_recv(server);
-}
-
-static int run_callback_mode(const BenchConfig* config,
-                             char* payload,
-                             char* response,
-                             char* server_buffer,
-                             Metrics* metrics)
-{
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
-    runtime_config.io_scheduler_count = config->io_schedulers;
-    runtime_config.compute_scheduler_count = 0;
-
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
-    C_Host local = {0};
-    int exit_code = 0;
-    CallbackServer server = {
-        .runtime = &runtime,
-        .listener = &listener,
-        .accepted = {0},
-        .buffer = server_buffer,
-        .payload_bytes = config->payload_bytes,
-        .done = ATOMIC_VAR_INIT(0),
-        .errors = 0,
-    };
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        create_listener(&listener, &local) != 0) {
-        ++metrics->errors;
-        exit_code = 1;
-        goto cleanup;
-    }
-
-    if (galay_kernel_tcp_socket_accept(&runtime, &listener, callback_on_accept, &server) !=
-        C_TcpSocketSuccess) {
-        ++metrics->errors;
-        exit_code = 2;
-        goto cleanup;
-    }
-
-    (void)run_client_loop(local.port, config, payload, response, metrics);
-    const int64_t wait_deadline = now_ns() + 3000000000LL;
-    while (!atomic_load(&server.done) && now_ns() < wait_deadline) {
-        usleep(1000);
-    }
-    if (!atomic_load(&server.done)) {
-        ++metrics->errors;
-    }
-    metrics->errors += server.errors;
-cleanup:
-    if (server.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&server.accepted);
-    }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
-    if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
-    }
-    qsort(metrics->latencies, (size_t)metrics->samples, sizeof(int64_t), compare_i64);
-    return exit_code;
-}
-
 static int parse_args(int argc, char** argv, BenchConfig* config)
 {
     config->payload_bytes = kDefaultPayloadBytes;
@@ -480,45 +352,24 @@ int main(int argc, char** argv)
         .samples = 0,
         .latencies = (int64_t*)calloc(kMaxSamples, sizeof(int64_t)),
     };
-    Metrics callback = {
-        .requests = 0,
-        .errors = 0,
-        .elapsed_ns = 0,
-        .samples = 0,
-        .latencies = (int64_t*)calloc(kMaxSamples, sizeof(int64_t)),
-    };
     if (payload == 0 || response == 0 || server_buffer == 0 ||
-        direct.latencies == 0 || callback.latencies == 0) {
+        direct.latencies == 0) {
         free(payload);
         free(response);
         free(server_buffer);
         free(direct.latencies);
-        free(callback.latencies);
         return 2;
     }
     fill_payload(payload, config.payload_bytes);
 
     int failed = run_direct_mode(&config, payload, response, server_buffer, &direct);
-    memset(response, 0, config.payload_bytes);
-    memset(server_buffer, 0, config.payload_bytes);
-    failed |= run_callback_mode(&config, payload, response, server_buffer, &callback);
 
     print_metrics("coro-direct", &config, &direct);
-    print_metrics("callback-task-bridge", &config, &callback);
-    if (callback.requests > 0) {
-        const double delta = ((double)direct.requests - (double)callback.requests) *
-            100.0 / (double)callback.requests;
-        printf("coro_tcp_vs_callback summary direct_requests=%llu callback_requests=%llu request_delta_percent=%.2f\n",
-               (unsigned long long)direct.requests,
-               (unsigned long long)callback.requests,
-               delta);
-    }
 
-    failed |= direct.errors != 0 || callback.errors != 0;
+    failed |= direct.errors != 0;
     free(payload);
     free(response);
     free(server_buffer);
     free(direct.latencies);
-    free(callback.latencies);
     return failed ? 3 : 0;
 }
