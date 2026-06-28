@@ -34,6 +34,54 @@ public:
     }
 
     /**
+     * @brief 设置最大头部字段数量
+     * @param max_header_count 最大头部字段数量，0 表示不限制
+     */
+    void setMaxHeaderCount(size_t max_header_count) {
+        m_max_header_count = max_header_count;
+    }
+
+    /**
+     * @brief 获取最大头部字段数量
+     * @return 最大头部字段数量，0 表示不限制
+     */
+    size_t getMaxHeaderCount() const {
+        return m_max_header_count;
+    }
+
+    /**
+     * @brief 设置单个头部行最大长度
+     * @param max_header_line_size 单行长度上限（字节），0 表示不限制
+     */
+    void setMaxHeaderLineSize(size_t max_header_line_size) {
+        m_max_header_line_size = max_header_line_size;
+    }
+
+    /**
+     * @brief 获取单个头部行最大长度
+     * @return 单行长度上限（字节），0 表示不限制
+     */
+    size_t getMaxHeaderLineSize() const {
+        return m_max_header_line_size;
+    }
+
+    /**
+     * @brief 设置最大 URI 长度
+     * @param max_uri_size URI 长度上限（字节），0 表示不限制
+     */
+    void setMaxUriSize(size_t max_uri_size) {
+        m_max_uri_size = max_uri_size;
+    }
+
+    /**
+     * @brief 获取最大 URI 长度
+     * @return URI 长度上限（字节），0 表示不限制
+     */
+    size_t getMaxUriSize() const {
+        return m_max_uri_size;
+    }
+
+    /**
      * @brief 设置最大Body长度
      * @param max_body_size 最大Body长度（字节）
      */
@@ -68,6 +116,9 @@ public:
 private:
     size_t m_max_header_size = DEFAULT_HTTP_MAX_HEADER_SIZE;
     size_t m_max_body_size = DEFAULT_HTTP_MAX_BODY_SIZE;
+    size_t m_max_header_count = 0;
+    size_t m_max_header_line_size = 0;
+    size_t m_max_uri_size = 0;
     int m_recv_timeout_ms = DEFAULT_HTTP_RECV_TIME_MS;
 };
 

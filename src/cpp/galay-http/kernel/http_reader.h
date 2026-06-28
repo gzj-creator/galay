@@ -27,10 +27,8 @@
 #include "../../galay-kernel/core/task.h"
 #include <chrono>
 #include <coroutine>
-#include <exception>
 #include <expected>
 #include <memory>
-#include <new>
 #include <optional>
 #include <span>
 #include <string>
@@ -93,21 +91,7 @@ struct HttpRingBufferTcpReadMachine {
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        try {
-            if (m_state->parseFromRingBuffer()) {
-                m_result = m_state->takeResult();
-                return MachineAction<result_type>::complete(std::move(*m_result));
-            }
-        } catch (const std::bad_alloc&) {
-            m_state->setParseError(HttpError(kRequestEntityTooLarge, "HTTP body allocation failed"));
-            m_result = m_state->takeResult();
-            return MachineAction<result_type>::complete(std::move(*m_result));
-        } catch (const std::exception& ex) {
-            m_state->setParseError(HttpError(kInternalError, ex.what()));
-            m_result = m_state->takeResult();
-            return MachineAction<result_type>::complete(std::move(*m_result));
-        } catch (...) {
-            m_state->setParseError(HttpError(kInternalError, "HTTP parse exception"));
+        if (m_state->parseFromRingBuffer()) {
             m_result = m_state->takeResult();
             return MachineAction<result_type>::complete(std::move(*m_result));
         }
@@ -163,21 +147,7 @@ struct HttpRingBufferSslReadMachine {
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
 
-        try {
-            if (m_state->parseFromRingBuffer()) {
-                m_result = m_state->takeResult();
-                return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
-            }
-        } catch (const std::bad_alloc&) {
-            m_state->setParseError(HttpError(kRequestEntityTooLarge, "HTTP body allocation failed"));
-            m_result = m_state->takeResult();
-            return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
-        } catch (const std::exception& ex) {
-            m_state->setParseError(HttpError(kInternalError, ex.what()));
-            m_result = m_state->takeResult();
-            return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
-        } catch (...) {
-            m_state->setParseError(HttpError(kInternalError, "HTTP parse exception"));
+        if (m_state->parseFromRingBuffer()) {
             m_result = m_state->takeResult();
             return galay::ssl::SslMachineAction<result_type>::complete(std::move(*m_result));
         }
@@ -265,6 +235,10 @@ struct HttpRequestReadState {
         if (read_iovecs.empty()) {
             return false;
         }
+
+        m_request->header().setParseLimits(m_setting->getMaxHeaderCount(),
+                                           m_setting->getMaxHeaderLineSize(),
+                                           m_setting->getMaxUriSize());
 
         if (IoVecWindow::buildWindow(read_iovecs, m_parse_iovecs) == 0) {
             return false;
@@ -875,12 +849,24 @@ public:
             return std::move(*this);
         }
 
+        ReadOperation& bodyTimeout(std::chrono::milliseconds timeout) & {
+            m_body_timeout = timeout;
+            return *this;
+        }
+
+        ReadOperation bodyTimeout(std::chrono::milliseconds timeout) && {
+            m_body_timeout = timeout;
+            return std::move(*this);
+        }
+
         auto operator co_await() & {
-            return Awaiter(m_reader->readFromSocket(m_state, m_generation, m_timeout));
+            return Awaiter(m_reader->readFromSocket(
+                m_state, m_generation, m_timeout, m_body_timeout));
         }
 
         auto operator co_await() && {
-            return Awaiter(m_reader->readFromSocket(std::move(m_state), m_generation, m_timeout));
+            return Awaiter(m_reader->readFromSocket(
+                std::move(m_state), m_generation, m_timeout, m_body_timeout));
         }
 
     private:
@@ -888,6 +874,7 @@ public:
         std::shared_ptr<StateT> m_state;
         uint64_t m_generation;
         std::optional<std::chrono::milliseconds> m_timeout;
+        std::optional<std::chrono::milliseconds> m_body_timeout;
     };
 
     /**
@@ -972,9 +959,11 @@ private:
     template<typename StateT>
     Task<typename StateT::ResultType> readFromSocket(std::shared_ptr<StateT> state,
                                                      uint64_t generation = 0,
-                                                     std::optional<std::chrono::milliseconds> timeout = std::nullopt) {
+                                                     std::optional<std::chrono::milliseconds> timeout = std::nullopt,
+                                                     std::optional<std::chrono::milliseconds> body_timeout = std::nullopt) {
         RequestReadActiveGuard active_guard;
         std::optional<SteadyClock::time_point> deadline;
+        bool body_timeout_armed = false;
         if (timeout.has_value()) {
             deadline = SteadyClock::now() + *timeout;
         }
@@ -991,18 +980,18 @@ private:
         }
 
         while (true) {
-            try {
-                if (state->parseFromRingBuffer()) {
-                    co_return state->takeResult();
+            if (state->parseFromRingBuffer()) {
+                co_return state->takeResult();
+            }
+
+            if constexpr (std::is_same_v<StateT, detail::HttpRequestReadState>) {
+                if (!body_timeout_armed &&
+                    body_timeout.has_value() &&
+                    state->m_request->header().isHeaderComplete() &&
+                    !state->m_request->isComplete()) {
+                    deadline = SteadyClock::now() + *body_timeout;
+                    body_timeout_armed = true;
                 }
-            } catch (const std::bad_alloc&) {
-                co_return std::unexpected(HttpError(
-                    kRequestEntityTooLarge,
-                    "HTTP body allocation failed"));
-            } catch (const std::exception& ex) {
-                co_return std::unexpected(HttpError(kInternalError, ex.what()));
-            } catch (...) {
-                co_return std::unexpected(HttpError(kInternalError, "HTTP parse exception"));
             }
 
             if constexpr (is_ssl_socket_v<SocketType>) {

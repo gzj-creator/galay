@@ -123,6 +123,9 @@ namespace galay::http
             }
 
             if (is_chunked) {
+                if (detail::getHeaderValuePtrLoose(m_header.headerPairs(), "content-length") != nullptr) {
+                    return {kBadRequest, -1};
+                }
                 // chunked body 继续往下解析
             } else {
                 // header解析完成，获取Content-Length

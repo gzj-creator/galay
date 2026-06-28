@@ -14,6 +14,7 @@
 
 #include "../kernel/http_conn.h"
 #include "file_settings.h"
+#include "http_policy.h"
 #include "http_range.h"
 #include "../protoc/http_request.h"
 #include "../protoc/http_base.h"
@@ -146,6 +147,23 @@ public:
      * @brief 清空所有路由
      */
     void clear();
+
+    /**
+     * @brief 设置路由器默认生产策略
+     * @param policy route-mode 默认策略，按值保存，调用方可安全释放原对象
+     * @details Task 1 仅保存该策略；后续限流、超时、代理和静态文件任务会读取这些值。
+     */
+    void setDefaultPolicy(HttpServerPolicy policy) {
+        m_defaultPolicy = std::move(policy);
+    }
+
+    /**
+     * @brief 获取路由器默认生产策略
+     * @return 当前默认策略引用，生命周期与路由器一致
+     */
+    const HttpServerPolicy& defaultPolicy() const {
+        return m_defaultPolicy;
+    }
 
     /**
      * @brief 获取所有已注册的路由数量
@@ -394,6 +412,9 @@ private:
 
     // 默认回退代理（本地路由 miss 或 mount 文件未命中时使用）
     std::shared_ptr<std::optional<HttpRouteHandler>> m_fallbackProxyHandlerState;
+
+    // route-mode 默认生产策略；Task 1 只保存，不改变行为
+    HttpServerPolicy m_defaultPolicy;
 
     // 路由计数
     size_t m_routeCount = 0;

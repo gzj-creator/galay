@@ -21,6 +21,7 @@
 #include "../protoc/http_chunk.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/async/tcp_socket.h"
+#include <chrono>
 #include <expected>
 #include <optional>
 #include <string>
@@ -80,6 +81,13 @@ template<typename T>
 inline constexpr bool is_http_writer_ssl_socket_v = is_http_writer_ssl_socket<T>::value;
 
 namespace detail {
+
+inline HttpError makeSendHttpError(const IOError& io_error) {
+    if (IOError::contains(io_error.code(), kTimeout)) {
+        return HttpError(kSendTimeOut, io_error.message());
+    }
+    return HttpError(kSendError, io_error.message());
+}
 
 /**
  * @brief HTTP TCP 写入状态机
@@ -149,8 +157,8 @@ struct HttpTcpWriteMachine {
     }
 
 private:
-    void failWithIo(const IOError& io_error, const char* op) {
-        m_result = std::unexpected(HttpError(kSendError, io_error.message()));
+    void failWithIo(const IOError& io_error, const char*) {
+        m_result = std::unexpected(makeSendHttpError(io_error));
     }
 
     void failWithMessage(const char* message) {
@@ -196,7 +204,11 @@ struct HttpSslSendMachine {
     void onSend(std::expected<size_t, galay::ssl::SslError> result) {
         if (!result) {
             m_writer->updateRemaining(m_writer->getRemainingBytes());
-            m_result = std::unexpected(HttpError(kSendError, result.error().message()));
+            const HttpErrorCode code =
+                result.error().code() == galay::ssl::SslErrorCode::kTimeout
+                    ? kSendTimeOut
+                    : kSendError;
+            m_result = std::unexpected(HttpError(code, result.error().message()));
             return;
         }
 
@@ -306,9 +318,9 @@ public:
         }
 
         if constexpr (is_tcp_socket_v<SocketType>) {
-            return makeWritevAwaitable();
+            return withConfiguredTimeout(makeWritevAwaitable());
         } else {
-            return makeSendAwaitable();
+            return withConfiguredTimeout(makeSendAwaitable());
         }
     }
 
@@ -341,9 +353,9 @@ public:
         }
 
         if constexpr (is_tcp_socket_v<SocketType>) {
-            return makeWritevAwaitable();
+            return withConfiguredTimeout(makeWritevAwaitable());
         } else {
-            return makeSendAwaitable();
+            return withConfiguredTimeout(makeSendAwaitable());
         }
     }
 
@@ -359,7 +371,7 @@ public:
             m_remaining_bytes = m_buffer.size();
         }
 
-        return makeSendAwaitable();
+        return withConfiguredTimeout(makeSendAwaitable());
     }
 
     /**
@@ -373,7 +385,7 @@ public:
             m_remaining_bytes = m_buffer.size();
         }
 
-        return makeSendAwaitable();
+        return withConfiguredTimeout(makeSendAwaitable());
     }
 
     /**
@@ -388,7 +400,7 @@ public:
             m_remaining_bytes = m_buffer.size();
         }
 
-        return makeSendAwaitable();
+        return withConfiguredTimeout(makeSendAwaitable());
     }
 
     /**
@@ -404,7 +416,7 @@ public:
             m_remaining_bytes = m_buffer.size();
         }
 
-        return makeSendAwaitable();
+        return withConfiguredTimeout(makeSendAwaitable());
     }
 
     /**
@@ -424,7 +436,7 @@ public:
             m_remaining_bytes = data.size();
         }
 
-        return makeSendAwaitable();
+        return withConfiguredTimeout(makeSendAwaitable());
     }
 
     /**
@@ -440,7 +452,7 @@ public:
             m_remaining_bytes = m_buffer.size();
         }
 
-        return makeSendAwaitable();
+        return withConfiguredTimeout(makeSendAwaitable());
     }
 
     void updateRemaining(size_t bytes_sent) {
@@ -499,6 +511,12 @@ public:
     }
 
 private:
+    template<typename Awaitable>
+    auto withConfiguredTimeout(Awaitable&& awaitable) {
+        return std::forward<Awaitable>(awaitable).timeout(
+            std::chrono::milliseconds(m_setting.getSendTimeout()));
+    }
+
     auto makeSendAwaitable() {
         return detail::buildSendAwaitable<SocketType, false>(*m_socket, *this);
     }

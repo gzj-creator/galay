@@ -15,6 +15,7 @@
 
 - 新增 CMake 守卫 `config.kernel_internal_includes_relative`：递归扫描 `src/cpp/galay-kernel` 全部 `.cc/.h/.hpp/.inl` 源码，禁止内部实现通过 `galay/cpp/galay-kernel/` 公共 include 前缀引用自身头文件，强制改用相对路径。
 - 新增 C Kernel TCP/UDP/AsyncFile/FileWatcher timeout C ABI：补齐 connect/accept/accept_loop/recv/recv_loop/send/send_loop/close、recvfrom/sendto loop、AsyncFile read/write/close 与 FileWatcher watch 的毫秒级 timeout API，并新增对应 C 回归测试、timeout 示例、timeout smoke 和混合 API pressure benchmark。
+- 新增 HTTP/1.1 route-mode 生产策略与边界测试，覆盖请求头/URI/body 限制、Content-Length/Transfer-Encoding 冲突校验、keep-alive 生命周期、请求/响应超时和 sendfile 写超时路径。
 - 新增 C Kernel UDP 双进程 client/server 互压 benchmark：`benchmark_c_kernel_udp_socket_server_throughput` 与 `benchmark_c_kernel_udp_socket_client_throughput` 对齐 C++ UDP server/client 压测口径，支持独立 server/client 进程、显式端口、并发 client、消息数、payload、duration 与 IO scheduler 参数。
 - 新增 C Kernel async/concurrency C ABI wrapper：补齐 UDP socket、AsyncFile、AioFile、FileWatcher、AsyncMutex、AsyncWaiter、MpscChannel、UnsafeChannel 的 `.h/.cc`、回归测试、示例与 benchmark smoke，并接入 `galay-c-kernel` 构建和 C Kernel 文档。
 - 新增 C Kernel direct coroutine async C ABI 覆盖：UDP、AsyncFile、FileWatcher、AsyncMutex、AsyncWaiter、MpscChannel、UnsafeChannel 通过旁路 C coroutine bridge 复刻 C++ async 能力，并新增 TCP iov/sendfile benchmark 覆盖。
@@ -33,6 +34,7 @@
 ### Changed
 
 - C Kernel TCP async C ABI 破坏式迁移为 direct C coroutine 形态：`tcp_socket_c` 直接提供 `C_IOResult` 返回的 accept/connect/recv/send/close 接口，移除 runtime callback/spawn 桥接路径，并同步更新 TCP C 测试、示例和 benchmark。
+- HTTP/1.1 route-mode 接入 `HttpServerPolicy`，将 reader/writer timeout、request limits、keep-alive idle timeout 和 response write timeout 统一由 server/router 策略驱动。
 - C Kernel async/concurrency C ABI 统一迁移到 direct coroutine 形态：测试、示例和 benchmark 不再依赖 callback/spawn wrapper，改为在 C coroutine 内直接调用 C async API 并显式处理返回值。
 - C 栈式协程 context 支持矩阵改为显式诊断：Linux/aarch64 当前不声明支持，CMake 会输出不支持原因，并让 direct C coroutine 测试、示例和 benchmark 带 skip reason 跳过。
 - galay-kernel 内部源码 include 由公共前缀 `<galay/cpp/galay-kernel/...>` 统一改为相对路径（同目录直引、跨目录用 `../core/`、`../common/`），覆盖 async/core/common 下的 reactor、scheduler、socket、file、logger 等实现文件，避免内部实现依赖安装态公共 include 前缀。
@@ -62,6 +64,7 @@
 ### Fixed
 
 - 修复 direct C coroutine TCP bridge 在 timeout timer 注册失败路径中未撤销 reactor registration 的生命周期问题，避免返回错误后后端仍持有栈上 awaitable 或悬空 controller；新增 C++ 回归测试覆盖 kqueue/epoll 清理与 socket 复用。
+- 修复 HTTP writer timeout 错误码映射为 `kSendTimeOut`，并加固 HTTP 静态文件与代理路径的返回值处理，避免 close/文件系统错误被静默丢弃。
 - 修复 C coroutine bridge 清理路径未完整传播返回值的问题，并加固 UDP bridge `user_data` 完成读取竞态，确保清理失败可合并为可观测错误而不是被静默丢弃。
 - 加固 C/C++ no-exception 与函数返回值必须处理规则：移除 C async 测试、示例、benchmark 和 bridge 中的裸调用/void-cast 忽略返回值路径，保持错误通过返回结构或错误码传播。
 - 修复 C Kernel timeout 示例合并冲突后的 cleanup 返回值处理，避免 direct coroutine 示例重复销毁任务句柄并保留清理失败错误码。

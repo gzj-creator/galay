@@ -105,8 +105,33 @@ public:
      * @param setting HttpWriterSetting配置
      * @return HttpWriterImpl<SocketType> Writer对象
      */
-    HttpWriterImpl<SocketType> getWriter(const HttpWriterSetting& setting = HttpWriterSetting()) {
+    HttpWriterImpl<SocketType> getWriter() {
+        return HttpWriterImpl<SocketType>(m_default_writer_setting, m_socket);
+    }
+
+    /**
+     * @brief 获取HttpWriter
+     * @param setting HttpWriterSetting配置
+     * @return HttpWriterImpl<SocketType> Writer对象
+     */
+    HttpWriterImpl<SocketType> getWriter(const HttpWriterSetting& setting) {
         return HttpWriterImpl<SocketType>(setting, m_socket);
+    }
+
+    /**
+     * @brief 设置连接级默认 HttpWriter 配置
+     * @param setting 默认写入器配置
+     */
+    void setDefaultWriterSetting(HttpWriterSetting setting) {
+        m_default_writer_setting = std::move(setting);
+    }
+
+    /**
+     * @brief 获取连接级默认 HttpWriter 配置
+     * @return 默认写入器配置引用
+     */
+    const HttpWriterSetting& defaultWriterSetting() const {
+        return m_default_writer_setting;
     }
 
     /**
@@ -146,6 +171,7 @@ private:
 
     SocketType m_socket;
     RingBuffer m_ring_buffer;
+    HttpWriterSetting m_default_writer_setting;
 };
 
 // 类型别名 - HTTP (TcpSocket)

@@ -126,6 +126,7 @@ namespace galay::http
                 return HttpStatusCode::BadRequest_400;
                 
             case kHeaderTooLong:
+            case kHeaderTooLarge:
                 return HttpStatusCode::RequestHeaderFieldsTooLarge_431;
                 
             case kUriTooLong:

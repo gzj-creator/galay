@@ -13,6 +13,7 @@
 
 #include "http_base.h"
 #include "http_error.h"
+#include <cstddef>
 #include <string_view>
 #include <map>
 #include <memory>
@@ -322,6 +323,16 @@ namespace galay::http {
         std::pair<HttpErrorCode, ssize_t> fromIOVec(const std::vector<iovec>& iovecs);
 
         /**
+         * @brief 设置请求解析限制
+         * @param max_header_count 最大头字段数，0 表示不限制
+         * @param max_header_line_size 单个头字段行长度上限，0 表示不限制
+         * @param max_uri_size URI 长度上限，0 表示不限制
+         */
+        void setParseLimits(size_t max_header_count,
+                            size_t max_header_line_size,
+                            size_t max_uri_size);
+
+        /**
          * @brief 从另一个请求头拷贝内容
          * @param header 源请求头
          */
@@ -336,7 +347,7 @@ namespace galay::http {
          * @return kNoError 继续解析，其他值表示错误或完成
          */
         HttpErrorCode parseChar(char c);
-        void commitParsedHeaderPair(); ///< 提交当前解析中的头部键值对
+        HttpErrorCode commitParsedHeaderPair(); ///< 提交当前解析中的头部键值对并校验限制
         void parseArgs(std::string uri); ///< 解析 URI 中的查询参数
         std::string convertFromUri(std::string_view url, bool convert_plus_to_space); ///< URL 解码
         std::string convertToUri(std::string&& url) const; ///< URL 编码
@@ -358,6 +369,12 @@ namespace galay::http {
         size_t m_parsedBytes = 0;                             ///< 已解析的字节数
         bool m_uriDecodeError = false;                        ///< URI 百分号解码是否失败
         CommonHeaderIndex m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon; ///< 当前解析的常见头部索引
+        size_t m_maxHeaderCount = 0;                          ///< 最大头字段数，0 表示不限制
+        size_t m_maxHeaderLineSize = 0;                       ///< 单行头字段长度上限，0 表示不限制
+        size_t m_maxUriSize = 0;                              ///< URI 长度上限，0 表示不限制
+        size_t m_headerCount = 0;                             ///< 已提交头字段数
+        bool m_hasContentLength = false;                      ///< 是否已经见过 Content-Length
+        size_t m_contentLengthValue = 0;                      ///< 首个 Content-Length 数值
     };
 
     /**

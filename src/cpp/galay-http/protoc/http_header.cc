@@ -1,4 +1,5 @@
 #include "http_header.h"
+#include "parse_utils.h"
 #include <algorithm>
 #include <array>
 #include <cctype>
@@ -460,15 +461,13 @@ namespace galay::http
                 return kNoError;
             }
 
-            auto [it, inserted] = m_headerPairs.try_emplace(std::move(normalized), value);
-            (void)it;
+            auto inserted = m_headerPairs.try_emplace(std::move(normalized), value).second;
             return inserted ? kNoError : kHeaderPairExist;
         }
 
         // ClientSide mode
         std::string normalized = toCanonicalHeaderKey(key);
-        auto [it, inserted] = m_headerPairs.try_emplace(std::move(normalized), value);
-        (void)it;
+        auto inserted = m_headerPairs.try_emplace(std::move(normalized), value).second;
         return inserted ? kNoError : kHeaderPairExist;
     }
 
@@ -679,8 +678,39 @@ namespace galay::http
         return this->m_headerPairs;
     }
 
-    void HttpRequestHeader::commitParsedHeaderPair()
+    void HttpRequestHeader::setParseLimits(size_t max_header_count,
+                                           size_t max_header_line_size,
+                                           size_t max_uri_size)
     {
+        m_maxHeaderCount = max_header_count;
+        m_maxHeaderLineSize = max_header_line_size;
+        m_maxUriSize = max_uri_size;
+    }
+
+    HttpErrorCode HttpRequestHeader::commitParsedHeaderPair()
+    {
+        const size_t line_size = m_parseHeaderKey.size() + 2 + m_parseHeaderValue.size();
+        if (m_maxHeaderLineSize != 0 && line_size > m_maxHeaderLineSize) {
+            return kHeaderTooLarge;
+        }
+
+        ++m_headerCount;
+        if (m_maxHeaderCount != 0 && m_headerCount > m_maxHeaderCount) {
+            return kHeaderTooLarge;
+        }
+
+        if (m_parseHeaderKey == "content-length") {
+            auto parsed_length = detail::parseSizeTStrict(m_parseHeaderValue);
+            if (!parsed_length.has_value()) {
+                return kBadRequest;
+            }
+            if (m_hasContentLength && m_contentLengthValue != parsed_length.value()) {
+                return kBadRequest;
+            }
+            m_hasContentLength = true;
+            m_contentLengthValue = parsed_length.value();
+        }
+
         if (m_headerPairs.mode() == HeaderPair::Mode::ServerSide) {
             // Server 端：使用 fast path
             if (m_currentCommonHeaderIdx != CommonHeaderIndex::NotCommon) {
@@ -707,6 +737,7 @@ namespace galay::http
         m_parseHeaderKey.clear();
         m_parseHeaderValue.clear();
         m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon;
+        return kNoError;
     }
 
     HttpErrorCode HttpRequestHeader::parseChar(char c)
@@ -730,6 +761,9 @@ namespace galay::http
                 return kBadRequest;
             } else {
                 m_parseUriStr += c;
+                if (m_maxUriSize != 0 && m_parseUriStr.size() > m_maxUriSize) {
+                    return kUriTooLong;
+                }
                 m_parseState = RequestParseState::Uri;
             }
             break;
@@ -749,6 +783,9 @@ namespace galay::http
                 return kBadRequest;
             } else {
                 m_parseUriStr += c;
+                if (m_maxUriSize != 0 && m_parseUriStr.size() > m_maxUriSize) {
+                    return kUriTooLong;
+                }
             }
             break;
 
@@ -829,7 +866,9 @@ namespace galay::http
             if (c == ' ') {
                 m_parseState = RequestParseState::HeaderSpace;
             } else if (c == '\r') {
-                commitParsedHeaderPair();
+                if (auto err = commitParsedHeaderPair(); err != kNoError) {
+                    return err;
+                }
                 m_parseState = RequestParseState::HeaderCR;
             } else {
                 m_parseHeaderValue += c;
@@ -841,7 +880,9 @@ namespace galay::http
             if (c == ' ') {
                 // skip extra spaces
             } else if (c == '\r') {
-                commitParsedHeaderPair();
+                if (auto err = commitParsedHeaderPair(); err != kNoError) {
+                    return err;
+                }
                 m_parseState = RequestParseState::HeaderCR;
             } else {
                 m_parseHeaderValue += c;
@@ -851,7 +892,9 @@ namespace galay::http
 
         case RequestParseState::HeaderValue:
             if (c == '\r') {
-                commitParsedHeaderPair();
+                if (auto err = commitParsedHeaderPair(); err != kNoError) {
+                    return err;
+                }
                 m_parseState = RequestParseState::HeaderCR;
             } else {
                 m_parseHeaderValue += c;
@@ -975,6 +1018,9 @@ namespace galay::http
                     }
                     reserveIfUnset(m_parseUriStr, 64);
                     m_parseUriStr.push_back(c);
+                    if (m_maxUriSize != 0 && m_parseUriStr.size() > m_maxUriSize) {
+                        return {kUriTooLong, -1};
+                    }
                     m_parseState = RequestParseState::Uri;
                     break;
                 }
@@ -987,6 +1033,9 @@ namespace galay::http
                     if (i > start) {
                         reserveIfUnset(m_parseUriStr, 64);
                         m_parseUriStr.append(data + start, i - start);
+                        if (m_maxUriSize != 0 && m_parseUriStr.size() > m_maxUriSize) {
+                            return {kUriTooLong, -1};
+                        }
                     }
                     if (i == len) {
                         break;
@@ -1119,7 +1168,9 @@ namespace galay::http
                     }
                     if (data[i] == '\r') {
                         ++i;
-                        commitParsedHeaderPair();
+                        if (auto err = commitParsedHeaderPair(); err != kNoError) {
+                            return {err, -1};
+                        }
                         m_parseState = RequestParseState::HeaderCR;
                         break;
                     }
@@ -1138,7 +1189,9 @@ namespace galay::http
                     }
                     if (data[i] == '\r') {
                         ++i;
-                        commitParsedHeaderPair();
+                        if (auto err = commitParsedHeaderPair(); err != kNoError) {
+                            return {err, -1};
+                        }
                         m_parseState = RequestParseState::HeaderCR;
                         break;
                     }
@@ -1161,7 +1214,9 @@ namespace galay::http
                         break;
                     }
                     ++i; // consume '\r'
-                    commitParsedHeaderPair();
+                    if (auto err = commitParsedHeaderPair(); err != kNoError) {
+                        return {err, -1};
+                    }
                     m_parseState = RequestParseState::HeaderCR;
                     break;
                 }
@@ -1317,6 +1372,9 @@ namespace galay::http
         m_parsedBytes = 0;
         m_uriDecodeError = false;
         m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon;
+        m_headerCount = 0;
+        m_hasContentLength = false;
+        m_contentLengthValue = 0;
     }
 
     void HttpRequestHeader::parseArgs(std::string uri)

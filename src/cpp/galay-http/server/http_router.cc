@@ -12,11 +12,14 @@
 #include <set>
 #include <cctype>
 #include <memory>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 #include <chrono>
 #include <fstream>
 #include <filesystem>
+#include <limits>
+#include <system_error>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
@@ -34,6 +37,18 @@ namespace {
 constexpr size_t kProxyMaxIdleConnectionsPerUpstream = 32;
 constexpr size_t kProxyRawRelayBufferSize = 16 * 1024;
 thread_local std::unordered_map<std::string, std::vector<std::unique_ptr<HttpClient>>> g_proxyClientPools;
+
+Task<void> closeHttpClientWithLog(HttpClient& client, std::string_view context)
+{
+    auto close_result = co_await client.close();
+    if (!close_result) {
+        HTTP_LOG_WARN("[proxy] [client-close-fail]",
+                      "context={} error={}",
+                      context,
+                      close_result.error().message());
+    }
+    co_return;
+}
 
 std::string toLowerAscii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -270,24 +285,19 @@ Task<void> connectProxyUpstream(HttpClient& client,
     ok = false;
     err_msg.clear();
 
-    try {
-        auto connect_result = co_await client.connect(url);
-        if (!connect_result) {
-            err_msg = connect_result.error().message();
-            co_return;
-        }
-        ok = true;
-    } catch (const std::exception& ex) {
-        err_msg = ex.what();
-    } catch (...) {
-        err_msg = "unknown exception";
+    auto connect_result = co_await client.connect(url);
+    if (!connect_result) {
+        err_msg = connect_result.error().message();
+        co_return;
     }
+    ok = true;
 
     co_return;
 }
 
 Task<void> relayRawUpstreamToDownstream(TcpSocket& upstream,
                                         TcpSocket& downstream,
+                                        std::chrono::milliseconds downstream_write_timeout,
                                         bool& ok,
                                         std::string& err_msg)
 {
@@ -311,7 +321,8 @@ Task<void> relayRawUpstreamToDownstream(TcpSocket& upstream,
         size_t offset = 0;
         while (offset < bytes) {
             const char* data = buffer.data() + offset;
-            auto send_result = co_await downstream.send(data, bytes - offset);
+            auto send_result = co_await downstream.send(data, bytes - offset)
+                .timeout(downstream_write_timeout);
             if (!send_result) {
                 err_msg = send_result.error().message();
                 co_return;
@@ -326,6 +337,11 @@ Task<void> relayRawUpstreamToDownstream(TcpSocket& upstream,
             offset += sent;
         }
     }
+}
+
+std::chrono::milliseconds responseWriteTimeoutFromConn(const HttpConn& conn)
+{
+    return std::chrono::milliseconds(conn.defaultWriterSetting().getSendTimeout());
 }
 
 } // namespace
@@ -843,10 +859,9 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
 {
     namespace fs = std::filesystem;
 
-    fs::path canonicalDir;
-    try {
-        canonicalDir = fs::canonical(dirPath);
-    } catch (const fs::filesystem_error&) {
+    std::error_code canonical_dir_error;
+    fs::path canonicalDir = fs::canonical(dirPath, canonical_dir_error);
+    if (canonical_dir_error) {
         canonicalDir = fs::path(dirPath);
     }
 
@@ -873,13 +888,9 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
         fs::path fullPath = fs::path(dirPath) / relativePath;
 
         // 安全检查：防止路径遍历攻击
-        fs::path canonicalFile;
-        bool fileNotFound = false;
-        try {
-            canonicalFile = fs::canonical(fullPath);
-        } catch (const fs::filesystem_error&) {
-            fileNotFound = true;
-        }
+        std::error_code canonical_file_error;
+        fs::path canonicalFile = fs::canonical(fullPath, canonical_file_error);
+        const bool fileNotFound = static_cast<bool>(canonical_file_error);
 
         if (fileNotFound) {
             if (fallbackHandler) {
@@ -918,7 +929,11 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
         }
 
         // 检查文件是否存在且是普通文件
-        if (!fs::exists(canonicalFile) || !fs::is_regular_file(canonicalFile)) {
+        std::error_code exists_error;
+        const bool file_exists = fs::exists(canonicalFile, exists_error);
+        std::error_code regular_file_error;
+        const bool is_regular = fs::is_regular_file(canonicalFile, regular_file_error);
+        if (exists_error || regular_file_error || !file_exists || !is_regular) {
             if (fallbackHandler) {
                 co_await fallbackHandler(conn, std::move(req));
                 co_return;
@@ -937,7 +952,25 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
         }
 
         // 获取文件大小
-        size_t fileSize = fs::file_size(canonicalFile);
+        std::error_code file_size_error;
+        uintmax_t rawFileSize = fs::file_size(canonicalFile, file_size_error);
+        if (file_size_error || rawFileSize > std::numeric_limits<size_t>::max()) {
+            HTTP_LOG_ERROR("[file] [stat-fail]",
+                           "path={} error={}",
+                           canonicalFile.string(),
+                           file_size_error.message());
+            auto response = Http1_1ResponseBuilder()
+                .status(HttpStatusCode::InternalServerError_500)
+                .body("500 Internal Server Error")
+                .buildMove();
+            auto writer = conn.getWriter();
+            while (true) {
+                auto send_result = co_await writer.sendResponse(response);
+                if (!send_result || send_result.value()) break;
+            }
+            co_return;
+        }
+        size_t fileSize = static_cast<size_t>(rawFileSize);
 
         // 设置 Content-Type
         std::string extension = canonicalFile.extension().string();
@@ -963,35 +996,71 @@ void HttpRouter::registerFilesRecursively(const std::string& routePrefix,
 
     fs::path fullPath = fs::path(dirPath) / currentPath;
 
-    try {
-        for (const auto& entry : fs::directory_iterator(fullPath)) {
-            std::string entryName = entry.path().filename().string();
-            std::string relativePath = currentPath.empty() ? entryName : currentPath + "/" + entryName;
-
-            if (entry.is_directory()) {
-                // 递归处理子目录
-                registerFilesRecursively(routePrefix, dirPath, config, relativePath);
-            } else if (entry.is_regular_file()) {
-                // 为文件创建路由
-                std::string routePath = routePrefix;
-                if (routePath.back() != '/') {
-                    routePath += '/';
-                }
-                routePath += relativePath;
-
-                // 创建文件处理器
-                std::string filePath = entry.path().string();
-                auto handler = createSingleFileHandler(filePath, config);
-
-                // 注册路由
-                addHandler<HttpMethod::GET, HttpMethod::HEAD>(routePath, handler);
-            }
-        }
-    } catch (const fs::filesystem_error& e) {
+    std::error_code iterator_error;
+    fs::directory_iterator dir_it(fullPath, iterator_error);
+    fs::directory_iterator end_it;
+    if (iterator_error) {
         HTTP_LOG_ERROR("[dir] [read-fail]",
                        "dir={} error={}",
                        fullPath.string(),
-                       e.what());
+                       iterator_error.message());
+        return;
+    }
+
+    for (; dir_it != end_it; dir_it.increment(iterator_error)) {
+        if (iterator_error) {
+            HTTP_LOG_ERROR("[dir] [read-fail]",
+                           "dir={} error={}",
+                           fullPath.string(),
+                           iterator_error.message());
+            return;
+        }
+
+        const auto& entry = *dir_it;
+        std::string entryName = entry.path().filename().string();
+        std::string relativePath = currentPath.empty() ? entryName : currentPath + "/" + entryName;
+
+        std::error_code entry_error;
+        if (entry.is_directory(entry_error)) {
+            if (entry_error) {
+                HTTP_LOG_ERROR("[dir] [entry-fail]",
+                               "path={} error={}",
+                               entry.path().string(),
+                               entry_error.message());
+                continue;
+            }
+            // 递归处理子目录
+            registerFilesRecursively(routePrefix, dirPath, config, relativePath);
+            continue;
+        }
+
+        if (entry.is_regular_file(entry_error)) {
+            if (entry_error) {
+                HTTP_LOG_ERROR("[file] [entry-fail]",
+                               "path={} error={}",
+                               entry.path().string(),
+                               entry_error.message());
+                continue;
+            }
+            // 为文件创建路由
+            std::string routePath = routePrefix;
+            if (routePath.back() != '/') {
+                routePath += '/';
+            }
+            routePath += relativePath;
+
+            // 创建文件处理器
+            std::string filePath = entry.path().string();
+            auto handler = createSingleFileHandler(filePath, config);
+
+            // 注册路由
+            addHandler<HttpMethod::GET, HttpMethod::HEAD>(routePath, handler);
+        } else if (entry_error) {
+            HTTP_LOG_ERROR("[file] [entry-fail]",
+                           "path={} error={}",
+                           entry.path().string(),
+                           entry_error.message());
+        }
     }
 }
 
@@ -1091,7 +1160,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             auto session_result = client->getSession();
             if (!session_result) {
                 HTTP_LOG_ERROR("[proxy-raw] [session-fail]", "error={}", session_result.error().message());
-                co_await client->close();
+                co_await closeHttpClientWithLog(*client, "raw-session-fail");
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream session failed");
                 co_return;
@@ -1113,7 +1182,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             }
 
             if (!send_ok) {
-                co_await client->close();
+                co_await closeHttpClientWithLog(*client, "raw-send-fail");
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: send upstream failed");
                 co_return;
@@ -1124,20 +1193,21 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             auto upstream_socket = client->socket();
             if (!upstream_socket) {
                 HTTP_LOG_ERROR("[proxy-raw] [socket-fail]", "error={}", upstream_socket.error().message());
-                co_await client->close();
+                co_await closeHttpClientWithLog(*client, "raw-socket-fail");
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream socket failed");
                 co_return;
             }
             co_await relayRawUpstreamToDownstream(upstream_socket.value().get(),
                                                   conn.getSocket(),
+                                                  responseWriteTimeoutFromConn(conn),
                                                   relay_ok,
                                                   relay_err);
             if (!relay_ok && !relay_err.empty()) {
                 HTTP_LOG_WARN("[proxy-raw] [relay-fail]", "error={}", relay_err);
             }
 
-            co_await client->close();
+            co_await closeHttpClientWithLog(*client, "raw-complete");
             co_return;
         }
         
@@ -1171,7 +1241,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             auto session_result = client->getSession();
             if (!session_result) {
                 HTTP_LOG_ERROR("[proxy] [session-fail]", "error={}", session_result.error().message());
-                co_await client->close();
+                co_await closeHttpClientWithLog(*client, "session-fail");
                 co_await sendProxyError(conn, HttpStatusCode::BadGateway_502,
                                         "Bad Gateway: upstream session failed");
                 co_return;
@@ -1193,7 +1263,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             }
 
             if (!send_ok) {
-                co_await client->close();
+                co_await closeHttpClientWithLog(*client, "send-fail");
                 if (borrowed_from_pool && !retried) {
                     retried = true;
                     borrowed_from_pool = false;
@@ -1233,7 +1303,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             }
 
             if (!recv_ok) {
-                co_await client->close();
+                co_await closeHttpClientWithLog(*client, "recv-fail");
                 if (borrowed_from_pool && !retried) {
                     retried = true;
                     borrowed_from_pool = false;
@@ -1283,10 +1353,10 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
             if (idle.size() < kProxyMaxIdleConnectionsPerUpstream) {
                 idle.push_back(std::move(client));
             } else if (client) {
-                co_await client->close();
+                co_await closeHttpClientWithLog(*client, "pool-full");
             }
         } else if (client) {
-            co_await client->close();
+            co_await closeHttpClientWithLog(*client, "not-keepalive");
         }
 
         co_return;
@@ -1601,10 +1671,12 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
             off_t offset = 0;
             size_t remaining = fileSize;
             size_t sendfileChunkSize = config.getSendFileChunkSize();
+            const auto response_write_timeout = responseWriteTimeoutFromConn(conn);
 
             while (remaining > 0) {
                 size_t toSend = std::min(remaining, sendfileChunkSize);
-                auto result = co_await conn.socket().sendfile(fd.get(), offset, toSend);
+                auto result = co_await conn.socket().sendfile(fd.get(), offset, toSend)
+                    .timeout(response_write_timeout);
 
                 if (!result) {
                     HTTP_LOG_ERROR("[sendfile] [fail]",
@@ -1696,10 +1768,12 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
         off_t offset = range.start;
         size_t remaining = range.length;
         size_t sendfileChunkSize = config.getSendFileChunkSize();
+        const auto response_write_timeout = responseWriteTimeoutFromConn(conn);
 
         while (remaining > 0) {
             size_t toSend = std::min(remaining, sendfileChunkSize);
-            auto result = co_await conn.socket().sendfile(fd.get(), offset, toSend);
+            auto result = co_await conn.socket().sendfile(fd.get(), offset, toSend)
+                .timeout(response_write_timeout);
 
             if (!result) {
                 HTTP_LOG_ERROR("[sendfile] [fail]",

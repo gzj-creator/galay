@@ -15,20 +15,21 @@
 
 #include "../kernel/http_conn.h"
 #include "http_router.h"
+#include "http_policy.h"
 #include "../common/http_log.h"
 #include "../builder/http_builder.h"
+#include "../utils/http_helper.h"
 #include "../plugin/common/defn.h"
 #include "../../galay-kernel/async/tcp_socket.h"
 #include "../../galay-kernel/core/runtime.h"
 #include <memory>
 #include <atomic>
-#include <exception>
 #include <expected>
 #include <functional>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <vector>
-
 #if defined(__linux__)
 #include <pthread.h>
 #include <sched.h>
@@ -44,6 +45,18 @@ namespace galay::http
 
 using namespace galay::async;
 using namespace galay::kernel;
+
+template<typename Closeable>
+Task<void> closeWithLog(Closeable& closeable, std::string_view context) {
+    auto close_result = co_await closeable.close();
+    if (!close_result) {
+        HTTP_LOG_WARN("[socket] [close-fail]",
+                      "context={} error={}",
+                      context,
+                      close_result.error().message());
+    }
+    co_return;
+}
 
 // 前向声明
 template<typename SocketType>
@@ -61,6 +74,7 @@ using HttpConnHandlerImpl = std::function<Task<void>(HttpConnImpl<SocketType>)>;
  * - `host` / `port` / `backlog` 控制监听 socket
  * - `io_scheduler_count` 与 `compute_scheduler_count` 交由 `RuntimeBuilder` 创建调度器
  * - `affinity` 只描述调度器绑核策略，不会改变业务 handler 的语义
+ * - `policy` 保存 route-mode 后续生产级加固所需的默认策略
  */
 struct HttpServerConfig
 {
@@ -70,6 +84,7 @@ struct HttpServerConfig
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
     size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
     RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
+    HttpServerPolicy policy;                     ///< HTTP/1.1 route-mode 生产策略
 };
 
 /**
@@ -83,6 +98,7 @@ public:
     HttpServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
     HttpServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
     HttpServerBuilder& computeSchedulerCount(size_t v)  { m_config.compute_scheduler_count = v; return *this; } ///< 设置计算调度器数量
+    HttpServerBuilder& policy(HttpServerPolicy v)        { m_config.policy = std::move(v); return *this; } ///< 设置 route-mode 生产策略
     /**
      * @brief 设置顺序 CPU 亲和性
      * @param io_count IO 调度器绑定的 CPU 核心数
@@ -184,15 +200,36 @@ public:
 
         m_handler = [this](HttpConnImpl<SocketType> conn) -> Task<void> {
             bool keep_alive = true;
+            size_t handled_requests = 0;
+            HttpReaderSetting reader_setting;
+            reader_setting.setMaxHeaderSize(m_config.policy.request_limits.max_header_size);
+            reader_setting.setMaxHeaderCount(m_config.policy.request_limits.max_header_count);
+            reader_setting.setMaxHeaderLineSize(m_config.policy.request_limits.max_header_line_size);
+            reader_setting.setMaxUriSize(m_config.policy.request_limits.max_uri_size);
+            reader_setting.setMaxBodySize(m_config.policy.request_limits.max_body_size);
+            HttpWriterSetting writer_setting;
+            writer_setting.setSendTimeout(
+                static_cast<int>(m_config.policy.timeouts.response_write_timeout.count()));
+            conn.setDefaultWriterSetting(writer_setting);
 
             while (keep_alive) {
-                auto reader = conn.getReader();
+                const bool waiting_for_initial_request = handled_requests == 0;
+                const auto read_timeout = waiting_for_initial_request
+                    ? m_config.policy.timeouts.request_header_timeout
+                    : m_config.policy.keep_alive.keep_alive_idle_timeout;
+                auto reader = conn.getReader(reader_setting);
                 HttpRequest request;
-                auto read_result = co_await reader.getRequest(request);
+                auto read_result = co_await reader.getRequest(request)
+                    .timeout(read_timeout)
+                    .bodyTimeout(m_config.policy.timeouts.request_body_timeout);
 
                 if (!read_result) {
                     const auto& error = read_result.error();
                     bool is_disconnect_like = error.code() == kConnectionClose;
+                    const bool is_timeout_like =
+                        error.code() == kRecvTimeOut ||
+                        error.code() == kSendTimeOut ||
+                        error.code() == kRequestTimeOut;
                     if (!is_disconnect_like &&
                         (error.code() == kRecvError || error.code() == kTcpRecvError)) {
                         const std::string message = error.message();
@@ -202,15 +239,41 @@ public:
 
                     if (is_disconnect_like) {
                         HTTP_LOG_DEBUG("[recv] [disconnect]", "code={}", static_cast<int>(error.code()));
-                    } else if (error.code() == kRecvTimeOut || error.code() == kSendTimeOut || error.code() == kRequestTimeOut) {
+                    } else if (is_timeout_like) {
                         HTTP_LOG_WARN("[recv] [timeout]", "code={} msg={}", static_cast<int>(error.code()), error.message());
                     } else {
                         HTTP_LOG_ERROR("[recv] [fail]", "code={} msg={}", static_cast<int>(error.code()), error.message());
+                    }
+
+                    const bool should_send_timeout_response =
+                        is_timeout_like && waiting_for_initial_request;
+
+                    if (!is_disconnect_like && !is_timeout_like) {
+                        auto response = HttpHelper::defaultHttpResponse(error.toHttpStatusCode());
+                        response.header().headerPairs().addHeaderPair("Connection", "close");
+                        auto writer = conn.getWriter();
+                        auto write_result = co_await writer.sendResponse(response);
+                        if (!write_result) {
+                            HTTP_LOG_WARN("[send] [fail]", "code={} msg={}",
+                                          static_cast<int>(write_result.error().code()),
+                                          write_result.error().message());
+                        }
+                    } else if (should_send_timeout_response) {
+                        auto response = HttpHelper::defaultHttpResponse(error.toHttpStatusCode());
+                        response.header().headerPairs().addHeaderPair("Connection", "close");
+                        auto writer = conn.getWriter();
+                        auto write_result = co_await writer.sendResponse(response);
+                        if (!write_result) {
+                            HTTP_LOG_WARN("[send] [fail]", "code={} msg={}",
+                                          static_cast<int>(write_result.error().code()),
+                                          write_result.error().message());
+                        }
                     }
                     break;
                 }
 
                 keep_alive = request.header().isKeepAlive() && !request.header().isConnectionClose();
+                ++handled_requests;
 
                 auto [handler, params] = m_router->findHandler(request.header().method(), request.header().uri());
 
@@ -249,7 +312,7 @@ public:
                 }
             }
 
-            co_await conn.close();
+            co_await closeWithLog(conn, "route-connection");
             co_return;
         };
 
@@ -427,12 +490,7 @@ protected:
      */
     virtual std::optional<SocketType> createClientSocket(GHandle fd) {
         if constexpr (std::is_same_v<SocketType, TcpSocket>) {
-            try {
-                return SocketType(fd);
-            } catch (...) {
-                HTTP_LOG_ERROR("[socket] [create-fail] [client]", "tcp client construction failed");
-                return std::nullopt;
-            }
+            return SocketType(fd);
         } else {
             // SslSocket 需要在派生类中实现
             return std::nullopt;
@@ -442,21 +500,12 @@ protected:
     bool startPlugins() {
         m_started_plugin_count = 0;
         for (auto& plugin : m_accept_plugins) {
-            try {
-                if (!plugin->start(m_runtime)) {
-                    stopStartedPlugins();
-                    return false;
-                }
-                ++m_started_plugin_count;
-            } catch (const std::exception& ex) {
-                HTTP_LOG_ERROR("[accept-plugin] [start-fail]", "error={}", ex.what());
-                stopStartedPlugins();
-                return false;
-            } catch (...) {
-                HTTP_LOG_ERROR("[accept-plugin] [start-fail]", "error=unknown");
+            if (!plugin->start(m_runtime)) {
+                HTTP_LOG_ERROR("[accept-plugin] [start-fail]", "error=start returned false");
                 stopStartedPlugins();
                 return false;
             }
+            ++m_started_plugin_count;
         }
         return true;
     }
@@ -464,11 +513,7 @@ protected:
     void stopStartedPlugins() noexcept {
         while (m_started_plugin_count > 0) {
             --m_started_plugin_count;
-            try {
-                m_accept_plugins[m_started_plugin_count]->stop();
-            } catch (...) {
-                HTTP_LOG_ERROR("[accept-plugin] [stop-fail]", "error=exception");
-            }
+            m_accept_plugins[m_started_plugin_count]->stop();
         }
     }
 
@@ -628,12 +673,7 @@ protected:
             return std::nullopt;
         }
 
-        try {
-            return galay::ssl::SslSocket(&m_ssl_ctx, fd);
-        } catch (...) {
-            HTTP_LOG_ERROR("[socket] [create-fail] [client]", "ssl client construction failed");
-            return std::nullopt;
-        }
+        return galay::ssl::SslSocket(&m_ssl_ctx, fd);
     }
 
     Task<void> serverLoop(IOScheduler* scheduler, TcpSocket* listener) override {
@@ -676,7 +716,7 @@ protected:
             auto continuing_result = co_await this->runAcceptPlugins(client_socket, client_host);
             bool continuing = continuing_result.value_or(false);
             if (!continuing) {
-                co_await client_socket.close();
+                co_await closeWithLog(client_socket, "ssl-accept-plugin-stop");
                 continue;
             }
 
@@ -688,7 +728,7 @@ protected:
 
             // 阶段 13：投递 TLS 连接处理任务，投递失败时关闭客户端 socket
             if (!scheduleTask(target_scheduler, handleSslConnection(std::move(client_socket)))) {
-                co_await client_socket.close();
+                co_await closeWithLog(client_socket, "ssl-schedule-fail");
             }
         }
 
@@ -700,7 +740,7 @@ private:
         auto handshake_result = co_await socket.handshake();
         if (!handshake_result) {
             HTTP_LOG_WARN("[ssl] [handshake] [fail]", "error={}", handshake_result.error().message());
-            co_await socket.close();
+            co_await closeWithLog(socket, "ssl-handshake-fail");
             co_return;
         }
 
