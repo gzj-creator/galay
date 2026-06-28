@@ -1,6 +1,9 @@
 #include <galay/c/galay-kernel-c/async-c/udp_socket_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
 #include <arpa/inet.h>
+#include <limits.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -8,7 +11,6 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
-#include <time.h>
 #include <unistd.h>
 
 enum {
@@ -27,10 +29,10 @@ typedef struct BenchmarkState {
     galay_kernel_runtime_t runtime;
     galay_kernel_udp_socket_t server;
     galay_kernel_udp_socket_t client;
+    galay_coro_task_t recv_task;
+    galay_coro_task_t send_task;
     C_Host server_local;
     atomic_int stop;
-    atomic_int recv_done;
-    atomic_int send_done;
     atomic_ullong recv_datagrams;
     atomic_ullong send_datagrams;
     atomic_ullong recv_bytes;
@@ -41,131 +43,93 @@ typedef struct BenchmarkState {
     size_t payload_bytes;
 } BenchmarkState;
 
-typedef struct CloseState {
-    atomic_int done;
-    atomic_int code;
-} CloseState;
+static void add_counter(atomic_ullong* counter, unsigned long long value)
+{
+    unsigned long long previous = atomic_fetch_add(counter, value);
+    if (value != 0 && previous > ULLONG_MAX - value) {
+        atomic_store(counter, ULLONG_MAX);
+    }
+}
 
 static int64_t now_us(void)
 {
     struct timeval tv;
-    if (gettimeofday(&tv, 0) != 0) {
+    if (gettimeofday(&tv, NULL) != 0) {
         return 0;
     }
     return (int64_t)tv.tv_sec * 1000000 + (int64_t)tv.tv_usec;
 }
 
-static int wait_done(atomic_int* done)
+static void recv_entry(void* arg)
 {
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 5000; ++i) {
-        if (atomic_load(done)) {
-            return 0;
+    BenchmarkState* state = (BenchmarkState*)arg;
+    while (!atomic_load(&state->stop)) {
+        C_Host from = {0};
+        C_IOResult result = galay_kernel_udp_socket_recvfrom(
+            &state->server,
+            state->recv_buffer,
+            state->payload_bytes,
+            &from,
+            -1);
+        if (result.code != C_IOResultOk) {
+            if (!atomic_load(&state->stop)) {
+                add_counter(&state->errors, 1);
+            }
+            break;
         }
-        nanosleep(&pause, 0);
+        if (result.bytes == 0) {
+            continue;
+        }
+        add_counter(&state->recv_datagrams, 1);
+        add_counter(&state->recv_bytes, (unsigned long long)result.bytes);
     }
-    return 1;
 }
 
-static void on_close(C_UdpSocketResultCode code, void* ctx)
+static void send_entry(void* arg)
 {
-    CloseState* state = (CloseState*)ctx;
-    atomic_store(&state->code, (int)code);
-    atomic_store(&state->done, 1);
-}
-
-static int close_socket(galay_kernel_runtime_t* runtime, galay_kernel_udp_socket_t* socket)
-{
-    CloseState state;
-    atomic_init(&state.done, 0);
-    atomic_init(&state.code, (int)C_UdpSocketIOFailed);
-    if (socket->socket == 0) {
-        return 0;
-    }
-    if (galay_kernel_udp_socket_close(runtime, socket, on_close, &state) != C_UdpSocketSuccess) {
-        return 1;
-    }
-    return wait_done(&state.done) != 0 ||
-        atomic_load(&state.code) != (int)C_UdpSocketSuccess;
-}
-
-static void post_send(BenchmarkState* state);
-
-static int on_recv_loop(galay_kernel_udp_recvfrom_result_t* result, void* ctx)
-{
-    BenchmarkState* state = (BenchmarkState*)ctx;
-    if (result == 0 || result->code != C_UdpSocketSuccess) {
-        atomic_fetch_add(&state->errors, 1);
-        atomic_store(&state->recv_done, 1);
-        return 1;
-    }
-
-    atomic_fetch_add(&state->recv_datagrams, 1);
-    atomic_fetch_add(&state->recv_bytes, (unsigned long long)result->bytes);
-    if (atomic_load(&state->stop)) {
-        atomic_store(&state->recv_done, 1);
-        return 1;
-    }
-    return 0;
-}
-
-static void on_send(galay_kernel_udp_sendto_result_t* result, void* ctx)
-{
-    BenchmarkState* state = (BenchmarkState*)ctx;
-    if (result == 0 || result->code != C_UdpSocketSuccess || result->bytes != state->payload_bytes) {
-        atomic_fetch_add(&state->errors, 1);
-        atomic_store(&state->send_done, 1);
-        return;
-    }
-
-    atomic_fetch_add(&state->send_datagrams, 1);
-    atomic_fetch_add(&state->send_bytes, (unsigned long long)result->bytes);
-    if (atomic_load(&state->stop)) {
-        atomic_store(&state->send_done, 1);
-        return;
-    }
-    post_send(state);
-}
-
-static void post_send(BenchmarkState* state)
-{
-    if (atomic_load(&state->stop)) {
-        atomic_store(&state->send_done, 1);
-        return;
-    }
-    if (galay_kernel_udp_socket_sendto(
-            &state->runtime,
+    BenchmarkState* state = (BenchmarkState*)arg;
+    while (!atomic_load(&state->stop)) {
+        C_IOResult result = galay_kernel_udp_socket_sendto(
             &state->client,
             state->payload,
             state->payload_bytes,
             &state->server_local,
-            on_send,
-            state) != C_UdpSocketSuccess) {
-        atomic_fetch_add(&state->errors, 1);
-        atomic_store(&state->send_done, 1);
+            1000);
+        if (result.code != C_IOResultOk || result.bytes != state->payload_bytes) {
+            add_counter(&state->errors, 1);
+            break;
+        }
+        add_counter(&state->send_datagrams, 1);
+        add_counter(&state->send_bytes, (unsigned long long)result.bytes);
     }
 }
 
-static void wake_receiver(const C_Host* endpoint)
+static int wake_receiver(const C_Host* endpoint)
 {
     int fd = socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
-        return;
+        return 1;
     }
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
+    struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(endpoint->port);
-    if (inet_pton(AF_INET, endpoint->address, &addr.sin_addr) == 1) {
-        (void)sendto(fd, 0, 0, 0, (const struct sockaddr*)&addr, sizeof(addr));
+    int status = 0;
+    if (inet_pton(AF_INET, endpoint->address, &addr.sin_addr) != 1 ||
+        sendto(fd, NULL, 0, 0, (const struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        status = 1;
     }
-    close(fd);
+    if (close(fd) != 0) {
+        status = 1;
+    }
+    return status;
 }
 
-static void print_usage(const char* program)
+static int print_usage(const char* program)
 {
-    printf("Usage: %s [-s payload_bytes] [-d duration_seconds] [--io-schedulers count>=2]\n", program);
+    return printf("Usage: %s [-s payload_bytes] [-d duration_seconds] [--io-schedulers count>=2]\n", program) < 0
+        ? 1
+        : 0;
 }
 
 static int parse_args(int argc, char** argv, BenchmarkConfig* config)
@@ -176,17 +140,15 @@ static int parse_args(int argc, char** argv, BenchmarkConfig* config)
 
     for (int i = 1; i < argc; ++i) {
         if (strcmp(argv[i], "-s") == 0 && i + 1 < argc) {
-            config->payload_bytes = (size_t)strtoull(argv[++i], 0, 10);
+            config->payload_bytes = (size_t)strtoull(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
             config->duration_seconds = atoi(argv[++i]);
         } else if (strcmp(argv[i], "--io-schedulers") == 0 && i + 1 < argc) {
-            config->io_schedulers = (size_t)strtoull(argv[++i], 0, 10);
+            config->io_schedulers = (size_t)strtoull(argv[++i], NULL, 10);
         } else if (strcmp(argv[i], "--help") == 0) {
-            print_usage(argv[0]);
-            return 1;
+            return print_usage(argv[0]) == 0 ? 1 : 2;
         } else {
-            print_usage(argv[0]);
-            return 1;
+            return print_usage(argv[0]) == 0 ? 1 : 2;
         }
     }
 
@@ -202,12 +164,9 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    BenchmarkState state;
-    memset(&state, 0, sizeof(state));
+    BenchmarkState state = {0};
     state.payload_bytes = bench_config.payload_bytes;
     atomic_init(&state.stop, 0);
-    atomic_init(&state.recv_done, 0);
-    atomic_init(&state.send_done, 0);
     atomic_init(&state.recv_datagrams, 0);
     atomic_init(&state.send_datagrams, 0);
     atomic_init(&state.recv_bytes, 0);
@@ -216,7 +175,7 @@ int main(int argc, char** argv)
 
     state.payload = (char*)malloc(state.payload_bytes);
     state.recv_buffer = (char*)malloc(state.payload_bytes);
-    if (state.payload == 0 || state.recv_buffer == 0) {
+    if (state.payload == NULL || state.recv_buffer == NULL) {
         free(state.payload);
         free(state.recv_buffer);
         return 2;
@@ -232,12 +191,15 @@ int main(int argc, char** argv)
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     int exit_code = 0;
 
-    printf("C UDP benchmark starting payload=%zu duration=%d io_schedulers=%zu\n",
-           bench_config.payload_bytes,
-           bench_config.duration_seconds,
-           bench_config.io_schedulers);
-    printf("meta: role=loopback io_mode=plain scenario=udp-datagram-throughput mode=callback-loop\n");
-    fflush(stdout);
+    if (printf("C UDP benchmark starting payload=%zu duration=%d io_schedulers=%zu\n",
+               bench_config.payload_bytes,
+               bench_config.duration_seconds,
+               bench_config.io_schedulers) < 0 ||
+        printf("meta: role=loopback io_mode=plain scenario=udp-datagram-throughput mode=coro-direct\n") < 0 ||
+        fflush(stdout) != 0) {
+        exit_code = 3;
+        goto cleanup;
+    }
 
     if (galay_kernel_runtime_create(&runtime_config, &state.runtime) != C_RuntimeSuccess ||
         galay_kernel_runtime_start(&state.runtime) != C_RuntimeSuccess ||
@@ -246,28 +208,37 @@ int main(int argc, char** argv)
         galay_kernel_udp_socket_bind(&state.server, &bind_host) != C_UdpSocketSuccess ||
         galay_kernel_udp_socket_bind(&state.client, &bind_host) != C_UdpSocketSuccess ||
         galay_kernel_udp_socket_local_endpoint(&state.server, &state.server_local) != C_UdpSocketSuccess) {
-        exit_code = 3;
-        goto cleanup;
-    }
-
-    if (galay_kernel_udp_socket_recvfrom_loop(
-            &state.runtime,
-            &state.server,
-            state.recv_buffer,
-            state.payload_bytes,
-            on_recv_loop,
-            &state) != C_UdpSocketSuccess) {
         exit_code = 4;
         goto cleanup;
     }
-    post_send(&state);
+
+    C_IOResult recv_spawn = galay_coro_spawn(&state.runtime, recv_entry, &state, NULL, &state.recv_task);
+    C_IOResult send_spawn = galay_coro_spawn(&state.runtime, send_entry, &state, NULL, &state.send_task);
+    if (recv_spawn.code != C_IOResultOk || send_spawn.code != C_IOResultOk) {
+        exit_code = 5;
+        goto cleanup;
+    }
 
     const int64_t start_us = now_us();
-    sleep((unsigned int)bench_config.duration_seconds);
+    unsigned int remaining = sleep((unsigned int)bench_config.duration_seconds);
+    if (remaining != 0) {
+        exit_code = 6;
+    }
     atomic_store(&state.stop, 1);
-    wake_receiver(&state.server_local);
-    (void)wait_done(&state.send_done);
-    (void)wait_done(&state.recv_done);
+    if (wake_receiver(&state.server_local) != 0 && exit_code == 0) {
+        exit_code = 7;
+    }
+    C_IOResult send_join = galay_coro_join(&state.send_task, 3000);
+    C_IOResult send_destroy = galay_coro_destroy(&state.send_task);
+    C_IOResult recv_join = galay_coro_join(&state.recv_task, 3000);
+    C_IOResult recv_destroy = galay_coro_destroy(&state.recv_task);
+    if ((send_join.code != C_IOResultOk ||
+         send_destroy.code != C_IOResultOk ||
+         recv_join.code != C_IOResultOk ||
+         recv_destroy.code != C_IOResultOk) &&
+        exit_code == 0) {
+        exit_code = 8;
+    }
     const int64_t elapsed_us = now_us() - start_us;
 
     const unsigned long long recv_datagrams = atomic_load(&state.recv_datagrams);
@@ -280,35 +251,60 @@ int main(int argc, char** argv)
         ? (double)recv_bytes / 1024.0 / 1024.0 / elapsed_seconds
         : 0.0;
 
-    printf("udp_socket_throughput sent_datagrams=%llu recv_datagrams=%llu sent_mb=%.3f recv_mb=%.3f throughput_mb_s=%.3f errors=%llu\n",
-           send_datagrams,
-           recv_datagrams,
-           (double)send_bytes / 1024.0 / 1024.0,
-           (double)recv_bytes / 1024.0 / 1024.0,
-           throughput_mb,
-           errors);
-    if (errors != 0 || send_datagrams == 0 || recv_datagrams == 0) {
-        exit_code = 5;
+    if (printf("udp_socket_throughput sent_datagrams=%llu recv_datagrams=%llu sent_mb=%.3f recv_mb=%.3f throughput_mb_s=%.3f errors=%llu\n",
+               send_datagrams,
+               recv_datagrams,
+               (double)send_bytes / 1024.0 / 1024.0,
+               (double)recv_bytes / 1024.0 / 1024.0,
+               throughput_mb,
+               errors) < 0 &&
+        exit_code == 0) {
+        exit_code = 9;
+    }
+    if ((errors != 0 || send_datagrams == 0 || recv_datagrams == 0) && exit_code == 0) {
+        exit_code = 10;
     }
 
 cleanup:
-    if (state.runtime.runtime != 0) {
-        if (state.client.socket != 0) {
-            (void)close_socket(&state.runtime, &state.client);
+    atomic_store(&state.stop, 1);
+    if (state.send_task.task != NULL) {
+        if (galay_coro_join(&state.send_task, 0).code == C_IOResultOk) {
+            if (galay_coro_destroy(&state.send_task).code != C_IOResultOk && exit_code == 0) {
+                exit_code = 11;
+            }
         }
-        if (state.server.socket != 0) {
-            (void)close_socket(&state.runtime, &state.server);
+    }
+    if (state.recv_task.task != NULL) {
+        if (wake_receiver(&state.server_local) != 0 && exit_code == 0) {
+            exit_code = 12;
+        }
+        if (galay_coro_join(&state.recv_task, 3000).code == C_IOResultOk) {
+            if (galay_coro_destroy(&state.recv_task).code != C_IOResultOk && exit_code == 0) {
+                exit_code = 13;
+            }
+        } else if (exit_code == 0) {
+            exit_code = 14;
         }
     }
-    if (state.client.socket != 0) {
-        (void)galay_kernel_udp_socket_destroy(&state.client);
+    if (state.client.socket != NULL &&
+        galay_kernel_udp_socket_destroy(&state.client) != C_UdpSocketSuccess &&
+        exit_code == 0) {
+        exit_code = 15;
     }
-    if (state.server.socket != 0) {
-        (void)galay_kernel_udp_socket_destroy(&state.server);
+    if (state.server.socket != NULL &&
+        galay_kernel_udp_socket_destroy(&state.server) != C_UdpSocketSuccess &&
+        exit_code == 0) {
+        exit_code = 16;
     }
-    if (state.runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&state.runtime);
-        (void)galay_kernel_runtime_destroy(&state.runtime);
+    if (state.runtime.runtime != NULL &&
+        galay_kernel_runtime_stop(&state.runtime) != C_RuntimeSuccess &&
+        exit_code == 0) {
+        exit_code = 17;
+    }
+    if (state.runtime.runtime != NULL &&
+        galay_kernel_runtime_destroy(&state.runtime) != C_RuntimeSuccess &&
+        exit_code == 0) {
+        exit_code = 18;
     }
     free(state.payload);
     free(state.recv_buffer);

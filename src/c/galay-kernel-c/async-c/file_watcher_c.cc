@@ -1,7 +1,9 @@
 #include "file_watcher_c.h"
 
 #include "../../../cpp/galay-kernel/async/file_watcher.h"
-#include "../../../cpp/galay-kernel/core/runtime.h"
+#include "../coro-c/coro_task_internal.hpp"
+#include "../coro-c/coro_wait_c.h"
+#include <galay/cpp/galay-kernel/core/c_coro_file_watcher_bridge.h>
 
 #include <cerrno>
 #include <chrono>
@@ -39,11 +41,6 @@ bool timeout_fits_chrono(uint64_t timeout_ms)
 
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
 
-galay::kernel::Runtime* to_cpp_runtime(galay_kernel_runtime_t* runtime)
-{
-    return static_cast<galay::kernel::Runtime*>(runtime->runtime);
-}
-
 galay::async::FileWatcher* to_cpp_watcher(galay_kernel_file_watcher_t* watcher)
 {
     return static_cast<galay::async::FileWatcher*>(watcher->watcher);
@@ -59,11 +56,6 @@ galay::kernel::FileWatchEvent to_cpp_events(C_FileWatchEvent events)
     return static_cast<galay::kernel::FileWatchEvent>(static_cast<unsigned int>(events));
 }
 
-C_FileWatchEvent to_c_events(galay::kernel::FileWatchEvent events)
-{
-    return static_cast<C_FileWatchEvent>(static_cast<unsigned int>(events));
-}
-
 C_FileWatcherResultCode from_cpp_io_error(const galay::kernel::IOError& error)
 {
     const auto code = error.code();
@@ -76,75 +68,182 @@ C_FileWatcherResultCode from_cpp_io_error(const galay::kernel::IOError& error)
     return C_FileWatcherIOFailed;
 }
 
-C_FileWatcherResultCode from_cpp_watch_timeout_error(const galay::kernel::IOError& error)
-{
-    if (galay::kernel::IOError::contains(error.code(), galay::kernel::kTimeout))
-    {
-        return C_FileWatcherTimeout;
-    }
-    return from_cpp_io_error(error);
-}
-
-void copy_name_to_result(const std::string& name, galay_kernel_file_watcher_watch_result_t* result)
-{
-    const auto bytes = name.size() < sizeof(result->name) - 1
-        ? name.size()
-        : sizeof(result->name) - 1;
-    if (bytes > 0)
-    {
-        std::memcpy(result->name, name.data(), bytes);
-    }
-    result->name[bytes] = '\0';
-}
-
-galay::kernel::Task<void> c_api_watch(
-    galay::async::FileWatcher* watcher,
-    galay_kernel_file_watcher_callback_t callback,
-    void* ctx)
-{
-    auto watched = co_await watcher->watch();
-
-    galay_kernel_file_watcher_watch_result_t result{};
-    if (!watched)
-    {
-        result.code = from_cpp_io_error(watched.error());
-        callback(&result, ctx);
-        co_return;
-    }
-
-    result.code = C_FileWatcherSuccess;
-    result.events = to_c_events(watched->event);
-    result.is_dir = watched->isDir;
-    copy_name_to_result(watched->name, &result);
-    callback(&result, ctx);
-    co_return;
-}
-
-galay::kernel::Task<void> c_api_watch_timeout(
-    galay::async::FileWatcher* watcher,
-    uint64_t timeout_ms,
-    galay_kernel_file_watcher_callback_t callback,
-    void* ctx)
-{
-    auto watched = co_await watcher->watch().timeout(std::chrono::milliseconds(timeout_ms));
-
-    galay_kernel_file_watcher_watch_result_t result{};
-    if (!watched)
-    {
-        result.code = from_cpp_watch_timeout_error(watched.error());
-        callback(&result, ctx);
-        co_return;
-    }
-
-    result.code = C_FileWatcherSuccess;
-    result.events = to_c_events(watched->event);
-    result.is_dir = watched->isDir;
-    copy_name_to_result(watched->name, &result);
-    callback(&result, ctx);
-    co_return;
-}
-
 #endif
+
+C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
+{
+    return C_IOResult{code, sys_errno, 0, 0, nullptr};
+}
+
+GalayCoreCoroIOResultCode to_core_code(C_IOResultCode code)
+{
+    switch (code) {
+    case C_IOResultOk:
+        return GalayCoreCoroIOResultOk;
+    case C_IOResultEof:
+        return GalayCoreCoroIOResultEof;
+    case C_IOResultTimeout:
+        return GalayCoreCoroIOResultTimeout;
+    case C_IOResultCancelled:
+        return GalayCoreCoroIOResultCancelled;
+    case C_IOResultInvalid:
+        return GalayCoreCoroIOResultInvalid;
+    case C_IOResultError:
+        return GalayCoreCoroIOResultError;
+    }
+    return GalayCoreCoroIOResultError;
+}
+
+C_IOResultCode from_core_code(GalayCoreCoroIOResultCode code)
+{
+    switch (code) {
+    case GalayCoreCoroIOResultOk:
+        return C_IOResultOk;
+    case GalayCoreCoroIOResultEof:
+        return C_IOResultEof;
+    case GalayCoreCoroIOResultTimeout:
+        return C_IOResultTimeout;
+    case GalayCoreCoroIOResultCancelled:
+        return C_IOResultCancelled;
+    case GalayCoreCoroIOResultInvalid:
+        return C_IOResultInvalid;
+    case GalayCoreCoroIOResultError:
+        return C_IOResultError;
+    }
+    return C_IOResultError;
+}
+
+GalayCoreCoroIOResult to_core_result(C_IOResult result)
+{
+    return GalayCoreCoroIOResult{
+        to_core_code(result.code),
+        result.sys_errno,
+        result.bytes,
+        result.value,
+        result.ptr,
+    };
+}
+
+C_IOResult from_core_result(GalayCoreCoroIOResult result)
+{
+    return C_IOResult{
+        from_core_code(result.code),
+        result.sys_errno,
+        result.bytes,
+        result.value,
+        result.ptr,
+    };
+}
+
+void* current_io_scheduler()
+{
+    return static_cast<void*>(galay::kernel::coro_c::currentTaskOwnerScheduler());
+}
+
+struct WaitRequestScope {
+    C_CoroWaitRequest request{nullptr};
+    void* user_data = nullptr;
+
+    ~WaitRequestScope()
+    {
+        if (request.request != nullptr) {
+            C_IOResult cleanup_result = galay_coro_wait_request_destroy(&request);
+            request.request = cleanup_result.code == C_IOResultOk ? nullptr : request.request;
+        }
+    }
+};
+
+C_IOResult merge_cleanup_result(C_IOResult primary, C_IOResult cleanup)
+{
+    return primary.code == C_IOResultOk && cleanup.code != C_IOResultOk
+        ? cleanup
+        : primary;
+}
+
+C_IOResult close_wait_scope(WaitRequestScope& scope)
+{
+    if (scope.request.request == nullptr) {
+        return make_result(C_IOResultOk);
+    }
+    return galay_coro_wait_request_destroy(&scope.request);
+}
+
+GalayCoreCoroIOResult wait_request(void* ctx, int64_t timeout_ms)
+{
+    auto* scope = static_cast<WaitRequestScope*>(ctx);
+    if (scope == nullptr) {
+        return to_core_result(make_result(C_IOResultInvalid));
+    }
+    return to_core_result(galay_coro_wait(&scope->request, timeout_ms));
+}
+
+GalayCoreCoroIOResult complete_user_data(void* user_data,
+                                         GalayCoreCoroIOResult result)
+{
+    return to_core_result(
+        galay_coro_wait_event_user_data_complete(user_data, from_core_result(result)));
+}
+
+GalayCoreCoroIOResult release_user_data(void* user_data)
+{
+    return to_core_result(galay_coro_wait_event_user_data_release(user_data));
+}
+
+C_IOResult prepare_wait_user_data(WaitRequestScope& scope)
+{
+    C_IOResult created = galay_coro_wait_request_create(&scope.request);
+    if (created.code != C_IOResultOk) {
+        return created;
+    }
+
+    uint64_t generation = 0;
+    C_IOResult prepared = galay_coro_wait_request_prepare(&scope.request, &generation);
+    if (prepared.code != C_IOResultOk) {
+        return prepared;
+    }
+
+    C_CoroWaitEventToken token{nullptr};
+    C_IOResult acquired =
+        galay_coro_wait_request_event_token_acquire(&scope.request, generation, &token);
+    if (acquired.code != C_IOResultOk) {
+        C_IOResult cancelled = galay_coro_wait_request_cancel(&scope.request, generation);
+        return merge_cleanup_result(acquired, cancelled);
+    }
+
+    C_IOResult detached =
+        galay_coro_wait_event_token_detach_user_data(&token, &scope.user_data);
+    if (detached.code != C_IOResultOk) {
+        C_IOResult released = galay_coro_wait_event_token_release(&token);
+        detached = merge_cleanup_result(detached, released);
+        C_IOResult cancelled = galay_coro_wait_request_cancel(&scope.request, generation);
+        detached = merge_cleanup_result(detached, cancelled);
+    }
+    return detached;
+}
+
+GalayCoreCoroWaitOps make_wait_ops(WaitRequestScope& scope)
+{
+    return GalayCoreCoroWaitOps{
+        wait_request,
+        complete_user_data,
+        release_user_data,
+        &scope,
+    };
+}
+
+template <typename Submit>
+C_IOResult submit_with_wait(Submit&& submit)
+{
+    WaitRequestScope scope;
+    C_IOResult prepared = prepare_wait_user_data(scope);
+    if (prepared.code != C_IOResultOk) {
+        return prepared;
+    }
+
+    GalayCoreCoroWaitOps wait_ops = make_wait_ops(scope);
+    C_IOResult result = from_core_result(std::forward<Submit>(submit)(scope.user_data, &wait_ops));
+    return merge_cleanup_result(result, close_wait_scope(scope));
+}
 
 } // namespace
 
@@ -162,10 +261,6 @@ const char* galay_kernel_file_watcher_get_error(C_FileWatcherResultCode code)
         return "io failed";
     case C_FileWatcherOperationInvalid:
         return "operation invalid";
-    case C_FileWatcherRuntimeNotRunning:
-        return "runtime not running";
-    case C_FileWatcherRuntimeSpawnFailed:
-        return "runtime spawn failed";
     case C_FileWatcherOperationUnsupported:
         return "operation unsupported";
     case C_FileWatcherTimeout:
@@ -315,76 +410,62 @@ C_FileWatcherResultCode galay_kernel_file_watcher_get_path(
 #endif
 }
 
-C_FileWatcherResultCode galay_kernel_file_watcher_watch(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_file_watcher_watch(
     galay_kernel_file_watcher_t* c_watcher,
-    galay_kernel_file_watcher_callback_t callback,
-    void* ctx)
+    galay_kernel_file_watcher_watch_result_t* out_result,
+    int64_t timeout_ms)
 {
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_watcher == nullptr || callback == nullptr)
-    {
-        return C_FileWatcherParameterInvalid;
-    }
-
-    if (!kFileWatcherSupported)
-    {
-        return C_FileWatcherOperationUnsupported;
-    }
-
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
-    if (c_watcher->watcher == nullptr)
-    {
-        return C_FileWatcherParameterInvalid;
+    void* scheduler = current_io_scheduler();
+    if (c_watcher == nullptr || c_watcher->watcher == nullptr ||
+        out_result == nullptr || scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
+        return make_result(C_IOResultInvalid);
     }
-
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
-    {
-        return C_FileWatcherRuntimeNotRunning;
+    if (timeout_ms == 0) {
+        out_result->code = C_FileWatcherTimeout;
+        out_result->events = C_FileWatchEventNone;
+        out_result->name[0] = '\0';
+        out_result->is_dir = false;
+        return make_result(C_IOResultTimeout);
     }
-
-    auto spawned = cpp_runtime->spawn(c_api_watch(to_cpp_watcher(c_watcher), callback, ctx));
-    return spawned ? C_FileWatcherSuccess : C_FileWatcherRuntimeSpawnFailed;
+    GalayCoreCoroFileWatchResult core_result{};
+    C_IOResult result = submit_with_wait(
+        [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
+            return galay_core_coro_file_watcher_watch(c_watcher->watcher,
+                                                      scheduler,
+                                                      &core_result,
+                                                      timeout_ms,
+                                                      user_data,
+                                                      wait_ops);
+        });
+    if (result.code == C_IOResultOk) {
+        out_result->code = C_FileWatcherSuccess;
+        out_result->events = static_cast<C_FileWatchEvent>(
+            static_cast<unsigned int>(core_result.events));
+        std::memcpy(out_result->name, core_result.name, sizeof(out_result->name));
+        out_result->name[sizeof(out_result->name) - 1] = '\0';
+        out_result->is_dir = core_result.is_dir;
+    } else if (result.code == C_IOResultTimeout) {
+        out_result->code = C_FileWatcherTimeout;
+        out_result->events = C_FileWatchEventNone;
+        out_result->name[0] = '\0';
+        out_result->is_dir = false;
+    } else if (result.code == C_IOResultInvalid) {
+        out_result->code = C_FileWatcherParameterInvalid;
+        out_result->events = C_FileWatchEventNone;
+        out_result->name[0] = '\0';
+        out_result->is_dir = false;
+    } else {
+        out_result->code = C_FileWatcherIOFailed;
+        out_result->events = C_FileWatchEventNone;
+        out_result->name[0] = '\0';
+        out_result->is_dir = false;
+    }
+    return result;
 #else
-    return C_FileWatcherOperationUnsupported;
-#endif
-}
-
-C_FileWatcherResultCode galay_kernel_file_watcher_watch_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_file_watcher_t* c_watcher,
-    uint64_t timeout_ms,
-    galay_kernel_file_watcher_callback_t callback,
-    void* ctx)
-{
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_watcher == nullptr || callback == nullptr || !timeout_fits_chrono(timeout_ms))
-    {
-        return C_FileWatcherParameterInvalid;
-    }
-
-    if (!kFileWatcherSupported)
-    {
-        return C_FileWatcherOperationUnsupported;
-    }
-
-#if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
-    if (c_watcher->watcher == nullptr)
-    {
-        return C_FileWatcherParameterInvalid;
-    }
-
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
-    {
-        return C_FileWatcherRuntimeNotRunning;
-    }
-
-    auto spawned = cpp_runtime->spawn(
-        c_api_watch_timeout(to_cpp_watcher(c_watcher), timeout_ms, callback, ctx));
-    return spawned ? C_FileWatcherSuccess : C_FileWatcherRuntimeSpawnFailed;
-#else
-    return C_FileWatcherOperationUnsupported;
+    (void)c_watcher;
+    (void)out_result;
+    (void)timeout_ms;
+    return make_result(C_IOResultError, ENOTSUP);
 #endif
 }

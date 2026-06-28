@@ -1,43 +1,18 @@
 #include <galay/c/galay-kernel-c/concurrency-c/async_waiter_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
-#include <stdatomic.h>
 #include <stdio.h>
-#include <time.h>
 
 typedef struct WaitState {
-    atomic_int done;
-    atomic_int code;
+    galay_kernel_async_waiter_t* waiter;
+    C_IOResult result;
 } WaitState;
 
-static void on_wait(C_AsyncWaiterResultCode code, void* ctx)
+static void wait_entry(void* ctx)
 {
     WaitState* state = (WaitState*)ctx;
-    atomic_store(&state->code, (int)code);
-    atomic_store(&state->done, 1);
-}
-
-static int wait_until(atomic_int* done)
-{
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 2000; ++i) {
-        if (atomic_load(done)) {
-            return 0;
-        }
-        nanosleep(&pause, 0);
-    }
-    return 1;
-}
-
-static int wait_until_waiting(galay_kernel_async_waiter_t* waiter)
-{
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 2000; ++i) {
-        if (galay_kernel_async_waiter_is_waiting(waiter)) {
-            return 0;
-        }
-        nanosleep(&pause, 0);
-    }
-    return 1;
+    state->result = galay_kernel_async_waiter_wait(state->waiter, 2000);
 }
 
 int main(void)
@@ -48,39 +23,47 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_async_waiter_t waiter = {0};
-    WaitState state;
-    atomic_init(&state.done, 0);
-    atomic_init(&state.code, (int)C_AsyncWaiterIOFailed);
+    galay_coro_task_t task = {0};
+    WaitState state = {&waiter, {0}};
 
     int exit_code = 0;
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
         galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_kernel_async_waiter_create(&waiter) != C_AsyncWaiterSuccess ||
-        galay_kernel_async_waiter_wait(&runtime, &waiter, on_wait, &state) != C_AsyncWaiterSuccess) {
+        galay_coro_spawn(&runtime, wait_entry, &state, 0, &task).code != C_IOResultOk ||
+        galay_kernel_async_waiter_notify(&waiter) != C_AsyncWaiterSuccess ||
+        galay_coro_join(&task, 3000).code != C_IOResultOk ||
+        state.result.code != C_IOResultOk ||
+        !galay_kernel_async_waiter_is_ready(&waiter)) {
         exit_code = 1;
         goto cleanup;
     }
 
-    if (wait_until_waiting(&waiter) != 0 ||
-        galay_kernel_async_waiter_notify(&waiter) != C_AsyncWaiterSuccess ||
-        wait_until(&state.done) != 0 ||
-        atomic_load(&state.code) != (int)C_AsyncWaiterSuccess ||
-        !galay_kernel_async_waiter_is_ready(&waiter)) {
+    if (printf("async_waiter signal=%s ready=%d\n",
+               galay_kernel_async_waiter_get_error(C_AsyncWaiterSuccess),
+               galay_kernel_async_waiter_is_ready(&waiter) ? 1 : 0) < 0) {
         exit_code = 2;
         goto cleanup;
     }
 
-    printf("async_waiter signal=%s ready=%d\n",
-           galay_kernel_async_waiter_get_error((C_AsyncWaiterResultCode)atomic_load(&state.code)),
-           galay_kernel_async_waiter_is_ready(&waiter) ? 1 : 0);
-
 cleanup:
+    if (task.task != 0) {
+        if (galay_coro_destroy(&task).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 3;
+        }
+    }
     if (waiter.waiter != 0) {
-        (void)galay_kernel_async_waiter_destroy(&waiter);
+        if (galay_kernel_async_waiter_destroy(&waiter) != C_AsyncWaiterSuccess && exit_code == 0) {
+            exit_code = 4;
+        }
     }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 5;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 6;
+        }
     }
     return exit_code;
 }

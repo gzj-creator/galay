@@ -41,7 +41,10 @@ static void server_entry(void* arg)
                                           sizeof(response) - 1,
                                           1000);
     example->server_result = sent;
-    (void)galay_kernel_tcp_socket_close(&example->accepted, 1000);
+    C_IOResult closed = galay_kernel_tcp_socket_close(&example->accepted, 1000);
+    if (example->server_result.code == C_IOResultOk && closed.code != C_IOResultOk) {
+        example->server_result = closed;
+    }
 }
 
 static void client_entry(void* arg)
@@ -74,7 +77,10 @@ static void client_entry(void* arg)
                                               sizeof(example->client_buffer),
                                               1000);
     example->client_result = received;
-    (void)galay_kernel_tcp_socket_close(&example->client, 1000);
+    C_IOResult closed = galay_kernel_tcp_socket_close(&example->client, 1000);
+    if (example->client_result.code == C_IOResultOk && closed.code != C_IOResultOk) {
+        example->client_result = closed;
+    }
 }
 
 int main(void)
@@ -87,11 +93,10 @@ int main(void)
     galay_kernel_tcp_socket_t listener = {0};
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
-    EchoExample example;
+    EchoExample example = {0};
     int exit_code = 0;
     galay_coro_task_t server = {0};
     galay_coro_task_t client = {0};
-    memset(&example, 0, sizeof(example));
     example.listener = &listener;
 
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
@@ -119,32 +124,51 @@ int main(void)
         memcmp(example.server_buffer, "ping", 4) == 0 &&
         memcmp(example.client_buffer, "pong", 4) == 0;
 
-    printf("coro_tcp_echo request=%.*s response=%.*s port=%u\n",
-           4,
-           example.server_buffer,
-           4,
-           example.client_buffer,
-           local.port);
+    if (printf("coro_tcp_echo request=%.*s response=%.*s port=%u\n",
+               4,
+               example.server_buffer,
+               4,
+               example.client_buffer,
+               local.port) < 0) {
+        exit_code = 10;
+        goto cleanup;
+    }
 
     exit_code = ok ? 0 : 3;
 
 cleanup:
     if (server.task != 0) {
-        (void)galay_coro_destroy(&server);
+        if (galay_coro_destroy(&server).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 4;
+        }
     }
     if (client.task != 0) {
-        (void)galay_coro_destroy(&client);
+        if (galay_coro_destroy(&client).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 5;
+        }
     }
     if (example.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&example.accepted);
+        if (galay_kernel_tcp_socket_destroy(&example.accepted) != C_TcpSocketSuccess &&
+            exit_code == 0) {
+            exit_code = 6;
+        }
     }
     if (example.client.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&example.client);
+        if (galay_kernel_tcp_socket_destroy(&example.client) != C_TcpSocketSuccess &&
+            exit_code == 0) {
+            exit_code = 7;
+        }
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && exit_code == 0) {
+        exit_code = 8;
+    }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 9;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 10;
+        }
     }
     return exit_code;
 }

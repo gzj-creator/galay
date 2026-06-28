@@ -1,54 +1,27 @@
 #include <galay/c/galay-kernel-c/async-c/file_watcher_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
-#include <stdatomic.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
 #include <unistd.h>
 
-typedef struct WatchState {
-    atomic_int done;
-    atomic_int code;
-    atomic_uint events;
-    char name[256];
-} WatchState;
+typedef struct WatchTimeoutState {
+    galay_kernel_file_watcher_t* watcher;
+    C_IOResult io_result;
+    galay_kernel_file_watcher_watch_result_t watch_result;
+} WatchTimeoutState;
 
 static int expect_status(C_FileWatcherResultCode actual, C_FileWatcherResultCode expected)
 {
     return actual == expected ? 0 : 1;
 }
 
-static void init_state(WatchState* state)
+static int expect_io_code(C_IOResult actual, C_IOResultCode expected)
 {
-    atomic_init(&state->done, 0);
-    atomic_init(&state->code, (int)C_FileWatcherIOFailed);
-    atomic_init(&state->events, 0u);
-    memset(state->name, 0, sizeof(state->name));
-}
-
-static void on_watch_timeout(galay_kernel_file_watcher_watch_result_t* result, void* ctx)
-{
-    WatchState* state = (WatchState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)C_FileWatcherIOFailed : (int)result->code);
-    atomic_store(&state->events, result == 0 ? 0u : (unsigned int)result->events);
-    if (result != 0) {
-        memcpy(state->name, result->name, sizeof(state->name));
-        state->name[sizeof(state->name) - 1] = '\0';
-    }
-    atomic_store(&state->done, 1);
-}
-
-static int wait_done(atomic_int* done)
-{
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 2000; ++i) {
-        if (atomic_load(done)) {
-            return 0;
-        }
-        nanosleep(&pause, 0);
-    }
-    return 1;
+    return actual.code == expected ? 0 : 1;
 }
 
 static int create_started_runtime(galay_kernel_runtime_t* runtime)
@@ -61,20 +34,25 @@ static int create_started_runtime(galay_kernel_runtime_t* runtime)
         return 1;
     }
     if (galay_kernel_runtime_start(runtime) != C_RuntimeSuccess) {
-        (void)galay_kernel_runtime_destroy(runtime);
+        if (galay_kernel_runtime_destroy(runtime) != C_RuntimeSuccess) {
+            return 2;
+        }
         return 1;
     }
     return 0;
 }
 
+static void watch_timeout_entry(void* ctx)
+{
+    WatchTimeoutState* state = (WatchTimeoutState*)ctx;
+    state->io_result =
+        galay_kernel_file_watcher_watch(state->watcher, &state->watch_result, 20);
+}
+
 static int test_timeout_api_parameter_errors(void)
 {
-    galay_kernel_runtime_t runtime = {0};
     galay_kernel_file_watcher_t watcher = {0};
-    WatchState state;
-    int exit_code = 0;
-
-    init_state(&state);
+    galay_kernel_file_watcher_watch_result_t result = {0};
 
     if (expect_status(C_FileWatcherTimeout, C_FileWatcherTimeout)) {
         return 10;
@@ -82,40 +60,24 @@ static int test_timeout_api_parameter_errors(void)
     if (strcmp(galay_kernel_file_watcher_get_error(C_FileWatcherTimeout), "timeout") != 0) {
         return 11;
     }
-    if (expect_status(galay_kernel_file_watcher_watch_timeout(0, &watcher, 1, on_watch_timeout, &state),
-            C_FileWatcherParameterInvalid)) {
+    if (expect_io_code(galay_kernel_file_watcher_watch(0, &result, 1), C_IOResultInvalid)) {
         return 12;
     }
-
-    if (create_started_runtime(&runtime) != 0) {
+    if (expect_io_code(galay_kernel_file_watcher_watch(&watcher, 0, 1), C_IOResultInvalid)) {
         return 13;
     }
-    if (expect_status(galay_kernel_file_watcher_watch_timeout(&runtime, 0, 1, on_watch_timeout, &state),
-            C_FileWatcherParameterInvalid)) {
-        exit_code = 14;
-        goto cleanup;
+    if (expect_io_code(galay_kernel_file_watcher_watch(&watcher, &result, 1), C_IOResultInvalid)) {
+        return 14;
     }
-    if (expect_status(galay_kernel_file_watcher_watch_timeout(&runtime, &watcher, 1, 0, &state),
-            C_FileWatcherParameterInvalid)) {
-        exit_code = 15;
-        goto cleanup;
-    }
-    if (atomic_load(&state.done) != 0) {
-        exit_code = 16;
-        goto cleanup;
-    }
-
-cleanup:
-    (void)galay_kernel_runtime_stop(&runtime);
-    (void)galay_kernel_runtime_destroy(&runtime);
-    return exit_code;
+    return 0;
 }
 
 static int test_watch_timeout_without_file_event(void)
 {
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_file_watcher_t watcher = {0};
-    WatchState state;
+    galay_coro_task_t watch_task = {0};
+    WatchTimeoutState state = {0};
     char template_path[] = "/tmp/galay-c-file-watch-timeout-XXXXXX";
     int fd = mkstemp(template_path);
     int wd = -1;
@@ -124,8 +86,10 @@ static int test_watch_timeout_without_file_event(void)
     if (fd < 0) {
         return 20;
     }
-    close(fd);
-    init_state(&state);
+    if (close(fd) != 0) {
+        return 20;
+    }
+    state.watcher = &watcher;
 
     if (create_started_runtime(&runtime) != 0) {
         exit_code = 21;
@@ -134,12 +98,13 @@ static int test_watch_timeout_without_file_event(void)
 
     C_FileWatcherResultCode create_code = galay_kernel_file_watcher_create(&watcher);
     if (create_code == C_FileWatcherOperationUnsupported) {
-        C_FileWatcherResultCode watch_code =
-            galay_kernel_file_watcher_watch_timeout(&runtime, &watcher, 1, on_watch_timeout, &state);
-        if (watch_code != C_FileWatcherOperationUnsupported || atomic_load(&state.done) != 0) {
+        C_IOResult watch_code = galay_kernel_file_watcher_watch(&watcher, &state.watch_result, 1);
+        if (watch_code.code != C_IOResultInvalid) {
             exit_code = 22;
         } else {
-            printf("file watcher timeout unsupported backend; skipped event timeout check\n");
+            if (printf("file watcher timeout unsupported backend; skipped event timeout check\n") < 0) {
+                exit_code = 33;
+            }
         }
         goto cleanup_runtime;
     }
@@ -154,34 +119,50 @@ static int test_watch_timeout_without_file_event(void)
         goto cleanup_watcher;
     }
 
-    if (galay_kernel_file_watcher_watch_timeout(&runtime, &watcher, 20, on_watch_timeout, &state) !=
-        C_FileWatcherSuccess) {
+    if (expect_io_code(galay_coro_spawn(&runtime, watch_timeout_entry, &state, 0, &watch_task),
+            C_IOResultOk) ||
+        expect_io_code(galay_coro_join(&watch_task, 2000), C_IOResultOk)) {
         exit_code = 25;
         goto cleanup_watcher;
     }
-    if (wait_done(&state.done) != 0) {
+    if (state.io_result.code != C_IOResultTimeout ||
+        state.watch_result.code != C_FileWatcherTimeout ||
+        state.watch_result.events != C_FileWatchEventNone ||
+        state.watch_result.name[0] != '\0') {
         exit_code = 26;
-        goto cleanup_watcher;
-    }
-    if (atomic_load(&state.code) != (int)C_FileWatcherTimeout ||
-        atomic_load(&state.events) != 0u ||
-        state.name[0] != '\0') {
-        exit_code = 27;
         goto cleanup_watcher;
     }
 
 cleanup_watcher:
+    if (watch_task.task != 0) {
+        if (galay_coro_destroy(&watch_task).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 27;
+        }
+    }
     if (watcher.watcher != 0) {
         if (wd >= 0) {
-            (void)galay_kernel_file_watcher_remove_watch(&watcher, wd);
+            if (galay_kernel_file_watcher_remove_watch(&watcher, wd) !=
+                    C_FileWatcherSuccess &&
+                exit_code == 0) {
+                exit_code = 28;
+            }
         }
-        (void)galay_kernel_file_watcher_destroy(&watcher);
+        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess &&
+            exit_code == 0) {
+            exit_code = 29;
+        }
     }
 cleanup_runtime:
-    (void)galay_kernel_runtime_stop(&runtime);
-    (void)galay_kernel_runtime_destroy(&runtime);
+    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        exit_code = 30;
+    }
+    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        exit_code = 31;
+    }
 cleanup_file:
-    unlink(template_path);
+    if (unlink(template_path) != 0 && errno != ENOENT && exit_code == 0) {
+        exit_code = 32;
+    }
     return exit_code;
 }
 

@@ -195,10 +195,26 @@ struct WaitRequestScope {
     ~WaitRequestScope()
     {
         if (request.request != nullptr) {
-            (void)galay_coro_wait_request_destroy(&request);
+            C_IOResult cleanup_result = galay_coro_wait_request_destroy(&request);
+            request.request = cleanup_result.code == C_IOResultOk ? nullptr : request.request;
         }
     }
 };
+
+C_IOResult merge_cleanup_result(C_IOResult primary, C_IOResult cleanup)
+{
+    return primary.code == C_IOResultOk && cleanup.code != C_IOResultOk
+        ? cleanup
+        : primary;
+}
+
+C_IOResult close_wait_scope(WaitRequestScope& scope)
+{
+    if (scope.request.request == nullptr) {
+        return make_result(C_IOResultOk);
+    }
+    return galay_coro_wait_request_destroy(&scope.request);
+}
 
 GalayCoreCoroIOResult wait_request(void* ctx, int64_t timeout_ms)
 {
@@ -238,15 +254,17 @@ C_IOResult prepare_wait_user_data(WaitRequestScope& scope)
     C_IOResult acquired =
         galay_coro_wait_request_event_token_acquire(&scope.request, generation, &token);
     if (acquired.code != C_IOResultOk) {
-        (void)galay_coro_wait_request_cancel(&scope.request, generation);
-        return acquired;
+        C_IOResult cancelled = galay_coro_wait_request_cancel(&scope.request, generation);
+        return merge_cleanup_result(acquired, cancelled);
     }
 
     C_IOResult detached =
         galay_coro_wait_event_token_detach_user_data(&token, &scope.user_data);
     if (detached.code != C_IOResultOk) {
-        (void)galay_coro_wait_event_token_release(&token);
-        (void)galay_coro_wait_request_cancel(&scope.request, generation);
+        C_IOResult released = galay_coro_wait_event_token_release(&token);
+        detached = merge_cleanup_result(detached, released);
+        C_IOResult cancelled = galay_coro_wait_request_cancel(&scope.request, generation);
+        detached = merge_cleanup_result(detached, cancelled);
     }
     return detached;
 }
@@ -271,29 +289,8 @@ C_IOResult submit_with_wait(Submit&& submit)
     }
 
     GalayCoreCoroWaitOps wait_ops = make_wait_ops(scope);
-    return from_core_result(std::forward<Submit>(submit)(scope.user_data, &wait_ops));
-}
-
-C_IOResult assign_peer_from_socket(galay_kernel_tcp_socket_t* socket, C_Host* out_peer)
-{
-    if (out_peer == nullptr) {
-        return make_result(C_IOResultOk);
-    }
-    if (socket == nullptr || socket->socket == nullptr) {
-        return make_result(C_IOResultInvalid);
-    }
-
-    auto* cpp_socket = static_cast<galay::async::TcpSocket*>(socket->socket);
-    sockaddr_storage storage{};
-    socklen_t length = sizeof(storage);
-    if (::getpeername(cpp_socket->handle().fd,
-                      reinterpret_cast<sockaddr*>(&storage),
-                      &length) != 0) {
-        return make_result(C_IOResultError, errno);
-    }
-    return assign_c_host_from_sockaddr(storage, out_peer)
-        ? make_result(C_IOResultOk)
-        : make_result(C_IOResultError);
+    C_IOResult result = from_core_result(std::forward<Submit>(submit)(scope.user_data, &wait_ops));
+    return merge_cleanup_result(result, close_wait_scope(scope));
 }
 
 } // namespace
@@ -431,17 +428,13 @@ C_IOResult galay_kernel_tcp_socket_accept(
             return galay_core_coro_tcp_accept(listener->socket,
                                               scheduler,
                                               &out_socket->socket,
+                                              reinterpret_cast<GalayCoreCoroHost*>(out_peer),
                                               timeout_ms,
                                               user_data,
                                               wait_ops);
         });
     if (result.code != C_IOResultOk) {
         return result;
-    }
-
-    C_IOResult peer_result = assign_peer_from_socket(out_socket, out_peer);
-    if (peer_result.code != C_IOResultOk) {
-        return peer_result;
     }
     result.ptr = out_socket;
     return result;
@@ -536,12 +529,26 @@ C_IOResult galay_kernel_tcp_socket_readv(
     size_t count,
     int64_t timeout_ms)
 {
-    (void)timeout_ms;
+    void* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
-        iovecs == nullptr || count == 0) {
+        iovecs == nullptr || count == 0 ||
+        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
     }
-    return make_result(C_IOResultError, ENOTSUP);
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+
+    return submit_with_wait(
+        [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
+            return galay_core_coro_tcp_readv(socket->socket,
+                                             scheduler,
+                                             iovecs,
+                                             count,
+                                             timeout_ms,
+                                             user_data,
+                                             wait_ops);
+        });
 }
 
 C_IOResult galay_kernel_tcp_socket_writev(
@@ -550,12 +557,26 @@ C_IOResult galay_kernel_tcp_socket_writev(
     size_t count,
     int64_t timeout_ms)
 {
-    (void)timeout_ms;
+    void* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
-        iovecs == nullptr || count == 0) {
+        iovecs == nullptr || count == 0 ||
+        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
     }
-    return make_result(C_IOResultError, ENOTSUP);
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+
+    return submit_with_wait(
+        [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
+            return galay_core_coro_tcp_writev(socket->socket,
+                                              scheduler,
+                                              iovecs,
+                                              count,
+                                              timeout_ms,
+                                              user_data,
+                                              wait_ops);
+        });
 }
 
 C_IOResult galay_kernel_tcp_socket_sendfile(
@@ -565,12 +586,27 @@ C_IOResult galay_kernel_tcp_socket_sendfile(
     size_t count,
     int64_t timeout_ms)
 {
-    (void)offset;
-    (void)timeout_ms;
-    if (socket == nullptr || socket->socket == nullptr || file_fd < 0 || count == 0) {
+    void* scheduler = current_io_scheduler();
+    if (socket == nullptr || socket->socket == nullptr ||
+        file_fd < 0 || offset < 0 || count == 0 ||
+        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
     }
-    return make_result(C_IOResultError, ENOTSUP);
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+
+    return submit_with_wait(
+        [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
+            return galay_core_coro_tcp_sendfile(socket->socket,
+                                                scheduler,
+                                                file_fd,
+                                                offset,
+                                                count,
+                                                timeout_ms,
+                                                user_data,
+                                                wait_ops);
+        });
 }
 
 C_IOResult galay_kernel_tcp_socket_close(

@@ -1,54 +1,55 @@
 #include <galay/c/galay-kernel-c/concurrency-c/async_mutex_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
-#include <stdbool.h>
+#include <errno.h>
 #include <stdatomic.h>
 #include <time.h>
 
-typedef struct CallbackState {
-    atomic_int done;
-    atomic_int code;
-} CallbackState;
+typedef struct LockState {
+    galay_kernel_async_mutex_t* mutex;
+    C_IOResult result;
+    atomic_int phase;
+} LockState;
 
 static int expect_status(C_AsyncMutexResultCode actual, C_AsyncMutexResultCode expected)
 {
     return actual == expected ? 0 : 1;
 }
 
-static void reset_callback_state(CallbackState* state, C_AsyncMutexResultCode initial_code)
+static int expect_io_code(C_IOResult actual, C_IOResultCode expected)
 {
-    atomic_store(&state->done, 0);
-    atomic_store(&state->code, (int)initial_code);
+    return actual.code == expected ? 0 : 1;
 }
 
-static void on_lock(C_AsyncMutexResultCode code, void* ctx)
-{
-    CallbackState* state = (CallbackState*)ctx;
-    atomic_store(&state->code, (int)code);
-    atomic_store(&state->done, 1);
-}
-
-static int wait_done(atomic_int* done)
+static int wait_phase(atomic_int* phase, int expected)
 {
     struct timespec pause = {0, 1000000};
     for (int i = 0; i < 2000; ++i) {
-        if (atomic_load(done)) {
+        if (atomic_load(phase) == expected) {
             return 0;
         }
-        nanosleep(&pause, 0);
+        if (nanosleep(&pause, 0) != 0 && errno != EINTR) {
+            return 1;
+        }
     }
     return 1;
 }
 
-static int wait_still_pending(atomic_int* done)
+static void lock_entry(void* ctx)
 {
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 50; ++i) {
-        if (atomic_load(done)) {
-            return 1;
-        }
-        nanosleep(&pause, 0);
+    LockState* state = (LockState*)ctx;
+    state->result = galay_kernel_async_mutex_lock(state->mutex, -1);
+    if (state->result.code == C_IOResultOk) {
+        atomic_store(&state->phase, 1);
     }
-    return 0;
+}
+
+static void lock_timeout_entry(void* ctx)
+{
+    LockState* state = (LockState*)ctx;
+    state->result = galay_kernel_async_mutex_lock(state->mutex, 20);
+    atomic_store(&state->phase, 1);
 }
 
 int main(void)
@@ -59,20 +60,16 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_async_mutex_t mutex = {0};
-    CallbackState first;
-    CallbackState second;
-    CallbackState timeout_state;
-    CallbackState stopped_state;
+    galay_coro_task_t first_task = {0};
+    galay_coro_task_t second_task = {0};
+    LockState first;
+    LockState second;
     int exit_code = 0;
 
-    atomic_init(&first.done, 0);
-    atomic_init(&first.code, (int)C_AsyncMutexIOFailed);
-    atomic_init(&second.done, 0);
-    atomic_init(&second.code, (int)C_AsyncMutexIOFailed);
-    atomic_init(&timeout_state.done, 0);
-    atomic_init(&timeout_state.code, (int)C_AsyncMutexIOFailed);
-    atomic_init(&stopped_state.done, 0);
-    atomic_init(&stopped_state.code, (int)C_AsyncMutexIOFailed);
+    atomic_init(&first.phase, 0);
+    atomic_init(&second.phase, 0);
+    first.mutex = &mutex;
+    second.mutex = &mutex;
 
     if (galay_kernel_async_mutex_get_error(C_AsyncMutexSuccess) == 0) {
         return 1;
@@ -95,110 +92,127 @@ int main(void)
     if (mutex.mutex == 0 || galay_kernel_async_mutex_is_locked(&mutex)) {
         return 7;
     }
-    if (expect_status(galay_kernel_async_mutex_lock(0, &mutex, on_lock, &first), C_AsyncMutexParameterInvalid)) {
+    if (expect_io_code(galay_kernel_async_mutex_lock(0, -1), C_IOResultInvalid) ||
+        expect_io_code(galay_kernel_async_mutex_lock(&mutex, -1), C_IOResultInvalid)) {
         return 8;
-    }
-    if (expect_status(galay_kernel_async_mutex_lock(&runtime, &mutex, 0, &first), C_AsyncMutexParameterInvalid)) {
-        return 9;
-    }
-    if (expect_status(galay_kernel_async_mutex_lock_timeout(&runtime, &mutex, 1, 0, &first), C_AsyncMutexParameterInvalid)) {
-        return 10;
     }
 
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
-        exit_code = 11;
+        exit_code = 9;
         goto cleanup;
     }
     if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+        exit_code = 10;
+        goto cleanup;
+    }
+
+    if (expect_io_code(galay_coro_spawn(&runtime, lock_entry, &first, 0, &first_task),
+            C_IOResultOk) ||
+        wait_phase(&first.phase, 1) != 0 ||
+        first.result.code != C_IOResultOk ||
+        !galay_kernel_async_mutex_is_locked(&mutex)) {
+        exit_code = 11;
+        goto cleanup;
+    }
+    if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
+        expect_io_code(galay_coro_join(&first_task, 2000), C_IOResultOk) ||
+        galay_kernel_async_mutex_is_locked(&mutex)) {
         exit_code = 12;
         goto cleanup;
     }
-
-    reset_callback_state(&first, C_AsyncMutexIOFailed);
-    if (expect_status(galay_kernel_async_mutex_lock(&runtime, &mutex, on_lock, &first), C_AsyncMutexSuccess) ||
-        wait_done(&first.done) != 0 ||
-        atomic_load(&first.code) != (int)C_AsyncMutexSuccess ||
-        !galay_kernel_async_mutex_is_locked(&mutex)) {
-        exit_code = 13;
-        goto cleanup;
-    }
-    if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
-        galay_kernel_async_mutex_is_locked(&mutex)) {
-        exit_code = 14;
-        goto cleanup;
-    }
-
-    reset_callback_state(&first, C_AsyncMutexIOFailed);
-    reset_callback_state(&second, C_AsyncMutexIOFailed);
-    if (expect_status(galay_kernel_async_mutex_lock(&runtime, &mutex, on_lock, &first), C_AsyncMutexSuccess) ||
-        wait_done(&first.done) != 0 ||
-        atomic_load(&first.code) != (int)C_AsyncMutexSuccess ||
-        !galay_kernel_async_mutex_is_locked(&mutex)) {
-        exit_code = 15;
-        goto cleanup;
-    }
-    if (expect_status(galay_kernel_async_mutex_lock(&runtime, &mutex, on_lock, &second), C_AsyncMutexSuccess)) {
-        exit_code = 16;
-        goto cleanup;
-    }
-    if (wait_still_pending(&second.done) != 0) {
-        exit_code = 17;
-        goto cleanup;
-    }
-    if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
-        wait_done(&second.done) != 0 ||
-        atomic_load(&second.code) != (int)C_AsyncMutexSuccess ||
-        !galay_kernel_async_mutex_is_locked(&mutex)) {
-        exit_code = 18;
-        goto cleanup;
-    }
-    if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
-        galay_kernel_async_mutex_is_locked(&mutex)) {
+    if (expect_io_code(galay_coro_destroy(&first_task), C_IOResultOk)) {
         exit_code = 19;
         goto cleanup;
     }
 
-    reset_callback_state(&first, C_AsyncMutexIOFailed);
-    reset_callback_state(&timeout_state, C_AsyncMutexIOFailed);
-    if (expect_status(galay_kernel_async_mutex_lock(&runtime, &mutex, on_lock, &first), C_AsyncMutexSuccess) ||
-        wait_done(&first.done) != 0 ||
-        atomic_load(&first.code) != (int)C_AsyncMutexSuccess ||
-        !galay_kernel_async_mutex_is_locked(&mutex)) {
-        exit_code = 20;
+    atomic_store(&first.phase, 0);
+    atomic_store(&second.phase, 0);
+    first.result.code = C_IOResultError;
+    second.result.code = C_IOResultError;
+    if (expect_io_code(galay_coro_spawn(&runtime, lock_entry, &first, 0, &first_task),
+            C_IOResultOk) ||
+        wait_phase(&first.phase, 1) != 0 ||
+        expect_io_code(galay_coro_spawn(&runtime, lock_entry, &second, 0, &second_task),
+            C_IOResultOk)) {
+        exit_code = 13;
         goto cleanup;
     }
-    if (expect_status(galay_kernel_async_mutex_lock_timeout(&runtime, &mutex, 20, on_lock, &timeout_state), C_AsyncMutexSuccess) ||
-        wait_done(&timeout_state.done) != 0 ||
-        atomic_load(&timeout_state.code) != (int)C_AsyncMutexTimeout ||
-        !galay_kernel_async_mutex_is_locked(&mutex)) {
-        exit_code = 21;
+    if (wait_phase(&second.phase, 1) == 0) {
+        exit_code = 14;
         goto cleanup;
     }
     if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
+        wait_phase(&second.phase, 1) != 0 ||
+        second.result.code != C_IOResultOk ||
+        !galay_kernel_async_mutex_is_locked(&mutex)) {
+        exit_code = 15;
+        goto cleanup;
+    }
+    if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
+        expect_io_code(galay_coro_join(&first_task, 2000), C_IOResultOk) ||
+        expect_io_code(galay_coro_join(&second_task, 2000), C_IOResultOk) ||
         galay_kernel_async_mutex_is_locked(&mutex)) {
-        exit_code = 22;
+        exit_code = 16;
+        goto cleanup;
+    }
+    if (expect_io_code(galay_coro_destroy(&first_task), C_IOResultOk) ||
+        expect_io_code(galay_coro_destroy(&second_task), C_IOResultOk)) {
+        exit_code = 20;
         goto cleanup;
     }
 
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_is_running(&runtime)) {
-        exit_code = 23;
+    atomic_store(&first.phase, 0);
+    atomic_store(&second.phase, 0);
+    first.result.code = C_IOResultError;
+    second.result.code = C_IOResultError;
+    if (expect_io_code(galay_coro_spawn(&runtime, lock_entry, &first, 0, &first_task),
+            C_IOResultOk) ||
+        wait_phase(&first.phase, 1) != 0 ||
+        expect_io_code(galay_coro_spawn(&runtime, lock_timeout_entry, &second, 0, &second_task),
+            C_IOResultOk) ||
+        wait_phase(&second.phase, 1) != 0 ||
+        second.result.code != C_IOResultTimeout ||
+        !galay_kernel_async_mutex_is_locked(&mutex)) {
+        exit_code = 17;
         goto cleanup;
     }
-    reset_callback_state(&stopped_state, C_AsyncMutexIOFailed);
-    if (expect_status(galay_kernel_async_mutex_lock(&runtime, &mutex, on_lock, &stopped_state), C_AsyncMutexRuntimeNotRunning) ||
-        atomic_load(&stopped_state.done) != 0) {
-        exit_code = 24;
+    if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
+        expect_io_code(galay_coro_join(&first_task, 2000), C_IOResultOk) ||
+        expect_io_code(galay_coro_join(&second_task, 2000), C_IOResultOk) ||
+        galay_kernel_async_mutex_is_locked(&mutex)) {
+        exit_code = 18;
+        goto cleanup;
+    }
+    if (expect_io_code(galay_coro_destroy(&first_task), C_IOResultOk) ||
+        expect_io_code(galay_coro_destroy(&second_task), C_IOResultOk)) {
+        exit_code = 21;
         goto cleanup;
     }
 
 cleanup:
+    if (first_task.task != 0) {
+        if (galay_coro_destroy(&first_task).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 22;
+        }
+    }
+    if (second_task.task != 0) {
+        if (galay_coro_destroy(&second_task).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 23;
+        }
+    }
     if (mutex.mutex != 0) {
-        (void)galay_kernel_async_mutex_destroy(&mutex);
+        if (galay_kernel_async_mutex_destroy(&mutex) != C_AsyncMutexSuccess &&
+            exit_code == 0) {
+            exit_code = 24;
+        }
     }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 25;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 26;
+        }
     }
     return exit_code;
 }

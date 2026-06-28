@@ -2,12 +2,15 @@
 
 #ifdef USE_EPOLL
 #include "../../../cpp/galay-kernel/async/aio_file.h"
-#include "../../../cpp/galay-kernel/core/runtime.h"
+#include "../coro-c/coro_task_internal.hpp"
 
 #include <new>
 #include <string>
 #include <utility>
 #endif
+
+#include <cerrno>
+#include <cstdint>
 
 namespace
 {
@@ -45,11 +48,6 @@ galay::async::AioFile* to_cpp_file(galay_kernel_aio_file_t* c_file)
     return static_cast<galay::async::AioFile*>(c_file->file);
 }
 
-galay::kernel::Runtime* to_cpp_runtime(galay_kernel_runtime_t* runtime)
-{
-    return static_cast<galay::kernel::Runtime*>(runtime->runtime);
-}
-
 C_AioFileResultCode from_cpp_io_error(const galay::kernel::IOError& error)
 {
     if (galay::kernel::IOError::contains(error.code(), galay::kernel::kParamInvalid))
@@ -62,34 +60,17 @@ C_AioFileResultCode from_cpp_io_error(const galay::kernel::IOError& error)
     }
     if (galay::kernel::IOError::contains(error.code(), galay::kernel::kNotRunningOnIOScheduler))
     {
-        return C_AioFileRuntimeNotRunning;
+        return C_AioFileIOFailed;
     }
     return C_AioFileIOFailed;
 }
 
-galay::kernel::Task<void> c_api_commit(
-    galay::async::AioFile* file,
-    galay_kernel_aio_file_commit_callback_t callback,
-    void* ctx)
-{
-    auto committed = co_await file->commit();
-
-    galay_kernel_aio_file_commit_result_t result{};
-    if (!committed)
-    {
-        result.code = from_cpp_io_error(committed.error());
-        callback(&result, ctx);
-        co_return;
-    }
-
-    result.code = C_AioFileSuccess;
-    result.count = committed->size();
-    result.results = committed->data();
-    callback(&result, ctx);
-    co_return;
-}
-
 #endif
+
+C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
+{
+    return C_IOResult{code, sys_errno, 0, 0, nullptr};
+}
 
 } // namespace
 
@@ -109,10 +90,6 @@ const char* galay_kernel_aio_file_get_error(C_AioFileResultCode code)
         return "operation invalid";
     case C_AioFileOperationUnsupported:
         return "operation unsupported";
-    case C_AioFileRuntimeNotRunning:
-        return "runtime not running";
-    case C_AioFileRuntimeSpawnFailed:
-        return "runtime spawn failed";
     }
     return "unknown aio file error";
 }
@@ -385,35 +362,53 @@ C_AioFileResultCode galay_kernel_aio_file_free_aligned_buffer(char* buffer)
 #endif
 }
 
-C_AioFileResultCode galay_kernel_aio_file_commit(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_aio_file_commit(
     galay_kernel_aio_file_t* c_file,
-    galay_kernel_aio_file_commit_callback_t callback,
-    void* ctx)
+    ssize_t* results,
+    size_t result_capacity,
+    size_t* out_count,
+    int64_t timeout_ms)
 {
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_file == nullptr || callback == nullptr)
-    {
-        return C_AioFileParameterInvalid;
+    if (c_file == nullptr || results == nullptr || result_capacity == 0 || out_count == nullptr) {
+        return make_result(C_IOResultInvalid);
     }
 
 #ifndef USE_EPOLL
-    (void)ctx;
-    return C_AioFileOperationUnsupported;
+    (void)timeout_ms;
+    return make_result(C_IOResultError, ENOTSUP);
 #else
     if (c_file->file == nullptr)
     {
-        return C_AioFileParameterInvalid;
+        return make_result(C_IOResultInvalid);
     }
-
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
-    {
-        return C_AioFileRuntimeNotRunning;
+    if (galay::kernel::coro_c::currentTaskOwnerScheduler() == nullptr) {
+        return make_result(C_IOResultInvalid);
     }
-
     auto* file = to_cpp_file(c_file);
-    auto spawned = cpp_runtime->spawn(c_api_commit(file, callback, ctx));
-    return spawned ? C_AioFileSuccess : C_AioFileRuntimeSpawnFailed;
+    if (!file->isValid()) {
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+
+    auto committed = file->commit();
+    if (committed.await_ready()) {
+        auto resumed = committed.await_resume();
+        if (!resumed) {
+            return from_cpp_io_error(resumed.error()) == C_AioFileParameterInvalid
+                ? make_result(C_IOResultInvalid)
+                : make_result(C_IOResultError);
+        }
+        if (resumed->size() > result_capacity) {
+            return make_result(C_IOResultInvalid);
+        }
+        *out_count = resumed->size();
+        for (size_t i = 0; i < resumed->size(); ++i) {
+            results[i] = (*resumed)[i];
+        }
+        return make_result(C_IOResultOk);
+    }
+    return make_result(C_IOResultError, ENOTSUP);
 #endif
 }

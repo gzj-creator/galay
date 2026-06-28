@@ -36,7 +36,9 @@ typedef struct Metrics {
 static int64_t now_ns(void)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
     return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
 }
 
@@ -62,7 +64,7 @@ static double percentile_us(const int64_t* sorted, int count, double percentile)
     return (double)sorted[index] / 1000.0;
 }
 
-static void print_metrics(const char* mode, const BenchConfig* config, const Metrics* metrics)
+static int print_metrics(const char* mode, const BenchConfig* config, const Metrics* metrics)
 {
     const double seconds = metrics->elapsed_ns > 0
         ? (double)metrics->elapsed_ns / 1000000000.0
@@ -71,19 +73,21 @@ static void print_metrics(const char* mode, const BenchConfig* config, const Met
     const double throughput = seconds > 0.0
         ? (double)(metrics->requests * config->payload_bytes * 2u) / seconds / 1024.0 / 1024.0
         : 0.0;
-    printf("coro_tcp_vs_callback mode=%s io_schedulers=%zu connections=1 duration_sec=%d payload_bytes=%zu elapsed_ms=%.3f requests=%llu qps=%.2f throughput_mb_per_sec=%.3f p50_us=%.2f p90_us=%.2f p99_us=%.2f errors=%llu\n",
-           mode,
-           config->io_schedulers,
-           config->duration_seconds,
-           config->payload_bytes,
-           (double)metrics->elapsed_ns / 1000000.0,
-           (unsigned long long)metrics->requests,
-           qps,
-           throughput,
-           percentile_us(metrics->latencies, metrics->samples, 0.50),
-           percentile_us(metrics->latencies, metrics->samples, 0.90),
-           percentile_us(metrics->latencies, metrics->samples, 0.99),
-           (unsigned long long)metrics->errors);
+    return printf("coro_tcp_vs_callback mode=%s io_schedulers=%zu connections=1 duration_sec=%d payload_bytes=%zu elapsed_ms=%.3f requests=%llu qps=%.2f throughput_mb_per_sec=%.3f p50_us=%.2f p90_us=%.2f p99_us=%.2f errors=%llu\n",
+                  mode,
+                  config->io_schedulers,
+                  config->duration_seconds,
+                  config->payload_bytes,
+                  (double)metrics->elapsed_ns / 1000000.0,
+                  (unsigned long long)metrics->requests,
+                  qps,
+                  throughput,
+                  percentile_us(metrics->latencies, metrics->samples, 0.50),
+                  percentile_us(metrics->latencies, metrics->samples, 0.90),
+                  percentile_us(metrics->latencies, metrics->samples, 0.99),
+                  (unsigned long long)metrics->errors) < 0
+        ? 1
+        : 0;
 }
 
 static int send_all_fd(int fd, const char* data, size_t length)
@@ -130,14 +134,12 @@ static int connect_client(uint16_t port)
     if (fd < 0) {
         return -1;
     }
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
+    struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1 ||
         connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != 0) {
-        close(fd);
-        return -1;
+        return close(fd) == 0 ? -1 : -2;
     }
     return fd;
 }
@@ -178,7 +180,10 @@ static int run_client_loop(uint16_t port,
         ++metrics->requests;
     }
     metrics->elapsed_ns = now_ns() - start_ns;
-    close(fd);
+    if (close(fd) != 0) {
+        ++metrics->errors;
+        return 1;
+    }
     return 0;
 }
 
@@ -243,7 +248,10 @@ static void direct_server_entry(void* arg)
             break;
         }
     }
-    (void)galay_kernel_tcp_socket_close(&server->accepted, 1000);
+    C_IOResult closed = galay_kernel_tcp_socket_close(&server->accepted, 1000);
+    if (closed.code != C_IOResultOk) {
+        ++server->errors;
+    }
 }
 
 static int run_direct_mode(const BenchConfig* config,
@@ -285,7 +293,9 @@ static int run_direct_mode(const BenchConfig* config,
         goto cleanup;
     }
 
-    (void)run_client_loop(local.port, config, payload, response, metrics);
+    if (run_client_loop(local.port, config, payload, response, metrics) != 0) {
+        exit_code = 3;
+    }
     atomic_store(&stop, 1);
     if (galay_coro_join(&server_task, 3000).code != C_IOResultOk) {
         ++metrics->errors;
@@ -294,22 +304,35 @@ static int run_direct_mode(const BenchConfig* config,
         ++metrics->errors;
     }
     metrics->errors += server.errors;
-    exit_code = 0;
+    if (metrics->errors != 0 && exit_code == 0) {
+        exit_code = 9;
+    }
     
 cleanup:
     atomic_store(&stop, 1);
     if (server_task.task != 0) {
         if (galay_coro_join(&server_task, 3000).code == C_IOResultOk) {
-            (void)galay_coro_destroy(&server_task);
+            if (galay_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
+                exit_code = 4;
+            }
         }
     }
     if (server.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&server.accepted);
+        if (galay_kernel_tcp_socket_destroy(&server.accepted) != C_TcpSocketSuccess &&
+            exit_code == 0) {
+            exit_code = 5;
+        }
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && exit_code == 0) {
+        exit_code = 6;
+    }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 7;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 8;
+        }
     }
     qsort(metrics->latencies, (size_t)metrics->samples, sizeof(int64_t), compare_i64);
     return exit_code;
@@ -364,7 +387,9 @@ int main(int argc, char** argv)
 
     int failed = run_direct_mode(&config, payload, response, server_buffer, &direct);
 
-    print_metrics("coro-direct", &config, &direct);
+    if (print_metrics("coro-direct", &config, &direct) != 0) {
+        failed = 3;
+    }
 
     failed |= direct.errors != 0;
     free(payload);

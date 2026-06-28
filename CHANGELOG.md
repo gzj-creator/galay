@@ -17,6 +17,7 @@
 - 新增 C Kernel TCP/UDP/AsyncFile/FileWatcher timeout C ABI：补齐 connect/accept/accept_loop/recv/recv_loop/send/send_loop/close、recvfrom/sendto loop、AsyncFile read/write/close 与 FileWatcher watch 的毫秒级 timeout API，并新增对应 C 回归测试、timeout 示例、timeout smoke 和混合 API pressure benchmark。
 - 新增 C Kernel UDP 双进程 client/server 互压 benchmark：`benchmark_c_kernel_udp_socket_server_throughput` 与 `benchmark_c_kernel_udp_socket_client_throughput` 对齐 C++ UDP server/client 压测口径，支持独立 server/client 进程、显式端口、并发 client、消息数、payload、duration 与 IO scheduler 参数。
 - 新增 C Kernel async/concurrency C ABI wrapper：补齐 UDP socket、AsyncFile、AioFile、FileWatcher、AsyncMutex、AsyncWaiter、MpscChannel、UnsafeChannel 的 `.h/.cc`、回归测试、示例与 benchmark smoke，并接入 `galay-c-kernel` 构建和 C Kernel 文档。
+- 新增 C Kernel direct coroutine async C ABI 覆盖：UDP、AsyncFile、FileWatcher、AsyncMutex、AsyncWaiter、MpscChannel、UnsafeChannel 通过旁路 C coroutine bridge 复刻 C++ async 能力，并新增 TCP iov/sendfile benchmark 覆盖。
 - 新增 C Kernel `TcpSocket` callback API，补齐 `connect` / `accept` / `recv` / `send` / `close`，并新增 `accept_loop` / `recv_loop` / `send_loop`，loop callback 可通过返回值控制是否继续。
 - 新增 C Kernel `TcpSocket` 回归、示例与 benchmark：覆盖 async callback、close 集成、loop callback、echo 示例、生命周期压测，以及双进程 TCP echo QPS/吞吐压测。
 - 新增 C++ 模块审计修复的边界测试与源码守卫，覆盖 kernel task/timeout/iov/resource、HTTP/WS/HTTP2 协议边界、Redis/MySQL/Mongo/etcd 客户端边界、MCP/SSL/tracing 安全生命周期，以及 utils umbrella/resource 错误边界。
@@ -32,6 +33,7 @@
 ### Changed
 
 - C Kernel TCP async C ABI 破坏式迁移为 direct C coroutine 形态：`tcp_socket_c` 直接提供 `C_IOResult` 返回的 accept/connect/recv/send/close 接口，移除 runtime callback/spawn 桥接路径，并同步更新 TCP C 测试、示例和 benchmark。
+- C Kernel async/concurrency C ABI 统一迁移到 direct coroutine 形态：测试、示例和 benchmark 不再依赖 callback/spawn wrapper，改为在 C coroutine 内直接调用 C async API 并显式处理返回值。
 - C 栈式协程 context 支持矩阵改为显式诊断：Linux/aarch64 当前不声明支持，CMake 会输出不支持原因，并让 direct C coroutine 测试、示例和 benchmark 带 skip reason 跳过。
 - galay-kernel 内部源码 include 由公共前缀 `<galay/cpp/galay-kernel/...>` 统一改为相对路径（同目录直引、跨目录用 `../core/`、`../common/`），覆盖 async/core/common 下的 reactor、scheduler、socket、file、logger 等实现文件，避免内部实现依赖安装态公共 include 前缀。
 - C++ 模块文档目录从 `docs/modules` 收敛到 `docs/cpp/modules`，顶层 README、`.gitignore` 与模块文档导航同步改向新的 cpp 文档路径。
@@ -60,6 +62,8 @@
 ### Fixed
 
 - 修复 direct C coroutine TCP bridge 在 timeout timer 注册失败路径中未撤销 reactor registration 的生命周期问题，避免返回错误后后端仍持有栈上 awaitable 或悬空 controller；新增 C++ 回归测试覆盖 kqueue/epoll 清理与 socket 复用。
+- 修复 C coroutine bridge 清理路径未完整传播返回值的问题，并加固 UDP bridge `user_data` 完成读取竞态，确保清理失败可合并为可观测错误而不是被静默丢弃。
+- 加固 C/C++ no-exception 与函数返回值必须处理规则：移除 C async 测试、示例、benchmark 和 bridge 中的裸调用/void-cast 忽略返回值路径，保持错误通过返回结构或错误码传播。
 - 修复 epoll reactor 在 one-shot connect 完成后可能保留未注册删除 pending 的问题，避免 socket 析构后残留悬空 `IOController*` 导致后续 HTTPS/WSS closed-port connect 无法注册并卡住 `http.error_propagation`。
 - 修复 kernel coroutine/resource 错误边界：`TaskAwaiter` 先绑定 continuation 再调度子任务，timeout 与 IO 完成做仲裁，`spawnBlocking()` 捕获 callable 异常并映射到 task error，非法 borrowed `readv/writev` count 返回 `IOError(kParamInvalid)` 而不是 abort。
 - 修复 socket/file RAII、ObjectPool late lease、Base64 malformed input、`Bytes::c_str()` NUL 结尾等资源生命周期和可恢复错误问题。

@@ -41,9 +41,8 @@ int main(void)
         C_TcpSocketOperationInvalid
     };
     C_UdpSocketResultCode udp_code = C_UdpSocketSuccess;
-    C_UdpSocketResultCode udp_timeout_code = C_UdpSocketTimeout;
     C_AsyncFileResultCode async_file_code = C_AsyncFileSuccess;
-    C_AsyncFileResultCode async_file_timeout_code = C_AsyncFileTimeout;
+    C_IOResultCode async_file_timeout_code = C_IOResultTimeout;
     C_AsyncFileOpenMode async_file_mode = C_AsyncFileOpenModeReadWrite;
     C_AioFileResultCode aio_file_code = C_AioFileSuccess;
     C_AioFileOpenMode aio_file_mode = C_AioFileOpenModeReadWrite;
@@ -82,9 +81,8 @@ int main(void)
             codes[3] == C_TcpSocketIOFailed &&
             codes[4] == C_TcpSocketOperationInvalid &&
             udp_code == C_UdpSocketSuccess &&
-            udp_timeout_code == C_UdpSocketTimeout &&
             async_file_code == C_AsyncFileSuccess &&
-            async_file_timeout_code == C_AsyncFileTimeout &&
+            async_file_timeout_code == C_IOResultTimeout &&
             async_file_mode == C_AsyncFileOpenModeReadWrite &&
             aio_file_code == C_AioFileSuccess &&
             aio_file_mode == C_AioFileOpenModeReadWrite &&

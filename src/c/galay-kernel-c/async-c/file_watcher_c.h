@@ -1,7 +1,7 @@
 #ifndef GALAY_KERNEL_FILE_WATCHER_C_H
 #define GALAY_KERNEL_FILE_WATCHER_C_H
 
-#include "../core-c/runtime_c.h"
+#include "../coro-c/coro_result_c.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -27,8 +27,6 @@ typedef enum C_FileWatcherResultCode {
     C_FileWatcherMemoryAllocFailed,     ///< 内存分配失败。
     C_FileWatcherIOFailed,              ///< 底层 IO 操作失败。
     C_FileWatcherOperationInvalid,      ///< 当前监控器状态不允许执行该操作。
-    C_FileWatcherRuntimeNotRunning,     ///< runtime 未启动。
-    C_FileWatcherRuntimeSpawnFailed,    ///< runtime 提交任务失败。
     C_FileWatcherOperationUnsupported,  ///< 当前构建后端不支持文件监控。
     C_FileWatcherTimeout,               ///< watch 操作超时。
 } C_FileWatcherResultCode;
@@ -65,7 +63,7 @@ typedef struct galay_kernel_file_watcher {
 } galay_kernel_file_watcher_t;
 
 /**
- * @brief FileWatcher watch 回调结果。
+ * @brief FileWatcher watch 结果。
  *
  * @note name 始终以 '\0' 结尾；在按文件监控或后端不提供文件名时可能为空。
  */
@@ -75,16 +73,6 @@ typedef struct galay_kernel_file_watcher_watch_result {
     char name[256];                 ///< 事件关联文件名。
     bool is_dir;                    ///< 事件目标是否为目录。
 } galay_kernel_file_watcher_watch_result_t;
-
-/**
- * @brief FileWatcher watch 完成回调。
- *
- * @param result watch 结果；只在回调期间有效。
- * @param ctx 调用 galay_kernel_file_watcher_watch 时传入的用户上下文。
- */
-typedef void (*galay_kernel_file_watcher_callback_t)(
-    galay_kernel_file_watcher_watch_result_t* result,
-    void* ctx);
 
 /**
  * @brief 将 FileWatcher 结果码转换为可读错误信息。
@@ -161,46 +149,21 @@ C_FileWatcherResultCode galay_kernel_file_watcher_get_path(
     size_t buffer_size);
 
 /**
- * @brief 在 runtime 上异步等待一个文件系统事件。
+ * @brief 挂起当前 C coroutine 并等待一个文件系统事件。
  *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_watcher FileWatcher 句柄；必须存活到 callback 完成。
- * @param callback watch 完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_FileWatcherSuccess；参数无效返回 C_FileWatcherParameterInvalid；
- * runtime 未运行返回 C_FileWatcherRuntimeNotRunning；提交失败返回 C_FileWatcherRuntimeSpawnFailed；
- * 后端不支持返回 C_FileWatcherOperationUnsupported。
+ * @param c_watcher FileWatcher 句柄。
+ * @param out_result 输出 watch 结果；成功或超时时写入 code/events/name/is_dir。
+ * @param timeout_ms 负数无限等待，0 不提交 watch 并直接返回超时，正数为毫秒超时。
+ * @return 成功事件返回 C_IOResultOk；超时返回 C_IOResultTimeout；参数、
+ * 不在 C coroutine 内调用或 watcher 状态无效返回 C_IOResultInvalid；底层错误返回 C_IOResultError。
  *
- * @note 该函数不会阻塞等待文件事件；一次调用只接收一个事件，callback 在 runtime 调度线程上执行。
- *       调用方不应在前一次 watch 完成前对同一 watcher 再次提交 watch。
+ * @note 该函数只能在 `galay_coro_spawn` 创建的 C coroutine 内调用；它会挂起
+ * 当前 C coroutine，不通过 C++ Task/runtime callback 桥接。
  */
-C_FileWatcherResultCode galay_kernel_file_watcher_watch(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_file_watcher_watch(
     galay_kernel_file_watcher_t* c_watcher,
-    galay_kernel_file_watcher_callback_t callback,
-    void* ctx);
-
-/**
- * @brief 在 runtime 上异步等待一个文件系统事件，带毫秒级超时。
- *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_watcher FileWatcher 句柄；必须存活到 callback 完成。
- * @param timeout_ms 超时时间，单位毫秒；0 表示立即超时检查。
- * @param callback watch 完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_FileWatcherSuccess；参数无效返回 C_FileWatcherParameterInvalid；
- * runtime 未运行返回 C_FileWatcherRuntimeNotRunning；提交失败返回 C_FileWatcherRuntimeSpawnFailed；
- * 后端不支持返回 C_FileWatcherOperationUnsupported。
- *
- * @note 该函数不会阻塞等待文件事件；超时通过 callback 上报 C_FileWatcherTimeout。
- *       调用方不应在前一次 watch 完成前对同一 watcher 再次提交 watch。
- */
-C_FileWatcherResultCode galay_kernel_file_watcher_watch_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_file_watcher_t* c_watcher,
-    uint64_t timeout_ms,
-    galay_kernel_file_watcher_callback_t callback,
-    void* ctx);
+    galay_kernel_file_watcher_watch_result_t* out_result,
+    int64_t timeout_ms);
 
 #ifdef __cplusplus
 }

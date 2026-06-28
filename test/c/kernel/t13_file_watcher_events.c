@@ -1,5 +1,8 @@
 #include <galay/c/galay-kernel-c/async-c/file_watcher_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdatomic.h>
 #include <stdio.h>
@@ -10,10 +13,9 @@
 
 typedef struct WatchState {
     atomic_int done;
-    atomic_int code;
-    atomic_uint events;
-    atomic_int is_dir;
-    char name[256];
+    galay_kernel_file_watcher_t* watcher;
+    C_IOResult io_result;
+    galay_kernel_file_watcher_watch_result_t watch_result;
 } WatchState;
 
 static int expect_status(C_FileWatcherResultCode actual, C_FileWatcherResultCode expected)
@@ -21,16 +23,16 @@ static int expect_status(C_FileWatcherResultCode actual, C_FileWatcherResultCode
     return actual == expected ? 0 : 1;
 }
 
-static void on_watch(galay_kernel_file_watcher_watch_result_t* result, void* ctx)
+static int expect_io_code(C_IOResult actual, C_IOResultCode expected)
+{
+    return actual.code == expected ? 0 : 1;
+}
+
+static void watch_entry(void* ctx)
 {
     WatchState* state = (WatchState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)C_FileWatcherIOFailed : (int)result->code);
-    atomic_store(&state->events, result == 0 ? 0u : (unsigned int)result->events);
-    atomic_store(&state->is_dir, result == 0 ? 0 : result->is_dir);
-    if (result != 0) {
-        memcpy(state->name, result->name, sizeof(state->name));
-        state->name[sizeof(state->name) - 1] = '\0';
-    }
+    state->io_result =
+        galay_kernel_file_watcher_watch(state->watcher, &state->watch_result, 1000);
     atomic_store(&state->done, 1);
 }
 
@@ -41,7 +43,9 @@ static int wait_done(atomic_int* done)
         if (atomic_load(done)) {
             return 0;
         }
-        nanosleep(&pause, 0);
+        if (nanosleep(&pause, 0) != 0 && errno != EINTR) {
+            return 1;
+        }
     }
     return 1;
 }
@@ -55,8 +59,12 @@ static int append_to_file(const char* path)
 
     const char payload[] = "x";
     int failed = write(fd, payload, sizeof(payload) - 1) != (ssize_t)(sizeof(payload) - 1);
-    (void)fsync(fd);
-    close(fd);
+    if (fsync(fd) != 0) {
+        failed = 1;
+    }
+    if (close(fd) != 0) {
+        failed = 1;
+    }
     return failed;
 }
 
@@ -67,7 +75,9 @@ static int trigger_until_done(const char* path, atomic_int* done)
         if (append_to_file(path) != 0) {
             return 1;
         }
-        nanosleep(&pause, 0);
+        if (nanosleep(&pause, 0) != 0 && errno != EINTR) {
+            return 1;
+        }
     }
     return wait_done(done);
 }
@@ -75,15 +85,15 @@ static int trigger_until_done(const char* path, atomic_int* done)
 static void init_state(WatchState* state)
 {
     atomic_init(&state->done, 0);
-    atomic_init(&state->code, (int)C_FileWatcherIOFailed);
-    atomic_init(&state->events, 0u);
-    atomic_init(&state->is_dir, 0);
-    memset(state->name, 0, sizeof(state->name));
+    state->watcher = 0;
+    state->io_result = (C_IOResult){0};
+    state->watch_result = (galay_kernel_file_watcher_watch_result_t){0};
 }
 
 static int test_parameter_errors(void)
 {
     galay_kernel_file_watcher_t watcher = {0};
+    WatchState state;
     int wd = -1;
     char path_buffer[4] = {0};
     char template_path[] = "/tmp/galay-c-file-watch-param-XXXXXX";
@@ -93,7 +103,10 @@ static int test_parameter_errors(void)
     if (fd < 0) {
         return 10;
     }
-    close(fd);
+    if (close(fd) != 0) {
+        return 10;
+    }
+    init_state(&state);
 
     if (expect_status(galay_kernel_file_watcher_create(0), C_FileWatcherParameterInvalid)) {
         exit_code = 11;
@@ -113,8 +126,8 @@ static int test_parameter_errors(void)
         exit_code = 14;
         goto cleanup_file;
     }
-    if (expect_status(galay_kernel_file_watcher_watch(0, &watcher, on_watch, 0),
-            C_FileWatcherParameterInvalid)) {
+    if (expect_io_code(galay_kernel_file_watcher_watch(0, &state.watch_result, -1),
+            C_IOResultInvalid)) {
         exit_code = 15;
         goto cleanup_file;
     }
@@ -152,64 +165,28 @@ static int test_parameter_errors(void)
         exit_code = 22;
         goto cleanup;
     }
+    if (expect_io_code(galay_kernel_file_watcher_watch(&watcher, 0, -1),
+            C_IOResultInvalid)) {
+        exit_code = 23;
+        goto cleanup;
+    }
+    if (expect_io_code(galay_kernel_file_watcher_watch(&watcher, &state.watch_result, -1),
+            C_IOResultInvalid)) {
+        exit_code = 24;
+        goto cleanup;
+    }
 
 cleanup:
     if (watcher.watcher != 0) {
-        (void)galay_kernel_file_watcher_destroy(&watcher);
+        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess &&
+            exit_code == 0) {
+            exit_code = 25;
+        }
     }
 cleanup_file:
-    unlink(template_path);
-    return exit_code;
-}
-
-static int test_stopped_runtime(void)
-{
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
-    config.io_scheduler_count = 1;
-    config.compute_scheduler_count = 0;
-
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_file_watcher_t watcher = {0};
-    WatchState state;
-    char template_path[] = "/tmp/galay-c-file-watch-stopped-XXXXXX";
-    int fd = mkstemp(template_path);
-    int wd = -1;
-    int exit_code = 0;
-
-    if (fd < 0) {
-        return 30;
+    if (unlink(template_path) != 0 && errno != ENOENT && exit_code == 0) {
+        exit_code = 26;
     }
-    close(fd);
-    init_state(&state);
-
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_file_watcher_create(&watcher) != C_FileWatcherSuccess ||
-        galay_kernel_file_watcher_add_watch(&watcher, template_path, C_FileWatchEventModify, &wd) != C_FileWatcherSuccess) {
-        exit_code = 31;
-        goto cleanup;
-    }
-
-    if (expect_status(galay_kernel_file_watcher_watch(&runtime, &watcher, on_watch, &state),
-            C_FileWatcherRuntimeNotRunning)) {
-        exit_code = 32;
-        goto cleanup;
-    }
-    if (atomic_load(&state.done) != 0) {
-        exit_code = 33;
-        goto cleanup;
-    }
-
-cleanup:
-    if (watcher.watcher != 0) {
-        (void)galay_kernel_file_watcher_destroy(&watcher);
-    }
-    if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
-    }
-    unlink(template_path);
     return exit_code;
 }
 
@@ -221,6 +198,7 @@ static int test_file_modify_event(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_file_watcher_t watcher = {0};
+    galay_coro_task_t watch_task = {0};
     WatchState state;
     char template_path[] = "/tmp/galay-c-file-watch-event-XXXXXX";
     char copied_path[512] = {0};
@@ -231,8 +209,11 @@ static int test_file_modify_event(void)
     if (fd < 0) {
         return 40;
     }
-    close(fd);
+    if (close(fd) != 0) {
+        return 40;
+    }
     init_state(&state);
+    state.watcher = &watcher;
 
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
         galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
@@ -245,41 +226,62 @@ static int test_file_modify_event(void)
         goto cleanup;
     }
 
-    if (galay_kernel_file_watcher_watch(&runtime, &watcher, on_watch, &state) != C_FileWatcherSuccess ||
+    if (expect_io_code(galay_coro_spawn(&runtime, watch_entry, &state, 0, &watch_task),
+            C_IOResultOk) ||
         trigger_until_done(template_path, &state.done) != 0) {
         exit_code = 42;
         goto cleanup;
     }
-
-    if (atomic_load(&state.code) != (int)C_FileWatcherSuccess ||
-        (atomic_load(&state.events) & (unsigned int)(C_FileWatchEventModify | C_FileWatchEventCloseWrite)) == 0 ||
-        atomic_load(&state.is_dir) != 0) {
+    if (expect_io_code(galay_coro_join(&watch_task, 2000), C_IOResultOk)) {
         exit_code = 43;
         goto cleanup;
     }
 
+    if (state.io_result.code != C_IOResultOk ||
+        state.watch_result.code != C_FileWatcherSuccess ||
+        (state.watch_result.events &
+            (C_FileWatchEvent)(C_FileWatchEventModify | C_FileWatchEventCloseWrite)) == 0 ||
+        state.watch_result.is_dir != 0) {
+        exit_code = 44;
+        goto cleanup;
+    }
+
 cleanup:
+    if (watch_task.task != 0) {
+        if (galay_coro_destroy(&watch_task).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 45;
+        }
+    }
     if (watcher.watcher != 0) {
         if (wd >= 0) {
-            (void)galay_kernel_file_watcher_remove_watch(&watcher, wd);
+            if (galay_kernel_file_watcher_remove_watch(&watcher, wd) !=
+                    C_FileWatcherSuccess &&
+                exit_code == 0) {
+                exit_code = 46;
+            }
         }
-        (void)galay_kernel_file_watcher_destroy(&watcher);
+        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess &&
+            exit_code == 0) {
+            exit_code = 47;
+        }
     }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 48;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 49;
+        }
     }
-    unlink(template_path);
+    if (unlink(template_path) != 0 && errno != ENOENT && exit_code == 0) {
+        exit_code = 50;
+    }
     return exit_code;
 }
 
 int main(void)
 {
     int result = test_parameter_errors();
-    if (result != 0) {
-        return result;
-    }
-    result = test_stopped_runtime();
     if (result != 0) {
         return result;
     }

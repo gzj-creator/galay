@@ -1,7 +1,7 @@
 #ifndef GALAY_KERNEL_ASYNC_WAITER_C_H
 #define GALAY_KERNEL_ASYNC_WAITER_C_H
 
-#include "../core-c/runtime_c.h"
+#include "../coro-c/coro_result_c.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -28,8 +28,6 @@ typedef enum C_AsyncWaiterResultCode {
     C_AsyncWaiterIOFailed,               ///< 底层异步等待失败。
     C_AsyncWaiterOperationInvalid,       ///< 当前 waiter 状态不允许执行该操作。
     C_AsyncWaiterTimeout,                ///< 等待超时。
-    C_AsyncWaiterRuntimeNotRunning,      ///< runtime 未启动。
-    C_AsyncWaiterRuntimeSpawnFailed,     ///< runtime 提交任务失败。
 } C_AsyncWaiterResultCode;
 
 /**
@@ -41,16 +39,6 @@ typedef enum C_AsyncWaiterResultCode {
 typedef struct galay_kernel_async_waiter {
     void* waiter;     ///< 内部 AsyncWaiter<void> 对象指针。
 } galay_kernel_async_waiter_t;
-
-/**
- * @brief AsyncWaiter wait 完成回调。
- *
- * @param code wait 完成结果码；成功为 C_AsyncWaiterSuccess，超时为 C_AsyncWaiterTimeout。
- * @param ctx 调用 wait/wait_timeout 时传入的用户上下文。
- */
-typedef void (*galay_kernel_async_waiter_callback_t)(
-    C_AsyncWaiterResultCode code,
-    void* ctx);
 
 /**
  * @brief 将 AsyncWaiter 结果码转换为可读错误信息。
@@ -77,7 +65,7 @@ C_AsyncWaiterResultCode galay_kernel_async_waiter_create(galay_kernel_async_wait
  * @param c_waiter 由 galay_kernel_async_waiter_create 初始化的 waiter 句柄。
  * @return 成功返回 C_AsyncWaiterSuccess；参数无效返回 C_AsyncWaiterParameterInvalid。
  *
- * @note 调用方必须保证没有未完成的 wait/wait_timeout callback 再访问该 waiter。
+ * @note 调用方必须保证没有未完成的 direct C coroutine wait 再访问该 waiter。
  * 该函数会释放 c_waiter->waiter 指向的内部对象，并将其置空。
  */
 C_AsyncWaiterResultCode galay_kernel_async_waiter_destroy(galay_kernel_async_waiter_t* c_waiter);
@@ -110,46 +98,18 @@ bool galay_kernel_async_waiter_is_ready(const galay_kernel_async_waiter_t* c_wai
 C_AsyncWaiterResultCode galay_kernel_async_waiter_notify(galay_kernel_async_waiter_t* c_waiter);
 
 /**
- * @brief 在 runtime 上异步等待完成通知。
+ * @brief 挂起当前 C coroutine 并等待完成通知。
  *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_waiter waiter 句柄；必须存活到 callback 完成。
- * @param callback wait 完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_AsyncWaiterSuccess；参数无效返回
- * C_AsyncWaiterParameterInvalid；runtime 未运行返回 C_AsyncWaiterRuntimeNotRunning；
- * 提交失败返回 C_AsyncWaiterRuntimeSpawnFailed。
+ * @param c_waiter waiter 句柄。
+ * @param timeout_ms 负数无限等待，0 立即返回超时，正数为毫秒超时。
+ * @return 成功收到通知返回 C_IOResultOk；超时返回 C_IOResultTimeout；参数无效、
+ * 不在 C coroutine 内调用或 waiter 状态无效返回 C_IOResultInvalid。
  *
- * @note 该函数不会阻塞等待 notify；最终结果通过 callback 在 runtime 调度线程上
- * 上报。每个 waiter 实例只支持一次 wait/notify 信号流程。
+ * @note 每个 waiter 实例只支持一次 wait/notify 或 wait timeout 信号流程。
  */
-C_AsyncWaiterResultCode galay_kernel_async_waiter_wait(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_async_waiter_wait(
     galay_kernel_async_waiter_t* c_waiter,
-    galay_kernel_async_waiter_callback_t callback,
-    void* ctx);
-
-/**
- * @brief 在 runtime 上异步等待完成通知，带毫秒级超时。
- *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_waiter waiter 句柄；必须存活到 callback 完成。
- * @param timeout_ms 超时时间，单位毫秒。
- * @param callback wait 完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_AsyncWaiterSuccess；参数无效返回
- * C_AsyncWaiterParameterInvalid；runtime 未运行返回 C_AsyncWaiterRuntimeNotRunning；
- * 提交失败返回 C_AsyncWaiterRuntimeSpawnFailed。
- *
- * @note 底层返回 kTimeout 时 callback 收到 C_AsyncWaiterTimeout。每个 waiter
- * 实例只支持一次 wait/notify 或 wait_timeout/notify 信号流程。
- */
-C_AsyncWaiterResultCode galay_kernel_async_waiter_wait_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_async_waiter_t* c_waiter,
-    uint64_t timeout_ms,
-    galay_kernel_async_waiter_callback_t callback,
-    void* ctx);
+    int64_t timeout_ms);
 
 #ifdef __cplusplus
 }

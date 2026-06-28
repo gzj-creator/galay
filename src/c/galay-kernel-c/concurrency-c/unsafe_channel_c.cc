@@ -1,25 +1,19 @@
 #include "unsafe_channel_c.h"
 
-#include "../../../cpp/galay-kernel/common/error.h"
 #include "../../../cpp/galay-kernel/concurrency/unsafe_channel.h"
-#include "../../../cpp/galay-kernel/core/runtime.h"
+#include "../coro-c/coro_task_c.h"
+#include "../coro-c/coro_wait_c.h"
 
 #include <chrono>
 #include <cstdint>
 #include <limits>
 #include <new>
 #include <utility>
-#include <vector>
 
 namespace
 {
 
 using CppUnsafeChannel = galay::kernel::UnsafeChannel<C_UnsafeChannelMessage>;
-
-galay::kernel::Runtime* to_cpp_runtime(galay_kernel_runtime_t* runtime)
-{
-    return static_cast<galay::kernel::Runtime*>(runtime->runtime);
-}
 
 CppUnsafeChannel* to_cpp_channel(galay_kernel_unsafe_channel_t* channel)
 {
@@ -49,21 +43,9 @@ galay::kernel::UnsafeChannelWakeMode to_cpp_wake_mode(C_UnsafeChannelWakeMode wa
     return galay::kernel::UnsafeChannelWakeMode::Inline;
 }
 
-C_UnsafeChannelResultCode from_cpp_io_error(const galay::kernel::IOError& error)
+C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
 {
-    if (galay::kernel::IOError::contains(error.code(), galay::kernel::kTimeout))
-    {
-        return C_UnsafeChannelTimeout;
-    }
-    if (galay::kernel::IOError::contains(error.code(), galay::kernel::kParamInvalid))
-    {
-        return C_UnsafeChannelParameterInvalid;
-    }
-    if (galay::kernel::IOError::contains(error.code(), galay::kernel::kNotReady))
-    {
-        return C_UnsafeChannelOperationInvalid;
-    }
-    return C_UnsafeChannelIOFailed;
+    return C_IOResult{code, sys_errno, 0, 0, nullptr};
 }
 
 bool is_valid_message(const C_UnsafeChannelMessage& message)
@@ -91,209 +73,63 @@ bool is_valid_batch(const C_UnsafeChannelMessage* messages, size_t count)
     return true;
 }
 
-bool timeout_fits_chrono(uint64_t timeout_ms)
+std::chrono::steady_clock::time_point make_deadline(int64_t timeout_ms)
 {
-    using Rep = std::chrono::milliseconds::rep;
-    if constexpr (std::numeric_limits<Rep>::is_signed)
+    if (timeout_ms < 0)
     {
-        return timeout_ms <= static_cast<uint64_t>(std::numeric_limits<Rep>::max());
+        return std::chrono::steady_clock::time_point::max();
     }
-    return timeout_ms <= std::numeric_limits<Rep>::max();
+    return std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
 }
 
-std::chrono::milliseconds to_timeout(uint64_t timeout_ms)
+bool timeout_expired(std::chrono::steady_clock::time_point deadline, int64_t timeout_ms)
 {
-    return std::chrono::milliseconds(static_cast<std::chrono::milliseconds::rep>(timeout_ms));
+    return timeout_ms >= 0 && std::chrono::steady_clock::now() >= deadline;
 }
 
-C_UnsafeChannelResultCode make_message_batch(
-    const C_UnsafeChannelMessage* messages,
-    size_t count,
-    std::vector<C_UnsafeChannelMessage>* batch)
+C_IOResult wait_next_poll(C_CoroWaitRequest* request,
+                          std::chrono::steady_clock::time_point deadline,
+                          int64_t timeout_ms)
 {
-    try
+    uint64_t generation = 0;
+    C_IOResult prepared = galay_coro_wait_request_prepare(request, &generation);
+    if (prepared.code != C_IOResultOk)
     {
-        batch->reserve(count);
-        for (size_t i = 0; i < count; ++i)
+        return make_result(C_IOResultInvalid);
+    }
+
+    int64_t poll_timeout_ms = 1;
+    if (timeout_ms >= 0)
+    {
+        const auto now = std::chrono::steady_clock::now();
+        if (now >= deadline)
         {
-            batch->push_back(messages[i]);
+            return make_result(C_IOResultTimeout);
+        }
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(deadline - now).count();
+        poll_timeout_ms = remaining <= 1 ? 1 : 1;
+    }
+
+    C_IOResult waited = galay_coro_wait(request, poll_timeout_ms);
+    if (waited.code == C_IOResultTimeout)
+    {
+        return make_result(C_IOResultOk);
+    }
+    return waited;
+}
+
+C_IOResult destroy_request_and_return(C_CoroWaitRequest* request, C_IOResult result)
+{
+    if (request != nullptr && request->request != nullptr)
+    {
+        C_IOResult destroyed = galay_coro_wait_request_destroy(request);
+        if (destroyed.code != C_IOResultOk && result.code == C_IOResultOk)
+        {
+            return make_result(C_IOResultInvalid);
         }
     }
-    catch (const std::bad_alloc&)
-    {
-        return C_UnsafeChannelMemoryAllocFailed;
-    }
-    catch (...)
-    {
-        return C_UnsafeChannelMemoryAllocFailed;
-    }
-    return C_UnsafeChannelSuccess;
-}
-
-void set_single_success_result(
-    galay_kernel_unsafe_channel_recv_result_t* result,
-    C_UnsafeChannelMessage&& message)
-{
-    result->code = C_UnsafeChannelSuccess;
-    result->message = message;
-    result->messages = nullptr;
-    result->count = 0;
-}
-
-void set_batch_success_result(
-    galay_kernel_unsafe_channel_recv_result_t* result,
-    std::vector<C_UnsafeChannelMessage>& messages)
-{
-    result->code = C_UnsafeChannelSuccess;
-    result->message = C_UnsafeChannelMessage{};
-    result->messages = messages.data();
-    result->count = messages.size();
-}
-
-void set_error_result(
-    galay_kernel_unsafe_channel_recv_result_t* result,
-    C_UnsafeChannelResultCode code)
-{
-    result->code = code;
-    result->message = C_UnsafeChannelMessage{};
-    result->messages = nullptr;
-    result->count = 0;
-}
-
-galay::kernel::Task<void> c_api_recv(
-    CppUnsafeChannel* channel,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    auto received = co_await channel->recv();
-    galay_kernel_unsafe_channel_recv_result_t result{};
-    if (received)
-    {
-        set_single_success_result(&result, std::move(*received));
-    }
-    else
-    {
-        set_error_result(&result, from_cpp_io_error(received.error()));
-    }
-    callback(&result, ctx);
-    co_return;
-}
-
-galay::kernel::Task<void> c_api_recv_timeout(
-    CppUnsafeChannel* channel,
-    std::chrono::milliseconds timeout,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    auto received = co_await channel->recv().timeout(timeout);
-    galay_kernel_unsafe_channel_recv_result_t result{};
-    if (received)
-    {
-        set_single_success_result(&result, std::move(*received));
-    }
-    else
-    {
-        set_error_result(&result, from_cpp_io_error(received.error()));
-    }
-    callback(&result, ctx);
-    co_return;
-}
-
-galay::kernel::Task<void> c_api_recv_batch(
-    CppUnsafeChannel* channel,
-    size_t max_count,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    auto received = co_await channel->recvBatch(max_count);
-    galay_kernel_unsafe_channel_recv_result_t result{};
-    if (received)
-    {
-        set_batch_success_result(&result, *received);
-    }
-    else
-    {
-        set_error_result(&result, from_cpp_io_error(received.error()));
-    }
-    callback(&result, ctx);
-    co_return;
-}
-
-galay::kernel::Task<void> c_api_recv_batch_timeout(
-    CppUnsafeChannel* channel,
-    size_t max_count,
-    std::chrono::milliseconds timeout,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    auto received = co_await channel->recvBatch(max_count).timeout(timeout);
-    galay_kernel_unsafe_channel_recv_result_t result{};
-    if (received)
-    {
-        set_batch_success_result(&result, *received);
-    }
-    else
-    {
-        set_error_result(&result, from_cpp_io_error(received.error()));
-    }
-    callback(&result, ctx);
-    co_return;
-}
-
-galay::kernel::Task<void> c_api_recv_batched(
-    CppUnsafeChannel* channel,
-    size_t limit,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    auto received = co_await channel->recvBatched(limit);
-    galay_kernel_unsafe_channel_recv_result_t result{};
-    if (received)
-    {
-        set_batch_success_result(&result, *received);
-    }
-    else
-    {
-        set_error_result(&result, from_cpp_io_error(received.error()));
-    }
-    callback(&result, ctx);
-    co_return;
-}
-
-galay::kernel::Task<void> c_api_recv_batched_timeout(
-    CppUnsafeChannel* channel,
-    size_t limit,
-    std::chrono::milliseconds timeout,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    auto received = co_await channel->recvBatched(limit).timeout(timeout);
-    galay_kernel_unsafe_channel_recv_result_t result{};
-    if (received)
-    {
-        set_batch_success_result(&result, *received);
-    }
-    else
-    {
-        const auto code = from_cpp_io_error(received.error());
-        if (code == C_UnsafeChannelTimeout)
-        {
-            const size_t pending = channel->size();
-            if (pending > 0)
-            {
-                auto partial = channel->tryRecvBatch(pending);
-                if (partial && !partial->empty())
-                {
-                    set_batch_success_result(&result, *partial);
-                    callback(&result, ctx);
-                    co_return;
-                }
-            }
-        }
-        set_error_result(&result, code);
-    }
-    callback(&result, ctx);
-    co_return;
+    return result;
 }
 
 } // namespace
@@ -314,10 +150,6 @@ const char* galay_kernel_unsafe_channel_get_error(C_UnsafeChannelResultCode code
         return "operation invalid";
     case C_UnsafeChannelTimeout:
         return "timeout";
-    case C_UnsafeChannelRuntimeNotRunning:
-        return "runtime not running";
-    case C_UnsafeChannelRuntimeSpawnFailed:
-        return "runtime spawn failed";
     }
     return "unknown unsafe channel error";
 }
@@ -380,21 +212,16 @@ C_UnsafeChannelResultCode galay_kernel_unsafe_channel_send_batch(
     {
         return C_UnsafeChannelParameterInvalid;
     }
-    if (count == 0)
-    {
-        return C_UnsafeChannelSuccess;
-    }
 
-    std::vector<C_UnsafeChannelMessage> batch;
-    auto made_batch = make_message_batch(messages, count, &batch);
-    if (made_batch != C_UnsafeChannelSuccess)
+    for (size_t i = 0; i < count; ++i)
     {
-        return made_batch;
+        C_UnsafeChannelResultCode sent = galay_kernel_unsafe_channel_send(c_channel, &messages[i]);
+        if (sent != C_UnsafeChannelSuccess)
+        {
+            return sent;
+        }
     }
-
-    return to_cpp_channel(c_channel)->sendBatch(std::move(batch))
-        ? C_UnsafeChannelSuccess
-        : C_UnsafeChannelIOFailed;
+    return C_UnsafeChannelSuccess;
 }
 
 C_UnsafeChannelResultCode galay_kernel_unsafe_channel_try_recv(
@@ -444,154 +271,173 @@ C_UnsafeChannelResultCode galay_kernel_unsafe_channel_try_recv_batch(
     return C_UnsafeChannelSuccess;
 }
 
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_unsafe_channel_recv(
     galay_kernel_unsafe_channel_t* c_channel,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
+    C_UnsafeChannelMessage* message,
+    int64_t timeout_ms)
 {
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_channel == nullptr || c_channel->channel == nullptr ||
-        callback == nullptr)
+    if (c_channel == nullptr || c_channel->channel == nullptr || message == nullptr)
     {
-        return C_UnsafeChannelParameterInvalid;
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0)
+    {
+        *message = C_UnsafeChannelMessage{};
+        return make_result(C_IOResultTimeout);
     }
 
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
+    C_CoroWaitRequest poll_request{};
+    C_IOResult created = galay_coro_wait_request_create(&poll_request);
+    if (created.code != C_IOResultOk)
     {
-        return C_UnsafeChannelRuntimeNotRunning;
+        return created.code == C_IOResultInvalid
+            ? make_result(C_IOResultInvalid)
+            : make_result(C_IOResultError, created.sys_errno);
     }
-
-    auto spawned = cpp_runtime->spawn(c_api_recv(to_cpp_channel(c_channel), callback, ctx));
-    return spawned ? C_UnsafeChannelSuccess : C_UnsafeChannelRuntimeSpawnFailed;
+    const auto deadline = make_deadline(timeout_ms);
+    for (;;)
+    {
+        C_UnsafeChannelResultCode received =
+            galay_kernel_unsafe_channel_try_recv(c_channel, message);
+        if (received == C_UnsafeChannelSuccess)
+        {
+            return destroy_request_and_return(&poll_request, make_result(C_IOResultOk));
+        }
+        if (received != C_UnsafeChannelTimeout)
+        {
+            return destroy_request_and_return(&poll_request, make_result(C_IOResultInvalid));
+        }
+        if (timeout_expired(deadline, timeout_ms))
+        {
+            *message = C_UnsafeChannelMessage{};
+            return destroy_request_and_return(&poll_request, make_result(C_IOResultTimeout));
+        }
+        C_IOResult parked = wait_next_poll(&poll_request, deadline, timeout_ms);
+        if (parked.code != C_IOResultOk)
+        {
+            return destroy_request_and_return(&poll_request, parked);
+        }
+    }
 }
 
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_timeout(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_unsafe_channel_recv_batch(
     galay_kernel_unsafe_channel_t* c_channel,
-    uint64_t timeout_ms,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_channel == nullptr || c_channel->channel == nullptr ||
-        callback == nullptr || !timeout_fits_chrono(timeout_ms))
-    {
-        return C_UnsafeChannelParameterInvalid;
-    }
-
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
-    {
-        return C_UnsafeChannelRuntimeNotRunning;
-    }
-
-    auto spawned = cpp_runtime->spawn(
-        c_api_recv_timeout(to_cpp_channel(c_channel), to_timeout(timeout_ms), callback, ctx));
-    return spawned ? C_UnsafeChannelSuccess : C_UnsafeChannelRuntimeSpawnFailed;
-}
-
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batch(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_unsafe_channel_t* c_channel,
+    C_UnsafeChannelMessage* messages,
     size_t max_count,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
+    size_t* out_count,
+    int64_t timeout_ms)
 {
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_channel == nullptr || c_channel->channel == nullptr ||
-        max_count == 0 || callback == nullptr)
+    if (c_channel == nullptr || c_channel->channel == nullptr ||
+        messages == nullptr || max_count == 0 || out_count == nullptr)
     {
-        return C_UnsafeChannelParameterInvalid;
+        return make_result(C_IOResultInvalid);
+    }
+    *out_count = 0;
+    if (timeout_ms == 0)
+    {
+        return make_result(C_IOResultTimeout);
     }
 
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
+    C_CoroWaitRequest poll_request{};
+    C_IOResult created = galay_coro_wait_request_create(&poll_request);
+    if (created.code != C_IOResultOk)
     {
-        return C_UnsafeChannelRuntimeNotRunning;
+        return created.code == C_IOResultInvalid
+            ? make_result(C_IOResultInvalid)
+            : make_result(C_IOResultError, created.sys_errno);
     }
-
-    auto spawned = cpp_runtime->spawn(
-        c_api_recv_batch(to_cpp_channel(c_channel), max_count, callback, ctx));
-    return spawned ? C_UnsafeChannelSuccess : C_UnsafeChannelRuntimeSpawnFailed;
+    const auto deadline = make_deadline(timeout_ms);
+    for (;;)
+    {
+        C_UnsafeChannelResultCode received =
+            galay_kernel_unsafe_channel_try_recv_batch(c_channel, messages, max_count, out_count);
+        if (received == C_UnsafeChannelSuccess)
+        {
+            return destroy_request_and_return(&poll_request, make_result(C_IOResultOk));
+        }
+        if (received != C_UnsafeChannelTimeout)
+        {
+            return destroy_request_and_return(&poll_request, make_result(C_IOResultInvalid));
+        }
+        if (timeout_expired(deadline, timeout_ms))
+        {
+            *out_count = 0;
+            return destroy_request_and_return(&poll_request, make_result(C_IOResultTimeout));
+        }
+        C_IOResult parked = wait_next_poll(&poll_request, deadline, timeout_ms);
+        if (parked.code != C_IOResultOk)
+        {
+            return destroy_request_and_return(&poll_request, parked);
+        }
+    }
 }
 
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batch_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_unsafe_channel_t* c_channel,
-    size_t max_count,
-    uint64_t timeout_ms,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_channel == nullptr || c_channel->channel == nullptr ||
-        max_count == 0 || callback == nullptr || !timeout_fits_chrono(timeout_ms))
-    {
-        return C_UnsafeChannelParameterInvalid;
-    }
-
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
-    {
-        return C_UnsafeChannelRuntimeNotRunning;
-    }
-
-    auto spawned = cpp_runtime->spawn(
-        c_api_recv_batch_timeout(to_cpp_channel(c_channel), max_count, to_timeout(timeout_ms), callback, ctx));
-    return spawned ? C_UnsafeChannelSuccess : C_UnsafeChannelRuntimeSpawnFailed;
-}
-
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batched(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_unsafe_channel_recv_batched(
     galay_kernel_unsafe_channel_t* c_channel,
     size_t limit,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
+    C_UnsafeChannelMessage* messages,
+    size_t max_count,
+    size_t* out_count,
+    int64_t timeout_ms)
 {
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_channel == nullptr || c_channel->channel == nullptr ||
-        limit == 0 || callback == nullptr)
+    if (c_channel == nullptr || c_channel->channel == nullptr || limit == 0 ||
+        messages == nullptr || max_count == 0 || out_count == nullptr)
     {
-        return C_UnsafeChannelParameterInvalid;
+        return make_result(C_IOResultInvalid);
+    }
+    *out_count = 0;
+
+    if (timeout_ms == 0)
+    {
+        if (galay_kernel_unsafe_channel_size(c_channel) > 0)
+        {
+            C_UnsafeChannelResultCode received =
+                galay_kernel_unsafe_channel_try_recv_batch(c_channel, messages, max_count, out_count);
+            return received == C_UnsafeChannelSuccess
+                ? make_result(C_IOResultOk)
+                : make_result(C_IOResultInvalid);
+        }
+        return make_result(C_IOResultTimeout);
     }
 
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
+    C_CoroWaitRequest poll_request{};
+    C_IOResult created = galay_coro_wait_request_create(&poll_request);
+    if (created.code != C_IOResultOk)
     {
-        return C_UnsafeChannelRuntimeNotRunning;
+        return created.code == C_IOResultInvalid
+            ? make_result(C_IOResultInvalid)
+            : make_result(C_IOResultError, created.sys_errno);
     }
-
-    auto spawned = cpp_runtime->spawn(
-        c_api_recv_batched(to_cpp_channel(c_channel), limit, callback, ctx));
-    return spawned ? C_UnsafeChannelSuccess : C_UnsafeChannelRuntimeSpawnFailed;
-}
-
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batched_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_unsafe_channel_t* c_channel,
-    size_t limit,
-    uint64_t timeout_ms,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx)
-{
-    if (runtime == nullptr || runtime->runtime == nullptr ||
-        c_channel == nullptr || c_channel->channel == nullptr ||
-        limit == 0 || callback == nullptr || !timeout_fits_chrono(timeout_ms))
+    const auto deadline = make_deadline(timeout_ms);
+    for (;;)
     {
-        return C_UnsafeChannelParameterInvalid;
+        if (galay_kernel_unsafe_channel_size(c_channel) >= limit)
+        {
+            C_UnsafeChannelResultCode received =
+                galay_kernel_unsafe_channel_try_recv_batch(c_channel, messages, max_count, out_count);
+            return received == C_UnsafeChannelSuccess
+                ? destroy_request_and_return(&poll_request, make_result(C_IOResultOk))
+                : destroy_request_and_return(&poll_request, make_result(C_IOResultInvalid));
+        }
+        if (timeout_expired(deadline, timeout_ms))
+        {
+            if (galay_kernel_unsafe_channel_size(c_channel) > 0)
+            {
+                C_UnsafeChannelResultCode received =
+                    galay_kernel_unsafe_channel_try_recv_batch(c_channel, messages, max_count, out_count);
+                return received == C_UnsafeChannelSuccess
+                    ? destroy_request_and_return(&poll_request, make_result(C_IOResultOk))
+                    : destroy_request_and_return(&poll_request, make_result(C_IOResultInvalid));
+            }
+            *out_count = 0;
+            return destroy_request_and_return(&poll_request, make_result(C_IOResultTimeout));
+        }
+        C_IOResult parked = wait_next_poll(&poll_request, deadline, timeout_ms);
+        if (parked.code != C_IOResultOk)
+        {
+            return destroy_request_and_return(&poll_request, parked);
+        }
     }
-
-    auto* cpp_runtime = to_cpp_runtime(runtime);
-    if (!cpp_runtime->isRunning())
-    {
-        return C_UnsafeChannelRuntimeNotRunning;
-    }
-
-    auto spawned = cpp_runtime->spawn(
-        c_api_recv_batched_timeout(to_cpp_channel(c_channel), limit, to_timeout(timeout_ms), callback, ctx));
-    return spawned ? C_UnsafeChannelSuccess : C_UnsafeChannelRuntimeSpawnFailed;
 }
 
 size_t galay_kernel_unsafe_channel_size(const galay_kernel_unsafe_channel_t* c_channel)

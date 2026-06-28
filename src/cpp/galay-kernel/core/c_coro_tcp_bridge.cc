@@ -12,6 +12,7 @@
 #include <limits>
 #include <mutex>
 #include <new>
+#include <span>
 #include <string>
 #include <utility>
 
@@ -24,9 +25,12 @@ using galay::kernel::ConnectAwaitable;
 using galay::kernel::IOController;
 using galay::kernel::IOError;
 using galay::kernel::IOScheduler;
+using galay::kernel::ReadvAwaitable;
 using galay::kernel::RecvAwaitable;
 using galay::kernel::Scheduler;
+using galay::kernel::SendFileAwaitable;
 using galay::kernel::SendAwaitable;
+using galay::kernel::WritevAwaitable;
 
 using C_IOResult = GalayCoreCoroIOResult;
 using C_IOResultCode = GalayCoreCoroIOResultCode;
@@ -69,6 +73,13 @@ C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
     return C_IOResult{code, sys_errno, 0, 0, nullptr};
 }
 
+C_IOResult merge_cleanup_result(C_IOResult primary, C_IOResult cleanup)
+{
+    return primary.code == C_IOResultOk && cleanup.code != C_IOResultOk
+        ? cleanup
+        : primary;
+}
+
 bool is_valid_c_ip_type(C_IPType ip_type)
 {
     return ip_type == C_IPTypeIPV4 || ip_type == C_IPTypeIPV6;
@@ -89,6 +100,27 @@ galay::kernel::Host from_c_host_to_cpp_host(const C_Host& host)
         static_cast<galay::kernel::IPType>(host.type),
         from_c_host_address_to_string(host),
         host.port);
+}
+
+bool assign_cpp_host_to_c_host(const galay::kernel::Host& host, C_Host* out_host)
+{
+    if (out_host == nullptr) {
+        return true;
+    }
+    if (!host.valid()) {
+        return false;
+    }
+    const std::string address = host.ip();
+    if (address.size() >= sizeof(out_host->address)) {
+        return false;
+    }
+    C_Host converted{};
+    converted.type = host.isIPv4() ? C_IPTypeIPV4 : C_IPTypeIPV6;
+    std::memcpy(converted.address, address.data(), address.size());
+    converted.address[address.size()] = '\0';
+    converted.port = host.port();
+    *out_host = converted;
+    return true;
 }
 
 int io_error_sys_errno(const IOError& error)
@@ -138,9 +170,12 @@ IOController::Index slot_for_event(IOEventType event)
     switch (event) {
     case ACCEPT:
     case RECV:
+    case READV:
         return IOController::READ;
     case CONNECT:
     case SEND:
+    case WRITEV:
+    case SENDFILE:
         return IOController::WRITE;
     default:
         return IOController::SIZE;
@@ -233,7 +268,7 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
         } else {
             rollbackResult();
         }
-        return result;
+        return merge_cleanup_result(result, completed);
     }
 
     void retireToken() noexcept
@@ -252,7 +287,8 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
                                                   CoroTcpCompletionPhase::Cancelled,
                                                   std::memory_order_acq_rel,
                                                   std::memory_order_acquire)) {
-            (void)completeUserDataNoRelease(make_result(C_IOResultCancelled));
+            m_last_cleanup_result =
+                completeUserDataNoRelease(make_result(C_IOResultCancelled));
         }
     }
 
@@ -273,10 +309,12 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
     void markWaitTimeout() noexcept
     {
         CoroTcpCompletionPhase expected = CoroTcpCompletionPhase::Pending;
-        (void)m_state.phase.compare_exchange_strong(expected,
-                                                    CoroTcpCompletionPhase::TimedOut,
-                                                    std::memory_order_acq_rel,
-                                                    std::memory_order_acquire);
+        if (!m_state.phase.compare_exchange_strong(expected,
+                                                   CoroTcpCompletionPhase::TimedOut,
+                                                   std::memory_order_acq_rel,
+                                                   std::memory_order_acquire)) {
+            return;
+        }
     }
 
 protected:
@@ -354,7 +392,8 @@ private:
             }
         }
         if (user_data != nullptr) {
-            (void)m_wait_ops.release_user_data(user_data);
+            C_IOResult released = m_wait_ops.release_user_data(user_data);
+            completed = merge_cleanup_result(completed, released);
         }
         return completed;
     }
@@ -367,7 +406,7 @@ private:
             user_data = std::exchange(m_state.user_data, nullptr);
         }
         if (user_data != nullptr) {
-            (void)m_wait_ops.release_user_data(user_data);
+            m_last_cleanup_result = m_wait_ops.release_user_data(user_data);
         }
     }
 
@@ -402,6 +441,7 @@ private:
     CoroTcpWakeState m_wake_state{};
     bool m_finished = false;
     bool m_complete_accepted = false;
+    C_IOResult m_last_cleanup_result = make_result(C_IOResultOk);
 };
 
 struct CoroAcceptOperation final: public AcceptAwaitable, public CoroTcpOperationBase {
@@ -409,10 +449,12 @@ struct CoroAcceptOperation final: public AcceptAwaitable, public CoroTcpOperatio
                         Scheduler* scheduler,
                         void* user_data,
                         GalayCoreCoroWaitOps wait_ops,
-                        void** out_socket)
+                        void** out_socket,
+                        C_Host* out_peer)
         : AcceptAwaitable(controller, &m_peer)
         , CoroTcpOperationBase(scheduler, user_data, wait_ops)
         , m_out_socket(out_socket)
+        , m_out_peer(out_peer)
     {
         m_waker = makeWaker();
 #ifdef USE_IOURING
@@ -443,9 +485,19 @@ private:
         if (!m_result) {
             return from_io_error(m_result.error());
         }
+        if (!assign_cpp_host_to_c_host(m_peer, m_out_peer)) {
+            if (*m_result != GHandle::invalid()) {
+                if (galay_close((*m_result).fd) != 0) {
+                    return make_result(C_IOResultError, errno);
+                }
+            }
+            return make_result(C_IOResultError);
+        }
         if (m_out_socket == nullptr || *m_out_socket != nullptr) {
             if (*m_result != GHandle::invalid()) {
-                galay_close((*m_result).fd);
+                if (galay_close((*m_result).fd) != 0) {
+                    return make_result(C_IOResultError, errno);
+                }
             }
             return make_result(C_IOResultInvalid);
         }
@@ -480,6 +532,7 @@ private:
 
     galay::kernel::Host m_peer;
     void** m_out_socket = nullptr;
+    C_Host* m_out_peer = nullptr;
     std::unique_ptr<TcpSocket> m_pending_socket;
 };
 
@@ -591,6 +644,133 @@ struct CoroSendOperation final: public SendAwaitable, public CoroTcpOperationBas
     {
         return guardedHandleComplete(
             [&]() { return SendAwaitable::handleComplete(handle); });
+    }
+#endif
+
+private:
+    C_IOResult buildResult() override
+    {
+        if (!m_result) {
+            return from_io_error(m_result.error());
+        }
+        C_IOResult result = make_result(C_IOResultOk);
+        result.bytes = *m_result;
+        return result;
+    }
+};
+
+struct CoroReadvOperation final: public ReadvAwaitable, public CoroTcpOperationBase {
+    CoroReadvOperation(IOController* controller,
+                       Scheduler* scheduler,
+                       void* user_data,
+                       GalayCoreCoroWaitOps wait_ops,
+                       const struct iovec* iovecs,
+                       size_t count)
+        : ReadvAwaitable(controller, std::span<const struct iovec>(iovecs, count))
+        , CoroTcpOperationBase(scheduler, user_data, wait_ops)
+    {
+        m_waker = makeWaker();
+#ifdef USE_IOURING
+        m_sqe_type = READV;
+#endif
+    }
+
+#ifdef USE_IOURING
+    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override
+    {
+        return guardedHandleComplete(
+            [&]() { return ReadvAwaitable::handleComplete(cqe, handle); });
+    }
+#else
+    bool handleComplete(GHandle handle) override
+    {
+        return guardedHandleComplete(
+            [&]() { return ReadvAwaitable::handleComplete(handle); });
+    }
+#endif
+
+private:
+    C_IOResult buildResult() override
+    {
+        if (!m_result) {
+            return from_io_error(m_result.error());
+        }
+        C_IOResult result = make_result(*m_result == 0 ? C_IOResultEof : C_IOResultOk);
+        result.bytes = *m_result;
+        return result;
+    }
+};
+
+struct CoroWritevOperation final: public WritevAwaitable, public CoroTcpOperationBase {
+    CoroWritevOperation(IOController* controller,
+                        Scheduler* scheduler,
+                        void* user_data,
+                        GalayCoreCoroWaitOps wait_ops,
+                        const struct iovec* iovecs,
+                        size_t count)
+        : WritevAwaitable(controller, std::span<const struct iovec>(iovecs, count))
+        , CoroTcpOperationBase(scheduler, user_data, wait_ops)
+    {
+        m_waker = makeWaker();
+#ifdef USE_IOURING
+        m_sqe_type = WRITEV;
+#endif
+    }
+
+#ifdef USE_IOURING
+    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override
+    {
+        return guardedHandleComplete(
+            [&]() { return WritevAwaitable::handleComplete(cqe, handle); });
+    }
+#else
+    bool handleComplete(GHandle handle) override
+    {
+        return guardedHandleComplete(
+            [&]() { return WritevAwaitable::handleComplete(handle); });
+    }
+#endif
+
+private:
+    C_IOResult buildResult() override
+    {
+        if (!m_result) {
+            return from_io_error(m_result.error());
+        }
+        C_IOResult result = make_result(C_IOResultOk);
+        result.bytes = *m_result;
+        return result;
+    }
+};
+
+struct CoroSendFileOperation final: public SendFileAwaitable, public CoroTcpOperationBase {
+    CoroSendFileOperation(IOController* controller,
+                          Scheduler* scheduler,
+                          void* user_data,
+                          GalayCoreCoroWaitOps wait_ops,
+                          int file_fd,
+                          off_t offset,
+                          size_t count)
+        : SendFileAwaitable(controller, file_fd, offset, count)
+        , CoroTcpOperationBase(scheduler, user_data, wait_ops)
+    {
+        m_waker = makeWaker();
+#ifdef USE_IOURING
+        m_sqe_type = SENDFILE;
+#endif
+    }
+
+#ifdef USE_IOURING
+    bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override
+    {
+        return guardedHandleComplete(
+            [&]() { return SendFileAwaitable::handleComplete(cqe, handle); });
+    }
+#else
+    bool handleComplete(GHandle handle) override
+    {
+        return guardedHandleComplete(
+            [&]() { return SendFileAwaitable::handleComplete(handle); });
     }
 #endif
 
@@ -743,7 +923,7 @@ C_IOResult perform_registered_io(IOController* controller,
     }
     if (result.code == C_IOResultTimeout && event == CONNECT) {
         if (operation.hasPendingToken()) {
-            operation.finishWithoutWait(result);
+            result = operation.finishWithoutWait(result);
         }
         const int closed = galay::kernel::detail::registerIOSchedulerClose(scheduler, controller);
         if (closed == 0) {
@@ -759,12 +939,24 @@ C_IOResult perform_registered_io(IOController* controller,
             (event == ACCEPT || event == RECV) &&
             (result.code == C_IOResultTimeout || result.code == C_IOResultCancelled);
         if (!keep_persistent_multishot) {
-            (void)static_cast<IOScheduler*>(scheduler)->remove(controller);
+            const int removed = static_cast<IOScheduler*>(scheduler)->remove(controller);
+            if (removed < 0) {
+                result = merge_cleanup_result(
+                    result,
+                    make_result(C_IOResultError,
+                                galay::kernel::detail::normalizeAwaitableErrno(removed)));
+            }
         }
 #else
-        (void)static_cast<IOScheduler*>(scheduler)->remove(controller);
+        const int removed = static_cast<IOScheduler*>(scheduler)->remove(controller);
+        if (removed < 0) {
+            result = merge_cleanup_result(
+                result,
+                make_result(C_IOResultError,
+                            galay::kernel::detail::normalizeAwaitableErrno(removed)));
+        }
 #endif
-        operation.finishWithoutWait(result);
+        result = operation.finishWithoutWait(result);
     }
     if (controller->m_awaitable[slot] == awaitable) {
         controller->removeAwaitable(event);
@@ -780,6 +972,7 @@ extern "C" {
 GalayCoreCoroIOResult galay_core_coro_tcp_accept(void* listener_socket,
                                                  void* scheduler_handle,
                                                  void** out_socket,
+                                                 GalayCoreCoroHost* out_peer,
                                                  int64_t timeout_ms,
                                                  void* user_data,
                                                  const GalayCoreCoroWaitOps* wait_ops)
@@ -798,7 +991,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_accept(void* listener_socket,
         return make_result(C_IOResultInvalid);
     }
     CoroAcceptOperation operation(
-        socket->controller(), scheduler, user_data, *wait_ops, out_socket);
+        socket->controller(), scheduler, user_data, *wait_ops, out_socket, out_peer);
     return perform_registered_io(socket->controller(),
                                  scheduler,
                                  ACCEPT,
@@ -905,6 +1098,105 @@ GalayCoreCoroIOResult galay_core_coro_tcp_send(void* socket_handle,
                                  timeout_ms,
                                  operation,
                                  static_cast<SendAwaitable*>(&operation));
+}
+
+GalayCoreCoroIOResult galay_core_coro_tcp_readv(void* socket_handle,
+                                                void* scheduler_handle,
+                                                const struct iovec* iovecs,
+                                                size_t count,
+                                                int64_t timeout_ms,
+                                                void* user_data,
+                                                const GalayCoreCoroWaitOps* wait_ops)
+{
+    auto* socket = to_cpp_socket(socket_handle);
+    Scheduler* scheduler = to_io_scheduler(scheduler_handle);
+    if (socket == nullptr || iovecs == nullptr || count == 0 ||
+        scheduler == nullptr || !timeout_fits_chrono(timeout_ms) ||
+        !valid_wait_ops(wait_ops)) {
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+    if (user_data == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    CoroReadvOperation operation(
+        socket->controller(), scheduler, user_data, *wait_ops, iovecs, count);
+    return perform_registered_io(socket->controller(),
+                                 scheduler,
+                                 READV,
+                                 timeout_ms,
+                                 operation,
+                                 static_cast<ReadvAwaitable*>(&operation));
+}
+
+GalayCoreCoroIOResult galay_core_coro_tcp_writev(void* socket_handle,
+                                                 void* scheduler_handle,
+                                                 const struct iovec* iovecs,
+                                                 size_t count,
+                                                 int64_t timeout_ms,
+                                                 void* user_data,
+                                                 const GalayCoreCoroWaitOps* wait_ops)
+{
+    auto* socket = to_cpp_socket(socket_handle);
+    Scheduler* scheduler = to_io_scheduler(scheduler_handle);
+    if (socket == nullptr || iovecs == nullptr || count == 0 ||
+        scheduler == nullptr || !timeout_fits_chrono(timeout_ms) ||
+        !valid_wait_ops(wait_ops)) {
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+    if (user_data == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    CoroWritevOperation operation(
+        socket->controller(), scheduler, user_data, *wait_ops, iovecs, count);
+    return perform_registered_io(socket->controller(),
+                                 scheduler,
+                                 WRITEV,
+                                 timeout_ms,
+                                 operation,
+                                 static_cast<WritevAwaitable*>(&operation));
+}
+
+GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(void* socket_handle,
+                                                   void* scheduler_handle,
+                                                   int file_fd,
+                                                   int64_t offset,
+                                                   size_t count,
+                                                   int64_t timeout_ms,
+                                                   void* user_data,
+                                                   const GalayCoreCoroWaitOps* wait_ops)
+{
+    auto* socket = to_cpp_socket(socket_handle);
+    Scheduler* scheduler = to_io_scheduler(scheduler_handle);
+    if (socket == nullptr || file_fd < 0 || offset < 0 || count == 0 ||
+        scheduler == nullptr || !timeout_fits_chrono(timeout_ms) ||
+        !valid_wait_ops(wait_ops)) {
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+    if (user_data == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    CoroSendFileOperation operation(socket->controller(),
+                                    scheduler,
+                                    user_data,
+                                    *wait_ops,
+                                    file_fd,
+                                    static_cast<off_t>(offset),
+                                    count);
+    return perform_registered_io(socket->controller(),
+                                 scheduler,
+                                 SENDFILE,
+                                 timeout_ms,
+                                 operation,
+                                 static_cast<SendFileAwaitable*>(&operation));
 }
 
 GalayCoreCoroIOResult galay_core_coro_tcp_close(void* socket_handle,

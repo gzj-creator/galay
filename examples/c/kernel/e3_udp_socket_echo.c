@@ -1,79 +1,80 @@
 #include <galay/c/galay-kernel-c/async-c/udp_socket_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
-#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
-#include <time.h>
 
 typedef struct RecvState {
-    atomic_int done;
-    atomic_int code;
-    atomic_int bytes;
+    galay_kernel_udp_socket_t* socket;
+    C_IOResult result;
+    char* buffer;
+    size_t length;
     C_Host from;
 } RecvState;
 
 typedef struct SendState {
-    atomic_int done;
-    atomic_int code;
-    atomic_int bytes;
+    galay_kernel_udp_socket_t* socket;
+    C_IOResult result;
+    const char* buffer;
+    size_t length;
+    C_Host to;
 } SendState;
 
 typedef struct CloseState {
-    atomic_int done;
-    atomic_int code;
+    galay_kernel_udp_socket_t* socket;
+    C_IOResult result;
 } CloseState;
 
-static int wait_done(atomic_int* done)
-{
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 2000; ++i) {
-        if (atomic_load(done)) {
-            return 0;
-        }
-        nanosleep(&pause, 0);
-    }
-    return 1;
-}
-
-static void on_recv(galay_kernel_udp_recvfrom_result_t* result, void* ctx)
+static void recv_entry(void* ctx)
 {
     RecvState* state = (RecvState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)C_UdpSocketIOFailed : (int)result->code);
-    atomic_store(&state->bytes, result == 0 ? 0 : (int)result->bytes);
-    if (result != 0) {
-        state->from = result->from;
-    }
-    atomic_store(&state->done, 1);
+    state->result =
+        galay_kernel_udp_socket_recvfrom(state->socket,
+                                         state->buffer,
+                                         state->length,
+                                         &state->from,
+                                         2000);
 }
 
-static void on_send(galay_kernel_udp_sendto_result_t* result, void* ctx)
+static void send_entry(void* ctx)
 {
     SendState* state = (SendState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)C_UdpSocketIOFailed : (int)result->code);
-    atomic_store(&state->bytes, result == 0 ? 0 : (int)result->bytes);
-    atomic_store(&state->done, 1);
+    state->result =
+        galay_kernel_udp_socket_sendto(state->socket,
+                                       state->buffer,
+                                       state->length,
+                                       &state->to,
+                                       2000);
 }
 
-static void on_close(C_UdpSocketResultCode code, void* ctx)
+static void close_entry(void* ctx)
 {
     CloseState* state = (CloseState*)ctx;
-    atomic_store(&state->code, (int)code);
-    atomic_store(&state->done, 1);
+    state->result = galay_kernel_udp_socket_close(state->socket, 1000);
 }
 
 static int close_socket(galay_kernel_runtime_t* runtime, galay_kernel_udp_socket_t* socket)
 {
-    CloseState state;
-    atomic_init(&state.done, 0);
-    atomic_init(&state.code, (int)C_UdpSocketIOFailed);
     if (socket->socket == 0) {
         return 0;
     }
-    if (galay_kernel_udp_socket_close(runtime, socket, on_close, &state) != C_UdpSocketSuccess) {
+    galay_coro_task_t task = {0};
+    CloseState state = {socket, {0}};
+    if (galay_coro_spawn(runtime, close_entry, &state, 0, &task).code != C_IOResultOk ||
+        galay_coro_join(&task, 2000).code != C_IOResultOk ||
+        state.result.code != C_IOResultOk) {
+        if (task.task != 0) {
+            if (galay_coro_destroy(&task).code != C_IOResultOk) {
+                return 1;
+            }
+        }
         return 1;
     }
-    return wait_done(&state.done) != 0 ||
-        atomic_load(&state.code) != (int)C_UdpSocketSuccess;
+    if (galay_coro_destroy(&task).code != C_IOResultOk) {
+        return 1;
+    }
+    return 0;
 }
 
 int main(void)
@@ -85,6 +86,8 @@ int main(void)
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_udp_socket_t server = {0};
     galay_kernel_udp_socket_t client = {0};
+    galay_coro_task_t recv_task = {0};
+    galay_coro_task_t send_task = {0};
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host server_local = {0};
     C_Host client_local = {0};
@@ -94,28 +97,6 @@ int main(void)
     const char response[] = "pong";
     char server_buffer[16] = {0};
     char client_buffer[16] = {0};
-
-    RecvState server_recv;
-    memset(&server_recv, 0, sizeof(server_recv));
-    atomic_init(&server_recv.done, 0);
-    atomic_init(&server_recv.code, (int)C_UdpSocketIOFailed);
-    atomic_init(&server_recv.bytes, 0);
-
-    SendState client_send;
-    atomic_init(&client_send.done, 0);
-    atomic_init(&client_send.code, (int)C_UdpSocketIOFailed);
-    atomic_init(&client_send.bytes, 0);
-
-    RecvState client_recv;
-    memset(&client_recv, 0, sizeof(client_recv));
-    atomic_init(&client_recv.done, 0);
-    atomic_init(&client_recv.code, (int)C_UdpSocketIOFailed);
-    atomic_init(&client_recv.bytes, 0);
-
-    SendState server_send;
-    atomic_init(&server_send.done, 0);
-    atomic_init(&server_send.code, (int)C_UdpSocketIOFailed);
-    atomic_init(&server_send.bytes, 0);
 
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
         galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
@@ -129,66 +110,90 @@ int main(void)
         goto cleanup;
     }
 
-    if (galay_kernel_udp_socket_recvfrom(&runtime, &server,
-            server_buffer, sizeof(server_buffer), on_recv, &server_recv) != C_UdpSocketSuccess ||
-        galay_kernel_udp_socket_sendto(&runtime, &client,
-            request, sizeof(request) - 1, &server_local, on_send, &client_send) != C_UdpSocketSuccess) {
+    RecvState server_recv = {&server, {0}, server_buffer, sizeof(server_buffer), {0}};
+    SendState client_send = {&client, {0}, request, sizeof(request) - 1, server_local};
+    if (galay_coro_spawn(&runtime, recv_entry, &server_recv, 0, &recv_task).code != C_IOResultOk ||
+        galay_coro_spawn(&runtime, send_entry, &client_send, 0, &send_task).code != C_IOResultOk ||
+        galay_coro_join(&send_task, 3000).code != C_IOResultOk ||
+        galay_coro_join(&recv_task, 3000).code != C_IOResultOk ||
+        client_send.result.code != C_IOResultOk ||
+        server_recv.result.code != C_IOResultOk ||
+        server_recv.result.bytes != sizeof(request) - 1 ||
+        memcmp(server_buffer, request, sizeof(request) - 1) != 0 ||
+        server_recv.from.port != client_local.port) {
         exit_code = 2;
         goto cleanup;
     }
-    if (wait_done(&client_send.done) != 0 ||
-        wait_done(&server_recv.done) != 0 ||
-        atomic_load(&client_send.code) != (int)C_UdpSocketSuccess ||
-        atomic_load(&server_recv.code) != (int)C_UdpSocketSuccess ||
-        atomic_load(&server_recv.bytes) != (int)(sizeof(request) - 1) ||
-        memcmp(server_buffer, request, sizeof(request) - 1) != 0 ||
-        server_recv.from.port != client_local.port) {
+    if (galay_coro_destroy(&send_task).code != C_IOResultOk ||
+        galay_coro_destroy(&recv_task).code != C_IOResultOk) {
+        exit_code = 4;
+        goto cleanup;
+    }
+
+    RecvState client_recv = {&client, {0}, client_buffer, sizeof(client_buffer), {0}};
+    SendState server_send = {&server, {0}, response, sizeof(response) - 1, server_recv.from};
+    if (galay_coro_spawn(&runtime, recv_entry, &client_recv, 0, &recv_task).code != C_IOResultOk ||
+        galay_coro_spawn(&runtime, send_entry, &server_send, 0, &send_task).code != C_IOResultOk ||
+        galay_coro_join(&send_task, 3000).code != C_IOResultOk ||
+        galay_coro_join(&recv_task, 3000).code != C_IOResultOk ||
+        server_send.result.code != C_IOResultOk ||
+        client_recv.result.code != C_IOResultOk ||
+        client_recv.result.bytes != sizeof(response) - 1 ||
+        memcmp(client_buffer, response, sizeof(response) - 1) != 0 ||
+        client_recv.from.port != server_local.port) {
         exit_code = 3;
         goto cleanup;
     }
 
-    if (galay_kernel_udp_socket_recvfrom(&runtime, &client,
-            client_buffer, sizeof(client_buffer), on_recv, &client_recv) != C_UdpSocketSuccess ||
-        galay_kernel_udp_socket_sendto(&runtime, &server,
-            response, sizeof(response) - 1, &server_recv.from, on_send, &server_send) != C_UdpSocketSuccess) {
-        exit_code = 4;
-        goto cleanup;
-    }
-    if (wait_done(&server_send.done) != 0 ||
-        wait_done(&client_recv.done) != 0 ||
-        atomic_load(&server_send.code) != (int)C_UdpSocketSuccess ||
-        atomic_load(&client_recv.code) != (int)C_UdpSocketSuccess ||
-        atomic_load(&client_recv.bytes) != (int)(sizeof(response) - 1) ||
-        memcmp(client_buffer, response, sizeof(response) - 1) != 0 ||
-        client_recv.from.port != server_local.port) {
+    if (printf("udp_socket_echo request=%s response=%s server_port=%u client_port=%u\n",
+               request,
+               client_buffer,
+               server_local.port,
+               client_local.port) < 0) {
         exit_code = 5;
         goto cleanup;
     }
 
-    printf("udp_socket_echo request=%s response=%s server_port=%u client_port=%u\n",
-           request,
-           client_buffer,
-           server_local.port,
-           client_local.port);
-
 cleanup:
+    if (send_task.task != 0) {
+        if (galay_coro_destroy(&send_task).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 6;
+        }
+    }
+    if (recv_task.task != 0) {
+        if (galay_coro_destroy(&recv_task).code != C_IOResultOk && exit_code == 0) {
+            exit_code = 7;
+        }
+    }
     if (runtime.runtime != 0) {
         if (client.socket != 0) {
-            (void)close_socket(&runtime, &client);
+            if (close_socket(&runtime, &client) != 0 && exit_code == 0) {
+                exit_code = 8;
+            }
         }
         if (server.socket != 0) {
-            (void)close_socket(&runtime, &server);
+            if (close_socket(&runtime, &server) != 0 && exit_code == 0) {
+                exit_code = 9;
+            }
         }
     }
     if (client.socket != 0) {
-        (void)galay_kernel_udp_socket_destroy(&client);
+        if (galay_kernel_udp_socket_destroy(&client) != C_UdpSocketSuccess && exit_code == 0) {
+            exit_code = 10;
+        }
     }
     if (server.socket != 0) {
-        (void)galay_kernel_udp_socket_destroy(&server);
+        if (galay_kernel_udp_socket_destroy(&server) != C_UdpSocketSuccess && exit_code == 0) {
+            exit_code = 11;
+        }
     }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 12;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 13;
+        }
     }
     return exit_code;
 }

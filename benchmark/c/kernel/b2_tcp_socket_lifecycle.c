@@ -1,66 +1,43 @@
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
 #include <arpa/inet.h>
-#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
-#include <time.h>
 #include <unistd.h>
 
 enum {
     TCP_SOCKET_ITERATIONS = 64
 };
 
-typedef struct AcceptState {
-    atomic_int done;
-    atomic_int code;
-    galay_kernel_tcp_socket_t socket;
-} AcceptState;
+typedef struct AcceptCloseState {
+    galay_kernel_tcp_socket_t* listener;
+    galay_kernel_tcp_socket_t accepted;
+    C_IOResult accept_result;
+    C_IOResult close_result;
+} AcceptCloseState;
 
-typedef struct CloseState {
-    atomic_int done;
-    atomic_int code;
-} CloseState;
+static void accept_close_entry(void* arg)
+{
+    AcceptCloseState* state = (AcceptCloseState*)arg;
+    state->accept_result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
+    if (state->accept_result.code != C_IOResultOk) {
+        return;
+    }
+    state->close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
+}
 
 static int64_t now_us(void)
 {
     struct timeval tv;
-    if (gettimeofday(&tv, 0) != 0) {
+    if (gettimeofday(&tv, NULL) != 0) {
         return 0;
     }
     return (int64_t)tv.tv_sec * 1000000 + (int64_t)tv.tv_usec;
-}
-
-static void on_accept(galay_kernel_tcp_accept_result_t* result, void* ctx)
-{
-    AcceptState* state = (AcceptState*)ctx;
-    atomic_store(&state->code, result == 0 ? (int)C_TcpSocketIOFailed : (int)result->code);
-    if (result != 0 && result->code == C_TcpSocketSuccess) {
-        state->socket = result->socket;
-    }
-    atomic_store(&state->done, 1);
-}
-
-static void on_close(C_TcpSocketResultCode code, void* ctx)
-{
-    CloseState* state = (CloseState*)ctx;
-    atomic_store(&state->code, (int)code);
-    atomic_store(&state->done, 1);
-}
-
-static int wait_done(atomic_int* done)
-{
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 2000; ++i) {
-        if (atomic_load(done)) {
-            return 0;
-        }
-        nanosleep(&pause, 0);
-    }
-    return 1;
 }
 
 static int connect_posix_client(uint16_t port)
@@ -70,13 +47,14 @@ static int connect_posix_client(uint16_t port)
         return -1;
     }
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
+    struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1 ||
         connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != 0) {
-        close(fd);
+        if (close(fd) != 0) {
+            return -1;
+        }
         return -1;
     }
     return fd;
@@ -101,70 +79,86 @@ int main(void)
         galay_kernel_tcp_socket_listen(&listener, 64) != C_TcpSocketSuccess ||
         galay_kernel_tcp_socket_local_endpoint(&listener, &local) != C_TcpSocketSuccess ||
         local.port == 0) {
-        return 1;
+        exit_code = 1;
+        goto cleanup;
     }
 
     const int64_t start = now_us();
     for (int i = 0; i < TCP_SOCKET_ITERATIONS; ++i) {
-        AcceptState accept_state;
-        atomic_init(&accept_state.done, 0);
-        atomic_init(&accept_state.code, (int)C_TcpSocketIOFailed);
-        accept_state.socket.socket = 0;
-
-        CloseState close_state;
-        atomic_init(&close_state.done, 0);
-        atomic_init(&close_state.code, (int)C_TcpSocketIOFailed);
-
-        int client_fd = -1;
-        if (galay_kernel_tcp_socket_accept(&runtime, &listener, on_accept, &accept_state) != C_TcpSocketSuccess) {
+        AcceptCloseState state = {
+            .listener = &listener,
+            .accepted = {0},
+            .accept_result = {C_IOResultInvalid, 0, 0, 0, NULL},
+            .close_result = {C_IOResultInvalid, 0, 0, 0, NULL},
+        };
+        galay_coro_task_t task = {0};
+        C_IOResult spawn_result = galay_coro_spawn(&runtime, accept_close_entry, &state, NULL, &task);
+        if (spawn_result.code != C_IOResultOk) {
             exit_code = 2;
             goto cleanup;
         }
 
-        client_fd = connect_posix_client(local.port);
-        if (client_fd < 0 ||
-            wait_done(&accept_state.done) != 0 ||
-            atomic_load(&accept_state.code) != (int)C_TcpSocketSuccess ||
-            accept_state.socket.socket == 0) {
-            if (client_fd >= 0) {
-                close(client_fd);
+        int client_fd = connect_posix_client(local.port);
+        if (client_fd < 0) {
+            if (galay_coro_join(&task, 0).code == C_IOResultOk) {
+                if (galay_coro_destroy(&task).code != C_IOResultOk) {
+                    exit_code = 3;
+                    goto cleanup;
+                }
             }
-            exit_code = 3;
-            goto cleanup;
-        }
-
-        if (galay_kernel_tcp_socket_close(&runtime, &accept_state.socket, on_close, &close_state) != C_TcpSocketSuccess ||
-            wait_done(&close_state.done) != 0 ||
-            atomic_load(&close_state.code) != (int)C_TcpSocketSuccess) {
-            close(client_fd);
-            (void)galay_kernel_tcp_socket_destroy(&accept_state.socket);
             exit_code = 4;
             goto cleanup;
         }
 
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&accept_state.socket);
-    }
-
-cleanup:
-    {
-        const int64_t elapsed = now_us() - start;
-        if (exit_code == 0) {
-            const double seconds = elapsed > 0 ? (double)elapsed / 1000000.0 : 0.0;
-            const double ops_per_sec = seconds > 0.0 ? (double)TCP_SOCKET_ITERATIONS / seconds : 0.0;
-            printf("tcp_socket_lifecycle iterations=%d elapsed_ms=%.3f ops_per_sec=%.2f\n",
-                   TCP_SOCKET_ITERATIONS,
-                   (double)elapsed / 1000.0,
-                   ops_per_sec);
+        C_IOResult join_result = galay_coro_join(&task, 2000);
+        C_IOResult destroy_result = galay_coro_destroy(&task);
+        if (close(client_fd) != 0) {
+            exit_code = 5;
+            goto cleanup;
+        }
+        if (join_result.code != C_IOResultOk ||
+            destroy_result.code != C_IOResultOk ||
+            state.accept_result.code != C_IOResultOk ||
+            state.close_result.code != C_IOResultOk) {
+            exit_code = 6;
+            if (state.accepted.socket != NULL &&
+                galay_kernel_tcp_socket_destroy(&state.accepted) != C_TcpSocketSuccess) {
+                exit_code = 7;
+            }
+            goto cleanup;
+        }
+        if (state.accepted.socket != NULL &&
+            galay_kernel_tcp_socket_destroy(&state.accepted) != C_TcpSocketSuccess) {
+            exit_code = 8;
+            goto cleanup;
         }
     }
 
-    if (listener.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+    const int64_t elapsed = now_us() - start;
+    const double seconds = elapsed > 0 ? (double)elapsed / 1000000.0 : 0.0;
+    const double ops_per_sec = seconds > 0.0 ? (double)TCP_SOCKET_ITERATIONS / seconds : 0.0;
+    if (printf("tcp_socket_lifecycle iterations=%d elapsed_ms=%.3f ops_per_sec=%.2f\n",
+               TCP_SOCKET_ITERATIONS,
+               (double)elapsed / 1000.0,
+               ops_per_sec) < 0) {
+        exit_code = 9;
     }
-    if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+
+cleanup:
+    if (listener.socket != NULL &&
+        galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess &&
+        exit_code == 0) {
+        exit_code = 10;
+    }
+    if (runtime.runtime != NULL &&
+        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess &&
+        exit_code == 0) {
+        exit_code = 11;
+    }
+    if (runtime.runtime != NULL &&
+        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess &&
+        exit_code == 0) {
+        exit_code = 12;
     }
     return exit_code;
 }

@@ -1,7 +1,7 @@
 #ifndef GALAY_KERNEL_AIO_FILE_C_H
 #define GALAY_KERNEL_AIO_FILE_C_H
 
-#include "../core-c/runtime_c.h"
+#include "../coro-c/coro_result_c.h"
 #include <stddef.h>
 #include <sys/types.h>
 
@@ -28,8 +28,6 @@ typedef enum C_AioFileResultCode {
     C_AioFileIOFailed,                ///< 底层 IO 操作失败。
     C_AioFileOperationInvalid,        ///< 当前文件状态不允许执行该操作。
     C_AioFileOperationUnsupported,    ///< 当前后端不支持 AioFile。
-    C_AioFileRuntimeNotRunning,       ///< runtime 未启动。
-    C_AioFileRuntimeSpawnFailed,      ///< runtime 提交任务失败。
 } C_AioFileResultCode;
 
 /**
@@ -52,27 +50,6 @@ typedef enum C_AioFileOpenMode {
 typedef struct galay_kernel_aio_file {
     void* file;        ///< 内部 AioFile 对象指针。
 } galay_kernel_aio_file_t;
-
-/**
- * @brief AioFile commit 回调结果。
- *
- * @note results 指向的数组只在 callback 执行期间有效；需要保留时调用方必须复制。
- */
-typedef struct galay_kernel_aio_file_commit_result {
-    C_AioFileResultCode code;  ///< commit 结果码。
-    size_t count;              ///< results 中返回值数量。
-    ssize_t* results;          ///< 每个 AIO 操作的返回值；只在回调期间有效。
-} galay_kernel_aio_file_commit_result_t;
-
-/**
- * @brief AioFile commit 完成回调。
- *
- * @param result commit 结果；只在回调期间有效。
- * @param ctx 调用 galay_kernel_aio_file_commit 时传入的用户上下文。
- */
-typedef void (*galay_kernel_aio_file_commit_callback_t)(
-    galay_kernel_aio_file_commit_result_t* result,
-    void* ctx);
 
 /**
  * @brief 将 AioFile 结果码转换为可读错误信息。
@@ -127,7 +104,7 @@ C_AioFileResultCode galay_kernel_aio_file_open(
  * @brief 预注册一个异步读操作，等待 commit 批量提交。
  *
  * @param c_file 已打开的 AioFile 句柄。
- * @param buffer 对齐的目标缓冲区；必须存活到 commit callback 完成。
+ * @param buffer 对齐的目标缓冲区；必须存活到 commit 完成。
  * @param length 读取字节数，必须大于 0。
  * @param offset 文件偏移量，不能为负数。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
@@ -143,7 +120,7 @@ C_AioFileResultCode galay_kernel_aio_file_pre_read(
  * @brief 预注册一个异步写操作，等待 commit 批量提交。
  *
  * @param c_file 已打开的 AioFile 句柄。
- * @param buffer 对齐的源缓冲区；必须存活到 commit callback 完成。
+ * @param buffer 对齐的源缓冲区；必须存活到 commit 完成。
  * @param length 写入字节数，必须大于 0。
  * @param offset 文件偏移量，不能为负数。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
@@ -219,23 +196,22 @@ C_AioFileResultCode galay_kernel_aio_file_alloc_aligned_buffer(
 C_AioFileResultCode galay_kernel_aio_file_free_aligned_buffer(char* buffer);
 
 /**
- * @brief 在 runtime 上异步提交所有已预注册的 AIO 操作。
+ * @brief 挂起当前 C coroutine 并提交所有已预注册的 AIO 操作。
  *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_file AioFile 句柄；必须存活到 callback 完成。
- * @param callback commit 完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
- * runtime 未运行返回 C_AioFileRuntimeNotRunning；提交失败返回 C_AioFileRuntimeSpawnFailed；
- * 非 USE_EPOLL 后端返回 C_AioFileOperationUnsupported。
- *
- * @note 该函数不会阻塞等待 AIO 完成；最终每个操作的 ssize_t 结果通过 callback 上报。
+ * @param c_file AioFile 句柄。
+ * @param results 调用方提供的结果数组；成功时写入每个 AIO 操作的 ssize_t 返回值。
+ * @param result_capacity results 可容纳的元素数。
+ * @param out_count 输出实际结果数量。
+ * @param timeout_ms 负数无限等待，0 立即返回超时，正数为毫秒超时。
+ * @return 成功提交并完成返回 C_IOResultOk；非 USE_EPOLL 后端返回 C_IOResultError；
+ * 参数无效、不在 C coroutine 内调用或结果数组容量不足返回 C_IOResultInvalid。
  */
-C_AioFileResultCode galay_kernel_aio_file_commit(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_aio_file_commit(
     galay_kernel_aio_file_t* c_file,
-    galay_kernel_aio_file_commit_callback_t callback,
-    void* ctx);
+    ssize_t* results,
+    size_t result_capacity,
+    size_t* out_count,
+    int64_t timeout_ms);
 
 #ifdef __cplusplus
 }

@@ -38,7 +38,9 @@ typedef struct BenchConfig {
 static int64_t now_ns(void)
 {
     struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0) {
+        return 0;
+    }
     return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
 }
 
@@ -145,7 +147,10 @@ static void direct_server_entry(void* arg)
         }
     }
 
-    (void)galay_kernel_tcp_socket_close(&server->accepted, 1000);
+    C_IOResult closed = galay_kernel_tcp_socket_close(&server->accepted, 1000);
+    if (closed.code != C_IOResultOk) {
+        ++server->errors;
+    }
 }
 
 static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
@@ -166,14 +171,12 @@ static int connect_client(uint16_t port)
     if (fd < 0) {
         return -1;
     }
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
+    struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1 ||
         connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != 0) {
-        close(fd);
-        return -1;
+        return close(fd) == 0 ? -1 : -2;
     }
     return fd;
 }
@@ -285,7 +288,9 @@ int main(int argc, char** argv)
     }
     const int64_t elapsed_ns = now_ns() - start_ns;
     atomic_store(&stop, 1);
-    close(client_fd);
+    if (close(client_fd) != 0) {
+        ++errors;
+    }
     client_fd = -1;
     if (galay_coro_join(&server_task, 3000).code != C_IOResultOk) {
         ++errors;
@@ -302,38 +307,54 @@ int main(int argc, char** argv)
         : 0.0;
     errors += server.errors;
 
-    printf("coro_tcp_echo_throughput mode=coro-direct io_schedulers=%zu connections=1 duration_sec=%d payload_bytes=%zu elapsed_ms=%.3f requests=%llu qps=%.2f throughput_mb_per_sec=%.3f p50_us=%.2f p90_us=%.2f p99_us=%.2f errors=%llu\n",
-           config.io_schedulers,
-           config.duration_seconds,
-           config.payload_bytes,
-           (double)elapsed_ns / 1000000.0,
-           (unsigned long long)requests,
-           qps,
-           throughput,
-           percentile_us(latencies, samples, 0.50),
-           percentile_us(latencies, samples, 0.90),
+    if (printf("coro_tcp_echo_throughput mode=coro-direct io_schedulers=%zu connections=1 duration_sec=%d payload_bytes=%zu elapsed_ms=%.3f requests=%llu qps=%.2f throughput_mb_per_sec=%.3f p50_us=%.2f p90_us=%.2f p99_us=%.2f errors=%llu\n",
+               config.io_schedulers,
+               config.duration_seconds,
+               config.payload_bytes,
+               (double)elapsed_ns / 1000000.0,
+               (unsigned long long)requests,
+               qps,
+               throughput,
+               percentile_us(latencies, samples, 0.50),
+               percentile_us(latencies, samples, 0.90),
                percentile_us(latencies, samples, 0.99),
-               (unsigned long long)errors);
+               (unsigned long long)errors) < 0 &&
+        exit_code == 0) {
+        exit_code = 7;
+    }
     
     exit_code = errors == 0 ? 0 : 6;
     
 cleanup:
     atomic_store(&stop, 1);
     if (client_fd >= 0) {
-        close(client_fd);
+        if (close(client_fd) != 0 && exit_code == 0) {
+            exit_code = 7;
+        }
     }
     if (server_task.task != 0) {
         if (galay_coro_join(&server_task, 3000).code == C_IOResultOk) {
-            (void)galay_coro_destroy(&server_task);
+            if (galay_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
+                exit_code = 8;
+            }
         }
     }
     if (server.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&server.accepted);
+        if (galay_kernel_tcp_socket_destroy(&server.accepted) != C_TcpSocketSuccess &&
+            exit_code == 0) {
+            exit_code = 9;
+        }
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && exit_code == 0) {
+        exit_code = 10;
+    }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 11;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 12;
+        }
     }
     free(latencies);
     free(payload);

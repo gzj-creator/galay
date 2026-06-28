@@ -84,16 +84,17 @@ public:
     bool await_ready() const noexcept;  ///< 若当前可直接抢锁则返回 true，避免挂起
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;  ///< 注册 waiter，并在未抢到锁时挂起当前协程
+    bool await_suspend(Waker waker) noexcept;  ///< 使用外部 Waker 注册等待，用于 C coroutine bridge
     std::expected<void, IOError> await_resume() noexcept
     {
         cancelWaiter();
         m_waiter.reset();
         return m_result;
     }
+    void markTimeout() noexcept;  ///< 标记等待超时，并让残留 waiter 在 unlock() 时失效
 
 private:
     friend struct WithTimeout<AsyncMutexAwaitable>;
-    void markTimeout() noexcept;  ///< 标记等待超时，并让残留 waiter 在 unlock() 时失效
     void cancelWaiter() noexcept;  ///< 让当前 waiter 失效，防止后续陈旧唤醒
 
     AsyncMutex* m_mutex;
@@ -227,8 +228,12 @@ inline bool AsyncMutexAwaitable::await_ready() const noexcept {
 
 template <typename Promise>
 inline bool AsyncMutexAwaitable::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
+    return await_suspend(Waker(handle));
+}
+
+inline bool AsyncMutexAwaitable::await_suspend(Waker waker) noexcept {
     auto* mutex = m_mutex;
-    m_waiter = std::make_shared<AsyncMutexWaiter>(Waker(handle));
+    m_waiter = std::make_shared<AsyncMutexWaiter>(std::move(waker));
     auto waiter = m_waiter;
     mutex->m_waiters.enqueue(std::move(waiter));
     mutex->wakeNextWaiterIfUnlocked();
@@ -242,7 +247,10 @@ inline void AsyncMutexAwaitable::markTimeout() noexcept {
 
 inline void AsyncMutexAwaitable::cancelWaiter() noexcept {
     if (m_waiter) {
-        m_waiter->active.store(false, std::memory_order_release);
+        const bool was_active = m_waiter->active.exchange(false, std::memory_order_acq_rel);
+        if (was_active) {
+            m_waiter->waker = Waker();
+        }
     }
 }
 } // namespace galay::kernel

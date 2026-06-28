@@ -1,7 +1,7 @@
 #ifndef GALAY_KERNEL_ASYNC_MUTEX_C_H
 #define GALAY_KERNEL_ASYNC_MUTEX_C_H
 
-#include "../core-c/runtime_c.h"
+#include "../coro-c/coro_result_c.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -27,8 +27,6 @@ typedef enum C_AsyncMutexResultCode {
     C_AsyncMutexIOFailed,               ///< 底层异步等待失败。
     C_AsyncMutexOperationInvalid,       ///< 当前 mutex 状态不允许执行该操作。
     C_AsyncMutexTimeout,                ///< 异步 lock 超时。
-    C_AsyncMutexRuntimeNotRunning,      ///< runtime 未启动。
-    C_AsyncMutexRuntimeSpawnFailed,     ///< runtime 提交任务失败。
 } C_AsyncMutexResultCode;
 
 /**
@@ -39,16 +37,6 @@ typedef enum C_AsyncMutexResultCode {
 typedef struct galay_kernel_async_mutex {
     void* mutex;            ///< 内部 AsyncMutex 对象指针。
 } galay_kernel_async_mutex_t;
-
-/**
- * @brief AsyncMutex lock 完成回调。
- *
- * @param code lock 完成结果码；获取锁成功为 C_AsyncMutexSuccess，超时为 C_AsyncMutexTimeout。
- * @param ctx 调用 lock API 时传入的用户上下文。
- */
-typedef void (*galay_kernel_async_mutex_callback_t)(
-    C_AsyncMutexResultCode code,
-    void* ctx);
 
 /**
  * @brief 将 AsyncMutex 结果码转换为可读错误信息。
@@ -77,7 +65,7 @@ C_AsyncMutexResultCode galay_kernel_async_mutex_create(galay_kernel_async_mutex_
  *
  * @note 该函数会释放 c_mutex->mutex 指向的内部 AsyncMutex，并将其置空。
  *       c_mutex 非空且 mutex 字段已为 NULL 时也安全返回成功。
- *       调用方必须确保没有未完成的 lock/lock_timeout 回调仍可能访问该 mutex。
+ *       调用方必须确保没有未完成的 direct C coroutine lock 仍可能访问该 mutex。
  */
 C_AsyncMutexResultCode galay_kernel_async_mutex_destroy(galay_kernel_async_mutex_t* c_mutex);
 
@@ -103,44 +91,18 @@ bool galay_kernel_async_mutex_is_locked(const galay_kernel_async_mutex_t* c_mute
 C_AsyncMutexResultCode galay_kernel_async_mutex_unlock(galay_kernel_async_mutex_t* c_mutex);
 
 /**
- * @brief 在 runtime 上异步获取 AsyncMutex。
+ * @brief 挂起当前 C coroutine 并获取 AsyncMutex。
  *
- * @param runtime 用于驱动 lock 协程的 runtime；必须存活到 callback 完成。
- * @param c_mutex AsyncMutex 句柄；必须存活到 callback 完成。
- * @param callback lock 完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交 lock 操作返回 C_AsyncMutexSuccess；参数无效返回 C_AsyncMutexParameterInvalid；
- * runtime 未运行返回 C_AsyncMutexRuntimeNotRunning；提交失败返回 C_AsyncMutexRuntimeSpawnFailed。
+ * @param c_mutex AsyncMutex 句柄。
+ * @param timeout_ms 负数无限等待，0 立即返回超时，正数为毫秒超时。
+ * @return 成功获取锁返回 C_IOResultOk；超时返回 C_IOResultTimeout；参数无效、
+ * 不在 C coroutine 内调用或 mutex 状态无效返回 C_IOResultInvalid。
  *
- * @note 该函数不会阻塞等待锁；最终获取结果通过 callback 上报，callback 在 runtime 调度线程上执行。
- *       callback 收到 C_AsyncMutexSuccess 后，调用方负责在临界区结束时调用 unlock。
+ * @note 成功返回后调用方负责在临界区结束时调用 unlock。
  */
-C_AsyncMutexResultCode galay_kernel_async_mutex_lock(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_async_mutex_lock(
     galay_kernel_async_mutex_t* c_mutex,
-    galay_kernel_async_mutex_callback_t callback,
-    void* ctx);
-
-/**
- * @brief 在 runtime 上异步获取 AsyncMutex，并设置超时。
- *
- * @param runtime 用于驱动 lock 协程的 runtime；必须存活到 callback 完成。
- * @param c_mutex AsyncMutex 句柄；必须存活到 callback 完成。
- * @param timeout_ms 超时时间，单位毫秒。
- * @param callback lock 完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交 lock 操作返回 C_AsyncMutexSuccess；参数无效返回 C_AsyncMutexParameterInvalid；
- * runtime 未运行返回 C_AsyncMutexRuntimeNotRunning；提交失败返回 C_AsyncMutexRuntimeSpawnFailed。
- *
- * @note 该函数不会阻塞等待锁；超时通过 callback 返回 C_AsyncMutexTimeout。
- *       callback 收到 C_AsyncMutexSuccess 后，调用方负责在临界区结束时调用 unlock。
- */
-C_AsyncMutexResultCode galay_kernel_async_mutex_lock_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_async_mutex_t* c_mutex,
-    uint64_t timeout_ms,
-    galay_kernel_async_mutex_callback_t callback,
-    void* ctx);
+    int64_t timeout_ms);
 
 #ifdef __cplusplus
 }

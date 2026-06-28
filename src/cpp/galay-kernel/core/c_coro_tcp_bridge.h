@@ -3,6 +3,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <sys/uio.h>
 
 /**
  * @file c_coro_tcp_bridge.h
@@ -62,6 +63,7 @@ typedef struct GalayCoreCoroWaitOps {
 GalayCoreCoroIOResult galay_core_coro_tcp_accept(void* listener_socket,
                                                  void* scheduler,
                                                  void** out_socket,
+                                                 GalayCoreCoroHost* out_peer,
                                                  int64_t timeout_ms,
                                                  void* user_data,
                                                  const GalayCoreCoroWaitOps* wait_ops);
@@ -88,6 +90,31 @@ GalayCoreCoroIOResult galay_core_coro_tcp_send(void* socket,
                                                int64_t timeout_ms,
                                                void* user_data,
                                                const GalayCoreCoroWaitOps* wait_ops);
+
+GalayCoreCoroIOResult galay_core_coro_tcp_readv(void* socket,
+                                                void* scheduler,
+                                                const struct iovec* iovecs,
+                                                size_t count,
+                                                int64_t timeout_ms,
+                                                void* user_data,
+                                                const GalayCoreCoroWaitOps* wait_ops);
+
+GalayCoreCoroIOResult galay_core_coro_tcp_writev(void* socket,
+                                                 void* scheduler,
+                                                 const struct iovec* iovecs,
+                                                 size_t count,
+                                                 int64_t timeout_ms,
+                                                 void* user_data,
+                                                 const GalayCoreCoroWaitOps* wait_ops);
+
+GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(void* socket,
+                                                   void* scheduler,
+                                                   int file_fd,
+                                                   int64_t offset,
+                                                   size_t count,
+                                                   int64_t timeout_ms,
+                                                   void* user_data,
+                                                   const GalayCoreCoroWaitOps* wait_ops);
 
 GalayCoreCoroIOResult galay_core_coro_tcp_close(void* socket,
                                                 void* scheduler,

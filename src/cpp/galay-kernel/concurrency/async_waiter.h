@@ -105,7 +105,9 @@ public:
     bool await_ready() const noexcept;  ///< 如果完成信号已经到达，则返回 true 以避免挂起
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;  ///< 注册等待协程并在尚未完成时挂起
-    std::expected<void, IOError> await_resume() noexcept { return m_result; }  ///< 返回完成结果；超时时返回 IOError(kTimeout, 0)
+    bool await_suspend(Waker waker) noexcept;  ///< 使用外部 Waker 注册等待，用于 C coroutine bridge
+    std::expected<void, IOError> await_resume() noexcept;  ///< 返回完成结果；超时时返回 IOError(kTimeout, 0)
+    void markTimeout() noexcept;  ///< 标记超时并清理等待器中的外部 Waker
 
 private:
     friend struct WithTimeout<AsyncWaiterAwaitable<void>>;
@@ -308,8 +310,12 @@ inline bool AsyncWaiterAwaitable<void>::await_ready() const noexcept {
 
 template <typename Promise>
 inline bool AsyncWaiterAwaitable<void>::await_suspend(std::coroutine_handle<Promise> handle) noexcept {
+    return await_suspend(Waker(handle));
+}
+
+inline bool AsyncWaiterAwaitable<void>::await_suspend(Waker waker) noexcept {
     auto* waiter = m_waiter;
-    waiter->m_waker = Waker(handle);
+    waiter->m_waker = std::move(waker);
     if (waiter->m_ready.load(std::memory_order_acquire)) {
         return false;
     }
@@ -322,6 +328,22 @@ inline bool AsyncWaiterAwaitable<void>::await_suspend(std::coroutine_handle<Prom
         return true;
     }
     return false;
+}
+
+inline void AsyncWaiterAwaitable<void>::markTimeout() noexcept {
+    m_result = std::unexpected(IOError(kTimeout, 0));
+    AsyncWaiterState expected = AsyncWaiterState::kWaiting;
+    if (m_waiter->m_state.compare_exchange_strong(expected,
+                                                  AsyncWaiterState::kEmpty,
+                                                  std::memory_order_acq_rel,
+                                                  std::memory_order_acquire)) {
+        m_waiter->m_waker = Waker();
+    }
+}
+
+inline std::expected<void, IOError> AsyncWaiterAwaitable<void>::await_resume() noexcept {
+    m_waiter->m_waker = Waker();
+    return m_result;
 }
 
 } // namespace galay::kernel

@@ -1,7 +1,7 @@
 #ifndef GALAY_KERNEL_UNSAFE_CHANNEL_C_H
 #define GALAY_KERNEL_UNSAFE_CHANNEL_C_H
 
-#include "../core-c/runtime_c.h"
+#include "../coro-c/coro_result_c.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -15,8 +15,8 @@
  * 调用方必须保证 payload 在消费者读取前保持有效。
  *
  * @warning UnsafeChannel 仅适合同一 scheduler 内协程通信；不要跨线程或跨
- * scheduler 调用。Inline wake mode 会在 send/send_batch 调用栈内恢复等待
- * 协程，可能导致 callback 重入发送侧调用栈。
+ * scheduler 调用。direct recv API 必须在 C coroutine 内调用，等待时通过
+ * galay_coro_yield 挂起当前 C coroutine，不创建 C++ Task wrapper。
  */
 
 #ifdef __cplusplus
@@ -41,8 +41,6 @@ typedef enum C_UnsafeChannelResultCode {
     C_UnsafeChannelIOFailed,               ///< 底层通道操作失败。
     C_UnsafeChannelOperationInvalid,       ///< 当前通道状态不允许执行该操作。
     C_UnsafeChannelTimeout,                ///< 接收超时或非阻塞接收当前无消息。
-    C_UnsafeChannelRuntimeNotRunning,      ///< runtime 未启动。
-    C_UnsafeChannelRuntimeSpawnFailed,     ///< runtime 提交任务失败。
 } C_UnsafeChannelResultCode;
 
 /**
@@ -68,31 +66,6 @@ typedef struct galay_kernel_unsafe_channel {
 } galay_kernel_unsafe_channel_t;
 
 /**
- * @brief UnsafeChannel 异步接收回调结果。
- *
- * @note 单条接收成功时 message 有效且 messages 为 NULL、count 为 0；
- * 批量或攒批接收成功时 messages 指向 count 条消息。messages 数组只在
- * callback 调用期间有效，调用方需要长期保存时必须自行复制消息结构体。
- */
-typedef struct galay_kernel_unsafe_channel_recv_result {
-    C_UnsafeChannelResultCode code;        ///< 接收结果码。
-    C_UnsafeChannelMessage message;        ///< 单条接收结果。
-    C_UnsafeChannelMessage* messages;      ///< 批量接收结果数组，仅 callback 期间有效。
-    size_t count;                          ///< 批量接收结果数量。
-} galay_kernel_unsafe_channel_recv_result_t;
-
-/**
- * @brief UnsafeChannel 异步接收完成回调。
- *
- * @param result 接收结果；只在回调期间有效。
- * @param ctx 调用 recv/recv_timeout/recv_batch/recv_batch_timeout/recv_batched/
- * recv_batched_timeout 时传入的用户上下文。
- */
-typedef void (*galay_kernel_unsafe_channel_recv_callback_t)(
-    galay_kernel_unsafe_channel_recv_result_t* result,
-    void* ctx);
-
-/**
  * @brief 将 UnsafeChannel 结果码转换为可读错误信息。
  *
  * @param code C_UnsafeChannelResultCode 结果码。
@@ -109,8 +82,7 @@ const char* galay_kernel_unsafe_channel_get_error(C_UnsafeChannelResultCode code
  * C_UnsafeChannelParameterInvalid；内存分配失败返回
  * C_UnsafeChannelMemoryAllocFailed。
  *
- * @note 该函数只创建通道对象，不启动协程。Inline wake mode 可能在
- * send/send_batch 调用栈内执行等待协程与 callback。
+ * @note 该函数只创建通道对象，不启动协程。
  */
 C_UnsafeChannelResultCode galay_kernel_unsafe_channel_create(
     galay_kernel_unsafe_channel_t* c_channel,
@@ -123,7 +95,7 @@ C_UnsafeChannelResultCode galay_kernel_unsafe_channel_create(
  * @return 成功返回 C_UnsafeChannelSuccess；参数无效返回
  * C_UnsafeChannelParameterInvalid。
  *
- * @note 调用方必须保证没有未完成的异步 recv callback 仍可能访问该 channel。
+ * @note 调用方必须保证没有未完成的 direct C coroutine recv 仍可能访问该 channel。
  * 该函数会释放 c_channel->channel 指向的内部对象，并将其置空。
  */
 C_UnsafeChannelResultCode galay_kernel_unsafe_channel_destroy(
@@ -137,8 +109,7 @@ C_UnsafeChannelResultCode galay_kernel_unsafe_channel_destroy(
  * @return 成功返回 C_UnsafeChannelSuccess；参数无效返回
  * C_UnsafeChannelParameterInvalid；底层队列入队失败返回 C_UnsafeChannelIOFailed。
  *
- * @warning 仅可在同一 scheduler/线程语境下调用。Inline wake mode 下该调用
- * 可能在返回前重入等待协程 callback。
+ * @warning 仅可在同一 scheduler/线程语境下调用。
  */
 C_UnsafeChannelResultCode galay_kernel_unsafe_channel_send(
     galay_kernel_unsafe_channel_t* c_channel,
@@ -151,12 +122,10 @@ C_UnsafeChannelResultCode galay_kernel_unsafe_channel_send(
  * @param messages 待发送消息数组；count 为 0 时可为 NULL。
  * @param count 待发送消息数量。
  * @return 成功返回 C_UnsafeChannelSuccess；参数无效返回
- * C_UnsafeChannelParameterInvalid；内存分配失败返回
- * C_UnsafeChannelMemoryAllocFailed；底层队列入队失败返回
- * C_UnsafeChannelIOFailed。
+ * C_UnsafeChannelParameterInvalid；底层队列入队失败返回 C_UnsafeChannelIOFailed。
  *
- * @warning 仅可在同一 scheduler/线程语境下调用。Inline wake mode 下该调用
- * 可能在返回前重入等待协程 callback。
+ * @warning 仅可在同一 scheduler/线程语境下调用。该函数逐条入队以避免 C ABI
+ * 层分配临时 vector。
  */
 C_UnsafeChannelResultCode galay_kernel_unsafe_channel_send_batch(
     galay_kernel_unsafe_channel_t* c_channel,
@@ -194,146 +163,56 @@ C_UnsafeChannelResultCode galay_kernel_unsafe_channel_try_recv_batch(
     size_t* out_count);
 
 /**
- * @brief 在 runtime 上异步接收单条消息。
+ * @brief 挂起当前 C coroutine 并接收单条消息。
  *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_channel channel 句柄；必须存活到 callback 完成。
- * @param callback 接收完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_UnsafeChannelSuccess；参数无效返回
- * C_UnsafeChannelParameterInvalid；runtime 未运行返回
- * C_UnsafeChannelRuntimeNotRunning；提交失败返回
- * C_UnsafeChannelRuntimeSpawnFailed。
- *
- * @note 该函数不会阻塞等待消息；最终结果通过 callback 在 runtime 调度线程上
- * 上报。UnsafeChannel 非线程安全，不应对同一 channel 并发提交多个 recv。
+ * @param c_channel channel 句柄。
+ * @param message 输出消息。
+ * @param timeout_ms 负数无限等待，0 立即超时检查，正数为毫秒超时。
+ * @return 成功返回 C_IOResultOk；超时返回 C_IOResultTimeout；参数无效或不在
+ * C coroutine 内调用返回 C_IOResultInvalid。
  */
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_unsafe_channel_recv(
     galay_kernel_unsafe_channel_t* c_channel,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx);
+    C_UnsafeChannelMessage* message,
+    int64_t timeout_ms);
 
 /**
- * @brief 在 runtime 上异步接收单条消息，带毫秒级超时。
+ * @brief 挂起当前 C coroutine 并批量接收消息。
  *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_channel channel 句柄；必须存活到 callback 完成。
- * @param timeout_ms 超时时间，单位毫秒。
- * @param callback 接收完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_UnsafeChannelSuccess；参数无效返回
- * C_UnsafeChannelParameterInvalid；runtime 未运行返回
- * C_UnsafeChannelRuntimeNotRunning；提交失败返回
- * C_UnsafeChannelRuntimeSpawnFailed。
- *
- * @note timeout_ms 为 0 时表示立即超时检查。超时完成时 callback 收到
- * C_UnsafeChannelTimeout，message 为零值、messages 为 NULL 且 count 为 0；成功时
- * message 只在回调期间有效。UnsafeChannel 非线程安全，不应对同一 channel 并发提交多个 recv。
- */
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_unsafe_channel_t* c_channel,
-    uint64_t timeout_ms,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx);
-
-/**
- * @brief 在 runtime 上异步批量接收消息。
- *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_channel channel 句柄；必须存活到 callback 完成。
+ * @param c_channel channel 句柄。
+ * @param messages 输出消息数组。
  * @param max_count 最多接收消息数，必须大于 0。
- * @param callback 接收完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_UnsafeChannelSuccess；参数无效返回
- * C_UnsafeChannelParameterInvalid；runtime 未运行返回
- * C_UnsafeChannelRuntimeNotRunning；提交失败返回
- * C_UnsafeChannelRuntimeSpawnFailed。
- *
- * @note callback 中的 messages 数组只在回调期间有效。
+ * @param out_count 实际接收消息数。
+ * @param timeout_ms 负数无限等待，0 立即超时检查，正数为毫秒超时。
+ * @return 成功返回 C_IOResultOk；超时返回 C_IOResultTimeout；参数无效或不在
+ * C coroutine 内调用返回 C_IOResultInvalid。
  */
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batch(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_unsafe_channel_recv_batch(
     galay_kernel_unsafe_channel_t* c_channel,
+    C_UnsafeChannelMessage* messages,
     size_t max_count,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx);
+    size_t* out_count,
+    int64_t timeout_ms);
 
 /**
- * @brief 在 runtime 上异步批量接收消息，带毫秒级超时。
+ * @brief 挂起当前 C coroutine 并按阈值攒批接收消息。
  *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_channel channel 句柄；必须存活到 callback 完成。
- * @param max_count 最多接收消息数，必须大于 0。
- * @param timeout_ms 超时时间，单位毫秒。
- * @param callback 接收完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_UnsafeChannelSuccess；参数无效返回
- * C_UnsafeChannelParameterInvalid；runtime 未运行返回
- * C_UnsafeChannelRuntimeNotRunning；提交失败返回
- * C_UnsafeChannelRuntimeSpawnFailed。
- *
- * @note timeout_ms 为 0 时表示立即超时检查。超时完成时 callback 收到
- * C_UnsafeChannelTimeout，messages 为 NULL 且 count 为 0；成功时 messages 数组只在
- * 回调期间有效。
- */
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batch_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_unsafe_channel_t* c_channel,
-    size_t max_count,
-    uint64_t timeout_ms,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx);
-
-/**
- * @brief 在 runtime 上异步攒批接收消息。
- *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_channel channel 句柄；必须存活到 callback 完成。
+ * @param c_channel channel 句柄。
  * @param limit 唤醒前至少需要累积的消息数，必须大于 0。
- * @param callback 接收完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_UnsafeChannelSuccess；参数无效返回
- * C_UnsafeChannelParameterInvalid；runtime 未运行返回
- * C_UnsafeChannelRuntimeNotRunning；提交失败返回
- * C_UnsafeChannelRuntimeSpawnFailed。
- *
- * @note 未达到 limit 时不会因普通 send/send_batch 唤醒；callback 中的 messages
- * 数组只在回调期间有效。
+ * @param messages 输出消息数组。
+ * @param max_count 最多接收消息数，必须大于 0。
+ * @param out_count 实际接收消息数。
+ * @param timeout_ms 负数无限等待，0 立即超时检查，正数为毫秒超时。
+ * @return 达到阈值或超时时存在部分消息均返回 C_IOResultOk；纯空超时返回
+ * C_IOResultTimeout；参数无效或不在 C coroutine 内调用返回 C_IOResultInvalid。
  */
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batched(
-    galay_kernel_runtime_t* runtime,
+C_IOResult galay_kernel_unsafe_channel_recv_batched(
     galay_kernel_unsafe_channel_t* c_channel,
     size_t limit,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx);
-
-/**
- * @brief 在 runtime 上异步攒批接收消息，带毫秒级超时。
- *
- * @param runtime 已启动的 runtime；必须存活到 callback 完成。
- * @param c_channel channel 句柄；必须存活到 callback 完成。
- * @param limit 唤醒前至少需要累积的消息数，必须大于 0。
- * @param timeout_ms 超时时间，单位毫秒。
- * @param callback 接收完成后调用的回调；不能为空。
- * @param ctx 原样传给 callback 的用户上下文。
- * @return 成功提交返回 C_UnsafeChannelSuccess；参数无效返回
- * C_UnsafeChannelParameterInvalid；runtime 未运行返回
- * C_UnsafeChannelRuntimeNotRunning；提交失败返回
- * C_UnsafeChannelRuntimeSpawnFailed。
- *
- * @note timeout 触发时若通道内已有部分消息，则 callback 返回
- * C_UnsafeChannelSuccess 与这批部分消息；纯空超时才返回 C_UnsafeChannelTimeout。
- * callback 中的 messages 数组只在回调期间有效。
- */
-C_UnsafeChannelResultCode galay_kernel_unsafe_channel_recv_batched_timeout(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_unsafe_channel_t* c_channel,
-    size_t limit,
-    uint64_t timeout_ms,
-    galay_kernel_unsafe_channel_recv_callback_t callback,
-    void* ctx);
+    C_UnsafeChannelMessage* messages,
+    size_t max_count,
+    size_t* out_count,
+    int64_t timeout_ms);
 
 /**
  * @brief 查询当前待消费消息数量。

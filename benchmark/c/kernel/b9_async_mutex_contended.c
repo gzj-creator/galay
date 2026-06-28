@@ -1,25 +1,21 @@
 #include <galay/c/galay-kernel-c/concurrency-c/async_mutex_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
-#include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/time.h>
-#include <time.h>
 
 enum {
     ASYNC_MUTEX_ITERATIONS = 4096
 };
 
-typedef struct BenchmarkState {
+typedef struct LockState {
     galay_kernel_async_mutex_t* mutex;
-    atomic_int completed;
-    atomic_int errors;
-} BenchmarkState;
-
-typedef struct HolderState {
-    atomic_int done;
-    atomic_int code;
-} HolderState;
+    C_IOResult lock_result;
+    C_AsyncMutexResultCode unlock_result;
+} LockState;
 
 static int64_t now_us(void)
 {
@@ -30,45 +26,13 @@ static int64_t now_us(void)
     return (int64_t)tv.tv_sec * 1000000 + (int64_t)tv.tv_usec;
 }
 
-static void on_holder_lock(C_AsyncMutexResultCode code, void* ctx)
+static void lock_entry(void* ctx)
 {
-    HolderState* state = (HolderState*)ctx;
-    atomic_store(&state->code, (int)code);
-    atomic_store(&state->done, 1);
-}
-
-static void on_contended_lock(C_AsyncMutexResultCode code, void* ctx)
-{
-    BenchmarkState* state = (BenchmarkState*)ctx;
-    if (code != C_AsyncMutexSuccess ||
-        galay_kernel_async_mutex_unlock(state->mutex) != C_AsyncMutexSuccess) {
-        atomic_fetch_add(&state->errors, 1);
+    LockState* state = (LockState*)ctx;
+    state->lock_result = galay_kernel_async_mutex_lock(state->mutex, 5000);
+    if (state->lock_result.code == C_IOResultOk) {
+        state->unlock_result = galay_kernel_async_mutex_unlock(state->mutex);
     }
-    atomic_fetch_add(&state->completed, 1);
-}
-
-static int wait_done(atomic_int* done)
-{
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 2000; ++i) {
-        if (atomic_load(done)) {
-            return 0;
-        }
-        nanosleep(&pause, 0);
-    }
-    return 1;
-}
-
-static int wait_completed(BenchmarkState* state, int expected)
-{
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 10000; ++i) {
-        if (atomic_load(&state->completed) == expected) {
-            return 0;
-        }
-        nanosleep(&pause, 0);
-    }
-    return 1;
 }
 
 int main(void)
@@ -79,17 +43,9 @@ int main(void)
 
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_async_mutex_t mutex = {0};
-    int submitted = 0;
+    galay_coro_task_t* tasks = 0;
+    LockState* states = 0;
     int exit_code = 0;
-
-    HolderState holder;
-    atomic_init(&holder.done, 0);
-    atomic_init(&holder.code, (int)C_AsyncMutexIOFailed);
-
-    BenchmarkState state;
-    state.mutex = &mutex;
-    atomic_init(&state.completed, 0);
-    atomic_init(&state.errors, 0);
 
     if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
         galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
@@ -97,48 +53,68 @@ int main(void)
         return 1;
     }
 
-    if (galay_kernel_async_mutex_lock(&runtime, &mutex, on_holder_lock, &holder) != C_AsyncMutexSuccess ||
-        wait_done(&holder.done) != 0 ||
-        atomic_load(&holder.code) != (int)C_AsyncMutexSuccess) {
+    tasks = (galay_coro_task_t*)calloc((size_t)ASYNC_MUTEX_ITERATIONS, sizeof(galay_coro_task_t));
+    states = (LockState*)calloc((size_t)ASYNC_MUTEX_ITERATIONS, sizeof(LockState));
+    if (tasks == 0 || states == 0) {
         exit_code = 2;
         goto cleanup;
     }
 
+    const int64_t start = now_us();
     for (int i = 0; i < ASYNC_MUTEX_ITERATIONS; ++i) {
-        if (galay_kernel_async_mutex_lock(&runtime, &mutex, on_contended_lock, &state) != C_AsyncMutexSuccess) {
+        states[i].mutex = &mutex;
+        states[i].unlock_result = C_AsyncMutexIOFailed;
+        if (galay_coro_spawn(&runtime, lock_entry, &states[i], 0, &tasks[i]).code != C_IOResultOk) {
             exit_code = 3;
             goto cleanup;
         }
-        ++submitted;
     }
-
-    {
-        struct timespec pause = {0, 10000000};
-        nanosleep(&pause, 0);
-    }
-
-    const int64_t start = now_us();
-    if (galay_kernel_async_mutex_unlock(&mutex) != C_AsyncMutexSuccess ||
-        wait_completed(&state, submitted) != 0 ||
-        atomic_load(&state.errors) != 0) {
-        exit_code = 4;
-        goto cleanup;
+    for (int i = 0; i < ASYNC_MUTEX_ITERATIONS; ++i) {
+        if (galay_coro_join(&tasks[i], 8000).code != C_IOResultOk ||
+            states[i].lock_result.code != C_IOResultOk ||
+            states[i].unlock_result != C_AsyncMutexSuccess) {
+            exit_code = 4;
+            goto cleanup;
+        }
     }
     const int64_t elapsed = now_us() - start;
-    const double seconds = elapsed > 0 ? (double)elapsed / 1000000.0 : 0.0;
-    const double ops_per_sec = seconds > 0.0 ? (double)submitted / seconds : 0.0;
-    printf("async_mutex_contended iterations=%d elapsed_ms=%.3f ops_per_sec=%.2f\n",
-           submitted,
-           (double)elapsed / 1000.0,
-           ops_per_sec);
+
+    {
+        const double seconds = elapsed > 0 ? (double)elapsed / 1000000.0 : 0.0;
+        const double ops_per_sec = seconds > 0.0 ? (double)ASYNC_MUTEX_ITERATIONS / seconds : 0.0;
+        if (printf("async_mutex_contended iterations=%d elapsed_ms=%.3f ops_per_sec=%.2f\n",
+                   ASYNC_MUTEX_ITERATIONS,
+                   (double)elapsed / 1000.0,
+                   ops_per_sec) < 0) {
+            exit_code = 5;
+            goto cleanup;
+        }
+    }
 
 cleanup:
+    if (tasks != 0) {
+        for (int i = 0; i < ASYNC_MUTEX_ITERATIONS; ++i) {
+            if (tasks[i].task != 0 &&
+                galay_coro_destroy(&tasks[i]).code != C_IOResultOk &&
+                exit_code == 0) {
+                exit_code = 6;
+            }
+        }
+    }
     if (mutex.mutex != 0) {
-        (void)galay_kernel_async_mutex_destroy(&mutex);
+        if (galay_kernel_async_mutex_destroy(&mutex) != C_AsyncMutexSuccess && exit_code == 0) {
+            exit_code = 7;
+        }
     }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 8;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 9;
+        }
     }
+    free(states);
+    free(tasks);
     return exit_code;
 }

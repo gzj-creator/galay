@@ -4,9 +4,11 @@
 
 #include <arpa/inet.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -15,6 +17,64 @@
 static int expect_code(C_IOResult result, C_IOResultCode expected)
 {
     return result.code == expected ? 0 : 1;
+}
+
+static atomic_int g_cleanup_failed;
+
+static void record_cleanup_failed(void)
+{
+    atomic_store(&g_cleanup_failed, 1);
+}
+
+static int take_cleanup_failed(void)
+{
+    return atomic_exchange(&g_cleanup_failed, 0);
+}
+
+static int merge_cleanup_status(int result, int cleanup_code)
+{
+    const int cleanup_failed = take_cleanup_failed();
+    return result == 0 && cleanup_failed ? cleanup_code : result;
+}
+
+static void record_io_cleanup(C_IOResult result)
+{
+    if (result.code != C_IOResultOk && result.code != C_IOResultInvalid) {
+        record_cleanup_failed();
+    }
+}
+
+static void record_socket_cleanup(C_TcpSocketResultCode result)
+{
+    if (result != C_TcpSocketSuccess && result != C_TcpSocketParameterInvalid) {
+        record_cleanup_failed();
+    }
+}
+
+static void record_runtime_cleanup(C_RuntimeResultCode result)
+{
+    if (result != C_RuntimeSuccess && result != C_RuntimeParameterInvalid) {
+        record_cleanup_failed();
+    }
+}
+
+static void record_posix_cleanup(int result)
+{
+    if (result != 0) {
+        record_cleanup_failed();
+    }
+}
+
+static int checked_memset(void* buffer, int value, size_t size)
+{
+    return memset(buffer, value, size) == buffer ? 0 : 1;
+}
+
+static void record_diagnostic_write(int result)
+{
+    if (result < 0) {
+        record_cleanup_failed();
+    }
 }
 
 static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
@@ -37,16 +97,15 @@ static int connect_posix_client(uint16_t port)
         return -1;
     }
 
-    struct sockaddr_in addr;
-    memset(&addr, 0, sizeof(addr));
+    struct sockaddr_in addr = {0};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(port);
     if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1) {
-        close(fd);
+        record_posix_cleanup(close(fd));
         return -1;
     }
     if (connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != 0) {
-        close(fd);
+        record_posix_cleanup(close(fd));
         return -1;
     }
     return fd;
@@ -57,7 +116,7 @@ static int recv_until_quiet(int fd, char marker, int* saw_marker)
     struct timeval timeout;
     timeout.tv_sec = 0;
     timeout.tv_usec = 100000;
-    (void)setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, (socklen_t)sizeof(timeout));
+    record_posix_cleanup(setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, (socklen_t)sizeof(timeout)));
 
     char buffer[4096];
     for (int reads = 0; reads < 4096; ++reads) {
@@ -93,6 +152,20 @@ typedef struct EchoState {
     char server_buffer[64];
     char client_buffer[64];
 } EchoState;
+
+typedef struct IovSendfileState {
+    galay_kernel_tcp_socket_t* listener;
+    galay_kernel_tcp_socket_t accepted;
+    C_Host accepted_peer;
+    int file_fd;
+    C_IOResult accept_result;
+    C_IOResult readv_result;
+    C_IOResult writev_result;
+    C_IOResult sendfile_result;
+    C_IOResult close_result;
+    char read_a[8];
+    char read_b[8];
+} IovSendfileState;
 
 static void echo_server_entry(void* arg)
 {
@@ -186,6 +259,51 @@ static void echo_client_entry(void* arg)
     state->client_close_result = galay_kernel_tcp_socket_close(&state->client, 1000);
 }
 
+static void iov_sendfile_server_entry(void* arg)
+{
+    IovSendfileState* state = (IovSendfileState*)arg;
+    state->accept_result =
+        galay_kernel_tcp_socket_accept(state->listener,
+                                       &state->accepted,
+                                       &state->accepted_peer,
+                                       1000);
+    if (state->accept_result.code != C_IOResultOk) {
+        return;
+    }
+
+    struct iovec read_iov[2];
+    read_iov[0].iov_base = state->read_a;
+    read_iov[0].iov_len = 3;
+    read_iov[1].iov_base = state->read_b;
+    read_iov[1].iov_len = 4;
+    state->readv_result =
+        galay_kernel_tcp_socket_readv(&state->accepted, read_iov, 2, 1000);
+    if (state->readv_result.code != C_IOResultOk) {
+        return;
+    }
+
+    const char write_a[] = "iov-";
+    const char write_b[] = "reply";
+    struct iovec write_iov[2];
+    write_iov[0].iov_base = (void*)write_a;
+    write_iov[0].iov_len = sizeof(write_a) - 1;
+    write_iov[1].iov_base = (void*)write_b;
+    write_iov[1].iov_len = sizeof(write_b) - 1;
+    state->writev_result =
+        galay_kernel_tcp_socket_writev(&state->accepted, write_iov, 2, 1000);
+    if (state->writev_result.code != C_IOResultOk) {
+        return;
+    }
+
+    state->sendfile_result =
+        galay_kernel_tcp_socket_sendfile(&state->accepted, state->file_fd, 6, 9, 1000);
+    if (state->sendfile_result.code != C_IOResultOk) {
+        return;
+    }
+
+    state->close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
+}
+
 typedef struct AcceptTimeoutState {
     galay_kernel_tcp_socket_t* listener;
     C_Host peer;
@@ -217,7 +335,7 @@ static void accept_timeout_late_client_entry(void* arg)
 {
     AcceptTimeoutState* state = (AcceptTimeoutState*)arg;
     while (atomic_load(&state->phase) != 1) {
-        (void)galay_coro_yield();
+        record_io_cleanup(galay_coro_yield());
     }
     if (galay_kernel_tcp_socket_create(&state->late_client, C_IPTypeIPV4) !=
         C_TcpSocketSuccess) {
@@ -279,7 +397,7 @@ static void recv_timeout_client_entry(void* arg)
         return;
     }
     while (atomic_load(&state->phase) != 1) {
-        (void)galay_coro_yield();
+        record_io_cleanup(galay_coro_yield());
     }
     state->late_send_result = galay_kernel_tcp_socket_send(&state->client, "late", 4, 1000);
     state->client_close_result = galay_kernel_tcp_socket_close(&state->client, 1000);
@@ -315,7 +433,7 @@ static void close_waiting_closer_entry(void* arg)
 {
     CloseWaitingState* state = (CloseWaitingState*)arg;
     while (atomic_load(&state->phase) != 1) {
-        (void)galay_coro_yield();
+        record_io_cleanup(galay_coro_yield());
     }
     state->close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
 }
@@ -388,14 +506,17 @@ static void send_timeout_server_entry(void* arg)
     }
 
     int send_buffer_size = 4096;
-    (void)setsockopt((int)state->accept_result.value,
+    record_posix_cleanup(setsockopt((int)state->accept_result.value,
                      SOL_SOCKET,
                      SO_SNDBUF,
                      &send_buffer_size,
-                     (socklen_t)sizeof(send_buffer_size));
+                     (socklen_t)sizeof(send_buffer_size)));
 
     char fill[4096];
-    memset(fill, 'a', sizeof(fill));
+    if (checked_memset(fill, 'a', sizeof(fill)) != 0) {
+        state->fill_errno = EFAULT;
+        return;
+    }
     for (;;) {
         ssize_t sent = send((int)state->accept_result.value, fill, sizeof(fill), 0);
         if (sent > 0) {
@@ -429,7 +550,7 @@ static void zero_timeout_connect_entry(void* arg)
     state->zero_accept_probe_result =
         galay_kernel_tcp_socket_accept(state->listener, &state->accepted_from_zero, NULL, 20);
     if (state->zero_accept_probe_result.code == C_IOResultOk) {
-        (void)galay_kernel_tcp_socket_close(&state->accepted_from_zero, 1000);
+        record_io_cleanup(galay_kernel_tcp_socket_close(&state->accepted_from_zero, 1000));
     }
 
     state->connect_result = galay_kernel_tcp_socket_connect(&state->client, &state->peer, 1000);
@@ -481,7 +602,7 @@ static void multi_scheduler_owner_entry(void* arg)
     }
     atomic_store(&state->phase, 1);
     while (atomic_load(&state->phase) == 1) {
-        (void)galay_coro_yield();
+        record_io_cleanup(galay_coro_yield());
     }
     if (state->client.socket != 0) {
         state->owner_close_client_result = galay_kernel_tcp_socket_close(&state->client, 1000);
@@ -495,7 +616,7 @@ static void multi_scheduler_misuse_entry(void* arg)
 {
     MultiSchedulerMisuseState* state = (MultiSchedulerMisuseState*)arg;
     while (atomic_load(&state->phase) == 0) {
-        (void)galay_coro_yield();
+        record_io_cleanup(galay_coro_yield());
     }
     if (atomic_load(&state->phase) == 1) {
         state->misuse_send_result = galay_kernel_tcp_socket_send(&state->client, "x", 1, 1000);
@@ -532,8 +653,7 @@ static int run_echo(galay_kernel_runtime_t* runtime)
 {
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
-    EchoState state;
-    memset(&state, 0, sizeof(state));
+    EchoState state = {0};
     state.listener = &listener;
 
     if (create_listener(&listener, &local) != 0) {
@@ -549,7 +669,7 @@ static int run_echo(galay_kernel_runtime_t* runtime)
                     C_IOResultOk) ||
         expect_code(galay_coro_join(&server, 2000), C_IOResultOk) ||
         expect_code(galay_coro_join(&client, 2000), C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 102;
     }
 
@@ -569,16 +689,125 @@ static int run_echo(galay_kernel_runtime_t* runtime)
         memcmp(state.server_buffer, "coro-ping-request", strlen("coro-ping-request")) != 0 ||
         memcmp(state.client_buffer, "coro-pong-response", strlen("coro-pong-response")) != 0;
 
-    (void)galay_coro_destroy(&server);
-    (void)galay_coro_destroy(&client);
+    record_io_cleanup(galay_coro_destroy(&server));
+    record_io_cleanup(galay_coro_destroy(&client));
     if (state.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
     }
     if (state.client.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.client);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.client));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
     return failed ? 103 : 0;
+}
+
+static int run_iov_sendfile(galay_kernel_runtime_t* runtime)
+{
+    galay_kernel_tcp_socket_t listener = {0};
+    C_Host local = {0};
+    int client_fd = -1;
+    char template_path[] = "/tmp/galay-coro-tcp-sendfile-XXXXXX";
+    IovSendfileState state = {0};
+    state.listener = &listener;
+    if (checked_memset(state.read_a, '?', sizeof(state.read_a)) != 0 ||
+        checked_memset(state.read_b, '?', sizeof(state.read_b)) != 0) {
+        return 164;
+    }
+
+    if (create_listener(&listener, &local) != 0) {
+        return 151;
+    }
+
+    state.file_fd = mkstemp(template_path);
+    if (state.file_fd < 0) {
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+        return 152;
+    }
+    record_posix_cleanup(unlink(template_path));
+    if (write(state.file_fd, "file-send-slice-data", 20) != 20) {
+        record_posix_cleanup(close(state.file_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+        return 153;
+    }
+
+    galay_coro_task_t server = {0};
+    if (expect_code(galay_coro_spawn(runtime, iov_sendfile_server_entry, &state, 0, &server),
+                    C_IOResultOk)) {
+        record_posix_cleanup(close(state.file_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+        return 154;
+    }
+
+    client_fd = connect_posix_client(local.port);
+    if (client_fd < 0) {
+        record_posix_cleanup(close(state.file_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+        return 155;
+    }
+    if (write(client_fd, "abc1234", 7) != 7) {
+        record_posix_cleanup(close(client_fd));
+        record_posix_cleanup(close(state.file_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+        return 156;
+    }
+    struct timeval timeout;
+    timeout.tv_sec = 1;
+    timeout.tv_usec = 0;
+    record_posix_cleanup(setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, &timeout, (socklen_t)sizeof(timeout)));
+
+    char peer_buffer[64] = {0};
+    size_t received = 0;
+    const size_t expected = strlen("iov-replyend-slice");
+    while (received < expected) {
+        ssize_t n = recv(client_fd,
+                         peer_buffer + received,
+                         expected - received,
+                         0);
+        if (n <= 0) {
+            break;
+        }
+        received += (size_t)n;
+    }
+
+    if (expect_code(galay_coro_join(&server, 2000), C_IOResultOk)) {
+        record_posix_cleanup(close(client_fd));
+        record_posix_cleanup(close(state.file_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+        return 157;
+    }
+
+    int failed = 0;
+    if (state.accept_result.code != C_IOResultOk ||
+        state.accepted_peer.type != C_IPTypeIPV4 ||
+        strcmp(state.accepted_peer.address, "127.0.0.1") != 0 ||
+        state.accepted_peer.port == 0) {
+        failed = 158;
+    } else if (state.readv_result.code != C_IOResultOk ||
+               state.readv_result.bytes != 7 ||
+               memcmp(state.read_a, "abc", 3) != 0 ||
+               memcmp(state.read_b, "1234", 4) != 0) {
+        failed = 159;
+    } else if (state.writev_result.code != C_IOResultOk ||
+               state.writev_result.bytes != strlen("iov-reply")) {
+        failed = 160;
+    } else if (state.sendfile_result.code != C_IOResultOk ||
+               state.sendfile_result.bytes != 9) {
+        failed = 161;
+    } else if (received != expected ||
+               memcmp(peer_buffer, "iov-replyend-slice", expected) != 0) {
+        failed = 162;
+    } else if (state.close_result.code != C_IOResultOk) {
+        failed = 163;
+    }
+
+    record_posix_cleanup(close(client_fd));
+    record_posix_cleanup(close(state.file_fd));
+    record_io_cleanup(galay_coro_destroy(&server));
+    if (state.accepted.socket != 0) {
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
+    }
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+    return failed;
 }
 
 static int run_accept_timeout(galay_kernel_runtime_t* runtime)
@@ -586,8 +815,7 @@ static int run_accept_timeout(galay_kernel_runtime_t* runtime)
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
     int client_fd = -1;
-    AcceptTimeoutState state;
-    memset(&state, 0, sizeof(state));
+    AcceptTimeoutState state = {0};
     state.listener = &listener;
     atomic_init(&state.phase, 0);
 
@@ -599,20 +827,20 @@ static int run_accept_timeout(galay_kernel_runtime_t* runtime)
     galay_coro_task_t task = {0};
     if (expect_code(galay_coro_spawn(runtime, accept_timeout_entry, &state, 0, &task),
                     C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 202;
     }
     if (expect_code(galay_coro_join(&task, 2000), C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 203;
     }
     if (expect_code(state.result, C_IOResultTimeout)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 205;
     }
     client_fd = connect_posix_client(local.port);
     if (client_fd < 0) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 206;
     }
 
@@ -620,31 +848,31 @@ static int run_accept_timeout(galay_kernel_runtime_t* runtime)
     if (expect_code(galay_coro_spawn(runtime, accept_timeout_late_accept_entry, &state, 0, &late_accept),
                     C_IOResultOk) ||
         expect_code(galay_coro_join(&late_accept, 2000), C_IOResultOk)) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 207;
     }
     if (expect_code(state.late_accept_result, C_IOResultOk)) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 208;
     }
     if (state.result.bytes != 0 || state.accepted.socket != 0) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 210;
     }
 
-    close(client_fd);
-    (void)galay_coro_destroy(&task);
-    (void)galay_coro_destroy(&late_accept);
+    record_posix_cleanup(close(client_fd));
+    record_io_cleanup(galay_coro_destroy(&task));
+    record_io_cleanup(galay_coro_destroy(&late_accept));
     if (state.accepted_late.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted_late);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted_late));
     }
     if (state.late_client.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.late_client);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.late_client));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
     return 0;
 }
 
@@ -653,10 +881,11 @@ static int run_recv_timeout(galay_kernel_runtime_t* runtime)
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
     int client_fd = -1;
-    RecvTimeoutState state;
-    memset(&state, 0, sizeof(state));
+    RecvTimeoutState state = {0};
     state.listener = &listener;
-    memset(state.buffer, 'x', sizeof(state.buffer));
+    if (checked_memset(state.buffer, 'x', sizeof(state.buffer)) != 0) {
+        return 307;
+    }
     atomic_init(&state.phase, 0);
 
     if (create_listener(&listener, &local) != 0) {
@@ -667,23 +896,23 @@ static int run_recv_timeout(galay_kernel_runtime_t* runtime)
     galay_coro_task_t server = {0};
     if (expect_code(galay_coro_spawn(runtime, recv_timeout_server_entry, &state, 0, &server),
                     C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 302;
     }
     client_fd = connect_posix_client(local.port);
     if (client_fd < 0) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 304;
     }
-    usleep(20000);
+    record_posix_cleanup(usleep(20000));
     if (write(client_fd, "late", 4) != 4) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 305;
     }
     if (expect_code(galay_coro_join(&server, 2000), C_IOResultOk)) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 306;
     }
 
@@ -697,26 +926,26 @@ static int run_recv_timeout(galay_kernel_runtime_t* runtime)
         memcmp(state.late_buffer, "late", 4) != 0 ||
         state.server_close_result.code != C_IOResultOk;
     if (failed) {
-        fprintf(stderr,
-                "recv timeout state: accept=%d recv=%d recv_bytes=%zu late_recv=%d late_bytes=%zu close=%d buffer=%.*s late=%.*s\n",
-                (int)state.accept_result.code,
-                (int)state.recv_result.code,
-                state.recv_result.bytes,
-                (int)state.late_recv_result.code,
-                state.late_recv_result.bytes,
-                (int)state.server_close_result.code,
-                (int)sizeof(state.buffer),
-                state.buffer,
-                (int)sizeof(state.late_buffer),
-                state.late_buffer);
+        record_diagnostic_write(fprintf(stderr,
+                                        "recv timeout state: accept=%d recv=%d recv_bytes=%zu late_recv=%d late_bytes=%zu close=%d buffer=%.*s late=%.*s\n",
+                                        (int)state.accept_result.code,
+                                        (int)state.recv_result.code,
+                                        state.recv_result.bytes,
+                                        (int)state.late_recv_result.code,
+                                        state.late_recv_result.bytes,
+                                        (int)state.server_close_result.code,
+                                        (int)sizeof(state.buffer),
+                                        state.buffer,
+                                        (int)sizeof(state.late_buffer),
+                                        state.late_buffer));
     }
 
-    close(client_fd);
-    (void)galay_coro_destroy(&server);
+    record_posix_cleanup(close(client_fd));
+    record_io_cleanup(galay_coro_destroy(&server));
     if (state.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
     return failed ? 303 : 0;
 }
 
@@ -725,8 +954,7 @@ static int run_close_while_waiting(galay_kernel_runtime_t* runtime)
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
     int client_fd = -1;
-    CloseWaitingState state;
-    memset(&state, 0, sizeof(state));
+    CloseWaitingState state = {0};
     state.listener = &listener;
     atomic_init(&state.phase, 0);
 
@@ -738,20 +966,20 @@ static int run_close_while_waiting(galay_kernel_runtime_t* runtime)
     galay_coro_task_t closer = {0};
     if (expect_code(galay_coro_spawn(runtime, close_waiting_server_entry, &state, 0, &server),
                     C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 402;
     }
     client_fd = connect_posix_client(local.port);
     if (client_fd < 0) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 403;
     }
     if (expect_code(galay_coro_spawn(runtime, close_waiting_closer_entry, &state, 0, &closer),
                     C_IOResultOk) ||
         expect_code(galay_coro_join(&closer, 2000), C_IOResultOk) ||
         expect_code(galay_coro_join(&server, 2000), C_IOResultOk)) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 404;
     }
 
@@ -761,13 +989,13 @@ static int run_close_while_waiting(galay_kernel_runtime_t* runtime)
         state.recv_result.code != C_IOResultCancelled ||
         atomic_load(&state.phase) != 2;
 
-    close(client_fd);
-    (void)galay_coro_destroy(&server);
-    (void)galay_coro_destroy(&closer);
+    record_posix_cleanup(close(client_fd));
+    record_io_cleanup(galay_coro_destroy(&server));
+    record_io_cleanup(galay_coro_destroy(&closer));
     if (state.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
     return failed ? 405 : 0;
 }
 
@@ -776,8 +1004,7 @@ static int run_immediate_accept(galay_kernel_runtime_t* runtime)
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
     int client_fd = -1;
-    ImmediateAcceptState state;
-    memset(&state, 0, sizeof(state));
+    ImmediateAcceptState state = {0};
     state.listener = &listener;
 
     if (create_listener(&listener, &local) != 0) {
@@ -785,7 +1012,7 @@ static int run_immediate_accept(galay_kernel_runtime_t* runtime)
     }
     client_fd = connect_posix_client(local.port);
     if (client_fd < 0) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 452;
     }
 
@@ -793,8 +1020,8 @@ static int run_immediate_accept(galay_kernel_runtime_t* runtime)
     if (expect_code(galay_coro_spawn(runtime, immediate_accept_entry, &state, 0, &task),
                     C_IOResultOk) ||
         expect_code(galay_coro_join(&task, 2000), C_IOResultOk)) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 453;
     }
 
@@ -805,12 +1032,12 @@ static int run_immediate_accept(galay_kernel_runtime_t* runtime)
         failed = 455;
     }
 
-    close(client_fd);
-    (void)galay_coro_destroy(&task);
+    record_posix_cleanup(close(client_fd));
+    record_io_cleanup(galay_coro_destroy(&task));
     if (state.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
     return failed;
 }
 
@@ -819,8 +1046,7 @@ static int run_send_timeout_contract(galay_kernel_runtime_t* runtime)
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
     int client_fd = -1;
-    SendTimeoutState state;
-    memset(&state, 0, sizeof(state));
+    SendTimeoutState state = {0};
     state.listener = &listener;
 
     if (create_listener(&listener, &local) != 0) {
@@ -830,17 +1056,17 @@ static int run_send_timeout_contract(galay_kernel_runtime_t* runtime)
     galay_coro_task_t server = {0};
     if (expect_code(galay_coro_spawn(runtime, send_timeout_server_entry, &state, 0, &server),
                     C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 472;
     }
     client_fd = connect_posix_client(local.port);
     if (client_fd < 0) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 473;
     }
     if (expect_code(galay_coro_join(&server, 3000), C_IOResultOk)) {
-        close(client_fd);
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_posix_cleanup(close(client_fd));
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 474;
     }
 
@@ -851,41 +1077,44 @@ static int run_send_timeout_contract(galay_kernel_runtime_t* runtime)
     if (state.accept_result.code != C_IOResultOk) {
         failed = 475;
     } else if (state.fill_errno != 0) {
-        fprintf(stderr, "send timeout fill failed errno=%d filled=%zu\n",
-                state.fill_errno,
-                state.filled_bytes);
+        record_diagnostic_write(fprintf(stderr,
+                                        "send timeout fill failed errno=%d filled=%zu\n",
+                                        state.fill_errno,
+                                        state.filled_bytes));
         failed = 476;
     } else if (drain_errno != 0) {
-        fprintf(stderr, "send timeout peer drain failed errno=%d\n", drain_errno);
+        record_diagnostic_write(fprintf(stderr,
+                                        "send timeout peer drain failed errno=%d\n",
+                                        drain_errno));
         failed = 481;
     } else if (state.send_result.code == C_IOResultTimeout && state.close_result.code != C_IOResultOk) {
-        fprintf(stderr,
-                "send timeout close got code=%d sys_errno=%d\n",
-                (int)state.close_result.code,
-                state.close_result.sys_errno);
+        record_diagnostic_write(fprintf(stderr,
+                                        "send timeout close got code=%d sys_errno=%d\n",
+                                        (int)state.close_result.code,
+                                        state.close_result.sys_errno));
         failed = 478;
     } else if (state.send_result.code == C_IOResultOk &&
                (state.send_result.bytes == 0 || !saw_late_byte)) {
-        fprintf(stderr,
-                "send completed but did not report/observe the test byte: bytes=%zu saw=%d\n",
-                state.send_result.bytes,
-                saw_late_byte);
+        record_diagnostic_write(fprintf(stderr,
+                                        "send completed but did not report/observe the test byte: bytes=%zu saw=%d\n",
+                                        state.send_result.bytes,
+                                        saw_late_byte));
         failed = 480;
     } else if (state.send_result.code != C_IOResultTimeout &&
                state.send_result.code != C_IOResultOk) {
-        fprintf(stderr,
-                "send timeout arbitration got unexpected code=%d sys_errno=%d\n",
-                (int)state.send_result.code,
-                state.send_result.sys_errno);
+        record_diagnostic_write(fprintf(stderr,
+                                        "send timeout arbitration got unexpected code=%d sys_errno=%d\n",
+                                        (int)state.send_result.code,
+                                        state.send_result.sys_errno));
         failed = 477;
     }
 
-    close(client_fd);
-    (void)galay_coro_destroy(&server);
+    record_posix_cleanup(close(client_fd));
+    record_io_cleanup(galay_coro_destroy(&server));
     if (state.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
     return failed;
 }
 
@@ -893,8 +1122,7 @@ static int run_zero_timeout_connect(galay_kernel_runtime_t* runtime)
 {
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
-    ZeroTimeoutConnectState state;
-    memset(&state, 0, sizeof(state));
+    ZeroTimeoutConnectState state = {0};
     state.listener = &listener;
 
     if (create_listener(&listener, &local) != 0) {
@@ -906,7 +1134,7 @@ static int run_zero_timeout_connect(galay_kernel_runtime_t* runtime)
     if (expect_code(galay_coro_spawn(runtime, zero_timeout_connect_entry, &state, 0, &task),
                     C_IOResultOk) ||
         expect_code(galay_coro_join(&task, 2000), C_IOResultOk)) {
-        (void)galay_kernel_tcp_socket_destroy(&listener);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 502;
     }
 
@@ -925,32 +1153,33 @@ static int run_zero_timeout_connect(galay_kernel_runtime_t* runtime)
         failed = 508;
     }
 
-    (void)galay_coro_destroy(&task);
+    record_io_cleanup(galay_coro_destroy(&task));
     if (state.accepted_from_zero.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted_from_zero);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted_from_zero));
     }
     if (state.accepted_after_connect.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted_after_connect);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted_after_connect));
     }
     if (state.client.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.client);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.client));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
     return failed;
 }
 
 static int run_connect_timeout_closes_socket(galay_kernel_runtime_t* runtime)
 {
-    ConnectTimeoutCloseState state;
-    memset(&state, 0, sizeof(state));
+    ConnectTimeoutCloseState state = {0};
     state.peer.type = C_IPTypeIPV4;
     state.peer.port = 9;
     const unsigned pid = (unsigned)getpid();
-    snprintf(state.peer.address,
-             sizeof(state.peer.address),
-             "169.254.%u.%u",
-             ((pid / 251U) % 254U) + 1U,
-             (pid % 254U) + 1U);
+    if (snprintf(state.peer.address,
+                 sizeof(state.peer.address),
+                 "169.254.%u.%u",
+                 ((pid / 251U) % 254U) + 1U,
+                 (pid % 254U) + 1U) <= 0) {
+        return 524;
+    }
     state.endpoint_after_timeout = C_TcpSocketSuccess;
 
     galay_coro_task_t task = {0};
@@ -958,28 +1187,28 @@ static int run_connect_timeout_closes_socket(galay_kernel_runtime_t* runtime)
                     C_IOResultOk) ||
         expect_code(galay_coro_join(&task, 3000), C_IOResultOk)) {
         if (state.client.socket != 0) {
-            (void)galay_kernel_tcp_socket_destroy(&state.client);
+            record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.client));
         }
         return 521;
     }
 
     int failed = 0;
     if (state.connect_result.code != C_IOResultTimeout) {
-        fprintf(stderr,
-                "connect timeout close expected Timeout, got code=%d sys_errno=%d\n",
-                (int)state.connect_result.code,
-                state.connect_result.sys_errno);
+        record_diagnostic_write(fprintf(stderr,
+                                        "connect timeout close expected Timeout, got code=%d sys_errno=%d\n",
+                                        (int)state.connect_result.code,
+                                        state.connect_result.sys_errno));
         failed = 522;
     } else if (state.endpoint_after_timeout != C_TcpSocketIOFailed) {
-        fprintf(stderr,
-                "connect timeout close expected closed fd, local_endpoint code=%d\n",
-                (int)state.endpoint_after_timeout);
+        record_diagnostic_write(fprintf(stderr,
+                                        "connect timeout close expected closed fd, local_endpoint code=%d\n",
+                                        (int)state.endpoint_after_timeout));
         failed = 523;
     }
 
-    (void)galay_coro_destroy(&task);
+    record_io_cleanup(galay_coro_destroy(&task));
     if (state.client.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.client);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.client));
     }
     return failed;
 }
@@ -995,14 +1224,13 @@ static int run_multi_scheduler_misuse(void)
         return 701;
     }
     if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
-        (void)galay_kernel_runtime_destroy(&runtime);
+        record_runtime_cleanup(galay_kernel_runtime_destroy(&runtime));
         return 702;
     }
 
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
-    MultiSchedulerMisuseState state;
-    memset(&state, 0, sizeof(state));
+    MultiSchedulerMisuseState state = {0};
     state.listener = &listener;
     atomic_init(&state.phase, 0);
 
@@ -1027,18 +1255,18 @@ static int run_multi_scheduler_misuse(void)
                    state.owner_close_server_result.code != C_IOResultOk) {
             result = 705;
         }
-        (void)galay_coro_destroy(&owner);
-        (void)galay_coro_destroy(&misuse);
+        record_io_cleanup(galay_coro_destroy(&owner));
+        record_io_cleanup(galay_coro_destroy(&misuse));
     }
 
     if (state.client.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.client);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.client));
     }
     if (state.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
-    (void)galay_kernel_runtime_stop(&runtime);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+    record_runtime_cleanup(galay_kernel_runtime_stop(&runtime));
     if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 706;
     }
@@ -1056,14 +1284,13 @@ static int run_owner_binding_failed_request_does_not_poison(void)
         return 801;
     }
     if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
-        (void)galay_kernel_runtime_destroy(&runtime);
+        record_runtime_cleanup(galay_kernel_runtime_destroy(&runtime));
         return 802;
     }
 
     galay_kernel_tcp_socket_t listener = {0};
     C_Host local = {0};
-    OwnerBindingPollutionState state;
-    memset(&state, 0, sizeof(state));
+    OwnerBindingPollutionState state = {0};
     state.listener = &listener;
 
     int result = 0;
@@ -1087,27 +1314,27 @@ static int run_owner_binding_failed_request_does_not_poison(void)
                    state.accept_result.code != C_IOResultOk ||
                    state.close_client_result.code != C_IOResultOk ||
                    state.close_server_result.code != C_IOResultOk) {
-            fprintf(stderr,
-                    "owner binding reuse failed poison=%d connect=%d accept=%d close_client=%d close_server=%d\n",
-                    (int)state.poison_send_result.code,
-                    (int)state.connect_result.code,
-                    (int)state.accept_result.code,
-                    (int)state.close_client_result.code,
-                    (int)state.close_server_result.code);
+            record_diagnostic_write(fprintf(stderr,
+                                            "owner binding reuse failed poison=%d connect=%d accept=%d close_client=%d close_server=%d\n",
+                                            (int)state.poison_send_result.code,
+                                            (int)state.connect_result.code,
+                                            (int)state.accept_result.code,
+                                            (int)state.close_client_result.code,
+                                            (int)state.close_server_result.code));
             result = 807;
         }
-        (void)galay_coro_destroy(&poison);
-        (void)galay_coro_destroy(&reuse);
+        record_io_cleanup(galay_coro_destroy(&poison));
+        record_io_cleanup(galay_coro_destroy(&reuse));
     }
 
     if (state.client.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.client);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.client));
     }
     if (state.accepted.socket != 0) {
-        (void)galay_kernel_tcp_socket_destroy(&state.accepted);
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
     }
-    (void)galay_kernel_tcp_socket_destroy(&listener);
-    (void)galay_kernel_runtime_stop(&runtime);
+    record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+    record_runtime_cleanup(galay_kernel_runtime_stop(&runtime));
     if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 808;
     }
@@ -1131,6 +1358,12 @@ int main(void)
         expect_code(galay_kernel_tcp_socket_send(0, buffer, sizeof(buffer), 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_send(&invalid_socket, 0, sizeof(buffer), 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_send(&invalid_socket, buffer, 0, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_readv(0, (const struct iovec*)buffer, 1, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_readv(&invalid_socket, 0, 1, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_writev(0, (const struct iovec*)buffer, 1, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_writev(&invalid_socket, 0, 1, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_sendfile(0, -1, 0, 1, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_sendfile(&invalid_socket, -1, 0, 1, 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_close(0, 0), C_IOResultInvalid)) {
         return 1;
     }
@@ -1144,41 +1377,56 @@ int main(void)
         return 2;
     }
     if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
-        (void)galay_kernel_runtime_destroy(&runtime);
-        return 3;
+        record_runtime_cleanup(galay_kernel_runtime_destroy(&runtime));
+        return merge_cleanup_status(3, 5);
     }
 
     int result = run_echo(&runtime);
+    result = merge_cleanup_status(result, 901);
+    if (result == 0) {
+        result = run_iov_sendfile(&runtime);
+        result = merge_cleanup_status(result, 902);
+    }
     if (result == 0) {
         result = run_accept_timeout(&runtime);
+        result = merge_cleanup_status(result, 903);
     }
     if (result == 0) {
         result = run_recv_timeout(&runtime);
+        result = merge_cleanup_status(result, 904);
     }
     if (result == 0) {
         result = run_close_while_waiting(&runtime);
+        result = merge_cleanup_status(result, 905);
     }
     if (result == 0) {
         result = run_immediate_accept(&runtime);
+        result = merge_cleanup_status(result, 906);
     }
     if (result == 0) {
         result = run_send_timeout_contract(&runtime);
+        result = merge_cleanup_status(result, 907);
     }
     if (result == 0) {
         result = run_zero_timeout_connect(&runtime);
+        result = merge_cleanup_status(result, 908);
     }
     if (result == 0) {
         result = run_connect_timeout_closes_socket(&runtime);
+        result = merge_cleanup_status(result, 909);
     }
-    (void)galay_kernel_runtime_stop(&runtime);
+    record_runtime_cleanup(galay_kernel_runtime_stop(&runtime));
     if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 4;
     }
+    result = merge_cleanup_status(result, 910);
     if (result == 0) {
         result = run_multi_scheduler_misuse();
+        result = merge_cleanup_status(result, 911);
     }
     if (result == 0) {
         result = run_owner_binding_failed_request_does_not_poison();
+        result = merge_cleanup_status(result, 912);
     }
     return result;
 }
