@@ -69,6 +69,7 @@
 
 ### Fixed
 
+- 修复 RPC managed client 清理路径静默丢弃返回值的问题：`release()` 与 `client.close()` 失败现在会通过 `RpcError` 显式传播，并新增源码边界测试防止回退到 `(void)` 忽略返回值。
 - 修复 kernel timeout/C coroutine 边界：`WithTimeout` 处理 timer 注册失败返回值并立即传播错误，C TCP bridge 在 timeout 服务不可用时清理 awaitable/user_data 后返回错误，`AsyncWaiter`/`AsyncMutex` await_suspend 路径满足最终挂起状态发布约束。
 - 修复 etcd t13/t14 cluster integration CTest 注册遗漏，未启用 `GALAY_IT_ENABLE` 时按 `SKIP_RETURN_CODE` 统计为 skipped 而不是失败。
 - 修复 direct C coroutine TCP bridge 在 timeout timer 注册失败路径中未撤销 reactor registration 的生命周期问题，避免返回错误后后端仍持有栈上 awaitable 或悬空 controller；新增 C++ 回归测试覆盖 kqueue/epoll 清理与 socket 复用。

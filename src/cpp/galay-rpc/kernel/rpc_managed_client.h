@@ -276,6 +276,11 @@ private:
                error.code() == RpcErrorCode::INTERNAL_ERROR;
     }
 
+    static RpcError combineCleanupError(const RpcError& primary, const RpcError& cleanup) {
+        return RpcError(RpcErrorCode::INTERNAL_ERROR,
+                        primary.toString() + "; cleanup failed: " + cleanup.toString());
+    }
+
     Task<RpcManagedCallResult> callOnce(const std::string& service,
                                         const std::string& method,
                                         const char* payload,
@@ -329,30 +334,61 @@ private:
         auto connect_result = co_await client.connect(endpoint.host, endpoint.port);
         if (!connect_result.has_value()) {
             lease.markBroken();
-            auto release_result = m_pool.release(std::move(lease));
-            (void)release_result;
             markEndpointUnavailable(endpoint);
-            co_return RpcManagedCallResult(std::unexpected(
-                RpcError(RpcErrorCode::INTERNAL_ERROR, connect_result.error().message())));
+            RpcError primary_error(RpcErrorCode::INTERNAL_ERROR, connect_result.error().message());
+            auto release_result = m_pool.release(std::move(lease));
+            if (!release_result.has_value()) {
+                co_return RpcManagedCallResult(std::unexpected(
+                    combineCleanupError(primary_error, release_result.error())));
+            }
+            co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
         }
         if (!connect_result->has_value()) {
             lease.markBroken();
-            auto release_result = m_pool.release(std::move(lease));
-            (void)release_result;
             markEndpointUnavailable(endpoint);
-            co_return RpcManagedCallResult(std::unexpected(
-                RpcError::from(connect_result->error(), RpcErrorCode::UNAVAILABLE)));
+            auto primary_error = RpcError::from(connect_result->error(), RpcErrorCode::UNAVAILABLE);
+            auto release_result = m_pool.release(std::move(lease));
+            if (!release_result.has_value()) {
+                co_return RpcManagedCallResult(std::unexpected(
+                    combineCleanupError(primary_error, release_result.error())));
+            }
+            co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
         }
 
         auto call_result = co_await client.call(service, method, payload, payload_len, options);
-        co_await client.close();
+        auto close_result = co_await client.close();
+        std::optional<RpcError> close_error;
+        if (!close_result.has_value()) {
+            close_error.emplace(RpcErrorCode::INTERNAL_ERROR, close_result.error().message());
+        } else if (!close_result->has_value()) {
+            close_error.emplace(RpcError::from(close_result->error(), RpcErrorCode::CONNECTION_CLOSED));
+        }
         if (!call_result.has_value()) {
             lease.markBroken();
-            auto release_result = m_pool.release(std::move(lease));
-            (void)release_result;
             markEndpointUnavailable(endpoint);
-            co_return RpcManagedCallResult(std::unexpected(
-                RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule managed RPC call")));
+            RpcError primary_error(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule managed RPC call");
+            if (close_error.has_value()) {
+                primary_error = combineCleanupError(primary_error, *close_error);
+            }
+            auto release_result = m_pool.release(std::move(lease));
+            if (!release_result.has_value()) {
+                primary_error = combineCleanupError(primary_error, release_result.error());
+            }
+            co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
+        }
+
+        if (close_error.has_value()) {
+            lease.markBroken();
+            markEndpointUnavailable(endpoint);
+            RpcError primary_error = call_result->has_value()
+                ? *close_error
+                : combineCleanupError(call_result->error(), *close_error);
+            auto release_result = m_pool.release(std::move(lease));
+            if (!release_result.has_value()) {
+                co_return RpcManagedCallResult(std::unexpected(
+                    combineCleanupError(primary_error, release_result.error())));
+            }
+            co_return RpcManagedCallResult(std::unexpected(std::move(primary_error)));
         }
 
         if (!call_result->has_value() &&
@@ -365,7 +401,16 @@ private:
         }
 
         auto release_result = m_pool.release(std::move(lease));
-        (void)release_result;
+        if (!release_result.has_value()) {
+            if (!call_result->has_value()) {
+                co_return RpcManagedCallResult(std::unexpected(
+                    combineCleanupError(call_result->error(), release_result.error())));
+            }
+            co_return RpcManagedCallResult(std::unexpected(
+                RpcError(RpcErrorCode::INTERNAL_ERROR,
+                         "RPC managed client release failed after successful call: " +
+                             release_result.error().toString())));
+        }
         co_return std::move(call_result.value());
     }
 
