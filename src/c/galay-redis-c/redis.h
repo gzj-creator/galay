@@ -13,13 +13,31 @@ typedef enum galay_redis_resp_type_t {
     GALAY_REDIS_RESP_ERROR = 1,
     GALAY_REDIS_RESP_INTEGER = 2,
     GALAY_REDIS_RESP_BULK_STRING = 3,
-    GALAY_REDIS_RESP_ARRAY = 4
+    GALAY_REDIS_RESP_ARRAY = 4,
+    GALAY_REDIS_RESP_NIL = 5,
+    GALAY_REDIS_RESP_DOUBLE = 6,
+    GALAY_REDIS_RESP_BOOLEAN = 7,
+    GALAY_REDIS_RESP_BLOB_ERROR = 8,
+    GALAY_REDIS_RESP_VERBATIM_STRING = 9,
+    GALAY_REDIS_RESP_BIG_NUMBER = 10,
+    GALAY_REDIS_RESP_MAP = 11,
+    GALAY_REDIS_RESP_SET = 12,
+    GALAY_REDIS_RESP_PUSH = 13
 } galay_redis_resp_type_t;
+
+typedef enum galay_redis_redirect_type_t {
+    GALAY_REDIS_REDIRECT_NONE = 0,
+    GALAY_REDIS_REDIRECT_MOVED = 1,
+    GALAY_REDIS_REDIRECT_ASK = 2
+} galay_redis_redirect_type_t;
 
 typedef struct galay_redis_command_builder_t galay_redis_command_builder_t;
 typedef struct galay_redis_reply_t galay_redis_reply_t;
 typedef struct galay_redis_client_t galay_redis_client_t;
 typedef struct galay_redis_pipeline_t galay_redis_pipeline_t;
+typedef struct galay_redis_pool_t galay_redis_pool_t;
+typedef struct galay_redis_pool_lease_t galay_redis_pool_lease_t;
+typedef struct galay_redis_cluster_t galay_redis_cluster_t;
 
 typedef struct galay_redis_client_config_t {
     const char* host;
@@ -30,6 +48,28 @@ typedef struct galay_redis_client_config_t {
     int resp_version;
     int connect_timeout_ms;
 } galay_redis_client_config_t;
+
+typedef struct galay_redis_pool_config_t {
+    galay_redis_client_config_t client;
+    size_t min_connections;
+    size_t max_connections;
+    size_t initial_connections;
+} galay_redis_pool_config_t;
+
+typedef struct galay_redis_cluster_node_config_t {
+    const char* host;
+    uint16_t port;
+    uint16_t slot_start;
+    uint16_t slot_end;
+} galay_redis_cluster_node_config_t;
+
+typedef struct galay_redis_cluster_route_t {
+    uint16_t slot;
+    size_t node_index;
+    const char* host;
+    uint16_t port;
+    galay_redis_redirect_type_t redirect_type;
+} galay_redis_cluster_route_t;
 
 const char* galay_redis_get_error(galay_status_t status);
 galay_status_t galay_redis_command_builder_create(galay_redis_command_builder_t** out);
@@ -44,10 +84,20 @@ galay_status_t galay_redis_command_builder_build(galay_redis_command_builder_t* 
 galay_status_t galay_redis_parse_reply(const char* data, size_t data_len,
                                        galay_redis_reply_t** out, size_t* consumed);
 void galay_redis_reply_destroy(galay_redis_reply_t* reply);
+void galay_redis_reply_free(galay_redis_reply_t* reply);
 galay_redis_resp_type_t galay_redis_reply_type(const galay_redis_reply_t* reply);
 galay_status_t galay_redis_reply_string(const galay_redis_reply_t* reply, const char** value,
                                         size_t* value_len);
+galay_status_t galay_redis_reply_integer(const galay_redis_reply_t* reply, int64_t* value);
+galay_status_t galay_redis_reply_double(const galay_redis_reply_t* reply, double* value);
+galay_status_t galay_redis_reply_boolean(const galay_redis_reply_t* reply, galay_bool_t* value);
 galay_status_t galay_redis_reply_array_size(const galay_redis_reply_t* reply, size_t* size);
+galay_status_t galay_redis_reply_array_at(const galay_redis_reply_t* reply, size_t index,
+                                          const galay_redis_reply_t** out);
+galay_status_t galay_redis_reply_map_size(const galay_redis_reply_t* reply, size_t* size);
+galay_status_t galay_redis_reply_map_at(const galay_redis_reply_t* reply, size_t index,
+                                        const galay_redis_reply_t** key,
+                                        const galay_redis_reply_t** value);
 galay_status_t galay_redis_client_create(const galay_redis_client_config_t* config,
                                          galay_redis_client_t** out);
 void galay_redis_client_destroy(galay_redis_client_t* client);
@@ -160,6 +210,99 @@ C_IOResult galay_redis_client_pipeline_async(galay_redis_client_t* client,
                                              int64_t timeout_ms,
                                              galay_redis_reply_t*** replies,
                                              size_t* reply_count);
+
+/**
+ * @brief 创建 Redis C 连接池。
+ * @param config 连接和池大小配置；NULL 使用 127.0.0.1:6379、最大 1 连接。
+ * @param out 成功时返回 pool，调用方负责用 `galay_redis_pool_destroy` 释放。
+ * @return 参数非法或分配失败通过 `galay_status_t` 返回。
+ * @note pool 不提供跨线程同步；应在同一 C runtime/调度上下文内 acquire/release。
+ */
+galay_status_t galay_redis_pool_create(const galay_redis_pool_config_t* config,
+                                       galay_redis_pool_t** out);
+
+/**
+ * @brief 销毁 Redis C 连接池及其空闲/占用连接句柄。
+ * @param pool 可为 NULL；调用方必须先停止使用所有 lease。
+ */
+void galay_redis_pool_destroy(galay_redis_pool_t* pool);
+
+/**
+ * @brief 在当前 C coroutine 内获取一个 Redis 连接 lease。
+ * @param pool 由 `galay_redis_pool_create` 创建的连接池。
+ * @param timeout_ms 新建连接时使用的连接超时；连接池已满时返回 `C_IOResultTimeout`。
+ * @param lease 成功时返回 lease，必须用 `galay_redis_pool_release` 归还。
+ * @return 成功返回 `C_IOResultOk`；参数错误、连接失败或池耗尽通过返回值传播。
+ */
+C_IOResult galay_redis_pool_acquire(galay_redis_pool_t* pool,
+                                    int64_t timeout_ms,
+                                    galay_redis_pool_lease_t** lease);
+
+/**
+ * @brief 归还一个 Redis pool lease。
+ * @param pool lease 所属 pool。
+ * @param lease 由 `galay_redis_pool_acquire` 返回的 lease。
+ * @return `GALAY_OK` 表示归还成功；重复归还或 pool 不匹配返回错误。
+ */
+galay_status_t galay_redis_pool_release(galay_redis_pool_t* pool,
+                                        galay_redis_pool_lease_t* lease);
+
+/**
+ * @brief 获取 lease 中借用的 client。
+ * @return 返回的 client 由 pool 拥有，生命周期到 lease release 为止；调用方不得 destroy。
+ */
+galay_redis_client_t* galay_redis_pool_lease_client(galay_redis_pool_lease_t* lease);
+
+/**
+ * @brief 创建最小 Redis Cluster 路由表。
+ * @param out 成功时返回 cluster，调用方负责用 `galay_redis_cluster_destroy` 释放。
+ */
+galay_status_t galay_redis_cluster_create(galay_redis_cluster_t** out);
+
+/**
+ * @brief 销毁 Redis Cluster 路由表。
+ * @param cluster 可为 NULL。
+ */
+void galay_redis_cluster_destroy(galay_redis_cluster_t* cluster);
+
+/**
+ * @brief 添加一个节点及其 slot 覆盖范围。
+ * @param node host/port 和闭区间 slot range；host 字符串会被复制到 cluster。
+ */
+galay_status_t galay_redis_cluster_add_node(galay_redis_cluster_t* cluster,
+                                            const galay_redis_cluster_node_config_t* node);
+
+/**
+ * @brief 计算 Redis Cluster key slot。
+ * @param key key 字节序列；支持 `{tag}` hash tag。
+ * @param key_len key 字节长度。
+ * @param slot 成功时返回 0-16383。
+ */
+galay_status_t galay_redis_cluster_key_slot(const char* key, size_t key_len, uint16_t* slot);
+
+/**
+ * @brief 按 slot 查询当前路由节点。
+ * @param route 成功时返回借用 host 指针；指针在下一次 cluster 修改前有效。
+ */
+galay_status_t galay_redis_cluster_route_slot(const galay_redis_cluster_t* cluster,
+                                              uint16_t slot,
+                                              galay_redis_cluster_route_t* route);
+
+/**
+ * @brief 按 key 计算 slot 并查询当前路由节点。
+ */
+galay_status_t galay_redis_cluster_route_key(const galay_redis_cluster_t* cluster,
+                                             const char* key,
+                                             size_t key_len,
+                                             galay_redis_cluster_route_t* route);
+
+/**
+ * @brief 解析 `-MOVED` 或 `-ASK` reply 并返回目标路由。
+ * @details MOVED 会更新 slot 路由缓存；ASK 只返回临时目标，不修改缓存。
+ */
+galay_status_t galay_redis_cluster_apply_redirect(galay_redis_cluster_t* cluster,
+                                                  const galay_redis_reply_t* reply,
+                                                  galay_redis_cluster_route_t* route);
 
 /**
  * @brief 在当前 C coroutine 内关闭 Redis TCP 连接并释放内部 socket。
