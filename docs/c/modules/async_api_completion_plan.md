@@ -24,6 +24,27 @@ async client/server C ABI。
   bridge 或模块自己的 direct coroutine 边界实现。
 - 禁止过分拆分 helper；关键错误传播、生命周期和资源释放逻辑保留在调用点附近。
 
+## C async ABI 约定
+
+每个模块的 C async surface 以 `src/c/galay-<module>-c/` 为唯一 ABI 边界。公开头文件只暴露
+opaque handle、C struct、枚举错误码、结果结构和 `galay_coro_task_t` 可等待对象；不得把 C++
+类型、模板、namespace、异常或 `Task<T>` helper 暴露到 C 调用方。所有 create/acquire API
+必须有对应 destroy/release API；返回的 buffer、reply、row、frame、span/export result 等资源
+必须在头文件 Doxygen 中说明所有权，并提供明确 free 路径。
+
+错误传播必须是返回值驱动：公共 C API 用 `galay_status_t`、模块错误枚举或结果结构表达失败，
+每个新增公开错误枚举必须提供覆盖全部枚举值的 `*_get_error(...)` 字符串函数。跨 C/C++ 边界时，
+底层 errno、typed error 或协议错误要立即转换成公开错误码或结果结构；生产实现不得新增
+`try`/`catch`/`throw` 兜底。所有非 `void` 返回值，包括 close、free、cleanup、rollback 路径，
+都必须检查并传播、合并或记录为调用方可观测状态。
+
+异步 API 必须通过 direct C coroutine runtime 悬挂和恢复，不能在 coroutine path 中隐藏阻塞
+I/O、阻塞锁、sleep 或 busy wait。测试使用本地 loopback/mock transport，不依赖真实外部服务；
+benchmark 只做吞吐、延迟或压力 smoke，不替代 correctness test。每个模块交付时必须同步更新
+`test/c/<module>`、`examples/c/<module>`、`benchmark/c/<module>` 和
+`docs/c/modules/<module>/README.md`，并写清 handle 生命周期、buffer 生命周期、线程/协程安全、
+取消/close 语义和错误码映射。
+
 ## 总体架构
 
 1. 每个 C 模块单独放在 `src/c/galay-<module>-c/`。
@@ -31,6 +52,23 @@ async client/server C ABI。
 3. 公共状态码继续复用 `galay_status_t`；模块特有错误补充模块枚举和 `*_get_error(...)`。
 4. async API 以 `galay_coro_task_t` / C runtime 为执行边界，避免通过 spawn C++ task 旁路。
 5. 同步/protocol helper 与 async client/server 分层：先保证协议 surface，再补网络 async。
+
+## 模块状态检查清单
+
+| 模块 | 当前状态 | 本轮 worker 验收点 |
+|---|---|---|
+| kernel | direct C coroutine 基础较完整，AioFile commit/sleep/timer/socket option residual 待补 | AioFile suspending bridge、`galay_coro_sleep`、kernel example/benchmark/docs 更新 |
+| http | 协议 helper 已有，async runtime 缺失 | C client/server/session/stream loopback、route callback、timeout/error 覆盖 |
+| ws | frame helper 已有，async runtime 缺失 | upgrade loopback、text/binary/ping/pong/close、fragment/mask 错误覆盖 |
+| http2 | frame/settings/ping/HPACK helper 已有，async runtime 缺失 | h2c client/server/stream、flow control、RST/GOAWAY/settings ack 覆盖 |
+| redis | standalone connect/command/auth/select/pipeline 已有，RESP/pool/topology 待补 | RESP reply accessor、pool lease、cluster route loopback |
+| mysql | 最小 connect/query/close 已有，auth/result/pool 待补 | result set/field/row、auth exchange、stmt/transaction/pool 覆盖 |
+| mongo | helper/stub surface 为主，真实 BSON/OP_MSG/async client 待补 | BSON compatibility、OP_MSG loopback、hello/command/CRUD helper |
+| etcd | config/KV surface 存在但 connect/KV 多为 unsupported | async connect/KV/lease/watch/pipeline/cluster policy |
+| mcp | JSON-RPC helper 已有，client/server runtime 待补 | stdio/http client loopback、server handler registration |
+| rpc | envelope codec helper 已有，runtime 待补 | unary/streaming loopback、deadline/cancel/pool/heartbeat |
+| ssl | context/config helper 已有，async socket 待补 | TLS loopback、handshake/send/recv/shutdown、ALPN/session/cipher controls |
+| tracing | trace/span/provider 部分 stub，真实生命周期/export 待补 | span lifecycle、context inject/extract、sampler/exporter/logger |
 
 ## Phase 1: C target 与公共 ABI 基线
 
