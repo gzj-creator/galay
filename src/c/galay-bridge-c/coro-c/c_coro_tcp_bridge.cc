@@ -1,9 +1,9 @@
 #include "c_coro_tcp_bridge.h"
 
-#include "../async/tcp_socket.h"
-#include "awaitable.h"
-#include "io_scheduler.hpp"
-#include "timer_scheduler.h"
+#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/timer_scheduler.h>
 
 #include <atomic>
 #include <cerrno>

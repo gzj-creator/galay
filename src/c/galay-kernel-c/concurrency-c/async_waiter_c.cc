@@ -3,7 +3,7 @@
 #include "../../../cpp/galay-kernel/concurrency/async_waiter.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
-#include <galay/cpp/galay-kernel/core/c_coro_async_waiter_bridge.h>
+#include <galay/c/galay-bridge-c/coro-c/c_coro_async_waiter_bridge.h>
 
 #include <chrono>
 #include <cstdint>

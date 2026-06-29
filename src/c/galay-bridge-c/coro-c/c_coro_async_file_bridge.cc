@@ -1,8 +1,8 @@
 #include "c_coro_async_file_bridge.h"
 
-#include "../async/async_file.h"
-#include "awaitable.h"
-#include "io_scheduler.hpp"
+#include <galay/cpp/galay-kernel/async/async_file.h>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 
 #include <atomic>
 #include <cerrno>
@@ -474,14 +474,14 @@ C_IOResult perform_registered_io(IOController* controller,
 
 extern "C" {
 
-GalayCoreCoroIOResult galay_core_coro_async_file_read(void* file_handle,
-                                                      void* scheduler_handle,
-                                                      char* buffer,
-                                                      size_t length,
-                                                      int64_t offset,
-                                                      int64_t timeout_ms,
-                                                      void* user_data,
-                                                      const GalayCoreCoroWaitOps* wait_ops)
+GalayCoreCoroIOResult galay_core_coro_async_file_read(void* file_handle [[maybe_unused]],
+                                                      void* scheduler_handle [[maybe_unused]],
+                                                      char* buffer [[maybe_unused]],
+                                                      size_t length [[maybe_unused]],
+                                                      int64_t offset [[maybe_unused]],
+                                                      int64_t timeout_ms [[maybe_unused]],
+                                                      void* user_data [[maybe_unused]],
+                                                      const GalayCoreCoroWaitOps* wait_ops [[maybe_unused]])
 {
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     auto* file = to_cpp_file(file_handle);
@@ -511,26 +511,18 @@ GalayCoreCoroIOResult galay_core_coro_async_file_read(void* file_handle,
                                  operation,
                                  static_cast<FileReadAwaitable*>(&operation));
 #else
-    (void)file_handle;
-    (void)scheduler_handle;
-    (void)buffer;
-    (void)length;
-    (void)offset;
-    (void)timeout_ms;
-    (void)user_data;
-    (void)wait_ops;
     return make_result(C_IOResultError, ENOTSUP);
 #endif
 }
 
-GalayCoreCoroIOResult galay_core_coro_async_file_write(void* file_handle,
-                                                       void* scheduler_handle,
-                                                       const char* buffer,
-                                                       size_t length,
-                                                       int64_t offset,
-                                                       int64_t timeout_ms,
-                                                       void* user_data,
-                                                       const GalayCoreCoroWaitOps* wait_ops)
+GalayCoreCoroIOResult galay_core_coro_async_file_write(void* file_handle [[maybe_unused]],
+                                                       void* scheduler_handle [[maybe_unused]],
+                                                       const char* buffer [[maybe_unused]],
+                                                       size_t length [[maybe_unused]],
+                                                       int64_t offset [[maybe_unused]],
+                                                       int64_t timeout_ms [[maybe_unused]],
+                                                       void* user_data [[maybe_unused]],
+                                                       const GalayCoreCoroWaitOps* wait_ops [[maybe_unused]])
 {
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     auto* file = to_cpp_file(file_handle);
@@ -560,23 +552,14 @@ GalayCoreCoroIOResult galay_core_coro_async_file_write(void* file_handle,
                                  operation,
                                  static_cast<FileWriteAwaitable*>(&operation));
 #else
-    (void)file_handle;
-    (void)scheduler_handle;
-    (void)buffer;
-    (void)length;
-    (void)offset;
-    (void)timeout_ms;
-    (void)user_data;
-    (void)wait_ops;
     return make_result(C_IOResultError, ENOTSUP);
 #endif
 }
 
 GalayCoreCoroIOResult galay_core_coro_async_file_close(void* file_handle,
                                                        void* scheduler_handle,
-                                                       int64_t timeout_ms)
+                                                       int64_t)
 {
-    (void)timeout_ms;
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     auto* file = to_cpp_file(file_handle);
     Scheduler* scheduler = to_io_scheduler(scheduler_handle);
@@ -594,8 +577,6 @@ GalayCoreCoroIOResult galay_core_coro_async_file_close(void* file_handle,
     }
     return make_result(C_IOResultError, galay::kernel::detail::normalizeAwaitableErrno(closed));
 #else
-    (void)file_handle;
-    (void)scheduler_handle;
     return make_result(C_IOResultError, ENOTSUP);
 #endif
 }

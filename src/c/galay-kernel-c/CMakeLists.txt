@@ -49,6 +49,7 @@ target_include_directories(galay-c-kernel
 
 target_link_libraries(galay-c-kernel
     PUBLIC
+        galay::c-bridge
         galay::kernel
 )
 

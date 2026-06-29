@@ -321,9 +321,60 @@ static int require_direct_tcp_c_api_uses_core_bridge(void)
     return failed;
 }
 
+static int require_c_bridge_module_layout(void)
+{
+    const char* bridge_files[] = {
+        "c_coro_async_file_bridge.cc",
+        "c_coro_async_file_bridge.h",
+        "c_coro_async_mutex_bridge.cc",
+        "c_coro_async_mutex_bridge.h",
+        "c_coro_async_waiter_bridge.cc",
+        "c_coro_async_waiter_bridge.h",
+        "c_coro_file_watcher_bridge.cc",
+        "c_coro_file_watcher_bridge.h",
+        "c_coro_tcp_bridge.cc",
+        "c_coro_tcp_bridge.h",
+        "c_coro_udp_bridge.cc",
+        "c_coro_udp_bridge.h",
+    };
+
+    int failed = 0;
+    for (size_t i = 0; i < sizeof(bridge_files) / sizeof(bridge_files[0]); ++i) {
+        char new_path[kMaxPath];
+        char old_path[kMaxPath];
+        char new_relative[kMaxPath];
+        char old_relative[kMaxPath];
+
+        if (!join_path(new_relative,
+                       sizeof(new_relative),
+                       "src/c/galay-bridge-c/coro-c",
+                       bridge_files[i]) ||
+            !join_path(old_relative,
+                       sizeof(old_relative),
+                       "src/cpp/galay-kernel/core",
+                       bridge_files[i]) ||
+            !join_path(new_path, sizeof(new_path), GALAY_SOURCE_DIR, new_relative) ||
+            !join_path(old_path, sizeof(old_path), GALAY_SOURCE_DIR, old_relative)) {
+            failed = 1;
+            continue;
+        }
+
+        if (!is_regular_file(new_path)) {
+            fprintf(stderr, "[T22] C/C++ bridge file must live in bridge module: %s\n", new_relative);
+            failed = 1;
+        }
+        if (is_regular_file(old_path)) {
+            fprintf(stderr, "[T22] C/C++ bridge file must not remain in C++ kernel core: %s\n", old_relative);
+            failed = 1;
+        }
+    }
+
+    return failed;
+}
+
 static int require_direct_tcp_iouring_result_flag_reset(void)
 {
-    const char* relative_path = "src/cpp/galay-kernel/core/c_coro_tcp_bridge.cc";
+    const char* relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
     char full_path[kMaxPath];
     if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
         return 1;
@@ -351,7 +402,7 @@ static int require_direct_tcp_iouring_result_flag_reset(void)
 
 static int require_direct_tcp_timeout_arbitration(void)
 {
-    const char* relative_path = "src/cpp/galay-kernel/core/c_coro_tcp_bridge.cc";
+    const char* relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
     char full_path[kMaxPath];
     if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
         return 1;
@@ -469,6 +520,7 @@ static int require_iouring_accept_uses_direct_completion_arbitration(void)
 int main(void)
 {
     int failed = require_direct_tcp_c_api_uses_core_bridge();
+    failed |= require_c_bridge_module_layout();
     failed |= require_direct_tcp_iouring_result_flag_reset();
     failed |= require_direct_tcp_timeout_arbitration();
     failed |= require_explicit_linux_aarch64_coro_context_boundary();

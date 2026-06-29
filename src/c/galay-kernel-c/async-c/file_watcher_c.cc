@@ -3,7 +3,7 @@
 #include "../../../cpp/galay-kernel/async/file_watcher.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
-#include <galay/cpp/galay-kernel/core/c_coro_file_watcher_bridge.h>
+#include <galay/c/galay-bridge-c/coro-c/c_coro_file_watcher_bridge.h>
 
 #include <cerrno>
 #include <chrono>
@@ -411,9 +411,9 @@ C_FileWatcherResultCode galay_kernel_file_watcher_get_path(
 }
 
 C_IOResult galay_kernel_file_watcher_watch(
-    galay_kernel_file_watcher_t* c_watcher,
-    galay_kernel_file_watcher_watch_result_t* out_result,
-    int64_t timeout_ms)
+    galay_kernel_file_watcher_t* c_watcher [[maybe_unused]],
+    galay_kernel_file_watcher_watch_result_t* out_result [[maybe_unused]],
+    int64_t timeout_ms [[maybe_unused]])
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
     void* scheduler = current_io_scheduler();
@@ -463,9 +463,6 @@ C_IOResult galay_kernel_file_watcher_watch(
     }
     return result;
 #else
-    (void)c_watcher;
-    (void)out_result;
-    (void)timeout_ms;
     return make_result(C_IOResultError, ENOTSUP);
 #endif
 }

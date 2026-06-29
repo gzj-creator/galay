@@ -1,8 +1,8 @@
 #include "c_coro_udp_bridge.h"
 
-#include "../async/udp_socket.h"
-#include "awaitable.h"
-#include "io_scheduler.hpp"
+#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 
 #include <atomic>
 #include <cerrno>
@@ -724,9 +724,8 @@ GalayCoreCoroIOResult galay_core_coro_udp_sendto(void* socket_handle,
 
 GalayCoreCoroIOResult galay_core_coro_udp_close(void* socket_handle,
                                                 void* scheduler_handle,
-                                                int64_t timeout_ms)
+                                                int64_t)
 {
-    (void)timeout_ms;
     auto* socket = to_cpp_socket(socket_handle);
     Scheduler* scheduler = to_io_scheduler(scheduler_handle);
     if (socket == nullptr || scheduler == nullptr) {

@@ -3,7 +3,7 @@
 #include "../../../cpp/galay-kernel/async/async_file.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
-#include <galay/cpp/galay-kernel/core/c_coro_async_file_bridge.h>
+#include <galay/c/galay-bridge-c/coro-c/c_coro_async_file_bridge.h>
 
 #include <cerrno>
 #include <chrono>
@@ -333,8 +333,8 @@ C_AsyncFileResultCode galay_kernel_async_file_destroy(galay_kernel_async_file_t*
 C_AsyncFileResultCode galay_kernel_async_file_open(
     galay_kernel_async_file_t* c_file,
     const char* path,
-    C_AsyncFileOpenMode mode,
-    int permissions)
+    C_AsyncFileOpenMode mode [[maybe_unused]],
+    int permissions [[maybe_unused]])
 {
     if (c_file == nullptr || path == nullptr || path[0] == '\0') {
         return C_AsyncFileParameterInvalid;
@@ -347,8 +347,6 @@ C_AsyncFileResultCode galay_kernel_async_file_open(
     auto opened = file->open(std::string(path), to_cpp_open_mode(mode), permissions);
     return opened ? C_AsyncFileSuccess : from_cpp_io_error(opened.error());
 #else
-    (void)mode;
-    (void)permissions;
     return C_AsyncFileOperationUnsupported;
 #endif
 }
@@ -400,11 +398,11 @@ C_AsyncFileResultCode galay_kernel_async_file_sync(galay_kernel_async_file_t* c_
 }
 
 C_IOResult galay_kernel_async_file_read(
-    galay_kernel_async_file_t* file,
-    char* buffer,
-    size_t length,
-    int64_t offset,
-    int64_t timeout_ms)
+    galay_kernel_async_file_t* file [[maybe_unused]],
+    char* buffer [[maybe_unused]],
+    size_t length [[maybe_unused]],
+    int64_t offset [[maybe_unused]],
+    int64_t timeout_ms [[maybe_unused]])
 {
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     void* scheduler = current_io_scheduler();
@@ -432,21 +430,16 @@ C_IOResult galay_kernel_async_file_read(
                                                    wait_ops);
         });
 #else
-    (void)file;
-    (void)buffer;
-    (void)length;
-    (void)offset;
-    (void)timeout_ms;
     return make_result(C_IOResultError, ENOTSUP);
 #endif
 }
 
 C_IOResult galay_kernel_async_file_write(
-    galay_kernel_async_file_t* file,
-    const char* buffer,
-    size_t length,
-    int64_t offset,
-    int64_t timeout_ms)
+    galay_kernel_async_file_t* file [[maybe_unused]],
+    const char* buffer [[maybe_unused]],
+    size_t length [[maybe_unused]],
+    int64_t offset [[maybe_unused]],
+    int64_t timeout_ms [[maybe_unused]])
 {
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     void* scheduler = current_io_scheduler();
@@ -474,18 +467,13 @@ C_IOResult galay_kernel_async_file_write(
                                                     wait_ops);
         });
 #else
-    (void)file;
-    (void)buffer;
-    (void)length;
-    (void)offset;
-    (void)timeout_ms;
     return make_result(C_IOResultError, ENOTSUP);
 #endif
 }
 
 C_IOResult galay_kernel_async_file_close(
-    galay_kernel_async_file_t* file,
-    int64_t timeout_ms)
+    galay_kernel_async_file_t* file [[maybe_unused]],
+    int64_t timeout_ms [[maybe_unused]])
 {
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     void* scheduler = current_io_scheduler();
@@ -496,8 +484,6 @@ C_IOResult galay_kernel_async_file_close(
     return from_core_result(
         galay_core_coro_async_file_close(file->file, scheduler, timeout_ms));
 #else
-    (void)file;
-    (void)timeout_ms;
     return make_result(C_IOResultError, ENOTSUP);
 #endif
 }

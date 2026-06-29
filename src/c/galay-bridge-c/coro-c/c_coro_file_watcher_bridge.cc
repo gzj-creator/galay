@@ -1,8 +1,8 @@
 #include "c_coro_file_watcher_bridge.h"
 
-#include "../async/file_watcher.h"
-#include "awaitable.h"
-#include "io_scheduler.hpp"
+#include <galay/cpp/galay-kernel/async/file_watcher.h>
+#include <galay/cpp/galay-kernel/core/awaitable.h>
+#include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 
 #include <atomic>
 #include <cerrno>

@@ -3,7 +3,7 @@
 #include "../../../cpp/galay-kernel/async/tcp_socket.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
-#include <galay/cpp/galay-kernel/core/c_coro_tcp_bridge.h>
+#include <galay/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.h>
 
 #include <arpa/inet.h>
 #include <cerrno>

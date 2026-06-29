@@ -1,8 +1,8 @@
-#include "c_coro_async_waiter_bridge.h"
+#include "c_coro_async_mutex_bridge.h"
 
-#include "../concurrency/async_waiter.h"
-#include "scheduler.hpp"
-#include "waker.h"
+#include <galay/cpp/galay-kernel/concurrency/async_mutex.h>
+#include <galay/cpp/galay-kernel/core/scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/waker.h>
 
 #include <atomic>
 #include <chrono>
@@ -15,26 +15,28 @@ namespace
 
 using C_IOResult = GalayCoreCoroIOResult;
 using C_IOResultCode = GalayCoreCoroIOResultCode;
-using galay::kernel::AsyncWaiter;
-using galay::kernel::AsyncWaiterAwaitable;
+using galay::kernel::AsyncMutex;
+using galay::kernel::AsyncMutexAwaitable;
 using galay::kernel::IOError;
 using galay::kernel::Scheduler;
 
 constexpr C_IOResultCode C_IOResultOk = GalayCoreCoroIOResultOk;
 constexpr C_IOResultCode C_IOResultTimeout = GalayCoreCoroIOResultTimeout;
+constexpr C_IOResultCode C_IOResultCancelled = GalayCoreCoroIOResultCancelled;
 constexpr C_IOResultCode C_IOResultInvalid = GalayCoreCoroIOResultInvalid;
 constexpr C_IOResultCode C_IOResultError = GalayCoreCoroIOResultError;
 
-struct CoroAsyncWaiterOperation;
+struct CoroAsyncMutexOperation;
 
-struct CoroAsyncWaiterWakeState {
+struct CoroAsyncMutexWakeState {
     galay::kernel::detail::ResumeTokenHeader header;
-    CoroAsyncWaiterOperation* operation = nullptr;
+    CoroAsyncMutexOperation* operation = nullptr;
 };
 
 enum class CompletionPhase : uint8_t {
     Pending,
     TimedOut,
+    Cancelled,
     Completed,
 };
 
@@ -82,18 +84,19 @@ C_IOResult from_io_error(const IOError& error)
     if (IOError::contains(error.code(), galay::kernel::kTimeout)) {
         return make_result(C_IOResultTimeout, sys_errno);
     }
-    if (IOError::contains(error.code(), galay::kernel::kParamInvalid)) {
+    if (IOError::contains(error.code(), galay::kernel::kParamInvalid) ||
+        IOError::contains(error.code(), galay::kernel::kNotReady)) {
         return make_result(C_IOResultInvalid, sys_errno);
     }
     return make_result(C_IOResultError, sys_errno);
 }
 
-struct CoroAsyncWaiterOperation {
-    CoroAsyncWaiterOperation(AsyncWaiter<void>* waiter,
-                             Scheduler* scheduler,
-                             void* user_data,
-                             GalayCoreCoroWaitOps wait_ops)
-        : awaitable(waiter->wait())
+struct CoroAsyncMutexOperation {
+    CoroAsyncMutexOperation(AsyncMutex* mutex,
+                            Scheduler* scheduler,
+                            void* user_data,
+                            GalayCoreCoroWaitOps wait_ops)
+        : awaitable(mutex->lock())
         , m_scheduler(scheduler)
         , m_wait_ops(wait_ops)
     {
@@ -152,7 +155,7 @@ struct CoroAsyncWaiterOperation {
 
     Scheduler* scheduler() const noexcept { return m_scheduler; }
 
-    AsyncWaiterAwaitable<void> awaitable;
+    AsyncMutexAwaitable awaitable;
 
 private:
     C_IOResult buildResult() noexcept
@@ -187,7 +190,7 @@ private:
 
     static Scheduler* wake_owner(void* state) noexcept
     {
-        auto* wake_state = static_cast<CoroAsyncWaiterWakeState*>(state);
+        auto* wake_state = static_cast<CoroAsyncMutexWakeState*>(state);
         return wake_state != nullptr && wake_state->operation != nullptr
             ? wake_state->operation->scheduler()
             : nullptr;
@@ -195,7 +198,7 @@ private:
 
     static bool wake_request(void* state) noexcept
     {
-        auto* wake_state = static_cast<CoroAsyncWaiterWakeState*>(state);
+        auto* wake_state = static_cast<CoroAsyncMutexWakeState*>(state);
         return wake_state != nullptr && wake_state->operation != nullptr &&
             wake_state->operation->completeFromWake();
     }
@@ -215,23 +218,23 @@ private:
     std::atomic<CompletionPhase> m_phase{CompletionPhase::Pending};
     std::mutex m_user_data_mutex;
     void* m_user_data = nullptr;
-    CoroAsyncWaiterWakeState m_wake_state{};
+    CoroAsyncMutexWakeState m_wake_state{};
 };
 
 } // namespace
 
 extern "C" {
 
-GalayCoreCoroIOResult galay_core_coro_async_waiter_wait(
-    void* waiter_handle,
+GalayCoreCoroIOResult galay_core_coro_async_mutex_lock(
+    void* mutex_handle,
     void* scheduler_handle,
     int64_t timeout_ms,
     void* user_data,
     const GalayCoreCoroWaitOps* wait_ops)
 {
-    auto* waiter = static_cast<AsyncWaiter<void>*>(waiter_handle);
+    auto* mutex = static_cast<AsyncMutex*>(mutex_handle);
     auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
-    if (waiter == nullptr || scheduler == nullptr || user_data == nullptr ||
+    if (mutex == nullptr || scheduler == nullptr || user_data == nullptr ||
         !timeout_fits_chrono(timeout_ms) || !valid_wait_ops(wait_ops)) {
         return make_result(C_IOResultInvalid);
     }
@@ -239,7 +242,7 @@ GalayCoreCoroIOResult galay_core_coro_async_waiter_wait(
         return make_result(C_IOResultTimeout);
     }
 
-    CoroAsyncWaiterOperation operation(waiter, scheduler, user_data, *wait_ops);
+    CoroAsyncMutexOperation operation(mutex, scheduler, user_data, *wait_ops);
     if (operation.awaitable.await_ready()) {
         return operation.finishWithoutWait(make_result(C_IOResultOk));
     }

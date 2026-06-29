@@ -14,6 +14,7 @@
 ### Added
 
 - 新增非 kernel C module target Phase 1 基线：按 `src/c/galay-<module>-c` 目录组织补齐 `galay-c-common`、`galay-c-utils`、`galay-c-ssl`、`galay-c-http`、`galay-c-ws`、`galay-c-http2`、`galay-c-redis`、`galay-c-rpc`、`galay-c-mysql`、`galay-c-mongo`、`galay-c-etcd`、`galay-c-mcp`、`galay-c-tracing` 的 CMake target、纯 C public header、最小 wrapper implementation 与 CTest surface 注册。
+- 新增 `galay-c-bridge` 内部 C/C++ bridge 模块，将 C coroutine 旁路 bridge 从 C++ kernel core 拆到 `src/c/galay-bridge-c/coro-c`，并由 `galay-c-kernel` 显式依赖。
 - 新增 HTTP/2 production hardening 覆盖：补齐 SETTINGS 校验、h2c HTTP2-Settings 解码、peer/local settings 应用、HEADERS/CONTINUATION 与 DATA outbound limit 测试，覆盖 `MAX_FRAME_SIZE`、`MAX_HEADER_LIST_SIZE`、ACK payload、非 0 stream SETTINGS 和 decoder header-list limit。
 - 新增 C async API 补齐计划文档 `docs/c/modules/async_api_completion_plan.md`，明确当前非 kernel C target/async ABI 缺口，并按 HTTP/WS/HTTP2、Redis/MySQL/Mongo、Etcd/MCP/RPC、SSL/tracing 分阶段实现。
 - 新增 CMake 守卫 `config.kernel_internal_includes_relative`：递归扫描 `src/cpp/galay-kernel` 全部 `.cc/.h/.hpp/.inl` 源码，禁止内部实现通过 `galay/cpp/galay-kernel/` 公共 include 前缀引用自身头文件，强制改用相对路径。

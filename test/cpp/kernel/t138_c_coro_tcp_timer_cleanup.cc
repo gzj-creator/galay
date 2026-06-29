@@ -4,7 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/async/tcp_socket.h>
-#include <galay/cpp/galay-kernel/core/c_coro_tcp_bridge.h>
+#include <galay/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/core/timer_scheduler.h>
 
