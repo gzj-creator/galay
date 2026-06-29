@@ -9,6 +9,11 @@
 - `galay_tracing_tracer_t`, `galay_tracing_span_t`, `galay_tracing_sampler_t`, and `galay_tracing_logger_t` are owned handles with matching destroy functions.
 - Spans borrow their provider. Keep the provider alive until spans and tracers created from it are destroyed.
 
+Trace/span ID helpers are value-style APIs: `galay_tracing_trace_id_generate`,
+`galay_tracing_trace_id_parse`, `galay_tracing_trace_id_format`,
+`galay_tracing_span_id_generate`, `galay_tracing_span_id_parse`, and
+`galay_tracing_span_id_format`. Format calls write into caller-owned buffers.
+
 ## Span Surface
 
 The C span API supports string, signed integer, unsigned integer, double, and bool attributes; status; events; and links. `galay_tracing_span_end` ends the real C++ `Span` and submits it to the provider processor when one is configured.

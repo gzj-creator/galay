@@ -4,7 +4,12 @@
 
 ## Scope
 
-- Frame, SETTINGS, PING, stream-id, and lightweight HPACK helper APIs remain synchronous helpers.
+- Frame, SETTINGS, PING, stream-id, and lightweight HPACK helper APIs remain synchronous helpers:
+  `galay_http2_stream_id_validate`, `galay_http2_settings_value_validate`,
+  `galay_http2_ping_frame_create`, `galay_http2_frame_encode`,
+  `galay_http2_frame_decode`, `galay_http2_headers_add`,
+  `galay_http2_headers_get`, `galay_http2_hpack_encode`, and
+  `galay_http2_hpack_decode`.
 - h2c prior-knowledge client/server runtime is available through opaque handles:
   `galay_http2_client_t`, `galay_http2_server_t`, `galay_http2_conn_t`, and
   `galay_http2_stream_t`.

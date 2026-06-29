@@ -138,12 +138,13 @@ C_IOResult galay_mysql_client_connect_async(galay_mysql_client_t* client,
                                             int64_t timeout_ms);
 
 /**
- * @brief 使用最近一次 handshake packet 发送 mysql_native_password 认证响应并读取认证结果。
+ * @brief 使用最近一次 handshake packet 发送 MySQL 认证响应并读取认证结果。
  * @param client 已通过 `galay_mysql_client_connect_async` 建立 TCP 并读取 handshake 的 client。
  * @param config 用户名、密码、database 等认证配置。
  * @param timeout_ms socket I/O 超时。
- * @return `C_IOResultOk` 表示认证 OK packet 已收到；不支持的插件或 ERR packet 返回错误。
- * @note 当前 C 子集支持 `mysql_native_password`，`caching_sha2_password` 全量认证仍保留在 C++ API。
+ * @return `C_IOResultOk` 表示认证 OK packet 已收到；不支持的插件、ERR packet 或协议错误返回错误。
+ * @note C ABI 支持 `mysql_native_password` 和 `caching_sha2_password`，后者覆盖 fast auth
+ *       与 RSA public-key full auth；full auth 需要构建时启用 SSL/RSA 支持。
  */
 C_IOResult galay_mysql_client_authenticate_async(galay_mysql_client_t* client,
                                                  const galay_mysql_config_t* config,

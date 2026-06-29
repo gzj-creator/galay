@@ -3,12 +3,15 @@
 #include <galay/cpp/galay-ssl/ssl/ssl_context.h>
 #include <galay/cpp/galay-ssl/ssl/ssl_engine.h>
 
+#include <openssl/ssl.h>
+
 #include <algorithm>
 #include <array>
 #include <cstdio>
 #include <cstring>
 #include <new>
 #include <string>
+#include <vector>
 
 struct galay_ssl_context_t {
     galay_ssl_method_t method = GALAY_SSL_METHOD_TLS_CLIENT;
@@ -55,6 +58,55 @@ galay::ssl::SslVerifyMode to_cpp_verify_mode(galay_ssl_verify_mode_t mode)
     return mode == GALAY_SSL_VERIFY_PEER
         ? galay::ssl::SslVerifyMode::Peer
         : galay::ssl::SslVerifyMode::None;
+}
+
+bool to_cpp_session_cache_mode(galay_ssl_session_cache_mode_t mode, long* out)
+{
+    if (out == nullptr) {
+        return false;
+    }
+    switch (mode) {
+    case GALAY_SSL_SESSION_CACHE_OFF:
+        *out = SSL_SESS_CACHE_OFF;
+        return true;
+    case GALAY_SSL_SESSION_CACHE_CLIENT:
+        *out = SSL_SESS_CACHE_CLIENT;
+        return true;
+    case GALAY_SSL_SESSION_CACHE_SERVER:
+        *out = SSL_SESS_CACHE_SERVER;
+        return true;
+    case GALAY_SSL_SESSION_CACHE_BOTH:
+        *out = SSL_SESS_CACHE_BOTH;
+        return true;
+    }
+    return false;
+}
+
+bool valid_protocol_list(const char* const* protocols, size_t count)
+{
+    if (protocols == nullptr || count == 0) {
+        return false;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        if (protocols[i] == nullptr) {
+            return false;
+        }
+        const size_t length = std::strlen(protocols[i]);
+        if (length == 0 || length > 255) {
+            return false;
+        }
+    }
+    return true;
+}
+
+std::vector<std::string> make_protocol_list(const char* const* protocols, size_t count)
+{
+    std::vector<std::string> result;
+    result.reserve(count);
+    for (size_t i = 0; i < count; ++i) {
+        result.emplace_back(protocols[i]);
+    }
+    return result;
 }
 
 galay_status_t file_exists(const char* path)
@@ -335,6 +387,70 @@ galay_status_t galay_ssl_context_set_verify_mode(galay_ssl_context_t* context,
     }
     context->verify_mode = mode;
     context->context->setVerifyMode(to_cpp_verify_mode(mode));
+    return GALAY_OK;
+}
+
+galay_status_t galay_ssl_context_set_alpn_protocols(galay_ssl_context_t* context,
+                                                    const char* const* protocols,
+                                                    size_t count)
+{
+    if (context == nullptr || context->context == nullptr ||
+        !valid_protocol_list(protocols, count)) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    auto configured = context->context->setALPNProtocols(make_protocol_list(protocols, count));
+    return map_ssl_expected(configured.has_value());
+}
+
+galay_status_t galay_ssl_context_set_alpn_select_protocols(galay_ssl_context_t* context,
+                                                           const char* const* protocols,
+                                                           size_t count)
+{
+    if (context == nullptr || context->context == nullptr ||
+        !valid_protocol_list(protocols, count)) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    auto configured = context->context->setALPNSelectProtocols(make_protocol_list(protocols, count));
+    return map_ssl_expected(configured.has_value());
+}
+
+galay_status_t galay_ssl_context_set_session_cache_mode(galay_ssl_context_t* context,
+                                                        galay_ssl_session_cache_mode_t mode)
+{
+    long cpp_mode = 0;
+    if (context == nullptr || context->context == nullptr ||
+        !to_cpp_session_cache_mode(mode, &cpp_mode)) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    context->context->setSessionCacheMode(cpp_mode);
+    return GALAY_OK;
+}
+
+galay_status_t galay_ssl_context_set_session_timeout(galay_ssl_context_t* context,
+                                                     long timeout_seconds)
+{
+    if (context == nullptr || context->context == nullptr || timeout_seconds < 0) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    context->context->setSessionTimeout(timeout_seconds);
+    return GALAY_OK;
+}
+
+galay_status_t galay_ssl_context_disable_session_cache(galay_ssl_context_t* context)
+{
+    if (context == nullptr || context->context == nullptr) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    context->context->disableSessionCache();
+    return GALAY_OK;
+}
+
+galay_status_t galay_ssl_context_disable_session_tickets(galay_ssl_context_t* context)
+{
+    if (context == nullptr || context->context == nullptr) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    context->context->disableSessionTickets();
     return GALAY_OK;
 }
 
@@ -622,6 +738,15 @@ galay_status_t galay_ssl_socket_get_cipher(const galay_ssl_socket_t* socket, cha
         return GALAY_INVALID_ARGUMENT;
     }
     return copy_string_status(socket->engine->getCipher(), out, out_len, written);
+}
+
+galay_status_t galay_ssl_socket_get_negotiated_alpn(const galay_ssl_socket_t* socket, char* out,
+                                                    size_t out_len, size_t* written)
+{
+    if (!valid_engine_socket(socket)) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    return copy_string_status(socket->engine->getALPNProtocol(), out, out_len, written);
 }
 
 }

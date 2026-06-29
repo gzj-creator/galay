@@ -1,5 +1,9 @@
 #include <galay/c/galay-mysql-c/mysql.h>
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
+#include <galay/cpp/galay-utils/crypto/hmac.hpp>
+#ifdef GALAY_SSL_FEATURE_ENABLED
+#include <galay/cpp/galay-ssl/crypto/rsa.h>
+#endif
 
 #include <array>
 #include <algorithm>
@@ -408,6 +412,44 @@ std::vector<unsigned char> mysql_native_password_response(const char* password,
         response[i] = static_cast<unsigned char>(hash1[i] ^ hash3[i]);
     }
     return response;
+}
+
+std::vector<unsigned char> mysql_caching_sha2_password_response(const char* password,
+                                                                const unsigned char* salt,
+                                                                size_t salt_len)
+{
+    std::vector<unsigned char> response;
+    const size_t password_len = std::strlen(password);
+    if (password_len == 0) {
+        return response;
+    }
+    const auto hash1 = galay::utils::SHA256::hash(
+        reinterpret_cast<const uint8_t*>(password), password_len);
+    const auto hash2 = galay::utils::SHA256::hash(hash1.data(), hash1.size());
+    std::vector<unsigned char> combined;
+    combined.reserve(hash2.size() + salt_len);
+    combined.insert(combined.end(), hash2.begin(), hash2.end());
+    combined.insert(combined.end(), salt, salt + salt_len);
+    const auto hash3 = galay::utils::SHA256::hash(combined.data(), combined.size());
+    response.resize(hash1.size());
+    for (size_t i = 0; i < hash1.size(); ++i) {
+        response[i] = static_cast<unsigned char>(hash1[i] ^ hash3[i]);
+    }
+    return response;
+}
+
+std::vector<unsigned char> mysql_auth_response_for_plugin(std::string_view plugin,
+                                                          const char* password,
+                                                          const unsigned char* salt,
+                                                          size_t salt_len)
+{
+    if (plugin == "mysql_native_password") {
+        return mysql_native_password_response(password, salt, salt_len);
+    }
+    if (plugin == "caching_sha2_password") {
+        return mysql_caching_sha2_password_response(password, salt, salt_len);
+    }
+    return {};
 }
 
 C_IOResult read_mysql_packet(galay_kernel_tcp_socket_t* socket,
@@ -1005,10 +1047,11 @@ galay_status_t mysql_parse_handshake_info(const std::vector<unsigned char>& pack
         if (pos + part2_len > view.payload_len) {
             return GALAY_PROTOCOL_ERROR;
         }
-        if (part2_len > 0 && payload[pos + part2_len - 1U] == '\0') {
-            --part2_len;
+        size_t copy_len = part2_len;
+        if (copy_len > 0 && payload[pos + copy_len - 1U] == '\0') {
+            --copy_len;
         }
-        info->auth_plugin_data.append(reinterpret_cast<const char*>(payload + pos), part2_len);
+        info->auth_plugin_data.append(reinterpret_cast<const char*>(payload + pos), copy_len);
         pos += part2_len;
     }
     if ((info->capability_flags & kMysqlCapabilityPluginAuth) != 0 && pos < view.payload_len) {
@@ -1034,7 +1077,8 @@ galay_status_t mysql_encode_handshake_response(const galay_mysql_config_t* confi
     if (config == nullptr || out == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    if (handshake.auth_plugin_name != "mysql_native_password") {
+    if (handshake.auth_plugin_name != "mysql_native_password" &&
+        handshake.auth_plugin_name != "caching_sha2_password") {
         return GALAY_UNSUPPORTED;
     }
     auto* packet = new (std::nothrow) galay_mysql_buffer_t();
@@ -1042,7 +1086,8 @@ galay_status_t mysql_encode_handshake_response(const galay_mysql_config_t* confi
         return GALAY_OUT_OF_MEMORY;
     }
     std::vector<unsigned char> auth =
-        mysql_native_password_response(config->password.c_str(),
+        mysql_auth_response_for_plugin(handshake.auth_plugin_name,
+                                       config->password.c_str(),
                                        reinterpret_cast<const unsigned char*>(handshake.auth_plugin_data.data()),
                                        handshake.auth_plugin_data.size());
     uint32_t capability_flags = kMysqlCapabilityLongPassword |
@@ -1310,7 +1355,8 @@ galay_status_t galay_mysql_auth_response_for_plugin(const char* plugin, const ch
     if (plugin == nullptr || password == nullptr || salt == nullptr || out == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    if (std::strcmp(plugin, "mysql_native_password") != 0) {
+    if (std::strcmp(plugin, "mysql_native_password") != 0 &&
+        std::strcmp(plugin, "caching_sha2_password") != 0) {
         return GALAY_UNSUPPORTED;
     }
     auto* buffer = new (std::nothrow) galay_mysql_buffer_t();
@@ -1321,7 +1367,7 @@ galay_status_t galay_mysql_auth_response_for_plugin(const char* plugin, const ch
         delete buffer;
         return GALAY_INVALID_ARGUMENT;
     }
-    buffer->data = mysql_native_password_response(password, salt, salt_len);
+    buffer->data = mysql_auth_response_for_plugin(plugin, password, salt, salt_len);
     *out = buffer;
     return GALAY_OK;
 }
@@ -1676,8 +1722,99 @@ C_IOResult galay_mysql_client_authenticate_async(galay_mysql_client_t* client,
         return read;
     }
     galay_mysql_packet_view_t view{};
-    const galay_status_t packet_status =
+    galay_status_t packet_status =
         mysql_extract_packet_view_internal(auth_result.data(), auth_result.size(), &view);
+    if (packet_status == GALAY_OK && view.payload_len == 2 &&
+        view.payload[0] == 0x01 && view.payload[1] == 0x03 &&
+        handshake.auth_plugin_name == "caching_sha2_password") {
+        auth_result.clear();
+        read = read_mysql_packet(&client->socket, &auth_result, timeout_ms);
+        if (read.code != C_IOResultOk) {
+            return read;
+        }
+        packet_status =
+            mysql_extract_packet_view_internal(auth_result.data(), auth_result.size(), &view);
+    }
+    if (packet_status == GALAY_OK && view.payload_len == 2 &&
+        view.payload[0] == 0x01 && view.payload[1] == 0x04 &&
+        handshake.auth_plugin_name == "caching_sha2_password") {
+#ifndef GALAY_SSL_FEATURE_ENABLED
+        return io_result_from_status(GALAY_UNSUPPORTED);
+#else
+        galay_mysql_buffer_t public_key_request;
+        mysql_append_packet_header(public_key_request.data,
+                                   1,
+                                   static_cast<uint8_t>(view.sequence_id + 1U));
+        public_key_request.data.push_back(0x02);
+        sent = mysql_send_buffer(client, &public_key_request, timeout_ms);
+        if (sent.code != C_IOResultOk) {
+            return sent;
+        }
+
+        std::vector<unsigned char> public_key_packet;
+        read = read_mysql_packet(&client->socket, &public_key_packet, timeout_ms);
+        if (read.code != C_IOResultOk) {
+            return read;
+        }
+        galay_mysql_packet_view_t public_key_view{};
+        packet_status = mysql_extract_packet_view_internal(public_key_packet.data(),
+                                                           public_key_packet.size(),
+                                                           &public_key_view);
+        if (packet_status != GALAY_OK || public_key_view.payload_len == 0 ||
+            public_key_view.payload[0] == 0xFF) {
+            return io_result_from_status(GALAY_PROTOCOL_ERROR);
+        }
+
+        const unsigned char* public_key = public_key_view.payload;
+        size_t public_key_len = public_key_view.payload_len;
+        if (public_key_len > 0 && public_key[0] == 0x01) {
+            ++public_key;
+            --public_key_len;
+        }
+        if (public_key_len == 0) {
+            return io_result_from_status(GALAY_PROTOCOL_ERROR);
+        }
+
+        std::string public_key_pem(reinterpret_cast<const char*>(public_key), public_key_len);
+        if (!public_key_pem.empty() && public_key_pem.back() == '\0') {
+            public_key_pem.pop_back();
+        }
+        std::string password_payload = config->password;
+        password_payload.push_back('\0');
+        if (!handshake.auth_plugin_data.empty()) {
+            for (size_t i = 0; i < password_payload.size(); ++i) {
+                password_payload[i] =
+                    static_cast<char>(password_payload[i] ^
+                                      handshake.auth_plugin_data[i % handshake.auth_plugin_data.size()]);
+            }
+        }
+
+        auto encrypted = galay::ssl::rsaOaepEncryptWithPemPublicKey(password_payload, public_key_pem);
+        if (!encrypted || encrypted->size() > kMysqlWireMaxPacketPayload) {
+            return io_result_from_status(GALAY_PROTOCOL_ERROR);
+        }
+
+        galay_mysql_buffer_t encrypted_packet;
+        mysql_append_packet_header(encrypted_packet.data,
+                                   static_cast<uint32_t>(encrypted->size()),
+                                   static_cast<uint8_t>(public_key_view.sequence_id + 1U));
+        encrypted_packet.data.insert(encrypted_packet.data.end(),
+                                     encrypted->begin(),
+                                     encrypted->end());
+        sent = mysql_send_buffer(client, &encrypted_packet, timeout_ms);
+        if (sent.code != C_IOResultOk) {
+            return sent;
+        }
+
+        auth_result.clear();
+        read = read_mysql_packet(&client->socket, &auth_result, timeout_ms);
+        if (read.code != C_IOResultOk) {
+            return read;
+        }
+        packet_status =
+            mysql_extract_packet_view_internal(auth_result.data(), auth_result.size(), &view);
+#endif
+    }
     if (packet_status != GALAY_OK || view.payload_len == 0 ||
         !mysql_is_ok_payload(view.payload, view.payload_len)) {
         return io_result_from_status(GALAY_PROTOCOL_ERROR);

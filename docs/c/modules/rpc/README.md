@@ -10,6 +10,16 @@
 - `galay_rpc_response_buffer_t.payload` is allocated by the C ABI and must be released with `galay_rpc_response_buffer_destroy`.
 - Handler `request` payload pointers are borrowed and valid only during the callback. Handler response payload pointers are borrowed until the server sends the response before returning to the accept loop.
 
+## Envelope Helpers And Defaults
+
+`galay_rpc_name_is_valid` validates service and method names.
+`galay_rpc_request_encoded_size`, `galay_rpc_response_encoded_size`,
+`galay_rpc_encode_request`, `galay_rpc_encode_response`,
+`galay_rpc_decode_request`, and `galay_rpc_decode_response` cover the synchronous
+RPC envelope codec. Default initializers are `galay_rpc_client_config_default`,
+`galay_rpc_server_config_default`, `galay_rpc_call_options_default`, and
+`galay_rpc_pool_config_default`.
+
 ## Coroutine Semantics
 
 `galay_rpc_client_connect`, `galay_rpc_client_call`, stream read/write, heartbeat, close, and `galay_rpc_server_serve_one` must run inside a `galay_coro_spawn` C coroutine. They suspend through the kernel C TCP ABI and return `C_IOResult`; they do not expose C++ `Task` types.

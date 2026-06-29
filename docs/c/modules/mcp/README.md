@@ -9,6 +9,19 @@ The MCP C API exposes opaque client/server handles over the direct C coroutine r
 - `galay_mcp_message_data` returns a borrowed pointer valid until the message is mutated or destroyed.
 - Handler callbacks receive borrowed argument/name/URI slices and an owned output message object they must fill with `galay_mcp_message_set_json`.
 
+## Message Helpers
+
+`galay_mcp_message_create`, `galay_mcp_message_set_json`, and
+`galay_mcp_message_data` manage raw JSON message buffers. Request/notification
+builders are `galay_mcp_build_request`, `galay_mcp_build_notification`,
+`galay_mcp_build_initialized_notification`, and
+`galay_mcp_build_empty_result_response`.
+
+`galay_mcp_parse_request` and `galay_mcp_parse_response` return parsed handles;
+release them with `galay_mcp_parsed_request_destroy` or
+`galay_mcp_parsed_response_destroy`. Accessors return borrowed JSON or string
+slices owned by the parsed handle.
+
 ## Client Runtime
 
 - Stdio loopback uses `galay_mcp_client_connect_stdio_loopback(client, server, timeout_ms)` and dispatches requests directly to the registered C server handlers.

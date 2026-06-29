@@ -36,7 +36,7 @@
 - 想看当前压测数据：`docs/c/modules/kernel/05-性能测试.md`
 - 想复现 benchmark：`docs/c/modules/kernel/05-性能测试.md` 的“推荐复现命令”
 - 想照着 C API 写 echo：`examples/c/kernel/e2_tcp_socket_echo.c`
-- 想确认 `accept` / `recv` / `send` / `close` callback 结果：`test/c/kernel/t6_tcp_async_callbacks.c`
+- 想确认 `accept` / `recv` / `send` / `close` direct coroutine 返回值：`test/c/kernel/t6_tcp_async_callbacks.c`
 - 想确认 close 集成路径：`test/c/kernel/t7_tcp_close_integration.c`
 - 想看 UDP C ABI：`src/c/galay-kernel-c/async-c/udp_socket_c.h`、`examples/c/kernel/e3_udp_socket_echo.c`、`test/c/kernel/t10_udp_socket_callbacks.c`
 - 想看 C coroutine sleep：`src/c/galay-kernel-c/coro-c/coro_wait_c.h`、`test/c/kernel/t26_coro_sleep.c`、`examples/c/kernel/e13_coro_sleep.c`、`benchmark/c/kernel/b24_coro_sleep_latency.c`
@@ -49,9 +49,8 @@
 - `galay_kernel_tcp_socket_accept`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`、`test/c/kernel/t6_tcp_async_callbacks.c`
 - `galay_kernel_tcp_socket_recv`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`、`examples/c/kernel/e2_tcp_socket_echo.c`
 - `galay_kernel_tcp_socket_send`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`、`examples/c/kernel/e2_tcp_socket_echo.c`
-- `galay_kernel_tcp_socket_accept_loop`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`、`test/c/kernel/t8_tcp_loop_callbacks.c`
-- `galay_kernel_tcp_socket_recv_loop`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`、`test/c/kernel/t8_tcp_loop_callbacks.c`
-- `galay_kernel_tcp_socket_send_loop`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`、`test/c/kernel/t8_tcp_loop_callbacks.c`
+- `galay_kernel_tcp_socket_readv` / `galay_kernel_tcp_socket_writev`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`
+- `galay_kernel_tcp_socket_sendfile`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`
 - `galay_kernel_tcp_socket_close`：`src/c/galay-kernel-c/async-c/tcp_socket_c.h`、`test/c/kernel/t7_tcp_close_integration.c`
 - `benchmark_c_kernel_tcp_socket_lifecycle`：`benchmark/c/kernel/b2_tcp_socket_lifecycle.c`、`docs/c/modules/kernel/05-性能测试.md`
 - `benchmark_c_kernel_tcp_socket_server_throughput`：`benchmark/c/kernel/b3_tcp_socket_server_throughput.c`、`docs/c/modules/kernel/05-性能测试.md`

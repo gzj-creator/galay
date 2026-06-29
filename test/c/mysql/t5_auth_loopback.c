@@ -24,6 +24,10 @@ enum {
 typedef struct MysqlAuthLoopbackState {
     galay_kernel_tcp_socket_t* listener;
     C_Host peer;
+    const char* plugin_name;
+    size_t expected_auth_len;
+    int use_caching_fast_auth;
+    int use_caching_full_auth;
     galay_kernel_tcp_socket_t accepted;
     C_IOResult accept_result;
     C_IOResult server_send_result;
@@ -32,7 +36,7 @@ typedef struct MysqlAuthLoopbackState {
     C_IOResult client_connect_result;
     C_IOResult client_close_result;
     galay_bool_t connected_after_auth;
-    unsigned char auth_packet[256];
+    unsigned char auth_packet[512];
     size_t auth_packet_len;
     int auth_payload_ok;
 } MysqlAuthLoopbackState;
@@ -70,11 +74,10 @@ static void put_u32(unsigned char* out, size_t* pos, uint32_t value)
     out[(*pos)++] = (unsigned char)((value >> 24u) & 0xffu);
 }
 
-static size_t build_handshake(unsigned char* out)
+static size_t build_handshake(unsigned char* out, const char* plugin)
 {
     static const char salt_1[] = "12345678";
     static const char salt_2[] = "abcdefghijkl";
-    static const char plugin[] = "mysql_native_password";
     const uint32_t caps = MYSQL_CAP_LONG_PASSWORD | MYSQL_CAP_PROTOCOL_41 |
         MYSQL_CAP_TRANSACTIONS | MYSQL_CAP_SECURE_CONNECTION | MYSQL_CAP_PLUGIN_AUTH;
     size_t payload_len_pos = 0;
@@ -100,8 +103,10 @@ static size_t build_handshake(unsigned char* out)
     memcpy(out + pos, salt_2, 12);
     pos += 12;
     out[pos++] = '\0';
-    memcpy(out + pos, plugin, sizeof(plugin));
-    pos += sizeof(plugin);
+    const size_t plugin_len = strlen(plugin);
+    memcpy(out + pos, plugin, plugin_len);
+    pos += plugin_len;
+    out[pos++] = '\0';
     out[0] = (unsigned char)((pos - payload_len_pos) & 0xffu);
     out[1] = (unsigned char)(((pos - payload_len_pos) >> 8u) & 0xffu);
     out[2] = (unsigned char)(((pos - payload_len_pos) >> 16u) & 0xffu);
@@ -142,7 +147,8 @@ static int recv_packet(galay_kernel_tcp_socket_t* socket, unsigned char* buffer,
     return 0;
 }
 
-static int check_auth_payload(const unsigned char* packet, size_t packet_len)
+static int check_auth_payload(const unsigned char* packet, size_t packet_len,
+                              const char* expected_plugin, size_t expected_auth_len)
 {
     const unsigned char* payload = packet + 4;
     const size_t payload_len = packet_len - 4;
@@ -175,7 +181,7 @@ static int check_auth_payload(const unsigned char* packet, size_t packet_len)
     }
     pos += user_len + 1;
     auth_len = payload[pos++];
-    if (auth_len != 20 || pos + auth_len >= payload_len) {
+    if (auth_len != expected_auth_len || pos + auth_len >= payload_len) {
         return 0;
     }
     pos += auth_len;
@@ -187,7 +193,7 @@ static int check_auth_payload(const unsigned char* packet, size_t packet_len)
     pos += database_len + 1;
     plugin = (const char*)payload + pos;
     plugin_len = strlen(plugin);
-    if (pos + plugin_len + 1 > payload_len || strcmp(plugin, "mysql_native_password") != 0) {
+    if (pos + plugin_len + 1 > payload_len || strcmp(plugin, expected_plugin) != 0) {
         return 0;
     }
     return 1;
@@ -199,8 +205,24 @@ static void mysql_auth_server_entry(void* arg)
     static const unsigned char ok_packet[] = {
         0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00
     };
+    static const unsigned char fast_auth_packet[] = {
+        0x02, 0x00, 0x00, 0x02, 0x01, 0x03
+    };
+    static const unsigned char full_auth_packet[] = {
+        0x02, 0x00, 0x00, 0x02, 0x01, 0x04
+    };
+    static const char public_key_pem[] =
+        "-----BEGIN PUBLIC KEY-----\n"
+        "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwPEGdRCRpZDptJqhD1Zk\n"
+        "U6Zz5XhBqL3DGi18XgpjmgJBKsY5Zli75fD9snqkb738i/DLBN1+6UGBeYxdOpT8\n"
+        "RE4/8kbTAAilMjp20/B1LI8rMf2g/R4wfVncBw+DaU7LNBtOv39I133DnyyjWX2l\n"
+        "BykLLTzHCNrQwPHgx7x73Qo65x9GVkk1QVfAdMH2LTohc4KRHyprsJ5UFzPi2R0j\n"
+        "+U8mDTovuptlslCTQg721EOE2iDjfvPRe9qo6t+hb/OtAKa1Hzks7CmXo+8GbNji\n"
+        "kVWUbSH3+ubRm0Y4ABMRYrTcMip2KlXWW0Qlgiuiiug5r7M94W0fSFoUh1qDv+x9\n"
+        "0QIDAQAB\n"
+        "-----END PUBLIC KEY-----\n";
     MysqlAuthLoopbackState* state = (MysqlAuthLoopbackState*)arg;
-    const size_t handshake_len = build_handshake(handshake);
+    const size_t handshake_len = build_handshake(handshake, state->plugin_name);
 
     state->accept_result =
         galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
@@ -219,7 +241,10 @@ static void mysql_auth_server_entry(void* arg)
         state->server_recv_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
         return;
     }
-    state->auth_payload_ok = check_auth_payload(state->auth_packet, state->auth_packet_len);
+    state->auth_payload_ok = check_auth_payload(state->auth_packet,
+                                                state->auth_packet_len,
+                                                state->plugin_name,
+                                                state->expected_auth_len);
     state->server_recv_result = (C_IOResult){
         state->auth_payload_ok ? C_IOResultOk : C_IOResultError,
         0,
@@ -229,6 +254,56 @@ static void mysql_auth_server_entry(void* arg)
     };
     if (!state->auth_payload_ok) {
         return;
+    }
+    if (state->use_caching_fast_auth) {
+        state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
+                                                                 (const char*)fast_auth_packet,
+                                                                 sizeof(fast_auth_packet),
+                                                                 1000);
+        if (state->server_send_result.code != C_IOResultOk) {
+            return;
+        }
+    }
+    if (state->use_caching_full_auth) {
+        unsigned char public_key_packet[1024];
+        size_t public_key_packet_len = 0;
+        state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
+                                                                 (const char*)full_auth_packet,
+                                                                 sizeof(full_auth_packet),
+                                                                 1000);
+        if (state->server_send_result.code != C_IOResultOk) {
+            return;
+        }
+        state->auth_packet_len = sizeof(state->auth_packet);
+        if (recv_packet(&state->accepted, state->auth_packet, &state->auth_packet_len) != 0 ||
+            state->auth_packet_len != 5 ||
+            state->auth_packet[4] != 0x02) {
+            state->server_recv_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
+            state->auth_payload_ok = 0;
+            return;
+        }
+        public_key_packet_len = 4;
+        public_key_packet[4] = 0x01;
+        memcpy(public_key_packet + 5, public_key_pem, sizeof(public_key_pem) - 1);
+        public_key_packet_len += 1 + sizeof(public_key_pem) - 1;
+        public_key_packet[0] = (unsigned char)((public_key_packet_len - 4) & 0xffu);
+        public_key_packet[1] = (unsigned char)(((public_key_packet_len - 4) >> 8u) & 0xffu);
+        public_key_packet[2] = (unsigned char)(((public_key_packet_len - 4) >> 16u) & 0xffu);
+        public_key_packet[3] = 4;
+        state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
+                                                                 (const char*)public_key_packet,
+                                                                 public_key_packet_len,
+                                                                 1000);
+        if (state->server_send_result.code != C_IOResultOk) {
+            return;
+        }
+        state->auth_packet_len = sizeof(state->auth_packet);
+        if (recv_packet(&state->accepted, state->auth_packet, &state->auth_packet_len) != 0 ||
+            state->auth_packet_len <= 4) {
+            state->server_recv_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
+            state->auth_payload_ok = 0;
+            return;
+        }
     }
     state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
                                                              (const char*)ok_packet,
@@ -276,7 +351,10 @@ cleanup:
     }
 }
 
-static int run_loopback(void)
+static int run_loopback(const char* plugin_name,
+                        size_t expected_auth_len,
+                        int use_caching_fast_auth,
+                        int use_caching_full_auth)
 {
     C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
@@ -295,6 +373,10 @@ static int run_loopback(void)
     REQUIRE_TRUE(create_listener(&listener, &local) == 0, 3);
     state.listener = &listener;
     state.peer = local;
+    state.plugin_name = plugin_name;
+    state.expected_auth_len = expected_auth_len;
+    state.use_caching_fast_auth = use_caching_fast_auth;
+    state.use_caching_full_auth = use_caching_full_auth;
 
     REQUIRE_TRUE(galay_coro_spawn(&runtime, mysql_auth_server_entry, &state, NULL, &server).code ==
                      C_IOResultOk,
@@ -339,5 +421,17 @@ static int run_loopback(void)
 
 int main(void)
 {
-    return run_loopback();
+    int result = run_loopback("mysql_native_password", 20, 0, 0);
+    if (result != 0) {
+        return result;
+    }
+    result = run_loopback("caching_sha2_password", 32, 1, 0);
+    if (result != 0) {
+        return 100 + result;
+    }
+    result = run_loopback("caching_sha2_password", 32, 0, 1);
+    if (result != 0) {
+        return 200 + result;
+    }
+    return 0;
 }

@@ -28,6 +28,12 @@ typedef struct TlsLoopbackState {
     C_IOResult client_recv_result;
     C_IOResult client_shutdown_result;
     C_IOResult client_close_result;
+    galay_status_t server_alpn_result;
+    galay_status_t client_alpn_result;
+    size_t server_alpn_written;
+    size_t client_alpn_written;
+    char server_alpn[16];
+    char client_alpn[16];
     char server_buffer[64];
     char client_buffer[64];
 } TlsLoopbackState;
@@ -45,6 +51,9 @@ static int expect_io(C_IOResult result, C_IOResultCode expected)
 
 static int load_contexts(TlsLoopbackState* state)
 {
+    const char* server_alpn[] = {"h2", "http/1.1"};
+    const char* client_alpn[] = {"http/1.1", "h2"};
+    const char* invalid_alpn[] = {""};
     char cert_path[512];
     char key_path[512];
     char ca_path[512];
@@ -61,6 +70,27 @@ static int load_contexts(TlsLoopbackState* state)
         galay_ssl_context_load_ca(state->client_context, ca_path) != GALAY_OK ||
         galay_ssl_context_set_verify_mode(state->client_context, GALAY_SSL_VERIFY_PEER) != GALAY_OK) {
         return 2;
+    }
+    if (galay_ssl_context_set_alpn_select_protocols(NULL, server_alpn, 2) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_set_alpn_select_protocols(state->server_context, NULL, 2) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_set_alpn_select_protocols(state->server_context, server_alpn, 0) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_set_alpn_protocols(state->client_context, invalid_alpn, 1) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_set_session_cache_mode(NULL, GALAY_SSL_SESSION_CACHE_BOTH) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_set_session_cache_mode(state->server_context,
+                                                (galay_ssl_session_cache_mode_t)99) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_set_session_timeout(NULL, 60) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_set_session_timeout(state->server_context, -1) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_disable_session_cache(NULL) != GALAY_INVALID_ARGUMENT ||
+        galay_ssl_context_disable_session_tickets(NULL) != GALAY_INVALID_ARGUMENT) {
+        return 3;
+    }
+    if (galay_ssl_context_set_alpn_select_protocols(state->server_context, server_alpn, 2) != GALAY_OK ||
+        galay_ssl_context_set_alpn_protocols(state->client_context, client_alpn, 2) != GALAY_OK ||
+        galay_ssl_context_set_session_cache_mode(state->server_context, GALAY_SSL_SESSION_CACHE_BOTH) != GALAY_OK ||
+        galay_ssl_context_set_session_timeout(state->server_context, 60) != GALAY_OK ||
+        galay_ssl_context_disable_session_tickets(state->server_context) != GALAY_OK ||
+        galay_ssl_context_disable_session_cache(state->server_context) != GALAY_OK) {
+        return 4;
     }
     return 0;
 }
@@ -88,6 +118,11 @@ static void server_entry(void* arg)
     }
     state->server_handshake_result = galay_ssl_socket_handshake(state->accepted, 1000);
     if (state->server_handshake_result.code != C_IOResultOk) {
+        return;
+    }
+    state->server_alpn_result = galay_ssl_socket_get_negotiated_alpn(
+        state->accepted, state->server_alpn, sizeof(state->server_alpn), &state->server_alpn_written);
+    if (state->server_alpn_result != GALAY_OK) {
         return;
     }
     state->server_recv_result = galay_ssl_socket_recv(
@@ -119,6 +154,11 @@ static void client_entry(void* arg)
     }
     state->client_handshake_result = galay_ssl_socket_handshake(state->client, 1000);
     if (state->client_handshake_result.code != C_IOResultOk) {
+        return;
+    }
+    state->client_alpn_result = galay_ssl_socket_get_negotiated_alpn(
+        state->client, state->client_alpn, sizeof(state->client_alpn), &state->client_alpn_written);
+    if (state->client_alpn_result != GALAY_OK) {
         return;
     }
     state->client_send_result = galay_ssl_socket_send(state->client, request, sizeof(request) - 1, 1000);
@@ -155,6 +195,8 @@ static int run_loopback(galay_kernel_runtime_t* runtime)
         expect_io(state.connect_result, C_IOResultOk) ||
         expect_io(state.server_handshake_result, C_IOResultOk) ||
         expect_io(state.client_handshake_result, C_IOResultOk) ||
+        state.server_alpn_result != GALAY_OK ||
+        state.client_alpn_result != GALAY_OK ||
         expect_io(state.server_recv_result, C_IOResultOk) ||
         expect_io(state.server_send_result, C_IOResultOk) ||
         expect_io(state.client_send_result, C_IOResultOk) ||
@@ -163,6 +205,10 @@ static int run_loopback(galay_kernel_runtime_t* runtime)
         expect_io(state.client_shutdown_result, C_IOResultOk) ||
         expect_io(state.server_close_result, C_IOResultOk) ||
         expect_io(state.client_close_result, C_IOResultOk) ||
+        state.server_alpn_written != 2 ||
+        state.client_alpn_written != 2 ||
+        memcmp(state.server_alpn, "h2", 2) != 0 ||
+        memcmp(state.client_alpn, "h2", 2) != 0 ||
         memcmp(state.server_buffer, "tls-ping-request", strlen("tls-ping-request")) != 0 ||
         memcmp(state.client_buffer, "tls-pong-response", strlen("tls-pong-response")) != 0;
 

@@ -6,6 +6,11 @@ destroy/release functions.
 
 ## RESP Values
 
+`galay_redis_command_builder_create`, `galay_redis_command_builder_build`, and
+`galay_redis_command_builder_destroy` encode command names and argument arrays into
+RESP command bytes. The returned encoded buffer is borrowed from the builder and
+remains valid until the next build or destroy.
+
 `galay_redis_parse_reply` parses RESP2 replies and the RESP3 types currently exposed
 by the C ABI: nil, double, boolean, blob error, verbatim string, big number, map,
 set, and push. Replies are owned by the caller and must be released with
@@ -24,6 +29,10 @@ Scalar type mismatches return `GALAY_INVALID_ARGUMENT`, and malformed RESP retur
 from a Galay C coroutine. These calls suspend through the kernel C TCP socket API
 and do not block the calling thread. Pipeline replies are returned as an owned array
 and must be released with `galay_redis_pipeline_replies_destroy`.
+
+`galay_redis_client_command` and `galay_redis_client_disconnect` are synchronous
+compatibility helpers for already-created clients; coroutine users should prefer
+the async calls above.
 
 ## Pool Lease Ownership
 

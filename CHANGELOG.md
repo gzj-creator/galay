@@ -73,6 +73,7 @@
 
 ### Fixed
 
+- 修复 C async API reviewer 发现的 MySQL/SSL parity 缺口：MySQL C auth loopback 覆盖并实现 `caching_sha2_password` fast auth 与 RSA full auth exchange；SSL C API 补齐 ALPN offer/select、协商结果读取和 session cache/ticket/timeout context controls，并新增 loopback 覆盖。
 - 修复 C Kernel AsyncMutex direct coroutine bridge 的 wake state 生命周期问题：`ResumeToken` 不再引用栈上 operation，改为引用计数堆状态，避免 waiter/waker 延迟释放时触发偶发 Bus error，并新增 512 轮 C handoff 压力回归覆盖。
 - 修复 RPC managed client 清理路径静默丢弃返回值的问题：`release()` 与 `client.close()` 失败现在会通过 `RpcError` 显式传播，并新增源码边界测试防止回退到 `(void)` 忽略返回值。
 - 修复 kernel timeout/C coroutine 边界：`WithTimeout` 处理 timer 注册失败返回值并立即传播错误，C TCP bridge 在 timeout 服务不可用时清理 awaitable/user_data 后返回错误，`AsyncWaiter`/`AsyncMutex` await_suspend 路径满足最终挂起状态发布约束。
@@ -96,6 +97,7 @@
 
 ### Docs
 
+- 补齐 C async API 模块 README 与 public header 对齐说明，覆盖 HTTP request/response parser/builder、header helper、route/session ownership、WS/HTTP2/Redis/Mongo/MCP/RPC/kernel/tracing helper family，以及 MySQL/SSL 新增认证与 ALPN/session 语义。
 - 新增 `docs/文档审查报告.md`，记录 docs 目录 354 个 Markdown 文件的结构、链接、命名和完整性审查结果及修复优先级。
 - 更新 C Kernel 性能文档，按 C++ 性能文档结构记录 2026-06-25 Release fresh TCP/UDP 双进程 C/S 压测数据、timeout API pressure/smoke 输出、复现命令、target 清单和网络吞吐指标解释。
 - 新增 `docs/c/modules/kernel` 文档导航与性能页，记录 C `TcpSocket` Release 构建、回归命令、同参数 C/C++ loopback benchmark 数据和当前复现口径。

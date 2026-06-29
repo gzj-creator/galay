@@ -10,6 +10,10 @@ Use `galay_mongo_document_t` for BSON documents and `galay_mongo_array_t` for ar
 
 ## Commands
 
+`galay_mongo_uri_parse` parses `mongodb://` connection strings. Host, database,
+and port accessors return borrowed slices owned by the URI handle; release the
+handle with `galay_mongo_uri_destroy`.
+
 CRUD helpers build command documents:
 
 - `galay_mongo_command_find_one`
@@ -27,5 +31,9 @@ The async client uses the Galay C coroutine TCP socket ABI. Call these functions
 - `galay_mongo_client_hello_async`
 - `galay_mongo_client_command_async`
 - `galay_mongo_client_close_async`
+
+Use `galay_mongo_client_set_endpoint` before connect when not deriving endpoint
+data from a URI. `galay_mongo_client_is_connected`, `galay_mongo_client_ping`,
+and `galay_mongo_client_close` are synchronous state or compatibility helpers.
 
 Errors are returned as `C_IOResult`; BSON and builder errors use `galay_status_t`. No C API path reports recoverable errors through C++ exceptions.

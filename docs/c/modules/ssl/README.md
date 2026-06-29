@@ -18,9 +18,30 @@
 
 Configuration APIs return `galay_status_t`; socket coroutine APIs return `C_IOResult`. Invalid handles or invalid buffers return `GALAY_INVALID_ARGUMENT` or `C_IOResultInvalid`. TLS protocol, certificate, or transport failures are mapped to `GALAY_IO_ERROR`, `C_IOResultError`, or `C_IOResultEof`.
 
+## ALPN
+
+Configure ALPN on the context before creating sockets from that context:
+
+- `galay_ssl_context_set_alpn_protocols` sets the client offer list.
+- `galay_ssl_context_set_alpn_select_protocols` sets the server selection priority. If client and server overlap, the first server-preferred protocol wins.
+
+The protocol array and strings are borrowed only for the duration of the call. Each protocol must be non-empty and no longer than 255 bytes. Invalid lists return `GALAY_INVALID_ARGUMENT`; OpenSSL configuration failures return `GALAY_IO_ERROR`.
+
+After a successful handshake, `galay_ssl_socket_get_negotiated_alpn` copies the negotiated protocol into caller-owned memory and writes the byte count to `written`. The copied bytes are not NUL-terminated. If no ALPN protocol was negotiated, `written` is `0`.
+
+## Session Controls
+
+Session controls are context-level settings and should be applied before sockets are created:
+
+- `galay_ssl_context_set_session_cache_mode` accepts `GALAY_SSL_SESSION_CACHE_OFF`, `CLIENT`, `SERVER`, or `BOTH`.
+- `galay_ssl_context_set_session_timeout` sets the session timeout in seconds; negative values are invalid.
+- `galay_ssl_context_disable_session_cache` disables OpenSSL session caching for the context.
+- `galay_ssl_context_disable_session_tickets` disables TLS session tickets for the context.
+
+These APIs do not expose `SSL_SESSION*` or any C++ type through the C ABI. They only configure the underlying C++ `SslContext` and return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+
 ## Notes
 
 - Certificate/key/CA loading uses the real C++ SSL context and validates file existence before loading so missing files return `GALAY_NOT_FOUND`.
 - `galay_ssl_socket_set_hostname` configures SNI and hostname verification on client sockets before handshake.
-- `galay_ssl_socket_get_protocol` and `galay_ssl_socket_get_cipher` copy negotiated strings into caller-owned buffers after handshake.
-- ALPN and session reuse controls are not exposed yet; the C surface currently covers loopback TLS handshake, plaintext read/write, shutdown, protocol, and cipher inspection.
+- `galay_ssl_socket_get_protocol`, `galay_ssl_socket_get_cipher`, and `galay_ssl_socket_get_negotiated_alpn` copy negotiated strings into caller-owned buffers after handshake.

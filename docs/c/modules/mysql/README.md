@@ -6,7 +6,7 @@
 
 - config/buffer/client lifecycle。
 - MySQL packet header/extract/query packet helper。
-- `mysql_native_password` auth response 和 loopback 认证。
+- `mysql_native_password` 与 `caching_sha2_password` fast/full auth response 和 loopback 认证。
 - result-set decode、field/row/value accessor、OK packet affected rows/status accessor。
 - async query-result、transaction begin/commit/rollback。
 - prepared statement prepare/execute 的基础 COM_STMT_PREPARE/COM_STMT_EXECUTE 路径。
@@ -35,7 +35,8 @@
 
 公共 API 使用 `galay_status_t` 或 `C_IOResult` 显式返回错误。协议截断、ERR packet、
 非法列定义、非法行值和不支持的 auth plugin 返回 `GALAY_PROTOCOL_ERROR` 或
-`GALAY_UNSUPPORTED`，再映射到 `C_IOResultError`。
+`GALAY_UNSUPPORTED`，再映射到 `C_IOResultError`。`caching_sha2_password` RSA full auth
+依赖构建时启用 SSL/RSA 支持；未启用时该路径显式返回 unsupported。
 
 C++ wrapper 实现没有新增 `try`、`catch` 或 `throw`。
 
@@ -51,14 +52,13 @@ coroutine 内调用 async 函数。`timeout_ms < 0` 的 connect 使用 config ti
 - `examples/c/mysql/e3_prepared_statement.c`：本地 loopback prepared statement。
 - `examples/c/mysql/e4_pool_query.c`：本地 loopback pool lease query。
 - `test/c/mysql/t4_result_set_decode.c`：result-set/OK packet accessor。
-- `test/c/mysql/t5_auth_loopback.c`：native-password auth loopback。
+- `test/c/mysql/t5_auth_loopback.c`：native-password、caching SHA2 fast auth 和 RSA full auth loopback。
 - `test/c/mysql/t6_stmt_transaction_pool.c`：stmt、transaction、pipeline、pool lease workflow。
 
 ## Deferred
 
 仍保留在 C++ API 或后续补齐：
 
-- `caching_sha2_password` RSA/full auth。
 - 真实 MySQL 多结果集、LOCAL INFILE、server-side cursor。
 - binary row result decode for prepared statements with returned columns。
 - 等待队列、公平调度和并发安全的完整 C pool parity。
