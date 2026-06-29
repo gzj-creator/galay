@@ -26,6 +26,8 @@ struct BenchmarkResult {
     double min_ns;
     double max_ns;
     double median_ns;
+    double p95_ns;
+    double p99_ns;
     size_t iterations;
     size_t items_per_iteration;
 };
@@ -63,6 +65,12 @@ public:
         result.min_ns = durations.front();
         result.max_ns = durations.back();
         result.median_ns = durations[durations.size() / 2];
+        result.p95_ns = durations[std::min(
+            durations.size() - 1,
+            static_cast<size_t>(0.95 * static_cast<double>(durations.size() - 1)))];
+        result.p99_ns = durations[std::min(
+            durations.size() - 1,
+            static_cast<size_t>(0.99 * static_cast<double>(durations.size() - 1)))];
         result.iterations = m_iterations;
         result.items_per_iteration = m_items_per_iteration;
 
@@ -79,6 +87,8 @@ void printResult(const BenchmarkResult& result) {
     std::cout << std::left << std::setw(35) << result.name
               << std::right << std::setw(12) << std::fixed << std::setprecision(1) << result.avg_ns << " ns"
               << std::setw(12) << result.median_ns << " ns"
+              << std::setw(12) << result.p95_ns << " ns"
+              << std::setw(12) << result.p99_ns << " ns"
               << std::setw(12) << result.min_ns << " ns"
               << std::setw(12) << result.max_ns << " ns"
               << std::setw(12) << result.iterations << " iters";
@@ -97,6 +107,8 @@ void printHeader() {
     std::cout << std::left << std::setw(35) << "Benchmark"
               << std::right << std::setw(12) << "Avg"
               << std::setw(12) << "Median"
+              << std::setw(12) << "P95"
+              << std::setw(12) << "P99"
               << std::setw(12) << "Min"
               << std::setw(12) << "Max"
               << std::setw(12) << "Iterations"

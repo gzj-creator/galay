@@ -37,6 +37,7 @@
 
 ### Changed
 
+- 优化 HTTP/2 HPACK 动态表查找热路径，按 ring 顺序直接扫描动态表以减少重复边界检查和取模；HTTP client 与 header parser benchmark 补充 P50/P90/P95/P99 等尾延迟观测输出；`TimingWheelTimerManager` 级联复用同一次 tick 的时间戳并修正默认 tick 注释。
 - HTTP/2 server/client/h2c 路径移除异常兜底，错误通过返回值、GOAWAY/RST_STREAM 或日志可观测路径传播；HTTP close 清理路径改为 inline 处理 close 返回值，避免 coroutine close helper 过度拆分。
 - C Kernel TCP async C ABI 破坏式迁移为 direct C coroutine 形态：`tcp_socket_c` 直接提供 `C_IOResult` 返回的 accept/connect/recv/send/close 接口，移除 runtime callback/spawn 桥接路径，并同步更新 TCP C 测试、示例和 benchmark。
 - HTTP/1.1 route-mode 接入 `HttpServerPolicy`，将 reader/writer timeout、request limits、keep-alive idle timeout 和 response write timeout 统一由 server/router 策略驱动。

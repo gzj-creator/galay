@@ -8,9 +8,11 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <iomanip>
 #include <map>
+#include <vector>
 
 using namespace galay::http;
 using namespace galay::kernel;
@@ -22,6 +24,17 @@ std::atomic<int64_t> g_bytes_recv{0};
 std::atomic<int64_t> g_request_time_us{0};
 std::atomic<int> g_active_connections{0};
 
+double percentile_ms(const std::vector<int64_t>& sorted_samples_us, double percentile) {
+    if (sorted_samples_us.empty()) {
+        return 0.0;
+    }
+    const auto max_index = sorted_samples_us.size() - 1;
+    const auto index = std::min(
+        max_index,
+        static_cast<size_t>(percentile * static_cast<double>(max_index)));
+    return static_cast<double>(sorted_samples_us[index]) / 1000.0;
+}
+
 /**
  * @brief 持续压测工作协程（类似 wrk）
  */
@@ -30,7 +43,8 @@ __attribute__((noinline))
 #endif
 Task<void> continuousWorker(int worker_id, const std::string& host, int port, const std::string& path,
                             std::chrono::steady_clock::time_point end_time,
-                            std::atomic<bool>& stop_flag) {
+                            std::atomic<bool>& stop_flag,
+                            std::vector<int64_t>* latency_samples_us) {
     (void)worker_id;
     g_active_connections++;
     auto client = HttpClientBuilder().build();
@@ -74,9 +88,14 @@ Task<void> continuousWorker(int worker_id, const std::string& host, int port, co
 
         auto& response = response_opt.value();
         auto request_end = std::chrono::steady_clock::now();
-        g_request_time_us += std::chrono::duration_cast<std::chrono::microseconds>(request_end - request_start).count();
+        const auto request_time_us =
+            std::chrono::duration_cast<std::chrono::microseconds>(request_end - request_start).count();
 
         if (static_cast<int>(response.header().code()) == 200) {
+            g_request_time_us += request_time_us;
+            if (latency_samples_us != nullptr) {
+                latency_samples_us->push_back(request_time_us);
+            }
             g_success++;
             g_bytes_recv += response.getBodyStr().size();
             g_bytes_sent += 100;  // 估算请求大小
@@ -104,6 +123,7 @@ void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
     g_active_connections = 0;
 
     std::atomic<bool> stop_flag{false};
+    std::vector<std::vector<int64_t>> latency_samples(static_cast<size_t>(connections));
 
     std::cout << "\n==========================================\n";
     std::cout << "持续压测模式 (类似 wrk)\n";
@@ -121,7 +141,9 @@ void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
     for (int i = 0; i < connections; i++) {
         auto* scheduler = rt.getNextIOScheduler();
         if (scheduler) {
-            scheduleTask(scheduler, continuousWorker(i, host, port, path, end_time, stop_flag));
+            latency_samples[static_cast<size_t>(i)].reserve(1024);
+            scheduleTask(scheduler, continuousWorker(i, host, port, path, end_time, stop_flag,
+                                                     &latency_samples[static_cast<size_t>(i)]));
         }
     }
 
@@ -150,6 +172,14 @@ void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
     double throughput_mb = (g_bytes_recv.load() + g_bytes_sent.load()) / 1024.0 / 1024.0;
     double throughput_mbps = (duration_s > 0) ? (throughput_mb / duration_s) : 0;
     double avg_request_us = (g_success.load() > 0) ? (g_request_time_us.load() * 1.0 / g_success.load()) : 0;
+    std::vector<int64_t> merged_latency_samples;
+    merged_latency_samples.reserve(static_cast<size_t>(g_success.load()));
+    for (auto& per_connection : latency_samples) {
+        merged_latency_samples.insert(merged_latency_samples.end(),
+                                      per_connection.begin(),
+                                      per_connection.end());
+    }
+    std::sort(merged_latency_samples.begin(), merged_latency_samples.end());
 
     std::cout << "\n==========================================\n";
     std::cout << "压测结果\n";
@@ -163,6 +193,14 @@ void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
     std::cout << "  QPS: " << qps << " 请求/秒\n";
     std::cout << "  吞吐量: " << throughput_mbps << " MB/秒\n";
     std::cout << "  平均延迟: " << (avg_request_us / 1000.0) << " ms\n";
+    if (!merged_latency_samples.empty()) {
+        std::cout << "  延迟样本: " << merged_latency_samples.size() << "\n";
+        std::cout << "  P50 延迟: " << percentile_ms(merged_latency_samples, 0.50) << " ms\n";
+        std::cout << "  P90 延迟: " << percentile_ms(merged_latency_samples, 0.90) << " ms\n";
+        std::cout << "  P95 延迟: " << percentile_ms(merged_latency_samples, 0.95) << " ms\n";
+        std::cout << "  P99 延迟: " << percentile_ms(merged_latency_samples, 0.99) << " ms\n";
+        std::cout << "  最大延迟: " << percentile_ms(merged_latency_samples, 1.00) << " ms\n";
+    }
     std::cout << "==========================================\n";
 }
 

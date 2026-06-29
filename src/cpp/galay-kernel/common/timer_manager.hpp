@@ -30,13 +30,13 @@ namespace galay::kernel
     // 使用分层时间轮结构，类似时钟的时分秒设计，支持超大范围的定时器
     // 插入/删除时间复杂度 O(1)
     //
-    // 时间轮结构（默认 1ms tick）：
-    // - 第1层：256个槽，每槽 1ms，覆盖 0-255ms
-    // - 第2层：64个槽，每槽 256ms，覆盖 256ms-16s
-    // - 第3层：64个槽，每槽 16s，覆盖 16s-17分钟
-    // - 第4层：64个槽，每槽 17分钟，覆盖 17分钟-18小时
-    // - 第5层：64个槽，每槽 18小时，覆盖 18小时-48天
-    // 总覆盖范围：约 48 天（1ms tick）
+    // 时间轮结构（默认 50ms tick）：
+    // - 第1层：256个槽，每槽 50ms，覆盖 0-12.8s
+    // - 第2层：64个槽，每槽 12.8s，覆盖 12.8s-13.6分钟
+    // - 第3层：64个槽，每槽 13.6分钟，覆盖 13.6分钟-14.6小时
+    // - 第4层：64个槽，每槽 14.6小时，覆盖 14.6小时-39天
+    // - 第5层：64个槽，每槽 39天，覆盖 39天-6.8年
+    // 总覆盖范围：约 6.8 年（50ms tick）
     /**
      * @brief 非线程安全的多层时间轮定时器管理器
      *
@@ -217,6 +217,8 @@ namespace galay::kernel
             auto now = std::chrono::steady_clock::now();
             uint64_t elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
                 now - m_startTime).count();
+            uint64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                now.time_since_epoch()).count();
             uint64_t targetTick = elapsed / m_tickDuration;
 
             // 快速路径：如果还没到下一个 tick，直接返回
@@ -229,22 +231,22 @@ namespace galay::kernel
                 // 级联必须在处理当前槽之前执行
                 // 级联：每 256 tick，从第2层降级到第1层
                 if ((m_currentTick & (WHEEL1_SIZE - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel2();
+                    cascadeWheel2(nowNs);
                 }
 
                 // 级联：每 16384 tick，从第3层降级到第2层
                 if ((m_currentTick & (WHEEL2_SPAN - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel3();
+                    cascadeWheel3(nowNs);
                 }
 
                 // 级联：每 1048576 tick，从第4层降级到第3层
                 if ((m_currentTick & (WHEEL3_SPAN - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel4();
+                    cascadeWheel4(nowNs);
                 }
 
                 // 级联：每 67108864 tick，从第5层降级到第4层
                 if ((m_currentTick & (WHEEL4_SPAN - 1)) == 0 && m_currentTick > 0) {
-                    cascadeWheel5();
+                    cascadeWheel5(nowNs);
                 }
 
                 // 处理第1层当前槽
@@ -285,37 +287,37 @@ namespace galay::kernel
         /**
          * @brief 将第2层定时器级联下降到第1层
          */
-        void cascadeWheel2()
+        void cascadeWheel2(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 8) & (WHEEL2_SIZE - 1);
-            cascadeSlot(m_wheel2[idx]);
+            cascadeSlot(m_wheel2[idx], nowNs);
         }
 
         /**
          * @brief 将第3层定时器级联下降到低层
          */
-        void cascadeWheel3()
+        void cascadeWheel3(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 14) & (WHEEL3_SIZE - 1);
-            cascadeSlot(m_wheel3[idx]);
+            cascadeSlot(m_wheel3[idx], nowNs);
         }
 
         /**
          * @brief 将第4层定时器级联下降到低层
          */
-        void cascadeWheel4()
+        void cascadeWheel4(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 20) & (WHEEL4_SIZE - 1);
-            cascadeSlot(m_wheel4[idx]);
+            cascadeSlot(m_wheel4[idx], nowNs);
         }
 
         /**
          * @brief 将第5层定时器级联下降到低层
          */
-        void cascadeWheel5()
+        void cascadeWheel5(uint64_t nowNs)
         {
             size_t idx = (m_currentTick >> 26) & (WHEEL5_SIZE - 1);
-            cascadeSlot(m_wheel5[idx]);
+            cascadeSlot(m_wheel5[idx], nowNs);
         }
 
         /**
@@ -325,15 +327,10 @@ namespace galay::kernel
          * @details 每个定时器被重新评估：若已过期则立即触发；
          * 否则插入到合适的时间轮层。
          */
-        void cascadeSlot(TimerList& slot)
+        void cascadeSlot(TimerList& slot, uint64_t nowNs)
         {
             TimerList temp = std::move(slot);
             slot.clear();
-
-            // 获取当前时间（纳秒）
-            auto now = std::chrono::steady_clock::now();
-            uint64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                now.time_since_epoch()).count();
 
             for (auto& timer : temp) {
                 if (timer->done() || timer->cancelled()) {

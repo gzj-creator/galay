@@ -4903,9 +4903,15 @@ const Http2HeaderField* HpackDynamicTable::get(size_t index) const
 
 std::pair<size_t, bool> HpackDynamicTable::find(const std::string& name, const std::string& value) const
 {
+    if (m_count == 0) {
+        return {SIZE_MAX, false};
+    }
+
     size_t name_match = 0;
+    const size_t cap = m_ring.size();
+    size_t pos = (m_head + cap - 1) % cap;
     for (size_t i = 0; i < m_count; ++i) {
-        const auto& entry = *get(i);
+        const auto& entry = m_ring[pos];
         if (entry.name == name) {
             if (entry.value == value) {
                 return {i, false};  // 完全匹配
@@ -4914,6 +4920,7 @@ std::pair<size_t, bool> HpackDynamicTable::find(const std::string& name, const s
                 name_match = i + 1;  // 记录第一个名称匹配（+1 表示找到）
             }
         }
+        pos = pos == 0 ? cap - 1 : pos - 1;
     }
     if (name_match > 0) {
         return {name_match - 1, true};  // 只匹配名称
