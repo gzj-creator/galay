@@ -1,4 +1,4 @@
-#include <galay/c/galay-http2/http2.h>
+#include <galay/c/galay-http2-c/http2.h>
 
 #include <string.h>
 

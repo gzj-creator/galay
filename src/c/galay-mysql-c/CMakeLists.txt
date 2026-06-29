@@ -1,0 +1,7 @@
+file(GLOB galay_c_mysql_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+add_library(galay-c-mysql ${galay_c_mysql_sources})
+add_library(galay::c-mysql ALIAS galay-c-mysql)
+target_compile_features(galay-c-mysql PUBLIC cxx_std_23)
+target_include_directories(galay-c-mysql PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_link_libraries(galay-c-mysql PUBLIC galay::c-common)
+set_target_properties(galay-c-mysql PROPERTIES EXPORT_NAME c-mysql)

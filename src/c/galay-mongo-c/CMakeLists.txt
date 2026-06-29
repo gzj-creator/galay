@@ -1,0 +1,7 @@
+file(GLOB galay_c_mongo_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+add_library(galay-c-mongo ${galay_c_mongo_sources})
+add_library(galay::c-mongo ALIAS galay-c-mongo)
+target_compile_features(galay-c-mongo PUBLIC cxx_std_23)
+target_include_directories(galay-c-mongo PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_link_libraries(galay-c-mongo PUBLIC galay::c-common)
+set_target_properties(galay-c-mongo PROPERTIES EXPORT_NAME c-mongo)

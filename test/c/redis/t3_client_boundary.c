@@ -1,4 +1,4 @@
-#include <galay/c/galay-redis/redis.h>
+#include <galay/c/galay-redis-c/redis.h>
 
 #include <stdio.h>
 

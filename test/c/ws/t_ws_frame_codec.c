@@ -1,4 +1,4 @@
-#include <galay/c/galay-ws/ws.h>
+#include <galay/c/galay-ws-c/ws.h>
 
 #include <stdint.h>
 #include <stdio.h>

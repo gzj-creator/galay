@@ -1,6 +1,6 @@
 #include <stdint.h>
 
-#include <galay/c/galay-c/common/galay_c_error.h>
+#include <galay/c/galay-common-c/common/galay_c_error.h>
 
 #if !defined(GALAY_C_VERSION_MAJOR)
 #error "GALAY_C_VERSION_MAJOR must be visible from C"

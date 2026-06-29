@@ -1,4 +1,4 @@
-#include <galay/c/galay-http2/http2.h>
+#include <galay/c/galay-http2-c/http2.h>
 
 static int expect_status(galay_status_t actual, galay_status_t expected)
 {

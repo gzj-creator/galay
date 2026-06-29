@@ -1,4 +1,4 @@
-#include <galay/c/galay-mongo/mongo.h>
+#include <galay/c/galay-mongo-c/mongo.h>
 
 int main(void)
 {

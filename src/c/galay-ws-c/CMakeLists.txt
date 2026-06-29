@@ -1,0 +1,7 @@
+file(GLOB galay_c_ws_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+add_library(galay-c-ws ${galay_c_ws_sources})
+add_library(galay::c-ws ALIAS galay-c-ws)
+target_compile_features(galay-c-ws PUBLIC cxx_std_23)
+target_include_directories(galay-c-ws PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_link_libraries(galay-c-ws PUBLIC galay::c-common)
+set_target_properties(galay-c-ws PROPERTIES EXPORT_NAME c-ws)

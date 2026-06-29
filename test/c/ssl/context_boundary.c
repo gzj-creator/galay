@@ -1,4 +1,4 @@
-#include <galay/c/galay-ssl/ssl.h>
+#include <galay/c/galay-ssl-c/ssl.h>
 
 #include <assert.h>
 #include <stdio.h>

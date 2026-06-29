@@ -1,5 +1,5 @@
 /**
- * @file async_strategy.hpp
+ * @file balancer.hpp
  * @brief 负载均衡策略实现
  * @author galay-kernel
  * @version 1.0.0
@@ -15,8 +15,8 @@
  * 其他均衡器不是线程安全的；需要外部同步。
  */
 
-#ifndef GALAY_ASYNC_STRATEGY_HPP
-#define GALAY_ASYNC_STRATEGY_HPP
+#ifndef GALAY_KERNEL_COMMON_BALANCER_HPP
+#define GALAY_KERNEL_COMMON_BALANCER_HPP
 
 #include <atomic>
 #include <vector>
@@ -337,4 +337,4 @@ public:
 
 } // namespace galay::details
 
-#endif // GALAY_ASYNC_STRATEGY_HPP
+#endif // GALAY_KERNEL_COMMON_BALANCER_HPP

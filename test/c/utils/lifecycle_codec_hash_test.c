@@ -1,4 +1,4 @@
-#include <galay/c/galay-utils/utils.h>
+#include <galay/c/galay-utils-c/utils.h>
 
 #include <assert.h>
 #include <stdint.h>

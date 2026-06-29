@@ -1,0 +1,7 @@
+file(GLOB galay_c_http_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+add_library(galay-c-http ${galay_c_http_sources})
+add_library(galay::c-http ALIAS galay-c-http)
+target_compile_features(galay-c-http PUBLIC cxx_std_23)
+target_include_directories(galay-c-http PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_link_libraries(galay-c-http PUBLIC galay::c-common)
+set_target_properties(galay-c-http PROPERTIES EXPORT_NAME c-http)

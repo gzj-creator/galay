@@ -1,0 +1,7 @@
+file(GLOB galay_c_ssl_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")
+add_library(galay-c-ssl ${galay_c_ssl_sources})
+add_library(galay::c-ssl ALIAS galay-c-ssl)
+target_compile_features(galay-c-ssl PUBLIC cxx_std_23)
+target_include_directories(galay-c-ssl PUBLIC $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_link_libraries(galay-c-ssl PUBLIC galay::c-common)
+set_target_properties(galay-c-ssl PROPERTIES EXPORT_NAME c-ssl)
