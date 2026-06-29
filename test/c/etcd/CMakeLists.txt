@@ -8,7 +8,7 @@ function(galay_add_c_etcd_test source_file)
             ${CMAKE_BINARY_DIR}/include
             ${CMAKE_SOURCE_DIR}/src/c
     )
-    target_link_libraries(${target_name} PRIVATE galay::c-etcd)
+    target_link_libraries(${target_name} PRIVATE galay::c-etcd galay::c-kernel)
     add_test(NAME "c.etcd.${scenario_name}" COMMAND ${target_name})
     if(scenario_name STREQUAL "header_smoke")
         set_tests_properties("c.etcd.${scenario_name}" PROPERTIES LABELS "c;etcd;surface")
