@@ -32,13 +32,22 @@ function(galay_add_c_ssl_test source_file)
     set(target_name "test_c_ssl_${scenario_name}")
     add_executable(${target_name} ${source_file})
     target_link_libraries(${target_name} PRIVATE galay::c-ssl)
+    target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
+    set_target_properties(${target_name} PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
     if(scenario_name STREQUAL "context_boundary")
         target_compile_definitions(${target_name}
             PRIVATE
                 GALAY_SSL_TEST_CERT_DIR="${CMAKE_CURRENT_LIST_DIR}/../../cpp/ssl/certs"
         )
     endif()
+    if(scenario_name STREQUAL "async_tls_loopback" OR scenario_name STREQUAL "handshake_error_test")
+        target_compile_definitions(${target_name}
+            PRIVATE
+                GALAY_SSL_TEST_CERT_DIR="${CMAKE_CURRENT_LIST_DIR}/../../cpp/ssl/certs"
+        )
+    endif()
     add_test(NAME "c.ssl.${scenario_name}" COMMAND ${target_name})
+    set_tests_properties("c.ssl.${scenario_name}" PROPERTIES LABELS "c;ssl;integration")
 endfunction()
 
 file(GLOB GALAY_C_SSL_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
