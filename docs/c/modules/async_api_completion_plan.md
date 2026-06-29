@@ -135,6 +135,11 @@ rtk ctest --test-dir build/direct-coro-c -L c --output-on-failure
   - recv reply
 - async topology/cluster 最小只读 discovery 后续再扩展。
 
+当前进度：
+- 已补齐 standalone direct C coroutine 最小闭环：`connect`、单条 `command_async`、
+  `close`，并通过本地 mock Redis loopback test、example 和 smoke benchmark 验证。
+- 待补齐：auth/select、pipeline 独立 API、批量 reply 保留、topology/cluster discovery。
+
 ### MySQL
 
 实现：

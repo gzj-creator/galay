@@ -13,6 +13,7 @@
 
 ### Added
 
+- 新增 Redis C standalone direct coroutine async client 最小闭环：`galay_redis_client_connect`、`galay_redis_client_command_async` 与 `galay_redis_client_close`，通过本地 mock Redis loopback 覆盖 PING/PONG，并补齐对应 C test、example 与 smoke benchmark。
 - 新增非 kernel C module target Phase 1 基线：按 `src/c/galay-<module>-c` 目录组织补齐 `galay-c-common`、`galay-c-utils`、`galay-c-ssl`、`galay-c-http`、`galay-c-ws`、`galay-c-http2`、`galay-c-redis`、`galay-c-rpc`、`galay-c-mysql`、`galay-c-mongo`、`galay-c-etcd`、`galay-c-mcp`、`galay-c-tracing` 的 CMake target、纯 C public header、最小 wrapper implementation 与 CTest surface 注册。
 - 新增 `galay-c-bridge` 内部 C/C++ bridge 模块，将 C coroutine 旁路 bridge 从 C++ kernel core 拆到 `src/c/galay-bridge-c/coro-c`，并由 `galay-c-kernel` 显式依赖。
 - 新增 HTTP/2 production hardening 覆盖：补齐 SETTINGS 校验、h2c HTTP2-Settings 解码、peer/local settings 应用、HEADERS/CONTINUATION 与 DATA outbound limit 测试，覆盖 `MAX_FRAME_SIZE`、`MAX_HEADER_LIST_SIZE`、ACK payload、非 0 stream SETTINGS 和 decoder header-list limit。

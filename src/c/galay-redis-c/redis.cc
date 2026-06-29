@@ -1,9 +1,64 @@
 #include <galay/c/galay-redis-c/redis.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
 
 #include <cstdlib>
+#include <cstring>
 #include <new>
 #include <string>
 #include <vector>
+
+namespace
+{
+
+constexpr size_t kRedisMaxReplyBuffer = 1024 * 1024;
+
+C_IOResult make_io_result(C_IOResultCode code, int64_t value = 0)
+{
+    return C_IOResult{code, 0, 0, value, nullptr};
+}
+
+C_IOResult io_result_from_status(galay_status_t status)
+{
+    return make_io_result(status == GALAY_INVALID_ARGUMENT ? C_IOResultInvalid : C_IOResultError,
+                          static_cast<int64_t>(status));
+}
+
+C_IOResult io_result_from_socket_create(C_TcpSocketResultCode code)
+{
+    return make_io_result(code == C_TcpSocketParameterInvalid ? C_IOResultInvalid : C_IOResultError,
+                          static_cast<int64_t>(code));
+}
+
+bool copy_host_to_c_host(const std::string& host, uint16_t port, C_Host* out)
+{
+    if (out == nullptr || host.empty() || host.size() >= sizeof(out->address) || port == 0) {
+        return false;
+    }
+    out->type = host.find(':') == std::string::npos ? C_IPTypeIPV4 : C_IPTypeIPV6;
+    std::memset(out->address, 0, sizeof(out->address));
+    std::memcpy(out->address, host.data(), host.size());
+    out->port = port;
+    return true;
+}
+
+bool reply_may_be_incomplete(const std::string& buffer, galay_status_t status)
+{
+    if (status == GALAY_INVALID_ARGUMENT) {
+        return true;
+    }
+    if (buffer.empty()) {
+        return true;
+    }
+    if (buffer[0] == '+') {
+        return buffer.find("\r\n") == std::string::npos;
+    }
+    if (buffer[0] == '*') {
+        return buffer.size() < 4;
+    }
+    return false;
+}
+
+} // namespace
 
 struct galay_redis_command_builder_t {
     std::string encoded;
@@ -16,7 +71,16 @@ struct galay_redis_reply_t {
 };
 
 struct galay_redis_client_t {
+    std::string host = "127.0.0.1";
+    uint16_t port = 6379;
+    std::string username;
+    std::string password;
+    int db_index = 0;
+    int resp_version = 2;
+    int connect_timeout_ms = -1;
+    galay_kernel_tcp_socket_t socket{};
     bool connected = false;
+    std::string recv_buffer;
 };
 
 extern "C" {
@@ -163,12 +227,40 @@ galay_status_t galay_redis_client_create(const galay_redis_client_config_t* conf
         *out = nullptr;
         return GALAY_INVALID_ARGUMENT;
     }
-    *out = new (std::nothrow) galay_redis_client_t();
-    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
+    auto* client = new (std::nothrow) galay_redis_client_t();
+    if (client == nullptr) {
+        *out = nullptr;
+        return GALAY_OUT_OF_MEMORY;
+    }
+    if (config != nullptr) {
+        if (config->host != nullptr && config->host[0] != '\0') {
+            client->host = config->host;
+        }
+        if (config->port != 0) {
+            client->port = config->port;
+        }
+        if (config->username != nullptr) {
+            client->username = config->username;
+        }
+        if (config->password != nullptr) {
+            client->password = config->password;
+        }
+        client->db_index = config->db_index;
+        client->resp_version = config->resp_version;
+        client->connect_timeout_ms = config->connect_timeout_ms;
+    }
+    *out = client;
+    return GALAY_OK;
 }
 
 void galay_redis_client_destroy(galay_redis_client_t* client)
 {
+    if (client != nullptr && client->socket.socket != nullptr) {
+        const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
+        if (destroyed != C_TcpSocketSuccess) {
+            client->connected = false;
+        }
+    }
     delete client;
 }
 
@@ -176,6 +268,12 @@ galay_status_t galay_redis_client_disconnect(galay_redis_client_t* client)
 {
     if (client == nullptr) {
         return GALAY_INVALID_ARGUMENT;
+    }
+    if (client->socket.socket != nullptr) {
+        const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
+        if (destroyed != C_TcpSocketSuccess) {
+            return GALAY_IO_ERROR;
+        }
     }
     client->connected = false;
     return GALAY_OK;
@@ -195,6 +293,133 @@ galay_status_t galay_redis_client_command(galay_redis_client_t* client, const ch
         return GALAY_INVALID_ARGUMENT;
     }
     return GALAY_UNSUPPORTED;
+}
+
+C_IOResult galay_redis_client_connect(galay_redis_client_t* client, int64_t timeout_ms)
+{
+    if (client == nullptr || client->connected || client->socket.socket != nullptr) {
+        return make_io_result(C_IOResultInvalid);
+    }
+    C_Host host{};
+    if (!copy_host_to_c_host(client->host, client->port, &host)) {
+        return make_io_result(C_IOResultInvalid);
+    }
+    C_TcpSocketResultCode created = galay_kernel_tcp_socket_create(&client->socket, host.type);
+    if (created != C_TcpSocketSuccess) {
+        return io_result_from_socket_create(created);
+    }
+
+    const int64_t effective_timeout =
+        timeout_ms < 0 && client->connect_timeout_ms > 0 ? client->connect_timeout_ms : timeout_ms;
+    C_IOResult connected = galay_kernel_tcp_socket_connect(&client->socket, &host, effective_timeout);
+    if (connected.code != C_IOResultOk) {
+        const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
+        if (destroyed != C_TcpSocketSuccess && connected.code == C_IOResultOk) {
+            return io_result_from_socket_create(destroyed);
+        }
+        client->connected = false;
+        return connected;
+    }
+    client->connected = true;
+    connected.ptr = client;
+    return connected;
+}
+
+C_IOResult galay_redis_client_command_async(galay_redis_client_t* client,
+                                            const char* command,
+                                            const char* const* args,
+                                            const size_t* arg_lens,
+                                            size_t arg_count,
+                                            int64_t timeout_ms,
+                                            galay_redis_reply_t** reply)
+{
+    if (reply != nullptr) {
+        *reply = nullptr;
+    }
+    if (client == nullptr || command == nullptr || reply == nullptr ||
+        !client->connected || client->socket.socket == nullptr ||
+        (arg_count != 0 && args == nullptr)) {
+        return make_io_result(C_IOResultInvalid);
+    }
+
+    galay_redis_command_builder_t builder;
+    const char* encoded = nullptr;
+    size_t encoded_len = 0;
+    galay_status_t built = galay_redis_command_builder_build(&builder,
+                                                             command,
+                                                             args,
+                                                             arg_lens,
+                                                             arg_count,
+                                                             &encoded,
+                                                             &encoded_len);
+    if (built != GALAY_OK) {
+        return io_result_from_status(built);
+    }
+
+    size_t sent = 0;
+    while (sent < encoded_len) {
+        C_IOResult send_result = galay_kernel_tcp_socket_send(&client->socket,
+                                                              encoded + sent,
+                                                              encoded_len - sent,
+                                                              timeout_ms);
+        if (send_result.code != C_IOResultOk) {
+            return send_result;
+        }
+        if (send_result.bytes == 0) {
+            return make_io_result(C_IOResultEof);
+        }
+        sent += send_result.bytes;
+    }
+
+    client->recv_buffer.clear();
+    char chunk[4096];
+    for (;;) {
+        C_IOResult recv_result =
+            galay_kernel_tcp_socket_recv(&client->socket, chunk, sizeof(chunk), timeout_ms);
+        if (recv_result.code != C_IOResultOk) {
+            return recv_result;
+        }
+        if (recv_result.bytes == 0) {
+            return make_io_result(C_IOResultEof);
+        }
+        client->recv_buffer.append(chunk, recv_result.bytes);
+        if (client->recv_buffer.size() > kRedisMaxReplyBuffer) {
+            return io_result_from_status(GALAY_PROTOCOL_ERROR);
+        }
+
+        size_t consumed = 0;
+        galay_redis_reply_t* parsed = nullptr;
+        galay_status_t parsed_status = galay_redis_parse_reply(client->recv_buffer.data(),
+                                                               client->recv_buffer.size(),
+                                                               &parsed,
+                                                               &consumed);
+        if (parsed_status == GALAY_OK) {
+            *reply = parsed;
+            C_IOResult result = make_io_result(C_IOResultOk);
+            result.bytes = consumed;
+            result.ptr = parsed;
+            return result;
+        }
+        if (!reply_may_be_incomplete(client->recv_buffer, parsed_status)) {
+            return io_result_from_status(parsed_status);
+        }
+    }
+}
+
+C_IOResult galay_redis_client_close(galay_redis_client_t* client, int64_t timeout_ms)
+{
+    if (client == nullptr || client->socket.socket == nullptr) {
+        return make_io_result(C_IOResultInvalid);
+    }
+
+    C_IOResult close_result = galay_kernel_tcp_socket_close(&client->socket, timeout_ms);
+    const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
+    client->connected = false;
+    client->recv_buffer.clear();
+    if (close_result.code == C_IOResultOk && destroyed != C_TcpSocketSuccess) {
+        return io_result_from_socket_create(destroyed);
+    }
+    return close_result;
 }
 
 }
