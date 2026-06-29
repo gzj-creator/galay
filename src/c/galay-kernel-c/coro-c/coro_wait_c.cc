@@ -45,6 +45,13 @@ C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
     return C_IOResult{code, sys_errno, 0, 0, nullptr};
 }
 
+C_IOResult merge_cleanup_result(C_IOResult primary, C_IOResult cleanup)
+{
+    return primary.code == C_IOResultOk && cleanup.code != C_IOResultOk
+        ? cleanup
+        : primary;
+}
+
 WaitRequestPtr* holder(C_CoroWaitRequest* request)
 {
     return request != nullptr ? static_cast<WaitRequestPtr*>(request->request) : nullptr;
@@ -451,6 +458,65 @@ C_IOResult event_user_data_release_impl(void* user_data)
     return make_result(C_IOResultOk);
 }
 
+C_IOResult sleep_impl(int64_t timeout_ms)
+{
+    if (timeout_ms < 0 ||
+        !timeout_fits_chrono(timeout_ms) ||
+        galay::kernel::coro_c::currentTask() == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultOk);
+    }
+
+    C_CoroWaitRequest request{nullptr};
+    C_IOResult created = request_create_impl(&request);
+    if (created.code != C_IOResultOk) {
+        return created;
+    }
+
+    uint64_t generation = 0;
+    C_IOResult prepared = request_prepare_impl(&request, &generation);
+    if (prepared.code != C_IOResultOk) {
+        C_IOResult destroyed = request_destroy_impl(&request);
+        return merge_cleanup_result(prepared, destroyed);
+    }
+
+    auto state = get_state(&request);
+    if (!state) {
+        C_IOResult destroyed = request_destroy_impl(&request);
+        return merge_cleanup_result(make_result(C_IOResultInvalid), destroyed);
+    }
+
+    std::weak_ptr<WaitRequestState> weak_state(state);
+    auto timer = std::make_shared<galay::kernel::CBTimer>(
+        std::chrono::milliseconds(timeout_ms),
+        [weak_state, generation]() {
+            if (auto locked = weak_state.lock()) {
+                C_IOResult completed = complete_state(locked,
+                                                      generation,
+                                                      make_result(C_IOResultOk),
+                                                      true);
+                if (completed.code != C_IOResultOk) {
+                    return;
+                }
+            }
+        });
+    if (!galay::kernel::TimerScheduler::getInstance()->addTimer(timer)) {
+        C_IOResult completed = complete_state(state,
+                                              generation,
+                                              make_result(C_IOResultCancelled),
+                                              true);
+        C_IOResult destroyed = request_destroy_impl(&request);
+        C_IOResult result = merge_cleanup_result(make_result(C_IOResultError), completed);
+        return merge_cleanup_result(result, destroyed);
+    }
+
+    C_IOResult waited = wait_impl(&request, -1);
+    C_IOResult destroyed = request_destroy_impl(&request);
+    return merge_cleanup_result(waited, destroyed);
+}
+
 } // namespace
 
 extern "C" {
@@ -590,6 +656,11 @@ C_IOResult galay_coro_wait_event_user_data_release(void* user_data)
     } catch (...) {
         return make_result(C_IOResultError);
     }
+}
+
+C_IOResult galay_coro_sleep(int64_t timeout_ms)
+{
+    return sleep_impl(timeout_ms);
 }
 
 } // extern "C"

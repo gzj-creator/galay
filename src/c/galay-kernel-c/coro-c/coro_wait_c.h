@@ -159,6 +159,16 @@ C_IOResult galay_coro_wait_event_user_data_cancel(void* user_data);
  */
 C_IOResult galay_coro_wait_event_user_data_release(void* user_data);
 
+/**
+ * @brief 挂起当前 C 协程一段时间。
+ * @param timeout_ms 休眠毫秒数；0 表示立即成功返回，负数无效。
+ * @return 在 C 协程内成功休眠返回 C_IOResultOk；不在 C 协程内调用、
+ * 参数无效或超出 chrono 可表达范围返回 C_IOResultInvalid；定时器注册失败
+ * 返回 C_IOResultError。
+ * @note 该函数通过全局 TimerScheduler 恢复当前 C 协程，不阻塞 scheduler 线程。
+ */
+C_IOResult galay_coro_sleep(int64_t timeout_ms);
+
 #ifdef __cplusplus
 }
 #endif

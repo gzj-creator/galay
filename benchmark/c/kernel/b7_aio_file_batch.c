@@ -1,11 +1,12 @@
 #include <galay/c/galay-kernel-c/async-c/aio_file_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
-#include <stdatomic.h>
+#include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 #include <sys/time.h>
-#include <time.h>
 #include <unistd.h>
 
 #ifdef USE_EPOLL
@@ -22,16 +23,16 @@ int main(void)
     galay_kernel_aio_file_t file = {0};
     C_AioFileResultCode code = galay_kernel_aio_file_create(&file, 4);
     if (code == C_AioFileOperationUnsupported) {
-        printf("aio_file_batch unsupported backend: %s\n", galay_kernel_aio_file_get_error(code));
-        return 0;
+        return printf("aio_file_batch unsupported backend: %s\n",
+                      galay_kernel_aio_file_get_error(code)) < 0 ? 1 : 0;
     }
-    printf("aio_file_batch unexpected result: %s\n", galay_kernel_aio_file_get_error(code));
-    return 1;
+    return printf("aio_file_batch unexpected result: %s\n",
+                  galay_kernel_aio_file_get_error(code)) < 0 ? 2 : 1;
 }
 #else
 typedef struct CommitState {
-    atomic_int done;
-    C_AioFileResultCode code;
+    galay_kernel_aio_file_t* file;
+    C_IOResult result;
     size_t count;
     ssize_t results[2];
 } CommitState;
@@ -45,36 +46,48 @@ static int64_t now_us(void)
     return (int64_t)tv.tv_sec * 1000000 + (int64_t)tv.tv_usec;
 }
 
-static void on_commit(galay_kernel_aio_file_commit_result_t* result, void* ctx)
+static void commit_entry(void* ctx)
 {
     CommitState* state = (CommitState*)ctx;
-    state->code = result->code;
-    state->count = result->count;
-    for (size_t i = 0; i < result->count && i < 2; ++i) {
-        state->results[i] = result->results[i];
-    }
-    atomic_store(&state->done, 1);
+    state->result = galay_kernel_aio_file_commit(state->file, state->results, 2, &state->count, -1);
 }
 
-static void init_state(CommitState* state)
+static void init_state(CommitState* state, galay_kernel_aio_file_t* file)
 {
-    atomic_init(&state->done, 0);
-    state->code = C_AioFileIOFailed;
+    state->file = file;
+    state->result = (C_IOResult){C_IOResultError, 0, 0, 0, 0};
     state->count = 0;
     state->results[0] = 0;
     state->results[1] = 0;
 }
 
-static int wait_commit(CommitState* state)
+static int commit_and_join(galay_kernel_runtime_t* runtime,
+                           galay_kernel_aio_file_t* file,
+                           CommitState* state,
+                           size_t block_size)
 {
-    struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 5000; ++i) {
-        if (atomic_load(&state->done)) {
-            return state->code == C_AioFileSuccess ? 0 : 1;
-        }
-        nanosleep(&pause, 0);
+    init_state(state, file);
+    galay_coro_task_t task = {0};
+    C_IOResult spawned = galay_coro_spawn(runtime, commit_entry, state, 0, &task);
+    if (spawned.code != C_IOResultOk) {
+        return 1;
     }
-    return 1;
+    C_IOResult joined = galay_coro_join(&task, 5000);
+    if (joined.code != C_IOResultOk) {
+        C_IOResult destroyed = galay_coro_destroy(&task);
+        return destroyed.code == C_IOResultOk ? 2 : 3;
+    }
+    C_IOResult destroyed = galay_coro_destroy(&task);
+    if (destroyed.code != C_IOResultOk) {
+        return 4;
+    }
+    if (state->result.code != C_IOResultOk ||
+        state->count != 2 ||
+        state->results[0] != (ssize_t)block_size ||
+        state->results[1] != (ssize_t)block_size) {
+        return 5;
+    }
+    return 0;
 }
 
 static void fill_pattern(char* buffer, size_t length, char seed)
@@ -84,23 +97,11 @@ static void fill_pattern(char* buffer, size_t length, char seed)
     }
 }
 
-static int commit_and_wait(
-    galay_kernel_runtime_t* runtime,
-    galay_kernel_aio_file_t* file,
-    CommitState* state,
-    size_t block_size)
+static void zero_buffer(char* buffer, size_t length)
 {
-    init_state(state);
-    if (galay_kernel_aio_file_commit(runtime, file, on_commit, state) != C_AioFileSuccess) {
-        return 1;
+    for (size_t i = 0; i < length; ++i) {
+        buffer[i] = 0;
     }
-    if (wait_commit(state) != 0 ||
-        state->count != 2 ||
-        state->results[0] != (ssize_t)block_size ||
-        state->results[1] != (ssize_t)block_size) {
-        return 1;
-    }
-    return 0;
 }
 
 int main(void)
@@ -112,7 +113,9 @@ int main(void)
     if (fd < 0) {
         return 1;
     }
-    close(fd);
+    if (close(fd) != 0) {
+        return 1;
+    }
 
     C_RuntimeConfig config = galay_kernel_runtime_config_default();
     config.io_scheduler_count = 1;
@@ -143,8 +146,8 @@ int main(void)
 
     const int64_t start = now_us();
     for (int i = 0; i < AIO_FILE_BATCH_ITERATIONS; ++i) {
-        memset(read_a, 0, block_size);
-        memset(read_b, 0, block_size);
+        zero_buffer(read_a, block_size);
+        zero_buffer(read_b, block_size);
 
         if (galay_kernel_aio_file_pre_write(&file, write_a, block_size, 0) != C_AioFileSuccess ||
             galay_kernel_aio_file_pre_write(&file, write_b, block_size, (off_t)block_size) != C_AioFileSuccess) {
@@ -152,7 +155,7 @@ int main(void)
             goto cleanup;
         }
         CommitState write_state;
-        if (commit_and_wait(&runtime, &file, &write_state, block_size) != 0 ||
+        if (commit_and_join(&runtime, &file, &write_state, block_size) != 0 ||
             galay_kernel_aio_file_clear(&file) != C_AioFileSuccess) {
             exit_code = 4;
             goto cleanup;
@@ -164,7 +167,7 @@ int main(void)
             goto cleanup;
         }
         CommitState read_state;
-        if (commit_and_wait(&runtime, &file, &read_state, block_size) != 0 ||
+        if (commit_and_join(&runtime, &file, &read_state, block_size) != 0 ||
             galay_kernel_aio_file_clear(&file) != C_AioFileSuccess ||
             memcmp(write_a, read_a, block_size) != 0 ||
             memcmp(write_b, read_b, block_size) != 0) {
@@ -182,36 +185,60 @@ int main(void)
         const double mib_per_sec = seconds > 0.0
             ? ((double)(AIO_FILE_BATCH_ITERATIONS * bytes_per_iteration) / (1024.0 * 1024.0)) / seconds
             : 0.0;
-        printf("aio_file_batch iterations=%d block_size=%zu elapsed_ms=%.3f aio_ops_per_sec=%.2f throughput_mib_per_sec=%.3f\n",
-               AIO_FILE_BATCH_ITERATIONS,
-               block_size,
-               (double)elapsed / 1000.0,
-               ops_per_sec,
-               mib_per_sec);
+        if (printf("aio_file_batch iterations=%d block_size=%zu elapsed_ms=%.3f aio_ops_per_sec=%.2f throughput_mib_per_sec=%.3f\n",
+                   AIO_FILE_BATCH_ITERATIONS,
+                   block_size,
+                   (double)elapsed / 1000.0,
+                   ops_per_sec,
+                   mib_per_sec) < 0) {
+            exit_code = 16;
+        }
     }
 
 cleanup:
     if (file.file != 0) {
-        (void)galay_kernel_aio_file_close(&file);
-        (void)galay_kernel_aio_file_destroy(&file);
+        if (galay_kernel_aio_file_close(&file) != C_AioFileSuccess && exit_code == 0) {
+            exit_code = 7;
+        }
+        if (galay_kernel_aio_file_destroy(&file) != C_AioFileSuccess && exit_code == 0) {
+            exit_code = 8;
+        }
     }
     if (runtime.runtime != 0) {
-        (void)galay_kernel_runtime_stop(&runtime);
-        (void)galay_kernel_runtime_destroy(&runtime);
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 9;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 10;
+        }
     }
     if (write_a != 0) {
-        (void)galay_kernel_aio_file_free_aligned_buffer(write_a);
+        if (galay_kernel_aio_file_free_aligned_buffer(write_a) != C_AioFileSuccess &&
+            exit_code == 0) {
+            exit_code = 11;
+        }
     }
     if (write_b != 0) {
-        (void)galay_kernel_aio_file_free_aligned_buffer(write_b);
+        if (galay_kernel_aio_file_free_aligned_buffer(write_b) != C_AioFileSuccess &&
+            exit_code == 0) {
+            exit_code = 12;
+        }
     }
     if (read_a != 0) {
-        (void)galay_kernel_aio_file_free_aligned_buffer(read_a);
+        if (galay_kernel_aio_file_free_aligned_buffer(read_a) != C_AioFileSuccess &&
+            exit_code == 0) {
+            exit_code = 13;
+        }
     }
     if (read_b != 0) {
-        (void)galay_kernel_aio_file_free_aligned_buffer(read_b);
+        if (galay_kernel_aio_file_free_aligned_buffer(read_b) != C_AioFileSuccess &&
+            exit_code == 0) {
+            exit_code = 14;
+        }
     }
-    unlink(path);
+    if (unlink(path) != 0 && errno != ENOENT && exit_code == 0) {
+        exit_code = 15;
+    }
     return exit_code;
 }
 #endif
