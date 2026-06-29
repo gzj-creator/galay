@@ -5,9 +5,12 @@
 #include <galay/cpp/galay-kernel/core/waker.h>
 
 #include <atomic>
+#include <cerrno>
 #include <chrono>
+#include <cstdint>
 #include <limits>
 #include <mutex>
+#include <new>
 #include <utility>
 
 namespace
@@ -25,13 +28,6 @@ constexpr C_IOResultCode C_IOResultTimeout = GalayCoreCoroIOResultTimeout;
 constexpr C_IOResultCode C_IOResultCancelled = GalayCoreCoroIOResultCancelled;
 constexpr C_IOResultCode C_IOResultInvalid = GalayCoreCoroIOResultInvalid;
 constexpr C_IOResultCode C_IOResultError = GalayCoreCoroIOResultError;
-
-struct CoroAsyncMutexOperation;
-
-struct CoroAsyncMutexWakeState {
-    galay::kernel::detail::ResumeTokenHeader header;
-    CoroAsyncMutexOperation* operation = nullptr;
-};
 
 enum class CompletionPhase : uint8_t {
     Pending,
@@ -91,24 +87,43 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, sys_errno);
 }
 
-struct CoroAsyncMutexOperation {
-    CoroAsyncMutexOperation(AsyncMutex* mutex,
+struct CoroAsyncMutexWakeState {
+    CoroAsyncMutexWakeState(AsyncMutex* mutex,
                             Scheduler* scheduler,
                             void* user_data,
                             GalayCoreCoroWaitOps wait_ops)
         : awaitable(mutex->lock())
         , m_scheduler(scheduler)
         , m_wait_ops(wait_ops)
+        , m_user_data(user_data)
     {
-        m_user_data = user_data;
-        m_wake_state.header.hooks = &kWakeHooks;
-        m_wake_state.operation = this;
+        header.hooks = &kWakeHooks;
+    }
+
+    void retain() noexcept
+    {
+        uint32_t current = m_ref_count.load(std::memory_order_relaxed);
+        while (current != std::numeric_limits<uint32_t>::max()) {
+            if (m_ref_count.compare_exchange_weak(current,
+                                                  current + 1,
+                                                  std::memory_order_relaxed,
+                                                  std::memory_order_relaxed)) {
+                return;
+            }
+        }
+    }
+
+    void release() noexcept
+    {
+        if (m_ref_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            delete this;
+        }
     }
 
     galay::kernel::Waker makeWaker() noexcept
     {
         return galay::kernel::Waker(
-            galay::kernel::detail::ResumeToken::fromCCoroutine(&m_wake_state));
+            galay::kernel::detail::ResumeToken::fromCCoroutine(this));
     }
 
     bool completeFromWake() noexcept
@@ -120,7 +135,7 @@ struct CoroAsyncMutexOperation {
                                              std::memory_order_acquire)) {
             return true;
         }
-        return completeUserData(buildResult());
+        return completeUserData(consumeAwaitableResult());
     }
 
     C_IOResult wait(int64_t timeout_ms) noexcept
@@ -130,15 +145,17 @@ struct CoroAsyncMutexOperation {
             : make_result(C_IOResultInvalid);
     }
 
-    void markWaitTimeout() noexcept
+    C_IOResult markWaitTimeout() noexcept
     {
         CompletionPhase expected = CompletionPhase::Pending;
-        if (m_phase.compare_exchange_strong(expected,
-                                            CompletionPhase::TimedOut,
-                                            std::memory_order_acq_rel,
-                                            std::memory_order_acquire)) {
-            awaitable.markTimeout();
+        if (!m_phase.compare_exchange_strong(expected,
+                                             CompletionPhase::TimedOut,
+                                             std::memory_order_acq_rel,
+                                             std::memory_order_acquire)) {
+            return make_result(C_IOResultOk);
         }
+        awaitable.markTimeout();
+        return consumeAwaitableResult();
     }
 
     bool hasPendingToken() noexcept
@@ -149,19 +166,33 @@ struct CoroAsyncMutexOperation {
 
     C_IOResult finishWithoutWait(C_IOResult result) noexcept
     {
+        result = merge_cleanup_result(result, cancelPendingWait());
         C_IOResult completed = completeAndReleaseUserData(result);
         return merge_cleanup_result(result, completed);
     }
 
     Scheduler* scheduler() const noexcept { return m_scheduler; }
 
+    galay::kernel::detail::ResumeTokenHeader header;
     AsyncMutexAwaitable awaitable;
 
 private:
-    C_IOResult buildResult() noexcept
+    C_IOResult consumeAwaitableResult() noexcept
     {
         auto resumed = awaitable.await_resume();
         return resumed ? make_result(C_IOResultOk) : from_io_error(resumed.error());
+    }
+
+    C_IOResult cancelPendingWait() noexcept
+    {
+        CompletionPhase expected = CompletionPhase::Pending;
+        if (!m_phase.compare_exchange_strong(expected,
+                                             CompletionPhase::Cancelled,
+                                             std::memory_order_acq_rel,
+                                             std::memory_order_acquire)) {
+            return make_result(C_IOResultOk);
+        }
+        return consumeAwaitableResult();
     }
 
     bool completeUserData(C_IOResult result) noexcept
@@ -191,20 +222,30 @@ private:
     static Scheduler* wake_owner(void* state) noexcept
     {
         auto* wake_state = static_cast<CoroAsyncMutexWakeState*>(state);
-        return wake_state != nullptr && wake_state->operation != nullptr
-            ? wake_state->operation->scheduler()
-            : nullptr;
+        return wake_state != nullptr ? wake_state->scheduler() : nullptr;
     }
 
     static bool wake_request(void* state) noexcept
     {
         auto* wake_state = static_cast<CoroAsyncMutexWakeState*>(state);
-        return wake_state != nullptr && wake_state->operation != nullptr &&
-            wake_state->operation->completeFromWake();
+        return wake_state != nullptr && wake_state->completeFromWake();
     }
 
-    static void wake_retain(void*) noexcept {}
-    static void wake_release(void*) noexcept {}
+    static void wake_retain(void* state) noexcept
+    {
+        auto* wake_state = static_cast<CoroAsyncMutexWakeState*>(state);
+        if (wake_state != nullptr) {
+            wake_state->retain();
+        }
+    }
+
+    static void wake_release(void* state) noexcept
+    {
+        auto* wake_state = static_cast<CoroAsyncMutexWakeState*>(state);
+        if (wake_state != nullptr) {
+            wake_state->release();
+        }
+    }
 
     inline static const galay::kernel::detail::ResumeTokenHooks kWakeHooks{
         .owner_scheduler = wake_owner,
@@ -213,12 +254,31 @@ private:
         .release = wake_release,
     };
 
+    std::atomic<uint32_t> m_ref_count{1};
     Scheduler* m_scheduler = nullptr;
     GalayCoreCoroWaitOps m_wait_ops{};
     std::atomic<CompletionPhase> m_phase{CompletionPhase::Pending};
     std::mutex m_user_data_mutex;
     void* m_user_data = nullptr;
-    CoroAsyncMutexWakeState m_wake_state{};
+};
+
+struct CoroAsyncMutexStateOwner {
+    explicit CoroAsyncMutexStateOwner(CoroAsyncMutexWakeState* state) noexcept
+        : m_state(state)
+    {
+    }
+
+    ~CoroAsyncMutexStateOwner()
+    {
+        if (m_state != nullptr) {
+            m_state->release();
+        }
+    }
+
+    CoroAsyncMutexWakeState* operator->() const noexcept { return m_state; }
+
+private:
+    CoroAsyncMutexWakeState* m_state = nullptr;
 };
 
 } // namespace
@@ -242,21 +302,27 @@ GalayCoreCoroIOResult galay_core_coro_async_mutex_lock(
         return make_result(C_IOResultTimeout);
     }
 
-    CoroAsyncMutexOperation operation(mutex, scheduler, user_data, *wait_ops);
-    if (operation.awaitable.await_ready()) {
-        return operation.finishWithoutWait(make_result(C_IOResultOk));
+    auto* state = new (std::nothrow) CoroAsyncMutexWakeState(
+        mutex, scheduler, user_data, *wait_ops);
+    if (state == nullptr) {
+        return make_result(C_IOResultError, ENOMEM);
     }
-    const bool suspended = operation.awaitable.await_suspend(operation.makeWaker());
+    CoroAsyncMutexStateOwner operation(state);
+
+    if (operation->awaitable.await_ready()) {
+        return operation->finishWithoutWait(make_result(C_IOResultOk));
+    }
+    const bool suspended = operation->awaitable.await_suspend(operation->makeWaker());
     if (!suspended) {
-        return operation.finishWithoutWait(make_result(C_IOResultOk));
+        return operation->finishWithoutWait(make_result(C_IOResultOk));
     }
 
-    C_IOResult result = operation.wait(timeout_ms);
+    C_IOResult result = operation->wait(timeout_ms);
     if (result.code == C_IOResultTimeout) {
-        operation.markWaitTimeout();
+        result = merge_cleanup_result(result, operation->markWaitTimeout());
     }
-    if (operation.hasPendingToken()) {
-        result = operation.finishWithoutWait(result);
+    if (operation->hasPendingToken()) {
+        result = operation->finishWithoutWait(result);
     }
     return result;
 }

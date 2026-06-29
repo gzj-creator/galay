@@ -64,6 +64,10 @@ struct galay_redis_command_builder_t {
     std::string encoded;
 };
 
+struct galay_redis_pipeline_t {
+    std::vector<std::string> encoded_commands;
+};
+
 struct galay_redis_reply_t {
     galay_redis_resp_type_t type = GALAY_REDIS_RESP_SIMPLE_STRING;
     std::string value;
@@ -140,6 +144,47 @@ galay_status_t galay_redis_command_builder_build(galay_redis_command_builder_t* 
     return GALAY_OK;
 }
 
+galay_status_t galay_redis_pipeline_create(galay_redis_pipeline_t** out)
+{
+    if (out == nullptr) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+    *out = new (std::nothrow) galay_redis_pipeline_t();
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
+}
+
+void galay_redis_pipeline_destroy(galay_redis_pipeline_t* pipeline)
+{
+    delete pipeline;
+}
+
+galay_status_t galay_redis_pipeline_add_command(galay_redis_pipeline_t* pipeline,
+                                                const char* command,
+                                                const char* const* args,
+                                                const size_t* arg_lens,
+                                                size_t arg_count)
+{
+    if (pipeline == nullptr || command == nullptr || (arg_count != 0 && args == nullptr)) {
+        return GALAY_INVALID_ARGUMENT;
+    }
+
+    galay_redis_command_builder_t builder;
+    const char* encoded = nullptr;
+    size_t encoded_len = 0;
+    galay_status_t built = galay_redis_command_builder_build(&builder,
+                                                             command,
+                                                             args,
+                                                             arg_lens,
+                                                             arg_count,
+                                                             &encoded,
+                                                             &encoded_len);
+    if (built != GALAY_OK) {
+        return built;
+    }
+    pipeline->encoded_commands.emplace_back(encoded, encoded_len);
+    return GALAY_OK;
+}
+
 galay_status_t galay_redis_parse_reply(const char* data, size_t data_len,
                                        galay_redis_reply_t** out, size_t* consumed)
 {
@@ -189,6 +234,17 @@ void galay_redis_reply_destroy(galay_redis_reply_t* reply)
         galay_redis_reply_destroy(child);
     }
     delete reply;
+}
+
+void galay_redis_pipeline_replies_destroy(galay_redis_reply_t** replies, size_t reply_count)
+{
+    if (replies == nullptr) {
+        return;
+    }
+    for (size_t i = 0; i < reply_count; ++i) {
+        galay_redis_reply_destroy(replies[i]);
+    }
+    std::free(replies);
 }
 
 galay_redis_resp_type_t galay_redis_reply_type(const galay_redis_reply_t* reply)
@@ -404,6 +460,156 @@ C_IOResult galay_redis_client_command_async(galay_redis_client_t* client,
             return io_result_from_status(parsed_status);
         }
     }
+}
+
+C_IOResult galay_redis_client_auth(galay_redis_client_t* client,
+                                   const char* username,
+                                   const char* password,
+                                   int64_t timeout_ms)
+{
+    if (client == nullptr || password == nullptr) {
+        return make_io_result(C_IOResultInvalid);
+    }
+
+    const bool has_username = username != nullptr && username[0] != '\0';
+    const char* args[2] = {nullptr, nullptr};
+    size_t arg_count = 0;
+    if (has_username) {
+        args[0] = username;
+        args[1] = password;
+        arg_count = 2;
+    } else {
+        args[0] = password;
+        arg_count = 1;
+    }
+
+    galay_redis_reply_t* reply = nullptr;
+    C_IOResult result =
+        galay_redis_client_command_async(client, "AUTH", args, nullptr, arg_count, timeout_ms, &reply);
+    if (result.code != C_IOResultOk) {
+        return result;
+    }
+
+    const char* value = nullptr;
+    size_t value_len = 0;
+    const galay_status_t string_status = galay_redis_reply_string(reply, &value, &value_len);
+    const bool ok = string_status == GALAY_OK && value_len == 2 &&
+        std::memcmp(value, "OK", value_len) == 0;
+    galay_redis_reply_destroy(reply);
+    return ok ? result : io_result_from_status(GALAY_PROTOCOL_ERROR);
+}
+
+C_IOResult galay_redis_client_select(galay_redis_client_t* client, int db_index, int64_t timeout_ms)
+{
+    if (client == nullptr || db_index < 0) {
+        return make_io_result(C_IOResultInvalid);
+    }
+
+    std::string db = std::to_string(db_index);
+    const char* args[] = {db.c_str()};
+    galay_redis_reply_t* reply = nullptr;
+    C_IOResult result =
+        galay_redis_client_command_async(client, "SELECT", args, nullptr, 1, timeout_ms, &reply);
+    if (result.code != C_IOResultOk) {
+        return result;
+    }
+
+    const char* value = nullptr;
+    size_t value_len = 0;
+    const galay_status_t string_status = galay_redis_reply_string(reply, &value, &value_len);
+    const bool ok = string_status == GALAY_OK && value_len == 2 &&
+        std::memcmp(value, "OK", value_len) == 0;
+    galay_redis_reply_destroy(reply);
+    return ok ? result : io_result_from_status(GALAY_PROTOCOL_ERROR);
+}
+
+C_IOResult galay_redis_client_pipeline_async(galay_redis_client_t* client,
+                                             const galay_redis_pipeline_t* pipeline,
+                                             int64_t timeout_ms,
+                                             galay_redis_reply_t*** replies,
+                                             size_t* reply_count)
+{
+    if (replies != nullptr) {
+        *replies = nullptr;
+    }
+    if (reply_count != nullptr) {
+        *reply_count = 0;
+    }
+    if (client == nullptr || pipeline == nullptr || replies == nullptr || reply_count == nullptr ||
+        !client->connected || client->socket.socket == nullptr ||
+        pipeline->encoded_commands.empty()) {
+        return make_io_result(C_IOResultInvalid);
+    }
+
+    for (const std::string& encoded : pipeline->encoded_commands) {
+        size_t sent = 0;
+        while (sent < encoded.size()) {
+            C_IOResult send_result = galay_kernel_tcp_socket_send(&client->socket,
+                                                                  encoded.data() + sent,
+                                                                  encoded.size() - sent,
+                                                                  timeout_ms);
+            if (send_result.code != C_IOResultOk) {
+                return send_result;
+            }
+            if (send_result.bytes == 0) {
+                return make_io_result(C_IOResultEof);
+            }
+            sent += send_result.bytes;
+        }
+    }
+
+    const size_t expected_count = pipeline->encoded_commands.size();
+    auto** parsed_replies =
+        static_cast<galay_redis_reply_t**>(std::calloc(expected_count,
+                                                       sizeof(galay_redis_reply_t*)));
+    if (parsed_replies == nullptr) {
+        return io_result_from_status(GALAY_OUT_OF_MEMORY);
+    }
+
+    client->recv_buffer.clear();
+    char chunk[4096];
+    size_t parsed_count = 0;
+    while (parsed_count < expected_count) {
+        size_t consumed = 0;
+        galay_redis_reply_t* parsed = nullptr;
+        galay_status_t parsed_status = galay_redis_parse_reply(client->recv_buffer.data(),
+                                                               client->recv_buffer.size(),
+                                                               &parsed,
+                                                               &consumed);
+        if (parsed_status == GALAY_OK) {
+            parsed_replies[parsed_count] = parsed;
+            ++parsed_count;
+            client->recv_buffer.erase(0, consumed);
+            continue;
+        }
+        if (!reply_may_be_incomplete(client->recv_buffer, parsed_status)) {
+            galay_redis_pipeline_replies_destroy(parsed_replies, expected_count);
+            return io_result_from_status(parsed_status);
+        }
+
+        C_IOResult recv_result =
+            galay_kernel_tcp_socket_recv(&client->socket, chunk, sizeof(chunk), timeout_ms);
+        if (recv_result.code != C_IOResultOk) {
+            galay_redis_pipeline_replies_destroy(parsed_replies, expected_count);
+            return recv_result;
+        }
+        if (recv_result.bytes == 0) {
+            galay_redis_pipeline_replies_destroy(parsed_replies, expected_count);
+            return make_io_result(C_IOResultEof);
+        }
+        client->recv_buffer.append(chunk, recv_result.bytes);
+        if (client->recv_buffer.size() > kRedisMaxReplyBuffer) {
+            galay_redis_pipeline_replies_destroy(parsed_replies, expected_count);
+            return io_result_from_status(GALAY_PROTOCOL_ERROR);
+        }
+    }
+
+    *replies = parsed_replies;
+    *reply_count = expected_count;
+    C_IOResult result = make_io_result(C_IOResultOk);
+    result.bytes = expected_count;
+    result.ptr = parsed_replies;
+    return result;
 }
 
 C_IOResult galay_redis_client_close(galay_redis_client_t* client, int64_t timeout_ms)

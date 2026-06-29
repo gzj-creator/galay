@@ -12,6 +12,10 @@ typedef struct LockState {
     atomic_int phase;
 } LockState;
 
+enum {
+    HANDOFF_STRESS_ITERATIONS = 512
+};
+
 static int expect_status(C_AsyncMutexResultCode actual, C_AsyncMutexResultCode expected)
 {
     return actual == expected ? 0 : 1;
@@ -22,10 +26,10 @@ static int expect_io_code(C_IOResult actual, C_IOResultCode expected)
     return actual.code == expected ? 0 : 1;
 }
 
-static int wait_phase(atomic_int* phase, int expected)
+static int wait_phase_for(atomic_int* phase, int expected, int attempts)
 {
     struct timespec pause = {0, 1000000};
-    for (int i = 0; i < 2000; ++i) {
+    for (int i = 0; i < attempts; ++i) {
         if (atomic_load(phase) == expected) {
             return 0;
         }
@@ -34,6 +38,11 @@ static int wait_phase(atomic_int* phase, int expected)
         }
     }
     return 1;
+}
+
+static int wait_phase(atomic_int* phase, int expected)
+{
+    return wait_phase_for(phase, expected, 2000);
 }
 
 static void lock_entry(void* ctx)
@@ -159,6 +168,44 @@ int main(void)
         expect_io_code(galay_coro_destroy(&second_task), C_IOResultOk)) {
         exit_code = 20;
         goto cleanup;
+    }
+
+    for (int i = 0; i < HANDOFF_STRESS_ITERATIONS; ++i) {
+        atomic_store(&first.phase, 0);
+        atomic_store(&second.phase, 0);
+        first.result.code = C_IOResultError;
+        second.result.code = C_IOResultError;
+        if (expect_io_code(galay_coro_spawn(&runtime, lock_entry, &first, 0, &first_task),
+                C_IOResultOk) ||
+            wait_phase(&first.phase, 1) != 0 ||
+            expect_io_code(galay_coro_spawn(&runtime, lock_entry, &second, 0, &second_task),
+                C_IOResultOk)) {
+            exit_code = 27;
+            goto cleanup;
+        }
+        if (wait_phase_for(&second.phase, 1, 10) == 0) {
+            exit_code = 28;
+            goto cleanup;
+        }
+        if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
+            wait_phase(&second.phase, 1) != 0 ||
+            second.result.code != C_IOResultOk ||
+            !galay_kernel_async_mutex_is_locked(&mutex)) {
+            exit_code = 29;
+            goto cleanup;
+        }
+        if (expect_status(galay_kernel_async_mutex_unlock(&mutex), C_AsyncMutexSuccess) ||
+            expect_io_code(galay_coro_join(&first_task, 2000), C_IOResultOk) ||
+            expect_io_code(galay_coro_join(&second_task, 2000), C_IOResultOk) ||
+            galay_kernel_async_mutex_is_locked(&mutex)) {
+            exit_code = 30;
+            goto cleanup;
+        }
+        if (expect_io_code(galay_coro_destroy(&first_task), C_IOResultOk) ||
+            expect_io_code(galay_coro_destroy(&second_task), C_IOResultOk)) {
+            exit_code = 31;
+            goto cleanup;
+        }
     }
 
     atomic_store(&first.phase, 0);

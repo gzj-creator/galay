@@ -73,6 +73,38 @@ static int test_client_rejects_null_command(void)
     return 0;
 }
 
+static int test_async_helpers_reject_invalid_arguments(void)
+{
+    galay_redis_client_t* client = NULL;
+
+    REQUIRE_STATUS(galay_redis_client_create(NULL, &client), GALAY_OK);
+    REQUIRE_TRUE(galay_redis_client_auth(NULL, NULL, NULL, 1).code == C_IOResultInvalid);
+    REQUIRE_TRUE(galay_redis_client_auth(client, NULL, NULL, 1).code == C_IOResultInvalid);
+    REQUIRE_TRUE(galay_redis_client_select(NULL, 0, 1).code == C_IOResultInvalid);
+    REQUIRE_TRUE(galay_redis_client_select(client, -1, 1).code == C_IOResultInvalid);
+
+    galay_redis_client_destroy(client);
+    return 0;
+}
+
+static int test_pipeline_rejects_invalid_arguments(void)
+{
+    galay_redis_pipeline_t* pipeline = NULL;
+
+    REQUIRE_STATUS(galay_redis_pipeline_create(NULL), GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_redis_pipeline_create(&pipeline), GALAY_OK);
+    REQUIRE_TRUE(pipeline != NULL);
+    REQUIRE_STATUS(galay_redis_pipeline_add_command(NULL, "PING", NULL, NULL, 0),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_redis_pipeline_add_command(pipeline, NULL, NULL, NULL, 0),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_redis_pipeline_add_command(pipeline, "PING", NULL, NULL, 1),
+                   GALAY_INVALID_ARGUMENT);
+
+    galay_redis_pipeline_destroy(pipeline);
+    return 0;
+}
+
 int main(void)
 {
     if (test_client_create_accepts_auth_config() != 0) {
@@ -82,6 +114,12 @@ int main(void)
         return 1;
     }
     if (test_client_rejects_null_command() != 0) {
+        return 1;
+    }
+    if (test_async_helpers_reject_invalid_arguments() != 0) {
+        return 1;
+    }
+    if (test_pipeline_rejects_invalid_arguments() != 0) {
         return 1;
     }
     return 0;

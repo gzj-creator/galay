@@ -151,6 +151,7 @@ static int test_sync_client_lifecycle(void)
 {
     galay_mysql_client_t* client = NULL;
     galay_bool_t connected = GALAY_TRUE;
+    galay_mysql_buffer_t* result = NULL;
 
     REQUIRE_STATUS(galay_mysql_client_create(NULL), GALAY_INVALID_ARGUMENT);
     REQUIRE_STATUS(galay_mysql_client_create(&client), GALAY_OK);
@@ -160,6 +161,14 @@ static int test_sync_client_lifecycle(void)
     REQUIRE_STATUS(galay_mysql_client_is_connected(client, NULL), GALAY_INVALID_ARGUMENT);
     REQUIRE_STATUS(galay_mysql_client_is_connected(NULL, &connected), GALAY_INVALID_ARGUMENT);
     REQUIRE_STATUS(galay_mysql_client_connect(NULL, NULL), GALAY_INVALID_ARGUMENT);
+    REQUIRE_TRUE(galay_mysql_client_connect_async(NULL, NULL, 1).code == C_IOResultInvalid);
+    REQUIRE_TRUE(galay_mysql_client_query_async(NULL, "SELECT 1", 1, &result).code ==
+                 C_IOResultInvalid);
+    REQUIRE_TRUE(galay_mysql_client_query_async(client, NULL, 1, &result).code ==
+                 C_IOResultInvalid);
+    REQUIRE_TRUE(galay_mysql_client_query_async(client, "SELECT 1", 1, NULL).code ==
+                 C_IOResultInvalid);
+    REQUIRE_TRUE(galay_mysql_client_close_async(NULL, 1).code == C_IOResultInvalid);
     galay_mysql_client_close(client);
     galay_mysql_client_destroy(client);
     galay_mysql_client_destroy(NULL);

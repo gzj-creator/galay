@@ -14,6 +14,8 @@
 ### Added
 
 - 新增 Redis C standalone direct coroutine async client 最小闭环：`galay_redis_client_connect`、`galay_redis_client_command_async` 与 `galay_redis_client_close`，通过本地 mock Redis loopback 覆盖 PING/PONG，并补齐对应 C test、example 与 smoke benchmark。
+- 新增 Redis C async `AUTH`、`SELECT` 与 pipeline API：支持 pipeline 命令缓存、批量 reply 保留和统一释放，并补齐本地 mock loopback test、example 与 smoke benchmark。
+- 新增 MySQL C direct coroutine async client 最小闭环：`galay_mysql_client_connect_async`、`galay_mysql_client_query_async` 与 `galay_mysql_client_close_async`，通过本地 mock MySQL packet loopback 覆盖 handshake、COM_QUERY 和 result packet，并补齐对应 C test、example 与 smoke benchmark。
 - 新增非 kernel C module target Phase 1 基线：按 `src/c/galay-<module>-c` 目录组织补齐 `galay-c-common`、`galay-c-utils`、`galay-c-ssl`、`galay-c-http`、`galay-c-ws`、`galay-c-http2`、`galay-c-redis`、`galay-c-rpc`、`galay-c-mysql`、`galay-c-mongo`、`galay-c-etcd`、`galay-c-mcp`、`galay-c-tracing` 的 CMake target、纯 C public header、最小 wrapper implementation 与 CTest surface 注册。
 - 新增 `galay-c-bridge` 内部 C/C++ bridge 模块，将 C coroutine 旁路 bridge 从 C++ kernel core 拆到 `src/c/galay-bridge-c/coro-c`，并由 `galay-c-kernel` 显式依赖。
 - 新增 HTTP/2 production hardening 覆盖：补齐 SETTINGS 校验、h2c HTTP2-Settings 解码、peer/local settings 应用、HEADERS/CONTINUATION 与 DATA outbound limit 测试，覆盖 `MAX_FRAME_SIZE`、`MAX_HEADER_LIST_SIZE`、ACK payload、非 0 stream SETTINGS 和 decoder header-list limit。
@@ -71,6 +73,7 @@
 
 ### Fixed
 
+- 修复 C Kernel AsyncMutex direct coroutine bridge 的 wake state 生命周期问题：`ResumeToken` 不再引用栈上 operation，改为引用计数堆状态，避免 waiter/waker 延迟释放时触发偶发 Bus error，并新增 512 轮 C handoff 压力回归覆盖。
 - 修复 RPC managed client 清理路径静默丢弃返回值的问题：`release()` 与 `client.close()` 失败现在会通过 `RpcError` 显式传播，并新增源码边界测试防止回退到 `(void)` 忽略返回值。
 - 修复 kernel timeout/C coroutine 边界：`WithTimeout` 处理 timer 注册失败返回值并立即传播错误，C TCP bridge 在 timeout 服务不可用时清理 awaitable/user_data 后返回错误，`AsyncWaiter`/`AsyncMutex` await_suspend 路径满足最终挂起状态发布约束。
 - 修复 etcd t13/t14 cluster integration CTest 注册遗漏，未启用 `GALAY_IT_ENABLE` 时按 `SKIP_RETURN_CODE` 统计为 skipped 而不是失败。

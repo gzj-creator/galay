@@ -138,7 +138,9 @@ rtk ctest --test-dir build/direct-coro-c -L c --output-on-failure
 当前进度：
 - 已补齐 standalone direct C coroutine 最小闭环：`connect`、单条 `command_async`、
   `close`，并通过本地 mock Redis loopback test、example 和 smoke benchmark 验证。
-- 待补齐：auth/select、pipeline 独立 API、批量 reply 保留、topology/cluster discovery。
+- 已补齐 `AUTH`、`SELECT`、pipeline 独立 API 和批量 reply 保留/释放路径，并通过本地 mock
+  Redis loopback test、example 和 smoke benchmark 验证。
+- 待补齐：topology/cluster discovery。
 
 ### MySQL
 
@@ -149,6 +151,12 @@ rtk ctest --test-dir build/direct-coro-c -L c --output-on-failure
   - query
   - read result/error packet
   - close
+
+当前进度：
+- 已补齐 direct C coroutine 最小闭环：TCP connect 后读取 server handshake packet、
+  发送 COM_QUERY、读取一个 result/error packet、close，并通过本地 mock MySQL packet
+  loopback test、example 和 smoke benchmark 验证。
+- 待补齐：完整 MySQL auth exchange、真实 result set/column/row 解码、错误包细分。
 
 ### Mongo
 
