@@ -95,6 +95,11 @@
 - 新增 `docs/文档审查报告.md`，记录 docs 目录 354 个 Markdown 文件的结构、链接、命名和完整性审查结果及修复优先级。
 - 更新 C Kernel 性能文档，按 C++ 性能文档结构记录 2026-06-25 Release fresh TCP/UDP 双进程 C/S 压测数据、timeout API pressure/smoke 输出、复现命令、target 清单和网络吞吐指标解释。
 - 新增 `docs/c/modules/kernel` 文档导航与性能页，记录 C `TcpSocket` Release 构建、回归命令、同参数 C/C++ loopback benchmark 数据和当前复现口径。
+- 按文档审查报告整改 docs 体系：统一全部模块 README 的 H1 标题（由「文档导航/索引/总览/首页」等多种写法改为「<模块> 文档」）；修复 http2/ws README 指向不存在文件的死链，仅保留实际可用文档入口。
+- 修正 mongo 模块交叉引用编号错乱（`06-示例代码` → `04`、`07-高级主题` → `06`）；移除 redis/ssl/http 快速开始中硬编码的开发者私有路径，统一用 `<galay-install-prefix>` 占位。
+- 校正 redis/http 快速开始中的示例源码路径与 target 名称，使其与当前 monorepo `examples/cpp/...` 目录结构和 target 命名一致。
+- 新增 mongo 模块 README 与 `docs/README.md` 顶层文档索引入口；更新 `docs/文档审查报告.md`（2026-06-29），跟踪前序问题修复状态并补充硬编码路径、示例不可运行等新发现。
+- 同步 `docs/release_note.md` 中的模块文档路径（`docs/modules/` → `docs/cpp/modules/` 与 `docs/c/modules/`）。
 
 ### Chore
 

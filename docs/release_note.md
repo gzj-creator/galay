@@ -76,10 +76,10 @@
 #### 文档与工程
 
 - 新增项目 `README.md`，介绍 galay 特性、13 个 `galay-*` 模块、环境要求、CMake 快速开始与目录结构。
-- 新增 `docs/modules/` 模块文档体系，覆盖快速开始、架构设计、API 参考、使用指南、示例代码、性能测试、高级主题与常见问题。
+- 新增 `docs/cpp/modules/` 与 `docs/c/modules/` 模块文档体系，覆盖快速开始、架构设计、API 参考、使用指南、示例代码、性能测试、高级主题与常见问题。
 - 新增 `examples/`、`scripts/` 目录；新增 `CLAUDE.md` 与 `AGENTS.md` 代理行为准则。
 - 新增 HTTP/2 静态文件 Release 对比校正与性能测试文档，新增 HTTP/2 dispatcher/scheduler 生产级优化计划，新增 MySQL 认证插件验证说明。
-- 大幅扩充 `.gitignore`，并将 `docs/plans/`、`.claude/`、`.codex/`、`docs/modules/*/plans` 排除出版本控制。
+- 大幅扩充 `.gitignore`，并将 `docs/plans/`、`.claude/`、`.codex/`、`docs/cpp/modules/*/plans` 排除出版本控制。
 
 #### 主要修复
 
