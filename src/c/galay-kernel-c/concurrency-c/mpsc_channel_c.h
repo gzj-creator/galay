@@ -21,6 +21,9 @@ extern "C" {
 
 /**
  * @brief MpscChannel C ABI 操作结果码。
+ *
+ * @details 同步发送/非阻塞接收返回该枚举；会挂起的 recv/recv_batch 返回
+ * C_IOResult。Timeout 同时表示 try_recv 当前无消息和 blocking recv 等待超时。
  */
 typedef enum C_MpscChannelResultCode {
     C_MpscChannelSuccess,                ///< 操作成功。
@@ -91,6 +94,9 @@ C_MpscChannelResultCode galay_kernel_mpsc_channel_destroy(galay_kernel_mpsc_chan
  * @param message 待发送消息；wrapper 只复制结构体，不复制 data 指向的 payload。
  * @return 成功返回 C_MpscChannelSuccess；参数无效返回 C_MpscChannelParameterInvalid；
  * 底层队列入队失败返回 C_MpscChannelIOFailed。
+ *
+ * @note send 可由多个生产者线程/协程调用，但 message->data 的生命周期仍由调用方
+ * 负责，直到消费者取走并完成使用。
  */
 C_MpscChannelResultCode galay_kernel_mpsc_channel_send(
     galay_kernel_mpsc_channel_t* c_channel,
@@ -104,6 +110,8 @@ C_MpscChannelResultCode galay_kernel_mpsc_channel_send(
  * @param count 待发送消息数量。
  * @return 成功返回 C_MpscChannelSuccess；参数无效返回 C_MpscChannelParameterInvalid；
  * 内存分配失败返回 C_MpscChannelMemoryAllocFailed；底层队列入队失败返回 C_MpscChannelIOFailed。
+ *
+ * @note 批量发送按数组顺序逐条入队；如果中途失败，已成功入队的消息不会回滚。
  */
 C_MpscChannelResultCode galay_kernel_mpsc_channel_send_batch(
     galay_kernel_mpsc_channel_t* c_channel,
@@ -118,7 +126,8 @@ C_MpscChannelResultCode galay_kernel_mpsc_channel_send_batch(
  * @return 成功取到消息返回 C_MpscChannelSuccess；当前无消息返回 C_MpscChannelTimeout；
  * 参数无效返回 C_MpscChannelParameterInvalid。
  *
- * @note 接收侧必须保持单消费者语义。
+ * @note 接收侧必须保持单消费者语义。message 由调用方提供；成功时 wrapper 只写入
+ * C_MpscChannelMessage 结构体，不复制 payload。
  */
 C_MpscChannelResultCode galay_kernel_mpsc_channel_try_recv(
     galay_kernel_mpsc_channel_t* c_channel,
@@ -135,6 +144,7 @@ C_MpscChannelResultCode galay_kernel_mpsc_channel_try_recv(
  * C_MpscChannelTimeout；参数无效返回 C_MpscChannelParameterInvalid。
  *
  * @note messages 数组由调用方提供，wrapper 只写入消息结构体。
+ * 接收侧必须保持单消费者语义。
  */
 C_MpscChannelResultCode galay_kernel_mpsc_channel_try_recv_batch(
     galay_kernel_mpsc_channel_t* c_channel,
@@ -150,6 +160,9 @@ C_MpscChannelResultCode galay_kernel_mpsc_channel_try_recv_batch(
  * @param timeout_ms 负数无限等待，0 立即超时检查，正数为毫秒超时。
  * @return 成功返回 C_IOResultOk；超时返回 C_IOResultTimeout；参数无效或不在
  * C coroutine 内调用返回 C_IOResultInvalid。
+ *
+ * @note 该函数通过 galay_coro_yield 让出当前 C coroutine，等待期间不会阻塞 OS
+ * 线程。message 必须在函数返回前保持有效。接收侧必须保持单消费者语义。
  */
 C_IOResult galay_kernel_mpsc_channel_recv(
     galay_kernel_mpsc_channel_t* c_channel,
@@ -158,6 +171,19 @@ C_IOResult galay_kernel_mpsc_channel_recv(
 
 /**
  * @brief 挂起当前 C coroutine 并批量接收消息。
+ *
+ * @param c_channel channel 句柄。
+ * @param messages 输出消息数组，容量至少为 max_count。
+ * @param max_count 最多接收消息数，必须大于 0。
+ * @param out_count 实际接收消息数，进入等待前会置 0。
+ * @param timeout_ms 负数无限等待，0 立即超时检查，正数为毫秒超时。
+ * @return 成功接收到至少一条消息返回 C_IOResultOk；超时返回 C_IOResultTimeout；
+ * 参数无效或不在 C coroutine 内调用返回 C_IOResultInvalid；yield 失败返回
+ * C_IOResultError/sys_errno。
+ *
+ * @note 该函数通过 galay_coro_yield 让出当前 C coroutine，等待期间不会阻塞 OS
+ * 线程。messages 和 out_count 必须在函数返回前保持有效。接收侧必须保持单消费者
+ * 语义；wrapper 只复制 C_MpscChannelMessage 结构体，不复制 payload。
  */
 C_IOResult galay_kernel_mpsc_channel_recv_batch(
     galay_kernel_mpsc_channel_t* c_channel,
@@ -171,6 +197,9 @@ C_IOResult galay_kernel_mpsc_channel_recv_batch(
  *
  * @param c_channel channel 句柄；为空或未初始化时返回 0。
  * @return 当前通道中的消息数近似值。
+ *
+ * @note 并发生产者存在时，该值只适合监控和启发式判断，不能作为后续接收一定成功
+ * 的同步条件。
  */
 size_t galay_kernel_mpsc_channel_size(const galay_kernel_mpsc_channel_t* c_channel);
 
@@ -179,6 +208,8 @@ size_t galay_kernel_mpsc_channel_size(const galay_kernel_mpsc_channel_t* c_chann
  *
  * @param c_channel channel 句柄；为空或未初始化时返回 true。
  * @return true 表示当前没有待消费消息。
+ *
+ * @note 并发生产者存在时，返回值只是调用瞬间的观察结果。
  */
 bool galay_kernel_mpsc_channel_empty(const galay_kernel_mpsc_channel_t* c_channel);
 

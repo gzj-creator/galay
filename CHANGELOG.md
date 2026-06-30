@@ -97,6 +97,7 @@
 
 ### Docs
 
+- 补齐 C public ABI 头文件 Doxygen 注释，覆盖 common/utils/kernel/bridge、HTTP/WS/HTTP2、Redis/MySQL/Mongo、Etcd/MCP/RPC、SSL/tracing 等模块的 ownership/lifetime、buffer 借用、错误码、coroutine 挂起、timeout/cancel/close 与线程/协程安全契约；本次仅更新头文件注释，不删除 public C ABI。
 - 补齐 C async API 模块 README 与 public header 对齐说明，覆盖 HTTP request/response parser/builder、header helper、route/session ownership、WS/HTTP2/Redis/Mongo/MCP/RPC/kernel/tracing helper family，以及 MySQL/SSL 新增认证与 ALPN/session 语义。
 - 新增 `docs/文档审查报告.md`，记录 docs 目录 354 个 Markdown 文件的结构、链接、命名和完整性审查结果及修复优先级。
 - 更新 C Kernel 性能文档，按 C++ 性能文档结构记录 2026-06-25 Release fresh TCP/UDP 双进程 C/S 压测数据、timeout API pressure/smoke 输出、复现命令、target 清单和网络吞吐指标解释。
