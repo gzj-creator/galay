@@ -21,14 +21,15 @@
 - 模块入口：
   - `galay-rpc/module/module_prelude.hpp`
   - `galay-rpc/module/galay_rpc.cppm`
+  - `galay-rpc/module/galay_rpc_etcd.cppm`（仅 `GALAY_RPC_ENABLE_ETCD=ON` 时随 RPC 目标启用）
 
 安装导出与模块边界：
 
-- header 模式 target：`galay-rpc::galay-rpc`
-- 条件模块 target：`galay-rpc::galay-rpc-modules`
+- 统一消费 target：`galay::rpc`
 - module 名：`galay.rpc`
+- 条件 etcd module 名：`galay.rpc.etcd`
 
-`galay-rpc::galay-rpc-modules` 只有在 `GALAY_ENABLE_CPP23_MODULES=ON` 且 CMake/生成器/编译器都支持 C++ module dependency scanning 时生成。当前 AppleClang 构建会显式跳过该 target，include target 仍是稳定生产入口。
+`GALAY_ENABLE_CPP23_MODULES=ON` 且 CMake/生成器/编译器都支持 C++ module dependency scanning 时，module file set 会直接注册到 `galay::rpc`，不会生成独立的 `*-modules` target。`GALAY_RPC_ENABLE_ETCD=ON` 时，`galay.rpc.etcd` 也挂在同一个 `galay::rpc` 目标上。
 
 ## 目录
 

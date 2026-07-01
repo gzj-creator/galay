@@ -77,7 +77,7 @@ cmake -S "${root}" -B "${build}" \
   -DBUILD_TESTING=OFF \
   -DCMAKE_INSTALL_PREFIX="${prefix}"
 
-cmake --build "${build}" --target utils kernel http ws http2 redis rpc -j "${jobs}"
+cmake --build "${build}" --target galay-utils galay-kernel galay-http galay-ws galay-http2 galay-redis galay-rpc -j "${jobs}"
 cmake --install "${build}"
 
 test -f "${prefix}/lib/cmake/galay/galayConfig.cmake"

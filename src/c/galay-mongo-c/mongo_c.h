@@ -1,5 +1,5 @@
-#ifndef GALAY_C_MONGO_MONGO_H
-#define GALAY_C_MONGO_MONGO_H
+#ifndef GALAY_C_MONGO_MONGO_C_H
+#define GALAY_C_MONGO_MONGO_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result_c.h>

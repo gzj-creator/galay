@@ -10,11 +10,10 @@ function(galay_add_kernel_example target_name source_file)
 endfunction()
 
 function(galay_add_kernel_import_example target_name source_file)
-    if(NOT TARGET galay-kernel-modules)
+    if(NOT GALAY_KERNEL_CPP23_MODULES_EFFECTIVE)
         return()
     endif()
     galay_add_kernel_example(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay-kernel-modules)
     set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
 endfunction()
 

@@ -1,4 +1,4 @@
-#include <galay/c/galay-tracing-c/tracing.h>
+#include <galay/c/galay-tracing-c/tracing_c.h>
 
 #include <galay/cpp/galay-tracing/common/span_id.h>
 #include <galay/cpp/galay-tracing/common/trace_id.h>

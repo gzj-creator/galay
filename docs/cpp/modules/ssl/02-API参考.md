@@ -22,8 +22,8 @@
 
 导出边界：
 
-- 安装包稳定导出 target：`galay-ssl::galay-ssl`
-- 条件生成但**安装包不导出**的模块 target：`galay-ssl-modules`
+- 安装包稳定导出 target：`galay::ssl`
+- 条件启用的 C++23 module file set：挂载在 `galay-ssl` / `galay::ssl`
 - `galay-ssl/async/awaitable.h` 是 `ssl_socket.h` 的实现支撑头，不是稳定独立入口
 
 ## 基础枚举
@@ -273,4 +273,4 @@
 以下内容在头文件中不能确认，文档不应臆造：
 
 - 没有公开的 `SslSocket::setTimeout()` 之类的显式超时配置接口
-- 安装包没有导出的 `galay-ssl::galay-ssl-modules` target
+- 安装包没有单独的 `-modules` target

@@ -1,11 +1,11 @@
 /**
- * @file etcd.h
+ * @file etcd_c.h
  * @brief Etcd C ABI 客户端、pipeline、watch 与 lease 接口。
  * @details 本头文件只暴露不透明 handle 和显式错误码；所有对象所有权通过
  * create/destroy 或结果 destroy 函数传递，不通过异常传播失败。
  */
-#ifndef GALAY_C_ETCD_ETCD_H
-#define GALAY_C_ETCD_ETCD_H
+#ifndef GALAY_C_ETCD_ETCD_C_H
+#define GALAY_C_ETCD_ETCD_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 

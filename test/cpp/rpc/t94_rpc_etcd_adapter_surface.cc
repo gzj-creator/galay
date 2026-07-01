@@ -1,7 +1,7 @@
 #include <galay/cpp/galay-rpc/discovery/etcd_service_registry.h>
 
 #ifndef GALAY_RPC_HAS_ETCD
-#error "galay::rpc-etcd must expose the etcd adapter feature macro"
+#error "galay::rpc must expose the etcd adapter feature macro when GALAY_RPC_ENABLE_ETCD is enabled"
 #endif
 
 int main()

@@ -1,4 +1,4 @@
-#include <galay/c/galay-rpc-c/rpc.h>
+#include <galay/c/galay-rpc-c/rpc_c.h>
 
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
 

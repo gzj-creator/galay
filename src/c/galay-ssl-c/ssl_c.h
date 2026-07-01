@@ -1,5 +1,5 @@
 /**
- * @file ssl.h
+ * @file ssl_c.h
  * @brief TLS/SSL C ABI。
  * @details
  * 该头文件暴露基于 OpenSSL 的 TLS context 和 TLS socket C 接口。context 负责证书、
@@ -16,8 +16,8 @@
  * 通过底层 TCP C ABI 等待网络事件，等待期间挂起当前 C coroutine；不应在未运行 galay
  * C runtime 的上下文中调用需要网络等待的函数。
  */
-#ifndef GALAY_C_SSL_SSL_H
-#define GALAY_C_SSL_SSL_H
+#ifndef GALAY_C_SSL_SSL_C_H
+#define GALAY_C_SSL_SSL_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>

@@ -53,7 +53,8 @@
 - galay-kernel 内部源码 include 由公共前缀 `<galay/cpp/galay-kernel/...>` 统一改为相对路径（同目录直引、跨目录用 `../core/`、`../common/`），覆盖 async/core/common 下的 reactor、scheduler、socket、file、logger 等实现文件，避免内部实现依赖安装态公共 include 前缀。
 - C++ 模块文档目录从 `docs/modules` 收敛到 `docs/cpp/modules`，顶层 README、`.gitignore` 与模块文档导航同步改向新的 cpp 文档路径。
 - C/C++ 示例、测试和 benchmark 的 CMake 注册方式批量改为 `file(GLOB ... CONFIGURE_DEPENDS)`，减少新增源文件时的手工 target 维护。
-- RPC / RPC-etcd C++23 module file set 改为通过 glob source 变量注册，保持模块入口文件与 CMake source list 规则一致。
+- RPC C++23 module file set 改为直接注册到 `galay-rpc` / `galay::rpc`，保持模块入口文件与 CMake source list 规则一致。
+- C ABI 非 kernel 模块公开头统一从 `<module>.h` 重命名为 `<module>_c.h`，kernel C ABI 新增 `kernel_c.h` 伞形公开头，并同步更新测试、示例、benchmark 与文档 include 路径。
 - 调整 C Kernel `TcpSocket` accept/recv/send 结果结构：accepted socket 直接随 `galay_kernel_tcp_accept_result_t` 返回，移除 `has_socket` 与 `take_socket`；recv/send 结果补充原始 buffer 与 length，便于 callback 链式处理。
 - C Kernel TCP/Host C enum 成员统一改为带前缀命名：`C_TcpSocket*` 与 `C_IPType*`，移除旧的无前缀 `Success` / `ParameterInvalid` / `IPV4` / `IPV6` 等枚举名，并同步更新测试、示例与 benchmark。
 - C Kernel 测试、示例和 benchmark CMake 改为 `file(GLOB ... CONFIGURE_DEPENDS)` 自动收集源文件，避免新增用例时逐个登记。
@@ -62,8 +63,9 @@
 - 多模块协议与资源路径补齐显式边界处理，包括 HTTP/WS/HTTP2/RPC framing、Redis pool wait/RESP limit、MySQL packet length、MCP transport limit、SSL init/hostname/OAEP 与 tracing shutdown/escaping。
 - Base64 解码改为显式可解码检查入口，C API、Mongo 与 etcd 调用侧先判定输入合法性，再用返回值表达错误，避免依赖异常作为错误通道。
 - MCP 自有 JSON 文档、写入器、解析辅助函数及相关调用点统一改为小写开头驼峰命名，保留类型名、构造函数、协议字段和 JSON-RPC 方法字符串不变。
-- RPC 的 etcd adapter 从核心 `galay::rpc` 目标拆分为可选 `galay::rpc-etcd` / `galay.rpc.etcd` 表面，避免核心 RPC 消费者隐式暴露 `GALAY_RPC_HAS_ETCD`。
-- **统一 utils C ABI 状态码到 `galay_status_t`**：`galay_utils_status_t` 改为 `galay_status_t` 别名，`GALAY_UTILS_*` 宏映射到 `GALAY_*`；utils 全部导出函数签名统一返回 `galay_status_t` 并标注 `GALAY_C_API`，`utils.h` 改用 `GALAY_C_BEGIN_DECLS`；`test/c/utils/header_smoke.c` 增加 `_Static_assert` 锁定新签名，`galay-c-utils` 显式链接 `galay::c-common`。
+- RPC 的 etcd adapter 改为由 `GALAY_RPC_ENABLE_ETCD` 控制并编译进 `galay::rpc`，不再导出单独的 `galay::rpc-etcd` 目标。
+- C++23 module 示例、测试与文档统一改为链接 `galay::<module>` canonical target，module file set 直接挂载在 `galay-<module>` 上，不再使用独立 `galay-<module>-modules` facade target。
+- **统一 utils C ABI 状态码到 `galay_status_t`**：`galay_utils_status_t` 改为 `galay_status_t` 别名，`GALAY_UTILS_*` 宏映射到 `GALAY_*`；utils 全部导出函数签名统一返回 `galay_status_t` 并标注 `GALAY_C_API`，`utils_c.h` 改用 `GALAY_C_BEGIN_DECLS`；`test/c/utils/header_smoke.c` 增加 `_Static_assert` 锁定新签名，`galay-c-utils` 显式链接 `galay::c-common`。
 - kernel C API 实现按 runtime、TCP socket 拆分到 `core-c` 与 `async-c`，并将 runtime / TCP socket C 句柄调整为 FFI 可见的 `void*` 载荷结构。
 - kernel common 负载均衡头文件从 `async_strategy.hpp` 更名为 `balancer.hpp`，同步更新 RPC discovery include，避免旧文件名残留。
 
@@ -183,7 +185,7 @@
 - **Reactor 抽象改为 `ReactorType` concept**：移除虚基类 `BackendReactor`，改为基于 `notify()` + `getHandle()` 的编译期约束，epoll/kqueue/io_uring 三后端通过 `static_assert` 锁定；`wakeReadFdForTest()` 更名为 `getHandle()`，新增 `std::expected<void, IOError> start()` 显式初始化。
 - **RPC 请求协议支持可选 metadata 扩展**：在请求体前增加向后兼容的 metadata marker 编码，旧格式请求仍按原 service/method/payload 解码；客户端真实 writev 发送路径和 direct serialization 保持一致，server interceptor 可读取真实跨网络 metadata。
 - **RPC 通道生命周期加固**：reader/writer/cancel watcher 统一纳入后台任务计数，`close()` 等待所有后台任务退出后返回；pending 计数改为原子快照，避免诊断读取与分发表更新竞争。
-- **RPC C++23 module target 显式门禁**：新增 guarded `galay-rpc-modules` 与 `rpc.t92.module.smoke`，仅在 CMake/生成器/编译器都支持 C++ module dependency scanning 时生成，当前 AppleClang 路径明确跳过。
+- **RPC C++23 module file set 显式门禁**：`rpc.t92.module.smoke` 仅在 `galay-rpc` / `galay::rpc` 目标真实注册 C++ module file set 时生成，当前 AppleClang 路径明确跳过。
 - **优化 RPC 热路径**：为 pending response/heartbeat dispatch 表按 `max_in_flight` 预留容量，并减少连接池重复 endpoint lookup，降低高并发 unary 和 pool pressure 场景中的分配与 hash 成本。
 - **源码目录归入 `src/cpp/`**：将 `src/` 下各模块（`galay-utils`/`kernel`/`ssl`/`http`/`ws`/`http2`/`redis`/`rpc`/`mysql`/`mongo`/`etcd`/`mcp`/`tracing`）统一迁入 `src/cpp/` 子目录，共 421 个文件纯移动，为后续多语言绑定预留 `galay/cpp/` 命名空间。
 - **头文件 include 路径统一**：所有 benchmark 与 test 源文件的 `#include "galay-xxx/..."` 改为 `#include <galay/cpp/galay-xxx/...>`，顶层 `CMakeLists.txt` 的 `add_subdirectory` 同步指向 `src/cpp/galay-*`，并在构建目录通过符号链接 `${CMAKE_BINARY_DIR}/include/galay/cpp -> src/cpp` 提供统一 include 根；头文件安装目录改为 `${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp`。

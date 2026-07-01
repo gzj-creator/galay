@@ -1,4 +1,4 @@
-#include <galay/c/galay-etcd-c/etcd.h>
+#include <galay/c/galay-etcd-c/etcd_c.h>
 
 #include <stdio.h>
 #include <string.h>

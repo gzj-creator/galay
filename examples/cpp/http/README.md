@@ -38,7 +38,7 @@ cmake -S . -B build-mod -G Ninja \
   -DBUILD_BENCHMARKS=OFF \
   -DBUILD_MODULE_EXAMPLES=ON \
   -DGALAY_BUILD_SSL=OFF
-cmake --build build-mod --target galay-http-modules T59-module_smoke --parallel
+cmake --build build-mod --target galay-http T59-module_smoke --parallel
 ```
 
 TLS import 示例额外需要：
@@ -50,7 +50,7 @@ cmake -S . -B build-mod-ssl -G Ninja \
   -DBUILD_BENCHMARKS=OFF \
   -DBUILD_MODULE_EXAMPLES=ON \
   -DGALAY_BUILD_SSL=ON
-cmake --build build-mod-ssl --target galay-http-modules T59-module_smoke --parallel
+cmake --build build-mod-ssl --target galay-http T59-module_smoke --parallel
 ```
 
 说明：

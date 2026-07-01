@@ -1,4 +1,4 @@
-#include <galay/c/galay-tracing-c/tracing.h>
+#include <galay/c/galay-tracing-c/tracing_c.h>
 
 #include <assert.h>
 #include <stdio.h>

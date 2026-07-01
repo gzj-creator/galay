@@ -25,7 +25,7 @@ cmake -S "${root}" -B "${minimal_build}" \
   -DGALAY_BUILD_MCP=OFF \
   -DGALAY_BUILD_TRACING=OFF \
   -DBUILD_TESTING=OFF
-cmake --build "${minimal_build}" --target utils kernel -j "${jobs}"
+cmake --build "${minimal_build}" --target galay-utils galay-kernel -j "${jobs}"
 if grep -E 'OpenSSL|OPENSSL' "${minimal_build}/CMakeCache.txt" >/dev/null; then
   echo "minimal build unexpectedly probed OpenSSL" >&2
   exit 1
@@ -46,7 +46,7 @@ cmake -S "${root}" -B "${protocol_build}" \
   -DGALAY_BUILD_MCP=OFF \
   -DGALAY_BUILD_TRACING=OFF \
   -DBUILD_TESTING=OFF
-cmake --build "${protocol_build}" --target http ws http2 redis -j "${jobs}"
+cmake --build "${protocol_build}" --target galay-http galay-ws galay-http2 galay-redis -j "${jobs}"
 if grep -E 'OpenSSL|OPENSSL' "${protocol_build}/CMakeCache.txt" >/dev/null; then
   echo "protocol modules without SSL unexpectedly probed OpenSSL" >&2
   exit 1
@@ -67,5 +67,5 @@ cmake -S "${root}" -B "${ssl_build}" \
   -DGALAY_BUILD_MCP=OFF \
   -DGALAY_BUILD_TRACING=OFF \
   -DBUILD_TESTING=OFF
-cmake --build "${ssl_build}" --target ssl http ws http2 redis -j "${jobs}"
+cmake --build "${ssl_build}" --target galay-ssl galay-http galay-ws galay-http2 galay-redis -j "${jobs}"
 grep -E 'OpenSSL|OPENSSL' "${ssl_build}/CMakeCache.txt" >/dev/null

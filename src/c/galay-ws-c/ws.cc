@@ -1,4 +1,4 @@
-#include <galay/c/galay-ws-c/ws.h>
+#include <galay/c/galay-ws-c/ws_c.h>
 
 #include <galay/cpp/galay-ws/server/ws_upgrade.h>
 

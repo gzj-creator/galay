@@ -1,4 +1,4 @@
-#include <galay/c/galay-utils-c/utils.h>
+#include <galay/c/galay-utils-c/utils_c.h>
 
 #if !defined(GALAY_C_API)
 #error "utils.h must include the common C ABI definitions"

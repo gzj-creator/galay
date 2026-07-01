@@ -12,11 +12,10 @@ function(galay_add_redis_example target_name source_file)
 endfunction()
 
 function(galay_add_redis_import_example target_name source_file)
-    if(NOT TARGET galay-redis-modules)
+    if(NOT GALAY_REDIS_CPP23_MODULES_EFFECTIVE)
         return()
     endif()
     galay_add_redis_example(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay-redis-modules)
     set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
 endfunction()
 

@@ -7,8 +7,8 @@
 | 项目 | 真实名字 | 说明 |
 |---|---|---|
 | 源码树目标 | `galay-redis` | 当前仓库真实构建目标 |
-| 安装后导入目标 | `galay-redis::galay-redis` | `find_package(galay-redis CONFIG REQUIRED)` 后可直接链接 |
-| 可选模块目标 | `galay-redis-modules` / `galay-redis::galay-redis-modules` | 只有满足模块工具链条件时才生成/导出 |
+| 安装后导入目标 | `galay::redis` | `find_package(galay CONFIG REQUIRED)` 后可直接链接 |
+| 可选模块 file set | `galay-redis` / `galay::redis` | 只有满足模块工具链条件时才启用 |
 | C++23 模块名 | `galay.redis` | 模块接口文件：`galay-redis/module/galay_redis.cppm` |
 | 安装头目录 | `include/galay/cpp/galay-redis` | `galay-redis/CMakeLists.txt` 会安装公开 `.h` / `.hpp` / `.inl`，并排除 `sync/` 遗留目录 |
 | 条件安装模块目录 | `include/galay/cpp/galay-redis/module` | `GALAY_REDIS_INSTALL_MODULE_INTERFACE=ON` 时安装 `.cppm` 接口文件 |
@@ -613,7 +613,7 @@ TLS 单连接路径当前返回的 operation 类型是：
 
 - 模块名：`galay.redis`
 - 文件：`galay-redis/module/galay_redis.cppm`
-- 可选目标：`galay-redis-modules`
+- 可选 file set：挂载在 `galay-redis` / `galay::redis`
 
 模块构建是否可用由 `galay-redis/CMakeLists.txt` 动态判定；详细条件见 [06-高级主题](06-高级主题.md)。
 

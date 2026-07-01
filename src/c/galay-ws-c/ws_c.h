@@ -1,8 +1,8 @@
-#ifndef GALAY_C_WS_WS_H
-#define GALAY_C_WS_WS_H
+#ifndef GALAY_C_WS_WS_C_H
+#define GALAY_C_WS_WS_C_H
 
 /**
- * @file ws.h
+ * @file ws_c.h
  * @brief Galay WebSocket C ABI。
  *
  * @details 该头文件暴露最小 WebSocket C runtime surface：frame codec helper、

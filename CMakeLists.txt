@@ -53,8 +53,8 @@ endif()
 if(GALAY_BUILD_REDIS)
     add_subdirectory(src/cpp/galay-redis)
 endif()
-if(GALAY_BUILD_RPC)
-    add_subdirectory(src/cpp/galay-rpc)
+if(GALAY_BUILD_ETCD)
+    add_subdirectory(src/cpp/galay-etcd)
 endif()
 if(GALAY_BUILD_MYSQL)
     add_subdirectory(src/cpp/galay-mysql)
@@ -62,8 +62,8 @@ endif()
 if(GALAY_BUILD_MONGO)
     add_subdirectory(src/cpp/galay-mongo)
 endif()
-if(GALAY_BUILD_ETCD)
-    add_subdirectory(src/cpp/galay-etcd)
+if(GALAY_BUILD_RPC)
+    add_subdirectory(src/cpp/galay-rpc)
 endif()
 if(GALAY_BUILD_MCP)
     add_subdirectory(src/cpp/galay-mcp)
@@ -75,50 +75,11 @@ if(GALAY_BUILD_C_API)
     add_subdirectory(src/c)
 endif()
 
-if(TARGET rpc AND TARGET etcd)
-    add_library(rpc-etcd INTERFACE)
-    add_library(galay::rpc-etcd ALIAS rpc-etcd)
-    if(NOT TARGET galay-rpc-etcd)
-        add_library(galay-rpc-etcd ALIAS rpc-etcd)
-    endif()
-    if(NOT TARGET galay-rpc::galay-rpc-etcd)
-        add_library(galay-rpc::galay-rpc-etcd ALIAS rpc-etcd)
-    endif()
-    target_compile_features(rpc-etcd INTERFACE cxx_std_23)
-    target_compile_definitions(rpc-etcd INTERFACE GALAY_RPC_HAS_ETCD=1)
-    target_link_libraries(rpc-etcd INTERFACE galay::rpc galay::etcd)
-    set_target_properties(rpc-etcd PROPERTIES EXPORT_NAME rpc-etcd)
-
-    if(TARGET galay-rpc-modules)
-        file(GLOB GALAY_RPC_ETCD_MODULE_SOURCES CONFIGURE_DEPENDS
-            "${PROJECT_SOURCE_DIR}/src/cpp/galay-rpc/module/galay_rpc_etcd.cppm"
-        )
-        add_library(galay-rpc-etcd-modules)
-        add_library(galay-rpc::galay-rpc-etcd-modules ALIAS galay-rpc-etcd-modules)
-        target_compile_features(galay-rpc-etcd-modules PUBLIC cxx_std_23)
-        target_link_libraries(galay-rpc-etcd-modules PUBLIC galay::rpc-etcd)
-        target_include_directories(galay-rpc-etcd-modules
-            PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
-                $<INSTALL_INTERFACE:include>
-        )
-        target_sources(galay-rpc-etcd-modules
-            PUBLIC
-                FILE_SET CXX_MODULES
-                BASE_DIRS ${PROJECT_SOURCE_DIR}/src/cpp/galay-rpc/module
-                FILES ${GALAY_RPC_ETCD_MODULE_SOURCES}
-        )
-        set_target_properties(galay-rpc-etcd-modules PROPERTIES
-            EXPORT_NAME galay-rpc-etcd-modules
-            CXX_SCAN_FOR_MODULES ON
-        )
-    endif()
-endif()
-
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
-    utils kernel ssl http ws http2 redis rpc mysql mongo etcd mcp tracing
-    rpc-etcd
+    galay-utils galay-kernel galay-ssl galay-http galay-ws galay-http2
+    galay-redis galay-rpc galay-mysql galay-mongo galay-etcd galay-mcp
+    galay-tracing
     galay-tracing-spdlog galay-tracing-kernel
     galay-c-common
     galay-c-bridge
@@ -131,6 +92,10 @@ foreach(_galay_target IN ITEMS
     endif()
 endforeach()
 
+if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
+    list(REMOVE_ITEM GALAY_INSTALL_TARGETS galay-rpc)
+endif()
+
 if(GALAY_INSTALL_TARGETS)
     install(TARGETS ${GALAY_INSTALL_TARGETS}
         EXPORT galayTargets
@@ -140,19 +105,8 @@ if(GALAY_INSTALL_TARGETS)
     )
 endif()
 
-if(TARGET galay-rpc-modules)
-    install(TARGETS galay-rpc-modules
-        EXPORT galayTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-rpc/module
-        CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
-    )
-endif()
-
-if(TARGET galay-rpc-etcd-modules)
-    install(TARGETS galay-rpc-etcd-modules
+if(TARGET galay-rpc AND GALAY_RPC_CPP23_MODULES_EFFECTIVE)
+    install(TARGETS galay-rpc
         EXPORT galayTargets
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
@@ -179,7 +133,7 @@ endif()
 
 set(GALAY_CONFIG_NEEDS_THREADS ON)
 set(GALAY_CONFIG_NEEDS_OPENSSL OFF)
-if(TARGET ssl OR TARGET tracing)
+if(TARGET galay-ssl OR TARGET galay-tracing)
     set(GALAY_CONFIG_NEEDS_OPENSSL ON)
 endif()
 set(GALAY_CONFIG_NEEDS_SPDLOG OFF)
@@ -198,7 +152,7 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
-if(TARGET galay-rpc-modules OR TARGET galay-rpc-etcd-modules)
+if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
     install(EXPORT galayTargets
         NAMESPACE galay::
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
@@ -224,7 +178,6 @@ foreach(_galay_package IN ITEMS
     galay-ssl
     galay-http
     galay-ws
-    galay-websocket
     galay-http2
     galay-redis
     galay-rpc

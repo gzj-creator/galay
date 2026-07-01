@@ -1,11 +1,11 @@
 /**
- * @file rpc.h
+ * @file rpc_c.h
  * @brief Galay RPC C ABI 编解码、client/server、stream、cancel 与 pool 接口。
  * @details C ABI 通过不透明 handle 管理运行期对象，通过显式 `galay_status_t`、
  * `galay_rpc_error_code_t` 和 `C_IOResult` 返回失败；不会通过 C++ 异常跨 ABI 传播。
  */
-#ifndef GALAY_C_RPC_RPC_H
-#define GALAY_C_RPC_RPC_H
+#ifndef GALAY_C_RPC_RPC_C_H
+#define GALAY_C_RPC_RPC_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/common-c/host.h>

@@ -1,8 +1,8 @@
-#ifndef GALAY_C_HTTP_HTTP_H
-#define GALAY_C_HTTP_HTTP_H
+#ifndef GALAY_C_HTTP_HTTP_C_H
+#define GALAY_C_HTTP_HTTP_C_H
 
 /**
- * @file http.h
+ * @file http_c.h
  * @brief Galay HTTP/1.1 C ABI。
  *
  * @details 该头文件暴露最小 HTTP/1.1 C runtime surface，包含请求/响应对象、

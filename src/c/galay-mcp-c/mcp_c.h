@@ -1,11 +1,11 @@
 /**
- * @file mcp.h
+ * @file mcp_c.h
  * @brief MCP C ABI 消息构造、解析、client/server 与工具注册接口。
  * @details 所有 handle 均为不透明 C 对象，通过 create/destroy 管理所有权；
  * JSON buffer 访问器返回借用视图，失败通过 `galay_status_t` 或 `C_IOResult` 显式返回。
  */
-#ifndef GALAY_C_MCP_MCP_H
-#define GALAY_C_MCP_MCP_H
+#ifndef GALAY_C_MCP_MCP_C_H
+#define GALAY_C_MCP_MCP_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result_c.h>

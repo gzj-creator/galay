@@ -1,4 +1,4 @@
-#include <galay/c/galay-utils-c/utils.h>
+#include <galay/c/galay-utils-c/utils_c.h>
 
 #include <galay/cpp/galay-utils/algorithm/consistent_hash.hpp>
 #include <galay/cpp/galay-utils/crypto/md5.hpp>

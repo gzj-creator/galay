@@ -13,7 +13,7 @@ Thumbs.db
 .cache/
 .tmp/
 .code-review-graph/
-.wroktree/
+.worktree/
 
 # CMake build output
 build/

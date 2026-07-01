@@ -9,11 +9,10 @@ function(galay_add_ws_example target_name source_file)
 endfunction()
 
 function(galay_add_ws_import_example target_name source_file)
-    if(NOT TARGET galay-ws-modules)
+    if(NOT GALAY_WS_CPP23_MODULES_EFFECTIVE)
         return()
     endif()
     galay_add_ws_example(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay-ws-modules)
     set_target_properties(${target_name} PROPERTIES CXX_EXTENSIONS OFF CXX_SCAN_FOR_MODULES ON)
 endfunction()
 

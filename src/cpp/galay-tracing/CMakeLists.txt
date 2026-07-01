@@ -1,17 +1,3 @@
-if(TARGET galay::kernel)
-    set(_galay_tracing_kernel_target galay::kernel)
-elseif(TARGET galay-kernel)
-    add_library(galay::kernel ALIAS galay-kernel)
-    set(_galay_tracing_kernel_target galay::kernel)
-elseif(TARGET kernel)
-    add_library(galay::kernel ALIAS kernel)
-    set(_galay_tracing_kernel_target galay::kernel)
-elseif(TARGET galay-kernel::galay-kernel)
-    set(_galay_tracing_kernel_target galay-kernel::galay-kernel)
-else()
-    message(FATAL_ERROR "tracing requires an in-tree kernel target")
-endif()
-
 galay_ensure_openssl()
 
 file(GLOB_RECURSE GALAY_TRACING_SOURCES CONFIGURE_DEPENDS
@@ -21,71 +7,47 @@ file(GLOB_RECURSE GALAY_TRACING_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/log/*.cc"
 )
 
-if(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
-    if(TARGET galay::http)
-        set(_galay_tracing_http_target galay::http)
-    elseif(TARGET http)
-        add_library(galay::http ALIAS http)
-        set(_galay_tracing_http_target galay::http)
-    elseif(TARGET galay-http)
-        add_library(galay::http ALIAS galay-http)
-        set(_galay_tracing_http_target galay::http)
-    elseif(TARGET galay-http::galay-http)
-        set(_galay_tracing_http_target galay-http::galay-http)
-    else()
-        message(FATAL_ERROR "tracing OTLP/HTTP requires an in-tree http target")
-    endif()
+add_library(galay-tracing ${GALAY_TRACING_SOURCES})
+add_library(galay::tracing ALIAS galay-tracing)
 
-endif()
-
-add_library(tracing ${GALAY_TRACING_SOURCES})
-add_library(galay::tracing ALIAS tracing)
-
-if(NOT TARGET galay-tracing)
-    add_library(galay-tracing ALIAS tracing)
-endif()
-if(NOT TARGET galay-tracing::galay-tracing)
-    add_library(galay-tracing::galay-tracing ALIAS tracing)
-endif()
-
-target_compile_features(tracing PUBLIC cxx_std_23)
-target_include_directories(tracing
+target_compile_features(galay-tracing PUBLIC cxx_std_23)
+target_include_directories(galay-tracing
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(tracing PUBLIC ${_galay_tracing_kernel_target} OpenSSL::Crypto)
+target_link_libraries(galay-tracing PUBLIC galay::kernel OpenSSL::Crypto)
 
 if(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
-    target_compile_definitions(tracing PUBLIC GALAY_TRACING_ENABLE_OTLP_HTTP=1)
-    target_link_libraries(tracing PUBLIC ${_galay_tracing_http_target})
+    target_compile_definitions(galay-tracing PUBLIC GALAY_TRACING_ENABLE_OTLP_HTTP=1)
+    target_link_libraries(galay-tracing PUBLIC galay::http)
 endif()
 
-set_target_properties(tracing PROPERTIES EXPORT_NAME tracing)
+set_target_properties(galay-tracing PROPERTIES EXPORT_NAME tracing)
 
 if(GALAY_TRACING_ENABLE_SPDLOG)
     galay_ensure_spdlog()
 
     file(GLOB GALAY_TRACING_SPDLOG_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/adapters/*spdlog*.cc")
     add_library(galay-tracing-spdlog ${GALAY_TRACING_SPDLOG_SOURCES})
-    add_library(galay-tracing::galay-tracing-spdlog ALIAS galay-tracing-spdlog)
+    add_library(galay::tracing-spdlog ALIAS galay-tracing-spdlog)
     target_compile_features(galay-tracing-spdlog PUBLIC cxx_std_23)
     target_include_directories(galay-tracing-spdlog
         PUBLIC
             $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
             $<INSTALL_INTERFACE:include>
     )
-    target_link_libraries(galay-tracing-spdlog PUBLIC tracing spdlog::spdlog)
+    target_link_libraries(galay-tracing-spdlog PUBLIC galay::tracing spdlog::spdlog)
     set_target_properties(galay-tracing-spdlog PROPERTIES EXPORT_NAME tracing-spdlog)
 endif()
 
 add_library(galay-tracing-kernel INTERFACE)
-add_library(galay-tracing::galay-tracing-kernel ALIAS galay-tracing-kernel)
+add_library(galay::tracing-kernel ALIAS galay-tracing-kernel)
 target_compile_features(galay-tracing-kernel INTERFACE cxx_std_23)
 target_include_directories(galay-tracing-kernel
     INTERFACE
         $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(galay-tracing-kernel INTERFACE tracing ${_galay_tracing_kernel_target})
+target_link_libraries(galay-tracing-kernel INTERFACE galay::tracing galay::kernel)
 set_target_properties(galay-tracing-kernel PROPERTIES EXPORT_NAME tracing-kernel)

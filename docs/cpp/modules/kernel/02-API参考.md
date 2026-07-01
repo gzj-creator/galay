@@ -5,10 +5,11 @@
 ## 导出 target
 
 - `galay-kernel`
-- `galay-kernel-modules`
+- `galay::kernel`
+  - C++23 module file set 直接挂载在该 canonical target 上
   - 仅在 `ENABLE_CPP23_MODULES=ON`
   - 且 `GALAY_KERNEL_CPP23_MODULES_EFFECTIVE=TRUE`
-  - 安装后通过 `galay-kernel::galay-kernel`、`galay-kernel::galay-kernel-modules` 消费
+  - 安装后仍通过 `galay::kernel` 消费
 
 ## 构建选项
 

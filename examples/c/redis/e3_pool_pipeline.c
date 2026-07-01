@@ -1,7 +1,7 @@
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-redis-c/redis.h>
+#include <galay/c/galay-redis-c/redis_c.h>
 
 #include <stdio.h>
 #include <string.h>

@@ -1,6 +1,6 @@
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-ssl-c/ssl.h>
+#include <galay/c/galay-ssl-c/ssl_c.h>
 
 #include <stdio.h>
 #include <string.h>

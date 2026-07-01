@@ -1,4 +1,4 @@
-#include <galay/c/galay-mcp-c/mcp.h>
+#include <galay/c/galay-mcp-c/mcp_c.h>
 
 #include <stdio.h>
 

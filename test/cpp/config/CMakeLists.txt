@@ -27,6 +27,23 @@ add_test(
 )
 
 add_test(
+    NAME config.canonical_cpp_targets
+    COMMAND ${CMAKE_COMMAND}
+        -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -D GALAY_BINARY_DIR=${CMAKE_BINARY_DIR}
+        -D GALAY_CMAKE_GENERATOR=${CMAKE_GENERATOR}
+        -D GALAY_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/canonical_cpp_targets.cmake
+)
+
+add_test(
+    NAME config.c_api_header_naming
+    COMMAND ${CMAKE_COMMAND}
+        -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/c_api_header_naming.cmake
+)
+
+add_test(
     NAME config.tracing_options_surface
     COMMAND ${CMAKE_COMMAND}
         -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}

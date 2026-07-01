@@ -1,5 +1,5 @@
 /**
- * @file tracing.h
+ * @file tracing_c.h
  * @brief galay-tracing 模块的 C ABI 声明
  * @author galay-tracing
  * @version 1.0.0
@@ -27,8 +27,8 @@
  *   `GALAY_INVALID_ARGUMENT`、`GALAY_PROTOCOL_ERROR`、`GALAY_OUT_OF_MEMORY`、
  *   `GALAY_IO_ERROR` 和 `GALAY_INTERNAL_ERROR`。
  */
-#ifndef GALAY_C_TRACING_TRACING_H
-#define GALAY_C_TRACING_TRACING_H
+#ifndef GALAY_C_TRACING_TRACING_C_H
+#define GALAY_C_TRACING_TRACING_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 

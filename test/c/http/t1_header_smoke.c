@@ -1,4 +1,4 @@
-#include <galay/c/galay-http-c/http.h>
+#include <galay/c/galay-http-c/http_c.h>
 
 int main(void)
 {

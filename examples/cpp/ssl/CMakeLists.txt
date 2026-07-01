@@ -6,11 +6,10 @@ function(galay_add_ssl_example target_name source_file)
 endfunction()
 
 function(galay_add_ssl_import_example target_name source_file)
-    if(NOT TARGET galay-ssl-modules)
+    if(NOT GALAY_SSL_CPP23_MODULES_EFFECTIVE)
         return()
     endif()
     galay_add_ssl_example(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay-ssl-modules)
     set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
 endfunction()
 

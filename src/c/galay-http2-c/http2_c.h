@@ -1,5 +1,5 @@
 /**
- * @file http2.h
+ * @file http2_c.h
  * @brief HTTP/2 C ABI。
  * @details
  * 该头文件暴露 h2c client/server、connection、stream、frame 和 header
@@ -16,8 +16,8 @@
  * 底层 TCP C coroutine 约束：等待网络事件时挂起当前 C coroutine；不应在未
  * 运行 galay C runtime 的上下文中调用需要网络等待的函数。
  */
-#ifndef GALAY_C_HTTP2_HTTP2_H
-#define GALAY_C_HTTP2_HTTP2_H
+#ifndef GALAY_C_HTTP2_HTTP2_C_H
+#define GALAY_C_HTTP2_HTTP2_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result_c.h>

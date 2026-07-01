@@ -1,6 +1,6 @@
 # Redis C API
 
-`src/c/galay-redis-c/redis.h` exposes the Redis C ABI. The surface is pure C:
+`src/c/galay-redis-c/redis_c.h` exposes the Redis C ABI. The surface is pure C:
 opaque handles, `galay_status_t`, `C_IOResult`, and borrowed pointers with explicit
 destroy/release functions.
 

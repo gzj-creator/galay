@@ -6,11 +6,10 @@ function(galay_add_tracing_example target_name source_file)
 endfunction()
 
 function(galay_add_tracing_import_example target_name source_file)
-    if(NOT TARGET galay-tracing::galay-tracing-modules)
+    if(NOT GALAY_TRACING_CPP23_MODULES_EFFECTIVE)
         return()
     endif()
     galay_add_tracing_example(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay-tracing::galay-tracing-modules)
     set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
 endfunction()
 

@@ -1,10 +1,10 @@
-#ifndef GALAY_C_UTILS_UTILS_H
-#define GALAY_C_UTILS_UTILS_H
+#ifndef GALAY_C_UTILS_UTILS_C_H
+#define GALAY_C_UTILS_UTILS_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 
 /**
- * @file utils.h
+ * @file utils_c.h
  * @brief Galay utils 模块的 C ABI。
  *
  * @details 该头文件提供字节数组、环形缓冲区和常用编码/摘要函数。除 create

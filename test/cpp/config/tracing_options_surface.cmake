@@ -131,7 +131,7 @@ execute_process(
 
 if(spdlog_configure_result EQUAL 0)
     execute_process(
-        COMMAND "${CMAKE_COMMAND}" --build "${spdlog_build_dir}" --target tracing galay-tracing-spdlog
+        COMMAND "${CMAKE_COMMAND}" --build "${spdlog_build_dir}" --target galay-tracing galay-tracing-spdlog
         RESULT_VARIABLE spdlog_build_result
         OUTPUT_VARIABLE spdlog_build_stdout
         ERROR_VARIABLE spdlog_build_stderr)

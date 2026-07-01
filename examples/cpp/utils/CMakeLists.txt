@@ -6,11 +6,10 @@ function(galay_add_utils_example target_name source_file)
 endfunction()
 
 function(galay_add_utils_import_example target_name source_file)
-    if(NOT TARGET galay-utils-modules)
+    if(NOT GALAY_UTILS_CPP23_MODULES_EFFECTIVE)
         return()
     endif()
     galay_add_utils_example(${target_name} ${source_file})
-    target_link_libraries(${target_name} PRIVATE galay-utils-modules)
     set_target_properties(${target_name} PROPERTIES CXX_SCAN_FOR_MODULES ON)
 endfunction()
 

@@ -27,7 +27,7 @@
 
 - CMake package：`find_package(galay-mcp CONFIG REQUIRED)`
 - 核心 target：`galay-mcp`
-- 模块 target：`galay-mcp-modules`（仅在模块支持开启且成功构建时导出）
+- 模块 file set：挂载在 `galay-mcp` / `galay::mcp`（仅在模块支持开启且成功构建时启用）
 - C++23 模块名：`galay.mcp`
 
 最小消费方式：
@@ -37,17 +37,17 @@
 ```cmake
 find_package(galay-mcp CONFIG REQUIRED)
 add_executable(your-target main.cc)
-target_link_libraries(your-target PRIVATE galay-mcp)
+target_link_libraries(your-target PRIVATE galay::mcp)
 ```
 
-如果安装里包含模块 target，则可改为：
+如果安装里包含 C++23 module file set，仍链接 canonical target：
 
 ```cmake
 add_executable(your-target main.cc)
-target_link_libraries(your-target PRIVATE galay-mcp-modules)
+target_link_libraries(your-target PRIVATE galay::mcp)
 ```
 
-`galay-mcp-modules` 通过公共链接依赖同样继承这一 C++23 要求。
+`galay::mcp` 通过公共链接依赖同样继承这一 C++23 要求。
 
 ## 2. JSON、协议常量与基础结构
 

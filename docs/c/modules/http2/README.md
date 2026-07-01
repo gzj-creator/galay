@@ -1,6 +1,6 @@
 # HTTP/2 C API
 
-`galay/c/galay-http2-c/http2.h` exposes a C ABI for HTTP/2 helper and h2c runtime use.
+`galay/c/galay-http2-c/http2_c.h` exposes a C ABI for HTTP/2 helper and h2c runtime use.
 
 ## Scope
 

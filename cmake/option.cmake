@@ -24,6 +24,7 @@ option(GALAY_DISABLE_IOURING "Disable io_uring and use epoll on Linux" ON)
 
 option(GALAY_TRACING_ENABLE_SPDLOG "Enable the tracing spdlog adapter" OFF)
 option(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT "Enable the built-in galay-http OTLP transport" OFF)
+option(GALAY_RPC_ENABLE_ETCD "Compile the RPC etcd discovery adapter into galay::rpc" OFF)
 
 if(DEFINED GALAY_TRACING_ENABLE_OTLP_HTTP)
     message(DEPRECATION
@@ -51,6 +52,12 @@ if(GALAY_BUILD_WS AND NOT GALAY_BUILD_HTTP)
 endif()
 if(GALAY_BUILD_HTTP2 AND NOT GALAY_BUILD_HTTP)
     message(FATAL_ERROR "GALAY_BUILD_HTTP2 requires GALAY_BUILD_HTTP")
+endif()
+if(GALAY_RPC_ENABLE_ETCD AND NOT GALAY_BUILD_RPC)
+    message(FATAL_ERROR "GALAY_RPC_ENABLE_ETCD requires GALAY_BUILD_RPC")
+endif()
+if(GALAY_RPC_ENABLE_ETCD AND NOT GALAY_BUILD_ETCD)
+    message(FATAL_ERROR "GALAY_RPC_ENABLE_ETCD requires GALAY_BUILD_ETCD")
 endif()
 
 if(GALAY_BUILD_SSL)

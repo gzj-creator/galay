@@ -23,12 +23,11 @@ file(GLOB GALAY_UTILS_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR
 foreach(test_source IN LISTS GALAY_UTILS_TEST_SOURCES)
     get_filename_component(test_name "${test_source}" NAME_WE)
     if(test_name STREQUAL "t_import_smoke" AND
-       (NOT GALAY_ENABLE_CPP23_MODULES OR NOT TARGET galay-utils-modules))
+       NOT GALAY_UTILS_CPP23_MODULES_EFFECTIVE)
         continue()
     endif()
     galay_add_utils_test("${test_name}" "${test_source}")
     if(test_name STREQUAL "t_import_smoke")
-        target_link_libraries(t_import_smoke PRIVATE galay-utils-modules)
         set_target_properties(t_import_smoke PROPERTIES CXX_SCAN_FOR_MODULES ON)
         set_tests_properties(utils.import_smoke PROPERTIES LABELS "utils;surface")
     endif()

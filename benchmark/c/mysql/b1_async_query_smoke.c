@@ -1,7 +1,7 @@
 #include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-mysql-c/mysql.h>
+#include <galay/c/galay-mysql-c/mysql_c.h>
 
 #include <stdint.h>
 #include <stdio.h>
