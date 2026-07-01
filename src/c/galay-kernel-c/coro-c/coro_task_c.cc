@@ -392,12 +392,8 @@ constexpr galay::kernel::detail::ResumeTokenHooks kResumeHooks{
 extern "C" void galay_coro_context_trampoline(C_CoroTaskInternal* task)
 {
 #if GALAY_C_CORO_HAS_CONTEXT
-    try {
-        task->entry(task->arg);
-        complete_task(task, C_CoroState::Done, make_result(C_IOResultOk));
-    } catch (...) {
-        complete_task(task, C_CoroState::Done, make_result(C_IOResultError));
-    }
+    task->entry(task->arg);
+    complete_task(task, C_CoroState::Done, make_result(C_IOResultOk));
     t_current_task = nullptr;
     galay_coro_context_switch(&task->context, &task->scheduler_context);
     for (;;) {
@@ -422,197 +418,172 @@ C_IOResult galay_coro_spawn(galay_kernel_runtime_t* runtime,
                             galay_coro_task_t* out_task)
 {
     C_CoroTaskInternal* task = nullptr;
-    try {
-        auto* cpp_runtime = to_cpp_runtime(runtime);
-        if (cpp_runtime == nullptr || entry == nullptr || out_task == nullptr ||
-            !galay_kernel_runtime_is_running(runtime)) {
-            return make_result(C_IOResultInvalid);
-        }
-#if !GALAY_C_CORO_HAS_CONTEXT
-        (void)arg;
-        (void)options;
-        return make_result(C_IOResultError, ENOTSUP);
-#else
-        auto* owner = cpp_runtime->getNextIOScheduler();
-        if (owner == nullptr) {
-            return make_result(C_IOResultInvalid);
-        }
-        const std::thread::id owner_thread = owner->threadId();
-        if (owner_thread == std::thread::id{}) {
-            return make_result(C_IOResultError, EAGAIN);
-        }
-
-        task = new (std::nothrow) C_CoroTaskInternal();
-        if (task == nullptr) {
-            return make_result(C_IOResultError, ENOMEM);
-        }
-        task->ready_header.hooks = &kReadyHooks;
-        task->resume_token.header.hooks = &kResumeHooks;
-        task->resume_token.task = task;
-        task->owner = owner;
-        task->owner_thread = owner_thread;
-        task->entry = entry;
-        task->arg = arg;
-
-        const size_t stack_size = options != nullptr && options->stack_size != 0
-            ? options->stack_size
-            : kDefaultStackSize;
-        if (!allocate_stack(task, stack_size) || !init_context(task)) {
-            C_IOResult result = task->result.code == C_IOResultOk
-                ? make_result(C_IOResultError, ENOTSUP)
-                : task->result;
-            release_task(task);
-            return result;
-        }
-
-        if (!request_ready(task)) {
-            release_task(task);
-            return make_result(C_IOResultError, EAGAIN);
-        }
-        out_task->task = task;
-        task = nullptr;
-        return make_result(C_IOResultOk);
-#endif
-    } catch (...) {
-        release_task(task);
-        return make_result(C_IOResultError);
+    auto* cpp_runtime = to_cpp_runtime(runtime);
+    if (cpp_runtime == nullptr || entry == nullptr || out_task == nullptr ||
+        !galay_kernel_runtime_is_running(runtime)) {
+        return make_result(C_IOResultInvalid);
     }
+#if !GALAY_C_CORO_HAS_CONTEXT
+    (void)arg;
+    (void)options;
+    return make_result(C_IOResultError, ENOTSUP);
+#else
+    auto* owner = cpp_runtime->getNextIOScheduler();
+    if (owner == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    const std::thread::id owner_thread = owner->threadId();
+    if (owner_thread == std::thread::id{}) {
+        return make_result(C_IOResultError, EAGAIN);
+    }
+
+    task = new (std::nothrow) C_CoroTaskInternal();
+    if (task == nullptr) {
+        return make_result(C_IOResultError, ENOMEM);
+    }
+    task->ready_header.hooks = &kReadyHooks;
+    task->resume_token.header.hooks = &kResumeHooks;
+    task->resume_token.task = task;
+    task->owner = owner;
+    task->owner_thread = owner_thread;
+    task->entry = entry;
+    task->arg = arg;
+
+    const size_t stack_size = options != nullptr && options->stack_size != 0
+        ? options->stack_size
+        : kDefaultStackSize;
+    if (!allocate_stack(task, stack_size) || !init_context(task)) {
+        C_IOResult result = task->result.code == C_IOResultOk
+            ? make_result(C_IOResultError, ENOTSUP)
+            : task->result;
+        release_task(task);
+        return result;
+    }
+
+    if (!request_ready(task)) {
+        release_task(task);
+        return make_result(C_IOResultError, EAGAIN);
+    }
+    out_task->task = task;
+    task = nullptr;
+    return make_result(C_IOResultOk);
+#endif
 }
 
 C_IOResult galay_coro_yield(void)
 {
-    try {
 #if GALAY_C_CORO_HAS_CONTEXT
-        C_CoroTaskInternal* task = t_current_task;
-        if (task == nullptr || task->state.load(std::memory_order_acquire) != C_CoroState::Running) {
-            return make_result(C_IOResultInvalid);
-        }
-
-        task->state.store(C_CoroState::Ready, std::memory_order_release);
-        if (!request_ready(task)) {
-            C_CoroState expected = C_CoroState::Ready;
-            if (!task->state.compare_exchange_strong(expected, C_CoroState::Running,
-                                                     std::memory_order_acq_rel,
-                                                     std::memory_order_acquire)) {
-                t_current_task = nullptr;
-                galay_coro_context_switch(&task->context, &task->scheduler_context);
-                t_current_task = task;
-                return expected == C_CoroState::Cancelled
-                    ? make_result(C_IOResultCancelled)
-                    : make_result(C_IOResultInvalid);
-            }
-            return make_result(C_IOResultError, EAGAIN);
-        }
-        t_current_task = nullptr;
-        galay_coro_context_switch(&task->context, &task->scheduler_context);
-        t_current_task = task;
-        return make_result(C_IOResultOk);
-#else
+    C_CoroTaskInternal* task = t_current_task;
+    if (task == nullptr || task->state.load(std::memory_order_acquire) != C_CoroState::Running) {
         return make_result(C_IOResultInvalid);
-#endif
-    } catch (...) {
-        return make_result(C_IOResultError);
     }
+
+    task->state.store(C_CoroState::Ready, std::memory_order_release);
+    if (!request_ready(task)) {
+        C_CoroState expected = C_CoroState::Ready;
+        if (!task->state.compare_exchange_strong(expected, C_CoroState::Running,
+                                                 std::memory_order_acq_rel,
+                                                 std::memory_order_acquire)) {
+            t_current_task = nullptr;
+            galay_coro_context_switch(&task->context, &task->scheduler_context);
+            t_current_task = task;
+            return expected == C_CoroState::Cancelled
+                ? make_result(C_IOResultCancelled)
+                : make_result(C_IOResultInvalid);
+        }
+        return make_result(C_IOResultError, EAGAIN);
+    }
+    t_current_task = nullptr;
+    galay_coro_context_switch(&task->context, &task->scheduler_context);
+    t_current_task = task;
+    return make_result(C_IOResultOk);
+#else
+    return make_result(C_IOResultInvalid);
+#endif
 }
 
 C_IOResult galay_coro_current(galay_coro_task_t* out_task)
 {
-    try {
-        if (out_task == nullptr || out_task->task != nullptr || t_current_task == nullptr) {
-            return make_result(C_IOResultInvalid);
-        }
-        retain_task(t_current_task);
-        out_task->task = t_current_task;
-        return make_result(C_IOResultOk);
-    } catch (...) {
-        return make_result(C_IOResultError);
+    if (out_task == nullptr || out_task->task != nullptr || t_current_task == nullptr) {
+        return make_result(C_IOResultInvalid);
     }
+    retain_task(t_current_task);
+    out_task->task = t_current_task;
+    return make_result(C_IOResultOk);
 }
 
 C_IOResult galay_coro_join(galay_coro_task_t* task_handle, int64_t timeout_ms)
 {
-    try {
-        if (task_handle == nullptr || task_handle->task == nullptr) {
-            return make_result(C_IOResultInvalid);
-        }
-        auto* task = static_cast<C_CoroTaskInternal*>(task_handle->task);
-        if (t_current_task != nullptr || galay::kernel::detail::isSchedulerThread()) {
-            return make_result(C_IOResultInvalid);
-        }
-        std::unique_lock<std::mutex> lock(task->mutex);
-        auto is_complete = [&]() {
-            C_CoroState state = task->state.load(std::memory_order_acquire);
-            return state == C_CoroState::Done || state == C_CoroState::Cancelled;
-        };
-
-        if (!is_complete()) {
-            if (timeout_ms < 0) {
-                task->cv.wait(lock, is_complete);
-            } else if (timeout_ms == 0) {
-                return make_result(C_IOResultTimeout);
-            } else if (!task->cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), is_complete)) {
-                return make_result(C_IOResultTimeout);
-            }
-        }
-
-        C_CoroState state = task->state.load(std::memory_order_acquire);
-        if (state == C_CoroState::Cancelled) {
-            return make_result(C_IOResultCancelled);
-        }
-        return task->result;
-    } catch (...) {
-        return make_result(C_IOResultError);
+    if (task_handle == nullptr || task_handle->task == nullptr) {
+        return make_result(C_IOResultInvalid);
     }
+    auto* task = static_cast<C_CoroTaskInternal*>(task_handle->task);
+    if (t_current_task != nullptr || galay::kernel::detail::isSchedulerThread()) {
+        return make_result(C_IOResultInvalid);
+    }
+    std::unique_lock<std::mutex> lock(task->mutex);
+    auto is_complete = [&]() {
+        C_CoroState state = task->state.load(std::memory_order_acquire);
+        return state == C_CoroState::Done || state == C_CoroState::Cancelled;
+    };
+
+    if (!is_complete()) {
+        if (timeout_ms < 0) {
+            task->cv.wait(lock, is_complete);
+        } else if (timeout_ms == 0) {
+            return make_result(C_IOResultTimeout);
+        } else if (!task->cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), is_complete)) {
+            return make_result(C_IOResultTimeout);
+        }
+    }
+
+    C_CoroState state = task->state.load(std::memory_order_acquire);
+    if (state == C_CoroState::Cancelled) {
+        return make_result(C_IOResultCancelled);
+    }
+    return task->result;
 }
 
 C_IOResult galay_coro_cancel(galay_coro_task_t* task_handle)
 {
-    try {
-        if (task_handle == nullptr || task_handle->task == nullptr) {
-            return make_result(C_IOResultInvalid);
-        }
-        auto* task = static_cast<C_CoroTaskInternal*>(task_handle->task);
-        C_CoroState expected = C_CoroState::Ready;
-        if (task->state.compare_exchange_strong(expected, C_CoroState::Cancelled,
-                                                std::memory_order_acq_rel,
-                                                std::memory_order_acquire)) {
-            {
-                std::lock_guard<std::mutex> lock(task->mutex);
-                task->result = make_result(C_IOResultCancelled);
-            }
-            task->cv.notify_all();
-            return make_result(C_IOResultCancelled);
-        }
-        if (expected == C_CoroState::Cancelled) {
-            return make_result(C_IOResultCancelled);
-        }
-        if (expected == C_CoroState::Done) {
-            std::lock_guard<std::mutex> lock(task->mutex);
-            return task->result;
-        }
+    if (task_handle == nullptr || task_handle->task == nullptr) {
         return make_result(C_IOResultInvalid);
-    } catch (...) {
-        return make_result(C_IOResultError);
     }
+    auto* task = static_cast<C_CoroTaskInternal*>(task_handle->task);
+    C_CoroState expected = C_CoroState::Ready;
+    if (task->state.compare_exchange_strong(expected, C_CoroState::Cancelled,
+                                            std::memory_order_acq_rel,
+                                            std::memory_order_acquire)) {
+        {
+            std::lock_guard<std::mutex> lock(task->mutex);
+            task->result = make_result(C_IOResultCancelled);
+        }
+        task->cv.notify_all();
+        return make_result(C_IOResultCancelled);
+    }
+    if (expected == C_CoroState::Cancelled) {
+        return make_result(C_IOResultCancelled);
+    }
+    if (expected == C_CoroState::Done) {
+        std::lock_guard<std::mutex> lock(task->mutex);
+        return task->result;
+    }
+    return make_result(C_IOResultInvalid);
 }
 
 C_IOResult galay_coro_destroy(galay_coro_task_t* task_handle)
 {
-    try {
-        if (task_handle == nullptr || task_handle->task == nullptr) {
-            return make_result(C_IOResultInvalid);
-        }
-        auto* task = static_cast<C_CoroTaskInternal*>(task_handle->task);
-        C_CoroState state = task->state.load(std::memory_order_acquire);
-        if (state != C_CoroState::Done && state != C_CoroState::Cancelled) {
-            return make_result(C_IOResultInvalid);
-        }
-        task_handle->task = nullptr;
-        release_task(task);
-        return make_result(C_IOResultOk);
-    } catch (...) {
-        return make_result(C_IOResultError);
+    if (task_handle == nullptr || task_handle->task == nullptr) {
+        return make_result(C_IOResultInvalid);
     }
+    auto* task = static_cast<C_CoroTaskInternal*>(task_handle->task);
+    C_CoroState state = task->state.load(std::memory_order_acquire);
+    if (state != C_CoroState::Done && state != C_CoroState::Cancelled) {
+        return make_result(C_IOResultInvalid);
+    }
+    task_handle->task = nullptr;
+    release_task(task);
+    return make_result(C_IOResultOk);
 }
 
 } // extern "C"

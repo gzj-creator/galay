@@ -77,6 +77,7 @@
 
 ### Fixed
 
+- 修复 C coroutine C ABI 源码边界遗漏异常控制流门禁的问题：`coro_task_c` 和 `coro_wait_c` 不再使用 `try/catch` 兜底，wait request/timer 分配改为显式失败返回，并让 `t22_coro_source_boundaries` 覆盖 `coro-c` 异常 token 与 `std::make_shared`。
 - 修复 C coroutine `AsyncWaiter` bridge 在 spawn/notify/destroy 竞态下的偶发 SIGSEGV：`await_suspend(false)` 路径补齐 `await_resume()` 清理语义，并避免 completion 恢复协程后继续访问已销毁的栈上 operation 回调。
 - 修复 Linux epoll/io_uring 全量 examples/benchmarks 验证中的误报和真实失败：HTTP proxy/manual HTTP2 示例支持 build-root 与 Tencent `source` 布局下的静态文件/证书解析，SSL echo 与 TCP/SSL throughput 按 C/S 配对执行，etcd/MySQL/Redis/Mongo/RPC service-discovery 外部依赖被归类为 `EXTERNAL_DEP` 而不是未知失败。
 - 修复 C kernel `coro_tcp` 在并发 CTest 下 close-while-waiting 子场景可能在 server 尚未进入可关闭阶段时启动 closer 的竞态，并为失败路径输出内部诊断码，避免远端日志只显示空输出。

@@ -175,6 +175,20 @@ static int scan_coro_file(const char* full_path, const char* relative_path)
         fprintf(stderr, "[T22] %s must not implement C coroutine APIs as Task<void> c_api_ wrappers\n", relative_path);
         failed = 1;
     }
+    if (contains_text(data, len, "try {") ||
+        contains_text(data, len, "catch (") ||
+        contains_text(data, len, "catch (...)")) {
+        fprintf(stderr,
+                "[T22] %s must propagate C coroutine errors through result values, not try/catch\n",
+                relative_path);
+        failed = 1;
+    }
+    if (contains_text(data, len, "std::make_shared")) {
+        fprintf(stderr,
+                "[T22] %s must use explicit nothrow allocation and C_IOResult errors, not std::make_shared\n",
+                relative_path);
+        failed = 1;
+    }
 
     free(data);
     return failed;

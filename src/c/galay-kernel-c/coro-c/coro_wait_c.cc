@@ -10,6 +10,7 @@
 #include <memory>
 #include <mutex>
 #include <new>
+#include <utility>
 
 namespace
 {
@@ -170,13 +171,36 @@ C_IOResult complete_state(const WaitRequestPtr& state,
     return make_result(result.code == C_IOResultCancelled ? C_IOResultCancelled : C_IOResultOk);
 }
 
+galay::kernel::Timer::ptr create_wait_timer(int64_t timeout_ms,
+                                            const WaitRequestPtr& state,
+                                            uint64_t generation,
+                                            C_IOResult result)
+{
+    std::weak_ptr<WaitRequestState> weak_state(state);
+    auto timer = std::unique_ptr<galay::kernel::CBTimer>(new (std::nothrow) galay::kernel::CBTimer(
+        std::chrono::milliseconds(timeout_ms),
+        [weak_state, generation, result]() {
+            if (auto locked = weak_state.lock()) {
+                (void)complete_state(locked, generation, result, true);
+            }
+        }));
+    if (!timer) {
+        return {};
+    }
+    return galay::kernel::Timer::ptr(std::move(timer));
+}
+
 C_IOResult request_create_impl(C_CoroWaitRequest* out_request)
 {
     if (out_request == nullptr || out_request->request != nullptr) {
         return make_result(C_IOResultInvalid);
     }
 
-    auto state = std::make_shared<WaitRequestState>();
+    auto raw_state = std::unique_ptr<WaitRequestState>(new (std::nothrow) WaitRequestState());
+    if (!raw_state) {
+        return make_result(C_IOResultError);
+    }
+    WaitRequestPtr state(std::move(raw_state));
     auto* state_holder = new (std::nothrow) WaitRequestPtr(std::move(state));
     if (state_holder == nullptr || !*state_holder) {
         delete state_holder;
@@ -292,17 +316,13 @@ C_IOResult wait_impl(C_CoroWaitRequest* request, int64_t timeout_ms)
     }
     galay::kernel::Timer::ptr pending_timer;
     if (timeout_ms > 0) {
-        std::weak_ptr<WaitRequestState> weak_state(state);
-        pending_timer = std::make_shared<galay::kernel::CBTimer>(
-            std::chrono::milliseconds(timeout_ms),
-            [weak_state, generation = timer_generation]() {
-                if (auto locked = weak_state.lock()) {
-                    (void)complete_state(locked,
-                                         generation,
-                                         make_result(C_IOResultTimeout),
-                                         true);
-                }
-            });
+        pending_timer = create_wait_timer(timeout_ms,
+                                          state,
+                                          timer_generation,
+                                          make_result(C_IOResultTimeout));
+        if (!pending_timer) {
+            return make_result(C_IOResultError);
+        }
     }
     if (!galay::kernel::coro_c::prepareCurrentTaskWait()) {
         return make_result(C_IOResultInvalid);
@@ -488,20 +508,16 @@ C_IOResult sleep_impl(int64_t timeout_ms)
         return merge_cleanup_result(make_result(C_IOResultInvalid), destroyed);
     }
 
-    std::weak_ptr<WaitRequestState> weak_state(state);
-    auto timer = std::make_shared<galay::kernel::CBTimer>(
-        std::chrono::milliseconds(timeout_ms),
-        [weak_state, generation]() {
-            if (auto locked = weak_state.lock()) {
-                C_IOResult completed = complete_state(locked,
-                                                      generation,
-                                                      make_result(C_IOResultOk),
-                                                      true);
-                if (completed.code != C_IOResultOk) {
-                    return;
-                }
-            }
-        });
+    auto timer = create_wait_timer(timeout_ms, state, generation, make_result(C_IOResultOk));
+    if (!timer) {
+        C_IOResult completed = complete_state(state,
+                                              generation,
+                                              make_result(C_IOResultCancelled),
+                                              true);
+        C_IOResult destroyed = request_destroy_impl(&request);
+        C_IOResult result = merge_cleanup_result(make_result(C_IOResultError), completed);
+        return merge_cleanup_result(result, destroyed);
+    }
     if (!galay::kernel::TimerScheduler::getInstance()->addTimer(timer)) {
         C_IOResult completed = complete_state(state,
                                               generation,
@@ -523,139 +539,83 @@ extern "C" {
 
 C_IOResult galay_coro_wait_request_create(C_CoroWaitRequest* out_request)
 {
-    try {
-        return request_create_impl(out_request);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return request_create_impl(out_request);
 }
 
 C_IOResult galay_coro_wait_request_destroy(C_CoroWaitRequest* request)
 {
-    try {
-        return request_destroy_impl(request);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return request_destroy_impl(request);
 }
 
 C_IOResult galay_coro_wait_request_prepare(C_CoroWaitRequest* request,
                                            uint64_t* out_generation)
 {
-    try {
-        return request_prepare_impl(request, out_generation);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return request_prepare_impl(request, out_generation);
 }
 
 C_IOResult galay_coro_wait_request_event_token_acquire(C_CoroWaitRequest* request,
                                                        uint64_t generation,
                                                        C_CoroWaitEventToken* out_token)
 {
-    try {
-        return event_token_acquire_impl(request, generation, out_token);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_token_acquire_impl(request, generation, out_token);
 }
 
 C_IOResult galay_coro_wait(C_CoroWaitRequest* request, int64_t timeout_ms)
 {
-    try {
-        return wait_impl(request, timeout_ms);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return wait_impl(request, timeout_ms);
 }
 
 C_IOResult galay_coro_wait_event_token_detach_user_data(C_CoroWaitEventToken* token,
                                                         void** out_user_data)
 {
-    try {
-        return event_token_detach_user_data_impl(token, out_user_data);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_token_detach_user_data_impl(token, out_user_data);
 }
 
 C_IOResult galay_coro_wait_request_complete(C_CoroWaitRequest* request,
                                             uint64_t generation,
                                             C_IOResult result)
 {
-    try {
-        auto state = get_state(request);
-        return complete_state(state, generation, result, false);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    auto state = get_state(request);
+    return complete_state(state, generation, result, false);
 }
 
 C_IOResult galay_coro_wait_request_cancel(C_CoroWaitRequest* request,
                                           uint64_t generation)
 {
-    try {
-        auto state = get_state(request);
-        return complete_state(state, generation, make_result(C_IOResultCancelled), true);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    auto state = get_state(request);
+    return complete_state(state, generation, make_result(C_IOResultCancelled), true);
 }
 
 C_IOResult galay_coro_wait_event_token_complete(C_CoroWaitEventToken* token,
                                                 C_IOResult result)
 {
-    try {
-        return event_token_complete_impl(token, result);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_token_complete_impl(token, result);
 }
 
 C_IOResult galay_coro_wait_event_token_cancel(C_CoroWaitEventToken* token)
 {
-    try {
-        return event_token_cancel_impl(token);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_token_cancel_impl(token);
 }
 
 C_IOResult galay_coro_wait_event_token_release(C_CoroWaitEventToken* token)
 {
-    try {
-        return event_token_release_impl(token);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_token_release_impl(token);
 }
 
 C_IOResult galay_coro_wait_event_user_data_complete(void* user_data,
                                                     C_IOResult result)
 {
-    try {
-        return event_user_data_complete_impl(user_data, result);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_user_data_complete_impl(user_data, result);
 }
 
 C_IOResult galay_coro_wait_event_user_data_cancel(void* user_data)
 {
-    try {
-        return event_user_data_cancel_impl(user_data);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_user_data_cancel_impl(user_data);
 }
 
 C_IOResult galay_coro_wait_event_user_data_release(void* user_data)
 {
-    try {
-        return event_user_data_release_impl(user_data);
-    } catch (...) {
-        return make_result(C_IOResultError);
-    }
+    return event_user_data_release_impl(user_data);
 }
 
 C_IOResult galay_coro_sleep(int64_t timeout_ms)
