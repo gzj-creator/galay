@@ -13,6 +13,10 @@ typedef struct WaitState {
     int64_t timeout_ms;
 } WaitState;
 
+enum {
+    ASYNC_WAITER_SIGNAL_RACE_ITERATIONS = 20000
+};
+
 static int expect_status(C_AsyncWaiterResultCode actual, C_AsyncWaiterResultCode expected)
 {
     return actual == expected ? 0 : 1;
@@ -270,6 +274,58 @@ cleanup:
     return exit_code;
 }
 
+static int test_spawn_notify_destroy_race(void)
+{
+    galay_kernel_runtime_t runtime = {0};
+    int exit_code = 0;
+
+    if (create_started_runtime(&runtime) != 0) {
+        return 40;
+    }
+
+    for (int i = 0; i < ASYNC_WAITER_SIGNAL_RACE_ITERATIONS; ++i) {
+        galay_kernel_async_waiter_t waiter = {0};
+        galay_coro_task_t task = {0};
+        WaitState state;
+
+        atomic_init(&state.phase, 0);
+        state.waiter = &waiter;
+        state.timeout_ms = 2000;
+
+        if (expect_status(galay_kernel_async_waiter_create(&waiter), C_AsyncWaiterSuccess) ||
+            expect_io_code(galay_coro_spawn(&runtime, wait_entry, &state, 0, &task), C_IOResultOk) ||
+            expect_status(galay_kernel_async_waiter_notify(&waiter), C_AsyncWaiterSuccess) ||
+            expect_io_code(galay_coro_join(&task, 3000), C_IOResultOk) ||
+            state.result.code != C_IOResultOk) {
+            exit_code = 41;
+        }
+        if (task.task != 0) {
+            if (galay_coro_destroy(&task).code != C_IOResultOk && exit_code == 0) {
+                exit_code = 42;
+            }
+        }
+        if (waiter.waiter != 0) {
+            if (galay_kernel_async_waiter_destroy(&waiter) != C_AsyncWaiterSuccess &&
+                exit_code == 0) {
+                exit_code = 43;
+            }
+        }
+        if (exit_code != 0) {
+            break;
+        }
+    }
+
+    if (runtime.runtime != 0) {
+        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 44;
+        }
+        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+            exit_code = 45;
+        }
+    }
+    return exit_code;
+}
+
 int main(void)
 {
     galay_kernel_async_waiter_t invalid = {0};
@@ -296,5 +352,9 @@ int main(void)
     if (result != 0) {
         return result;
     }
-    return test_timeout();
+    result = test_timeout();
+    if (result != 0) {
+        return result;
+    }
+    return test_spawn_notify_destroy_race();
 }

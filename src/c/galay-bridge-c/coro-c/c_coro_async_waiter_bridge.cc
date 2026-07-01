@@ -170,16 +170,18 @@ private:
     C_IOResult completeAndReleaseUserData(C_IOResult result) noexcept
     {
         void* user_data = nullptr;
+        auto complete_user_data = m_wait_ops.complete_user_data;
+        auto release_user_data = m_wait_ops.release_user_data;
         C_IOResult completed = make_result(C_IOResultInvalid);
         {
             std::lock_guard<std::mutex> lock(m_user_data_mutex);
             user_data = std::exchange(m_user_data, nullptr);
-            if (user_data != nullptr) {
-                completed = m_wait_ops.complete_user_data(user_data, result);
+            if (user_data != nullptr && complete_user_data != nullptr) {
+                completed = complete_user_data(user_data, result);
             }
         }
-        if (user_data != nullptr) {
-            C_IOResult released = m_wait_ops.release_user_data(user_data);
+        if (user_data != nullptr && release_user_data != nullptr) {
+            C_IOResult released = release_user_data(user_data);
             completed = merge_cleanup_result(completed, released);
         }
         return completed;
@@ -245,7 +247,11 @@ GalayCoreCoroIOResult galay_core_coro_async_waiter_wait(
     }
     const bool suspended = operation.awaitable.await_suspend(operation.makeWaker());
     if (!suspended) {
-        return operation.finishWithoutWait(make_result(C_IOResultOk));
+        auto resumed = operation.awaitable.await_resume();
+        C_IOResult immediate_result = resumed
+            ? make_result(C_IOResultOk)
+            : from_io_error(resumed.error());
+        return operation.finishWithoutWait(immediate_result);
     }
 
     C_IOResult result = operation.wait(timeout_ms);

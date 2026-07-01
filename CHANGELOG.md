@@ -77,6 +77,7 @@
 
 ### Fixed
 
+- 修复 C coroutine `AsyncWaiter` bridge 在 spawn/notify/destroy 竞态下的偶发 SIGSEGV：`await_suspend(false)` 路径补齐 `await_resume()` 清理语义，并避免 completion 恢复协程后继续访问已销毁的栈上 operation 回调。
 - 修复 Linux epoll/io_uring 全量 examples/benchmarks 验证中的误报和真实失败：HTTP proxy/manual HTTP2 示例支持 build-root 与 Tencent `source` 布局下的静态文件/证书解析，SSL echo 与 TCP/SSL throughput 按 C/S 配对执行，etcd/MySQL/Redis/Mongo/RPC service-discovery 外部依赖被归类为 `EXTERNAL_DEP` 而不是未知失败。
 - 修复 C kernel `coro_tcp` 在并发 CTest 下 close-while-waiting 子场景可能在 server 尚未进入可关闭阶段时启动 closer 的竞态，并为失败路径输出内部诊断码，避免远端日志只显示空输出。
 - 修复 `benchmark_c_kernel_async_waiter_signal` 和 `benchmark_c_kernel_coro_tcp_iov_sendfile` 在 Linux smoke sweep 中 workload 过重导致崩溃/超时的问题，前者新增可校验的正整数迭代参数，矩阵脚本对二者传入短 workload。
