@@ -2,6 +2,10 @@ function(galay_add_ssl_benchmark target_name)
     add_executable(${target_name} ${ARGN})
     target_link_libraries(${target_name} PRIVATE galay::ssl)
     target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
+    target_compile_definitions(${target_name}
+        PRIVATE
+            GALAY_SSL_BENCHMARK_CERT_DIR="${CMAKE_CURRENT_LIST_DIR}/../../../test/cpp/ssl/certs"
+    )
     set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
 endfunction()
 

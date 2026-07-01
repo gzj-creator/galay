@@ -8,13 +8,19 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cstdint>
 #include <exception>
+#include <fcntl.h>
 #include <memory>
 #include <mutex>
+#include <netdb.h>
+#include <poll.h>
 #include <string>
+#include <string_view>
 #include <thread>
+#include <unistd.h>
 #include <utility>
 #include <vector>
 
@@ -48,6 +54,93 @@ struct SharedState
     std::atomic<bool> benchmark_started{false};
     std::atomic<bool> benchmark_aborted{false};
 };
+
+struct EndpointParts {
+    std::string host;
+    std::string port;
+    bool valid = false;
+};
+
+EndpointParts parseHttpEndpoint(const std::string& endpoint)
+{
+    constexpr std::string_view prefix = "http://";
+    if (endpoint.rfind(prefix, 0) != 0) {
+        return {};
+    }
+
+    std::string_view rest(endpoint.data() + prefix.size(), endpoint.size() - prefix.size());
+    const size_t slash = rest.find('/');
+    if (slash != std::string_view::npos) {
+        rest = rest.substr(0, slash);
+    }
+
+    EndpointParts parts;
+    const size_t colon = rest.rfind(':');
+    if (colon == std::string_view::npos) {
+        parts.host = std::string(rest);
+        parts.port = "2379";
+    } else {
+        parts.host = std::string(rest.substr(0, colon));
+        parts.port = std::string(rest.substr(colon + 1));
+    }
+    parts.valid = !parts.host.empty() && !parts.port.empty();
+    return parts;
+}
+
+bool setNonBlocking(int fd)
+{
+    const int flags = ::fcntl(fd, F_GETFL, 0);
+    return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
+}
+
+bool endpointReachable(const EndpointParts& endpoint)
+{
+    if (!endpoint.valid) {
+        return true;
+    }
+
+    addrinfo hints{};
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_family = AF_UNSPEC;
+
+    addrinfo* raw = nullptr;
+    const int gai = ::getaddrinfo(endpoint.host.c_str(), endpoint.port.c_str(), &hints, &raw);
+    if (gai != 0 || raw == nullptr) {
+        return false;
+    }
+
+    bool reachable = false;
+    for (addrinfo* item = raw; item != nullptr && !reachable; item = item->ai_next) {
+        int fd = ::socket(item->ai_family, item->ai_socktype, item->ai_protocol);
+        if (fd < 0) {
+            continue;
+        }
+        if (!setNonBlocking(fd)) {
+            (void)::close(fd);
+            continue;
+        }
+
+        if (::connect(fd, item->ai_addr, item->ai_addrlen) == 0) {
+            reachable = true;
+        } else if (errno == EINPROGRESS) {
+            pollfd pfd{.fd = fd, .events = POLLOUT, .revents = 0};
+            const int polled = ::poll(&pfd, 1, 200);
+            if (polled > 0) {
+                int socket_error = 0;
+                socklen_t len = sizeof(socket_error);
+                reachable = ::getsockopt(fd, SOL_SOCKET, SO_ERROR, &socket_error, &len) == 0 &&
+                    socket_error == 0;
+            }
+        }
+
+        if (::close(fd) != 0 && reachable) {
+            reachable = false;
+        }
+    }
+
+    ::freeaddrinfo(raw);
+    return reachable;
+}
 
 std::string payloadOfSize(int size)
 {
@@ -263,6 +356,9 @@ runAsyncBenchmark(const AsyncBenchmarkArgs& args)
     }
     if (args.timeout_seconds <= 0) {
         return std::unexpected("timeout_seconds must be > 0");
+    }
+    if (!endpointReachable(parseHttpEndpoint(args.endpoint))) {
+        return std::unexpected("[EXTERNAL_DEP] etcd endpoint is required: " + args.endpoint);
     }
 
     const int io_schedulers = resolvedSchedulerCount(args);

@@ -11,6 +11,8 @@
 #include <atomic>
 #include <csignal>
 #include <algorithm>
+#include <charconv>
+#include <limits>
 #include <vector>
 #include <thread>
 #include <chrono>
@@ -49,6 +51,47 @@ void configureBenchmarkTlsContext(SslContext& ctx) {
     ctx.disableSessionCache();
     ctx.setSessionTimeout(0);
     ctx.disableSessionTickets();
+}
+
+std::string benchmarkCertPath(const char* name) {
+    return std::string(GALAY_SSL_BENCHMARK_CERT_DIR) + "/" + name;
+}
+
+bool parseInt(const char* text, int minValue, int* value) {
+    int parsed = 0;
+    const char* end = text + std::char_traits<char>::length(text);
+    auto result = std::from_chars(text, end, parsed);
+    if (result.ec != std::errc() || result.ptr != end || parsed < minValue) {
+        return false;
+    }
+    *value = parsed;
+    return true;
+}
+
+bool parsePort(const char* text, uint16_t* value) {
+    int parsed = 0;
+    if (!parseInt(text, 1, &parsed) || parsed > std::numeric_limits<uint16_t>::max()) {
+        return false;
+    }
+    *value = static_cast<uint16_t>(parsed);
+    return true;
+}
+
+bool parseSize(const char* text, size_t* value) {
+    size_t parsed = 0;
+    const char* end = text + std::char_traits<char>::length(text);
+    auto result = std::from_chars(text, end, parsed);
+    if (result.ec != std::errc() || result.ptr != end || parsed == 0) {
+        return false;
+    }
+    *value = parsed;
+    return true;
+}
+
+void printUsage(const char* program) {
+    std::cerr << "Usage: " << program
+              << " <host> <port> <connections> <requests_per_conn> [payload_bytes] [threads] [connect_retries]\n";
+    std::cerr << "Requires a running benchmark_ssl_tls_server_throughput endpoint.\n";
 }
 
 } // namespace
@@ -225,7 +268,7 @@ void runClientThread(const std::string& host, uint16_t port,
     configureBenchmarkTlsContext(ctx);
 
     // 加载CA证书，即使不验证（用于建立信任链）
-    auto caResult = ctx.loadCACertificate("certs/ca.crt");
+    auto caResult = ctx.loadCACertificate(benchmarkCertPath("ca.crt"));
     if (!caResult) {
         metrics.errors += static_cast<uint64_t>(connections);
         metrics.connections_done += static_cast<uint64_t>(connections);
@@ -260,29 +303,46 @@ void runClientThread(const std::string& host, uint16_t port,
 }
 
 int main(int argc, char* argv[]) {
+    if (argc == 2 && std::string_view(argv[1]) == "--help") {
+        printUsage(argv[0]);
+        return 0;
+    }
     if (argc < 5) {
+        printUsage(argv[0]);
         return 1;
     }
 
     std::string host = argv[1];
-    uint16_t port = static_cast<uint16_t>(std::stoi(argv[2]));
-    int connections = std::stoi(argv[3]);
-    int requestsPerConn = std::stoi(argv[4]);
+    uint16_t port = 0;
+    int connections = 0;
+    int requestsPerConn = 0;
+    if (!parsePort(argv[2], &port) ||
+        !parseInt(argv[3], 1, &connections) ||
+        !parseInt(argv[4], 1, &requestsPerConn)) {
+        printUsage(argv[0]);
+        return 1;
+    }
     // 保持默认与历史压测一致（47 字节），大包场景用第 5 个参数显式指定。
     size_t payloadBytes = 47;
     if (argc >= 6) {
-        payloadBytes = static_cast<size_t>(std::stoull(argv[5]));
-        if (payloadBytes == 0) {
-            payloadBytes = 1;
+        if (!parseSize(argv[5], &payloadBytes)) {
+            printUsage(argv[0]);
+            return 1;
         }
     }
     int threads = 1;
     if (argc >= 7) {
-        threads = std::max(1, std::stoi(argv[6]));
+        if (!parseInt(argv[6], 1, &threads)) {
+            printUsage(argv[0]);
+            return 1;
+        }
     }
     int connectRetries = 3;
     if (argc >= 8) {
-        connectRetries = std::max(1, std::stoi(argv[7]));
+        if (!parseInt(argv[7], 1, &connectRetries)) {
+            printUsage(argv[0]);
+            return 1;
+        }
     }
 
     // 设置信号处理
@@ -335,6 +395,10 @@ int main(int argc, char* argv[]) {
                   << " recv=" << g_recv_fail.load()
                   << " peer_closed=" << g_peer_closed.load()
                   << std::endl;
+        if (g_requests.load() == 0 && g_connect_fail.load() == g_errors.load()) {
+            std::cerr << "[EXTERNAL_DEP] TLS benchmark server is required. Start benchmark_ssl_tls_server_throughput on "
+                      << host << ":" << port << " before running this client.\n";
+        }
     }
     std::cout << "Total bytes sent: " << g_bytes_sent << std::endl;
     std::cout << "Total bytes received: " << g_bytes_recv << std::endl;
@@ -362,5 +426,5 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    return 0;
+    return g_errors.load() == 0 ? 0 : 2;
 }

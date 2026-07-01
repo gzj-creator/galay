@@ -519,9 +519,13 @@ struct IOController {
             if (chunk.length == 0) {
                 chunk.release();
                 m_ready_recvs.pop_front();
+                if (total_bytes >= capacity) {
+                    break;
+                }
+                continue;
             }
 
-            if (total_bytes >= capacity || chunk.length != 0) {
+            if (total_bytes >= capacity) {
                 break;
             }
         }

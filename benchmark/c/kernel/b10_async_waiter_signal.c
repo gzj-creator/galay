@@ -2,8 +2,11 @@
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
+#include <errno.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/time.h>
 
 enum {
@@ -30,8 +33,23 @@ static void wait_entry(void* ctx)
     state->result = galay_kernel_async_waiter_wait(state->waiter, 2000);
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
+    int iterations = ASYNC_WAITER_ITERATIONS;
+    if (argc == 2) {
+        char* end = 0;
+        errno = 0;
+        long parsed = strtol(argv[1], &end, 10);
+        if (errno != 0 || end == argv[1] || *end != '\0' || parsed <= 0 || parsed > INT_MAX) {
+            fprintf(stderr, "usage: %s [positive-iterations]\n", argv[0]);
+            return 1;
+        }
+        iterations = (int)parsed;
+    } else if (argc > 2) {
+        fprintf(stderr, "usage: %s [positive-iterations]\n", argv[0]);
+        return 1;
+    }
+
     C_RuntimeConfig config = galay_kernel_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
@@ -45,7 +63,7 @@ int main(void)
     }
 
     const int64_t start = now_us();
-    for (int i = 0; i < ASYNC_WAITER_ITERATIONS; ++i) {
+    for (int i = 0; i < iterations; ++i) {
         galay_kernel_async_waiter_t waiter = {0};
         galay_coro_task_t task = {0};
         WaitState state = {&waiter, {0}};
@@ -75,9 +93,9 @@ int main(void)
     const int64_t elapsed = now_us() - start;
     if (exit_code == 0) {
         const double seconds = elapsed > 0 ? (double)elapsed / 1000000.0 : 0.0;
-        const double ops_per_sec = seconds > 0.0 ? (double)ASYNC_WAITER_ITERATIONS / seconds : 0.0;
+        const double ops_per_sec = seconds > 0.0 ? (double)iterations / seconds : 0.0;
         if (printf("async_waiter_signal iterations=%d elapsed_ms=%.3f ops_per_sec=%.2f\n",
-                   ASYNC_WAITER_ITERATIONS,
+                   iterations,
                    (double)elapsed / 1000.0,
                    ops_per_sec) < 0) {
             exit_code = 5;

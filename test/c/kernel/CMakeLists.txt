@@ -29,4 +29,9 @@ foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)
     endif()
     add_test(NAME "c.kernel.${scenario_name}" COMMAND ${target_name})
     set_tests_properties("c.kernel.${scenario_name}" PROPERTIES LABELS "c;kernel;unit")
+    if(source_name STREQUAL "t23_coro_task" OR
+       source_name STREQUAL "t24_coro_result_wait" OR
+       source_name STREQUAL "t25_coro_tcp")
+        set_tests_properties("c.kernel.${scenario_name}" PROPERTIES RUN_SERIAL TRUE)
+    endif()
 endforeach()

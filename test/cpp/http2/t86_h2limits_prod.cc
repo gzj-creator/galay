@@ -1,3 +1,6 @@
+#include <chrono>
+#include <sstream>
+
 #define private public
 #include <galay/cpp/galay-http2/kernel/stream_manager.h>
 #undef private

@@ -19,6 +19,9 @@ inline bool AcceptIOContext::handleComplete(struct io_uring_cqe* cqe,
 
 inline bool RecvIOContext::handleComplete(struct io_uring_cqe* cqe,
                                           [[maybe_unused]] GHandle handle) {
+    if (cqe != nullptr && cqe->res >= 0 && (cqe->flags & IORING_CQE_F_BUFFER) != 0) {
+        return true;
+    }
     auto result = io::handleRecv(cqe, m_buffer);
     if(!result && IOError::contains(result.error().code(), kNotReady)) return false;
     m_result = std::move(result);

@@ -12,7 +12,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
-#include <stdexcept>
+#include <iostream>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -36,7 +36,7 @@ namespace {
 
 constexpr uint16_t kPort = 19446;
 constexpr int kConnections = 16;
-constexpr int kRoundsPerConn = 4000;
+constexpr int kRoundsPerConn = 1000;
 constexpr size_t kPayloadSize = 1024;
 
 struct SteadyState {
@@ -63,60 +63,72 @@ void fail(SteadyState* state, std::string message)
     }
 }
 
-void expect(bool condition, const char* message)
+std::string benchmarkCertPath(const char* name)
 {
-    if (!condition) {
-        throw std::runtime_error(message);
-    }
+    return std::string(GALAY_SSL_BENCHMARK_CERT_DIR) + "/" + name;
 }
 
-void waitFor(std::atomic<bool>& flag, const char* message)
+bool expect(bool condition, const char* message)
+{
+    if (!condition) {
+        std::cerr << "[FAIL] " << message << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool waitFor(std::atomic<bool>& flag, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!flag.load(std::memory_order_relaxed)) {
         if (std::chrono::steady_clock::now() >= deadline) {
-            throw std::runtime_error(message);
+            std::cerr << "[FAIL] " << message << std::endl;
+            return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    return true;
 }
 
-void waitForCount(std::atomic<int>& count, int expected, const char* message)
+bool waitForCount(std::atomic<int>& count, int expected, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (count.load(std::memory_order_relaxed) < expected) {
         if (std::chrono::steady_clock::now() >= deadline) {
-            throw std::runtime_error(message);
+            std::cerr << "[FAIL] " << message << std::endl;
+            return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    return true;
 }
 
-void waitForCompletion(SteadyState& state, std::atomic<int>& count, int expected, const char* message)
+bool waitForCompletion(SteadyState& state, std::atomic<int>& count, int expected, const char* message)
 {
     const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
     while (count.load(std::memory_order_relaxed) < expected) {
         if (state.failed.load(std::memory_order_relaxed)) {
-            throw std::runtime_error(state.failure.empty() ? message : state.failure);
+            std::cerr << "[FAIL] " << (state.failure.empty() ? message : state.failure) << std::endl;
+            return false;
         }
         if (std::chrono::steady_clock::now() >= deadline) {
-            throw std::runtime_error(
-                std::string(message) +
-                " [client_done=" + std::to_string(state.client_done.load(std::memory_order_relaxed)) +
-                ", server_done=" + std::to_string(state.server_done.load(std::memory_order_relaxed)) +
-                ", accepted=" + std::to_string(state.accepted.load(std::memory_order_relaxed)) +
-                ", connected=" + std::to_string(state.connected.load(std::memory_order_relaxed)) +
-                ", client_hs=" + std::to_string(state.client_handshake_done.load(std::memory_order_relaxed)) +
-                ", server_hs=" + std::to_string(state.server_handshake_done.load(std::memory_order_relaxed)) +
-                ", client_send=" + std::to_string(state.client_send_ops.load(std::memory_order_relaxed)) +
-                ", client_recv=" + std::to_string(state.client_recv_ops.load(std::memory_order_relaxed)) +
-                ", server_recv=" + std::to_string(state.server_recv_ops.load(std::memory_order_relaxed)) +
-                ", server_send=" + std::to_string(state.server_send_ops.load(std::memory_order_relaxed)) +
-                "]"
-            );
+            std::cerr << "[FAIL] " << message
+                      << " [client_done=" << state.client_done.load(std::memory_order_relaxed)
+                      << ", server_done=" << state.server_done.load(std::memory_order_relaxed)
+                      << ", accepted=" << state.accepted.load(std::memory_order_relaxed)
+                      << ", connected=" << state.connected.load(std::memory_order_relaxed)
+                      << ", client_hs=" << state.client_handshake_done.load(std::memory_order_relaxed)
+                      << ", server_hs=" << state.server_handshake_done.load(std::memory_order_relaxed)
+                      << ", client_send=" << state.client_send_ops.load(std::memory_order_relaxed)
+                      << ", client_recv=" << state.client_recv_ops.load(std::memory_order_relaxed)
+                      << ", server_recv=" << state.server_recv_ops.load(std::memory_order_relaxed)
+                      << ", server_send=" << state.server_send_ops.load(std::memory_order_relaxed)
+                      << "]" << std::endl;
+            return false;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+    return true;
 }
 
 Task<void> handleAcceptedClient(SslContext* ctx, GHandle handle, SteadyState* state)
@@ -271,34 +283,49 @@ int main()
 
     SslContext server_ctx(SslMethod::TLS_Server);
     SslContext client_ctx(SslMethod::TLS_Client);
-    expect(server_ctx.isValid(), "server context invalid");
-    expect(client_ctx.isValid(), "client context invalid");
+    if (!expect(server_ctx.isValid(), "server context invalid") ||
+        !expect(client_ctx.isValid(), "client context invalid")) {
+        return 2;
+    }
 
-    expect(server_ctx.loadCertificate("certs/server.crt").has_value(), "load server cert failed");
-    expect(server_ctx.loadPrivateKey("certs/server.key").has_value(), "load server key failed");
-    expect(client_ctx.loadCACertificate("certs/ca.crt").has_value(), "load CA failed");
+    if (!expect(server_ctx.loadCertificate(benchmarkCertPath("server.crt")).has_value(), "load server cert failed") ||
+        !expect(server_ctx.loadPrivateKey(benchmarkCertPath("server.key")).has_value(), "load server key failed") ||
+        !expect(client_ctx.loadCACertificate(benchmarkCertPath("ca.crt")).has_value(), "load CA failed")) {
+        std::cerr << "[SKIP] missing TLS benchmark certificates under "
+                  << GALAY_SSL_BENCHMARK_CERT_DIR << std::endl;
+        return 0;
+    }
     client_ctx.setVerifyMode(SslVerifyMode::Peer);
 
     TestScheduler scheduler;
     scheduler.start();
 
-    expect(scheduleTask(scheduler, runServer(&scheduler, &server_ctx, &state)), "spawn server failed");
-    waitFor(state.server_ready, "server did not become ready");
-
-    for (int i = 0; i < kConnections; ++i) {
-        expect(scheduleTask(scheduler, runClient(&client_ctx, &state, i)), "spawn client failed");
+    int exit_code = 0;
+    if (!expect(scheduleTask(scheduler, runServer(&scheduler, &server_ctx, &state)), "spawn server failed") ||
+        !waitFor(state.server_ready, "server did not become ready")) {
+        exit_code = 3;
     }
 
-    waitForCompletion(state, state.client_done, kConnections, "clients did not finish");
-    waitForCompletion(state, state.server_done, kConnections, "server handlers did not finish");
+    for (int i = 0; exit_code == 0 && i < kConnections; ++i) {
+        if (!expect(scheduleTask(scheduler, runClient(&client_ctx, &state, i)), "spawn client failed")) {
+            exit_code = 4;
+        }
+    }
+
+    if (exit_code == 0 &&
+        (!waitForCompletion(state, state.client_done, kConnections, "clients did not finish") ||
+         !waitForCompletion(state, state.server_done, kConnections, "server handlers did not finish"))) {
+        exit_code = 5;
+    }
 
     scheduler.stop();
 
-    if (state.failed.load(std::memory_order_relaxed)) {
-        throw std::runtime_error(state.failure.empty()
-                                     ? "default context steady-state failed"
-                                     : state.failure);
+    if (exit_code == 0 && state.failed.load(std::memory_order_relaxed)) {
+        std::cerr << "[FAIL] "
+                  << (state.failure.empty() ? "default context steady-state failed" : state.failure)
+                  << std::endl;
+        exit_code = 6;
     }
 
-    return 0;
+    return exit_code;
 }

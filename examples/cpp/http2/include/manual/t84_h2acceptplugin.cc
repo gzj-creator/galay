@@ -6,11 +6,13 @@
 #include <chrono>
 #include <cerrno>
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <netinet/in.h>
 #include <string>
 #include <sys/socket.h>
+#include <system_error>
 #include <thread>
 #include <unistd.h>
 
@@ -26,6 +28,27 @@ namespace {
 {
     std::cerr << "[T84] " << message << "\n";
     std::abort();
+}
+
+std::string resolveHttp2Asset(const char* name)
+{
+    const char* dirs[] = {
+        "test/cpp/http2",
+        "../test/cpp/http2",
+        "../../test/cpp/http2",
+        "../source/test/cpp/http2",
+        "../../source/test/cpp/http2",
+    };
+
+    for (const char* dir : dirs) {
+        std::filesystem::path path = std::filesystem::path(dir) / name;
+        std::error_code ec;
+        if (std::filesystem::exists(path, ec)) {
+            return path.string();
+        }
+    }
+
+    fail("missing http2 TLS test asset");
 }
 
 uint16_t pickFreePort()
@@ -259,12 +282,14 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
     std::atomic<int> downstream_start_count{0};
     std::atomic<int> downstream_stop_count{0};
     uint16_t port = pickFreePort();
+    const std::string cert_path = resolveHttp2Asset("test.crt");
+    const std::string key_path = resolveHttp2Asset("test.key");
 
     H2Server server(H2ServerBuilder()
         .host("127.0.0.1")
         .port(port)
-        .certPath("test/test.crt")
-        .keyPath("test/test.key")
+        .certPath(cert_path)
+        .keyPath(key_path)
         .ioSchedulerCount(2)
         .computeSchedulerCount(0)
         .streamHandler(unusedStreamHandler)

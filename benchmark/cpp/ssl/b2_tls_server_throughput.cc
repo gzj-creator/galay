@@ -9,8 +9,10 @@
 #include <iostream>
 #include <atomic>
 #include <csignal>
+#include <charconv>
 #include <cerrno>
 #include <cstring>
+#include <limits>
 #include <algorithm>
 #include <chrono>
 #include <memory>
@@ -38,6 +40,11 @@ std::atomic<uint64_t> g_connections{0};
 std::atomic<uint64_t> g_bytes_recv{0};
 std::atomic<uint64_t> g_bytes_sent{0};
 
+struct ServerStartupState {
+    std::atomic<int> ready{0};
+    std::atomic<int> failed{0};
+};
+
 void configureBenchmarkTlsContext(SslContext& ctx) {
     ctx.disableSessionCache();
     ctx.setSessionTimeout(0);
@@ -64,6 +71,32 @@ std::unique_ptr<SslContext> createBenchmarkServerContext(const std::string& cert
     }
 
     return ctx;
+}
+
+bool parseInt(const char* text, int minValue, int* value) {
+    int parsed = 0;
+    const char* end = text + std::char_traits<char>::length(text);
+    auto result = std::from_chars(text, end, parsed);
+    if (result.ec != std::errc() || result.ptr != end || parsed < minValue) {
+        return false;
+    }
+    *value = parsed;
+    return true;
+}
+
+bool parsePort(const char* text, uint16_t* value) {
+    int parsed = 0;
+    if (!parseInt(text, 1, &parsed) || parsed > std::numeric_limits<uint16_t>::max()) {
+        return false;
+    }
+    *value = static_cast<uint16_t>(parsed);
+    return true;
+}
+
+void printUsage(const char* program) {
+    std::cerr << "Usage: " << program
+              << " <port> <cert_file> <key_file> [backlog] [worker_count]\n";
+    std::cerr << "LONG_RUNNING: stop with SIGINT or SIGTERM after the matching client finishes.\n";
 }
 
 } // namespace
@@ -119,10 +152,12 @@ Task<void> sslServer(IOScheduler* scheduler,
                      uint16_t port,
                      int backlog,
                      int workerIndex,
-                     int workerCount) {
+                     int workerCount,
+                     ServerStartupState* startup) {
     SslSocket listener(ctx);
 
     if (!listener.isValid()) {
+        startup->failed.fetch_add(1, std::memory_order_relaxed);
         co_return;
     }
 
@@ -135,17 +170,20 @@ Task<void> sslServer(IOScheduler* scheduler,
     auto bindResult = listener.bind(Host(IPType::IPV4, "0.0.0.0", port));
     if (!bindResult) {
         logErrno("bind failed");
+        startup->failed.fetch_add(1, std::memory_order_relaxed);
         co_return;
     }
 
     auto listenResult = listener.listen(backlog);
     if (!listenResult) {
         logErrno("listen failed");
+        startup->failed.fetch_add(1, std::memory_order_relaxed);
         co_return;
     }
 
     std::cout << "SSL Server worker " << (workerIndex + 1) << "/" << workerCount
               << " listening on port " << port << std::endl;
+    startup->ready.fetch_add(1, std::memory_order_relaxed);
 
     while (g_running) {
         Host clientHost;
@@ -163,20 +201,35 @@ Task<void> sslServer(IOScheduler* scheduler,
 }
 
 int main(int argc, char* argv[]) {
+    if (argc == 2 && std::string_view(argv[1]) == "--help") {
+        printUsage(argv[0]);
+        return 0;
+    }
     if (argc < 4) {
+        printUsage(argv[0]);
         return 1;
     }
 
-    uint16_t port = static_cast<uint16_t>(std::stoi(argv[1]));
+    uint16_t port = 0;
+    if (!parsePort(argv[1], &port)) {
+        printUsage(argv[0]);
+        return 1;
+    }
     std::string certFile = argv[2];
     std::string keyFile = argv[3];
     int backlog = 4096;
     if (argc >= 5) {
-        backlog = std::max(128, std::stoi(argv[4]));
+        if (!parseInt(argv[4], 128, &backlog)) {
+            printUsage(argv[0]);
+            return 1;
+        }
     }
     int workerCount = 1;
     if (argc >= 6) {
-        workerCount = std::max(1, std::stoi(argv[5]));
+        if (!parseInt(argv[5], 1, &workerCount)) {
+            printUsage(argv[0]);
+            return 1;
+        }
     }
 
     signal(SIGINT, signalHandler);
@@ -206,18 +259,40 @@ int main(int argc, char* argv[]) {
     std::cout << "Starting SSL benchmark server on port " << port
               << " with " << workerCount << " worker(s)" << std::endl;
 
+    ServerStartupState startup;
+    int exit_code = 0;
     for (int i = 0; i < workerCount; ++i) {
         workers[static_cast<size_t>(i)].scheduler->start();
-        scheduleTask(*workers[static_cast<size_t>(i)].scheduler,
-                     sslServer(workers[static_cast<size_t>(i)].scheduler.get(),
-                               workers[static_cast<size_t>(i)].ctx.get(),
-                               port,
-                               backlog,
-                               i,
-                               workerCount));
+        if (!scheduleTask(*workers[static_cast<size_t>(i)].scheduler,
+                          sslServer(workers[static_cast<size_t>(i)].scheduler.get(),
+                                    workers[static_cast<size_t>(i)].ctx.get(),
+                                    port,
+                                    backlog,
+                                    i,
+                                    workerCount,
+                                    &startup))) {
+            startup.failed.fetch_add(1, std::memory_order_relaxed);
+        }
     }
 
-    while (g_running) {
+    const auto startupDeadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (startup.ready.load(std::memory_order_relaxed) +
+               startup.failed.load(std::memory_order_relaxed) < workerCount &&
+           std::chrono::steady_clock::now() < startupDeadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+
+    if (startup.failed.load(std::memory_order_relaxed) != 0 ||
+        startup.ready.load(std::memory_order_relaxed) != workerCount) {
+        std::cerr << "[FAIL] SSL benchmark server failed to start all workers"
+                  << " ready=" << startup.ready.load(std::memory_order_relaxed)
+                  << " failed=" << startup.failed.load(std::memory_order_relaxed)
+                  << " expected=" << workerCount << std::endl;
+        g_running = false;
+        exit_code = 2;
+    }
+
+    while (exit_code == 0 && g_running) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
@@ -230,5 +305,5 @@ int main(int argc, char* argv[]) {
     std::cout << "Total bytes received: " << g_bytes_recv << std::endl;
     std::cout << "Total bytes sent: " << g_bytes_sent << std::endl;
 
-    return 0;
+    return exit_code;
 }

@@ -22,6 +22,11 @@ C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
     return C_IOResult{code, sys_errno, 0, 0, nullptr};
 }
 
+bool offset_fits_off_t(int64_t offset)
+{
+    return offset >= 0 && offset <= static_cast<int64_t>(std::numeric_limits<off_t>::max());
+}
+
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 
 bool is_valid_open_mode(C_AsyncFileOpenMode mode)
@@ -67,11 +72,6 @@ const galay::async::AsyncFile* to_cpp_file(const galay_kernel_async_file_t* c_fi
 bool is_file_open(const galay::async::AsyncFile* file)
 {
     return file != nullptr && !(file->handle() == GHandle::invalid());
-}
-
-bool offset_fits_off_t(int64_t offset)
-{
-    return offset >= 0 && offset <= static_cast<int64_t>(std::numeric_limits<off_t>::max());
 }
 
 C_AsyncFileResultCode from_cpp_io_error(const galay::kernel::IOError& error)
@@ -404,11 +404,14 @@ C_IOResult galay_kernel_async_file_read(
     int64_t offset [[maybe_unused]],
     int64_t timeout_ms [[maybe_unused]])
 {
-#if defined(USE_KQUEUE) || defined(USE_IOURING)
-    void* scheduler = current_io_scheduler();
     if (file == nullptr || file->file == nullptr ||
         buffer == nullptr || length == 0 || !offset_fits_off_t(offset) ||
-        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
+        !timeout_fits_chrono(timeout_ms)) {
+        return make_result(C_IOResultInvalid);
+    }
+#if defined(USE_KQUEUE) || defined(USE_IOURING)
+    void* scheduler = current_io_scheduler();
+    if (scheduler == nullptr) {
         return make_result(C_IOResultInvalid);
     }
     if (timeout_ms == 0) {
@@ -441,11 +444,14 @@ C_IOResult galay_kernel_async_file_write(
     int64_t offset [[maybe_unused]],
     int64_t timeout_ms [[maybe_unused]])
 {
-#if defined(USE_KQUEUE) || defined(USE_IOURING)
-    void* scheduler = current_io_scheduler();
     if (file == nullptr || file->file == nullptr ||
         buffer == nullptr || length == 0 || !offset_fits_off_t(offset) ||
-        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
+        !timeout_fits_chrono(timeout_ms)) {
+        return make_result(C_IOResultInvalid);
+    }
+#if defined(USE_KQUEUE) || defined(USE_IOURING)
+    void* scheduler = current_io_scheduler();
+    if (scheduler == nullptr) {
         return make_result(C_IOResultInvalid);
     }
     if (timeout_ms == 0) {
@@ -475,10 +481,12 @@ C_IOResult galay_kernel_async_file_close(
     galay_kernel_async_file_t* file [[maybe_unused]],
     int64_t timeout_ms [[maybe_unused]])
 {
+    if (file == nullptr || file->file == nullptr || !timeout_fits_chrono(timeout_ms)) {
+        return make_result(C_IOResultInvalid);
+    }
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     void* scheduler = current_io_scheduler();
-    if (file == nullptr || file->file == nullptr ||
-        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
+    if (scheduler == nullptr) {
         return make_result(C_IOResultInvalid);
     }
     return from_core_result(

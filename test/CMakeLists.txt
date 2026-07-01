@@ -43,3 +43,5 @@ endif()
 if(GALAY_BUILD_TRACING)
     add_subdirectory(cpp/tracing)
 endif()
+
+add_subdirectory(scripts)

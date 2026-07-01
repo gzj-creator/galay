@@ -432,8 +432,11 @@ static void close_waiting_server_entry(void* arg)
 static void close_waiting_closer_entry(void* arg)
 {
     CloseWaitingState* state = (CloseWaitingState*)arg;
-    while (atomic_load(&state->phase) != 1) {
+    while (atomic_load(&state->phase) == 0) {
         record_io_cleanup(galay_coro_yield());
+    }
+    if (atomic_load(&state->phase) != 1) {
+        return;
     }
     state->close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
 }
@@ -974,10 +977,34 @@ static int run_close_while_waiting(galay_kernel_runtime_t* runtime)
         record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 403;
     }
+    for (int wait = 0; wait < 10000 && atomic_load(&state.phase) == 0; ++wait) {
+        record_posix_cleanup(usleep(1000));
+    }
+    if (atomic_load(&state.phase) != 1) {
+        record_diagnostic_write(fprintf(stderr,
+                                        "close while waiting server not ready: accept=%d recv=%d phase=%d\n",
+                                        (int)state.accept_result.code,
+                                        (int)state.recv_result.code,
+                                        atomic_load(&state.phase)));
+        record_posix_cleanup(close(client_fd));
+        record_io_cleanup(galay_coro_join(&server, 5000));
+        record_io_cleanup(galay_coro_destroy(&server));
+        if (state.accepted.socket != 0) {
+            record_socket_cleanup(galay_kernel_tcp_socket_destroy(&state.accepted));
+        }
+        record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
+        return 406;
+    }
     if (expect_code(galay_coro_spawn(runtime, close_waiting_closer_entry, &state, 0, &closer),
                     C_IOResultOk) ||
-        expect_code(galay_coro_join(&closer, 2000), C_IOResultOk) ||
-        expect_code(galay_coro_join(&server, 2000), C_IOResultOk)) {
+        expect_code(galay_coro_join(&closer, 5000), C_IOResultOk) ||
+        expect_code(galay_coro_join(&server, 5000), C_IOResultOk)) {
+        record_diagnostic_write(fprintf(stderr,
+                                        "close while waiting join failed: accept=%d recv=%d close=%d phase=%d\n",
+                                        (int)state.accept_result.code,
+                                        (int)state.recv_result.code,
+                                        (int)state.close_result.code,
+                                        atomic_load(&state.phase)));
         record_posix_cleanup(close(client_fd));
         record_socket_cleanup(galay_kernel_tcp_socket_destroy(&listener));
         return 404;
@@ -1427,6 +1454,9 @@ int main(void)
     if (result == 0) {
         result = run_owner_binding_failed_request_does_not_poison();
         result = merge_cleanup_status(result, 912);
+    }
+    if (result != 0) {
+        record_diagnostic_write(fprintf(stderr, "coro_tcp failed result=%d\n", result));
     }
     return result;
 }

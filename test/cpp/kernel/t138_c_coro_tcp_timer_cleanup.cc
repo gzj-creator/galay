@@ -138,7 +138,7 @@ bool createLoopbackPair(TcpSocket* listener, TcpSocket* accepted, int* client_fd
 }
 
 #ifdef USE_KQUEUE
-bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, const TcpSocket& socket)
+bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, TcpSocket& socket)
 {
     auto* kqueue_scheduler = dynamic_cast<KqueueScheduler*>(scheduler);
     if (kqueue_scheduler == nullptr) {
@@ -164,7 +164,7 @@ bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, const TcpSocket& 
     return false;
 }
 #elif defined(USE_EPOLL)
-bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, const TcpSocket& socket)
+bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, TcpSocket& socket)
 {
     auto* epoll_scheduler = dynamic_cast<EpollScheduler*>(scheduler);
     if (epoll_scheduler == nullptr) {
@@ -179,7 +179,7 @@ bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, const TcpSocket& 
     return false;
 }
 #else
-bool verifyBackendRegistrationWasRemoved(Scheduler*, const TcpSocket&)
+bool verifyBackendRegistrationWasRemoved(Scheduler*, TcpSocket&)
 {
     return true;
 }

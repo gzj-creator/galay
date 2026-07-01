@@ -5,6 +5,7 @@ function(galay_add_utils_test target_name source_file)
     if(target_name STREQUAL "t6_buffer_queue_ring" OR
        target_name STREQUAL "t7_cache_lru" OR
        target_name STREQUAL "t8_concurrency_pool_waiter" OR
+       target_name STREQUAL "t15_consistent_hash_header_self_contained" OR
        target_name STREQUAL "t12_resilience_rate_circuit")
         target_compile_definitions("${target_name}" PRIVATE
             GALAY_UTILS_SOURCE_DIR="${PROJECT_SOURCE_DIR}/src/cpp"

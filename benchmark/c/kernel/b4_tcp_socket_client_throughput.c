@@ -292,6 +292,7 @@ int main(int argc, char** argv)
             exit_code == 0) {
             exit_code = 8;
         }
+        sessions[i].socket.socket = NULL;
         free(sessions[i].request);
         free(sessions[i].response);
         sessions[i].request = NULL;
@@ -317,6 +318,15 @@ int main(int argc, char** argv)
     }
     if (total_errors != 0 && exit_code == 0) {
         exit_code = 10;
+    }
+    if (total_requests == 0 && total_errors != 0) {
+        if (fprintf(stderr,
+                    "[EXTERNAL_DEP] TCP echo server is required. Start benchmark_c_kernel_tcp_socket_server_throughput on %s:%u before running this client.\n",
+                    state.config.host,
+                    state.config.port) < 0 &&
+            exit_code == 0) {
+            exit_code = 15;
+        }
     }
 
     for (int i = 0; i < state.config.connections; ++i) {

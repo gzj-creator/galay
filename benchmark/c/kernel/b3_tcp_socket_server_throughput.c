@@ -238,7 +238,8 @@ static int wake_listener(uint16_t port)
 
 int main(int argc, char** argv)
 {
-    ServerState server = {0};
+    static ServerState server;
+    memset(&server, 0, sizeof(server));
     server.port = TCP_SERVER_DEFAULT_PORT;
     size_t io_schedulers = TCP_SERVER_DEFAULT_IO_SCHEDULERS;
     if (argc > 1) {

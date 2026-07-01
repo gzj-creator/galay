@@ -153,6 +153,9 @@ void sendAll(int fd, std::string_view data)
     size_t sent = 0;
     while (sent < data.size()) {
         const ssize_t n = ::send(fd, data.data() + sent, data.size() - sent, 0);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
         if (n <= 0) {
             fail("send failed, errno=" + std::to_string(errno));
         }
@@ -163,7 +166,10 @@ void sendAll(int fd, std::string_view data)
 std::string recvOnce(int fd)
 {
     char buffer[4096];
-    const ssize_t n = ::recv(fd, buffer, sizeof(buffer), 0);
+    ssize_t n = 0;
+    do {
+        n = ::recv(fd, buffer, sizeof(buffer), 0);
+    } while (n < 0 && errno == EINTR);
     if (n < 0) {
         fail("recv failed at stage " + std::to_string(g_stage) + ", errno=" + std::to_string(errno));
     }

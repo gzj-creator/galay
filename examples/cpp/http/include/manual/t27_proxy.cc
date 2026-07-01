@@ -136,6 +136,11 @@ Task<void> upstreamStream(HttpConn& conn, HttpRequest req)
 std::string resolveStaticDir()
 {
     const std::string candidates[] = {
+        "./test/cpp/http/static_files",
+        "../test/cpp/http/static_files",
+        "../../test/cpp/http/static_files",
+        "../source/test/cpp/http/static_files",
+        "../../source/test/cpp/http/static_files",
         "./test/static_files",
         "../test/static_files",
         "../../test/static_files"
@@ -146,7 +151,7 @@ std::string resolveStaticDir()
             return path;
         }
     }
-    return "./test/static_files";
+    return "./test/cpp/http/static_files";
 }
 
 std::string sendRawHttp(const std::string& request, uint16_t port)

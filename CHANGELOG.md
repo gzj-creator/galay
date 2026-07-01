@@ -13,6 +13,8 @@
 
 ### Added
 
+- 新增 Linux examples/benchmarks 全量执行矩阵脚本 `scripts/verify_linux_exec_matrix.py`，支持按 build root 扫描可执行文件、区分 PASS/SKIP/LONG_RUNNING/EXTERNAL_DEP/NEEDS_PEER/FAIL/MISSING，并对已知 C/S 架构测试按先启动 server、再运行 client、最后清理 server 的顺序验证。
+- 新增 `consistent_hash.hpp` 无阻塞锁源码边界测试与 lookup benchmark，锁定一致性哈希实现不再引入 `std::mutex` / `std::shared_mutex` 等会阻塞协程调度线程的同步原语。
 - 新增 Redis C standalone direct coroutine async client 最小闭环：`galay_redis_client_connect`、`galay_redis_client_command_async` 与 `galay_redis_client_close`，通过本地 mock Redis loopback 覆盖 PING/PONG，并补齐对应 C test、example 与 smoke benchmark。
 - 新增 Redis C async `AUTH`、`SELECT` 与 pipeline API：支持 pipeline 命令缓存、批量 reply 保留和统一释放，并补齐本地 mock loopback test、example 与 smoke benchmark。
 - 新增 MySQL C direct coroutine async client 最小闭环：`galay_mysql_client_connect_async`、`galay_mysql_client_query_async` 与 `galay_mysql_client_close_async`，通过本地 mock MySQL packet loopback 覆盖 handshake、COM_QUERY 和 result packet，并补齐对应 C test、example 与 smoke benchmark。
@@ -40,6 +42,8 @@
 
 ### Changed
 
+- `ConsistentHash` 从 `std::shared_mutex` 读写锁改为 copy-on-write 原子快照发布与 reader-count retired snapshot 回收，读路径只做原子快照加载和原子节点状态更新，避免 coroutine 调度线程被阻塞锁卡住。
+- Linux examples/benchmarks smoke 验证统一以短 workload 运行重型 benchmark，并将 C stackful coroutine 边界 CTest 配置为串行运行，降低 4 核 Linux 主机上并发 CTest 对短 join/cancel 窗口的干扰。
 - 优化 HTTP/2 HPACK 动态表查找热路径，按 ring 顺序直接扫描动态表以减少重复边界检查和取模；HTTP client 与 header parser benchmark 补充 P50/P90/P95/P99 等尾延迟观测输出；`TimingWheelTimerManager` 级联复用同一次 tick 的时间戳并修正默认 tick 注释。
 - HTTP/2 server/client/h2c 路径移除异常兜底，错误通过返回值、GOAWAY/RST_STREAM 或日志可观测路径传播；HTTP close 清理路径改为 inline 处理 close 返回值，避免 coroutine close helper 过度拆分。
 - C Kernel TCP async C ABI 破坏式迁移为 direct C coroutine 形态：`tcp_socket_c` 直接提供 `C_IOResult` 返回的 accept/connect/recv/send/close 接口，移除 runtime callback/spawn 桥接路径，并同步更新 TCP C 测试、示例和 benchmark。
@@ -73,6 +77,9 @@
 
 ### Fixed
 
+- 修复 Linux epoll/io_uring 全量 examples/benchmarks 验证中的误报和真实失败：HTTP proxy/manual HTTP2 示例支持 build-root 与 Tencent `source` 布局下的静态文件/证书解析，SSL echo 与 TCP/SSL throughput 按 C/S 配对执行，etcd/MySQL/Redis/Mongo/RPC service-discovery 外部依赖被归类为 `EXTERNAL_DEP` 而不是未知失败。
+- 修复 C kernel `coro_tcp` 在并发 CTest 下 close-while-waiting 子场景可能在 server 尚未进入可关闭阶段时启动 closer 的竞态，并为失败路径输出内部诊断码，避免远端日志只显示空输出。
+- 修复 `benchmark_c_kernel_async_waiter_signal` 和 `benchmark_c_kernel_coro_tcp_iov_sendfile` 在 Linux smoke sweep 中 workload 过重导致崩溃/超时的问题，前者新增可校验的正整数迭代参数，矩阵脚本对二者传入短 workload。
 - 修复 C async API reviewer 发现的 MySQL/SSL parity 缺口：MySQL C auth loopback 覆盖并实现 `caching_sha2_password` fast auth 与 RSA full auth exchange；SSL C API 补齐 ALPN offer/select、协商结果读取和 session cache/ticket/timeout context controls，并新增 loopback 覆盖。
 - 修复 C Kernel AsyncMutex direct coroutine bridge 的 wake state 生命周期问题：`ResumeToken` 不再引用栈上 operation，改为引用计数堆状态，避免 waiter/waker 延迟释放时触发偶发 Bus error，并新增 512 轮 C handoff 压力回归覆盖。
 - 修复 RPC managed client 清理路径静默丢弃返回值的问题：`release()` 与 `client.close()` 失败现在会通过 `RpcError` 显式传播，并新增源码边界测试防止回退到 `(void)` 忽略返回值。

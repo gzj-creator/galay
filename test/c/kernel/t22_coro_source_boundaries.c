@@ -85,6 +85,23 @@ static int contains_text(const char* text, size_t text_len, const char* needle)
     return 0;
 }
 
+static size_t count_text(const char* text, size_t text_len, const char* needle)
+{
+    const size_t needle_len = strlen(needle);
+    if (needle_len == 0 || text_len < needle_len) {
+        return 0;
+    }
+
+    size_t count = 0;
+    for (size_t i = 0; i + needle_len <= text_len; ++i) {
+        if (memcmp(text + i, needle, needle_len) == 0) {
+            ++count;
+            i += needle_len - 1;
+        }
+    }
+    return count;
+}
+
 static int has_suffix(const char* path, const char* suffix)
 {
     const size_t path_len = strlen(path);
@@ -372,31 +389,49 @@ static int require_c_bridge_module_layout(void)
     return failed;
 }
 
-static int require_direct_tcp_iouring_result_flag_reset(void)
+static int require_iouring_result_flag_lifecycle(void)
 {
-    const char* relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
-    char full_path[kMaxPath];
-    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+    const char* bridge_relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
+    const char* scheduler_relative_path = "src/cpp/galay-kernel/core/io_scheduler.hpp";
+    char bridge_full_path[kMaxPath];
+    char scheduler_full_path[kMaxPath];
+    if (!join_path(bridge_full_path, sizeof(bridge_full_path), GALAY_SOURCE_DIR, bridge_relative_path) ||
+        !join_path(scheduler_full_path, sizeof(scheduler_full_path), GALAY_SOURCE_DIR, scheduler_relative_path)) {
         return 1;
     }
 
-    char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
+    char* bridge_data = NULL;
+    size_t bridge_len = 0;
+    if (!read_file(bridge_full_path, &bridge_data, &bridge_len)) {
         return 1;
     }
 
     int failed = 0;
-    if (!contains_text(data, len, "m_controller->m_accept_result_assigned = false;")) {
-        fprintf(stderr, "[T22] direct TCP accept must reset io_uring accept result assignment on C result consumption\n");
+    if (contains_text(bridge_data, bridge_len, "m_controller->m_accept_result_assigned = false;") ||
+        contains_text(bridge_data, bridge_len, "m_controller->m_recv_result_assigned = false;")) {
+        fprintf(stderr,
+                "[T22] direct TCP bridge must not reset io_uring result-assigned flags while the old awaitable still owns the slot\n");
         failed = 1;
     }
-    if (!contains_text(data, len, "m_controller->m_recv_result_assigned = false;")) {
-        fprintf(stderr, "[T22] direct TCP recv must reset io_uring recv result assignment on C result consumption\n");
-        failed = 1;
+    free(bridge_data);
+
+    char* scheduler_data = NULL;
+    size_t scheduler_len = 0;
+    if (!read_file(scheduler_full_path, &scheduler_data, &scheduler_len)) {
+        return 1;
     }
 
-    free(data);
+    if (count_text(scheduler_data, scheduler_len, "m_accept_result_assigned = false;") < 2) {
+        fprintf(stderr,
+                "[T22] io_uring accept result-assigned flag must reset at fill/remove awaitable lifecycle boundaries\n");
+        failed = 1;
+    }
+    if (count_text(scheduler_data, scheduler_len, "m_recv_result_assigned = false;") < 2) {
+        fprintf(stderr,
+                "[T22] io_uring recv result-assigned flag must reset at fill/remove awaitable lifecycle boundaries\n");
+        failed = 1;
+    }
+    free(scheduler_data);
     return failed;
 }
 
@@ -521,7 +556,7 @@ int main(void)
 {
     int failed = require_direct_tcp_c_api_uses_core_bridge();
     failed |= require_c_bridge_module_layout();
-    failed |= require_direct_tcp_iouring_result_flag_reset();
+    failed |= require_iouring_result_flag_lifecycle();
     failed |= require_direct_tcp_timeout_arbitration();
     failed |= require_explicit_linux_aarch64_coro_context_boundary();
     failed |= require_iouring_accept_uses_direct_completion_arbitration();

@@ -3,6 +3,7 @@
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 #include <galay/c/galay-mysql-c/mysql.h>
 
+#include <stdio.h>
 #include <string.h>
 
 #define REQUIRE_TRUE(expr, code) \
@@ -129,6 +130,22 @@ static int recv_exact(galay_kernel_tcp_socket_t* socket, unsigned char* buffer, 
     return 0;
 }
 
+static int send_exact(galay_kernel_tcp_socket_t* socket, const unsigned char* buffer, size_t length)
+{
+    size_t sent = 0;
+    while (sent < length) {
+        C_IOResult result = galay_kernel_tcp_socket_send(socket,
+                                                         (const char*)buffer + sent,
+                                                         length - sent,
+                                                         1000);
+        if (result.code != C_IOResultOk || result.bytes == 0) {
+            return 1;
+        }
+        sent += result.bytes;
+    }
+    return 0;
+}
+
 static int recv_packet(galay_kernel_tcp_socket_t* socket, unsigned char* buffer, size_t* packet_len)
 {
     uint32_t payload_len = 0;
@@ -229,11 +246,12 @@ static void mysql_auth_server_entry(void* arg)
     if (state->accept_result.code != C_IOResultOk) {
         return;
     }
-    state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
-                                                             (const char*)handshake,
-                                                             handshake_len,
-                                                             1000);
-    if (state->server_send_result.code != C_IOResultOk) {
+    if (send_exact(&state->accepted, handshake, handshake_len) != 0) {
+        state->server_send_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
+        return;
+    }
+    state->server_send_result = (C_IOResult){C_IOResultOk, 0, handshake_len, 0, NULL};
+    if (state->server_send_result.bytes != handshake_len) {
         return;
     }
     state->auth_packet_len = sizeof(state->auth_packet);
@@ -256,24 +274,22 @@ static void mysql_auth_server_entry(void* arg)
         return;
     }
     if (state->use_caching_fast_auth) {
-        state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
-                                                                 (const char*)fast_auth_packet,
-                                                                 sizeof(fast_auth_packet),
-                                                                 1000);
-        if (state->server_send_result.code != C_IOResultOk) {
+        if (send_exact(&state->accepted, fast_auth_packet, sizeof(fast_auth_packet)) != 0) {
+            state->server_send_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
             return;
         }
+        state->server_send_result =
+            (C_IOResult){C_IOResultOk, 0, sizeof(fast_auth_packet), 0, NULL};
     }
     if (state->use_caching_full_auth) {
         unsigned char public_key_packet[1024];
         size_t public_key_packet_len = 0;
-        state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
-                                                                 (const char*)full_auth_packet,
-                                                                 sizeof(full_auth_packet),
-                                                                 1000);
-        if (state->server_send_result.code != C_IOResultOk) {
+        if (send_exact(&state->accepted, full_auth_packet, sizeof(full_auth_packet)) != 0) {
+            state->server_send_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
             return;
         }
+        state->server_send_result =
+            (C_IOResult){C_IOResultOk, 0, sizeof(full_auth_packet), 0, NULL};
         state->auth_packet_len = sizeof(state->auth_packet);
         if (recv_packet(&state->accepted, state->auth_packet, &state->auth_packet_len) != 0 ||
             state->auth_packet_len != 5 ||
@@ -290,13 +306,12 @@ static void mysql_auth_server_entry(void* arg)
         public_key_packet[1] = (unsigned char)(((public_key_packet_len - 4) >> 8u) & 0xffu);
         public_key_packet[2] = (unsigned char)(((public_key_packet_len - 4) >> 16u) & 0xffu);
         public_key_packet[3] = 4;
-        state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
-                                                                 (const char*)public_key_packet,
-                                                                 public_key_packet_len,
-                                                                 1000);
-        if (state->server_send_result.code != C_IOResultOk) {
+        if (send_exact(&state->accepted, public_key_packet, public_key_packet_len) != 0) {
+            state->server_send_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
             return;
         }
+        state->server_send_result =
+            (C_IOResult){C_IOResultOk, 0, public_key_packet_len, 0, NULL};
         state->auth_packet_len = sizeof(state->auth_packet);
         if (recv_packet(&state->accepted, state->auth_packet, &state->auth_packet_len) != 0 ||
             state->auth_packet_len <= 4) {
@@ -305,13 +320,11 @@ static void mysql_auth_server_entry(void* arg)
             return;
         }
     }
-    state->server_send_result = galay_kernel_tcp_socket_send(&state->accepted,
-                                                             (const char*)ok_packet,
-                                                             sizeof(ok_packet),
-                                                             1000);
-    if (state->server_send_result.code != C_IOResultOk) {
+    if (send_exact(&state->accepted, ok_packet, sizeof(ok_packet)) != 0) {
+        state->server_send_result = (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
         return;
     }
+    state->server_send_result = (C_IOResult){C_IOResultOk, 0, sizeof(ok_packet), 0, NULL};
     state->server_close_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
 }
 
@@ -394,6 +407,20 @@ static int run_loopback(const char* plugin_name,
         state.connected_after_auth != GALAY_TRUE ||
         state.auth_payload_ok != 1 ||
         state.client_close_result.code != C_IOResultOk) {
+        fprintf(stderr,
+                "diag plugin=%s accept=%d send=%d send_bytes=%zu recv=%d recv_bytes=%zu "
+                "client=%d client_value=%lld connected=%d auth_ok=%d close=%d\n",
+                state.plugin_name,
+                state.accept_result.code,
+                state.server_send_result.code,
+                state.server_send_result.bytes,
+                state.server_recv_result.code,
+                state.server_recv_result.bytes,
+                state.client_connect_result.code,
+                (long long)state.client_connect_result.value,
+                state.connected_after_auth,
+                state.auth_payload_ok,
+                state.client_close_result.code);
         result = 8;
     }
     if (server.task != NULL && galay_coro_destroy(&server).code != C_IOResultOk && result == 0) {

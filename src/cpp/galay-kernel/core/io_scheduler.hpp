@@ -1020,6 +1020,9 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
             (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
             static_cast<uint32_t>(type));
         m_awaitable[READ] = awaitable;
+#ifdef USE_IOURING
+        m_recv_result_assigned = false;
+#endif
         break;
     case IOEventType::READV:
     case IOEventType::FILEREAD:
@@ -1038,6 +1041,9 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
             (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
             static_cast<uint32_t>(type));
         m_awaitable[READ] = awaitable;
+#ifdef USE_IOURING
+        m_accept_result_assigned = false;
+#endif
         break;
     case IOEventType::SEQUENCE:
         m_type |= type;
@@ -1071,6 +1077,9 @@ inline void IOController::removeAwaitable(IOEventType type) {
     switch (type) {
     case IOEventType::RECV:
         m_awaitable[READ] = nullptr;
+#ifdef USE_IOURING
+        m_recv_result_assigned = false;
+#endif
         break;
     case IOEventType::READV:
     case IOEventType::FILEREAD:
@@ -1083,6 +1092,9 @@ inline void IOController::removeAwaitable(IOEventType type) {
         break;
     case IOEventType::ACCEPT:
         m_awaitable[READ] = nullptr;
+#ifdef USE_IOURING
+        m_accept_result_assigned = false;
+#endif
         break;
     case IOEventType::SEQUENCE:
 #ifdef USE_IOURING

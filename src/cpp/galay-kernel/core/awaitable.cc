@@ -98,9 +98,6 @@ int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller)
  * @return 成功时返回已接受的连接句柄，失败时返回 IOError
  */
 std::expected<GHandle, IOError> AcceptAwaitable::await_resume() {
-#ifdef USE_IOURING
-    m_controller->m_accept_result_assigned = false;
-#endif
     return detail::resumeIOAwaitable<ACCEPT>(*this);
 }
 
@@ -109,9 +106,6 @@ std::expected<GHandle, IOError> AcceptAwaitable::await_resume() {
  * @return 成功时返回已接收字节数，失败时返回 IOError
  */
 std::expected<size_t, IOError> RecvAwaitable::await_resume() {
-#ifdef USE_IOURING
-    m_controller->m_recv_result_assigned = false;
-#endif
     return detail::resumeIOAwaitable<RECV>(*this);
 }
 

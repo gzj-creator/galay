@@ -480,9 +480,6 @@ struct CoroAcceptOperation final: public AcceptAwaitable, public CoroTcpOperatio
 private:
     C_IOResult buildResult() override
     {
-#ifdef USE_IOURING
-        m_controller->m_accept_result_assigned = false;
-#endif
         if (!m_result) {
             return from_io_error(m_result.error());
         }
@@ -606,9 +603,6 @@ struct CoroRecvOperation final: public RecvAwaitable, public CoroTcpOperationBas
 private:
     C_IOResult buildResult() override
     {
-#ifdef USE_IOURING
-        m_controller->m_recv_result_assigned = false;
-#endif
         if (!m_result) {
             return from_io_error(m_result.error());
         }
