@@ -32,8 +32,8 @@ extern "C" {
  * wait 回调应挂起 coroutine，不应阻塞 scheduler 线程。
  */
 GalayCoreCoroIOResult galay_core_coro_async_mutex_lock(
-    void* mutex,
-    void* scheduler,
+    GalayCoreAsyncMutex* mutex,
+    GalayCoreIOScheduler* scheduler,
     int64_t timeout_ms,
     void* user_data,
     const GalayCoreCoroWaitOps* wait_ops);

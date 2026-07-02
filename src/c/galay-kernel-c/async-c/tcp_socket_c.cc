@@ -183,9 +183,20 @@ GalayCoreCoroHost to_core_host(const C_Host& host)
     return out;
 }
 
-void* current_io_scheduler()
+GalayCoreIOScheduler* current_io_scheduler()
 {
-    return static_cast<void*>(galay::kernel::coro_c::currentTaskOwnerScheduler());
+    return reinterpret_cast<GalayCoreIOScheduler*>(
+        galay::kernel::coro_c::currentTaskOwnerScheduler());
+}
+
+GalayCoreTcpSocket* to_core_socket(void* socket)
+{
+    return reinterpret_cast<GalayCoreTcpSocket*>(socket);
+}
+
+galay::async::TcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
+{
+    return reinterpret_cast<galay::async::TcpSocket*>(socket);
 }
 
 struct WaitRequestScope {
@@ -413,7 +424,7 @@ C_IOResult galay_kernel_tcp_socket_accept(
     C_Host* out_peer,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (listener == nullptr || listener->socket == nullptr ||
         out_socket == nullptr || out_socket->socket != nullptr ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -423,19 +434,22 @@ C_IOResult galay_kernel_tcp_socket_accept(
         return make_result(C_IOResultTimeout);
     }
 
+    GalayCoreTcpSocket* accepted_socket = nullptr;
     C_IOResult result = submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_accept(listener->socket,
+            return galay_core_coro_tcp_accept(to_core_socket(listener->socket),
                                               scheduler,
-                                              &out_socket->socket,
+                                              &accepted_socket,
                                               reinterpret_cast<GalayCoreCoroHost*>(out_peer),
                                               timeout_ms,
                                               user_data,
                                               wait_ops);
         });
     if (result.code != C_IOResultOk) {
+        delete to_cpp_socket(accepted_socket);
         return result;
     }
+    out_socket->socket = accepted_socket;
     result.ptr = out_socket;
     return result;
 }
@@ -445,7 +459,7 @@ C_IOResult galay_kernel_tcp_socket_connect(
     const C_Host* host,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         host == nullptr || !is_valid_c_ip_type(host->type) ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -458,7 +472,7 @@ C_IOResult galay_kernel_tcp_socket_connect(
     GalayCoreCoroHost core_host = to_core_host(*host);
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_connect(socket->socket,
+            return galay_core_coro_tcp_connect(to_core_socket(socket->socket),
                                                scheduler,
                                                &core_host,
                                                timeout_ms,
@@ -473,7 +487,7 @@ C_IOResult galay_kernel_tcp_socket_recv(
     size_t length,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         buffer == nullptr || length == 0 ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -485,7 +499,7 @@ C_IOResult galay_kernel_tcp_socket_recv(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_recv(socket->socket,
+            return galay_core_coro_tcp_recv(to_core_socket(socket->socket),
                                             scheduler,
                                             buffer,
                                             length,
@@ -501,7 +515,7 @@ C_IOResult galay_kernel_tcp_socket_send(
     size_t length,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         buffer == nullptr || length == 0 ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -513,7 +527,7 @@ C_IOResult galay_kernel_tcp_socket_send(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_send(socket->socket,
+            return galay_core_coro_tcp_send(to_core_socket(socket->socket),
                                             scheduler,
                                             buffer,
                                             length,
@@ -525,11 +539,11 @@ C_IOResult galay_kernel_tcp_socket_send(
 
 C_IOResult galay_kernel_tcp_socket_readv(
     galay_kernel_tcp_socket_t* socket,
-    const struct iovec* iovecs,
+    const galay_iovec_t* iovecs,
     size_t count,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         iovecs == nullptr || count == 0 ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -541,7 +555,7 @@ C_IOResult galay_kernel_tcp_socket_readv(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_readv(socket->socket,
+            return galay_core_coro_tcp_readv(to_core_socket(socket->socket),
                                              scheduler,
                                              iovecs,
                                              count,
@@ -553,11 +567,11 @@ C_IOResult galay_kernel_tcp_socket_readv(
 
 C_IOResult galay_kernel_tcp_socket_writev(
     galay_kernel_tcp_socket_t* socket,
-    const struct iovec* iovecs,
+    const galay_iovec_t* iovecs,
     size_t count,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         iovecs == nullptr || count == 0 ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -569,7 +583,7 @@ C_IOResult galay_kernel_tcp_socket_writev(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_writev(socket->socket,
+            return galay_core_coro_tcp_writev(to_core_socket(socket->socket),
                                               scheduler,
                                               iovecs,
                                               count,
@@ -586,7 +600,7 @@ C_IOResult galay_kernel_tcp_socket_sendfile(
     size_t count,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         file_fd < 0 || offset < 0 || count == 0 ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -598,7 +612,7 @@ C_IOResult galay_kernel_tcp_socket_sendfile(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_sendfile(socket->socket,
+            return galay_core_coro_tcp_sendfile(to_core_socket(socket->socket),
                                                 scheduler,
                                                 file_fd,
                                                 offset,
@@ -613,13 +627,13 @@ C_IOResult galay_kernel_tcp_socket_close(
     galay_kernel_tcp_socket_t* socket,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
     }
     return from_core_result(
-        galay_core_coro_tcp_close(socket->socket, scheduler, timeout_ms));
+        galay_core_coro_tcp_close(to_core_socket(socket->socket), scheduler, timeout_ms));
 }
 
 } // extern "C"

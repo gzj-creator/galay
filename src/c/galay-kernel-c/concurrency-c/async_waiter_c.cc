@@ -107,9 +107,15 @@ C_IOResult from_core_result(GalayCoreCoroIOResult result)
     };
 }
 
-void* current_scheduler()
+GalayCoreIOScheduler* current_scheduler()
 {
-    return static_cast<void*>(galay::kernel::coro_c::currentTaskOwnerScheduler());
+    return reinterpret_cast<GalayCoreIOScheduler*>(
+        galay::kernel::coro_c::currentTaskOwnerScheduler());
+}
+
+GalayCoreAsyncWaiter* to_core_waiter(void* waiter)
+{
+    return reinterpret_cast<GalayCoreAsyncWaiter*>(waiter);
 }
 
 struct WaitRequestScope {
@@ -303,7 +309,7 @@ C_IOResult galay_kernel_async_waiter_wait(
     galay_kernel_async_waiter_t* c_waiter,
     int64_t timeout_ms)
 {
-    void* scheduler = current_scheduler();
+    GalayCoreIOScheduler* scheduler = current_scheduler();
     if (c_waiter == nullptr || c_waiter->waiter == nullptr ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
@@ -314,7 +320,7 @@ C_IOResult galay_kernel_async_waiter_wait(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_async_waiter_wait(c_waiter->waiter,
+            return galay_core_coro_async_waiter_wait(to_core_waiter(c_waiter->waiter),
                                                      scheduler,
                                                      timeout_ms,
                                                      user_data,

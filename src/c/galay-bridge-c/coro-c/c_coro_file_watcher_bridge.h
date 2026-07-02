@@ -68,8 +68,8 @@ typedef struct GalayCoreCoroFileWatchResult {
  * 挂起 coroutine，不应阻塞 scheduler 线程。
  */
 GalayCoreCoroIOResult galay_core_coro_file_watcher_watch(
-    void* watcher,
-    void* scheduler,
+    GalayCoreFileWatcher* watcher,
+    GalayCoreIOScheduler* scheduler,
     GalayCoreCoroFileWatchResult* out_result,
     int64_t timeout_ms,
     void* user_data,

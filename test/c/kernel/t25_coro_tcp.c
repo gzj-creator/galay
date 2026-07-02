@@ -271,11 +271,11 @@ static void iov_sendfile_server_entry(void* arg)
         return;
     }
 
-    struct iovec read_iov[2];
-    read_iov[0].iov_base = state->read_a;
-    read_iov[0].iov_len = 3;
-    read_iov[1].iov_base = state->read_b;
-    read_iov[1].iov_len = 4;
+    galay_iovec_t read_iov[2];
+    read_iov[0].base = state->read_a;
+    read_iov[0].len = 3;
+    read_iov[1].base = state->read_b;
+    read_iov[1].len = 4;
     state->readv_result =
         galay_kernel_tcp_socket_readv(&state->accepted, read_iov, 2, 1000);
     if (state->readv_result.code != C_IOResultOk) {
@@ -284,11 +284,11 @@ static void iov_sendfile_server_entry(void* arg)
 
     const char write_a[] = "iov-";
     const char write_b[] = "reply";
-    struct iovec write_iov[2];
-    write_iov[0].iov_base = (void*)write_a;
-    write_iov[0].iov_len = sizeof(write_a) - 1;
-    write_iov[1].iov_base = (void*)write_b;
-    write_iov[1].iov_len = sizeof(write_b) - 1;
+    galay_iovec_t write_iov[2];
+    write_iov[0].base = (void*)write_a;
+    write_iov[0].len = sizeof(write_a) - 1;
+    write_iov[1].base = (void*)write_b;
+    write_iov[1].len = sizeof(write_b) - 1;
     state->writev_result =
         galay_kernel_tcp_socket_writev(&state->accepted, write_iov, 2, 1000);
     if (state->writev_result.code != C_IOResultOk) {
@@ -1385,9 +1385,9 @@ int main(void)
         expect_code(galay_kernel_tcp_socket_send(0, buffer, sizeof(buffer), 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_send(&invalid_socket, 0, sizeof(buffer), 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_send(&invalid_socket, buffer, 0, 0), C_IOResultInvalid) ||
-        expect_code(galay_kernel_tcp_socket_readv(0, (const struct iovec*)buffer, 1, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_readv(0, (const galay_iovec_t*)buffer, 1, 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_readv(&invalid_socket, 0, 1, 0), C_IOResultInvalid) ||
-        expect_code(galay_kernel_tcp_socket_writev(0, (const struct iovec*)buffer, 1, 0), C_IOResultInvalid) ||
+        expect_code(galay_kernel_tcp_socket_writev(0, (const galay_iovec_t*)buffer, 1, 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_writev(&invalid_socket, 0, 1, 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_sendfile(0, -1, 0, 1, 0), C_IOResultInvalid) ||
         expect_code(galay_kernel_tcp_socket_sendfile(&invalid_socket, -1, 0, 1, 0), C_IOResultInvalid) ||

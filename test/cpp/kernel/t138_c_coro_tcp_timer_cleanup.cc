@@ -74,6 +74,16 @@ GalayCoreCoroWaitOps makeWaitOps(ManualWaitState* state)
     };
 }
 
+GalayCoreTcpSocket* toCoreSocket(TcpSocket* socket)
+{
+    return reinterpret_cast<GalayCoreTcpSocket*>(socket);
+}
+
+GalayCoreIOScheduler* toCoreScheduler(Scheduler* scheduler)
+{
+    return reinterpret_cast<GalayCoreIOScheduler*>(scheduler);
+}
+
 int connectPosixClient(uint16_t port)
 {
     int fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -219,8 +229,8 @@ bool verifyTimerAddFailureLeavesSocketReusable()
     char failed_buffer = 0;
     ManualWaitState failed_wait;
     GalayCoreCoroWaitOps failed_ops = makeWaitOps(&failed_wait);
-    GalayCoreCoroIOResult failed = galay_core_coro_tcp_recv(&server,
-                                                            scheduler,
+    GalayCoreCoroIOResult failed = galay_core_coro_tcp_recv(toCoreSocket(&server),
+                                                            toCoreScheduler(scheduler),
                                                             &failed_buffer,
                                                             1,
                                                             1000,
@@ -255,8 +265,8 @@ bool verifyTimerAddFailureLeavesSocketReusable()
     char ok_buffer = 0;
     ManualWaitState ok_wait;
     GalayCoreCoroWaitOps ok_ops = makeWaitOps(&ok_wait);
-    GalayCoreCoroIOResult ok = galay_core_coro_tcp_recv(&server,
-                                                        scheduler,
+    GalayCoreCoroIOResult ok = galay_core_coro_tcp_recv(toCoreSocket(&server),
+                                                        toCoreScheduler(scheduler),
                                                         &ok_buffer,
                                                         1,
                                                         -1,

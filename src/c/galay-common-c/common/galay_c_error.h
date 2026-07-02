@@ -40,7 +40,10 @@ typedef enum galay_status_t {
     GALAY_PROTOCOL_ERROR = 4,      ///< 输入数据不符合对应协议或序列化格式。
     GALAY_UNSUPPORTED = 5,         ///< 当前平台、后端或构建选项不支持该操作。
     GALAY_IO_ERROR = 6,            ///< 底层系统调用、文件、网络或设备 I/O 失败。
-    GALAY_INTERNAL_ERROR = 7       ///< 内部状态不一致或无法归类的实现错误。
+    GALAY_INTERNAL_ERROR = 7,      ///< 内部状态不一致或无法归类的实现错误。
+    GALAY_EOF = 8,                 ///< 对端关闭、文件结束或读路径收到断开信号。
+    GALAY_TIMEOUT = 9,             ///< 等待或 I/O 操作超时。
+    GALAY_CANCELLED = 10           ///< 等待中的操作被取消。
 } galay_status_t;
 
 /**

@@ -166,6 +166,12 @@ C_IOResult io_result_from_status(galay_status_t status)
             return make_io_result(C_IOResultOk);
         case GALAY_INVALID_ARGUMENT:
             return make_io_result(C_IOResultInvalid);
+        case GALAY_EOF:
+            return make_io_result(C_IOResultEof);
+        case GALAY_TIMEOUT:
+            return make_io_result(C_IOResultTimeout);
+        case GALAY_CANCELLED:
+            return make_io_result(C_IOResultCancelled);
         case GALAY_NOT_FOUND:
         case GALAY_PROTOCOL_ERROR:
         case GALAY_UNSUPPORTED:

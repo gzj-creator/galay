@@ -11,10 +11,12 @@
 #include <cstring>
 #include <expected>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <span>
 #include <string>
+#include <sys/uio.h>
 #include <utility>
 
 namespace
@@ -145,18 +147,49 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-TcpSocket* to_cpp_socket(void* socket)
+TcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
 {
-    return static_cast<TcpSocket*>(socket);
+    return reinterpret_cast<TcpSocket*>(socket);
 }
 
-Scheduler* to_io_scheduler(void* scheduler_handle)
+Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)
 {
-    auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
+    auto* scheduler = reinterpret_cast<Scheduler*>(scheduler_handle);
     return scheduler != nullptr && scheduler->type() == galay::kernel::kIOScheduler
         ? scheduler
         : nullptr;
 }
+
+std::unique_ptr<struct iovec[]> make_platform_iovecs(const galay_iovec_t* iovecs,
+                                                     size_t count)
+{
+    auto platform_iovecs = std::unique_ptr<struct iovec[]>(
+        new (std::nothrow) struct iovec[count]);
+    if (!platform_iovecs) {
+        return nullptr;
+    }
+    for (size_t i = 0; i < count; ++i) {
+        platform_iovecs[i].iov_base = iovecs[i].base;
+        platform_iovecs[i].iov_len = iovecs[i].len;
+    }
+    return platform_iovecs;
+}
+
+struct PlatformIovecStorage {
+    PlatformIovecStorage(std::unique_ptr<struct iovec[]> iovecs, size_t count) noexcept
+        : iovecs(std::move(iovecs))
+        , count(count)
+    {
+    }
+
+    std::span<const struct iovec> span() const noexcept
+    {
+        return std::span<const struct iovec>(iovecs.get(), count);
+    }
+
+    std::unique_ptr<struct iovec[]> iovecs;
+    size_t count = 0;
+};
 
 bool valid_wait_ops(const GalayCoreCoroWaitOps* wait_ops)
 {
@@ -450,7 +483,7 @@ struct CoroAcceptOperation final: public AcceptAwaitable, public CoroTcpOperatio
                         Scheduler* scheduler,
                         void* user_data,
                         GalayCoreCoroWaitOps wait_ops,
-                        void** out_socket,
+                        GalayCoreTcpSocket** out_socket,
                         C_Host* out_peer)
         : AcceptAwaitable(controller, &m_peer)
         , CoroTcpOperationBase(scheduler, user_data, wait_ops)
@@ -519,7 +552,7 @@ private:
     void commitResult() noexcept override
     {
         if (m_out_socket != nullptr && *m_out_socket == nullptr && m_pending_socket) {
-            *m_out_socket = m_pending_socket.release();
+            *m_out_socket = reinterpret_cast<GalayCoreTcpSocket*>(m_pending_socket.release());
         }
     }
 
@@ -529,7 +562,7 @@ private:
     }
 
     galay::kernel::Host m_peer;
-    void** m_out_socket = nullptr;
+    GalayCoreTcpSocket** m_out_socket = nullptr;
     C_Host* m_out_peer = nullptr;
     std::unique_ptr<TcpSocket> m_pending_socket;
 };
@@ -654,14 +687,18 @@ private:
     }
 };
 
-struct CoroReadvOperation final: public ReadvAwaitable, public CoroTcpOperationBase {
+struct CoroReadvOperation final:
+    private PlatformIovecStorage,
+    public ReadvAwaitable,
+    public CoroTcpOperationBase {
     CoroReadvOperation(IOController* controller,
                        Scheduler* scheduler,
                        void* user_data,
                        GalayCoreCoroWaitOps wait_ops,
-                       const struct iovec* iovecs,
+                       std::unique_ptr<struct iovec[]> iovecs,
                        size_t count)
-        : ReadvAwaitable(controller, std::span<const struct iovec>(iovecs, count))
+        : PlatformIovecStorage(std::move(iovecs), count)
+        , ReadvAwaitable(controller, span())
         , CoroTcpOperationBase(scheduler, user_data, wait_ops)
     {
         m_waker = makeWaker();
@@ -696,14 +733,18 @@ private:
     }
 };
 
-struct CoroWritevOperation final: public WritevAwaitable, public CoroTcpOperationBase {
+struct CoroWritevOperation final:
+    private PlatformIovecStorage,
+    public WritevAwaitable,
+    public CoroTcpOperationBase {
     CoroWritevOperation(IOController* controller,
                         Scheduler* scheduler,
                         void* user_data,
                         GalayCoreCoroWaitOps wait_ops,
-                        const struct iovec* iovecs,
+                        std::unique_ptr<struct iovec[]> iovecs,
                         size_t count)
-        : WritevAwaitable(controller, std::span<const struct iovec>(iovecs, count))
+        : PlatformIovecStorage(std::move(iovecs), count)
+        , WritevAwaitable(controller, span())
         , CoroTcpOperationBase(scheduler, user_data, wait_ops)
     {
         m_waker = makeWaker();
@@ -969,9 +1010,9 @@ C_IOResult perform_registered_io(IOController* controller,
 
 extern "C" {
 
-GalayCoreCoroIOResult galay_core_coro_tcp_accept(void* listener_socket,
-                                                 void* scheduler_handle,
-                                                 void** out_socket,
+GalayCoreCoroIOResult galay_core_coro_tcp_accept(GalayCoreTcpSocket* listener_socket,
+                                                 GalayCoreIOScheduler* scheduler_handle,
+                                                 GalayCoreTcpSocket** out_socket,
                                                  GalayCoreCoroHost* out_peer,
                                                  int64_t timeout_ms,
                                                  void* user_data,
@@ -1000,8 +1041,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_accept(void* listener_socket,
                                  static_cast<AcceptAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_tcp_connect(void* socket_handle,
-                                                  void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_tcp_connect(GalayCoreTcpSocket* socket_handle,
+                                                  GalayCoreIOScheduler* scheduler_handle,
                                                   const GalayCoreCoroHost* host,
                                                   int64_t timeout_ms,
                                                   void* user_data,
@@ -1038,8 +1079,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_connect(void* socket_handle,
                                  static_cast<ConnectAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_tcp_recv(void* socket_handle,
-                                               void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_tcp_recv(GalayCoreTcpSocket* socket_handle,
+                                               GalayCoreIOScheduler* scheduler_handle,
                                                char* buffer,
                                                size_t length,
                                                int64_t timeout_ms,
@@ -1069,8 +1110,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_recv(void* socket_handle,
                                  static_cast<RecvAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_tcp_send(void* socket_handle,
-                                               void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_tcp_send(GalayCoreTcpSocket* socket_handle,
+                                               GalayCoreIOScheduler* scheduler_handle,
                                                const char* buffer,
                                                size_t length,
                                                int64_t timeout_ms,
@@ -1100,9 +1141,9 @@ GalayCoreCoroIOResult galay_core_coro_tcp_send(void* socket_handle,
                                  static_cast<SendAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_tcp_readv(void* socket_handle,
-                                                void* scheduler_handle,
-                                                const struct iovec* iovecs,
+GalayCoreCoroIOResult galay_core_coro_tcp_readv(GalayCoreTcpSocket* socket_handle,
+                                                GalayCoreIOScheduler* scheduler_handle,
+                                                const galay_iovec_t* iovecs,
                                                 size_t count,
                                                 int64_t timeout_ms,
                                                 void* user_data,
@@ -1121,8 +1162,12 @@ GalayCoreCoroIOResult galay_core_coro_tcp_readv(void* socket_handle,
     if (user_data == nullptr) {
         return make_result(C_IOResultInvalid);
     }
+    auto platform_iovecs = make_platform_iovecs(iovecs, count);
+    if (!platform_iovecs) {
+        return make_result(C_IOResultError, ENOMEM);
+    }
     CoroReadvOperation operation(
-        socket->controller(), scheduler, user_data, *wait_ops, iovecs, count);
+        socket->controller(), scheduler, user_data, *wait_ops, std::move(platform_iovecs), count);
     return perform_registered_io(socket->controller(),
                                  scheduler,
                                  READV,
@@ -1131,9 +1176,9 @@ GalayCoreCoroIOResult galay_core_coro_tcp_readv(void* socket_handle,
                                  static_cast<ReadvAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_tcp_writev(void* socket_handle,
-                                                 void* scheduler_handle,
-                                                 const struct iovec* iovecs,
+GalayCoreCoroIOResult galay_core_coro_tcp_writev(GalayCoreTcpSocket* socket_handle,
+                                                 GalayCoreIOScheduler* scheduler_handle,
+                                                 const galay_iovec_t* iovecs,
                                                  size_t count,
                                                  int64_t timeout_ms,
                                                  void* user_data,
@@ -1152,8 +1197,12 @@ GalayCoreCoroIOResult galay_core_coro_tcp_writev(void* socket_handle,
     if (user_data == nullptr) {
         return make_result(C_IOResultInvalid);
     }
+    auto platform_iovecs = make_platform_iovecs(iovecs, count);
+    if (!platform_iovecs) {
+        return make_result(C_IOResultError, ENOMEM);
+    }
     CoroWritevOperation operation(
-        socket->controller(), scheduler, user_data, *wait_ops, iovecs, count);
+        socket->controller(), scheduler, user_data, *wait_ops, std::move(platform_iovecs), count);
     return perform_registered_io(socket->controller(),
                                  scheduler,
                                  WRITEV,
@@ -1162,8 +1211,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_writev(void* socket_handle,
                                  static_cast<WritevAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(void* socket_handle,
-                                                   void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(GalayCoreTcpSocket* socket_handle,
+                                                   GalayCoreIOScheduler* scheduler_handle,
                                                    int file_fd,
                                                    int64_t offset,
                                                    size_t count,
@@ -1199,8 +1248,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(void* socket_handle,
                                  static_cast<SendFileAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_tcp_close(void* socket_handle,
-                                                void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_tcp_close(GalayCoreTcpSocket* socket_handle,
+                                                GalayCoreIOScheduler* scheduler_handle,
                                                 int64_t)
 {
     auto* socket = to_cpp_socket(socket_handle);

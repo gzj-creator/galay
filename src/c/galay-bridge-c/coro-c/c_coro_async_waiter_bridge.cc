@@ -88,6 +88,16 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, sys_errno);
 }
 
+AsyncWaiter<void>* to_cpp_waiter(GalayCoreAsyncWaiter* waiter)
+{
+    return reinterpret_cast<AsyncWaiter<void>*>(waiter);
+}
+
+Scheduler* to_scheduler(GalayCoreIOScheduler* scheduler_handle)
+{
+    return reinterpret_cast<Scheduler*>(scheduler_handle);
+}
+
 struct CoroAsyncWaiterOperation {
     CoroAsyncWaiterOperation(AsyncWaiter<void>* waiter,
                              Scheduler* scheduler,
@@ -225,14 +235,14 @@ private:
 extern "C" {
 
 GalayCoreCoroIOResult galay_core_coro_async_waiter_wait(
-    void* waiter_handle,
-    void* scheduler_handle,
+    GalayCoreAsyncWaiter* waiter_handle,
+    GalayCoreIOScheduler* scheduler_handle,
     int64_t timeout_ms,
     void* user_data,
     const GalayCoreCoroWaitOps* wait_ops)
 {
-    auto* waiter = static_cast<AsyncWaiter<void>*>(waiter_handle);
-    auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
+    auto* waiter = to_cpp_waiter(waiter_handle);
+    auto* scheduler = to_scheduler(scheduler_handle);
     if (waiter == nullptr || scheduler == nullptr || user_data == nullptr ||
         !timeout_fits_chrono(timeout_ms) || !valid_wait_ops(wait_ops)) {
         return make_result(C_IOResultInvalid);

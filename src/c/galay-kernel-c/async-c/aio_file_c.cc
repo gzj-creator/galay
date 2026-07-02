@@ -143,9 +143,15 @@ C_IOResult from_core_result(GalayCoreCoroIOResult result)
     };
 }
 
-void* current_io_scheduler()
+GalayCoreIOScheduler* current_io_scheduler()
 {
-    return static_cast<void*>(galay::kernel::coro_c::currentTaskOwnerScheduler());
+    return reinterpret_cast<GalayCoreIOScheduler*>(
+        galay::kernel::coro_c::currentTaskOwnerScheduler());
+}
+
+GalayCoreAioFile* to_core_file(void* file)
+{
+    return reinterpret_cast<GalayCoreAioFile*>(file);
 }
 
 struct WaitRequestScope {
@@ -557,7 +563,7 @@ C_IOResult galay_kernel_aio_file_commit(
     {
         return make_result(C_IOResultInvalid);
     }
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (scheduler == nullptr) {
         return make_result(C_IOResultInvalid);
     }
@@ -572,7 +578,7 @@ C_IOResult galay_kernel_aio_file_commit(
     *out_count = 0;
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_aio_file_commit(c_file->file,
+            return galay_core_coro_aio_file_commit(to_core_file(c_file->file),
                                                    scheduler,
                                                    results,
                                                    result_capacity,

@@ -81,14 +81,14 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-AsyncFile* to_cpp_file(void* file)
+AsyncFile* to_cpp_file(GalayCoreAsyncFile* file)
 {
-    return static_cast<AsyncFile*>(file);
+    return reinterpret_cast<AsyncFile*>(file);
 }
 
-Scheduler* to_io_scheduler(void* scheduler_handle)
+Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)
 {
-    auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
+    auto* scheduler = reinterpret_cast<Scheduler*>(scheduler_handle);
     return scheduler != nullptr && scheduler->type() == galay::kernel::kIOScheduler
         ? scheduler
         : nullptr;
@@ -474,8 +474,8 @@ C_IOResult perform_registered_io(IOController* controller,
 
 extern "C" {
 
-GalayCoreCoroIOResult galay_core_coro_async_file_read(void* file_handle [[maybe_unused]],
-                                                      void* scheduler_handle [[maybe_unused]],
+GalayCoreCoroIOResult galay_core_coro_async_file_read(GalayCoreAsyncFile* file_handle [[maybe_unused]],
+                                                      GalayCoreIOScheduler* scheduler_handle [[maybe_unused]],
                                                       char* buffer [[maybe_unused]],
                                                       size_t length [[maybe_unused]],
                                                       int64_t offset [[maybe_unused]],
@@ -515,8 +515,8 @@ GalayCoreCoroIOResult galay_core_coro_async_file_read(void* file_handle [[maybe_
 #endif
 }
 
-GalayCoreCoroIOResult galay_core_coro_async_file_write(void* file_handle [[maybe_unused]],
-                                                       void* scheduler_handle [[maybe_unused]],
+GalayCoreCoroIOResult galay_core_coro_async_file_write(GalayCoreAsyncFile* file_handle [[maybe_unused]],
+                                                       GalayCoreIOScheduler* scheduler_handle [[maybe_unused]],
                                                        const char* buffer [[maybe_unused]],
                                                        size_t length [[maybe_unused]],
                                                        int64_t offset [[maybe_unused]],
@@ -556,8 +556,8 @@ GalayCoreCoroIOResult galay_core_coro_async_file_write(void* file_handle [[maybe
 #endif
 }
 
-GalayCoreCoroIOResult galay_core_coro_async_file_close(void* file_handle,
-                                                       void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_async_file_close(GalayCoreAsyncFile* file_handle,
+                                                       GalayCoreIOScheduler* scheduler_handle,
                                                        int64_t)
 {
 #if defined(USE_KQUEUE) || defined(USE_IOURING)

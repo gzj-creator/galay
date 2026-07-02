@@ -166,9 +166,15 @@ C_IOResult from_core_result(GalayCoreCoroIOResult result)
     };
 }
 
-void* current_io_scheduler()
+GalayCoreIOScheduler* current_io_scheduler()
 {
-    return static_cast<void*>(galay::kernel::coro_c::currentTaskOwnerScheduler());
+    return reinterpret_cast<GalayCoreIOScheduler*>(
+        galay::kernel::coro_c::currentTaskOwnerScheduler());
+}
+
+GalayCoreAsyncFile* to_core_file(void* file)
+{
+    return reinterpret_cast<GalayCoreAsyncFile*>(file);
 }
 
 struct WaitRequestScope {
@@ -410,7 +416,7 @@ C_IOResult galay_kernel_async_file_read(
         return make_result(C_IOResultInvalid);
     }
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (scheduler == nullptr) {
         return make_result(C_IOResultInvalid);
     }
@@ -423,7 +429,7 @@ C_IOResult galay_kernel_async_file_read(
     }
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_async_file_read(file->file,
+            return galay_core_coro_async_file_read(to_core_file(file->file),
                                                    scheduler,
                                                    buffer,
                                                    length,
@@ -450,7 +456,7 @@ C_IOResult galay_kernel_async_file_write(
         return make_result(C_IOResultInvalid);
     }
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (scheduler == nullptr) {
         return make_result(C_IOResultInvalid);
     }
@@ -463,7 +469,7 @@ C_IOResult galay_kernel_async_file_write(
     }
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_async_file_write(file->file,
+            return galay_core_coro_async_file_write(to_core_file(file->file),
                                                     scheduler,
                                                     buffer,
                                                     length,
@@ -485,12 +491,12 @@ C_IOResult galay_kernel_async_file_close(
         return make_result(C_IOResultInvalid);
     }
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (scheduler == nullptr) {
         return make_result(C_IOResultInvalid);
     }
     return from_core_result(
-        galay_core_coro_async_file_close(file->file, scheduler, timeout_ms));
+        galay_core_coro_async_file_close(to_core_file(file->file), scheduler, timeout_ms));
 #else
     return make_result(C_IOResultError, ENOTSUP);
 #endif

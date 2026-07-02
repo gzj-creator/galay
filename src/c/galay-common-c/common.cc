@@ -36,6 +36,12 @@ const char* galay_status_string(galay_status_t status)
             return "io error";
         case GALAY_INTERNAL_ERROR:
             return "internal error";
+        case GALAY_EOF:
+            return "eof";
+        case GALAY_TIMEOUT:
+            return "timeout";
+        case GALAY_CANCELLED:
+            return "cancelled";
     }
     return "unknown";
 }

@@ -32,8 +32,8 @@ extern "C" {
  * @note buffer/from/user_data 必须在函数返回或清理完成前保持有效。close 可取消同一
  * controller 上挂起的 direct C coroutine recvfrom。
  */
-GalayCoreCoroIOResult galay_core_coro_udp_recvfrom(void* socket,
-                                                   void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_udp_recvfrom(GalayCoreUdpSocket* socket,
+                                                   GalayCoreIOScheduler* scheduler,
                                                    char* buffer,
                                                    size_t length,
                                                    GalayCoreCoroHost* from,
@@ -57,8 +57,8 @@ GalayCoreCoroIOResult galay_core_coro_udp_recvfrom(void* socket,
  *
  * @note buffer/to/user_data 必须在函数返回前保持有效。
  */
-GalayCoreCoroIOResult galay_core_coro_udp_sendto(void* socket,
-                                                 void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_udp_sendto(GalayCoreUdpSocket* socket,
+                                                 GalayCoreIOScheduler* scheduler,
                                                  const char* buffer,
                                                  size_t length,
                                                  const GalayCoreCoroHost* to,
@@ -78,8 +78,8 @@ GalayCoreCoroIOResult galay_core_coro_udp_sendto(void* socket,
  * @note close 会取消同一 controller 上挂起的 direct C coroutine recvfrom/sendto。
  * 不允许在存在非 direct C coroutine awaitable 时关闭。
  */
-GalayCoreCoroIOResult galay_core_coro_udp_close(void* socket,
-                                                void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_udp_close(GalayCoreUdpSocket* socket,
+                                                GalayCoreIOScheduler* scheduler,
                                                 int64_t timeout_ms);
 
 #ifdef __cplusplus

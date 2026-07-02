@@ -35,8 +35,8 @@ extern "C" {
  * @note results、out_count 和 user_data 必须在函数返回或清理完成前保持有效。
  * 函数开始提交前会将 *out_count 置 0。
  */
-GalayCoreCoroIOResult galay_core_coro_aio_file_commit(void* file,
-                                                      void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_aio_file_commit(GalayCoreAioFile* file,
+                                                      GalayCoreIOScheduler* scheduler,
                                                       ssize_t* results,
                                                       size_t result_capacity,
                                                       size_t* out_count,

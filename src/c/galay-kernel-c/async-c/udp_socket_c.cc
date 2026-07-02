@@ -182,9 +182,15 @@ GalayCoreCoroHost to_core_host(const C_Host& host)
     return out;
 }
 
-void* current_io_scheduler()
+GalayCoreIOScheduler* current_io_scheduler()
 {
-    return static_cast<void*>(galay::kernel::coro_c::currentTaskOwnerScheduler());
+    return reinterpret_cast<GalayCoreIOScheduler*>(
+        galay::kernel::coro_c::currentTaskOwnerScheduler());
+}
+
+GalayCoreUdpSocket* to_core_socket(void* socket)
+{
+    return reinterpret_cast<GalayCoreUdpSocket*>(socket);
 }
 
 struct WaitRequestScope {
@@ -400,7 +406,7 @@ C_IOResult galay_kernel_udp_socket_recvfrom(
     C_Host* from,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         (buffer == nullptr && length != 0) ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
@@ -412,7 +418,7 @@ C_IOResult galay_kernel_udp_socket_recvfrom(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_udp_recvfrom(socket->socket,
+            return galay_core_coro_udp_recvfrom(to_core_socket(socket->socket),
                                                 scheduler,
                                                 buffer,
                                                 length,
@@ -430,7 +436,7 @@ C_IOResult galay_kernel_udp_socket_sendto(
     const C_Host* to,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         (buffer == nullptr && length != 0) ||
         to == nullptr || !is_valid_c_ip_type(to->type) ||
@@ -448,7 +454,7 @@ C_IOResult galay_kernel_udp_socket_sendto(
     GalayCoreCoroHost core_to = to_core_host(*to);
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_udp_sendto(socket->socket,
+            return galay_core_coro_udp_sendto(to_core_socket(socket->socket),
                                               scheduler,
                                               buffer,
                                               length,
@@ -463,13 +469,13 @@ C_IOResult galay_kernel_udp_socket_close(
     galay_kernel_udp_socket_t* socket,
     int64_t timeout_ms)
 {
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (socket == nullptr || socket->socket == nullptr ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
     }
     return from_core_result(
-        galay_core_coro_udp_close(socket->socket, scheduler, timeout_ms));
+        galay_core_coro_udp_close(to_core_socket(socket->socket), scheduler, timeout_ms));
 }
 
 } // extern "C"

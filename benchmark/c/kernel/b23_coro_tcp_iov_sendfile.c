@@ -109,11 +109,11 @@ static void server_entry(void* arg)
     }
 
     for (int i = 0; i < server->iterations; ++i) {
-        struct iovec read_iov[2];
-        read_iov[0].iov_base = server->read_a;
-        read_iov[0].iov_len = 3;
-        read_iov[1].iov_base = server->read_b;
-        read_iov[1].iov_len = 4;
+        galay_iovec_t read_iov[2];
+        read_iov[0].base = server->read_a;
+        read_iov[0].len = 3;
+        read_iov[1].base = server->read_b;
+        read_iov[1].len = 4;
         C_IOResult read_result =
             galay_kernel_tcp_socket_readv(&server->accepted, read_iov, 2, 1000);
         if (read_result.code != C_IOResultOk || read_result.bytes != 7) {
@@ -123,11 +123,11 @@ static void server_entry(void* arg)
 
         const char write_a[] = "iov-";
         const char write_b[] = "reply";
-        struct iovec write_iov[2];
-        write_iov[0].iov_base = (void*)write_a;
-        write_iov[0].iov_len = sizeof(write_a) - 1;
-        write_iov[1].iov_base = (void*)write_b;
-        write_iov[1].iov_len = sizeof(write_b) - 1;
+        galay_iovec_t write_iov[2];
+        write_iov[0].base = (void*)write_a;
+        write_iov[0].len = sizeof(write_a) - 1;
+        write_iov[1].base = (void*)write_b;
+        write_iov[1].len = sizeof(write_b) - 1;
         C_IOResult write_result =
             galay_kernel_tcp_socket_writev(&server->accepted, write_iov, 2, 1000);
         if (write_result.code != C_IOResultOk || write_result.bytes != 9) {

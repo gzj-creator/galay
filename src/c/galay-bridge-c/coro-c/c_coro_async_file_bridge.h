@@ -32,8 +32,8 @@ extern "C" {
  *
  * @note buffer/user_data 必须在函数返回或清理完成前保持有效。
  */
-GalayCoreCoroIOResult galay_core_coro_async_file_read(void* file,
-                                                      void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_async_file_read(GalayCoreAsyncFile* file,
+                                                      GalayCoreIOScheduler* scheduler,
                                                       char* buffer,
                                                       size_t length,
                                                       int64_t offset,
@@ -58,8 +58,8 @@ GalayCoreCoroIOResult galay_core_coro_async_file_read(void* file,
  *
  * @note buffer/user_data 必须在函数返回前保持有效。调用方需要处理短写。
  */
-GalayCoreCoroIOResult galay_core_coro_async_file_write(void* file,
-                                                       void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_async_file_write(GalayCoreAsyncFile* file,
+                                                       GalayCoreIOScheduler* scheduler,
                                                        const char* buffer,
                                                        size_t length,
                                                        int64_t offset,
@@ -78,8 +78,8 @@ GalayCoreCoroIOResult galay_core_coro_async_file_write(void* file,
  *
  * @note close 不释放 AsyncFile 对象，调用方仍负责销毁外层句柄。
  */
-GalayCoreCoroIOResult galay_core_coro_async_file_close(void* file,
-                                                       void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_async_file_close(GalayCoreAsyncFile* file,
+                                                       GalayCoreIOScheduler* scheduler,
                                                        int64_t timeout_ms);
 
 #ifdef __cplusplus

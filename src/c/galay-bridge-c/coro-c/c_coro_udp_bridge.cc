@@ -132,14 +132,14 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-UdpSocket* to_cpp_socket(void* socket)
+UdpSocket* to_cpp_socket(GalayCoreUdpSocket* socket)
 {
-    return static_cast<UdpSocket*>(socket);
+    return reinterpret_cast<UdpSocket*>(socket);
 }
 
-Scheduler* to_io_scheduler(void* scheduler_handle)
+Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)
 {
-    auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
+    auto* scheduler = reinterpret_cast<Scheduler*>(scheduler_handle);
     return scheduler != nullptr && scheduler->type() == galay::kernel::kIOScheduler
         ? scheduler
         : nullptr;
@@ -643,8 +643,8 @@ C_IOResult perform_registered_io(IOController* controller,
 
 extern "C" {
 
-GalayCoreCoroIOResult galay_core_coro_udp_recvfrom(void* socket_handle,
-                                                   void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_udp_recvfrom(GalayCoreUdpSocket* socket_handle,
+                                                   GalayCoreIOScheduler* scheduler_handle,
                                                    char* buffer,
                                                    size_t length,
                                                    GalayCoreCoroHost* from,
@@ -680,8 +680,8 @@ GalayCoreCoroIOResult galay_core_coro_udp_recvfrom(void* socket_handle,
                                  static_cast<RecvFromAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_udp_sendto(void* socket_handle,
-                                                 void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_udp_sendto(GalayCoreUdpSocket* socket_handle,
+                                                 GalayCoreIOScheduler* scheduler_handle,
                                                  const char* buffer,
                                                  size_t length,
                                                  const GalayCoreCoroHost* to,
@@ -722,8 +722,8 @@ GalayCoreCoroIOResult galay_core_coro_udp_sendto(void* socket_handle,
                                  static_cast<SendToAwaitable*>(&operation));
 }
 
-GalayCoreCoroIOResult galay_core_coro_udp_close(void* socket_handle,
-                                                void* scheduler_handle,
+GalayCoreCoroIOResult galay_core_coro_udp_close(GalayCoreUdpSocket* socket_handle,
+                                                GalayCoreIOScheduler* scheduler_handle,
                                                 int64_t)
 {
     auto* socket = to_cpp_socket(socket_handle);

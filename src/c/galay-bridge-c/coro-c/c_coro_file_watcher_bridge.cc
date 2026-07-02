@@ -83,14 +83,14 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-FileWatcher* to_cpp_watcher(void* watcher)
+FileWatcher* to_cpp_watcher(GalayCoreFileWatcher* watcher)
 {
-    return static_cast<FileWatcher*>(watcher);
+    return reinterpret_cast<FileWatcher*>(watcher);
 }
 
-Scheduler* to_io_scheduler(void* scheduler_handle)
+Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)
 {
-    auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
+    auto* scheduler = reinterpret_cast<Scheduler*>(scheduler_handle);
     return scheduler != nullptr && scheduler->type() == galay::kernel::kIOScheduler
         ? scheduler
         : nullptr;
@@ -426,8 +426,8 @@ C_IOResult perform_registered_watch(IOController* controller,
 extern "C" {
 
 GalayCoreCoroIOResult galay_core_coro_file_watcher_watch(
-    void* watcher_handle,
-    void* scheduler_handle,
+    GalayCoreFileWatcher* watcher_handle,
+    GalayCoreIOScheduler* scheduler_handle,
     GalayCoreCoroFileWatchResult* out_result,
     int64_t timeout_ms,
     void* user_data,

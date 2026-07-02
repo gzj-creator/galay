@@ -31,8 +31,8 @@ extern "C" {
  * 不应阻塞 scheduler 线程。
  */
 GalayCoreCoroIOResult galay_core_coro_async_waiter_wait(
-    void* waiter,
-    void* scheduler,
+    GalayCoreAsyncWaiter* waiter,
+    GalayCoreIOScheduler* scheduler,
     int64_t timeout_ms,
     void* user_data,
     const GalayCoreCoroWaitOps* wait_ops);

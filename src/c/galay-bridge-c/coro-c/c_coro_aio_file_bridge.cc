@@ -67,14 +67,14 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-AioFile* to_cpp_file(void* file)
+AioFile* to_cpp_file(GalayCoreAioFile* file)
 {
-    return static_cast<AioFile*>(file);
+    return reinterpret_cast<AioFile*>(file);
 }
 
-Scheduler* to_io_scheduler(void* scheduler_handle)
+Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)
 {
-    auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
+    auto* scheduler = reinterpret_cast<Scheduler*>(scheduler_handle);
     return scheduler != nullptr && scheduler->type() == galay::kernel::kIOScheduler
         ? scheduler
         : nullptr;
@@ -353,8 +353,8 @@ private:
 
 extern "C" {
 
-GalayCoreCoroIOResult galay_core_coro_aio_file_commit(void* file_handle [[maybe_unused]],
-                                                      void* scheduler_handle [[maybe_unused]],
+GalayCoreCoroIOResult galay_core_coro_aio_file_commit(GalayCoreAioFile* file_handle [[maybe_unused]],
+                                                      GalayCoreIOScheduler* scheduler_handle [[maybe_unused]],
                                                       ssize_t* results [[maybe_unused]],
                                                       size_t result_capacity [[maybe_unused]],
                                                       size_t* out_count [[maybe_unused]],

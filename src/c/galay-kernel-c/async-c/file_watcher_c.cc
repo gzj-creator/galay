@@ -135,9 +135,15 @@ C_IOResult from_core_result(GalayCoreCoroIOResult result)
     };
 }
 
-void* current_io_scheduler()
+GalayCoreIOScheduler* current_io_scheduler()
 {
-    return static_cast<void*>(galay::kernel::coro_c::currentTaskOwnerScheduler());
+    return reinterpret_cast<GalayCoreIOScheduler*>(
+        galay::kernel::coro_c::currentTaskOwnerScheduler());
+}
+
+GalayCoreFileWatcher* to_core_watcher(void* watcher)
+{
+    return reinterpret_cast<GalayCoreFileWatcher*>(watcher);
 }
 
 struct WaitRequestScope {
@@ -416,7 +422,7 @@ C_IOResult galay_kernel_file_watcher_watch(
     int64_t timeout_ms [[maybe_unused]])
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
-    void* scheduler = current_io_scheduler();
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
     if (c_watcher == nullptr || c_watcher->watcher == nullptr ||
         out_result == nullptr || scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
@@ -431,7 +437,7 @@ C_IOResult galay_kernel_file_watcher_watch(
     GalayCoreCoroFileWatchResult core_result{};
     C_IOResult result = submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_file_watcher_watch(c_watcher->watcher,
+            return galay_core_coro_file_watcher_watch(to_core_watcher(c_watcher->watcher),
                                                       scheduler,
                                                       &core_result,
                                                       timeout_ms,

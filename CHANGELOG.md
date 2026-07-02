@@ -13,6 +13,7 @@
 
 ### Added
 
+- 新增 C ABI 封装约定落地：`C_IOResultCode` 诊断字符串和 `galay_status_t` 映射 helper，补齐 EOF/Timeout/Cancelled 通用状态码，并新增 `galay_iovec_t` 作为 public C ABI scatter/gather buffer 类型。
 - 新增 Linux examples/benchmarks 全量执行矩阵脚本 `scripts/verify_linux_exec_matrix.py`，支持按 build root 扫描可执行文件、区分 PASS/SKIP/LONG_RUNNING/EXTERNAL_DEP/NEEDS_PEER/FAIL/MISSING，并对已知 C/S 架构测试按先启动 server、再运行 client、最后清理 server 的顺序验证。
 - 新增 `consistent_hash.hpp` 无阻塞锁源码边界测试与 lookup benchmark，锁定一致性哈希实现不再引入 `std::mutex` / `std::shared_mutex` 等会阻塞协程调度线程的同步原语。
 - 新增 Redis C standalone direct coroutine async client 最小闭环：`galay_redis_client_connect`、`galay_redis_client_command_async` 与 `galay_redis_client_close`，通过本地 mock Redis loopback 覆盖 PING/PONG，并补齐对应 C test、example 与 smoke benchmark。
@@ -42,6 +43,7 @@
 
 ### Changed
 
+- C coroutine bridge 入口从裸 `void*` 收敛为 `GalayCore*` 具名 opaque C 类型，TCP readv/writev public ABI 改用 `galay_iovec_t` 并在实现内部转换为平台 `struct iovec`。
 - 完成 `docs/cpp-modules-optimization.md` 中一轮 C++ 模块低风险优化落地：覆盖 utils Base64、SSL/WS/HTTP/HTTP2 hot path、Redis/MySQL/Mongo/etcd/MCP 协议解析、tracing traceparent/sampler、kernel timer drain 与 RPC pool endpoint key，并补齐对应 CTest 与 benchmark 覆盖；跨行为连接池真复用、Mongo TLS URI、etcd HTTPS 等高风险项保留为单独设计任务。
 - `ConsistentHash` 从 `std::shared_mutex` 读写锁改为 copy-on-write 原子快照发布与 reader-count retired snapshot 回收，读路径只做原子快照加载和原子节点状态更新，避免 coroutine 调度线程被阻塞锁卡住。
 - Linux examples/benchmarks smoke 验证统一以短 workload 运行重型 benchmark，并将 C stackful coroutine 边界 CTest 配置为串行运行，降低 4 核 Linux 主机上并发 CTest 对短 join/cancel 窗口的干扰。
@@ -108,7 +110,6 @@
 - 加固 C++ `Host` 字符串构造与 TCP/UDP bind 边界：非法 IP 或协议类型会被标记为 invalid，bind 在系统调用前返回 `IOError(kParamInvalid)`，C ABI bind 将其映射为 `ParameterInvalid`。
 
 ### Docs
-
 - 补齐 C public ABI 头文件 Doxygen 注释，覆盖 common/utils/kernel/bridge、HTTP/WS/HTTP2、Redis/MySQL/Mongo、Etcd/MCP/RPC、SSL/tracing 等模块的 ownership/lifetime、buffer 借用、错误码、coroutine 挂起、timeout/cancel/close 与线程/协程安全契约；本次仅更新头文件注释，不删除 public C ABI。
 - 补齐 C async API 模块 README 与 public header 对齐说明，覆盖 HTTP request/response parser/builder、header helper、route/session ownership、WS/HTTP2/Redis/Mongo/MCP/RPC/kernel/tracing helper family，以及 MySQL/SSL 新增认证与 ALPN/session 语义。
 - 新增 `docs/文档审查报告.md`，记录 docs 目录 354 个 Markdown 文件的结构、链接、命名和完整性审查结果及修复优先级。

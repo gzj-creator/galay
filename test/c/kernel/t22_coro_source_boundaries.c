@@ -330,7 +330,7 @@ static int require_direct_tcp_c_api_uses_core_bridge(void)
         "RecvAwaitable",
         "SendAwaitable",
         "IOController",
-        "IOScheduler",
+        "galay::kernel::IOScheduler",
         "registerIOSchedulerEvent",
         "registerIOSchedulerClose",
         "m_awaitable",

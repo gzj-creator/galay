@@ -110,6 +110,10 @@ galay_etcd_error_code_t error_from_status(galay_status_t status)
             return GALAY_ETCD_ERROR_INVALID_ARGUMENT;
         case GALAY_PROTOCOL_ERROR:
             return GALAY_ETCD_ERROR_PROTOCOL;
+        case GALAY_CANCELLED:
+            return GALAY_ETCD_ERROR_CANCELLED;
+        case GALAY_EOF:
+        case GALAY_TIMEOUT:
         case GALAY_IO_ERROR:
             return GALAY_ETCD_ERROR_IO;
         case GALAY_NOT_FOUND:

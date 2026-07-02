@@ -87,6 +87,16 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, sys_errno);
 }
 
+AsyncMutex* to_cpp_mutex(GalayCoreAsyncMutex* mutex)
+{
+    return reinterpret_cast<AsyncMutex*>(mutex);
+}
+
+Scheduler* to_scheduler(GalayCoreIOScheduler* scheduler_handle)
+{
+    return reinterpret_cast<Scheduler*>(scheduler_handle);
+}
+
 struct CoroAsyncMutexWakeState {
     CoroAsyncMutexWakeState(AsyncMutex* mutex,
                             Scheduler* scheduler,
@@ -286,14 +296,14 @@ private:
 extern "C" {
 
 GalayCoreCoroIOResult galay_core_coro_async_mutex_lock(
-    void* mutex_handle,
-    void* scheduler_handle,
+    GalayCoreAsyncMutex* mutex_handle,
+    GalayCoreIOScheduler* scheduler_handle,
     int64_t timeout_ms,
     void* user_data,
     const GalayCoreCoroWaitOps* wait_ops)
 {
-    auto* mutex = static_cast<AsyncMutex*>(mutex_handle);
-    auto* scheduler = static_cast<Scheduler*>(scheduler_handle);
+    auto* mutex = to_cpp_mutex(mutex_handle);
+    auto* scheduler = to_scheduler(scheduler_handle);
     if (mutex == nullptr || scheduler == nullptr || user_data == nullptr ||
         !timeout_fits_chrono(timeout_ms) || !valid_wait_ops(wait_ops)) {
         return make_result(C_IOResultInvalid);

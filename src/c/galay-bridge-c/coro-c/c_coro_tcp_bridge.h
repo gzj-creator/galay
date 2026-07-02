@@ -1,9 +1,10 @@
 #ifndef GALAY_KERNEL_CORE_C_CORO_TCP_BRIDGE_H
 #define GALAY_KERNEL_CORE_C_CORO_TCP_BRIDGE_H
 
+#include <galay/c/galay-common-c/common/galay_c_iovec.h>
+
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/uio.h>
 
 /**
  * @file c_coro_tcp_bridge.h
@@ -24,6 +25,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct GalayCoreTcpSocket GalayCoreTcpSocket;
+typedef struct GalayCoreUdpSocket GalayCoreUdpSocket;
+typedef struct GalayCoreAsyncFile GalayCoreAsyncFile;
+typedef struct GalayCoreAioFile GalayCoreAioFile;
+typedef struct GalayCoreFileWatcher GalayCoreFileWatcher;
+typedef struct GalayCoreAsyncMutex GalayCoreAsyncMutex;
+typedef struct GalayCoreAsyncWaiter GalayCoreAsyncWaiter;
+typedef struct GalayCoreIOScheduler GalayCoreIOScheduler;
 
 /**
  * @brief bridge 层 direct coroutine I/O 结果码。
@@ -122,7 +132,10 @@ typedef GalayCoreCoroIOResult (*GalayCoreCoroReleaseUserDataFn)(void* user_data)
  * user_data。
  *
  * @note wait、complete_user_data、release_user_data 必须全部非 NULL；ctx 可为 NULL，
- * 由调用方自定义。
+ * 由调用方自定义。允许调用线程：wait 只能由当前 C coroutine 所属 owner IO
+ * scheduler 线程调用；complete_user_data/release_user_data 可由 IO scheduler 完成路径
+ * 或清理路径调用。可重入：同一 user_data token 不可并发重入，跨 token 调用必须由
+ * runtime 自行保证线程安全。
  */
 typedef struct GalayCoreCoroWaitOps {
     GalayCoreCoroWaitFn wait;                              ///< 挂起/等待当前 C coroutine。
@@ -147,9 +160,9 @@ typedef struct GalayCoreCoroWaitOps {
  * @note out_socket/out_peer/user_data 必须在操作完成或被清理前保持有效。close 可取消
  * 同一 controller 上挂起的 direct C coroutine accept。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_accept(void* listener_socket,
-                                                 void* scheduler,
-                                                 void** out_socket,
+GalayCoreCoroIOResult galay_core_coro_tcp_accept(GalayCoreTcpSocket* listener_socket,
+                                                 GalayCoreIOScheduler* scheduler,
+                                                 GalayCoreTcpSocket** out_socket,
                                                  GalayCoreCoroHost* out_peer,
                                                  int64_t timeout_ms,
                                                  void* user_data,
@@ -170,8 +183,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_accept(void* listener_socket,
  * @note socket 会在提交前被设置为非阻塞模式。host 和 user_data 必须在函数返回前
  * 保持有效。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_connect(void* socket,
-                                                  void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_tcp_connect(GalayCoreTcpSocket* socket,
+                                                  GalayCoreIOScheduler* scheduler,
                                                   const GalayCoreCoroHost* host,
                                                   int64_t timeout_ms,
                                                   void* user_data,
@@ -192,8 +205,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_connect(void* socket,
  *
  * @note buffer 必须在函数返回前保持有效且不被并发写入。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_recv(void* socket,
-                                               void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_tcp_recv(GalayCoreTcpSocket* socket,
+                                               GalayCoreIOScheduler* scheduler,
                                                char* buffer,
                                                size_t length,
                                                int64_t timeout_ms,
@@ -214,8 +227,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_recv(void* socket,
  *
  * @note buffer 必须在函数返回前保持有效。调用方需要处理短写。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_send(void* socket,
-                                               void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_tcp_send(GalayCoreTcpSocket* socket,
+                                               GalayCoreIOScheduler* scheduler,
                                                const char* buffer,
                                                size_t length,
                                                int64_t timeout_ms,
@@ -227,18 +240,18 @@ GalayCoreCoroIOResult galay_core_coro_tcp_send(void* socket,
  *
  * @param socket 内部 TcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
- * @param iovecs 输出 iovec 数组，必须非 NULL。
+ * @param iovecs 输出 galay_iovec_t 数组，必须非 NULL。
  * @param count iovec 数量，必须大于 0。
  * @param timeout_ms 负数无限等待，0 立即返回 Timeout，正数为毫秒超时。
  * @param user_data runtime token，必须非 NULL。
  * @param wait_ops runtime 等待/完成回调表，所有回调必须非 NULL。
  * @return 成功返回 Ok 且 bytes 为读取字节数；其它错误按 code 和 sys_errno 返回。
  *
- * @note iovecs 和 iov_base 指向的缓冲区必须在函数返回前保持有效。
+ * @note iovecs 和 base 指向的缓冲区必须在函数返回前保持有效。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_readv(void* socket,
-                                                void* scheduler,
-                                                const struct iovec* iovecs,
+GalayCoreCoroIOResult galay_core_coro_tcp_readv(GalayCoreTcpSocket* socket,
+                                                GalayCoreIOScheduler* scheduler,
+                                                const galay_iovec_t* iovecs,
                                                 size_t count,
                                                 int64_t timeout_ms,
                                                 void* user_data,
@@ -249,18 +262,18 @@ GalayCoreCoroIOResult galay_core_coro_tcp_readv(void* socket,
  *
  * @param socket 内部 TcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
- * @param iovecs 输入 iovec 数组，必须非 NULL。
+ * @param iovecs 输入 galay_iovec_t 数组，必须非 NULL。
  * @param count iovec 数量，必须大于 0。
  * @param timeout_ms 负数无限等待，0 立即返回 Timeout，正数为毫秒超时。
  * @param user_data runtime token，必须非 NULL。
  * @param wait_ops runtime 等待/完成回调表，所有回调必须非 NULL。
  * @return 成功返回 Ok 且 bytes 为写入字节数；其它错误按 code 和 sys_errno 返回。
  *
- * @note iovecs 和 iov_base 指向的数据必须在函数返回前保持有效。调用方需要处理短写。
+ * @note iovecs 和 base 指向的数据必须在函数返回前保持有效。调用方需要处理短写。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_writev(void* socket,
-                                                 void* scheduler,
-                                                 const struct iovec* iovecs,
+GalayCoreCoroIOResult galay_core_coro_tcp_writev(GalayCoreTcpSocket* socket,
+                                                 GalayCoreIOScheduler* scheduler,
+                                                 const galay_iovec_t* iovecs,
                                                  size_t count,
                                                  int64_t timeout_ms,
                                                  void* user_data,
@@ -281,8 +294,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_writev(void* socket,
  *
  * @note socket 和 file_fd 必须在函数返回前保持有效。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(void* socket,
-                                                   void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(GalayCoreTcpSocket* socket,
+                                                   GalayCoreIOScheduler* scheduler,
                                                    int file_fd,
                                                    int64_t offset,
                                                    size_t count,
@@ -302,8 +315,8 @@ GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(void* socket,
  * @note close 会取消同一 controller 上挂起的 direct C coroutine 操作并回写 Cancelled。
  * 不允许在存在非 direct C coroutine awaitable 时关闭。
  */
-GalayCoreCoroIOResult galay_core_coro_tcp_close(void* socket,
-                                                void* scheduler,
+GalayCoreCoroIOResult galay_core_coro_tcp_close(GalayCoreTcpSocket* socket,
+                                                GalayCoreIOScheduler* scheduler,
                                                 int64_t timeout_ms);
 
 #ifdef __cplusplus

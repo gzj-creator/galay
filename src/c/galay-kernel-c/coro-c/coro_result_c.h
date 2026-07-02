@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <galay/c/galay-common-c/common/galay_c_error.h>
 
 /**
  * @file coro_result_c.h
@@ -35,7 +36,8 @@ typedef enum C_IOResultCode {
  * @brief C 协程结果结构。
  *
  * @details 恢复路径不会通过参数传递业务结果。被恢复的协程从自己的 request/task
- * 状态中读取结果结构，再由 direct C ABI 返回给调用方。
+ * 状态中读取结果结构，再由 direct C ABI 返回给调用方。ABI 演进只能在尾部追加
+ * 字段，禁止在现有字段之间插入或改变字段含义。
  *
  * @note sys_errno 仅在 code 为 C_IOResultError、部分 C_IOResultInvalid 或
  * C_IOResultTimeout 时可能有诊断意义；为 0 表示没有可公开的系统 errno。
@@ -47,6 +49,25 @@ typedef struct C_IOResult {
     int64_t value;         ///< 附加整数值，例如文件描述符或计数；无语义时为 0。
     void* ptr;             ///< 附加指针值；所有权按具体 API 注释约定。
 } C_IOResult;
+
+/**
+ * @brief 返回 C_IOResultCode 的稳定字符串。
+ *
+ * @param code C 协程/I/O 结果码，允许传入未知枚举值。
+ * @return 静态字符串；不会返回 NULL，未知值返回 "unknown"。
+ * @note 该函数不分配内存、不会阻塞，适合 FFI 绑定在错误转换路径直接调用。
+ */
+const char* galay_coro_ioresult_string(C_IOResultCode code);
+
+/**
+ * @brief 将 C_IOResultCode 归一化为 galay_status_t。
+ *
+ * @param code C 协程/I/O 结果码，允许传入未知枚举值。
+ * @return 可供只处理通用状态码的上层使用的状态；未知值返回
+ * GALAY_INTERNAL_ERROR。
+ * @note 该函数不分配内存、不会阻塞，保留 EOF/Timeout/Cancelled 的通用状态区分。
+ */
+galay_status_t galay_coro_ioresult_to_status(C_IOResultCode code);
 
 #ifdef __cplusplus
 }

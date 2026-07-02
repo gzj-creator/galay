@@ -3,9 +3,9 @@
 
 #include "../common-c/host.h"
 #include "../coro-c/coro_result_c.h"
+#include <galay/c/galay-common-c/common/galay_c_iovec.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <sys/uio.h>
 
 /**
  * @file tcp_socket_c.h
@@ -206,16 +206,16 @@ C_IOResult galay_kernel_tcp_socket_send(
  * @brief 挂起当前 C coroutine 并执行 scatter read。
  *
  * @param socket 已连接或已接受的 TCP socket。
- * @param iovecs 调用方提供的 iovec 数组，必须非 NULL。
+ * @param iovecs 调用方提供的 galay_iovec_t 数组，必须非 NULL。
  * @param count iovec 数量，必须大于 0。
  * @param timeout_ms 负数无限等待，0 立即返回 C_IOResultTimeout，正数为毫秒超时。
  * @return 成功返回 C_IOResultOk，result.bytes 为读取字节数；其它结果码语义同 recv。
  *
- * @note iovecs 以及其中每个 iov_base 指向的缓冲区必须在函数返回前保持有效。
+ * @note iovecs 以及其中每个 base 指向的缓冲区必须在函数返回前保持有效。
  */
 C_IOResult galay_kernel_tcp_socket_readv(
     galay_kernel_tcp_socket_t* socket,
-    const struct iovec* iovecs,
+    const galay_iovec_t* iovecs,
     size_t count,
     int64_t timeout_ms);
 
@@ -223,17 +223,17 @@ C_IOResult galay_kernel_tcp_socket_readv(
  * @brief 挂起当前 C coroutine 并执行 gather write。
  *
  * @param socket 已连接或已接受的 TCP socket。
- * @param iovecs 待发送 iovec 数组，必须非 NULL。
+ * @param iovecs 待发送 galay_iovec_t 数组，必须非 NULL。
  * @param count iovec 数量，必须大于 0。
  * @param timeout_ms 负数无限等待，0 立即返回 C_IOResultTimeout，正数为毫秒超时。
  * @return 成功返回 C_IOResultOk，result.bytes 为写入字节数；其它结果码语义同 send。
  *
- * @note iovecs 以及其中每个 iov_base 指向的数据必须在函数返回前保持有效。调用方
+ * @note iovecs 以及其中每个 base 指向的数据必须在函数返回前保持有效。调用方
  * 需要处理短写。
  */
 C_IOResult galay_kernel_tcp_socket_writev(
     galay_kernel_tcp_socket_t* socket,
-    const struct iovec* iovecs,
+    const galay_iovec_t* iovecs,
     size_t count,
     int64_t timeout_ms);
 
