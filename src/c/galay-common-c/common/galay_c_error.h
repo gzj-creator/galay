@@ -17,7 +17,7 @@
  * @note 这些宏表示当前 C ABI 头文件声明版本；运行时库版本请通过
  * galay_c_version_major/minor/patch 查询并与宏值比较。
  */
-#define GALAY_C_VERSION_MAJOR 6u
+#define GALAY_C_VERSION_MAJOR 4u
 #define GALAY_C_VERSION_MINOR 0u
 #define GALAY_C_VERSION_PATCH 0u
 

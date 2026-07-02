@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+_本次 v4.0.0 发版后暂无未发版变更。_
+
+## [v4.0.0] - 2026-07-02
+
 ### Added
 
 - 新增 C ABI 封装约定落地：`C_IOResultCode` 诊断字符串和 `galay_status_t` 映射 helper，补齐 EOF/Timeout/Cancelled 通用状态码，并新增 `galay_iovec_t` 作为 public C ABI scatter/gather buffer 类型。

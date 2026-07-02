@@ -91,3 +91,52 @@
 - 修复 HTTP/2 静态文件 cache 多 worker 共享可变状态、HPACK 全量解码与 query variant 缓存放大问题。
 - 修复 WSS 回显循环状态机移动后悬空指针、CMake OpenSSL 探测失效 Cellar cache、MySQL 8 auth switch、`MurmurHash3Util` 越界读取等问题。
 - 修复 epoll/kqueue/kernel work-stealing 中的 IO 完成清理、awaitable 生命周期与跨线程任务抢占问题。
+
+## v4.0.0 - 2026-07-02
+
+- **版本级别**：大版本（major）
+- **Git 提交消息**：`feat: 落地 C direct coroutine 异步运行时与全模块 C ABI 并统一构建版本号`
+- **Git tag**：`v4.0.0`
+
+### 变更摘要
+
+本次为自 `v3.0.0` 以来的大版本发版，主线是补齐 C 侧异步运行时与全模块 C ABI，并将构建侧版本号与发版 tag 统一对齐到 `4.0.0`。
+
+#### 版本号统一
+
+- 将 `CMakeLists.txt` 的 `project VERSION`、`MODULE.bazel` 的 `version`、`GALAY_C_VERSION_{MAJOR,MINOR,PATCH}` 宏与 `galay_c_version_*()` 运行期函数由 `6.0.0` 统一为 `4.0.0`，使本地构建版本与发版 tag 保持一致。
+
+#### C direct coroutine 异步运行时
+
+- 新增 C 栈式协程核心、协程等待结果原语与就绪/唤醒边界抽象，并建立独立于 C++ kernel core 的 C coroutine 旁路 bridge（`src/c/galay-bridge-c/coro-c`）。
+- C Kernel TCP/UDP/AsyncFile/FileWatcher/AsyncMutex/AsyncWaiter/MpscChannel/UnsafeChannel 完成 direct coroutine 形态迁移，C async API 在 C 协程内直接调用并显式处理返回值，移除 runtime callback/spawn 桥接路径。
+
+#### 全模块 C async ABI 补齐
+
+- 补齐 HTTP、WebSocket、HTTP/2、Redis、MySQL、Mongo、etcd、MCP、RPC、SSL、tracing 的 C async 客户端接口，并配套 C test、example 与 smoke benchmark。
+- 新增非 kernel C module target 基线（`galay-c-common`/`-utils`/`-ssl`/`-http`/`-ws`/`-http2`/`-redis`/`-mysql`/`-mongo`/`-etcd`/`-mcp`/`-rpc`/`-tracing`），统一公开头与实现命名为 `<module>_c.h` / `<module>_c.cc`，kernel C ABI 分层为 `core-c` / `runtime_c` / `common-c` / `async-c` 并提供 `kernel_c.h` 伞形头。
+
+#### C ABI 封装约定与可见性
+
+- 落地 `C_IOResultCode` 诊断字符串、`galay_status_t` 通用状态码（含 EOF/Timeout/Cancelled）、`galay_iovec_t` public scatter/gather buffer。
+- 统一 14 个 `galay-c-*` 共享库的 `GALAY_C_SHARED` / `GALAY_C_BUILDING` 宏、hidden visibility 与 `VERSION` / `SOVERSION` 属性，新增 `galay_c_version_{major,minor,patch}()` 版本接口与 `GALAY_BUFFER_TOO_SMALL` 状态码。
+
+#### 生产级加固与错误边界
+
+- HTTP/2 补齐 SETTINGS 校验、h2c HTTP2-Settings 解码、peer/local settings 应用、HEADERS/CONTINUATION/DATA outbound limit 与 kernel 层 flow_control 发送窗口控制；HPACK 动态表查找热路径优化。
+- HTTP/1.1 route-mode 接入 `HttpServerPolicy`，统一 reader/writer timeout、请求限制与 keep-alive 策略。
+- `ConsistentHash` 由 `std::shared_mutex` 读写锁改为 copy-on-write 原子快照发布与 retired snapshot 回收，避免阻塞协程调度线程。
+- 大量底层边界迁移到 `std::expected` 显式错误传播，新增 no-exception 源码边界守卫，防止异常控制流重新进入 C 包装层。
+
+#### 修复
+
+- 修复 C coroutine `AsyncWaiter` 偶发 SIGSEGV、协程 await_suspend 竞态与丢失唤醒、连接池等待者竞态与统计泄漏。
+- 修复 Linux 全量验证与一致性哈希无锁化路径、HTTP/2 静态文件 cache 多 worker 共享状态、WSS 回显循环悬空指针、MySQL 8 auth switch、`MurmurHash3Util` 越界读取等问题。
+
+#### 工程与构建
+
+- 统一 CMake 目标组织与命名，示例/测试/benchmark 的源文件注册改为 `file(GLOB ... CONFIGURE_DEPENDS)`。
+- 新增 Linux examples/benchmarks 全量执行矩阵脚本 `scripts/verify_linux_exec_matrix.py`，规范化 C/S 架构测试的 server 先启 / client 后跑 / 清理顺序。
+- 整理 C++ 模块文档目录到 `docs/cpp/modules`，补齐 C async API 补齐计划等文档。
+
+具体代码变更与边界用例细节请参见 `CHANGELOG.md` 的 `v4.0.0` 版本节。
