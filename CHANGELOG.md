@@ -11,7 +11,21 @@
 
 ## [Unreleased]
 
-_本次 v4.0.0 发版后暂无未发版变更。_
+_本次 v4.0.1 发版后暂无未发版变更。_
+
+## [v4.0.1] - 2026-07-03
+
+### Added
+
+- 新增 galay-framework 开发 skill（`agent/skill/`），作为在 galay 上开发服务端 / 客户端 / 中间件与 C/FFI 的统一入口：`SKILL.md` 给出 Runtime / `Task<T>` / `std::expected` 错误传播心智模型、include 前缀与命名空间、CMake 链接 target、构建开关与平台后端（io_uring / epoll / kqueue）速查及 13 个 C++ 模块 + C ABI 模块地图；`references/cpp-api.md` 汇总 13 个 C++ 模块公开类型与方法签名；`references/c-api.md` 覆盖 C ABI 错误约定、runtime / coro 驱动模型、每模块 handle 与完整 C 示例。
+
+### Changed
+
+- 构建版本号对齐 git tag：`CMakeLists.txt` 的 `project(galay VERSION ...)` 与 `MODULE.bazel` 的 `module(... version = ...)` 自 `4.0.0` 升至 `4.0.1`。
+
+### Removed
+
+- 清理被新 skill 取代的过期文档：`docs/c-abi-encapsulation-optimization.md`、`docs/cpp-modules-optimization.md`、`docs/naming-and-cmake-optimization.md`、`docs/rust-ffi-zero-overhead-guide.md`、`docs/文档审查报告.md`、`docs/README.md`，以及仅停留在 v3.0.0 的旧 `docs/release_note.md`（自本次起按发版节重建）。
 
 ## [v4.0.0] - 2026-07-02
 
