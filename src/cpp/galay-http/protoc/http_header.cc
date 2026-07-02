@@ -518,6 +518,22 @@ namespace galay::http
         return kNoError;
     }
 
+    void HeaderPair::setNormalizedUncommonHeaderPair(std::string key, std::string value)
+    {
+        m_headerPairs.insert_or_assign(std::move(key), std::move(value));
+    }
+
+    void HeaderPair::mergeNormalizedUncommonHeaderPair(std::string key, std::string value)
+    {
+        auto [it, inserted] = m_headerPairs.try_emplace(std::move(key), std::move(value));
+        if (inserted) {
+            return;
+        }
+
+        it->second += ", ";
+        it->second += value;
+    }
+
     size_t HeaderPair::estimatedSerializedSize() const
     {
         size_t estimated_size = 0;
@@ -720,11 +736,7 @@ namespace galay::http
                 );
         } else {
             // 罕见 header，key 已经是小写；重复字段按逗号合并，供请求层做严格协议校验。
-            if (const auto* existing = m_headerPairs.getValuePtr(m_parseHeaderKey);
-                existing != nullptr) {
-                m_parseHeaderValue = *existing + ", " + m_parseHeaderValue;
-            }
-            m_headerPairs.addNormalizedHeaderPair(
+            m_headerPairs.mergeNormalizedUncommonHeaderPair(
                 std::move(m_parseHeaderKey),
                 std::move(m_parseHeaderValue)
             );
@@ -1638,7 +1650,7 @@ namespace galay::http
                 );
             } else {
                 // 罕见 header，key 已经是小写
-                m_headerPairs.addNormalizedHeaderPair(
+                m_headerPairs.setNormalizedUncommonHeaderPair(
                     std::move(m_parseHeaderKey),
                     std::move(m_parseHeaderValue)
                 );

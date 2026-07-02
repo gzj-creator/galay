@@ -33,8 +33,12 @@ void test_base64_short_malformed_reports_decode_error()
 
 void test_base64_crlf_whitespace_decode()
 {
+    assert(galay::utils::Base64Util::Base64CanDecode("SGVs\r\n bG8=\t", true));
+    assert(!galay::utils::Base64Util::Base64CanDecode("SGVs\r\n bG8=\t", false));
     const std::string decoded = galay::utils::Base64Util::Base64Decode("SGVs\r\n bG8=\t", true);
     assert(decoded == "Hello");
+    assert(galay::utils::Base64Util::Base64CanDecode("\r\n\t ", true));
+    assert(!galay::utils::Base64Util::Base64CanDecode("\r\n\t ", false));
     assert(galay::utils::Base64Util::Base64Decode("\r\n\t ", true).empty());
 }
 

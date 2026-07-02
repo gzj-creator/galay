@@ -762,8 +762,12 @@ struct WsMessageReadState {
                 return true;
             }
 
+            const bool frame_payload_utf8_validated =
+                frame.header.opcode == WsOpcode::Text && frame.header.fin;
             if (frame.header.fin) {
-                if (*m_opcode == WsOpcode::Text && !WsFrameParser::isValidUtf8(*m_message)) {
+                if (*m_opcode == WsOpcode::Text &&
+                    !frame_payload_utf8_validated &&
+                    !WsFrameParser::isValidUtf8(*m_message)) {
                     setParseError(WsError(kWsInvalidUtf8));
                     return true;
                 }
@@ -804,16 +808,26 @@ struct WsMessageReadState {
         }
         const size_t old_size = m_message->size();
         const bool replace_message = m_first_frame;
-        const size_t write_offset = old_size;
+        const bool replace_fragment_prefix = replace_message && !prefix.fin;
+        const size_t write_offset = replace_fragment_prefix ? 0 : old_size;
+        const bool preserve_existing_message = replace_fragment_prefix && old_size != 0;
+        std::string previous_message;
 
-        m_message->resize(old_size + payload_size);
+        if (preserve_existing_message) {
+            previous_message = std::move(*m_message);
+        }
+        m_message->resize(write_offset + payload_size);
         if (payload_size > 0 &&
             !wsReadIovecBytes(iovecs,
                               iovec_count,
                               prefix.payload_offset,
                               m_message->data() + write_offset,
                               payload_size)) {
-            m_message->resize(old_size);
+            if (preserve_existing_message) {
+                *m_message = std::move(previous_message);
+            } else {
+                m_message->resize(old_size);
+            }
             return WsMessageFastPathStatus::kFallback;
         }
 
@@ -821,6 +835,7 @@ struct WsMessageReadState {
             wsApplyMaskInPlace(m_message->data() + write_offset, payload_size, prefix.masking_key);
         }
 
+        bool payload_utf8_validated = false;
         if (prefix.opcode == WsOpcode::Text &&
             prefix.fin &&
             !wsIsValidUtf8Span(m_message->data() + write_offset, payload_size)) {
@@ -828,9 +843,10 @@ struct WsMessageReadState {
             setParseError(WsError(kWsInvalidUtf8));
             return WsMessageFastPathStatus::kReturn;
         }
+        payload_utf8_validated = prefix.opcode == WsOpcode::Text && prefix.fin;
 
         if (replace_message) {
-            if (old_size != 0 && payload_size != 0) {
+            if (!replace_fragment_prefix && old_size != 0 && payload_size != 0) {
                 std::memmove(m_message->data(), m_message->data() + old_size, payload_size);
             }
             m_message->resize(payload_size);
@@ -848,6 +864,7 @@ struct WsMessageReadState {
 
         if (prefix.fin &&
             *m_opcode == WsOpcode::Text &&
+            !payload_utf8_validated &&
             !wsIsValidUtf8Span(m_message->data(), m_message->size())) {
             setParseError(WsError(kWsInvalidUtf8));
             return WsMessageFastPathStatus::kReturn;

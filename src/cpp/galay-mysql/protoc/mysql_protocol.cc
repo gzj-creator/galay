@@ -116,6 +116,15 @@ std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, 
 
 std::expected<std::string, ParseError> readLenEncString(const char* data, size_t len, size_t& consumed)
 {
+    auto view_result = readLenEncStringView(data, len, consumed);
+    if (!view_result) return std::unexpected(view_result.error());
+
+    const std::string_view view = view_result.value();
+    return std::string(view.data(), view.size());
+}
+
+std::expected<std::string_view, ParseError> readLenEncStringView(const char* data, size_t len, size_t& consumed)
+{
     size_t int_consumed = 0;
     auto int_result = readLenEncInt(data, len, int_consumed);
     if (!int_result) return std::unexpected(int_result.error());
@@ -131,7 +140,7 @@ std::expected<std::string, ParseError> readLenEncString(const char* data, size_t
     if (str_size > len - int_consumed) return std::unexpected(ParseError::Incomplete);
 
     consumed = int_consumed + str_size;
-    return std::string(data + int_consumed, str_size);
+    return std::string_view(data + int_consumed, str_size);
 }
 
 std::expected<std::string, ParseError> readNullTermString(const char* data, size_t len, size_t& consumed)
@@ -464,9 +473,36 @@ MysqlParser::parseTextRow(const char* data, size_t len, size_t column_count)
             pos += 1;
         } else {
             size_t consumed = 0;
-            auto val = readLenEncString(data + pos, len - pos, consumed);
+            auto val = readLenEncStringView(data + pos, len - pos, consumed);
             if (!val) return std::unexpected(val.error());
-            row.push_back(std::move(val.value()));
+            const std::string_view view = val.value();
+            row.emplace_back(std::string(view.data(), view.size()));
+            pos += consumed;
+        }
+    }
+
+    return row;
+}
+
+std::expected<std::vector<std::optional<std::string_view>>, ParseError>
+MysqlParser::parseTextRowView(const char* data, size_t len, size_t column_count)
+{
+    std::vector<std::optional<std::string_view>> row;
+    row.reserve(column_count);
+    size_t pos = 0;
+
+    for (size_t i = 0; i < column_count; ++i) {
+        if (pos >= len) return std::unexpected(ParseError::Incomplete);
+
+        if (static_cast<uint8_t>(data[pos]) == 0xFB) {
+            // NULL
+            row.push_back(std::nullopt);
+            pos += 1;
+        } else {
+            size_t consumed = 0;
+            auto val = readLenEncStringView(data + pos, len - pos, consumed);
+            if (!val) return std::unexpected(val.error());
+            row.push_back(val.value());
             pos += consumed;
         }
     }

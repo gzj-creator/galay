@@ -150,6 +150,96 @@ namespace galay::utils
     private:
         static constexpr unsigned int invalid_char = 0xffU;
 
+        static bool is_decode_whitespace(unsigned char ch)
+        {
+            return std::isspace(ch) != 0;
+        }
+
+        static bool can_decode_chunk(const unsigned char char_array_4[4], size_t chars_in_chunk)
+        {
+            if (chars_in_chunk == 0) {
+                return true;
+            }
+            if (chars_in_chunk == 1) {
+                return false;
+            }
+
+            const unsigned int first = pos_of_char(char_array_4[0]);
+            const unsigned int second = pos_of_char(char_array_4[1]);
+            if (first == invalid_char || second == invalid_char) {
+                return false;
+            }
+
+            if (chars_in_chunk > 2 &&
+                char_array_4[2] != '=' &&
+                char_array_4[2] != '.') {
+                const unsigned int third = pos_of_char(char_array_4[2]);
+                if (third == invalid_char) {
+                    return false;
+                }
+
+                if (chars_in_chunk > 3 &&
+                    char_array_4[3] != '=' &&
+                    char_array_4[3] != '.') {
+                    const unsigned int fourth = pos_of_char(char_array_4[3]);
+                    if (fourth == invalid_char) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        static bool append_decode_chunk(const unsigned char char_array_4[4], size_t chars_in_chunk, std::string &ret)
+        {
+            if (chars_in_chunk == 0) {
+                return true;
+            }
+            if (chars_in_chunk == 1) {
+                return false;
+            }
+
+            const unsigned int pos_of_char_0 = pos_of_char(char_array_4[0]);
+            const unsigned int pos_of_char_1 = pos_of_char(char_array_4[1]);
+            if (pos_of_char_0 == invalid_char || pos_of_char_1 == invalid_char) {
+                return false;
+            }
+
+            unsigned int pos_of_char_2 = 0;
+            const bool emit_second = chars_in_chunk > 2 &&
+                char_array_4[2] != '=' &&
+                char_array_4[2] != '.';
+            if (emit_second) {
+                pos_of_char_2 = pos_of_char(char_array_4[2]);
+                if (pos_of_char_2 == invalid_char) {
+                    return false;
+                }
+            }
+
+            unsigned int pos_of_char_3 = 0;
+            const bool emit_third = emit_second &&
+                chars_in_chunk > 3 &&
+                char_array_4[3] != '=' &&
+                char_array_4[3] != '.';
+            if (emit_third) {
+                pos_of_char_3 = pos_of_char(char_array_4[3]);
+                if (pos_of_char_3 == invalid_char) {
+                    return false;
+                }
+            }
+
+            ret.push_back(static_cast<std::string::value_type>((pos_of_char_0 << 2) + ((pos_of_char_1 & 0x30) >> 4)));
+            if (emit_second) {
+                ret.push_back(static_cast<std::string::value_type>(((pos_of_char_1 & 0x0f) << 4) + ((pos_of_char_2 & 0x3c) >> 2)));
+            }
+            if (emit_third) {
+                ret.push_back(static_cast<std::string::value_type>(((pos_of_char_2 & 0x03) << 6) + pos_of_char_3));
+            }
+
+            return true;
+        }
+
         template <typename String>
         static std::string Decode(String const &encoded_string, bool remove_linebreaks)
         {
@@ -161,86 +251,50 @@ namespace galay::utils
             if (encoded_string.empty())
                 return std::string();
 
-            if (remove_linebreaks)
-            {
-
-                std::string copy(encoded_string);
-
-                copy.erase(std::remove_if(copy.begin(), copy.end(), [](unsigned char ch) {
-                    return std::isspace(ch) != 0;
-                }), copy.end());
-
-                return Base64Decode(copy, false);
-            }
-
-            size_t length_of_string = encoded_string.length();
-            if (length_of_string % 4 == 1) {
-                return std::string();
-            }
-            size_t pos = 0;
-
-            if (!CanDecode(encoded_string, false)) {
-                return std::string();
-            }
-
             //
             // The approximate length (bytes) of the decoded string might be one or
             // two bytes smaller, depending on the amount of trailing equal signs
             // in the encoded string. This approximation is needed to reserve
             // enough space in the string to be returned.
             //
-            size_t approx_length_of_decoded_string = length_of_string / 4 * 3;
+            size_t approx_length_of_decoded_string = encoded_string.length() / 4 * 3;
             std::string ret;
             ret.reserve(approx_length_of_decoded_string);
 
-            while (pos < length_of_string)
-            {
-                if (length_of_string - pos == 1) {
-                    return std::string();
-                }
-                //
-                // Iterate over encoded input string in chunks. The size of all
-                // chunks except the last one is 4 bytes.
-                //
-                // The last chunk might be padded with equal signs or dots
-                // in order to make it 4 bytes in size as well, but this
-                // is not required as per RFC 2045.
-                //
-                // All chunks except the last one produce three output bytes.
-                //
-                // The last chunk produces at least one and up to three bytes.
-                //
-
-                size_t pos_of_char_1 = pos_of_char(encoded_string.at(pos + 1));
-
-                //
-                // Emit the first output byte that is produced in each chunk:
-                //
-                ret.push_back(static_cast<std::string::value_type>(((pos_of_char(encoded_string.at(pos + 0))) << 2) + ((pos_of_char_1 & 0x30) >> 4)));
-
-                if ((pos + 2 < length_of_string) && // Check for data that is not padded with equal signs (which is allowed by RFC 2045)
-                    encoded_string.at(pos + 2) != '=' &&
-                    encoded_string.at(pos + 2) != '.' // accept URL-safe base 64 strings, too, so check for '.' also.
-                )
-                {
-                    //
-                    // Emit a chunk's second byte (which might not be produced in the last chunk).
-                    //
-                    unsigned int pos_of_char_2 = pos_of_char(encoded_string.at(pos + 2));
-                    ret.push_back(static_cast<std::string::value_type>(((pos_of_char_1 & 0x0f) << 4) + ((pos_of_char_2 & 0x3c) >> 2)));
-
-                    if ((pos + 3 < length_of_string) &&
-                        encoded_string.at(pos + 3) != '=' &&
-                        encoded_string.at(pos + 3) != '.')
-                    {
-                        //
-                        // Emit a chunk's third byte (which might not be produced in the last chunk).
-                        //
-                        ret.push_back(static_cast<std::string::value_type>(((pos_of_char_2 & 0x03) << 6) + pos_of_char(encoded_string.at(pos + 3))));
+            if (!remove_linebreaks) {
+                for (size_t pos = 0; pos < encoded_string.length(); pos += 4) {
+                    unsigned char char_array_4[4] = {};
+                    const size_t chars_in_chunk = std::min<size_t>(4, encoded_string.length() - pos);
+                    for (size_t i = 0; i < chars_in_chunk; ++i) {
+                        char_array_4[i] = static_cast<unsigned char>(encoded_string.at(pos + i));
+                    }
+                    if (!append_decode_chunk(char_array_4, chars_in_chunk, ret)) {
+                        return std::string();
                     }
                 }
 
-                pos += 4;
+                return ret;
+            }
+
+            unsigned char char_array_4[4] = {};
+            size_t chars_in_chunk = 0;
+            for (size_t pos = 0; pos < encoded_string.length(); ++pos) {
+                const auto ch = static_cast<unsigned char>(encoded_string.at(pos));
+                if (is_decode_whitespace(ch)) {
+                    continue;
+                }
+
+                char_array_4[chars_in_chunk++] = ch;
+                if (chars_in_chunk == 4) {
+                    if (!append_decode_chunk(char_array_4, chars_in_chunk, ret)) {
+                        return std::string();
+                    }
+                    chars_in_chunk = 0;
+                }
+            }
+
+            if (!append_decode_chunk(char_array_4, chars_in_chunk, ret)) {
+                return std::string();
             }
 
             return ret;
@@ -258,53 +312,45 @@ namespace galay::utils
             if (encoded_string.empty()) {
                 return true;
             }
-            if (remove_linebreaks) {
-                std::string copy(encoded_string);
-                copy.erase(std::remove_if(copy.begin(), copy.end(), [](unsigned char ch) {
-                    return std::isspace(ch) != 0;
-                }), copy.end());
-                return CanDecode(copy, false);
-            }
 
-            const size_t length_of_string = encoded_string.length();
-            if (length_of_string % 4 == 1) {
-                return false;
-            }
-
-            size_t pos = 0;
-            while (pos < length_of_string) {
-                if (length_of_string - pos == 1) {
+            if (!remove_linebreaks) {
+                const size_t length_of_string = encoded_string.length();
+                if (length_of_string % 4 == 1) {
                     return false;
                 }
 
-                const unsigned int first = pos_of_char(encoded_string.at(pos));
-                const unsigned int second = pos_of_char(encoded_string.at(pos + 1));
-                if (first == invalid_char || second == invalid_char) {
-                    return false;
-                }
-
-                if ((pos + 2 < length_of_string) &&
-                    encoded_string.at(pos + 2) != '=' &&
-                    encoded_string.at(pos + 2) != '.') {
-                    const unsigned int third = pos_of_char(encoded_string.at(pos + 2));
-                    if (third == invalid_char) {
+                for (size_t pos = 0; pos < length_of_string; pos += 4) {
+                    unsigned char char_array_4[4] = {};
+                    const size_t chars_in_chunk = std::min<size_t>(4, length_of_string - pos);
+                    for (size_t i = 0; i < chars_in_chunk; ++i) {
+                        char_array_4[i] = static_cast<unsigned char>(encoded_string.at(pos + i));
+                    }
+                    if (!can_decode_chunk(char_array_4, chars_in_chunk)) {
                         return false;
                     }
-
-                    if ((pos + 3 < length_of_string) &&
-                        encoded_string.at(pos + 3) != '=' &&
-                        encoded_string.at(pos + 3) != '.') {
-                        const unsigned int fourth = pos_of_char(encoded_string.at(pos + 3));
-                        if (fourth == invalid_char) {
-                            return false;
-                        }
-                    }
                 }
 
-                pos += 4;
+                return true;
             }
 
-            return true;
+            unsigned char char_array_4[4] = {};
+            size_t chars_in_chunk = 0;
+            for (size_t pos = 0; pos < encoded_string.length(); ++pos) {
+                const auto ch = static_cast<unsigned char>(encoded_string.at(pos));
+                if (is_decode_whitespace(ch)) {
+                    continue;
+                }
+
+                char_array_4[chars_in_chunk++] = ch;
+                if (chars_in_chunk == 4) {
+                    if (!can_decode_chunk(char_array_4, chars_in_chunk)) {
+                        return false;
+                    }
+                    chars_in_chunk = 0;
+                }
+            }
+
+            return can_decode_chunk(char_array_4, chars_in_chunk);
         }
 
         static std::string insert_linebreaks(std::string str, size_t distance)
@@ -370,47 +416,39 @@ namespace galay::utils
     // Implementation of Base64Encode functions
     inline std::string Base64Util::Base64Encode(unsigned char const *bytes_to_encode, size_t in_len, bool url)
     {
-        std::string ret;
-        int i = 0;
-        unsigned char char_array_3[3];
-        unsigned char char_array_4[4];
-
         const char *base64_chars_selected = base64_chars[url ? 1 : 0];
 
-        // Pre-calculate and reserve exact size needed
-        size_t encoded_size = ((in_len + 2) / 3) * 4;
-        ret.reserve(encoded_size);
+        const size_t encoded_size = ((in_len + 2) / 3) * 4;
+        std::string ret(encoded_size, '\0');
+        size_t output_pos = 0;
 
-        while (in_len--)
-        {
-            char_array_3[i++] = *(bytes_to_encode++);
-            if (i == 3)
-            {
-                char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-                char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-                char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-                char_array_4[3] = char_array_3[2] & 0x3f;
+        while (in_len >= 3) {
+            const unsigned char first = bytes_to_encode[0];
+            const unsigned char second = bytes_to_encode[1];
+            const unsigned char third = bytes_to_encode[2];
 
-                for (i = 0; i < 4; i++)
-                    ret += base64_chars_selected[char_array_4[i]];
-                i = 0;
-            }
+            ret[output_pos++] = base64_chars_selected[(first & 0xfc) >> 2];
+            ret[output_pos++] = base64_chars_selected[((first & 0x03) << 4) + ((second & 0xf0) >> 4)];
+            ret[output_pos++] = base64_chars_selected[((second & 0x0f) << 2) + ((third & 0xc0) >> 6)];
+            ret[output_pos++] = base64_chars_selected[third & 0x3f];
+
+            bytes_to_encode += 3;
+            in_len -= 3;
         }
 
-        if (i)
-        {
-            for (int j = i; j < 3; j++)
-                char_array_3[j] = '\0';
-
-            char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
-            char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
-            char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
-
-            for (int j = 0; j < i + 1; j++)
-                ret += base64_chars_selected[char_array_4[j]];
-
-            while (i++ < 3)
-                ret += '=';
+        if (in_len == 1) {
+            const unsigned char first = bytes_to_encode[0];
+            ret[output_pos++] = base64_chars_selected[(first & 0xfc) >> 2];
+            ret[output_pos++] = base64_chars_selected[(first & 0x03) << 4];
+            ret[output_pos++] = '=';
+            ret[output_pos++] = '=';
+        } else if (in_len == 2) {
+            const unsigned char first = bytes_to_encode[0];
+            const unsigned char second = bytes_to_encode[1];
+            ret[output_pos++] = base64_chars_selected[(first & 0xfc) >> 2];
+            ret[output_pos++] = base64_chars_selected[((first & 0x03) << 4) + ((second & 0xf0) >> 4)];
+            ret[output_pos++] = base64_chars_selected[(second & 0x0f) << 2];
+            ret[output_pos++] = '=';
         }
 
         return ret;

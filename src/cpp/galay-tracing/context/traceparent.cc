@@ -78,16 +78,21 @@ std::string injectTraceparent(const TraceContext& context) {
         return {};
     }
 
-    std::string value;
-    value.reserve(kTraceparentLength);
-    value.append("00-");
-    value.append(context.traceId().toHex());
-    value.push_back(kSeparator);
-    value.append(context.spanId().toHex());
-    value.push_back(kSeparator);
-    value.push_back(kHexDigits[context.traceFlags() >> 4]);
-    value.push_back(kHexDigits[context.traceFlags() & 0x0fU]);
-    return value;
+    std::array<char, kTraceparentLength> value{};
+    value[0] = '0';
+    value[1] = '0';
+    value[2] = kSeparator;
+    if (!context.traceId().toHex(value.data() + 3, TraceId::kHexLength)) {
+        return {};
+    }
+    value[35] = kSeparator;
+    if (!context.spanId().toHex(value.data() + 36, SpanId::kHexLength)) {
+        return {};
+    }
+    value[52] = kSeparator;
+    value[53] = kHexDigits[context.traceFlags() >> 4U];
+    value[54] = kHexDigits[context.traceFlags() & 0x0fU];
+    return std::string(value.data(), value.size());
 }
 
 std::string injectTracestate(const TraceContext& context) {

@@ -418,6 +418,29 @@ void test_mixed_common_and_map()
     TEST_PASS("Mixed common and map headers");
 }
 
+void test_request_parse_merges_duplicate_rare_headers()
+{
+    std::cout << "\n=== Test: Request parse merges duplicate rare headers ===" << std::endl;
+
+    HttpRequestHeader header;
+    const std::string raw =
+        "GET /rare HTTP/1.1\r\n"
+        "X-Trace-Id: first\r\n"
+        "x-trace-id: second\r\n"
+        "\r\n";
+
+    auto [err, consumed] = header.fromString(raw);
+    TEST_ASSERT(err == kNoError, "Rare duplicate header parse should succeed");
+    TEST_ASSERT(consumed == static_cast<ssize_t>(raw.size()),
+                "Rare duplicate header parse should consume the full header");
+    TEST_ASSERT(header.headerPairs().getValue("x-trace-id") == "first, second",
+                "Rare duplicate request headers should be merged in parse order");
+    TEST_ASSERT(header.headerPairs().getValue("X-Trace-Id") == "first, second",
+                "Rare duplicate request headers should remain case-insensitive");
+
+    TEST_PASS("Request parse merges duplicate rare headers");
+}
+
 void test_client_side_mode()
 {
     std::cout << "\n=== Test: Client side mode ===" << std::endl;
@@ -495,6 +518,7 @@ int main()
     test_overwrite_value();
     test_all_common_headers();
     test_mixed_common_and_map();
+    test_request_parse_merges_duplicate_rare_headers();
     test_client_side_mode();
     test_large_value();
     test_special_characters();

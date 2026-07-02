@@ -1,4 +1,5 @@
 #include <galay/cpp/galay-http/protoc/http_request.h>
+#include <galay/cpp/galay-ws/kernel/ws_reader.h>
 #include <galay/cpp/galay-ws/protoc/ws_frame.h>
 #include <galay/cpp/galay-ws/server/ws_upgrade.h>
 
@@ -43,6 +44,14 @@ std::string makeMaskedRaw(WsOpcode opcode,
     }
     out += payload;
     return out;
+}
+
+std::string encodeMaskedFrame(WsOpcode opcode, std::string payload, bool fin = true)
+{
+    WsFrame frame(opcode, std::move(payload), fin);
+    std::string encoded;
+    WsFrameParser::encodeInto(encoded, frame, true);
+    return encoded;
 }
 
 WsErrorCode parseFrameCode(std::string& raw)
@@ -128,6 +137,47 @@ int main()
     runBench("BM_RejectShortUpgradeKey", kIterations, [&]() {
         auto request = parseUpgradeRequest("YWJj");
         return !WsUpgrade::handleUpgrade(request).success;
+    });
+
+    const std::string expected_fragmented =
+        std::string(128, 'a') + std::string(128, 'b') + std::string(128, 'c');
+    const std::string fragmented_frame =
+        encodeMaskedFrame(WsOpcode::Text, std::string(128, 'a'), false) +
+        encodeMaskedFrame(WsOpcode::Continuation, std::string(128, 'b'), false) +
+        encodeMaskedFrame(WsOpcode::Continuation, std::string(128, 'c'), true);
+    WsReaderSetting reader_setting;
+    reader_setting.max_frame_size = 1024;
+    reader_setting.max_message_size = 2048;
+    galay::utils::RingBuffer fragmented_ring(fragmented_frame.size() + 16);
+    std::string fragmented_message;
+    WsOpcode fragmented_opcode = WsOpcode::Close;
+    galay::websocket::detail::WsMessageReadState fragmented_state(
+        fragmented_ring,
+        reader_setting,
+        fragmented_message,
+        fragmented_opcode,
+        true,
+        false,
+        nullptr);
+
+    runBench("BM_FragmentedTextAssemblyFastPath", kIterations, [&]() {
+        fragmented_state.resetForNextMessage();
+        fragmented_opcode = WsOpcode::Close;
+        const size_t written =
+            fragmented_ring.write(fragmented_frame.data(), fragmented_frame.size());
+        if (written != fragmented_frame.size()) {
+            return false;
+        }
+        if (!fragmented_state.parseFromBuffer()) {
+            return false;
+        }
+        auto result = fragmented_state.takeResult();
+        return result.has_value() &&
+               result.value() &&
+               fragmented_opcode == WsOpcode::Text &&
+               fragmented_message == expected_fragmented &&
+               fragmented_state.m_fast_path_frames == 3 &&
+               fragmented_ring.readable() == 0;
     });
 
     return 0;

@@ -7,12 +7,32 @@
 namespace galay {
 namespace mcp {
 
+JsonDocument::JsonDocument(JsonDocument&& other) noexcept
+    : m_buffer(std::move(other.m_buffer)),
+      m_document(std::move(other.m_document)),
+      m_root(other.m_root)
+{
+    other.m_root = JsonElement{};
+}
+
+JsonDocument& JsonDocument::operator=(JsonDocument&& other) noexcept
+{
+    if (this != &other) {
+        m_buffer = std::move(other.m_buffer);
+        m_document = std::move(other.m_document);
+        m_root = other.m_root;
+        other.m_root = JsonElement{};
+    }
+    return *this;
+}
+
 std::expected<JsonDocument, McpError> JsonDocument::parse(std::string_view json) {
     JsonDocument doc;
     try {
-        doc.m_parser = std::make_unique<simdjson::dom::parser>();
+        thread_local simdjson::dom::parser parser;
+        doc.m_document = std::make_unique<simdjson::dom::document>();
         doc.m_buffer = simdjson::padded_string(json);
-        auto parsed = doc.m_parser->parse(doc.m_buffer);
+        auto parsed = parser.parse_into_document(*doc.m_document, doc.m_buffer);
         if (parsed.error()) {
             return std::unexpected(McpError::parseError(simdjson::error_message(parsed.error())));
         }

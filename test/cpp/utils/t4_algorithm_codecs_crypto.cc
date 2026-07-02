@@ -51,16 +51,19 @@ void test_base64() {
     // Single character
     std::string singleChar = "A";
     std::string singleEncoded = Base64Util::Base64Encode(singleChar);
+    assert(singleEncoded == "QQ==");
     assert(Base64Util::Base64Decode(singleEncoded) == singleChar);
 
     // Two characters
     std::string twoChars = "AB";
     std::string twoEncoded = Base64Util::Base64Encode(twoChars);
+    assert(twoEncoded == "QUI=");
     assert(Base64Util::Base64Decode(twoEncoded) == twoChars);
 
     // Three characters (no padding needed)
     std::string threeChars = "ABC";
     std::string threeEncoded = Base64Util::Base64Encode(threeChars);
+    assert(threeEncoded == "QUJD");
     assert(Base64Util::Base64Decode(threeEncoded) == threeChars);
 
     // Test all ASCII characters
@@ -88,6 +91,8 @@ void test_base64() {
     std::string testData = "\xFB\xFF"; // Will produce '+' and '/' in standard encoding
     std::string standardEncoded = Base64Util::Base64Encode(testData, false);
     std::string urlSafeEncoded = Base64Util::Base64Encode(testData, true);
+    assert(standardEncoded == "+/8=");
+    assert(urlSafeEncoded == "-_8=");
     // Both should decode to the same value
     assert(Base64Util::Base64Decode(standardEncoded) == testData);
     assert(Base64Util::Base64Decode(urlSafeEncoded) == testData);

@@ -144,3 +144,30 @@
 - `architecture_review_report.md` / `architecture_defects_report.md` — kernel/http/http2/rpc 架构与热路径
 - 可观测性/tracing 集成方案 — 用来验证本文优化是否真有收益,后续单独跟踪
 - `docs/c-abi-encapsulation-optimization.md` / `docs/rust-ffi-zero-overhead-guide.md` — C ABI 与 FFI
+
+---
+
+## 五、2026-07-02 落地记录
+
+本轮按模块并行处理低风险优化项,每个模块均补充或复用测试与 benchmark 验证。连接池真复用、Mongo/etcd TLS 等跨行为成熟度项未强行并入本轮,保留为单独设计任务。
+
+| 模块 | 已落地项 | 验证 |
+| --- | --- | --- |
+| utils | Base64 encode 预分配后索引写入;decode/canDecode 去空白路径避免整串递归拷贝 | `utils.algorithm_codecs_crypto`, `utils.resource_error_boundaries`, `benchmark_utils_resource_error_boundaries` |
+| ssl | read/write 热路径仅在错误队列非空时清理;await poll 内缓存 pending encrypted output | `ssl.*`, `benchmark_ssl_tls_steady_state` |
+| ws | 分片文本首帧组装避开多余 append/memmove;已校验单帧文本不重复整体验证 | `ws.ws_protocol_boundaries`, `benchmark_ws_protocol_boundaries` |
+| redis | RESP simple/error/bulk string 直接 materialize 到 `RedisReply` owned string,减少解析层临时 string | `redis.t2.protocol`, `redis.t21.resp.boundaries`, `benchmark_redis_resp_parser_throughput` |
+| mysql | 新增 borrowed `readLenEncStringView`/`parseTextRowView`,owned API 保持不变 | `mysql.t2.protocol`, `benchmark_mysql_lenenc_row_parse` |
+| mongo | OP_MSG CRC32C 改为 Castagnoli 查表实现,新增 known-vector 覆盖 | `mongo.crc32c`, `benchmark_mongo_crc32c` |
+| etcd | endpoint 解析从 `std::regex` 改为直接字符串解析和 `from_chars` | `etcd.t15.endpoint.parser`, `benchmark_etcd_b4_endpoint_parser` |
+| mcp | `JsonDocument::parse` 复用 thread-local parser state,DOM document 由每个 `JsonDocument` 独立持有 | `mcp.json_document_lifetime_and_allocation`, `benchmark_mcp_json_document_parse_throughput` |
+| tracing | `injectTraceparent` 使用固定 55 字节缓冲一次 materialize;sampler 高 64 位提取改为直接展开 | `tracing.traceparent`, `tracing.span_guard`, `benchmark_tracing_traceparent_throughput` |
+| http | rare header 解析慢路径跳过重复 common-header 匹配与重复 map lookup | `http.parser`, `http.header`, `http.header_case`, `http.http_protocol_boundaries`, `benchmark_http_header_parser_throughput` |
+| http2 | outbound bytes DATA 路径直接以当前 pending chunk 的 `string_view` 序列化,避免一层临时 payload string | `http2.h2core`, `http2.h2flow`, `http2.h2pressure`, `benchmark_http2_h2_kernel_pressure` |
+| kernel | `ThreadSafeTimerManager` draining pending timers 时批内复用一次时钟快照 | `kernel.timer`, `kernel.wheel`, `benchmark_kernel_thread_safe_timer_manager` |
+| rpc | pool bucket key 从 `host:port` string 改为 `RpcEndpoint` key,减少 endpoint switching 下的 key 构造 | `rpc.t40.connection.pool`, `rpc.t41.managed.client`, `rpc.t42.connection.pool.multi.endpoint`, `benchmark_rpc_connection_pool_endpoint_switching` |
+
+未在本轮完成的高风险项:
+- redis/rpc 真 socket 复用连接池:当前池语义是逻辑 lease,真复用需要重设 `RpcClient`/channel/socket 生命周期、健康检查、取消、失败和 shutdown 语义。
+- Mongo TLS URI、etcd HTTPS 下游 TLS:属于能力成熟度项,不是局部性能优化。
+- tracing small_vector/attribute 延迟 materialize:涉及 public storage/lifetime 语义,需单独设计。

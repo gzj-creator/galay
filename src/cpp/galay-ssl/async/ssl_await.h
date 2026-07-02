@@ -574,9 +574,9 @@ private:
     void onShutdownWrite(std::expected<size_t, IOError> result);   ///< 处理关闭写入完成
 
     bool prepareReadBuffer(std::vector<char>& buffer);                    ///< 准备读取缓冲区
-    bool prepareWriteFromPending(std::vector<char>& buffer, SslErrorCode error_code);  ///< 从待发送数据准备写入缓冲区
-    bool prepareRecvSendChunk();                                          ///< 准备接收发送块
-    bool fillSendChunk();                                                 ///< 填充发送块
+    bool prepareWriteFromPending(std::vector<char>& buffer, size_t pending, SslErrorCode error_code);  ///< 从待发送数据准备写入缓冲区
+    bool prepareRecvSendChunk(size_t pending);                            ///< 准备接收发送块
+    bool fillSendChunk(size_t pending = 0);                                ///< 填充发送块
     RecvPollAction drainRecvPlaintext();                                  ///< 排空接收明文
 
     void setHandshakeFailure(SslError error);   ///< 设置握手失败

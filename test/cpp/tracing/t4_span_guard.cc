@@ -315,6 +315,21 @@ void ratioSamplerHandlesBoundaryRatios() {
     galay::tracing::clearCurrentContext();
 }
 
+void ratioSamplerUsesTraceIdHighBitsThreshold() {
+    galay::tracing::TraceIdRatioSampler half(0.5);
+
+    const auto belowHalf = galay::tracing::TraceId::fromHex("40000000000000000000000000000000");
+    const auto atHalf = galay::tracing::TraceId::fromHex("80000000000000000000000000000000");
+    const auto aboveHalf = galay::tracing::TraceId::fromHex("ffffffffffffffff0000000000000000");
+
+    assert(belowHalf.isValid());
+    assert(atHalf.isValid());
+    assert(aboveHalf.isValid());
+    assert(half.shouldSample(nullptr, belowHalf));
+    assert(!half.shouldSample(nullptr, atHalf));
+    assert(!half.shouldSample(nullptr, aboveHalf));
+}
+
 void spanGuardIsMoveOnlyAndRestoresOnce() {
     static_assert(!std::is_copy_constructible_v<galay::tracing::SpanGuard>);
     static_assert(!std::is_copy_assignable_v<galay::tracing::SpanGuard>);
@@ -354,5 +369,6 @@ int main() {
     configuredSamplerCanDropRootSpan();
     parentBasedSamplerInheritsRemoteDecision();
     ratioSamplerHandlesBoundaryRatios();
+    ratioSamplerUsesTraceIdHighBitsThreshold();
     spanGuardIsMoveOnlyAndRestoresOnce();
 }

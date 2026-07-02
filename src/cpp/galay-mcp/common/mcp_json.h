@@ -29,11 +29,15 @@ using JsonArray = simdjson::dom::array; ///< JSON数组类型别名
 
 /**
  * @brief JSON文档类
- * @details 持有simdjson解析器和缓冲区，提供JSON文本的解析和访问功能
+ * @details 持有simdjson文档和缓冲区，提供JSON文本的解析和访问功能
  */
 class JsonDocument {
 public:
     JsonDocument() = default; ///< 默认构造
+    JsonDocument(JsonDocument&& other) noexcept; ///< 移动构造，转移地址稳定的DOM存储
+    JsonDocument& operator=(JsonDocument&& other) noexcept; ///< 移动赋值，转移地址稳定的DOM存储
+    JsonDocument(const JsonDocument&) = delete; ///< 禁止拷贝底层DOM存储
+    JsonDocument& operator=(const JsonDocument&) = delete; ///< 禁止拷贝底层DOM存储
 
     /**
      * @brief 解析JSON文本创建文档
@@ -47,8 +51,8 @@ public:
     std::string_view raw() const { return std::string_view(m_buffer.data(), m_buffer.size()); } ///< 获取原始JSON文本
 
 private:
-    std::unique_ptr<simdjson::dom::parser> m_parser; ///< simdjson解析器
     simdjson::padded_string m_buffer; ///< 带填充的缓冲区
+    std::unique_ptr<simdjson::dom::document> m_document; ///< 地址稳定的DOM存储，移动JsonDocument不失效外部元素视图
     JsonElement m_root; ///< 根元素
 };
 

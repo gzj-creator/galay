@@ -42,6 +42,7 @@
 
 ### Changed
 
+- 完成 `docs/cpp-modules-optimization.md` 中一轮 C++ 模块低风险优化落地：覆盖 utils Base64、SSL/WS/HTTP/HTTP2 hot path、Redis/MySQL/Mongo/etcd/MCP 协议解析、tracing traceparent/sampler、kernel timer drain 与 RPC pool endpoint key，并补齐对应 CTest 与 benchmark 覆盖；跨行为连接池真复用、Mongo TLS URI、etcd HTTPS 等高风险项保留为单独设计任务。
 - `ConsistentHash` 从 `std::shared_mutex` 读写锁改为 copy-on-write 原子快照发布与 reader-count retired snapshot 回收，读路径只做原子快照加载和原子节点状态更新，避免 coroutine 调度线程被阻塞锁卡住。
 - Linux examples/benchmarks smoke 验证统一以短 workload 运行重型 benchmark，并将 C stackful coroutine 边界 CTest 配置为串行运行，降低 4 核 Linux 主机上并发 CTest 对短 join/cancel 窗口的干扰。
 - 优化 HTTP/2 HPACK 动态表查找热路径，按 ring 顺序直接扫描动态表以减少重复边界检查和取模；HTTP client 与 header parser benchmark 补充 P50/P90/P95/P99 等尾延迟观测输出；`TimingWheelTimerManager` 级联复用同一次 tick 的时间戳并修正默认 tick 注释。

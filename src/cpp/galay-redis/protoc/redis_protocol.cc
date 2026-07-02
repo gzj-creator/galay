@@ -108,6 +108,12 @@ namespace galay::redis::protocol
         return *this;
     }
 
+    void RedisReply::assignString(RespType type, const char* data, size_t length)
+    {
+        m_type = type;
+        m_data.emplace<std::string>(data, length);
+    }
+
     std::string RedisReply::asString() const
     {
         if (auto* str = std::get_if<std::string>(&m_data)) {
@@ -276,8 +282,7 @@ namespace galay::redis::protocol
     {
         // Hot path for short status replies such as "+OK\r\n".
         if (length >= 5 && data[3] == '\r' && data[4] == '\n') {
-            std::string value(data + 1, 2);
-            *out = RedisReply(RespType::SimpleString, std::move(value));
+            out->assignString(RespType::SimpleString, data + 1, 2);
             return 5;
         }
 
@@ -286,8 +291,7 @@ namespace galay::redis::protocol
             return std::unexpected(ParseError::Incomplete);
         }
 
-        std::string value(data + 1, *crlf_pos - 1);
-        *out = RedisReply(RespType::SimpleString, std::move(value));
+        out->assignString(RespType::SimpleString, data + 1, *crlf_pos - 1);
         return *crlf_pos + 2;
     }
 
@@ -299,8 +303,7 @@ namespace galay::redis::protocol
             return std::unexpected(ParseError::Incomplete);
         }
 
-        std::string value(data + 1, *crlf_pos - 1);
-        *out = RedisReply(RespType::Error, std::move(value));
+        out->assignString(RespType::Error, data + 1, *crlf_pos - 1);
         return *crlf_pos + 2;
     }
 
@@ -362,8 +365,7 @@ namespace galay::redis::protocol
             return std::unexpected(ParseError::InvalidFormat);
         }
 
-        std::string value(data + content_start, static_cast<size_t>(str_len));
-        *out = RedisReply(RespType::BulkString, std::move(value));
+        out->assignString(RespType::BulkString, data + content_start, str_size);
         return content_end + 2;
     }
 

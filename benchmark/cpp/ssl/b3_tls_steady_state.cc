@@ -301,6 +301,7 @@ int main()
     scheduler.start();
 
     int exit_code = 0;
+    const auto benchmark_start = std::chrono::steady_clock::now();
     if (!expect(scheduleTask(scheduler, runServer(&scheduler, &server_ctx, &state)), "spawn server failed") ||
         !waitFor(state.server_ready, "server did not become ready")) {
         exit_code = 3;
@@ -319,6 +320,33 @@ int main()
     }
 
     scheduler.stop();
+    const auto benchmark_end = std::chrono::steady_clock::now();
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        benchmark_end - benchmark_start
+    ).count();
+
+    const auto client_send_ops = state.client_send_ops.load(std::memory_order_relaxed);
+    const auto client_recv_ops = state.client_recv_ops.load(std::memory_order_relaxed);
+    const auto server_recv_ops = state.server_recv_ops.load(std::memory_order_relaxed);
+    const auto server_send_ops = state.server_send_ops.load(std::memory_order_relaxed);
+
+    std::cout << "\nSSL steady-state hot-path benchmark:" << std::endl;
+    std::cout << "Connections: " << kConnections
+              << ", rounds/conn: " << kRoundsPerConn
+              << ", payload bytes: " << kPayloadSize << std::endl;
+    std::cout << "Client send/recv ops: " << client_send_ops << "/" << client_recv_ops
+              << ", server recv/send ops: " << server_recv_ops << "/" << server_send_ops
+              << ", elapsed: " << elapsed_ms << " ms" << std::endl;
+    if (elapsed_ms > 0) {
+        const auto echo_rounds = std::min(client_send_ops, client_recv_ops);
+        const double rps = static_cast<double>(echo_rounds) * 1000.0 /
+                           static_cast<double>(elapsed_ms);
+        const double mib = static_cast<double>(echo_rounds * kPayloadSize * 2) /
+                           1024.0 / 1024.0;
+        const double throughput = mib * 1000.0 / static_cast<double>(elapsed_ms);
+        std::cout << "Echo round-trips/sec: " << rps
+                  << ", plaintext throughput: " << throughput << " MiB/s" << std::endl;
+    }
 
     if (exit_code == 0 && state.failed.load(std::memory_order_relaxed)) {
         std::cerr << "[FAIL] "

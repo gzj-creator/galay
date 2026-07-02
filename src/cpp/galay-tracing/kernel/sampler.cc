@@ -12,7 +12,6 @@
 
 #include <algorithm>
 #include <atomic>
-#include <cstddef>
 #include <cstdint>
 
 namespace galay::tracing {
@@ -22,12 +21,16 @@ namespace {
 std::atomic<const Sampler*> g_sampler{nullptr};
 
 [[nodiscard]] std::uint64_t traceIdHighBits(const TraceId& traceId) noexcept {
-    std::uint64_t value = 0;
+    static_assert(TraceId::kByteLength >= sizeof(std::uint64_t));
     const auto& bytes = traceId.bytes();
-    for (std::size_t i = 0; i < sizeof(std::uint64_t); ++i) {
-        value = (value << 8U) | static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[i]));
-    }
-    return value;
+    return (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[0])) << 56U)
+        | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[1])) << 48U)
+        | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[2])) << 40U)
+        | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[3])) << 32U)
+        | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[4])) << 24U)
+        | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[5])) << 16U)
+        | (static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[6])) << 8U)
+        | static_cast<std::uint64_t>(static_cast<unsigned char>(bytes[7]));
 }
 
 [[nodiscard]] const Sampler& builtInSampler() noexcept {

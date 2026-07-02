@@ -1,6 +1,5 @@
 #include "mongo_protocol.h"
-
-#include <cstring>
+#include "crc32c.h"
 
 namespace galay::mongo::protocol
 {
@@ -25,19 +24,6 @@ uint32_t readUint32LE(const char* p)
            (static_cast<uint32_t>(static_cast<uint8_t>(p[1])) <<  8) |
            (static_cast<uint32_t>(static_cast<uint8_t>(p[2])) << 16) |
            (static_cast<uint32_t>(static_cast<uint8_t>(p[3])) << 24);
-}
-
-uint32_t crc32c(const char* data, size_t len)
-{
-    uint32_t crc = 0xFFFFFFFFu;
-    for (size_t i = 0; i < len; ++i) {
-        crc ^= static_cast<uint8_t>(data[i]);
-        for (int bit = 0; bit < 8; ++bit) {
-            const uint32_t mask = 0u - (crc & 1u);
-            crc = (crc >> 1) ^ (0x82F63B78u & mask);
-        }
-    }
-    return ~crc;
 }
 
 void writeInt32LEAt(std::string& out, size_t pos, int32_t value)
@@ -165,7 +151,7 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
         }
 
         const uint32_t expected_checksum = readUint32LE(data + message_size - 4);
-        const uint32_t actual_checksum = crc32c(data, message_size - 4);
+        const uint32_t actual_checksum = detail::crc32c(data, message_size - 4);
         if (actual_checksum != expected_checksum) {
             return std::unexpected(MongoError(MONGO_ERROR_PROTOCOL,
                                               "OP_MSG checksum mismatch"));

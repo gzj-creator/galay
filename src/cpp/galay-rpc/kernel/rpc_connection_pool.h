@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <deque>
 #include <expected>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -303,6 +304,16 @@ private:
         size_t total = 0;
     };
 
+    struct EndpointHash {
+        size_t operator()(const RpcEndpoint& endpoint) const noexcept {
+            const size_t host_hash = std::hash<std::string>{}(endpoint.host);
+            const size_t port_hash = std::hash<uint16_t>{}(endpoint.port);
+            const size_t mixed_port =
+                port_hash + 0x9e3779b97f4a7c15ULL + (host_hash << 6) + (host_hash >> 2);
+            return host_hash ^ mixed_port;
+        }
+    };
+
     static RpcConnectionPoolConfig normalize(RpcConnectionPoolConfig config) {
         if (config.max_connections_per_endpoint == 0) {
             config.max_connections_per_endpoint = 1;
@@ -326,7 +337,7 @@ private:
             return *m_last_bucket;
         }
 
-        auto [it, inserted] = m_buckets.try_emplace(endpoint.key());
+        auto [it, inserted] = m_buckets.try_emplace(endpoint);
         if (inserted) {
             it->second.endpoint = endpoint;
         }
@@ -339,7 +350,7 @@ private:
             return m_last_bucket;
         }
 
-        auto it = m_buckets.find(endpoint.key());
+        auto it = m_buckets.find(endpoint);
         if (it == m_buckets.end()) {
             return nullptr;
         }
@@ -351,7 +362,7 @@ private:
             return m_last_bucket;
         }
 
-        auto it = m_buckets.find(endpoint.key());
+        auto it = m_buckets.find(endpoint);
         if (it == m_buckets.end()) {
             return nullptr;
         }
@@ -416,7 +427,7 @@ private:
     }
 
     RpcConnectionPoolConfig m_config;
-    std::unordered_map<std::string, EndpointBucket> m_buckets;
+    std::unordered_map<RpcEndpoint, EndpointBucket, EndpointHash> m_buckets;
     EndpointBucket* m_last_bucket = nullptr;
     uint64_t m_next_id = 1;
     bool m_shutdown = false;

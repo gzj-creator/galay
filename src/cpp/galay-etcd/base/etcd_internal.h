@@ -32,7 +32,6 @@
 #include <expected>
 #include <limits>
 #include <optional>
-#include <regex>
 #include <span>
 #include <string>
 #include <string_view>
@@ -257,35 +256,68 @@ struct ParsedEndpoint
  */
 inline std::expected<ParsedEndpoint, std::string> parseEndpoint(const std::string& endpoint)
 {
-    thread_local const std::regex kEndpointRegex(
-        R"(^(http|https)://(\[[^\]]+\]|[^/:]+)(?::(\d+))?(?:/.*)?$)",
-        std::regex::icase);
-    std::smatch matches;
-    if (!std::regex_match(endpoint, matches, kEndpointRegex)) {
+    constexpr std::string_view kHttpPrefix = "http://";
+    constexpr std::string_view kHttpsPrefix = "https://";
+
+    ParsedEndpoint parsed;
+    std::string_view rest;
+    if (endpoint.size() >= kHttpPrefix.size() &&
+        std::equal(kHttpPrefix.begin(), kHttpPrefix.end(), endpoint.begin(), [](char lhs, char rhs) {
+            return std::tolower(static_cast<unsigned char>(lhs)) ==
+                std::tolower(static_cast<unsigned char>(rhs));
+        })) {
+        rest = std::string_view(endpoint).substr(kHttpPrefix.size());
+        parsed.secure = false;
+    } else if (endpoint.size() >= kHttpsPrefix.size() &&
+               std::equal(kHttpsPrefix.begin(), kHttpsPrefix.end(), endpoint.begin(), [](char lhs, char rhs) {
+                   return std::tolower(static_cast<unsigned char>(lhs)) ==
+                       std::tolower(static_cast<unsigned char>(rhs));
+               })) {
+        rest = std::string_view(endpoint).substr(kHttpsPrefix.size());
+        parsed.secure = true;
+    } else {
         return std::unexpected("invalid endpoint: " + endpoint);
     }
 
-    ParsedEndpoint parsed;
-    std::string scheme = matches[1].str();
-    std::transform(
-        scheme.begin(),
-        scheme.end(),
-        scheme.begin(),
-        [](const unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
-    parsed.secure = scheme == "https";
-
-    std::string host = matches[2].str();
-    if (host.size() >= 2 && host.front() == '[' && host.back() == ']') {
-        host = host.substr(1, host.size() - 2);
+    std::string_view host;
+    std::string_view port_text;
+    if (rest.starts_with('[')) {
+        const size_t closing = rest.find(']');
+        if (closing == std::string_view::npos || closing == 1) {
+            return std::unexpected("invalid endpoint: " + endpoint);
+        }
+        host = rest.substr(1, closing - 1);
         parsed.ipv6 = true;
-    } else if (host.find(':') != std::string::npos) {
-        parsed.ipv6 = true;
+        rest.remove_prefix(closing + 1);
+    } else {
+        const size_t host_end = rest.find_first_of(":/");
+        host = rest.substr(0, host_end);
+        if (host.empty()) {
+            return std::unexpected("invalid endpoint: " + endpoint);
+        }
+        rest.remove_prefix(host_end == std::string_view::npos ? rest.size() : host_end);
     }
-    parsed.host = std::move(host);
+
+    if (rest.starts_with(':')) {
+        rest.remove_prefix(1);
+        const size_t port_end = rest.find('/');
+        port_text = rest.substr(0, port_end);
+        if (port_text.empty() ||
+            !std::all_of(port_text.begin(), port_text.end(), [](const unsigned char ch) {
+                return std::isdigit(ch) != 0;
+            })) {
+            return std::unexpected("invalid endpoint: " + endpoint);
+        }
+        rest.remove_prefix(port_end == std::string_view::npos ? rest.size() : port_end);
+    }
+
+    if (!rest.empty() && !rest.starts_with('/')) {
+        return std::unexpected("invalid endpoint: " + endpoint);
+    }
+    parsed.host = std::string(host);
 
     int port = parsed.secure ? 443 : 80;
-    if (matches[3].matched) {
-        const std::string port_text = matches[3].str();
+    if (!port_text.empty()) {
         const char* begin = port_text.data();
         const char* end = begin + port_text.size();
         const auto converted = std::from_chars(begin, end, port);

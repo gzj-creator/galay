@@ -105,6 +105,15 @@ namespace galay::redis::protocol
         const RespData& getData() const { return m_data; } ///< 获取数据
 
     private:
+        friend class RespParser;
+
+        /**
+         * @brief 从解析输入直接写入自有字符串载荷
+         * @note 该函数会拷贝 data 指向的字节到 RedisReply 内部的 std::string，
+         *       不保存调用方输入缓冲区视图，确保解析结果可独立存活。
+         */
+        void assignString(RespType type, const char* data, size_t length);
+
         RespType m_type;  ///< 回复类型
         RespData m_data;  ///< 回复数据
     };

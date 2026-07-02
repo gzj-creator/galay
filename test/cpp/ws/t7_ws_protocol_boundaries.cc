@@ -150,26 +150,48 @@ void testCloseFrameValidation()
 
 void testFragmentedTextValidatesWholeUtf8()
 {
-    RingBuffer ring(1024);
-    std::string buffered;
-    buffered += encodeMaskedFrame(WsOpcode::Text, std::string("\xC3", 1), false);
-    buffered += encodeMaskedFrame(WsOpcode::Continuation, std::string("(", 1), true);
-    writeAll(ring, buffered);
-
     WsReaderSetting setting;
     setting.max_frame_size = 1024;
     setting.max_message_size = 1024;
 
-    std::string message;
-    WsOpcode opcode = WsOpcode::Close;
-    galay::websocket::detail::WsMessageReadState state(
-        ring, setting, message, opcode, true, false, nullptr);
+    {
+        RingBuffer ring(1024);
+        std::string buffered;
+        buffered += encodeMaskedFrame(WsOpcode::Text, std::string("\xC3", 1), false);
+        buffered += encodeMaskedFrame(WsOpcode::Continuation, std::string("\xA9", 1), true);
+        writeAll(ring, buffered);
 
-    check(state.parseFromBuffer(), "fragmented invalid UTF-8 should complete with an error");
-    const auto result = state.takeResult();
-    check(!result.has_value(), "fragmented invalid UTF-8 should not parse successfully");
-    check(result.error().code() == kWsInvalidUtf8,
-          "fragmented invalid UTF-8 should return kWsInvalidUtf8");
+        std::string message;
+        WsOpcode opcode = WsOpcode::Close;
+        galay::websocket::detail::WsMessageReadState state(
+            ring, setting, message, opcode, true, false, nullptr);
+
+        check(state.parseFromBuffer(), "fragmented split UTF-8 should complete");
+        const auto result = state.takeResult();
+        check(result.has_value(), "fragmented split UTF-8 should parse successfully");
+        check(message == std::string("\xC3\xA9", 2),
+              "fragmented split UTF-8 should preserve payload bytes");
+        check(opcode == WsOpcode::Text, "fragmented split UTF-8 should preserve text opcode");
+    }
+
+    {
+        RingBuffer ring(1024);
+        std::string buffered;
+        buffered += encodeMaskedFrame(WsOpcode::Text, std::string("\xC3", 1), false);
+        buffered += encodeMaskedFrame(WsOpcode::Continuation, std::string("(", 1), true);
+        writeAll(ring, buffered);
+
+        std::string message;
+        WsOpcode opcode = WsOpcode::Close;
+        galay::websocket::detail::WsMessageReadState state(
+            ring, setting, message, opcode, true, false, nullptr);
+
+        check(state.parseFromBuffer(), "fragmented invalid UTF-8 should complete with an error");
+        const auto result = state.takeResult();
+        check(!result.has_value(), "fragmented invalid UTF-8 should not parse successfully");
+        check(result.error().code() == kWsInvalidUtf8,
+              "fragmented invalid UTF-8 should return kWsInvalidUtf8");
+    }
 }
 
 void testEchoZeroCopyHonorsReaderLimits()

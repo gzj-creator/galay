@@ -273,8 +273,15 @@ private:
         while ((count = m_pendingQueue.try_dequeue_bulk(timers, BATCH_SIZE)) > 0) {
             m_pendingSize.fetch_sub(count, std::memory_order_relaxed);
 
+            const auto now = std::chrono::steady_clock::now();
+            const uint64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                now.time_since_epoch()).count();
+            const uint64_t elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                now - m_startTime).count();
+            const uint64_t currentTickFromStart = elapsed / m_tickDuration;
+
             for (size_t i = 0; i < count; ++i) {
-                addTimerToWheel(std::move(timers[i]));
+                addTimerToWheel(std::move(timers[i]), nowNs, currentTickFromStart);
             }
         }
     }
@@ -282,7 +289,7 @@ private:
     /**
      * @brief 将定时器添加到时间轮的合适位置
      */
-    void addTimerToWheel(Timer::ptr timer)
+    void addTimerToWheel(Timer::ptr timer, uint64_t nowNs, uint64_t currentTickFromStart)
     {
         if (!timer || timer->done() || timer->cancelled()) {
             return;
@@ -290,11 +297,6 @@ private:
 
         // 获取定时器的绝对过期时间（纳秒）
         uint64_t expireTimeNs = timer->getExpireTime();
-
-        // 获取当前时间（纳秒）
-        auto now = std::chrono::steady_clock::now();
-        uint64_t nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            now.time_since_epoch()).count();
 
         // 计算剩余时间（纳秒）
         if (expireTimeNs <= nowNs) {
@@ -319,9 +321,6 @@ private:
         }
 
         // 计算绝对到期 tick
-        uint64_t elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-            now - m_startTime).count();
-        uint64_t currentTickFromStart = elapsed / m_tickDuration;
         uint64_t absoluteTick = currentTickFromStart + delayTicks;
 
         // 根据延迟 tick 数选择合适的层

@@ -143,6 +143,81 @@ void test_len_enc_string_overflow()
     std::cout << "  PASSED" << std::endl;
 }
 
+void test_len_enc_string_view_borrows_packet_buffer()
+{
+    std::cout << "Testing length-encoded string view borrowing..." << std::endl;
+
+    std::string buf;
+    writeLenEncString(buf, "0123456789abcdef");
+
+    size_t consumed = 0;
+    auto result = readLenEncStringView(buf.data(), buf.size(), consumed);
+    assert(result.has_value());
+    assert(result.value() == "0123456789abcdef");
+    assert(result.value().data() == buf.data() + 1);
+    assert(result.value().size() == 16);
+    assert(consumed == buf.size());
+
+    buf[1] = 'X';
+    assert(result.value().front() == 'X');
+
+    std::string overflow;
+    overflow.push_back(static_cast<char>(0xFE));
+    writeUint64(overflow, std::numeric_limits<uint64_t>::max());
+    consumed = 0;
+    auto overflow_result = readLenEncStringView(overflow.data(), overflow.size(), consumed);
+    assert(!overflow_result.has_value());
+    assert(overflow_result.error() == ParseError::BufferOverflow);
+    assert(consumed == 0);
+
+    std::string incomplete;
+    writeLenEncInt(incomplete, 5);
+    incomplete.append("abc");
+    consumed = 0;
+    auto incomplete_result = readLenEncStringView(incomplete.data(), incomplete.size(), consumed);
+    assert(!incomplete_result.has_value());
+    assert(incomplete_result.error() == ParseError::Incomplete);
+    assert(consumed == 0);
+
+    std::cout << "  PASSED" << std::endl;
+}
+
+void test_text_row_view_borrows_packet_buffer()
+{
+    std::cout << "Testing text row view borrowing..." << std::endl;
+
+    std::string row_payload;
+    writeLenEncString(row_payload, "alpha");
+    row_payload.push_back(static_cast<char>(0xFB));
+    const size_t second_value_offset = row_payload.size() + 1;
+    writeLenEncString(row_payload, "bravo-bravo-bravo");
+
+    MysqlParser parser;
+    auto row = parser.parseTextRowView(row_payload.data(), row_payload.size(), 3);
+    assert(row.has_value());
+    assert(row->size() == 3);
+    assert(row->at(0).has_value());
+    assert(row->at(0).value() == "alpha");
+    assert(row->at(0).value().data() == row_payload.data() + 1);
+    assert(!row->at(1).has_value());
+    assert(row->at(2).has_value());
+    assert(row->at(2).value() == "bravo-bravo-bravo");
+    assert(row->at(2).value().data() == row_payload.data() + second_value_offset);
+
+    row_payload[1] = 'A';
+    assert(row->at(0).value().front() == 'A');
+
+    auto owned_row = parser.parseTextRow(row_payload.data(), row_payload.size(), 3);
+    assert(owned_row.has_value());
+    assert(owned_row->at(0).has_value());
+    assert(owned_row->at(0).value() == "Alpha");
+    assert(!owned_row->at(1).has_value());
+    assert(owned_row->at(2).has_value());
+    assert(owned_row->at(2).value() == "bravo-bravo-bravo");
+
+    std::cout << "  PASSED" << std::endl;
+}
+
 void test_packet_header()
 {
     std::cout << "Testing packet header parse..." << std::endl;
@@ -431,6 +506,8 @@ int main()
     test_len_enc_int();
     test_len_enc_string();
     test_len_enc_string_overflow();
+    test_len_enc_string_view_borrows_packet_buffer();
+    test_text_row_view_borrows_packet_buffer();
     test_packet_header();
     test_encoder();
     test_encoder_rejects_oversized_packet();

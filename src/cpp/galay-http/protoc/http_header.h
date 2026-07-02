@@ -101,6 +101,9 @@ namespace galay::http {
      */
     class HeaderPair
     {
+        friend class HttpRequestHeader;
+        friend class HttpResponseHeader;
+
     public:
         /**
          * @brief 头部存储模式
@@ -228,6 +231,9 @@ namespace galay::http {
         void forEachHeader(std::function<void(std::string_view, std::string_view)> callback) const;
 
     private:
+        void setNormalizedUncommonHeaderPair(std::string key, std::string value);
+        void mergeNormalizedUncommonHeaderPair(std::string key, std::string value);
+
         Mode m_mode;                               ///< 存储模式
 
         std::array<std::string, 15> m_commonHeaders;   ///< Fast-path 存储（仅 ServerSide 使用）

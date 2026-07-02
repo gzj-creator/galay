@@ -275,10 +275,9 @@ bool SslOperationDriver::prepareReadBuffer(std::vector<char>& buffer)
     return true;
 }
 
-bool SslOperationDriver::prepareWriteFromPending(std::vector<char>& buffer, SslErrorCode error_code)
+bool SslOperationDriver::prepareWriteFromPending(std::vector<char>& buffer, size_t pending, SslErrorCode error_code)
 {
     (void)error_code;
-    const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
     if (pending == 0) {
         return false;
     }
@@ -364,34 +363,39 @@ SslOperationDriver::RecvPollAction SslOperationDriver::drainRecvPlaintext()
     return RecvPollAction::kNeedRecv;
 }
 
-bool SslOperationDriver::prepareRecvSendChunk()
+bool SslOperationDriver::prepareRecvSendChunk(size_t pending)
 {
     if (m_send_context.m_length > 0) {
         return true;
     }
 
-    if (m_socket->m_engine.pendingEncryptedOutput() == 0) {
+    if (pending == 0) {
+        pending = m_socket->m_engine.pendingEncryptedOutput();
+    }
+    if (pending == 0) {
         setRecvFailure(SslError(SslErrorCode::kReadFailed));
         return false;
     }
 
-    if (!prepareWriteFromPending(m_recv_cipher_buffer, SslErrorCode::kReadFailed)) {
+    if (!prepareWriteFromPending(m_recv_cipher_buffer, pending, SslErrorCode::kReadFailed)) {
         setRecvFailure(SslError(SslErrorCode::kReadFailed));
         return false;
     }
     return true;
 }
 
-bool SslOperationDriver::fillSendChunk()
+bool SslOperationDriver::fillSendChunk(size_t pending)
 {
     while (true) {
         if (m_send_context.m_length > 0) {
             return true;
         }
 
-        const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+        if (pending == 0) {
+            pending = m_socket->m_engine.pendingEncryptedOutput();
+        }
         if (pending > 0) {
-            if (!prepareWriteFromPending(m_send_cipher_buffer, SslErrorCode::kWriteFailed)) {
+            if (!prepareWriteFromPending(m_send_cipher_buffer, pending, SslErrorCode::kWriteFailed)) {
                 setSendFailure(SslError(SslErrorCode::kWriteFailed));
                 return false;
             }
@@ -413,20 +417,24 @@ bool SslOperationDriver::fillSendChunk()
 
         if (ssl_ret == SslIOResult::Success && bytes_written > 0) {
             m_send.plain_offset += bytes_written;
+            pending = 0;
             continue;
         }
 
         if (ssl_ret == SslIOResult::WantRead) {
-            if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
+            pending = m_socket->m_engine.pendingEncryptedOutput();
+            if (pending > 0) {
                 continue;
             }
             m_send.read_pending = true;
             return false;
         }
 
-        if (ssl_ret == SslIOResult::WantWrite &&
-            m_socket->m_engine.pendingEncryptedOutput() > 0) {
-            continue;
+        if (ssl_ret == SslIOResult::WantWrite) {
+            pending = m_socket->m_engine.pendingEncryptedOutput();
+            if (pending > 0) {
+                continue;
+            }
         }
 
         setSendFailure(SslError::fromOpenSSL(SslErrorCode::kWriteFailed));
@@ -471,33 +479,42 @@ SslOperationDriver::WaitAction SslOperationDriver::pollHandshake()
     const SslIOResult ret = m_socket->m_engine.doHandshake();
     switch (ret) {
     case SslIOResult::Success:
-        if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
-            if (!prepareWriteFromPending(m_handshake_buffer, SslErrorCode::kHandshakeFailed)) {
-                setHandshakeFailure(SslError(SslErrorCode::kHandshakeFailed));
-                return {};
+        {
+            const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+            if (pending > 0) {
+                if (!prepareWriteFromPending(m_handshake_buffer, pending, SslErrorCode::kHandshakeFailed)) {
+                    setHandshakeFailure(SslError(SslErrorCode::kHandshakeFailed));
+                    return {};
+                }
+                m_handshake.flush_success = true;
+                return {WaitKind::kWrite, &m_send_context};
             }
-            m_handshake.flush_success = true;
-            return {WaitKind::kWrite, &m_send_context};
         }
         m_handshake.result = {};
         m_handshake.result_set = true;
         return {};
     case SslIOResult::WantWrite:
-        if (!prepareWriteFromPending(m_handshake_buffer, SslErrorCode::kHandshakeFailed)) {
-            setHandshakeFailure(SslError::fromOpenSSL(SslErrorCode::kHandshakeFailed));
-            return {};
+        {
+            const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+            if (!prepareWriteFromPending(m_handshake_buffer, pending, SslErrorCode::kHandshakeFailed)) {
+                setHandshakeFailure(SslError::fromOpenSSL(SslErrorCode::kHandshakeFailed));
+                return {};
+            }
         }
         m_handshake.flush_success = false;
         m_handshake.wait_read_after_write = false;
         return {WaitKind::kWrite, &m_send_context};
     case SslIOResult::WantRead:
-        if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
-            if (!prepareWriteFromPending(m_handshake_buffer, SslErrorCode::kHandshakeFailed)) {
-                setHandshakeFailure(SslError::fromOpenSSL(SslErrorCode::kHandshakeFailed));
-                return {};
+        {
+            const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+            if (pending > 0) {
+                if (!prepareWriteFromPending(m_handshake_buffer, pending, SslErrorCode::kHandshakeFailed)) {
+                    setHandshakeFailure(SslError::fromOpenSSL(SslErrorCode::kHandshakeFailed));
+                    return {};
+                }
+                m_handshake.wait_read_after_write = true;
+                return {WaitKind::kWrite, &m_send_context};
             }
-            m_handshake.wait_read_after_write = true;
-            return {WaitKind::kWrite, &m_send_context};
         }
         if (!prepareReadBuffer(m_handshake_buffer)) {
             setHandshakeFailure(SslError(SslErrorCode::kHandshakeFailed));
@@ -530,7 +547,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollRecv()
     case RecvPollAction::kCompleted:
         return {};
     case RecvPollAction::kNeedSend:
-        if (!prepareRecvSendChunk()) {
+        if (!prepareRecvSendChunk(0)) {
             return {};
         }
         return {WaitKind::kWrite, &m_send_context};
@@ -592,20 +609,26 @@ SslOperationDriver::WaitAction SslOperationDriver::pollShutdown()
         setShutdownSuccess();
         return {};
     case SslIOResult::WantWrite:
-        if (!prepareWriteFromPending(m_shutdown_buffer, SslErrorCode::kShutdownFailed)) {
-            setShutdownSuccess();
-            return {};
+        {
+            const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+            if (!prepareWriteFromPending(m_shutdown_buffer, pending, SslErrorCode::kShutdownFailed)) {
+                setShutdownSuccess();
+                return {};
+            }
         }
         m_shutdown.wait_read_after_write = false;
         return {WaitKind::kWrite, &m_send_context};
     case SslIOResult::WantRead:
-        if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
-            if (!prepareWriteFromPending(m_shutdown_buffer, SslErrorCode::kShutdownFailed)) {
-                setShutdownSuccess();
-                return {};
+        {
+            const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+            if (pending > 0) {
+                if (!prepareWriteFromPending(m_shutdown_buffer, pending, SslErrorCode::kShutdownFailed)) {
+                    setShutdownSuccess();
+                    return {};
+                }
+                m_shutdown.wait_read_after_write = true;
+                return {WaitKind::kWrite, &m_send_context};
             }
-            m_shutdown.wait_read_after_write = true;
-            return {WaitKind::kWrite, &m_send_context};
         }
         if (!prepareReadBuffer(m_shutdown_buffer)) {
             setShutdownSuccess();
@@ -692,8 +715,9 @@ void SslOperationDriver::onHandshakeWrite(std::expected<size_t, IOError> result)
     m_send_context.m_buffer += m_send_context.m_length;
     m_send_context.m_length = 0;
 
-    if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
-        if (!prepareWriteFromPending(m_handshake_buffer, SslErrorCode::kHandshakeFailed)) {
+    const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+    if (pending > 0) {
+        if (!prepareWriteFromPending(m_handshake_buffer, pending, SslErrorCode::kHandshakeFailed)) {
             setHandshakeFailure(SslError(SslErrorCode::kHandshakeFailed));
         }
         return;
@@ -752,8 +776,9 @@ void SslOperationDriver::onRecvWrite(std::expected<size_t, IOError> result)
     m_send_context.m_buffer += m_send_context.m_length;
     m_send_context.m_length = 0;
 
-    if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
-        prepareRecvSendChunk();
+    const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+    if (pending > 0) {
+        prepareRecvSendChunk(pending);
     }
 }
 
@@ -786,8 +811,9 @@ void SslOperationDriver::onSendWrite(std::expected<size_t, IOError> result)
     m_send_context.m_buffer += m_send_context.m_length;
     m_send_context.m_length = 0;
 
-    if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
-        fillSendChunk();
+    const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+    if (pending > 0) {
+        fillSendChunk(pending);
     }
 }
 
@@ -820,8 +846,9 @@ void SslOperationDriver::onShutdownWrite(std::expected<size_t, IOError> result)
     m_send_context.m_buffer += m_send_context.m_length;
     m_send_context.m_length = 0;
 
-    if (m_socket->m_engine.pendingEncryptedOutput() > 0) {
-        if (!prepareWriteFromPending(m_shutdown_buffer, SslErrorCode::kShutdownFailed)) {
+    const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
+    if (pending > 0) {
+        if (!prepareWriteFromPending(m_shutdown_buffer, pending, SslErrorCode::kShutdownFailed)) {
             setShutdownSuccess();
         }
         return;

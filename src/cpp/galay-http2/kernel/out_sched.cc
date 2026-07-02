@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <string_view>
 
 namespace galay::http2
 {
@@ -268,19 +269,25 @@ H2OutboundBytesSelection Http2OutboundScheduler::pickSendableBytes(H2OutboundBud
                     break;
                 }
 
-                auto payload = takeFrontData(stream.pending, chunk);
+                const auto& front = stream.pending.chunks.front();
+                const std::string_view payload(front.data() + stream.pending.front_offset, chunk);
+                const bool send_end = stream.pending.end_stream &&
+                                      stream.pending.chunks.size() == 1 &&
+                                      stream.pending.front_offset + chunk == front.size();
+                auto frame = Http2FrameBuilder::dataBytes(stream.stream_id, payload, send_end);
+                stream.pending.front_offset += chunk;
+                normalizePending(stream.pending);
                 budget.conn_window -= static_cast<int32_t>(chunk);
                 stream.stream_window -= static_cast<int32_t>(chunk);
                 stream.deficit -= chunk;
                 out.total_data_bytes += chunk;
                 progressed = true;
 
-                const bool send_end = stream.pending.end_stream && stream.pending.chunks.empty();
                 if (send_end) {
                     stream.pending.end_stream = false;
                     stream.queued = false;
                 }
-                out.frames.push_back(Http2FrameBuilder::dataBytes(stream.stream_id, payload, send_end));
+                out.frames.push_back(std::move(frame));
 
                 if (budget.conn_window <= 0) {
                     break;

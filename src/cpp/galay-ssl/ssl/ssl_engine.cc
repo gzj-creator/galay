@@ -4,6 +4,17 @@
 namespace galay::ssl
 {
 
+namespace {
+
+void clearOpenSslErrorQueueIfNeeded()
+{
+    if (ERR_peek_error() != 0) {
+        ERR_clear_error();
+    }
+}
+
+} // namespace
+
 SslEngine::SslEngine(SslContext* ctx)
     : m_ssl(nullptr)
     , m_ctx(ctx)
@@ -186,7 +197,7 @@ SslIOResult SslEngine::read(char* buffer, size_t length, size_t& bytesRead)
     }
 
     bytesRead = 0;
-    ERR_clear_error();  // 清除之前的错误
+    clearOpenSslErrorQueueIfNeeded();
     int ret = SSL_read(m_ssl, buffer, static_cast<int>(length));
 
     if (ret > 0) {
@@ -216,7 +227,7 @@ SslIOResult SslEngine::write(const char* buffer, size_t length, size_t& bytesWri
     }
 
     bytesWritten = 0;
-    ERR_clear_error();
+    clearOpenSslErrorQueueIfNeeded();
     int ret = SSL_write(m_ssl, buffer, static_cast<int>(length));
 
     if (ret > 0) {

@@ -22,6 +22,7 @@
 #include <vector>
 #include <expected>
 #include <cstdint>
+#include <optional>
 
 namespace galay::mysql::protocol
 {
@@ -45,6 +46,16 @@ std::expected<uint64_t, ParseError> readLenEncInt(const char* data, size_t len, 
  * @return 解析的字符串
  */
 std::expected<std::string, ParseError> readLenEncString(const char* data, size_t len, size_t& consumed);
+
+/**
+ * @brief 读取length-encoded string并返回借用视图
+ * @param data 数据指针
+ * @param len 可用长度
+ * @param consumed 输出：消耗的字节数
+ * @return 指向输入缓冲区内部的字符串视图
+ * @note 返回的string_view不拥有数据，仅在调用方提供的缓冲区保持存活且不被修改时有效。
+ */
+std::expected<std::string_view, ParseError> readLenEncStringView(const char* data, size_t len, size_t& consumed);
 
 /**
  * @brief 读取null-terminated string
@@ -157,6 +168,17 @@ public:
      */
     std::expected<std::vector<std::optional<std::string>>, ParseError>
     parseTextRow(const char* data, size_t len, size_t column_count);
+
+    /**
+     * @brief 解析文本协议行数据并返回借用视图
+     * @param data payload数据（不含包头）
+     * @param len payload长度
+     * @param column_count 列数
+     * @return 一行数据（每列为optional<string_view>，NULL用nullopt表示）
+     * @note 返回的string_view不拥有数据，仅在调用方提供的payload缓冲区保持存活且不被修改时有效。
+     */
+    std::expected<std::vector<std::optional<std::string_view>>, ParseError>
+    parseTextRowView(const char* data, size_t len, size_t column_count);
 
     /**
      * @brief 解析COM_STMT_PREPARE响应的OK部分
