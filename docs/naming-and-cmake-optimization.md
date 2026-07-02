@@ -68,7 +68,7 @@ awaitable.h  task.h  scheduler.hpp  io_scheduler.hpp  timeout.hpp  runtime.h
 - 内部/桥接头统一带 `_internal` / `_bridge` 标识,且不进安装导出。
 - 现有细粒度头可保留,只需通过伞形头组织并明确“未纳入伞形头者视为内部”。
 
-**落地**:非 kernel C 模块公开头已从 `<module>.h` 重命名为 `<module>_c.h`;kernel 新增 `kernel_c.h` 伞形公开头。
+**落地**:非 kernel C 模块公开头与实现文件已从 `<module>.h` / `<module>.cc` 重命名为 `<module>_c.h` / `<module>_c.cc`;kernel 新增 `kernel_c.h` 伞形公开头。
 
 ---
 

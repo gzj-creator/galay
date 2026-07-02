@@ -54,7 +54,7 @@
 - C++ 模块文档目录从 `docs/modules` 收敛到 `docs/cpp/modules`，顶层 README、`.gitignore` 与模块文档导航同步改向新的 cpp 文档路径。
 - C/C++ 示例、测试和 benchmark 的 CMake 注册方式批量改为 `file(GLOB ... CONFIGURE_DEPENDS)`，减少新增源文件时的手工 target 维护。
 - RPC C++23 module file set 改为直接注册到 `galay-rpc` / `galay::rpc`，保持模块入口文件与 CMake source list 规则一致。
-- C ABI 非 kernel 模块公开头统一从 `<module>.h` 重命名为 `<module>_c.h`，kernel C ABI 新增 `kernel_c.h` 伞形公开头，并同步更新测试、示例、benchmark 与文档 include 路径。
+- C ABI 非 kernel 模块公开头与实现文件统一从 `<module>.h` / `<module>.cc` 重命名为 `<module>_c.h` / `<module>_c.cc`，kernel C ABI 新增 `kernel_c.h` 伞形公开头，并同步更新测试、示例、benchmark 与文档 include 路径。
 - 调整 C Kernel `TcpSocket` accept/recv/send 结果结构：accepted socket 直接随 `galay_kernel_tcp_accept_result_t` 返回，移除 `has_socket` 与 `take_socket`；recv/send 结果补充原始 buffer 与 length，便于 callback 链式处理。
 - C Kernel TCP/Host C enum 成员统一改为带前缀命名：`C_TcpSocket*` 与 `C_IPType*`，移除旧的无前缀 `Success` / `ParameterInvalid` / `IPV4` / `IPV6` 等枚举名，并同步更新测试、示例与 benchmark。
 - C Kernel 测试、示例和 benchmark CMake 改为 `file(GLOB ... CONFIGURE_DEPENDS)` 自动收集源文件，避免新增用例时逐个登记。

@@ -111,12 +111,12 @@ static int scan_file(const char* relative_path)
 int main(void)
 {
     const char* files[] = {
-        "src/c/galay-mysql-c/mysql.cc",
-        "src/c/galay-mongo-c/mongo.cc",
-        "src/c/galay-tracing-c/tracing.cc",
-        "src/c/galay-http2-c/http2.cc",
-        "src/c/galay-redis-c/redis.cc",
-        "src/c/galay-etcd-c/etcd.cc",
+        "src/c/galay-mysql-c/mysql_c.cc",
+        "src/c/galay-mongo-c/mongo_c.cc",
+        "src/c/galay-tracing-c/tracing_c.cc",
+        "src/c/galay-http2-c/http2_c.cc",
+        "src/c/galay-redis-c/redis_c.cc",
+        "src/c/galay-etcd-c/etcd_c.cc",
         "src/cpp/galay-utils/encoding/base64.hpp",
     };
 

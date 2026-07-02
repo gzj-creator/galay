@@ -85,7 +85,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_recv(
 - 明确“什么是公开 C ABI”(未被伞形头纳入的即视为内部)。
 - 不改变现有细粒度头,纯增量。
 
-**落地**:非 kernel C 模块公开头统一为 `<module>_c.h`;kernel 提供 `kernel_c.h` 作为公开伞形头。
+**落地**:非 kernel C 模块公开头与实现文件统一为 `<module>_c.h` / `<module>_c.cc`;kernel 提供 `kernel_c.h` 作为公开伞形头。
 
 ### P2-1:结构体 ABI 稳定性显式化
 
