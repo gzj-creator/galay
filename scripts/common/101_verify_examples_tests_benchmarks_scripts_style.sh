@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${root}"
 
-python3 scripts/audit_examples_tests_benchmarks_scripts_style.py
+python3 scripts/common/100_audit_examples_tests_benchmarks_scripts_style.py
 
 cmake -S . -B build/verify-examples-tests-benchmarks-scripts-style \
   -DGALAY_BUILD_UTILS=ON \

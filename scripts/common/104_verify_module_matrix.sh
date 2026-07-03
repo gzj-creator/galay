@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 jobs="${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
 
 minimal_build="${root}/build/verify-minimal"

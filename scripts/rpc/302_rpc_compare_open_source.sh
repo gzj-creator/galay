@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RESULT_DIR="${ROOT_DIR}/benchmark/results/rpc"
 REQUESTS="${RPC_BENCH_REQUESTS:-10000}"
 PAYLOAD="${RPC_BENCH_PAYLOAD:-128}"
@@ -35,6 +35,6 @@ mkdir -p "${RESULT_DIR}"
     echo "galay_payload_scaling_reference:"
     "${ROOT_DIR}/build-rpc-release/benchmark/cpp/rpc/benchmark_rpc_payload_scaling" "${REQUESTS}" "${PAYLOAD}"
   else
-    echo "galay_payload_scaling_reference=missing; run scripts/rpc_release_benchmark.sh first"
+    echo "galay_payload_scaling_reference=missing; run scripts/rpc/301_rpc_release_benchmark.sh first"
   fi
 } | tee "${RESULT_DIR}/open-source-comparison.txt"

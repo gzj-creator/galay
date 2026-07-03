@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-"$ROOT_DIR/build"}"
 GALAY_SERVER="${GALAY_SERVER:-"$BUILD_DIR/benchmark/http2/benchmark_http2_h2_multiplex_server_throughput"}"
 GALAY_STATIC_SERVER="${GALAY_STATIC_SERVER:-"$BUILD_DIR/benchmark/http2/benchmark_http2_h2_static_fast_path"}"

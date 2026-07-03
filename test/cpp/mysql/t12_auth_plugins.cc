@@ -73,7 +73,7 @@ int requireAuthMatrixConfigOrSkip(const AuthMatrixConfig& cfg)
     std::cerr << "T11-MySQLAuthPlugins skipped: set GALAY_MYSQL_AUTH_HOST, "
                  "GALAY_MYSQL_AUTH_PASSWORD, GALAY_MYSQL_AUTH_DB, and optionally "
                  "GALAY_MYSQL_AUTH_PORT/GALAY_MYSQL_AUTH_*_USER. "
-                 "Run scripts/mysql/mysql_auth_matrix_setup.sh to create the default users."
+                 "Run scripts/mysql/202_mysql_auth_matrix_setup.sh to create the default users."
               << std::endl;
     return mysql_test::kMysqlTestSkippedExitCode;
 }

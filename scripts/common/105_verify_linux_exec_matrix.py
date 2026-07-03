@@ -228,7 +228,7 @@ def find_free_port() -> int:
 
 
 def source_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return Path(__file__).resolve().parents[2]
 
 
 def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:

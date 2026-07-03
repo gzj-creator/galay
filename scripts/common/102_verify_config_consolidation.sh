@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 build="${root}/build/verify-config-consolidation"
 jobs="${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
 

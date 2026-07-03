@@ -11,7 +11,18 @@
 
 ## [Unreleased]
 
-_本次 v4.0.1 发版后暂无未发版变更。_
+### Changed
+
+- **重组 `scripts/` 目录**：将原本散落在 `scripts/` 根下的验证与基准脚本按模块迁入 `common/`、`etcd/`、`http2/`、`mongo/`、`mysql/`、`redis/`、`rpc/` 子目录，并统一加 `1xx`/`2xx`/`3xx`/`4xx`/`5xx` 数字前缀，以稳定执行顺序并按域归类。
+- **重组 `agent/skill/` 目录**：将顶层 `SKILL.md` 与 `references/` 迁入 `agent/skill/galay-usage/` 子目录，使 skill 以命名目录形式承载，便于安装与复用。
+
+### Added
+
+- 新增 `scripts/common/500_install_skill.sh`：把指定 skill 目录以同名方式安装到目标目录，供本地或代理环境复用 galay skill。
+
+### Docs
+
+- 同步更新 `CHANGELOG.md` 历史版本节、`benchmark/cpp/rpc/README.md`、`docs/cpp/modules/http2/05-性能测试.md`、`docs/cpp/modules/rpc/performance-comparison.md` 与 `test/cpp/mysql/t12_auth_plugins.cc` 中引用的脚本路径，指向重组后的新位置。
 
 ## [v4.0.1] - 2026-07-03
 
@@ -32,7 +43,7 @@ _本次 v4.0.1 发版后暂无未发版变更。_
 ### Added
 
 - 新增 C ABI 封装约定落地：`C_IOResultCode` 诊断字符串和 `galay_status_t` 映射 helper，补齐 EOF/Timeout/Cancelled 通用状态码，并新增 `galay_iovec_t` 作为 public C ABI scatter/gather buffer 类型。
-- 新增 Linux examples/benchmarks 全量执行矩阵脚本 `scripts/verify_linux_exec_matrix.py`，支持按 build root 扫描可执行文件、区分 PASS/SKIP/LONG_RUNNING/EXTERNAL_DEP/NEEDS_PEER/FAIL/MISSING，并对已知 C/S 架构测试按先启动 server、再运行 client、最后清理 server 的顺序验证。
+- 新增 Linux examples/benchmarks 全量执行矩阵脚本 `scripts/common/105_verify_linux_exec_matrix.py`，支持按 build root 扫描可执行文件、区分 PASS/SKIP/LONG_RUNNING/EXTERNAL_DEP/NEEDS_PEER/FAIL/MISSING，并对已知 C/S 架构测试按先启动 server、再运行 client、最后清理 server 的顺序验证。
 - 新增 `consistent_hash.hpp` 无阻塞锁源码边界测试与 lookup benchmark，锁定一致性哈希实现不再引入 `std::mutex` / `std::shared_mutex` 等会阻塞协程调度线程的同步原语。
 - 新增 Redis C standalone direct coroutine async client 最小闭环：`galay_redis_client_connect`、`galay_redis_client_command_async` 与 `galay_redis_client_close`，通过本地 mock Redis loopback 覆盖 PING/PONG，并补齐对应 C test、example 与 smoke benchmark。
 - 新增 Redis C async `AUTH`、`SELECT` 与 pipeline API：支持 pipeline 命令缓存、批量 reply 保留和统一释放，并补齐本地 mock loopback test、example 与 smoke benchmark。
@@ -154,7 +165,7 @@ _本次 v4.0.1 发版后暂无未发版变更。_
 - **新增 IPv6 dual-stack socket 选项**：`HandleOption::handleIPv6Only(bool)` 显式设置 `IPV6_V6ONLY`；`TcpSocket::openHandle` / `UdpSocket::openHandle` 在 IPv6 场景默认调用 `handleIPv6Only(false)` 启用 dual-stack，并新增 `test/cpp/kernel/t127_ipv6only.cc` 锁定源码与运行时行为。
 - **补齐 galay-rpc 生产级能力**：新增调用级 metadata/options、错误码扩展、连接级 `RpcChannel`、并发 unary、deadline/cancel、heartbeat、reconnect、连接池、托管客户端、重试/治理/背压、配置/endpoint cache、etcd registry contract、stream 契约加固、server interceptor/TLS hook、metrics/tracing helper 等公共能力，并同步导出到 module facade。
 - **新增 RPC 边界测试与压测矩阵**：补齐 malformed/truncated/oversized 协议帧、borrowed payload、metadata wire round-trip、并发 unary、deadline/cancel、heartbeat/reconnect、连接池、托管客户端、治理/背压、stream、auth、TLS、metrics/tracing、综合边界矩阵等 CTest 覆盖；新增 unary latency、stream pressure、concurrent unary、pool pressure、managed client、payload scaling 等 benchmark。
-- **新增 RPC release benchmark 与开源对比脚本**：新增 `scripts/rpc_release_benchmark.sh`、`scripts/rpc_compare_open_source.sh`、`benchmark/cpp/rpc/README.md` 与 `docs/modules/rpc/performance-comparison.md`，记录 release 模式 QPS/latency、错误数和本地缺少开源 C++ RPC 基线工具链时的明确阻塞信息。
+- **新增 RPC release benchmark 与开源对比脚本**：新增 `scripts/rpc/301_rpc_release_benchmark.sh`、`scripts/rpc/302_rpc_compare_open_source.sh`、`benchmark/cpp/rpc/README.md` 与 `docs/modules/rpc/performance-comparison.md`，记录 release 模式 QPS/latency、错误数和本地缺少开源 C++ RPC 基线工具链时的明确阻塞信息。
 - **新增 C ABI 包装层 `src/c/`**：覆盖 utils/kernel/ssl/http/ws/http2/redis/rpc/mysql/mongo/etcd/mcp/tracing 共 13 个模块，以及通用 `galay-c` 包（含错误码与 ABI 宏），共 44 个文件；通过新增的 `GALAY_BUILD_C_API=ON` 构建选项启用，与既有 C++ 构建互不干扰。
 - **新增 C ABI 用例目录**：`benchmark/c/`、`examples/c/`、`test/c/`（共 99 个文件）提供各模块 C ABI 的 codec/builder/lifecycle smoke 基准、示例与回归测试入口。
 - **测试集成配置头**：新增 `test/cpp/{etcd,redis}/integration_config.h`，作为对应模块集成测试的统一配置入口。
@@ -175,10 +186,10 @@ _本次 v4.0.1 发版后暂无未发版变更。_
 - 新增 HTTP/2 HEADERS-only 静态空响应 fast path，GET/HEAD exact path 命中时可绕过 active handler 和完整 stream 生命周期，并复用预编码响应头。
 - 新增 HTTP/2 小 body 静态响应 bytes fast path，GET 命中时批量发送预编码 HEADERS 与 DATA bytes，HEAD 只返回响应头。
 - 新增 HTTP/2 静态文件 metadata/cache 组件，支持 path 规范化防逃逸、404、小文件 body 缓存、MIME、ETag 与 If-None-Match 304。
-- 新增 HTTP/2 静态空响应 h2load benchmark server 与 `scripts/http2_h2load_compare.sh --galay-static-empty` 模式，记录 req/s、p95、p99、CPU、RSS 与失败率。
-- 新增 `scripts/http2_h2load_compare.sh --galay-static-small`，记录 1KB 静态响应 fast path 的 h2load 指标。
+- 新增 HTTP/2 静态空响应 h2load benchmark server 与 `scripts/http2/300_http2_h2load_compare.sh --galay-static-empty` 模式，记录 req/s、p95、p99、CPU、RSS 与失败率。
+- 新增 `scripts/http2/300_http2_h2load_compare.sh --galay-static-small`，记录 1KB 静态响应 fast path 的 h2load 指标。
 - 新增 HTTP/2 `H2StaticResponse`/`H2StaticRoute` 静态响应配置类型，以及 h2c/h2 server builder 的 `staticResponse()` 配置入口。
-- 新增 `scripts/http2_h2load_compare.sh`，记录 galay h2c POST echo 与 `nghttpd --echo-upload` 的同参数外部 h2load 对比基线。
+- 新增 `scripts/http2/300_http2_h2load_compare.sh`，记录 galay h2c POST echo 与 `nghttpd --echo-upload` 的同参数外部 h2load 对比基线。
 - 新增 HTTP/2 kernel 层 `flow_control` 发送窗口控制器，覆盖连接/stream 窗口消耗、WINDOW_UPDATE、SETTINGS_INITIAL_WINDOW_SIZE delta 与窗口溢出错误。
 - 新增 HTTP/2 dispatcher/outbound scheduler 压力回归测试 `t85_h2pressure`，覆盖 1000 streams 公平调度、大 body 分片、频繁 WINDOW_UPDATE 与 GOAWAY 后新流拒绝。
 - 新增 HTTP/2 kernel 压力基准 `benchmark_http2_h2_kernel_pressure`，分阶段输出 scheduler/bytes scheduler/flow control/dispatcher QPS 与瓶颈阶段。
@@ -301,7 +312,7 @@ _本次 v4.0.1 发版后暂无未发版变更。_
 ### Chore
 
 - **拆分 benchmark/examples 与 test**：将原本散落在 `test/cpp/` 下的基准与示例源码迁出到 `benchmark/cpp/*/b*.cc`（etcd/redis/ssl）与 `examples/cpp/*/include/manual/*.cc`（http/http2/redis/rpc/ws），让回归测试目录只保留真正的 `t{n}_*.cc` 用例。
-- 新增 `scripts/mysql/mysql_auth_matrix_setup.sh`，按模块目录管理 MySQL auth 矩阵测试用户准备脚本。
+- 新增 `scripts/mysql/202_mysql_auth_matrix_setup.sh`，按模块目录管理 MySQL auth 矩阵测试用户准备脚本。
 - 扩充 `.gitignore`，新增 `.claude/`、`.codex/` 条目，避免代理本地配置目录进入版本控制。
 - 扩充 `.gitignore`，新增 `docs/modules/*/plans`，避免按模块拆分的本地规划文档进入版本控制。
 - 移除 examples/tests/benchmarks/scripts style 审计中的 `stale-include-root` 阻断规则，保留其他结构与命名检查。

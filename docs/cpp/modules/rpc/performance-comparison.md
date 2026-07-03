@@ -3,8 +3,8 @@
 This document records the repeatable benchmark commands for `galay-rpc`.
 
 ```bash
-rtk ./scripts/rpc_release_benchmark.sh
-rtk ./scripts/rpc_compare_open_source.sh
+rtk ./scripts/rpc/301_rpc_release_benchmark.sh
+rtk ./scripts/rpc/302_rpc_compare_open_source.sh
 ```
 
 The open-source comparison script uses a local gRPC C++ baseline when available.
@@ -19,7 +19,7 @@ Environment:
 - `requests=10000`
 - `payload=128`
 
-`rtk ./scripts/rpc_release_benchmark.sh` at 2026-06-21 22:43:30 CST:
+`rtk ./scripts/rpc/301_rpc_release_benchmark.sh` at 2026-06-21 22:43:30 CST:
 
 | Workload | Result | Errors |
 |---|---:|---:|
@@ -30,7 +30,7 @@ Environment:
 | Managed client pressure | 18,131,000 qps | 0 |
 | Payload scaling | 5,179,450 qps, 0.85 GB/s | 0 |
 
-`rtk ./scripts/rpc_compare_open_source.sh`:
+`rtk ./scripts/rpc/302_rpc_compare_open_source.sh`:
 
 - `baseline=none`
 - `status=blocked`

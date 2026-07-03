@@ -10,12 +10,12 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 EXAMPLE_RE = re.compile(r"^e[0-9]+_[a-z0-9]+(?:_[a-z0-9]+)*\.cc$")
 TEST_RE = re.compile(r"^t[0-9]+_[a-z0-9]+(?:_[a-z0-9]+)*\.cc$")
 BENCHMARK_RE = re.compile(r"^b[0-9]+_[a-z0-9]+(?:_[a-z0-9]+)*\.cc$")
 BENCHMARK_SUPPORT_RE = re.compile(r"^(?:bench_support|ssl_stats)\.cc$")
-SCRIPT_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*\.(?:sh|py|cmake|in|yml|yaml|json|md|txt|conf|crt|key|srl)$")
+SCRIPT_RE = re.compile(r"^[0-9]{3}_[a-z0-9]+(?:_[a-z0-9]+)*\.(?:sh|py|cmake|in|yml|yaml|json|md|txt|conf|crt|key|srl)$")
 GROUPED_UTIL_TEST_RE = re.compile(r"^[a-z0-9]+(?:_[a-z0-9]+)*_test\.cc$")
 LEGACY_SCRIPT_RE = re.compile(r"S[0-9]+-Run|RunIntegrationTest|RunHttpIntegrationTest")
 TARGET_BENCH_RE = re.compile(r"add_executable\s*\(\s*([A-Za-z0-9_.:-]+)")
@@ -164,8 +164,12 @@ def audit_scripts() -> None:
     for path in sorted(base.rglob("*")):
         if not path.is_file():
             continue
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
+            continue
+        if path.parent == base:
+            issue(path, 1, "script-location", "script files should live in a category subdirectory")
         if not SCRIPT_RE.match(path.name):
-            issue(path, 1, "script-name", "script name should be lower snake_case")
+            issue(path, 1, "script-name", "script name should start with a unique NNN_ prefix and use lower snake_case")
         if LEGACY_SCRIPT_RE.search(path.name):
             issue(path, 1, "legacy-script-name", "legacy stage-coded script name should be renamed")
         if path.suffix == ".sh":
