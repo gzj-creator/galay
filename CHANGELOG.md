@@ -20,6 +20,10 @@
 
 - 新增 `scripts/common/500_install_skill.sh`：把指定 skill 目录以同名方式安装到目标目录，供本地或代理环境复用 galay skill。
 
+### Fixed
+
+- 修复 HTTP server 路由参数丢失：`HttpServer` 在通过 `m_router->findHandler(method, uri)` 匹配路由后，未将解析出的路径参数回填到 `request`，导致业务 handler 始终拿不到 `/users/:id` 这类路径参数；现已在路由命中后立即 `request.setRouteParams(std::move(params))`，使 handler 能正确读取路由参数。
+
 ### Docs
 
 - 同步更新 `CHANGELOG.md` 历史版本节、`benchmark/cpp/rpc/README.md`、`docs/cpp/modules/http2/05-性能测试.md`、`docs/cpp/modules/rpc/performance-comparison.md` 与 `test/cpp/mysql/t12_auth_plugins.cc` 中引用的脚本路径，指向重组后的新位置。

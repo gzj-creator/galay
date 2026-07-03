@@ -263,6 +263,7 @@ public:
                 ++handled_requests;
 
                 auto [handler, params] = m_router->findHandler(request.header().method(), request.header().uri());
+                request.setRouteParams(std::move(params));
 
                 if (!handler && m_router->hasFallbackProxy()) {
                     handler = m_router->fallbackProxyHandler();
