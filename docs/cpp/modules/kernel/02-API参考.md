@@ -792,7 +792,7 @@ builder iovec 公开面：
 - `AsyncMutex` / `MpscChannel<T>` / `UnsafeChannel<T>` / `AsyncWaiter<T>`：
   - 先看本页 `并发原语`
   - 再看 `docs/03-使用指南.md` 与 `docs/07-常见问题.md`
-- `find_package(galay-kernel)` / 已安装头文件边界：
+- `find_package(galay)` / 已安装头文件边界：
   - 先看本页 `导出 target`、`安装包头文件边界`
   - 再看 `docs/00-快速开始.md` 与 `docs/07-常见问题.md`
 

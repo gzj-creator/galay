@@ -80,7 +80,6 @@ int main() {
     const auto root_build = root / "BUILD.bazel";
     const auto kernel_build = source_root / "galay-kernel" / "BUILD";
     const auto kernel_cmake = source_root / "galay-kernel" / "CMakeLists.txt";
-    const auto package_config = root / "cmake" / "galay-module-config.cmake.in";
     const auto aio_file_h = source_root / "galay-kernel" / "async" / "aio_file.h";
     const auto defn_hpp = source_root / "galay-kernel" / "common" / "defn.hpp";
     const auto kqueue_scheduler_h = source_root / "galay-kernel" / "core" / "kqueue_scheduler.h";
@@ -93,7 +92,6 @@ int main() {
     const std::string root_build_content = readAll(root_build);
     const std::string kernel_build_content = readAll(kernel_build);
     const std::string kernel_cmake_content = readAll(kernel_cmake);
-    const std::string package_config_content = readAll(package_config);
     const std::string aio_content = readAll(aio_file_h);
     const std::string defn_content = readAll(defn_hpp);
     const std::string kqueue_scheduler_content = readAll(kqueue_scheduler_h);
@@ -103,7 +101,6 @@ int main() {
     if (root_cmake_content.empty()) failures.push_back(root_cmake.string() + ": failed to read file");
     if (root_build_content.empty()) failures.push_back(root_build.string() + ": failed to read file");
     if (kernel_cmake_content.empty()) failures.push_back(kernel_cmake.string() + ": failed to read file");
-    if (package_config_content.empty()) failures.push_back(package_config.string() + ": failed to read file");
     if (aio_content.empty()) failures.push_back(aio_file_h.string() + ": failed to read file");
     if (defn_content.empty()) failures.push_back(defn_hpp.string() + ": failed to read file");
     if (kqueue_scheduler_content.empty()) failures.push_back(kqueue_scheduler_h.string() + ": failed to read file");
@@ -150,6 +147,11 @@ int main() {
                        root_cmake_content,
                        "GALAY_KERNEL_BACKEND STREQUAL \"iocp\"",
                        "expected top-level backend allow-list to drop iocp");
+    requireNotContains(failures,
+                       root_cmake,
+                       root_cmake_content,
+                       "galay-module-config.cmake.in",
+                       "expected old per-module package config template removal");
 
     requireContains(failures,
                     kernel_build,

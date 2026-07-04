@@ -172,52 +172,6 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay
 )
 
-foreach(_galay_package IN ITEMS
-    galay-utils
-    galay-kernel
-    galay-ssl
-    galay-http
-    galay-ws
-    galay-http2
-    galay-redis
-    galay-rpc
-    galay-mysql
-    galay-mongo
-    galay-etcd
-    galay-mcp
-    galay-tracing
-    galay-c-common
-    galay-c-utils
-    galay-c-kernel
-    galay-c-ssl
-    galay-c-http
-    galay-c-ws
-    galay-c-http2
-    galay-c-redis
-    galay-c-rpc
-    galay-c-mysql
-    galay-c-mongo
-    galay-c-etcd
-    galay-c-mcp
-    galay-c-tracing
-)
-    configure_package_config_file(
-        ${PROJECT_SOURCE_DIR}/cmake/galay-module-config.cmake.in
-        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}Config.cmake
-        INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_galay_package}
-    )
-    write_basic_package_version_file(
-        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}ConfigVersion.cmake
-        VERSION ${PROJECT_VERSION}
-        COMPATIBILITY SameMajorVersion
-    )
-    install(FILES
-        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}Config.cmake
-        ${CMAKE_CURRENT_BINARY_DIR}/${_galay_package}ConfigVersion.cmake
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${_galay_package}
-    )
-endforeach()
-
 if(BUILD_TESTING)
     add_subdirectory(test)
 endif()

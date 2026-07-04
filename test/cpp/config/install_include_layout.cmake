@@ -135,6 +135,24 @@ if(installed_targets_content MATCHES "include/galay/cpp")
     message(FATAL_ERROR "Installed CMake targets must expose only the aggregate include root, not include/galay/cpp.")
 endif()
 
+foreach(required_package_file
+        IN ITEMS
+        "lib/cmake/galay/galayConfig.cmake"
+        "lib/cmake/galay/galayConfigVersion.cmake"
+        "lib/cmake/galay/galayTargets.cmake")
+    if(NOT EXISTS "${prefix_dir}/${required_package_file}")
+        message(FATAL_ERROR "Missing installed package file: ${required_package_file}")
+    endif()
+endforeach()
+
+file(GLOB installed_module_package_dirs
+    "${prefix_dir}/lib/cmake/galay-*")
+if(installed_module_package_dirs)
+    message(FATAL_ERROR
+        "Installed CMake package layout must expose only lib/cmake/galay, "
+        "not per-module package directories: ${installed_module_package_dirs}")
+endif()
+
 file(GLOB_RECURSE installed_cppm_files
     "${prefix_dir}/include/galay/cpp/*.cppm")
 if(installed_cppm_files)
@@ -155,7 +173,7 @@ file(WRITE "${consumer_source_dir}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.20)
 project(galay_install_include_layout_consumer LANGUAGES CXX)
 
-find_package(galay-kernel CONFIG REQUIRED)
+find_package(galay CONFIG REQUIRED)
 
 add_executable(consumer main.cc)
 target_compile_features(consumer PRIVATE cxx_std_23)

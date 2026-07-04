@@ -4,7 +4,7 @@ project(galay_mysql_consumer_smoke LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD @GALAY_MYSQL_CXX_STANDARD@)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(galay-mysql REQUIRED CONFIG)
+find_package(galay REQUIRED CONFIG)
 
 add_executable(galay_mysql_consumer_smoke main.cc)
 target_link_libraries(galay_mysql_consumer_smoke PRIVATE galay::mysql)

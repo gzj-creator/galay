@@ -48,19 +48,28 @@ execute_process(
 
 if(NOT install_result EQUAL 0)
     message(FATAL_ERROR
-        "Failed to install galay-mysql for package smoke test.\n"
+        "Failed to install galay for package smoke test.\n"
         "stdout:\n${install_stdout}\n"
         "stderr:\n${install_stderr}")
 endif()
 
 foreach(required_package_file
         IN ITEMS
-        "lib/cmake/galay-mysql/galay-mysqlConfig.cmake"
-        "lib/cmake/galay-mysql/galay-mysqlConfigVersion.cmake")
+        "lib/cmake/galay/galayConfig.cmake"
+        "lib/cmake/galay/galayConfigVersion.cmake"
+        "lib/cmake/galay/galayTargets.cmake")
     if(NOT EXISTS "${prefix_dir}/${required_package_file}")
         message(FATAL_ERROR "Missing installed package file: ${required_package_file}")
     endif()
 endforeach()
+
+file(GLOB installed_module_package_dirs
+    "${prefix_dir}/lib/cmake/galay-*")
+if(installed_module_package_dirs)
+    message(FATAL_ERROR
+        "Installed CMake package layout must expose only lib/cmake/galay, "
+        "not per-module package directories: ${installed_module_package_dirs}")
+endif()
 
 set(package_prefix_path "${prefix_dir}")
 if(DEFINED GALAY_MYSQL_PACKAGE_CMAKE_PREFIX_PATH
@@ -91,7 +100,7 @@ execute_process(
 
 if(NOT configure_result EQUAL 0)
     message(FATAL_ERROR
-        "Failed to configure external consumer via find_package(galay-mysql).\n"
+        "Failed to configure external consumer via find_package(galay).\n"
         "stdout:\n${configure_stdout}\n"
         "stderr:\n${configure_stderr}")
 endif()
@@ -110,7 +119,7 @@ execute_process(
 
 if(NOT build_result EQUAL 0)
     message(FATAL_ERROR
-        "Failed to build external consumer linked against installed galay-mysql.\n"
+        "Failed to build external consumer linked against installed galay.\n"
         "stdout:\n${build_stdout}\n"
         "stderr:\n${build_stderr}")
 endif()

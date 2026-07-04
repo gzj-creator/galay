@@ -75,16 +75,54 @@ int main() {
 | C++ | `<galay/cpp/galay-<module>/...>` | `galay::kernel`、`galay::async`、`galay::http`、`galay::http2`、`galay::websocket`、`galay::redis`、`galay::mysql`、`galay::mongo`、`galay::etcd`、`galay::rpc`、`galay::mcp`、`galay::tracing`、`galay::utils`、`galay::ssl` |
 | C | `<galay/c/galay-<module>-c/...>` | 函数 `galay_<module>_<action>()`、类型 `galay_<module>_<type>_t`、共享值类型 `C_Host`/`C_IOResult`/`C_RuntimeConfig` |
 
-### CMake 链接目标
+### CMake / Bazel 引入模块
+
+安装后只导出一个 CMake package：`galay`。不要使用按模块命名的旧 CMake package 入口；按需链接模块 target：
 
 ```cmake
-find_package(galay-<module> CONFIG REQUIRED)          # 或整包
+find_package(galay CONFIG REQUIRED)
+
+add_executable(app main.cc)
 target_link_libraries(app PRIVATE galay::kernel galay::http)
 ```
 
+在仓库内用 Bazel 时，每个 C++ 模块对应一个 `cc_library` label：
+
+```python
+cc_binary(
+    name = "app",
+    srcs = ["main.cc"],
+    deps = [
+        "//src/cpp/galay-kernel:galay-kernel",
+        "//src/cpp/galay-http:galay-http",
+    ],
+)
+```
+
+- CMake target `galay::<module>` 对应 Bazel label `//src/cpp/galay-<module>:galay-<module>`，例如 `galay::kernel` ↔ `//src/cpp/galay-kernel:galay-kernel`。
+- 外部 Bazel/Bzlmod 消费时仓库名是 `galay`，label 前加 `@galay`，例如 `@galay//src/cpp/galay-kernel:galay-kernel`。
+- 例外/补充：CMake `galay::ws` 对应 Bazel `//src/cpp/galay-ws:galay-ws`；Redis TLS 额外有 Bazel `//src/cpp/galay-redis:galay-redis-tls`。
 - C++ target：`galay::kernel`、`galay::http`、`galay::http2`、`galay::ws`（注意 CMake target 是 `galay::ws`，但 C++ 命名空间是 `galay::websocket`）、`galay::redis`、`galay::mysql`、`galay::mongo`、`galay::etcd`、`galay::rpc`、`galay::mcp`、`galay::tracing`（附 `galay::tracing-kernel`、`galay::tracing-spdlog`）、`galay::utils`、`galay::ssl`。异步 socket 类型在 `galay::async` **命名空间**里，随 `galay::kernel` 提供，无独立 target。
 - C target：`galay::c-kernel`、`galay::c-common`、`galay::c-bridge`、`galay::c-http`、`galay::c-http2`、`galay::c-ws`、`galay::c-redis`、`galay::c-mysql`、`galay::c-mongo`、`galay::c-etcd`、`galay::c-rpc`、`galay::c-mcp`、`galay::c-ssl`、`galay::c-tracing`、`galay::c-utils`。
 - C++23 module 模式（`-DGALAY_ENABLE_CPP23_MODULES=ON`，需 CMake ≥ 3.28 + Ninja/VS + 非 AppleClang）：`import galay.kernel;`、`import galay.http;`、`import galay.http2;`、`import galay.websocket;`、`import galay.redis;`、`import galay.mysql;`、`import galay.mongo;`、`import galay.etcd;`、`import galay.rpc;`（`import galay.rpc.etcd;`）、`import galay.mcp;`、`import galay.tracing;`、`import galay.utils;`、`import galay.ssl;`。
+
+常用模块映射：
+
+| 模块 | CMake target | Bazel label |
+| --- | --- | --- |
+| kernel | `galay::kernel` | `//src/cpp/galay-kernel:galay-kernel` |
+| utils | `galay::utils` | `//src/cpp/galay-utils:galay-utils` |
+| ssl | `galay::ssl` | `//src/cpp/galay-ssl:galay-ssl` |
+| http | `galay::http` | `//src/cpp/galay-http:galay-http` |
+| http2 | `galay::http2` | `//src/cpp/galay-http2:galay-http2` |
+| ws | `galay::ws` | `//src/cpp/galay-ws:galay-ws` |
+| redis | `galay::redis` | `//src/cpp/galay-redis:galay-redis` |
+| mysql | `galay::mysql` | `//src/cpp/galay-mysql:galay-mysql` |
+| mongo | `galay::mongo` | `//src/cpp/galay-mongo:galay-mongo` |
+| etcd | `galay::etcd` | `//src/cpp/galay-etcd:galay-etcd` |
+| rpc | `galay::rpc` | `//src/cpp/galay-rpc:galay-rpc` |
+| mcp | `galay::mcp` | `//src/cpp/galay-mcp:galay-mcp` |
+| tracing | `galay::tracing` | `//src/cpp/galay-tracing:galay-tracing` |
 
 ### 构建开关（`cmake -B build -D<opt>=ON/OFF`）
 

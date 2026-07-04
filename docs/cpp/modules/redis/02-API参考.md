@@ -601,7 +601,7 @@ TLS 单连接路径当前返回的 operation 类型是：
 
 但要注意：
 
-- 当前安装规则会排除 `sync/`，因此 `find_package(galay-redis)` 消费方不会拿到这组头文件
+- 当前安装规则会排除 `sync/`，因此 `find_package(galay)` 消费方不会拿到这组头文件
 - 当前 `examples/`、`benchmark/` 没有覆盖这条同步路径
 - 当前主 README 和快速开始不再把它当作默认入口
 - 模块 `galay.redis` 也不会导出这条同步路径

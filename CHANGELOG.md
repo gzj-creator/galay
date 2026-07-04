@@ -13,6 +13,7 @@
 
 ### Changed
 
+- **统一 CMake 安装包为单一 `galay` 包**：移除顶层 `CMakeLists.txt` 中按模块生成 `galay-kernel` / `galay-utils` / `galay-http` 等独立 package config 的 foreach，并删除模板 `cmake/galay-module-config.cmake.in`；安装后只在 `lib/cmake/galay` 下导出 `galayConfig.cmake` / `galayConfigVersion.cmake` / `galayTargets.cmake`，外部项目统一通过 `find_package(galay CONFIG REQUIRED)` 后按需链接 `galay::<module>`。同步收紧 install 布局校验（`test/cpp/config/install_include_layout.cmake`、`test/cpp/mysql/package/CMakeLists.txt.in` 与 `package_consumer_smoke.cmake`、`scripts/common/103_verify_module_layout_install_bazel.sh`）强制断言不再安装按模块的 package 目录，`test/cpp/kernel/t94_alignsrc.cc` 改为校验旧模板已移除；并刷新全模块快速开始 / API 参考 / 常见问题文档与 `agent/skill/galay-usage/SKILL.md` 的引入方式（含 CMake target 与 Bazel label 映射表）。
 - **重组 `scripts/` 目录**：将原本散落在 `scripts/` 根下的验证与基准脚本按模块迁入 `common/`、`etcd/`、`http2/`、`mongo/`、`mysql/`、`redis/`、`rpc/` 子目录，并统一加 `1xx`/`2xx`/`3xx`/`4xx`/`5xx` 数字前缀，以稳定执行顺序并按域归类。
 - **重组 `agent/skill/` 目录**：将顶层 `SKILL.md` 与 `references/` 迁入 `agent/skill/galay-usage/` 子目录，使 skill 以命名目录形式承载，便于安装与复用。
 - **构建开关默认收敛**：`cmake/option.cmake` 将 `BUILD_TESTING`、`GALAY_BUILD_EXAMPLES`、`GALAY_BUILD_BENCHMARKS` 默认值由 `ON` 改为 `OFF`，使测试 / 示例 / 基准目标改为按需开启，避免默认全量构建。

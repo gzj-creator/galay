@@ -82,7 +82,10 @@ cmake --install "${build}"
 
 test -f "${prefix}/lib/cmake/galay/galayConfig.cmake"
 test -f "${prefix}/lib/cmake/galay/galayTargets.cmake"
-test -f "${prefix}/lib/cmake/galay-kernel/galay-kernelConfig.cmake"
+if compgen -G "${prefix}/lib/cmake/galay-*" >/dev/null; then
+  echo "per-module CMake package directories must not be installed" >&2
+  exit 1
+fi
 test -f "${prefix}/include/galay/cpp/galay-kernel/core/runtime.h"
 test -f "${prefix}/include/galay/cpp/galay-http/protoc/http_request.h"
 test -f "${prefix}/include/galay/cpp/galay-ws/protoc/ws_frame.h"

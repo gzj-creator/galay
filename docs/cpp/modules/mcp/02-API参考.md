@@ -25,7 +25,7 @@
 
 ## 1. 导出 target、包名与模块名
 
-- CMake package：`find_package(galay-mcp CONFIG REQUIRED)`
+- CMake package：`find_package(galay CONFIG REQUIRED)`
 - 核心 target：`galay-mcp`
 - 模块 file set：挂载在 `galay-mcp` / `galay::mcp`（仅在模块支持开启且成功构建时启用）
 - C++23 模块名：`galay.mcp`
@@ -35,7 +35,7 @@
 `galay-mcp` 导出的 CMake target 会通过 `INTERFACE_COMPILE_FEATURES` 发布 `cxx_std_23`，因此**链接该 target 的消费者无需再额外手写** `set(CMAKE_CXX_STANDARD 23)`：
 
 ```cmake
-find_package(galay-mcp CONFIG REQUIRED)
+find_package(galay CONFIG REQUIRED)
 add_executable(your-target main.cc)
 target_link_libraries(your-target PRIVATE galay::mcp)
 ```
