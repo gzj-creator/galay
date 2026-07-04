@@ -1,12 +1,24 @@
-HTTP/2 h2load external comparison
-h2load:  h2load nghttp2/1.69.0
-nghttpd: nghttpd nghttp2/1.69.0
-build:   /Users/gongzhijie/Desktop/projects/git/galay/build-release (CMAKE_BUILD_TYPE=Release)
-payload: 13 bytes
-mode:    POST echo
-h2load:  -D10 --warm-up-time=2 -t4 -c20 -m100 -d payload
-server:  4 IO workers, max_streams=1000
+HTTP/2 h2load POST echo — fair comparison (galay vs clean nghttp2 echo)
+h2load:        h2load nghttp2/1.69.0
+nghttp2-echo:  hand-written minimal h2c echo (thread-per-connection, TCP_NODELAY, SO_NOSIGPIPE, real HPACK/framing)
+galay:         build-release (CMAKE_BUILD_TYPE=Release), galay-kernel SIGPIPE-fixed
+machine:       Apple M4 Pro (12 cores)
+payloads:      13 B / 1 KB / 16 KB
+mode:          POST echo
+server:        4 IO workers, max_streams=1000
 
-scenario                      req/s        p95        p99   failed  errored  timeout   avg_cpu%   max_cpu%  max_rss_mib     rc
-galay-post-echo          1296550.00     1.77ms     1.98ms        0        0        0      119.6      126.3         22.3      0
-nghttpd-echo-upload        14540.00   162.84ms   199.93ms        0        0        0      295.8      319.1          9.6      0
+scenario                       req/s        p50        p99   failed  errored  timeout
+galay-echo    13B  -c20 -m100  1331387.00     1.26ms     1.89ms       0        0        0
+galay-echo    13B  -c40 -m250  1514531.25     5.15ms     7.66ms       0        0        0
+galay-echo     1KB -c20 -m100   977006.88     1.57ms     2.36ms       0        0        0
+galay-echo    16KB -c20 -m100   214674.62     9.26ms    10.67ms       0        0        0
+nghttp2-echo  13B  -c20 -m100   204840.50     9.79ms    11.04ms       0        0        0
+nghttp2-echo  13B  -c40 -m250   224178.00    22.04ms   352.18ms       0        0        0
+nghttp2-echo   1KB -c20 -m100   269472.50     7.44ms    10.64ms       0        0        0
+nghttp2-echo  16KB -c20 -m100   118173.50    16.66ms    20.98ms       0        0        0
+nghttp2-echo  16KB -c40 -m250   118935.62    82.99ms    98.08ms       0        0        0
+
+Unloaded single-stream RTT (-t1 -c1 -m1, p50): galay-echo 19us / nghttp2-echo 18us — both at the h2load measurement floor.
+Sanity: nghttpd --no-tls static 0B GET on the same machine reaches ~2.6M req/s, i.e. the nghttp2 stack is not slow; the retracted comparison used nghttpd --echo-upload, a demo handler that does not scale with concurrency.
+
+Real throughput multiplier (galay-echo / nghttp2-echo): ~6.5x at 13B, shrinking to ~1.8x at 16KB. Single-request latency is a wash.

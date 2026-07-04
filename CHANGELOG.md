@@ -28,6 +28,7 @@
 - 新增 `docs/benchmark_plan.md`（全模块性能压测计划：控制变量、指标、环境与分模块场景）与 `docs/machine_config.md`（测试机器硬件与系统配置记录）。
 - `scripts/http2/300_http2_h2load_compare.sh` 新增 `--post-echo-best` / `--post-echo-matrix` best-of 矩阵模式：遍历 server 线程数、最大流数与 h2load 线程 / 客户端 / 流数组合，输出 galay 与 nghttpd 的最佳吞吐与配置对比，默认要求 Release 构建并支持 `build-release` 路径回退。
 - 新增 `test/scripts/t2_http2_h2load_compare.py`，并在 `test/scripts/CMakeLists.txt` 注册 `scripts.http2_h2load_compare` CTest 用例。
+- 新增 `benchmark/cpp/http/b17_static_server_throughput.cc`：HTTP/1.1 静态文件 echo 压测程序，每请求执行 stat+open+read+close 真实磁盘读取，镜像 Apache httpd 静态服务工作量，作为 galay-static vs httpd-static 的公平对比基线（区别于 b1 的内存固定响应）。
 
 ### Fixed
 
@@ -36,6 +37,7 @@
 ### Docs
 
 - 同步更新 `CHANGELOG.md` 历史版本节、`benchmark/cpp/rpc/README.md`、`docs/cpp/modules/http2/05-性能测试.md`、`docs/cpp/modules/rpc/performance-comparison.md` 与 `test/cpp/mysql/t12_auth_plugins.cc` 中引用的脚本路径，指向重组后的新位置。
+- 刷新 HTTP / HTTP2 性能测试报告与基准数据：更新 `docs/cpp/modules/http/05-性能测试.md`、`docs/cpp/modules/http2/05-性能测试.md` 及对应 `benchmark_data/`（http11 同语言对比、h2load post-echo 对比 CSV/TXT、post-echo 吞吐与延迟 SVG 图表）。
 
 ## [v4.0.1] - 2026-07-03
 

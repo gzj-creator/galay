@@ -1,16 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="820" height="260" viewBox="0 0 820 260" role="img" aria-labelledby="title desc">
-  <title id="title">HTTP/2 POST echo throughput</title>
-  <desc id="desc">Release h2load POST echo throughput comparison between galay and nghttpd.</desc>
+  <title id="title">HTTP/2 POST echo throughput (fair)</title>
+  <desc id="desc">Release h2load POST echo throughput: galay-echo vs a clean hand-written nghttp2 echo (thread-per-connection, TCP_NODELAY). 13B payload, -t4 -c20 -m100.</desc>
   <rect width="820" height="260" fill="#ffffff"/>
-  <text x="28" y="34" font-family="Arial, sans-serif" font-size="20" fill="#111827">HTTP/2 POST echo throughput</text>
-  <text x="28" y="58" font-family="Arial, sans-serif" font-size="12" fill="#4b5563">h2load -D10 --warm-up-time=2 -t4 -c20 -m100 -d payload</text>
+  <text x="28" y="34" font-family="Arial, sans-serif" font-size="20" fill="#111827">HTTP/2 POST echo throughput (fair, 13B)</text>
+  <text x="28" y="58" font-family="Arial, sans-serif" font-size="12" fill="#4b5563">h2load -D8 --warm-up-time=2 -t4 -c20 -m100 -d 13B | galay vs clean nghttp2 echo</text>
   <line x1="150" y1="86" x2="770" y2="86" stroke="#e5e7eb"/>
   <line x1="150" y1="146" x2="770" y2="146" stroke="#e5e7eb"/>
   <text x="28" y="119" font-family="Arial, sans-serif" font-size="14" fill="#111827">galay</text>
   <rect x="150" y="96" width="620" height="34" rx="4" fill="#2563eb"/>
-  <text x="622" y="119" font-family="Arial, sans-serif" font-size="14" fill="#ffffff">1,310,990 req/s</text>
-  <text x="28" y="179" font-family="Arial, sans-serif" font-size="14" fill="#111827">nghttpd</text>
-  <rect x="150" y="156" width="7.2" height="34" rx="3" fill="#f97316"/>
-  <text x="168" y="179" font-family="Arial, sans-serif" font-size="14" fill="#111827">15,290 req/s</text>
-  <text x="28" y="232" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">Source: benchmark_data/h2load_compare_2026-07-03.csv</text>
+  <text x="622" y="119" font-family="Arial, sans-serif" font-size="14" fill="#ffffff">1,331,387 req/s</text>
+  <text x="28" y="179" font-family="Arial, sans-serif" font-size="14" fill="#111827">nghttp2-echo</text>
+  <rect x="150" y="156" width="95" height="34" rx="4" fill="#f97316"/>
+  <text x="255" y="179" font-family="Arial, sans-serif" font-size="14" fill="#111827">204,840 req/s</text>
+  <text x="28" y="232" font-family="Arial, sans-serif" font-size="12" fill="#6b7280">Source: benchmark_data/h2load_post_echo_compare_2026-07-04.csv · real multiplier ≈ 6.5×</text>
 </svg>
