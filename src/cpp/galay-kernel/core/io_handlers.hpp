@@ -16,6 +16,7 @@
 
 #include "../common/defn.hpp"
 #include "../common/error.h"
+#include "../common/handle_option.h"
 #include "../common/host.hpp"
 #include <sys/socket.h>
 #include <sys/uio.h>
@@ -58,6 +59,14 @@ inline std::pair<std::expected<GHandle, IOError>, Host> handleAccept(GHandle lis
             return {std::unexpected(IOError(kNotReady, 0)), Host{}};
         }
         return {std::unexpected(IOError(kAcceptFailed, static_cast<uint32_t>(errno))), Host{}};
+    }
+    auto no_sigpipe = HandleOption(handle).handleNoSigPipe();
+    if (!no_sigpipe) {
+        const auto option_error = no_sigpipe.error();
+        if (galay_close(handle.fd) != 0) {
+            return {std::unexpected(IOError(kDisconnectError, static_cast<uint32_t>(errno))), Host{}};
+        }
+        return {std::unexpected(option_error), Host{}};
     }
     Host host = Host::fromSockAddr(addr);
     return {handle, std::move(host)};
@@ -106,7 +115,10 @@ inline std::expected<size_t, IOError> handleReadv(GHandle handle, struct iovec* 
 
 inline std::expected<size_t, IOError> handleWritev(GHandle handle, struct iovec* iovecs, int iovcnt)
 {
-    ssize_t writtenBytes = writev(handle.fd, iovecs, iovcnt);
+    struct msghdr msg{};
+    msg.msg_iov = iovecs;
+    msg.msg_iovlen = static_cast<size_t>(iovcnt);
+    ssize_t writtenBytes = sendmsg(handle.fd, &msg, kSendNoSignalFlag);
     if (writtenBytes >= 0) {
         return static_cast<size_t>(writtenBytes);
     } else {

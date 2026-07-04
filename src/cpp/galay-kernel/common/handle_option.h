@@ -10,6 +10,7 @@
  * - 端口复用（SO_REUSEPORT）
  * - IPv6-only / dual-stack 控制（IPV6_V6ONLY）
  * - 低延迟传输（TCP_NODELAY）
+ * - 局部抑制 socket 写入触发 SIGPIPE（SO_NOSIGPIPE）
  *
  * @code
  * TcpSocket socket(scheduler);
@@ -154,6 +155,19 @@ public:
      * @note 在连接建立后尽快调用
      */
     std::expected<void, IOError> handleTcpNoDelay();
+
+    /**
+     * @brief 在支持的平台上启用 SO_NOSIGPIPE
+     *
+     * @return std::expected<void, IOError> 成功返回 void，失败返回 IOError
+     *
+     * @details
+     * - macOS/BSD：设置 SO_NOSIGPIPE，使该 socket 写入断开连接时返回 EPIPE 而不是投递 SIGPIPE
+     * - 其他平台：静默成功，不修改进程级 signal disposition
+     *
+     * @note 这是 socket 局部策略，框架不会修改全局 SIGPIPE 处理方式。
+     */
+    std::expected<void, IOError> handleNoSigPipe();
 
     /**
      * @brief 启用 TCP_DEFER_ACCEPT（仅 Linux）

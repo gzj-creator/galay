@@ -86,8 +86,9 @@ public:
     /**
      * @brief 创建 TCP socket 并以返回值报告系统调用错误。
      * @param type IP 协议类型（IPV4/IPV6）
-     * @return 成功返回可用 TcpSocket；socket() 失败时返回 IOError(kOpenFailed, errno)。
+     * @return 成功返回可用 TcpSocket；socket() 或 socket 局部选项配置失败时返回 IOError。
      * @note 不启动任何协程，也不阻塞；适合 C ABI/FFI 边界显式映射错误。
+     *       支持 SO_NOSIGPIPE 的平台会在创建时启用该 socket 局部选项。
      */
     static std::expected<TcpSocket, galay::kernel::IOError> create(
         galay::kernel::IPType type = galay::kernel::IPType::IPV4);

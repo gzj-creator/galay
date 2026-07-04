@@ -36,7 +36,7 @@ TcpSocket::TcpSocket(IPType type)
 /**
  * @brief 创建 TCP 套接字并返回显式错误。
  * @param type IP 协议类型（IPV4 或 IPV6）
- * @return 成功返回 TcpSocket；失败返回 IOError(kOpenFailed, errno)
+ * @return 成功返回 TcpSocket；失败返回 IOError
  */
 std::expected<TcpSocket, IOError> TcpSocket::create(IPType type)
 {
@@ -106,11 +106,22 @@ std::expected<GHandle, IOError> TcpSocket::openHandle(IPType type)
     if (fd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
     }
+    auto no_sigpipe = HandleOption(GHandle{.fd = fd}).handleNoSigPipe();
+    if (!no_sigpipe) {
+        const auto option_error = no_sigpipe.error();
+        if (::close(fd) != 0) {
+            return std::unexpected(IOError(kDisconnectError, errno));
+        }
+        return std::unexpected(option_error);
+    }
     if (type == IPType::IPV6) {
         auto dual_stack = HandleOption(GHandle{.fd = fd}).handleIPv6Only(false);
         if (!dual_stack) {
-            ::close(fd);
-            return std::unexpected(dual_stack.error());
+            const auto option_error = dual_stack.error();
+            if (::close(fd) != 0) {
+                return std::unexpected(IOError(kDisconnectError, errno));
+            }
+            return std::unexpected(option_error);
         }
     }
     return GHandle{.fd = fd};

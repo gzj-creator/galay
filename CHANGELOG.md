@@ -16,10 +16,14 @@
 - **重组 `scripts/` 目录**：将原本散落在 `scripts/` 根下的验证与基准脚本按模块迁入 `common/`、`etcd/`、`http2/`、`mongo/`、`mysql/`、`redis/`、`rpc/` 子目录，并统一加 `1xx`/`2xx`/`3xx`/`4xx`/`5xx` 数字前缀，以稳定执行顺序并按域归类。
 - **重组 `agent/skill/` 目录**：将顶层 `SKILL.md` 与 `references/` 迁入 `agent/skill/galay-usage/` 子目录，使 skill 以命名目录形式承载，便于安装与复用。
 - **构建开关默认收敛**：`cmake/option.cmake` 将 `BUILD_TESTING`、`GALAY_BUILD_EXAMPLES`、`GALAY_BUILD_BENCHMARKS` 默认值由 `ON` 改为 `OFF`，使测试 / 示例 / 基准目标改为按需开启，避免默认全量构建。
+- **kernel 写路径改用局部 SIGPIPE 抑制**：`handleWritev` 由 `writev()` 改为 `sendmsg()` 并携带 `MSG_NOSIGNAL`，与 `handleSend` / `handleSendTo` 对齐；框架不再依赖全局 SIGPIPE 处置，向断连 socket 写入时返回 `EPIPE` 而非投递 SIGPIPE。
+- **socket 选项失败的清理路径不再静默 `close`**：`TcpSocket::openHandle` 与 `handleAccept` 在 `handleNoSigPipe` / IPv6-only 等选项失败时检查 `close()` 返回值，失败时显式上报 `kDisconnectError`，避免错误被吞掉。
 
 ### Added
 
 - 新增 `scripts/common/500_install_skill.sh`：把指定 skill 目录以同名方式安装到目标目录，供本地或代理环境复用 galay skill。
+- **新增 socket 局部 SIGPIPE 抑制选项**：`HandleOption::handleNoSigPipe()` 在 macOS/BSD 等支持平台上启用 `SO_NOSIGPIPE`，并在 `TcpSocket::openHandle`、`handleAccept` 创建或接收 socket 时默认启用，使写入断连连接返回 `EPIPE` 而非投递 SIGPIPE；不支持该选项的平台为空操作。
+- 新增 `test/cpp/kernel/t139_sigpipe_policy.cc`：验证 `Runtime` 构造不修改全局 SIGPIPE 处置、Linux `handleSend` / `handleWritev` 写路径走 `MSG_NOSIGNAL`、支持平台 `TcpSocket::create` 默认启用 `SO_NOSIGPIPE`。
 - **全模块性能测试文档与基准数据落地**：为 `kernel` / `http` / `http2` / `ws` / `rpc` / `ssl` / `tracing` / `utils` / `redis` / `mysql` / `mongo` / `etcd` 各模块补全或新建 `05-性能测试.md`，记录可复现的 benchmark target、运行命令与同环境性能对比快照；并在各模块下新增 `benchmark_data/`、`configs/` 归档压测结果（CSV / TXT / SVG / log）与复现配置。
 - 新增 `docs/benchmark_plan.md`（全模块性能压测计划：控制变量、指标、环境与分模块场景）与 `docs/machine_config.md`（测试机器硬件与系统配置记录）。
 - `scripts/http2/300_http2_h2load_compare.sh` 新增 `--post-echo-best` / `--post-echo-matrix` best-of 矩阵模式：遍历 server 线程数、最大流数与 h2load 线程 / 客户端 / 流数组合，输出 galay 与 nghttpd 的最佳吞吐与配置对比，默认要求 Release 构建并支持 `build-release` 路径回退。

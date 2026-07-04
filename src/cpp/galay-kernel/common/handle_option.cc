@@ -173,6 +173,26 @@ std::expected<void, IOError> HandleOption::handleTcpNoDelay()
 }
 
 /**
+ * @brief 在支持的平台上启用 SO_NOSIGPIPE
+ * @return 成功返回 void，失败返回 IOError；不支持该选项的平台为空操作
+ */
+std::expected<void, IOError> HandleOption::handleNoSigPipe()
+{
+    if (m_handle.fd < 0) {
+        return std::unexpected(IOError(kParamInvalid, 0));
+    }
+
+#if defined(SO_NOSIGPIPE)
+    int opt = 1;
+    if (::setsockopt(m_handle.fd, SOL_SOCKET, SO_NOSIGPIPE, &opt, sizeof(opt)) != 0) {
+        return std::unexpected(IOError(kBindFailed, errno));
+    }
+#endif
+
+    return {};
+}
+
+/**
  * @brief 在 Linux 上启用 TCP_DEFER_ACCEPT；其他平台为空操作
  * @param seconds accept 返回前等待第一个数据包的最大时间
  * @return 成功返回 void，句柄无效或 seconds <= 0 时返回 IOError
