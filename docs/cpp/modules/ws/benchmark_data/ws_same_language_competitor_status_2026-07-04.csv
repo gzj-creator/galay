@@ -1,0 +1,6 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-ws,echo_throughput,throughput,,msg/s,blocked,"Galay WS client benchmark hardcodes ws://127.0.0.1:8080/ws and port 8080 is occupied by taskqueue PID 12175"
+websocketd,echo_throughput,throughput,,msg/s,excluded,"Excluded by latest no-cross-language requirement and command not installed"
+gorilla-websocket,echo_throughput,throughput,,msg/s,excluded,"Excluded by latest no-cross-language requirement"
+node-ws,echo_throughput,throughput,,msg/s,excluded,"Excluded by latest no-cross-language requirement"
+same-language-cpp-representative,echo_throughput,throughput,,msg/s,blocked,"benchmark_plan.md does not name a C/C++ WS competitor; no uWebSockets/Boost.Beast/WebSocket++ harness is present"

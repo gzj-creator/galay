@@ -1,0 +1,4 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-ws,ws_echo,server_port,8080,port,blocked,"benchmark_ws_ws_client_throughput hardcodes ws://127.0.0.1:8080/ws"
+galay-ws,ws_echo,port_owner,taskqueue,pid,blocked,"lsof shows taskqueue PID 12175 listening on TCP 8080; not killed because it is unrelated user process"
+galay-ws,ws_echo,throughput,,msg/s,blocked,"server/client benchmark built, but default client port is occupied"

@@ -1,0 +1,12 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-http,http11_keepalive_ok,requests_per_second,160032.19,req/s,ok,"Release; benchmark_http_echo_server_throughput 18080 4; wrk -t4 -c100 -d10s --latency --timeout 5s"
+galay-http,http11_keepalive_ok,total_requests,1616408,count,ok,"10.10s wall time"
+galay-http,http11_keepalive_ok,p50_latency,0.601,ms,ok,"wrk latency distribution"
+galay-http,http11_keepalive_ok,p75_latency,0.821,ms,ok,"wrk latency distribution"
+galay-http,http11_keepalive_ok,p90_latency,0.98,ms,ok,"wrk latency distribution"
+galay-http,http11_keepalive_ok,p99_latency,1.18,ms,ok,"wrk latency distribution"
+galay-http,http11_keepalive_ok,avg_latency,0.61579,ms,ok,"wrk thread stats"
+galay-http,http11_keepalive_ok,transfer_per_sec,13.74,MB/s,ok,"wrk output"
+nginx,http11_keepalive_ok,requests_per_second,,req/s,unavailable,"nginx not available in PATH"
+caddy,http11_keepalive_ok,requests_per_second,,req/s,unavailable,"caddy not available in PATH"
+httpd,http11_static_file,requests_per_second,,req/s,blocked,"previous httpd config probe hit macOS Desktop path permission; no server started"

@@ -1,0 +1,8 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-tracing,span_scope_sampled,ns_per_scope,189.602,ns/scope,ok,"Release internal benchmark; not a competitor comparison"
+galay-tracing,otlp_json_exporter,ns_per_span,122.15,ns/span,ok,"Release internal mock transport benchmark"
+galay-tracing,batch_processor_batch_size_median_e2e,ns_per_span,16.2288,ns/span,ok,"Release internal benchmark"
+opentelemetry-cpp,span_scope,ns_per_scope,,ns/scope,blocked,"Homebrew formula exists but depends on grpc; Homebrew grpc/opentelemetry dependency install failed due ghcr.io bottle download reset"
+jaeger-client-cpp,span_scope,ns_per_scope,,ns/scope,unavailable,"No Homebrew formula found for jaeger-client-cpp"
+zipkin-cpp,span_scope,ns_per_scope,,ns/scope,unavailable,"No Homebrew formula found for zipkin-cpp"
+rust-tracing,span_scope,ns_per_scope,,ns/scope,excluded,"Excluded by latest no-cross-language requirement"

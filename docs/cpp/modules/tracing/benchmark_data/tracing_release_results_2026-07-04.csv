@@ -1,0 +1,13 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-tracing,span_scope,subscriber_like_noop,1.61665,ns/scope,ok,"Release; benchmark_tracing_span_scope_throughput workload=20000"
+galay-tracing,span_scope,span_id_random,208.965,ns/op,ok,"Release"
+galay-tracing,span_scope,trace_id_random,208.106,ns/op,ok,"Release"
+galay-tracing,span_scope,sampled,189.602,ns/scope,ok,"Release timing disabled"
+galay-tracing,span_scope,unsampled,293.969,ns/scope,ok,"Release timing disabled"
+galay-tracing,span_scope,sampled_timing_enabled,266.033,ns/scope,ok,"Release"
+galay-tracing,otlp_json_exporter,ns_per_span,122.15,ns/span,ok,"Release; workload=10000 batch_size=8 mock_transport"
+galay-tracing,otlp_json_exporter,requests,10000,count,ok,"Release"
+galay-tracing,otlp_json_exporter,avg_body_bytes,1329,bytes,ok,"Release"
+galay-tracing,batch_processor_timed,median_e2e,49.9658,ns/span,ok,"Release; workload=100000 batch_size=512 rounds=7"
+galay-tracing,batch_processor_on_end,median_e2e,15.4654,ns/span,ok,"Release; workload=100000 batch_size=512 rounds=7"
+galay-tracing,batch_processor_batch_size,median_e2e,16.2288,ns/span,ok,"Release; workload=100000 batch_size=512 rounds=7"

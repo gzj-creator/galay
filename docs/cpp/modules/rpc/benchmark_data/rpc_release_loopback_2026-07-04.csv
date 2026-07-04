@@ -1,0 +1,10 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-rpc,unary_loopback,iterations,1000,count,ok,"Release; benchmark_rpc_unary_loopback_latency 1000"
+galay-rpc,unary_loopback,operations,1000,count,ok,"errors=0"
+galay-rpc,unary_loopback,errors,0,count,ok,"Release local loopback"
+galay-rpc,unary_loopback,elapsed,0.0447469,s,ok,"Release local loopback"
+galay-rpc,unary_loopback,throughput,22347.9,ops/s,ok,"Release local loopback"
+galay-rpc,unary_loopback,p50_latency,33,us,ok,"Release local loopback"
+galay-rpc,unary_loopback,p90_latency,70,us,ok,"Release local loopback"
+galay-rpc,unary_loopback,p99_latency,115,us,ok,"Release local loopback"
+galay-rpc,unary_loopback,max_latency,231,us,ok,"Release local loopback"

@@ -1,0 +1,13 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-ssl,tls13_new_handshake_s_time,connections,6839,count,ok,"openssl s_time -connect 127.0.0.1:18443 -new -tls1_3 -time 5; benchmark_ssl_tls_server_throughput"
+galay-ssl,tls13_new_handshake_s_time,real_seconds,6,s,ok,"openssl s_time reported real seconds"
+galay-ssl,tls13_new_handshake_s_time,connections_per_real_second,1139.83,conn/s,ok,"6839 / 6 real seconds"
+galay-ssl,tls13_new_handshake_s_time,connections_per_user_second,5065.93,conn/user-s,ok,"openssl s_time reported user-second rate"
+galay-ssl,tls13_new_handshake_s_time,bytes_read_per_connection,0,bytes,ok,"handshake-only run without -www"
+openssl-s-server,tls13_new_handshake_s_time,connections,7638,count,ok,"openssl s_server -quiet -tls1_3; same openssl s_time client arguments"
+openssl-s-server,tls13_new_handshake_s_time,real_seconds,6,s,ok,"openssl s_time reported real seconds"
+openssl-s-server,tls13_new_handshake_s_time,connections_per_real_second,1273.00,conn/s,ok,"7638 / 6 real seconds"
+openssl-s-server,tls13_new_handshake_s_time,connections_per_user_second,4992.16,conn/user-s,ok,"openssl s_time reported user-second rate"
+openssl-s-server,tls13_new_handshake_s_time,bytes_read_per_connection,0,bytes,ok,"handshake-only run without -www"
+nginx,tls13_new_handshake_s_time,connections_per_real_second,,conn/s,blocked,"Homebrew install attempted; ghcr.io bottle downloads failed with curl Recv failure: Connection reset by peer"
+boost-asio-ssl,tls13_new_handshake_s_time,connections_per_real_second,,conn/s,blocked,"Boost.Asio not installed; Homebrew boost install failed due ghcr.io bottle download reset"

@@ -1,0 +1,12 @@
+HTTP/2 h2load external comparison
+h2load:  h2load nghttp2/1.69.0
+nghttpd: nghttpd nghttp2/1.69.0
+build:   /Users/gongzhijie/Desktop/projects/git/galay/build-release (CMAKE_BUILD_TYPE=Release)
+payload: 13 bytes
+mode:    POST echo
+h2load:  -D10 --warm-up-time=2 -t4 -c20 -m100 -d payload
+server:  4 IO workers, max_streams=1000
+
+scenario                      req/s        p95        p99   failed  errored  timeout   avg_cpu%   max_cpu%  max_rss_mib     rc
+galay-post-echo          1296550.00     1.77ms     1.98ms        0        0        0      119.6      126.3         22.3      0
+nghttpd-echo-upload        14540.00   162.84ms   199.93ms        0        0        0      295.8      319.1          9.6      0

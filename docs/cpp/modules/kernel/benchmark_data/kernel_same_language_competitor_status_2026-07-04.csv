@@ -1,0 +1,8 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-kernel,internal_release_reference,compute_empty_tasks_per_second,4055220,tasks/s,ok,"Release internal benchmark; not a competitor comparison"
+galay-kernel,internal_release_reference,mpsc_batch_messages_per_second,14521900,msg/s,ok,"Release internal benchmark; not a competitor comparison"
+libuv,task_scheduling_latency,p50_latency,,us,blocked,"libuv 1.51.0 is installed, but repository has no same-workload libuv scheduler/channel/timer harness"
+libuv,channel_throughput,messages_per_second,,msg/s,blocked,"libuv does not provide an MPSC/MPMC channel comparable to galay MPSC benchmark without writing a new adapter benchmark"
+libuv,timer_precision,p99_overshoot,,us,blocked,"libuv 1.51.0 installed, but no plan-aligned timer precision harness exists in repository"
+boost-asio,task_scheduling_latency,p50_latency,,us,blocked,"Boost.Asio not installed; Homebrew boost install failed due ghcr.io bottle download reset"
+boost-asio,timer_precision,p99_overshoot,,us,blocked,"Boost.Asio not installed; Homebrew boost install failed due ghcr.io bottle download reset"

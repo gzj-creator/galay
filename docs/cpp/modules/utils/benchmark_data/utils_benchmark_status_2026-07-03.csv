@@ -1,0 +1,9 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-utils,lru_cache_throughput,throughput,,ops/s,blocked,"build/ is Debug with GALAY_BUILD_BENCHMARKS=OFF; build-release target exists but executable was not generated/run in this round"
+galay-utils,byte_queue_view_throughput,throughput,,ops/s,blocked,"build/ is Debug with GALAY_BUILD_BENCHMARKS=OFF; build-release target exists but executable was not generated/run in this round"
+galay-utils,ring_buffer_throughput,throughput,,ops/s,blocked,"build/ is Debug with GALAY_BUILD_BENCHMARKS=OFF; build-release target exists but executable was not generated/run in this round"
+galay-utils,bloom_filter_throughput,throughput,,ops/s,blocked,"build/ is Debug with GALAY_BUILD_BENCHMARKS=OFF; build-release target exists but executable was not generated/run in this round"
+galay-utils,circuit_breaker_throughput,throughput,,ops/s,blocked,"build/ is Debug with GALAY_BUILD_BENCHMARKS=OFF; build-release target exists but executable was not generated/run in this round"
+galay-utils,resource_error_boundaries,latency,,ns,blocked,"build/ is Debug with GALAY_BUILD_BENCHMARKS=OFF; build-release target exists but executable was not generated/run in this round"
+galay-utils,consistent_hash_lookup,throughput,,ops/s,blocked,"build/ is Debug with GALAY_BUILD_BENCHMARKS=OFF; build-release target exists but executable was not generated/run in this round"
+utils-competitor,all,throughput,,ops/s,unavailable,"docs/benchmark_plan.md does not define a utils competitor set"

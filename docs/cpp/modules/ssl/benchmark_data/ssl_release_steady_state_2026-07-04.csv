@@ -1,0 +1,7 @@
+implementation,scenario,metric,value,unit,status,notes
+galay-ssl,tls_steady_state,connections,16,count,ok,"Release; benchmark_ssl_tls_steady_state"
+galay-ssl,tls_steady_state,rounds_per_connection,1000,count,ok,"payload=1024 bytes"
+galay-ssl,tls_steady_state,client_send_ops,16000,count,ok,"server recv/send ops also 16000/16000"
+galay-ssl,tls_steady_state,elapsed,230,ms,ok,"Release local loopback"
+galay-ssl,tls_steady_state,round_trips_per_second,69565.2,ops/s,ok,"Echo round-trips/sec"
+galay-ssl,tls_steady_state,plaintext_throughput,135.87,MiB/s,ok,"1024B payload echo"
