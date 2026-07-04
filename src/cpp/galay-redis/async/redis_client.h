@@ -188,6 +188,17 @@ namespace galay::redis
         }
 
         /**
+         * @brief 设置连接 socket 是否启用 TCP_NODELAY
+         * @param enabled 是否启用
+         * @return 构建器引用
+         */
+        RedisClientBuilder& tcpNoDelay(bool enabled)
+        {
+            m_config.tcp_no_delay = enabled;
+            return *this;
+        }
+
+        /**
          * @brief 构建 RedisClient 实例
          * @return 配置完成的 RedisClient
          */
@@ -279,6 +290,17 @@ namespace galay::redis
         RedissClientBuilder& bufferSize(size_t size)
         {
             m_config.buffer_size = size;
+            return *this;
+        }
+
+        /**
+         * @brief 设置底层 TCP socket 是否启用 TCP_NODELAY
+         * @param enabled 是否启用
+         * @return 构建器引用
+         */
+        RedissClientBuilder& tcpNoDelay(bool enabled)
+        {
+            m_config.tcp_no_delay = enabled;
             return *this;
         }
 

@@ -35,9 +35,13 @@ namespace galay::redis::protocol
          * @param host 服务器地址
          * @param port 服务器端口
          * @param timeout_ms 连接超时时间（毫秒），默认 5000
+         * @param tcp_no_delay 是否为连接 socket 启用 TCP_NODELAY
          * @return 成功或错误
          */
-        std::expected<void, RedisError> connect(const std::string& host, int port, uint32_t timeout_ms = 5000);
+        std::expected<void, RedisError> connect(const std::string& host,
+                                                int port,
+                                                uint32_t timeout_ms = 5000,
+                                                bool tcp_no_delay = true);
 
         /**
          * @brief 断开连接

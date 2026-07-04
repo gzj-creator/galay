@@ -63,6 +63,7 @@ class WsUpgraderImpl;
  */
 struct WsClientConfig
 {
+    bool tcp_no_delay = true; ///< 是否为连接 socket 启用 TCP_NODELAY
     HeaderPair::Mode header_mode = HeaderPair::Mode::ClientSide; ///< HTTP 头部归一化策略
 };
 
@@ -72,6 +73,7 @@ struct WsClientConfig
  */
 class WsClientBuilder {
 public:
+    WsClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
     WsClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     WsClientImpl<TcpSocket> build() const;
     WsClientConfig buildConfig() const { return m_config; }
@@ -616,6 +618,13 @@ public:
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
+        if (m_config.tcp_no_delay) {
+            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                m_socket.reset();
+                co_return std::unexpected(nodelay_result.error());
+            }
+        }
 
         Host server_host(IPType::IPV4, m_url.host, m_url.port);
         auto connect_result = co_await m_socket->connect(server_host);
@@ -709,6 +718,7 @@ struct WssClientConfig
     std::string ca_path;            ///< CA 证书路径
     bool verify_peer = false;       ///< 是否校验服务端证书
     int verify_depth = 4;           ///< 证书链校验深度
+    bool tcp_no_delay = true;       ///< 是否为底层 TCP 连接启用 TCP_NODELAY
     HeaderPair::Mode header_mode = HeaderPair::Mode::ClientSide; ///< HTTP 头部归一化策略
 };
 
@@ -723,6 +733,7 @@ public:
     WssClientBuilder& caPath(std::string v) { m_config.ca_path = std::move(v); return *this; }
     WssClientBuilder& verifyPeer(bool v) { m_config.verify_peer = v; return *this; }
     WssClientBuilder& verifyDepth(int v) { m_config.verify_depth = v; return *this; }
+    WssClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
     WssClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     WssClient build() const;
     WssClientConfig buildConfig() const { return m_config; }
@@ -735,7 +746,7 @@ class WssClient : public WsClientImpl<galay::ssl::SslSocket>
 {
 public:
     WssClient(const WssClientConfig& config = WssClientConfig())
-        : WsClientImpl<galay::ssl::SslSocket>()
+        : WsClientImpl<galay::ssl::SslSocket>(convertConfig(config))
         , m_wss_config(config)
         , m_ssl_ctx(galay::ssl::SslMethod::TLS_Client)
     {
@@ -786,6 +797,13 @@ public:
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
+        if (m_wss_config.tcp_no_delay) {
+            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                m_socket.reset();
+                co_return std::unexpected(nodelay_result.error());
+            }
+        }
 
         auto sni_result = m_socket->setHostname(m_url.host);
         if (!sni_result) {
@@ -815,6 +833,13 @@ public:
     }
 
 private:
+    static WsClientConfig convertConfig(const WssClientConfig& config) {
+        WsClientConfig base_config;
+        base_config.tcp_no_delay = config.tcp_no_delay;
+        base_config.header_mode = config.header_mode;
+        return base_config;
+    }
+
     void initSslContext() {
         if (!m_ssl_ctx.isValid()) {
             m_ssl_context_ready = false;

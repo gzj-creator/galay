@@ -109,7 +109,7 @@ namespace galay::redis
 
         // 连接到Redis服务器
         const uint32_t timeout_ms = m_config.connect_timeout_ms;
-        auto connect_result = m_connection->connect(host, port, timeout_ms);
+        auto connect_result = m_connection->connect(host, port, timeout_ms, m_config.tcp_no_delay);
         if (!connect_result) {
             REDIS_LOG_ERROR("[client]", "[Redis connect to {}:{} failed, error is {}]", host.c_str(), port, connect_result.error().message());
             return connect_result;

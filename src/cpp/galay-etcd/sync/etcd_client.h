@@ -122,6 +122,17 @@ public:
     }
 
     /**
+     * @brief 设置连接 socket 是否启用 TCP_NODELAY
+     * @param enabled true 表示启用 TCP_NODELAY；false 表示保留系统默认
+     * @return 构建器引用，支持链式调用
+     */
+    EtcdClientBuilder& tcpNoDelay(bool enabled)
+    {
+        m_config.tcp_no_delay = enabled;
+        return *this;
+    }
+
+    /**
      * @brief 直接设置完整的客户端配置
      * @param config 同步客户端配置
      * @return 构建器引用，支持链式调用

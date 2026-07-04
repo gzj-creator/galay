@@ -425,6 +425,14 @@ namespace galay::redis
                         non_block.error(),
                         RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
                 }
+                if (config.tcp_no_delay) {
+                    const auto nodelay = socket->option().handleTcpNoDelay();
+                    if (!nodelay) {
+                        return std::unexpected(mapIoErrorToRedisErrorLocal(
+                            nodelay.error(),
+                            RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
+                    }
+                }
 
                 if (!server_name.empty()) {
                     const auto sni_result = socket->setHostname(std::string(server_name));

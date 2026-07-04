@@ -215,6 +215,18 @@ MysqlConnectAwaitable::SharedState::SharedState(AsyncMysqlClient& client, MysqlC
             MYSQL_ERROR_CONNECTION,
             "Failed to set non-blocking before connect: " + nonblock_result.error().message()));
         phase = Phase::Invalid;
+        return;
+    }
+
+    if (config.tcp_no_delay) {
+        auto nodelay_result = client.socket().option().handleTcpNoDelay();
+        if (!nodelay_result) {
+            result = std::unexpected(MysqlError(
+                MYSQL_ERROR_CONNECTION,
+                "Failed to set TCP_NODELAY before connect: " + nodelay_result.error().message()));
+            phase = Phase::Invalid;
+            return;
+        }
     }
 }
 
@@ -1980,6 +1992,7 @@ MysqlConnectAwaitable AsyncMysqlClient::connect(std::string_view host, uint16_t 
     config.username.assign(user.data(), user.size());
     config.password.assign(password.data(), password.size());
     config.database.assign(database.data(), database.size());
+    config.tcp_no_delay = m_config.tcp_no_delay;
     return connect(std::move(config));
 }
 

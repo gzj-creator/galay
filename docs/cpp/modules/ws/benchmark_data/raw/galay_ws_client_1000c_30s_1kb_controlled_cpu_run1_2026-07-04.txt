@@ -1,0 +1,41 @@
+========================================
+WebSocket Client Benchmark
+========================================
+Clients:            1000
+Duration:           30 seconds
+Message size:       1024 bytes
+Target URL:         ws://127.0.0.1:18092/ws
+========================================
+
+Starting 1000 clients...
+Running for 30 seconds...
+
+========================================
+WebSocket Benchmark Results
+========================================
+Duration: 30.005 seconds
+
+Connections:
+  Total:      1000
+  Successful: 1000
+  Failed:     0
+
+Messages:
+  Sent:       4592557
+  Received:   4593382
+
+Data Transfer:
+  Sent:       4702778368 bytes (4484.92 MB)
+  Received:   4702637168 bytes (4484.78 MB)
+
+Throughput:
+  Messages/sec:  153060
+  MB/sec (sent): 149.472
+  MB/sec (recv): 149.468
+
+Latency (RTT):
+  Count:    4592382
+  Min:      0.01 ms
+  Avg:      6.5141 ms
+  Max:      16.112 ms
+========================================

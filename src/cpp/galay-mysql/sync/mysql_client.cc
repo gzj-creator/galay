@@ -104,7 +104,9 @@ MysqlClient& MysqlClient::operator=(MysqlClient&& other) noexcept
     return *this;
 }
 
-MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t port, uint32_t timeout_ms)
+MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t port,
+                                           uint32_t timeout_ms,
+                                           bool tcp_no_delay)
 {
     closeSocket();
 
@@ -178,8 +180,14 @@ MysqlVoidResult MysqlClient::connectSocket(const std::string& host, uint16_t por
         return std::unexpected(makeSysError(MYSQL_ERROR_CONNECTION, "Failed to restore socket flags"));
     }
 
-    const int nodelay = 1;
-    (void)::setsockopt(m_socket_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay));
+    if (tcp_no_delay) {
+        const int nodelay = 1;
+        if (::setsockopt(m_socket_fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) != 0) {
+            auto error = makeSysError(MYSQL_ERROR_CONNECTION, "Failed to set TCP_NODELAY");
+            closeSocket();
+            return std::unexpected(std::move(error));
+        }
+    }
 
     m_connected = true;
     m_recv_ring_buffer.clear();
@@ -200,7 +208,7 @@ void MysqlClient::closeSocket() noexcept
 
 MysqlVoidResult MysqlClient::connect(const MysqlConfig& config)
 {
-    auto conn_result = connectSocket(config.host, config.port, config.connect_timeout_ms);
+    auto conn_result = connectSocket(config.host, config.port, config.connect_timeout_ms, config.tcp_no_delay);
     if (!conn_result) {
         return std::unexpected(conn_result.error());
     }

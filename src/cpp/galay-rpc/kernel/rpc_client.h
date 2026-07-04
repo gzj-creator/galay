@@ -194,6 +194,7 @@ using RpcCallAwaitableImpl = Task<RpcCallResult>;
  * @brief RPC客户端配置
  */
 struct RpcClientConfig {
+    bool tcp_no_delay = true;                   ///< 是否为连接 socket 启用 TCP_NODELAY
     RpcReaderSetting reader_setting;            ///< 读取器配置
     RpcWriterSetting writer_setting;            ///< 写入器配置
     size_t ring_buffer_size = kDefaultRpcRingBufferSize;  ///< 环形缓冲区大小
@@ -213,6 +214,8 @@ public:
     RpcClientBuilder& writerSetting(RpcWriterSetting setting) { m_config.writer_setting = std::move(setting); return *this; }
     /// @brief 设置环形缓冲区大小
     RpcClientBuilder& ringBufferSize(size_t size)             { m_config.ring_buffer_size = size; return *this; }
+    /// @brief 设置连接 socket 是否启用 TCP_NODELAY
+    RpcClientBuilder& tcpNoDelay(bool value)                   { m_config.tcp_no_delay = value; return *this; }
     /// @brief 设置metrics回调
     RpcClientBuilder& metricsCallback(RpcMetricCallback callback) { m_config.channel_options.metrics_callback = std::move(callback); return *this; }
     /// @brief 构建RpcClient实例
@@ -243,7 +246,8 @@ public:
               config.reader_setting,
               config.writer_setting,
               config.ring_buffer_size,
-              config.channel_options))
+              config.channel_options,
+              config.tcp_no_delay))
         , m_config(config)
         , m_stream_id(1)
     {
@@ -548,7 +552,8 @@ private:
             m_config.reader_setting,
             m_config.writer_setting,
             m_config.ring_buffer_size,
-            m_config.channel_options);
+            m_config.channel_options,
+            m_config.tcp_no_delay);
     }
 
     Task<std::expected<void, IOError>> connectWithPolicy() {
@@ -562,11 +567,21 @@ private:
                 }
             }
             auto channel = makeChannel();
-            auto result = co_await channel->connect(m_host, m_port);
+            auto task_result = co_await channel->connect(m_host, m_port);
+            if (!task_result.has_value()) {
+                last_error = std::unexpected(IOError(kConnectFailed, 0));
+                m_connected = false;
+                if (attempt + 1 < attempts && m_reconnect_policy.backoff.count() > 0) {
+                    co_await sleep(m_reconnect_policy.backoff);
+                }
+                continue;
+            }
+
+            auto result = std::move(task_result.value());
             if (result.has_value()) {
                 m_channel = std::move(channel);
                 m_connected = true;
-                co_return result;
+                co_return std::move(result);
             }
 
             last_error = std::unexpected(result.error());

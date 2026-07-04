@@ -42,6 +42,7 @@ using ::galay::utils::RingBuffer;
 
 struct H2ClientConfig
 {
+    bool tcp_no_delay = true;
     uint32_t max_concurrent_streams = 100;
     uint32_t initial_window_size = 65535;
     uint32_t max_frame_size = 16384;
@@ -97,6 +98,7 @@ private:
  */
 class H2ClientBuilder {
 public:
+    H2ClientBuilder& tcpNoDelay(bool v)              { m_config.tcp_no_delay = v; return *this; }
     H2ClientBuilder& maxConcurrentStreams(uint32_t v)  { m_config.max_concurrent_streams = v; return *this; }
     H2ClientBuilder& initialWindowSize(uint32_t v)    { m_config.initial_window_size = v; return *this; }
     H2ClientBuilder& maxFrameSize(uint32_t v)         { m_config.max_frame_size = v; return *this; }
@@ -536,6 +538,17 @@ public:
             discardTransport(*m_client);
             m_ready = true;
             return;
+        }
+        if (m_client->m_config.tcp_no_delay) {
+            auto nodelay_result = m_client->m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                HTTP_LOG_ERROR("[h2] [connect] [nodelay-fail]",
+                               "error={}",
+                               nodelay_result.error().message());
+                discardTransport(*m_client);
+                m_ready = true;
+                return;
+            }
         }
 
         auto sni_result = m_client->m_socket->setHostname(m_client->m_host);
@@ -1111,6 +1124,16 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
                        nonblock_result.error().message());
         discard_transport();
         co_return std::unexpected(Http2ErrorCode::ConnectError);
+    }
+    if (m_config.tcp_no_delay) {
+        auto nodelay_result = m_socket->option().handleTcpNoDelay();
+        if (!nodelay_result) {
+            HTTP_LOG_ERROR("[h2] [connect] [nodelay-fail]",
+                           "error={}",
+                           nodelay_result.error().message());
+            discard_transport();
+            co_return std::unexpected(Http2ErrorCode::ConnectError);
+        }
     }
 
     auto sni_result = m_socket->setHostname(m_host);

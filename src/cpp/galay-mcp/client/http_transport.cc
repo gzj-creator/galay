@@ -6,10 +6,11 @@
 
 namespace galay::mcp::detail {
 
-HttpClientTransport::HttpClientTransport(kernel::Runtime& runtime, std::string url)
+HttpClientTransport::HttpClientTransport(kernel::Runtime& runtime, McpHttpClientConfig config)
     : m_runtime(&runtime)
-    , m_httpClient(std::make_unique<http::HttpClient>())
-    , m_serverUrl(std::move(url)) {
+    , m_httpClient(std::make_unique<http::HttpClient>(
+          http::HttpClientBuilder().tcpNoDelay(config.tcp_no_delay).build()))
+    , m_serverUrl(std::move(config.url)) {
 }
 
 HttpClientTransport::ConnectAwaitable HttpClientTransport::connect() {

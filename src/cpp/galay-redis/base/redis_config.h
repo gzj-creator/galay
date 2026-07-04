@@ -30,6 +30,7 @@ namespace galay::redis
         int32_t db_index = 0;
         int version = 2;
         uint32_t connect_timeout_ms = 5000;
+        bool tcp_no_delay = true;
 
         // Reserved for a future sync transport path. Current protocol::Connection
         // supports host/port/timeout only.
@@ -46,6 +47,7 @@ namespace galay::redis
         std::chrono::milliseconds send_timeout = std::chrono::milliseconds(-1);
         std::chrono::milliseconds recv_timeout = std::chrono::milliseconds(-1);
         size_t buffer_size = 65536;
+        bool tcp_no_delay = true;
 
         bool isSendTimeoutEnabled() const
         {

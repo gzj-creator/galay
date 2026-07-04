@@ -116,6 +116,7 @@ struct H2cServerConfig
     std::string host = "0.0.0.0";
     uint16_t port = 8080;
     int backlog = 128;
+    bool tcp_no_delay = true;
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     RuntimeAffinityConfig affinity;
@@ -149,6 +150,7 @@ public:
     H2cServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
     H2cServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
     H2cServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
+    H2cServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; }
     H2cServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; }
     H2cServerBuilder& computeSchedulerCount(size_t v)  { m_config.compute_scheduler_count = v; return *this; }
     H2cServerBuilder& maxConcurrentStreams(uint32_t v)  { m_config.max_concurrent_streams = v; return *this; }
@@ -540,6 +542,12 @@ private:
                                nonblock_result.error().message());
                 continue;
             }
+            if (m_config.tcp_no_delay) {
+                auto nodelay_result = client_socket.option().handleTcpNoDelay();
+                if (!nodelay_result) {
+                    HTTP_LOG_DEBUG("[socket] [nodelay]", "failed to set TCP_NODELAY");
+                }
+            }
 
             // 阶段 12：执行 accept plugin，允许插件在协议检测前拦截连接
             auto continuing_result = co_await runAcceptPlugins(client_socket, client_host);
@@ -883,6 +891,7 @@ struct H2ServerConfig
     std::string host = "0.0.0.0";
     uint16_t port = 9443;
     int backlog = 128;
+    bool tcp_no_delay = true;
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     RuntimeAffinityConfig affinity;
@@ -923,6 +932,7 @@ public:
     H2ServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; }
     H2ServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; }
     H2ServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; }
+    H2ServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; }
     H2ServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; }
     H2ServerBuilder& computeSchedulerCount(size_t v)  { m_config.compute_scheduler_count = v; return *this; }
     H2ServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
@@ -1249,8 +1259,11 @@ private:
             if (!nonblock_result) {
                 continue;
             }
-            auto nodelay_result = client_socket.option().handleTcpNoDelay();
-            if (!nodelay_result) {
+            if (m_config.tcp_no_delay) {
+                auto nodelay_result = client_socket.option().handleTcpNoDelay();
+                if (!nodelay_result) {
+                    HTTP_LOG_DEBUG("[socket] [nodelay]", "failed to set TCP_NODELAY");
+                }
             }
 
             // 阶段 12：执行 accept plugin，允许插件在 TLS 握手前拦截连接

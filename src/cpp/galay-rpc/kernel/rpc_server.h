@@ -57,6 +57,7 @@ struct RpcServerConfig {
     std::string host = "0.0.0.0";       ///< 监听地址
     uint16_t port = 9000;               ///< 监听端口
     int backlog = 128;                  ///< 监听队列长度
+    bool tcp_no_delay = true;           ///< 是否为已接受连接启用 TCP_NODELAY
     size_t io_scheduler_count = 0;      ///< IO调度器数量，0表示自动
     size_t compute_scheduler_count = 0; ///< 计算调度器数量，0表示自动
     RuntimeAffinityConfig affinity;     ///< 绑核配置
@@ -79,6 +80,8 @@ public:
     RpcServerBuilder& port(uint16_t value)                               { m_config.port = value; return *this; }
     /// @brief 设置监听队列长度
     RpcServerBuilder& backlog(int value)                                 { m_config.backlog = value; return *this; }
+    /// @brief 设置已接受连接是否启用 TCP_NODELAY
+    RpcServerBuilder& tcpNoDelay(bool value)                             { m_config.tcp_no_delay = value; return *this; }
     /// @brief 设置IO调度器数量
     RpcServerBuilder& ioSchedulerCount(size_t value)                     { m_config.io_scheduler_count = value; return *this; }
     /// @brief 设置计算调度器数量
@@ -424,6 +427,14 @@ private:
      */
     Task<void> handleConnection(GHandle handle) {
         RpcConn conn(handle, RpcReaderSetting{}, RpcWriterSetting{}, m_config.ring_buffer_size);
+        if (m_config.tcp_no_delay) {
+            auto nodelay_result = conn.socket().option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                RPC_LOG_WARN("[server] [socket] [nodelay-fail]",
+                             "error={}",
+                             nodelay_result.error().message());
+            }
+        }
         auto reader = conn.getReader();
         auto writer = conn.getWriter();
         std::array<RouteCacheEntry, kRouteCacheSize> route_cache{};

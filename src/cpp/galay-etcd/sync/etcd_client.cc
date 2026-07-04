@@ -15,6 +15,7 @@
 #include <exception>
 #include <fcntl.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <string_view>
 #include <sys/socket.h>
@@ -685,6 +686,23 @@ EtcdBoolResult EtcdClient::connect()
             (void)::setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(nosigpipe));
         }
 #endif
+
+        if (m_network_config.tcp_no_delay) {
+            int nodelay = 1;
+            if (::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) != 0) {
+                last_connect_error = makeErrnoError(
+                    EtcdErrorType::Connection,
+                    "setsockopt TCP_NODELAY failed",
+                    errno);
+                if (::close(fd) != 0) {
+                    ETCD_LOG_WARN("[sync] [connect]",
+                                  "close after TCP_NODELAY failure failed endpoint={} error={}",
+                                  m_config.endpoint,
+                                  std::strerror(errno));
+                }
+                continue;
+            }
+        }
 
         if (m_network_config.keepalive) {
             int enable_keepalive = 1;

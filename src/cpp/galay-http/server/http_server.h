@@ -59,6 +59,7 @@ using HttpConnHandlerImpl = std::function<Task<void>(HttpConnImpl<SocketType>)>;
  * @brief HTTP服务器配置
  * @details
  * - `host` / `port` / `backlog` 控制监听 socket
+ * - `tcp_no_delay` 控制 accept 后的连接 socket 是否启用 TCP_NODELAY
  * - `io_scheduler_count` 与 `compute_scheduler_count` 交由 `RuntimeBuilder` 创建调度器
  * - `affinity` 只描述调度器绑核策略，不会改变业务 handler 的语义
  * - `policy` 保存 route-mode 后续生产级加固所需的默认策略
@@ -68,6 +69,7 @@ struct HttpServerConfig
     std::string host = "0.0.0.0";              ///< 监听地址
     uint16_t port = 8080;                       ///< 监听端口
     int backlog = 128;                          ///< listen backlog 队列长度
+    bool tcp_no_delay = true;                   ///< 是否为已接受连接启用 TCP_NODELAY
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
     size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
     RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
@@ -83,6 +85,7 @@ public:
     HttpServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; } ///< 设置监听地址
     HttpServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; } ///< 设置监听端口
     HttpServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
+    HttpServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; } ///< 设置已接受连接是否启用 TCP_NODELAY
     HttpServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
     HttpServerBuilder& computeSchedulerCount(size_t v)  { m_config.compute_scheduler_count = v; return *this; } ///< 设置计算调度器数量
     HttpServerBuilder& policy(HttpServerPolicy v)        { m_config.policy = std::move(v); return *this; } ///< 设置 route-mode 生产策略
@@ -453,11 +456,17 @@ protected:
             }
 
 
-            // 阶段 10：配置客户端 socket 为非阻塞模式
+            // 阶段 10：配置客户端 socket 为非阻塞模式，并按配置选择 TCP_NODELAY
             SocketType client_socket = std::move(*client_socket_opt);
             auto nonblock_result = client_socket.option().handleNonBlock();
             if (!nonblock_result) {
                 continue;
+            }
+            if (m_config.tcp_no_delay) {
+                auto nodelay_result = client_socket.option().handleTcpNoDelay();
+                if (!nodelay_result) {
+                    HTTP_LOG_DEBUG("[socket] [nodelay]", "failed to set TCP_NODELAY");
+                }
             }
 
             // 阶段 11：执行 accept plugin，允许用户在进入连接处理前拦截 socket
@@ -572,6 +581,7 @@ inline HttpServer HttpServerBuilder::build() const { return HttpServer(m_config)
  * @details
  * - `cert_path` / `key_path` 是 TLS 服务端证书与私钥
  * - `ca_path`、`verify_peer`、`verify_depth` 用于双向 TLS 或客户端证书校验
+ * - `tcp_no_delay` 控制 accept 后的 TLS 底层 TCP socket 是否启用 TCP_NODELAY
  * - `reader_setting` / `writer_setting` 仅在 TLS 连接路径上生效
  */
 struct HttpsServerConfig
@@ -579,6 +589,7 @@ struct HttpsServerConfig
     std::string host = "0.0.0.0";              ///< 监听地址
     uint16_t port = 443;                        ///< 监听端口
     int backlog = 128;                          ///< listen backlog 队列长度
+    bool tcp_no_delay = true;                   ///< 是否为已接受连接启用 TCP_NODELAY
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
     size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
     RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
@@ -602,6 +613,7 @@ public:
     HttpsServerBuilder& host(std::string v)              { m_config.host = std::move(v); return *this; } ///< 设置监听地址
     HttpsServerBuilder& port(uint16_t v)                 { m_config.port = v; return *this; } ///< 设置监听端口
     HttpsServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
+    HttpsServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; } ///< 设置已接受连接是否启用 TCP_NODELAY
     HttpsServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
     HttpsServerBuilder& computeSchedulerCount(size_t v)  { m_config.compute_scheduler_count = v; return *this; } ///< 设置计算调度器数量
     HttpsServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
@@ -700,9 +712,11 @@ protected:
             if (!nonblock_result) {
                 continue;
             }
-            auto nodelay_result = client_socket.option().handleTcpNoDelay();
-            if (!nodelay_result) {
-                HTTP_LOG_DEBUG("[socket] [nodelay]", "failed to set TCP_NODELAY");
+            if (m_config.tcp_no_delay) {
+                auto nodelay_result = client_socket.option().handleTcpNoDelay();
+                if (!nodelay_result) {
+                    HTTP_LOG_DEBUG("[socket] [nodelay]", "failed to set TCP_NODELAY");
+                }
             }
 
             // 阶段 11：执行 accept plugin，允许用户在 TLS 握手前拦截 socket
@@ -764,6 +778,7 @@ private:
         base_config.host = config.host;
         base_config.port = config.port;
         base_config.backlog = config.backlog;
+        base_config.tcp_no_delay = config.tcp_no_delay;
         base_config.io_scheduler_count = config.io_scheduler_count;
         base_config.compute_scheduler_count = config.compute_scheduler_count;
         base_config.affinity = config.affinity;

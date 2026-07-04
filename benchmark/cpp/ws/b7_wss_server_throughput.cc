@@ -14,6 +14,7 @@
 #include <galay/cpp/galay-ws/kernel/writer_cfg.h>
 #include <galay/cpp/galay-http/protoc/http_request.h>
 #include <galay/cpp/galay-http/builder/http_builder.h>
+#include "benchmark/cpp/ws/ws_benchmark_args.h"
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 
@@ -122,12 +123,14 @@ int main(int argc, char* argv[]) {
     if (argc > 2) io_threads = std::atoi(argv[2]);
     if (argc > 3) cert_path = argv[3];
     if (argc > 4) key_path = argv[4];
+    const bool tcp_no_delay = galay::benchmark::ws::resolveBenchmarkServerNoDelay(argc, argv, 5);
 
     std::cout << "========================================\n";
     std::cout << "WSS (WebSocket Secure) Benchmark Server\n";
     std::cout << "========================================\n";
     std::cout << "Port: " << port << "\n";
     std::cout << "IO Threads: " << io_threads << "\n";
+    std::cout << "TCP_NODELAY: " << (tcp_no_delay ? "on" : "off") << "\n";
     std::cout << "Configured Compute Threads: 0\n";
     std::cout << "Cert: " << cert_path << "\n";
     std::cout << "Key:  " << key_path << "\n";
@@ -146,6 +149,7 @@ int main(int argc, char* argv[]) {
             .keyPath(key_path)
             .ioSchedulerCount(static_cast<size_t>(io_threads))
             .computeSchedulerCount(0)
+            .tcpNoDelay(tcp_no_delay)
             .build());
 
         server.start(httpsHandler);

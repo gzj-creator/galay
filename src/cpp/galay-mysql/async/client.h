@@ -133,6 +133,18 @@ public:
     }
 
     /**
+     * @brief 设置快捷连接接口是否启用 TCP_NODELAY
+     * @param enabled true 表示连接 socket 启用 TCP_NODELAY；false 表示保留系统默认
+     * @return 构建器引用，支持链式调用
+     * @note 显式传入 MysqlConfig 的 connect(MysqlConfig) 以 MysqlConfig::tcp_no_delay 为准。
+     */
+    AsyncMysqlClientBuilder& tcpNoDelay(bool enabled)
+    {
+        m_config.tcp_no_delay = enabled;
+        return *this;
+    }
+
+    /**
      * @brief 构建AsyncMysqlClient实例
      * @return 配置完成的AsyncMysqlClient对象
      */

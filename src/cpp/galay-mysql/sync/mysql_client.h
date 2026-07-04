@@ -155,7 +155,9 @@ private:
 
     static constexpr size_t kRecvBufferCapacity = 256 * 1024; ///< 接收缓冲区容量（256KB）
 
-    MysqlVoidResult connectSocket(const std::string& host, uint16_t port, uint32_t timeout_ms); ///< 创建TCP连接
+    MysqlVoidResult connectSocket(const std::string& host, uint16_t port,
+                                  uint32_t timeout_ms,
+                                  bool tcp_no_delay = true); ///< 创建TCP连接
     void closeSocket() noexcept; ///< 关闭套接字
 
     MysqlVoidResult sendAll(std::string_view data); ///< 发送全部数据

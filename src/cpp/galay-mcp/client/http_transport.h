@@ -1,6 +1,7 @@
 #ifndef GALAY_MCP_CLIENT_HTTP_TRANSPORT_H
 #define GALAY_MCP_CLIENT_HTTP_TRANSPORT_H
 
+#include "client.h"
 #include "client_common.h"
 #include "../../galay-http/client/http_client.h"
 
@@ -15,7 +16,7 @@ public:
         decltype(std::declval<http::HttpClient&>().connect(std::declval<const std::string&>()));
     using CloseAwaitable = decltype(std::declval<http::HttpClient&>().close());
 
-    explicit HttpClientTransport(kernel::Runtime& runtime, std::string url);
+    explicit HttpClientTransport(kernel::Runtime& runtime, McpHttpClientConfig config);
 
     ConnectAwaitable connect();
     ConnectAwaitable connect(std::string url);

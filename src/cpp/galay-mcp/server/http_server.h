@@ -47,7 +47,8 @@ public:
     McpHttpServer(const std::string& host = "0.0.0.0",
                   int port = 8080,
                   size_t ioSchedulers = 8,
-                  size_t computeSchedulers = 0);
+                  size_t computeSchedulers = 0,
+                  bool tcpNoDelay = true);
     ~McpHttpServer(); ///< 析构函数
 
     McpHttpServer(const McpHttpServer&) = delete; ///< 禁止拷贝构造
@@ -230,6 +231,7 @@ private:
     std::string m_serverVersion; ///< 服务器版本
     size_t m_ioSchedulers; ///< IO调度线程数
     size_t m_computeSchedulers; ///< 计算调度线程数
+    bool m_tcpNoDelay; ///< 是否为已接受 HTTP 连接启用 TCP_NODELAY
 
     /**
      * @brief 工具注册信息

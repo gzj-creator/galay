@@ -2,6 +2,7 @@
  * @file B5-Websocket.cc
  * @brief WebSocket 服务器压测程序
  * @details 配合 B4-WebsocketClient 进行 WebSocket 性能测试
+ * @usage benchmark_ws_ws_server_throughput [port] [io_threads] [nodelay:on|off]
  */
 
 #include <galay/cpp/galay-http/server/http_server.h>
@@ -11,6 +12,7 @@
 #include <galay/cpp/galay-http/protoc/http_response.h>
 #include <galay/cpp/galay-http/builder/http_builder.h>
 #include <galay/cpp/galay-ws/kernel/writer_cfg.h>
+#include "benchmark/cpp/ws/ws_benchmark_args.h"
 #include <iostream>
 #include <atomic>
 #include <signal.h>
@@ -165,12 +167,14 @@ int main(int argc, char* argv[]) {
     if (argc >= 3) {
         io_threads = std::atoi(argv[2]);
     }
+    const bool tcp_no_delay = galay::benchmark::ws::resolveBenchmarkServerNoDelay(argc, argv, 3);
 
     std::cout << "========================================" << std::endl;
     std::cout << "WebSocket Benchmark Server" << std::endl;
     std::cout << "========================================" << std::endl;
     std::cout << "Port: " << port << std::endl;
     std::cout << "IO Threads: " << io_threads << std::endl;
+    std::cout << "TCP_NODELAY: " << (tcp_no_delay ? "on" : "off") << std::endl;
     std::cout << "Configured Compute Threads: 0" << std::endl;
     std::cout << "WebSocket endpoint: ws://localhost:" << port << "/ws" << std::endl;
     std::cout << "Press Ctrl+C to stop" << std::endl;
@@ -186,6 +190,7 @@ int main(int argc, char* argv[]) {
             .port(port)
             .ioSchedulerCount(static_cast<size_t>(io_threads))
             .computeSchedulerCount(0)
+            .tcpNoDelay(tcp_no_delay)
             .build());
 
 

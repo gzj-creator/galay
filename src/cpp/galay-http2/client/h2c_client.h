@@ -43,6 +43,7 @@ using ::galay::utils::RingBuffer;
 
 struct H2cClientConfig
 {
+    bool tcp_no_delay = true;
     uint32_t max_concurrent_streams = 100;
     uint32_t initial_window_size = 65535;
     uint32_t max_frame_size = 16384;
@@ -61,6 +62,7 @@ class H2cClient;
 
 class H2cClientBuilder {
 public:
+    H2cClientBuilder& tcpNoDelay(bool v)              { m_config.tcp_no_delay = v; return *this; }
     H2cClientBuilder& maxConcurrentStreams(uint32_t v)  { m_config.max_concurrent_streams = v; return *this; }
     H2cClientBuilder& initialWindowSize(uint32_t v)    { m_config.initial_window_size = v; return *this; }
     H2cClientBuilder& maxFrameSize(uint32_t v)         { m_config.max_frame_size = v; return *this; }
@@ -120,6 +122,14 @@ public:
             m_socket.reset();
             m_ring_buffer.reset();
             co_return std::unexpected(r.error());
+        }
+        if (m_config.tcp_no_delay) {
+            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                m_socket.reset();
+                m_ring_buffer.reset();
+                co_return std::unexpected(nodelay_result.error());
+            }
         }
         Host server_host(IPType::IPV4, host, port);
         co_return co_await m_socket->connect(server_host);

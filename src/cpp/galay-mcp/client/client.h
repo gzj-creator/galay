@@ -31,6 +31,7 @@ struct McpStdioClientConfig {
 
 struct McpHttpClientConfig {
     std::string url;
+    bool tcp_no_delay = true;
 };
 
 class McpClient {

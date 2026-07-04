@@ -30,7 +30,7 @@ public:
 
     Impl(kernel::Runtime& runtime, McpHttpClientConfig config)
         : mode(McpClientMode::Http)
-        , httpTransport(std::make_unique<detail::HttpClientTransport>(runtime, std::move(config.url))) {}
+        , httpTransport(std::make_unique<detail::HttpClientTransport>(runtime, std::move(config))) {}
 
     McpClientMode mode;
     std::unique_ptr<detail::StdioClientTransport> stdioTransport;

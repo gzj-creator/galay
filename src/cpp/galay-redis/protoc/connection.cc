@@ -1,6 +1,7 @@
 #include "connection.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
+#include <netinet/tcp.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -23,7 +24,10 @@ namespace galay::redis::protocol
         disconnect();
     }
 
-    std::expected<void, RedisError> Connection::connect(const std::string& host, int port, uint32_t timeout_ms)
+    std::expected<void, RedisError> Connection::connect(const std::string& host,
+                                                        int port,
+                                                        uint32_t timeout_ms,
+                                                        bool tcp_no_delay)
     {
         // 创建socket
         m_socket_fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -39,6 +43,15 @@ namespace galay::redis::protocol
             m_socket_fd = -1;
             return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR,
                 "Failed to set non-blocking mode"));
+        }
+        if (tcp_no_delay) {
+            int opt = 1;
+            if (::setsockopt(m_socket_fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt)) != 0) {
+                ::close(m_socket_fd);
+                m_socket_fd = -1;
+                return std::unexpected(RedisError(RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR,
+                    "Failed to set TCP_NODELAY: " + std::string(strerror(errno))));
+            }
         }
 
         // 解析主机地址

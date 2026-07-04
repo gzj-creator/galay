@@ -14,6 +14,7 @@
 #include <exception>
 #include <fcntl.h>
 #include <netdb.h>
+#include <netinet/tcp.h>
 #include <poll.h>
 #include <sys/socket.h>
 #include <sys/time.h>
@@ -827,6 +828,21 @@ AsyncEtcdClient::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& own
             return;
         }
 
+        if (client->m_network_config.tcp_no_delay) {
+            auto nodelay_result = client->m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result.has_value()) {
+                EtcdError error = mapKernelIoError(nodelay_result.error(), EtcdErrorType::Connection);
+                client->setError(error);
+                ETCD_LOG_ERROR("[async] [connect]", "set TCP_NODELAY failed endpoint={} error={}",
+                               client->m_config.endpoint,
+                               error.message());
+                client->m_socket.reset();
+                client->m_connected = false;
+                result = std::unexpected(error);
+                return;
+            }
+        }
+
         host = client->m_server_host.value();
         phase = Phase::Connect;
         ETCD_LOG_INFO("[async] [connect]", "connecting endpoint={}",
@@ -1373,6 +1389,26 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
                     (void)::setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &nosigpipe, sizeof(nosigpipe));
                 }
 #endif
+
+                if (network_config.tcp_no_delay) {
+                    int nodelay = 1;
+                    if (::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &nodelay, sizeof(nodelay)) != 0) {
+                        ETCD_LOG_WARN("[async] [watch]",
+                                      "setsockopt TCP_NODELAY failed key={} host={} port={} error={}",
+                                      watch_key,
+                                      host,
+                                      port,
+                                      std::strerror(errno));
+                        if (::close(fd) != 0) {
+                            ETCD_LOG_WARN("[async] [watch]",
+                                          "close after TCP_NODELAY failure failed key={} error={}",
+                                          watch_key,
+                                          std::strerror(errno));
+                        }
+                        fd = -1;
+                        continue;
+                    }
+                }
 
                 if (network_config.keepalive) {
                     int enable_keepalive = 1;

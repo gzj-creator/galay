@@ -826,6 +826,15 @@ namespace galay::redis
             std::move(options.password),
             options.db_index,
             options.version);
+        if (m_config.tcp_no_delay) {
+            auto nodelay_result = m_socket.option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                state->result = std::unexpected(detail::mapIoErrorToRedisError(
+                    nodelay_result.error(),
+                    RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
+                state->phase = detail::RedisConnectSharedState::Phase::Invalid;
+            }
+        }
         return galay::kernel::AwaitableBuilder<RedisVoidResult>::fromStateMachine(
                    m_socket.controller(),
                    detail::RedisConnectMachine(std::move(state)))

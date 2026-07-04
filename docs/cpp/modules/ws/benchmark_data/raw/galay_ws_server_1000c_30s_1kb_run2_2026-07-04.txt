@@ -1,0 +1,16 @@
+========================================
+WebSocket Benchmark Server
+========================================
+Port: 18080
+IO Threads: 4
+Configured Compute Threads: 0
+WebSocket endpoint: ws://localhost:18080/ws
+Press Ctrl+C to stop
+========================================
+
+Server started successfully!
+
+Runtime Config: io=4 compute=0 (configured io=4 compute=0)
+
+Shutting down...
+Server stopped.

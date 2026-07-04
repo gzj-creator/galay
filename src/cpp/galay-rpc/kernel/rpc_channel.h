@@ -335,10 +335,12 @@ public:
     explicit RpcChannelImpl(const RpcReaderSetting& reader_setting = {},
                             const RpcWriterSetting& writer_setting = {},
                             size_t ring_buffer_size = kDefaultRpcRingBufferSize,
-                            RpcChannelOptions options = {})
+                            RpcChannelOptions options = {},
+                            bool tcp_no_delay = true)
         : m_reader_setting(reader_setting)
         , m_writer_setting(writer_setting)
         , m_ring_buffer_size(ring_buffer_size == 0 ? kDefaultRpcRingBufferSize : ring_buffer_size)
+        , m_tcp_no_delay(tcp_no_delay)
         , m_state(options)
         , m_outbound_backpressure(options)
         , m_metrics(options.metrics_callback)
@@ -353,15 +355,34 @@ public:
 
     /**
      * @brief 连接到远端
-     * @return socket连接awaitable
+     * @return 连接任务；socket 选项配置或连接失败通过 IOError 返回
      * @note 创建非阻塞socket和ring buffer；不会阻塞OS线程。
      */
-    ConnectAwaitable connect(const std::string& host, uint16_t port) {
+    Task<std::expected<void, IOError>> connect(const std::string& host, uint16_t port) {
         m_socket = std::make_unique<SocketType>(IPType::IPV4);
         m_ring_buffer = std::make_unique<RingBuffer>(m_ring_buffer_size);
-        m_socket->option().handleNonBlock();
+        auto nonblock_result = m_socket->option().handleNonBlock();
+        if (!nonblock_result) {
+            m_socket.reset();
+            m_ring_buffer.reset();
+            co_return std::unexpected(nonblock_result.error());
+        }
+        if (m_tcp_no_delay) {
+            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                m_socket.reset();
+                m_ring_buffer.reset();
+                co_return std::unexpected(nodelay_result.error());
+            }
+        }
         Host server_host(IPType::IPV4, host, port);
-        return m_socket->connect(server_host);
+        auto connect_result = co_await m_socket->connect(server_host);
+        if (!connect_result) {
+            m_socket.reset();
+            m_ring_buffer.reset();
+            co_return std::unexpected(connect_result.error());
+        }
+        co_return std::expected<void, IOError>{};
     }
 
     /**
@@ -973,6 +994,7 @@ private:
     RpcReaderSetting m_reader_setting;         ///< 读取配置
     RpcWriterSetting m_writer_setting;         ///< 写入配置
     size_t m_ring_buffer_size;                 ///< ring buffer大小
+    bool m_tcp_no_delay = true;                ///< 是否为连接 socket 启用 TCP_NODELAY
     RpcChannelState m_state;                   ///< pending分发表
     std::atomic<size_t> m_pending_count{0};    ///< 无锁诊断用pending数量快照
     AsyncMutex m_state_mutex;                  ///< 串行化pending/heartbeat表访问

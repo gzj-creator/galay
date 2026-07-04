@@ -32,13 +32,15 @@ JsonString makeResultResponse(int64_t id, std::string_view resultJson) {
 McpHttpServer::McpHttpServer(const std::string& host,
                              int port,
                              size_t ioSchedulers,
-                             size_t computeSchedulers)
+                             size_t computeSchedulers,
+                             bool tcpNoDelay)
     : m_host(host)
     , m_port(port)
     , m_serverName("galay-mcp-http-server")
     , m_serverVersion("1.0.0")
     , m_ioSchedulers(ioSchedulers)
     , m_computeSchedulers(computeSchedulers)
+    , m_tcpNoDelay(tcpNoDelay)
     , m_toolsCacheDirty(false)
     , m_resourcesCacheDirty(false)
     , m_promptsCacheDirty(false)
@@ -229,6 +231,7 @@ void McpHttpServer::start() {
     config.backlog = 128;
     config.io_scheduler_count = m_ioSchedulers;
     config.compute_scheduler_count = m_computeSchedulers;
+    config.tcp_no_delay = m_tcpNoDelay;
 
     m_httpServer = std::make_unique<http::HttpServer>(config);
     m_running = true;

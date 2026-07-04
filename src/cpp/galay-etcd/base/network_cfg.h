@@ -28,6 +28,7 @@ struct EtcdNetworkConfig
     std::chrono::milliseconds request_timeout = std::chrono::milliseconds(-1); ///< 请求超时时间，-1 表示不超时
     size_t buffer_size = 16384;   ///< 网络收发缓冲区大小（字节）
     bool keepalive = true;        ///< 是否启用 TCP keepalive
+    bool tcp_no_delay = true;     ///< 是否为连接 socket 启用 TCP_NODELAY
 
     /**
      * @brief 判断是否启用了请求超时

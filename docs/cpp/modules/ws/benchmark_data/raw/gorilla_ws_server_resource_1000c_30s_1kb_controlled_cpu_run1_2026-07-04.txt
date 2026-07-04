@@ -1,0 +1,40 @@
+sample_time=2026-07-04T22:05:16+0800
+top_data 94455  11/4 44M galay_ws_gorilla
+ps_data 94455 256.4  51680 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:18+0800
+top_data 94455  11/4 44M galay_ws_gorilla
+ps_data 94455 274.1  51712 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:20+0800
+top_data 94455  12/4 45M galay_ws_gorilla
+ps_data 94455 272.1  52768 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:22+0800
+top_data 94455  12/4 45M galay_ws_gorilla
+ps_data 94455 285.1  52768 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:24+0800
+top_data 94455  12/4 45M galay_ws_gorilla
+ps_data 94455 271.0  52768 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:27+0800
+top_data 94455  14/4 45M galay_ws_gorilla
+ps_data 94455 270.1  52832 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:29+0800
+top_data 94455  14/4 45M galay_ws_gorilla
+ps_data 94455 268.8  52848 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:31+0800
+top_data 94455  14/4 45M galay_ws_gorilla
+ps_data 94455 290.0  52896 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:33+0800
+top_data 94455  14/4 45M galay_ws_gorilla
+ps_data 94455 279.1  52896 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:36+0800
+top_data 94455  14/4 45M galay_ws_gorilla
+ps_data 94455 276.2  52896 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:38+0800
+top_data 94455  14/3 45M galay_ws_gorilla
+ps_data 94455 278.4  52912 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:40+0800
+top_data 94455  14/3 45M galay_ws_gorilla
+ps_data 94455 269.8  52912 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:42+0800
+top_data 94455  14/4 45M galay_ws_gorilla
+ps_data 94455 265.3  52912 /tmp/galay_ws_gorilla_echo_20260704
+sample_time=2026-07-04T22:05:45+0800

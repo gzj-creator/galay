@@ -21,6 +21,8 @@
 
 ### Added
 
+- **全模块新增 TCP_NODELAY 可配置化**：为 etcd / http / http2 / mcp / mysql / redis / rpc / ws 各模块的客户端与服务端配置新增 `tcp_no_delay` 字段（默认开启）与对应 `tcpNoDelay()` builder 方法；连接建立或 accept 后按配置对 socket 启用 `TCP_NODELAY`，选项失败按各模块语义显式传播错误（客户端连接路径回滚并返回失败，服务端 accept 路径记录 WARN 后继续）。新增各模块 `t*_nodelay_config` 白盒测试，通过 `getsockopt` 验证 socket 选项随配置在默认开启与显式关闭两种情况下均正确生效。
+- **WS benchmark 支持 TCP_NODELAY 开关与目标 URL 参数**：新增 `benchmark/cpp/ws/ws_benchmark_args.h` 集中解析命令行参数；`b5_ws_server_throughput` 第 3 个、`b7_wss_server_throughput` 第 5 个业务参数控制 server 端 `TCP_NODELAY`（默认开启，传 `off`/`false`/`0` 关闭）；`b6_ws_client_throughput` 第 4 个业务参数指定目标 URL，默认仍为 `ws://127.0.0.1:8080/ws`，便于在 8080 被占用时改用其他端口。
 - 新增 `scripts/common/500_install_skill.sh`：把指定 skill 目录以同名方式安装到目标目录，供本地或代理环境复用 galay skill。
 - **新增 socket 局部 SIGPIPE 抑制选项**：`HandleOption::handleNoSigPipe()` 在 macOS/BSD 等支持平台上启用 `SO_NOSIGPIPE`，并在 `TcpSocket::openHandle`、`handleAccept` 创建或接收 socket 时默认启用，使写入断连连接返回 `EPIPE` 而非投递 SIGPIPE；不支持该选项的平台为空操作。
 - 新增 `test/cpp/kernel/t139_sigpipe_policy.cc`：验证 `Runtime` 构造不修改全局 SIGPIPE 处置、Linux `handleSend` / `handleWritev` 写路径走 `MSG_NOSIGNAL`、支持平台 `TcpSocket::create` 默认启用 `SO_NOSIGPIPE`。
@@ -36,6 +38,7 @@
 
 ### Docs
 
+- 刷新 `docs/cpp/modules/ws/05-性能测试.md`：补做 WS echo 同类竞品实测对比（`gorilla/websocket v1.5.3`，1000 连接 / 30s / 1KB payload），归档原始日志（`benchmark_data/raw/`）、竞品 fixture（`gorilla_echo_server_2026_07_04/`）与汇总 CSV，并补充 server `TCP_NODELAY` 开关与 client 目标 URL 参数用法。
 - 同步更新 `CHANGELOG.md` 历史版本节、`benchmark/cpp/rpc/README.md`、`docs/cpp/modules/http2/05-性能测试.md`、`docs/cpp/modules/rpc/performance-comparison.md` 与 `test/cpp/mysql/t12_auth_plugins.cc` 中引用的脚本路径，指向重组后的新位置。
 - 刷新 HTTP / HTTP2 性能测试报告与基准数据：更新 `docs/cpp/modules/http/05-性能测试.md`、`docs/cpp/modules/http2/05-性能测试.md` 及对应 `benchmark_data/`（http11 同语言对比、h2load post-echo 对比 CSV/TXT、post-echo 吞吐与延迟 SVG 图表）。
 

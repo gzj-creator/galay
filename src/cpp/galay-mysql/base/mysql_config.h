@@ -31,6 +31,7 @@ struct MysqlConfig
     std::string database;               ///< 默认数据库
     std::string charset = "utf8mb4";    ///< 字符集
     uint32_t connect_timeout_ms = 5000; ///< 连接超时（毫秒）
+    bool tcp_no_delay = true;           ///< 是否为连接 socket 启用 TCP_NODELAY
 
     /**
      * @brief 创建默认配置
@@ -70,6 +71,7 @@ struct AsyncMysqlConfig
     std::chrono::milliseconds recv_timeout = std::chrono::milliseconds(-1);
     size_t buffer_size = 16384;
     size_t result_row_reserve_hint = 0;
+    bool tcp_no_delay = true; ///< 快捷 connect(host, ...) 使用的默认 TCP_NODELAY 策略
 
     bool isSendTimeoutEnabled() const
     {

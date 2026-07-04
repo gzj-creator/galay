@@ -119,10 +119,12 @@ class HttpClientImpl;
  * @brief HTTP客户端配置
  * @details
  * - `header_mode` 控制 HeaderPair 的大小写/归一化策略。
+ * - `tcp_no_delay` 控制连接 socket 是否启用 TCP_NODELAY。
  * - 配置会在 `build()` 时复制到客户端对象；后续修改 builder 不影响已构建实例。
  */
 struct HttpClientConfig
 {
+    bool tcp_no_delay = true; ///< 是否为连接 socket 启用 TCP_NODELAY
     HeaderPair::Mode header_mode = HeaderPair::Mode::ClientSide;
 };
 
@@ -132,6 +134,7 @@ struct HttpClientConfig
  */
 class HttpClientBuilder {
 public:
+    HttpClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
     HttpClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     HttpClientImpl<TcpSocket> build() const;
     HttpClientConfig buildConfig() const                       { return m_config; }
@@ -212,6 +215,13 @@ public:
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
+        if (m_config.tcp_no_delay) {
+            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                m_socket.reset();
+                co_return std::unexpected(nodelay_result.error());
+            }
+        }
 
         Host server_host(IPType::IPV4, m_url.host, m_url.port);
         auto connect_result = co_await m_socket->connect(server_host);
@@ -291,6 +301,7 @@ namespace galay::http {
  * @details
  * - `ca_path` 为空时不额外加载 CA 文件
  * - `verify_peer=false` 时不会校验证书链，适合本地自签名测试，不适合生产环境
+ * - `tcp_no_delay` 控制底层 TCP 连接 socket 是否启用 TCP_NODELAY
  * - `header_mode` 与明文 `HttpClientConfig` 的语义保持一致
  */
 struct HttpsClientConfig
@@ -299,6 +310,7 @@ struct HttpsClientConfig
     std::string ca_path;            // CA 证书路径（可选，用于验证服务器）
     bool verify_peer = false;       // 是否验证服务器证书
     int verify_depth = 4;           // 证书链验证深度
+    bool tcp_no_delay = true;       ///< 是否为底层 TCP 连接启用 TCP_NODELAY
     HeaderPair::Mode header_mode = HeaderPair::Mode::ClientSide;
 };
 
@@ -313,6 +325,7 @@ public:
     HttpsClientBuilder& caPath(std::string v)              { m_config.ca_path = std::move(v); return *this; }
     HttpsClientBuilder& verifyPeer(bool v)                 { m_config.verify_peer = v; return *this; }
     HttpsClientBuilder& verifyDepth(int v)                 { m_config.verify_depth = v; return *this; }
+    HttpsClientBuilder& tcpNoDelay(bool v)                 { m_config.tcp_no_delay = v; return *this; }
     HttpsClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
     HttpsClient build() const;
     HttpsClientConfig buildConfig() const                  { return m_config; }
@@ -388,6 +401,13 @@ public:
             m_socket.reset();
             co_return std::unexpected(nonblock_result.error());
         }
+        if (m_https_config.tcp_no_delay) {
+            auto nodelay_result = m_socket->option().handleTcpNoDelay();
+            if (!nodelay_result) {
+                m_socket.reset();
+                co_return std::unexpected(nodelay_result.error());
+            }
+        }
 
         // 设置 SNI (Server Name Indication)
         auto sni_result = m_socket->setHostname(m_url.host);
@@ -450,6 +470,8 @@ private:
 
     static HttpClientConfig convertConfig(const HttpsClientConfig& config) {
         HttpClientConfig base_config;
+        base_config.tcp_no_delay = config.tcp_no_delay;
+        base_config.header_mode = config.header_mode;
         return base_config;
     }
 

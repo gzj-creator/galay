@@ -20,6 +20,7 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-ws/client/ws_client.h>
 #include <galay/cpp/galay-ws/kernel/writer_cfg.h>
+#include "benchmark/cpp/ws/ws_benchmark_args.h"
 
 #ifdef USE_KQUEUE
 #include <galay/cpp/galay-kernel/core/kqueue_scheduler.h>
@@ -83,6 +84,7 @@ static uint32_t toLatencyUs(std::chrono::steady_clock::duration duration) {
 Task<void> benchmarkWebSocketClient(
     IOScheduler* scheduler,
     int client_id,
+    const std::string& target_url,
     const std::string& message_payload,
     std::chrono::steady_clock::time_point end_time)
 {
@@ -92,7 +94,7 @@ Task<void> benchmarkWebSocketClient(
 
     auto client = WsClientBuilder().build();
 
-    auto connect_result = co_await client.connect("ws://127.0.0.1:8080/ws");
+    auto connect_result = co_await client.connect(target_url);
     if (!connect_result) {
         g_failed_connections.fetch_add(1);
         co_return;
@@ -257,6 +259,7 @@ int main(int argc, char* argv[]) {
     if (argc > 1) num_clients = std::stoi(argv[1]);
     if (argc > 2) duration_sec = std::stod(argv[2]);
     if (argc > 3) message_size = std::stoi(argv[3]);
+    std::string target_url = galay::benchmark::ws::resolveBenchmarkClientUrl(argc, argv);
 
     std::cout << "========================================\n";
     std::cout << "WebSocket Client Benchmark\n";
@@ -264,6 +267,7 @@ int main(int argc, char* argv[]) {
     std::cout << "Clients:            " << num_clients << "\n";
     std::cout << "Duration:           " << duration_sec << " seconds\n";
     std::cout << "Message size:       " << message_size << " bytes\n";
+    std::cout << "Target URL:         " << target_url << "\n";
     std::cout << "========================================\n\n";
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
@@ -287,7 +291,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "Failed to get IO scheduler for client " << i << "\n";
             return 1;
         }
-        scheduleTask(scheduler, benchmarkWebSocketClient(scheduler, i, message_payload, end_time));
+        scheduleTask(scheduler, benchmarkWebSocketClient(scheduler, i, target_url, message_payload, end_time));
     }
 
     std::cout << "Running for " << duration_sec << " seconds...\n";
