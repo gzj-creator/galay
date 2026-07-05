@@ -11,17 +11,11 @@
 
 ## [Unreleased]
 
-### Changed
-
-- **统一 CMake 安装包为单一 `galay` 包**：移除顶层 `CMakeLists.txt` 中按模块生成 `galay-kernel` / `galay-utils` / `galay-http` 等独立 package config 的 foreach，并删除模板 `cmake/galay-module-config.cmake.in`；安装后只在 `lib/cmake/galay` 下导出 `galayConfig.cmake` / `galayConfigVersion.cmake` / `galayTargets.cmake`，外部项目统一通过 `find_package(galay CONFIG REQUIRED)` 后按需链接 `galay::<module>`。同步收紧 install 布局校验（`test/cpp/config/install_include_layout.cmake`、`test/cpp/mysql/package/CMakeLists.txt.in` 与 `package_consumer_smoke.cmake`、`scripts/common/103_verify_module_layout_install_bazel.sh`）强制断言不再安装按模块的 package 目录，`test/cpp/kernel/t94_alignsrc.cc` 改为校验旧模板已移除；并刷新全模块快速开始 / API 参考 / 常见问题文档与 `agent/skill/galay-usage/SKILL.md` 的引入方式（含 CMake target 与 Bazel label 映射表）。
-- **重组 `scripts/` 目录**：将原本散落在 `scripts/` 根下的验证与基准脚本按模块迁入 `common/`、`etcd/`、`http2/`、`mongo/`、`mysql/`、`redis/`、`rpc/` 子目录，并统一加 `1xx`/`2xx`/`3xx`/`4xx`/`5xx` 数字前缀，以稳定执行顺序并按域归类。
-- **重组 `agent/skill/` 目录**：将顶层 `SKILL.md` 与 `references/` 迁入 `agent/skill/galay-usage/` 子目录，使 skill 以命名目录形式承载，便于安装与复用。
-- **构建开关默认收敛**：`cmake/option.cmake` 将 `BUILD_TESTING`、`GALAY_BUILD_EXAMPLES`、`GALAY_BUILD_BENCHMARKS` 默认值由 `ON` 改为 `OFF`，使测试 / 示例 / 基准目标改为按需开启，避免默认全量构建。
-- **kernel 写路径改用局部 SIGPIPE 抑制**：`handleWritev` 由 `writev()` 改为 `sendmsg()` 并携带 `MSG_NOSIGNAL`，与 `handleSend` / `handleSendTo` 对齐；框架不再依赖全局 SIGPIPE 处置，向断连 socket 写入时返回 `EPIPE` 而非投递 SIGPIPE。
-- **socket 选项失败的清理路径不再静默 `close`**：`TcpSocket::openHandle` 与 `handleAccept` 在 `handleNoSigPipe` / IPv6-only 等选项失败时检查 `close()` 返回值，失败时显式上报 `kDisconnectError`，避免错误被吞掉。
+## [v4.0.1] - 2026-07-05
 
 ### Added
 
+- 新增 galay-framework 开发 skill（`agent/skill/galay-usage/`），作为在 galay 上开发服务端 / 客户端 / 中间件与 C/FFI 的统一入口：`SKILL.md` 给出 Runtime / `Task<T>` / `std::expected` 错误传播心智模型、include 前缀与命名空间、CMake 链接 target、构建开关与平台后端（io_uring / epoll / kqueue）速查及 13 个 C++ 模块 + C ABI 模块地图；`references/cpp-api.md` 汇总 13 个 C++ 模块公开类型与方法签名；`references/c-api.md` 覆盖 C ABI 错误约定、runtime / coro 驱动模型、每模块 handle 与完整 C 示例。
 - **全模块新增 TCP_NODELAY 可配置化**：为 etcd / http / http2 / mcp / mysql / redis / rpc / ws 各模块的客户端与服务端配置新增 `tcp_no_delay` 字段（默认开启）与对应 `tcpNoDelay()` builder 方法；连接建立或 accept 后按配置对 socket 启用 `TCP_NODELAY`，选项失败按各模块语义显式传播错误（客户端连接路径回滚并返回失败，服务端 accept 路径记录 WARN 后继续）。新增各模块 `t*_nodelay_config` 白盒测试，通过 `getsockopt` 验证 socket 选项随配置在默认开启与显式关闭两种情况下均正确生效。
 - **WS benchmark 支持 TCP_NODELAY 开关与目标 URL 参数**：新增 `benchmark/cpp/ws/ws_benchmark_args.h` 集中解析命令行参数；`b5_ws_server_throughput` 第 3 个、`b7_wss_server_throughput` 第 5 个业务参数控制 server 端 `TCP_NODELAY`（默认开启，传 `off`/`false`/`0` 关闭）；`b6_ws_client_throughput` 第 4 个业务参数指定目标 URL，默认仍为 `ws://127.0.0.1:8080/ws`，便于在 8080 被占用时改用其他端口。
 - 新增 `scripts/common/500_install_skill.sh`：把指定 skill 目录以同名方式安装到目标目录，供本地或代理环境复用 galay skill。
@@ -33,29 +27,29 @@
 - 新增 `test/scripts/t2_http2_h2load_compare.py`，并在 `test/scripts/CMakeLists.txt` 注册 `scripts.http2_h2load_compare` CTest 用例。
 - 新增 `benchmark/cpp/http/b17_static_server_throughput.cc`：HTTP/1.1 静态文件 echo 压测程序，每请求执行 stat+open+read+close 真实磁盘读取，镜像 Apache httpd 静态服务工作量，作为 galay-static vs httpd-static 的公平对比基线（区别于 b1 的内存固定响应）。
 
+### Changed
+
+- **统一 CMake 安装包为单一 `galay` 包**：移除顶层 `CMakeLists.txt` 中按模块生成 `galay-kernel` / `galay-utils` / `galay-http` 等独立 package config 的 foreach，并删除模板 `cmake/galay-module-config.cmake.in`；安装后只在 `lib/cmake/galay` 下导出 `galayConfig.cmake` / `galayConfigVersion.cmake` / `galayTargets.cmake`，外部项目统一通过 `find_package(galay CONFIG REQUIRED)` 后按需链接 `galay::<module>`。同步收紧 install 布局校验（`test/cpp/config/install_include_layout.cmake`、`test/cpp/mysql/package/CMakeLists.txt.in` 与 `package_consumer_smoke.cmake`、`scripts/common/103_verify_module_layout_install_bazel.sh`）强制断言不再安装按模块的 package 目录，`test/cpp/kernel/t94_alignsrc.cc` 改为校验旧模板已移除；并刷新全模块快速开始 / API 参考 / 常见问题文档与 `agent/skill/galay-usage/SKILL.md` 的引入方式（含 CMake target 与 Bazel label 映射表）。
+- **重组 `scripts/` 目录**：将原本散落在 `scripts/` 根下的验证与基准脚本按模块迁入 `common/`、`etcd/`、`http2/`、`mongo/`、`mysql/`、`redis/`、`rpc/` 子目录，并统一加 `1xx`/`2xx`/`3xx`/`4xx`/`5xx` 数字前缀，以稳定执行顺序并按域归类。
+- **重组 `agent/skill/` 目录**：将顶层 `SKILL.md` 与 `references/` 迁入 `agent/skill/galay-usage/` 子目录，使 skill 以命名目录形式承载，便于安装与复用。
+- **构建开关默认收敛**：`cmake/option.cmake` 将 `BUILD_TESTING`、`GALAY_BUILD_EXAMPLES`、`GALAY_BUILD_BENCHMARKS` 默认值由 `ON` 改为 `OFF`，使测试 / 示例 / 基准目标改为按需开启，避免默认全量构建。
+- **kernel 写路径改用局部 SIGPIPE 抑制**：`handleWritev` 由 `writev()` 改为 `sendmsg()` 并携带 `MSG_NOSIGNAL`，与 `handleSend` / `handleSendTo` 对齐；框架不再依赖全局 SIGPIPE 处置，向断连 socket 写入时返回 `EPIPE` 而非投递 SIGPIPE。
+- **socket 选项失败的清理路径不再静默 `close`**：`TcpSocket::openHandle` 与 `handleAccept` 在 `handleNoSigPipe` / IPv6-only 等选项失败时检查 `close()` 返回值，失败时显式上报 `kDisconnectError`，避免错误被吞掉。
+- 构建版本号对齐 git tag：`CMakeLists.txt` 的 `project(galay VERSION ...)` 与 `MODULE.bazel` 的 `module(... version = ...)` 自 `4.0.0` 升至 `4.0.1`。
+
 ### Fixed
 
 - 修复 HTTP server 路由参数丢失：`HttpServer` 在通过 `m_router->findHandler(method, uri)` 匹配路由后，未将解析出的路径参数回填到 `request`，导致业务 handler 始终拿不到 `/users/:id` 这类路径参数；现已在路由命中后立即 `request.setRouteParams(std::move(params))`，使 handler 能正确读取路由参数。
+
+### Removed
+
+- 清理被新 skill 取代的过期文档：`docs/c-abi-encapsulation-optimization.md`、`docs/cpp-modules-optimization.md`、`docs/naming-and-cmake-optimization.md`、`docs/rust-ffi-zero-overhead-guide.md`、`docs/文档审查报告.md`、`docs/README.md`，以及仅停留在 v3.0.0 的旧 `docs/release_note.md`（自本次起按发版节重建）。
 
 ### Docs
 
 - 刷新 `docs/cpp/modules/ws/05-性能测试.md`：补做 WS echo 同类竞品实测对比（`gorilla/websocket v1.5.3`，1000 连接 / 30s / 1KB payload），归档原始日志（`benchmark_data/raw/`）、竞品 fixture（`gorilla_echo_server_2026_07_04/`）与汇总 CSV，并补充 server `TCP_NODELAY` 开关与 client 目标 URL 参数用法。
 - 同步更新 `CHANGELOG.md` 历史版本节、`benchmark/cpp/rpc/README.md`、`docs/cpp/modules/http2/05-性能测试.md`、`docs/cpp/modules/rpc/performance-comparison.md` 与 `test/cpp/mysql/t12_auth_plugins.cc` 中引用的脚本路径，指向重组后的新位置。
 - 刷新 HTTP / HTTP2 性能测试报告与基准数据：更新 `docs/cpp/modules/http/05-性能测试.md`、`docs/cpp/modules/http2/05-性能测试.md` 及对应 `benchmark_data/`（http11 同语言对比、h2load post-echo 对比 CSV/TXT、post-echo 吞吐与延迟 SVG 图表）。
-
-## [v4.0.1] - 2026-07-03
-
-### Added
-
-- 新增 galay-framework 开发 skill（`agent/skill/`），作为在 galay 上开发服务端 / 客户端 / 中间件与 C/FFI 的统一入口：`SKILL.md` 给出 Runtime / `Task<T>` / `std::expected` 错误传播心智模型、include 前缀与命名空间、CMake 链接 target、构建开关与平台后端（io_uring / epoll / kqueue）速查及 13 个 C++ 模块 + C ABI 模块地图；`references/cpp-api.md` 汇总 13 个 C++ 模块公开类型与方法签名；`references/c-api.md` 覆盖 C ABI 错误约定、runtime / coro 驱动模型、每模块 handle 与完整 C 示例。
-
-### Changed
-
-- 构建版本号对齐 git tag：`CMakeLists.txt` 的 `project(galay VERSION ...)` 与 `MODULE.bazel` 的 `module(... version = ...)` 自 `4.0.0` 升至 `4.0.1`。
-
-### Removed
-
-- 清理被新 skill 取代的过期文档：`docs/c-abi-encapsulation-optimization.md`、`docs/cpp-modules-optimization.md`、`docs/naming-and-cmake-optimization.md`、`docs/rust-ffi-zero-overhead-guide.md`、`docs/文档审查报告.md`、`docs/README.md`，以及仅停留在 v3.0.0 的旧 `docs/release_note.md`（自本次起按发版节重建）。
 
 ## [v4.0.0] - 2026-07-02
 
