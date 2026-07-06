@@ -157,9 +157,9 @@ public:
     galay::kernel::IOController* getController() { return &m_controller; }
 
 private:
-    int m_watch_fd;                                ///< Linux: inotify fd, macOS: 当前监控的 fd
     galay::kernel::IOController m_controller;      ///< IO控制器
     std::unordered_map<int, std::string> m_watches; ///< wd/fd -> path 映射
+    int m_watch_fd;                                ///< Linux: inotify fd, macOS: 当前监控的 fd
 
     static constexpr size_t BUFFER_SIZE = 4096;    ///< 事件缓冲区大小
     char m_buffer[BUFFER_SIZE];                    ///< 事件缓冲区

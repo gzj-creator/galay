@@ -167,26 +167,26 @@ struct galay_redis_pipeline_t {
 };
 
 struct galay_redis_reply_t {
-    galay_redis_resp_type_t type = GALAY_REDIS_RESP_SIMPLE_STRING;
     std::string value;
-    int64_t integer = 0;
-    double double_value = 0.0;
-    galay_bool_t bool_value = GALAY_FALSE;
     std::vector<galay_redis_reply_t*> array;
     std::vector<std::pair<galay_redis_reply_t*, galay_redis_reply_t*>> map;
+    int64_t integer = 0;
+    double double_value = 0.0;
+    galay_redis_resp_type_t type = GALAY_REDIS_RESP_SIMPLE_STRING;
+    galay_bool_t bool_value = GALAY_FALSE;
 };
 
 struct galay_redis_client_t {
     std::string host = "127.0.0.1";
-    uint16_t port = 6379;
     std::string username;
     std::string password;
+    std::string recv_buffer;
+    galay_kernel_tcp_socket_t socket{};
     int db_index = 0;
     int resp_version = 2;
     int connect_timeout_ms = -1;
-    galay_kernel_tcp_socket_t socket{};
+    uint16_t port = 6379;
     bool connected = false;
-    std::string recv_buffer;
 };
 
 struct galay_redis_pool_connection_t {
@@ -196,16 +196,16 @@ struct galay_redis_pool_connection_t {
 
 struct galay_redis_pool_t {
     std::string host = "127.0.0.1";
-    uint16_t port = 6379;
     std::string username;
     std::string password;
-    int db_index = 0;
-    int resp_version = 2;
-    int connect_timeout_ms = -1;
+    std::vector<galay_redis_pool_connection_t> connections;
     size_t min_connections = 0;
     size_t max_connections = 1;
     size_t initial_connections = 0;
-    std::vector<galay_redis_pool_connection_t> connections;
+    int db_index = 0;
+    int resp_version = 2;
+    int connect_timeout_ms = -1;
+    uint16_t port = 6379;
 };
 
 struct galay_redis_pool_lease_t {

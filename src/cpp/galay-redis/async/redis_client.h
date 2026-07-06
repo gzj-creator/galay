@@ -108,9 +108,9 @@ namespace galay::redis
     struct RedissClientConfig
     {
         std::string ca_path;       ///< CA 证书路径
-        bool verify_peer = false;  ///< 是否验证对端证书
-        int verify_depth = 4;      ///< 证书链验证深度
         std::string server_name;   ///< SNI 服务器名称
+        int verify_depth = 4;      ///< 证书链验证深度
+        bool verify_peer = false;  ///< 是否验证对端证书
     };
 #endif
 
@@ -425,18 +425,18 @@ namespace galay::redis
             RedisExchangeSharedState(RedisClient& client,
                                      std::span<const RedisCommandView> commands);
 
-            RedisClient* client = nullptr;              ///< 关联的客户端
             std::string encoded_cmd;                    ///< 已编码的命令字符串
-            std::string_view encoded_view;              ///< 已编码的命令视图
-            size_t expected_replies = 0;                ///< 期望的回复数量
-            bool recv_only = false;                     ///< 是否仅接收模式
-            size_t sent = 0;                            ///< 已发送字节数
-            Phase phase = Phase::Start;                 ///< 当前阶段
-            std::vector<RedisValue> values;             ///< 解析得到的值
             std::string parse_buffer;                   ///< 解析缓冲区
+            std::vector<RedisValue> values;             ///< 解析得到的值
             std::array<struct iovec, 2> read_iovecs{};  ///< 读取 iovec 数组
-            size_t read_iov_count = 0;                  ///< 读取 iovec 数量
             std::optional<RedisExchangeResult> result;  ///< 交换结果
+            std::string_view encoded_view;              ///< 已编码的命令视图
+            RedisClient* client = nullptr;              ///< 关联的客户端
+            size_t expected_replies = 0;                ///< 期望的回复数量
+            size_t sent = 0;                            ///< 已发送字节数
+            size_t read_iov_count = 0;                  ///< 读取 iovec 数量
+            Phase phase = Phase::Start;                 ///< 当前阶段
+            bool recv_only = false;                     ///< 是否仅接收模式
         };
 
         /**
@@ -520,25 +520,25 @@ namespace galay::redis
                                     int32_t db_index,
                                     int version);
 
-            RedisClient* client = nullptr;              ///< 关联的客户端
+            galay::kernel::Host host;                   ///< 主机地址
             std::string ip;                             ///< 服务器 IP
-            int32_t port = 0;                           ///< 服务器端口
             std::string username;                       ///< 用户名
             std::string password;                       ///< 密码
-            int32_t db_index = 0;                       ///< 数据库索引
-            int version = 2;                            ///< RESP 协议版本
-            galay::kernel::Host host;                   ///< 主机地址
-            size_t sent = 0;                            ///< 已发送字节数
-            bool auth_sent = false;                     ///< AUTH 是否已发送
-            bool select_sent = false;                   ///< SELECT 是否已发送
-            PendingCommand pending_command = PendingCommand::None; ///< 待处理命令
             std::string encoded_cmd;                    ///< 已编码命令
             std::string parse_buffer;                   ///< 解析缓冲区
             std::vector<RedisValue> values;             ///< 解析得到的值
-            Phase phase = Phase::Connect;               ///< 当前阶段
             std::array<struct iovec, 2> read_iovecs{};  ///< 读取 iovec 数组
-            size_t read_iov_count = 0;                  ///< 读取 iovec 数量
             std::optional<RedisVoidResult> result;      ///< 连接结果
+            RedisClient* client = nullptr;              ///< 关联的客户端
+            size_t sent = 0;                            ///< 已发送字节数
+            size_t read_iov_count = 0;                  ///< 读取 iovec 数量
+            int32_t port = 0;                           ///< 服务器端口
+            int32_t db_index = 0;                       ///< 数据库索引
+            int version = 2;                            ///< RESP 协议版本
+            Phase phase = Phase::Connect;               ///< 当前阶段
+            PendingCommand pending_command = PendingCommand::None; ///< 待处理命令
+            bool auth_sent = false;                     ///< AUTH 是否已发送
+            bool select_sent = false;                   ///< SELECT 是否已发送
         };
 
         /**
@@ -623,19 +623,19 @@ namespace galay::redis
                                       size_t expected_replies,
                                       bool recv_only);
 
-            RedissClientImpl* impl = nullptr;
             std::string encoded_cmd;
-            size_t expected_replies = 0;
-            bool recv_only = false;
-            size_t sent = 0;
-            Phase phase = Phase::Start;
-            std::vector<RedisValue> values;
             std::string parse_buffer;
+            std::vector<RedisValue> values;
             std::array<struct iovec, 2> read_iovecs{};
-            size_t read_iov_count = 0;
-            char* read_buffer = nullptr;
-            size_t read_length = 0;
             std::optional<RedissCommandResult> result;
+            RedissClientImpl* impl = nullptr;
+            char* read_buffer = nullptr;
+            size_t expected_replies = 0;
+            size_t sent = 0;
+            size_t read_iov_count = 0;
+            size_t read_length = 0;
+            Phase phase = Phase::Start;
+            bool recv_only = false;
         };
 
         struct RedissExchangeMachine
@@ -682,24 +682,24 @@ namespace galay::redis
                                      int32_t port,
                                      RedisConnectOptions options);
 
-            RedissClientImpl* impl = nullptr;
-            std::string ip;
-            int32_t port = 0;
-            RedisConnectOptions options;
             galay::kernel::Host host;
-            size_t sent = 0;
-            bool auth_sent = false;
-            bool select_sent = false;
-            PendingCommand pending_command = PendingCommand::None;
+            RedisConnectOptions options;
+            std::string ip;
             std::string encoded_cmd;
             std::string parse_buffer;
             std::vector<RedisValue> values;
-            Phase phase = Phase::Connect;
             std::array<struct iovec, 2> read_iovecs{};
-            size_t read_iov_count = 0;
-            char* read_buffer = nullptr;
-            size_t read_length = 0;
             std::optional<RedisVoidResult> result;
+            RedissClientImpl* impl = nullptr;
+            char* read_buffer = nullptr;
+            size_t sent = 0;
+            size_t read_iov_count = 0;
+            size_t read_length = 0;
+            int32_t port = 0;
+            Phase phase = Phase::Connect;
+            PendingCommand pending_command = PendingCommand::None;
+            bool auth_sent = false;
+            bool select_sent = false;
         };
 
         struct RedissConnectMachine
@@ -852,12 +852,12 @@ namespace galay::redis
 
     private:
         // 成员变量
-        bool m_is_closed = false;                             ///< 连接关闭标志
         TcpSocket m_socket;                                   ///< TCP 套接字
-        IOScheduler* m_scheduler;                             ///< IO 调度器
-        protocol::RespParser m_parser;                        ///< RESP 协议解析器
         AsyncRedisConfig m_config;                            ///< 异步配置
         std::shared_ptr<galay::utils::RingBuffer> m_ring_buffer; ///< 接收环形缓冲区
+        IOScheduler* m_scheduler;                             ///< IO 调度器
+        bool m_is_closed = false;                             ///< 连接关闭标志
+        protocol::RespParser m_parser;                        ///< RESP 协议解析器
     };
 
 #ifdef GALAY_SSL_FEATURE_ENABLED

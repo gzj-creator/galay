@@ -1092,7 +1092,7 @@ HttpRouteHandler HttpRouter::createProxyHandler(const std::string& routePrefix,
                                                 uint16_t upstreamPort,
                                                 ProxyMode mode)
 {
-    return [routePrefix, upstreamHost, upstreamPort, mode](HttpConn& conn, HttpRequest req) -> Task<void> {
+    return [routePrefix, upstreamHost, mode, upstreamPort](HttpConn& conn, HttpRequest req) -> Task<void> {
         const std::string request_uri = req.header().uri();
         const std::string upstream_uri = rewriteProxyUri(routePrefix, request_uri);
         const std::string pool_key = buildUpstreamKey(upstreamHost, upstreamPort);

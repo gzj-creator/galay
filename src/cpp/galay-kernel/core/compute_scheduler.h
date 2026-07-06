@@ -139,9 +139,8 @@ private:
 
 private:
     std::thread m_thread;                                       ///< 工作线程
-    std::atomic<bool> m_running{false};                         ///< 运行状态
-
     moodycamel::BlockingConcurrentQueue<ComputeTask> m_queue;   ///< 任务队列（阻塞）
+    std::atomic<bool> m_running{false};                         ///< 运行状态
 };
 
 } // namespace galay::kernel

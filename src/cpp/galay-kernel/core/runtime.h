@@ -46,11 +46,11 @@ namespace galay::kernel
  * - `Mode::Custom` 要求调用方提供与 scheduler 数量完全一致的 CPU 列表
  */
 struct RuntimeAffinityConfig {
-    enum class Mode { None, Sequential, Custom } mode = Mode::None;  ///< 绑核分配模式
-    size_t seq_io_count = 0;  ///< Sequential 模式下参与分配的 IO scheduler 数
-    size_t seq_compute_count = 0;  ///< Sequential 模式下参与分配的 compute scheduler 数
     std::vector<uint32_t> custom_io_cpus;  ///< Custom 模式下 IO scheduler 的目标 CPU 列表
     std::vector<uint32_t> custom_compute_cpus;  ///< Custom 模式下 compute scheduler 的目标 CPU 列表
+    size_t seq_io_count = 0;  ///< Sequential 模式下参与分配的 IO scheduler 数
+    size_t seq_compute_count = 0;  ///< Sequential 模式下参与分配的 compute scheduler 数
+    enum class Mode { None, Sequential, Custom } mode = Mode::None;  ///< 绑核分配模式
 };
 
 /**

@@ -147,9 +147,9 @@ Span::Span(std::string name, SpanContext context, std::string tracestate)
 
 Span::Span(std::string name, SpanContext context, std::string tracestate, SpanTimingPolicy timingPolicy)
     : m_name(std::move(name)),
-      m_context(std::move(context)),
       m_tracestate(std::move(tracestate)),
-      m_startedAt(timingPolicy == SpanTimingPolicy::kEnabled ? Clock::now() : Clock::time_point{}) {
+      m_startedAt(timingPolicy == SpanTimingPolicy::kEnabled ? Clock::now() : Clock::time_point{}),
+      m_context(std::move(context)) {
 }
 
 void Span::end() noexcept {
@@ -162,7 +162,7 @@ void Span::end() noexcept {
 }
 
 void Span::setStatus(SpanStatusCode code, std::string message) {
-    m_status = SpanStatus{.code = code, .message = std::move(message)};
+    m_status = SpanStatus{.message = std::move(message), .code = code};
 }
 
 bool Span::setAttribute(SpanAttribute attribute) {
@@ -224,9 +224,9 @@ bool Span::addLink(SpanContext context, std::string tracestate, std::vector<Span
         attributes.resize(kMaxLinkAttributes);
     }
     m_links.push_back(SpanLink{
-        .context = std::move(context),
         .tracestate = std::move(tracestate),
         .attributes = std::move(attributes),
+        .context = std::move(context),
     });
     return true;
 }

@@ -69,7 +69,7 @@ enum class McpErrorCode {
  */
 class McpError {
 public:
-    McpError() : m_code(McpErrorCode::Success), m_message("") {} ///< 默认构造，表示成功
+    McpError() : m_message(""), m_code(McpErrorCode::Success) {} ///< 默认构造，表示成功
 
     /**
      * @brief 带错误码和消息的构造函数
@@ -77,7 +77,7 @@ public:
      * @param message 错误消息
      */
     McpError(McpErrorCode code, const std::string& message)
-        : m_code(code), m_message(message) {}
+        : m_message(message), m_code(code) {}
 
     /**
      * @brief 带错误码、消息和详情的构造函数
@@ -86,7 +86,7 @@ public:
      * @param details 错误详情
      */
     McpError(McpErrorCode code, const std::string& message, const std::string& details)
-        : m_code(code), m_message(message), m_details(details) {}
+        : m_message(message), m_details(details), m_code(code) {}
 
     McpErrorCode code() const { return m_code; } ///< 获取错误码
     const std::string& message() const { return m_message; } ///< 获取错误消息
@@ -398,9 +398,9 @@ public:
     }
 
 private:
-    McpErrorCode m_code; ///< 错误码
     std::string m_message; ///< 错误消息
     std::string m_details; ///< 错误详情
+    McpErrorCode m_code; ///< 错误码
 };
 
 } // namespace mcp

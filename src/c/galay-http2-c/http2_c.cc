@@ -10,10 +10,10 @@
 #include <vector>
 
 struct galay_http2_frame_t {
+    std::vector<uint8_t> payload;
+    uint32_t stream_id = 0;
     galay_http2_frame_type_t type = GALAY_HTTP2_FRAME_DATA;
     uint8_t flags = 0;
-    uint32_t stream_id = 0;
-    std::vector<uint8_t> payload;
 };
 
 struct galay_http2_header_item {
@@ -40,10 +40,10 @@ struct DataChunk {
 };
 
 struct RawFrame {
+    std::vector<uint8_t> payload;
+    uint32_t stream_id = 0;
     galay_http2_frame_type_t type = GALAY_HTTP2_FRAME_DATA;
     uint8_t flags = 0;
-    uint32_t stream_id = 0;
-    std::vector<uint8_t> payload;
 };
 
 struct galay_http2_conn_t {
@@ -65,6 +65,8 @@ struct galay_http2_conn_t {
 };
 
 struct galay_http2_stream_t {
+    std::deque<galay_http2_headers_t*> pending_headers;
+    std::deque<DataChunk> pending_data;
     galay_http2_conn_t* conn = nullptr;
     uint32_t id = 0;
     galay_http2_stream_state_t state = GALAY_HTTP2_STREAM_IDLE;
@@ -72,8 +74,6 @@ struct galay_http2_stream_t {
     int32_t recv_window = static_cast<int32_t>(kDefaultInitialWindow);
     bool reset_received = false;
     bool reset_sent = false;
-    std::deque<galay_http2_headers_t*> pending_headers;
-    std::deque<DataChunk> pending_data;
 };
 
 struct galay_http2_client_t {

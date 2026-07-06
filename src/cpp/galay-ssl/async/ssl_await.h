@@ -61,13 +61,13 @@ enum class SslMachineSignal : uint8_t {
  */
 template <typename ResultT>
 struct SslMachineAction {
-    SslMachineSignal signal = SslMachineSignal::kContinue;  ///< 当前信号
     char* read_buffer = nullptr;                             ///< 接收缓冲区指针
     size_t read_length = 0;                                  ///< 接收缓冲区大小
     const char* write_buffer = nullptr;                      ///< 发送缓冲区指针
     size_t write_length = 0;                                 ///< 发送数据长度
     std::optional<ResultT> result;                           ///< 操作结果（kComplete 时有效）
     std::optional<SslError> error;                           ///< 操作错误（kFail 时有效）
+    SslMachineSignal signal = SslMachineSignal::kContinue;  ///< 当前信号
 
     /**
      * @brief 创建继续信号的动作
@@ -437,8 +437,8 @@ public:
      * @brief 等待动作
      */
     struct WaitAction {
-        WaitKind kind = WaitKind::kNone;  ///< 等待类型
         IOContextBase* context = nullptr;  ///< IO 上下文
+        WaitKind kind = WaitKind::kNone;  ///< 等待类型
     };
 
     /**
@@ -585,7 +585,6 @@ private:
     void setShutdownSuccess();                  ///< 设置关闭成功
     void clearTransientBuffers();               ///< 清除临时缓冲区
 
-    OperationKind m_operation = OperationKind::kNone;  ///< 当前操作类型
     SslSocket* m_socket = nullptr;                     ///< SSL Socket 指针
     RecvIOContext m_recv_context;                       ///< 接收 IO 上下文
     SendIOContext m_send_context;                       ///< 发送 IO 上下文
@@ -594,8 +593,8 @@ private:
      * @brief 握手状态
      */
     struct HandshakeState {
-        bool result_set = false;                         ///< 结果是否已设置
         std::expected<void, SslError> result{};          ///< 握手结果
+        bool result_set = false;                         ///< 结果是否已设置
         bool flush_success = false;                      ///< 是否已成功刷新
         bool wait_read_after_write = false;              ///< 写入后是否等待读取
         bool read_pending = false;                       ///< 是否有待处理的读取
@@ -607,8 +606,8 @@ private:
     struct RecvState {
         char* plain_buffer = nullptr;                    ///< 明文缓冲区
         size_t plain_length = 0;                         ///< 明文长度
-        bool result_set = false;                         ///< 结果是否已设置
         std::expected<Bytes, SslError> result{};         ///< 接收结果
+        bool result_set = false;                         ///< 结果是否已设置
     } m_recv;
 
     /**
@@ -618,17 +617,17 @@ private:
         const char* plain_buffer = nullptr;              ///< 明文缓冲区
         size_t plain_length = 0;                         ///< 明文总长度
         size_t plain_offset = 0;                         ///< 当前发送偏移
+        std::expected<size_t, SslError> result{};        ///< 发送结果
         bool read_pending = false;                       ///< 是否有待处理的读取
         bool result_set = false;                         ///< 结果是否已设置
-        std::expected<size_t, SslError> result{};        ///< 发送结果
     } m_send;
 
     /**
      * @brief 关闭状态
      */
     struct ShutdownState {
-        bool result_set = false;                         ///< 结果是否已设置
         std::expected<void, SslError> result{};          ///< 关闭结果
+        bool result_set = false;                         ///< 结果是否已设置
         bool wait_read_after_write = false;              ///< 写入后是否等待读取
         bool read_pending = false;                       ///< 是否有待处理的读取
     } m_shutdown;
@@ -636,6 +635,7 @@ private:
     std::vector<char> m_shutdown_buffer;                 ///< 关闭密文缓冲区
     std::vector<char> m_recv_cipher_buffer;              ///< 接收密文缓冲区
     std::vector<char> m_send_cipher_buffer;              ///< 发送密文缓冲区
+    OperationKind m_operation = OperationKind::kNone;    ///< 当前操作类型
 };
 
 /**
@@ -659,9 +659,9 @@ public:
      */
     SslStateMachineAwaitable(IOController* controller, SslSocket* socket, MachineT machine)
         : SequenceAwaitableBase(controller)
-        , m_socket(socket)
         , m_machine(std::move(machine))
-        , m_driver(socket) {}
+        , m_driver(socket)
+        , m_socket(socket) {}
 
     /**
      * @brief 检查操作是否已完成（无需挂起）
@@ -926,14 +926,14 @@ private:
 
     void activateRead()
     {
-        m_active_task = IOTask{RECV, nullptr, &m_driver.recvContext()};
+        m_active_task = IOTask{nullptr, &m_driver.recvContext(), RECV};
         m_has_active_task = true;
         m_active_kind = ActiveKind::kRead;
     }
 
     void activateWrite()
     {
-        m_active_task = IOTask{SEND, nullptr, &m_driver.sendContext()};
+        m_active_task = IOTask{nullptr, &m_driver.sendContext(), SEND};
         m_has_active_task = true;
         m_active_kind = ActiveKind::kWrite;
     }
@@ -1053,17 +1053,17 @@ private:
         return SequenceProgress::kCompleted;
     }
 
-    SslSocket* m_socket = nullptr;
     MachineT m_machine;
     SslOperationDriver m_driver;
     IOTask m_active_task{};
-    bool m_has_active_task = false;
+    std::optional<result_type> m_result;
+    std::optional<SslError> m_error;
+    SslSocket* m_socket = nullptr;
     ActiveKind m_active_kind = ActiveKind::kNone;
     SslMachineSignal m_running_signal = SslMachineSignal::kContinue;
+    bool m_has_active_task = false;
     bool m_context_bound = false;
-    std::optional<result_type> m_result;
     bool m_result_set = false;
-    std::optional<SslError> m_error;
 };
 
 /**

@@ -45,12 +45,12 @@ enum class PipelineOpType
  */
 struct PipelineOp
 {
-    PipelineOpType type = PipelineOpType::Put;  ///< 操作类型
     std::string key;                             ///< 目标键
     std::string value;                           ///< 写入的值（仅 Put 操作使用）
-    bool prefix = false;                         ///< 是否为前缀匹配（Get/Delete 操作使用）
     std::optional<int64_t> limit = std::nullopt; ///< 返回数量限制（Get 操作使用）
     std::optional<int64_t> lease_id = std::nullopt; ///< 租约 ID（Put 操作使用）
+    PipelineOpType type = PipelineOpType::Put;  ///< 操作类型
+    bool prefix = false;                         ///< 是否为前缀匹配（Get/Delete 操作使用）
 
     /**
      * @brief 创建一个 Put 操作
@@ -113,10 +113,10 @@ struct PipelineOp
  */
 struct PipelineItemResult
 {
+    std::vector<EtcdKeyValue> kvs;             ///< 查询到的键值对列表（Get 操作）
+    int64_t deleted_count = 0;                 ///< 删除的键数量（Delete 操作）
     PipelineOpType type = PipelineOpType::Put; ///< 对应的操作类型
     bool ok = false;                           ///< 操作是否成功
-    int64_t deleted_count = 0;                 ///< 删除的键数量（Delete 操作）
-    std::vector<EtcdKeyValue> kvs;             ///< 查询到的键值对列表（Get 操作）
 };
 
 /**
@@ -136,9 +136,9 @@ enum class EtcdWatchEventType
  */
 struct EtcdWatchEvent
 {
-    EtcdWatchEventType type = EtcdWatchEventType::Unknown; ///< 事件类型
     EtcdKeyValue kv;                                       ///< 事件对应的键值对
     std::optional<EtcdKeyValue> prev_kv = std::nullopt;    ///< 变更前的键值对（可选）
+    EtcdWatchEventType type = EtcdWatchEventType::Unknown; ///< 事件类型
 };
 
 /**
@@ -147,11 +147,11 @@ struct EtcdWatchEvent
  */
 struct EtcdWatchResponse
 {
+    std::vector<EtcdWatchEvent> events;     ///< 事件列表
     int64_t watch_id = 0;                   ///< Watch ID
+    int64_t compact_revision = 0;           ///< 压缩修订版本号
     bool created = false;                   ///< 是否为创建确认
     bool canceled = false;                  ///< 是否已被取消
-    int64_t compact_revision = 0;           ///< 压缩修订版本号
-    std::vector<EtcdWatchEvent> events;     ///< 事件列表
 };
 
 /**

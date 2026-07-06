@@ -48,8 +48,8 @@ void setCurrentContext(std::optional<TraceContext> context) {
         return;
     }
     t_currentContext = detail::CurrentContextState{
-        .spanContext = SpanContext(*context),
         .tracestate = context->tracestate(),
+        .spanContext = SpanContext(*context),
     };
 }
 

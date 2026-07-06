@@ -251,12 +251,11 @@ private:
     JsonString m_resourcesListCache; ///< 资源列表缓存
     JsonString m_promptsListCache; ///< 提示列表缓存
 
-    std::atomic<bool> m_running; ///< 服务器运行状态
-    std::atomic<bool> m_initialized; ///< 初始化状态
-
     std::istream* m_input; ///< 输入流指针
     std::ostream* m_output; ///< 输出流指针
     std::mutex m_outputMutex; ///< 输出流互斥锁
+    std::atomic<bool> m_running; ///< 服务器运行状态
+    std::atomic<bool> m_initialized; ///< 初始化状态
 };
 
 } // namespace mcp

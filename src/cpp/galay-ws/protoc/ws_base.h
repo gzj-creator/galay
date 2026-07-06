@@ -78,24 +78,24 @@ enum class WsCloseCode : uint16_t
  */
 struct WsFrameHeader
 {
+    uint64_t payload_length;     ///< Payload 长度
+    WsOpcode opcode;             ///< 操作码
+    uint8_t masking_key[4];      ///< 掩码密钥（如果 mask=1）
     bool fin;                    ///< FIN 位：是否是最后一个分片
     bool rsv1;                   ///< RSV1 位：保留位1
     bool rsv2;                   ///< RSV2 位：保留位2
     bool rsv3;                   ///< RSV3 位：保留位3
-    WsOpcode opcode;             ///< 操作码
     bool mask;                   ///< MASK 位：是否使用掩码
-    uint64_t payload_length;     ///< Payload 长度
-    uint8_t masking_key[4];      ///< 掩码密钥（如果 mask=1）
 
     WsFrameHeader()
-        : fin(false)
+        : payload_length(0)
+        , opcode(WsOpcode::Text)
+        , masking_key{0, 0, 0, 0}
+        , fin(false)
         , rsv1(false)
         , rsv2(false)
         , rsv3(false)
-        , opcode(WsOpcode::Text)
         , mask(false)
-        , payload_length(0)
-        , masking_key{0, 0, 0, 0}
     {
     }
 };

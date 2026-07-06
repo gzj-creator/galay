@@ -65,9 +65,9 @@ struct HttpTimeoutPolicy
  */
 struct HttpKeepAlivePolicy
 {
-    bool enabled = true; ///< 是否允许 route-mode 使用 keep-alive。
     size_t max_requests_per_connection = 0; ///< 单连接最大请求数，0 表示不限制。
     std::chrono::milliseconds keep_alive_idle_timeout{DEFAULT_HTTP_KEEPALIVE_TIME_MS}; ///< 请求间空闲超时。
+    bool enabled = true; ///< 是否允许 route-mode 使用 keep-alive。
 };
 
 /**
@@ -92,9 +92,9 @@ struct HttpProxyPolicy
  */
 struct HttpStaticPolicy
 {
-    bool follow_symlinks = false;              ///< 是否允许跟随符号链接。
     size_t max_range_count = 0;                ///< 最大 Range 数，0 表示不额外限制。
     size_t max_aggregate_range_bytes = 0;      ///< 多 Range 聚合字节上限，0 表示不额外限制。
+    bool follow_symlinks = false;              ///< 是否允许跟随符号链接。
     bool reject_encoded_path_separators = true; ///< 是否拒绝编码后的路径分隔符。
     bool head_sends_body = false;              ///< HEAD 是否发送 body，默认不发送。
 };

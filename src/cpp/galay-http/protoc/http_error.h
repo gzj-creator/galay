@@ -106,8 +106,8 @@ namespace galay::http
         HttpStatusCode toHttpStatusCode() const;
 
     private:
-        HttpErrorCode m_code;      ///< 错误码
         std::string m_extra_msg;   ///< 附加错误描述
+        HttpErrorCode m_code;      ///< 错误码
     };
 
 

@@ -49,8 +49,8 @@ inline FileWatchEvent operator&(FileWatchEvent a, FileWatchEvent b) {
  * @brief 文件监控结果
  */
 struct FileWatchResult {
-    FileWatchEvent event;       ///< 触发的事件类型
     std::string name;           ///< 相关文件名（目录监控时有效）
+    FileWatchEvent event;       ///< 触发的事件类型
     bool isDir;                 ///< 是否是目录
 
     /**

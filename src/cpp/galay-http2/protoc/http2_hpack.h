@@ -190,9 +190,9 @@ private:
     void encodeFieldStateless(const Http2HeaderField& field, std::string& output);
 
     HpackDynamicTable m_dynamic_table;
+    size_t m_pending_table_size = 0;
     bool m_use_huffman = false;  // 是否使用 Huffman 编码
     bool m_table_size_update_pending = false;
-    size_t m_pending_table_size = 0;
 };
 
 /**

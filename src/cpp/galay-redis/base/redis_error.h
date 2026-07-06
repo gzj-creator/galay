@@ -92,8 +92,8 @@ namespace galay::redis
         std::string message() const;
 
     private:
-        RedisErrorType m_type;     ///< 错误类型
         std::string m_extra_msg;   ///< 附加错误消息
+        RedisErrorType m_type;     ///< 错误类型
     };
 }
 #endif

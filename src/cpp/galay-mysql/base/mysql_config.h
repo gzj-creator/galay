@@ -25,12 +25,12 @@ namespace galay::mysql
 struct MysqlConfig
 {
     std::string host = "127.0.0.1";     ///< 服务器地址
-    uint16_t port = 3306;               ///< 服务器端口
     std::string username;               ///< 用户名
     std::string password;               ///< 密码
     std::string database;               ///< 默认数据库
     std::string charset = "utf8mb4";    ///< 字符集
     uint32_t connect_timeout_ms = 5000; ///< 连接超时（毫秒）
+    uint16_t port = 3306;               ///< 服务器端口
     bool tcp_no_delay = true;           ///< 是否为连接 socket 启用 TCP_NODELAY
 
     /**

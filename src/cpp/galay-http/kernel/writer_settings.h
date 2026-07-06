@@ -82,10 +82,10 @@ public:
     }
 
 private:
-    int m_send_timeout_ms = DEFAULT_HTTP_SEND_TIME_MS;
-    bool m_buffering_enabled = true;
     size_t m_max_response_size = DEFAULT_HTTP_MAX_BODY_SIZE;
     size_t m_writev_coalesce_threshold = 0;
+    int m_send_timeout_ms = DEFAULT_HTTP_SEND_TIME_MS;
+    bool m_buffering_enabled = true;
 };
 
 } // namespace galay::http

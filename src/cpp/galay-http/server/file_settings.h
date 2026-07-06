@@ -53,14 +53,14 @@ public:
      *          - ETag：启用
      */
     StaticFileSetting()
-        : m_transfer_mode(FileTransferMode::AUTO)
-        , m_small_file_threshold(64 * 1024)        // 64KB
+        : m_small_file_threshold(64 * 1024)        // 64KB
         , m_large_file_threshold(1024 * 1024)      // 1MB
         , m_chunk_size(64 * 1024)                  // 64KB
         , m_sendfile_chunk_size(10 * 1024 * 1024) // 10MB
+        , m_max_cache_size(100 * 1024 * 1024)     // 100MB
+        , m_transfer_mode(FileTransferMode::AUTO)
         , m_enable_cache(false)
         , m_enable_etag(true)
-        , m_max_cache_size(100 * 1024 * 1024)     // 100MB
     {
     }
 
@@ -219,14 +219,14 @@ public:
     }
 
 private:
-    FileTransferMode m_transfer_mode;    ///< 文件传输模式
     size_t m_small_file_threshold;       ///< 小文件阈值（字节）
     size_t m_large_file_threshold;       ///< 大文件阈值（字节）
     size_t m_chunk_size;                 ///< Chunk 大小（字节）
     size_t m_sendfile_chunk_size;        ///< SendFile 块大小（字节）
+    size_t m_max_cache_size;             ///< 最大缓存大小（字节）
+    FileTransferMode m_transfer_mode;    ///< 文件传输模式
     bool m_enable_cache;                 ///< 是否启用缓存
     bool m_enable_etag;                  ///< 是否启用 ETag 条件请求
-    size_t m_max_cache_size;             ///< 最大缓存大小（字节）
 };
 
 } // namespace galay::http

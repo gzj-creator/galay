@@ -53,10 +53,10 @@ enum class CoroUdpCompletionPhase : uint8_t {
 };
 
 struct CoroUdpCompletionState {
-    std::atomic<CoroUdpCompletionPhase> phase{CoroUdpCompletionPhase::Pending};
     std::mutex user_data_mutex;
-    void* user_data = nullptr;
     GalayCoreCoroWaitOps wait_ops{};
+    void* user_data = nullptr;
+    std::atomic<CoroUdpCompletionPhase> phase{CoroUdpCompletionPhase::Pending};
 };
 
 C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
@@ -192,8 +192,8 @@ struct CoroUdpOperationBase: public CoroUdpOperationInterface {
     CoroUdpOperationBase(Scheduler* scheduler,
                          void* user_data,
                          GalayCoreCoroWaitOps wait_ops)
-        : m_scheduler(scheduler)
-        , m_wait_ops(wait_ops)
+        : m_wait_ops(wait_ops)
+        , m_scheduler(scheduler)
     {
         m_state.user_data = user_data;
         m_state.wait_ops = wait_ops;
@@ -209,40 +209,40 @@ struct CoroUdpOperationBase: public CoroUdpOperationInterface {
 
     bool completeFromWake() noexcept
     {
-        if (m_finished) {
+        if (finished()) {
             return true;
         }
         const CoroUdpCompletionPhase phase =
             m_state.phase.load(std::memory_order_acquire);
         if (phase == CoroUdpCompletionPhase::TimedOut ||
             phase == CoroUdpCompletionPhase::Cancelled) {
-            m_finished = true;
+            setFinished();
             releaseUserDataOnly();
             return true;
         }
         if (phase != CoroUdpCompletionPhase::Completed) {
             return true;
         }
-        m_finished = true;
+        setFinished();
         return completeUserData(buildResult());
     }
 
     C_IOResult immediateResult() noexcept
     {
-        m_finished = true;
+        setFinished();
         return buildResult();
     }
 
     C_IOResult finishWithoutWait(C_IOResult result) noexcept
     {
-        m_finished = true;
+        setFinished();
         C_IOResult completed = completeAndReleaseUserData(result);
         return merge_cleanup_result(result, completed);
     }
 
     void cancelFromClose() noexcept override
     {
-        if (m_finished) {
+        if (finished()) {
             return;
         }
         CoroUdpCompletionPhase expected = CoroUdpCompletionPhase::Pending;
@@ -365,19 +365,30 @@ private:
     static void wake_retain(void*) noexcept {}
     static void wake_release(void*) noexcept {}
 
+    bool finished() const noexcept
+    {
+        return (m_flags & kFinishedFlag) != 0;
+    }
+
+    void setFinished() noexcept
+    {
+        m_flags |= kFinishedFlag;
+    }
+
     inline static const galay::kernel::detail::ResumeTokenHooks kWakeHooks{
         .owner_scheduler = wake_owner,
         .request_resume = wake_request,
         .retain = wake_retain,
         .release = wake_release,
     };
+    static constexpr uint64_t kFinishedFlag = 1u;
 
-    Scheduler* m_scheduler = nullptr;
-    GalayCoreCoroWaitOps m_wait_ops{};
     CoroUdpCompletionState m_state;
     CoroUdpWakeState m_wake_state{};
-    bool m_finished = false;
     C_IOResult m_last_cleanup_result = make_result(C_IOResultOk);
+    GalayCoreCoroWaitOps m_wait_ops{};
+    Scheduler* m_scheduler = nullptr;
+    uint64_t m_flags = 0;
 };
 
 struct CoroRecvFromOperation final: public RecvFromAwaitable, public CoroUdpOperationBase {

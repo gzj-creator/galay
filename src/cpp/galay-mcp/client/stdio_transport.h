@@ -45,14 +45,14 @@ private:
 private:
     std::string m_clientName;
     std::string m_clientVersion;
-    ServerInfo m_serverInfo;
-    ServerCapabilities m_serverCapabilities;
-    std::atomic<bool> m_initialized{false};
     std::atomic<int64_t> m_requestIdCounter{0};
+    ServerInfo m_serverInfo;
     std::istream* m_input;
     std::ostream* m_output;
     std::mutex m_outputMutex;
     std::mutex m_inputMutex;
+    ServerCapabilities m_serverCapabilities;
+    std::atomic<bool> m_initialized{false};
 };
 
 } // namespace galay::mcp::detail

@@ -42,8 +42,9 @@ public:
     TraceContext(TraceId traceId, SpanId spanId, std::uint8_t traceFlags = 0, std::string tracestate = {})
         : m_traceId(traceId),
           m_spanId(spanId),
-          m_traceFlags(traceFlags),
-          m_tracestate(std::move(tracestate)) {
+          m_tracestate(std::move(tracestate)),
+          m_parentSpanId(std::nullopt),
+          m_traceFlags(traceFlags) {
     }
 
     /**
@@ -141,9 +142,9 @@ private:
 
     TraceId m_traceId{};                       ///< 追踪标识符
     SpanId m_spanId{};                         ///< Span 标识符
+    std::string m_tracestate;                  ///< W3C tracestate
     std::optional<SpanId> m_parentSpanId;      ///< 父 Span 标识符
     std::uint8_t m_traceFlags{0};              ///< 追踪标志位
-    std::string m_tracestate;                  ///< W3C tracestate
 };
 
 /**

@@ -127,17 +127,17 @@ struct BatchSpanProcessor::WorkerControl {
         std::atomic<bool> ok{false};
     };
 
+    std::atomic<std::size_t> activeFlushCallers{0};
+    std::atomic<Clock::rep> shutdownDeadlineTicks{
+        Clock::time_point::max().time_since_epoch().count()};
+    std::counting_semaphore<> signal{0};
+    moodycamel::ConcurrentQueue<std::shared_ptr<FlushRequest>> flushRequests;
     std::atomic<bool> shutdownRequested{false};
     std::atomic<bool> workerStopped{false};
     std::atomic<bool> joinClaimed{false};
     std::atomic<bool> exporterShutdown{false};
     std::atomic<bool> shutdownDrainOk{true};
-    std::atomic<std::size_t> activeFlushCallers{0};
     std::atomic<bool> signalPending{false};
-    std::atomic<Clock::rep> shutdownDeadlineTicks{
-        Clock::time_point::max().time_since_epoch().count()};
-    std::counting_semaphore<> signal{0};
-    moodycamel::ConcurrentQueue<std::shared_ptr<FlushRequest>> flushRequests;
 
     void setShutdownDeadline(Clock::time_point deadline) noexcept {
         shutdownDeadlineTicks.store(deadline.time_since_epoch().count(), std::memory_order_release);

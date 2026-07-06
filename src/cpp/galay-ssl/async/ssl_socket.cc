@@ -10,12 +10,12 @@ namespace galay::ssl
 
 SslSocket::SslSocket(SslContext* ctx, IPType type)
     : m_controller(GHandle::invalid())
-    , m_ctx(ctx)
     , m_engine(ctx)
-    , m_isServer(false)
-    , m_engineInitialized(false)
     , m_recvCipherBuffer()
     , m_sendCipherBuffer()
+    , m_ctx(ctx)
+    , m_isServer(false)
+    , m_engineInitialized(false)
 {
     int domain = (type == IPType::IPV4) ? AF_INET : AF_INET6;
     int fd = ::socket(domain, SOCK_STREAM, 0);
@@ -26,12 +26,12 @@ SslSocket::SslSocket(SslContext* ctx, IPType type)
 
 SslSocket::SslSocket(SslContext* ctx, GHandle handle)
     : m_controller(handle)
-    , m_ctx(ctx)
     , m_engine(ctx)
-    , m_isServer(true)
-    , m_engineInitialized(false)
     , m_recvCipherBuffer()
     , m_sendCipherBuffer()
+    , m_ctx(ctx)
+    , m_isServer(true)
+    , m_engineInitialized(false)
 {
     initEngine();
 }
@@ -43,12 +43,12 @@ SslSocket::~SslSocket()
 
 SslSocket::SslSocket(SslSocket&& other) noexcept
     : m_controller(std::move(other.m_controller))
-    , m_ctx(other.m_ctx)
     , m_engine(std::move(other.m_engine))
-    , m_isServer(other.m_isServer)
-    , m_engineInitialized(other.m_engineInitialized)
     , m_recvCipherBuffer(std::move(other.m_recvCipherBuffer))
     , m_sendCipherBuffer(std::move(other.m_sendCipherBuffer))
+    , m_ctx(other.m_ctx)
+    , m_isServer(other.m_isServer)
+    , m_engineInitialized(other.m_engineInitialized)
 {
     other.m_ctx = nullptr;
     other.m_engineInitialized = false;

@@ -400,8 +400,8 @@ struct HttpRequestReadState {
     std::vector<iovec> m_parse_iovecs;                  ///< 解析用 iovec 缓冲
     BorrowedIovecs<2> m_write_iovecs;                   ///< 接收窗口 iovec
     std::optional<HttpError> m_http_error;              ///< HTTP 解析错误
-    bool m_read_active = false;                         ///< 是否有正在执行的读取协程
     uint64_t m_generation = 0;                           ///< 状态复用代数，用于识别陈旧 awaitable
+    bool m_read_active = false;                         ///< 是否有正在执行的读取协程
 };
 
 /**

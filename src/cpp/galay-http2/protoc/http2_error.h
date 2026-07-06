@@ -35,7 +35,7 @@ public:
      * @param message 附加描述信息
      */
     Http2Error(Http2ErrorCode code, std::string message = "")
-        : m_code(code), m_message(std::move(message)) {}
+        : m_message(std::move(message)), m_code(code) {}
 
     /**
      * @brief 从底层 I/O 错误构造 HTTP/2 错误
@@ -44,8 +44,8 @@ public:
      *          避免可恢复 I/O 错误落入内核 awaitable 的进程终止兜底路径。
      */
     explicit Http2Error(const galay::kernel::IOError& io_error)
-        : m_code(Http2ErrorCode::InternalError)
-        , m_message(io_error.message())
+        : m_message(io_error.message())
+        , m_code(Http2ErrorCode::InternalError)
     {
         const uint64_t code = io_error.code();
         if (galay::kernel::IOError::contains(code, galay::kernel::kTimeout) ||
@@ -80,8 +80,8 @@ public:
     static Http2Error compressionError(const std::string& msg = "") { return Http2Error(Http2ErrorCode::CompressionError, msg); } ///< 创建压缩错误
 
 private:
-    Http2ErrorCode m_code = Http2ErrorCode::NoError; ///< 错误码
     std::string m_message; ///< 附加描述信息
+    Http2ErrorCode m_code = Http2ErrorCode::NoError; ///< 错误码
 };
 
 /**

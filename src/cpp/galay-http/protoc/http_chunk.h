@@ -135,10 +135,10 @@ private:
         kDone,
     };
 
-    Phase m_phase = Phase::kSizeLine;       ///< 当前解析阶段
     std::string m_line_buffer;              ///< chunk size 行或 trailer 行缓存
     size_t m_current_chunk_size = 0;        ///< 当前 chunk payload 总长度
     size_t m_current_chunk_read = 0;        ///< 当前 chunk 已读取 payload 长度
+    Phase m_phase = Phase::kSizeLine;       ///< 当前解析阶段
     bool m_pending_cr = false;              ///< 是否刚读取到 '\r'
 };
 

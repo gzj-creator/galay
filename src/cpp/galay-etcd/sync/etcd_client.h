@@ -300,22 +300,21 @@ private:
     std::string m_api_prefix;                                           ///< API 路径前缀
     std::string m_host_header;                                          ///< HTTP Host 头
     std::string m_endpoint_host;                                        ///< 端点主机名
-    uint16_t m_endpoint_port = 0;                                       ///< 端点端口号
-    bool m_endpoint_secure = false;                                     ///< 是否为 HTTPS 连接
-    bool m_endpoint_ipv6 = false;                                       ///< 是否为 IPv6 地址
     std::string m_endpoint_error;                                       ///< 端点解析错误信息
-    bool m_endpoint_valid = false;                                      ///< 端点地址是否有效
-
-    int m_socket_fd = -1;                                               ///< TCP 套接字文件描述符
-    bool m_connected = false;                                           ///< 是否已连接
-    std::optional<std::chrono::milliseconds> m_applied_socket_timeout;  ///< 已应用的 socket 超时时间
-    bool m_socket_timeout_cached = false;                               ///< socket 超时是否已缓存
     std::string m_request_buffer;                                       ///< 请求缓冲区
     std::string m_response_raw_buffer;                                  ///< 原始响应缓冲区
     std::vector<char> m_recv_buffer;                                    ///< 接收缓冲区
+    std::optional<std::chrono::milliseconds> m_applied_socket_timeout;  ///< 已应用的 socket 超时时间
 
     EtcdError m_last_error;                                             ///< 最后一次错误
     EtcdClientStats m_stats{};                                          ///< 统计快照占位
+    int m_socket_fd = -1;                                               ///< TCP 套接字文件描述符
+    uint16_t m_endpoint_port = 0;                                       ///< 端点端口号
+    bool m_endpoint_secure = false;                                     ///< 是否为 HTTPS 连接
+    bool m_endpoint_ipv6 = false;                                       ///< 是否为 IPv6 地址
+    bool m_endpoint_valid = false;                                      ///< 端点地址是否有效
+    bool m_connected = false;                                           ///< 是否已连接
+    bool m_socket_timeout_cached = false;                               ///< socket 超时是否已缓存
 };
 
 } // namespace galay::etcd

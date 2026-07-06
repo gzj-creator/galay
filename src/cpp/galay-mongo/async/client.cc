@@ -442,14 +442,14 @@ struct AsyncMongoClientInternals
     struct ConnectFlowState {
         AsyncMongoClient& client;
         MongoConfig config;
-        bool auth_enabled = false;
-        AuthPhase auth_phase = AuthPhase::HelloReply;
         std::string auth_db;
-        int32_t auth_conversation_id = 0;
         std::string auth_client_nonce;
         std::string auth_client_first_bare;
         std::string auth_expected_server_signature;
         std::string encoded_request;
+        int32_t auth_conversation_id = 0;
+        AuthPhase auth_phase = AuthPhase::HelloReply;
+        bool auth_enabled = false;
 
         ConnectFlowState(AsyncMongoClient& client_ref, MongoConfig cfg)
             : client(client_ref)
@@ -1180,8 +1180,7 @@ AsyncMongoClient::AsyncMongoClient(IOScheduler* scheduler,
 }
 
 AsyncMongoClient::AsyncMongoClient(AsyncMongoClient&& other) noexcept
-    : m_is_closed(other.m_is_closed)
-    , m_config(std::move(other.m_config))
+    : m_config(std::move(other.m_config))
     , m_socket(std::move(other.m_socket))
     , m_ring_buffer(std::move(other.m_ring_buffer))
     , m_decode_scratch(std::move(other.m_decode_scratch))
@@ -1189,6 +1188,7 @@ AsyncMongoClient::AsyncMongoClient(AsyncMongoClient&& other) noexcept
     , m_ping_encoded_template(std::move(other.m_ping_encoded_template))
     , m_pipeline_reserve_per_command(other.m_pipeline_reserve_per_command)
     , m_next_request_id(other.m_next_request_id)
+    , m_is_closed(other.m_is_closed)
 {
     other.m_is_closed = true;
 }

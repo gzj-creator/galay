@@ -19,10 +19,10 @@ JsonString emptyObjectString() {
 McpStdioServer::McpStdioServer()
     : m_serverName("galay-mcp-server")
     , m_serverVersion("1.0.0")
-    , m_running(false)
-    , m_initialized(false)
     , m_input(&std::cin)
-    , m_output(&std::cout) {
+    , m_output(&std::cout)
+    , m_running(false)
+    , m_initialized(false) {
     m_toolsListCache = protocol::buildListResultFromMap(
         m_tools, "tools",
         [](const ToolInfo& info) -> const Tool& { return info.tool; });

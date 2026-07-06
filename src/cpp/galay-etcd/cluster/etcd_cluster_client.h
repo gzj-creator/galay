@@ -42,12 +42,12 @@ enum class EtcdEndpointHealthState
 struct EtcdEndpointHealthSnapshot
 {
     std::string endpoint;                                                ///< 端点地址
-    EtcdEndpointHealthState state = EtcdEndpointHealthState::Unknown;    ///< 当前健康状态
     std::optional<EtcdError> last_error = std::nullopt;                  ///< 最近一次错误
     std::optional<std::chrono::system_clock::time_point> last_failure_time = std::nullopt; ///< 最近失败时间
     std::optional<std::chrono::system_clock::time_point> last_success_time = std::nullopt; ///< 最近成功时间
     std::optional<std::chrono::system_clock::time_point> last_probe_time = std::nullopt; ///< 最近主动探测时间
     size_t consecutive_failures = 0;                                     ///< 连续失败次数
+    EtcdEndpointHealthState state = EtcdEndpointHealthState::Unknown;    ///< 当前健康状态
 };
 
 /**

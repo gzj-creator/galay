@@ -78,12 +78,12 @@ namespace galay::redis
         size_t sentinel_count = 0;          ///< 已配置 Sentinel 数量
         size_t cluster_node_count = 0;      ///< 已配置集群节点数量
         size_t connected_node_count = 0;    ///< 已标记为已连接的节点数量
-        bool master_connected = false;      ///< 主节点是否已标记为已连接
-        bool slot_cache_ready = false;      ///< 集群槽位缓存是否已就绪
-        RedisReadPolicy read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
-        RedisAccessMode access_mode = RedisAccessMode::ReadWrite;     ///< 访问模式
         RedisTopologyRetryConfig retry_config;       ///< 重试配置
         RedisTopologyRefreshConfig refresh_config;   ///< 刷新配置
+        RedisReadPolicy read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
+        RedisAccessMode access_mode = RedisAccessMode::ReadWrite;     ///< 访问模式
+        bool master_connected = false;      ///< 主节点是否已标记为已连接
+        bool slot_cache_ready = false;      ///< 集群槽位缓存是否已就绪
     };
 
     /**
@@ -93,9 +93,9 @@ namespace galay::redis
     struct RedisNodeAddress
     {
         std::string host = "127.0.0.1";    ///< 节点主机地址
-        int32_t port = 6379;                ///< 节点端口
         std::string username;               ///< 认证用户名
         std::string password;               ///< 认证密码
+        int32_t port = 6379;                ///< 节点端口
         int32_t db_index = 0;               ///< 数据库索引
         int version = 2;                    ///< RESP 协议版本
     };
@@ -318,12 +318,12 @@ namespace galay::redis
         std::vector<bool> m_replica_connected;                        ///< 从节点连接状态
         std::vector<NodeHandle> m_sentinels;                          ///< Sentinel 节点列表
         std::string m_sentinel_master_name = "mymaster";              ///< Sentinel 监控的主节点名称
-        bool m_master_connected = false;                              ///< 主节点连接状态
         size_t m_read_cursor = 0;                                     ///< 读请求轮询游标
         size_t m_auto_retry_attempts = 2;                             ///< 自动重试次数
         RedisTopologyRetryConfig m_retry_config;                      ///< 拓扑重试配置
         RedisTopologyRefreshConfig m_refresh_config;                  ///< 拓扑刷新配置
         RedisReadPolicy m_read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
+        bool m_master_connected = false;                              ///< 主节点连接状态
     };
 
     /**
@@ -542,10 +542,10 @@ namespace galay::redis
                 Moved,  ///< MOVED 重定向（永久）
                 Ask,    ///< ASK 重定向（临时）
             };
-            Type type = Type::None;  ///< 重定向类型
-            uint16_t slot = 0;       ///< 目标槽位
             std::string host;        ///< 目标主机
+            Type type = Type::None;  ///< 重定向类型
             int32_t port = 0;        ///< 目标端口
+            uint16_t slot = 0;       ///< 目标槽位
         };
 
         Task<RedisCommandResult> refreshSlotsTask(); ///< 刷新槽位协程
@@ -575,10 +575,10 @@ namespace galay::redis
         std::array<int, 16384> m_slot_owner{};                        ///< 槽位到节点的映射表
         std::chrono::milliseconds m_auto_refresh_interval{5000};      ///< 自动刷新间隔
         std::chrono::steady_clock::time_point m_last_refresh_time{};  ///< 上次刷新时间
-        bool m_slot_cache_ready = false;                              ///< 槽位缓存是否就绪
         RedisTopologyRetryConfig m_retry_config;                      ///< 拓扑重试配置
         RedisTopologyRefreshConfig m_refresh_config;                  ///< 拓扑刷新配置
         RedisReadPolicy m_read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
+        bool m_slot_cache_ready = false;                              ///< 槽位缓存是否就绪
     };
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -759,12 +759,12 @@ namespace galay::redis
         std::vector<bool> m_replica_connected;                        ///< 从节点连接状态
         std::vector<NodeHandle> m_sentinels;                          ///< Sentinel 节点列表
         std::string m_sentinel_master_name = "mymaster";              ///< Sentinel 监控的主节点名称
-        bool m_master_connected = false;                              ///< 主节点连接状态
         size_t m_read_cursor = 0;                                     ///< 读请求轮询游标
         size_t m_auto_retry_attempts = 2;                             ///< 自动重试次数
         RedisTopologyRetryConfig m_retry_config;                      ///< 拓扑重试配置
         RedisTopologyRefreshConfig m_refresh_config;                  ///< 拓扑刷新配置
         RedisReadPolicy m_read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
+        bool m_master_connected = false;                              ///< 主节点连接状态
     };
 
     class RedissClusterClient;
@@ -934,10 +934,10 @@ namespace galay::redis
                 Moved,  ///< MOVED 重定向（永久）
                 Ask,    ///< ASK 重定向（临时）
             };
-            Type type = Type::None;  ///< 重定向类型
-            uint16_t slot = 0;       ///< 目标槽位
             std::string host;        ///< 目标主机
+            Type type = Type::None;  ///< 重定向类型
             int32_t port = 0;        ///< 目标端口
+            uint16_t slot = 0;       ///< 目标槽位
         };
 
         Task<RedisCommandResult> refreshSlotsTask(); ///< 刷新槽位协程
@@ -968,10 +968,10 @@ namespace galay::redis
         std::array<int, 16384> m_slot_owner{};                        ///< 槽位到节点的映射表
         std::chrono::milliseconds m_auto_refresh_interval{5000};      ///< 自动刷新间隔
         std::chrono::steady_clock::time_point m_last_refresh_time{};  ///< 上次刷新时间
-        bool m_slot_cache_ready = false;                              ///< 槽位缓存是否就绪
         RedisTopologyRetryConfig m_retry_config;                      ///< 拓扑重试配置
         RedisTopologyRefreshConfig m_refresh_config;                  ///< 拓扑刷新配置
         RedisReadPolicy m_read_policy = RedisReadPolicy::PreferReplica; ///< 读路由策略
+        bool m_slot_cache_ready = false;                              ///< 槽位缓存是否就绪
     };
 
 #endif

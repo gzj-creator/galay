@@ -108,9 +108,9 @@ private:
  * @details 记录节点的健康状态、请求计数和失败计数，所有字段均为原子类型。
  */
 struct NodeStatus {
-    std::atomic<bool> healthy{true}; ///< 是否健康
     std::atomic<uint64_t> requestCount{0}; ///< 请求计数
     std::atomic<uint64_t> failureCount{0}; ///< 失败计数
+    std::atomic<bool> healthy{true}; ///< 是否健康
 
     void recordRequest() { ++requestCount; } ///< 记录一次请求
     void recordFailure() { ++failureCount; healthy = false; } ///< 记录一次失败并标记为不健康

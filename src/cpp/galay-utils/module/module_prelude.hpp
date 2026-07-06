@@ -25,6 +25,9 @@
 #if __has_include(<cctype>)
 #include <cctype>
 #endif
+#if __has_include(<cerrno>)
+#include <cerrno>
+#endif
 #if __has_include(<chrono>)
 #include <chrono>
 #endif
@@ -135,6 +138,9 @@
 #endif
 #if __has_include(<sys/mman.h>)
 #include <sys/mman.h>
+#endif
+#if __has_include(<sys/resource.h>)
+#include <sys/resource.h>
 #endif
 #if __has_include(<sys/stat.h>)
 #include <sys/stat.h>

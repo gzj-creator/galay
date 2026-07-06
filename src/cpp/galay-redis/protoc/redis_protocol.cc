@@ -71,22 +71,26 @@ namespace galay::redis::protocol
 
     // RedisReply实现
     RedisReply::RedisReply()
-        : m_type(RespType::Null), m_data(std::monostate{})
+        : m_data(std::monostate{})
+        , m_type(RespType::Null)
     {
     }
 
     RedisReply::RedisReply(RespType type, RespData data)
-        : m_type(type), m_data(std::move(data))
+        : m_data(std::move(data))
+        , m_type(type)
     {
     }
 
     RedisReply::RedisReply(const RedisReply& other)
-        : m_type(other.m_type), m_data(other.m_data)
+        : m_data(other.m_data)
+        , m_type(other.m_type)
     {
     }
 
     RedisReply::RedisReply(RedisReply&& other) noexcept
-        : m_type(other.m_type), m_data(std::move(other.m_data))
+        : m_data(std::move(other.m_data))
+        , m_type(other.m_type)
     {
     }
 

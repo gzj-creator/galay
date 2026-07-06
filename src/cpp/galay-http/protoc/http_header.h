@@ -234,12 +234,10 @@ namespace galay::http {
         void setNormalizedUncommonHeaderPair(std::string key, std::string value);
         void mergeNormalizedUncommonHeaderPair(std::string key, std::string value);
 
-        Mode m_mode;                               ///< 存储模式
-
         std::array<std::string, 15> m_commonHeaders;   ///< Fast-path 存储（仅 ServerSide 使用）
-        std::bitset<15> m_commonHeaderPresent;         ///< Fast-path 存在标记
-
         std::map<std::string, std::string> m_headerPairs; ///< Slow-path 存储
+        std::bitset<15> m_commonHeaderPresent;         ///< Fast-path 存在标记
+        Mode m_mode;                               ///< 存储模式
     };
 
     /**
@@ -361,26 +359,26 @@ namespace galay::http {
         size_t toUtf8(int code, char *buff); ///< 将 Unicode 码点转为 UTF-8
         bool fromHexToI(const std::string_view &s, size_t i, size_t cnt, int &val); ///< 从十六进制字符串解析整数
     private:
-        HttpMethod m_method = HttpMethod::GET;               ///< 请求方法
         std::string m_uri;                                    ///< 请求 URI
-        HttpVersion m_version = HttpVersion::HttpVersion_1_1; ///< HTTP 版本
         std::map<std::string, std::string> m_argList;         ///< URI 查询参数
         HeaderPair m_headerPairs;                             ///< 头部键值对
-        RequestParseState m_parseState = RequestParseState::Method; ///< 解析状态
         std::string m_parseMethodStr;                         ///< 解析中的方法字符串
         std::string m_parseUriStr;                            ///< 解析中的 URI 字符串
         std::string m_parseVersionStr;                        ///< 解析中的版本字符串
         std::string m_parseHeaderKey;                         ///< 解析中的头部键名
         std::string m_parseHeaderValue;                       ///< 解析中的头部值
         size_t m_parsedBytes = 0;                             ///< 已解析的字节数
-        bool m_uriDecodeError = false;                        ///< URI 百分号解码是否失败
-        CommonHeaderIndex m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon; ///< 当前解析的常见头部索引
         size_t m_maxHeaderCount = 0;                          ///< 最大头字段数，0 表示不限制
         size_t m_maxHeaderLineSize = 0;                       ///< 单行头字段长度上限，0 表示不限制
         size_t m_maxUriSize = 0;                              ///< URI 长度上限，0 表示不限制
         size_t m_headerCount = 0;                             ///< 已提交头字段数
-        bool m_hasContentLength = false;                      ///< 是否已经见过 Content-Length
         size_t m_contentLengthValue = 0;                      ///< 首个 Content-Length 数值
+        HttpMethod m_method = HttpMethod::GET;               ///< 请求方法
+        HttpVersion m_version = HttpVersion::HttpVersion_1_1; ///< HTTP 版本
+        RequestParseState m_parseState = RequestParseState::Method; ///< 解析状态
+        CommonHeaderIndex m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon; ///< 当前解析的常见头部索引
+        bool m_uriDecodeError = false;                        ///< URI 百分号解码是否失败
+        bool m_hasContentLength = false;                      ///< 是否已经见过 Content-Length
     };
 
     /**
@@ -474,15 +472,15 @@ namespace galay::http {
         HttpErrorCode parseChar(char c);
         void commitParsedHeaderPair(); ///< 提交当前解析中的头部键值对
     private:
-        HttpStatusCode m_code = HttpStatusCode::OK_200;       ///< 状态码
-        HttpVersion m_version = HttpVersion::HttpVersion_1_1; ///< HTTP 版本
         HeaderPair m_headerPairs;                             ///< 头部键值对
-        ResponseParseState m_parseState = ResponseParseState::Version; ///< 解析状态
         std::string m_parseVersionStr;                        ///< 解析中的版本字符串
         std::string m_parseCodeStr;                           ///< 解析中的状态码字符串
         std::string m_parseHeaderKey;                         ///< 解析中的头部键名
         std::string m_parseHeaderValue;                       ///< 解析中的头部值
         size_t m_parsedBytes = 0;                             ///< 已解析的字节数
+        HttpStatusCode m_code = HttpStatusCode::OK_200;       ///< 状态码
+        HttpVersion m_version = HttpVersion::HttpVersion_1_1; ///< HTTP 版本
+        ResponseParseState m_parseState = ResponseParseState::Version; ///< 解析状态
         CommonHeaderIndex m_currentCommonHeaderIdx = CommonHeaderIndex::NotCommon; ///< 当前解析的常见头部索引
     };
 

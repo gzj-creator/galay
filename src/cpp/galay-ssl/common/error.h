@@ -55,7 +55,7 @@ public:
     /**
      * @brief 构造成功状态
      */
-    SslError() : m_code(SslErrorCode::kSuccess), m_ssl_error(0) {}
+    SslError() : m_ssl_error(0), m_code(SslErrorCode::kSuccess) {}
 
     /**
      * @brief 构造错误对象
@@ -63,7 +63,7 @@ public:
      * @param ssl_error OpenSSL 错误码（可选）
      */
     explicit SslError(SslErrorCode code, unsigned long ssl_error = 0)
-        : m_code(code), m_ssl_error(ssl_error) {
+        : m_ssl_error(ssl_error), m_code(code) {
         if (ssl_error == 0) {
             m_ssl_error = ERR_peek_last_error();
         }
@@ -112,8 +112,8 @@ public:
     std::string sslErrorString() const;
 
 private:
-    SslErrorCode m_code;        ///< SSL 错误码
     unsigned long m_ssl_error;  ///< OpenSSL 错误码
+    SslErrorCode m_code;        ///< SSL 错误码
 };
 
 } // namespace galay::ssl

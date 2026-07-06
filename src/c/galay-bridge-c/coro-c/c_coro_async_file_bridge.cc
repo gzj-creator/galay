@@ -132,8 +132,8 @@ struct CoroFileOperationBase {
     CoroFileOperationBase(Scheduler* scheduler,
                           void* user_data,
                           GalayCoreCoroWaitOps wait_ops)
-        : m_scheduler(scheduler)
-        , m_wait_ops(wait_ops)
+        : m_wait_ops(wait_ops)
+        , m_scheduler(scheduler)
         , m_user_data(user_data)
     {
         m_wake_state.header.hooks = &kWakeHooks;
@@ -282,14 +282,14 @@ private:
         .release = wake_release,
     };
 
-    Scheduler* m_scheduler = nullptr;
-    GalayCoreCoroWaitOps m_wait_ops{};
-    void* m_user_data = nullptr;
     std::mutex m_user_data_mutex;
-    std::atomic<CoroFileCompletionPhase> m_phase{CoroFileCompletionPhase::Pending};
     CoroFileWakeState m_wake_state{};
-    bool m_finished = false;
     C_IOResult m_last_cleanup_result = make_result(C_IOResultOk);
+    GalayCoreCoroWaitOps m_wait_ops{};
+    Scheduler* m_scheduler = nullptr;
+    void* m_user_data = nullptr;
+    std::atomic<CoroFileCompletionPhase> m_phase{CoroFileCompletionPhase::Pending};
+    bool m_finished = false;
 };
 
 struct CoroFileReadOperation final: public FileReadAwaitable, public CoroFileOperationBase {

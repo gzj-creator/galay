@@ -263,10 +263,10 @@ public:
 private:
     friend class AsyncWaiterAwaitable<void>;
 
+    Waker m_waker;
     std::atomic<AsyncWaiterState> m_state{AsyncWaiterState::kEmpty};
     std::atomic<bool> m_notified{false};
     std::atomic<bool> m_ready{false};
-    Waker m_waker;
 };
 
 // AsyncWaiterAwaitable<T> 实现

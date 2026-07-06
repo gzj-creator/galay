@@ -282,13 +282,13 @@ struct galay_ws_received_frame_t {
 
 struct galay_ws_connection_t {
     galay_kernel_tcp_socket_t socket{};
+    std::vector<uint8_t> recv_buffer;
+    uint32_t mask_counter = 1;
+    galay_ws_opcode_t fragmented_opcode = GALAY_WS_OPCODE_CONTINUATION;
+    galay_ws_error_t last_error = GALAY_WS_ERROR_NONE;
     bool is_server = false;
     bool closed = false;
     bool fragmented = false;
-    galay_ws_opcode_t fragmented_opcode = GALAY_WS_OPCODE_CONTINUATION;
-    uint32_t mask_counter = 1;
-    galay_ws_error_t last_error = GALAY_WS_ERROR_NONE;
-    std::vector<uint8_t> recv_buffer;
 };
 
 struct galay_ws_session_t {
@@ -298,10 +298,10 @@ struct galay_ws_session_t {
 
 struct galay_ws_client_t {
     std::string host;
-    uint16_t port = 0;
     std::string path;
-    int connect_timeout_ms = -1;
     galay_ws_connection_t* connection = nullptr;
+    int connect_timeout_ms = -1;
+    uint16_t port = 0;
 };
 
 extern "C" {

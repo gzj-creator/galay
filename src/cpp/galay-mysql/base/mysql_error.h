@@ -85,9 +85,9 @@ public:
     uint16_t serverErrno() const;
 
 private:
+    std::string m_extra_msg;        ///< 附加错误消息
     MysqlErrorType m_type;          ///< 错误类型
     uint16_t m_server_errno = 0;    ///< 服务器错误码
-    std::string m_extra_msg;        ///< 附加错误消息
 };
 
 } // namespace galay::mysql

@@ -170,14 +170,14 @@ private:
     MysqlResult receiveResultSet(); ///< 接收完整结果集
     MysqlVoidResult runSimpleStatement(const std::string& sql); ///< 执行简单SQL语句
 
-    int m_socket_fd;                             ///< 套接字文件描述符
-    bool m_connected;                            ///< 是否已连接
     galay::utils::RingBuffer m_recv_ring_buffer; ///< 接收环形缓冲区
     std::string m_parse_scratch;                 ///< 解析临时缓冲区
 
+    uint32_t m_server_capabilities = 0;          ///< 服务器能力标志
+    int m_socket_fd;                             ///< 套接字文件描述符
     protocol::MysqlParser m_parser;              ///< 协议解析器
     protocol::MysqlEncoder m_encoder;            ///< 协议编码器
-    uint32_t m_server_capabilities = 0;          ///< 服务器能力标志
+    bool m_connected;                            ///< 是否已连接
 };
 
 } // namespace galay::mysql

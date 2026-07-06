@@ -43,12 +43,12 @@ struct galay_mongo_uri_t {
 
 struct galay_mongo_client_t {
     std::string host = "127.0.0.1";
-    uint16_t port = 27017;
     std::string database = "admin";
-    galay_kernel_tcp_socket_t socket{};
-    bool connected = false;
-    int32_t next_request_id = 1;
     std::string recv_buffer;
+    galay_kernel_tcp_socket_t socket{};
+    int32_t next_request_id = 1;
+    uint16_t port = 27017;
+    bool connected = false;
 };
 
 namespace

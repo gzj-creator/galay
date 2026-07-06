@@ -213,8 +213,8 @@ private:
         }
     }
 
-    std::atomic<bool> m_locked{false};                      ///< 锁状态
     moodycamel::ConcurrentQueue<std::shared_ptr<AsyncMutexWaiter>> m_waiters;  ///< 无锁等待队列
+    std::atomic<bool> m_locked{false};                      ///< 锁状态
 };
 
 // AsyncMutexAwaitable 实现

@@ -47,12 +47,14 @@ namespace galay::http
 
 
     HttpError::HttpError(HttpErrorCode code, const std::string& extra_msg)
-        :m_code(code), m_extra_msg(extra_msg)
+        : m_extra_msg(extra_msg)
+        , m_code(code)
     {
     }
 
     HttpError::HttpError(const galay::kernel::IOError& io_error)
-        : m_code(kInternalError), m_extra_msg(io_error.message())
+        : m_extra_msg(io_error.message())
+        , m_code(kInternalError)
     {
         const uint64_t code = io_error.code();
         if (galay::kernel::IOError::contains(code, galay::kernel::kDisconnectError)) {

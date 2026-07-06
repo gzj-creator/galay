@@ -65,10 +65,10 @@ enum class CoroTcpCompletionPhase : uint8_t {
 };
 
 struct CoroTcpCompletionState {
-    std::atomic<CoroTcpCompletionPhase> phase{CoroTcpCompletionPhase::Pending};
     std::mutex user_data_mutex;
-    void* user_data = nullptr;
     GalayCoreCoroWaitOps wait_ops{};
+    void* user_data = nullptr;
+    std::atomic<CoroTcpCompletionPhase> phase{CoroTcpCompletionPhase::Pending};
 };
 
 C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
@@ -243,8 +243,8 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
     CoroTcpOperationBase(Scheduler* scheduler,
                          void* user_data,
                          GalayCoreCoroWaitOps wait_ops)
-        : m_scheduler(scheduler)
-        , m_wait_ops(wait_ops)
+        : m_wait_ops(wait_ops)
+        , m_scheduler(scheduler)
     {
         m_state.user_data = user_data;
         m_state.wait_ops = wait_ops;
@@ -260,14 +260,14 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
 
     bool completeFromWake() noexcept
     {
-        if (m_finished) {
+        if (finished()) {
             return true;
         }
         const CoroTcpCompletionPhase phase =
             m_state.phase.load(std::memory_order_acquire);
         if (phase == CoroTcpCompletionPhase::TimedOut ||
             phase == CoroTcpCompletionPhase::Cancelled) {
-            m_finished = true;
+            setFinished();
             releaseUserDataOnly();
             rollbackResult();
             return true;
@@ -275,10 +275,10 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
         if (phase != CoroTcpCompletionPhase::Completed) {
             return true;
         }
-        m_finished = true;
+        setFinished();
         C_IOResult result = buildResult();
         const bool completed = completeUserData(result);
-        if (m_complete_accepted) {
+        if (completeAccepted()) {
             commitResult();
         } else {
             rollbackResult();
@@ -288,16 +288,16 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
 
     C_IOResult immediateResult() noexcept
     {
-        m_finished = true;
+        setFinished();
         return buildResult();
     }
 
     C_IOResult finishWithoutWait(C_IOResult result) noexcept
     {
-        m_finished = true;
+        setFinished();
         const C_IOResult completed = completeAndReleaseUserData(result);
-        m_complete_accepted = completed.code == C_IOResultOk && result.code == C_IOResultOk;
-        if (m_complete_accepted) {
+        setCompleteAccepted(completed.code == C_IOResultOk && result.code == C_IOResultOk);
+        if (completeAccepted()) {
             commitResult();
         } else {
             rollbackResult();
@@ -307,13 +307,13 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
 
     void retireToken() noexcept
     {
-        m_finished = true;
+        setFinished();
         releaseUserDataOnly();
     }
 
     void cancelFromClose() noexcept override
     {
-        if (m_finished) {
+        if (finished()) {
             return;
         }
         CoroTcpCompletionPhase expected = CoroTcpCompletionPhase::Pending;
@@ -387,12 +387,12 @@ private:
 
     bool completeUserData(C_IOResult result) noexcept
     {
-        m_complete_accepted = false;
+        setCompleteAccepted(false);
         const C_IOResult completed = completeAndReleaseUserData(result);
         if (completed.code == C_IOResultInvalid) {
             return true;
         }
-        m_complete_accepted = completed.code == C_IOResultOk;
+        setCompleteAccepted(completed.code == C_IOResultOk);
         return completed.code == C_IOResultOk || completed.code == C_IOResultInvalid;
     }
 
@@ -462,20 +462,45 @@ private:
     static void wake_retain(void*) noexcept {}
     static void wake_release(void*) noexcept {}
 
+    bool finished() const noexcept
+    {
+        return (m_flags & kFinishedFlag) != 0;
+    }
+
+    void setFinished() noexcept
+    {
+        m_flags |= kFinishedFlag;
+    }
+
+    bool completeAccepted() const noexcept
+    {
+        return (m_flags & kCompleteAcceptedFlag) != 0;
+    }
+
+    void setCompleteAccepted(bool accepted) noexcept
+    {
+        if (accepted) {
+            m_flags |= kCompleteAcceptedFlag;
+        } else {
+            m_flags &= ~kCompleteAcceptedFlag;
+        }
+    }
+
     inline static const galay::kernel::detail::ResumeTokenHooks kWakeHooks{
         .owner_scheduler = wake_owner,
         .request_resume = wake_request,
         .retain = wake_retain,
         .release = wake_release,
     };
+    static constexpr uint64_t kFinishedFlag = 1u;
+    static constexpr uint64_t kCompleteAcceptedFlag = 2u;
 
-    Scheduler* m_scheduler = nullptr;
-    GalayCoreCoroWaitOps m_wait_ops{};
     CoroTcpCompletionState m_state;
     CoroTcpWakeState m_wake_state{};
-    bool m_finished = false;
-    bool m_complete_accepted = false;
     C_IOResult m_last_cleanup_result = make_result(C_IOResultOk);
+    GalayCoreCoroWaitOps m_wait_ops{};
+    Scheduler* m_scheduler = nullptr;
+    uint64_t m_flags = 0;
 };
 
 struct CoroAcceptOperation final: public AcceptAwaitable, public CoroTcpOperationBase {

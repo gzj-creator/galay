@@ -147,9 +147,9 @@ private:
  */
 struct MongoPipelineResponse
 {
-    int32_t request_id = 0;                          ///< 对应的请求 ID
     std::optional<MongoReply> reply;                 ///< 响应文档（成功时有效）
     std::optional<MongoError> error;                 ///< 错误信息（失败时有效）
+    int32_t request_id = 0;                          ///< 对应的请求 ID
 
     bool ok() const { return reply.has_value(); }    ///< 判断该条命令是否成功
 };
@@ -261,7 +261,6 @@ private:
      */
     int32_t reserveRequestIdBlock(size_t count);
 
-    bool m_is_closed = true;                                         ///< 连接是否已关闭
     AsyncMongoConfig m_config = AsyncMongoConfig::noTimeout();       ///< 异步客户端配置
     TcpSocket m_socket;                                              ///< 底层 TCP socket
     galay::utils::RingBuffer m_ring_buffer;                          ///< 接收环形缓冲区
@@ -270,6 +269,7 @@ private:
     std::string m_ping_encoded_template;                             ///< 预编码的 ping 命令模板
     size_t m_pipeline_reserve_per_command = 96;                      ///< pipeline 每条命令预留编码字节数
     int32_t m_next_request_id = 1;                                   ///< 下一个可分配的请求 ID
+    bool m_is_closed = true;                                         ///< 连接是否已关闭
 };
 
 inline AsyncMongoClient AsyncMongoClientBuilder::build() const

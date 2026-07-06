@@ -129,10 +129,10 @@ private:
     std::string m_org_table;                        ///< 原始表名
     std::string m_name;                             ///< 列名
     std::string m_org_name;                         ///< 原始列名
-    uint16_t m_character_set = 0;                   ///< 字符集编码
     uint32_t m_column_length = 0;                   ///< 列长度
-    MysqlFieldType m_type = MysqlFieldType::NULL_TYPE; ///< 字段类型
+    uint16_t m_character_set = 0;                   ///< 字符集编码
     uint16_t m_flags = 0;                           ///< 字段标志位
+    MysqlFieldType m_type = MysqlFieldType::NULL_TYPE; ///< 字段类型
     uint8_t m_decimals = 0;                         ///< 小数位数
 };
 
@@ -319,11 +319,11 @@ public:
 private:
     std::vector<MysqlField> m_fields;      ///< 列定义数组
     std::vector<MysqlRow> m_rows;          ///< 行数据数组
+    std::string m_info;                    ///< 附加信息
     uint64_t m_affected_rows = 0;          ///< 影响行数
     uint64_t m_last_insert_id = 0;         ///< 最后插入ID
     uint16_t m_warnings = 0;               ///< 警告数
     uint16_t m_status_flags = 0;           ///< 状态标志
-    std::string m_info;                    ///< 附加信息
 };
 
 } // namespace galay::mysql

@@ -104,8 +104,8 @@ struct CoroAsyncWaiterOperation {
                              void* user_data,
                              GalayCoreCoroWaitOps wait_ops)
         : awaitable(waiter->wait())
-        , m_scheduler(scheduler)
         , m_wait_ops(wait_ops)
+        , m_scheduler(scheduler)
     {
         m_user_data = user_data;
         m_wake_state.header.hooks = &kWakeHooks;
@@ -222,12 +222,12 @@ private:
         .release = wake_release,
     };
 
-    Scheduler* m_scheduler = nullptr;
-    GalayCoreCoroWaitOps m_wait_ops{};
-    std::atomic<CompletionPhase> m_phase{CompletionPhase::Pending};
     std::mutex m_user_data_mutex;
-    void* m_user_data = nullptr;
     CoroAsyncWaiterWakeState m_wake_state{};
+    GalayCoreCoroWaitOps m_wait_ops{};
+    Scheduler* m_scheduler = nullptr;
+    void* m_user_data = nullptr;
+    std::atomic<CompletionPhase> m_phase{CompletionPhase::Pending};
 };
 
 } // namespace

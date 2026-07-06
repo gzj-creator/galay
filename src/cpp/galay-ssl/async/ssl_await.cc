@@ -465,7 +465,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollHandshake()
         return {};
     }
     if (m_send_context.m_length > 0) {
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     }
     if (m_handshake.read_pending) {
         if (!prepareReadBuffer(m_handshake_buffer)) {
@@ -473,7 +473,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollHandshake()
             return {};
         }
         m_handshake.read_pending = false;
-        return {WaitKind::kRead, &m_recv_context};
+        return {&m_recv_context, WaitKind::kRead};
     }
 
     const SslIOResult ret = m_socket->m_engine.doHandshake();
@@ -487,7 +487,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollHandshake()
                     return {};
                 }
                 m_handshake.flush_success = true;
-                return {WaitKind::kWrite, &m_send_context};
+                return {&m_send_context, WaitKind::kWrite};
             }
         }
         m_handshake.result = {};
@@ -503,7 +503,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollHandshake()
         }
         m_handshake.flush_success = false;
         m_handshake.wait_read_after_write = false;
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     case SslIOResult::WantRead:
         {
             const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
@@ -513,14 +513,14 @@ SslOperationDriver::WaitAction SslOperationDriver::pollHandshake()
                     return {};
                 }
                 m_handshake.wait_read_after_write = true;
-                return {WaitKind::kWrite, &m_send_context};
+                return {&m_send_context, WaitKind::kWrite};
             }
         }
         if (!prepareReadBuffer(m_handshake_buffer)) {
             setHandshakeFailure(SslError(SslErrorCode::kHandshakeFailed));
             return {};
         }
-        return {WaitKind::kRead, &m_recv_context};
+        return {&m_recv_context, WaitKind::kRead};
     case SslIOResult::ZeroReturn:
         setHandshakeFailure(SslError(SslErrorCode::kPeerClosed));
         return {};
@@ -540,7 +540,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollRecv()
         return {};
     }
     if (m_send_context.m_length > 0) {
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     }
 
     switch (drainRecvPlaintext()) {
@@ -550,13 +550,13 @@ SslOperationDriver::WaitAction SslOperationDriver::pollRecv()
         if (!prepareRecvSendChunk(0)) {
             return {};
         }
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     case RecvPollAction::kNeedRecv:
         if (!prepareReadBuffer(m_recv_cipher_buffer)) {
             setRecvFailure(SslError(SslErrorCode::kReadFailed));
             return {};
         }
-        return {WaitKind::kRead, &m_recv_context};
+        return {&m_recv_context, WaitKind::kRead};
     }
 
     setRecvFailure(SslError(SslErrorCode::kReadFailed));
@@ -574,13 +574,13 @@ SslOperationDriver::WaitAction SslOperationDriver::pollSend()
             return {};
         }
         m_send.read_pending = false;
-        return {WaitKind::kRead, &m_recv_context};
+        return {&m_recv_context, WaitKind::kRead};
     }
     if (m_send_context.m_length > 0) {
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     }
     if (fillSendChunk()) {
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     }
     return {};
 }
@@ -591,7 +591,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollShutdown()
         return {};
     }
     if (m_send_context.m_length > 0) {
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     }
     if (m_shutdown.read_pending) {
         if (!prepareReadBuffer(m_shutdown_buffer)) {
@@ -599,7 +599,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollShutdown()
             return {};
         }
         m_shutdown.read_pending = false;
-        return {WaitKind::kRead, &m_recv_context};
+        return {&m_recv_context, WaitKind::kRead};
     }
 
     const SslIOResult ret = m_socket->m_engine.shutdown();
@@ -617,7 +617,7 @@ SslOperationDriver::WaitAction SslOperationDriver::pollShutdown()
             }
         }
         m_shutdown.wait_read_after_write = false;
-        return {WaitKind::kWrite, &m_send_context};
+        return {&m_send_context, WaitKind::kWrite};
     case SslIOResult::WantRead:
         {
             const size_t pending = m_socket->m_engine.pendingEncryptedOutput();
@@ -627,14 +627,14 @@ SslOperationDriver::WaitAction SslOperationDriver::pollShutdown()
                     return {};
                 }
                 m_shutdown.wait_read_after_write = true;
-                return {WaitKind::kWrite, &m_send_context};
+                return {&m_send_context, WaitKind::kWrite};
             }
         }
         if (!prepareReadBuffer(m_shutdown_buffer)) {
             setShutdownSuccess();
             return {};
         }
-        return {WaitKind::kRead, &m_recv_context};
+        return {&m_recv_context, WaitKind::kRead};
     case SslIOResult::Syscall:
     case SslIOResult::Error:
         setShutdownSuccess();

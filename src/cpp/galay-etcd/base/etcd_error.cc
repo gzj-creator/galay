@@ -29,8 +29,8 @@ EtcdError::EtcdError(EtcdErrorType type)
 }
 
 EtcdError::EtcdError(EtcdErrorType type, std::string extra_msg)
-    : m_type(type)
-    , m_extra_msg(std::move(extra_msg))
+    : m_extra_msg(std::move(extra_msg))
+    , m_type(type)
 {
 }
 

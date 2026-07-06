@@ -1949,14 +1949,14 @@ AsyncMysqlClient::AsyncMysqlClient(IOScheduler* scheduler,
 }
 
 AsyncMysqlClient::AsyncMysqlClient(AsyncMysqlClient&& other) noexcept
-    : m_is_closed(other.m_is_closed)
-    , m_socket(std::move(other.m_socket))
+    : m_socket(std::move(other.m_socket))
     , m_scheduler(other.m_scheduler)
-    , m_parser(std::move(other.m_parser))
-    , m_encoder(std::move(other.m_encoder))
     , m_config(std::move(other.m_config))
     , m_ring_buffer(std::move(other.m_ring_buffer))
     , m_server_capabilities(other.m_server_capabilities)
+    , m_parser(std::move(other.m_parser))
+    , m_encoder(std::move(other.m_encoder))
+    , m_is_closed(other.m_is_closed)
 {
     other.m_is_closed = true;
 }
@@ -1964,14 +1964,14 @@ AsyncMysqlClient::AsyncMysqlClient(AsyncMysqlClient&& other) noexcept
 AsyncMysqlClient& AsyncMysqlClient::operator=(AsyncMysqlClient&& other) noexcept
 {
     if (this != &other) {
-        m_is_closed = other.m_is_closed;
         m_socket = std::move(other.m_socket);
         m_scheduler = other.m_scheduler;
-        m_parser = std::move(other.m_parser);
-        m_encoder = std::move(other.m_encoder);
         m_config = std::move(other.m_config);
         m_ring_buffer = std::move(other.m_ring_buffer);
         m_server_capabilities = other.m_server_capabilities;
+        m_parser = std::move(other.m_parser);
+        m_encoder = std::move(other.m_encoder);
+        m_is_closed = other.m_is_closed;
         other.m_is_closed = true;
     }
     return *this;

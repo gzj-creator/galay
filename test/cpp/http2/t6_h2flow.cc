@@ -69,13 +69,13 @@ int main() {
 
     std::vector<H2StreamSendState> streams;
     streams.push_back(H2StreamSendState{
-        .stream_id = 1,
-        .stream_window = 6,
         .pending = {
             .chunks = {"1234567890"},
             .front_offset = 0,
             .end_stream = true
         },
+        .stream_id = 1,
+        .stream_window = 6,
         .weight = 16
     });
 
@@ -109,13 +109,13 @@ int main() {
 
     std::vector<H2StreamSendState> empty_streams;
     empty_streams.push_back(H2StreamSendState{
-        .stream_id = 11,
-        .stream_window = 6,
         .pending = {
             .chunks = {},
             .front_offset = 0,
             .end_stream = true
         },
+        .stream_id = 11,
+        .stream_window = 6,
         .weight = 16
     });
 
@@ -136,23 +136,23 @@ int main() {
     };
     std::vector<H2StreamSendState> fair_streams;
     fair_streams.push_back(H2StreamSendState{
-        .stream_id = 1,
-        .stream_window = 20,
         .pending = {
             .chunks = {"llllllllll"},
             .front_offset = 0,
             .end_stream = false
         },
+        .stream_id = 1,
+        .stream_window = 20,
         .weight = 1
     });
     fair_streams.push_back(H2StreamSendState{
-        .stream_id = 3,
-        .stream_window = 20,
         .pending = {
             .chunks = {"HHHHHHHHHH"},
             .front_offset = 0,
             .end_stream = false
         },
+        .stream_id = 3,
+        .stream_window = 20,
         .weight = 4
     });
 
@@ -177,13 +177,13 @@ int main() {
     priority_queues.control_frames.push_back(std::make_unique<Http2GoAwayFrame>());
     priority_queues.header_frames.push_back(Http2FrameBuilder::headers(3, "headers", false, true));
     priority_queues.data_streams.push_back(H2StreamSendState{
-        .stream_id = 3,
-        .stream_window = 20,
         .pending = {
             .chunks = {"data"},
             .front_offset = 0,
             .end_stream = false
         },
+        .stream_id = 3,
+        .stream_window = 20,
         .weight = 16
     });
 
@@ -203,13 +203,13 @@ int main() {
     H2OutboundQueues blocked_queues;
     blocked_queues.header_frames.push_back(Http2FrameBuilder::headers(5, "headers", false, true));
     blocked_queues.data_streams.push_back(H2StreamSendState{
-        .stream_id = 5,
-        .stream_window = 20,
         .pending = {
             .chunks = {"blocked"},
             .front_offset = 0,
             .end_stream = false
         },
+        .stream_id = 5,
+        .stream_window = 20,
         .weight = 16
     });
     auto blocked_selection = Http2OutboundScheduler::pickSendableFrames(H2OutboundBudget{
@@ -223,13 +223,13 @@ int main() {
 
     std::vector<H2StreamSendState> byte_streams;
     byte_streams.push_back(H2StreamSendState{
-        .stream_id = 13,
-        .stream_window = 8,
         .pending = {
             .chunks = {"abcdefgh"},
             .front_offset = 0,
             .end_stream = true
         },
+        .stream_id = 13,
+        .stream_window = 8,
         .weight = 16
     });
     auto byte_selection = Http2OutboundScheduler::pickSendableBytes(H2OutboundBudget{

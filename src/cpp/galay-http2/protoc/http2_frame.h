@@ -34,9 +34,9 @@ namespace galay::http2
 struct Http2FrameHeader
 {
     uint32_t length = 0;        // 帧负载长度 (24 bits)
+    uint32_t stream_id = 0;     // 流标识符 (31 bits, 最高位保留)
     Http2FrameType type = Http2FrameType::Unknown;  // 帧类型 (8 bits)
     uint8_t flags = 0;          // 帧标志 (8 bits)
-    uint32_t stream_id = 0;     // 流标识符 (31 bits, 最高位保留)
 
     // 序列化帧头到 9 字节
     void serialize(uint8_t* buffer) const;
@@ -221,9 +221,9 @@ public:
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
 
 private:
+    uint32_t m_stream_dependency = 0;
     std::string m_header_block;
     bool m_exclusive = false;
-    uint32_t m_stream_dependency = 0;
     uint8_t m_weight = 16;  // 默认权重
     uint8_t m_pad_length = 0;
 };
@@ -251,8 +251,8 @@ public:
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
 
 private:
-    bool m_exclusive = false;
     uint32_t m_stream_dependency = 0;
+    bool m_exclusive = false;
     uint8_t m_weight = 16;
 };
 
@@ -293,12 +293,12 @@ public:
 
     // 设置参数
     struct Setting {
-        Http2SettingsId id;
         uint32_t value;
+        Http2SettingsId id;
     };
 
     void addSetting(Http2SettingsId id, uint32_t value) {
-        m_settings.push_back({id, value});
+        m_settings.push_back(Setting{.value = value, .id = id});
     }
 
     const std::vector<Setting>& settings() const { return m_settings; }
@@ -409,8 +409,8 @@ public:
 
 private:
     uint32_t m_last_stream_id = 0;
-    Http2ErrorCode m_error_code = Http2ErrorCode::NoError;
     std::string m_debug_data;
+    Http2ErrorCode m_error_code = Http2ErrorCode::NoError;
 };
 
 /**

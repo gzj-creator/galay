@@ -100,9 +100,6 @@ namespace galay::kernel::coro_c
 struct C_CoroTaskInternal {
     galay::kernel::detail::ReadyEntryCoroHeader ready_header;
     C_CoroResumeTokenState resume_token;
-    std::atomic<uint32_t> ref_count{1};
-    std::atomic<C_CoroState> state{C_CoroState::Ready};
-    std::atomic<bool> queued{false};
     galay::kernel::Scheduler* owner = nullptr;
     std::thread::id owner_thread;
     galay_coro_entry_fn entry = nullptr;
@@ -116,6 +113,9 @@ struct C_CoroTaskInternal {
     std::mutex mutex;
     std::condition_variable cv;
     C_IOResult result{C_IOResultOk, 0, 0, 0, nullptr};
+    std::atomic<uint32_t> ref_count{1};
+    std::atomic<C_CoroState> state{C_CoroState::Ready};
+    std::atomic<bool> queued{false};
 };
 
 } // namespace galay::kernel::coro_c

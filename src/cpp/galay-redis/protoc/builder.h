@@ -295,7 +295,6 @@ namespace galay::redis
         [[nodiscard]] std::string_view toEncodedView(Slice slice) const; ///< 将编码切片转换为 string_view
         void rebuildViewsIfNeeded() const; ///< 按需重建命令视图
 
-        protocol::RespEncoder m_encoder;              ///< RESP 编码器
         std::string m_encoded;                        ///< 累积的编码数据
 
         std::string m_storage;                        ///< 字符串存储池
@@ -304,6 +303,7 @@ namespace galay::redis
         mutable std::vector<std::string_view> m_arg_views;         ///< 参数视图缓存
         mutable std::vector<RedisCommandView> m_command_views;     ///< 命令视图缓存
         mutable bool m_views_dirty = true;            ///< 视图脏标志
+        protocol::RespEncoder m_encoder;              ///< RESP 编码器
     };
 
     template <size_t N>

@@ -183,21 +183,21 @@ struct alignas(64) TaskState
     void* resultStorage() noexcept { return static_cast<void*>(m_result_storage); }
     const void* resultStorage() const noexcept { return static_cast<const void*>(m_result_storage); }
 
+    alignas(std::max_align_t) std::byte m_result_storage[kInlineResultBytes]{};  ///< 小对象内联结果存储
     std::coroutine_handle<> m_handle = nullptr;  ///< 底层协程句柄
     Scheduler* m_scheduler = nullptr;  ///< 任务所属调度器
     Runtime* m_runtime = nullptr;  ///< 任务继承到的 Runtime 上下文
+    void (*m_destroy_result)(TaskState&) noexcept = nullptr;  ///< 销毁尚未消费的结果对象
+    std::atomic<TaskWaiter*> m_waiter{nullptr};  ///< 惰性分配的等待器，仅 join/wait 路径需要
+    std::atomic<uint64_t> m_refs{1};  ///< TaskRef 引用计数
     std::optional<TaskRef> m_then;  ///< `then()` 追加的 continuation 任务
     std::optional<TaskRef> m_next;  ///< 当前 `co_await` 恢复后要继续唤醒的父任务
-    void (*m_destroy_result)(TaskState&) noexcept = nullptr;  ///< 销毁尚未消费的结果对象
     std::optional<detail::TaskResultError> m_result_error;  ///< 任务错误
-    std::atomic<TaskWaiter*> m_waiter{nullptr};  ///< 惰性分配的等待器，仅 join/wait 路径需要
-    std::atomic<uint32_t> m_refs{1};  ///< TaskRef 引用计数
+    ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果的存储形态
     std::atomic<bool> m_done{false};  ///< 任务是否已经执行完成
     std::atomic<bool> m_queued{false};  ///< 任务是否已在调度队列中
     std::atomic<bool> m_resume_owner_only{false};  ///< 本次由 waker/timeout 恢复的任务必须回到 owner scheduler 线程执行
     std::atomic<bool> m_result_consumed{false};  ///< 任务结果是否已被 join/await 消费
-    ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果的存储形态
-    alignas(std::max_align_t) std::byte m_result_storage[kInlineResultBytes]{};  ///< 小对象内联结果存储
 };
 
 struct TaskWaiter

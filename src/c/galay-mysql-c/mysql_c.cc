@@ -37,16 +37,16 @@ struct MysqlResultField {
     std::string org_table;
     std::string name;
     std::string org_name;
-    uint16_t character_set = 0;
     uint32_t column_length = 0;
-    uint8_t column_type = 0;
+    uint16_t character_set = 0;
     uint16_t flags = 0;
+    uint8_t column_type = 0;
     uint8_t decimals = 0;
 };
 
 struct MysqlResultValue {
-    bool is_null = false;
     std::string data;
+    bool is_null = false;
 };
 
 struct MysqlHandshakeInfo {
@@ -490,12 +490,12 @@ C_IOResult read_mysql_packet(galay_kernel_tcp_socket_t* socket,
 
 struct galay_mysql_config_t {
     std::string host = "127.0.0.1";
-    uint16_t port = 3306;
     std::string username = "root";
     std::string password;
     std::string database;
     std::string charset = "utf8mb4";
     uint32_t timeout_ms = 3000;
+    uint16_t port = 3306;
 };
 
 struct galay_mysql_buffer_t {
@@ -512,12 +512,12 @@ struct galay_mysql_result_set_t {
 };
 
 struct galay_mysql_stmt_t {
+    std::vector<MysqlResultField> param_fields;
+    std::vector<MysqlResultField> column_fields;
     uint32_t statement_id = 0;
     uint16_t num_columns = 0;
     uint16_t num_params = 0;
     uint16_t warnings = 0;
-    std::vector<MysqlResultField> param_fields;
-    std::vector<MysqlResultField> column_fields;
 };
 
 struct galay_mysql_pipeline_t {
@@ -530,9 +530,9 @@ struct galay_mysql_pipeline_result_t {
 
 struct galay_mysql_client_t {
     galay_kernel_tcp_socket_t socket{};
+    std::vector<unsigned char> handshake_packet;
     bool connected = false;
     bool authenticated = false;
-    std::vector<unsigned char> handshake_packet;
 };
 
 struct galay_mysql_pool_t {

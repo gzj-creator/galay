@@ -114,8 +114,8 @@ namespace galay::redis::protocol
          */
         void assignString(RespType type, const char* data, size_t length);
 
-        RespType m_type;  ///< 回复类型
         RespData m_data;  ///< 回复数据
+        RespType m_type;  ///< 回复类型
     };
 
     /**

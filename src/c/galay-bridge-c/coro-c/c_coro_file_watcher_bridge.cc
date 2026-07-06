@@ -47,10 +47,10 @@ enum class CoroFileWatcherCompletionPhase : uint8_t {
 };
 
 struct CoroFileWatcherCompletionState {
-    std::atomic<CoroFileWatcherCompletionPhase> phase{CoroFileWatcherCompletionPhase::Pending};
     std::mutex user_data_mutex;
-    void* user_data = nullptr;
     GalayCoreCoroWaitOps wait_ops{};
+    void* user_data = nullptr;
+    std::atomic<CoroFileWatcherCompletionPhase> phase{CoroFileWatcherCompletionPhase::Pending};
 };
 
 C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
@@ -171,8 +171,8 @@ struct CoroFileWatcherOperation final: public FileWatchAwaitable {
 #else
         : FileWatchAwaitable(controller, m_buffer, sizeof(m_buffer))
 #endif
-        , m_scheduler(scheduler)
         , m_wait_ops(wait_ops)
+        , m_scheduler(scheduler)
         , m_out_result(out_result)
     {
         m_state.user_data = user_data;
@@ -357,14 +357,14 @@ private:
         .release = wake_release,
     };
 
-    Scheduler* m_scheduler = nullptr;
-    GalayCoreCoroWaitOps m_wait_ops{};
     CoroFileWatcherCompletionState m_state;
     CoroFileWatcherWakeState m_wake_state{};
+    C_IOResult m_last_cleanup_result = make_result(C_IOResultOk);
+    GalayCoreCoroWaitOps m_wait_ops{};
+    Scheduler* m_scheduler = nullptr;
     GalayCoreCoroFileWatchResult* m_out_result = nullptr;
     char m_buffer[4096]{};
     bool m_finished = false;
-    C_IOResult m_last_cleanup_result = make_result(C_IOResultOk);
 };
 
 C_IOResult perform_registered_watch(IOController* controller,

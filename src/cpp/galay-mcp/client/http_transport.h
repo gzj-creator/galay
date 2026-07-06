@@ -55,11 +55,11 @@ private:
     std::string m_serverUrl;
     std::string m_clientName;
     std::string m_clientVersion;
+    std::atomic<int64_t> m_requestIdCounter{0};
     ServerInfo m_serverInfo;
     ServerCapabilities m_serverCapabilities;
     std::atomic<bool> m_connected{false};
     std::atomic<bool> m_initialized{false};
-    std::atomic<int64_t> m_requestIdCounter{0};
 };
 
 } // namespace galay::mcp::detail

@@ -67,13 +67,13 @@ using HttpConnHandlerImpl = std::function<Task<void>(HttpConnImpl<SocketType>)>;
 struct HttpServerConfig
 {
     std::string host = "0.0.0.0";              ///< 监听地址
-    uint16_t port = 8080;                       ///< 监听端口
-    int backlog = 128;                          ///< listen backlog 队列长度
-    bool tcp_no_delay = true;                   ///< 是否为已接受连接启用 TCP_NODELAY
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
     size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
     RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
     HttpServerPolicy policy;                     ///< HTTP/1.1 route-mode 生产策略
+    int backlog = 128;                          ///< listen backlog 队列长度
+    uint16_t port = 8080;                       ///< 监听端口
+    bool tcp_no_delay = true;                   ///< 是否为已接受连接启用 TCP_NODELAY
 };
 
 /**
@@ -587,19 +587,19 @@ inline HttpServer HttpServerBuilder::build() const { return HttpServer(m_config)
 struct HttpsServerConfig
 {
     std::string host = "0.0.0.0";              ///< 监听地址
-    uint16_t port = 443;                        ///< 监听端口
-    int backlog = 128;                          ///< listen backlog 队列长度
-    bool tcp_no_delay = true;                   ///< 是否为已接受连接启用 TCP_NODELAY
-    size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
-    RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
-    HttpReaderSetting reader_setting;           ///< TLS 连接的读取器配置
-    HttpWriterSetting writer_setting;           ///< TLS 连接的写入器配置
     std::string cert_path;                      ///< TLS 服务端证书路径
     std::string key_path;                       ///< TLS 服务端私钥路径
     std::string ca_path;                        ///< CA 证书路径（用于客户端证书校验）
-    bool verify_peer = false;                   ///< 是否校验客户端证书
+    HttpReaderSetting reader_setting;           ///< TLS 连接的读取器配置
+    HttpWriterSetting writer_setting;           ///< TLS 连接的写入器配置
+    RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
+    size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
+    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
+    int backlog = 128;                          ///< listen backlog 队列长度
     int verify_depth = 4;                       ///< 证书链校验深度
+    uint16_t port = 443;                        ///< 监听端口
+    bool tcp_no_delay = true;                   ///< 是否为已接受连接启用 TCP_NODELAY
+    bool verify_peer = false;                   ///< 是否校验客户端证书
 };
 
 class HttpsServer;

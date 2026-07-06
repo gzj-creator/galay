@@ -227,9 +227,9 @@ public:
 private:
     SSL* m_ssl;                         ///< OpenSSL SSL 对象
     SslContext* m_ctx;                  ///< SSL 上下文（不拥有）
-    SslHandshakeState m_handshakeState; ///< 握手状态
     BIO* m_rbio = nullptr;             ///< read BIO（网络密文 → SSL）
     BIO* m_wbio = nullptr;             ///< write BIO（SSL → 网络密文）
+    SslHandshakeState m_handshakeState; ///< 握手状态
 };
 
 } // namespace galay::ssl

@@ -59,9 +59,9 @@ inline std::string encodeRawPacket(std::string_view payload, uint8_t sequence_id
 } // namespace
 
 MysqlClient::MysqlClient()
-    : m_socket_fd(-1)
+    : m_recv_ring_buffer(kRecvBufferCapacity)
+    , m_socket_fd(-1)
     , m_connected(false)
-    , m_recv_ring_buffer(kRecvBufferCapacity)
 {
 }
 
@@ -71,13 +71,13 @@ MysqlClient::~MysqlClient()
 }
 
 MysqlClient::MysqlClient(MysqlClient&& other) noexcept
-    : m_socket_fd(other.m_socket_fd)
-    , m_connected(other.m_connected)
-    , m_recv_ring_buffer(std::move(other.m_recv_ring_buffer))
+    : m_recv_ring_buffer(std::move(other.m_recv_ring_buffer))
     , m_parse_scratch(std::move(other.m_parse_scratch))
+    , m_server_capabilities(other.m_server_capabilities)
+    , m_socket_fd(other.m_socket_fd)
     , m_parser(std::move(other.m_parser))
     , m_encoder(std::move(other.m_encoder))
-    , m_server_capabilities(other.m_server_capabilities)
+    , m_connected(other.m_connected)
 {
     other.m_socket_fd = -1;
     other.m_connected = false;
@@ -89,13 +89,13 @@ MysqlClient& MysqlClient::operator=(MysqlClient&& other) noexcept
     if (this != &other) {
         close();
 
-        m_socket_fd = other.m_socket_fd;
-        m_connected = other.m_connected;
         m_recv_ring_buffer = std::move(other.m_recv_ring_buffer);
         m_parse_scratch = std::move(other.m_parse_scratch);
+        m_server_capabilities = other.m_server_capabilities;
+        m_socket_fd = other.m_socket_fd;
         m_parser = std::move(other.m_parser);
         m_encoder = std::move(other.m_encoder);
-        m_server_capabilities = other.m_server_capabilities;
+        m_connected = other.m_connected;
 
         other.m_socket_fd = -1;
         other.m_connected = false;

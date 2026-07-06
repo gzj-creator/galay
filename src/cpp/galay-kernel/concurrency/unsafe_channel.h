@@ -360,10 +360,10 @@ private:
     std::deque<T> m_queue;
     size_t m_size = 0;
     size_t m_wakeThreshold = 1;
-    bool m_hasWaiter = false;
-    UnsafeChannelWakeMode m_wake_mode = UnsafeChannelWakeMode::Inline;
     std::coroutine_handle<> m_waiterHandle;
     TaskRef m_waiterTask;
+    UnsafeChannelWakeMode m_wake_mode = UnsafeChannelWakeMode::Inline;
+    bool m_hasWaiter = false;
 };
 
 // ============================================================================

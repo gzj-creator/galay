@@ -51,9 +51,9 @@ enum class MongoReadPreference
  */
 struct MongoRetryConfig
 {
+    uint32_t max_attempts = 1;     ///< 最大尝试次数，1 表示不重试
     bool retry_reads = false;      ///< 是否允许安全读重试
     bool retry_writes = false;     ///< 是否允许可证明安全的写重试
-    uint32_t max_attempts = 1;     ///< 最大尝试次数，1 表示不重试
 };
 
 /**
@@ -73,9 +73,9 @@ struct MongoPoolConfig
 struct MongoTopologyConfig
 {
     std::string replica_set_name;                             ///< 期望的 replica set 名称，空表示不校验
-    MongoReadPreference read_preference = MongoReadPreference::kPrimary; ///< 默认 primary
     std::chrono::milliseconds server_selection_timeout{30000}; ///< server selection 超时
     std::chrono::milliseconds local_threshold{15};             ///< nearest 延迟窗口
+    MongoReadPreference read_preference = MongoReadPreference::kPrimary; ///< 默认 primary
 };
 
 /**
@@ -94,25 +94,21 @@ struct MongoConfig
     static constexpr uint32_t kDefaultConnectTimeoutMs = 5000;          ///< 默认 TCP 连接超时（毫秒）
     static constexpr size_t kDefaultRecvBufferSize = 16384;             ///< 默认同步连接接收缓冲区大小
 
-    std::string host = kDefaultHost;               ///< 服务器地址
-    uint16_t port = kDefaultPort;                  ///< 服务器端口
-    std::vector<MongoEndpoint> seeds;              ///< replica set seed list；为空时使用 host/port 兼容路径
-
-    std::string username;                          ///< 认证用户名（为空则跳过认证）
-    std::string password;                          ///< 认证密码
-
+    std::string host = kDefaultHost;                    ///< 服务器地址
+    std::string username;                               ///< 认证用户名（为空则跳过认证）
+    std::string password;                               ///< 认证密码
     std::string database = kDefaultDatabase;            ///< 默认业务库
     std::string auth_database = kDefaultAuthDatabase;   ///< SCRAM 认证库，默认 admin
     std::string hello_database = kDefaultHelloDatabase; ///< hello 握手使用的数据库，默认 admin
-
-    std::string app_name = kDefaultAppName;        ///< 客户端应用名称，用于 hello 握手
-
-    bool tcp_nodelay = kDefaultTcpNoDelay;                  ///< 是否启用 TCP_NODELAY
+    std::string app_name = kDefaultAppName;             ///< 客户端应用名称，用于 hello 握手
+    std::vector<MongoEndpoint> seeds;                   ///< replica set seed list；为空时使用 host/port 兼容路径
+    MongoTopologyConfig topology;                       ///< 拓扑与 server selection 配置
+    MongoPoolConfig pool;                               ///< 连接池配置
+    MongoRetryConfig retry;                             ///< 重试策略配置
+    size_t recv_buffer_size = kDefaultRecvBufferSize;   ///< 同步连接接收缓冲区大小（字节）
     uint32_t connect_timeout_ms = kDefaultConnectTimeoutMs; ///< TCP 连接超时（毫秒）
-    size_t recv_buffer_size = kDefaultRecvBufferSize;       ///< 同步连接接收缓冲区大小（字节）
-    MongoRetryConfig retry;                                 ///< 重试策略配置
-    MongoPoolConfig pool;                                   ///< 连接池配置
-    MongoTopologyConfig topology;                           ///< 拓扑与 server selection 配置
+    uint16_t port = kDefaultPort;                       ///< 服务器端口
+    bool tcp_nodelay = kDefaultTcpNoDelay;              ///< 是否启用 TCP_NODELAY
 
     /**
      * @brief 返回全部使用默认值的配置

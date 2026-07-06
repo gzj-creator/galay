@@ -85,8 +85,8 @@ private:
     void restore() noexcept;
 
     Span m_span;                              ///< 被守卫的 Span
-    std::optional<SpanContext> m_previousContext; ///< 之前的 Span 上下文
     std::string m_previousTracestate;        ///< 之前的 tracestate
+    std::optional<SpanContext> m_previousContext; ///< 之前的 Span 上下文
     bool m_active{false};                    ///< 守卫是否活跃
 };
 

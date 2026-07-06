@@ -22,9 +22,9 @@ using namespace galay::http;
  */
 struct WsUpgradeResult
 {
-    bool success = false;
-    std::string error_message;
     HttpResponse response;
+    std::string error_message;
+    bool success = false;
 };
 
 /**

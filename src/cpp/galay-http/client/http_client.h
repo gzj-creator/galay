@@ -44,8 +44,8 @@ using namespace galay::kernel;
 struct HttpUrl {
     std::string scheme;    ///< 协议（http/https）
     std::string host;      ///< 主机名
-    int port;              ///< 端口号
     std::string path;      ///< 路径
+    int port;              ///< 端口号
     bool is_secure;        ///< 是否为安全连接（HTTPS）
 
     /**
@@ -124,8 +124,8 @@ class HttpClientImpl;
  */
 struct HttpClientConfig
 {
-    bool tcp_no_delay = true; ///< 是否为连接 socket 启用 TCP_NODELAY
     HeaderPair::Mode header_mode = HeaderPair::Mode::ClientSide;
+    bool tcp_no_delay = true; ///< 是否为连接 socket 启用 TCP_NODELAY
 };
 
 /**
@@ -308,10 +308,10 @@ struct HttpsClientConfig
 {
     // SSL 配置
     std::string ca_path;            // CA 证书路径（可选，用于验证服务器）
-    bool verify_peer = false;       // 是否验证服务器证书
     int verify_depth = 4;           // 证书链验证深度
-    bool tcp_no_delay = true;       ///< 是否为底层 TCP 连接启用 TCP_NODELAY
     HeaderPair::Mode header_mode = HeaderPair::Mode::ClientSide;
+    bool verify_peer = false;       // 是否验证服务器证书
+    bool tcp_no_delay = true;       ///< 是否为底层 TCP 连接启用 TCP_NODELAY
 };
 
 class HttpsClient;

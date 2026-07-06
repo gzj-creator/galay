@@ -254,8 +254,8 @@ EtcdVoidResult sendAll(int fd, std::string_view payload)
 
 struct ParsedHttpHeaders
 {
-    int status_code = 0;
     std::optional<size_t> content_length = std::nullopt;
+    int status_code = 0;
     bool chunked = false;
     bool connection_close = false;
 };
@@ -350,10 +350,10 @@ enum class ChunkDecodeState
 
 struct ChunkDecodeResult
 {
-    ChunkDecodeState state = ChunkDecodeState::Incomplete;
     std::string body;
-    size_t consumed = 0;
     std::string error;
+    size_t consumed = 0;
+    ChunkDecodeState state = ChunkDecodeState::Incomplete;
 };
 
 ChunkDecodeResult decodeChunkedBody(std::string_view raw)
@@ -429,8 +429,8 @@ ChunkDecodeResult decodeChunkedBody(std::string_view raw)
 
 struct HttpResponseData
 {
-    int status_code = 0;
     std::string body;
+    int status_code = 0;
     bool connection_close = false;
 };
 
@@ -461,9 +461,9 @@ std::expected<HttpResponseData, EtcdError> recvHttpResponse(
                 auto chunked = decodeChunkedBody(std::string_view(raw.data() + body_offset, raw.size() - body_offset));
                 if (chunked.state == ChunkDecodeState::Complete) {
                     return HttpResponseData{
-                        headers->status_code,
-                        std::move(chunked.body),
-                        headers->connection_close || peer_closed,
+                        .body = std::move(chunked.body),
+                        .status_code = headers->status_code,
+                        .connection_close = headers->connection_close || peer_closed,
                     };
                 }
                 if (chunked.state == ChunkDecodeState::Error) {
@@ -473,16 +473,16 @@ std::expected<HttpResponseData, EtcdError> recvHttpResponse(
                 const size_t total_needed = body_offset + headers->content_length.value();
                 if (raw.size() >= total_needed) {
                     return HttpResponseData{
-                        headers->status_code,
-                        raw.substr(body_offset, headers->content_length.value()),
-                        headers->connection_close || peer_closed,
+                        .body = raw.substr(body_offset, headers->content_length.value()),
+                        .status_code = headers->status_code,
+                        .connection_close = headers->connection_close || peer_closed,
                     };
                 }
             } else if (peer_closed) {
                 return HttpResponseData{
-                    headers->status_code,
-                    raw.substr(body_offset),
-                    true,
+                    .body = raw.substr(body_offset),
+                    .status_code = headers->status_code,
+                    .connection_close = true,
                 };
             }
         }
@@ -522,9 +522,9 @@ std::expected<HttpResponseData, EtcdError> recvHttpResponse(
                 auto chunked = decodeChunkedBody(std::string_view(raw.data() + body_offset, raw.size() - body_offset));
                 if (chunked.state == ChunkDecodeState::Complete) {
                     return HttpResponseData{
-                        headers->status_code,
-                        std::move(chunked.body),
-                        true,
+                        .body = std::move(chunked.body),
+                        .status_code = headers->status_code,
+                        .connection_close = true,
                     };
                 }
                 return std::unexpected(EtcdError(EtcdErrorType::Recv, "connection closed before complete chunked body"));
@@ -536,16 +536,16 @@ std::expected<HttpResponseData, EtcdError> recvHttpResponse(
                     return std::unexpected(EtcdError(EtcdErrorType::Recv, "connection closed before complete response body"));
                 }
                 return HttpResponseData{
-                    headers->status_code,
-                    raw.substr(body_offset, headers->content_length.value()),
-                    true,
+                    .body = raw.substr(body_offset, headers->content_length.value()),
+                    .status_code = headers->status_code,
+                    .connection_close = true,
                 };
             }
 
             return HttpResponseData{
-                headers->status_code,
-                raw.substr(body_offset),
-                true,
+                .body = raw.substr(body_offset),
+                .status_code = headers->status_code,
+                .connection_close = true,
             };
         }
 

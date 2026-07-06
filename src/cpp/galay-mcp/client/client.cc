@@ -25,16 +25,16 @@ McpClient::CloseAwaitable makeImmediateCloseErrorTask() {
 class McpClient::Impl {
 public:
     explicit Impl(McpStdioClientConfig config)
-        : mode(McpClientMode::Stdio)
-        , stdioTransport(std::make_unique<detail::StdioClientTransport>(config.input, config.output)) {}
+        : stdioTransport(std::make_unique<detail::StdioClientTransport>(config.input, config.output))
+        , mode(McpClientMode::Stdio) {}
 
     Impl(kernel::Runtime& runtime, McpHttpClientConfig config)
-        : mode(McpClientMode::Http)
-        , httpTransport(std::make_unique<detail::HttpClientTransport>(runtime, std::move(config))) {}
+        : httpTransport(std::make_unique<detail::HttpClientTransport>(runtime, std::move(config)))
+        , mode(McpClientMode::Http) {}
 
-    McpClientMode mode;
     std::unique_ptr<detail::StdioClientTransport> stdioTransport;
     std::unique_ptr<detail::HttpClientTransport> httpTransport;
+    McpClientMode mode;
 };
 
 McpClient::McpClient(McpStdioClientConfig config)

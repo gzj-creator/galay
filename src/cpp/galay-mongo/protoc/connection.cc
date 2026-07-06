@@ -36,10 +36,10 @@ int32_t readInt32LE(const char* p)
 
 Connection::ConnectOptions::ConnectOptions()
     : host(::galay::mongo::MongoConfig::kDefaultHost)
-    , port(::galay::mongo::MongoConfig::kDefaultPort)
-    , timeout_ms(::galay::mongo::MongoConfig::kDefaultConnectTimeoutMs)
-    , tcp_nodelay(::galay::mongo::MongoConfig::kDefaultTcpNoDelay)
     , recv_buffer_size(::galay::mongo::MongoConfig::kDefaultRecvBufferSize)
+    , timeout_ms(::galay::mongo::MongoConfig::kDefaultConnectTimeoutMs)
+    , port(::galay::mongo::MongoConfig::kDefaultPort)
+    , tcp_nodelay(::galay::mongo::MongoConfig::kDefaultTcpNoDelay)
 {
 }
 
@@ -56,9 +56,9 @@ Connection::ConnectOptions::fromMongoConfig(const ::galay::mongo::MongoConfig& c
 }
 
 Connection::Connection()
-    : m_socket_fd(-1)
+    : m_recv_ring(kDefaultBufferSize)
+    , m_socket_fd(-1)
     , m_connected(false)
-    , m_recv_ring(kDefaultBufferSize)
 {
 }
 
@@ -68,9 +68,10 @@ Connection::~Connection()
 }
 
 Connection::Connection(Connection&& other) noexcept
-    : m_socket_fd(other.m_socket_fd)
+    : m_recv_ring(std::move(other.m_recv_ring))
+    , m_decode_buffer(std::move(other.m_decode_buffer))
+    , m_socket_fd(other.m_socket_fd)
     , m_connected(other.m_connected)
-    , m_recv_ring(std::move(other.m_recv_ring))
 {
     other.m_socket_fd = -1;
     other.m_connected = false;

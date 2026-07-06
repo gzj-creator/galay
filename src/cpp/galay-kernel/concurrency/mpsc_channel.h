@@ -144,7 +144,7 @@ public:
      * @return true 入队成功；false 底层无锁队列拒绝入队
      */
     bool send(T&& value) {
-        uint32_t prevSize = m_size.fetch_add(1, std::memory_order_acq_rel);
+        size_t prevSize = m_size.fetch_add(1, std::memory_order_acq_rel);
         if (!m_queue.enqueue(std::forward<T>(value))) {
             m_size.fetch_sub(1, std::memory_order_acq_rel);
             return false;
@@ -173,7 +173,7 @@ public:
     bool sendBatch(const std::vector<T>& values) requires std::copy_constructible<T> {
         if (values.empty()) return true;
         uint32_t count = static_cast<uint32_t>(values.size());
-        uint32_t prevSize = m_size.fetch_add(count, std::memory_order_acq_rel);
+        size_t prevSize = m_size.fetch_add(count, std::memory_order_acq_rel);
         if (!m_queue.enqueue_bulk(values.data(), values.size())) {
             m_size.fetch_sub(count, std::memory_order_acq_rel);
             return false;
@@ -192,7 +192,7 @@ public:
     bool sendBatch(std::vector<T>&& values) {
         if (values.empty()) return true;
         uint32_t count = static_cast<uint32_t>(values.size());
-        uint32_t prevSize = m_size.fetch_add(count, std::memory_order_acq_rel);
+        size_t prevSize = m_size.fetch_add(count, std::memory_order_acq_rel);
         if (!m_queue.enqueue_bulk(std::make_move_iterator(values.begin()), count)) {
             m_size.fetch_sub(count, std::memory_order_acq_rel);
             return false;
@@ -282,7 +282,7 @@ public:
             values.resize(maxCount);
             size_t count = m_queue.try_dequeue_bulk(values.data() + base, maxCount - base);
             if (count > 0) {
-                m_size.fetch_sub(static_cast<uint32_t>(count), std::memory_order_acq_rel);
+                m_size.fetch_sub(count, std::memory_order_acq_rel);
                 m_waiter_registration.clearPendingWake();
                 values.resize(base + count);
             } else {
@@ -383,7 +383,7 @@ private:
     }
 
 
-    alignas(64) std::atomic<uint32_t> m_size{0};
+    alignas(64) std::atomic<size_t> m_size{0};
     WaitRegistration m_waiter_registration;
     moodycamel::ConcurrentQueue<T> m_queue;
     size_t m_defaultBatchSize{1024};

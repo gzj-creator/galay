@@ -51,8 +51,8 @@ struct MongoMessageHeader
 struct MongoMessage
 {
     MongoMessageHeader header;   ///< 消息头
-    int32_t flags = 0;           ///< OP_MSG 标志位
     MongoDocument body;          ///< 消息体（Section Kind 0）
+    int32_t flags = 0;           ///< OP_MSG 标志位
 };
 
 /**

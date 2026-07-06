@@ -563,9 +563,9 @@ struct IOController {
     IOEventType m_type = IOEventType::INVALID;  ///< 当前IO事件类型
     void* m_awaitable[IOController::SIZE] = {nullptr, nullptr};  ///< READ/WRITE 槽位上的 awaitable 指针
     SequenceAwaitableBase* m_sequence_owner[IOController::SIZE] = {nullptr, nullptr};  ///< READ/WRITE 槽位所属的 sequence awaitable
+    std::atomic<Scheduler*> m_owner_scheduler{nullptr};  ///< direct C TCP I/O 绑定的 owner scheduler；C++ awaitable 不依赖该字段
     uint8_t m_sequence_interest_mask = 0;  ///< sequence 关心的 READ/WRITE 位掩码
     uint8_t m_sequence_armed_mask = 0;  ///< 已经向 reactor 注册的 READ/WRITE 位掩码
-    std::atomic<Scheduler*> m_owner_scheduler{nullptr};  ///< direct C TCP I/O 绑定的 owner scheduler；C++ awaitable 不依赖该字段
 #ifdef USE_EPOLL
     uint32_t m_registered_events = 0;          ///< epoll 已注册的事件掩码缓存
 #endif

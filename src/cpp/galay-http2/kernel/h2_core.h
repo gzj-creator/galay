@@ -145,18 +145,18 @@ public:
 private:
     void enqueueDispatchAction(const H2DispatchAction& action);
 
-    std::atomic<State> m_state{State::Idle};
-    std::atomic<bool> m_stop_requested{false};
-    std::atomic<bool> m_settings_ack_pending{false};
     TimerConfig m_timer_config{};
     std::chrono::steady_clock::time_point m_settings_sent_at{};
     std::chrono::steady_clock::time_point m_last_frame_recv_at{std::chrono::steady_clock::now()};
     std::chrono::steady_clock::time_point m_last_ping_sent_at{};
-    bool m_waiting_ping_ack = false;
-    bool m_graceful_shutdown_started = false;
     std::chrono::steady_clock::time_point m_graceful_shutdown_started_at{};
     H2DispatcherConnectionState m_dispatch_state;
     H2OutboundQueues m_outbound_queues;
+    std::atomic<State> m_state{State::Idle};
+    std::atomic<bool> m_stop_requested{false};
+    std::atomic<bool> m_settings_ack_pending{false};
+    bool m_waiting_ping_ack = false;
+    bool m_graceful_shutdown_started = false;
     bool m_outbound_ready = false;
 };
 

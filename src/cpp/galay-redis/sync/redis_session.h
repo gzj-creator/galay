@@ -417,9 +417,9 @@ namespace galay::redis
 
     private:
         std::ostringstream m_stream;                            ///< 字符串输出流（用于命令编码）
+        RedisSessionConfig m_config;                            ///< 连接配置
         std::unique_ptr<protocol::Connection> m_connection;     ///< 底层 TCP 连接
         protocol::RespEncoder m_encoder;                        ///< RESP 编码器
-        RedisSessionConfig m_config;                            ///< 连接配置
     };
 
 }

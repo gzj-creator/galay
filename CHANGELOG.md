@@ -11,6 +11,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **全模块结构体字段重排以优化内存布局**：对 kernel / http / http2 / ws / rpc / mcp / redis / mysql / mongo / etcd / ssl / tracing / utils 及全部 C ABI 模块（`src/c/galay-*-c`）中的 struct / class 成员按访问热点与尺寸重排，把分散的小尺寸标量、指针与 bool 收敛到更紧凑的位置以减少 padding、提升缓存命中率；同步更新聚合初始化 `{...}` 顺序与构造初始化列表顺序以匹配新声明顺序（消除 `-Wreorder`）。
+- **TCP 完成状态位压缩为位域**：`c_coro_tcp_bridge.cc` 的 `CoroTcpOperationBase` 用单个 `uint64_t m_flags` 位标记替代 `m_finished` / `m_complete_accepted` 两个独立 bool，并提供 `finished()` / `completeAccepted()` / `setFinished()` / `setCompleteAccepted()` 访问器，进一步压缩对象尺寸。
+- kernel IO 上下文中部分 bool / 枚举状态字段统一改为 `uint64_t` 承载：`ReadvIOContext` / `WritevIOContext` 的 `m_immediate_result`、`FileWatchIOContext` 的 `m_events`、`SequenceAwaitableBase` 的 `m_registered`。
+
+### Added
+
+- **utils 新增跨平台进程优先级接口**：`Process` 新增 `priority()` / `setPriority()` 静态方法，POSIX 平台基于 `getpriority` / `setpriority`（nice 值 `[-20,19]`），Windows 平台映射到 priority class；新增 `ProcessPriorityError` 错误枚举与配套的 `processPriorityErrorString()` 错误描述函数，错误经 `std::expected<T, ProcessPriorityError>` 显式传播，errno / `GetLastError` 立即转换为具体错误码（遵循错误显式传播与每个错误码配套错误字符串的约定）。`module_prelude.hpp` 补齐 `<cerrno>` / `<sys/resource.h>` 头，并新增 `test/cpp/utils/t11_platform_process_system.cc` 白盒测试。
+
 ## [v4.0.2] - 2026-07-06
 
 ### Docs

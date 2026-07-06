@@ -81,8 +81,8 @@ public:
      * @param other 被接管的对象，返回后变为无效描述符状态
      */
     FileDescriptor(FileDescriptor&& other) noexcept
-        : m_fd(other.m_fd)
-        , m_last_error(std::move(other.m_last_error))
+        : m_last_error(std::move(other.m_last_error))
+        , m_fd(other.m_fd)
     {
         other.m_fd = -1;
     }
@@ -216,8 +216,8 @@ public:
     }
 
 private:
-    int m_fd;
     std::optional<IOError> m_last_error;
+    int m_fd;
 };
 
 } // namespace galay::kernel

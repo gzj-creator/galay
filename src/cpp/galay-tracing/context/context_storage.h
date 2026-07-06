@@ -24,8 +24,8 @@ namespace detail {
  * @details 包含 SpanContext 和 tracestate，用于内部序列化/反序列化线程本地存储
  */
 struct CurrentContextState {
-    std::optional<SpanContext> spanContext; ///< 当前活跃的 Span 上下文
     std::string tracestate;                 ///< W3C tracestate 不透明字符串
+    std::optional<SpanContext> spanContext; ///< 当前活跃的 Span 上下文
 };
 
 /**

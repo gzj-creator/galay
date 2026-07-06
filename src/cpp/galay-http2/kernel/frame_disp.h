@@ -52,10 +52,10 @@ struct H2DispatchAction
 
 struct H2DispatchResult
 {
-    bool ok = true;
-    H2DispatchErrorScope error_scope = H2DispatchErrorScope::None;
-    Http2ErrorCode error_code = Http2ErrorCode::NoError;
     std::vector<H2DispatchAction> actions;
+    Http2ErrorCode error_code = Http2ErrorCode::NoError;
+    H2DispatchErrorScope error_scope = H2DispatchErrorScope::None;
+    bool ok = true;
 };
 
 /**
@@ -85,12 +85,12 @@ struct H2DispatcherStreamState
  */
 struct H2DispatcherConnectionState
 {
-    bool expecting_continuation = false;
-    uint32_t continuation_stream_id = 0;
-    bool goaway_received = false;
+    std::unordered_map<uint32_t, H2DispatcherStreamState> streams;
     uint32_t last_peer_stream_id = 0;
     uint32_t goaway_last_stream_id = 0;
-    std::unordered_map<uint32_t, H2DispatcherStreamState> streams;
+    uint32_t continuation_stream_id = 0;
+    bool expecting_continuation = false;
+    bool goaway_received = false;
 };
 
 /**

@@ -75,15 +75,15 @@ public:
      * @param tickDuration 每个 tick 的时间间隔（纳秒）
      */
     explicit ThreadSafeTimerManager(uint64_t tickDuration = 1000000ULL)
-        : m_tickDuration(tickDuration)
+        : m_wheelSize(0)
+        , m_pendingSize(0)
+        , m_tickDuration(tickDuration)
         , m_currentTick(0)
         , m_wheel1(WHEEL1_SIZE)
         , m_wheel2(WHEEL2_SIZE)
         , m_wheel3(WHEEL3_SIZE)
         , m_wheel4(WHEEL4_SIZE)
         , m_wheel5(WHEEL5_SIZE)
-        , m_wheelSize(0)
-        , m_pendingSize(0)
         , m_startTime(std::chrono::steady_clock::now())
     {
     }
@@ -458,6 +458,10 @@ private:
     }
 
 private:
+    // 计数器（原子操作，用于监控）
+    alignas(64) std::atomic<size_t> m_wheelSize;
+    alignas(64) std::atomic<size_t> m_pendingSize;
+
     uint64_t m_tickDuration;
     uint64_t m_currentTick;
 
@@ -470,10 +474,6 @@ private:
 
     // 待处理队列（无锁 MPSC）
     moodycamel::ConcurrentQueue<Timer::ptr> m_pendingQueue;
-
-    // 计数器（原子操作，用于监控）
-    alignas(64) std::atomic<size_t> m_wheelSize;
-    alignas(64) std::atomic<size_t> m_pendingSize;
 
     std::chrono::steady_clock::time_point m_startTime;
 };

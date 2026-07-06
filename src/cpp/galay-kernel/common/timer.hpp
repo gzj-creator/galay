@@ -124,9 +124,9 @@ public:
     }
 
 protected:
-    std::atomic<int> m_flag{0};
     uint64_t m_delay = 0;                  ///< 相对延迟（纳秒）
     mutable uint64_t m_expireTime = 0;     ///< 绝对过期时间（纳秒，延迟计算）
+    std::atomic<int> m_flag{0};
 };
 
 /**

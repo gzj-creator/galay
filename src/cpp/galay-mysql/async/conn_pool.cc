@@ -193,7 +193,6 @@ MysqlConnectionPool::LeaseAwaitable MysqlConnectionPool::acquireLease() { return
 
 MysqlConnectionPool::AcquireAwaitable::AcquireAwaitable(MysqlConnectionPool& pool)
     : m_pool(pool)
-    , m_state(State::Invalid)
 {
 }
 

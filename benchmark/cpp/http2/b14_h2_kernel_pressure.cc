@@ -51,13 +51,13 @@ std::vector<H2StreamSendState> makeStreams(size_t streams_count, size_t payload_
     streams.reserve(streams_count);
     for (size_t i = 0; i < streams_count; ++i) {
         streams.push_back(H2StreamSendState{
-            .stream_id = static_cast<uint32_t>(1 + i * 2),
-            .stream_window = static_cast<int32_t>(payload_bytes),
             .pending = {
                 .chunks = {std::string(payload_bytes, static_cast<char>('a' + (i % 26)))},
                 .front_offset = 0,
                 .end_stream = false
             },
+            .stream_id = static_cast<uint32_t>(1 + i * 2),
+            .stream_window = static_cast<int32_t>(payload_bytes),
             .weight = static_cast<uint8_t>((i % 4) + 1)
         });
     }

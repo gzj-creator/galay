@@ -49,11 +49,11 @@ struct H2PendingData
  */
 struct H2StreamSendState
 {
+    H2PendingData pending;                  ///< 待发送 DATA 缓冲
+    size_t deficit = 0;                     ///< DRR 当前可用发送额度
     uint32_t stream_id = 0;                 ///< 流 ID
     int32_t stream_window = 0;              ///< 流级流量控制窗口
-    H2PendingData pending;                  ///< 待发送 DATA 缓冲
     uint8_t weight = 16;                    ///< 流优先级权重
-    size_t deficit = 0;                     ///< DRR 当前可用发送额度
     bool queued = false;                    ///< 是否已经进入调度轮转
 };
 

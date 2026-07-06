@@ -102,9 +102,9 @@ enum class RangeType
  */
 struct RangeParseResult
 {
-    RangeType type;                       ///< Range 类型
     std::vector<HttpRange> ranges;        ///< Range 列表
     std::string boundary;                 ///< multipart 边界（多范围时使用）
+    RangeType type;                       ///< Range 类型
 
     /**
      * @brief 默认构造函数
@@ -120,7 +120,8 @@ struct RangeParseResult
      * @param r Range 列表
      */
     RangeParseResult(RangeType t, const std::vector<HttpRange>& r)
-        : type(t), ranges(r)
+        : ranges(r)
+        , type(t)
     {
     }
 

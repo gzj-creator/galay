@@ -35,11 +35,11 @@ McpHttpServer::McpHttpServer(const std::string& host,
                              size_t computeSchedulers,
                              bool tcpNoDelay)
     : m_host(host)
-    , m_port(port)
     , m_serverName("galay-mcp-http-server")
     , m_serverVersion("1.0.0")
     , m_ioSchedulers(ioSchedulers)
     , m_computeSchedulers(computeSchedulers)
+    , m_port(port)
     , m_tcpNoDelay(tcpNoDelay)
     , m_toolsCacheDirty(false)
     , m_resourcesCacheDirty(false)

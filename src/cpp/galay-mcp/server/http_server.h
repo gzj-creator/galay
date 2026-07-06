@@ -226,12 +226,8 @@ private:
 
 private:
     std::string m_host; ///< 监听地址
-    int m_port; ///< 监听端口
     std::string m_serverName; ///< 服务器名称
     std::string m_serverVersion; ///< 服务器版本
-    size_t m_ioSchedulers; ///< IO调度线程数
-    size_t m_computeSchedulers; ///< 计算调度线程数
-    bool m_tcpNoDelay; ///< 是否为已接受 HTTP 连接启用 TCP_NODELAY
 
     /**
      * @brief 工具注册信息
@@ -263,16 +259,19 @@ private:
     JsonString m_toolsListCache; ///< 工具列表缓存
     JsonString m_resourcesListCache; ///< 资源列表缓存
     JsonString m_promptsListCache; ///< 提示列表缓存
-    bool m_toolsCacheDirty; ///< 工具列表缓存脏标志
-    bool m_resourcesCacheDirty; ///< 资源列表缓存脏标志
-    bool m_promptsCacheDirty; ///< 提示列表缓存脏标志
-
-    std::atomic<bool> m_running; ///< 服务器运行状态
-    std::atomic<bool> m_initialized; ///< 初始化状态
     McpProductionPolicy m_policy; ///< 生产运行策略
 
     std::unique_ptr<http::HttpServer> m_httpServer; ///< HTTP服务器实例
     std::unique_ptr<http::HttpRouter> m_router; ///< HTTP路由器实例
+    size_t m_ioSchedulers; ///< IO调度线程数
+    size_t m_computeSchedulers; ///< 计算调度线程数
+    int m_port; ///< 监听端口
+    bool m_tcpNoDelay; ///< 是否为已接受 HTTP 连接启用 TCP_NODELAY
+    bool m_toolsCacheDirty; ///< 工具列表缓存脏标志
+    bool m_resourcesCacheDirty; ///< 资源列表缓存脏标志
+    bool m_promptsCacheDirty; ///< 提示列表缓存脏标志
+    std::atomic<bool> m_running; ///< 服务器运行状态
+    std::atomic<bool> m_initialized; ///< 初始化状态
 };
 
 } // namespace mcp

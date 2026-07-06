@@ -75,10 +75,10 @@ namespace galay::redis::protocol
         std::expected<RedisReply, RedisError> execute(const std::string& encoded_command);
 
     private:
+        std::vector<char> m_recv_buffer;    ///< 接收缓冲区
         int m_socket_fd;                    ///< 套接字文件描述符
         bool m_connected;                   ///< 连接状态
         RespParser m_parser;                ///< RESP 协议解析器
-        std::vector<char> m_recv_buffer;    ///< 接收缓冲区
         static constexpr size_t BUFFER_SIZE = 8192; ///< 默认缓冲区大小
     };
 }

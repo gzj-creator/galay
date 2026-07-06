@@ -37,10 +37,8 @@ namespace galay::redis
     {
         // 连接参数
         std::string host = "127.0.0.1";        ///< Redis 服务器地址
-        int32_t port = 6379;                    ///< Redis 服务器端口
         std::string username = "";              ///< 认证用户名
         std::string password = "";              ///< 认证密码
-        int32_t db_index = 0;                   ///< 数据库索引
 
         // 连接池大小
         size_t min_connections = 2;      ///< 最小连接数
@@ -53,12 +51,16 @@ namespace galay::redis
         std::chrono::milliseconds connect_timeout = std::chrono::seconds(3);  ///< 连接超时
 
         // 健康检查
-        bool enable_health_check = true;                                        ///< 是否启用健康检查
         std::chrono::milliseconds health_check_interval = std::chrono::seconds(30); ///< 健康检查间隔
 
+        int32_t port = 6379;                    ///< Redis 服务器端口
+        int32_t db_index = 0;                   ///< 数据库索引
+
         // 重连配置
-        bool enable_auto_reconnect = true;  ///< 是否启用自动重连
         int max_reconnect_attempts = 3;     ///< 最大重连尝试次数
+
+        bool enable_health_check = true;         ///< 是否启用健康检查
+        bool enable_auto_reconnect = true;       ///< 是否启用自动重连
 
         // 连接验证配置
         bool enable_connection_validation = true;  ///< 获取连接时是否验证
@@ -115,10 +117,9 @@ namespace galay::redis
     struct RedissConnectionPoolConfig
     {
         std::string host = "127.0.0.1";        ///< Redis 服务器地址
-        int32_t port = 6380;                    ///< Redis TLS 端口
         std::string username = "";              ///< 认证用户名
         std::string password = "";              ///< 认证密码
-        int32_t db_index = 0;                   ///< 数据库索引
+        RedissClientConfig tls_config;           ///< TLS 配置
 
         size_t min_connections = 2;             ///< 最小连接数
         size_t max_connections = 10;            ///< 最大连接数
@@ -128,17 +129,17 @@ namespace galay::redis
         std::chrono::milliseconds idle_timeout = std::chrono::minutes(5);      ///< 空闲连接超时
         std::chrono::milliseconds connect_timeout = std::chrono::seconds(3);   ///< 连接超时
 
-        bool enable_health_check = true;                                        ///< 是否启用健康检查
         std::chrono::milliseconds health_check_interval = std::chrono::seconds(30); ///< 健康检查间隔
 
-        bool enable_auto_reconnect = true;  ///< 是否启用自动重连
+        int32_t port = 6380;                    ///< Redis TLS 端口
+        int32_t db_index = 0;                   ///< 数据库索引
         int max_reconnect_attempts = 3;     ///< 最大重连尝试次数
 
+        bool enable_health_check = true;     ///< 是否启用健康检查
+        bool enable_auto_reconnect = true;   ///< 是否启用自动重连
         bool enable_connection_validation = true;  ///< 获取连接时是否验证
         bool validate_on_acquire = false;          ///< 每次获取时都验证
         bool validate_on_return = false;           ///< 归还时验证
-
-        RedissClientConfig tls_config; ///< TLS 配置
 
         /**
          * @brief 验证配置参数是否合法
@@ -416,13 +417,13 @@ namespace galay::redis
 
         SuspendAction prepareSuspend(galay::kernel::Waker waiter_waker);
 
-        RedisConnectionPool* m_pool = nullptr;
-        State m_state = State::Invalid;
+        std::optional<RedisConnectOperation> m_connect_awaitable;
+        std::optional<RedisError> m_error;
         std::shared_ptr<PooledConnection> m_connection;
         std::shared_ptr<detail::RedisPoolWaiter> m_waiter;
-        std::optional<RedisConnectOperation> m_connect_awaitable;
+        RedisConnectionPool* m_pool = nullptr;
         std::chrono::steady_clock::time_point m_start_time;
-        std::optional<RedisError> m_error;
+        State m_state = State::Invalid;
         bool m_wait_counted = false;
     };
 
@@ -523,13 +524,13 @@ namespace galay::redis
 
         SuspendAction prepareSuspend(galay::kernel::Waker waiter_waker);
 
-        RedissConnectionPool* m_pool = nullptr;
-        State m_state = State::Invalid;
+        std::optional<detail::RedissConnectOperation> m_connect_awaitable;
+        std::optional<RedisError> m_error;
         std::shared_ptr<PooledRedissConnection> m_connection;
         std::shared_ptr<detail::RedissPoolWaiter> m_waiter;
-        std::optional<detail::RedissConnectOperation> m_connect_awaitable;
+        RedissConnectionPool* m_pool = nullptr;
         std::chrono::steady_clock::time_point m_start_time;
-        std::optional<RedisError> m_error;
+        State m_state = State::Invalid;
         bool m_wait_counted = false;
     };
 #endif
@@ -676,10 +677,6 @@ namespace galay::redis
         std::vector<std::shared_ptr<PooledConnection>> m_all_connections;      ///< 所有连接列表
         mutable std::mutex m_mutex;                                            ///< 互斥锁
 
-        // 状态标志
-        std::atomic<bool> m_is_initialized{false};       ///< 是否已初始化
-        std::atomic<bool> m_is_shutting_down{false};     ///< 是否正在关闭
-
         // 统计信息
         std::atomic<uint64_t> m_total_acquired{0};       ///< 总获取次数
         std::atomic<uint64_t> m_total_released{0};       ///< 总归还次数
@@ -696,6 +693,8 @@ namespace galay::redis
         std::atomic<uint64_t> m_total_acquire_time_ms{0};  ///< 总获取时间（毫秒）
         std::atomic<double> m_max_acquire_time_ms{0.0};    ///< 最大获取时间（毫秒）
         std::atomic<size_t> m_peak_active_connections{0};  ///< 峰值活跃连接数
+        std::atomic<bool> m_is_initialized{false};         ///< 是否已初始化
+        std::atomic<bool> m_is_shutting_down{false};       ///< 是否正在关闭
 
     };
 
@@ -757,9 +756,6 @@ namespace galay::redis
         std::vector<std::shared_ptr<PooledRedissConnection>> m_all_connections;      ///< 所有连接列表
         mutable std::mutex m_mutex;                                                  ///< 互斥锁
 
-        std::atomic<bool> m_is_initialized{false};       ///< 是否已初始化
-        std::atomic<bool> m_is_shutting_down{false};     ///< 是否正在关闭
-
         std::atomic<uint64_t> m_total_acquired{0};       ///< 总获取次数
         std::atomic<uint64_t> m_total_released{0};       ///< 总归还次数
         std::atomic<uint64_t> m_total_created{0};        ///< 总创建次数
@@ -774,6 +770,8 @@ namespace galay::redis
         std::atomic<uint64_t> m_total_acquire_time_ms{0};  ///< 总获取时间（毫秒）
         std::atomic<double> m_max_acquire_time_ms{0.0};    ///< 最大获取时间（毫秒）
         std::atomic<size_t> m_peak_active_connections{0};  ///< 峰值活跃连接数
+        std::atomic<bool> m_is_initialized{false};         ///< 是否已初始化
+        std::atomic<bool> m_is_shutting_down{false};       ///< 是否正在关闭
     };
 #endif
 

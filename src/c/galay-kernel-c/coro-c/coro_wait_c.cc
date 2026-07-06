@@ -26,11 +26,11 @@ enum class WaitState : uint8_t {
 
 struct WaitRequestState {
     std::mutex mutex;
-    uint64_t generation = 0;
-    WaitState state = WaitState::Idle;
+    galay::kernel::Timer::ptr timer;
     C_IOResult result{C_IOResultInvalid, 0, 0, 0, nullptr};
     galay::kernel::coro_c::C_CoroTaskInternal* waiter = nullptr;
-    galay::kernel::Timer::ptr timer;
+    uint64_t generation = 0;
+    WaitState state = WaitState::Idle;
     bool completed_waiter_pending = false;
 };
 

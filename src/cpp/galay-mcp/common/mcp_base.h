@@ -67,11 +67,11 @@ enum class ContentType {
  * @details 表示MCP协议中的内容项，可以是文本、图片或资源引用
  */
 struct Content {
-    ContentType type{ContentType::Text}; ///< 内容类型
     std::string text; ///< 文本内容（Text类型使用）
     std::string data; ///< 图片数据（Image类型使用，base64编码）
     std::string mimeType; ///< MIME类型（Image类型使用）
     std::string uri; ///< 资源URI（Resource类型使用）
+    ContentType type{ContentType::Text}; ///< 内容类型
 
     /**
      * @brief 序列化为JSON字符串
@@ -272,9 +272,9 @@ struct JsonRpcNotification {
  * @details 表示JSON-RPC 2.0格式的错误信息
  */
 struct JsonRpcError {
-    int code = 0; ///< 错误码
     std::string message; ///< 错误消息
     std::optional<JsonString> data; ///< 附加错误数据
+    int code = 0; ///< 错误码
 
     JsonString toJson() const; ///< 序列化为JSON字符串
     static std::expected<JsonRpcError, McpError> fromJson(const JsonElement& element); ///< 从JSON元素反序列化

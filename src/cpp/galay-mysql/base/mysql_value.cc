@@ -9,9 +9,9 @@ namespace galay::mysql
 MysqlField::MysqlField(std::string name, MysqlFieldType type, uint16_t flags,
                        uint32_t column_length, uint8_t decimals)
     : m_name(std::move(name))
-    , m_type(type)
-    , m_flags(flags)
     , m_column_length(column_length)
+    , m_flags(flags)
+    , m_type(type)
     , m_decimals(decimals)
 {
 }

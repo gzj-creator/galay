@@ -186,10 +186,10 @@ public:
         };
 
         MysqlConnectionPool& m_pool;                                ///< 连接池引用
-        State m_state;                                               ///< 当前状态
         AsyncMysqlClient* m_client = nullptr;                        ///< 客户端指针
         std::shared_ptr<detail::MysqlPoolWaiter> m_waiter;           ///< 等待队列节点
         std::optional<MysqlConnectAwaitable> m_connect_awaitable;    ///< 连接等待体
+        State m_state = State::Invalid;                              ///< 当前状态
     };
 
     /**

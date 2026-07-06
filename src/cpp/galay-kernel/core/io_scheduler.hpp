@@ -570,15 +570,15 @@ struct IOSchedulerWorkerState {
     std::mt19937 random_seed{std::random_device{}()};  ///< 用于 victim 选择的随机器
 
     std::atomic<uint64_t> injected_outstanding{0};  ///< 尚未搬运到本地队列的注入任务数
-    std::atomic<bool> owner_drained_injected_once{false};  ///< owner 线程是否已处理过注入队列
+    uint64_t steal_attempts = 0;  ///< trySteal() 进入真实 sibling 探测的次数
+    uint64_t steal_successes = 0;  ///< trySteal() 成功窃取至少一个任务的次数
     uint32_t consecutive_lifo_polls = 0;  ///< 连续命中 ready_lifo_slot 的次数
     uint32_t lifo_poll_limit = 8;  ///< 允许连续走 LIFO 的最大次数
     uint32_t polls_since_inject = 0;  ///< 距离上次检查 ready_inject_queue 已轮询的任务数
     uint32_t inject_check_interval = 8;  ///< 检查 ready_inject_queue 的轮询间隔
+    std::atomic<bool> owner_drained_injected_once{false};  ///< owner 线程是否已处理过注入队列
     bool lifo_enabled = true;  ///< 是否允许优先从 ready_lifo_slot 取任务
     bool stealing_enabled = true;  ///< 当前后端是否允许在 sibling 线程上恢复 stolen task
-    uint64_t steal_attempts = 0;  ///< trySteal() 进入真实 sibling 探测的次数
-    uint64_t steal_successes = 0;  ///< trySteal() 成功窃取至少一个任务的次数
 
 private:
     void clearPendingReadyEntries() noexcept {

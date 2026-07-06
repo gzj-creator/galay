@@ -352,7 +352,10 @@ Http2ErrorCode Http2SettingsFrame::parsePayload(const uint8_t* data, size_t leng
                          (static_cast<uint32_t>(data[i + 4]) << 8) |
                          static_cast<uint32_t>(data[i + 5]);
 
-        m_settings.push_back({static_cast<Http2SettingsId>(id), value});
+        m_settings.push_back(Http2SettingsFrame::Setting{
+            .value = value,
+            .id = static_cast<Http2SettingsId>(id)
+        });
     }
 
     return Http2ErrorCode::NoError;

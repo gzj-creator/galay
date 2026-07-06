@@ -22,19 +22,19 @@ struct galay_http_headers_t {
 };
 
 struct galay_http_request_t {
-    galay_http_method_t method = GALAY_HTTP_METHOD_GET;
     std::string path = "/";
     galay_http_headers_t headers;
     std::string body;
     std::string serialized;
+    galay_http_method_t method = GALAY_HTTP_METHOD_GET;
     bool complete = false;
 };
 
 struct galay_http_response_t {
-    int status = GALAY_HTTP_STATUS_OK;
     galay_http_headers_t headers;
     std::string body;
     std::string serialized;
+    int status = GALAY_HTTP_STATUS_OK;
     bool complete = false;
 };
 
@@ -48,16 +48,16 @@ struct galay_http_client_t {
 };
 
 struct galay_http_route_entry {
-    galay_http_method_t method;
     std::string path;
     galay_http_route_callback_t callback = nullptr;
     void* user_data = nullptr;
+    galay_http_method_t method;
 };
 
 struct galay_http_server_t {
     galay_kernel_tcp_socket_t listener{nullptr};
-    bool listening = false;
     std::vector<galay_http_route_entry> routes;
+    bool listening = false;
 };
 
 namespace
@@ -70,8 +70,8 @@ enum class ParseState {
 };
 
 struct ParseResult {
-    ParseState state = ParseState::kError;
     size_t consumed = 0;
+    ParseState state = ParseState::kError;
 };
 
 C_IOResult make_io_result(C_IOResultCode code, int sys_errno = 0, size_t bytes = 0, void* ptr = nullptr)
@@ -239,25 +239,25 @@ ParseResult parse_headers_block(std::string_view header_block,
         const size_t line_end = next == std::string_view::npos ? header_block.size() : next;
         const std::string_view line = header_block.substr(pos, line_end - pos);
         if (line.empty()) {
-            return ParseResult{ParseState::kError, 0};
+            return ParseResult{0, ParseState::kError};
         }
         const size_t colon = line.find(':');
         if (colon == std::string_view::npos || colon == 0) {
-            return ParseResult{ParseState::kError, 0};
+            return ParseResult{0, ParseState::kError};
         }
         const std::string_view name = line.substr(0, colon);
         const std::string value = trim_header_value(line.substr(colon + 1));
         const galay_status_t add_status = add_header_value(headers, name, value);
         if (add_status != GALAY_OK) {
-            return ParseResult{ParseState::kError, 0};
+            return ParseResult{0, ParseState::kError};
         }
         pos = next == std::string_view::npos ? header_block.size() : next + 2;
     }
 
     if (!read_content_length(headers, content_length)) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
-    return ParseResult{ParseState::kComplete, 0};
+    return ParseResult{0, ParseState::kComplete};
 }
 
 ParseResult parse_request_internal(galay_http_request_t& request,
@@ -268,16 +268,16 @@ ParseResult parse_request_internal(galay_http_request_t& request,
     const size_t header_end = data.find("\r\n\r\n");
     if (header_end == std::string_view::npos) {
         return data.size() > max_header_len
-            ? ParseResult{ParseState::kError, 0}
-            : ParseResult{ParseState::kNeedMore, 0};
+            ? ParseResult{0, ParseState::kError}
+            : ParseResult{0, ParseState::kNeedMore};
     }
     if (header_end + 4 > max_header_len) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     const size_t line_end = data.find("\r\n");
     if (line_end == std::string_view::npos || line_end == 0 || line_end > header_end) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     const std::string_view request_line = data.substr(0, line_end);
@@ -288,19 +288,19 @@ ParseResult parse_request_internal(galay_http_request_t& request,
     if (first_space == std::string_view::npos ||
         second_space == std::string_view::npos ||
         second_space + 1 >= request_line.size()) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     galay_http_method_t method = GALAY_HTTP_METHOD_GET;
     if (!method_from_text(request_line.substr(0, first_space), method)) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     const std::string_view path = request_line.substr(first_space + 1,
                                                       second_space - first_space - 1);
     const std::string_view version = request_line.substr(second_space + 1);
     if (path.empty() || (version != "HTTP/1.1" && version != "HTTP/1.0")) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     size_t content_length = 0;
@@ -316,18 +316,18 @@ ParseResult parse_request_internal(galay_http_request_t& request,
     }
 
     if (content_length > max_body_len) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
     const size_t body_begin = header_end + 4;
     if (data.size() < body_begin + content_length) {
-        return ParseResult{ParseState::kNeedMore, 0};
+        return ParseResult{0, ParseState::kNeedMore};
     }
 
     request.method = method;
     request.path.assign(path);
     request.body.assign(data.substr(body_begin, content_length));
     request.complete = true;
-    return ParseResult{ParseState::kComplete, body_begin + content_length};
+    return ParseResult{body_begin + content_length, ParseState::kComplete};
 }
 
 ParseResult parse_response_internal(galay_http_response_t& response,
@@ -338,26 +338,26 @@ ParseResult parse_response_internal(galay_http_response_t& response,
     const size_t header_end = data.find("\r\n\r\n");
     if (header_end == std::string_view::npos) {
         return data.size() > max_header_len
-            ? ParseResult{ParseState::kError, 0}
-            : ParseResult{ParseState::kNeedMore, 0};
+            ? ParseResult{0, ParseState::kError}
+            : ParseResult{0, ParseState::kNeedMore};
     }
     if (header_end + 4 > max_header_len) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     const size_t line_end = data.find("\r\n");
     if (line_end == std::string_view::npos || line_end == 0 || line_end > header_end) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     const std::string_view status_line = data.substr(0, line_end);
     if (status_line.size() < 12 || status_line.substr(0, 9) != "HTTP/1.1 ") {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     int status = 0;
     if (!parse_status_decimal(status_line.substr(9, 3), status)) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
 
     size_t content_length = 0;
@@ -373,17 +373,17 @@ ParseResult parse_response_internal(galay_http_response_t& response,
     }
 
     if (content_length > max_body_len) {
-        return ParseResult{ParseState::kError, 0};
+        return ParseResult{0, ParseState::kError};
     }
     const size_t body_begin = header_end + 4;
     if (data.size() < body_begin + content_length) {
-        return ParseResult{ParseState::kNeedMore, 0};
+        return ParseResult{0, ParseState::kNeedMore};
     }
 
     response.status = status;
     response.body.assign(data.substr(body_begin, content_length));
     response.complete = true;
-    return ParseResult{ParseState::kComplete, body_begin + content_length};
+    return ParseResult{body_begin + content_length, ParseState::kComplete};
 }
 
 galay_status_t serialize_headers(const galay_http_headers_t& headers,
@@ -1022,7 +1022,7 @@ galay_status_t galay_http_server_add_route(galay_http_server_t* server,
             return GALAY_OK;
         }
     }
-    server->routes.push_back(galay_http_route_entry{method, path, callback, user_data});
+    server->routes.push_back(galay_http_route_entry{path, callback, user_data, method});
     return GALAY_OK;
 }
 

@@ -42,10 +42,10 @@ namespace galay::utils
     private:
         struct Context
         {
-            uint32_t state[5];
             uint64_t bit_count;
-            uint8_t buffer[64];
             size_t buffer_size;
+            uint32_t state[5];
+            uint8_t buffer[64];
         };
 
         static constexpr std::array<uint32_t, 4> kRoundConstants{

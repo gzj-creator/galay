@@ -175,8 +175,8 @@ namespace galay::redis
                                                                std::string encoded_command_in,
                                                                size_t expected_replies_in,
                                                                bool recv_only_in)
-        : client(&client)
-        , encoded_cmd(std::move(encoded_command_in))
+        : encoded_cmd(std::move(encoded_command_in))
+        , client(&client)
         , expected_replies(expected_replies_in)
         , recv_only(recv_only_in)
     {
@@ -196,8 +196,8 @@ namespace galay::redis
                                                                std::string_view encoded_command_in,
                                                                size_t expected_replies_in,
                                                                bool recv_only_in)
-        : client(&client)
-        , encoded_view(recv_only_in ? std::string_view{} : encoded_command_in)
+        : encoded_view(recv_only_in ? std::string_view{} : encoded_command_in)
+        , client(&client)
         , expected_replies(expected_replies_in)
         , recv_only(recv_only_in)
     {
@@ -406,14 +406,14 @@ namespace galay::redis
                                                              std::string password_in,
                                                              int32_t db_index_in,
                                                              int version_in)
-        : client(&client)
+        : host(version_in == 6 ? IPType::IPV6 : IPType::IPV4, ip_in, port_in)
         , ip(std::move(ip_in))
-        , port(port_in)
         , username(std::move(username_in))
         , password(std::move(password_in))
+        , client(&client)
+        , port(port_in)
         , db_index(db_index_in)
         , version(version_in)
-        , host(version == 6 ? IPType::IPV6 : IPType::IPV4, ip, port)
     {
         client.ringBuffer().clear();
         client.parser() = protocol::RespParser();
@@ -649,19 +649,19 @@ namespace galay::redis
 
     RedisClient::RedisClient(IOScheduler* scheduler,
                              AsyncRedisConfig config)
-        : m_scheduler(scheduler)
-        , m_config(config)
+        : m_config(config)
         , m_ring_buffer(std::make_shared<galay::utils::RingBuffer>(config.buffer_size))
+        , m_scheduler(scheduler)
     {
     }
 
     RedisClient::RedisClient(RedisClient&& other) noexcept
-        : m_is_closed(other.m_is_closed)
-        , m_socket(std::move(other.m_socket))
-        , m_scheduler(other.m_scheduler)
-        , m_parser(std::move(other.m_parser))
+        : m_socket(std::move(other.m_socket))
         , m_config(other.m_config)
         , m_ring_buffer(std::move(other.m_ring_buffer))
+        , m_scheduler(other.m_scheduler)
+        , m_is_closed(other.m_is_closed)
+        , m_parser(std::move(other.m_parser))
     {
         other.m_is_closed = true;
     }

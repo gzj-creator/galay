@@ -48,10 +48,10 @@ public:
         ConnectOptions();
 
         std::string host;               ///< 服务器地址
-        uint16_t port;                  ///< 服务器端口
-        uint32_t timeout_ms;            ///< 连接超时（毫秒）
-        bool tcp_nodelay;               ///< 是否启用 TCP_NODELAY
         size_t recv_buffer_size;        ///< 接收缓冲区大小（字节）
+        uint32_t timeout_ms;            ///< 连接超时（毫秒）
+        uint16_t port;                  ///< 服务器端口
+        bool tcp_nodelay;               ///< 是否启用 TCP_NODELAY
 
         /**
          * @brief 从 MongoConfig 创建连接选项
@@ -126,10 +126,10 @@ private:
     void copyReadable(size_t offset, char* dst, size_t len) const;     ///< 从环形缓冲区拷贝可读数据
     std::string consumeToString(size_t len);                           ///< 消费并转换为字符串
 
-    int m_socket_fd;                                ///< 底层 socket 文件描述符
-    bool m_connected;                               ///< 连接状态标志
     galay::utils::RingBuffer m_recv_ring;           ///< 接收环形缓冲区
     std::string m_decode_buffer;                    ///< 解码用的临时缓冲区
+    int m_socket_fd;                                ///< 底层 socket 文件描述符
+    bool m_connected;                               ///< 连接状态标志
 
     static constexpr size_t kDefaultBufferSize = 16384;           ///< 默认接收缓冲区大小
     static constexpr size_t kMaxMessageSize = 128 * 1024 * 1024;  ///< 最大消息长度（128 MB）

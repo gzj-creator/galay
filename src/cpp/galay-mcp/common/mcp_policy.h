@@ -52,9 +52,9 @@ struct McpTimeoutPolicy {
  * @details 默认关闭严格会话隔离，以保留现有HTTP示例的无会话行为。
  */
 struct McpSessionPolicy {
-    bool strict_http_sessions = false; ///< true时要求initialize后使用显式session id
     std::chrono::milliseconds idle_timeout{0}; ///< 会话空闲超时，0表示禁用
     std::chrono::milliseconds max_age{0}; ///< 会话最大生命周期，0表示禁用
+    bool strict_http_sessions = false; ///< true时要求initialize后使用显式session id
 };
 
 /**
@@ -70,9 +70,9 @@ struct McpHttpAuthPolicy {
 
     using Validator = std::function<std::expected<void, McpError>(std::string_view authorization_header)>;
 
-    Mode mode = Mode::Disabled; ///< 默认关闭认证，保持向后兼容
     std::string bearer_token; ///< BearerToken模式下期望的token值
     Validator validator; ///< Callback模式下的认证回调
+    Mode mode = Mode::Disabled; ///< 默认关闭认证，保持向后兼容
 
     bool enabled() const noexcept { return mode != Mode::Disabled; }
 };

@@ -289,8 +289,8 @@ EtcdVoidResult setSocketTimeouts(int fd, std::chrono::milliseconds timeout)
 
 struct ParsedHttpHeaders
 {
-    int status_code = 0;
     std::optional<size_t> content_length = std::nullopt;
+    int status_code = 0;
     bool chunked = false;
     bool connection_close = false;
 };
@@ -458,9 +458,9 @@ private:
         ReadTrailer,
     };
 
-    State m_state = State::ReadSize;
-    size_t m_expected_size = 0;
     std::string m_buffer;
+    size_t m_expected_size = 0;
+    State m_state = State::ReadSize;
     bool m_complete = false;
 };
 
@@ -591,8 +591,8 @@ AsyncEtcdClusterClient::AttemptResult AsyncEtcdClusterClient::makeAttempt(
 
 struct AsyncEtcdClient::WatchWorkerState
 {
-    std::atomic<bool> stop{false};
     std::thread thread;
+    std::atomic<bool> stop{false};
 };
 
 AsyncEtcdClient::AsyncEtcdClient(galay::kernel::IOScheduler* scheduler,
@@ -1354,7 +1354,7 @@ EtcdBoolResult AsyncEtcdClient::startWatchWorker(
     const std::string watch_key = key;
 
     worker->thread = std::thread(
-        [worker, host, port, request, network_config, watch_key, dispatch = std::move(dispatch)]() mutable {
+        [worker, host, request, network_config, watch_key, dispatch = std::move(dispatch), port]() mutable {
             ETCD_LOG_INFO("[async] [watch]", "worker started key={} host={} port={}",
                           watch_key,
                           host,

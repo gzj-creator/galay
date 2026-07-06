@@ -163,10 +163,10 @@ public:
         struct SharedState {
             explicit SharedState(AsyncEtcdClient& client);
 
-            AsyncEtcdClient* client = nullptr;       ///< 客户端指针
-            Phase phase = Phase::Done;                ///< 当前阶段
             galay::kernel::Host host;                 ///< 目标主机
             std::optional<Result> result;             ///< 连接结果
+            AsyncEtcdClient* client = nullptr;       ///< 客户端指针
+            Phase phase = Phase::Done;                ///< 当前阶段
         };
 
         /**
@@ -633,19 +633,19 @@ private:
     std::string m_host_header;                                             ///< HTTP Host 头
     std::string m_serialized_request_prefix;                               ///< 序列化请求前缀缓存
     std::string m_serialized_request_headers;                              ///< 序列化请求头缓存
-    galay::kernel::IPType m_ip_type = galay::kernel::IPType::IPV4;        ///< IP 协议类型
     std::optional<galay::kernel::Host> m_server_host;                      ///< 解析后的服务端主机地址
     std::string m_endpoint_error;                                          ///< 端点解析错误信息
-    bool m_endpoint_valid = false;                                         ///< 端点地址是否有效
 
     std::unique_ptr<galay::async::TcpSocket> m_socket;                     ///< TCP 套接字
     std::unique_ptr<galay::http::HttpSession> m_http_session;              ///< HTTP 会话
-    bool m_connected = false;                                              ///< 是否已连接
 
     EtcdError m_last_error;                                                ///< 最后一次错误
     EtcdClientStats m_stats{};                                             ///< 统计快照占位
     std::mutex m_watch_mutex;                                              ///< Watch 工作列表互斥锁
     std::vector<std::shared_ptr<WatchWorkerState>> m_watch_workers;        ///< Watch 工作线程状态列表
+    galay::kernel::IPType m_ip_type = galay::kernel::IPType::IPV4;        ///< IP 协议类型
+    bool m_endpoint_valid = false;                                         ///< 端点地址是否有效
+    bool m_connected = false;                                              ///< 是否已连接
 };
 
 /**

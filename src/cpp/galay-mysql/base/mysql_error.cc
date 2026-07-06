@@ -9,12 +9,12 @@ MysqlError::MysqlError(MysqlErrorType type)
 }
 
 MysqlError::MysqlError(MysqlErrorType type, std::string extra_msg)
-    : m_type(type), m_extra_msg(std::move(extra_msg))
+    : m_extra_msg(std::move(extra_msg)), m_type(type)
 {
 }
 
 MysqlError::MysqlError(MysqlErrorType type, uint16_t server_errno, std::string server_msg)
-    : m_type(type), m_server_errno(server_errno), m_extra_msg(std::move(server_msg))
+    : m_extra_msg(std::move(server_msg)), m_type(type), m_server_errno(server_errno)
 {
 }
 

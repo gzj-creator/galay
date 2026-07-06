@@ -237,18 +237,18 @@ private:
         AsyncMysqlClient* client = nullptr;                     ///< 客户端指针
         MysqlConfig config;                                     ///< 连接配置
         galay::kernel::Host host;                               ///< 主机地址
-        Phase phase = Phase::Connect;                           ///< 当前阶段
         protocol::HandshakeV10 handshake;                       ///< 握手包数据
         std::string auth_plugin_name;                           ///< 当前认证插件名
         std::string auth_plugin_data;                           ///< 当前认证插件salt
-        AuthStage auth_stage = AuthStage::InitialResponse;      ///< 认证阶段
         std::string auth_packet;                                ///< 认证数据包
-        size_t sent = 0;                                        ///< 已发送字节数
-        bool connected = false;                                 ///< 是否已连接
         std::string parse_scratch;                              ///< 解析临时缓冲区
         std::array<struct iovec, 2> read_iovecs{};              ///< 读取iovec数组
-        size_t read_iov_count = 0;                              ///< 读取iovec数量
         std::optional<Result> result;                           ///< 最终结果
+        size_t sent = 0;                                        ///< 已发送字节数
+        size_t read_iov_count = 0;                              ///< 读取iovec数量
+        Phase phase = Phase::Connect;                           ///< 当前阶段
+        AuthStage auth_stage = AuthStage::InitialResponse;      ///< 认证阶段
+        bool connected = false;                                 ///< 是否已连接
     };
 
     /**
@@ -346,15 +346,15 @@ private:
 
         AsyncMysqlClient* client = nullptr;             ///< 客户端指针
         std::string encoded_cmd;                         ///< 编码后的命令
-        Phase phase = Phase::SendCommand;                ///< 当前阶段
-        size_t sent = 0;                                 ///< 已发送字节数
         MysqlResultSet result_set;                       ///< 结果集
-        uint64_t column_count = 0;                       ///< 列数
-        size_t columns_received = 0;                     ///< 已接收列数
         std::string parse_scratch;                       ///< 解析临时缓冲区
         std::array<struct iovec, 2> read_iovecs{};       ///< 读取iovec数组
-        size_t read_iov_count = 0;                       ///< 读取iovec数量
         std::optional<Result> result;                    ///< 最终结果
+        uint64_t column_count = 0;                       ///< 列数
+        size_t sent = 0;                                 ///< 已发送字节数
+        size_t columns_received = 0;                     ///< 已接收列数
+        size_t read_iov_count = 0;                       ///< 读取iovec数量
+        Phase phase = Phase::SendCommand;                ///< 当前阶段
     };
 
     /**
@@ -454,15 +454,15 @@ private:
 
         AsyncMysqlClient* client = nullptr;             ///< 客户端指针
         std::string encoded_cmd;                         ///< 编码后的命令
-        Phase phase = Phase::SendCommand;                ///< 当前阶段
-        size_t sent = 0;                                 ///< 已发送字节数
         PrepareResult prepare_result;                    ///< 准备结果
-        size_t params_received = 0;                      ///< 已接收参数数
-        size_t columns_received = 0;                     ///< 已接收列数
         std::string parse_scratch;                       ///< 解析临时缓冲区
         std::array<struct iovec, 2> read_iovecs{};       ///< 读取iovec数组
-        size_t read_iov_count = 0;                       ///< 读取iovec数量
         std::optional<Result> result;                    ///< 最终结果
+        size_t sent = 0;                                 ///< 已发送字节数
+        size_t params_received = 0;                      ///< 已接收参数数
+        size_t columns_received = 0;                     ///< 已接收列数
+        size_t read_iov_count = 0;                       ///< 读取iovec数量
+        Phase phase = Phase::SendCommand;                ///< 当前阶段
     };
 
     /**
@@ -551,15 +551,15 @@ private:
 
         AsyncMysqlClient* client = nullptr;             ///< 客户端指针
         std::string encoded_cmd;                         ///< 已编码的命令
-        Phase phase = Phase::SendCommand;                ///< 当前阶段
-        size_t sent = 0;                                 ///< 已发送字节数
         MysqlResultSet result_set;                       ///< 结果集
-        uint64_t column_count = 0;                       ///< 列数
-        size_t columns_received = 0;                     ///< 已接收列数
         std::string parse_scratch;                       ///< 解析临时缓冲区
         std::array<struct iovec, 2> read_iovecs{};       ///< 读取iovec数组
-        size_t read_iov_count = 0;                       ///< 读取iovec数量
         std::optional<Result> result;                    ///< 最终结果
+        uint64_t column_count = 0;                       ///< 列数
+        size_t sent = 0;                                 ///< 已发送字节数
+        size_t columns_received = 0;                     ///< 已接收列数
+        size_t read_iov_count = 0;                       ///< 读取iovec数量
+        Phase phase = Phase::SendCommand;                ///< 当前阶段
     };
 
     /**
@@ -663,15 +663,15 @@ private:
         std::vector<struct iovec> write_iovecs;                 ///< 写入iovec数组
         size_t write_iov_cursor = 0;                            ///< 写入iovec游标
         size_t next_command_index = 0;                          ///< 下一个待处理命令索引
-        Phase phase = Phase::SendCommands;                      ///< 当前阶段
         std::vector<MysqlResultSet> results;                    ///< 结果集合
         MysqlResultSet current_result;                          ///< 当前正在构建的结果集
-        uint64_t column_count = 0;                              ///< 当前列数
-        size_t columns_received = 0;                            ///< 已接收列数
         std::string parse_scratch;                              ///< 解析临时缓冲区
         std::array<struct iovec, 2> read_iovecs{};              ///< 读取iovec数组
-        size_t read_iov_count = 0;                              ///< 读取iovec数量
         std::optional<Result> result;                           ///< 最终结果
+        uint64_t column_count = 0;                              ///< 当前列数
+        size_t columns_received = 0;                            ///< 已接收列数
+        size_t read_iov_count = 0;                              ///< 读取iovec数量
+        Phase phase = Phase::SendCommands;                      ///< 当前阶段
     };
 
     /**
@@ -857,14 +857,14 @@ private:
     friend class MysqlStmtExecuteAwaitable;
     friend class MysqlPipelineAwaitable;
 
-    bool m_is_closed = false;                       ///< 是否已关闭
     TcpSocket m_socket;                             ///< TCP套接字
     IOScheduler* m_scheduler;                       ///< IO调度器指针
-    protocol::MysqlParser m_parser;                 ///< 协议解析器
-    protocol::MysqlEncoder m_encoder;               ///< 协议编码器
     AsyncMysqlConfig m_config;                      ///< 异步配置
     galay::utils::RingBuffer m_ring_buffer;         ///< 接收环形缓冲区
     uint32_t m_server_capabilities = 0;             ///< 服务器能力标志
+    protocol::MysqlParser m_parser;                 ///< 协议解析器
+    protocol::MysqlEncoder m_encoder;               ///< 协议编码器
+    bool m_is_closed = false;                       ///< 是否已关闭
 
 };
 

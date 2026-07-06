@@ -61,8 +61,8 @@ void applySampling(SpanContext& context, const SpanContext* parent) noexcept {
 
 SpanGuard::SpanGuard(Span span, std::optional<SpanContext> previousContext, std::string previousTracestate)
     : m_span(std::move(span)),
-      m_previousContext(std::move(previousContext)),
       m_previousTracestate(std::move(previousTracestate)),
+      m_previousContext(std::move(previousContext)),
       m_active(true) {
 }
 
@@ -72,8 +72,8 @@ SpanGuard::~SpanGuard() noexcept {
 
 SpanGuard::SpanGuard(SpanGuard&& other) noexcept
     : m_span(std::move(other.m_span)),
-      m_previousContext(std::move(other.m_previousContext)),
       m_previousTracestate(std::move(other.m_previousTracestate)),
+      m_previousContext(std::move(other.m_previousContext)),
       m_active(other.m_active) {
     other.m_active = false;
 }
@@ -112,8 +112,8 @@ void SpanGuard::restore() noexcept {
     }
     try {
         detail::setCurrentContextState(detail::CurrentContextState{
-            .spanContext = std::move(m_previousContext),
             .tracestate = std::move(m_previousTracestate),
+            .spanContext = std::move(m_previousContext),
         });
     } catch (...) {
         clearCurrentContext();
@@ -131,8 +131,8 @@ SpanGuard startSpan(std::string_view name) {
     auto tracestate = previous.spanContext.has_value() ? previous.tracestate : std::string();
     Span span(std::string(name), context, tracestate);
     detail::setCurrentContextState(detail::CurrentContextState{
-        .spanContext = context,
         .tracestate = tracestate,
+        .spanContext = context,
     });
     return SpanGuard(std::move(span), std::move(previous.spanContext), std::move(previous.tracestate));
 }
@@ -146,8 +146,8 @@ SpanGuard startServerSpan(std::string_view name, const TraceContext& parent) {
     Span span(std::string(name), context, tracestate);
     span.setKind(SpanKind::kServer);
     detail::setCurrentContextState(detail::CurrentContextState{
-        .spanContext = context,
         .tracestate = tracestate,
+        .spanContext = context,
     });
     return SpanGuard(std::move(span), std::move(previous.spanContext), std::move(previous.tracestate));
 }

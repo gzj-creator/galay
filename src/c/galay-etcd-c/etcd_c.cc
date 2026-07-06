@@ -25,13 +25,13 @@ struct EtcdKv {
 
 struct ParsedEndpoint {
     std::string host;
-    uint16_t port = 0;
     std::string host_header;
+    uint16_t port = 0;
 };
 
 struct HttpResponse {
-    int status = 0;
     std::string body;
+    int status = 0;
 };
 
 bool is_http_endpoint(std::string_view endpoint)
@@ -416,12 +416,12 @@ struct galay_etcd_config_builder_t {
 struct galay_etcd_client_t {
     std::string endpoint;
     std::string api_prefix;
-    galay_etcd_endpoint_policy_t endpoint_policy = GALAY_ETCD_ENDPOINT_POLICY_FIRST_HEALTHY;
     ParsedEndpoint parsed;
     galay_kernel_tcp_socket_t socket{};
-    bool connected = false;
     std::string recv_buffer;
     galay_etcd_client_stats_t stats{};
+    galay_etcd_endpoint_policy_t endpoint_policy = GALAY_ETCD_ENDPOINT_POLICY_FIRST_HEALTHY;
+    bool connected = false;
 };
 
 struct galay_etcd_get_result_t {
@@ -429,18 +429,18 @@ struct galay_etcd_get_result_t {
 };
 
 struct PipelineOp {
-    galay_etcd_pipeline_op_type_t type = GALAY_ETCD_PIPELINE_PUT;
     std::string key;
     std::string value;
-    bool prefix = false;
     int64_t limit = 0;
     int64_t lease_id = 0;
+    galay_etcd_pipeline_op_type_t type = GALAY_ETCD_PIPELINE_PUT;
+    bool prefix = false;
 };
 
 struct PipelineItem {
-    galay_etcd_pipeline_op_type_t type = GALAY_ETCD_PIPELINE_PUT;
     galay_etcd_get_result_t get_result;
     int64_t deleted_count = 0;
+    galay_etcd_pipeline_op_type_t type = GALAY_ETCD_PIPELINE_PUT;
 };
 
 struct galay_etcd_pipeline_t {
@@ -459,10 +459,10 @@ struct galay_etcd_watch_t {
 };
 
 struct galay_etcd_watch_event_t {
-    int64_t watch_id = 0;
-    galay_etcd_watch_event_type_t type = GALAY_ETCD_WATCH_EVENT_UNKNOWN;
     std::string key;
     std::string value;
+    int64_t watch_id = 0;
+    galay_etcd_watch_event_type_t type = GALAY_ETCD_WATCH_EVENT_UNKNOWN;
 };
 
 namespace

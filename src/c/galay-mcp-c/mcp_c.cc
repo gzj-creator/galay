@@ -439,10 +439,10 @@ struct galay_mcp_message_t {
 };
 
 struct galay_mcp_parsed_request_t {
-    bool notification = false;
-    int64_t id = 0;
     std::string method;
     std::string params;
+    int64_t id = 0;
+    bool notification = false;
 };
 
 struct galay_mcp_parsed_response_t {
@@ -451,36 +451,36 @@ struct galay_mcp_parsed_response_t {
 };
 
 struct galay_mcp_client_config_t {
-    galay_mcp_mode_t mode = GALAY_MCP_MODE_STDIO;
     std::string url;
     std::string bearer_token;
+    galay_mcp_mode_t mode = GALAY_MCP_MODE_STDIO;
 };
 
 struct galay_mcp_server_t {
-    galay_mcp_mode_t mode = GALAY_MCP_MODE_STDIO;
     std::string name = "galay-c-mcp-server";
     std::string version = "1.0.0";
     std::vector<ToolRegistration> tools;
     std::vector<ResourceRegistration> resources;
     std::vector<PromptRegistration> prompts;
     std::string http_host = "127.0.0.1";
-    uint16_t http_port = 0;
     std::string bearer_token;
     galay_kernel_tcp_socket_t listener{};
+    galay_mcp_mode_t mode = GALAY_MCP_MODE_STDIO;
+    uint16_t http_port = 0;
     bool listening = false;
 };
 
 struct galay_mcp_client_t {
-    galay_mcp_mode_t mode = GALAY_MCP_MODE_STDIO;
     std::string url;
     std::string http_host;
-    uint16_t http_port = 0;
     std::string http_path = "/mcp";
     std::string bearer_token;
     galay_mcp_server_t* loopback_server = nullptr;
+    int64_t next_id = 1;
+    galay_mcp_mode_t mode = GALAY_MCP_MODE_STDIO;
+    uint16_t http_port = 0;
     bool connected = false;
     bool initialized = false;
-    int64_t next_id = 1;
 };
 
 namespace

@@ -103,8 +103,8 @@ struct CoroAsyncMutexWakeState {
                             void* user_data,
                             GalayCoreCoroWaitOps wait_ops)
         : awaitable(mutex->lock())
-        , m_scheduler(scheduler)
         , m_wait_ops(wait_ops)
+        , m_scheduler(scheduler)
         , m_user_data(user_data)
     {
         header.hooks = &kWakeHooks;
@@ -264,12 +264,12 @@ private:
         .release = wake_release,
     };
 
-    std::atomic<uint32_t> m_ref_count{1};
-    Scheduler* m_scheduler = nullptr;
-    GalayCoreCoroWaitOps m_wait_ops{};
-    std::atomic<CompletionPhase> m_phase{CompletionPhase::Pending};
     std::mutex m_user_data_mutex;
+    GalayCoreCoroWaitOps m_wait_ops{};
+    Scheduler* m_scheduler = nullptr;
     void* m_user_data = nullptr;
+    std::atomic<uint32_t> m_ref_count{1};
+    std::atomic<CompletionPhase> m_phase{CompletionPhase::Pending};
 };
 
 struct CoroAsyncMutexStateOwner {

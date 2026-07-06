@@ -76,8 +76,8 @@ public:
     [[nodiscard]] bool isOk() const;
 
 private:
-    EtcdErrorType m_type;    ///< 错误类型
     std::string m_extra_msg; ///< 附加错误消息
+    EtcdErrorType m_type;    ///< 错误类型
 };
 
 } // namespace galay::etcd

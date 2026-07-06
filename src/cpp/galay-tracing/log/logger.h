@@ -435,10 +435,10 @@ private:
      */
     void publish(LogRecord record);
 
-    std::atomic<LogLevel> m_level;                              ///< 原子日志级别
     std::mutex m_mutex;                                         ///< Sink 管理互斥锁
     std::vector<std::unique_ptr<SinkSnapshot>> m_sinkSnapshots; ///< Sink 快照历史
     std::atomic<const SinkSnapshot*> m_sinkSnapshot{nullptr};   ///< 当前活跃的 Sink 快照
+    std::atomic<LogLevel> m_level;                              ///< 原子日志级别
 };
 
 /**
@@ -498,9 +498,9 @@ public:
      * @param source 源码位置
      */
     ContextLogger(std::optional<TraceContext> context, Writer writer, SourceLocation source)
-        : m_context(makeLogContext(std::move(context))),
-          m_writer(std::move(writer)),
-          m_source(source) {
+        : m_writer(std::move(writer)),
+          m_source(source),
+          m_context(makeLogContext(std::move(context))) {
     }
 
     /**
@@ -563,9 +563,9 @@ private:
         });
     }
 
-    std::optional<LogContext> m_context; ///< 绑定的日志上下文
     Writer m_writer;                     ///< 日志写入器
     SourceLocation m_source;             ///< 源码位置
+    std::optional<LogContext> m_context; ///< 绑定的日志上下文
 };
 
 /**
@@ -583,9 +583,9 @@ public:
      * @param source 源码位置
      */
     ContextEventLogger(std::optional<TraceContext> context, Writer writer, SourceLocation source)
-        : m_context(makeLogContext(std::move(context))),
-          m_writer(std::move(writer)),
-          m_source(source) {
+        : m_writer(std::move(writer)),
+          m_source(source),
+          m_context(makeLogContext(std::move(context))) {
     }
 
     /**
@@ -650,9 +650,9 @@ private:
         });
     }
 
-    std::optional<LogContext> m_context; ///< 绑定的日志上下文
     Writer m_writer;                     ///< 结构化日志写入器
     SourceLocation m_source;             ///< 源码位置
+    std::optional<LogContext> m_context; ///< 绑定的日志上下文
 };
 
 /**

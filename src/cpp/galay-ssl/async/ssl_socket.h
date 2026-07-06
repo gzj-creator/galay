@@ -301,14 +301,14 @@ private:
     friend class SslOperationDriver;
 
     IOController m_controller;  ///< IO 事件控制器
-    SslContext* m_ctx;          ///< SSL 上下文（不拥有）
     SslEngine m_engine;         ///< SSL 引擎
-    bool m_isServer;            ///< 是否为服务端模式
-    bool m_engineInitialized;   ///< SSL 引擎是否已初始化
     std::vector<char> m_handshakeBuffer;   ///< 握手阶段的密文缓冲区
     std::vector<char> m_shutdownBuffer;    ///< 关闭阶段的密文缓冲区
     std::vector<char> m_recvCipherBuffer;  ///< 接收密文缓冲区
     std::vector<char> m_sendCipherBuffer;  ///< 发送密文缓冲区
+    SslContext* m_ctx;          ///< SSL 上下文（不拥有）
+    bool m_isServer;            ///< 是否为服务端模式
+    bool m_engineInitialized;   ///< SSL 引擎是否已初始化
 };
 
 } // namespace galay::ssl

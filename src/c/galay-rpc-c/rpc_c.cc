@@ -20,9 +20,9 @@ constexpr uint8_t kMessageHeartbeat = 3;
 
 struct RpcRouteSlot {
     std::string method;
-    galay_rpc_call_mode_t mode = GALAY_RPC_CALL_UNARY;
     galay_rpc_method_handler_fn handler = nullptr;
     void* user_data = nullptr;
+    galay_rpc_call_mode_t mode = GALAY_RPC_CALL_UNARY;
 };
 
 struct galay_rpc_service_t {
@@ -32,28 +32,28 @@ struct galay_rpc_service_t {
 
 struct galay_rpc_server_t {
     std::string host = "127.0.0.1";
-    uint16_t port = 0;
-    int backlog = static_cast<int>(kDefaultBacklog);
     galay_kernel_tcp_socket_t listener{};
-    bool listening = false;
     std::vector<galay_rpc_service_t*> services;
+    int backlog = static_cast<int>(kDefaultBacklog);
+    uint16_t port = 0;
+    bool listening = false;
 };
 
 struct galay_rpc_client_t {
     std::string host = "127.0.0.1";
-    uint16_t port = 0;
-    int64_t connect_timeout_ms = -1;
     galay_kernel_tcp_socket_t socket{};
-    bool connected = false;
+    int64_t connect_timeout_ms = -1;
     uint32_t next_request_id = 1;
+    uint16_t port = 0;
+    bool connected = false;
 };
 
 struct galay_rpc_stream_t {
     galay_rpc_client_t* client = nullptr;
     std::string service;
     std::string method;
-    galay_rpc_call_mode_t mode = GALAY_RPC_CALL_BIDI_STREAMING;
     uint32_t request_id = 0;
+    galay_rpc_call_mode_t mode = GALAY_RPC_CALL_BIDI_STREAMING;
     bool closed = false;
 };
 
@@ -63,17 +63,17 @@ struct galay_rpc_cancellation_source_t {
 
 struct galay_rpc_pool_lease_t {
     std::string host;
-    uint16_t port = 0;
     uint64_t id = 0;
+    uint16_t port = 0;
     bool valid = false;
 };
 
 struct PoolBucket {
     std::string host;
-    uint16_t port = 0;
     std::vector<uint64_t> available;
     size_t in_use = 0;
     size_t total = 0;
+    uint16_t port = 0;
 };
 
 struct galay_rpc_pool_t {
@@ -84,11 +84,11 @@ struct galay_rpc_pool_t {
 };
 
 struct IncomingFrame {
-    uint8_t type = 0;
-    uint32_t request_id = 0;
-    uint32_t body_len = 0;
     std::vector<uint8_t> bytes;
     galay_rpc_request_t request{};
+    uint32_t request_id = 0;
+    uint32_t body_len = 0;
+    uint8_t type = 0;
 };
 
 namespace {

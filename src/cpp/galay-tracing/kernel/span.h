@@ -174,9 +174,9 @@ struct SpanEvent {
  * @details 表示当前 Span 与另一条追踪上下文的关系，属性拥有其字符串存储。
  */
 struct SpanLink {
-    SpanContext context;                   ///< 被链接的 Span 上下文
     std::string tracestate;                ///< 被链接上下文的 tracestate
     std::vector<SpanAttribute> attributes; ///< 链接属性
+    SpanContext context;                   ///< 被链接的 Span 上下文
 };
 
 /**
@@ -239,8 +239,8 @@ struct SpanLink {
  * @brief Span 状态
  */
 struct SpanStatus {
-    SpanStatusCode code{SpanStatusCode::kUnset}; ///< 状态码
     std::string message;                         ///< 状态描述消息
+    SpanStatusCode code{SpanStatusCode::kUnset}; ///< 状态码
 };
 
 /**
@@ -506,15 +506,15 @@ public:
 
 private:
     std::string m_name;                        ///< 操作名称
-    SpanContext m_context;                      ///< Span 上下文
     std::string m_tracestate;                   ///< W3C tracestate
-    SpanKind m_kind{SpanKind::kInternal};       ///< Span 类型
     SpanStatus m_status;                        ///< Span 状态
     std::vector<SpanAttribute> m_attributes;    ///< 属性列表
     std::vector<SpanEvent> m_events;            ///< 事件列表
     std::vector<SpanLink> m_links;              ///< 链接列表
     Clock::time_point m_startedAt{};            ///< 开始时间戳
     Clock::time_point m_endedAt{};              ///< 结束时间戳
+    SpanKind m_kind{SpanKind::kInternal};       ///< Span 类型
+    SpanContext m_context;                      ///< Span 上下文
     bool m_ended{false};                        ///< 是否已结束
 };
 

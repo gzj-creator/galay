@@ -95,9 +95,9 @@ struct EtcdCredentialConfig
 struct EtcdProductionConfig
 {
     std::vector<std::string> endpoints;                         ///< etcd 集群端点列表
-    EtcdEndpointPolicy endpoint_policy = EtcdEndpointPolicy::FirstHealthy; ///< 端点选择策略
     EtcdRetryConfig retry;                                      ///< 重试配置
     std::chrono::milliseconds health_interval{5000};           ///< 健康检查间隔
+    EtcdEndpointPolicy endpoint_policy = EtcdEndpointPolicy::FirstHealthy; ///< 端点选择策略
     bool prefer_leader = false;                                 ///< 是否优先 leader
 };
 

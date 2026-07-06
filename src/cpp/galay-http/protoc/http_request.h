@@ -152,9 +152,9 @@ private:
     size_t m_contentLength = 0;            ///< Content-Length 值
     size_t m_bodyParsed = 0;               ///< 已解析的 body 字节数
     size_t m_headerLength = 0;             ///< header 的字节长度
-    bool m_headerParsed = false;           ///< header 是否已解析完成
     ChunkParser m_chunkParser;             ///< chunked body 增量解析状态
     std::map<std::string, std::string> m_routeParams; ///< 路由参数（由 HttpRouter 设置）
+    bool m_headerParsed = false;           ///< header 是否已解析完成
 };
 
 }

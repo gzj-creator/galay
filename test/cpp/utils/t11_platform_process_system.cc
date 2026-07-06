@@ -120,6 +120,20 @@ void test_process() {
     // Check if process is running
     assert(Process::isRunning(pid));
 
+    auto priority = Process::priority(pid);
+    assert(priority.has_value());
+
+    auto samePriority = Process::setPriority(pid, *priority);
+    assert(samePriority.has_value());
+
+    auto updatedPriority = Process::priority(pid);
+    assert(updatedPriority.has_value());
+    assert(*updatedPriority == *priority);
+
+    auto invalidPriority = Process::setPriority(pid, 20);
+    assert(!invalidPriority.has_value());
+    assert(invalidPriority.error() == ProcessPriorityError::InvalidPriority);
+
     std::cout << "Process tests passed!" << std::endl;
 }
 

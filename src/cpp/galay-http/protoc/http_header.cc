@@ -350,24 +350,24 @@ namespace galay::http
     } // namespace
 
     HeaderPair::HeaderPair(Mode mode)
-        : m_mode(mode)
-        , m_commonHeaderPresent(0)  // 初始化为全 0
+        : m_commonHeaderPresent(0)  // 初始化为全 0
+        , m_mode(mode)
     {
     }
 
     HeaderPair::HeaderPair(const HeaderPair &other)
-        : m_mode(other.m_mode)
-        , m_commonHeaders(other.m_commonHeaders)
-        , m_commonHeaderPresent(other.m_commonHeaderPresent)
+        : m_commonHeaders(other.m_commonHeaders)
         , m_headerPairs(other.m_headerPairs)
+        , m_commonHeaderPresent(other.m_commonHeaderPresent)
+        , m_mode(other.m_mode)
     {
     }
 
     HeaderPair::HeaderPair(HeaderPair &&other)
-        : m_mode(other.m_mode)
-        , m_commonHeaders(std::move(other.m_commonHeaders))
-        , m_commonHeaderPresent(other.m_commonHeaderPresent)
+        : m_commonHeaders(std::move(other.m_commonHeaders))
         , m_headerPairs(std::move(other.m_headerPairs))
+        , m_commonHeaderPresent(other.m_commonHeaderPresent)
+        , m_mode(other.m_mode)
     {
     }
 

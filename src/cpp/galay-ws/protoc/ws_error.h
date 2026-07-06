@@ -56,8 +56,8 @@ public:
      * @param extra_msg 附加错误描述
      */
     WsError(WsErrorCode code, const std::string& extra_msg = "")
-        : m_code(code)
-        , m_extra_msg(extra_msg)
+        : m_extra_msg(extra_msg)
+        , m_code(code)
     {
     }
 
@@ -68,8 +68,8 @@ public:
      *          避免可恢复 I/O 错误落入内核 awaitable 的进程终止兜底路径。
      */
     explicit WsError(const galay::kernel::IOError& io_error)
-        : m_code(kWsConnectionError)
-        , m_extra_msg(io_error.message())
+        : m_extra_msg(io_error.message())
+        , m_code(kWsConnectionError)
     {
         const uint64_t code = io_error.code();
         if (galay::kernel::IOError::contains(code, galay::kernel::kDisconnectError)) {
@@ -174,8 +174,8 @@ private:
     }
 
 private:
-    WsErrorCode m_code;      ///< 错误码
     std::string m_extra_msg; ///< 附加错误描述
+    WsErrorCode m_code;      ///< 错误码
 };
 
 } // namespace galay::websocket

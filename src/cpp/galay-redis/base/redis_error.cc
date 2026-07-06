@@ -1,5 +1,6 @@
 #include "redis_error.h"
 #include <array>
+#include <utility>
 
 namespace galay::redis
 {
@@ -34,13 +35,14 @@ namespace galay::redis
     }
 
     RedisError::RedisError(RedisErrorType type, std::string extra_msg)
-        : m_type(type), m_extra_msg(extra_msg)
+        : m_extra_msg(std::move(extra_msg))
+        , m_type(type)
     {
     }
 
     RedisError::RedisError(const galay::kernel::IOError& io_error)
-        : m_type(REDIS_ERROR_TYPE_NETWORK_ERROR)
-        , m_extra_msg(io_error.message())
+        : m_extra_msg(io_error.message())
+        , m_type(REDIS_ERROR_TYPE_NETWORK_ERROR)
     {
         using galay::kernel::IOError;
         using namespace galay::kernel;

@@ -24,9 +24,11 @@ namespace galay::redis
     struct RedisSessionConfig
     {
         std::string host = "127.0.0.1";
-        int32_t port = 6379;
         std::string username;
         std::string password;
+        std::optional<std::string> bind_address;
+        std::optional<std::string> unix_socket_path;
+        int32_t port = 6379;
         int32_t db_index = 0;
         int version = 2;
         uint32_t connect_timeout_ms = 5000;
@@ -34,9 +36,7 @@ namespace galay::redis
 
         // Reserved for a future sync transport path. Current protocol::Connection
         // supports host/port/timeout only.
-        std::optional<std::string> bind_address;
         bool reuse_address = false;
-        std::optional<std::string> unix_socket_path;
     };
 
     /**

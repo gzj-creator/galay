@@ -112,20 +112,19 @@ public:
 
     friend struct SchedulerTestAccess;
 protected:
-    std::atomic<bool> m_running;
     std::thread m_thread;
+    IOSchedulerWorkerState m_worker;
+    std::atomic<uint64_t> m_last_error_code{0};
+    std::atomic<bool> m_sleeping{true};
+    std::atomic<bool> m_wakeup_pending{false};
+    WakeCoordinator m_wake_coordinator;
+    SchedulerCore m_core;
+    KqueueReactor m_reactor;
 
     // 配置
     int m_max_events;
     int m_batch_size;
-
-    std::atomic<uint64_t> m_last_error_code{0};
-    std::atomic<bool> m_sleeping{true};
-    std::atomic<bool> m_wakeup_pending{false};
-    IOSchedulerWorkerState m_worker;
-    WakeCoordinator m_wake_coordinator;
-    SchedulerCore m_core;
-    KqueueReactor m_reactor;
+    std::atomic<bool> m_running;
 
 private:
     /**

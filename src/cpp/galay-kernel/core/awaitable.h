@@ -528,7 +528,7 @@ struct ReadvIOContext: public IOContextBase {
 
     std::span<const struct iovec> m_iovecs;  ///< 借用的 iovec 数组视图
     std::expected<size_t, IOError> m_result;  ///< 实际读取字节数或错误
-    bool m_immediate_result = false;  ///< 构造阶段即可返回的参数错误
+    uint64_t m_immediate_result = 0;  ///< 构造阶段即可返回的参数错误
 
 #ifdef USE_IOURING
     void initMsghdr() {
@@ -621,7 +621,7 @@ struct WritevIOContext: public IOContextBase {
 
     std::span<const struct iovec> m_iovecs;  ///< 借用的 iovec 数组视图
     std::expected<size_t, IOError> m_result;  ///< 实际写入字节数或错误
-    bool m_immediate_result = false;  ///< 构造阶段即可返回的参数错误
+    uint64_t m_immediate_result = 0;  ///< 构造阶段即可返回的参数错误
 
 #ifdef USE_IOURING
     void initMsghdr() {
@@ -959,7 +959,9 @@ struct FileWriteAwaitable: public FileWriteIOContext, public TimeoutSupport<File
 struct FileWatchIOContext: public IOContextBase {
 #ifdef USE_KQUEUE
     FileWatchIOContext(char* buffer, size_t buffer_size, FileWatchEvent events)
-        : m_buffer(buffer), m_buffer_size(buffer_size), m_events(events) {}
+        : m_buffer(buffer), m_buffer_size(buffer_size) {
+        m_events = static_cast<uint64_t>(events);
+    }
 #else
     FileWatchIOContext(char* buffer, size_t buffer_size)
         : m_buffer(buffer), m_buffer_size(buffer_size) {}
@@ -973,10 +975,10 @@ struct FileWatchIOContext: public IOContextBase {
 
     char* m_buffer;  ///< 监控事件输出缓冲区
     size_t m_buffer_size;  ///< 输出缓冲区容量
-#ifdef USE_KQUEUE
-    FileWatchEvent m_events;  ///< kqueue 模式下的监控事件掩码
-#endif
     std::expected<FileWatchResult, IOError> m_result;  ///< 文件监控结果或错误
+#ifdef USE_KQUEUE
+    uint64_t m_events = 0;  ///< kqueue 模式下的监控事件掩码
+#endif
 };
 
 /**
@@ -1015,7 +1017,7 @@ struct FileWatchAwaitable: public FileWatchIOContext, public TimeoutSupport<File
  */
 struct SendFileIOContext: public IOContextBase {
     SendFileIOContext(int file_fd, off_t offset, size_t count)
-        : m_file_fd(file_fd), m_offset(offset), m_count(count) {}
+        : m_offset(offset), m_count(count), m_file_fd(file_fd) {}
 
 #ifdef USE_IOURING
     bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring sendfile 完成事件
@@ -1023,10 +1025,10 @@ struct SendFileIOContext: public IOContextBase {
     bool handleComplete(GHandle handle) override;  ///< 处理传统后端 sendfile 就绪事件
 #endif
 
-    int m_file_fd;  ///< 源文件 fd
     off_t m_offset;  ///< 发送起始偏移
     size_t m_count;  ///< 请求发送的字节数
     std::expected<size_t, IOError> m_result;  ///< 实际发送字节数或错误
+    int m_file_fd;  ///< 源文件 fd
 };
 
 /**
@@ -1085,7 +1087,6 @@ template <typename ResultT>
  * @tparam ResultT 状态机结果类型
  */
 struct MachineAction {
-    MachineSignal signal = MachineSignal::kContinue;  ///< 当前动作类型
     char* read_buffer = nullptr;  ///< read/recv 目标缓冲区
     size_t read_length = 0;  ///< read/recv 请求长度
     const struct iovec* iovecs = nullptr;  ///< readv/writev 的 iovec 指针
@@ -1095,6 +1096,7 @@ struct MachineAction {
     Host connect_host{};  ///< connect 目标地址
     std::optional<ResultT> result;  ///< 成功结果
     std::optional<IOError> error;  ///< 失败结果
+    MachineSignal signal = MachineSignal::kContinue;  ///< 当前动作类型
 
     static MachineAction continue_() {
         return MachineAction{};
@@ -1172,9 +1174,9 @@ struct SequenceAwaitableBase: public AwaitableBase {
      * @brief sequence 队列中的单个任务条目
      */
     struct IOTask {
-        IOEventType type;  ///< 默认事件类型
         void* task = nullptr;  ///< 具体任务对象指针
         IOContextBase* context = nullptr;  ///< 具体 IO 上下文指针
+        IOEventType type;  ///< 默认事件类型
     };
 
     explicit SequenceAwaitableBase(IOController* controller,
@@ -1290,9 +1292,9 @@ struct SequenceAwaitableBase: public AwaitableBase {
     std::optional<IOError> m_error;  ///< 当前 sequence 错误
     IOController* m_controller;  ///< 关联的 IO 控制器
     Waker m_waker;  ///< 恢复等待协程的唤醒器
+    uint64_t m_registered = 0;  ///< 当前是否已登记到 controller
     SequenceOwnerDomain m_requested_domain = SequenceOwnerDomain::ReadWrite;  ///< 期望占用的读写域
     SequenceOwnerDomain m_registered_domain = SequenceOwnerDomain::ReadWrite;  ///< 实际已登记的读写域
-    bool m_registered = false;  ///< 当前是否已登记到 controller
 };
 
 namespace detail {
@@ -1676,7 +1678,7 @@ private:
             return false;
         }
         const size_t index = (m_head + m_size) % InlineN;
-        m_tasks[index] = IOTask{type, task, context};
+        m_tasks[index] = IOTask{task, context, type};
         ++m_size;
         return true;
     }
@@ -1737,12 +1739,12 @@ public:
 
     StateMachineAwaitable(IOController* controller, MachineT machine)
         : SequenceAwaitableBase(controller, detail::resolveStateMachineOwnerDomain(machine))
-        , m_machine(std::move(machine))
         , m_recv_context(nullptr, 0)
         , m_readv_context(std::span<const struct iovec>{})
         , m_send_context(nullptr, 0)
         , m_writev_context(std::span<const struct iovec>{})
-        , m_connect_context(Host{}) {}
+        , m_connect_context(Host{})
+        , m_machine(std::move(machine)) {}
 
 private:
     template <typename ResultT, size_t InlineN, typename FlowT>
@@ -1752,12 +1754,12 @@ private:
                           MachineT machine,
                           SequenceOwnerDomain requested_domain)
         : SequenceAwaitableBase(controller, requested_domain)
-        , m_machine(std::move(machine))
         , m_recv_context(nullptr, 0)
         , m_readv_context(std::span<const struct iovec>{})
         , m_send_context(nullptr, 0)
         , m_writev_context(std::span<const struct iovec>{})
-        , m_connect_context(Host{}) {}
+        , m_connect_context(Host{})
+        , m_machine(std::move(machine)) {}
 
 public:
     bool await_ready() {
@@ -2063,7 +2065,7 @@ private:
                 }
                 m_recv_context.m_buffer = action.read_buffer;
                 m_recv_context.m_length = action.read_length;
-                m_active_task = IOTask{RECV, nullptr, &m_recv_context};
+                m_active_task = IOTask{nullptr, &m_recv_context, RECV};
                 m_has_active_task = true;
                 m_active_kind = ActiveKind::kRead;
                 return SequenceProgress::kNeedWait;
@@ -2081,7 +2083,7 @@ private:
 #ifdef USE_IOURING
                 m_readv_context.initMsghdr();
 #endif
-                m_active_task = IOTask{READV, nullptr, &m_readv_context};
+                m_active_task = IOTask{nullptr, &m_readv_context, READV};
                 m_has_active_task = true;
                 m_active_kind = ActiveKind::kReadv;
                 return SequenceProgress::kNeedWait;
@@ -2097,7 +2099,7 @@ private:
                 }
                 m_send_context.m_buffer = action.write_buffer;
                 m_send_context.m_length = action.write_length;
-                m_active_task = IOTask{SEND, nullptr, &m_send_context};
+                m_active_task = IOTask{nullptr, &m_send_context, SEND};
                 m_has_active_task = true;
                 m_active_kind = ActiveKind::kWrite;
                 return SequenceProgress::kNeedWait;
@@ -2115,13 +2117,13 @@ private:
 #ifdef USE_IOURING
                 m_writev_context.initMsghdr();
 #endif
-                m_active_task = IOTask{WRITEV, nullptr, &m_writev_context};
+                m_active_task = IOTask{nullptr, &m_writev_context, WRITEV};
                 m_has_active_task = true;
                 m_active_kind = ActiveKind::kWritev;
                 return SequenceProgress::kNeedWait;
             case MachineSignal::kWaitConnect:
                 m_connect_context.m_host = action.connect_host;
-                m_active_task = IOTask{CONNECT, nullptr, &m_connect_context};
+                m_active_task = IOTask{nullptr, &m_connect_context, CONNECT};
                 m_has_active_task = true;
                 m_active_kind = ActiveKind::kConnect;
                 return SequenceProgress::kNeedWait;
@@ -2195,17 +2197,17 @@ private:
         m_active_kind = ActiveKind::kNone;
     }
 
-    MachineT m_machine;  ///< 用户提供的状态机对象
     RecvIOContext m_recv_context;  ///< 复用的 recv 上下文
     ReadvIOContext m_readv_context;  ///< 复用的 readv 上下文
     SendIOContext m_send_context;  ///< 复用的 send 上下文
     WritevIOContext m_writev_context;  ///< 复用的 writev 上下文
     ConnectIOContext m_connect_context;  ///< 复用的 connect 上下文
+    MachineT m_machine;  ///< 用户提供的状态机对象
     IOTask m_active_task{};  ///< 当前已激活的 sequence 任务
-    bool m_has_active_task = false;  ///< 当前是否已有活动任务
-    ActiveKind m_active_kind = ActiveKind::kNone;  ///< 当前活动任务类型
-    bool m_context_bound = false;  ///< 是否已把 AwaitContext 绑定给状态机
     std::optional<result_type> m_result;  ///< 状态机成功结果
+    ActiveKind m_active_kind = ActiveKind::kNone;  ///< 当前活动任务类型
+    bool m_has_active_task = false;  ///< 当前是否已有活动任务
+    bool m_context_bound = false;  ///< 是否已把 AwaitContext 绑定给状态机
     bool m_result_set = false;  ///< 状态机是否已产出成功结果
 };
 
@@ -2441,7 +2443,6 @@ public:
      * @brief 单个线性状态机节点描述
      */
     struct Node {
-        NodeKind kind = NodeKind::kLocal;  ///< 节点类型
         IOHandlerFn io_handler = nullptr;  ///< IO 节点回调
         LocalHandlerFn local_handler = nullptr;  ///< 本地节点回调
         ParseHandlerFn parse_handler = nullptr;  ///< parser 节点回调
@@ -2452,6 +2453,7 @@ public:
         size_t io_length = 0;  ///< 单缓冲 IO 请求长度
         Host connect_host{};  ///< connect 目标地址
         size_t parse_rearm_recv_index = kInvalidIndex;  ///< parser NeedMore 时重挂起的接收节点索引
+        NodeKind kind = NodeKind::kLocal;  ///< 节点类型
     };
 
     using NodeList = std::vector<Node>;
@@ -2854,10 +2856,6 @@ private:
     IOController* m_controller;  ///< 关联的 IO 控制器
     FlowT* m_flow;  ///< 宿主 flow 对象
     NodeList m_nodes;  ///< 线性节点列表
-    size_t m_cursor = 0;  ///< 当前执行到的节点索引
-    PendingIO m_pending_io = PendingIO::kNone;  ///< 当前挂起中的 IO 类型
-    size_t m_pending_index = kInvalidIndex;  ///< 当前挂起节点索引
-
     SequenceAwaitable<ResultT, InlineN> m_ops_owner;  ///< 复用的 sequence 操作容器
     RecvIOContext m_recv_context;  ///< recv 上下文缓存
     ReadvIOContext m_readv_context;  ///< readv 上下文缓存
@@ -2867,6 +2865,9 @@ private:
 
     std::optional<result_type> m_result;  ///< 成功结果
     std::optional<IOError> m_error;  ///< 错误结果
+    size_t m_pending_index = kInvalidIndex;  ///< 当前挂起节点索引
+    size_t m_cursor = 0;  ///< 当前执行到的节点索引
+    PendingIO m_pending_io = PendingIO::kNone;  ///< 当前挂起中的 IO 类型
 };
 
 } // namespace detail

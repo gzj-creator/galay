@@ -138,14 +138,14 @@ struct PacketHeader
  */
 struct HandshakeV10
 {
-    uint8_t protocol_version = 0;        ///< 协议版本
     std::string server_version;          ///< 服务器版本字符串
-    uint32_t connection_id = 0;          ///< 连接ID
     std::string auth_plugin_data;        ///< 认证插件salt数据（20字节）
-    uint32_t capability_flags = 0;       ///< 服务器能力标志
-    uint8_t character_set = 0;           ///< 默认字符集
-    uint16_t status_flags = 0;           ///< 服务器状态标志
     std::string auth_plugin_name;        ///< 认证插件名称
+    uint32_t connection_id = 0;          ///< 连接ID
+    uint32_t capability_flags = 0;       ///< 服务器能力标志
+    uint16_t status_flags = 0;           ///< 服务器状态标志
+    uint8_t protocol_version = 0;        ///< 协议版本
+    uint8_t character_set = 0;           ///< 默认字符集
 };
 
 /**
@@ -154,13 +154,13 @@ struct HandshakeV10
  */
 struct HandshakeResponse41
 {
-    uint32_t capability_flags = 0;       ///< 客户端能力标志
-    uint32_t max_packet_size = MYSQL_MAX_PACKET_SIZE; ///< 最大包大小
-    uint8_t character_set = CHARSET_UTF8MB4_GENERAL_CI; ///< 字符集
     std::string username;                ///< 用户名
     std::string auth_response;           ///< 认证响应数据
     std::string database;                ///< 初始数据库
     std::string auth_plugin_name;        ///< 认证插件名称
+    uint32_t capability_flags = 0;       ///< 客户端能力标志
+    uint32_t max_packet_size = MYSQL_MAX_PACKET_SIZE; ///< 最大包大小
+    uint8_t character_set = CHARSET_UTF8MB4_GENERAL_CI; ///< 字符集
 };
 
 /**
@@ -179,11 +179,11 @@ struct AuthSwitchRequest
  */
 struct OkPacket
 {
+    std::string info;            ///< 附加信息
     uint64_t affected_rows = 0;  ///< 影响行数
     uint64_t last_insert_id = 0; ///< 最后插入ID
     uint16_t status_flags = 0;   ///< 服务器状态标志
     uint16_t warnings = 0;       ///< 警告数
-    std::string info;            ///< 附加信息
 };
 
 /**
@@ -192,9 +192,9 @@ struct OkPacket
  */
 struct ErrPacket
 {
-    uint16_t error_code = 0;    ///< 错误码
     std::string sql_state;      ///< SQL状态码（5字节）
     std::string error_message;  ///< 错误消息
+    uint16_t error_code = 0;    ///< 错误码
 };
 
 /**
@@ -219,10 +219,10 @@ struct ColumnDefinitionPacket
     std::string org_table;      ///< 原始表名
     std::string name;           ///< 列别名
     std::string org_name;       ///< 列原始名
-    uint16_t character_set = 0; ///< 字符集
     uint32_t column_length = 0; ///< 列长度
-    uint8_t column_type = 0;    ///< 列类型
+    uint16_t character_set = 0; ///< 字符集
     uint16_t flags = 0;         ///< 列标志
+    uint8_t column_type = 0;    ///< 列类型
     uint8_t decimals = 0;       ///< 小数位数
 };
 
@@ -245,12 +245,12 @@ struct ResultSetPacket
  */
 struct StmtPrepareOkPacket
 {
+    std::vector<ColumnDefinitionPacket> param_defs;         ///< 参数定义列表
+    std::vector<ColumnDefinitionPacket> column_defs;        ///< 列定义列表
     uint32_t statement_id = 0;                              ///< 语句ID
     uint16_t num_columns = 0;                               ///< 列数
     uint16_t num_params = 0;                                ///< 参数数
     uint16_t warning_count = 0;                             ///< 警告数
-    std::vector<ColumnDefinitionPacket> param_defs;         ///< 参数定义列表
-    std::vector<ColumnDefinitionPacket> column_defs;        ///< 列定义列表
 };
 
 /**

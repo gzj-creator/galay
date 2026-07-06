@@ -39,9 +39,9 @@ SslEngine::~SslEngine()
 SslEngine::SslEngine(SslEngine&& other) noexcept
     : m_ssl(other.m_ssl)
     , m_ctx(other.m_ctx)
-    , m_handshakeState(other.m_handshakeState)
     , m_rbio(other.m_rbio)
     , m_wbio(other.m_wbio)
+    , m_handshakeState(other.m_handshakeState)
 {
     other.m_ssl = nullptr;
     other.m_ctx = nullptr;

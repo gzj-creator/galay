@@ -34,26 +34,26 @@ struct H2StaticFileRequest {
 };
 
 struct H2StaticFileLookup {
-    int status = 404;
     std::filesystem::path file_path;
-    uintmax_t file_size = 0;
-    std::time_t last_modified = 0;
     std::string etag;
     std::string content_type = "application/octet-stream";
-    bool body_cached = false;
     std::shared_ptr<const std::string> body;
     std::shared_ptr<const std::string> encoded_headers;
     std::vector<Http2HeaderField> headers;
+    uintmax_t file_size = 0;
+    std::time_t last_modified = 0;
     uintmax_t range_start = 0;
     uintmax_t range_end = 0;
+    int status = 404;
+    bool body_cached = false;
 };
 
 struct H2StaticFileFastLookup {
     std::filesystem::path file_path;
-    uintmax_t content_length = 0;
-    bool body_cached = false;
     std::shared_ptr<const std::string> body;
     std::shared_ptr<const std::string> encoded_headers;
+    uintmax_t content_length = 0;
+    bool body_cached = false;
 };
 
 class H2StaticFileCache;
@@ -87,14 +87,14 @@ public:
 private:
     struct Entry {
         std::filesystem::path file_path;
-        uintmax_t file_size = 0;
-        std::time_t last_modified = 0;
         std::string etag;
         std::string content_type;
-        bool body_cached = false;
         std::shared_ptr<const std::string> body;
         std::shared_ptr<const std::string> encoded_headers;
         std::vector<Http2HeaderField> headers;
+        uintmax_t file_size = 0;
+        std::time_t last_modified = 0;
+        bool body_cached = false;
     };
 
     // 返回指向内部缓存的临时视图；调用方必须在当前同步调用栈内消费，不能保存。

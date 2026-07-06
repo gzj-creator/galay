@@ -466,11 +466,11 @@ namespace galay::redis
             RedissClientConfig tls_config;
             std::shared_ptr<galay::utils::RingBuffer> ring_buffer;
             TcpSocket ready_socket;
-            protocol::RespParser parser;
-            bool is_closed = true;
             std::optional<RedisError> boot_error;
             galay::ssl::SslContext ssl_context;
             std::optional<galay::ssl::SslSocket> socket;
+            protocol::RespParser parser;
+            bool is_closed = true;
         };
 #else
         struct RedissClientImpl
@@ -512,8 +512,8 @@ namespace galay::redis
                                                              std::string encoded_command_in,
                                                              size_t expected_replies_in,
                                                              bool recv_only_in)
-            : impl(impl_in)
-            , encoded_cmd(std::move(encoded_command_in))
+            : encoded_cmd(std::move(encoded_command_in))
+            , impl(impl_in)
             , expected_replies(expected_replies_in)
             , recv_only(recv_only_in)
         {
@@ -710,11 +710,11 @@ namespace galay::redis
                                                            std::string ip_in,
                                                            int32_t port_in,
                                                            RedisConnectOptions options_in)
-            : impl(impl_in)
-            , ip(std::move(ip_in))
-            , port(port_in)
+            : host(options_in.version == 6 ? IPType::IPV6 : IPType::IPV4, ip_in, port_in)
             , options(std::move(options_in))
-            , host(options.version == 6 ? IPType::IPV6 : IPType::IPV4, ip, port)
+            , ip(std::move(ip_in))
+            , impl(impl_in)
+            , port(port_in)
         {
             values.reserve(1);
             if (impl == nullptr) {

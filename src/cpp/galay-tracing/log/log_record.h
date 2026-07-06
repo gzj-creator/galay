@@ -173,12 +173,12 @@ private:
     };
 
     explicit constexpr LogFieldValue(LogFieldType type, Storage storage) noexcept
-        : m_type(type),
-          m_storage(storage) {
+        : m_storage(storage),
+          m_type(type) {
     }
 
-    LogFieldType m_type{LogFieldType::kString}; ///< 值类型
     Storage m_storage{};                         ///< 值存储
+    LogFieldType m_type{LogFieldType::kString}; ///< 值类型
 };
 
 /**

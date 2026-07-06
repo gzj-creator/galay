@@ -121,10 +121,9 @@ private:
 
 private:
     std::thread m_thread;                           ///< 定时轮线程
+    ThreadSafeTimerManager m_timerManager;          ///< 线程安全定时轮管理器
     std::atomic<bool> m_running{false};             ///< 运行状态
     std::atomic<bool> m_stopFlag{false};            ///< 停止标志
-
-    ThreadSafeTimerManager m_timerManager;          ///< 线程安全定时轮管理器
 };
 
 } // namespace galay::kernel
