@@ -18,3 +18,17 @@
 - **全模块性能测试文档与基准数据落地**：为 kernel / http / http2 / ws / rpc / ssl / tracing / utils / redis / mysql / mongo / etcd 各模块补全 `05-性能测试.md`，并归档 `benchmark_data/`、`configs/` 压测结果与复现配置；新增 `docs/benchmark_plan.md` 与 `docs/machine_config.md`。
 - **构建与脚本整理**：`BUILD_TESTING` / `GALAY_BUILD_EXAMPLES` / `GALAY_BUILD_BENCHMARKS` 默认改为 `OFF`（按需开启）；`scripts/` 按模块归类并加数字前缀；构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）对齐 `4.0.1`。
 - **清理过期文档**：删除被新 skill 取代的旧优化建议、陈旧 `docs/release_note.md`（仅停留在 v3.0.0）与 `docs/README.md` 等。
+
+## v4.0.2 - 2026-07-06
+
+- **版本级别**：小版本（patch）
+- **Git 提交消息**：`docs: 补全 C ABI 模块文档并对齐 README 目录结构`
+- **Git tag**：`v4.0.2`
+
+### 变更摘要
+
+本次为 `v4.0.1` 之后的小版本发版，主线为文档：补全 C ABI 模块文档、对齐 README 目录结构说明并清理过期压测计划文档，无代码改动。
+
+- **补全 C ABI 模块文档**：在 `docs/c/modules/` 下新增 `bridge` / `common` / `utils` 共享层 README，给出源码位置、CMake target / alias、依赖与主要职责，与既有各协议模块（kernel / http / http2 / ws / rpc / ssl / tracing / redis / mysql / mongo / etcd / mcp）文档对齐。
+- **对齐 README 目录结构**：把“模块化构建”说明拆分为 C++ 模块（`src/cpp/galay-*`）与 C ABI 模块（`src/c/galay-*-c`），仓库目录树同步区分 `docs/cpp/modules/` 与 `docs/c/modules/`，并补上 C ABI 文档入口指引。
+- **清理过期文档**：删除 `docs/benchmark_plan.md`，其内容已被 v4.0.1 各模块 `05-性能测试.md` 与归档基准数据取代。

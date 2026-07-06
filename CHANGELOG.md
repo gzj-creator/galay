@@ -11,6 +11,17 @@
 
 ## [Unreleased]
 
+## [v4.0.2] - 2026-07-06
+
+### Docs
+
+- 补全 C ABI 模块文档：在 `docs/c/modules/` 下新增 `bridge` / `common` / `utils` 共享层 README，给出源码位置、CMake target / alias、依赖与主要职责，与既有各协议模块文档对齐。
+- 更新 `README.md`：模块化构建说明拆分为 C++ 模块（`src/cpp/galay-*`）与 C ABI 模块（`src/c/galay-*-c`），目录树同步区分 `docs/cpp/modules/` 与 `docs/c/modules/`，并补上 C ABI 文档入口指引。
+
+### Removed
+
+- 删除过期文档 `docs/benchmark_plan.md`：其内容已被 v4.0.1 各模块 `05-性能测试.md` 与归档基准数据取代。
+
 ## [v4.0.1] - 2026-07-05
 
 ### Added
