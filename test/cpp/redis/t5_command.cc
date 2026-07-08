@@ -14,7 +14,7 @@ namespace
         { client.command(std::move(command)).timeout(std::chrono::milliseconds(200)) };
     };
 
-    static_assert(HasRawCommandApi<RedisClient>);
+    static_assert(HasRawCommandApi<RedisClient<>>);
 }
 
 int main()

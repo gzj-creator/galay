@@ -309,7 +309,7 @@ private:
             }
         }
 
-        RingBuffer ring_buffer(m_config.ring_buffer_size == 0 ? 128 * 1024 : m_config.ring_buffer_size);
+        RingBuffer<> ring_buffer(m_config.ring_buffer_size == 0 ? 128 * 1024 : m_config.ring_buffer_size);
         StreamReader reader(ring_buffer, socket, m_config.stream_limits);
 
         while (m_running.load(std::memory_order_acquire)) {

@@ -1,6 +1,7 @@
 #include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstring>
@@ -8,6 +9,10 @@
 #include <iostream>
 #include <string>
 #include <vector>
+
+#if defined(__unix__) || defined(__APPLE__)
+#include <sys/uio.h>
+#endif
 
 namespace {
 
@@ -44,6 +49,31 @@ void printResult(const Result& result) {
               << "  checksum=" << result.checksum << '\n';
 }
 
+#if defined(__unix__) || defined(__APPLE__)
+void benchWrappedIovec(std::size_t capacity, std::size_t iterations) {
+    galay::utils::RingBuffer<> buffer(capacity);
+    const std::size_t actualCapacity = buffer.capacity();
+    std::vector<std::byte> prefix(actualCapacity - 64, std::byte{'a'});
+    std::vector<std::byte> wrapped(256, std::byte{'b'});
+
+    const auto prefixWritten = buffer.write(prefix.data(), prefix.size());
+    buffer.consume(actualCapacity - 128);
+    const auto wrappedWritten = buffer.write(wrapped.data(), wrapped.size());
+    if (prefixWritten != prefix.size() || wrappedWritten != wrapped.size()) {
+        std::cerr << "failed to prepare wrapped iovec benchmark\n";
+        return;
+    }
+
+    std::array<struct iovec, 2> iovecs{};
+    auto result = measure("wrap-iovec-" + std::to_string(capacity / 1024) + "KB",
+                          iterations, buffer.readable(), [&](std::size_t i) {
+        const auto count = buffer.getReadIovecs(iovecs);
+        return count + iovecs[0].iov_len + i % 17;
+    });
+    printResult(result);
+}
+#endif
+
 } // namespace
 
 int main() {
@@ -62,7 +92,7 @@ int main() {
               << std::setw(14) << "MB/s" << '\n';
 
     {
-        galay::utils::RingBuffer buffer(capacity);
+        galay::utils::RingBuffer<> buffer(capacity);
         auto result = measure("write+consume", iterations, chunk, [&](std::size_t i) {
             const auto written = buffer.write(writeData.data(), writeData.size());
             buffer.consume(written);
@@ -72,7 +102,7 @@ int main() {
     }
 
     {
-        galay::utils::RingBuffer buffer(capacity);
+        galay::utils::RingBuffer<> buffer(capacity);
         auto result = measure("write+read", iterations, chunk, [&](std::size_t i) {
             const auto written = buffer.write(writeData.data(), writeData.size());
             const auto read = buffer.read(readData.data(), readData.size());
@@ -82,7 +112,7 @@ int main() {
     }
 
     {
-        galay::utils::RingBuffer buffer(4096);
+        galay::utils::RingBuffer<> buffer(4096);
         auto result = measure("wrap-around", iterations, 256, [&](std::size_t i) {
             const auto written = buffer.write(writeData.data(), 256);
             buffer.consume(128);
@@ -93,6 +123,12 @@ int main() {
         });
         printResult(result);
     }
+
+#if defined(__unix__) || defined(__APPLE__)
+    benchWrappedIovec(4096, iterations);
+    benchWrappedIovec(64 * 1024, iterations);
+    benchWrappedIovec(128 * 1024, iterations);
+#endif
 
     return static_cast<int>(g_sink == static_cast<std::size_t>(-1));
 }

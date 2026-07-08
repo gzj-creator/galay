@@ -53,7 +53,7 @@ Task<void> run(IOScheduler* scheduler, AsyncState* state, const mysql_example::D
         co_return;
     }
 
-    AsyncMysqlClient* client = acq->value();
+    AsyncMysqlClient<>* client = acq->value();
 
     auto query_res = co_await client->query("SELECT CONNECTION_ID()");
     if (!query_res) {

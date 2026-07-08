@@ -115,6 +115,7 @@ namespace galay::redis
 #endif
 
     // 前向声明
+    template<galay::utils::RingBufferBackendStrategy Strategy = galay::utils::RingBufferBackendStrategy::Mmap>
     class RedisClient;
 #ifdef GALAY_SSL_FEATURE_ENABLED
     class RedissClient;
@@ -202,7 +203,7 @@ namespace galay::redis
          * @brief 构建 RedisClient 实例
          * @return 配置完成的 RedisClient
          */
-        RedisClient build() const;
+        RedisClient<> build() const;
 
         /**
          * @brief 获取当前构建的配置
@@ -392,6 +393,7 @@ namespace galay::redis
          * @brief Redis 命令交换共享状态
          * @details 保存单次命令发送/接收过程中所有中间状态和缓冲区
          */
+        template<galay::utils::RingBufferBackendStrategy Strategy>
         struct RedisExchangeSharedState
         {
             /**
@@ -408,21 +410,21 @@ namespace galay::redis
             /**
              * @brief 从已编码字符串构造（移动语义）
              */
-            RedisExchangeSharedState(RedisClient& client,
+            RedisExchangeSharedState(RedisClient<Strategy>& client,
                                      std::string encoded_command,
                                      size_t expected_replies,
                                      bool recv_only);
             /**
              * @brief 从字符串视图构造（零拷贝）
              */
-            RedisExchangeSharedState(RedisClient& client,
+            RedisExchangeSharedState(RedisClient<Strategy>& client,
                                      std::string_view encoded_command,
                                      size_t expected_replies,
                                      bool recv_only);
             /**
              * @brief 从批量命令视图构造
              */
-            RedisExchangeSharedState(RedisClient& client,
+            RedisExchangeSharedState(RedisClient<Strategy>& client,
                                      std::span<const RedisCommandView> commands);
 
             std::string encoded_cmd;                    ///< 已编码的命令字符串
@@ -431,7 +433,7 @@ namespace galay::redis
             std::array<struct iovec, 2> read_iovecs{};  ///< 读取 iovec 数组
             std::optional<RedisExchangeResult> result;  ///< 交换结果
             std::string_view encoded_view;              ///< 已编码的命令视图
-            RedisClient* client = nullptr;              ///< 关联的客户端
+            RedisClient<Strategy>* client = nullptr;    ///< 关联的客户端
             size_t expected_replies = 0;                ///< 期望的回复数量
             size_t sent = 0;                            ///< 已发送字节数
             size_t read_iov_count = 0;                  ///< 读取 iovec 数量
@@ -443,6 +445,7 @@ namespace galay::redis
          * @brief Redis 命令交换状态机
          * @details 驱动命令发送和回复解析的异步状态机
          */
+        template<galay::utils::RingBufferBackendStrategy Strategy>
         struct RedisExchangeMachine
         {
             using result_type = RedisExchangeResult;
@@ -453,7 +456,7 @@ namespace galay::redis
              * @brief 构造交换状态机
              * @param state 共享状态指针
              */
-            explicit RedisExchangeMachine(std::shared_ptr<RedisExchangeSharedState> state);
+            explicit RedisExchangeMachine(std::shared_ptr<RedisExchangeSharedState<Strategy>> state);
 
             /**
              * @brief 推进状态机
@@ -480,13 +483,14 @@ namespace galay::redis
             void setSendError(const IOError& io_error) noexcept;       ///< 设置发送错误
             void setRecvError(const IOError& io_error) noexcept;       ///< 设置接收错误
 
-            std::shared_ptr<RedisExchangeSharedState> m_state;         ///< 共享状态
+            std::shared_ptr<RedisExchangeSharedState<Strategy>> m_state; ///< 共享状态
         };
 
         /**
          * @brief Redis 连接建立共享状态
          * @details 保存连接、认证和数据库选择过程中的所有中间状态
          */
+        template<galay::utils::RingBufferBackendStrategy Strategy>
         struct RedisConnectSharedState
         {
             /**
@@ -512,7 +516,7 @@ namespace galay::redis
             /**
              * @brief 构造连接共享状态
              */
-            RedisConnectSharedState(RedisClient& client,
+            RedisConnectSharedState(RedisClient<Strategy>& client,
                                     std::string ip,
                                     int32_t port,
                                     std::string username,
@@ -529,7 +533,7 @@ namespace galay::redis
             std::vector<RedisValue> values;             ///< 解析得到的值
             std::array<struct iovec, 2> read_iovecs{};  ///< 读取 iovec 数组
             std::optional<RedisVoidResult> result;      ///< 连接结果
-            RedisClient* client = nullptr;              ///< 关联的客户端
+            RedisClient<Strategy>* client = nullptr;    ///< 关联的客户端
             size_t sent = 0;                            ///< 已发送字节数
             size_t read_iov_count = 0;                  ///< 读取 iovec 数量
             int32_t port = 0;                           ///< 服务器端口
@@ -545,6 +549,7 @@ namespace galay::redis
          * @brief Redis 连接建立状态机
          * @details 驱动 TCP 连接、TLS 握手、认证和数据库选择的异步状态机
          */
+        template<galay::utils::RingBufferBackendStrategy Strategy>
         struct RedisConnectMachine
         {
             using result_type = RedisVoidResult;
@@ -555,7 +560,7 @@ namespace galay::redis
              * @brief 构造连接状态机
              * @param state 共享状态指针
              */
-            explicit RedisConnectMachine(std::shared_ptr<RedisConnectSharedState> state);
+            explicit RedisConnectMachine(std::shared_ptr<RedisConnectSharedState<Strategy>> state);
 
             /**
              * @brief 推进状态机
@@ -590,17 +595,23 @@ namespace galay::redis
             void setSendError(const IOError& io_error) noexcept;       ///< 设置发送错误
             void setRecvError(const IOError& io_error) noexcept;       ///< 设置接收错误
 
-            std::shared_ptr<RedisConnectSharedState> m_state;          ///< 共享状态
+            std::shared_ptr<RedisConnectSharedState<Strategy>> m_state; ///< 共享状态
         };
 
+        template<galay::utils::RingBufferBackendStrategy Strategy>
         using RedisExchangeOperation =
-            galay::kernel::StateMachineAwaitable<RedisExchangeMachine>;
+            galay::kernel::StateMachineAwaitable<RedisExchangeMachine<Strategy>>;
+        template<galay::utils::RingBufferBackendStrategy Strategy>
         using RedisConnectOperation =
-            galay::kernel::StateMachineAwaitable<RedisConnectMachine>;
+            galay::kernel::StateMachineAwaitable<RedisConnectMachine<Strategy>>;
     } // namespace detail
 
-    using RedisExchangeOperation = detail::RedisExchangeOperation;
-    using RedisConnectOperation = detail::RedisConnectOperation;
+    template<galay::utils::RingBufferBackendStrategy Strategy = galay::utils::RingBufferBackendStrategy::Mmap>
+    using RedisExchangeOperationFor = detail::RedisExchangeOperation<Strategy>;
+    template<galay::utils::RingBufferBackendStrategy Strategy = galay::utils::RingBufferBackendStrategy::Mmap>
+    using RedisConnectOperationFor = detail::RedisConnectOperation<Strategy>;
+    using RedisExchangeOperation = RedisExchangeOperationFor<>;
+    using RedisConnectOperation = RedisConnectOperationFor<>;
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     namespace detail
@@ -743,6 +754,7 @@ namespace galay::redis
      * @brief Redis客户端类
      * @details 提供异步Redis客户端功能，采用Awaitable模式
      */
+    template<galay::utils::RingBufferBackendStrategy Strategy>
     class RedisClient
     {
     public:
@@ -774,7 +786,7 @@ namespace galay::redis
          * @param url Redis 连接 URL
          * @return RedisConnectOperation 连接操作
          */
-        RedisConnectOperation connect(const std::string& url);
+        RedisConnectOperationFor<Strategy> connect(const std::string& url);
 
         /**
          * @brief 连接到指定地址的 Redis 服务器
@@ -783,9 +795,9 @@ namespace galay::redis
          * @param options 连接选项（认证、数据库等）
          * @return RedisConnectOperation 连接操作
          */
-        RedisConnectOperation connect(const std::string& ip,
-                                      int32_t port,
-                                      RedisConnectOptions options = {});
+        RedisConnectOperationFor<Strategy> connect(const std::string& ip,
+                                                   int32_t port,
+                                                   RedisConnectOptions options = {});
 
         // ======================== 命令执行 ========================
 
@@ -794,22 +806,22 @@ namespace galay::redis
          * @param command_packet 已编码的命令包
          * @return 命令交换操作等待体
          */
-        RedisExchangeOperation command(RedisEncodedCommand command_packet);
+        RedisExchangeOperationFor<Strategy> command(RedisEncodedCommand command_packet);
 
         /**
          * @brief 零拷贝执行单条 Redis 命令
          * @param packet 借用命令包，必须在整个 co_await 期间保持有效
          * @return 命令交换操作等待体
          */
-        RedisExchangeOperation commandBorrowed(const RedisBorrowedCommand& packet);
-        RedisExchangeOperation commandBorrowed(RedisBorrowedCommand&& packet) = delete; ///< 禁止右值
+        RedisExchangeOperationFor<Strategy> commandBorrowed(const RedisBorrowedCommand& packet);
+        RedisExchangeOperationFor<Strategy> commandBorrowed(RedisBorrowedCommand&& packet) = delete; ///< 禁止右值
 
         /**
          * @brief 仅接收指定数量的回复（不发送命令）
          * @param expected_replies 期望的回复数量
          * @return 命令交换操作等待体
          */
-        RedisExchangeOperation receive(size_t expected_replies = 1);
+        RedisExchangeOperationFor<Strategy> receive(size_t expected_replies = 1);
 
         // ======================== Pipeline批量操作 ========================
 
@@ -818,7 +830,7 @@ namespace galay::redis
          * @param commands 命令视图数组
          * @return 命令交换操作等待体
          */
-        RedisExchangeOperation batch(std::span<const RedisCommandView> commands);
+        RedisExchangeOperationFor<Strategy> batch(std::span<const RedisCommandView> commands);
 
         /**
          * @brief 零拷贝批量执行预编码的 Pipeline
@@ -826,15 +838,15 @@ namespace galay::redis
          * @param expected_replies 期望的回复数量
          * @return 命令交换操作等待体
          */
-        RedisExchangeOperation batchBorrowed(const std::string& encoded, size_t expected_replies);
-        RedisExchangeOperation batchBorrowed(std::string&& encoded, size_t expected_replies) = delete; ///< 禁止右值
+        RedisExchangeOperationFor<Strategy> batchBorrowed(const std::string& encoded, size_t expected_replies);
+        RedisExchangeOperationFor<Strategy> batchBorrowed(std::string&& encoded, size_t expected_replies) = delete; ///< 禁止右值
 
         // ======================== 连接管理 ========================
 
         TcpSocket& socket() { return m_socket; }                               ///< 获取底层 TCP 套接字
         protocol::RespParser& parser() { return m_parser; }                    ///< 获取 RESP 解析器
-        galay::utils::RingBuffer& ringBuffer() { return *m_ring_buffer; }      ///< 获取接收环形缓冲区
-        const galay::utils::RingBuffer& ringBuffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
+        galay::utils::RingBuffer<Strategy>& ringBuffer() { return *m_ring_buffer; } ///< 获取接收环形缓冲区
+        const galay::utils::RingBuffer<Strategy>& ringBuffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
         const AsyncRedisConfig& asyncConfig() const { return m_config; }       ///< 获取异步配置
         void setClosed(bool closed) { m_is_closed = closed; }                  ///< 设置关闭状态
 
@@ -854,7 +866,7 @@ namespace galay::redis
         // 成员变量
         TcpSocket m_socket;                                   ///< TCP 套接字
         AsyncRedisConfig m_config;                            ///< 异步配置
-        std::shared_ptr<galay::utils::RingBuffer> m_ring_buffer; ///< 接收环形缓冲区
+        std::shared_ptr<galay::utils::RingBuffer<Strategy>> m_ring_buffer; ///< 接收环形缓冲区
         IOScheduler* m_scheduler;                             ///< IO 调度器
         bool m_is_closed = false;                             ///< 连接关闭标志
         protocol::RespParser m_parser;                        ///< RESP 协议解析器
@@ -933,9 +945,9 @@ namespace galay::redis
     };
 #endif
 
-    inline galay::redis::RedisClient galay::redis::RedisClientBuilder::build() const
+    inline galay::redis::RedisClient<> galay::redis::RedisClientBuilder::build() const
     {
-        return RedisClient(m_scheduler, m_config);
+        return RedisClient<>(m_scheduler, m_config);
     }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED

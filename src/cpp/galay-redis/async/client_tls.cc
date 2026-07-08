@@ -123,7 +123,7 @@ namespace galay::redis
             return result;
         }
 
-        static bool parseRepliesFromRingBuffer(galay::utils::RingBuffer& ring_buffer,
+        static bool parseRepliesFromRingBuffer(galay::utils::RingBuffer<>& ring_buffer,
                                                protocol::RespParser& parser,
                                                std::string& parse_buffer,
                                                size_t expected_replies,
@@ -335,7 +335,7 @@ namespace galay::redis
             return parsed;
         }
 
-        bool prepareReadWindow(galay::utils::RingBuffer& ring_buffer,
+        bool prepareReadWindow(galay::utils::RingBuffer<>& ring_buffer,
                                std::array<struct iovec, 2>& read_iovecs,
                                size_t& read_iov_count,
                                char*& read_buffer,
@@ -364,7 +364,7 @@ namespace galay::redis
                 : scheduler(scheduler_in)
                 , config(std::move(config_in))
                 , tls_config(std::move(tls_config_in))
-                , ring_buffer(std::make_shared<galay::utils::RingBuffer>(config.buffer_size))
+                , ring_buffer(std::make_shared<galay::utils::RingBuffer<>>(config.buffer_size))
                 , ready_socket(IPType::IPV4)
                 , ssl_context(galay::ssl::SslMethod::TLS_Client)
             {
@@ -464,7 +464,7 @@ namespace galay::redis
             IOScheduler* scheduler = nullptr;
             AsyncRedisConfig config;
             RedissClientConfig tls_config;
-            std::shared_ptr<galay::utils::RingBuffer> ring_buffer;
+            std::shared_ptr<galay::utils::RingBuffer<>> ring_buffer;
             TcpSocket ready_socket;
             std::optional<RedisError> boot_error;
             galay::ssl::SslContext ssl_context;
@@ -481,7 +481,7 @@ namespace galay::redis
                 : scheduler(scheduler_in)
                 , config(std::move(config_in))
                 , tls_config(std::move(tls_config_in))
-                , ring_buffer(std::make_shared<galay::utils::RingBuffer>(config.buffer_size))
+                , ring_buffer(std::make_shared<galay::utils::RingBuffer<>>(config.buffer_size))
                 , ready_socket(IPType::IPV4)
             {
                 boot_error = RedisError(
@@ -497,7 +497,7 @@ namespace galay::redis
             IOScheduler* scheduler = nullptr;
             AsyncRedisConfig config;
             RedissClientConfig tls_config;
-            std::shared_ptr<galay::utils::RingBuffer> ring_buffer;
+            std::shared_ptr<galay::utils::RingBuffer<>> ring_buffer;
             TcpSocket ready_socket;
             bool is_closed = true;
             std::optional<RedisError> boot_error;

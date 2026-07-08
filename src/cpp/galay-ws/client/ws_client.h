@@ -89,7 +89,7 @@ struct WsClientUpgradeState {
     using ResultType = std::expected<bool, WsError>;
 
     WsClientUpgradeState(SocketType* socket,
-                         RingBuffer* ring_buffer,
+                         RingBuffer<>* ring_buffer,
                          WsUrl url,
                          std::unique_ptr<WsConnImpl<SocketType>>* ws_conn_ptr)
         : m_socket(socket)
@@ -339,7 +339,7 @@ private:
     }
 
     SocketType* m_socket = nullptr;
-    RingBuffer* m_ring_buffer = nullptr;
+    RingBuffer<>* m_ring_buffer = nullptr;
     WsUrl m_url;
     std::unique_ptr<WsConnImpl<SocketType>>* m_ws_conn_ptr = nullptr;
     std::string m_ws_key;
@@ -482,7 +482,7 @@ struct WsClientSslUpgradeMachine {
 
 template<typename SocketType>
 auto buildWsClientUpgradeOperation(SocketType* socket,
-                                   RingBuffer* ring_buffer,
+                                   RingBuffer<>* ring_buffer,
                                    const WsUrl& url,
                                    std::unique_ptr<WsConnImpl<SocketType>>* ws_conn_ptr) {
     using StateT = WsClientUpgradeState<SocketType>;
@@ -525,7 +525,7 @@ class WsUpgraderImpl
 {
 public:
     WsUpgraderImpl(SocketType* socket,
-                   RingBuffer* ring_buffer,
+                   RingBuffer<>* ring_buffer,
                    const WsUrl& url,
                    const WsReaderSetting& reader_setting,
                    const WsWriterSetting& writer_setting,
@@ -562,7 +562,7 @@ public:
 
 private:
     SocketType* m_socket;
-    RingBuffer* m_ring_buffer;
+    RingBuffer<>* m_ring_buffer;
     const WsUrl& m_url;
     const WsReaderSetting& m_reader_setting;
     const WsWriterSetting& m_writer_setting;

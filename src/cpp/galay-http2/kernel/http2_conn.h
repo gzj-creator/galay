@@ -48,9 +48,10 @@ namespace galay::http2
 using namespace galay::kernel;
 using ::galay::utils::Bytes;
 using ::galay::utils::RingBuffer;
+using ::galay::utils::RingBufferBackendStrategy;
 
 // 前向声明 StreamManager
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class Http2StreamManagerImpl;
 
 // 类型特征：检测是否是 SslSocket
@@ -277,7 +278,7 @@ struct Http2RuntimeConfig
 };
 
 // 前向声明
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class Http2ConnImpl;
 
 namespace detail {
@@ -335,7 +336,8 @@ inline bool isKnownHttp2FrameType(Http2FrameType type) {
     }
 }
 
-inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer& ring_buffer,
+template<RingBufferBackendStrategy Strategy>
+inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer<Strategy>& ring_buffer,
                                                      uint32_t max_frame_size) {
     Http2BufferedFrameStatus status;
     if (ring_buffer.readable() < kHttp2FrameHeaderLength) {
@@ -361,8 +363,9 @@ inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer& ring_buffer,
     return status;
 }
 
+template<RingBufferBackendStrategy Strategy>
 inline std::expected<Http2Frame::uptr, Http2ErrorCode>
-parseSingleBufferedFrame(RingBuffer& ring_buffer,
+parseSingleBufferedFrame(RingBuffer<Strategy>& ring_buffer,
                          uint32_t max_frame_size,
                          std::vector<uint8_t>& scratch) {
     while (true) {
@@ -408,8 +411,9 @@ parseSingleBufferedFrame(RingBuffer& ring_buffer,
     }
 }
 
+template<RingBufferBackendStrategy Strategy>
 inline std::expected<std::vector<Http2Frame::uptr>, Http2ErrorCode>
-parseBufferedFrameBatch(RingBuffer& ring_buffer,
+parseBufferedFrameBatch(RingBuffer<Strategy>& ring_buffer,
                         uint32_t max_frame_size,
                         size_t max_frames,
                         std::vector<uint8_t>& scratch) {
@@ -465,8 +469,9 @@ parseBufferedFrameBatch(RingBuffer& ring_buffer,
     return frames;
 }
 
+template<RingBufferBackendStrategy Strategy>
 inline std::expected<std::vector<Http2RawFrameView>, Http2ErrorCode>
-parseBufferedFrameViewBatch(RingBuffer& ring_buffer,
+parseBufferedFrameViewBatch(RingBuffer<Strategy>& ring_buffer,
                             uint32_t max_frame_size,
                             size_t max_frames) {
     std::vector<Http2RawFrameView> frames;
@@ -518,11 +523,11 @@ parseBufferedFrameViewBatch(RingBuffer& ring_buffer,
     return frames;
 }
 
-template<typename ValueT>
+template<typename ValueT, RingBufferBackendStrategy Strategy>
 struct Http2ReadStateBase {
     using ResultType = std::expected<ValueT, Http2ErrorCode>;
 
-    Http2ReadStateBase(RingBuffer& ring_buffer,
+    Http2ReadStateBase(RingBuffer<Strategy>& ring_buffer,
                        Http2Settings& peer_settings,
                        bool* peer_closed = nullptr,
                        std::string* last_error_msg = nullptr,
@@ -561,7 +566,7 @@ struct Http2ReadStateBase {
             compactIovecs(m_write_iovecs.storage(), m_write_iovecs.size());
         m_write_iovecs.setCount(compact_count);
         if (m_write_iovecs.empty()) {
-            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer is full");
+            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<> is full");
             return false;
         }
         return true;
@@ -574,7 +579,7 @@ struct Http2ReadStateBase {
             return false;
         }
         if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer is full");
+            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<> is full");
             return false;
         }
         return true;
@@ -631,7 +636,7 @@ protected:
         }
     }
 
-    RingBuffer* m_ring_buffer = nullptr;
+    RingBuffer<Strategy>* m_ring_buffer = nullptr;
     Http2Settings* m_peer_settings = nullptr;
     bool* m_peer_closed = nullptr;
     std::string* m_last_error_msg = nullptr;
@@ -641,8 +646,9 @@ protected:
     std::optional<ResultType> m_result;
 };
 
-struct Http2SingleFrameReadState : Http2ReadStateBase<Http2Frame::uptr> {
-    using Base = Http2ReadStateBase<Http2Frame::uptr>;
+template<RingBufferBackendStrategy Strategy>
+struct Http2SingleFrameReadState : Http2ReadStateBase<Http2Frame::uptr, Strategy> {
+    using Base = Http2ReadStateBase<Http2Frame::uptr, Strategy>;
     using Base::Base;
 
     bool parseFromRingBuffer() {
@@ -663,10 +669,11 @@ struct Http2SingleFrameReadState : Http2ReadStateBase<Http2Frame::uptr> {
     }
 };
 
-struct Http2FrameBatchReadState : Http2ReadStateBase<std::vector<Http2Frame::uptr>> {
-    using Base = Http2ReadStateBase<std::vector<Http2Frame::uptr>>;
+template<RingBufferBackendStrategy Strategy>
+struct Http2FrameBatchReadState : Http2ReadStateBase<std::vector<Http2Frame::uptr>, Strategy> {
+    using Base = Http2ReadStateBase<std::vector<Http2Frame::uptr>, Strategy>;
 
-    Http2FrameBatchReadState(RingBuffer& ring_buffer,
+    Http2FrameBatchReadState(RingBuffer<Strategy>& ring_buffer,
                              Http2Settings& peer_settings,
                              size_t max_frames,
                              bool* peer_closed = nullptr,
@@ -696,10 +703,11 @@ struct Http2FrameBatchReadState : Http2ReadStateBase<std::vector<Http2Frame::upt
     size_t m_max_frames;
 };
 
-struct Http2FrameViewBatchReadState : Http2ReadStateBase<std::vector<Http2RawFrameView>> {
-    using Base = Http2ReadStateBase<std::vector<Http2RawFrameView>>;
+template<RingBufferBackendStrategy Strategy>
+struct Http2FrameViewBatchReadState : Http2ReadStateBase<std::vector<Http2RawFrameView>, Strategy> {
+    using Base = Http2ReadStateBase<std::vector<Http2RawFrameView>, Strategy>;
 
-    Http2FrameViewBatchReadState(RingBuffer& ring_buffer,
+    Http2FrameViewBatchReadState(RingBuffer<Strategy>& ring_buffer,
                                  Http2Settings& peer_settings,
                                  size_t max_frames,
                                  bool* peer_closed = nullptr,
@@ -1124,7 +1132,7 @@ using Http2WriteOperationType =
 /**
  * @brief HTTP/2 连接模板类
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy>
 class Http2ConnImpl
 {
 public:
@@ -1170,7 +1178,7 @@ public:
         // 升级后需要扩展 buffer 大小以适应 HTTP/2
         if (m_ring_buffer.capacity() < 65536) {
             // 保留已有数据，扩展容量
-            RingBuffer new_buffer(65536);
+            RingBuffer<Strategy> new_buffer(65536);
             // 复制已有数据到新 buffer
             auto read_iovecs = borrowReadIovecs(m_ring_buffer);
             for (const auto& iov : read_iovecs) {
@@ -1196,7 +1204,7 @@ public:
     /**
      * @brief 从 Socket 和 RingBuffer 构造
      */
-    Http2ConnImpl(SocketType&& socket, RingBuffer&& ring_buffer)
+    Http2ConnImpl(SocketType&& socket, RingBuffer<Strategy>&& ring_buffer)
         : m_socket(std::move(socket))
         , m_ring_buffer(std::move(ring_buffer))
         , m_last_peer_stream_id(0)
@@ -1563,10 +1571,10 @@ public:
     }
 
     // StreamManager 访问（需要 include stream_manager.h 后才能使用）
-    Http2StreamManagerImpl<SocketType>* streamManager() { return m_stream_manager.get(); }
+    Http2StreamManagerImpl<SocketType, Strategy>* streamManager() { return m_stream_manager.get(); }
     void initStreamManager() {
         if (!m_stream_manager) {
-            m_stream_manager = std::make_unique<Http2StreamManagerImpl<SocketType>>(*this);
+            m_stream_manager = std::make_unique<Http2StreamManagerImpl<SocketType, Strategy>>(*this);
         }
     }
 
@@ -1581,7 +1589,7 @@ public:
     /**
      * @brief 获取接收缓冲区引用
      */
-    RingBuffer& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<Strategy>& ringBuffer() { return m_ring_buffer; }
 
     /**
      * @brief 将数据放入接收缓冲区
@@ -1938,11 +1946,10 @@ public:
     }
 
 private:
-    template<typename>
-    friend class Http2StreamManagerImpl;
+    friend class Http2StreamManagerImpl<SocketType, Strategy>;
 
     SocketType m_socket;
-    RingBuffer m_ring_buffer;
+    RingBuffer<Strategy> m_ring_buffer;
     std::vector<uint8_t> m_parse_buffer;  // 用于跨 iovec 边界的帧解析
 
     // 连接设置
@@ -1982,7 +1989,7 @@ private:
     uint32_t m_continuation_stream_id;
 
     // StreamManager
-    std::unique_ptr<Http2StreamManagerImpl<SocketType>> m_stream_manager;
+    std::unique_ptr<Http2StreamManagerImpl<SocketType, Strategy>> m_stream_manager;
     std::unique_ptr<Http2ConnectionCore> m_connection_core;
 };
 
@@ -2000,14 +2007,15 @@ using Http2sConn = Http2ConnImpl<galay::ssl::SslSocket>;
 namespace galay::http2
 {
 
-template<typename SocketType>
-Http2ConnImpl<SocketType>::~Http2ConnImpl() = default;
+template<typename SocketType, RingBufferBackendStrategy Strategy>
+Http2ConnImpl<SocketType, Strategy>::~Http2ConnImpl() = default;
 
-template<typename SocketType>
-Http2ConnImpl<SocketType>::Http2ConnImpl(Http2ConnImpl&&) noexcept = default;
+template<typename SocketType, RingBufferBackendStrategy Strategy>
+Http2ConnImpl<SocketType, Strategy>::Http2ConnImpl(Http2ConnImpl&&) noexcept = default;
 
-template<typename SocketType>
-Http2ConnImpl<SocketType>& Http2ConnImpl<SocketType>::operator=(Http2ConnImpl&&) noexcept = default;
+template<typename SocketType, RingBufferBackendStrategy Strategy>
+Http2ConnImpl<SocketType, Strategy>& Http2ConnImpl<SocketType, Strategy>::operator=(
+    Http2ConnImpl&&) noexcept = default;
 
 } // namespace galay::http2
 

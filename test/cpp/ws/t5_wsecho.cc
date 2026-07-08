@@ -52,7 +52,7 @@ std::string flattenIovecs(const struct iovec* iovecs, size_t count) {
     return result;
 }
 
-RingBuffer makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
+RingBuffer<> makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
     RingBuffer ring(capacity);
     std::string head(prefix, 'x');
     if (ring.write(head.data(), head.size()) != head.size()) {

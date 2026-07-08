@@ -73,10 +73,13 @@ void test_byte_queue_view() {
 void test_ring_buffer() {
     std::cout << "=== Testing RingBuffer ===" << std::endl;
 
+    using DefaultRingBuffer = RingBuffer<>;
+    using VectorRingBuffer = RingBuffer<RingBufferBackendStrategy::Vector>;
+
     {
         bool thrown = false;
         try {
-            RingBuffer invalid(0);
+            DefaultRingBuffer invalid(0);
         } catch (const std::invalid_argument&) {
             thrown = true;
         }
@@ -84,7 +87,7 @@ void test_ring_buffer() {
     }
 
     {
-        RingBuffer buffer(8);
+        VectorRingBuffer buffer(8);
         assert(buffer.empty());
         assert(!buffer.full());
         assert(buffer.capacity() == 8);
@@ -125,7 +128,7 @@ void test_ring_buffer() {
     }
 
     {
-        RingBuffer buffer(4);
+        VectorRingBuffer buffer(4);
 
         std::array<std::span<std::byte>, 2> writeSpans{};
         const size_t writeSpanCount = buffer.writeSpans(writeSpans);
@@ -144,7 +147,23 @@ void test_ring_buffer() {
 
 #if defined(__unix__) || defined(__APPLE__)
     {
-        RingBuffer buffer(8);
+        DefaultRingBuffer buffer(8);
+        const size_t capacity = buffer.capacity();
+        assert(capacity >= 8);
+
+        std::string prefix(capacity - 2, 'x');
+        assert(buffer.write(prefix.data(), prefix.size()) == prefix.size());
+        buffer.consume(capacity - 4);
+        assert(buffer.write("abcdef", 6) == 6);
+
+        std::array<struct iovec, 2> readIovecs{};
+        const size_t readCount = buffer.getReadIovecs(readIovecs);
+        assert(readCount == 1);
+        assert(readIovecs[0].iov_len == buffer.readable());
+    }
+
+    {
+        VectorRingBuffer buffer(8);
 
         std::array<struct iovec, 2> writeIovecs{};
         const size_t writeCount = buffer.getWriteIovecs(writeIovecs);
@@ -177,7 +196,7 @@ void test_ring_buffer() {
 #endif
 
     {
-        RingBuffer buffer(5);
+        VectorRingBuffer buffer(5);
         assert(buffer.write("abcde", 5) == 5);
         assert(buffer.write("z", 1) == 0);
 
@@ -187,7 +206,7 @@ void test_ring_buffer() {
 
         assert(buffer.write("fg", 2) == 2);
 
-        RingBuffer moved(std::move(buffer));
+        VectorRingBuffer moved(std::move(buffer));
         assert(moved.readable() == 4);
         assert(buffer.empty());
         assert(buffer.readable() == 0);
@@ -196,7 +215,7 @@ void test_ring_buffer() {
         assert(std::string(movedOut, 4) == "defg");
         assert(moved.empty());
 
-        RingBuffer assigned(3);
+        VectorRingBuffer assigned(3);
         assert(assigned.write("xy", 2) == 2);
         assigned = std::move(moved);
         assert(assigned.empty());

@@ -321,11 +321,11 @@ using Http2ActiveConnHandler = std::function<Task<void>(Http2ConnContext&)>;
  * 2. 运行帧写入协程（Writer），从连接内 send_queue 批量发送到 socket
  * 3. 新流创建后自动 spawn 用户 handler
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy>
 class Http2StreamManagerImpl
 {
 public:
-    Http2StreamManagerImpl(Http2ConnImpl<SocketType>& conn)
+    Http2StreamManagerImpl(Http2ConnImpl<SocketType, Strategy>& conn)
         : m_conn(conn)
         , m_running(false)
     {
@@ -429,7 +429,7 @@ public:
     /**
      * @brief 获取连接引用（供用户 handler 使用）
      */
-    Http2ConnImpl<SocketType>& conn() { return m_conn; }
+    Http2ConnImpl<SocketType, Strategy>& conn() { return m_conn; }
 
     /**
      * @brief 从非协程上下文启动 StreamManager
@@ -1578,7 +1578,7 @@ private:
         switch (frame->type()) {
             case Http2FrameType::Settings: {
                 auto* settings = frame->asSettings();
-                auto err = Http2ConnImpl<SocketType>::validateSettingsFrame(*settings);
+                auto err = Http2ConnImpl<SocketType, Strategy>::validateSettingsFrame(*settings);
                 if (err != Http2ErrorCode::NoError) {
                     enqueueGoawayAction(err);
                     return;
@@ -2882,7 +2882,7 @@ private:
         }
     }
 
-    Http2ConnImpl<SocketType>& m_conn;
+    Http2ConnImpl<SocketType, Strategy>& m_conn;
     bool m_started = false;
     bool m_running;
     galay::kernel::AsyncWaiter<void> m_stop_waiter;

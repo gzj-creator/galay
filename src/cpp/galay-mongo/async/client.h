@@ -243,8 +243,8 @@ public:
     bool isClosed() const { return m_is_closed; }  ///< 判断连接是否已关闭
 
     TcpSocket& socket() { return m_socket; }        ///< 获取底层 TCP socket 的可变引用
-    galay::utils::RingBuffer& ringBuffer() { return m_ring_buffer; }   ///< 获取接收环形缓冲区
-    const galay::utils::RingBuffer& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    galay::utils::RingBuffer<>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    const galay::utils::RingBuffer<>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
 
     /**
      * @brief 分配下一个请求 ID（线程不安全）
@@ -263,7 +263,7 @@ private:
 
     AsyncMongoConfig m_config = AsyncMongoConfig::noTimeout();       ///< 异步客户端配置
     TcpSocket m_socket;                                              ///< 底层 TCP socket
-    galay::utils::RingBuffer m_ring_buffer;                          ///< 接收环形缓冲区
+    galay::utils::RingBuffer<> m_ring_buffer;                        ///< 接收环形缓冲区
     std::string m_decode_scratch;                                    ///< 解码用的临时缓冲区
     std::string m_ping_template_db;                                  ///< ping 命令模板数据库名
     std::string m_ping_encoded_template;                             ///< 预编码的 ping 命令模板

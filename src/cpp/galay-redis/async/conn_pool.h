@@ -196,7 +196,7 @@ namespace galay::redis
          * @param client Redis 客户端智能指针
          * @param scheduler IO 调度器指针
          */
-        PooledConnection(std::shared_ptr<RedisClient> client, IOScheduler* scheduler)
+        PooledConnection(std::shared_ptr<RedisClient<>> client, IOScheduler* scheduler)
             : m_client(std::move(client))
             , m_scheduler(scheduler)
             , m_last_used(std::chrono::steady_clock::now())
@@ -204,14 +204,14 @@ namespace galay::redis
         {
         }
 
-        RedisClient* get() { return m_client.get(); }              ///< 获取原始客户端指针
-        const RedisClient* get() const { return m_client.get(); }  ///< 获取原始客户端指针（const）
+        RedisClient<>* get() { return m_client.get(); }              ///< 获取原始客户端指针
+        const RedisClient<>* get() const { return m_client.get(); }  ///< 获取原始客户端指针（const）
 
-        RedisClient* operator->() { return m_client.get(); }              ///< 箭头操作符访问客户端
-        const RedisClient* operator->() const { return m_client.get(); }  ///< 箭头操作符访问客户端（const）
+        RedisClient<>* operator->() { return m_client.get(); }              ///< 箭头操作符访问客户端
+        const RedisClient<>* operator->() const { return m_client.get(); }  ///< 箭头操作符访问客户端（const）
 
-        RedisClient& operator*() { return *m_client; }              ///< 解引用操作符
-        const RedisClient& operator*() const { return *m_client; }  ///< 解引用操作符（const）
+        RedisClient<>& operator*() { return *m_client; }              ///< 解引用操作符
+        const RedisClient<>& operator*() const { return *m_client; }  ///< 解引用操作符（const）
 
         /**
          * @brief 更新最后使用时间为当前时刻
@@ -236,7 +236,7 @@ namespace galay::redis
         bool isClosed() const { return m_client->isClosed(); }     ///< 检查连接是否已关闭
 
     private:
-        std::shared_ptr<RedisClient> m_client;                          ///< 底层 Redis 客户端
+        std::shared_ptr<RedisClient<>> m_client;                          ///< 底层 Redis 客户端
         IOScheduler* m_scheduler;                                        ///< IO 调度器
         std::chrono::steady_clock::time_point m_last_used;               ///< 最后使用时间
         bool m_is_healthy;                                               ///< 健康状态标志
@@ -811,14 +811,14 @@ namespace galay::redis
             return *this;
         }
 
-        RedisClient* get() { return m_conn ? m_conn->get() : nullptr; }
-        const RedisClient* get() const { return m_conn ? m_conn->get() : nullptr; }
+        RedisClient<>* get() { return m_conn ? m_conn->get() : nullptr; }
+        const RedisClient<>* get() const { return m_conn ? m_conn->get() : nullptr; }
 
-        RedisClient* operator->() { return get(); }
-        const RedisClient* operator->() const { return get(); }
+        RedisClient<>* operator->() { return get(); }
+        const RedisClient<>* operator->() const { return get(); }
 
-        RedisClient& operator*() { return *get(); }
-        const RedisClient& operator*() const { return *get(); }
+        RedisClient<>& operator*() { return *get(); }
+        const RedisClient<>& operator*() const { return *get(); }
 
         explicit operator bool() const { return m_conn != nullptr; }
 

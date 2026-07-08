@@ -12,7 +12,7 @@ using namespace galay::websocket;
 
 namespace {
 
-bool writeAll(RingBuffer& ring, std::string_view bytes) {
+bool writeAll(RingBuffer<>& ring, std::string_view bytes) {
     return ring.write(bytes.data(), bytes.size()) == bytes.size();
 }
 
@@ -30,7 +30,7 @@ int main() {
     WsReaderSetting setting;
 
     {
-        RingBuffer ring(8);
+        RingBuffer<> ring(8);
         if (!check(writeAll(ring, "abcdef"), "failed to seed wrapped frame buffer")) {
             return 1;
         }
@@ -43,7 +43,10 @@ int main() {
         if (!check(state.prepareRecvWindow(buffer, length), "frame state should expose recv window")) {
             return 1;
         }
-        if (!check(length == 2, "frame state should expose only first writable segment for SSL recv")) {
+        if (!check(state.recvIovecsCount() == 1, "frame state should expose one contiguous mmap segment")) {
+            return 1;
+        }
+        if (!check(length == ring.writable(), "frame state should expose the full contiguous writable window")) {
             return 1;
         }
         if (!check(!state.m_recv_staged, "frame state should avoid SSL staging scratch on wrapped window")) {
@@ -55,7 +58,7 @@ int main() {
     }
 
     {
-        RingBuffer ring(8);
+        RingBuffer<> ring(8);
         if (!check(writeAll(ring, "abcdef"), "failed to seed wrapped message buffer")) {
             return 1;
         }
@@ -70,7 +73,10 @@ int main() {
         if (!check(state.prepareRecvWindow(buffer, length), "message state should expose recv window")) {
             return 1;
         }
-        if (!check(length == 2, "message state should expose only first writable segment for SSL recv")) {
+        if (!check(state.recvIovecsCount() == 1, "message state should expose one contiguous mmap segment")) {
+            return 1;
+        }
+        if (!check(length == ring.writable(), "message state should expose the full contiguous writable window")) {
             return 1;
         }
         if (!check(!state.m_recv_staged, "message state should avoid SSL staging scratch on wrapped window")) {

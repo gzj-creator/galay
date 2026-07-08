@@ -126,7 +126,7 @@ private:
     void copyReadable(size_t offset, char* dst, size_t len) const;     ///< 从环形缓冲区拷贝可读数据
     std::string consumeToString(size_t len);                           ///< 消费并转换为字符串
 
-    galay::utils::RingBuffer m_recv_ring;           ///< 接收环形缓冲区
+    galay::utils::RingBuffer<> m_recv_ring;         ///< 接收环形缓冲区
     std::string m_decode_buffer;                    ///< 解码用的临时缓冲区
     int m_socket_fd;                                ///< 底层 socket 文件描述符
     bool m_connected;                               ///< 连接状态标志

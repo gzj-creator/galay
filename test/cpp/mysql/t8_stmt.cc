@@ -82,7 +82,7 @@ Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state
 
     // 准备INSERT语句
     std::cout << "Testing PREPARE..." << std::endl;
-    std::optional<MysqlPrepareAwaitable::PrepareResult> prepare_result;
+    std::optional<MysqlPrepareAwaitable<>::PrepareResult> prepare_result;
     MYSQL_CO_PREPARE(client, "INSERT INTO galay_stmt_test (name, age) VALUES (?, ?)", prepare_result);
 
     if (prepare_result) {
@@ -134,7 +134,7 @@ Task<void> test_prepared_statement(IOScheduler* scheduler, AsyncTestState* state
     // 准备SELECT语句
     std::cout << "Testing PREPARE SELECT..." << std::endl;
     {
-        std::optional<MysqlPrepareAwaitable::PrepareResult> prep_sel;
+        std::optional<MysqlPrepareAwaitable<>::PrepareResult> prep_sel;
         MYSQL_CO_PREPARE(client, "SELECT * FROM galay_stmt_test WHERE name = ?", prep_sel);
         if (prep_sel) {
             std::cout << "  Statement ID: " << prep_sel->statement_id << std::endl;

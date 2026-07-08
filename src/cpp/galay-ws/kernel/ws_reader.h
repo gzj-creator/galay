@@ -519,7 +519,7 @@ struct WsRingBufferSslReadMachine {
 struct WsFrameReadState {
     using ResultType = std::expected<bool, WsError>;
 
-    WsFrameReadState(RingBuffer& ring_buffer,
+    WsFrameReadState(RingBuffer<>& ring_buffer,
                      const WsReaderSetting& setting,
                      WsFrame& frame,
                      bool is_server)
@@ -637,7 +637,7 @@ struct WsFrameReadState {
         return true;
     }
 
-    RingBuffer* m_ring_buffer;
+    RingBuffer<>* m_ring_buffer;
     WsReaderSetting m_setting;
     WsFrame* m_frame;
     bool m_is_server;
@@ -651,7 +651,7 @@ struct WsFrameReadState {
 struct WsMessageReadState {
     using ResultType = std::expected<bool, WsError>;
 
-    WsMessageReadState(RingBuffer& ring_buffer,
+    WsMessageReadState(RingBuffer<>& ring_buffer,
                        const WsReaderSetting& setting,
                        std::string& message,
                        WsOpcode& opcode,
@@ -965,7 +965,7 @@ struct WsMessageReadState {
         return true;
     }
 
-    RingBuffer* m_ring_buffer;
+    RingBuffer<>* m_ring_buffer;
     WsReaderSetting m_setting;
     std::string* m_message;
     WsOpcode* m_opcode;
@@ -1027,7 +1027,7 @@ public:
      * @param is_server 是否为服务器端
      * @param use_mask 是否使用掩码
      */
-    WsReaderImpl(RingBuffer& ring_buffer,
+    WsReaderImpl(RingBuffer<>& ring_buffer,
                  const WsReaderSetting& setting,
                  SocketType& socket,
                  bool is_server = true,
@@ -1076,7 +1076,7 @@ private:
         return true;
     }
 
-    RingBuffer* m_ring_buffer;
+    RingBuffer<>* m_ring_buffer;
     WsReaderSetting m_setting;
     SocketType* m_socket;
     bool m_is_server;

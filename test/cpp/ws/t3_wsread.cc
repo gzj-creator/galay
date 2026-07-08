@@ -25,7 +25,7 @@ std::string encodeMaskedFrame(WsOpcode opcode, std::string payload, bool fin = t
     return encoded;
 }
 
-void writeAll(RingBuffer& ring, std::string_view bytes) {
+void writeAll(RingBuffer<>& ring, std::string_view bytes) {
     const size_t written = ring.write(bytes.data(), bytes.size());
     if (written != bytes.size()) {
         throw std::runtime_error("ring buffer write truncated");

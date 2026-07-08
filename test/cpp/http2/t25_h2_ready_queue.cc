@@ -57,7 +57,7 @@ Task<void> activeHandler(Http2ConnContext& ctx)
 
 Task<void> runClient(uint16_t port)
 {
-    H2cClient client(H2cClientBuilder().build());
+    H2cClient<> client(H2cClientBuilder().build());
     auto connect_result = co_await client.connect("127.0.0.1", port);
     if (!connect_result) {
         std::cerr << "[T90] connect failed: " << connect_result.error().message() << "\n";

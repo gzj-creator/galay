@@ -72,7 +72,7 @@ Task<void> handleStream(Http2Stream::ptr stream) {
 /**
  * @brief 单个客户端协程 - 使用 HTTP/2 多路复用
  */
-Task<void> runClient(std::shared_ptr<H2cClient> client,
+Task<void> runClient(std::shared_ptr<H2cClient<>> client,
                      int client_id,
                      const std::string& host,
                      uint16_t port,
@@ -167,12 +167,12 @@ void runBenchmark(const std::string& host,
     runtime.start();
 
     // 客户端对象统一延迟释放，避免 kqueue 队列中残留事件访问已销毁 controller。
-    std::vector<std::shared_ptr<H2cClient>> client_pool;
+    std::vector<std::shared_ptr<H2cClient<>>> client_pool;
     client_pool.reserve(concurrent_clients);
 
     // 启动所有客户端（负载均衡到不同的调度器）
     for (int i = 0; i < concurrent_clients; i++) {
-        auto client = std::make_shared<H2cClient>(H2cClientBuilder().buildConfig());
+        auto client = std::make_shared<H2cClient<>>(H2cClientBuilder().buildConfig());
         client_pool.push_back(client);
         auto* scheduler = runtime.getNextIOScheduler();
         scheduleTask(scheduler, runClient(std::move(client), i, host, port, requests_per_client));

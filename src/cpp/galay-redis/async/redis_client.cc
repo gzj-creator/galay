@@ -13,6 +13,8 @@
 
 namespace galay::redis
 {
+    using galay::utils::RingBufferBackendStrategy;
+
     namespace detail
     {
         RedisError mapIoErrorToRedisError(const IOError& io_error, RedisErrorType fallback)
@@ -90,7 +92,8 @@ namespace galay::redis
             return result;
         }
 
-        bool parseRepliesFromRingBuffer(galay::utils::RingBuffer& ring_buffer,
+        template<RingBufferBackendStrategy Strategy>
+        bool parseRepliesFromRingBuffer(galay::utils::RingBuffer<Strategy>& ring_buffer,
                                         protocol::RespParser& parser,
                                         std::string& parse_buffer,
                                         size_t expected_replies,
@@ -171,10 +174,11 @@ namespace galay::redis
 
     } // namespace detail
 
-    detail::RedisExchangeSharedState::RedisExchangeSharedState(RedisClient& client,
-                                                               std::string encoded_command_in,
-                                                               size_t expected_replies_in,
-                                                               bool recv_only_in)
+    template<RingBufferBackendStrategy Strategy>
+    detail::RedisExchangeSharedState<Strategy>::RedisExchangeSharedState(RedisClient<Strategy>& client,
+                                                                         std::string encoded_command_in,
+                                                                         size_t expected_replies_in,
+                                                                         bool recv_only_in)
         : encoded_cmd(std::move(encoded_command_in))
         , client(&client)
         , expected_replies(expected_replies_in)
@@ -188,14 +192,15 @@ namespace galay::redis
         values.reserve(expected_replies);
         if (expected_replies == 0) {
             result = std::optional<std::vector<RedisValue>>(std::vector<RedisValue>{});
-            phase = RedisExchangeSharedState::Phase::Done;
+            phase = RedisExchangeSharedState<Strategy>::Phase::Done;
         }
     }
 
-    detail::RedisExchangeSharedState::RedisExchangeSharedState(RedisClient& client,
-                                                               std::string_view encoded_command_in,
-                                                               size_t expected_replies_in,
-                                                               bool recv_only_in)
+    template<RingBufferBackendStrategy Strategy>
+    detail::RedisExchangeSharedState<Strategy>::RedisExchangeSharedState(RedisClient<Strategy>& client,
+                                                                         std::string_view encoded_command_in,
+                                                                         size_t expected_replies_in,
+                                                                         bool recv_only_in)
         : encoded_view(recv_only_in ? std::string_view{} : encoded_command_in)
         , client(&client)
         , expected_replies(expected_replies_in)
@@ -204,12 +209,13 @@ namespace galay::redis
         values.reserve(expected_replies);
         if (expected_replies == 0) {
             result = std::optional<std::vector<RedisValue>>(std::vector<RedisValue>{});
-            phase = RedisExchangeSharedState::Phase::Done;
+            phase = RedisExchangeSharedState<Strategy>::Phase::Done;
         }
     }
 
-    detail::RedisExchangeSharedState::RedisExchangeSharedState(
-        RedisClient& client,
+    template<RingBufferBackendStrategy Strategy>
+    detail::RedisExchangeSharedState<Strategy>::RedisExchangeSharedState(
+        RedisClient<Strategy>& client,
         std::span<const RedisCommandView> commands)
         : client(&client)
         , expected_replies(commands.size())
@@ -217,7 +223,7 @@ namespace galay::redis
         values.reserve(expected_replies);
         if (expected_replies == 0) {
             result = std::optional<std::vector<RedisValue>>(std::vector<RedisValue>{});
-            phase = RedisExchangeSharedState::Phase::Done;
+            phase = RedisExchangeSharedState<Strategy>::Phase::Done;
             return;
         }
 
@@ -240,32 +246,38 @@ namespace galay::redis
         encoded_view = encoded_cmd;
     }
 
-    detail::RedisExchangeMachine::RedisExchangeMachine(std::shared_ptr<RedisExchangeSharedState> state)
+    template<RingBufferBackendStrategy Strategy>
+    detail::RedisExchangeMachine<Strategy>::RedisExchangeMachine(
+        std::shared_ptr<RedisExchangeSharedState<Strategy>> state)
         : m_state(std::move(state))
     {
     }
 
-    void detail::RedisExchangeMachine::setError(RedisError error) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisExchangeMachine<Strategy>::setError(RedisError error) noexcept
     {
         m_state->result = std::unexpected(std::move(error));
-        m_state->phase = RedisExchangeSharedState::Phase::Invalid;
+        m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Invalid;
     }
 
-    void detail::RedisExchangeMachine::setSendError(const IOError& io_error) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisExchangeMachine<Strategy>::setSendError(const IOError& io_error) noexcept
     {
         setError(detail::mapIoErrorToRedisError(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR));
     }
 
-    void detail::RedisExchangeMachine::setRecvError(const IOError& io_error) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisExchangeMachine<Strategy>::setRecvError(const IOError& io_error) noexcept
     {
         setError(detail::mapIoErrorToRedisError(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_RECV_ERROR));
     }
 
-    bool detail::RedisExchangeMachine::prepareReadWindow()
+    template<RingBufferBackendStrategy Strategy>
+    bool detail::RedisExchangeMachine<Strategy>::prepareReadWindow()
     {
         m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
             m_state->read_iovecs.data(),
@@ -279,7 +291,8 @@ namespace galay::redis
         return true;
     }
 
-    std::expected<bool, RedisError> detail::RedisExchangeMachine::tryParseReplies()
+    template<RingBufferBackendStrategy Strategy>
+    std::expected<bool, RedisError> detail::RedisExchangeMachine<Strategy>::tryParseReplies()
     {
         bool parse_error = false;
         const bool done = detail::parseRepliesFromRingBuffer(
@@ -297,38 +310,39 @@ namespace galay::redis
         return done;
     }
 
-    galay::kernel::MachineAction<detail::RedisExchangeMachine::result_type>
-    detail::RedisExchangeMachine::advance()
+    template<RingBufferBackendStrategy Strategy>
+    galay::kernel::MachineAction<typename detail::RedisExchangeMachine<Strategy>::result_type>
+    detail::RedisExchangeMachine<Strategy>::advance()
     {
         if (m_state->result.has_value()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
         switch (m_state->phase) {
-        case RedisExchangeSharedState::Phase::Invalid:
+        case RedisExchangeSharedState<Strategy>::Phase::Invalid:
             setError(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                 "Redis exchange machine in invalid state"));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
-        case RedisExchangeSharedState::Phase::Start:
+        case RedisExchangeSharedState<Strategy>::Phase::Start:
             if (m_state->expected_replies == 0) {
                 m_state->result = std::optional<std::vector<RedisValue>>(std::vector<RedisValue>{});
-                m_state->phase = RedisExchangeSharedState::Phase::Done;
+                m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Done;
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
             m_state->phase = (m_state->recv_only || m_state->encoded_view.empty())
-                ? RedisExchangeSharedState::Phase::Parse
-                : RedisExchangeSharedState::Phase::Send;
+                ? RedisExchangeSharedState<Strategy>::Phase::Parse
+                : RedisExchangeSharedState<Strategy>::Phase::Send;
             return galay::kernel::MachineAction<result_type>::continue_();
-        case RedisExchangeSharedState::Phase::Send:
+        case RedisExchangeSharedState<Strategy>::Phase::Send:
             if (m_state->sent >= m_state->encoded_view.size()) {
-                m_state->phase = RedisExchangeSharedState::Phase::Parse;
+                m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Parse;
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
             return galay::kernel::MachineAction<result_type>::waitWrite(
                 m_state->encoded_view.data() + m_state->sent,
                 m_state->encoded_view.size() - m_state->sent);
-        case RedisExchangeSharedState::Phase::Parse: {
+        case RedisExchangeSharedState<Strategy>::Phase::Parse: {
             auto parsed = tryParseReplies();
             if (!parsed.has_value()) {
                 setError(std::move(parsed.error()));
@@ -337,7 +351,7 @@ namespace galay::redis
             if (parsed.value()) {
                 auto values = std::move(m_state->values);
                 m_state->result = std::optional<std::vector<RedisValue>>(std::move(values));
-                m_state->phase = RedisExchangeSharedState::Phase::Done;
+                m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Done;
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
             if (!prepareReadWindow()) {
@@ -347,7 +361,7 @@ namespace galay::redis
                 m_state->read_iovecs.data(),
                 m_state->read_iov_count);
         }
-        case RedisExchangeSharedState::Phase::Done:
+        case RedisExchangeSharedState<Strategy>::Phase::Done:
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
@@ -357,7 +371,8 @@ namespace galay::redis
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
-    void detail::RedisExchangeMachine::onRead(std::expected<size_t, IOError> result)
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisExchangeMachine<Strategy>::onRead(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
@@ -374,10 +389,11 @@ namespace galay::redis
         }
 
         m_state->client->ringBuffer().produce(result.value());
-        m_state->phase = RedisExchangeSharedState::Phase::Parse;
+        m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Parse;
     }
 
-    void detail::RedisExchangeMachine::onWrite(std::expected<size_t, IOError> result)
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisExchangeMachine<Strategy>::onWrite(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
@@ -395,17 +411,18 @@ namespace galay::redis
 
         m_state->sent += result.value();
         if (m_state->sent >= m_state->encoded_view.size()) {
-            m_state->phase = RedisExchangeSharedState::Phase::Parse;
-        }
+            m_state->phase = RedisExchangeSharedState<Strategy>::Phase::Parse;
+    }
     }
 
-    detail::RedisConnectSharedState::RedisConnectSharedState(RedisClient& client,
-                                                             std::string ip_in,
-                                                             int32_t port_in,
-                                                             std::string username_in,
-                                                             std::string password_in,
-                                                             int32_t db_index_in,
-                                                             int version_in)
+    template<RingBufferBackendStrategy Strategy>
+    detail::RedisConnectSharedState<Strategy>::RedisConnectSharedState(RedisClient<Strategy>& client,
+                                                                       std::string ip_in,
+                                                                       int32_t port_in,
+                                                                       std::string username_in,
+                                                                       std::string password_in,
+                                                                       int32_t db_index_in,
+                                                                       int version_in)
         : host(version_in == 6 ? IPType::IPV6 : IPType::IPV4, ip_in, port_in)
         , ip(std::move(ip_in))
         , username(std::move(username_in))
@@ -419,39 +436,46 @@ namespace galay::redis
         client.parser() = protocol::RespParser();
     }
 
-    detail::RedisConnectMachine::RedisConnectMachine(std::shared_ptr<RedisConnectSharedState> state)
+    template<RingBufferBackendStrategy Strategy>
+    detail::RedisConnectMachine<Strategy>::RedisConnectMachine(
+        std::shared_ptr<RedisConnectSharedState<Strategy>> state)
         : m_state(std::move(state))
     {
     }
 
-    void detail::RedisConnectMachine::setError(RedisError error) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisConnectMachine<Strategy>::setError(RedisError error) noexcept
     {
         m_state->result = std::unexpected(std::move(error));
-        m_state->phase = RedisConnectSharedState::Phase::Invalid;
+        m_state->phase = RedisConnectSharedState<Strategy>::Phase::Invalid;
     }
 
-    void detail::RedisConnectMachine::setConnectError(const IOError& io_error) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisConnectMachine<Strategy>::setConnectError(const IOError& io_error) noexcept
     {
         setError(detail::mapIoErrorToRedisError(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
     }
 
-    void detail::RedisConnectMachine::setSendError(const IOError& io_error) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisConnectMachine<Strategy>::setSendError(const IOError& io_error) noexcept
     {
         setError(detail::mapIoErrorToRedisError(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR));
     }
 
-    void detail::RedisConnectMachine::setRecvError(const IOError& io_error) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisConnectMachine<Strategy>::setRecvError(const IOError& io_error) noexcept
     {
         setError(detail::mapIoErrorToRedisError(
             io_error,
             RedisErrorType::REDIS_ERROR_TYPE_RECV_ERROR));
     }
 
-    bool detail::RedisConnectMachine::prepareReadWindow()
+    template<RingBufferBackendStrategy Strategy>
+    bool detail::RedisConnectMachine<Strategy>::prepareReadWindow()
     {
         m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
             m_state->read_iovecs.data(),
@@ -465,11 +489,12 @@ namespace galay::redis
         return true;
     }
 
-    bool detail::RedisConnectMachine::prepareNextCommand()
+    template<RingBufferBackendStrategy Strategy>
+    bool detail::RedisConnectMachine<Strategy>::prepareNextCommand()
     {
         RedisCommandBuilder builder;
         if (!m_state->auth_sent && (!m_state->username.empty() || !m_state->password.empty())) {
-            m_state->pending_command = RedisConnectSharedState::PendingCommand::Auth;
+            m_state->pending_command = RedisConnectSharedState<Strategy>::PendingCommand::Auth;
             m_state->auth_sent = true;
             m_state->encoded_cmd = m_state->username.empty()
                 ? builder.auth(m_state->password).encoded
@@ -479,19 +504,20 @@ namespace galay::redis
         }
 
         if (!m_state->select_sent && m_state->db_index != 0) {
-            m_state->pending_command = RedisConnectSharedState::PendingCommand::Select;
+            m_state->pending_command = RedisConnectSharedState<Strategy>::PendingCommand::Select;
             m_state->select_sent = true;
             m_state->encoded_cmd = builder.select(m_state->db_index).encoded;
             m_state->sent = 0;
             return true;
         }
 
-        m_state->pending_command = RedisConnectSharedState::PendingCommand::None;
+        m_state->pending_command = RedisConnectSharedState<Strategy>::PendingCommand::None;
         m_state->encoded_cmd.clear();
         return false;
     }
 
-    std::expected<bool, RedisError> detail::RedisConnectMachine::tryParseReply()
+    template<RingBufferBackendStrategy Strategy>
+    std::expected<bool, RedisError> detail::RedisConnectMachine<Strategy>::tryParseReply()
     {
         bool parse_error = false;
         const bool done = detail::parseRepliesFromRingBuffer(
@@ -519,45 +545,46 @@ namespace galay::redis
         RedisValue reply = std::move(m_state->values.front());
         m_state->values.clear();
         if (reply.isError()) {
-            const auto error_type = m_state->pending_command == RedisConnectSharedState::PendingCommand::Auth
+            const auto error_type = m_state->pending_command == RedisConnectSharedState<Strategy>::PendingCommand::Auth
                 ? RedisErrorType::REDIS_ERROR_TYPE_AUTH_ERROR
                 : RedisErrorType::REDIS_ERROR_TYPE_INVALID_ERROR;
             return std::unexpected(RedisError(error_type, reply.toError()));
         }
 
         if (prepareNextCommand()) {
-            m_state->phase = RedisConnectSharedState::Phase::Send;
+            m_state->phase = RedisConnectSharedState<Strategy>::Phase::Send;
         } else {
-            m_state->phase = RedisConnectSharedState::Phase::Done;
+            m_state->phase = RedisConnectSharedState<Strategy>::Phase::Done;
             m_state->result = RedisVoidResult{};
         }
         return true;
     }
 
-    galay::kernel::MachineAction<RedisVoidResult>
-    detail::RedisConnectMachine::advance()
+    template<RingBufferBackendStrategy Strategy>
+    galay::kernel::MachineAction<typename detail::RedisConnectMachine<Strategy>::result_type>
+    detail::RedisConnectMachine<Strategy>::advance()
     {
         if (m_state->result.has_value()) {
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
         }
 
         switch (m_state->phase) {
-        case RedisConnectSharedState::Phase::Invalid:
+        case RedisConnectSharedState<Strategy>::Phase::Invalid:
             setError(RedisError(
                 RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
                 "Redis connect machine in invalid state"));
             return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
-        case RedisConnectSharedState::Phase::Connect:
+        case RedisConnectSharedState<Strategy>::Phase::Connect:
             return galay::kernel::MachineAction<result_type>::waitConnect(m_state->host);
-        case RedisConnectSharedState::Phase::Send:
+        case RedisConnectSharedState<Strategy>::Phase::Send:
             if (m_state->sent >= m_state->encoded_cmd.size()) {
-                m_state->phase = RedisConnectSharedState::Phase::Parse;
+                m_state->phase = RedisConnectSharedState<Strategy>::Phase::Parse;
                 return galay::kernel::MachineAction<result_type>::continue_();
             }
             return galay::kernel::MachineAction<result_type>::waitWrite(
                 m_state->encoded_cmd.data() + m_state->sent,
                 m_state->encoded_cmd.size() - m_state->sent);
-        case RedisConnectSharedState::Phase::Parse: {
+        case RedisConnectSharedState<Strategy>::Phase::Parse: {
             auto parsed = tryParseReply();
             if (!parsed.has_value()) {
                 setError(std::move(parsed.error()));
@@ -573,7 +600,7 @@ namespace galay::redis
                 m_state->read_iovecs.data(),
                 m_state->read_iov_count);
         }
-        case RedisConnectSharedState::Phase::Done:
+        case RedisConnectSharedState<Strategy>::Phase::Done:
             if (!m_state->result.has_value()) {
                 m_state->result = RedisVoidResult{};
             }
@@ -586,7 +613,8 @@ namespace galay::redis
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
     }
 
-    void detail::RedisConnectMachine::onConnect(std::expected<void, IOError> result)
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisConnectMachine<Strategy>::onConnect(std::expected<void, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
@@ -598,14 +626,15 @@ namespace galay::redis
 
         m_state->client->setClosed(false);
         if (prepareNextCommand()) {
-            m_state->phase = RedisConnectSharedState::Phase::Send;
+            m_state->phase = RedisConnectSharedState<Strategy>::Phase::Send;
         } else {
-            m_state->phase = RedisConnectSharedState::Phase::Done;
+            m_state->phase = RedisConnectSharedState<Strategy>::Phase::Done;
             m_state->result = RedisVoidResult{};
         }
     }
 
-    void detail::RedisConnectMachine::onRead(std::expected<size_t, IOError> result)
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisConnectMachine<Strategy>::onRead(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
@@ -622,10 +651,11 @@ namespace galay::redis
         }
 
         m_state->client->ringBuffer().produce(result.value());
-        m_state->phase = RedisConnectSharedState::Phase::Parse;
+        m_state->phase = RedisConnectSharedState<Strategy>::Phase::Parse;
     }
 
-    void detail::RedisConnectMachine::onWrite(std::expected<size_t, IOError> result)
+    template<RingBufferBackendStrategy Strategy>
+    void detail::RedisConnectMachine<Strategy>::onWrite(std::expected<size_t, IOError> result)
     {
         if (m_state->result.has_value()) {
             return;
@@ -643,19 +673,21 @@ namespace galay::redis
 
         m_state->sent += result.value();
         if (m_state->sent >= m_state->encoded_cmd.size()) {
-            m_state->phase = RedisConnectSharedState::Phase::Parse;
+            m_state->phase = RedisConnectSharedState<Strategy>::Phase::Parse;
         }
     }
 
-    RedisClient::RedisClient(IOScheduler* scheduler,
-                             AsyncRedisConfig config)
+    template<RingBufferBackendStrategy Strategy>
+    RedisClient<Strategy>::RedisClient(IOScheduler* scheduler,
+                                       AsyncRedisConfig config)
         : m_config(config)
-        , m_ring_buffer(std::make_shared<galay::utils::RingBuffer>(config.buffer_size))
+        , m_ring_buffer(std::make_shared<galay::utils::RingBuffer<Strategy>>(config.buffer_size))
         , m_scheduler(scheduler)
     {
     }
 
-    RedisClient::RedisClient(RedisClient&& other) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    RedisClient<Strategy>::RedisClient(RedisClient&& other) noexcept
         : m_socket(std::move(other.m_socket))
         , m_config(other.m_config)
         , m_ring_buffer(std::move(other.m_ring_buffer))
@@ -666,7 +698,8 @@ namespace galay::redis
         other.m_is_closed = true;
     }
 
-    RedisClient& RedisClient::operator=(RedisClient&& other) noexcept
+    template<RingBufferBackendStrategy Strategy>
+    RedisClient<Strategy>& RedisClient<Strategy>::operator=(RedisClient&& other) noexcept
     {
         if (this != &other) {
             m_is_closed = other.m_is_closed;
@@ -680,69 +713,75 @@ namespace galay::redis
         return *this;
     }
 
-    RedisExchangeOperation RedisClient::command(RedisEncodedCommand command_packet)
+    template<RingBufferBackendStrategy Strategy>
+    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::command(RedisEncodedCommand command_packet)
     {
-        auto state = std::make_shared<detail::RedisExchangeSharedState>(
+        auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(
             *this,
             std::move(command_packet.encoded),
             command_packet.expected_replies,
             false);
         return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
                    m_socket.controller(),
-                   detail::RedisExchangeMachine(std::move(state)))
+                   detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
     }
 
-    RedisExchangeOperation RedisClient::commandBorrowed(const RedisBorrowedCommand& packet)
+    template<RingBufferBackendStrategy Strategy>
+    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::commandBorrowed(const RedisBorrowedCommand& packet)
     {
-        auto state = std::make_shared<detail::RedisExchangeSharedState>(
+        auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(
             *this,
             packet.encoded(),
             packet.expectedReplies(),
             false);
         return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
                    m_socket.controller(),
-                   detail::RedisExchangeMachine(std::move(state)))
+                   detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
     }
 
-    RedisExchangeOperation RedisClient::receive(size_t expected_replies)
+    template<RingBufferBackendStrategy Strategy>
+    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::receive(size_t expected_replies)
     {
-        auto state = std::make_shared<detail::RedisExchangeSharedState>(
+        auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(
             *this,
             std::string(),
             expected_replies,
             true);
         return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
                    m_socket.controller(),
-                   detail::RedisExchangeMachine(std::move(state)))
+                   detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
     }
 
-    RedisExchangeOperation RedisClient::batch(std::span<const RedisCommandView> commands)
+    template<RingBufferBackendStrategy Strategy>
+    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::batch(std::span<const RedisCommandView> commands)
     {
-        auto state = std::make_shared<detail::RedisExchangeSharedState>(*this, commands);
+        auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(*this, commands);
         return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
                    m_socket.controller(),
-                   detail::RedisExchangeMachine(std::move(state)))
+                   detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
     }
 
-    RedisExchangeOperation RedisClient::batchBorrowed(const std::string& encoded,
-                                                      size_t expected_replies)
+    template<RingBufferBackendStrategy Strategy>
+    RedisExchangeOperationFor<Strategy> RedisClient<Strategy>::batchBorrowed(const std::string& encoded,
+                                                                            size_t expected_replies)
     {
-        auto state = std::make_shared<detail::RedisExchangeSharedState>(
+        auto state = std::make_shared<detail::RedisExchangeSharedState<Strategy>>(
             *this,
             std::string_view(encoded),
             expected_replies,
             false);
         return galay::kernel::AwaitableBuilder<detail::RedisExchangeResult>::fromStateMachine(
                    m_socket.controller(),
-                   detail::RedisExchangeMachine(std::move(state)))
+                   detail::RedisExchangeMachine<Strategy>(std::move(state)))
             .build();
     }
 
-    RedisConnectOperation RedisClient::connect(const std::string& url)
+    template<RingBufferBackendStrategy Strategy>
+    RedisConnectOperationFor<Strategy> RedisClient<Strategy>::connect(const std::string& url)
     {
         std::regex pattern(R"(^redis://(?:([^:@]*)(?::([^@]*))?@)?([a-zA-Z0-9\-\.]+)(?::(\d+))?(?:/(\d+))?$)");
         std::smatch matches;
@@ -814,11 +853,12 @@ namespace galay::redis
         return connect(ip, port, std::move(options));
     }
 
-    RedisConnectOperation RedisClient::connect(const std::string& ip,
-                                               int32_t port,
-                                               RedisConnectOptions options)
+    template<RingBufferBackendStrategy Strategy>
+    RedisConnectOperationFor<Strategy> RedisClient<Strategy>::connect(const std::string& ip,
+                                                                     int32_t port,
+                                                                     RedisConnectOptions options)
     {
-        auto state = std::make_shared<detail::RedisConnectSharedState>(
+        auto state = std::make_shared<detail::RedisConnectSharedState<Strategy>>(
             *this,
             ip,
             port,
@@ -832,12 +872,16 @@ namespace galay::redis
                 state->result = std::unexpected(detail::mapIoErrorToRedisError(
                     nodelay_result.error(),
                     RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
-                state->phase = detail::RedisConnectSharedState::Phase::Invalid;
+                state->phase = detail::RedisConnectSharedState<Strategy>::Phase::Invalid;
             }
         }
         return galay::kernel::AwaitableBuilder<RedisVoidResult>::fromStateMachine(
                    m_socket.controller(),
-                   detail::RedisConnectMachine(std::move(state)))
+                   detail::RedisConnectMachine<Strategy>(std::move(state)))
             .build();
     }
+
+    template class RedisClient<RingBufferBackendStrategy::Mmap>;
+    template class RedisClient<RingBufferBackendStrategy::Vector>;
+    template class RedisClient<RingBufferBackendStrategy::Auto>;
 } // namespace galay::redis

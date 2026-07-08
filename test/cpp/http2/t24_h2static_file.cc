@@ -71,7 +71,7 @@ Task<void> fallbackActiveHandler(Http2ConnContext& ctx)
     co_return;
 }
 
-Http2Stream::ptr sendRequest(H2cClient& client,
+Http2Stream::ptr sendRequest(H2cClient<>& client,
                              uint16_t port,
                              const std::string& method,
                              const std::string& path,
@@ -99,7 +99,7 @@ Http2Stream::ptr sendRequest(H2cClient& client,
 
 Task<void> runIntegrationClient(uint16_t port)
 {
-    H2cClient client(H2cClientBuilder().build());
+    H2cClient<> client(H2cClientBuilder().build());
     auto connect_result = co_await client.connect("127.0.0.1", port);
     if (!connect_result) {
         std::cerr << "[T89] connect failed: " << connect_result.error().message() << "\n";

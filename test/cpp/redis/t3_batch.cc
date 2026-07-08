@@ -15,7 +15,7 @@ namespace
         { client.batch(commands).timeout(std::chrono::milliseconds(200)) };
     };
 
-    static_assert(HasBatchTimeoutApi<RedisClient>);
+    static_assert(HasBatchTimeoutApi<RedisClient<>>);
 }
 
 int main()

@@ -40,6 +40,7 @@ using namespace galay::kernel;
 using namespace galay::http;
 using namespace galay::async;
 using ::galay::utils::RingBuffer;
+using ::galay::utils::RingBufferBackendStrategy;
 
 struct H2cClientConfig
 {
@@ -58,6 +59,7 @@ struct H2cClientConfig
     Http2FlowControlStrategy flow_control_strategy;
 };
 
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class H2cClient;
 
 class H2cClientBuilder {
@@ -78,7 +80,7 @@ public:
         m_config.flow_control_strategy = std::move(v);
         return *this;
     }
-    H2cClient build() const;
+    H2cClient<> build() const;
     H2cClientConfig buildConfig() const {
         return Http2Conn::normalizeSettingsConfig(m_config);
     }
@@ -87,11 +89,16 @@ private:
 };
 
 // Forward declarations
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class H2cUpgradeAwaitable;
+
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+struct H2cUpgradeMachine;
 
 /**
  * @brief H2c 客户端 (HTTP/2 over cleartext)
  */
+template<RingBufferBackendStrategy Strategy>
 class H2cClient
 {
 public:
@@ -116,7 +123,7 @@ public:
         m_port = port;
         m_authority = m_host + ":" + std::to_string(m_port);
         m_socket = std::make_unique<TcpSocket>(IPType::IPV4);
-        m_ring_buffer = std::make_unique<RingBuffer>(m_ring_buffer_size);
+        m_ring_buffer = std::make_unique<RingBuffer<Strategy>>(m_ring_buffer_size);
         auto r = m_socket->option().handleNonBlock();
         if (!r) {
             m_socket.reset();
@@ -135,7 +142,7 @@ public:
         co_return co_await m_socket->connect(server_host);
     }
 
-    H2cUpgradeAwaitable upgrade(const std::string& path = "/");
+    H2cUpgradeAwaitable<Strategy> upgrade(const std::string& path = "/");
     Http2Stream::ptr get(const std::string& path);
     Http2Stream::ptr post(const std::string& path,
                           const std::string& body,
@@ -143,11 +150,11 @@ public:
     Task<std::expected<bool, Http2Error>> shutdown();
 
     bool isUpgraded() const { return m_upgraded; }
-    Http2ConnImpl<TcpSocket>* getConn() { return m_conn.get(); }
+    Http2ConnImpl<TcpSocket, Strategy>* getConn() { return m_conn.get(); }
 
 private:
-    friend struct H2cUpgradeMachine;
-    friend class H2cUpgradeAwaitable;
+    friend struct H2cUpgradeMachine<Strategy>;
+    friend class H2cUpgradeAwaitable<Strategy>;
 
     H2cClientConfig m_config;
     std::string m_host;
@@ -155,8 +162,8 @@ private:
     uint16_t m_port;
     size_t m_ring_buffer_size;
     std::unique_ptr<TcpSocket> m_socket;
-    std::unique_ptr<RingBuffer> m_ring_buffer;
-    std::unique_ptr<Http2ConnImpl<TcpSocket>> m_conn;
+    std::unique_ptr<RingBuffer<Strategy>> m_ring_buffer;
+    std::unique_ptr<Http2ConnImpl<TcpSocket, Strategy>> m_conn;
     std::optional<Http2SettingsFrame> m_pending_peer_settings;
     bool m_upgraded;
     std::expected<bool, Http2Error> m_upgrade_result{true};
@@ -167,10 +174,11 @@ private:
  * @brief H2c 升级状态机
  * @details IO 顺序：SEND upgrade → RECV 101 → SEND preface+settings → RECV settings → SEND ACK
  */
+template<RingBufferBackendStrategy Strategy>
 struct H2cUpgradeMachine {
     using result_type = std::expected<bool, Http2Error>;
 
-    explicit H2cUpgradeMachine(H2cClient& client, const std::string& path)
+    explicit H2cUpgradeMachine(H2cClient<Strategy>& client, const std::string& path)
         : m_client(&client)
         , m_ring_buffer(client.m_ring_buffer.get())
     {
@@ -205,7 +213,7 @@ struct H2cUpgradeMachine {
                     m_phase = Phase::kSendPrefaceSettings;
                     continue;
                 }
-                if (!prepareRecvWindow("RingBuffer full while waiting 101")) {
+                if (!prepareRecvWindow("RingBuffer<> full while waiting 101")) {
                     return MachineAction<result_type>::complete(std::move(*m_result));
                 }
                 return MachineAction<result_type>::waitReadv(m_read_iov_storage.data(), m_read_iov_count);
@@ -222,7 +230,7 @@ struct H2cUpgradeMachine {
                     m_phase = Phase::kSendAck;
                     continue;
                 }
-                if (!prepareRecvWindow("RingBuffer full while waiting SETTINGS")) {
+                if (!prepareRecvWindow("RingBuffer<> full while waiting SETTINGS")) {
                     return MachineAction<result_type>::complete(std::move(*m_result));
                 }
                 return MachineAction<result_type>::waitReadv(m_read_iov_storage.data(), m_read_iov_count);
@@ -504,8 +512,8 @@ private:
         return true;
     }
 
-    H2cClient* m_client = nullptr;
-    RingBuffer* m_ring_buffer = nullptr;
+    H2cClient<Strategy>* m_client = nullptr;
+    RingBuffer<Strategy>* m_ring_buffer = nullptr;
     Phase m_phase = Phase::kSendUpgrade;
     size_t m_send_offset = 0;
     std::string m_upgrade_request_buf;
@@ -521,9 +529,10 @@ private:
  * @brief H2c 升级 awaitable 包装器
  * @details 适配新 `StateMachineAwaitable`，并在 `await_resume()` 时完成 transport 最终接管。
  */
+template<RingBufferBackendStrategy Strategy>
 class H2cUpgradeAwaitable
     : public SequenceAwaitableBase
-    , public TimeoutSupport<H2cUpgradeAwaitable>
+    , public TimeoutSupport<H2cUpgradeAwaitable<Strategy>>
 {
 public:
     using ResultType = std::expected<bool, Http2Error>;
@@ -534,7 +543,7 @@ public:
     H2cUpgradeAwaitable(H2cUpgradeAwaitable&&) noexcept = default;
     H2cUpgradeAwaitable& operator=(H2cUpgradeAwaitable&&) noexcept = default;
 
-    H2cUpgradeAwaitable(H2cClient& client, const std::string& path)
+    H2cUpgradeAwaitable(H2cClient<Strategy>& client, const std::string& path)
         : SequenceAwaitableBase(client.m_socket ? client.m_socket->controller() : nullptr)
         , m_client(&client)
     {
@@ -547,7 +556,7 @@ public:
         m_inner_operation = std::make_unique<InnerOperation>(
             AwaitableBuilder<ResultType>::fromStateMachine(
                 client.m_socket->controller(),
-                H2cUpgradeMachine(client, path))
+                H2cUpgradeMachine<Strategy>(client, path))
                 .build()
         );
     }
@@ -619,10 +628,10 @@ public:
     std::expected<bool, IOError> m_result{true};
 
 private:
-    using InnerOperation = galay::kernel::StateMachineAwaitable<H2cUpgradeMachine>;
+    using InnerOperation = galay::kernel::StateMachineAwaitable<H2cUpgradeMachine<Strategy>>;
 
-    static void discardTransport(H2cClient& client);
-    static bool finalizeTransport(H2cClient& client, Scheduler* scheduler);
+    static void discardTransport(H2cClient<Strategy>& client);
+    static bool finalizeTransport(H2cClient<Strategy>& client, Scheduler* scheduler);
     static Http2Error translateIoError(const IOError& error);
 
     ResultType resumeInner() {
@@ -637,7 +646,7 @@ private:
         }
     }
 
-    H2cClient* m_client = nullptr;
+    H2cClient<Strategy>* m_client = nullptr;
     std::unique_ptr<InnerOperation> m_inner_operation;
     std::optional<Http2Error> m_error;
     Scheduler* m_scheduler = nullptr;
@@ -646,11 +655,12 @@ private:
     bool m_inner_completed = false;
 };
 
-inline H2cClient H2cClientBuilder::build() const {
-    return H2cClient(Http2Conn::normalizeSettingsConfig(m_config));
+inline H2cClient<> H2cClientBuilder::build() const {
+    return H2cClient<>(Http2Conn::normalizeSettingsConfig(m_config));
 }
 
-inline void H2cUpgradeAwaitable::discardTransport(H2cClient& client) {
+template<RingBufferBackendStrategy Strategy>
+inline void H2cUpgradeAwaitable<Strategy>::discardTransport(H2cClient<Strategy>& client) {
     if (client.m_conn != nullptr) {
         if (client.m_conn->socket().handle().fd >= 0) {
             int close_result = ::close(client.m_conn->socket().handle().fd);
@@ -675,12 +685,13 @@ inline void H2cUpgradeAwaitable::discardTransport(H2cClient& client) {
     client.m_upgraded = false;
 }
 
-inline bool H2cUpgradeAwaitable::finalizeTransport(H2cClient& client, Scheduler* scheduler) {
+template<RingBufferBackendStrategy Strategy>
+inline bool H2cUpgradeAwaitable<Strategy>::finalizeTransport(H2cClient<Strategy>& client, Scheduler* scheduler) {
     if (scheduler == nullptr || client.m_socket == nullptr || client.m_ring_buffer == nullptr) {
         return false;
     }
 
-    client.m_conn = std::make_unique<Http2ConnImpl<TcpSocket>>(
+    client.m_conn = std::make_unique<Http2ConnImpl<TcpSocket, Strategy>>(
         std::move(*client.m_socket), std::move(*client.m_ring_buffer));
     auto local_settings = Http2Conn::makeSettingsFrameFromConfig(client.m_config, 0);
     if (client.m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
@@ -715,7 +726,8 @@ inline bool H2cUpgradeAwaitable::finalizeTransport(H2cClient& client, Scheduler*
     return true;
 }
 
-inline Http2Error H2cUpgradeAwaitable::translateIoError(const IOError& error) {
+template<RingBufferBackendStrategy Strategy>
+inline Http2Error H2cUpgradeAwaitable<Strategy>::translateIoError(const IOError& error) {
     if (IOError::contains(error.code(), kTimeout)) {
         return Http2Error(Http2ErrorCode::ConnectError, "upgrade timeout");
     }
@@ -725,7 +737,8 @@ inline Http2Error H2cUpgradeAwaitable::translateIoError(const IOError& error) {
     return Http2Error(Http2ErrorCode::InternalError, error.message());
 }
 
-inline std::expected<bool, Http2Error> H2cUpgradeAwaitable::await_resume() {
+template<RingBufferBackendStrategy Strategy>
+inline std::expected<bool, Http2Error> H2cUpgradeAwaitable<Strategy>::await_resume() {
     const auto fail = [this](Http2Error error) -> ResultType {
         discardTransport(*m_client);
         m_client->m_upgrade_result = std::unexpected(error);
@@ -763,13 +776,15 @@ inline std::expected<bool, Http2Error> H2cUpgradeAwaitable::await_resume() {
     return result;
 }
 
-inline H2cUpgradeAwaitable H2cClient::upgrade(const std::string& path) {
-    return H2cUpgradeAwaitable(*this, path);
+template<RingBufferBackendStrategy Strategy>
+inline H2cUpgradeAwaitable<Strategy> H2cClient<Strategy>::upgrade(const std::string& path) {
+    return H2cUpgradeAwaitable<Strategy>(*this, path);
 }
 
 // ============== get() / post() ==============
 
-inline Http2Stream::ptr H2cClient::get(const std::string& path) {
+template<RingBufferBackendStrategy Strategy>
+inline Http2Stream::ptr H2cClient<Strategy>::get(const std::string& path) {
     if (!m_conn || !m_conn->streamManager()) {
         return nullptr;
     }
@@ -785,9 +800,10 @@ inline Http2Stream::ptr H2cClient::get(const std::string& path) {
     return stream;
 }
 
-inline Http2Stream::ptr H2cClient::post(const std::string& path,
-                                         const std::string& body,
-                                         const std::string& content_type) {
+template<RingBufferBackendStrategy Strategy>
+inline Http2Stream::ptr H2cClient<Strategy>::post(const std::string& path,
+                                                  const std::string& body,
+                                                  const std::string& content_type) {
     if (!m_conn || !m_conn->streamManager()) {
         return nullptr;
     }
@@ -805,7 +821,8 @@ inline Http2Stream::ptr H2cClient::post(const std::string& path,
     return stream;
 }
 
-inline Task<std::expected<bool, Http2Error>> H2cClient::shutdown() {
+template<RingBufferBackendStrategy Strategy>
+inline Task<std::expected<bool, Http2Error>> H2cClient<Strategy>::shutdown() {
     m_shutdown_result = true;
 
 

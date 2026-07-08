@@ -37,7 +37,7 @@ static_assert(std::is_class_v<RedisTopologyRetryConfig>);
 static_assert(std::is_class_v<RedisTopologyRefreshConfig>);
 static_assert(std::is_class_v<RedisTopologyStats>);
 
-static_assert(requires(RedisClient& client,
+static_assert(requires(RedisClient<>& client,
                        RedisEncodedCommand encoded,
                        std::span<const RedisCommandView> commands,
                        RedisConnectionPool& pool,

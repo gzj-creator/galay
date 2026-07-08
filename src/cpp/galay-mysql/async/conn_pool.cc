@@ -9,7 +9,7 @@ namespace galay::mysql
 
 MysqlPoolLease::MysqlPoolLease() noexcept = default;
 
-MysqlPoolLease::MysqlPoolLease(MysqlConnectionPool* pool, AsyncMysqlClient* client) noexcept
+MysqlPoolLease::MysqlPoolLease(MysqlConnectionPool* pool, AsyncMysqlClient<>* client) noexcept
     : m_pool(pool)
     , m_client(client)
 {
@@ -36,17 +36,17 @@ MysqlPoolLease::~MysqlPoolLease()
     release();
 }
 
-AsyncMysqlClient* MysqlPoolLease::get() const noexcept
+AsyncMysqlClient<>* MysqlPoolLease::get() const noexcept
 {
     return m_client;
 }
 
-AsyncMysqlClient& MysqlPoolLease::operator*() const noexcept
+AsyncMysqlClient<>& MysqlPoolLease::operator*() const noexcept
 {
     return *m_client;
 }
 
-AsyncMysqlClient* MysqlPoolLease::operator->() const noexcept
+AsyncMysqlClient<>* MysqlPoolLease::operator->() const noexcept
 {
     return m_client;
 }
@@ -65,7 +65,7 @@ void MysqlPoolLease::release() noexcept
     }
 }
 
-AsyncMysqlClient* MysqlPoolLease::dismiss() noexcept
+AsyncMysqlClient<>* MysqlPoolLease::dismiss() noexcept
 {
     m_pool = nullptr;
     return std::exchange(m_client, nullptr);
@@ -97,13 +97,13 @@ MysqlConnectionPool::~MysqlConnectionPool()
             waiter->waker.wakeUp();
         }
     }
-    AsyncMysqlClient* client = nullptr;
+    AsyncMysqlClient<>* client = nullptr;
     while (m_idle_clients.try_dequeue(client)) {}
 }
 
-AsyncMysqlClient* MysqlConnectionPool::tryAcquire()
+AsyncMysqlClient<>* MysqlConnectionPool::tryAcquire()
 {
-    AsyncMysqlClient* client = nullptr;
+    AsyncMysqlClient<>* client = nullptr;
     if (m_idle_clients.try_dequeue(client)) {
         m_idle_connections.fetch_sub(1, std::memory_order_acq_rel);
         return client;
@@ -111,7 +111,7 @@ AsyncMysqlClient* MysqlConnectionPool::tryAcquire()
     return nullptr;
 }
 
-AsyncMysqlClient* MysqlConnectionPool::createClient()
+AsyncMysqlClient<>* MysqlConnectionPool::createClient()
 {
     size_t slot = m_total_connections.load(std::memory_order_acquire);
     while (slot < m_max_connections) {
@@ -119,7 +119,7 @@ AsyncMysqlClient* MysqlConnectionPool::createClient()
                                                        slot + 1,
                                                        std::memory_order_acq_rel,
                                                        std::memory_order_acquire)) {
-            auto client = std::make_unique<AsyncMysqlClient>(m_scheduler, m_async_config);
+            auto client = std::make_unique<AsyncMysqlClient<>>(m_scheduler, m_async_config);
             auto* ptr = client.get();
             m_all_clients[slot] = std::move(client);
             return ptr;
@@ -169,7 +169,7 @@ bool MysqlConnectionPool::wakeOneWaiter()
     return false;
 }
 
-void MysqlConnectionPool::release(AsyncMysqlClient* client)
+void MysqlConnectionPool::release(AsyncMysqlClient<>* client)
 {
     if (!client) return;
 
@@ -201,7 +201,7 @@ bool MysqlConnectionPool::AcquireAwaitable::await_ready() const noexcept
     return false;
 }
 
-std::expected<std::optional<AsyncMysqlClient*>, MysqlError>
+std::expected<std::optional<AsyncMysqlClient<>*>, MysqlError>
 MysqlConnectionPool::AcquireAwaitable::await_resume()
 {
     if (m_state == State::Ready) {

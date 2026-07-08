@@ -190,7 +190,7 @@ int observeH2cClientTcpNoDelay(bool tcp_no_delay)
 {
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
     LoopbackListener listener;
-    H2cClient client(H2cClientBuilder().tcpNoDelay(tcp_no_delay).build());
+    H2cClient<> client(H2cClientBuilder().tcpNoDelay(tcp_no_delay).build());
 
     auto connect_result = runtime.blockOn(client.connect("127.0.0.1", listener.port()));
     require(connect_result.has_value(), "runtime should run H2cClient connect task");
@@ -302,7 +302,7 @@ int observeH2ClientTcpNoDelay(bool tcp_no_delay)
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    H2Client client(H2ClientBuilder()
+    H2Client<> client(H2ClientBuilder()
         .verifyPeer(false)
         .tcpNoDelay(tcp_no_delay)
         .build());

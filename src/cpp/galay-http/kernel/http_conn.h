@@ -22,7 +22,7 @@ namespace galay::websocket {
 }
 
 namespace galay::http2 {
-    template<typename SocketType>
+    template<typename SocketType, ::galay::utils::RingBufferBackendStrategy Strategy>
     class Http2ConnImpl;  // 前向声明
 }
 
@@ -59,7 +59,7 @@ public:
     {
     }
 
-    HttpConnImpl(SocketType&& socket, RingBuffer&& ring_buffer)
+    HttpConnImpl(SocketType&& socket, RingBuffer<>&& ring_buffer)
         : m_socket(std::move(socket))
         , m_ring_buffer(std::move(ring_buffer))
     {
@@ -153,7 +153,7 @@ public:
     friend class galay::websocket::WsConnImpl;
 
     // 允许Http2ConnImpl访问私有成员（用于h2c升级）
-    template<typename S>
+    template<typename S, ::galay::utils::RingBufferBackendStrategy Strategy>
     friend class galay::http2::Http2ConnImpl;
 
 private:
@@ -167,10 +167,10 @@ private:
      * @brief 获取RingBuffer（私有方法，仅供友元类使用）
      * @return RingBuffer引用
      */
-    RingBuffer& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<>& ringBuffer() { return m_ring_buffer; }
 
     SocketType m_socket;
-    RingBuffer m_ring_buffer;
+    RingBuffer<> m_ring_buffer;
     HttpWriterSetting m_default_writer_setting;
 };
 

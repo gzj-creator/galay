@@ -30,12 +30,16 @@
 using namespace galay::async;
 using namespace galay::kernel;
 
+using DefaultRingBuffer = RingBuffer<>;
+using VectorRingBuffer = RingBuffer<galay::utils::RingBufferBackendStrategy::Vector>;
+
 std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_passed{false};
 
 // ============ 单元测试 ============
 
-std::string collectReadable(const RingBuffer& buffer) {
+template<galay::utils::RingBufferBackendStrategy Strategy>
+std::string collectReadable(const RingBuffer<Strategy>& buffer) {
     std::array<struct iovec, 2> iovecs{};
     const size_t count = buffer.getReadIovecs(iovecs);
     std::string collected;
@@ -49,7 +53,7 @@ std::string collectReadable(const RingBuffer& buffer) {
 void test_basic_operations() {
     LogInfo("=== Test: Basic Operations ===");
 
-    RingBuffer buf(100);
+    VectorRingBuffer buf(100);
     assert(buf.capacity() == 100);
     assert(buf.readable() == 0);
     assert(buf.writable() == 100);
@@ -78,7 +82,7 @@ void test_basic_operations() {
 void test_wrap_around() {
     LogInfo("=== Test: Wrap Around ===");
 
-    RingBuffer buf(20);
+    VectorRingBuffer buf(20);
 
     // 写入15字节
     buf.write("123456789012345", 15);
@@ -113,7 +117,7 @@ void test_wrap_around() {
 void test_get_write_iovecs() {
     LogInfo("=== Test: getWriteIovecs ===");
 
-    RingBuffer buf(20);
+    VectorRingBuffer buf(20);
 
     // 空缓冲区，应该返回一段 [0, 20)
     std::array<struct iovec, 2> iovecs1{};
@@ -146,7 +150,7 @@ void test_get_write_iovecs() {
 void test_get_read_iovecs() {
     LogInfo("=== Test: getReadIovecs ===");
 
-    RingBuffer buf(20);
+    VectorRingBuffer buf(20);
 
     // 空缓冲区
     std::array<struct iovec, 2> iovecs1{};
@@ -176,7 +180,7 @@ void test_get_read_iovecs() {
 void test_full_and_empty() {
     LogInfo("=== Test: Full and Empty ===");
 
-    RingBuffer buf(10);
+    VectorRingBuffer buf(10);
 
     assert(buf.empty());
     assert(!buf.full());
@@ -201,16 +205,16 @@ void test_full_and_empty() {
 void test_move_semantics() {
     LogInfo("=== Test: Move Semantics ===");
 
-    RingBuffer buf1(100);
+    VectorRingBuffer buf1(100);
     buf1.write("Test Data", 9);
 
     // 移动构造
-    RingBuffer buf2(std::move(buf1));
+    VectorRingBuffer buf2(std::move(buf1));
     assert(buf2.readable() == 9);
     assert(buf2.capacity() == 100);
 
     // 移动赋值
-    RingBuffer buf3(50);
+    VectorRingBuffer buf3(50);
     buf3 = std::move(buf2);
     assert(buf3.readable() == 9);
     assert(buf3.capacity() == 100);
@@ -257,7 +261,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     client.option().handleNonBlock();
 
     // 使用 RingBuffer 接收数据
-    RingBuffer recvBuffer(1024);
+    DefaultRingBuffer recvBuffer(1024);
     std::array<struct iovec, 2> recvWriteIovecs{};
     std::array<struct iovec, 2> sendReadIovecs{};
 
@@ -290,7 +294,7 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     }
 
     // 使用 RingBuffer + writev 发送响应
-    RingBuffer sendBuffer(1024);
+    DefaultRingBuffer sendBuffer(1024);
     std::string response = "Response: " + received + " [echoed]";
     sendBuffer.write(response.data(), response.size());
 
@@ -334,7 +338,7 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Client] Connected to server");
 
     // 使用 RingBuffer 准备发送数据
-    RingBuffer sendBuffer(1024);
+    DefaultRingBuffer sendBuffer(1024);
     const char* msg = "Hello from RingBuffer client!";
     sendBuffer.write(msg, strlen(msg));
     std::array<struct iovec, 2> sendReadIovecs{};
@@ -355,7 +359,7 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Client] writev sent {} bytes", writevResult.value());
 
     // 使用 RingBuffer + readv 接收响应
-    RingBuffer recvBuffer(1024);
+    DefaultRingBuffer recvBuffer(1024);
 
     size_t recvWriteCount = recvBuffer.getWriteIovecs(recvWriteIovecs);
     auto readvResult = co_await client.readv(recvWriteIovecs, recvWriteCount);

@@ -50,7 +50,7 @@ int main()
         }
     }
 
-    if (!contains(async_client, "MysqlPipelineAwaitable::Machine::finalizeCurrentResult") ||
+    if (!contains(async_client, "MysqlPipelineAwaitable<Strategy>::Machine::finalizeCurrentResult") ||
         !contains(async_client, "m_state->results.push_back")) {
         std::cerr << "async pipeline must preserve per-response result boundaries\n";
         return 1;

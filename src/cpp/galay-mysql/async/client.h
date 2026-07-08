@@ -50,6 +50,8 @@ using galay::kernel::Host;
 using galay::kernel::IOError;
 using galay::kernel::IPType;
 using galay::kernel::Task;
+using galay::utils::RingBufferBackendStrategy;
+using galay::utils::RingBuffer;
 
 
 // 类型别名
@@ -57,6 +59,7 @@ using MysqlResult = std::expected<MysqlResultSet, MysqlError>;     ///< 查询�
 using MysqlVoidResult = std::expected<void, MysqlError>;           ///< 无返回值操作结果类型
 
 // 前向声明
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class AsyncMysqlClient;
 
 /**
@@ -148,7 +151,7 @@ public:
      * @brief 构建AsyncMysqlClient实例
      * @return 配置完成的AsyncMysqlClient对象
      */
-    AsyncMysqlClient build() const;
+    AsyncMysqlClient<> build() const;
 
     /**
      * @brief 仅构建配置对象
@@ -170,6 +173,7 @@ private:
  * @brief MySQL连接等待体
  * @details 通过最新 state-machine awaitable 内核执行 CONNECT -> READV -> SEND -> READV
  */
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlConnectAwaitable
 {
 public:
@@ -180,7 +184,7 @@ public:
      * @param client 异步MySQL客户端引用
      * @param config MySQL连接配置
      */
-    MysqlConnectAwaitable(AsyncMysqlClient& client, MysqlConfig config);
+    MysqlConnectAwaitable(AsyncMysqlClient<Strategy>& client, MysqlConfig config);
     MysqlConnectAwaitable(MysqlConnectAwaitable&&) noexcept = default;
     MysqlConnectAwaitable& operator=(MysqlConnectAwaitable&&) noexcept = default;
     MysqlConnectAwaitable(const MysqlConnectAwaitable&) = delete;
@@ -232,9 +236,9 @@ private:
      * @brief 连接等待体共享状态
      */
     struct SharedState {
-        explicit SharedState(AsyncMysqlClient& client, MysqlConfig config);
+        explicit SharedState(AsyncMysqlClient<Strategy>& client, MysqlConfig config);
 
-        AsyncMysqlClient* client = nullptr;                     ///< 客户端指针
+        AsyncMysqlClient<Strategy>* client = nullptr;           ///< 客户端指针
         MysqlConfig config;                                     ///< 连接配置
         galay::kernel::Host host;                               ///< 主机地址
         protocol::HandshakeV10 handshake;                       ///< 握手包数据
@@ -296,8 +300,9 @@ private:
  * @details 基于 sequence awaitable 链式执行 SEND -> READV，
  *          在“查询包发送完毕”和“结果集解析完毕”两个语义点唤醒。
  */
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlQueryAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlQueryAwaitable>
+    : public galay::kernel::TimeoutSupport<MysqlQueryAwaitable<Strategy>>
 {
 public:
     using Result = std::expected<std::optional<MysqlResultSet>, MysqlError>; ///< 查询结果类型
@@ -307,7 +312,7 @@ public:
      * @param client 异步MySQL客户端引用
      * @param sql SQL查询语句
      */
-    MysqlQueryAwaitable(AsyncMysqlClient& client, std::string_view sql);
+    MysqlQueryAwaitable(AsyncMysqlClient<Strategy>& client, std::string_view sql);
     MysqlQueryAwaitable(MysqlQueryAwaitable&&) noexcept = default;
     MysqlQueryAwaitable& operator=(MysqlQueryAwaitable&&) noexcept = default;
     MysqlQueryAwaitable(const MysqlQueryAwaitable&) = delete;
@@ -342,9 +347,9 @@ private:
      * @brief 查询等待体共享状态
      */
     struct SharedState {
-        SharedState(AsyncMysqlClient& client, std::string_view sql);
+        SharedState(AsyncMysqlClient<Strategy>& client, std::string_view sql);
 
-        AsyncMysqlClient* client = nullptr;             ///< 客户端指针
+        AsyncMysqlClient<Strategy>* client = nullptr;   ///< 客户端指针
         std::string encoded_cmd;                         ///< 编码后的命令
         MysqlResultSet result_set;                       ///< 结果集
         std::string parse_scratch;                       ///< 解析临时缓冲区
@@ -393,8 +398,9 @@ private:
  * @brief MySQL预处理语句准备等待体
  * @details 发送COM_STMT_PREPARE并接收响应
  */
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlPrepareAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlPrepareAwaitable>
+    : public galay::kernel::TimeoutSupport<MysqlPrepareAwaitable<Strategy>>
 {
 public:
     /**
@@ -414,7 +420,7 @@ public:
      * @param client 异步MySQL客户端引用
      * @param sql 预处理SQL语句
      */
-    MysqlPrepareAwaitable(AsyncMysqlClient& client, std::string_view sql);
+    MysqlPrepareAwaitable(AsyncMysqlClient<Strategy>& client, std::string_view sql);
     MysqlPrepareAwaitable(MysqlPrepareAwaitable&&) noexcept = default;
     MysqlPrepareAwaitable& operator=(MysqlPrepareAwaitable&&) noexcept = default;
     MysqlPrepareAwaitable(const MysqlPrepareAwaitable&) = delete;
@@ -450,9 +456,9 @@ private:
      * @brief 预处理准备等待体共享状态
      */
     struct SharedState {
-        SharedState(AsyncMysqlClient& client, std::string_view sql);
+        SharedState(AsyncMysqlClient<Strategy>& client, std::string_view sql);
 
-        AsyncMysqlClient* client = nullptr;             ///< 客户端指针
+        AsyncMysqlClient<Strategy>* client = nullptr;   ///< 客户端指针
         std::string encoded_cmd;                         ///< 编码后的命令
         PrepareResult prepare_result;                    ///< 准备结果
         std::string parse_scratch;                       ///< 解析临时缓冲区
@@ -501,8 +507,9 @@ private:
  * @brief MySQL预处理语句执行等待体
  * @details 发送COM_STMT_EXECUTE并接收结果集
  */
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlStmtExecuteAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlStmtExecuteAwaitable>
+    : public galay::kernel::TimeoutSupport<MysqlStmtExecuteAwaitable<Strategy>>
 {
 public:
     using Result = std::expected<std::optional<MysqlResultSet>, MysqlError>; ///< 执行结果类型
@@ -512,7 +519,7 @@ public:
      * @param client 异步MySQL客户端引用
      * @param encoded_cmd 已编码的命令数据
      */
-    MysqlStmtExecuteAwaitable(AsyncMysqlClient& client, std::string encoded_cmd);
+    MysqlStmtExecuteAwaitable(AsyncMysqlClient<Strategy>& client, std::string encoded_cmd);
     MysqlStmtExecuteAwaitable(MysqlStmtExecuteAwaitable&&) noexcept = default;
     MysqlStmtExecuteAwaitable& operator=(MysqlStmtExecuteAwaitable&&) noexcept = default;
     MysqlStmtExecuteAwaitable(const MysqlStmtExecuteAwaitable&) = delete;
@@ -547,9 +554,9 @@ private:
      * @brief 预处理语句执行等待体共享状态
      */
     struct SharedState {
-        SharedState(AsyncMysqlClient& client, std::string encoded_cmd);
+        SharedState(AsyncMysqlClient<Strategy>& client, std::string encoded_cmd);
 
-        AsyncMysqlClient* client = nullptr;             ///< 客户端指针
+        AsyncMysqlClient<Strategy>* client = nullptr;   ///< 客户端指针
         std::string encoded_cmd;                         ///< 已编码的命令
         MysqlResultSet result_set;                       ///< 结果集
         std::string parse_scratch;                       ///< 解析临时缓冲区
@@ -598,8 +605,9 @@ private:
  * @brief MySQL Pipeline等待体
  * @details 批量发送编码后的COM_QUERY包并统一接收/解析响应
  */
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlPipelineAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlPipelineAwaitable>
+    : public galay::kernel::TimeoutSupport<MysqlPipelineAwaitable<Strategy>>
 {
 public:
     using Result = std::expected<std::optional<std::vector<MysqlResultSet>>, MysqlError>; ///< 流水线结果类型
@@ -609,7 +617,7 @@ public:
      * @param client 异步MySQL客户端引用
      * @param commands 编码后的命令视图数组
      */
-    MysqlPipelineAwaitable(AsyncMysqlClient& client,
+    MysqlPipelineAwaitable(AsyncMysqlClient<Strategy>& client,
                            std::span<const protocol::MysqlCommandView> commands);
     MysqlPipelineAwaitable(MysqlPipelineAwaitable&&) noexcept = default;
     MysqlPipelineAwaitable& operator=(MysqlPipelineAwaitable&&) noexcept = default;
@@ -653,10 +661,10 @@ private:
      * @brief Pipeline等待体共享状态
      */
     struct SharedState {
-        SharedState(AsyncMysqlClient& client,
+        SharedState(AsyncMysqlClient<Strategy>& client,
                     std::span<const protocol::MysqlCommandView> commands);
 
-        AsyncMysqlClient* client = nullptr;                     ///< 客户端指针
+        AsyncMysqlClient<Strategy>* client = nullptr;           ///< 客户端指针
         size_t expected_results = 0;                            ///< 预期结果数量
         std::string encoded_buffer;                             ///< 编码缓冲区
         std::vector<EncodedSlice> encoded_slices;               ///< 命令切片列表
@@ -729,6 +737,7 @@ private:
  * }
  * @endcode
  */
+template<RingBufferBackendStrategy Strategy>
 class AsyncMysqlClient
 {
 public:
@@ -755,7 +764,7 @@ public:
      * @param config MySQL连接配置
      * @return 连接等待体
      */
-    MysqlConnectAwaitable connect(MysqlConfig config);
+    MysqlConnectAwaitable<Strategy> connect(MysqlConfig config);
 
     /**
      * @brief 异步连接到MySQL服务器（参数形式）
@@ -766,9 +775,9 @@ public:
      * @param database 默认数据库
      * @return 连接等待体
      */
-    MysqlConnectAwaitable connect(std::string_view host, uint16_t port,
-                                  std::string_view user, std::string_view password,
-                                  std::string_view database = "");
+    MysqlConnectAwaitable<Strategy> connect(std::string_view host, uint16_t port,
+                                            std::string_view user, std::string_view password,
+                                            std::string_view database = "");
 
     // ======================== 查询 ========================
 
@@ -777,21 +786,21 @@ public:
      * @param sql SQL语句
      * @return 查询等待体
      */
-    MysqlQueryAwaitable query(std::string_view sql);
+    MysqlQueryAwaitable<Strategy> query(std::string_view sql);
 
     /**
      * @brief 异步批量执行编码后的命令
      * @param commands 编码后的命令视图数组
      * @return Pipeline等待体
      */
-    MysqlPipelineAwaitable batch(std::span<const protocol::MysqlCommandView> commands);
+    MysqlPipelineAwaitable<Strategy> batch(std::span<const protocol::MysqlCommandView> commands);
 
     /**
      * @brief 异步Pipeline执行多条SQL语句
      * @param sqls SQL语句数组
      * @return Pipeline等待体
      */
-    MysqlPipelineAwaitable pipeline(std::span<const std::string_view> sqls);
+    MysqlPipelineAwaitable<Strategy> pipeline(std::span<const std::string_view> sqls);
 
     // ======================== 预处理语句 ========================
 
@@ -800,7 +809,7 @@ public:
      * @param sql 预处理SQL语句
      * @return 准备等待体
      */
-    MysqlPrepareAwaitable prepare(std::string_view sql);
+    MysqlPrepareAwaitable<Strategy> prepare(std::string_view sql);
 
     /**
      * @brief 异步执行预处理语句（string参数版本）
@@ -809,9 +818,9 @@ public:
      * @param param_types 参数类型列表
      * @return 执行等待体
      */
-    MysqlStmtExecuteAwaitable stmtExecute(uint32_t stmt_id,
-                                          std::span<const std::optional<std::string>> params,
-                                          std::span<const uint8_t> param_types = {});
+    MysqlStmtExecuteAwaitable<Strategy> stmtExecute(uint32_t stmt_id,
+                                                    std::span<const std::optional<std::string>> params,
+                                                    std::span<const uint8_t> param_types = {});
 
     /**
      * @brief 异步执行预处理语句（string_view参数版本）
@@ -820,20 +829,20 @@ public:
      * @param param_types 参数类型列表
      * @return 执行等待体
      */
-    MysqlStmtExecuteAwaitable stmtExecute(uint32_t stmt_id,
-                                          std::span<const std::optional<std::string_view>> params,
-                                          std::span<const uint8_t> param_types = {});
+    MysqlStmtExecuteAwaitable<Strategy> stmtExecute(uint32_t stmt_id,
+                                                    std::span<const std::optional<std::string_view>> params,
+                                                    std::span<const uint8_t> param_types = {});
 
     // ======================== 事务 ========================
 
-    MysqlQueryAwaitable beginTransaction();  ///< 异步开启事务
-    MysqlQueryAwaitable commit();             ///< 异步提交事务
-    MysqlQueryAwaitable rollback();           ///< 异步回滚事务
+    MysqlQueryAwaitable<Strategy> beginTransaction();  ///< 异步开启事务
+    MysqlQueryAwaitable<Strategy> commit();             ///< 异步提交事务
+    MysqlQueryAwaitable<Strategy> rollback();           ///< 异步回滚事务
 
     // ======================== 工具命令 ========================
 
-    MysqlQueryAwaitable ping();                                ///< 异步发送心跳检测
-    MysqlQueryAwaitable useDatabase(std::string_view database); ///< 异步切换数据库
+    MysqlQueryAwaitable<Strategy> ping();                                ///< 异步发送心跳检测
+    MysqlQueryAwaitable<Strategy> useDatabase(std::string_view database); ///< 异步切换数据库
 
     // ======================== 连接管理 ========================
 
@@ -843,24 +852,24 @@ public:
     // ======================== 内部访问 ========================
 
     TcpSocket& socket() { return m_socket; }                   ///< 获取TCP套接字引用
-    galay::utils::RingBuffer& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
-    const galay::utils::RingBuffer& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    RingBuffer<Strategy>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    const RingBuffer<Strategy>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
     protocol::MysqlParser& parser() { return m_parser; }       ///< 获取协议解析器引用
     protocol::MysqlEncoder& encoder() { return m_encoder; }    ///< 获取协议编码器引用
     const AsyncMysqlConfig& asyncConfig() const { return m_config; } ///< 获取异步配置
     uint32_t serverCapabilities() const { return m_server_capabilities; } ///< 获取服务器能力标志
     void setServerCapabilities(uint32_t caps) { m_server_capabilities = caps; } ///< 设置服务器能力标志
 private:
-    friend class MysqlConnectAwaitable;
-    friend class MysqlQueryAwaitable;
-    friend class MysqlPrepareAwaitable;
-    friend class MysqlStmtExecuteAwaitable;
-    friend class MysqlPipelineAwaitable;
+    friend class MysqlConnectAwaitable<Strategy>;
+    friend class MysqlQueryAwaitable<Strategy>;
+    friend class MysqlPrepareAwaitable<Strategy>;
+    friend class MysqlStmtExecuteAwaitable<Strategy>;
+    friend class MysqlPipelineAwaitable<Strategy>;
 
     TcpSocket m_socket;                             ///< TCP套接字
     IOScheduler* m_scheduler;                       ///< IO调度器指针
     AsyncMysqlConfig m_config;                      ///< 异步配置
-    galay::utils::RingBuffer m_ring_buffer;         ///< 接收环形缓冲区
+    RingBuffer<Strategy> m_ring_buffer;             ///< 接收环形缓冲区
     uint32_t m_server_capabilities = 0;             ///< 服务器能力标志
     protocol::MysqlParser m_parser;                 ///< 协议解析器
     protocol::MysqlEncoder m_encoder;               ///< 协议编码器
@@ -872,9 +881,9 @@ private:
  * @brief AsyncMysqlClientBuilder::build的inline实现
  * @return 构建的AsyncMysqlClient对象
  */
-inline galay::mysql::AsyncMysqlClient galay::mysql::AsyncMysqlClientBuilder::build() const
+inline galay::mysql::AsyncMysqlClient<> galay::mysql::AsyncMysqlClientBuilder::build() const
 {
-    return AsyncMysqlClient(m_scheduler, m_config);
+    return AsyncMysqlClient<>(m_scheduler, m_config);
 }
 
 } // namespace galay::mysql

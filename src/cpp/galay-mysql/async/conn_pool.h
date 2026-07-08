@@ -39,7 +39,7 @@ struct MysqlPoolWaiter {
     }
 
     galay::kernel::Waker waker;                 ///< 等待协程唤醒器
-    std::atomic<AsyncMysqlClient*> client{nullptr}; ///< 唤醒前预留给该等待者的连接
+    std::atomic<AsyncMysqlClient<>*> client{nullptr}; ///< 唤醒前预留给该等待者的连接
     std::atomic<bool> active{true};             ///< 防止陈旧等待节点重复唤醒
 };
 
@@ -73,25 +73,25 @@ public:
     MysqlPoolLease& operator=(const MysqlPoolLease&) = delete; ///< 禁止拷贝赋值
     ~MysqlPoolLease(); ///< 析构时归还仍持有的连接
 
-    AsyncMysqlClient* get() const noexcept; ///< 获取底层连接指针
-    AsyncMysqlClient& operator*() const noexcept; ///< 解引用底层连接
-    AsyncMysqlClient* operator->() const noexcept; ///< 访问底层连接
+    AsyncMysqlClient<>* get() const noexcept; ///< 获取底层连接指针
+    AsyncMysqlClient<>& operator*() const noexcept; ///< 解引用底层连接
+    AsyncMysqlClient<>* operator->() const noexcept; ///< 访问底层连接
     explicit operator bool() const noexcept; ///< 是否持有连接
     void release() noexcept; ///< 立即归还连接；可重复调用
-    AsyncMysqlClient* dismiss() noexcept; ///< 放弃RAII归还责任并返回底层连接
+    AsyncMysqlClient<>* dismiss() noexcept; ///< 放弃RAII归还责任并返回底层连接
 
 private:
     friend class MysqlConnectionPool;
 
-    MysqlPoolLease(MysqlConnectionPool* pool, AsyncMysqlClient* client) noexcept;
+    MysqlPoolLease(MysqlConnectionPool* pool, AsyncMysqlClient<>* client) noexcept;
 
     MysqlConnectionPool* m_pool = nullptr; ///< 归还目标连接池
-    AsyncMysqlClient* m_client = nullptr;  ///< 当前持有连接
+    AsyncMysqlClient<>* m_client = nullptr;  ///< 当前持有连接
 };
 
 /**
  * @brief 异步MySQL连接池
- * @details 管理多个AsyncMysqlClient连接，支持异步获取和归还。
+ * @details 管理多个AsyncMysqlClient<>连接，支持异步获取和归还。
  *          当空闲连接不足时自动创建新连接，达到上限后等待其他协程归还连接。
  */
 class MysqlConnectionPool
@@ -171,7 +171,7 @@ public:
          * @brief 获取连接获取结果
          * @return 成功时返回客户端指针，失败时返回错误
          */
-        std::expected<std::optional<AsyncMysqlClient*>, MysqlError> await_resume();
+        std::expected<std::optional<AsyncMysqlClient<>*>, MysqlError> await_resume();
 
     private:
         /**
@@ -186,9 +186,9 @@ public:
         };
 
         MysqlConnectionPool& m_pool;                                ///< 连接池引用
-        AsyncMysqlClient* m_client = nullptr;                        ///< 客户端指针
+        AsyncMysqlClient<>* m_client = nullptr;                        ///< 客户端指针
         std::shared_ptr<detail::MysqlPoolWaiter> m_waiter;           ///< 等待队列节点
-        std::optional<MysqlConnectAwaitable> m_connect_awaitable;    ///< 连接等待体
+        std::optional<MysqlConnectAwaitable<>> m_connect_awaitable;    ///< 连接等待体
         State m_state = State::Invalid;                              ///< 当前状态
     };
 
@@ -234,7 +234,7 @@ public:
      * @brief 归还连接到池中
      * @param client 要归还的客户端指针
      */
-    void release(AsyncMysqlClient* client);
+    void release(AsyncMysqlClient<>* client);
 
     /**
      * @brief 获取当前池中连接数
@@ -251,8 +251,8 @@ public:
 private:
     friend class AcquireAwaitable;
 
-    AsyncMysqlClient* tryAcquire();  ///< 尝试从空闲队列获取连接
-    AsyncMysqlClient* createClient(); ///< 创建新的客户端连接
+    AsyncMysqlClient<>* tryAcquire();  ///< 尝试从空闲队列获取连接
+    AsyncMysqlClient<>* createClient(); ///< 创建新的客户端连接
     bool enqueueWaiter(std::shared_ptr<detail::MysqlPoolWaiter> waiter); ///< 注册等待连接的协程
     bool wakeOneWaiter(); ///< 唤醒一个仍然有效的等待协程
 
@@ -262,9 +262,9 @@ private:
     size_t m_min_connections;                        ///< 最小连接数
     size_t m_max_connections;                        ///< 最大连接数
 
-    moodycamel::ConcurrentQueue<AsyncMysqlClient*> m_idle_clients; ///< 空闲客户端队列（无锁）
+    moodycamel::ConcurrentQueue<AsyncMysqlClient<>*> m_idle_clients; ///< 空闲客户端队列（无锁）
     moodycamel::ConcurrentQueue<std::shared_ptr<detail::MysqlPoolWaiter>> m_waiters; ///< 等待者队列（无锁）
-    std::vector<std::unique_ptr<AsyncMysqlClient>> m_all_clients; ///< 所有客户端槽位，构造后不扩容
+    std::vector<std::unique_ptr<AsyncMysqlClient<>>> m_all_clients; ///< 所有客户端槽位，构造后不扩容
     std::atomic<size_t> m_total_connections{0};              ///< 总连接数
     std::atomic<size_t> m_idle_connections{0};               ///< 空闲连接数
 

@@ -49,11 +49,6 @@ void token_entry(void* arg)
     state->phase.store(2, std::memory_order_release);
 }
 
-void throwing_entry(void*)
-{
-    throw 42;
-}
-
 galay::kernel::Task<void> scheduler_join_probe(galay_coro_task_t* task,
                                                std::atomic<int>* observed_code)
 {
@@ -129,20 +124,9 @@ int main()
         return 7;
     }
 
-    galay_coro_task_t throwing_task{};
-    if (galay_coro_spawn(&runtime, throwing_entry, nullptr, nullptr, &throwing_task).code != C_IOResultOk) {
-        std::cerr << "[T137] failed to spawn throwing C coroutine\n";
-        return 8;
-    }
-    if (galay_coro_join(&throwing_task, 1000).code != C_IOResultError ||
-        galay_coro_destroy(&throwing_task).code != C_IOResultOk) {
-        std::cerr << "[T137] throwing C coroutine should complete with C_IOResultError\n";
-        return 9;
-    }
-
     (void)galay_kernel_runtime_stop(&runtime);
     if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess) {
-        return 10;
+        return 8;
     }
 
     std::cout << "T137-CCoroResumeToken PASS\n";

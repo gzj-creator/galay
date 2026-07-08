@@ -71,7 +71,7 @@ uint16_t reserveFreePort()
 
 Task<void> runClient(uint16_t port)
 {
-    H2Client client(H2ClientBuilder().verifyPeer(false).build());
+    H2Client<> client(H2ClientBuilder().verifyPeer(false).build());
     auto connect_result = co_await client.connect("127.0.0.1", port);
     if (!connect_result || !connect_result.value()) {
         std::cerr << "[T91] connect failed has_value="

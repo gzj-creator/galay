@@ -34,6 +34,9 @@
 namespace galay::rpc
 {
 
+using ::galay::utils::RingBufferBackendStrategy;
+using ::galay::utils::RingBuffer;
+
 using RpcCallResult = std::expected<std::optional<RpcResponse>, RpcError>;
 
 /**
@@ -329,7 +332,7 @@ private:
  *          分发给pending waiter。Task路径不使用阻塞锁、条件变量或sleep。
  * @tparam SocketType 底层socket类型
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RpcChannelImpl {
 public:
     explicit RpcChannelImpl(const RpcReaderSetting& reader_setting = {},
@@ -360,7 +363,7 @@ public:
      */
     Task<std::expected<void, IOError>> connect(const std::string& host, uint16_t port) {
         m_socket = std::make_unique<SocketType>(IPType::IPV4);
-        m_ring_buffer = std::make_unique<RingBuffer>(m_ring_buffer_size);
+        m_ring_buffer = std::make_unique<RingBuffer<Strategy>>(m_ring_buffer_size);
         auto nonblock_result = m_socket->option().handleNonBlock();
         if (!nonblock_result) {
             m_socket.reset();
@@ -579,8 +582,8 @@ public:
     }
 
     /// @brief 获取读取器
-    RpcReaderImpl<SocketType> getReader() {
-        return RpcReaderImpl<SocketType>(*m_ring_buffer, m_reader_setting, *m_socket);
+    RpcReaderImpl<SocketType, Strategy> getReader() {
+        return RpcReaderImpl<SocketType, Strategy>(*m_ring_buffer, m_reader_setting, *m_socket);
     }
 
     /// @brief 获取写入器
@@ -591,7 +594,7 @@ public:
     /// @brief 获取底层socket
     SocketType& socket() { return *m_socket; }
     /// @brief 获取RingBuffer
-    RingBuffer& ringBuffer() { return *m_ring_buffer; }
+    RingBuffer<Strategy>& ringBuffer() { return *m_ring_buffer; }
     /// @brief 获取读取配置
     const RpcReaderSetting& readerSetting() const { return m_reader_setting; }
     /// @brief 当前pending数量
@@ -750,7 +753,7 @@ private:
         LoopGuard guard(*this);
         while (!m_shutdown_requested.load(std::memory_order_acquire)) {
             RpcHeader header;
-            auto header_result = co_await GetRpcHeaderAwaitable<SocketType>(*m_ring_buffer, header, *m_socket)
+            auto header_result = co_await GetRpcHeaderAwaitable<SocketType, Strategy>(*m_ring_buffer, header, *m_socket)
                 .timeout(std::chrono::milliseconds(50));
             if (!header_result.has_value()) {
                 if (header_result.error().code() == RpcErrorCode::DEADLINE_EXCEEDED &&
@@ -816,7 +819,7 @@ private:
 
             std::vector<char> body(header.m_body_length);
             if (header.m_body_length > 0) {
-                auto body_result = co_await GetRpcBodyAwaitable<SocketType>(
+                auto body_result = co_await GetRpcBodyAwaitable<SocketType, Strategy>(
                     *m_ring_buffer,
                     body.data(),
                     body.size(),
@@ -990,7 +993,7 @@ private:
     };
 
     std::unique_ptr<SocketType> m_socket;       ///< 底层socket
-    std::unique_ptr<RingBuffer> m_ring_buffer;  ///< 读取ring buffer
+    std::unique_ptr<RingBuffer<Strategy>> m_ring_buffer;  ///< 读取ring buffer
     RpcReaderSetting m_reader_setting;         ///< 读取配置
     RpcWriterSetting m_writer_setting;         ///< 写入配置
     size_t m_ring_buffer_size;                 ///< ring buffer大小

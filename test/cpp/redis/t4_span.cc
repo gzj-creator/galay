@@ -18,7 +18,7 @@ namespace
         { builder.commands() } -> std::same_as<std::span<const RedisCommandView>>;
     };
 
-    static_assert(HasSpanBatchApi<RedisClient>);
+    static_assert(HasSpanBatchApi<RedisClient<>>);
     static_assert(BuilderCommandsExposeSpan<RedisCommandBuilder>);
 }
 

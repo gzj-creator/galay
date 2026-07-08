@@ -11,6 +11,8 @@ using namespace galay::redis;
 
 namespace
 {
+    using DefaultRedisClient = RedisClient<>;
+
     template <typename T>
     concept HasBorrowedPlainFastPath = requires(T& client,
                                                 RedisBorrowedCommand packet,
@@ -38,19 +40,19 @@ namespace
         client.commandBorrowed(std::move(packet));
     };
 
-    static_assert(HasBorrowedPlainFastPath<RedisClient>);
+    static_assert(HasBorrowedPlainFastPath<DefaultRedisClient>);
     static_assert(std::is_same_v<
-                  decltype(static_cast<RedisExchangeOperation (RedisClient::*)(const RedisBorrowedCommand&)>(&RedisClient::commandBorrowed)),
-                  RedisExchangeOperation (RedisClient::*)(const RedisBorrowedCommand&)>);
+                  decltype(static_cast<RedisExchangeOperation (DefaultRedisClient::*)(const RedisBorrowedCommand&)>(&DefaultRedisClient::commandBorrowed)),
+                  RedisExchangeOperation (DefaultRedisClient::*)(const RedisBorrowedCommand&)>);
     static_assert(std::is_same_v<
-                  decltype(static_cast<RedisExchangeOperation (RedisClient::*)(const std::string&, size_t)>(&RedisClient::batchBorrowed)),
-                  RedisExchangeOperation (RedisClient::*)(const std::string&, size_t)>);
+                  decltype(static_cast<RedisExchangeOperation (DefaultRedisClient::*)(const std::string&, size_t)>(&DefaultRedisClient::batchBorrowed)),
+                  RedisExchangeOperation (DefaultRedisClient::*)(const std::string&, size_t)>);
     static_assert(std::constructible_from<RedisBorrowedCommand, const std::string&, size_t>);
     static_assert(!std::constructible_from<RedisBorrowedCommand, std::string&&, size_t>);
     static_assert(!std::constructible_from<RedisBorrowedCommand, std::string_view, size_t>);
-    static_assert(RejectsTemporaryBatchString<RedisClient>);
-    static_assert(RejectsBatchStringView<RedisClient>);
-    static_assert(RejectsTemporaryBorrowedPacket<RedisClient>);
+    static_assert(RejectsTemporaryBatchString<DefaultRedisClient>);
+    static_assert(RejectsBatchStringView<DefaultRedisClient>);
+    static_assert(RejectsTemporaryBorrowedPacket<DefaultRedisClient>);
 }
 
 int main()

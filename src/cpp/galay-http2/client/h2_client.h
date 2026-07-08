@@ -39,6 +39,7 @@ namespace galay::http2
 using namespace galay::kernel;
 using ::galay::utils::Bytes;
 using ::galay::utils::RingBuffer;
+using ::galay::utils::RingBufferBackendStrategy;
 
 struct H2ClientConfig
 {
@@ -51,20 +52,29 @@ struct H2ClientConfig
     std::string ca_path;
 };
 
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class H2Client;
 
 namespace detail
 {
-inline bool parseFrameFromRingBuffer(RingBuffer& ring_buffer,
+template<RingBufferBackendStrategy Strategy>
+inline bool parseFrameFromRingBuffer(RingBuffer<Strategy>& ring_buffer,
                                      uint32_t max_frame_size,
                                      std::optional<Http2ErrorCode>& error,
                                      std::vector<uint8_t>& scratch,
                                      Http2Frame::uptr& frame);
 
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 struct H2ClientConnectMachine;
+
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class H2ClientConnectSequence;
+
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 struct H2RequestMachine;
-auto buildRequestOperation(H2Client& client, Http2Request&& request);
+
+template<RingBufferBackendStrategy Strategy>
+auto buildRequestOperation(H2Client<Strategy>& client, Http2Request&& request);
 
 class CaptureSchedulerAwaitable {
 public:
@@ -105,7 +115,7 @@ public:
     H2ClientBuilder& maxHeaderListSize(uint32_t v)    { m_config.max_header_list_size = v; return *this; }
     H2ClientBuilder& verifyPeer(bool v)               { m_config.verify_peer = v; return *this; }
     H2ClientBuilder& caPath(std::string v)            { m_config.ca_path = std::move(v); return *this; }
-    H2Client build() const;
+    H2Client<> build() const;
     H2ClientConfig buildConfig() const {
         return Http2Conn::normalizeSettingsConfig(m_config);
     }
@@ -131,6 +141,7 @@ private:
  * - 客户端独占持有 TLS socket 与 `Http2ConnImpl`
  * - 返回给调用方的 `Http2Stream::ptr` 共享持有具体流对象，但连接生命周期仍由客户端控制
  */
+template<RingBufferBackendStrategy Strategy>
 class H2Client
 {
 public:
@@ -195,10 +206,16 @@ public:
     }
 
 private:
+    template<RingBufferBackendStrategy>
     friend struct detail::H2ClientConnectMachine;
+    template<RingBufferBackendStrategy>
     friend class detail::H2ClientConnectSequence;
+    template<RingBufferBackendStrategy>
     friend struct detail::H2RequestMachine;
-    friend auto detail::buildRequestOperation(H2Client& client, Http2Request&& request);
+    template<RingBufferBackendStrategy RequestStrategy>
+    friend auto detail::buildRequestOperation(
+        H2Client<RequestStrategy>& client,
+        Http2Request&& request);
 
     H2ClientConfig m_config;
     std::string m_host;
@@ -212,7 +229,7 @@ private:
     galay::ssl::SslContext m_ssl_ctx;
     galay::ssl::SslSocket m_dummy_socket{nullptr};
     std::unique_ptr<galay::ssl::SslSocket> m_socket;
-    std::unique_ptr<Http2ConnImpl<galay::ssl::SslSocket>> m_conn;
+    std::unique_ptr<Http2ConnImpl<galay::ssl::SslSocket, Strategy>> m_conn;
     std::expected<bool, Http2ErrorCode> m_connect_result{true};
     std::expected<bool, Http2ErrorCode> m_close_result{true};
 
@@ -222,7 +239,8 @@ private:
 namespace detail
 {
 
-inline bool parseFrameFromRingBuffer(RingBuffer& ring_buffer,
+template<RingBufferBackendStrategy Strategy>
+inline bool parseFrameFromRingBuffer(RingBuffer<Strategy>& ring_buffer,
                                      uint32_t max_frame_size,
                                      std::optional<Http2ErrorCode>& error,
                                      std::vector<uint8_t>& scratch,
@@ -287,10 +305,11 @@ inline bool parseFrameFromRingBuffer(RingBuffer& ring_buffer,
     return true;
 }
 
+template<RingBufferBackendStrategy Strategy>
 struct H2ClientConnectMachine {
     using result_type = std::expected<bool, Http2ErrorCode>;
 
-    explicit H2ClientConnectMachine(H2Client& client)
+    explicit H2ClientConnectMachine(H2Client<Strategy>& client)
         : m_client(&client)
         , m_server_host(IPType::IPV4, client.m_host, client.m_port)
         , m_driver(client.m_socket.get())
@@ -418,7 +437,7 @@ private:
 
     void preparePreface() {
         m_preface.assign(kHttp2ConnectionPreface.begin(), kHttp2ConnectionPreface.end());
-        auto settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+        auto settings = Http2ConnImpl<galay::ssl::SslSocket, Strategy>::makeSettingsFrameFromConfig(
             m_client->m_config,
             0);
         settings.header().stream_id = 0;
@@ -442,7 +461,7 @@ private:
         m_phase = Phase::kDone;
     }
 
-    H2Client* m_client = nullptr;
+    H2Client<Strategy>* m_client = nullptr;
     Host m_server_host;
     galay::ssl::SslOperationDriver m_driver;
     std::string m_preface;
@@ -450,9 +469,10 @@ private:
     Phase m_phase = Phase::kConnect;
 };
 
+template<RingBufferBackendStrategy Strategy>
 class H2ClientConnectSequence
     : public SequenceAwaitableBase
-    , public TimeoutSupport<H2ClientConnectSequence>
+    , public TimeoutSupport<H2ClientConnectSequence<Strategy>>
 {
 public:
     using ResultType = std::expected<bool, Http2ErrorCode>;
@@ -474,7 +494,7 @@ private:
         socket.reset();
     }
 
-    static void discardTransport(H2Client& client) {
+    static void discardTransport(H2Client<Strategy>& client) {
         if (client.m_conn) {
             if (client.m_conn->socket().handle().fd >= 0) {
                 int close_result = ::close(client.m_conn->socket().handle().fd);
@@ -489,16 +509,16 @@ private:
         client.m_scheduler = nullptr;
     }
 
-    static bool finalizeTransport(H2Client& client) {
+    static bool finalizeTransport(H2Client<Strategy>& client) {
         if (client.m_socket == nullptr) {
             return false;
         }
 
         client.m_conn =
-            std::make_unique<Http2ConnImpl<galay::ssl::SslSocket>>(std::move(*client.m_socket));
+            std::make_unique<Http2ConnImpl<galay::ssl::SslSocket, Strategy>>(std::move(*client.m_socket));
         client.m_socket.reset();
         client.m_conn->setIsClient(true);
-        auto local_settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+        auto local_settings = Http2ConnImpl<galay::ssl::SslSocket, Strategy>::makeSettingsFrameFromConfig(
             client.m_config,
             0);
         if (client.m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
@@ -513,7 +533,7 @@ private:
     }
 
 public:
-    H2ClientConnectSequence(H2Client& client, std::string host, uint16_t port)
+    H2ClientConnectSequence(H2Client<Strategy>& client, std::string host, uint16_t port)
         : SequenceAwaitableBase(client.m_dummy_socket.controller())
         , m_client(&client)
         , m_result(true)
@@ -564,7 +584,7 @@ public:
         m_inner_operation = std::make_unique<InnerOperation>(
             AwaitableBuilder<ResultType>::fromStateMachine(
                 m_client->m_socket->controller(),
-                H2ClientConnectMachine(*m_client))
+                H2ClientConnectMachine<Strategy>(*m_client))
                 .build()
         );
     }
@@ -653,7 +673,7 @@ public:
     std::expected<bool, IOError> m_result;
 
 private:
-    using InnerOperation = galay::kernel::StateMachineAwaitable<H2ClientConnectMachine>;
+    using InnerOperation = galay::kernel::StateMachineAwaitable<H2ClientConnectMachine<Strategy>>;
 
     ResultType resumeInner() {
         m_inner_completed = true;
@@ -667,17 +687,18 @@ private:
         }
     }
 
-    H2Client* m_client = nullptr;
+    H2Client<Strategy>* m_client = nullptr;
     std::unique_ptr<InnerOperation> m_inner_operation;
     bool m_ready = false;
     bool m_inner_armed = false;
     bool m_inner_completed = false;
 };
 
+template<RingBufferBackendStrategy Strategy>
 struct H2RequestMachine {
     using result_type = std::expected<std::optional<Http2Response>, Http2ErrorCode>;
 
-    H2RequestMachine(H2Client* client, Http2Request request)
+    H2RequestMachine(H2Client<Strategy>* client, Http2Request request)
         : m_client(client)
         , m_request(std::move(request))
     {
@@ -1005,7 +1026,7 @@ private:
         }
     }
 
-    H2Client* m_client = nullptr;
+    H2Client<Strategy>* m_client = nullptr;
     Http2Request m_request;
     std::string m_send_buffer;
     size_t m_send_offset = 0;
@@ -1020,9 +1041,10 @@ private:
     bool m_initialized = false;
 };
 
-inline auto buildRequestOperation(H2Client& client, Http2Request&& request) {
-    using ResultType = H2RequestMachine::result_type;
-    auto machine = H2RequestMachine(&client, std::move(request));
+template<RingBufferBackendStrategy Strategy>
+inline auto buildRequestOperation(H2Client<Strategy>& client, Http2Request&& request) {
+    using ResultType = typename H2RequestMachine<Strategy>::result_type;
+    auto machine = H2RequestMachine<Strategy>(&client, std::move(request));
     return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
                client.m_conn ? client.m_conn->socket().controller() : client.m_dummy_socket.controller(),
                client.m_conn ? &client.m_conn->socket() : &client.m_dummy_socket,
@@ -1032,8 +1054,9 @@ inline auto buildRequestOperation(H2Client& client, Http2Request&& request) {
 
 } // namespace detail
 
-inline H2Client::H2Client(const H2ClientConfig& config)
-    : m_config(Http2ConnImpl<galay::ssl::SslSocket>::normalizeSettingsConfig(config))
+template<RingBufferBackendStrategy Strategy>
+inline H2Client<Strategy>::H2Client(const H2ClientConfig& config)
+    : m_config(Http2ConnImpl<galay::ssl::SslSocket, Strategy>::normalizeSettingsConfig(config))
     , m_connected(false)
     , m_next_stream_id(1)
     , m_ssl_ctx(galay::ssl::SslMethod::TLS_Client)
@@ -1052,7 +1075,10 @@ inline H2Client::H2Client(const H2ClientConfig& config)
     }
 }
 
-inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uint16_t port) {
+template<RingBufferBackendStrategy Strategy>
+inline typename H2Client<Strategy>::ConnectAwaitable H2Client<Strategy>::connect(
+    const std::string& host,
+    uint16_t port) {
     const auto discard_socket = [](std::unique_ptr<galay::ssl::SslSocket>& socket) {
         if (socket && socket->handle().fd >= 0) {
             int close_result = ::close(socket->handle().fd);
@@ -1083,10 +1109,10 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
             return false;
         }
 
-        m_conn = std::make_unique<Http2ConnImpl<galay::ssl::SslSocket>>(std::move(*m_socket));
+        m_conn = std::make_unique<Http2ConnImpl<galay::ssl::SslSocket, Strategy>>(std::move(*m_socket));
         m_socket.reset();
         m_conn->setIsClient(true);
-        auto local_settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+        auto local_settings = Http2ConnImpl<galay::ssl::SslSocket, Strategy>::makeSettingsFrameFromConfig(
             m_config,
             0);
         if (m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {
@@ -1170,7 +1196,7 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
     }
 
     std::string preface(kHttp2ConnectionPreface.begin(), kHttp2ConnectionPreface.end());
-    auto settings = Http2ConnImpl<galay::ssl::SslSocket>::makeSettingsFrameFromConfig(
+    auto settings = Http2ConnImpl<galay::ssl::SslSocket, Strategy>::makeSettingsFrameFromConfig(
         m_config,
         0);
     settings.header().stream_id = 0;
@@ -1203,11 +1229,13 @@ inline H2Client::ConnectAwaitable H2Client::connect(const std::string& host, uin
     co_return std::expected<bool, Http2ErrorCode>(true);
 }
 
-inline auto H2Client::request(Http2Request request) {
+template<RingBufferBackendStrategy Strategy>
+inline auto H2Client<Strategy>::request(Http2Request request) {
     return detail::buildRequestOperation(*this, std::move(request));
 }
 
-inline bool H2Client::ensureActiveStreamManager() {
+template<RingBufferBackendStrategy Strategy>
+inline bool H2Client<Strategy>::ensureActiveStreamManager() {
     if (!m_connected || !m_conn) {
         return false;
     }
@@ -1240,7 +1268,8 @@ inline bool H2Client::ensureActiveStreamManager() {
     return true;
 }
 
-inline Http2Stream::ptr H2Client::get(const std::string& path) {
+template<RingBufferBackendStrategy Strategy>
+inline Http2Stream::ptr H2Client<Strategy>::get(const std::string& path) {
     if (!ensureActiveStreamManager()) {
         HTTP_LOG_ERROR("[h2] [get]", "client not ready");
         return nullptr;
@@ -1258,9 +1287,10 @@ inline Http2Stream::ptr H2Client::get(const std::string& path) {
     return stream;
 }
 
-inline Http2Stream::ptr H2Client::post(const std::string& path,
-                                       const std::string& body,
-                                       const std::string& content_type) {
+template<RingBufferBackendStrategy Strategy>
+inline Http2Stream::ptr H2Client<Strategy>::post(const std::string& path,
+                                                 const std::string& body,
+                                                 const std::string& content_type) {
     if (!ensureActiveStreamManager()) {
         HTTP_LOG_ERROR("[h2] [post]", "client not ready");
         return nullptr;
@@ -1280,7 +1310,8 @@ inline Http2Stream::ptr H2Client::post(const std::string& path,
     return stream;
 }
 
-inline Task<std::expected<bool, Http2ErrorCode>> H2Client::close() {
+template<RingBufferBackendStrategy Strategy>
+inline Task<std::expected<bool, Http2ErrorCode>> H2Client<Strategy>::close() {
     m_connected = false;
     m_close_result = true;
 
@@ -1305,8 +1336,8 @@ inline Task<std::expected<bool, Http2ErrorCode>> H2Client::close() {
     co_return m_close_result;
 }
 
-inline H2Client H2ClientBuilder::build() const {
-    return H2Client(Http2Conn::normalizeSettingsConfig(m_config));
+inline H2Client<> H2ClientBuilder::build() const {
+    return H2Client<>(Http2Conn::normalizeSettingsConfig(m_config));
 }
 
 #endif // GALAY_SSL_FEATURE_ENABLED

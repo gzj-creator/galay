@@ -270,13 +270,13 @@ namespace galay::redis
          */
         Task<RedisCommandResult> refreshFromSentinel();
 
-        RedisClient& master(); ///< 获取主节点客户端引用
+        RedisClient<>& master(); ///< 获取主节点客户端引用
         /**
          * @brief 获取指定索引的从节点客户端
          * @param index 从节点索引
          * @return 从节点客户端引用（若索引越界返回空）
          */
-        std::optional<std::reference_wrapper<RedisClient>> replica(size_t index);
+        std::optional<std::reference_wrapper<RedisClient<>>> replica(size_t index);
         size_t replicaCount() const noexcept; ///< 获取从节点数量
 
         /**
@@ -292,7 +292,7 @@ namespace galay::redis
         struct NodeHandle
         {
             RedisNodeAddress address;                          ///< 节点地址
-            std::unique_ptr<RedisClient> client;               ///< 客户端实例
+            std::unique_ptr<RedisClient<>> client;               ///< 客户端实例
             bool connected = false;                            ///< 连接状态
         };
 
@@ -303,17 +303,17 @@ namespace galay::redis
         Task<RedisCommandResult> refreshSentinelTask(); ///< Sentinel 刷新协程
 
         bool isRetryableConnectionError(const RedisError& error) const noexcept; ///< 判断是否为可重试的连接错误
-        RedisClient* chooseReadClient(); ///< 选择读客户端（轮询从节点）
-        RedisClient* ensureMaster(); ///< 确保主节点可用
-        RedisClient* chooseAvailableSentinel(); ///< 选择可用的 Sentinel 节点
+        RedisClient<>* chooseReadClient(); ///< 选择读客户端（轮询从节点）
+        RedisClient<>* ensureMaster(); ///< 确保主节点可用
+        RedisClient<>* chooseAvailableSentinel(); ///< 选择可用的 Sentinel 节点
         bool parseMasterAddressReply(const std::vector<RedisValue>& values, RedisNodeAddress* out_addr) const; ///< 解析主节点地址回复
         bool parseReplicaListReply(const std::vector<RedisValue>& values, std::vector<RedisNodeAddress>* replicas) const; ///< 解析从节点列表回复
 
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
-        std::unique_ptr<RedisClient> m_master;                        ///< 主节点客户端
+        std::unique_ptr<RedisClient<>> m_master;                        ///< 主节点客户端
         RedisNodeAddress m_master_address;                            ///< 主节点地址
-        std::vector<std::unique_ptr<RedisClient>> m_replicas;         ///< 从节点客户端列表
+        std::vector<std::unique_ptr<RedisClient<>>> m_replicas;         ///< 从节点客户端列表
         std::vector<RedisNodeAddress> m_replica_addresses;            ///< 从节点地址列表
         std::vector<bool> m_replica_connected;                        ///< 从节点连接状态
         std::vector<NodeHandle> m_sentinels;                          ///< Sentinel 节点列表
@@ -508,7 +508,7 @@ namespace galay::redis
          * @param index 节点索引
          * @return 节点客户端引用（若索引越界返回空）
          */
-        std::optional<std::reference_wrapper<RedisClient>> node(size_t index);
+        std::optional<std::reference_wrapper<RedisClient<>>> node(size_t index);
 
         /**
          * @brief 获取拓扑统计信息
@@ -523,7 +523,7 @@ namespace galay::redis
         struct ClusterNode
         {
             RedisClusterNodeAddress address;                    ///< 节点地址（含槽位范围）
-            std::unique_ptr<RedisClient> client;                ///< 客户端实例
+            std::unique_ptr<RedisClient<>> client;                ///< 客户端实例
             bool connected = false;                             ///< 连接状态
         };
 
@@ -560,8 +560,8 @@ namespace galay::redis
         static std::string extractHashTag(const std::string& key); ///< 提取哈希标签
         static std::optional<RedirectInfo> parseRedirect(const RedisValue& value); ///< 解析重定向响应
 
-        RedisClient* chooseNodeBySlot(uint16_t slot) noexcept; ///< 根据槽位选择节点
-        RedisClient* chooseNodeByKey(const std::string& key) noexcept; ///< 根据键选择节点
+        RedisClient<>* chooseNodeBySlot(uint16_t slot) noexcept; ///< 根据槽位选择节点
+        RedisClient<>* chooseNodeByKey(const std::string& key) noexcept; ///< 根据键选择节点
         ClusterNode* chooseNodeHandleBySlot(uint16_t slot) noexcept; ///< 根据槽位选择节点句柄
         ClusterNode* chooseNodeHandleByKey(const std::string& key) noexcept; ///< 根据键选择节点句柄
         ClusterNode* findOrCreateNode(const std::string& host, int32_t port); ///< 查找或创建节点
@@ -571,7 +571,7 @@ namespace galay::redis
         IOScheduler* m_scheduler;                                     ///< IO 调度器
         AsyncRedisConfig m_config;                                    ///< 异步配置
         std::vector<ClusterNode> m_nodes;                             ///< 集群节点列表
-        std::unique_ptr<RedisClient> m_fallback_client;               ///< 回退客户端
+        std::unique_ptr<RedisClient<>> m_fallback_client;               ///< 回退客户端
         std::array<int, 16384> m_slot_owner{};                        ///< 槽位到节点的映射表
         std::chrono::milliseconds m_auto_refresh_interval{5000};      ///< 自动刷新间隔
         std::chrono::steady_clock::time_point m_last_refresh_time{};  ///< 上次刷新时间

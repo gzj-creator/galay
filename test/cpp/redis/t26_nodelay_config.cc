@@ -100,7 +100,7 @@ int readTcpNoDelay(int fd)
     return value;
 }
 
-Task<RedisVoidResult> connectRedisClient(RedisClient* client, uint16_t port)
+Task<RedisVoidResult> connectRedisClient(RedisClient<>* client, uint16_t port)
 {
     if (client == nullptr) {
         co_return std::unexpected(RedisError(
@@ -110,7 +110,7 @@ Task<RedisVoidResult> connectRedisClient(RedisClient* client, uint16_t port)
     co_return co_await client->connect("127.0.0.1", port);
 }
 
-Task<std::expected<void, IOError>> closeRedisClient(RedisClient* client)
+Task<std::expected<void, IOError>> closeRedisClient(RedisClient<>* client)
 {
     if (client == nullptr) {
         co_return std::unexpected(IOError(kNotReady, 0));
@@ -160,7 +160,7 @@ int observeAsyncRedisClientTcpNoDelay(bool tcp_no_delay)
         .scheduler(scheduler)
         .tcpNoDelay(tcp_no_delay)
         .buildConfig();
-    RedisClient client(scheduler, config);
+    RedisClient<> client(scheduler, config);
 
     auto connect_result = runtime.blockOn(connectRedisClient(&client, listener.port()));
     require(connect_result.has_value(), "runtime should run RedisClient connect task");

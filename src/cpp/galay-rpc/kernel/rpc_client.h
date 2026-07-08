@@ -54,9 +54,11 @@ namespace galay::rpc
 {
 
 using namespace galay::kernel;
+using ::galay::utils::RingBufferBackendStrategy;
+using ::galay::utils::RingBuffer;
 
 // 前向声明
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy>
 class RpcClientImpl;
 
 namespace detail {
@@ -66,14 +68,17 @@ namespace detail {
  *
  * @details 从RingBuffer中解析响应消息，并验证request_id与期望值匹配。
  */
-class ExpectedRpcResponseReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult>
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class ExpectedRpcResponseReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>
 {
 public:
-    ExpectedRpcResponseReadState(RingBuffer& ring_buffer,
+    using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
+
+    ExpectedRpcResponseReadState(RingBuffer<Strategy>& ring_buffer,
                                  const RpcReaderSetting& setting,
                                  uint32_t expected_request_id,
                                  RpcResponse& response)
-        : RpcRingBufferReadStateBase<RpcAwaitableResult>(ring_buffer)
+        : Base(ring_buffer)
         , m_setting(&setting)
         , m_expected_request_id(expected_request_id)
         , m_response(&response)
@@ -83,12 +88,12 @@ public:
     /// @brief 从RingBuffer中尝试解析期望的响应消息
     bool parseFromRingBuffer()
     {
-        if (ringBuffer().readable() == 0) {
+        if (this->ringBuffer().readable() == 0) {
             return false;
         }
 
         std::array<struct iovec, 2> read_iovecs{};
-        const size_t read_iovecs_count = ringBuffer().getReadIovecs(read_iovecs);
+        const size_t read_iovecs_count = this->ringBuffer().getReadIovecs(read_iovecs);
         if (read_iovecs_count == 0) {
             return false;
         }
@@ -99,7 +104,7 @@ public:
                                                     m_setting->max_message_size,
                                                     *m_response);
         if (!parse_result.has_value()) {
-            setReadError(parse_result.error());
+            this->setReadError(parse_result.error());
             return true;
         }
 
@@ -108,12 +113,12 @@ public:
         }
 
         if (m_response->requestId() != m_expected_request_id) {
-            setReadError(RpcError(RpcErrorCode::INVALID_RESPONSE,
-                                  "Mismatched response request id"));
+            this->setReadError(RpcError(RpcErrorCode::INVALID_RESPONSE,
+                                        "Mismatched response request id"));
             return true;
         }
 
-        ringBuffer().consume(parse_result.value());
+        this->ringBuffer().consume(parse_result.value());
         return true;
     }
 
@@ -132,11 +137,12 @@ private:
  *          内部使用状态机驱动readv直到收到完整响应。
  * @tparam SocketType Socket类型
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RecvRpcResponseChainAwaitable
-    : public TimeoutSupport<RecvRpcResponseChainAwaitable<SocketType>> {
+    : public TimeoutSupport<RecvRpcResponseChainAwaitable<SocketType, Strategy>> {
 public:
     using Result = detail::RpcAwaitableResult;
+    using ReadState = detail::ExpectedRpcResponseReadState<Strategy>;
 
     /**
      * @brief 构造响应接收等待体
@@ -145,11 +151,11 @@ public:
      * @param expected_request_id 期望匹配的请求ID
      * @param response 输出响应对象
      */
-    RecvRpcResponseChainAwaitable(RingBuffer& ring_buffer,
+    RecvRpcResponseChainAwaitable(RingBuffer<Strategy>& ring_buffer,
                                   const RpcReaderSetting& setting,
                                   uint32_t expected_request_id,
                                   RpcResponse& response)
-        : m_state(std::make_shared<detail::ExpectedRpcResponseReadState>(
+        : m_state(std::make_shared<ReadState>(
             ring_buffer,
             setting,
             expected_request_id,
@@ -157,7 +163,7 @@ public:
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
                 nullptr,
-                detail::RpcRingBufferReadMachine<detail::ExpectedRpcResponseReadState>(m_state))
+                detail::RpcRingBufferReadMachine<ReadState>(m_state))
                 .build())
     {}
 
@@ -177,9 +183,9 @@ public:
 
 private:
     using InnerAwaitable =
-        StateMachineAwaitable<detail::RpcRingBufferReadMachine<detail::ExpectedRpcResponseReadState>>;
+        StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
-    std::shared_ptr<detail::ExpectedRpcResponseReadState> m_state;  ///< 读取状态
+    std::shared_ptr<ReadState> m_state;  ///< 读取状态
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -219,7 +225,7 @@ public:
     /// @brief 设置metrics回调
     RpcClientBuilder& metricsCallback(RpcMetricCallback callback) { m_config.channel_options.metrics_callback = std::move(callback); return *this; }
     /// @brief 构建RpcClient实例
-    RpcClientImpl<TcpSocket> build() const;
+    RpcClientImpl<TcpSocket, RingBufferBackendStrategy::Mmap> build() const;
     /// @brief 仅导出配置
     RpcClientConfig buildConfig() const                       { return m_config; }
 
@@ -234,7 +240,7 @@ private:
  *          支持超时控制，使用协程进行异步IO操作。
  * @tparam SocketType 底层Socket类型，默认为TcpSocket
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RpcClientImpl {
 public:
     /**
@@ -242,7 +248,7 @@ public:
      * @param config 客户端配置
      */
     explicit RpcClientImpl(const RpcClientConfig& config = RpcClientConfig())
-        : m_channel(std::make_unique<RpcChannelImpl<SocketType>>(
+        : m_channel(std::make_unique<RpcChannelImpl<SocketType, Strategy>>(
               config.reader_setting,
               config.writer_setting,
               config.ring_buffer_size,
@@ -440,8 +446,8 @@ public:
      *
      * @note 仅创建会话对象，不会自动执行 STREAM_INIT。
      */
-    std::expected<RpcStreamImpl<SocketType>, RpcError> createStream(const std::string& service,
-                                                                     const std::string& method) {
+    std::expected<RpcStreamImpl<SocketType, Strategy>, RpcError> createStream(const std::string& service,
+                                                                               const std::string& method) {
         const uint32_t stream_id = m_stream_id.fetch_add(1, std::memory_order_relaxed);
         return createStream(stream_id, service, method);
     }
@@ -451,9 +457,9 @@ public:
      *
      * @note 仅创建会话对象，不会自动执行 STREAM_INIT。
      */
-    std::expected<RpcStreamImpl<SocketType>, RpcError> createStream(uint32_t stream_id,
-                                                                     const std::string& service = {},
-                                                                     const std::string& method = {}) {
+    std::expected<RpcStreamImpl<SocketType, Strategy>, RpcError> createStream(uint32_t stream_id,
+                                                                               const std::string& service = {},
+                                                                               const std::string& method = {}) {
         if (!m_channel || !m_connected || !m_channel->ready()) {
             RPC_LOG_WARN("[client] [stream] [not-connected]",
                          "stream_id={} service={} method={}",
@@ -463,7 +469,7 @@ public:
             return std::unexpected(RpcError(RpcErrorCode::CONNECTION_CLOSED,
                                             "Client is not connected"));
         }
-        return RpcStreamImpl<SocketType>(m_channel->socket(), m_channel->ringBuffer(), stream_id, service, method);
+        return RpcStreamImpl<SocketType, Strategy>(m_channel->socket(), m_channel->ringBuffer(), stream_id, service, method);
     }
 
     /**
@@ -484,7 +490,7 @@ public:
     /**
      * @brief 获取读取器
      */
-    RpcReaderImpl<SocketType> getReader() {
+    RpcReaderImpl<SocketType, Strategy> getReader() {
         return m_channel->getReader();
     }
 
@@ -503,7 +509,7 @@ public:
     /**
      * @brief 获取RingBuffer
      */
-    RingBuffer& ringBuffer() { return m_channel->ringBuffer(); }
+    RingBuffer<Strategy>& ringBuffer() { return m_channel->ringBuffer(); }
 
     /**
      * @brief 获取读取配置
@@ -547,8 +553,8 @@ private:
         co_return std::move(call_result.value());
     }
 
-    std::unique_ptr<RpcChannelImpl<SocketType>> makeChannel() const {
-        return std::make_unique<RpcChannelImpl<SocketType>>(
+    std::unique_ptr<RpcChannelImpl<SocketType, Strategy>> makeChannel() const {
+        return std::make_unique<RpcChannelImpl<SocketType, Strategy>>(
             m_config.reader_setting,
             m_config.writer_setting,
             m_config.ring_buffer_size,
@@ -617,7 +623,7 @@ private:
         }
     }
 
-    std::unique_ptr<RpcChannelImpl<SocketType>> m_channel;  ///< 一元RPC连接通道
+    std::unique_ptr<RpcChannelImpl<SocketType, Strategy>> m_channel;  ///< 一元RPC连接通道
     RpcClientConfig m_config;                     ///< 客户端配置
     std::atomic<uint32_t> m_stream_id;            ///< 自增流ID
     RpcReconnectPolicy m_reconnect_policy;        ///< opt-in重连策略

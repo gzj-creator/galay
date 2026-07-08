@@ -23,7 +23,7 @@ static std::atomic<int> g_success{0};
 static std::atomic<int> g_fail{0};
 
 Task<void> runClient(const std::string& host, uint16_t port, int num_requests) {
-    H2Client client(H2ClientBuilder()
+    H2Client<> client(H2ClientBuilder()
         .verifyPeer(false)
         .build());
 

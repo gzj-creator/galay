@@ -31,12 +31,13 @@ namespace galay::rpc
 
 using namespace galay::kernel;
 using namespace galay::async;
+using ::galay::utils::RingBufferBackendStrategy;
 using ::galay::utils::RingBuffer;
 
 
 // 前向声明
-template<typename SocketType> class RpcConnImpl;
-template<typename SocketType> class RpcReaderImpl;
+template<typename SocketType, RingBufferBackendStrategy Strategy> class RpcConnImpl;
+template<typename SocketType, RingBufferBackendStrategy Strategy> class RpcReaderImpl;
 template<typename SocketType> class RpcWriterImpl;
 
 /// @brief RPC连接默认环形缓冲区大小（8KB）
@@ -292,13 +293,16 @@ using RpcAwaitableResult = std::expected<bool, RpcError>;
  *
  * @details 从RingBuffer中逐步读取并解析完整的RPC请求消息。
  */
-class RpcRequestReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult>
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class RpcRequestReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>
 {
 public:
-    RpcRequestReadState(RingBuffer& ring_buffer,
+    using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
+
+    RpcRequestReadState(RingBuffer<Strategy>& ring_buffer,
                         const RpcReaderSetting& setting,
                         RpcRequest& request)
-        : RpcRingBufferReadStateBase<RpcAwaitableResult>(ring_buffer)
+        : Base(ring_buffer)
         , m_setting(&setting)
         , m_request(&request)
     {
@@ -307,12 +311,12 @@ public:
     /// @brief 从RingBuffer中尝试解析请求消息
     bool parseFromRingBuffer()
     {
-        if (ringBuffer().readable() == 0) {
+        if (this->ringBuffer().readable() == 0) {
             return false;
         }
 
         std::array<struct iovec, 2> read_iovecs{};
-        const size_t read_iovecs_count = ringBuffer().getReadIovecs(read_iovecs);
+        const size_t read_iovecs_count = this->ringBuffer().getReadIovecs(read_iovecs);
         if (read_iovecs_count == 0) {
             return false;
         }
@@ -323,7 +327,7 @@ public:
                                                    m_setting->max_message_size,
                                                    *m_request);
         if (!parse_result.has_value()) {
-            setReadError(parse_result.error());
+            this->setReadError(parse_result.error());
             return true;
         }
 
@@ -331,7 +335,7 @@ public:
             return false;
         }
 
-        ringBuffer().consume(parse_result.value());
+        this->ringBuffer().consume(parse_result.value());
         return true;
     }
 
@@ -345,13 +349,16 @@ private:
  *
  * @details 从RingBuffer中逐步读取并解析完整的RPC响应消息。
  */
-class RpcResponseReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult>
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class RpcResponseReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>
 {
 public:
-    RpcResponseReadState(RingBuffer& ring_buffer,
+    using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
+
+    RpcResponseReadState(RingBuffer<Strategy>& ring_buffer,
                          const RpcReaderSetting& setting,
                          RpcResponse& response)
-        : RpcRingBufferReadStateBase<RpcAwaitableResult>(ring_buffer)
+        : Base(ring_buffer)
         , m_setting(&setting)
         , m_response(&response)
     {
@@ -360,12 +367,12 @@ public:
     /// @brief 从RingBuffer中尝试解析响应消息
     bool parseFromRingBuffer()
     {
-        if (ringBuffer().readable() == 0) {
+        if (this->ringBuffer().readable() == 0) {
             return false;
         }
 
         std::array<struct iovec, 2> read_iovecs{};
-        const size_t read_iovecs_count = ringBuffer().getReadIovecs(read_iovecs);
+        const size_t read_iovecs_count = this->ringBuffer().getReadIovecs(read_iovecs);
         if (read_iovecs_count == 0) {
             return false;
         }
@@ -376,7 +383,7 @@ public:
                                                     m_setting->max_message_size,
                                                     *m_response);
         if (!parse_result.has_value()) {
-            setReadError(parse_result.error());
+            this->setReadError(parse_result.error());
             return true;
         }
 
@@ -384,7 +391,7 @@ public:
             return false;
         }
 
-        ringBuffer().consume(parse_result.value());
+        this->ringBuffer().consume(parse_result.value());
         return true;
     }
 
@@ -398,11 +405,14 @@ private:
  *
  * @details 仅从RingBuffer中读取并解析RPC消息头（16字节）。
  */
-class RpcHeaderReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult>
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class RpcHeaderReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>
 {
 public:
-    RpcHeaderReadState(RingBuffer& ring_buffer, RpcHeader& header)
-        : RpcRingBufferReadStateBase<RpcAwaitableResult>(ring_buffer)
+    using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
+
+    RpcHeaderReadState(RingBuffer<Strategy>& ring_buffer, RpcHeader& header)
+        : Base(ring_buffer)
         , m_header(&header)
     {
     }
@@ -411,7 +421,7 @@ public:
     bool parseFromRingBuffer()
     {
         std::array<struct iovec, 2> read_iovecs{};
-        const size_t read_iovecs_count = ringBuffer().getReadIovecs(read_iovecs);
+        const size_t read_iovecs_count = this->ringBuffer().getReadIovecs(read_iovecs);
         const std::span<const iovec> read_span(read_iovecs.data(), read_iovecs_count);
         if (iovecsReadableBytes(read_span) < RPC_HEADER_SIZE) {
             return false;
@@ -421,11 +431,11 @@ public:
         copyFromIovecs(read_span, 0, header_buf, RPC_HEADER_SIZE);
 
         if (!m_header->deserialize(header_buf)) {
-            setReadError(RpcError(RpcErrorCode::INVALID_REQUEST, "Invalid header"));
+            this->setReadError(RpcError(RpcErrorCode::INVALID_REQUEST, "Invalid header"));
             return true;
         }
 
-        ringBuffer().consume(RPC_HEADER_SIZE);
+        this->ringBuffer().consume(RPC_HEADER_SIZE);
         return true;
     }
 
@@ -438,17 +448,20 @@ private:
  *
  * @details 从RingBuffer中读取指定长度的消息体数据。
  */
-class RpcBodyReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult>
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class RpcBodyReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>
 {
 public:
+    using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
+
     /**
      * @brief 构造消息体读取状态
      * @param ring_buffer 环形缓冲区
      * @param body 输出缓冲区
      * @param body_len 要读取的体长度
      */
-    RpcBodyReadState(RingBuffer& ring_buffer, char* body, size_t body_len)
-        : RpcRingBufferReadStateBase<RpcAwaitableResult>(ring_buffer)
+    RpcBodyReadState(RingBuffer<Strategy>& ring_buffer, char* body, size_t body_len)
+        : Base(ring_buffer)
         , m_body(body)
         , m_body_len(body_len)
     {
@@ -458,14 +471,14 @@ public:
     bool parseFromRingBuffer()
     {
         std::array<struct iovec, 2> read_iovecs{};
-        const size_t read_iovecs_count = ringBuffer().getReadIovecs(read_iovecs);
+        const size_t read_iovecs_count = this->ringBuffer().getReadIovecs(read_iovecs);
         const std::span<const iovec> read_span(read_iovecs.data(), read_iovecs_count);
         if (iovecsReadableBytes(read_span) < m_body_len) {
             return false;
         }
 
         copyFromIovecs(read_span, 0, m_body, m_body_len);
-        ringBuffer().consume(m_body_len);
+        this->ringBuffer().consume(m_body_len);
         return true;
     }
 
@@ -675,11 +688,12 @@ private:
  * @details 支持超时控制的RPC请求接收协程等待体。
  * @tparam SocketType Socket类型
  */
-template<typename SocketType>
-class GetRpcRequestAwaitable : public TimeoutSupport<GetRpcRequestAwaitable<SocketType>>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class GetRpcRequestAwaitable : public TimeoutSupport<GetRpcRequestAwaitable<SocketType, Strategy>>
 {
 public:
     using Result = detail::RpcAwaitableResult;
+    using ReadState = detail::RpcRequestReadState<Strategy>;
 
     /**
      * @brief 构造请求接收等待体
@@ -688,15 +702,15 @@ public:
      * @param request 输出请求对象
      * @param socket Socket引用
      */
-    GetRpcRequestAwaitable(RingBuffer& ring_buffer,
+    GetRpcRequestAwaitable(RingBuffer<Strategy>& ring_buffer,
                            const RpcReaderSetting& setting,
                            RpcRequest& request,
                            SocketType& socket)
-        : m_state(std::make_shared<detail::RpcRequestReadState>(ring_buffer, setting, request))
+        : m_state(std::make_shared<ReadState>(ring_buffer, setting, request))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
                 socket.controller(),
-                detail::RpcRingBufferReadMachine<detail::RpcRequestReadState>(m_state))
+                detail::RpcRingBufferReadMachine<ReadState>(m_state))
                 .build())
     {}
 
@@ -716,9 +730,9 @@ public:
 
 private:
     using InnerAwaitable =
-        StateMachineAwaitable<detail::RpcRingBufferReadMachine<detail::RpcRequestReadState>>;
+        StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
-    std::shared_ptr<detail::RpcRequestReadState> m_state;  ///< 读取状态
+    std::shared_ptr<ReadState> m_state;  ///< 读取状态
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -728,11 +742,12 @@ private:
  * @details 支持超时控制的RPC响应接收协程等待体。
  * @tparam SocketType Socket类型
  */
-template<typename SocketType>
-class GetRpcResponseAwaitable : public TimeoutSupport<GetRpcResponseAwaitable<SocketType>>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class GetRpcResponseAwaitable : public TimeoutSupport<GetRpcResponseAwaitable<SocketType, Strategy>>
 {
 public:
     using Result = detail::RpcAwaitableResult;
+    using ReadState = detail::RpcResponseReadState<Strategy>;
 
     /**
      * @brief 构造响应接收等待体
@@ -741,15 +756,15 @@ public:
      * @param response 输出响应对象
      * @param socket Socket引用
      */
-    GetRpcResponseAwaitable(RingBuffer& ring_buffer,
+    GetRpcResponseAwaitable(RingBuffer<Strategy>& ring_buffer,
                             const RpcReaderSetting& setting,
                             RpcResponse& response,
                             SocketType& socket)
-        : m_state(std::make_shared<detail::RpcResponseReadState>(ring_buffer, setting, response))
+        : m_state(std::make_shared<ReadState>(ring_buffer, setting, response))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
                 socket.controller(),
-                detail::RpcRingBufferReadMachine<detail::RpcResponseReadState>(m_state))
+                detail::RpcRingBufferReadMachine<ReadState>(m_state))
                 .build())
     {}
 
@@ -769,9 +784,9 @@ public:
 
 private:
     using InnerAwaitable =
-        StateMachineAwaitable<detail::RpcRingBufferReadMachine<detail::RpcResponseReadState>>;
+        StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
-    std::shared_ptr<detail::RpcResponseReadState> m_state;  ///< 读取状态
+    std::shared_ptr<ReadState> m_state;  ///< 读取状态
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -925,11 +940,12 @@ private:
  * @details 仅读取RPC消息头的协程等待体，支持超时控制。
  * @tparam SocketType Socket类型
  */
-template<typename SocketType>
-class GetRpcHeaderAwaitable : public TimeoutSupport<GetRpcHeaderAwaitable<SocketType>>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class GetRpcHeaderAwaitable : public TimeoutSupport<GetRpcHeaderAwaitable<SocketType, Strategy>>
 {
 public:
     using Result = detail::RpcAwaitableResult;
+    using ReadState = detail::RpcHeaderReadState<Strategy>;
 
     /**
      * @brief 构造消息头读取等待体
@@ -937,12 +953,12 @@ public:
      * @param header 输出消息头
      * @param socket Socket引用
      */
-    GetRpcHeaderAwaitable(RingBuffer& ring_buffer, RpcHeader& header, SocketType& socket)
-        : m_state(std::make_shared<detail::RpcHeaderReadState>(ring_buffer, header))
+    GetRpcHeaderAwaitable(RingBuffer<Strategy>& ring_buffer, RpcHeader& header, SocketType& socket)
+        : m_state(std::make_shared<ReadState>(ring_buffer, header))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
                 socket.controller(),
-                detail::RpcRingBufferReadMachine<detail::RpcHeaderReadState>(m_state))
+                detail::RpcRingBufferReadMachine<ReadState>(m_state))
                 .build())
     {}
 
@@ -962,9 +978,9 @@ public:
 
 private:
     using InnerAwaitable =
-        StateMachineAwaitable<detail::RpcRingBufferReadMachine<detail::RpcHeaderReadState>>;
+        StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
-    std::shared_ptr<detail::RpcHeaderReadState> m_state;  ///< 读取状态
+    std::shared_ptr<ReadState> m_state;  ///< 读取状态
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -974,11 +990,12 @@ private:
  * @details 读取指定长度消息体的协程等待体，支持超时控制。
  * @tparam SocketType Socket类型
  */
-template<typename SocketType>
-class GetRpcBodyAwaitable : public TimeoutSupport<GetRpcBodyAwaitable<SocketType>>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class GetRpcBodyAwaitable : public TimeoutSupport<GetRpcBodyAwaitable<SocketType, Strategy>>
 {
 public:
     using Result = detail::RpcAwaitableResult;
+    using ReadState = detail::RpcBodyReadState<Strategy>;
 
     /**
      * @brief 构造消息体读取等待体
@@ -987,12 +1004,12 @@ public:
      * @param body_len 要读取的体长度
      * @param socket Socket引用
      */
-    GetRpcBodyAwaitable(RingBuffer& ring_buffer, char* body, size_t body_len, SocketType& socket)
-        : m_state(std::make_shared<detail::RpcBodyReadState>(ring_buffer, body, body_len))
+    GetRpcBodyAwaitable(RingBuffer<Strategy>& ring_buffer, char* body, size_t body_len, SocketType& socket)
+        : m_state(std::make_shared<ReadState>(ring_buffer, body, body_len))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
                 socket.controller(),
-                detail::RpcRingBufferReadMachine<detail::RpcBodyReadState>(m_state))
+                detail::RpcRingBufferReadMachine<ReadState>(m_state))
                 .build())
     {}
 
@@ -1012,9 +1029,9 @@ public:
 
 private:
     using InnerAwaitable =
-        StateMachineAwaitable<detail::RpcRingBufferReadMachine<detail::RpcBodyReadState>>;
+        StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
-    std::shared_ptr<detail::RpcBodyReadState> m_state;  ///< 读取状态
+    std::shared_ptr<ReadState> m_state;  ///< 读取状态
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -1024,12 +1041,12 @@ private:
  * @details 提供从连接中读取RPC请求、响应、消息头和消息体的接口。
  * @tparam SocketType Socket类型
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RpcReaderImpl
 {
 public:
-    using GetHeaderAwaitable = GetRpcHeaderAwaitable<SocketType>;  ///< 消息头读取等待体类型
-    using GetBodyAwaitable = GetRpcBodyAwaitable<SocketType>;      ///< 消息体读取等待体类型
+    using GetHeaderAwaitable = GetRpcHeaderAwaitable<SocketType, Strategy>;  ///< 消息头读取等待体类型
+    using GetBodyAwaitable = GetRpcBodyAwaitable<SocketType, Strategy>;      ///< 消息体读取等待体类型
 
     /**
      * @brief 构造读取器
@@ -1037,7 +1054,7 @@ public:
      * @param setting 读取配置
      * @param socket Socket引用
      */
-    RpcReaderImpl(RingBuffer& ring_buffer, const RpcReaderSetting& setting, SocketType& socket)
+    RpcReaderImpl(RingBuffer<Strategy>& ring_buffer, const RpcReaderSetting& setting, SocketType& socket)
         : m_ring_buffer(ring_buffer)
         , m_setting(setting)
         , m_socket(socket)
@@ -1049,8 +1066,8 @@ public:
      * @param request 输出请求对象
      * @return 等待体，co_await返回后表示请求已完整解析
      */
-    GetRpcRequestAwaitable<SocketType> getRequest(RpcRequest& request) {
-        return GetRpcRequestAwaitable<SocketType>(m_ring_buffer, m_setting, request, m_socket);
+    GetRpcRequestAwaitable<SocketType, Strategy> getRequest(RpcRequest& request) {
+        return GetRpcRequestAwaitable<SocketType, Strategy>(m_ring_buffer, m_setting, request, m_socket);
     }
 
     /**
@@ -1058,8 +1075,8 @@ public:
      * @param response 输出响应对象
      * @return 等待体
      */
-    GetRpcResponseAwaitable<SocketType> getResponse(RpcResponse& response) {
-        return GetRpcResponseAwaitable<SocketType>(m_ring_buffer, m_setting, response, m_socket);
+    GetRpcResponseAwaitable<SocketType, Strategy> getResponse(RpcResponse& response) {
+        return GetRpcResponseAwaitable<SocketType, Strategy>(m_ring_buffer, m_setting, response, m_socket);
     }
 
     /**
@@ -1077,7 +1094,7 @@ public:
     }
 
 private:
-    RingBuffer& m_ring_buffer;              ///< 环形缓冲区引用
+    RingBuffer<Strategy>& m_ring_buffer;    ///< 环形缓冲区引用
     const RpcReaderSetting& m_setting;      ///< 读取配置引用
     SocketType& m_socket;                   ///< Socket引用
 };
@@ -1146,7 +1163,7 @@ using RpcWriter = RpcWriterImpl<TcpSocket>;
  *
  * @details 封装TCP连接，使用RingBuffer配合readv/writev提供高效IO。
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RpcConnImpl
 {
 public:
@@ -1201,8 +1218,8 @@ public:
     /**
      * @brief 获取读取器
      */
-    RpcReaderImpl<SocketType> getReader() {
-        return RpcReaderImpl<SocketType>(m_ring_buffer, m_reader_setting, m_socket);
+    RpcReaderImpl<SocketType, Strategy> getReader() {
+        return RpcReaderImpl<SocketType, Strategy>(m_ring_buffer, m_reader_setting, m_socket);
     }
 
     /**
@@ -1220,7 +1237,7 @@ public:
     /**
      * @brief 获取RingBuffer
      */
-    RingBuffer& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<Strategy>& ringBuffer() { return m_ring_buffer; }
 
     /**
      * @brief 关闭连接
@@ -1236,7 +1253,7 @@ private:
     }
 
     SocketType m_socket;                        ///< 底层Socket
-    RingBuffer m_ring_buffer;                   ///< 环形缓冲区
+    RingBuffer<Strategy> m_ring_buffer;         ///< 环形缓冲区
     RpcReaderSetting m_reader_setting;          ///< 读取配置
     RpcWriterSetting m_writer_setting;          ///< 写入配置
 };

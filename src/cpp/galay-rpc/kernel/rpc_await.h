@@ -27,6 +27,7 @@ namespace galay::rpc
 {
 
 using namespace galay::kernel;
+using ::galay::utils::RingBufferBackendStrategy;
 using ::galay::utils::RingBuffer;
 
 namespace detail {
@@ -72,7 +73,8 @@ inline void consumeWritevIovecs(std::vector<iovec>& iovecs, size_t consumed)
  * @param read_iov_count 输出的iovec数量
  * @return 是否有可写空间
  */
-inline bool prepareRingBufferReadWindow(RingBuffer& ring_buffer,
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+inline bool prepareRingBufferReadWindow(RingBuffer<Strategy>& ring_buffer,
                                         std::array<struct iovec, 2>& read_iovecs,
                                         size_t& read_iov_count)
 {
@@ -106,17 +108,19 @@ inline RpcError mapRpcReadError(const IOError& io_error,
  *          包括准备读取窗口、处理接收错误和对端关闭事件。
  * @tparam ResultT 结果类型，默认为std::expected<bool, RpcError>
  */
-template<typename ResultT = std::expected<bool, RpcError>>
+template<typename ResultT = std::expected<bool, RpcError>,
+         RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RpcRingBufferReadStateBase
 {
 public:
     using ResultType = ResultT;
+    using RingBufferType = RingBuffer<Strategy>;
 
     /**
      * @brief 构造读取状态基类
      * @param ring_buffer 环形缓冲区引用
      */
-    explicit RpcRingBufferReadStateBase(RingBuffer& ring_buffer)
+    explicit RpcRingBufferReadStateBase(RingBufferType& ring_buffer)
         : m_ring_buffer(&ring_buffer)
     {
     }
@@ -165,7 +169,7 @@ public:
 
 protected:
     /// @brief 获取环形缓冲区引用
-    RingBuffer& ringBuffer() { return *m_ring_buffer; }
+    RingBufferType& ringBuffer() { return *m_ring_buffer; }
 
     /// @brief 设置读取错误
     void setReadError(RpcError error)
@@ -174,7 +178,7 @@ protected:
     }
 
 private:
-    RingBuffer* m_ring_buffer = nullptr;          ///< 环形缓冲区指针
+    RingBufferType* m_ring_buffer = nullptr;      ///< 环形缓冲区指针
     std::array<struct iovec, 2> m_read_iovecs{}; ///< 读取iovec数组
     size_t m_read_iov_count = 0;                  ///< 读取iovec数量
     std::optional<RpcError> m_error;              ///< 可选的错误信息

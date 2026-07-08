@@ -31,7 +31,7 @@ int expect_control_frame_body_rejected(RpcMessageType type, const char* name)
     auto next_frame = next_data.serialize(RpcMessageType::STREAM_DATA);
     auto wire = concat(std::move(invalid_frame), next_frame);
 
-    RingBuffer ring_buffer(128);
+    RingBuffer<> ring_buffer(128);
     if (auto rc = expect(ring_buffer.write(wire.data(), wire.size()) == wire.size(),
                          "failed to seed stream ring buffer")) {
         return rc;

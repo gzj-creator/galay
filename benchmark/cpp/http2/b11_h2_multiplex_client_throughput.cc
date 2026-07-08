@@ -114,7 +114,7 @@ Task<void> handleResponse(Http2Stream::ptr stream, std::shared_ptr<BatchBarrier>
  *   每轮在同一连接上并发发射 streams_per_conn 个 stream，
  *   等待全部完成后进入下一轮
  */
-Task<void> runConnection(std::shared_ptr<H2cClient> client,
+Task<void> runConnection(std::shared_ptr<H2cClient<>> client,
                          int id,
                          const std::string& host, uint16_t port,
                          int streams_per_conn, int rounds) {
@@ -238,11 +238,11 @@ int main(int argc, char* argv[]) {
 
     auto t0 = std::chrono::steady_clock::now();
 
-    std::vector<std::shared_ptr<H2cClient>> client_pool;
+    std::vector<std::shared_ptr<H2cClient<>>> client_pool;
     client_pool.reserve(connections);
 
     for (int i = 0; i < connections; i++) {
-        auto client = std::make_shared<H2cClient>(H2cClientBuilder().buildConfig());
+        auto client = std::make_shared<H2cClient<>>(H2cClientBuilder().buildConfig());
         client_pool.push_back(client);
         auto* sched = rt.getNextIOScheduler();
         scheduleTask(sched, runConnection(std::move(client), i, host, port, streams, rounds));

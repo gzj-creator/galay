@@ -116,11 +116,11 @@ int observeSyncConnectSocketTcpNoDelay(bool tcp_no_delay)
 
 int observeAsyncConnectSetupTcpNoDelay(bool tcp_no_delay)
 {
-    AsyncMysqlClient client(nullptr);
+    AsyncMysqlClient<> client(nullptr);
     MysqlConfig config = MysqlConfig::defaultConfig();
     config.tcp_no_delay = tcp_no_delay;
-    MysqlConnectAwaitable::SharedState state(client, config);
-    require(!state.result.has_value(), "MysqlConnectAwaitable setup should remain ready to connect");
+    MysqlConnectAwaitable<>::SharedState state(client, config);
+    require(!state.result.has_value(), "MysqlConnectAwaitable<> setup should remain ready to connect");
     return readTcpNoDelay(client.socket().handle().fd);
 }
 
@@ -154,10 +154,10 @@ void test_sync_client_applies_config()
 void test_async_client_applies_config()
 {
     const int default_nodelay = observeAsyncConnectSetupTcpNoDelay(true);
-    require(default_nodelay != 0, "default AsyncMysqlClient connect setup should enable TCP_NODELAY");
+    require(default_nodelay != 0, "default AsyncMysqlClient<> connect setup should enable TCP_NODELAY");
 
     const int disabled_nodelay = observeAsyncConnectSetupTcpNoDelay(false);
-    require(disabled_nodelay == 0, "disabled AsyncMysqlClient connect setup should leave TCP_NODELAY off");
+    require(disabled_nodelay == 0, "disabled AsyncMysqlClient<> connect setup should leave TCP_NODELAY off");
 }
 
 } // namespace

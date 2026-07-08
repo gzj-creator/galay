@@ -24,7 +24,7 @@ struct AsyncTestState {
 };
 
 // Helper: 执行查询直到完成
-// MysqlQueryAwaitable返回 std::expected<std::optional<MysqlResultSet>, MysqlError>
+// MysqlQueryAwaitable<>返回 std::expected<std::optional<MysqlResultSet>, MysqlError>
 // 成功时应直接返回完整结果
 #define MYSQL_CO_QUERY(client, sql, result_var) \
     { \
@@ -209,7 +209,7 @@ int main()
 {
     std::cout << "=== T3: Async MySQL Client Tests ===" << std::endl;
     const auto db_cfg = mysql_test::loadDbTestConfig();
-    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T3-AsyncMysqlClient");
+    if (const int skip_code = mysql_test::requireDbTestConfigOrSkip(db_cfg, "T3-AsyncMysqlClient<>");
         skip_code != 0) {
         return skip_code;
     }

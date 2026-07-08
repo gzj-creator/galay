@@ -461,7 +461,7 @@ public:
     HttpReaderImpl<SocketType>& getReader() { return m_reader; } ///< 获取读取器引用
     HttpWriterImpl<SocketType>& getWriter() { return m_writer; } ///< 获取写入器引用
     SocketType& getSocket() { return m_socket; } ///< 获取底层 Socket 引用
-    RingBuffer& getRingBuffer() { return m_ring_buffer; } ///< 获取 RingBuffer 引用
+    RingBuffer<>& getRingBuffer() { return m_ring_buffer; } ///< 获取 RingBuffer 引用
     const HttpReaderSetting& getReaderSetting() const { return m_reader_setting; } ///< 获取读取器配置
 
     /**
@@ -671,7 +671,7 @@ private:
     }
 
     SocketType& m_socket;                                    ///< Socket 引用
-    RingBuffer m_ring_buffer;                                ///< 环形缓冲区
+    RingBuffer<> m_ring_buffer;                              ///< 环形缓冲区
     HttpReaderSetting m_reader_setting;                      ///< 读取器配置
     HttpWriterSetting m_writer_setting;                      ///< 写入器配置
     HttpReaderImpl<SocketType> m_reader;                     ///< 读取器

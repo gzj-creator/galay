@@ -12,6 +12,8 @@
 #include <utility>
 
 using namespace galay::mysql;
+using galay::utils::RingBufferBackendStrategy;
+using galay::utils::RingBuffer;
 
 void require(bool condition, const char* message)
 {
@@ -39,36 +41,60 @@ concept HasProtocolSendAwaitable = requires { typename T::ProtocolSendAwaitable;
 template <typename T>
 concept HasProtocolRecvAwaitable = requires { typename T::ProtocolRecvAwaitable; };
 
-static_assert(!std::derived_from<MysqlConnectAwaitable, galay::kernel::SequenceAwaitableBase>);
-static_assert(!HasProtocolConnectAwaitable<MysqlConnectAwaitable>);
-static_assert(!HasProtocolHandshakeRecvAwaitable<MysqlConnectAwaitable>);
-static_assert(!HasProtocolAuthSendAwaitable<MysqlConnectAwaitable>);
-static_assert(!HasProtocolAuthResultRecvAwaitable<MysqlConnectAwaitable>);
+using DefaultMysqlClient = AsyncMysqlClient<>;
+using VectorMysqlClient = AsyncMysqlClient<RingBufferBackendStrategy::Vector>;
+using DefaultMysqlConnectAwaitable = MysqlConnectAwaitable<>;
+using DefaultMysqlQueryAwaitable = MysqlQueryAwaitable<>;
+using DefaultMysqlPrepareAwaitable = MysqlPrepareAwaitable<>;
+using DefaultMysqlStmtExecuteAwaitable = MysqlStmtExecuteAwaitable<>;
+using DefaultMysqlPipelineAwaitable = MysqlPipelineAwaitable<>;
+using VectorMysqlConnectAwaitable = MysqlConnectAwaitable<RingBufferBackendStrategy::Vector>;
+using VectorMysqlQueryAwaitable = MysqlQueryAwaitable<RingBufferBackendStrategy::Vector>;
+using VectorMysqlPrepareAwaitable = MysqlPrepareAwaitable<RingBufferBackendStrategy::Vector>;
+using VectorMysqlStmtExecuteAwaitable = MysqlStmtExecuteAwaitable<RingBufferBackendStrategy::Vector>;
+using VectorMysqlPipelineAwaitable = MysqlPipelineAwaitable<RingBufferBackendStrategy::Vector>;
 
-static_assert(!std::derived_from<MysqlQueryAwaitable, galay::kernel::SequenceAwaitableBase>);
-static_assert(!HasProtocolSendAwaitable<MysqlQueryAwaitable>);
-static_assert(!HasProtocolRecvAwaitable<MysqlQueryAwaitable>);
+static_assert(!std::derived_from<DefaultMysqlConnectAwaitable, galay::kernel::SequenceAwaitableBase>);
+static_assert(!HasProtocolConnectAwaitable<DefaultMysqlConnectAwaitable>);
+static_assert(!HasProtocolHandshakeRecvAwaitable<DefaultMysqlConnectAwaitable>);
+static_assert(!HasProtocolAuthSendAwaitable<DefaultMysqlConnectAwaitable>);
+static_assert(!HasProtocolAuthResultRecvAwaitable<DefaultMysqlConnectAwaitable>);
 
-static_assert(!std::derived_from<MysqlPrepareAwaitable, galay::kernel::SequenceAwaitableBase>);
-static_assert(!HasProtocolSendAwaitable<MysqlPrepareAwaitable>);
-static_assert(!HasProtocolRecvAwaitable<MysqlPrepareAwaitable>);
+static_assert(!std::derived_from<DefaultMysqlQueryAwaitable, galay::kernel::SequenceAwaitableBase>);
+static_assert(!HasProtocolSendAwaitable<DefaultMysqlQueryAwaitable>);
+static_assert(!HasProtocolRecvAwaitable<DefaultMysqlQueryAwaitable>);
 
-static_assert(!std::derived_from<MysqlStmtExecuteAwaitable, galay::kernel::SequenceAwaitableBase>);
-static_assert(!HasProtocolSendAwaitable<MysqlStmtExecuteAwaitable>);
-static_assert(!HasProtocolRecvAwaitable<MysqlStmtExecuteAwaitable>);
+static_assert(!std::derived_from<DefaultMysqlPrepareAwaitable, galay::kernel::SequenceAwaitableBase>);
+static_assert(!HasProtocolSendAwaitable<DefaultMysqlPrepareAwaitable>);
+static_assert(!HasProtocolRecvAwaitable<DefaultMysqlPrepareAwaitable>);
 
-static_assert(!std::derived_from<MysqlPipelineAwaitable, galay::kernel::SequenceAwaitableBase>);
-static_assert(!HasProtocolSendAwaitable<MysqlPipelineAwaitable>);
-static_assert(!HasProtocolRecvAwaitable<MysqlPipelineAwaitable>);
+static_assert(!std::derived_from<DefaultMysqlStmtExecuteAwaitable, galay::kernel::SequenceAwaitableBase>);
+static_assert(!HasProtocolSendAwaitable<DefaultMysqlStmtExecuteAwaitable>);
+static_assert(!HasProtocolRecvAwaitable<DefaultMysqlStmtExecuteAwaitable>);
 
-static_assert(requires(AsyncMysqlClient& client, MysqlConfig config) {
-    { client.connect(config) } -> std::same_as<MysqlConnectAwaitable>;
-    { client.query("SELECT 1") } -> std::same_as<MysqlQueryAwaitable>;
-    { client.prepare("SELECT ?") } -> std::same_as<MysqlPrepareAwaitable>;
+static_assert(!std::derived_from<DefaultMysqlPipelineAwaitable, galay::kernel::SequenceAwaitableBase>);
+static_assert(!HasProtocolSendAwaitable<DefaultMysqlPipelineAwaitable>);
+static_assert(!HasProtocolRecvAwaitable<DefaultMysqlPipelineAwaitable>);
+
+static_assert(requires(DefaultMysqlClient& client, MysqlConfig config) {
+    { client.connect(config) } -> std::same_as<DefaultMysqlConnectAwaitable>;
+    { client.query("SELECT 1") } -> std::same_as<DefaultMysqlQueryAwaitable>;
+    { client.prepare("SELECT ?") } -> std::same_as<DefaultMysqlPrepareAwaitable>;
     { client.stmtExecute(1u,
                          std::declval<std::span<const std::optional<std::string>>>(),
-                         std::declval<std::span<const uint8_t>>()) } -> std::same_as<MysqlStmtExecuteAwaitable>;
-    { client.batch(std::declval<std::span<const protocol::MysqlCommandView>>()) } -> std::same_as<MysqlPipelineAwaitable>;
+                         std::declval<std::span<const uint8_t>>()) } -> std::same_as<DefaultMysqlStmtExecuteAwaitable>;
+    { client.batch(std::declval<std::span<const protocol::MysqlCommandView>>()) } -> std::same_as<DefaultMysqlPipelineAwaitable>;
+});
+
+static_assert(requires(VectorMysqlClient& client, MysqlConfig config) {
+    { client.connect(config) } -> std::same_as<VectorMysqlConnectAwaitable>;
+    { client.query("SELECT 1") } -> std::same_as<VectorMysqlQueryAwaitable>;
+    { client.prepare("SELECT ?") } -> std::same_as<VectorMysqlPrepareAwaitable>;
+    { client.stmtExecute(1u,
+                         std::declval<std::span<const std::optional<std::string>>>(),
+                         std::declval<std::span<const uint8_t>>()) } -> std::same_as<VectorMysqlStmtExecuteAwaitable>;
+    { client.batch(std::declval<std::span<const protocol::MysqlCommandView>>()) } -> std::same_as<VectorMysqlPipelineAwaitable>;
+    { client.ringBuffer() } -> std::same_as<RingBuffer<RingBufferBackendStrategy::Vector>&>;
 });
 
 int main()
@@ -86,7 +112,7 @@ int main()
     require(sync_pipeline.error().type() == MYSQL_ERROR_INVALID_PARAM,
             "oversized sync pipeline should return invalid param");
 
-    AsyncMysqlClient async_client(nullptr);
+    DefaultMysqlClient async_client(nullptr);
     auto async_query = async_client.query(oversized_sql);
     require(async_query.isInvalid(), "oversized async query awaitable should be invalid");
     auto async_pipeline = async_client.pipeline(oversized_pipeline);

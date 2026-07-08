@@ -117,7 +117,7 @@ Task<void> runClient(int id,
     (void)id;
     ActiveClientGuard guard;
 
-    H2Client client(H2ClientBuilder()
+    H2Client<> client(H2ClientBuilder()
         .verifyPeer(false)
         .build());
 

@@ -43,7 +43,7 @@ static int g_failed = 0;
         g_passed++; \
     } while(0)
 
-static std::vector<struct iovec> readIovecs(const RingBuffer& buffer)
+static std::vector<struct iovec> readIovecs(const RingBuffer<>& buffer)
 {
     auto borrowed = borrowReadIovecs(buffer);
     std::vector<struct iovec> iovecs;

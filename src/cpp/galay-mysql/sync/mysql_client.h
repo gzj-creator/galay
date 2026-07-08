@@ -170,7 +170,7 @@ private:
     MysqlResult receiveResultSet(); ///< 接收完整结果集
     MysqlVoidResult runSimpleStatement(const std::string& sql); ///< 执行简单SQL语句
 
-    galay::utils::RingBuffer m_recv_ring_buffer; ///< 接收环形缓冲区
+    galay::utils::RingBuffer<> m_recv_ring_buffer; ///< 接收环形缓冲区
     std::string m_parse_scratch;                 ///< 解析临时缓冲区
 
     uint32_t m_server_capabilities = 0;          ///< 服务器能力标志

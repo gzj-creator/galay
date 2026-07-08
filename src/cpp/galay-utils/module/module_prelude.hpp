@@ -46,6 +46,9 @@
 #if __has_include(<cstdint>)
 #include <cstdint>
 #endif
+#if __has_include(<cstdio>)
+#include <cstdio>
+#endif
 #if __has_include(<cstdlib>)
 #include <cstdlib>
 #endif
@@ -90,6 +93,9 @@
 #endif
 #if __has_include(<iostream>)
 #include <iostream>
+#endif
+#if __has_include(<limits>)
+#include <limits>
 #endif
 #if __has_include(<mach-o/dyld.h>)
 #include <mach-o/dyld.h>
@@ -147,6 +153,9 @@
 #endif
 #if __has_include(<sys/types.h>)
 #include <sys/types.h>
+#endif
+#if __has_include(<sys/uio.h>)
+#include <sys/uio.h>
 #endif
 #if __has_include(<sys/wait.h>)
 #include <sys/wait.h>

@@ -79,7 +79,7 @@ namespace galay::redis
 
         if (m_state == State::Ready) {
         } else if (m_pool->m_all_connections.size() < m_pool->m_config.max_connections) {
-            auto client = std::make_shared<RedisClient>(m_pool->m_scheduler);
+            auto client = std::make_shared<RedisClient<>>(m_pool->m_scheduler);
             m_connection = std::make_shared<PooledConnection>(client, m_pool->m_scheduler);
             m_pool->m_all_connections.push_back(m_connection);
             m_pool->m_total_created++;
@@ -488,7 +488,7 @@ namespace galay::redis
                             m_config.host, m_config.port);
             }
 
-            auto client = std::make_shared<RedisClient>(m_scheduler);
+            auto client = std::make_shared<RedisClient<>>(m_scheduler);
             auto conn = std::make_shared<PooledConnection>(client, m_scheduler);
 
             // 同步辅助路径只登记客户端槽位；协程 acquire 路径负责真实连接。

@@ -25,7 +25,7 @@ std::atomic<bool> g_done{false};
  * @brief 客户端测试协程
  */
 Task<void> test_client(const std::string& host, uint16_t port, int num_requests) {
-    H2cClient client(H2cClientBuilder().build());
+    H2cClient<> client(H2cClientBuilder().build());
 
     std::cout << "Connecting to " << host << ":" << port << "..." << std::endl;
     auto connect_result = co_await client.connect(host, port);

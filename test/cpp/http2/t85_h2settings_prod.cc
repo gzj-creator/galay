@@ -250,7 +250,7 @@ Task<void> noopStreamHandler(Http2Stream::ptr) {
 }
 
 Task<void> runH2cUpgradeClient(uint16_t port) {
-    H2cClient client(H2cClientBuilder().build());
+    H2cClient<> client(H2cClientBuilder().build());
 
     auto connect_result = co_await client.connect("127.0.0.1", port);
     if (!connect_result) {

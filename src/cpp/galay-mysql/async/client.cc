@@ -67,7 +67,8 @@ bool handleSendResult(std::expected<size_t, IOError>& io_result,
     return false;
 }
 
-bool prepareRecvWindow(galay::utils::RingBuffer& ring_buffer, std::vector<struct iovec>& iovecs)
+template<RingBufferBackendStrategy Strategy>
+bool prepareRecvWindow(RingBuffer<Strategy>& ring_buffer, std::vector<struct iovec>& iovecs)
 {
     struct iovec raw_iovecs[2];
     const size_t count = ring_buffer.getWriteIovecs(raw_iovecs, 2);
@@ -187,9 +188,10 @@ std::array<struct iovec, 1>& emptyIovecs()
 
 }
 
-// ======================== MysqlConnectAwaitable ========================
+// ======================== MysqlConnectAwaitable<Strategy> ========================
 
-MysqlConnectAwaitable::MysqlConnectAwaitable(AsyncMysqlClient& client, MysqlConfig config)
+template<RingBufferBackendStrategy Strategy>
+MysqlConnectAwaitable<Strategy>::MysqlConnectAwaitable(AsyncMysqlClient<Strategy>& client, MysqlConfig config)
     : m_state(std::make_shared<SharedState>(client, std::move(config)))
     , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
                   client.socket().controller(),
@@ -198,12 +200,14 @@ MysqlConnectAwaitable::MysqlConnectAwaitable(AsyncMysqlClient& client, MysqlConf
 {
 }
 
-bool MysqlConnectAwaitable::isInvalid() const
+template<RingBufferBackendStrategy Strategy>
+bool MysqlConnectAwaitable<Strategy>::isInvalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
 
-MysqlConnectAwaitable::SharedState::SharedState(AsyncMysqlClient& client, MysqlConfig config_in)
+template<RingBufferBackendStrategy Strategy>
+MysqlConnectAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strategy>& client, MysqlConfig config_in)
     : client(&client)
     , config(std::move(config_in))
     , host(IPType::IPV4, config.host, config.port)
@@ -230,33 +234,39 @@ MysqlConnectAwaitable::SharedState::SharedState(AsyncMysqlClient& client, MysqlC
     }
 }
 
-MysqlConnectAwaitable::Machine::Machine(std::shared_ptr<SharedState> state)
+template<RingBufferBackendStrategy Strategy>
+MysqlConnectAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> state)
     : m_state(std::move(state))
 {
 }
 
-void MysqlConnectAwaitable::Machine::setError(MysqlError error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
-void MysqlConnectAwaitable::Machine::setConnectError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::setConnectError(const IOError& io_error) noexcept
 {
     setError(MysqlError(MYSQL_ERROR_CONNECTION, io_error.message()));
 }
 
-void MysqlConnectAwaitable::Machine::setSendError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
 {
     setError(MysqlError(MYSQL_ERROR_SEND, io_error.message()));
 }
 
-void MysqlConnectAwaitable::Machine::setRecvError(const std::string& phase, const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::setRecvError(const std::string& phase, const IOError& io_error) noexcept
 {
     setError(MysqlError(MYSQL_ERROR_RECV, io_error.message() + " during " + phase));
 }
 
-void MysqlConnectAwaitable::Machine::completeSuccess() noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::completeSuccess() noexcept
 {
     m_state->connected = true;
     m_state->phase = Phase::Done;
@@ -266,7 +276,8 @@ void MysqlConnectAwaitable::Machine::completeSuccess() noexcept
                  m_state->config.port);
 }
 
-bool MysqlConnectAwaitable::Machine::prepareReadWindow()
+template<RingBufferBackendStrategy Strategy>
+bool MysqlConnectAwaitable<Strategy>::Machine::prepareReadWindow()
 {
     m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
         m_state->read_iovecs.data(),
@@ -280,8 +291,9 @@ bool MysqlConnectAwaitable::Machine::prepareReadWindow()
     return true;
 }
 
-galay::kernel::MachineAction<MysqlConnectAwaitable::Result>
-MysqlConnectAwaitable::Machine::advance()
+template<RingBufferBackendStrategy Strategy>
+galay::kernel::MachineAction<typename MysqlConnectAwaitable<Strategy>::Result>
+MysqlConnectAwaitable<Strategy>::Machine::advance()
 {
     if (m_state->result.has_value()) {
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
@@ -345,7 +357,8 @@ MysqlConnectAwaitable::Machine::advance()
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
-void MysqlConnectAwaitable::Machine::onConnect(std::expected<void, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::onConnect(std::expected<void, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -366,7 +379,8 @@ void MysqlConnectAwaitable::Machine::onConnect(std::expected<void, IOError> resu
     m_state->phase = Phase::HandshakeRead;
 }
 
-void MysqlConnectAwaitable::Machine::onRead(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -395,7 +409,8 @@ void MysqlConnectAwaitable::Machine::onRead(std::expected<size_t, IOError> resul
     }
 }
 
-void MysqlConnectAwaitable::Machine::onWrite(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlConnectAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -418,7 +433,8 @@ void MysqlConnectAwaitable::Machine::onWrite(std::expected<size_t, IOError> resu
     }
 }
 
-std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseHandshakeFromRingBuffer()
+template<RingBufferBackendStrategy Strategy>
+std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseHandshakeFromRingBuffer()
 {
     struct iovec read_iovecs[2];
     const size_t read_iovecs_count = m_state->client->ringBuffer().getReadIovecs(read_iovecs, 2);
@@ -503,7 +519,8 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseHandshakeFr
     return true;
 }
 
-std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseAuthResultFromRingBuffer()
+template<RingBufferBackendStrategy Strategy>
+std::expected<bool, MysqlError> MysqlConnectAwaitable<Strategy>::Machine::parseAuthResultFromRingBuffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
@@ -627,9 +644,10 @@ std::expected<bool, MysqlError> MysqlConnectAwaitable::Machine::parseAuthResultF
     }
 }
 
-// ======================== MysqlQueryAwaitable ========================
+// ======================== MysqlQueryAwaitable<Strategy> ========================
 
-MysqlQueryAwaitable::MysqlQueryAwaitable(AsyncMysqlClient& client, std::string_view sql)
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy>::MysqlQueryAwaitable(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : m_state(std::make_shared<SharedState>(client, sql))
     , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
                   client.socket().controller(),
@@ -638,12 +656,14 @@ MysqlQueryAwaitable::MysqlQueryAwaitable(AsyncMysqlClient& client, std::string_v
 {
 }
 
-bool MysqlQueryAwaitable::isInvalid() const
+template<RingBufferBackendStrategy Strategy>
+bool MysqlQueryAwaitable<Strategy>::isInvalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
 
-MysqlQueryAwaitable::SharedState::SharedState(AsyncMysqlClient& client, std::string_view sql)
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : client(&client)
     , encoded_cmd(detail::buildSingleCommandPacket(protocol::CommandType::COM_QUERY,
                                                    sql,
@@ -661,30 +681,35 @@ MysqlQueryAwaitable::SharedState::SharedState(AsyncMysqlClient& client, std::str
     }
 }
 
-MysqlQueryAwaitable::Machine::Machine(std::shared_ptr<SharedState> state)
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> state)
     : m_state(std::move(state))
 {
 }
 
-void MysqlQueryAwaitable::Machine::setError(MysqlError error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlQueryAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
-void MysqlQueryAwaitable::Machine::setSendError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlQueryAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
 {
     MYSQL_LOG_DEBUG("[client]", "send query failed: {}", io_error.message());
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
 }
 
-void MysqlQueryAwaitable::Machine::setRecvError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlQueryAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
 {
     MYSQL_LOG_DEBUG("[client]", "recv query failed: {}", io_error.message());
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
 }
 
-bool MysqlQueryAwaitable::Machine::prepareReadWindow()
+template<RingBufferBackendStrategy Strategy>
+bool MysqlQueryAwaitable<Strategy>::Machine::prepareReadWindow()
 {
     m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
         m_state->read_iovecs.data(),
@@ -696,8 +721,9 @@ bool MysqlQueryAwaitable::Machine::prepareReadWindow()
     return true;
 }
 
-galay::kernel::MachineAction<MysqlQueryAwaitable::Result>
-MysqlQueryAwaitable::Machine::advance()
+template<RingBufferBackendStrategy Strategy>
+galay::kernel::MachineAction<typename MysqlQueryAwaitable<Strategy>::Result>
+MysqlQueryAwaitable<Strategy>::Machine::advance()
 {
     if (m_state->result.has_value()) {
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
@@ -746,7 +772,8 @@ MysqlQueryAwaitable::Machine::advance()
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
-void MysqlQueryAwaitable::Machine::onRead(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlQueryAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -762,7 +789,8 @@ void MysqlQueryAwaitable::Machine::onRead(std::expected<size_t, IOError> result)
     m_state->client->ringBuffer().produce(result.value());
 }
 
-void MysqlQueryAwaitable::Machine::onWrite(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlQueryAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -782,7 +810,8 @@ void MysqlQueryAwaitable::Machine::onWrite(std::expected<size_t, IOError> result
     }
 }
 
-std::expected<bool, MysqlError> MysqlQueryAwaitable::Machine::tryParseFromRingBuffer()
+template<RingBufferBackendStrategy Strategy>
+std::expected<bool, MysqlError> MysqlQueryAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
@@ -929,9 +958,10 @@ std::expected<bool, MysqlError> MysqlQueryAwaitable::Machine::tryParseFromRingBu
     }
 }
 
-// ======================== MysqlPrepareAwaitable ========================
+// ======================== MysqlPrepareAwaitable<Strategy> ========================
 
-MysqlPrepareAwaitable::MysqlPrepareAwaitable(AsyncMysqlClient& client, std::string_view sql)
+template<RingBufferBackendStrategy Strategy>
+MysqlPrepareAwaitable<Strategy>::MysqlPrepareAwaitable(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : m_state(std::make_shared<SharedState>(client, sql))
     , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
                   client.socket().controller(),
@@ -940,12 +970,14 @@ MysqlPrepareAwaitable::MysqlPrepareAwaitable(AsyncMysqlClient& client, std::stri
 {
 }
 
-bool MysqlPrepareAwaitable::isInvalid() const
+template<RingBufferBackendStrategy Strategy>
+bool MysqlPrepareAwaitable<Strategy>::isInvalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
 
-MysqlPrepareAwaitable::SharedState::SharedState(AsyncMysqlClient& client, std::string_view sql)
+template<RingBufferBackendStrategy Strategy>
+MysqlPrepareAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strategy>& client, std::string_view sql)
     : client(&client)
     , encoded_cmd(detail::buildSingleCommandPacket(protocol::CommandType::COM_STMT_PREPARE,
                                                    sql,
@@ -958,28 +990,33 @@ MysqlPrepareAwaitable::SharedState::SharedState(AsyncMysqlClient& client, std::s
     }
 }
 
-MysqlPrepareAwaitable::Machine::Machine(std::shared_ptr<SharedState> state)
+template<RingBufferBackendStrategy Strategy>
+MysqlPrepareAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> state)
     : m_state(std::move(state))
 {
 }
 
-void MysqlPrepareAwaitable::Machine::setError(MysqlError error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlPrepareAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
-void MysqlPrepareAwaitable::Machine::setSendError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlPrepareAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
 {
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
 }
 
-void MysqlPrepareAwaitable::Machine::setRecvError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlPrepareAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
 {
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
 }
 
-bool MysqlPrepareAwaitable::Machine::prepareReadWindow()
+template<RingBufferBackendStrategy Strategy>
+bool MysqlPrepareAwaitable<Strategy>::Machine::prepareReadWindow()
 {
     m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
         m_state->read_iovecs.data(),
@@ -991,8 +1028,9 @@ bool MysqlPrepareAwaitable::Machine::prepareReadWindow()
     return true;
 }
 
-galay::kernel::MachineAction<MysqlPrepareAwaitable::Result>
-MysqlPrepareAwaitable::Machine::advance()
+template<RingBufferBackendStrategy Strategy>
+galay::kernel::MachineAction<typename MysqlPrepareAwaitable<Strategy>::Result>
+MysqlPrepareAwaitable<Strategy>::Machine::advance()
 {
     if (m_state->result.has_value()) {
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
@@ -1042,7 +1080,8 @@ MysqlPrepareAwaitable::Machine::advance()
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
-void MysqlPrepareAwaitable::Machine::onRead(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlPrepareAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -1058,7 +1097,8 @@ void MysqlPrepareAwaitable::Machine::onRead(std::expected<size_t, IOError> resul
     m_state->client->ringBuffer().produce(result.value());
 }
 
-void MysqlPrepareAwaitable::Machine::onWrite(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlPrepareAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -1078,7 +1118,8 @@ void MysqlPrepareAwaitable::Machine::onWrite(std::expected<size_t, IOError> resu
     }
 }
 
-std::expected<bool, MysqlError> MysqlPrepareAwaitable::Machine::tryParseFromRingBuffer()
+template<RingBufferBackendStrategy Strategy>
+std::expected<bool, MysqlError> MysqlPrepareAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
@@ -1201,9 +1242,10 @@ std::expected<bool, MysqlError> MysqlPrepareAwaitable::Machine::tryParseFromRing
     }
 }
 
-// ======================== MysqlStmtExecuteAwaitable ========================
+// ======================== MysqlStmtExecuteAwaitable<Strategy> ========================
 
-MysqlStmtExecuteAwaitable::MysqlStmtExecuteAwaitable(AsyncMysqlClient& client, std::string encoded_cmd)
+template<RingBufferBackendStrategy Strategy>
+MysqlStmtExecuteAwaitable<Strategy>::MysqlStmtExecuteAwaitable(AsyncMysqlClient<Strategy>& client, std::string encoded_cmd)
     : m_state(std::make_shared<SharedState>(client, std::move(encoded_cmd)))
     , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
                   client.socket().controller(),
@@ -1212,12 +1254,14 @@ MysqlStmtExecuteAwaitable::MysqlStmtExecuteAwaitable(AsyncMysqlClient& client, s
 {
 }
 
-bool MysqlStmtExecuteAwaitable::isInvalid() const
+template<RingBufferBackendStrategy Strategy>
+bool MysqlStmtExecuteAwaitable<Strategy>::isInvalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
 
-MysqlStmtExecuteAwaitable::SharedState::SharedState(AsyncMysqlClient& client, std::string encoded_cmd_in)
+template<RingBufferBackendStrategy Strategy>
+MysqlStmtExecuteAwaitable<Strategy>::SharedState::SharedState(AsyncMysqlClient<Strategy>& client, std::string encoded_cmd_in)
     : client(&client)
     , encoded_cmd(std::move(encoded_cmd_in))
 {
@@ -1233,28 +1277,33 @@ MysqlStmtExecuteAwaitable::SharedState::SharedState(AsyncMysqlClient& client, st
     }
 }
 
-MysqlStmtExecuteAwaitable::Machine::Machine(std::shared_ptr<SharedState> state)
+template<RingBufferBackendStrategy Strategy>
+MysqlStmtExecuteAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> state)
     : m_state(std::move(state))
 {
 }
 
-void MysqlStmtExecuteAwaitable::Machine::setError(MysqlError error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
-void MysqlStmtExecuteAwaitable::Machine::setSendError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
 {
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
 }
 
-void MysqlStmtExecuteAwaitable::Machine::setRecvError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
 {
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
 }
 
-bool MysqlStmtExecuteAwaitable::Machine::prepareReadWindow()
+template<RingBufferBackendStrategy Strategy>
+bool MysqlStmtExecuteAwaitable<Strategy>::Machine::prepareReadWindow()
 {
     m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
         m_state->read_iovecs.data(),
@@ -1266,8 +1315,9 @@ bool MysqlStmtExecuteAwaitable::Machine::prepareReadWindow()
     return true;
 }
 
-galay::kernel::MachineAction<MysqlStmtExecuteAwaitable::Result>
-MysqlStmtExecuteAwaitable::Machine::advance()
+template<RingBufferBackendStrategy Strategy>
+galay::kernel::MachineAction<typename MysqlStmtExecuteAwaitable<Strategy>::Result>
+MysqlStmtExecuteAwaitable<Strategy>::Machine::advance()
 {
     if (m_state->result.has_value()) {
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
@@ -1316,7 +1366,8 @@ MysqlStmtExecuteAwaitable::Machine::advance()
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
-void MysqlStmtExecuteAwaitable::Machine::onRead(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -1332,7 +1383,8 @@ void MysqlStmtExecuteAwaitable::Machine::onRead(std::expected<size_t, IOError> r
     m_state->client->ringBuffer().produce(result.value());
 }
 
-void MysqlStmtExecuteAwaitable::Machine::onWrite(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlStmtExecuteAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -1352,7 +1404,8 @@ void MysqlStmtExecuteAwaitable::Machine::onWrite(std::expected<size_t, IOError> 
     }
 }
 
-std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable::Machine::tryParseFromRingBuffer()
+template<RingBufferBackendStrategy Strategy>
+std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
 {
     while (true) {
         struct iovec read_iovecs[2];
@@ -1497,9 +1550,10 @@ std::expected<bool, MysqlError> MysqlStmtExecuteAwaitable::Machine::tryParseFrom
     }
 }
 
-// ======================== MysqlPipelineAwaitable ========================
+// ======================== MysqlPipelineAwaitable<Strategy> ========================
 
-MysqlPipelineAwaitable::MysqlPipelineAwaitable(AsyncMysqlClient& client,
+template<RingBufferBackendStrategy Strategy>
+MysqlPipelineAwaitable<Strategy>::MysqlPipelineAwaitable(AsyncMysqlClient<Strategy>& client,
                                                std::span<const protocol::MysqlCommandView> commands)
     : m_state(std::make_shared<SharedState>(client, commands))
     , m_inner(galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
@@ -1509,13 +1563,15 @@ MysqlPipelineAwaitable::MysqlPipelineAwaitable(AsyncMysqlClient& client,
 {
 }
 
-bool MysqlPipelineAwaitable::isInvalid() const
+template<RingBufferBackendStrategy Strategy>
+bool MysqlPipelineAwaitable<Strategy>::isInvalid() const
 {
     return m_state != nullptr && m_state->phase == Phase::Invalid;
 }
 
-MysqlPipelineAwaitable::SharedState::SharedState(
-    AsyncMysqlClient& client,
+template<RingBufferBackendStrategy Strategy>
+MysqlPipelineAwaitable<Strategy>::SharedState::SharedState(
+    AsyncMysqlClient<Strategy>& client,
     std::span<const protocol::MysqlCommandView> commands)
     : client(&client)
     , expected_results(commands.size())
@@ -1557,28 +1613,33 @@ MysqlPipelineAwaitable::SharedState::SharedState(
     write_iovecs.reserve(reserve_hint);
 }
 
-MysqlPipelineAwaitable::Machine::Machine(std::shared_ptr<SharedState> state)
+template<RingBufferBackendStrategy Strategy>
+MysqlPipelineAwaitable<Strategy>::Machine::Machine(std::shared_ptr<SharedState> state)
     : m_state(std::move(state))
 {
 }
 
-void MysqlPipelineAwaitable::Machine::setError(MysqlError error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::setError(MysqlError error) noexcept
 {
     m_state->result = std::unexpected(std::move(error));
     m_state->phase = Phase::Invalid;
 }
 
-void MysqlPipelineAwaitable::Machine::setSendError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::setSendError(const IOError& io_error) noexcept
 {
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_SEND));
 }
 
-void MysqlPipelineAwaitable::Machine::setRecvError(const IOError& io_error) noexcept
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::setRecvError(const IOError& io_error) noexcept
 {
     setError(detail::mapAwaitableIoError(io_error, MYSQL_ERROR_RECV));
 }
 
-void MysqlPipelineAwaitable::Machine::refillWriteIovWindow()
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::refillWriteIovWindow()
 {
     if (m_state->write_iov_cursor > 0) {
         m_state->write_iovecs.erase(
@@ -1602,7 +1663,8 @@ void MysqlPipelineAwaitable::Machine::refillWriteIovWindow()
     }
 }
 
-size_t MysqlPipelineAwaitable::Machine::pendingWriteIovCount()
+template<RingBufferBackendStrategy Strategy>
+size_t MysqlPipelineAwaitable<Strategy>::Machine::pendingWriteIovCount()
 {
     while (m_state->write_iov_cursor < m_state->write_iovecs.size() &&
            m_state->write_iovecs[m_state->write_iov_cursor].iov_len == 0) {
@@ -1624,7 +1686,8 @@ size_t MysqlPipelineAwaitable::Machine::pendingWriteIovCount()
     return m_state->write_iovecs.size() - m_state->write_iov_cursor;
 }
 
-bool MysqlPipelineAwaitable::Machine::advanceAfterWrite(size_t sent_bytes)
+template<RingBufferBackendStrategy Strategy>
+bool MysqlPipelineAwaitable<Strategy>::Machine::advanceAfterWrite(size_t sent_bytes)
 {
     size_t remaining = sent_bytes;
     while (remaining > 0 && m_state->write_iov_cursor < m_state->write_iovecs.size()) {
@@ -1656,7 +1719,8 @@ bool MysqlPipelineAwaitable::Machine::advanceAfterWrite(size_t sent_bytes)
     return true;
 }
 
-bool MysqlPipelineAwaitable::Machine::prepareReadWindow()
+template<RingBufferBackendStrategy Strategy>
+bool MysqlPipelineAwaitable<Strategy>::Machine::prepareReadWindow()
 {
     m_state->read_iov_count = m_state->client->ringBuffer().getWriteIovecs(
         m_state->read_iovecs.data(),
@@ -1670,7 +1734,8 @@ bool MysqlPipelineAwaitable::Machine::prepareReadWindow()
     return true;
 }
 
-void MysqlPipelineAwaitable::Machine::resetCurrentResult()
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::resetCurrentResult()
 {
     m_state->phase = Phase::ReceivingHeader;
     m_state->current_result = MysqlResultSet{};
@@ -1681,7 +1746,8 @@ void MysqlPipelineAwaitable::Machine::resetCurrentResult()
     m_state->columns_received = 0;
 }
 
-void MysqlPipelineAwaitable::Machine::finalizeCurrentResult()
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::finalizeCurrentResult()
 {
     m_state->results.push_back(std::move(m_state->current_result));
     if (m_state->results.size() >= m_state->expected_results) {
@@ -1691,8 +1757,9 @@ void MysqlPipelineAwaitable::Machine::finalizeCurrentResult()
     }
 }
 
-galay::kernel::MachineAction<MysqlPipelineAwaitable::Result>
-MysqlPipelineAwaitable::Machine::advance()
+template<RingBufferBackendStrategy Strategy>
+galay::kernel::MachineAction<typename MysqlPipelineAwaitable<Strategy>::Result>
+MysqlPipelineAwaitable<Strategy>::Machine::advance()
 {
     if (m_state->result.has_value()) {
         return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
@@ -1744,7 +1811,8 @@ MysqlPipelineAwaitable::Machine::advance()
     return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
 }
 
-void MysqlPipelineAwaitable::Machine::onRead(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::onRead(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -1760,7 +1828,8 @@ void MysqlPipelineAwaitable::Machine::onRead(std::expected<size_t, IOError> resu
     m_state->client->ringBuffer().produce(result.value());
 }
 
-void MysqlPipelineAwaitable::Machine::onWrite(std::expected<size_t, IOError> result)
+template<RingBufferBackendStrategy Strategy>
+void MysqlPipelineAwaitable<Strategy>::Machine::onWrite(std::expected<size_t, IOError> result)
 {
     if (m_state->result.has_value()) {
         return;
@@ -1786,7 +1855,8 @@ void MysqlPipelineAwaitable::Machine::onWrite(std::expected<size_t, IOError> res
         m_state->phase = Phase::ReceivingHeader;
     }
 }
-std::expected<bool, MysqlError> MysqlPipelineAwaitable::Machine::tryParseFromRingBuffer()
+template<RingBufferBackendStrategy Strategy>
+std::expected<bool, MysqlError> MysqlPipelineAwaitable<Strategy>::Machine::tryParseFromRingBuffer()
 {
     while (m_state->results.size() < m_state->expected_results) {
         struct iovec read_iovecs[2];
@@ -1938,9 +2008,10 @@ std::expected<bool, MysqlError> MysqlPipelineAwaitable::Machine::tryParseFromRin
     return true;
 }
 
-// ======================== AsyncMysqlClient 实现 ========================
+// ======================== AsyncMysqlClient<Strategy> 实现 ========================
 
-AsyncMysqlClient::AsyncMysqlClient(IOScheduler* scheduler,
+template<RingBufferBackendStrategy Strategy>
+AsyncMysqlClient<Strategy>::AsyncMysqlClient(IOScheduler* scheduler,
                                    AsyncMysqlConfig config)
     : m_scheduler(scheduler)
     , m_config(std::move(config))
@@ -1948,7 +2019,8 @@ AsyncMysqlClient::AsyncMysqlClient(IOScheduler* scheduler,
 {
 }
 
-AsyncMysqlClient::AsyncMysqlClient(AsyncMysqlClient&& other) noexcept
+template<RingBufferBackendStrategy Strategy>
+AsyncMysqlClient<Strategy>::AsyncMysqlClient(AsyncMysqlClient<Strategy>&& other) noexcept
     : m_socket(std::move(other.m_socket))
     , m_scheduler(other.m_scheduler)
     , m_config(std::move(other.m_config))
@@ -1961,7 +2033,8 @@ AsyncMysqlClient::AsyncMysqlClient(AsyncMysqlClient&& other) noexcept
     other.m_is_closed = true;
 }
 
-AsyncMysqlClient& AsyncMysqlClient::operator=(AsyncMysqlClient&& other) noexcept
+template<RingBufferBackendStrategy Strategy>
+AsyncMysqlClient<Strategy>& AsyncMysqlClient<Strategy>::operator=(AsyncMysqlClient<Strategy>&& other) noexcept
 {
     if (this != &other) {
         m_socket = std::move(other.m_socket);
@@ -1977,12 +2050,14 @@ AsyncMysqlClient& AsyncMysqlClient::operator=(AsyncMysqlClient&& other) noexcept
     return *this;
 }
 
-MysqlConnectAwaitable AsyncMysqlClient::connect(MysqlConfig config)
+template<RingBufferBackendStrategy Strategy>
+MysqlConnectAwaitable<Strategy> AsyncMysqlClient<Strategy>::connect(MysqlConfig config)
 {
-    return MysqlConnectAwaitable(*this, std::move(config));
+    return MysqlConnectAwaitable<Strategy>(*this, std::move(config));
 }
 
-MysqlConnectAwaitable AsyncMysqlClient::connect(std::string_view host, uint16_t port,
+template<RingBufferBackendStrategy Strategy>
+MysqlConnectAwaitable<Strategy> AsyncMysqlClient<Strategy>::connect(std::string_view host, uint16_t port,
                                                 std::string_view user, std::string_view password,
                                                 std::string_view database)
 {
@@ -1996,17 +2071,20 @@ MysqlConnectAwaitable AsyncMysqlClient::connect(std::string_view host, uint16_t 
     return connect(std::move(config));
 }
 
-MysqlQueryAwaitable AsyncMysqlClient::query(std::string_view sql)
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::query(std::string_view sql)
 {
-    return MysqlQueryAwaitable(*this, sql);
+    return MysqlQueryAwaitable<Strategy>(*this, sql);
 }
 
-MysqlPipelineAwaitable AsyncMysqlClient::batch(std::span<const protocol::MysqlCommandView> commands)
+template<RingBufferBackendStrategy Strategy>
+MysqlPipelineAwaitable<Strategy> AsyncMysqlClient<Strategy>::batch(std::span<const protocol::MysqlCommandView> commands)
 {
-    return MysqlPipelineAwaitable(*this, commands);
+    return MysqlPipelineAwaitable<Strategy>(*this, commands);
 }
 
-MysqlPipelineAwaitable AsyncMysqlClient::pipeline(std::span<const std::string_view> sqls)
+template<RingBufferBackendStrategy Strategy>
+MysqlPipelineAwaitable<Strategy> AsyncMysqlClient<Strategy>::pipeline(std::span<const std::string_view> sqls)
 {
     size_t reserve_bytes = 0;
     for (const auto sql : sqls) {
@@ -2022,46 +2100,54 @@ MysqlPipelineAwaitable AsyncMysqlClient::pipeline(std::span<const std::string_vi
     return batch(builder.commands());
 }
 
-MysqlPrepareAwaitable AsyncMysqlClient::prepare(std::string_view sql)
+template<RingBufferBackendStrategy Strategy>
+MysqlPrepareAwaitable<Strategy> AsyncMysqlClient<Strategy>::prepare(std::string_view sql)
 {
-    return MysqlPrepareAwaitable(*this, sql);
+    return MysqlPrepareAwaitable<Strategy>(*this, sql);
 }
 
-MysqlStmtExecuteAwaitable AsyncMysqlClient::stmtExecute(uint32_t stmt_id,
+template<RingBufferBackendStrategy Strategy>
+MysqlStmtExecuteAwaitable<Strategy> AsyncMysqlClient<Strategy>::stmtExecute(uint32_t stmt_id,
                                                         std::span<const std::optional<std::string>> params,
                                                         std::span<const uint8_t> param_types)
 {
-    return MysqlStmtExecuteAwaitable(*this, m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0));
+    return MysqlStmtExecuteAwaitable<Strategy>(*this, m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0));
 }
 
-MysqlStmtExecuteAwaitable AsyncMysqlClient::stmtExecute(uint32_t stmt_id,
+template<RingBufferBackendStrategy Strategy>
+MysqlStmtExecuteAwaitable<Strategy> AsyncMysqlClient<Strategy>::stmtExecute(uint32_t stmt_id,
                                                         std::span<const std::optional<std::string_view>> params,
                                                         std::span<const uint8_t> param_types)
 {
-    return MysqlStmtExecuteAwaitable(*this, m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0));
+    return MysqlStmtExecuteAwaitable<Strategy>(*this, m_encoder.encodeStmtExecute(stmt_id, params, param_types, 0));
 }
 
-MysqlQueryAwaitable AsyncMysqlClient::beginTransaction()
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::beginTransaction()
 {
     return query("BEGIN");
 }
 
-MysqlQueryAwaitable AsyncMysqlClient::commit()
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::commit()
 {
     return query("COMMIT");
 }
 
-MysqlQueryAwaitable AsyncMysqlClient::rollback()
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::rollback()
 {
     return query("ROLLBACK");
 }
 
-MysqlQueryAwaitable AsyncMysqlClient::ping()
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::ping()
 {
     return query("SELECT 1");
 }
 
-MysqlQueryAwaitable AsyncMysqlClient::useDatabase(std::string_view database)
+template<RingBufferBackendStrategy Strategy>
+MysqlQueryAwaitable<Strategy> AsyncMysqlClient<Strategy>::useDatabase(std::string_view database)
 {
     std::string sql;
     sql.reserve(4 + database.size());
@@ -2069,5 +2155,24 @@ MysqlQueryAwaitable AsyncMysqlClient::useDatabase(std::string_view database)
     sql.append(database.data(), database.size());
     return query(sql);
 }
+
+template class MysqlConnectAwaitable<RingBufferBackendStrategy::Mmap>;
+template class MysqlConnectAwaitable<RingBufferBackendStrategy::Vector>;
+template class MysqlConnectAwaitable<RingBufferBackendStrategy::Auto>;
+template class MysqlQueryAwaitable<RingBufferBackendStrategy::Mmap>;
+template class MysqlQueryAwaitable<RingBufferBackendStrategy::Vector>;
+template class MysqlQueryAwaitable<RingBufferBackendStrategy::Auto>;
+template class MysqlPrepareAwaitable<RingBufferBackendStrategy::Mmap>;
+template class MysqlPrepareAwaitable<RingBufferBackendStrategy::Vector>;
+template class MysqlPrepareAwaitable<RingBufferBackendStrategy::Auto>;
+template class MysqlStmtExecuteAwaitable<RingBufferBackendStrategy::Mmap>;
+template class MysqlStmtExecuteAwaitable<RingBufferBackendStrategy::Vector>;
+template class MysqlStmtExecuteAwaitable<RingBufferBackendStrategy::Auto>;
+template class MysqlPipelineAwaitable<RingBufferBackendStrategy::Mmap>;
+template class MysqlPipelineAwaitable<RingBufferBackendStrategy::Vector>;
+template class MysqlPipelineAwaitable<RingBufferBackendStrategy::Auto>;
+template class AsyncMysqlClient<RingBufferBackendStrategy::Mmap>;
+template class AsyncMysqlClient<RingBufferBackendStrategy::Vector>;
+template class AsyncMysqlClient<RingBufferBackendStrategy::Auto>;
 
 } // namespace galay::mysql

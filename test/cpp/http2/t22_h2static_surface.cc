@@ -3,13 +3,28 @@
  * @brief HTTP/2 静态响应配置入口 public surface 测试
  */
 
+#include <galay/cpp/galay-http2/client/h2_client.h>
+#include <galay/cpp/galay-http2/client/h2c_client.h>
 #include <galay/cpp/galay-http2/server/http2_server.h>
 
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <type_traits>
+#include <utility>
 
 using namespace galay::http2;
+using galay::utils::RingBufferBackendStrategy;
+
+static_assert(std::is_move_constructible_v<H2cClient<>>);
+static_assert(std::is_move_constructible_v<H2cClient<RingBufferBackendStrategy::Vector>>);
+static_assert(std::is_same_v<decltype(std::declval<H2cClientBuilder>().build()), H2cClient<>>);
+
+#ifdef GALAY_SSL_FEATURE_ENABLED
+static_assert(std::is_move_constructible_v<H2Client<>>);
+static_assert(std::is_move_constructible_v<H2Client<RingBufferBackendStrategy::Vector>>);
+static_assert(std::is_same_v<decltype(std::declval<H2ClientBuilder>().build()), H2Client<>>);
+#endif
 
 int main()
 {

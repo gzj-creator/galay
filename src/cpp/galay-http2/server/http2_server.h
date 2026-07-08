@@ -244,7 +244,7 @@ inline bool looksLikeHttpMethod(const char* buf) {
 /**
  * @brief 从 RingBuffer 的 iovec 拷贝 n 字节到 buf（不 consume）
  */
-inline void peekRingBuffer(RingBuffer& rb, char* buf, size_t n) {
+inline void peekRingBuffer(RingBuffer<>& rb, char* buf, size_t n) {
     auto iovecs = borrowReadIovecs(rb);
     size_t copied = 0;
     for (const auto& iov : iovecs) {
@@ -258,7 +258,7 @@ inline void peekRingBuffer(RingBuffer& rb, char* buf, size_t n) {
 /**
  * @brief 把 RingBuffer 全部数据取出到 string 并 consume
  */
-inline std::string drainRingBuffer(RingBuffer& rb) {
+inline std::string drainRingBuffer(RingBuffer<>& rb) {
     std::string data;
     data.reserve(rb.readable());
     auto iovecs = borrowReadIovecs(rb);

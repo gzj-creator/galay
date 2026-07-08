@@ -36,13 +36,18 @@
 #include <utility>
 #include <sys/uio.h>
 
+namespace galay::utils
+{
+enum class RingBufferBackendStrategy;
+}
+
 namespace galay::http2
 {
 
-template<typename SocketType>
+template<typename SocketType, ::galay::utils::RingBufferBackendStrategy Strategy>
 class Http2StreamManagerImpl;
 
-template<typename SocketType>
+template<typename SocketType, ::galay::utils::RingBufferBackendStrategy Strategy>
 class Http2ConnImpl;
 
 class Http2ActiveStreamBatch;
@@ -1491,9 +1496,9 @@ private:
     bool m_io_attached = false;
     std::function<void(uint32_t)> m_retire_callback;
 
-    template<typename SocketType>
+    template<typename SocketType, ::galay::utils::RingBufferBackendStrategy Strategy>
     friend class Http2StreamManagerImpl;
-    template<typename SocketType>
+    template<typename SocketType, ::galay::utils::RingBufferBackendStrategy Strategy>
     friend class Http2ConnImpl;
     friend class Http2StreamPool;
     friend class Http2ActiveStreamBatch;

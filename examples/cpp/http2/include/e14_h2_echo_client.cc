@@ -19,7 +19,7 @@ using namespace galay::http2;
 using namespace galay::kernel;
 
 Task<void> runClient(const std::string& host, uint16_t port) {
-    H2Client client(H2ClientBuilder()
+    H2Client<> client(H2ClientBuilder()
         .verifyPeer(false)
         .build());
 

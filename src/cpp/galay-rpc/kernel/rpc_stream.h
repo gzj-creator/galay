@@ -56,6 +56,8 @@ namespace galay::rpc
 {
 
 using namespace galay::kernel;
+using ::galay::utils::RingBufferBackendStrategy;
+using ::galay::utils::RingBuffer;
 
 /**
  * @brief 流帧边界配置
@@ -366,7 +368,7 @@ private:
 };
 
 // 前向声明
-template<typename SocketType> class StreamReaderImpl;
+template<typename SocketType, RingBufferBackendStrategy Strategy> class StreamReaderImpl;
 template<typename SocketType> class StreamWriterImpl;
 
 namespace detail {
@@ -377,13 +379,16 @@ namespace detail {
  * @details 从RingBuffer中逐步读取流消息（头部+体）。
  *          内部维护ReadHeader/ReadBody两阶段状态。
  */
-class StreamMessageReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult>
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class StreamMessageReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>
 {
 public:
-    StreamMessageReadState(RingBuffer& ring_buffer,
+    using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
+
+    StreamMessageReadState(RingBuffer<Strategy>& ring_buffer,
                            StreamMessage& message,
                            RpcStreamLimits limits = {})
-        : RpcRingBufferReadStateBase<RpcAwaitableResult>(ring_buffer)
+        : Base(ring_buffer)
         , m_message(&message)
         , m_limits(limits)
     {
@@ -391,7 +396,7 @@ public:
 
     bool parseFromRingBuffer()
     {
-        auto& rb = ringBuffer();
+        auto& rb = this->ringBuffer();
         std::array<struct iovec, 2> read_iovecs_storage{};
         size_t read_iovecs_count = rb.getReadIovecs(read_iovecs_storage);
         std::span<const struct iovec> read_iovecs(read_iovecs_storage.data(), read_iovecs_count);
@@ -403,8 +408,8 @@ public:
             }
             rb.consume(m_body_length);
             m_state = State::ReadHeader;
-            setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
-                                  "RPC stream control frame must not carry a body"));
+            this->setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                        "RPC stream control frame must not carry a body"));
             return true;
         }
 
@@ -417,7 +422,7 @@ public:
             copyFromIovecs(read_iovecs, 0, header_buf, RPC_HEADER_SIZE);
 
             if (!m_header.deserialize(header_buf)) {
-                setReadError(RpcError(RpcErrorCode::INVALID_REQUEST, "Invalid header"));
+                this->setReadError(RpcError(RpcErrorCode::INVALID_REQUEST, "Invalid header"));
                 return true;
             }
 
@@ -438,8 +443,8 @@ public:
                     }
                     rb.consume(RPC_HEADER_SIZE + m_body_length);
                     m_state = State::ReadHeader;
-                    setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
-                                          "RPC stream control frame must not carry a body"));
+                    this->setReadError(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                                "RPC stream control frame must not carry a body"));
                     return true;
                 }
                 rb.consume(RPC_HEADER_SIZE);
@@ -457,8 +462,8 @@ public:
             }
 
             if (m_body_length > m_limits.max_frame_bytes) {
-                setReadError(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
-                                      "RPC stream frame limit exceeded"));
+                this->setReadError(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
+                                            "RPC stream frame limit exceeded"));
                 m_state = State::ReadHeader;
                 return true;
             }
@@ -476,7 +481,7 @@ public:
 
             RpcPayloadView payload_view;
             if (!payloadViewFromIovecs(read_iovecs, 0, m_body_length, payload_view)) {
-                setReadError(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid stream payload view"));
+                this->setReadError(RpcError(RpcErrorCode::DESERIALIZATION_ERROR, "Invalid stream payload view"));
                 return true;
             }
 
@@ -701,21 +706,22 @@ private:
 /**
  * @brief 流消息接收等待体
  */
-template<typename SocketType>
-class GetStreamMessageAwaitable : public TimeoutSupport<GetStreamMessageAwaitable<SocketType>>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+class GetStreamMessageAwaitable : public TimeoutSupport<GetStreamMessageAwaitable<SocketType, Strategy>>
 {
 public:
     using Result = detail::RpcAwaitableResult;
+    using ReadState = detail::StreamMessageReadState<Strategy>;
 
-    GetStreamMessageAwaitable(RingBuffer& ring_buffer,
+    GetStreamMessageAwaitable(RingBuffer<Strategy>& ring_buffer,
                               SocketType& socket,
                               StreamMessage& msg,
                               RpcStreamLimits limits = {})
-        : m_state(std::make_shared<detail::StreamMessageReadState>(ring_buffer, msg, limits))
+        : m_state(std::make_shared<ReadState>(ring_buffer, msg, limits))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
                 socket.controller(),
-                detail::RpcRingBufferReadMachine<detail::StreamMessageReadState>(m_state))
+                detail::RpcRingBufferReadMachine<ReadState>(m_state))
                 .build())
     {}
 
@@ -735,19 +741,19 @@ public:
 
 private:
     using InnerAwaitable =
-        StateMachineAwaitable<detail::RpcRingBufferReadMachine<detail::StreamMessageReadState>>;
+        StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
-    std::shared_ptr<detail::StreamMessageReadState> m_state;
+    std::shared_ptr<ReadState> m_state;
     InnerAwaitable m_inner;
 };
 
 /**
  * @brief 流读取器
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class StreamReaderImpl {
 public:
-    StreamReaderImpl(RingBuffer& ring_buffer, SocketType& socket, RpcStreamLimits limits = {})
+    StreamReaderImpl(RingBuffer<Strategy>& ring_buffer, SocketType& socket, RpcStreamLimits limits = {})
         : m_ring_buffer(&ring_buffer)
         , m_socket(&socket)
         , m_limits(limits)
@@ -758,12 +764,12 @@ public:
      * @param msg 输出消息
      * @return 等待体，co_await返回后表示一条完整流消息
      */
-    GetStreamMessageAwaitable<SocketType> getMessage(StreamMessage& msg) {
-        return GetStreamMessageAwaitable<SocketType>(*m_ring_buffer, *m_socket, msg, m_limits);
+    GetStreamMessageAwaitable<SocketType, Strategy> getMessage(StreamMessage& msg) {
+        return GetStreamMessageAwaitable<SocketType, Strategy>(*m_ring_buffer, *m_socket, msg, m_limits);
     }
 
 private:
-    RingBuffer* m_ring_buffer = nullptr;  ///< 环形缓冲区指针
+    RingBuffer<Strategy>* m_ring_buffer = nullptr;  ///< 环形缓冲区指针
     SocketType* m_socket = nullptr;       ///< Socket指针
     RpcStreamLimits m_limits;             ///< 流帧边界配置
 };
@@ -866,7 +872,7 @@ private:
  *          以及流ID和路由信息。每条连接同一时刻只处理一个活跃流会话。
  * @tparam SocketType Socket类型
  */
-template<typename SocketType>
+template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RpcStreamImpl {
 public:
     /**
@@ -878,7 +884,7 @@ public:
      * @param method_name 方法名
      */
     RpcStreamImpl(SocketType& socket,
-                  RingBuffer& ring_buffer,
+                  RingBuffer<Strategy>& ring_buffer,
                   uint32_t stream_id,
                   std::string service_name = {},
                   std::string method_name = {})
@@ -917,12 +923,12 @@ public:
     }
 
     /// @brief 获取流读取器
-    StreamReaderImpl<SocketType>& getReader() { return m_reader; }
+    StreamReaderImpl<SocketType, Strategy>& getReader() { return m_reader; }
     /// @brief 获取流写入器
     StreamWriterImpl<SocketType>& getWriter() { return m_writer; }
 
     /// @brief 读取流消息
-    GetStreamMessageAwaitable<SocketType> read(StreamMessage& msg) {
+    GetStreamMessageAwaitable<SocketType, Strategy> read(StreamMessage& msg) {
         return m_reader.getMessage(msg);
     }
 
@@ -958,15 +964,15 @@ public:
     /// @brief 获取底层Socket
     SocketType& socket() { return *m_socket; }
     /// @brief 获取环形缓冲区
-    RingBuffer& ringBuffer() { return *m_ring_buffer; }
+    RingBuffer<Strategy>& ringBuffer() { return *m_ring_buffer; }
 
 private:
     SocketType* m_socket = nullptr;                          ///< Socket指针
-    RingBuffer* m_ring_buffer = nullptr;                     ///< 环形缓冲区指针
+    RingBuffer<Strategy>* m_ring_buffer = nullptr;           ///< 环形缓冲区指针
     uint32_t m_stream_id;                                    ///< 流ID
     std::string m_service_name;                              ///< 服务名
     std::string m_method_name;                               ///< 方法名
-    StreamReaderImpl<SocketType> m_reader;                   ///< 流读取器
+    StreamReaderImpl<SocketType, Strategy> m_reader;         ///< 流读取器
     StreamWriterImpl<SocketType> m_writer;                   ///< 流写入器
 };
 

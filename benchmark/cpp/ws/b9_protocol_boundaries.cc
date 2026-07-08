@@ -148,7 +148,7 @@ int main()
     WsReaderSetting reader_setting;
     reader_setting.max_frame_size = 1024;
     reader_setting.max_message_size = 2048;
-    galay::utils::RingBuffer fragmented_ring(fragmented_frame.size() + 16);
+    galay::utils::RingBuffer<> fragmented_ring(fragmented_frame.size() + 16);
     std::string fragmented_message;
     WsOpcode fragmented_opcode = WsOpcode::Close;
     galay::websocket::detail::WsMessageReadState fragmented_state(

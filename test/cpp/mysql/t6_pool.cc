@@ -37,7 +37,7 @@ Task<void> test_connection_pool(IOScheduler* scheduler, AsyncTestState* state, m
 
     // 获取连接
     std::cout << "Acquiring connection..." << std::endl;
-    AsyncMysqlClient* client = nullptr;
+    AsyncMysqlClient<>* client = nullptr;
     {
         auto ar = co_await pool.acquire();
         if (!ar) {

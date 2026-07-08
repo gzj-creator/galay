@@ -33,8 +33,8 @@ std::string encodeMaskedFrame(galay::websocket::WsOpcode opcode, std::string pay
     return encoded;
 }
 
-galay::utils::RingBuffer makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
-    galay::utils::RingBuffer ring(capacity);
+galay::utils::RingBuffer<> makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
+    galay::utils::RingBuffer<> ring(capacity);
     std::string head(prefix, 'x');
     if (ring.write(head.data(), head.size()) != head.size()) {
         throw std::runtime_error("failed to seed ring prefix");
@@ -81,7 +81,7 @@ int main() {
 
     {
         galay::ssl::SslSocket socket(nullptr);
-        galay::utils::RingBuffer ring(256);
+        galay::utils::RingBuffer<> ring(256);
         const auto text1 = encodeMaskedFrame(WsOpcode::Text, "loop-one");
         const auto text2 = encodeMaskedFrame(WsOpcode::Text, "loop-two");
         const auto close = encodeMaskedFrame(WsOpcode::Close, "");

@@ -87,7 +87,7 @@ namespace galay::redis
             return encodeCommand(cmd, std::vector<std::string>(args), expected_replies);
         }
 
-        RedisConnectOperation connectToAddress(RedisClient* client, const RedisNodeAddress& address)
+        RedisConnectOperation connectToAddress(RedisClient<>* client, const RedisNodeAddress& address)
         {
             RedisConnectOptions options;
             options.username = address.username;
@@ -160,10 +160,10 @@ namespace galay::redis
     {
     }
 
-    RedisClient* RedisMasterSlaveClient::ensureMaster()
+    RedisClient<>* RedisMasterSlaveClient::ensureMaster()
     {
         if (!m_master) {
-            m_master = std::make_unique<RedisClient>(m_scheduler, m_config);
+            m_master = std::make_unique<RedisClient<>>(m_scheduler, m_config);
         }
         return m_master.get();
     }
@@ -178,7 +178,7 @@ namespace galay::redis
 
     RedisConnectOperation RedisMasterSlaveClient::addReplica(const RedisNodeAddress& replica)
     {
-        auto client = std::make_unique<RedisClient>(m_scheduler, m_config);
+        auto client = std::make_unique<RedisClient<>>(m_scheduler, m_config);
         auto* raw_client = client.get();
         m_replicas.push_back(std::move(client));
         m_replica_addresses.push_back(replica);
@@ -190,7 +190,7 @@ namespace galay::redis
     {
         NodeHandle node;
         node.address = sentinel;
-        node.client = std::make_unique<RedisClient>(m_scheduler, m_config);
+        node.client = std::make_unique<RedisClient<>>(m_scheduler, m_config);
         node.connected = false;
         auto* raw_client = node.client.get();
         m_sentinels.push_back(std::move(node));
@@ -228,11 +228,11 @@ namespace galay::redis
         std::span<const RedisCommandView> commands,
         bool prefer_read)
     {
-        RedisClient* client = prefer_read ? chooseReadClient() : ensureMaster();
+        RedisClient<>* client = prefer_read ? chooseReadClient() : ensureMaster();
         return client->batch(commands);
     }
 
-    RedisClient* RedisMasterSlaveClient::chooseReadClient()
+    RedisClient<>* RedisMasterSlaveClient::chooseReadClient()
     {
         if (m_replicas.empty()) {
             return ensureMaster();
@@ -251,12 +251,12 @@ namespace galay::redis
         return ensureMaster();
     }
 
-    RedisClient& RedisMasterSlaveClient::master()
+    RedisClient<>& RedisMasterSlaveClient::master()
     {
         return *ensureMaster();
     }
 
-    std::optional<std::reference_wrapper<RedisClient>> RedisMasterSlaveClient::replica(size_t index)
+    std::optional<std::reference_wrapper<RedisClient<>>> RedisMasterSlaveClient::replica(size_t index)
     {
         if (index >= m_replicas.size() || !m_replicas[index]) {
             return std::nullopt;
@@ -284,7 +284,7 @@ namespace galay::redis
         }
     }
 
-    RedisClient* RedisMasterSlaveClient::chooseAvailableSentinel()
+    RedisClient<>* RedisMasterSlaveClient::chooseAvailableSentinel()
     {
         for (auto& sentinel : m_sentinels) {
             if (sentinel.client) {
@@ -426,7 +426,7 @@ namespace galay::redis
             if (m_master) {
                 co_await m_master->close();
             }
-            m_master = std::make_unique<RedisClient>(m_scheduler, m_config);
+            m_master = std::make_unique<RedisClient<>>(m_scheduler, m_config);
         }
 
         std::vector<std::string> replicas_query_args;
@@ -439,12 +439,12 @@ namespace galay::redis
             std::vector<RedisNodeAddress> parsed_replicas;
             if (parseReplicaListReply(replicas_reply.value().value(), &parsed_replicas)) {
                 auto next_replica_addresses = std::move(parsed_replicas);
-                std::vector<std::unique_ptr<RedisClient>> next_replicas;
+                std::vector<std::unique_ptr<RedisClient<>>> next_replicas;
                 std::vector<bool> next_replica_connected;
                 next_replicas.reserve(next_replica_addresses.size());
                 next_replica_connected.reserve(next_replica_addresses.size());
                 for (const auto& addr : next_replica_addresses) {
-                    auto client = std::make_unique<RedisClient>(m_scheduler, m_config);
+                    auto client = std::make_unique<RedisClient<>>(m_scheduler, m_config);
                     auto connect_res = co_await connectToAddress(client.get(), addr);
                     next_replica_connected.push_back(connect_res.has_value());
                     next_replicas.push_back(std::move(client));
@@ -470,7 +470,7 @@ namespace galay::redis
 
         max_attempts = std::max<size_t>(1, max_attempts);
         for (size_t attempt = 0; attempt < max_attempts; ++attempt) {
-            RedisClient* target = prefer_read ? chooseReadClient() : ensureMaster();
+            RedisClient<>* target = prefer_read ? chooseReadClient() : ensureMaster();
             bool is_master_target = (target == ensureMaster());
             size_t replica_index = static_cast<size_t>(-1);
             if (!is_master_target) {
@@ -543,7 +543,7 @@ namespace galay::redis
     {
         ClusterNode cluster_node;
         cluster_node.address = node;
-        cluster_node.client = std::make_unique<RedisClient>(m_scheduler, m_config);
+        cluster_node.client = std::make_unique<RedisClient<>>(m_scheduler, m_config);
         cluster_node.connected = false;
 
         auto* raw_client = cluster_node.client.get();
@@ -613,10 +613,10 @@ namespace galay::redis
             routing_key.assign(commands.front().args.front());
         }
 
-        RedisClient* node = routing_key.empty() ? chooseNodeBySlot(0) : chooseNodeByKey(routing_key);
+        RedisClient<>* node = routing_key.empty() ? chooseNodeBySlot(0) : chooseNodeByKey(routing_key);
         if (!node) {
             if (!m_fallback_client) {
-                m_fallback_client = std::make_unique<RedisClient>(m_scheduler, m_config);
+                m_fallback_client = std::make_unique<RedisClient<>>(m_scheduler, m_config);
             }
             return m_fallback_client->batch(commands);
         }
@@ -635,7 +635,7 @@ namespace galay::redis
         return m_nodes.size();
     }
 
-    std::optional<std::reference_wrapper<RedisClient>> RedisClusterClient::node(size_t index)
+    std::optional<std::reference_wrapper<RedisClient<>>> RedisClusterClient::node(size_t index)
     {
         if (index >= m_nodes.size() || !m_nodes[index].client) {
             return std::nullopt;
@@ -724,13 +724,13 @@ namespace galay::redis
         return chooseNodeHandleBySlot(keySlot(key));
     }
 
-    RedisClient* RedisClusterClient::chooseNodeBySlot(uint16_t slot) noexcept
+    RedisClient<>* RedisClusterClient::chooseNodeBySlot(uint16_t slot) noexcept
     {
         auto* node = chooseNodeHandleBySlot(slot);
         return node ? node->client.get() : nullptr;
     }
 
-    RedisClient* RedisClusterClient::chooseNodeByKey(const std::string& key) noexcept
+    RedisClient<>* RedisClusterClient::chooseNodeByKey(const std::string& key) noexcept
     {
         auto* node = chooseNodeHandleByKey(key);
         return node ? node->client.get() : nullptr;
@@ -749,7 +749,7 @@ namespace galay::redis
         node.address.port = port;
         node.address.slot_start = 0;
         node.address.slot_end = 16383;
-        node.client = std::make_unique<RedisClient>(m_scheduler, m_config);
+        node.client = std::make_unique<RedisClient<>>(m_scheduler, m_config);
         node.connected = false;
         m_nodes.push_back(std::move(node));
         return &m_nodes.back();
