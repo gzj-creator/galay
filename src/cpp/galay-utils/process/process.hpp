@@ -12,6 +12,8 @@
 #define GALAY_UTILS_PROCESS_HPP
 
 #include "../common/defn.hpp"
+#include "system.hpp"
+#include <algorithm>
 #include <cerrno>
 #include <expected>
 #include <string>
@@ -20,10 +22,19 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <span>
 
 #if defined(_WIN32)
 #include <windows.h>
 #include <tlhelp32.h>
+#elif defined(__linux__)
+#include <sched.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sys/resource.h>
+#include <signal.h>
+#include <fcntl.h>
 #else
 #include <unistd.h>
 #include <sys/types.h>
@@ -83,6 +94,41 @@ inline constexpr const char* processPriorityErrorString(ProcessPriorityError err
         return "system error";
     }
     return "unknown process priority error";
+}
+
+/**
+ * @brief 进程 CPU 亲和性操作错误
+ */
+enum class ProcessAffinityError {
+    EmptyCpuSet, ///< CPU 集合为空
+    InvalidCpu, ///< CPU ID 超出当前系统支持范围
+    PermissionDenied, ///< 当前进程没有权限修改目标进程亲和性
+    NotFound, ///< 目标进程不存在
+    Unsupported, ///< 当前平台不支持进程级 CPU 亲和性
+    SystemError ///< 其他系统错误
+};
+
+/**
+ * @brief 获取进程 CPU 亲和性错误描述
+ * @param error 错误枚举值
+ * @return 静态错误描述字符串
+ */
+inline constexpr const char* processAffinityErrorString(ProcessAffinityError error) noexcept {
+    switch (error) {
+    case ProcessAffinityError::EmptyCpuSet:
+        return "empty cpu set";
+    case ProcessAffinityError::InvalidCpu:
+        return "invalid cpu";
+    case ProcessAffinityError::PermissionDenied:
+        return "permission denied";
+    case ProcessAffinityError::NotFound:
+        return "process not found";
+    case ProcessAffinityError::Unsupported:
+        return "unsupported";
+    case ProcessAffinityError::SystemError:
+        return "system error";
+    }
+    return "unknown process affinity error";
 }
 
 /**
@@ -250,6 +296,134 @@ public:
             return std::unexpected(priorityErrorFromErrno(errno));
         }
         return {};
+#endif
+    }
+
+    /**
+     * @brief 获取当前进程 CPU 亲和性
+     * @return 当前允许运行的零基 CPU ID 列表；失败返回具体错误
+     * @note Linux/Windows 支持进程级 CPU 亲和性；不支持的平台返回 Unsupported。
+     */
+    [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpuAffinity() {
+        return cpuAffinity(currentId());
+    }
+
+    /**
+     * @brief 获取指定进程 CPU 亲和性
+     * @param pid 目标进程 ID
+     * @return 目标进程允许运行的零基 CPU ID 列表；失败返回具体错误
+     */
+    [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpuAffinity(ProcessId pid) {
+#if defined(_WIN32)
+        HANDLE hProcess = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid);
+        if (!hProcess) {
+            return std::unexpected(affinityErrorFromWindows(GetLastError()));
+        }
+
+        DWORD_PTR processMask = 0;
+        DWORD_PTR systemMask = 0;
+        BOOL getResult = GetProcessAffinityMask(hProcess, &processMask, &systemMask);
+        DWORD getError = getResult == 0 ? GetLastError() : ERROR_SUCCESS;
+        BOOL closeResult = CloseHandle(hProcess);
+        if (getResult == 0) {
+            return std::unexpected(affinityErrorFromWindows(getError));
+        }
+        if (closeResult == 0) {
+            return std::unexpected(ProcessAffinityError::SystemError);
+        }
+
+        std::vector<unsigned int> cpus;
+        for (unsigned int cpu = 0; cpu < sizeof(DWORD_PTR) * 8U; ++cpu) {
+            if ((processMask & (static_cast<DWORD_PTR>(1) << cpu)) != 0) {
+                cpus.push_back(cpu);
+            }
+        }
+        return cpus;
+#elif defined(__linux__)
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        if (sched_getaffinity(static_cast<pid_t>(pid), sizeof(mask), &mask) != 0) {
+            return std::unexpected(affinityErrorFromErrno(errno));
+        }
+
+        std::vector<unsigned int> cpus;
+        const unsigned int cpu_count = System::cpuCount();
+        for (unsigned int cpu = 0; cpu < cpu_count && cpu < CPU_SETSIZE; ++cpu) {
+            if (CPU_ISSET(cpu, &mask)) {
+                cpus.push_back(cpu);
+            }
+        }
+        return cpus;
+#else
+        (void)pid;
+        return std::unexpected(ProcessAffinityError::Unsupported);
+#endif
+    }
+
+    /**
+     * @brief 设置当前进程 CPU 亲和性
+     * @param cpus 零基 CPU ID 集合，不能为空
+     * @return 成功返回空 expected，失败返回具体错误
+     */
+    [[nodiscard]] static std::expected<void, ProcessAffinityError>
+    setCpuAffinity(std::span<const unsigned int> cpus) {
+        return setCpuAffinity(currentId(), cpus);
+    }
+
+    /**
+     * @brief 设置指定进程 CPU 亲和性
+     * @param pid 目标进程 ID
+     * @param cpus 零基 CPU ID 集合，不能为空
+     * @return 成功返回空 expected，失败返回具体错误
+     * @note Linux/Windows 支持进程级 CPU 亲和性；不支持的平台返回 Unsupported。
+     */
+    [[nodiscard]] static std::expected<void, ProcessAffinityError>
+    setCpuAffinity(ProcessId pid, std::span<const unsigned int> cpus) {
+        auto normalized = normalizeCpuSet(cpus);
+        if (!normalized.has_value()) {
+            return std::unexpected(normalized.error());
+        }
+
+#if defined(_WIN32)
+        DWORD_PTR processMask = 0;
+        for (unsigned int cpu : *normalized) {
+            if (cpu >= sizeof(DWORD_PTR) * 8U) {
+                return std::unexpected(ProcessAffinityError::InvalidCpu);
+            }
+            processMask |= (static_cast<DWORD_PTR>(1) << cpu);
+        }
+
+        HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
+        if (!hProcess) {
+            return std::unexpected(affinityErrorFromWindows(GetLastError()));
+        }
+
+        BOOL setResult = SetProcessAffinityMask(hProcess, processMask);
+        DWORD setError = setResult == 0 ? GetLastError() : ERROR_SUCCESS;
+        BOOL closeResult = CloseHandle(hProcess);
+        if (setResult == 0) {
+            return std::unexpected(affinityErrorFromWindows(setError));
+        }
+        if (closeResult == 0) {
+            return std::unexpected(ProcessAffinityError::SystemError);
+        }
+        return {};
+#elif defined(__linux__)
+        cpu_set_t mask;
+        CPU_ZERO(&mask);
+        for (unsigned int cpu : *normalized) {
+            if (cpu >= CPU_SETSIZE) {
+                return std::unexpected(ProcessAffinityError::InvalidCpu);
+            }
+            CPU_SET(cpu, &mask);
+        }
+        if (sched_setaffinity(static_cast<pid_t>(pid), sizeof(mask), &mask) != 0) {
+            return std::unexpected(affinityErrorFromErrno(errno));
+        }
+        return {};
+#else
+        (void)pid;
+        return std::unexpected(ProcessAffinityError::Unsupported);
 #endif
     }
 
@@ -504,6 +678,25 @@ public:
     }
 
 private:
+    static std::expected<std::vector<unsigned int>, ProcessAffinityError>
+    normalizeCpuSet(std::span<const unsigned int> cpus) {
+        if (cpus.empty()) {
+            return std::unexpected(ProcessAffinityError::EmptyCpuSet);
+        }
+
+        const unsigned int cpu_count = System::cpuCount();
+        std::vector<unsigned int> normalized(cpus.begin(), cpus.end());
+        std::sort(normalized.begin(), normalized.end());
+        normalized.erase(std::unique(normalized.begin(), normalized.end()), normalized.end());
+
+        for (unsigned int cpu : normalized) {
+            if (cpu >= cpu_count) {
+                return std::unexpected(ProcessAffinityError::InvalidCpu);
+            }
+        }
+        return normalized;
+    }
+
 #if defined(_WIN32)
     static ProcessPriorityError priorityErrorFromWindows(DWORD error) {
         switch (error) {
@@ -515,6 +708,19 @@ private:
             return ProcessPriorityError::NotFound;
         default:
             return ProcessPriorityError::SystemError;
+        }
+    }
+
+    static ProcessAffinityError affinityErrorFromWindows(DWORD error) {
+        switch (error) {
+        case ERROR_ACCESS_DENIED:
+            return ProcessAffinityError::PermissionDenied;
+        case ERROR_INVALID_PARAMETER:
+        case ERROR_NOT_FOUND:
+        case ERROR_INVALID_HANDLE:
+            return ProcessAffinityError::NotFound;
+        default:
+            return ProcessAffinityError::SystemError;
         }
     }
 #else
@@ -529,6 +735,20 @@ private:
             return ProcessPriorityError::InvalidPriority;
         default:
             return ProcessPriorityError::SystemError;
+        }
+    }
+
+    static ProcessAffinityError affinityErrorFromErrno(int error) {
+        switch (error) {
+        case EACCES:
+        case EPERM:
+            return ProcessAffinityError::PermissionDenied;
+        case ESRCH:
+            return ProcessAffinityError::NotFound;
+        case EINVAL:
+            return ProcessAffinityError::InvalidCpu;
+        default:
+            return ProcessAffinityError::SystemError;
         }
     }
 #endif

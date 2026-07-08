@@ -510,7 +510,7 @@
 |---|---|---|
 | App | `galay-utils/app/app.hpp` | `ArgType`、`ArgValue`、`Arg`、`Cmd`、`App` |
 | Parser | `galay-utils/config/parser_manager.hpp` | `ParserBase`、`ConfigParser`、`IniParser`、`EnvParser`、`TomlParser`、`ParserManager` |
-| Process | `galay-utils/process/process.hpp` | `ProcessId`、`ExitStatus`、`Process` |
+| Process | `galay-utils/process/process.hpp` | `ProcessId`、`ExitStatus`、`ProcessPriorityError`、`ProcessAffinityError`、`Process` |
 
 ### `App`
 
@@ -580,9 +580,21 @@
 - `ExitStatus`
   - 数据成员：`code` / `signaled` / `signal`
   - `success() const`
+- `ProcessPriorityError`
+- `processPriorityErrorString(ProcessPriorityError)`
+- `ProcessAffinityError`
+- `processAffinityErrorString(ProcessAffinityError)`
 - `Process`
   - `Process::currentId()`
   - `Process::parentId()`
+  - `Process::priority() -> std::expected<int, ProcessPriorityError>`
+  - `Process::priority(ProcessId pid) -> std::expected<int, ProcessPriorityError>`
+  - `Process::setPriority(int value) -> std::expected<void, ProcessPriorityError>`
+  - `Process::setPriority(ProcessId pid, int value) -> std::expected<void, ProcessPriorityError>`
+  - `Process::cpuAffinity() -> std::expected<std::vector<unsigned int>, ProcessAffinityError>`
+  - `Process::cpuAffinity(ProcessId pid) -> std::expected<std::vector<unsigned int>, ProcessAffinityError>`
+  - `Process::setCpuAffinity(std::span<const unsigned int> cpus) -> std::expected<void, ProcessAffinityError>`
+  - `Process::setCpuAffinity(ProcessId pid, std::span<const unsigned int> cpus) -> std::expected<void, ProcessAffinityError>`
   - `wait(ProcessId pid, int options = 0) -> std::optional<ExitStatus>`
   - `spawn(const std::string& path, const std::vector<std::string>& args) -> ProcessId`
   - `execute(const std::string& command) -> ExitStatus`

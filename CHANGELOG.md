@@ -22,6 +22,7 @@
 ### Added
 
 - **utils 新增跨平台进程优先级接口**：`Process` 新增 `priority()` / `setPriority()` 静态方法，POSIX 平台基于 `getpriority` / `setpriority`（nice 值 `[-20,19]`），Windows 平台映射到 priority class；新增 `ProcessPriorityError` 错误枚举与配套的 `processPriorityErrorString()` 错误描述函数，错误经 `std::expected<T, ProcessPriorityError>` 显式传播，errno / `GetLastError` 立即转换为具体错误码（遵循错误显式传播与每个错误码配套错误字符串的约定）。`module_prelude.hpp` 补齐 `<cerrno>` / `<sys/resource.h>` 头，并新增 `test/cpp/utils/t11_platform_process_system.cc` 白盒测试。
+- **utils Process 新增 CPU 核心亲和性接口**：`Process` 新增 `cpuAffinity()` / `setCpuAffinity()` 静态方法，Linux 基于 `sched_getaffinity` / `sched_setaffinity`，Windows 基于 process affinity mask，其他平台显式返回 `ProcessAffinityError::Unsupported`；新增 `processAffinityErrorString()`，并补齐边界测试、roundtrip benchmark 与 API/使用文档。
 
 ### Fixed
 

@@ -124,6 +124,9 @@
 #if __has_include(<set>)
 #include <set>
 #endif
+#if __has_include(<sched.h>)
+#include <sched.h>
+#endif
 #if __has_include(<shared_mutex>)
 #include <shared_mutex>
 #endif

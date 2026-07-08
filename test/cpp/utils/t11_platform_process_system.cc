@@ -99,6 +99,68 @@ void test_signal_handler() {
 
 // ==================== Pool Tests ====================
 
+void test_process_priority_errors() {
+    using galay::utils::ProcessPriorityError;
+
+    const ProcessPriorityError errors[] = {
+        ProcessPriorityError::InvalidPriority,
+        ProcessPriorityError::PermissionDenied,
+        ProcessPriorityError::NotFound,
+        ProcessPriorityError::SystemError,
+    };
+
+    for (ProcessPriorityError error : errors) {
+        assert(processPriorityErrorString(error)[0] != '\0');
+    }
+}
+
+void test_process_affinity() {
+    ProcessId pid = Process::currentId();
+    auto original = Process::cpuAffinity(pid);
+
+#if !defined(_WIN32) && !defined(__linux__)
+    assert(!original.has_value());
+    assert(original.error() == ProcessAffinityError::Unsupported);
+#else
+    assert(original.has_value());
+    assert(!original->empty());
+
+    const unsigned int cpu_count = System::cpuCount();
+    for (unsigned int cpu : *original) {
+        assert(cpu < cpu_count);
+    }
+
+    auto sameAffinity = Process::setCpuAffinity(pid, *original);
+    assert(sameAffinity.has_value());
+
+    auto after = Process::cpuAffinity(pid);
+    assert(after.has_value());
+    assert(*after == *original);
+#endif
+
+    const std::array<unsigned int, 0> empty{};
+    auto emptyResult = Process::setCpuAffinity(pid, empty);
+    assert(!emptyResult.has_value());
+    assert(emptyResult.error() == ProcessAffinityError::EmptyCpuSet);
+
+    const std::array<unsigned int, 1> invalid{System::cpuCount() + 1024U};
+    auto invalidResult = Process::setCpuAffinity(pid, invalid);
+    assert(!invalidResult.has_value());
+    assert(invalidResult.error() == ProcessAffinityError::InvalidCpu);
+
+    const ProcessAffinityError errors[] = {
+        ProcessAffinityError::EmptyCpuSet,
+        ProcessAffinityError::InvalidCpu,
+        ProcessAffinityError::PermissionDenied,
+        ProcessAffinityError::NotFound,
+        ProcessAffinityError::Unsupported,
+        ProcessAffinityError::SystemError,
+    };
+    for (ProcessAffinityError error : errors) {
+        assert(processAffinityErrorString(error)[0] != '\0');
+    }
+}
+
 void test_process() {
     std::cout << "=== Testing Process ===" << std::endl;
 
@@ -133,6 +195,9 @@ void test_process() {
     auto invalidPriority = Process::setPriority(pid, 20);
     assert(!invalidPriority.has_value());
     assert(invalidPriority.error() == ProcessPriorityError::InvalidPriority);
+
+    test_process_priority_errors();
+    test_process_affinity();
 
     std::cout << "Process tests passed!" << std::endl;
 }
