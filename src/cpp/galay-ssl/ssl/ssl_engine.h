@@ -86,17 +86,17 @@ public:
      * @brief 将从网络 recv 到的密文喂给 SSL（写入 rbio）
      * @param data 密文数据
      * @param length 数据长度
-     * @return 实际写入 BIO 的字节数，-1 表示错误
+     * @return 成功返回实际写入 BIO 的字节数，失败返回 SslError；不会阻塞
      */
-    int feedEncryptedInput(const char* data, size_t length);
+    std::expected<size_t, SslError> feedEncryptedInput(const char* data, size_t length);
 
     /**
      * @brief 从 SSL 取出待发送的密文（读取 wbio）
      * @param buffer 输出缓冲区
      * @param length 缓冲区大小
-     * @return 实际读取的字节数，0 表示无数据，-1 表示错误
+     * @return 成功返回实际读取的字节数，失败返回 SslError；不会阻塞
      */
-    int extractEncryptedOutput(char* buffer, size_t length);
+    std::expected<size_t, SslError> extractEncryptedOutput(char* buffer, size_t length);
 
     /**
      * @brief 检查 wbio 中是否有待发送的密文

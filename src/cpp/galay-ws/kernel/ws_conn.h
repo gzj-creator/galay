@@ -144,7 +144,7 @@ public:
     void onWrite(std::expected<size_t, IOError> result) {
         if (m_direct_send.active()) {
             if (!result) {
-                m_result = std::unexpected(WsError(kWsSendError, result.error().message()));
+                m_result = std::unexpected(WsError(result.error()));
                 return;
             }
 
@@ -463,7 +463,7 @@ public:
 
         if (!result) {
             m_writer.resetPendingState();
-            m_result = std::unexpected(WsError(kWsSendError, result.error().message()));
+            m_result = std::unexpected(WsError(result.error()));
             return;
         }
 
@@ -763,7 +763,7 @@ struct WsSslEchoLoopMachine {
             if (m_write_mode == WriteMode::kWriter) {
                 m_writer.resetPendingState();
             }
-            m_result = std::unexpected(WsError(kWsSendError, result.error().message()));
+            m_result = std::unexpected(WsError(result.error()));
             return;
         }
 

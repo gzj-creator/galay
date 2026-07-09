@@ -520,7 +520,11 @@ private:
         });
 
         auto itemIt = m_items.begin();
-        m_index.emplace(itemIt->key, itemIt);
+        auto [insertedIt, inserted] = m_index.emplace(itemIt->key, itemIt);
+        if (!inserted || insertedIt == m_index.end()) {
+            m_items.pop_front();
+            return false;
+        }
         updateExpiration(itemIt, expiration);
         recordInsert();
         enforceCapacity();
@@ -561,7 +565,11 @@ private:
         });
 
         auto itemIt = m_items.begin();
-        m_index.emplace(itemIt->key, itemIt);
+        auto [insertedIt, inserted] = m_index.emplace(itemIt->key, itemIt);
+        if (!inserted || insertedIt == m_index.end()) {
+            m_items.pop_front();
+            return false;
+        }
         updateExpiration(itemIt, expiration);
         recordInsert();
         enforceCapacity();
@@ -587,7 +595,16 @@ private:
             return;
         }
 
-        updateExpiration(it, expirationFromTtl(*it->ttl));
+        const auto now = Clock::now();
+        if (it->expiresAt.has_value()) {
+            const duration refreshInterval = *it->ttl / 4;
+            const time_point lastRefresh = *it->expiresAt - *it->ttl;
+            if (refreshInterval > duration::zero() && now - lastRefresh < refreshInterval) {
+                return;
+            }
+        }
+
+        updateExpiration(it, Expiration{now + *it->ttl, it->ttl});
     }
 
     void touch(ListIterator it) const {
@@ -637,7 +654,10 @@ private:
             auto last = std::prev(m_items.end());
             auto indexIt = m_index.find(last->key);
             if (indexIt == m_index.end()) {
-                m_items.erase(last);
+                auto next = m_items.erase(last);
+                if (next != m_items.end()) {
+                    continue;
+                }
                 continue;
             }
             eraseEntry(indexIt, EvictReason::Capacity);
@@ -662,8 +682,14 @@ private:
         auto itemIt = indexIt->second;
         notifyEvict(itemIt, reason);
         recordEviction(reason);
-        m_index.erase(indexIt);
-        m_items.erase(itemIt);
+        auto nextIndex = m_index.erase(indexIt);
+        if (nextIndex != m_index.end()) {
+            // erase 返回值已显式处理；调用方不依赖后继位置。
+        }
+        auto nextItem = m_items.erase(itemIt);
+        if (nextItem != m_items.end()) {
+            // erase 返回值已显式处理；调用方不依赖后继位置。
+        }
     }
 
     void notifyEvict(ListIterator it, EvictReason reason) const {

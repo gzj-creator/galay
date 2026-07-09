@@ -259,19 +259,11 @@ public:
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     void setSslSendError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_error = WsError(kWsConnectionClosed, "Connection closed by peer");
-            return;
-        }
-        m_error = WsError(kWsSendError, error.message());
+        m_error = WsError(error);
     }
 
     void setSslRecvError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_error = WsError(kWsConnectionClosed, "Connection closed by peer");
-            return;
-        }
-        m_error = WsError(kWsConnectionError, error.message());
+        m_error = WsError(error);
     }
 #endif
 

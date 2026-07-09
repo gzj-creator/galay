@@ -26,6 +26,7 @@
 #include "../core/io_scheduler.hpp"
 #include "../core/awaitable.h"
 #include "../common/error.h"
+#include <deque>
 #include <expected>
 #include <string>
 #include <unordered_map>
@@ -158,6 +159,7 @@ public:
 
 private:
     galay::kernel::IOController m_controller;      ///< IO控制器
+    std::deque<galay::kernel::FileWatchResult> m_ready_events; ///< 已读取但尚未交付的事件队列
     std::unordered_map<int, std::string> m_watches; ///< wd/fd -> path 映射
     int m_watch_fd;                                ///< Linux: inotify fd, macOS: 当前监控的 fd
 

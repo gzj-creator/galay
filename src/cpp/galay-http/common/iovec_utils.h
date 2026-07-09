@@ -382,6 +382,18 @@ public:
         normalize();
     }
 
+    template<size_t N>
+    void reset(const std::array<struct iovec, N>& iovecs, size_t count) {
+        m_iovecs.clear();
+        m_index = 0;
+        m_remaining_bytes = 0;
+        const size_t bounded = std::min(count, N);
+        m_iovecs.reserve(bounded);
+        for (size_t i = 0; i < bounded; ++i) {
+            append(iovecs[i]);
+        }
+    }
+
     [[nodiscard]] const struct iovec* data() const noexcept {
         if (empty()) {
             return nullptr;

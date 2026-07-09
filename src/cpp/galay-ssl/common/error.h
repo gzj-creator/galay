@@ -42,6 +42,7 @@ enum class SslErrorCode : uint32_t {
     kSNISetFailed,              ///< SNI 设置失败
     kALPNSetFailed,             ///< ALPN 设置失败
     kTimeout,                   ///< 操作超时
+    kBufferTooLarge,            ///< 缓冲区长度超过底层 API 可表达范围
     kUnknown,                   ///< 未知错误
 };
 

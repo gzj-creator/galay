@@ -212,16 +212,16 @@ C_IOResult flush_encrypted(galay_ssl_socket_t* socket, int64_t timeout_ms)
     while (socket->engine->pendingEncryptedOutput() > 0) {
         const size_t pending = socket->engine->pendingEncryptedOutput();
         const size_t chunk = std::min(pending, buffer.size());
-        const int extracted = socket->engine->extractEncryptedOutput(buffer.data(), chunk);
-        if (extracted <= 0) {
+        const auto extracted = socket->engine->extractEncryptedOutput(buffer.data(), chunk);
+        if (!extracted || *extracted == 0) {
             return make_io_result(C_IOResultError);
         }
         C_IOResult sent = send_all_plain_tcp(
-            &socket->transport, buffer.data(), static_cast<size_t>(extracted), timeout_ms);
+            &socket->transport, buffer.data(), *extracted, timeout_ms);
         if (sent.code != C_IOResultOk) {
             return sent;
         }
-        total += static_cast<size_t>(extracted);
+        total += *extracted;
     }
     return make_io_result(C_IOResultOk, 0, total);
 }
@@ -237,8 +237,8 @@ C_IOResult recv_encrypted(galay_ssl_socket_t* socket, int64_t timeout_ms)
     if (received.bytes == 0) {
         return make_io_result(C_IOResultEof);
     }
-    const int fed = socket->engine->feedEncryptedInput(buffer.data(), received.bytes);
-    if (fed <= 0 || static_cast<size_t>(fed) != received.bytes) {
+    const auto fed = socket->engine->feedEncryptedInput(buffer.data(), received.bytes);
+    if (!fed || *fed == 0 || *fed != received.bytes) {
         return make_io_result(C_IOResultError);
     }
     return received;

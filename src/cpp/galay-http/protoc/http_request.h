@@ -14,6 +14,9 @@
 #include "http_header.h"
 #include "http_body.h"
 #include "http_chunk.h"
+#include "route_params.h"
+#include <map>
+#include <optional>
 #include <vector>
 #include <sys/uio.h>
 
@@ -132,6 +135,12 @@ public:
     void setRouteParams(std::map<std::string, std::string>&& params);
 
     /**
+     * @brief 设置路由参数
+     * @param params 路由匹配阶段生成的小容器参数
+     */
+    void setRouteParams(RouteParams&& params);
+
+    /**
      * @brief 获取所有路由参数
      * @return 路由参数映射
      */
@@ -162,7 +171,8 @@ private:
     size_t m_bodyParsed = 0;               ///< 已解析的 body 字节数
     size_t m_headerLength = 0;             ///< header 的字节长度
     ChunkParser m_chunkParser;             ///< chunked body 增量解析状态
-    std::map<std::string, std::string> m_routeParams; ///< 路由参数（由 HttpRouter 设置）
+    RouteParams m_routeParams; ///< 路由参数（由 HttpRouter 设置）
+    mutable std::optional<std::map<std::string, std::string>> m_routeParamMapCache; ///< 旧 map API 的懒加载缓存
     bool m_headerParsed = false;           ///< header 是否已解析完成
 };
 

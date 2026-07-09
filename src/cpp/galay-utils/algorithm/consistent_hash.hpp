@@ -19,6 +19,7 @@
 #include <functional>
 #include <optional>
 #include <atomic>
+#include <limits>
 #include <memory>
 #include <unordered_map>
 
@@ -112,10 +113,28 @@ struct NodeStatus {
     std::atomic<uint64_t> failureCount{0}; ///< 失败计数
     std::atomic<bool> healthy{true}; ///< 是否健康
 
-    void recordRequest() { ++requestCount; } ///< 记录一次请求
-    void recordFailure() { ++failureCount; healthy = false; } ///< 记录一次失败并标记为不健康
-    void markHealthy() { healthy = true; } ///< 标记为健康
-    void reset() { requestCount = 0; failureCount = 0; healthy = true; } ///< 重置所有计数器
+    void recordRequest() {
+        const uint64_t previous = requestCount.fetch_add(1, std::memory_order_relaxed);
+        if (previous == std::numeric_limits<uint64_t>::max()) {
+            requestCount.store(previous, std::memory_order_relaxed);
+        }
+    } ///< 记录一次请求
+
+    void recordFailure() {
+        const uint64_t previous = failureCount.fetch_add(1, std::memory_order_relaxed);
+        if (previous == std::numeric_limits<uint64_t>::max()) {
+            failureCount.store(previous, std::memory_order_relaxed);
+        }
+        healthy.store(false, std::memory_order_release);
+    } ///< 记录一次失败并标记为不健康
+
+    void markHealthy() { healthy.store(true, std::memory_order_release); } ///< 标记为健康
+
+    void reset() {
+        requestCount.store(0, std::memory_order_relaxed);
+        failureCount.store(0, std::memory_order_relaxed);
+        healthy.store(true, std::memory_order_release);
+    } ///< 重置所有计数器
 };
 
 /**
@@ -161,13 +180,19 @@ class ConsistentHash {
         explicit SnapshotGuard(const ConsistentHash& owner)
             : m_owner(owner)
         {
-            m_owner.m_readers.fetch_add(1);
-            m_snapshot = m_owner.m_state.load();
+            const size_t previous = m_owner.m_readers.fetch_add(1, std::memory_order_acquire);
+            if (previous == std::numeric_limits<size_t>::max()) {
+                m_owner.m_readers.store(previous, std::memory_order_release);
+            }
+            m_snapshot = m_owner.m_state.load(std::memory_order_acquire);
         }
 
         ~SnapshotGuard()
         {
-            m_owner.m_readers.fetch_sub(1);
+            const size_t previous = m_owner.m_readers.fetch_sub(1, std::memory_order_release);
+            if (previous == 0) {
+                m_owner.m_readers.store(0, std::memory_order_release);
+            }
         }
 
         SnapshotGuard(const SnapshotGuard&) = delete;
@@ -199,7 +224,7 @@ public:
         , m_readers(0)
     {
         auto initial = std::make_unique<RingSnapshot>();
-        m_state.store(initial.release());
+        m_state.store(initial.release(), std::memory_order_release);
     }
 
     /**
@@ -207,9 +232,9 @@ public:
      * @note 析构要求外部已停止并发访问该对象；这与对象生命周期的一般规则一致。
      */
     ~ConsistentHash() {
-        delete m_state.exchange(nullptr);
+        delete m_state.exchange(nullptr, std::memory_order_acq_rel);
 
-        RingSnapshot* snapshot = m_retired.exchange(nullptr);
+        RingSnapshot* snapshot = m_retired.exchange(nullptr, std::memory_order_acq_rel);
         while (snapshot != nullptr) {
             RingSnapshot* next = snapshot->next_retired;
             delete snapshot;
@@ -247,8 +272,8 @@ public:
                 if (m_state.compare_exchange_weak(
                         expected,
                         next,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
+                        std::memory_order_release,
+                        std::memory_order_acquire)) {
                     retired = current;
                     break;
                 }
@@ -281,16 +306,23 @@ public:
                 for (size_t i = 0; i < vnodes; ++i) {
                     std::string virtualKey = nodeId + "#" + std::to_string(i);
                     uint32_t hash = m_hashFunc(virtualKey);
-                    next->ring.erase(hash);
+                    const size_t erased = next->ring.erase(hash);
+                    if (erased == 0) {
+                        continue;
+                    }
                 }
 
-                next->nodes.erase(nodeId);
+                const size_t erased_node = next->nodes.erase(nodeId);
+                if (erased_node == 0) {
+                    delete next;
+                    return;
+                }
                 const RingSnapshot* expected = current;
                 if (m_state.compare_exchange_weak(
                         expected,
                         next,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
+                        std::memory_order_release,
+                        std::memory_order_acquire)) {
                     retired = current;
                     break;
                 }
@@ -387,8 +419,10 @@ public:
 
             const auto& nodeId = it->second->config.id;
             if (seen.find(nodeId) == seen.end()) {
-                seen.insert(nodeId);
-                result.push_back(it->second->config);
+                auto [seenIt, inserted] = seen.insert(nodeId);
+                if (inserted && seenIt != seen.end()) {
+                    result.push_back(it->second->config);
+                }
             }
 
             ++it;
@@ -457,8 +491,8 @@ public:
                 if (m_state.compare_exchange_weak(
                         expected,
                         next,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
+                        std::memory_order_release,
+                        std::memory_order_acquire)) {
                     retired = current;
                     break;
                 }
@@ -479,23 +513,23 @@ private:
 
     void retireSnapshot(const RingSnapshot* snapshot) {
         RingSnapshot* retired = const_cast<RingSnapshot*>(snapshot);
-        RingSnapshot* head = m_retired.load();
+        RingSnapshot* head = m_retired.load(std::memory_order_acquire);
         do {
             retired->next_retired = head;
         } while (!m_retired.compare_exchange_weak(
             head,
             retired,
-            std::memory_order_seq_cst,
-            std::memory_order_seq_cst));
+            std::memory_order_release,
+            std::memory_order_acquire));
         collectRetiredSnapshots();
     }
 
     void collectRetiredSnapshots() const {
-        if (m_readers.load() != 0) {
+        if (m_readers.load(std::memory_order_acquire) != 0) {
             return;
         }
 
-        RingSnapshot* snapshot = m_retired.exchange(nullptr);
+        RingSnapshot* snapshot = m_retired.exchange(nullptr, std::memory_order_acq_rel);
         while (snapshot != nullptr) {
             RingSnapshot* next = snapshot->next_retired;
             delete snapshot;

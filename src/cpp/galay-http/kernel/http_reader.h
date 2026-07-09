@@ -357,15 +357,7 @@ struct HttpRequestReadState {
      * @param error SSL 错误
      */
     void setSslRecvError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kTimeout) {
-            m_http_error = HttpError(kRecvTimeOut, error.message());
-            return;
-        }
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_http_error = HttpError(kConnectionClose);
-            return;
-        }
-        m_http_error = HttpError(kRecvError, error.message());
+        m_http_error = HttpError(error);
     }
 #endif
 
@@ -555,15 +547,7 @@ struct HttpResponseReadState {
      * @param error SSL 错误
      */
     void setSslRecvError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kTimeout) {
-            m_http_error = HttpError(kRecvTimeOut, error.message());
-            return;
-        }
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_http_error = HttpError(kConnectionClose);
-            return;
-        }
-        m_http_error = HttpError(kRecvError, error.message());
+        m_http_error = HttpError(error);
     }
 #endif
 
@@ -719,15 +703,7 @@ struct HttpChunkReadState {
      * @param error SSL 错误
      */
     void setSslRecvError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kTimeout) {
-            m_http_error = HttpError(kRecvTimeOut, error.message());
-            return;
-        }
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_http_error = HttpError(kConnectionClose);
-            return;
-        }
-        m_http_error = HttpError(kRecvError, error.message());
+        m_http_error = HttpError(error);
     }
 #endif
 

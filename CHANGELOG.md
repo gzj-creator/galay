@@ -13,6 +13,14 @@
 
 ### Changed
 
+- **Linux 性能构建与同机压测口径落地**：新增 `linux-perf-release` CMake preset，使用 `RelWithDebInfo`、`-O2` 与 frame pointer 构建全模块 benchmark；在 Tencent 4C4G Linux 上补跑 clean `HEAD` baseline 与当前快照 5 轮同 workload 压测，记录 HTTP static、HTTP2 static、route match、writer layout、sendfile、utils、Redis pool 与 RPC cancel notify 的可比结果，并确认 current 构建 warning 为 0。
+- **HTTP/1 与 HTTP/2 静态文件链路异步化**：HTTP MEMORY 静态文件读取改为 blocking executor + `AsyncWaiter` 挂起等待，HTTP server root task 显式绑定 runtime；HTTP/2 静态文件 cache 提升为 server 级共享缓存，cache miss 通过 blocking worker 读取并回投 frame，避免事件循环同步读文件。
+- **Redis pool 与 RPC 取消通知热路径优化**：Redis async pool 收敛 acquire/release 并发状态、等待队列与计数器更新，减少跨线程竞争；RPC pending cancel 从每 call watcher/扫描改为 cancellation token callback 直接通知 pending waiter，降低取消路径资源放大。
+- **HTTP route / writer 与 utils 热路径分配优化**：HTTP 路由匹配改用 `string_view` 段扫描和小型连续 route params，兼容 `routeParams()` 懒加载 map；HTTP writer TCP layout 复用固定 iovec cursor，SSL 合并路径复用成员 buffer；LRU 热 key 访问改为惰性刷新过期节点，ConsistentHash 原子快照读写改用更弱但足够的 acquire/release/relaxed 内存序。
+- **SSL 引擎 BIO 接口改为 std::expected 显式错误传播**：`SslEngine::feedEncryptedInput` / `extractEncryptedOutput` 由返回 `int`（-1 表示错误）改为 `std::expected<size_t, SslError>`，新增 `SslErrorCode::kBufferTooLarge` 表达缓冲区超过 `INT_MAX` 的失败原因，并经 `SslError::fromOpenSSL` 保留 OpenSSL 错误链；C 包装 `ssl_c.cc` 与 C++ awaitable 同步消费新的 expected 返回，移除原先的哨兵 `int` 错误判断（遵循错误必须经返回值显式传播的约定）。
+- **SSL 状态机错误映射收敛为 `mapSslError` 约定并加编译期约束**：`SslStateMachineAwaitable` 新增 `ssl_error_expected` / `ssl_error_mappable_expected` 类型 trait 与 `HasSslErrorMapper` concept，通过 `static_assert` 强制 `result_type` 必须是可直接承载 `SslError`、或经 `mapSslError` 映射的 `std::expected`；新增 `makeUnexpected()` 集中错误构造，移除原先命中不可表达错误时的 `std::abort()` 兜底，统一返回 `kUnknown`。HTTP / HTTP2 / Redis / WS 各 SSL 状态机补齐 `mapSslError(SslError)` 映射入口。
+- **RESP double 解析改 `strtod` 去异常**：`redis_protocol.cc` 的 double 帧解析由 `std::stod`（throw）改为 `std::strtod` + errno / 长度 / 溢出校验（限制文本长度上限），超范围或格式非法时显式返回 `ParseError::InvalidFormat`，移除协议解析路径上的异常控制流。
+- **mvcc / Transaction 禁用拷贝与移动**：`VersionedValue` 显式 default move、delete copy；`Mvcc` / `Transaction` 因持有 `shared_mutex` / 引用而禁用拷贝与移动，消除隐式误拷贝风险，延续对象所有权契约收敛。
 - **C++ 对象所有权契约收敛为 move-only + 显式 clone**：覆盖 kernel / utils / HTTP / HTTP2 / WS / RPC / Redis / MySQL / Mongo / Etcd / MCP / SSL / tracing 等模块，非平凡状态对象禁用隐式拷贝，保留显式移动，并通过 `clone()` 暴露可审计的深拷贝入口；借用 payload / buffer 视图在 clone 时物化为独立自有存储，避免隐藏浅拷贝和生命周期悬空。
 - **RingBuffer 模板化支持后端策略选择**：`RingBuffer` 新增 `RingBufferBackendStrategy::{Mmap, Vector, Auto}` 模板参数，默认使用 `Mmap` 后端以提供跨环绕边界的单段连续 span/iovec 视图；`Vector` 保留原有双段环绕行为，`Auto` 按容量选择后端。
 - **协议客户端传播 RingBuffer 后端策略**：Redis / MySQL / RPC / HTTP2 / HTTP / WS / Mongo 等持有 RingBuffer 的连接、客户端、awaitable 与测试/示例/benchmark 类型补齐模板参数，默认保持 `RingBufferBackendStrategy::Mmap`，并保留显式 `Vector` 实例化覆盖。
@@ -22,12 +30,20 @@
 
 ### Added
 
+- **C ABI 补齐 `*_get_error` 错误字符串入口**：为 `galay_etcd` / `galay_rpc` / `galay_coro_ioresult` 错误码新增 `*_get_error()` 约定函数（语义与既有 `*_error_string` 完全一致，覆盖全部枚举值），满足「每个公开 C 错误码枚举都需配套错误字符串获取函数」要求；补齐 `test/c/{etcd,kernel,rpc}` 下 `t6_error_get_error.c` / `t28_coro_ioresult_get_error.c` / `t4_error_get_error.c` 白盒测试。
+- **RingBuffer 新增 expected 工厂 `create()`**：`RingBuffer::create(capacity)` 以 `std::expected<RingBuffer, RingBufferError>` 表达容量非法（`kInvalidCapacity`）等可恢复失败，避免在工厂路径用异常表达容量校验失败。
+- **新增 SSL 引擎 BIO 边界测试与 benchmark**：`test/cpp/ssl/t15_engine_bio_boundaries.cc` 与 `benchmark/cpp/ssl/b5_engine_bio_boundaries.cc` 覆盖 expected 化后的 BIO 读写边界与空 `wbio` / `rbio` 失败路径、超大缓冲区 `kBufferTooLarge` 分支。
+- **benchmark 补 RESP double 解析场景**：`b7_resp_parser_throughput` 新增 double 帧解析吞吐场景与 payload 校验。
 - **新增 ownership surface 测试与 clone/move 压力基准**：在 `test/cpp/{etcd,http,http2,kernel,mcp,mongo,mysql,redis,rpc,ssl,tracing,utils,ws}` 下新增 move-only / clone 契约测试，覆盖类型 trait、深拷贝独立性、移动后视图重绑定与注册项所有权；在对应 `benchmark/cpp/*` 模块新增 clone/move ownership pressure 基准，锁定迁移后的复制成本和移动路径行为。
 - **utils 新增跨平台进程优先级接口**：`Process` 新增 `priority()` / `setPriority()` 静态方法，POSIX 平台基于 `getpriority` / `setpriority`（nice 值 `[-20,19]`），Windows 平台映射到 priority class；新增 `ProcessPriorityError` 错误枚举与配套的 `processPriorityErrorString()` 错误描述函数，错误经 `std::expected<T, ProcessPriorityError>` 显式传播，errno / `GetLastError` 立即转换为具体错误码（遵循错误显式传播与每个错误码配套错误字符串的约定）。`module_prelude.hpp` 补齐 `<cerrno>` / `<sys/resource.h>` 头，并新增 `test/cpp/utils/t11_platform_process_system.cc` 白盒测试。
 - **utils Process 新增 CPU 核心亲和性接口**：`Process` 新增 `cpuAffinity()` / `setCpuAffinity()` 静态方法，Linux 基于 `sched_getaffinity` / `sched_setaffinity`，Windows 基于 process affinity mask，其他平台显式返回 `ProcessAffinityError::Unsupported`；新增 `processAffinityErrorString()`，并补齐边界测试、roundtrip benchmark 与 API/使用文档。
 
 ### Fixed
 
+- **修复 Linux io_uring 与 sendfile 进度回归**：Linux io_uring 构建下 `sigpipe_policy` / `sendfile_one_shot_progress` 测试按真实 CQE 入口校验；`SendFileIOContext` 短发送后推进 offset/count 并累计结果，当前 one-shot 8MiB x 8 压测 5 轮均完成，clean `HEAD` baseline 在同 workload 下稳定停在 `65536/8388608`。
+- **修复 epoll AIO 与 file watcher 事件处理边界**：AIO completion 收割改为非阻塞处理，file watcher 读取路径循环解析缓冲区内全部 `inotify_event` 并 drain 至 `EAGAIN`，补齐 burst 文件事件和非阻塞源码边界测试。
+- **消除 Linux GCC 14 构建 warning**：`RpcEndpointCache` 改用 `std::atomic<std::shared_ptr<...>>` 成员 `load/store`，替换 deprecated shared_ptr atomic free function；MCP HTTP 示例移除 coroutine frame 中无 linkage 本地 lambda 捕获，current 完整增量构建 warning grep 为 0。
+- **修复 etcd HTTP 头 token 解析误命中**：`parseHttpHeaders` 的 `transfer-encoding: chunked` 与 `connection: close` 判定由裸子串匹配改为按逗号分词的 `containsAsciiTokenIgnoreCase`，避免 `keep-alive` 等相邻 token 或噪声子串导致的误判；async / sync 两条解析路径同步对齐。
 - 修复 move-only 契约迁移后的 C API wrapper、示例与 benchmark 编译边界：Mongo C wrapper 对嵌套 document / array / reply 改为显式 `clone()`，tracing C wrapper 改用 `LogRecord` 构造函数，HTTP / RPC / WS / tracing 示例和吞吐 benchmark 改为移动取值或引用绑定，避免隐式拷贝 move-only 类型。
 - 修复 RingBuffer 模板化重构后的回归测试期望：HTTP recv window 与 MySQL multi-result source 测试对齐默认 `Mmap` 单段视图和模板化类型名；C coroutine ResumeToken 测试移除违反 no-exception 契约的抛异常入口用例。
 - 恢复 Linux examples/benchmarks 执行矩阵的稳定入口：新增 `scripts/verify_linux_exec_matrix.py` 兼容 shim，转发并重导出 `scripts/common/105_verify_linux_exec_matrix.py`，保持现有脚本测试可 import 旧路径。

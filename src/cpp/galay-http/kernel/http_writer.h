@@ -21,6 +21,7 @@
 #include "../protoc/http_chunk.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/async/tcp_socket.h"
+#include <array>
 #include <chrono>
 #include <expected>
 #include <optional>
@@ -204,11 +205,7 @@ struct HttpSslSendMachine {
     void onSend(std::expected<size_t, galay::ssl::SslError> result) {
         if (!result) {
             m_writer->updateRemaining(m_writer->getRemainingBytes());
-            const HttpErrorCode code =
-                result.error().code() == galay::ssl::SslErrorCode::kTimeout
-                    ? kSendTimeOut
-                    : kSendError;
-            m_result = std::unexpected(HttpError(code, result.error().message()));
+            m_result = std::unexpected(HttpError(result.error()));
             return;
         }
 
@@ -285,6 +282,7 @@ public:
         , m_socket(&socket)
         , m_remaining_bytes(0)
     {
+        m_writev_cursor.reserve(2);
     }
 
     /**
@@ -300,18 +298,14 @@ public:
                 m_body_buffer = response.getBodyStr();
 
                 if (!response.header().isChunked()) {
-                    response.header().headerPairs().addHeaderPairIfNotExist(
-                        "Content-Length",
-                        std::to_string(m_body_buffer.size()));
+                    ensureContentLength(response.header().headerPairs(), m_body_buffer.size());
                 }
 
                 m_buffer = response.header().toString();
                 prepareTcpSendLayout();
             } else {
                 if (!response.header().isChunked()) {
-                    response.header().headerPairs().addHeaderPairIfNotExist(
-                        "Content-Length",
-                        std::to_string(response.bodyStr().size()));
+                    ensureContentLength(response.header().headerPairs(), response.bodyStr().size());
                 }
                 prepareSslSendLayout(response.header().toString(), response.bodyStr());
             }
@@ -335,18 +329,14 @@ public:
                 m_body_buffer = request.bodyStr();
 
                 if (!request.header().isChunked()) {
-                    request.header().headerPairs().addHeaderPairIfNotExist(
-                        "Content-Length",
-                        std::to_string(m_body_buffer.size()));
+                    ensureContentLength(request.header().headerPairs(), m_body_buffer.size());
                 }
 
                 m_buffer = request.header().toString();
                 prepareTcpSendLayout();
             } else {
                 if (!request.header().isChunked()) {
-                    request.header().headerPairs().addHeaderPairIfNotExist(
-                        "Content-Length",
-                        std::to_string(request.bodyStr().size()));
+                    ensureContentLength(request.header().headerPairs(), request.bodyStr().size());
                 }
                 prepareSslSendLayout(request.header().toString(), request.bodyStr());
             }
@@ -430,7 +420,7 @@ public:
         if (m_remaining_bytes == 0) {
             m_buffer.clear();
             m_body_buffer.clear();
-            m_writev_cursor.reset(std::vector<iovec>{});
+            m_writev_cursor.clear();
             m_external_buffer = data.data();
             m_external_buffer_size = data.size();
             m_remaining_bytes = data.size();
@@ -461,7 +451,7 @@ public:
             m_buffer.clear();
             m_body_buffer.clear();
             clearExternalBuffer();
-            m_writev_cursor.reset(std::vector<iovec>{});
+            m_writev_cursor.clear();
         } else {
             m_remaining_bytes -= bytes_sent;
         }
@@ -474,7 +464,7 @@ public:
             m_buffer.clear();
             m_body_buffer.clear();
             clearExternalBuffer();
-            m_writev_cursor.reset(std::vector<iovec>{});
+            m_writev_cursor.clear();
         } else {
             m_remaining_bytes -= advanced;
         }
@@ -525,30 +515,42 @@ private:
         return detail::buildSendAwaitable<SocketType, true>(*m_socket, *this);
     }
 
+    static void ensureContentLength(HeaderPair& headers, size_t size) {
+        const HttpErrorCode result = headers.addHeaderPairIfNotExist(
+            "Content-Length",
+            std::to_string(size));
+        if (result != kNoError && result != kHeaderPairExist) {
+            HTTP_LOG_WARN("[writer] [content-length-header-fail]", "code={}", static_cast<int>(result));
+        }
+    }
+
     void prepareTcpSendLayout() {
         const size_t total_size = m_buffer.size() + m_body_buffer.size();
         const size_t coalesce_threshold = m_setting.getWritevCoalesceThreshold();
 
         if (coalesce_threshold > 0 && total_size <= coalesce_threshold) {
             if (!m_body_buffer.empty()) {
-                m_buffer.append(m_body_buffer);
+                std::string& appended = m_buffer.append(m_body_buffer);
+                if (&appended != &m_buffer) {
+                    HTTP_LOG_WARN("[writer] [tcp-coalesce-append-unexpected]", "body_size={}", m_body_buffer.size());
+                }
                 m_body_buffer.clear();
             }
-            std::vector<iovec> iovecs;
-            iovecs.reserve(1);
-            iovecs.push_back({const_cast<char*>(m_buffer.data()), m_buffer.size()});
-            m_writev_cursor.reset(std::move(iovecs));
+            std::array<iovec, 2> iovecs{};
+            size_t iov_count = 0;
+            iovecs[iov_count++] = {const_cast<char*>(m_buffer.data()), m_buffer.size()};
+            m_writev_cursor.reset(iovecs, iov_count);
             m_remaining_bytes = m_writev_cursor.remainingBytes();
             return;
         }
 
-        std::vector<iovec> iovecs;
-        iovecs.reserve(2);
-        iovecs.push_back({const_cast<char*>(m_buffer.data()), m_buffer.size()});
+        std::array<iovec, 2> iovecs{};
+        size_t iov_count = 0;
+        iovecs[iov_count++] = {const_cast<char*>(m_buffer.data()), m_buffer.size()};
         if (!m_body_buffer.empty()) {
-            iovecs.push_back({const_cast<char*>(m_body_buffer.data()), m_body_buffer.size()});
+            iovecs[iov_count++] = {const_cast<char*>(m_body_buffer.data()), m_body_buffer.size()};
         }
-        m_writev_cursor.reset(std::move(iovecs));
+        m_writev_cursor.reset(iovecs, iov_count);
         m_remaining_bytes = m_writev_cursor.remainingBytes();
     }
 
@@ -556,9 +558,15 @@ private:
         clearExternalBuffer();
         m_buffer.clear();
         m_buffer.reserve(header.size() + body.size());
-        m_buffer.append(std::move(header));
+        std::string& header_appended = m_buffer.append(header);
+        if (&header_appended != &m_buffer) {
+            HTTP_LOG_WARN("[writer] [ssl-header-append-unexpected]", "header_size={}", header.size());
+        }
         if (!body.empty()) {
-            m_buffer.append(body.data(), body.size());
+            std::string& body_appended = m_buffer.append(body.data(), body.size());
+            if (&body_appended != &m_buffer) {
+                HTTP_LOG_WARN("[writer] [ssl-body-append-unexpected]", "body_size={}", body.size());
+            }
         }
         m_remaining_bytes = m_buffer.size();
         ++m_fast_path_counters.ssl_coalesced_layout_hits;

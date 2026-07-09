@@ -106,37 +106,6 @@ std::string_view trimLeadingSlash(std::string_view path)
     return path;
 }
 
-std::string_view trimAscii(std::string_view value)
-{
-    size_t begin = 0;
-    while (begin < value.size() && std::isspace(static_cast<unsigned char>(value[begin]))) {
-        ++begin;
-    }
-    size_t end = value.size();
-    while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
-        --end;
-    }
-    return value.substr(begin, end - begin);
-}
-
-char toLowerAscii(char ch)
-{
-    return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
-}
-
-bool equalsAsciiIgnoreCase(std::string_view lhs, std::string_view rhs)
-{
-    if (lhs.size() != rhs.size()) {
-        return false;
-    }
-    for (size_t i = 0; i < lhs.size(); ++i) {
-        if (toLowerAscii(lhs[i]) != toLowerAscii(rhs[i])) {
-            return false;
-        }
-    }
-    return true;
-}
-
 bool isTimeoutErrno(int error_number)
 {
     return error_number == EAGAIN || error_number == EWOULDBLOCK || error_number == ETIMEDOUT;
@@ -360,12 +329,11 @@ std::expected<ParsedHttpHeaders, EtcdError> parseHttpHeaders(std::string_view he
                 }
                 headers.content_length = static_cast<size_t>(parsed);
             } else if (equalsAsciiIgnoreCase(key, "transfer-encoding")) {
-                if (value.find("chunked") != std::string_view::npos ||
-                    value.find("Chunked") != std::string_view::npos) {
+                if (containsAsciiTokenIgnoreCase(value, "chunked")) {
                     headers.chunked = true;
                 }
             } else if (equalsAsciiIgnoreCase(key, "connection")) {
-                headers.connection_close = equalsAsciiIgnoreCase(value, "close");
+                headers.connection_close = containsAsciiTokenIgnoreCase(value, "close");
             }
         }
 

@@ -12,6 +12,9 @@
 
 #include "http_base.h"
 #include "../../galay-kernel/common/error.h"
+#ifdef GALAY_SSL_FEATURE_ENABLED
+#include "../../galay-ssl/common/error.h"
+#endif
 #include <string>
 
 namespace galay::http
@@ -87,6 +90,15 @@ namespace galay::http
          */
         explicit HttpError(const galay::kernel::IOError& io_error);
 
+#ifdef GALAY_SSL_FEATURE_ENABLED
+        /**
+         * @brief 从 SSL 错误构造 HttpError
+         * @param ssl_error galay-ssl 返回的 SSL 错误
+         * @details 供 SSL awaitable 将底层 SSL 错误直接转换为 HTTP 层错误。
+         */
+        explicit HttpError(const galay::ssl::SslError& ssl_error);
+#endif
+
         /**
          * @brief 获取错误码
          * @return 错误码枚举值
@@ -109,7 +121,6 @@ namespace galay::http
         std::string m_extra_msg;   ///< 附加错误描述
         HttpErrorCode m_code;      ///< 错误码
     };
-
 
 }
 

@@ -12,6 +12,9 @@
 #define GALAY_REDIS_ERROR_H
 
 #include "../../galay-kernel/common/error.h"
+#ifdef GALAY_SSL_FEATURE_ENABLED
+#include "../../galay-ssl/common/error.h"
+#endif
 #include <string>
 
 namespace galay::redis
@@ -79,6 +82,14 @@ namespace galay::redis
          */
         RedisError(const galay::kernel::IOError& io_error);
 
+#ifdef GALAY_SSL_FEATURE_ENABLED
+        /**
+         * @brief 从 SSL 错误构造 Redis 错误
+         * @param ssl_error galay-ssl 返回的 SSL 错误
+         */
+        RedisError(const galay::ssl::SslError& ssl_error);
+#endif
+
         /**
          * @brief 获取错误类型
          * @return 错误类型枚举值
@@ -95,5 +106,6 @@ namespace galay::redis
         std::string m_extra_msg;   ///< 附加错误消息
         RedisErrorType m_type;     ///< 错误类型
     };
+
 }
 #endif

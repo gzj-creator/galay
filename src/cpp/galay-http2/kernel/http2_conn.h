@@ -36,6 +36,7 @@
 #include <cstring>
 #include <chrono>
 #include <string_view>
+#include <type_traits>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include "../../galay-ssl/async/ssl_await.h"
@@ -271,7 +272,9 @@ struct Http2RuntimeConfig
         if constexpr (requires { config.static_file_mounts; }) {
             static_file_mounts = config.static_file_mounts;
             for (auto& mount : static_file_mounts) {
-                mount.cache = std::make_shared<H2StaticFileCache>(mount.config);
+                if (!mount.cache) {
+                    mount.cache = std::make_shared<H2StaticFileCache>(mount.config);
+                }
             }
         }
     }
@@ -282,6 +285,63 @@ template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBac
 class Http2ConnImpl;
 
 namespace detail {
+
+template<typename ResultT>
+struct ExpectedTraits;
+
+template<typename T, typename E>
+struct ExpectedTraits<std::expected<T, E>> {
+    using value_type = T;
+    using error_type = E;
+};
+
+#ifdef GALAY_SSL_FEATURE_ENABLED
+template<typename ResultT>
+struct Http2SslResult;
+
+template<typename T, typename E>
+struct Http2SslResult<std::expected<T, E>> {
+    using type = std::expected<T, Http2Error>;
+};
+
+template<typename ResultT>
+using Http2SslResultT = typename Http2SslResult<ResultT>::type;
+
+template<typename ResultT>
+Http2SslResultT<ResultT> toSslHttp2Result(ResultT result) {
+    using ValueT = typename ExpectedTraits<ResultT>::value_type;
+
+    if (!result) {
+        return std::unexpected(Http2Error(result.error()));
+    }
+    if constexpr (std::is_void_v<ValueT>) {
+        return {};
+    } else {
+        return Http2SslResultT<ResultT>(std::move(result.value()));
+    }
+}
+#endif
+
+template<typename ResultT, typename InnerResultT>
+ResultT toOuterHttp2Result(InnerResultT result) {
+    using ValueT = typename ExpectedTraits<ResultT>::value_type;
+    using OuterErrorT = typename ExpectedTraits<ResultT>::error_type;
+    using InnerErrorT = typename ExpectedTraits<InnerResultT>::error_type;
+
+    if (!result) {
+        if constexpr (std::is_same_v<OuterErrorT, Http2ErrorCode> &&
+                      std::is_same_v<InnerErrorT, Http2Error>) {
+            return std::unexpected(result.error().code());
+        } else {
+            return std::unexpected(OuterErrorT(result.error()));
+        }
+    }
+    if constexpr (std::is_void_v<ValueT>) {
+        return {};
+    } else {
+        return ResultT(std::move(result.value()));
+    }
+}
 
 struct Http2BufferedFrameStatus {
     Http2FrameHeader header{};
@@ -603,11 +663,8 @@ struct Http2ReadStateBase {
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     void setSslRecvError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            setProtocolError(Http2ErrorCode::ProtocolError, "peer closed");
-            return;
-        }
-        setProtocolError(Http2ErrorCode::ProtocolError, error.message());
+        const Http2Error http2_error(error);
+        setProtocolError(http2_error.code(), http2_error.message());
     }
 #endif
 
@@ -784,7 +841,8 @@ struct Http2TcpReadMachine {
 #ifdef GALAY_SSL_FEATURE_ENABLED
 template<typename StateT>
 struct Http2SslReadMachine {
-    using result_type = typename StateT::ResultType;
+    using state_result_type = typename StateT::ResultType;
+    using result_type = Http2SslResultT<state_result_type>;
     static constexpr auto kSequenceOwnerDomain = galay::kernel::SequenceOwnerDomain::Read;
 
     explicit Http2SslReadMachine(StateT state)
@@ -792,19 +850,23 @@ struct Http2SslReadMachine {
 
     galay::ssl::SslMachineAction<result_type> advance() {
         if (m_state.hasResult()) {
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state.takeResult());
+            return galay::ssl::SslMachineAction<result_type>::complete(
+                toSslHttp2Result(m_state.takeResult()));
         }
         if (m_state.parseFromRingBuffer()) {
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state.takeResult());
+            return galay::ssl::SslMachineAction<result_type>::complete(
+                toSslHttp2Result(m_state.takeResult()));
         }
         if (m_state.completeIfClosing()) {
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state.takeResult());
+            return galay::ssl::SslMachineAction<result_type>::complete(
+                toSslHttp2Result(m_state.takeResult()));
         }
 
         char* recv_buffer = nullptr;
         size_t recv_length = 0;
         if (!m_state.prepareRecvWindow(recv_buffer, recv_length)) {
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state.takeResult());
+            return galay::ssl::SslMachineAction<result_type>::complete(
+                toSslHttp2Result(m_state.takeResult()));
         }
 
         return galay::ssl::SslMachineAction<result_type>::recv(recv_buffer, recv_length);
@@ -866,7 +928,12 @@ public:
         if (m_ready_result.has_value()) {
             return std::move(*m_ready_result);
         }
-        return m_inner_operation->await_resume();
+        auto inner_result = m_inner_operation->await_resume();
+        if constexpr (std::is_same_v<std::remove_cvref_t<decltype(inner_result)>, ResultT>) {
+            return inner_result;
+        } else {
+            return toOuterHttp2Result<ResultT>(std::move(inner_result));
+        }
     }
 
     IOTask* front() override {
@@ -959,7 +1026,8 @@ struct Http2WriteState {
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     void setSslSendError(const galay::ssl::SslError& error) {
-        m_result = std::unexpected(Http2ErrorCode::InternalError);
+        const Http2Error http2_error(error);
+        m_result = std::unexpected(http2_error.code());
     }
 #endif
 
@@ -997,7 +1065,8 @@ struct Http2TcpWriteMachine {
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 struct Http2SslWriteMachine {
-    using result_type = Http2WriteState::ResultType;
+    using state_result_type = Http2WriteState::ResultType;
+    using result_type = Http2SslResultT<state_result_type>;
     static constexpr auto kSequenceOwnerDomain = galay::kernel::SequenceOwnerDomain::Write;
 
     explicit Http2SslWriteMachine(Http2WriteState state)
@@ -1005,7 +1074,8 @@ struct Http2SslWriteMachine {
 
     galay::ssl::SslMachineAction<result_type> advance() {
         if (m_state.hasResult()) {
-            return galay::ssl::SslMachineAction<result_type>::complete(m_state.takeResult());
+            return galay::ssl::SslMachineAction<result_type>::complete(
+                toSslHttp2Result(m_state.takeResult()));
         }
         return galay::ssl::SslMachineAction<result_type>::send(
             m_state.bufferData(),
@@ -1035,7 +1105,8 @@ auto buildStateMachineReadOperation(SocketType& socket, StateT state) {
     using ResultType = typename StateT::ResultType;
     if constexpr (is_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
+        using SslResultType = Http2SslResultT<ResultType>;
+        return galay::ssl::SslAwaitableBuilder<SslResultType>::fromStateMachine(
                    socket.controller(),
                    &socket,
                    Http2SslReadMachine<StateT>(std::move(state)))
@@ -1075,7 +1146,8 @@ auto buildWriteStateOperation(SocketType& socket, Http2WriteState state) {
     using ResultType = Http2WriteState::ResultType;
     if constexpr (is_ssl_socket_v<SocketType>) {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        return galay::ssl::SslAwaitableBuilder<ResultType>::fromStateMachine(
+        using SslResultType = Http2SslResultT<ResultType>;
+        return galay::ssl::SslAwaitableBuilder<SslResultType>::fromStateMachine(
                    socket.controller(),
                    &socket,
                    Http2SslWriteMachine(std::move(state)))

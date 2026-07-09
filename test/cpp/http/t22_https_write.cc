@@ -1,6 +1,7 @@
 #include <cassert>
 #include <iostream>
 #include <string>
+#include <type_traits>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include <sstream>
@@ -15,6 +16,7 @@
 int main() {
 #ifdef GALAY_SSL_FEATURE_ENABLED
     using namespace galay::http;
+    static_assert(std::is_constructible_v<HttpError, const galay::ssl::SslError&>);
 
     galay::ssl::SslSocket socket(nullptr);
     HttpWriterImpl<galay::ssl::SslSocket> writer(HttpWriterSetting(), socket);

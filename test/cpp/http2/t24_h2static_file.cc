@@ -212,31 +212,55 @@ int main()
     });
 
     auto hit = cache.lookup(H2StaticFileRequest{.path = "/hello.txt"});
-    assert(hit.status == 200);
-    assert(hit.file_size == 5);
-    assert(hit.content_type == "text/plain");
-    assert(hit.body_cached);
-    assert(hit.body && *hit.body == "hello");
-    assert(!hit.etag.empty());
+    if (hit.status != 200 ||
+        hit.file_size != 5 ||
+        hit.content_type != "text/plain" ||
+        hit.body_cached ||
+        hit.body != nullptr ||
+        !hit.body_cacheable ||
+        !hit.body_cache_slot ||
+        hit.etag.empty()) {
+        std::cerr << "[T89] initial H2 static cache lookup must cache metadata without synchronous body read\n";
+        return 1;
+    }
+    auto published_body = std::make_shared<const std::string>("hello");
+    const bool published = hit.body_cache_slot->storeIfEmpty(published_body);
+    if (!published) {
+        std::cerr << "[T89] initial H2 static body cache publish failed\n";
+        return 1;
+    }
     auto hit_again = cache.lookup(H2StaticFileRequest{.path = "/hello.txt"});
-    assert(hit.encoded_headers != nullptr);
-    assert(hit_again.encoded_headers == hit.encoded_headers);
+    if (!hit.encoded_headers ||
+        hit_again.encoded_headers != hit.encoded_headers ||
+        !hit_again.body_cached ||
+        !hit_again.body ||
+        *hit_again.body != "hello" ||
+        hit_again.body_cache_slot != hit.body_cache_slot) {
+        std::cerr << "[T89] H2 static body cache must be reused after async publish\n";
+        return 1;
+    }
     auto hit_query_a = cache.lookup(H2StaticFileRequest{.path = "/hello.txt?x=1"});
     auto hit_query_b = cache.lookup(H2StaticFileRequest{.path = "/hello.txt?x=2"});
-    assert(hit_query_a.status == 200);
-    assert(hit_query_b.status == 200);
-    assert(hit_query_a.encoded_headers == hit.encoded_headers);
-    assert(hit_query_b.encoded_headers == hit.encoded_headers);
-    assert(hit_query_a.body == hit.body);
-    assert(hit_query_b.body == hit.body);
+    if (hit_query_a.status != 200 ||
+        hit_query_b.status != 200 ||
+        hit_query_a.encoded_headers != hit.encoded_headers ||
+        hit_query_b.encoded_headers != hit.encoded_headers ||
+        hit_query_a.body != hit_again.body ||
+        hit_query_b.body != hit_again.body) {
+        std::cerr << "[T89] H2 static query aliases must share cached metadata and body\n";
+        return 1;
+    }
     auto fast_hit = cache.lookupFast200("/hello.txt?fast=1");
-    assert(fast_hit.has_value());
-    assert(fast_hit->content_length == 5);
-    assert(fast_hit->encoded_headers == hit.encoded_headers);
-    assert(fast_hit->body == hit.body);
-    assert(headerValue(hit, "content-length") == "5");
-    assert(headerValue(hit, "content-type") == "text/plain");
-    assert(headerValue(hit, "etag") == hit.etag);
+    if (!fast_hit.has_value() ||
+        fast_hit->content_length != 5 ||
+        fast_hit->encoded_headers != hit.encoded_headers ||
+        fast_hit->body != hit_again.body ||
+        headerValue(hit, "content-length") != "5" ||
+        headerValue(hit, "content-type") != "text/plain" ||
+        headerValue(hit, "etag") != hit.etag) {
+        std::cerr << "[T89] H2 static fast lookup must reuse encoded headers and async body cache\n";
+        return 1;
+    }
 
     auto not_modified = cache.lookup(H2StaticFileRequest{
         .path = "/hello.txt",
@@ -267,9 +291,12 @@ int main()
     assert(static_config.static_file_mounts[0].cache != nullptr);
     assert(runtime_a.static_file_mounts[0].cache != nullptr);
     assert(runtime_b.static_file_mounts[0].cache != nullptr);
-    assert(runtime_a.static_file_mounts[0].cache != static_config.static_file_mounts[0].cache);
-    assert(runtime_b.static_file_mounts[0].cache != static_config.static_file_mounts[0].cache);
-    assert(runtime_a.static_file_mounts[0].cache != runtime_b.static_file_mounts[0].cache);
+    if (runtime_a.static_file_mounts[0].cache != static_config.static_file_mounts[0].cache ||
+        runtime_b.static_file_mounts[0].cache != static_config.static_file_mounts[0].cache ||
+        runtime_a.static_file_mounts[0].cache != runtime_b.static_file_mounts[0].cache) {
+        std::cerr << "[T89] H2C runtime configs must share server-level static file cache\n";
+        return 1;
+    }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     H2ServerConfig tls_static_config;
@@ -284,9 +311,12 @@ int main()
     assert(tls_static_config.static_file_mounts[0].cache != nullptr);
     assert(tls_runtime_a.static_file_mounts[0].cache != nullptr);
     assert(tls_runtime_b.static_file_mounts[0].cache != nullptr);
-    assert(tls_runtime_a.static_file_mounts[0].cache != tls_static_config.static_file_mounts[0].cache);
-    assert(tls_runtime_b.static_file_mounts[0].cache != tls_static_config.static_file_mounts[0].cache);
-    assert(tls_runtime_a.static_file_mounts[0].cache != tls_runtime_b.static_file_mounts[0].cache);
+    if (tls_runtime_a.static_file_mounts[0].cache != tls_static_config.static_file_mounts[0].cache ||
+        tls_runtime_b.static_file_mounts[0].cache != tls_static_config.static_file_mounts[0].cache ||
+        tls_runtime_a.static_file_mounts[0].cache != tls_runtime_b.static_file_mounts[0].cache) {
+        std::cerr << "[T89] H2 TLS runtime configs must share server-level static file cache\n";
+        return 1;
+    }
 #endif
 
     std::ofstream(root / "small.txt") << std::string(1024, 'a');

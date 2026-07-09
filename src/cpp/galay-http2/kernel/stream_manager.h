@@ -19,6 +19,9 @@
 #include "../../galay-kernel/concurrency/async_waiter.h"
 #include "../../galay-kernel/concurrency/mpsc_channel.h"
 #include "../../galay-kernel/common/sleep.hpp"
+#include "../../galay-kernel/core/runtime.h"
+#include <cerrno>
+#include <expected>
 #include <memory>
 #include <queue>
 #include <string>
@@ -33,9 +36,10 @@
 #include <cstring>
 #include <algorithm>
 #include <deque>
-#include <fstream>
 #include <limits>
+#include <fcntl.h>
 #include <sys/uio.h>
+#include <unistd.h>
 
 namespace galay::http2
 {
@@ -1885,32 +1889,80 @@ private:
         return 0;
     }
 
-    std::vector<std::string> readStaticFileChunks(const std::filesystem::path& path,
-                                                  uintmax_t offset,
-                                                  uintmax_t length) const {
+    enum class H2StaticFileBodyReadError {
+        kInvalidRange,
+        kOpen,
+        kRead,
+        kShortRead,
+        kClose,
+    };
+
+    static std::expected<std::vector<std::string>, H2StaticFileBodyReadError>
+    readStaticFileChunksBlocking(const std::string& path,
+                                 uintmax_t offset,
+                                 uintmax_t length,
+                                 uint32_t max_frame_size) {
+        if (max_frame_size == 0 ||
+            offset > static_cast<uintmax_t>(std::numeric_limits<off_t>::max())) {
+            return std::unexpected(H2StaticFileBodyReadError::kInvalidRange);
+        }
+
         std::vector<std::string> chunks;
-        const auto frame_size = std::max<uint32_t>(m_conn.peerSettings().max_frame_size, 1);
+        const auto frame_size = std::max<uint32_t>(max_frame_size, 1);
         chunks.reserve(static_cast<size_t>((length + frame_size - 1) / frame_size));
 
-        std::ifstream in(path, std::ios::binary);
-        if (!in) {
-            return {};
+        const int fd = ::open(path.c_str(), O_RDONLY);
+        if (fd < 0) {
+            return std::unexpected(H2StaticFileBodyReadError::kOpen);
         }
-        in.seekg(static_cast<std::streamoff>(offset), std::ios::beg);
 
         uintmax_t remaining = length;
+        uintmax_t current_offset = offset;
         while (remaining > 0) {
             const auto chunk_size = static_cast<size_t>(
-                std::min<uintmax_t>(remaining, m_conn.peerSettings().max_frame_size));
+                std::min<uintmax_t>(remaining, frame_size));
             std::string chunk(chunk_size, '\0');
-            in.read(chunk.data(), static_cast<std::streamsize>(chunk.size()));
-            const auto read_count = in.gcount();
-            if (read_count <= 0) {
-                return {};
+
+            size_t chunk_offset = 0;
+            while (chunk_offset < chunk_size) {
+                if (current_offset > static_cast<uintmax_t>(std::numeric_limits<off_t>::max())) {
+                    const int close_result = ::close(fd);
+                    if (close_result != 0) {
+                        return std::unexpected(H2StaticFileBodyReadError::kClose);
+                    }
+                    return std::unexpected(H2StaticFileBodyReadError::kInvalidRange);
+                }
+                const ssize_t read_count = ::pread(fd,
+                                                   chunk.data() + chunk_offset,
+                                                   chunk_size - chunk_offset,
+                                                   static_cast<off_t>(current_offset));
+                if (read_count < 0) {
+                    if (errno == EINTR) {
+                        continue;
+                    }
+                    const int close_result = ::close(fd);
+                    if (close_result != 0) {
+                        return std::unexpected(H2StaticFileBodyReadError::kClose);
+                    }
+                    return std::unexpected(H2StaticFileBodyReadError::kRead);
+                }
+                if (read_count == 0) {
+                    const int close_result = ::close(fd);
+                    if (close_result != 0) {
+                        return std::unexpected(H2StaticFileBodyReadError::kClose);
+                    }
+                    return std::unexpected(H2StaticFileBodyReadError::kShortRead);
+                }
+                const auto advanced = static_cast<size_t>(read_count);
+                chunk_offset += advanced;
+                current_offset += static_cast<uintmax_t>(advanced);
             }
-            chunk.resize(static_cast<size_t>(read_count));
-            remaining -= static_cast<uintmax_t>(chunk.size());
+            remaining -= static_cast<uintmax_t>(chunk_size);
             chunks.push_back(std::move(chunk));
+        }
+        const int close_result = ::close(fd);
+        if (close_result != 0) {
+            return std::unexpected(H2StaticFileBodyReadError::kClose);
         }
         return chunks;
     }
@@ -1964,6 +2016,126 @@ private:
         m_conn.adjustConnSendWindow(-static_cast<int32_t>(total));
     }
 
+    static bool enqueueStaticFileReadFailure(MpscChannel<Http2OutgoingFrame>* send_channel,
+                                             uint32_t stream_id) {
+        if (send_channel == nullptr) {
+            return false;
+        }
+        auto rst = std::make_unique<Http2RstStreamFrame>();
+        rst->header().stream_id = stream_id;
+        rst->setErrorCode(Http2ErrorCode::InternalError);
+        std::vector<Http2OutgoingFrame> frames;
+        frames.reserve(1);
+        frames.push_back(Http2OutgoingFrame{std::move(rst)});
+        return send_channel->sendBatch(std::move(frames));
+    }
+
+    bool scheduleStaticFileBodyRead(uint32_t stream_id,
+                                    std::shared_ptr<const std::string> header_block,
+                                    std::shared_ptr<H2StaticFileBodyCacheSlot> body_cache_slot,
+                                    std::string file_path,
+                                    uintmax_t offset,
+                                    uintmax_t length) {
+        if (!header_block || length == 0 ||
+            length > static_cast<uintmax_t>(std::numeric_limits<int32_t>::max())) {
+            return false;
+        }
+        auto runtime = RuntimeHandle::tryCurrent();
+        if (!runtime.has_value()) {
+            return false;
+        }
+
+        const uint32_t frame_size = std::max<uint32_t>(m_conn.peerSettings().max_frame_size, 1);
+        auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
+            stream_id, header_block->size(), false, true);
+        auto* send_channel = &m_send_channel;
+
+        // Reserve flow-control credit on the IO owner before the worker thread reads.
+        // The worker only touches its local buffers and the thread-safe send channel.
+        m_conn.adjustConnSendWindow(-static_cast<int32_t>(length));
+        auto blocking_task = runtime->spawnBlocking(
+            [send_channel,
+             stream_id,
+             header_block = std::move(header_block),
+             body_cache_slot = std::move(body_cache_slot),
+             header_bytes,
+             file_path = std::move(file_path),
+             offset,
+             length,
+             frame_size]() mutable {
+                auto chunks_result = readStaticFileChunksBlocking(file_path, offset, length, frame_size);
+                if (!chunks_result.has_value()) {
+                    const bool sent = enqueueStaticFileReadFailure(send_channel, stream_id);
+                    if (!sent) {
+                        return;
+                    }
+                    return;
+                }
+
+                auto& chunks = chunks_result.value();
+                std::shared_ptr<const std::string> cached_body;
+                if (body_cache_slot && offset == 0 &&
+                    length <= static_cast<uintmax_t>(std::numeric_limits<size_t>::max())) {
+                    auto body = std::make_shared<std::string>();
+                    body->reserve(static_cast<size_t>(length));
+                    bool append_ok = true;
+                    for (const auto& chunk : chunks) {
+                        std::string& appended = body->append(chunk);
+                        if (&appended != body.get()) {
+                            append_ok = false;
+                            break;
+                        }
+                    }
+                    if (append_ok && body->size() == static_cast<size_t>(length)) {
+                        cached_body = body;
+                        const bool stored = body_cache_slot->storeIfEmpty(cached_body);
+                        if (!stored) {
+                            cached_body = body_cache_slot->load();
+                        }
+                    }
+                }
+
+                std::vector<Http2OutgoingFrame> frames;
+                frames.reserve(chunks.size() + 1);
+                frames.push_back(
+                    Http2OutgoingFrame::segmentedShared(std::move(header_bytes),
+                                                        std::move(header_block)));
+                if (cached_body) {
+                    size_t body_offset = 0;
+                    for (size_t i = 0; i < chunks.size(); ++i) {
+                        const bool end_stream = i + 1 == chunks.size();
+                        const size_t chunk_size = chunks[i].size();
+                        auto data_header = Http2FrameBuilder::dataHeaderBytes(
+                            stream_id, chunk_size, end_stream);
+                        frames.push_back(Http2OutgoingFrame::segmentedShared(
+                            std::move(data_header), cached_body, body_offset, chunk_size));
+                        body_offset += chunk_size;
+                    }
+                } else {
+                    for (size_t i = 0; i < chunks.size(); ++i) {
+                        const bool end_stream = i + 1 == chunks.size();
+                        auto data_header = Http2FrameBuilder::dataHeaderBytes(
+                            stream_id, chunks[i].size(), end_stream);
+                        frames.push_back(Http2OutgoingFrame::segmented(
+                            std::move(data_header), std::move(chunks[i])));
+                    }
+                }
+                const bool sent = send_channel->sendBatch(std::move(frames));
+                if (!sent) {
+                    return;
+                }
+            });
+        if (!blocking_task.has_value()) {
+            m_conn.adjustConnSendWindow(static_cast<int32_t>(length));
+            return false;
+        }
+        if (!blocking_task->isValid()) {
+            m_conn.adjustConnSendWindow(static_cast<int32_t>(length));
+            return false;
+        }
+        return true;
+    }
+
     bool sendStaticFileLookup(uint32_t stream_id,
                               std::string_view method,
                               const H2StaticFileLookup& lookup) {
@@ -1974,17 +2146,19 @@ private:
         if (has_body && !canSendStaticFileBodyNow(length)) {
             return false;
         }
-        std::vector<std::string> body_chunks;
-        if (has_body && !lookup.body) {
-            body_chunks = readStaticFileChunks(lookup.file_path, 0, length);
-            if (body_chunks.empty()) {
-                return false;
-            }
-        }
-
         auto header_block = lookup.encoded_headers
             ? lookup.encoded_headers
             : encodeH2StaticFileHeaders(lookup.status, lookup.headers);
+        if (has_body && !lookup.body) {
+            const uintmax_t body_offset = lookup.status == 206 ? lookup.range_start : 0;
+            return scheduleStaticFileBodyRead(stream_id,
+                                              std::move(header_block),
+                                              lookup.body_cacheable ? lookup.body_cache_slot : nullptr,
+                                              lookup.file_path.string(),
+                                              body_offset,
+                                              length);
+        }
+
         const bool headers_end_stream = !has_body;
         auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
             stream_id, header_block->size(), headers_end_stream, true);
@@ -1996,8 +2170,6 @@ private:
 
         if (lookup.body) {
             appendStaticFileSharedDataFrames(stream_id, lookup.body);
-        } else {
-            appendStaticFileDataFrames(stream_id, std::move(body_chunks));
         }
         return true;
     }
@@ -2016,12 +2188,13 @@ private:
             return false;
         }
 
-        std::vector<std::string> body_chunks;
         if (has_body && !lookup.body) {
-            body_chunks = readStaticFileChunks(lookup.file_path, 0, length);
-            if (body_chunks.empty()) {
-                return false;
-            }
+            return scheduleStaticFileBodyRead(stream_id,
+                                              lookup.encoded_headers,
+                                              lookup.body_cacheable ? lookup.body_cache_slot : nullptr,
+                                              lookup.file_path.string(),
+                                              0,
+                                              length);
         }
 
         auto header_bytes = Http2FrameBuilder::headersHeaderBytes(
@@ -2035,8 +2208,6 @@ private:
 
         if (lookup.body) {
             appendStaticFileSharedDataFrames(stream_id, lookup.body);
-        } else {
-            appendStaticFileDataFrames(stream_id, std::move(body_chunks));
         }
         return true;
     }

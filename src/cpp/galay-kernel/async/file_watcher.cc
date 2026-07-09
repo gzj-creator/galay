@@ -67,12 +67,14 @@ static uint32_t toInotifyMask(FileWatchEvent events)
  */
 FileWatcher::FileWatcher()
     : m_controller(GHandle::invalid())
+    , m_watch_fd(-1)
 #ifdef USE_KQUEUE
     , m_current_events(FileWatchEvent::None)
 #endif
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
     m_controller.m_handle.fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    m_watch_fd = m_controller.m_handle.fd;
 #endif
     // macOS: m_controller 在 addWatch 时设置为第一个监控的文件 fd
 }
@@ -103,11 +105,14 @@ FileWatcher::~FileWatcher()
  */
 FileWatcher::FileWatcher(FileWatcher&& other) noexcept
     : m_controller(std::move(other.m_controller))
+    , m_ready_events(std::move(other.m_ready_events))
     , m_watches(std::move(other.m_watches))
+    , m_watch_fd(other.m_watch_fd)
 #ifdef USE_KQUEUE
     , m_current_events(other.m_current_events)
 #endif
 {
+    other.m_watch_fd = -1;
 }
 
 /**
@@ -134,7 +139,10 @@ FileWatcher& FileWatcher::operator=(FileWatcher&& other) noexcept
 
         // 移动资源
         m_controller = std::move(other.m_controller);
+        m_ready_events = std::move(other.m_ready_events);
         m_watches = std::move(other.m_watches);
+        m_watch_fd = other.m_watch_fd;
+        other.m_watch_fd = -1;
 #ifdef USE_KQUEUE
         m_current_events = other.m_current_events;
 #endif
@@ -180,6 +188,7 @@ std::expected<int, IOError> FileWatcher::addWatch(const std::string& path, FileW
     // 设置第一个监控的 fd 作为 watch_fd
     if (m_controller.m_handle.fd < 0) {
         m_controller.m_handle.fd = fd;
+        m_watch_fd = fd;
     }
 
     return fd;
@@ -227,8 +236,10 @@ std::expected<void, IOError> FileWatcher::removeWatch(int wd)
     if (wd == m_controller.m_handle.fd) {
         if (!m_watches.empty()) {
             m_controller.m_handle.fd = m_watches.begin()->first;
+            m_watch_fd = m_controller.m_handle.fd;
         } else {
             m_controller.m_handle.fd = -1;
+            m_watch_fd = -1;
         }
     }
 
@@ -248,10 +259,10 @@ FileWatchAwaitable FileWatcher::watch()
 {
 #ifdef USE_KQUEUE
     return FileWatchAwaitable(&m_controller,
-                              m_buffer, BUFFER_SIZE, m_current_events);
+                              m_buffer, BUFFER_SIZE, m_current_events, &m_ready_events);
 #else
     return FileWatchAwaitable(&m_controller,
-                              m_buffer, BUFFER_SIZE);
+                              m_buffer, BUFFER_SIZE, &m_ready_events);
 #endif
 }
 

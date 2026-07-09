@@ -26,6 +26,7 @@
 
 #include <atomic>
 #include <expected>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <unordered_map>
@@ -56,19 +57,27 @@ struct RpcChannelOptions {
  *          对象由shared_ptr持有，保证从入队到通知期间生命周期稳定。
  */
 struct RpcChannelPendingCall {
-    uint32_t request_id = 0;             ///< 请求ID
+    AsyncWaiter<RpcCallResult> waiter;   ///< 调用完成等待器
+    std::shared_ptr<RpcCancellationRegistration> cancellation_registration; ///< 取消回调注册
     std::string service;                 ///< 指标使用的服务名
     std::string method;                  ///< 指标使用的方法名
+    std::optional<RpcCancellationToken> cancellation_token;  ///< 可选取消令牌
     std::chrono::steady_clock::time_point started_at{};  ///< 调用开始时间
-    AsyncWaiter<RpcCallResult> waiter;   ///< 调用完成等待器
+    uint32_t request_id = 0;             ///< 请求ID
     std::atomic<bool> completed{false};  ///< 是否已被通知
+
+    ~RpcChannelPendingCall() {
+        if (cancellation_registration) {
+            cancellation_registration->deactivate();
+        }
+    }
 };
 
 using RpcHeartbeatResult = std::expected<void, RpcError>;
 
 struct RpcChannelPendingHeartbeat {
-    uint32_t request_id = 0;                 ///< 心跳ID
     AsyncWaiter<RpcHeartbeatResult> waiter;  ///< 心跳完成等待器
+    uint32_t request_id = 0;                 ///< 心跳ID
     std::atomic<bool> completed{false};      ///< 是否已通知
 };
 
@@ -118,7 +127,11 @@ public:
                                             "Duplicate RPC request id"));
         }
 
-        m_pending.emplace(request_id, pending);
+        auto [_, inserted] = m_pending.emplace(request_id, pending);
+        if (!inserted) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                            "Duplicate RPC request id"));
+        }
         return pending;
     }
 
@@ -135,11 +148,20 @@ public:
         }
 
         auto pending = std::move(it->second);
-        m_pending.erase(it);
+        auto next = m_pending.erase(it);
+        if (next != m_pending.end()) {
+            // erase 返回值仅用于显式处理；分发表后继位置不影响分发逻辑。
+        }
         if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
             return pending;
         }
-        pending->waiter.notify(RpcCallResult(std::optional<RpcResponse>(std::move(response))));
+        const bool notified = pending->waiter.notify(
+            RpcCallResult(std::optional<RpcResponse>(std::move(response))));
+        if (!notified) {
+            RPC_LOG_WARN("[channel] [recv] [notify-duplicate]",
+                         "request_id={}",
+                         pending->request_id);
+        }
         return pending;
     }
 
@@ -156,12 +178,20 @@ public:
         }
 
         auto pending = std::move(it->second);
-        m_pending.erase(it);
+        auto next = m_pending.erase(it);
+        if (next != m_pending.end()) {
+            // erase 返回值仅用于显式处理；分发表后继位置不影响失败路径。
+        }
         if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
             return false;
         }
-        pending->waiter.notify(RpcCallResult(std::unexpected(error)));
-        return true;
+        const bool notified = pending->waiter.notify(RpcCallResult(std::unexpected(error)));
+        if (!notified) {
+            RPC_LOG_WARN("[channel] [fail] [notify-duplicate]",
+                         "request_id={}",
+                         pending->request_id);
+        }
+        return notified;
     }
 
     /**
@@ -177,13 +207,21 @@ public:
         }
         m_pending.clear();
 
+        size_t notified_count = 0;
         for (auto& pending : pending_calls) {
             if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
                 continue;
             }
-            pending->waiter.notify(RpcCallResult(std::unexpected(error)));
+            const bool notified = pending->waiter.notify(RpcCallResult(std::unexpected(error)));
+            if (notified) {
+                ++notified_count;
+            } else {
+                RPC_LOG_WARN("[channel] [fail-all] [notify-duplicate]",
+                             "request_id={}",
+                             pending->request_id);
+            }
         }
-        return pending_calls.size();
+        return notified_count;
     }
 
     /// @brief 当前pending请求数量
@@ -342,11 +380,11 @@ public:
                             bool tcp_no_delay = true)
         : m_reader_setting(reader_setting)
         , m_writer_setting(writer_setting)
-        , m_ring_buffer_size(ring_buffer_size == 0 ? kDefaultRpcRingBufferSize : ring_buffer_size)
-        , m_tcp_no_delay(tcp_no_delay)
         , m_state(options)
         , m_outbound_backpressure(options)
         , m_metrics(options.metrics_callback)
+        , m_ring_buffer_size(ring_buffer_size == 0 ? kDefaultRpcRingBufferSize : ring_buffer_size)
+        , m_tcp_no_delay(tcp_no_delay)
     {
         m_pending_heartbeats.reserve(options.max_in_flight);
     }
@@ -444,23 +482,40 @@ public:
         outbound.pending_hint->service = service;
         outbound.pending_hint->method = method;
         outbound.pending_hint->started_at = outbound.started_at;
+        if (cancellation_token.has_value()) {
+            outbound.pending_hint->cancellation_token = *cancellation_token;
+            std::weak_ptr<RpcChannelPendingCall> weak_pending = outbound.pending_hint;
+            auto registration = cancellation_token->registerCallback([weak_pending]() {
+                auto pending = weak_pending.lock();
+                if (!pending) {
+                    return;
+                }
+                if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
+                    return;
+                }
+                const bool notified = pending->waiter.notify(
+                    RpcCallResult(std::unexpected(
+                        RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled"))));
+                if (!notified) {
+                    RPC_LOG_WARN("[channel] [cancel] [notify-duplicate]",
+                                 "request_id={}",
+                                 pending->request_id);
+                }
+            });
+            if (!registration) {
+                m_outbound_backpressure.release(outbound.reserved_bytes);
+                co_return RpcCallResult(std::unexpected(
+                    RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to register RPC cancellation callback")));
+            }
+            outbound.pending_hint->cancellation_registration = std::move(registration);
+        }
         auto pending = outbound.pending_hint;
 
+        const size_t reserved_bytes = outbound.reserved_bytes;
         if (!m_outbound.send(std::move(outbound))) {
-            m_outbound_backpressure.release(outbound.reserved_bytes);
+            m_outbound_backpressure.release(reserved_bytes);
             co_return RpcCallResult(std::unexpected(
                 RpcError(RpcErrorCode::RESOURCE_EXHAUSTED, "RPC outbound queue rejected call")));
-        }
-
-        if (cancellation_token.has_value()) {
-            auto* scheduler_for_cancel = scheduler;
-            auto token = *cancellation_token;
-            m_active_loops.fetch_add(1, std::memory_order_acq_rel);
-            if (!scheduleTask(scheduler_for_cancel, cancelWatchLoop(request_id, token, pending))) {
-                m_active_loops.fetch_sub(1, std::memory_order_acq_rel);
-                co_return RpcCallResult(std::unexpected(
-                    RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule RPC cancel watcher")));
-            }
         }
 
         auto deadline = options.effectiveDeadline(RpcClock::now());
@@ -494,6 +549,11 @@ public:
             }
             co_return RpcCallResult(std::unexpected(
                 RpcError::from(wait_result.error(), RpcErrorCode::INTERNAL_ERROR)));
+        }
+        if (!wait_result.value().has_value() &&
+            wait_result.value().error().code() == RpcErrorCode::CANCELLED) {
+            requestPendingCleanup(request_id,
+                                  RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled"));
         }
         co_return std::move(wait_result.value());
     }
@@ -555,7 +615,9 @@ public:
                                                          std::memory_order_acquire)) {
             OutboundCall shutdown;
             shutdown.shutdown = true;
-            m_outbound.send(std::move(shutdown));
+            if (!m_outbound.send(std::move(shutdown))) {
+                RPC_LOG_WARN("[channel] [shutdown] [enqueue-failed]", "state={}", 1);
+            }
         }
     }
 
@@ -605,13 +667,13 @@ public:
 private:
     struct OutboundCall {
         RpcRequest request;
+        std::optional<RpcError> cleanup_error;
         std::shared_ptr<RpcChannelPendingCall> pending_hint;
         std::shared_ptr<RpcChannelPendingHeartbeat> heartbeat_pending;
-        uint32_t heartbeat_id = 0;
-        size_t reserved_bytes = 0;
         std::chrono::steady_clock::time_point started_at{};
+        size_t reserved_bytes = 0;
+        uint32_t heartbeat_id = 0;
         uint32_t cleanup_request_id = 0;
-        std::optional<RpcError> cleanup_error;
         bool heartbeat = false;
         bool cleanup_pending = false;
         bool shutdown = false;
@@ -632,17 +694,36 @@ private:
             co_return true;
         }
 
-        m_active_loops.fetch_add(2, std::memory_order_acq_rel);
+        const size_t loops_before_start = m_active_loops.fetch_add(2, std::memory_order_acq_rel);
+        if (loops_before_start > std::numeric_limits<size_t>::max() - 2) {
+            RPC_LOG_WARN("[channel] [loops] [count-overflow-risk]",
+                         "previous={}",
+                         loops_before_start);
+        }
         if (!scheduleTask(scheduler, writerLoop())) {
-            m_active_loops.fetch_sub(2, std::memory_order_acq_rel);
+            const size_t loops_before_sub = m_active_loops.fetch_sub(2, std::memory_order_acq_rel);
+            if (loops_before_sub < 2) {
+                RPC_LOG_WARN("[channel] [loops] [count-underflow]",
+                             "previous={}",
+                             loops_before_sub);
+            }
             m_loops_started.store(false, std::memory_order_release);
             co_return false;
         }
         if (!scheduleTask(scheduler, readerLoop())) {
-            m_active_loops.fetch_sub(1, std::memory_order_acq_rel);
+            const size_t loops_before_sub = m_active_loops.fetch_sub(1, std::memory_order_acq_rel);
+            if (loops_before_sub == 0) {
+                RPC_LOG_WARN("[channel] [loops] [count-underflow]",
+                             "previous={}",
+                             loops_before_sub);
+            }
             requestShutdown();
             auto drain_result = co_await waitForBackgroundTasks(std::chrono::milliseconds(1000));
-            (void)drain_result;
+            if (!drain_result.has_value() || !drain_result.value().has_value()) {
+                RPC_LOG_WARN("[channel] [loops] [drain-failed-after-reader-schedule-failure]",
+                             "state={}",
+                             1);
+            }
             m_loops_started.store(false, std::memory_order_release);
             co_return false;
         }
@@ -680,7 +761,13 @@ private:
                         requestShutdown();
                         break;
                     }
-                    m_state.failPending(outbound.cleanup_request_id, *outbound.cleanup_error);
+                    const bool failed = m_state.failPending(outbound.cleanup_request_id,
+                                                            *outbound.cleanup_error);
+                    if (!failed) {
+                        RPC_LOG_DEBUG("[channel] [cleanup] [pending-missing]",
+                                      "request_id={}",
+                                      outbound.cleanup_request_id);
+                    }
                     m_pending_count.store(m_state.pendingCount(), std::memory_order_release);
                     m_state_mutex.unlock();
                 }
@@ -692,8 +779,22 @@ private:
                     requestShutdown();
                     break;
                 }
-                m_pending_heartbeats.emplace(outbound.heartbeat_id, outbound.heartbeat_pending);
+                auto [_, inserted] = m_pending_heartbeats.emplace(outbound.heartbeat_id,
+                                                                  outbound.heartbeat_pending);
                 m_state_mutex.unlock();
+                if (!inserted) {
+                    m_outbound_backpressure.release(outbound.reserved_bytes);
+                    const bool notified = outbound.heartbeat_pending->waiter.notify(
+                        RpcHeartbeatResult(std::unexpected(
+                            RpcError(RpcErrorCode::INVALID_REQUEST,
+                                     "Duplicate RPC heartbeat id"))));
+                    if (!notified) {
+                        RPC_LOG_WARN("[channel] [heartbeat] [notify-duplicate]",
+                                     "request_id={}",
+                                     outbound.heartbeat_id);
+                    }
+                    continue;
+                }
                 auto send_result = co_await SendRawDataAwaitable<SocketType>(
                     rpcBuildHeartbeatFrame(outbound.heartbeat_id),
                     *m_socket);
@@ -704,7 +805,12 @@ private:
                         requestShutdown();
                         break;
                     }
-                    failHeartbeat(outbound.heartbeat_id, send_result.error());
+                    const bool failed = failHeartbeat(outbound.heartbeat_id, send_result.error());
+                    if (!failed) {
+                        RPC_LOG_DEBUG("[channel] [heartbeat] [fail-missing]",
+                                      "request_id={}",
+                                      outbound.heartbeat_id);
+                    }
                     m_state_mutex.unlock();
                     requestShutdown();
                     break;
@@ -712,6 +818,20 @@ private:
                 continue;
             }
             if (outbound.pending_hint->completed.load(std::memory_order_acquire)) {
+                m_outbound_backpressure.release(outbound.reserved_bytes);
+                continue;
+            }
+            if (outbound.pending_hint->cancellation_token.has_value() &&
+                outbound.pending_hint->cancellation_token->cancelled()) {
+                outbound.pending_hint->completed.store(true, std::memory_order_release);
+                const bool notified = outbound.pending_hint->waiter.notify(
+                    RpcCallResult(std::unexpected(
+                        RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled"))));
+                if (!notified) {
+                    RPC_LOG_WARN("[channel] [cancel] [notify-duplicate]",
+                                 "request_id={}",
+                                 outbound.pending_hint->request_id);
+                }
                 m_outbound_backpressure.release(outbound.reserved_bytes);
                 continue;
             }
@@ -727,7 +847,13 @@ private:
             m_state_mutex.unlock();
             if (!registered.has_value()) {
                 m_outbound_backpressure.release(outbound.reserved_bytes);
-                outbound.pending_hint->waiter.notify(RpcCallResult(std::unexpected(registered.error())));
+                const bool notified = outbound.pending_hint->waiter.notify(
+                    RpcCallResult(std::unexpected(registered.error())));
+                if (!notified) {
+                    RPC_LOG_WARN("[channel] [register] [notify-duplicate]",
+                                 "request_id={}",
+                                 outbound.pending_hint->request_id);
+                }
                 continue;
             }
 
@@ -739,7 +865,12 @@ private:
                     requestShutdown();
                     break;
                 }
-                m_state.failPending(outbound.request.requestId(), send_result.error());
+                const bool failed = m_state.failPending(outbound.request.requestId(), send_result.error());
+                if (!failed) {
+                    RPC_LOG_DEBUG("[channel] [send] [fail-pending-missing]",
+                                  "request_id={}",
+                                  outbound.request.requestId());
+                }
                 m_pending_count.store(m_state.pendingCount(), std::memory_order_release);
                 m_state_mutex.unlock();
                 requestShutdown();
@@ -768,9 +899,7 @@ private:
                     requestShutdown();
                     break;
                 }
-                m_state.failAllPending(header_result.error());
-                m_pending_count.store(0, std::memory_order_release);
-                failAllHeartbeats(header_result.error());
+                failAllWaitersLocked(header_result.error());
                 m_state_mutex.unlock();
                 requestShutdown();
                 break;
@@ -782,7 +911,12 @@ private:
                     requestShutdown();
                     break;
                 }
-                completeHeartbeat(header.m_request_id);
+                const bool completed = completeHeartbeat(header.m_request_id);
+                if (!completed) {
+                    RPC_LOG_DEBUG("[channel] [heartbeat] [late-or-unknown]",
+                                  "request_id={}",
+                                  header.m_request_id);
+                }
                 m_state_mutex.unlock();
                 continue;
             }
@@ -794,9 +928,7 @@ private:
                     requestShutdown();
                     break;
                 }
-                m_state.failAllPending(error);
-                m_pending_count.store(0, std::memory_order_release);
-                failAllHeartbeats(error);
+                failAllWaitersLocked(error);
                 m_state_mutex.unlock();
                 requestShutdown();
                 break;
@@ -809,9 +941,7 @@ private:
                     requestShutdown();
                     break;
                 }
-                m_state.failAllPending(error);
-                m_pending_count.store(0, std::memory_order_release);
-                failAllHeartbeats(error);
+                failAllWaitersLocked(error);
                 m_state_mutex.unlock();
                 requestShutdown();
                 break;
@@ -830,9 +960,7 @@ private:
                         requestShutdown();
                         break;
                     }
-                    m_state.failAllPending(body_result.error());
-                    m_pending_count.store(0, std::memory_order_release);
-                    failAllHeartbeats(body_result.error());
+                    failAllWaitersLocked(body_result.error());
                     m_state_mutex.unlock();
                     requestShutdown();
                     break;
@@ -850,9 +978,7 @@ private:
                     requestShutdown();
                     break;
                 }
-                m_state.failAllPending(error);
-                m_pending_count.store(0, std::memory_order_release);
-                failAllHeartbeats(error);
+                failAllWaitersLocked(error);
                 m_state_mutex.unlock();
                 requestShutdown();
                 break;
@@ -881,9 +1007,7 @@ private:
         if (!locked.has_value()) {
             co_return;
         }
-        m_state.failAllPending(RpcError(RpcErrorCode::UNAVAILABLE, "RPC channel closed"));
-        m_pending_count.store(0, std::memory_order_release);
-        failAllHeartbeats(RpcError(RpcErrorCode::UNAVAILABLE, "RPC channel closed"));
+        failAllWaitersLocked(RpcError(RpcErrorCode::UNAVAILABLE, "RPC channel closed"));
         m_state_mutex.unlock();
         co_return;
     }
@@ -894,12 +1018,20 @@ private:
             return false;
         }
         auto pending = std::move(it->second);
-        m_pending_heartbeats.erase(it);
+        auto next = m_pending_heartbeats.erase(it);
+        if (next != m_pending_heartbeats.end()) {
+            // erase 返回值仅用于显式处理；心跳后继位置不影响完成逻辑。
+        }
         if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
             return false;
         }
-        pending->waiter.notify(RpcHeartbeatResult{});
-        return true;
+        const bool notified = pending->waiter.notify(RpcHeartbeatResult{});
+        if (!notified) {
+            RPC_LOG_WARN("[channel] [heartbeat] [notify-duplicate]",
+                         "request_id={}",
+                         request_id);
+        }
+        return notified;
     }
 
     bool failHeartbeat(uint32_t request_id, const RpcError& error) {
@@ -908,25 +1040,55 @@ private:
             return false;
         }
         auto pending = std::move(it->second);
-        m_pending_heartbeats.erase(it);
+        auto next = m_pending_heartbeats.erase(it);
+        if (next != m_pending_heartbeats.end()) {
+            // erase 返回值仅用于显式处理；心跳后继位置不影响失败逻辑。
+        }
         if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
             return false;
         }
-        pending->waiter.notify(RpcHeartbeatResult(std::unexpected(error)));
-        return true;
+        const bool notified = pending->waiter.notify(RpcHeartbeatResult(std::unexpected(error)));
+        if (!notified) {
+            RPC_LOG_WARN("[channel] [heartbeat] [notify-duplicate]",
+                         "request_id={}",
+                         request_id);
+        }
+        return notified;
     }
 
-    void failAllHeartbeats(const RpcError& error) {
+    size_t failAllHeartbeats(const RpcError& error) {
         std::vector<std::shared_ptr<RpcChannelPendingHeartbeat>> pending;
         pending.reserve(m_pending_heartbeats.size());
         for (auto& [_, heartbeat] : m_pending_heartbeats) {
             pending.push_back(std::move(heartbeat));
         }
         m_pending_heartbeats.clear();
+        size_t notified_count = 0;
         for (auto& heartbeat : pending) {
             if (!heartbeat->completed.exchange(true, std::memory_order_acq_rel)) {
-                heartbeat->waiter.notify(RpcHeartbeatResult(std::unexpected(error)));
+                const bool notified = heartbeat->waiter.notify(
+                    RpcHeartbeatResult(std::unexpected(error)));
+                if (notified) {
+                    ++notified_count;
+                } else {
+                    RPC_LOG_WARN("[channel] [heartbeat] [notify-duplicate]",
+                                 "request_id={}",
+                                 heartbeat->request_id);
+                }
             }
+        }
+        return notified_count;
+    }
+
+    void failAllWaitersLocked(const RpcError& error) {
+        const size_t failed_pending = m_state.failAllPending(error);
+        m_pending_count.store(0, std::memory_order_release);
+        const size_t failed_heartbeats = failAllHeartbeats(error);
+        if (failed_pending > 0 || failed_heartbeats > 0) {
+            RPC_LOG_DEBUG("[channel] [waiters] [failed-all]",
+                          "pending={} heartbeats={}",
+                          failed_pending,
+                          failed_heartbeats);
         }
     }
 
@@ -940,36 +1102,16 @@ private:
         m_metrics.emit(event);
     }
 
-    Task<void> cancelWatchLoop(uint32_t request_id,
-                               RpcCancellationToken token,
-                               std::shared_ptr<RpcChannelPendingCall> pending) {
-        LoopGuard guard(*this);
-        while (!m_shutdown_requested.load(std::memory_order_acquire)) {
-            if (token.cancelled()) {
-                if (!pending->completed.exchange(true, std::memory_order_acq_rel)) {
-                    pending->waiter.notify(RpcCallResult(std::unexpected(
-                        RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled"))));
-                }
-                if (!m_shutdown_requested.load(std::memory_order_acquire)) {
-                    requestPendingCleanup(request_id,
-                                          RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled"));
-                }
-                co_return;
-            }
-            if (pending->completed.load(std::memory_order_acquire)) {
-                co_return;
-            }
-            co_await sleep(std::chrono::milliseconds(1));
-        }
-        co_return;
-    }
-
     void requestPendingCleanup(uint32_t request_id, RpcError error) {
         OutboundCall cleanup;
         cleanup.cleanup_pending = true;
         cleanup.cleanup_request_id = request_id;
         cleanup.cleanup_error = std::move(error);
-        m_outbound.send(std::move(cleanup));
+        if (!m_outbound.send(std::move(cleanup))) {
+            RPC_LOG_WARN("[channel] [cleanup] [enqueue-failed]",
+                         "request_id={}",
+                         request_id);
+        }
     }
 
 private:
@@ -982,7 +1124,13 @@ private:
 
         ~LoopGuard()
         {
-            m_channel.m_active_loops.fetch_sub(1, std::memory_order_acq_rel);
+            const size_t loops_before_sub = m_channel.m_active_loops.fetch_sub(1,
+                                                                               std::memory_order_acq_rel);
+            if (loops_before_sub == 0) {
+                RPC_LOG_WARN("[channel] [loops] [guard-underflow]",
+                             "previous={}",
+                             loops_before_sub);
+            }
         }
 
         LoopGuard(const LoopGuard&) = delete;
@@ -996,19 +1144,19 @@ private:
     std::unique_ptr<RingBuffer<Strategy>> m_ring_buffer;  ///< 读取ring buffer
     RpcReaderSetting m_reader_setting;         ///< 读取配置
     RpcWriterSetting m_writer_setting;         ///< 写入配置
-    size_t m_ring_buffer_size;                 ///< ring buffer大小
-    bool m_tcp_no_delay = true;                ///< 是否为连接 socket 启用 TCP_NODELAY
     RpcChannelState m_state;                   ///< pending分发表
-    std::atomic<size_t> m_pending_count{0};    ///< 无锁诊断用pending数量快照
     AsyncMutex m_state_mutex;                  ///< 串行化pending/heartbeat表访问
     RpcOutboundBackpressure m_outbound_backpressure;  ///< 出站队列背压计数
     RpcMetricsSink m_metrics;                  ///< 指标回调
     MpscChannel<OutboundCall> m_outbound;      ///< 线程安全出站队列
     std::unordered_map<uint32_t, std::shared_ptr<RpcChannelPendingHeartbeat>> m_pending_heartbeats;  ///< heartbeat等待表
+    size_t m_ring_buffer_size;                 ///< ring buffer大小
+    std::atomic<size_t> m_pending_count{0};    ///< 无锁诊断用pending数量快照
     std::atomic<uint32_t> m_request_id{0};     ///< 请求ID生成器
+    std::atomic<size_t> m_active_loops{0};      ///< 仍在访问通道状态的后台loop数量
     std::atomic<bool> m_loops_started{false};  ///< reader/writer loop是否已启动
     std::atomic<bool> m_shutdown_requested{false};  ///< 是否请求关闭
-    std::atomic<size_t> m_active_loops{0};      ///< 仍在访问通道状态的后台loop数量
+    bool m_tcp_no_delay = true;                ///< 是否为连接 socket 启用 TCP_NODELAY
 };
 
 using RpcChannel = RpcChannelImpl<TcpSocket>;

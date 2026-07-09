@@ -205,6 +205,15 @@ typedef galay_rpc_error_code_t (*galay_rpc_method_handler_fn)(
 const char* galay_rpc_error_string(galay_rpc_error_code_t code);
 
 /**
+ * @brief 返回 RPC 错误码字符串。
+ * @param code RPC 错误码。
+ * @return 永久有效的静态字符串；未知值返回 "Unknown"。
+ * @note 该函数是 C ABI `*_get_error` 约定入口，语义与
+ * `galay_rpc_error_string` 完全一致。
+ */
+const char* galay_rpc_get_error(galay_rpc_error_code_t code);
+
+/**
  * @brief 将 RPC 错误码映射为通用 C 状态码。
  * @param code RPC 错误码。
  * @return 对应 `galay_status_t`。

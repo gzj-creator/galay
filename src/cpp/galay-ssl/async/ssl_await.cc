@@ -288,13 +288,13 @@ bool SslOperationDriver::prepareWriteFromPending(std::vector<char>& buffer, size
     }
 
     const size_t to_read = std::min(pending, buffer.size());
-    const int n = m_socket->m_engine.extractEncryptedOutput(buffer.data(), to_read);
-    if (n <= 0) {
+    const auto extracted = m_socket->m_engine.extractEncryptedOutput(buffer.data(), to_read);
+    if (!extracted || *extracted == 0) {
         return false;
     }
 
     m_send_context.m_buffer = buffer.data();
-    m_send_context.m_length = static_cast<size_t>(n);
+    m_send_context.m_length = *extracted;
     return true;
 }
 
@@ -693,7 +693,8 @@ void SslOperationDriver::onHandshakeRead(std::expected<size_t, IOError> result)
         return;
     }
 
-    if (m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value()) <= 0) {
+    const auto fed = m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value());
+    if (!fed || *fed == 0) {
         setHandshakeFailure(SslError(SslErrorCode::kHandshakeFailed));
     }
 }
@@ -754,7 +755,8 @@ void SslOperationDriver::onRecvRead(std::expected<size_t, IOError> result)
         return;
     }
 
-    if (m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value()) <= 0) {
+    const auto fed = m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value());
+    if (!fed || *fed == 0) {
         setRecvFailure(SslError(SslErrorCode::kReadFailed));
     }
 }
@@ -789,7 +791,8 @@ void SslOperationDriver::onSendRead(std::expected<size_t, IOError> result)
         return;
     }
 
-    if (m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value()) <= 0) {
+    const auto fed = m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value());
+    if (!fed || *fed == 0) {
         setSendFailure(SslError(SslErrorCode::kWriteFailed));
     }
 }
@@ -824,7 +827,8 @@ void SslOperationDriver::onShutdownRead(std::expected<size_t, IOError> result)
         return;
     }
 
-    if (m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value()) <= 0) {
+    const auto fed = m_socket->m_engine.feedEncryptedInput(m_recv_context.m_buffer, result.value());
+    if (!fed || *fed == 0) {
         setShutdownSuccess();
     }
 }

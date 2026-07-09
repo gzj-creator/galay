@@ -7,20 +7,19 @@
 #include <galay/cpp/galay-kernel/core/io_handlers.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
+#include <cctype>
 #include <csignal>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <sstream>
+#include <string>
+#include <string_view>
 #include <sys/socket.h>
 #include <sys/uio.h>
 #include <unistd.h>
 
 namespace {
-
-volatile sig_atomic_t g_sigpipe_seen = 0;
-
-void sigpipeHandler(int)
-{
-    g_sigpipe_seen = 1;
-}
 
 bool check(bool condition, const char* message)
 {
@@ -65,7 +64,87 @@ bool runtimeConstructorDoesNotChangeSigpipe()
     return ok;
 }
 
-#if defined(__linux__)
+#if defined(__linux__) && !defined(USE_IOURING)
+volatile sig_atomic_t g_sigpipe_seen = 0;
+
+void sigpipeHandler(int)
+{
+    g_sigpipe_seen = 1;
+}
+#endif
+
+#if defined(__linux__) && defined(USE_IOURING)
+std::filesystem::path repoRoot()
+{
+    std::filesystem::path file = __FILE__;
+    return file.parent_path().parent_path().parent_path().parent_path();
+}
+
+std::string readFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path);
+    if (!input) {
+        std::cerr << "[t139] failed to open " << path << '\n';
+        return {};
+    }
+
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+std::string collapseWhitespace(std::string_view text)
+{
+    std::string result;
+    result.reserve(text.size());
+    bool in_space = false;
+    for (const unsigned char ch : text) {
+        if (std::isspace(ch) != 0) {
+            if (!in_space) {
+                result.push_back(' ');
+                in_space = true;
+            }
+            continue;
+        }
+        result.push_back(static_cast<char>(ch));
+        in_space = false;
+    }
+    return result;
+}
+
+bool contains(std::string_view text, std::string_view needle)
+{
+    return text.find(needle) != std::string_view::npos;
+}
+
+bool linuxUringSendSubmissionsUseNoSignal()
+{
+    const auto source =
+        readFile(repoRoot() / "src/cpp/galay-kernel/core/uring_reactor.cc");
+    if (!check(!source.empty(), "failed to read io_uring reactor source")) {
+        return false;
+    }
+
+    const auto compact = collapseWhitespace(source);
+    bool ok = true;
+    ok = check(contains(compact, "constexpr int kSendNoSignalFlag ="),
+               "io_uring backend must define a local no-SIGPIPE send flag") &&
+         ok;
+    ok = check(contains(compact, "const int send_flags = flags | kSendNoSignalFlag;"),
+               "io_uring send helper must merge MSG_NOSIGNAL into caller flags") &&
+         ok;
+    ok = check(contains(compact, "io_uring_prep_send(sqe, fd, buffer, length, send_flags)"),
+               "io_uring send helper must submit the merged no-SIGPIPE flags") &&
+         ok;
+    ok = check(contains(compact,
+                        "io_uring_prep_sendmsg(sqe, controller->m_handle.fd, &awaitable->m_msg, kSendNoSignalFlag)"),
+               "io_uring writev awaitable must pass MSG_NOSIGNAL") &&
+         ok;
+    return ok;
+}
+#endif
+
+#if defined(__linux__) && !defined(USE_IOURING)
 bool makeBrokenSocketPair(int fds[2])
 {
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0) {
@@ -166,7 +245,9 @@ int main()
 {
     bool ok = true;
     ok = runtimeConstructorDoesNotChangeSigpipe() && ok;
-#if defined(__linux__)
+#if defined(__linux__) && defined(USE_IOURING)
+    ok = linuxUringSendSubmissionsUseNoSignal() && ok;
+#elif defined(__linux__)
     ok = linuxSendDoesNotDeliverSigpipe() && ok;
     ok = linuxWritevDoesNotDeliverSigpipe() && ok;
 #endif

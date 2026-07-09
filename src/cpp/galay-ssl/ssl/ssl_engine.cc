@@ -1,5 +1,6 @@
 #include "ssl_engine.h"
 #include <galay/cpp/galay-ssl/common/ssl_log.h>
+#include <limits>
 
 namespace galay::ssl
 {
@@ -111,16 +112,36 @@ std::expected<void, SslError> SslEngine::initMemoryBIO()
     return {};
 }
 
-int SslEngine::feedEncryptedInput(const char* data, size_t length)
+std::expected<size_t, SslError> SslEngine::feedEncryptedInput(const char* data, size_t length)
 {
-    if (!m_rbio) return -1;
-    return BIO_write(m_rbio, data, static_cast<int>(length));
+    if (!m_rbio) {
+        return std::unexpected(SslError(SslErrorCode::kReadFailed));
+    }
+    if (length > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        return std::unexpected(SslError(SslErrorCode::kBufferTooLarge));
+    }
+
+    const int written = BIO_write(m_rbio, data, static_cast<int>(length));
+    if (written < 0) {
+        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kReadFailed));
+    }
+    return static_cast<size_t>(written);
 }
 
-int SslEngine::extractEncryptedOutput(char* buffer, size_t length)
+std::expected<size_t, SslError> SslEngine::extractEncryptedOutput(char* buffer, size_t length)
 {
-    if (!m_wbio) return -1;
-    return BIO_read(m_wbio, buffer, static_cast<int>(length));
+    if (!m_wbio) {
+        return std::unexpected(SslError(SslErrorCode::kWriteFailed));
+    }
+    if (length > static_cast<size_t>(std::numeric_limits<int>::max())) {
+        return std::unexpected(SslError(SslErrorCode::kBufferTooLarge));
+    }
+
+    const int read = BIO_read(m_wbio, buffer, static_cast<int>(length));
+    if (read < 0) {
+        return std::unexpected(SslError::fromOpenSSL(SslErrorCode::kWriteFailed));
+    }
+    return static_cast<size_t>(read);
 }
 
 size_t SslEngine::pendingEncryptedOutput() const

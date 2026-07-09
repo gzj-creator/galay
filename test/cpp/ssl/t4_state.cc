@@ -14,6 +14,10 @@ using namespace galay::ssl;
 
 using SurfaceResult = std::expected<size_t, SslError>;
 
+struct MapperOnlyError {
+    explicit MapperOnlyError(int) {}
+};
+
 struct SurfaceMachine {
     using result_type = SurfaceResult;
 
@@ -28,6 +32,22 @@ struct SurfaceMachine {
     void onShutdown(std::expected<void, SslError>) {}
 };
 
+struct MapperOnlyMachine {
+    using result_type = std::expected<size_t, MapperOnlyError>;
+
+    SslMachineAction<result_type> advance()
+    {
+        return SslMachineAction<result_type>::fail(SslError(SslErrorCode::kUnknown));
+    }
+
+    void onHandshake(std::expected<void, SslError>) {}
+    void onRecv(std::expected<Bytes, SslError>) {}
+    void onSend(std::expected<size_t, SslError>) {}
+    void onShutdown(std::expected<void, SslError>) {}
+
+    MapperOnlyError mapSslError(const SslError&) { return MapperOnlyError(0); }
+};
+
 template <typename BuilderT>
 concept HasFromStateMachine = requires(IOController* controller, SslSocket* socket, SurfaceMachine machine) {
     { BuilderT::fromStateMachine(controller, socket, std::move(machine)) };
@@ -37,6 +57,7 @@ static_assert(std::is_same_v<decltype(SslMachineAction<SurfaceResult>::continue_
 static_assert(std::is_same_v<decltype(SslMachineAction<SurfaceResult>::complete(SurfaceResult{0})), SslMachineAction<SurfaceResult>>);
 static_assert(std::same_as<decltype(std::declval<AwaitContext>().scheduler), Scheduler*>);
 static_assert(std::constructible_from<SslStateMachineAwaitable<SurfaceMachine>, IOController*, SslSocket*, SurfaceMachine>);
+static_assert(!SslAwaitableStateMachine<MapperOnlyMachine>);
 static_assert(HasFromStateMachine<SslAwaitableBuilder<SurfaceResult>>);
 
 int main()

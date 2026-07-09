@@ -72,6 +72,39 @@ namespace galay::http
         }
     }
 
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    HttpError::HttpError(const galay::ssl::SslError& ssl_error)
+        : m_extra_msg(ssl_error.message())
+        , m_code(kInternalError)
+    {
+        using galay::ssl::SslErrorCode;
+
+        switch (ssl_error.code()) {
+        case SslErrorCode::kTimeout:
+        case SslErrorCode::kHandshakeTimeout:
+            m_code = kRequestTimeOut;
+            return;
+        case SslErrorCode::kPeerClosed:
+            m_code = kConnectionClose;
+            return;
+        case SslErrorCode::kReadFailed:
+            m_code = kRecvError;
+            return;
+        case SslErrorCode::kWriteFailed:
+            m_code = kSendError;
+            return;
+        case SslErrorCode::kVerificationFailed:
+        case SslErrorCode::kHandshakeFailed:
+        case SslErrorCode::kSNISetFailed:
+            m_code = kTcpConnectError;
+            return;
+        default:
+            m_code = kInternalError;
+            return;
+        }
+    }
+#endif
+
     HttpErrorCode HttpError::code() const
     {
         return m_code;

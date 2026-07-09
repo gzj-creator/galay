@@ -38,6 +38,7 @@
 #include <expected>
 #include <span>
 #include <array>
+#include <deque>
 #include <vector>
 #include <memory>
 #include <optional>
@@ -958,13 +959,18 @@ struct FileWriteAwaitable: public FileWriteIOContext, public TimeoutSupport<File
  */
 struct FileWatchIOContext: public IOContextBase {
 #ifdef USE_KQUEUE
-    FileWatchIOContext(char* buffer, size_t buffer_size, FileWatchEvent events)
-        : m_buffer(buffer), m_buffer_size(buffer_size) {
+    FileWatchIOContext(char* buffer,
+                       size_t buffer_size,
+                       FileWatchEvent events,
+                       std::deque<FileWatchResult>* ready_events = nullptr)
+        : m_buffer(buffer), m_buffer_size(buffer_size), m_ready_events(ready_events) {
         m_events = static_cast<uint64_t>(events);
     }
 #else
-    FileWatchIOContext(char* buffer, size_t buffer_size)
-        : m_buffer(buffer), m_buffer_size(buffer_size) {}
+    FileWatchIOContext(char* buffer,
+                       size_t buffer_size,
+                       std::deque<FileWatchResult>* ready_events = nullptr)
+        : m_buffer(buffer), m_buffer_size(buffer_size), m_ready_events(ready_events) {}
 #endif
 
 #ifdef USE_IOURING
@@ -975,6 +981,7 @@ struct FileWatchIOContext: public IOContextBase {
 
     char* m_buffer;  ///< 监控事件输出缓冲区
     size_t m_buffer_size;  ///< 输出缓冲区容量
+    std::deque<FileWatchResult>* m_ready_events = nullptr;  ///< 已 drain 但尚未交付的事件队列
     std::expected<FileWatchResult, IOError> m_result;  ///< 文件监控结果或错误
 #ifdef USE_KQUEUE
     uint64_t m_events = 0;  ///< kqueue 模式下的监控事件掩码
@@ -988,17 +995,27 @@ struct FileWatchAwaitable: public FileWatchIOContext, public TimeoutSupport<File
 #ifdef USE_KQUEUE
     FileWatchAwaitable(IOController* controller,
                        char* buffer, size_t buffer_size,
-                       FileWatchEvent events)
-        : FileWatchIOContext(buffer, buffer_size, events),
+                       FileWatchEvent events,
+                       std::deque<FileWatchResult>* ready_events = nullptr)
+        : FileWatchIOContext(buffer, buffer_size, events, ready_events),
           m_controller(controller) {}
 #else
     FileWatchAwaitable(IOController* controller,
-                       char* buffer, size_t buffer_size)
-        : FileWatchIOContext(buffer, buffer_size),
+                       char* buffer,
+                       size_t buffer_size,
+                       std::deque<FileWatchResult>* ready_events = nullptr)
+        : FileWatchIOContext(buffer, buffer_size, ready_events),
           m_controller(controller) {}
 #endif
 
-    bool await_ready() { return false; }
+    bool await_ready() {
+        if (m_ready_events != nullptr && !m_ready_events->empty()) {
+            m_result = std::move(m_ready_events->front());
+            m_ready_events->pop_front();
+            return true;
+        }
+        return false;
+    }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         return detail::suspendRegisteredAwaitable<FileWatchAwaitable, FILEWATCH, kReadFailed>(
@@ -1017,7 +1034,7 @@ struct FileWatchAwaitable: public FileWatchIOContext, public TimeoutSupport<File
  */
 struct SendFileIOContext: public IOContextBase {
     SendFileIOContext(int file_fd, off_t offset, size_t count)
-        : m_offset(offset), m_count(count), m_file_fd(file_fd) {}
+        : m_offset(offset), m_count(count), m_transferred(0), m_file_fd(file_fd) {}
 
 #ifdef USE_IOURING
     bool handleComplete(struct io_uring_cqe* cqe, GHandle handle) override;  ///< 处理 io_uring sendfile 完成事件
@@ -1026,7 +1043,8 @@ struct SendFileIOContext: public IOContextBase {
 #endif
 
     off_t m_offset;  ///< 发送起始偏移
-    size_t m_count;  ///< 请求发送的字节数
+    size_t m_count;  ///< 剩余待发送字节数
+    size_t m_transferred;  ///< 当前 awaitable 已累计发送字节数
     std::expected<size_t, IOError> m_result;  ///< 实际发送字节数或错误
     int m_file_fd;  ///< 源文件 fd
 };

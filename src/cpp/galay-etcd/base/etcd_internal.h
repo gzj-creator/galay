@@ -42,6 +42,75 @@ namespace galay::etcd::internal
 {
 
 /**
+ * @brief 去除 ASCII 空白字符
+ * @param value 输入字符串视图
+ * @return 去除首尾 ASCII 空白后的视图
+ */
+inline std::string_view trimAscii(std::string_view value)
+{
+    size_t begin = 0;
+    while (begin < value.size() && std::isspace(static_cast<unsigned char>(value[begin]))) {
+        ++begin;
+    }
+    size_t end = value.size();
+    while (end > begin && std::isspace(static_cast<unsigned char>(value[end - 1]))) {
+        --end;
+    }
+    return value.substr(begin, end - begin);
+}
+
+/**
+ * @brief ASCII 字符转小写
+ * @param ch 输入字符
+ * @return 小写字符
+ */
+inline char toLowerAscii(char ch)
+{
+    return static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+}
+
+/**
+ * @brief 忽略 ASCII 大小写比较两个字符串
+ * @param lhs 左值
+ * @param rhs 右值
+ * @return 完全相等返回 true
+ */
+inline bool equalsAsciiIgnoreCase(std::string_view lhs, std::string_view rhs)
+{
+    if (lhs.size() != rhs.size()) {
+        return false;
+    }
+    for (size_t i = 0; i < lhs.size(); ++i) {
+        if (toLowerAscii(lhs[i]) != toLowerAscii(rhs[i])) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
+ * @brief 判断逗号分隔的 HTTP 头 token 中是否包含目标值
+ * @param value HTTP 头值
+ * @param needle 目标 token
+ * @return 忽略 ASCII 大小写命中完整 token 时返回 true
+ */
+inline bool containsAsciiTokenIgnoreCase(std::string_view value, std::string_view needle)
+{
+    while (!value.empty()) {
+        const size_t comma = value.find(',');
+        const std::string_view token = trimAscii(value.substr(0, comma));
+        if (equalsAsciiIgnoreCase(token, needle)) {
+            return true;
+        }
+        if (comma == std::string_view::npos) {
+            return false;
+        }
+        value.remove_prefix(comma + 1);
+    }
+    return false;
+}
+
+/**
  * @brief 将字符串视图解析为有符号 64 位整数
  * @param value 待解析的字符串视图
  * @return 解析成功返回整数值，失败返回 std::nullopt

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include <sstream>
@@ -16,6 +17,7 @@
 int main() {
 #ifdef GALAY_SSL_FEATURE_ENABLED
     using namespace galay::websocket;
+    static_assert(std::is_constructible_v<WsError, const galay::ssl::SslError&>);
 
     galay::ssl::SslSocket socket(nullptr);
     WsWriterImpl<galay::ssl::SslSocket> writer(WsWriterSetting::byServer(), socket);

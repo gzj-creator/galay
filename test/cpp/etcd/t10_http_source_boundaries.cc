@@ -38,6 +38,7 @@ int main()
     const auto root = repoRoot();
     const auto sync_client = readFile(root / "src/cpp/galay-etcd/sync/etcd_client.cc");
     const auto async_client = readFile(root / "src/cpp/galay-etcd/async/client.cc");
+    const auto internal_header = readFile(root / "src/cpp/galay-etcd/base/etcd_internal.h");
 
     for (const auto* required : {
              "chunk size overflows buffer bounds",
@@ -52,6 +53,26 @@ int main()
     if (!contains(async_client, "kMaxWatchHeaderBytes") ||
         !contains(async_client, "watch response header too large")) {
         std::cerr << "etcd watch worker must enforce a hard response-header limit\n";
+        return 1;
+    }
+
+    if (!contains(internal_header, "containsAsciiTokenIgnoreCase")) {
+        std::cerr << "etcd HTTP parser token helper must live in shared internal header\n";
+        return 1;
+    }
+    if (contains(sync_client, "bool containsAsciiTokenIgnoreCase") ||
+        contains(async_client, "bool containsAsciiTokenIgnoreCase")) {
+        std::cerr << "etcd HTTP parser token helper must not be duplicated in clients\n";
+        return 1;
+    }
+    if (!contains(sync_client, "containsAsciiTokenIgnoreCase") ||
+        !contains(async_client, "containsAsciiTokenIgnoreCase")) {
+        std::cerr << "etcd HTTP parser must recognize comma-separated header tokens case-insensitively\n";
+        return 1;
+    }
+    if (contains(sync_client, "value.find(\"chunked\")") ||
+        contains(async_client, "value.find(\"chunked\")")) {
+        std::cerr << "etcd transfer-encoding parser must not use case-sensitive substring matching\n";
         return 1;
     }
 

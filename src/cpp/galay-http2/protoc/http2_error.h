@@ -13,6 +13,9 @@
 
 #include "http2_base.h"
 #include "../../galay-kernel/common/error.h"
+#ifdef GALAY_SSL_FEATURE_ENABLED
+#include "../../galay-ssl/common/error.h"
+#endif
 #include <optional>
 #include <string>
 #include <expected>
@@ -54,6 +57,41 @@ public:
             m_code = Http2ErrorCode::ConnectError;
         }
     }
+
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    /**
+     * @brief 从 SSL 错误构造 HTTP/2 错误
+     * @param ssl_error galay-ssl 返回的 SSL 错误
+     * @details 供 SSL awaitable 将底层 SSL 错误直接转换为 HTTP/2 层错误。
+     */
+    explicit Http2Error(const galay::ssl::SslError& ssl_error)
+        : m_message(ssl_error.message())
+        , m_code(Http2ErrorCode::InternalError)
+    {
+        using galay::ssl::SslErrorCode;
+
+        switch (ssl_error.code()) {
+        case SslErrorCode::kTimeout:
+        case SslErrorCode::kHandshakeTimeout:
+            m_code = Http2ErrorCode::SettingsTimeout;
+            return;
+        case SslErrorCode::kPeerClosed:
+            m_message = "peer closed";
+            m_code = Http2ErrorCode::ProtocolError;
+            return;
+        case SslErrorCode::kVerificationFailed:
+            m_code = Http2ErrorCode::InadequateSecurity;
+            return;
+        case SslErrorCode::kHandshakeFailed:
+        case SslErrorCode::kSNISetFailed:
+            m_code = Http2ErrorCode::ConnectError;
+            return;
+        default:
+            m_code = Http2ErrorCode::InternalError;
+            return;
+        }
+    }
+#endif
 
     Http2ErrorCode code() const { return m_code; } ///< 获取错误码
     const std::string& message() const { return m_message; } ///< 获取错误描述

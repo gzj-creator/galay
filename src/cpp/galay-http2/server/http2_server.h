@@ -42,6 +42,7 @@
 #include <array>
 #include <optional>
 #include <chrono>
+#include <limits>
 #include <thread>
 #include <vector>
 #include <sys/socket.h>
@@ -402,6 +403,22 @@ public:
     }
 
 private:
+    /**
+     * @brief 将 server 拥有的 root task 绑定到当前 Runtime 后提交到指定调度器。
+     * @details HTTP/2 静态文件异步读取依赖 `RuntimeHandle::current()` 派生
+     *          blocking task；server 直接使用裸 scheduler 投递 root task 时必须显式绑定。
+     */
+    template <typename T>
+    bool scheduleRuntimeTask(Scheduler* scheduler, Task<T> task) {
+        if (scheduler == nullptr || !task.isValid()) {
+            return false;
+        }
+        TaskRef task_ref = galay::kernel::detail::TaskAccess::detachTask(std::move(task));
+        galay::kernel::detail::setTaskRuntime(task_ref, &m_runtime);
+        galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
+        return scheduler->schedule(std::move(task_ref));
+    }
+
     bool startInternal() {
         if (m_running.load()) {
             HTTP_LOG_WARN("[h2c] [server]", "already running");
@@ -413,7 +430,13 @@ private:
             return false;
         }
 
-        m_runtime.start();
+        auto runtime_start = m_runtime.start();
+        if (!runtime_start.has_value()) {
+            HTTP_LOG_ERROR("[h2c] [runtime-start-fail]",
+                           "error={}",
+                           runtime_start.error().message());
+            return false;
+        }
 
         if (!startPlugins()) {
             m_runtime.stop();
@@ -432,9 +455,21 @@ private:
             auto* scheduler = m_runtime.getIOScheduler(i);
             if (scheduler) {
                 auto loop = serverLoop(scheduler);
-                m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
-                if (!scheduleTask(scheduler, std::move(loop))) {
-                    m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
+                const size_t previous_loop_count =
+                    m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
+                if (previous_loop_count == std::numeric_limits<size_t>::max()) {
+                    HTTP_LOG_WARN("[h2c] [server-loop-count-overflow]",
+                                  "previous={}",
+                                  previous_loop_count);
+                }
+                if (!scheduleRuntimeTask(scheduler, std::move(loop))) {
+                    const size_t before_sub =
+                        m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
+                    if (before_sub == 0) {
+                        HTTP_LOG_WARN("[h2c] [server-loop-count-underflow]",
+                                      "previous={}",
+                                      before_sub);
+                    }
                     HTTP_LOG_ERROR("[h2c] [schedule-fail]", "server-loop");
                     m_running.store(false);
                     wakeTcpAcceptLoops(m_config.host,
@@ -1102,6 +1137,20 @@ public:
 private:
     static constexpr uint64_t kLowLatencyIoTimerTickNs = 1000000ULL;
 
+    /**
+     * @brief 将 TLS server 拥有的 root task 绑定到当前 Runtime 后提交。
+     */
+    template <typename T>
+    bool scheduleRuntimeTask(Scheduler* scheduler, Task<T> task) {
+        if (scheduler == nullptr || !task.isValid()) {
+            return false;
+        }
+        TaskRef task_ref = galay::kernel::detail::TaskAccess::detachTask(std::move(task));
+        galay::kernel::detail::setTaskRuntime(task_ref, &m_runtime);
+        galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
+        return scheduler->schedule(std::move(task_ref));
+    }
+
     void configureLowLatencyIoTimers() {
         for (size_t i = 0; i < m_runtime.getIOSchedulerCount(); ++i) {
             auto* scheduler = m_runtime.getIOScheduler(i);
@@ -1123,7 +1172,13 @@ private:
             return false;
         }
 
-        m_runtime.start();
+        auto runtime_start = m_runtime.start();
+        if (!runtime_start.has_value()) {
+            HTTP_LOG_ERROR("[h2] [runtime-start-fail]",
+                           "error={}",
+                           runtime_start.error().message());
+            return false;
+        }
         configureLowLatencyIoTimers();
         if (!startPlugins()) {
             m_runtime.stop();
@@ -1136,9 +1191,21 @@ private:
             auto* scheduler = m_runtime.getIOScheduler(i);
             if (scheduler) {
                 auto loop = serverLoop(scheduler);
-                m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
-                if (!scheduleTask(scheduler, std::move(loop))) {
-                    m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
+                const size_t previous_loop_count =
+                    m_server_loop_count.fetch_add(1, std::memory_order_acq_rel);
+                if (previous_loop_count == std::numeric_limits<size_t>::max()) {
+                    HTTP_LOG_WARN("[h2] [server-loop-count-overflow]",
+                                  "previous={}",
+                                  previous_loop_count);
+                }
+                if (!scheduleRuntimeTask(scheduler, std::move(loop))) {
+                    const size_t before_sub =
+                        m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
+                    if (before_sub == 0) {
+                        HTTP_LOG_WARN("[h2] [server-loop-count-underflow]",
+                                      "previous={}",
+                                      before_sub);
+                    }
                     m_running.store(false);
                     wakeTcpAcceptLoops(m_config.host,
                                        m_config.port,

@@ -136,6 +136,15 @@ typedef struct galay_etcd_watch_event_t galay_etcd_watch_event_t;
 const char* galay_etcd_error_string(galay_etcd_error_code_t code);
 
 /**
+ * @brief 返回 Etcd 错误码静态字符串。
+ * @param code Etcd 错误码。
+ * @return 永久有效的 NUL 结尾静态字符串；未知值返回 "unknown"。
+ * @note 该函数是 C ABI `*_get_error` 约定入口，语义与
+ * `galay_etcd_error_string` 完全一致。
+ */
+const char* galay_etcd_get_error(galay_etcd_error_code_t code);
+
+/**
  * @brief 将 Etcd 错误码映射为通用 `galay_status_t`。
  * @param code Etcd 错误码。
  * @return 对应通用状态码；未知值返回 `GALAY_INTERNAL_ERROR`。

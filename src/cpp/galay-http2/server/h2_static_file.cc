@@ -5,7 +5,6 @@
 #include <galay/cpp/galay-http/server/http_range.h>
 
 #include <chrono>
-#include <fstream>
 #include <sstream>
 #include <string_view>
 
@@ -26,7 +25,7 @@ std::string extensionToMime(const std::filesystem::path& path)
 {
     auto ext = path.extension().string();
     if (!ext.empty() && ext.front() == '.') {
-        ext.erase(ext.begin());
+        return galay::http::MimeType::convertToMimeType(ext.substr(1));
     }
     return galay::http::MimeType::convertToMimeType(ext);
 }
@@ -40,32 +39,6 @@ std::string stripQuery(std::string_view path)
     return std::string(path.substr(0, query_pos));
 }
 
-std::shared_ptr<const std::string> readSmallFile(const std::filesystem::path& path,
-                                                 uintmax_t size)
-{
-    auto body = std::make_shared<std::string>();
-    body->resize(static_cast<size_t>(size));
-    std::ifstream in(path, std::ios::binary);
-    if (size > 0) {
-        in.read(body->data(), static_cast<std::streamsize>(body->size()));
-    }
-    return body;
-}
-
-std::shared_ptr<const std::string> readFileRange(const std::filesystem::path& path,
-                                                 uintmax_t start,
-                                                 uintmax_t length)
-{
-    auto body = std::make_shared<std::string>();
-    body->resize(static_cast<size_t>(length));
-    std::ifstream in(path, std::ios::binary);
-    in.seekg(static_cast<std::streamoff>(start), std::ios::beg);
-    if (length > 0) {
-        in.read(body->data(), static_cast<std::streamsize>(body->size()));
-    }
-    return body;
-}
-
 } // namespace
 
 H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig config)
@@ -74,7 +47,7 @@ H2StaticFileMount makeH2StaticFileMount(std::string prefix, H2StaticFileConfig c
         prefix = "/";
     }
     if (prefix.front() != '/') {
-        prefix.insert(prefix.begin(), '/');
+        prefix = "/" + prefix;
     }
     while (prefix.size() > 1 && prefix.back() == '/') {
         prefix.pop_back();
@@ -153,14 +126,17 @@ H2StaticFileLookup H2StaticFileCache::lookup(const H2StaticFileRequest& request)
         if (m_config.enable_etag && !entry->etag.empty()) {
             lookup.headers.push_back({"etag", entry->etag});
         }
-        if (entry->body_cached && entry->body) {
+        auto cached_body = entry->body_cache_slot ? entry->body_cache_slot->load() : nullptr;
+        if (cached_body) {
             lookup.body = std::make_shared<const std::string>(
-                entry->body->substr(static_cast<size_t>(range.start), static_cast<size_t>(length)));
+                cached_body->substr(static_cast<size_t>(range.start), static_cast<size_t>(length)));
             lookup.body_cached = true;
         } else {
-            lookup.body = readFileRange(entry->file_path, range.start, length);
+            lookup.body = nullptr;
             lookup.body_cached = false;
         }
+        lookup.body_cache_slot = entry->body_cache_slot;
+        lookup.body_cacheable = entry->body_cacheable;
         return lookup;
     }
     return makeLookup(*entry, 200);
@@ -175,11 +151,14 @@ std::optional<H2StaticFileFastLookup> H2StaticFileCache::lookupFast200(
     }
 
     H2StaticFileFastLookup lookup;
+    auto cached_body = entry->body_cache_slot ? entry->body_cache_slot->load() : nullptr;
     lookup.file_path = entry->file_path;
     lookup.content_length = entry->file_size;
-    lookup.body_cached = entry->body_cached;
-    lookup.body = entry->body_cached ? entry->body : nullptr;
+    lookup.body_cached = static_cast<bool>(cached_body);
+    lookup.body = std::move(cached_body);
     lookup.encoded_headers = entry->encoded_headers;
+    lookup.body_cache_slot = entry->body_cache_slot;
+    lookup.body_cacheable = entry->body_cacheable;
     return lookup;
 }
 
@@ -196,7 +175,10 @@ H2StaticFileCache::Entry* H2StaticFileCache::findOrLoadEntry(std::string_view re
             return nullptr;
         }
         key = file_path.string();
-        m_request_path_cache.emplace(cache_path, key);
+        auto [_, inserted] = m_request_path_cache.emplace(cache_path, key);
+        if (!inserted) {
+            m_request_path_cache[cache_path] = key;
+        }
     }
 
     auto it = m_cache.find(key);
@@ -206,7 +188,11 @@ H2StaticFileCache::Entry* H2StaticFileCache::findOrLoadEntry(std::string_view re
         if (!std::filesystem::is_regular_file(file_path, ec) || ec) {
             return nullptr;
         }
-        it = m_cache.emplace(key, loadEntry(file_path)).first;
+        auto [insert_it, inserted] = m_cache.emplace(key, loadEntry(file_path));
+        it = insert_it;
+        if (!inserted) {
+            return &it->second;
+        }
     }
     return &it->second;
 }
@@ -277,8 +263,11 @@ H2StaticFileLookup H2StaticFileCache::makeLookup(const Entry& entry, int status)
     lookup.last_modified = entry.last_modified;
     lookup.etag = entry.etag;
     lookup.content_type = entry.content_type;
-    lookup.body_cached = status == 200 && entry.body_cached;
-    lookup.body = lookup.body_cached ? entry.body : nullptr;
+    lookup.body_cache_slot = entry.body_cache_slot;
+    lookup.body_cacheable = entry.body_cacheable;
+    auto cached_body = entry.body_cache_slot ? entry.body_cache_slot->load() : nullptr;
+    lookup.body_cached = status == 200 && static_cast<bool>(cached_body);
+    lookup.body = lookup.body_cached ? std::move(cached_body) : nullptr;
     if (status == 200) {
         lookup.headers = entry.headers;
         lookup.encoded_headers = entry.encoded_headers;
@@ -321,8 +310,8 @@ H2StaticFileCache::Entry H2StaticFileCache::loadEntry(
     }
     entry.encoded_headers = encodeH2StaticFileHeaders(200, entry.headers);
     if (entry.file_size <= m_config.small_file_threshold) {
-        entry.body = readSmallFile(file_path, entry.file_size);
-        entry.body_cached = true;
+        entry.body_cache_slot = std::make_shared<H2StaticFileBodyCacheSlot>();
+        entry.body_cacheable = true;
     }
     return entry;
 }

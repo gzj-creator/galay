@@ -175,19 +175,11 @@ struct HttpSessionState {
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     void setSslSendError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_error = HttpError(kConnectionClose, error.message());
-            return;
-        }
-        m_error = HttpError(kSendError, error.message());
+        m_error = HttpError(error);
     }
 
     void setSslRecvError(const galay::ssl::SslError& error) {
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_error = HttpError(kConnectionClose, error.message());
-            return;
-        }
-        m_error = HttpError(kRecvError, error.message());
+        m_error = HttpError(error);
     }
 #endif
 

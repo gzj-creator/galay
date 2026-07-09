@@ -35,30 +35,6 @@ namespace galay::redis
         }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-        RedisError mapSslErrorToRedisError(const galay::ssl::SslError& ssl_error,
-                                           RedisErrorType fallback)
-        {
-            using galay::ssl::SslErrorCode;
-
-            switch (ssl_error.code()) {
-            case SslErrorCode::kTimeout:
-            case SslErrorCode::kHandshakeTimeout:
-                return RedisError(RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR, ssl_error.message());
-            case SslErrorCode::kPeerClosed:
-                return RedisError(RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_CLOSED, ssl_error.message());
-            case SslErrorCode::kReadFailed:
-                return RedisError(RedisErrorType::REDIS_ERROR_TYPE_RECV_ERROR, ssl_error.message());
-            case SslErrorCode::kWriteFailed:
-                return RedisError(RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR, ssl_error.message());
-            case SslErrorCode::kVerificationFailed:
-            case SslErrorCode::kHandshakeFailed:
-            case SslErrorCode::kSNISetFailed:
-                return RedisError(RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR, ssl_error.message());
-            default:
-                return RedisError(fallback, ssl_error.message());
-            }
-        }
-
         static size_t decimalDigits(size_t value)
         {
             size_t digits = 1;
@@ -378,17 +354,13 @@ namespace galay::redis
                 if (!tls_config.ca_path.empty()) {
                     const auto load_ca = ssl_context.loadCACertificate(tls_config.ca_path);
                     if (!load_ca) {
-                        boot_error = mapSslErrorToRedisError(
-                            load_ca.error(),
-                            RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR);
+                        boot_error = RedisError(load_ca.error());
                         return;
                     }
                 } else if (tls_config.verify_peer) {
                     const auto load_default_ca = ssl_context.useDefaultCA();
                     if (!load_default_ca) {
-                        boot_error = mapSslErrorToRedisError(
-                            load_default_ca.error(),
-                            RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR);
+                        boot_error = RedisError(load_default_ca.error());
                         return;
                     }
                 }
@@ -547,16 +519,12 @@ namespace galay::redis
 
         void RedissExchangeMachine::setSendError(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(mapSslErrorToRedisError(
-                ssl_error,
-                RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR));
+            setError(RedisError(ssl_error));
         }
 
         void RedissExchangeMachine::setRecvError(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(mapSslErrorToRedisError(
-                ssl_error,
-                RedisErrorType::REDIS_ERROR_TYPE_RECV_ERROR));
+            setError(RedisError(ssl_error));
         }
 
         bool RedissExchangeMachine::prepareReadWindow()
@@ -753,16 +721,12 @@ namespace galay::redis
 
         void RedissConnectMachine::setSendError(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(mapSslErrorToRedisError(
-                ssl_error,
-                RedisErrorType::REDIS_ERROR_TYPE_SEND_ERROR));
+            setError(RedisError(ssl_error));
         }
 
         void RedissConnectMachine::setRecvError(const galay::ssl::SslError& ssl_error) noexcept
         {
-            setError(mapSslErrorToRedisError(
-                ssl_error,
-                RedisErrorType::REDIS_ERROR_TYPE_RECV_ERROR));
+            setError(RedisError(ssl_error));
         }
 
         bool RedissConnectMachine::prepareReadWindow()
@@ -891,9 +855,7 @@ namespace galay::redis
         {
             m_ssl_active = false;
             if (!result) {
-                setError(mapSslErrorToRedisError(
-                    result.error(),
-                    RedisErrorType::REDIS_ERROR_TYPE_CONNECTION_ERROR));
+                setError(RedisError(result.error()));
                 return;
             }
 

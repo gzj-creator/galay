@@ -18,6 +18,10 @@
 #include "../common/error.h"
 #include "../common/handle_option.h"
 #include "../common/host.hpp"
+#ifdef USE_EPOLL
+#include "watch_defs.hpp"
+#include <sys/inotify.h>
+#endif
 #include <sys/socket.h>
 #include <sys/uio.h>
 #ifdef USE_EPOLL
@@ -25,6 +29,7 @@
 #endif
 #include <unistd.h>
 #include <cerrno>
+#include <deque>
 #include <expected>
 #include <utility>
 
@@ -229,6 +234,62 @@ inline std::expected<size_t, IOError> handleSendFile(GHandle socket_handle, int 
 #endif
 }
 
+#ifdef USE_EPOLL
+inline FileWatchResult makeInotifyWatchResult(const struct inotify_event& event)
+{
+    FileWatchResult result{};
+    result.isDir = (event.mask & IN_ISDIR) != 0;
+    if (event.len > 0) {
+        result.name = std::string(event.name);
+    }
+    uint32_t mask = 0;
+    if (event.mask & IN_ACCESS) mask |= static_cast<uint32_t>(FileWatchEvent::Access);
+    if (event.mask & IN_MODIFY) mask |= static_cast<uint32_t>(FileWatchEvent::Modify);
+    if (event.mask & IN_ATTRIB) mask |= static_cast<uint32_t>(FileWatchEvent::Attrib);
+    if (event.mask & IN_CLOSE_WRITE) mask |= static_cast<uint32_t>(FileWatchEvent::CloseWrite);
+    if (event.mask & IN_CLOSE_NOWRITE) mask |= static_cast<uint32_t>(FileWatchEvent::CloseNoWrite);
+    if (event.mask & IN_OPEN) mask |= static_cast<uint32_t>(FileWatchEvent::Open);
+    if (event.mask & IN_MOVED_FROM) mask |= static_cast<uint32_t>(FileWatchEvent::MovedFrom);
+    if (event.mask & IN_MOVED_TO) mask |= static_cast<uint32_t>(FileWatchEvent::MovedTo);
+    if (event.mask & IN_CREATE) mask |= static_cast<uint32_t>(FileWatchEvent::Create);
+    if (event.mask & IN_DELETE) mask |= static_cast<uint32_t>(FileWatchEvent::Delete);
+    if (event.mask & IN_DELETE_SELF) mask |= static_cast<uint32_t>(FileWatchEvent::DeleteSelf);
+    if (event.mask & IN_MOVE_SELF) mask |= static_cast<uint32_t>(FileWatchEvent::MoveSelf);
+    result.event = static_cast<FileWatchEvent>(mask);
+    return result;
+}
+
+inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
+    const char* buffer,
+    size_t length,
+    std::deque<FileWatchResult>* ready_events)
+{
+    size_t offset = 0;
+    bool has_first = false;
+    FileWatchResult first{};
+    while (offset + sizeof(struct inotify_event) <= length) {
+        const auto* event =
+            reinterpret_cast<const struct inotify_event*>(buffer + offset);
+        const size_t event_size = sizeof(struct inotify_event) + event->len;
+        if (event_size == 0 || offset + event_size > length) {
+            break;
+        }
+        auto result = makeInotifyWatchResult(*event);
+        if (!has_first) {
+            first = std::move(result);
+            has_first = true;
+        } else if (ready_events != nullptr) {
+            ready_events->push_back(std::move(result));
+        }
+        offset += event_size;
+    }
+    if (!has_first) {
+        return std::unexpected(IOError(kReadFailed, 0));
+    }
+    return first;
+}
+#endif
+
 } // namespace galay::kernel::io
 
 
@@ -243,6 +304,7 @@ inline std::expected<size_t, IOError> handleSendFile(GHandle socket_handle, int 
 #undef BLOCK_SIZE
 #endif
 #include <cerrno>
+#include <deque>
 #include <expected>
 #include <sys/inotify.h>
 #include <sys/sendfile.h>
@@ -378,31 +440,68 @@ inline std::expected<size_t, IOError> handleFileWrite(struct io_uring_cqe* cqe)
     return std::unexpected(IOError(kWriteFailed, static_cast<uint32_t>(-res)));
 }
 
-inline std::expected<FileWatchResult, IOError> handleFileWatch(struct io_uring_cqe* cqe, char* buffer)
+inline FileWatchResult makeInotifyWatchResult(const struct inotify_event& event)
+{
+    FileWatchResult result{};
+    result.isDir = (event.mask & IN_ISDIR) != 0;
+    if (event.len > 0) {
+        result.name = std::string(event.name);
+    }
+    uint32_t mask = 0;
+    if (event.mask & IN_ACCESS)       mask |= static_cast<uint32_t>(FileWatchEvent::Access);
+    if (event.mask & IN_MODIFY)       mask |= static_cast<uint32_t>(FileWatchEvent::Modify);
+    if (event.mask & IN_ATTRIB)       mask |= static_cast<uint32_t>(FileWatchEvent::Attrib);
+    if (event.mask & IN_CLOSE_WRITE)  mask |= static_cast<uint32_t>(FileWatchEvent::CloseWrite);
+    if (event.mask & IN_CLOSE_NOWRITE) mask |= static_cast<uint32_t>(FileWatchEvent::CloseNoWrite);
+    if (event.mask & IN_OPEN)         mask |= static_cast<uint32_t>(FileWatchEvent::Open);
+    if (event.mask & IN_MOVED_FROM)   mask |= static_cast<uint32_t>(FileWatchEvent::MovedFrom);
+    if (event.mask & IN_MOVED_TO)     mask |= static_cast<uint32_t>(FileWatchEvent::MovedTo);
+    if (event.mask & IN_CREATE)       mask |= static_cast<uint32_t>(FileWatchEvent::Create);
+    if (event.mask & IN_DELETE)       mask |= static_cast<uint32_t>(FileWatchEvent::Delete);
+    if (event.mask & IN_DELETE_SELF)  mask |= static_cast<uint32_t>(FileWatchEvent::DeleteSelf);
+    if (event.mask & IN_MOVE_SELF)    mask |= static_cast<uint32_t>(FileWatchEvent::MoveSelf);
+    result.event = static_cast<FileWatchEvent>(mask);
+    return result;
+}
+
+inline std::expected<FileWatchResult, IOError> parseInotifyEvents(
+    const char* buffer,
+    size_t length,
+    std::deque<FileWatchResult>* ready_events)
+{
+    size_t offset = 0;
+    bool has_first = false;
+    FileWatchResult first{};
+    while (offset + sizeof(struct inotify_event) <= length) {
+        const auto* event =
+            reinterpret_cast<const struct inotify_event*>(buffer + offset);
+        const size_t event_size = sizeof(struct inotify_event) + event->len;
+        if (event_size == 0 || offset + event_size > length) {
+            break;
+        }
+        auto result = makeInotifyWatchResult(*event);
+        if (!has_first) {
+            first = std::move(result);
+            has_first = true;
+        } else if (ready_events != nullptr) {
+            ready_events->push_back(std::move(result));
+        }
+        offset += event_size;
+    }
+    if (!has_first) {
+        return std::unexpected(IOError(kReadFailed, 0));
+    }
+    return first;
+}
+
+inline std::expected<FileWatchResult, IOError> handleFileWatch(
+    struct io_uring_cqe* cqe,
+    char* buffer,
+    std::deque<FileWatchResult>* ready_events)
 {
     int res = cqe->res;
     if (res > 0) {
-        struct inotify_event* event = reinterpret_cast<struct inotify_event*>(buffer);
-        FileWatchResult result;
-        result.isDir = (event->mask & IN_ISDIR) != 0;
-        if (event->len > 0) {
-            result.name = std::string(event->name);
-        }
-        uint32_t mask = 0;
-        if (event->mask & IN_ACCESS)       mask |= static_cast<uint32_t>(FileWatchEvent::Access);
-        if (event->mask & IN_MODIFY)       mask |= static_cast<uint32_t>(FileWatchEvent::Modify);
-        if (event->mask & IN_ATTRIB)       mask |= static_cast<uint32_t>(FileWatchEvent::Attrib);
-        if (event->mask & IN_CLOSE_WRITE)  mask |= static_cast<uint32_t>(FileWatchEvent::CloseWrite);
-        if (event->mask & IN_CLOSE_NOWRITE) mask |= static_cast<uint32_t>(FileWatchEvent::CloseNoWrite);
-        if (event->mask & IN_OPEN)         mask |= static_cast<uint32_t>(FileWatchEvent::Open);
-        if (event->mask & IN_MOVED_FROM)   mask |= static_cast<uint32_t>(FileWatchEvent::MovedFrom);
-        if (event->mask & IN_MOVED_TO)     mask |= static_cast<uint32_t>(FileWatchEvent::MovedTo);
-        if (event->mask & IN_CREATE)       mask |= static_cast<uint32_t>(FileWatchEvent::Create);
-        if (event->mask & IN_DELETE)       mask |= static_cast<uint32_t>(FileWatchEvent::Delete);
-        if (event->mask & IN_DELETE_SELF)  mask |= static_cast<uint32_t>(FileWatchEvent::DeleteSelf);
-        if (event->mask & IN_MOVE_SELF)    mask |= static_cast<uint32_t>(FileWatchEvent::MoveSelf);
-        result.event = static_cast<FileWatchEvent>(mask);
-        return result;
+        return parseInotifyEvents(buffer, static_cast<size_t>(res), ready_events);
     } else if (res == 0) {
         return std::unexpected(IOError(kReadFailed, 0));
     }

@@ -22,6 +22,7 @@
 #include <functional>
 #include <unordered_map>
 #include <string>
+#include <string_view>
 #include <memory>
 #include <vector>
 #include <map>
@@ -60,7 +61,7 @@ enum class ProxyMode
 struct RouteMatch
 {
     HttpRouteHandler* handler = nullptr; ///< 匹配到的处理器指针
-    std::map<std::string, std::string> params;  ///< 路径参数，例如 /user/:id 中的 id
+    RouteParams params;  ///< 路径参数，例如 /user/:id 中的 id
 };
 
 /**
@@ -288,7 +289,24 @@ private:
      * @return 处理函数指针，未找到返回nullptr
      */
     HttpRouteHandler* searchRoute(RouteTrieNode* root, const std::vector<std::string>& segments,
-                                  std::map<std::string, std::string>& params);
+                                  RouteParams& params);
+
+    /**
+     * @brief 使用 string_view 段扫描在 Trie 树中查找路由，避免请求热路径分配路径段。
+     * @param root Trie树根节点
+     * @param path 请求路径；只在本次调用栈内借用
+     * @param params 输出参数：提取的路径参数
+     * @return 处理函数指针，未找到返回nullptr
+     */
+    HttpRouteHandler* searchRoutePath(RouteTrieNode* root,
+                                      std::string_view path,
+                                      RouteParams& params);
+
+    HttpRouteHandler* searchRoutePathRecursive(RouteTrieNode* node,
+                                               std::string_view path,
+                                               size_t offset,
+                                               std::vector<std::string_view>& paramValues,
+                                               RouteParams& params);
 
     /**
      * @brief 创建静态文件服务处理器（动态查找）

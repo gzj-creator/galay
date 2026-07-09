@@ -522,38 +522,50 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
             auto* aio_awaitable =
                 static_cast<galay::async::AioCommitAwaitable*>(controller->m_awaitable[IOController::READ]);
             if (aio_awaitable) {
+                bool should_wake = false;
                 uint64_t completed = 0;
                 const ssize_t n = read(controller->m_handle.fd, &completed, sizeof(completed));
                 if (n == static_cast<ssize_t>(sizeof(completed)) && completed > 0) {
                     const size_t expected_events = aio_awaitable->m_pending_count;
-                    std::vector<ssize_t> results;
-                    results.reserve(expected_events);
+                    aio_awaitable->m_results.reserve(expected_events);
 
-                    while (results.size() < expected_events) {
-                        std::vector<struct io_event> events(expected_events - results.size());
+                    while (aio_awaitable->m_results.size() < expected_events) {
+                        const size_t remaining = expected_events - aio_awaitable->m_results.size();
+                        std::vector<struct io_event> events(remaining);
+                        timespec timeout{0, 0};
                         const int num_events = io_getevents(aio_awaitable->m_aio_ctx,
-                                                            1,
+                                                            0,
                                                             static_cast<long>(events.size()),
                                                             events.data(),
-                                                            nullptr);
-                        if (num_events <= 0) {
-                            aio_awaitable->m_result = std::unexpected(IOError(kReadFailed, errno));
+                                                            &timeout);
+                        if (num_events < 0) {
+                            aio_awaitable->m_result = std::unexpected(
+                                IOError(kReadFailed, static_cast<uint32_t>(-num_events)));
+                            should_wake = true;
+                            break;
+                        }
+                        if (num_events == 0) {
                             break;
                         }
                         for (int i = 0; i < num_events; ++i) {
-                            results.push_back(events[static_cast<size_t>(i)].res);
+                            aio_awaitable->m_results.push_back(events[static_cast<size_t>(i)].res);
                         }
                     }
 
-                    if (results.size() == expected_events) {
-                        aio_awaitable->m_result = std::move(results);
-                    } else {
-                        aio_awaitable->m_result = std::unexpected(IOError(kReadFailed, errno));
+                    if (aio_awaitable->m_results.size() == expected_events) {
+                        aio_awaitable->m_result = std::move(aio_awaitable->m_results);
+                        should_wake = true;
                     }
+                } else if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+                    return;
                 } else {
                     aio_awaitable->m_result = std::unexpected(IOError(kReadFailed, errno));
+                    should_wake = true;
                 }
 
+                if (!should_wake) {
+                    return;
+                }
                 Waker waker = aio_awaitable->m_waker;
                 controller->removeAwaitable(FILEREAD);
                 syncEvents(controller);
@@ -563,46 +575,62 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
         } else if (t & FILEWATCH) {
             auto* awaitable = controller->getAwaitable<FileWatchAwaitable>();
             if (awaitable) {
-                const ssize_t len =
-                    read(controller->m_handle.fd, awaitable->m_buffer, awaitable->m_buffer_size);
-                if (len > 0) {
-                    auto* event = reinterpret_cast<struct inotify_event*>(awaitable->m_buffer);
-                    FileWatchResult result;
-                    result.isDir = (event->mask & IN_ISDIR) != 0;
-                    if (event->len > 0) {
-                        result.name = std::string(event->name);
+                bool completed = false;
+                std::expected<FileWatchResult, IOError> first_result =
+                    std::unexpected(IOError(kReadFailed, 0));
+                while (true) {
+                    const ssize_t len =
+                        read(controller->m_handle.fd, awaitable->m_buffer, awaitable->m_buffer_size);
+                    if (len > 0) {
+                        auto parsed = io::parseInotifyEvents(awaitable->m_buffer,
+                                                             static_cast<size_t>(len),
+                                                             awaitable->m_ready_events);
+                        if (!parsed) {
+                            if (!completed) {
+                                first_result = std::unexpected(parsed.error());
+                                completed = true;
+                            }
+                            break;
+                        }
+                        if (!completed) {
+                            first_result = std::move(parsed);
+                            completed = true;
+                        } else if (awaitable->m_ready_events != nullptr) {
+                            awaitable->m_ready_events->push_back(std::move(parsed.value()));
+                        }
+                        continue;
+                    }
+                    if (len == 0) {
+                        if (!completed) {
+                            first_result = std::unexpected(IOError(kReadFailed, 0));
+                            completed = true;
+                        }
+                        break;
                     }
 
-                    uint32_t mask = 0;
-                    if (event->mask & IN_ACCESS) mask |= static_cast<uint32_t>(FileWatchEvent::Access);
-                    if (event->mask & IN_MODIFY) mask |= static_cast<uint32_t>(FileWatchEvent::Modify);
-                    if (event->mask & IN_ATTRIB) mask |= static_cast<uint32_t>(FileWatchEvent::Attrib);
-                    if (event->mask & IN_CLOSE_WRITE) mask |= static_cast<uint32_t>(FileWatchEvent::CloseWrite);
-                    if (event->mask & IN_CLOSE_NOWRITE) mask |= static_cast<uint32_t>(FileWatchEvent::CloseNoWrite);
-                    if (event->mask & IN_OPEN) mask |= static_cast<uint32_t>(FileWatchEvent::Open);
-                    if (event->mask & IN_MOVED_FROM) mask |= static_cast<uint32_t>(FileWatchEvent::MovedFrom);
-                    if (event->mask & IN_MOVED_TO) mask |= static_cast<uint32_t>(FileWatchEvent::MovedTo);
-                    if (event->mask & IN_CREATE) mask |= static_cast<uint32_t>(FileWatchEvent::Create);
-                    if (event->mask & IN_DELETE) mask |= static_cast<uint32_t>(FileWatchEvent::Delete);
-                    if (event->mask & IN_DELETE_SELF) mask |= static_cast<uint32_t>(FileWatchEvent::DeleteSelf);
-                    if (event->mask & IN_MOVE_SELF) mask |= static_cast<uint32_t>(FileWatchEvent::MoveSelf);
-                    result.event = static_cast<FileWatchEvent>(mask);
-                    awaitable->m_result = std::move(result);
-                } else if (len == 0) {
-                    awaitable->m_result = std::unexpected(IOError(kReadFailed, 0));
-                } else if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                    awaitable->m_result =
-                        std::unexpected(IOError(kReadFailed, static_cast<uint32_t>(errno)));
+                    const int saved_errno = errno;
+                    if (saved_errno == EINTR) {
+                        continue;
+                    }
+                    if (saved_errno == EAGAIN || saved_errno == EWOULDBLOCK) {
+                        break;
+                    }
+                    if (!completed) {
+                        first_result = std::unexpected(
+                            IOError(kReadFailed, static_cast<uint32_t>(saved_errno)));
+                        completed = true;
+                    }
+                    break;
                 }
 
-                const bool completed = awaitable->handleComplete(controller->m_handle);
+                if (!completed) {
+                    return;
+                }
+                awaitable->m_result = std::move(first_result);
                 Waker waker = awaitable->m_waker;
                 controller->removeAwaitable(FILEWATCH);
                 syncEvents(controller);
                 (void)flushPendingChanges();
-                if (!completed) {
-                    return;
-                }
                 waker.wakeUp();
             }
         }

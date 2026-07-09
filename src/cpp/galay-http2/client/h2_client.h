@@ -399,7 +399,7 @@ private:
             HTTP_LOG_ERROR("[h2] [handshake-fail]",
                            "error={}",
                            result.error().message());
-            fail();
+            fail(Http2Error(result.error()).code());
             return;
         }
 
@@ -422,7 +422,7 @@ private:
             HTTP_LOG_ERROR("[h2] [preface-send-fail]",
                            "error={}",
                            result.error().message());
-            fail();
+            fail(Http2Error(result.error()).code());
             return;
         }
 
@@ -451,13 +451,22 @@ private:
         m_phase = Phase::kDone;
     }
 
-    void fail(const char* phase = nullptr, const char* detail = nullptr) {
-        if (phase != nullptr && detail != nullptr) {
-            HTTP_LOG_ERROR("[h2]", "phase={} detail={}", phase, detail);
-        }
+    void fail()
+    {
+        fail(Http2ErrorCode::ConnectError);
+    }
+
+    void fail(const char* phase, const char* detail)
+    {
+        HTTP_LOG_ERROR("[h2]", "phase={} detail={}", phase, detail);
+        fail(Http2ErrorCode::ConnectError);
+    }
+
+    void fail(Http2ErrorCode code)
+    {
         m_client->m_connected = false;
-        m_client->m_connect_result = std::unexpected(Http2ErrorCode::ConnectError);
-        m_result = std::unexpected(Http2ErrorCode::ConnectError);
+        m_client->m_connect_result = std::unexpected(code);
+        m_result = std::unexpected(code);
         m_phase = Phase::kDone;
     }
 
@@ -864,16 +873,12 @@ private:
 
     void setSslSendError(const galay::ssl::SslError& error) {
         HTTP_LOG_ERROR("[h2] [send-fail]", "error={}", error.message());
-        m_error = Http2ErrorCode::InternalError;
+        m_error = Http2Error(error).code();
     }
 
     void setSslRecvError(const galay::ssl::SslError& error) {
         HTTP_LOG_ERROR("[h2] [recv-fail]", "error={}", error.message());
-        if (error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
-            m_error = Http2ErrorCode::ConnectError;
-            return;
-        }
-        m_error = Http2ErrorCode::InternalError;
+        m_error = Http2Error(error).code();
     }
 
     bool parseNextFrame(Http2Frame::uptr& frame) {

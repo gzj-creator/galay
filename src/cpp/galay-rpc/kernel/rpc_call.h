@@ -14,6 +14,7 @@
 #include "rpc_metadata.h"
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <atomic>
@@ -22,6 +23,52 @@ namespace galay::rpc
 {
 
 using RpcClock = std::chrono::steady_clock;  ///< RPC deadline使用的单调时钟
+
+/**
+ * @brief 取消回调注册句柄
+ * @details 由 RpcCancellationToken::registerCallback 创建；调用方持有该句柄，
+ *          在 pending 完成后调用 deactivate()，避免后续 cancel() 重复通知。
+ */
+class RpcCancellationRegistration {
+public:
+    explicit RpcCancellationRegistration(std::function<void()> callback)
+        : m_callback(std::move(callback))
+    {
+    }
+
+    RpcCancellationRegistration(const RpcCancellationRegistration&) = delete;
+    RpcCancellationRegistration& operator=(const RpcCancellationRegistration&) = delete;
+    RpcCancellationRegistration(RpcCancellationRegistration&&) = delete;
+    RpcCancellationRegistration& operator=(RpcCancellationRegistration&&) = delete;
+
+    /// @brief 停用注册，后续 cancel() 将跳过该回调。
+    void deactivate() noexcept {
+        m_active.store(false, std::memory_order_release);
+    }
+
+    /// @brief 如果仍处于活动状态则执行回调。
+    bool notifyIfActive() const {
+        if (!m_active.load(std::memory_order_acquire)) {
+            return false;
+        }
+        if (!m_callback) {
+            return false;
+        }
+        m_callback();
+        return true;
+    }
+
+    std::shared_ptr<RpcCancellationRegistration> next; ///< 单向回调链
+
+private:
+    std::function<void()> m_callback; ///< 取消通知回调
+    std::atomic<bool> m_active{true}; ///< 是否仍然有效
+};
+
+struct RpcCancellationState {
+    std::atomic<std::shared_ptr<RpcCancellationRegistration>> callbacks;
+    std::atomic<bool> cancelled{false};
+};
 
 /**
  * @brief 取消令牌占位
@@ -35,17 +82,49 @@ public:
 
     /// @brief 是否已经请求取消
     bool cancelled() const {
-        return m_state && m_state->load(std::memory_order_acquire);
+        return m_state && m_state->cancelled.load(std::memory_order_acquire);
+    }
+
+    /**
+     * @brief 注册取消通知回调
+     * @param callback cancel() 后执行的回调；不得阻塞
+     * @return 注册句柄；空 token 返回 nullptr
+     */
+    std::shared_ptr<RpcCancellationRegistration> registerCallback(std::function<void()> callback) const {
+        if (!m_state) {
+            return nullptr;
+        }
+
+        auto registration = std::make_shared<RpcCancellationRegistration>(std::move(callback));
+        auto head = m_state->callbacks.load(std::memory_order_acquire);
+        while (true) {
+            std::shared_ptr<RpcCancellationRegistration> next = head;
+            registration->next.swap(next);
+            if (m_state->callbacks.compare_exchange_weak(head,
+                                                         registration,
+                                                         std::memory_order_release,
+                                                         std::memory_order_acquire)) {
+                break;
+            }
+        }
+
+        if (cancelled()) {
+            const bool notified = registration->notifyIfActive();
+            if (!notified) {
+                registration->deactivate();
+            }
+        }
+        return registration;
     }
 
 private:
     friend class RpcCancellationSource;
-    explicit RpcCancellationToken(std::shared_ptr<std::atomic<bool>> state)
+    explicit RpcCancellationToken(std::shared_ptr<RpcCancellationState> state)
         : m_state(std::move(state))
     {
     }
 
-    std::shared_ptr<std::atomic<bool>> m_state;  ///< 共享取消状态
+    std::shared_ptr<RpcCancellationState> m_state;  ///< 共享取消状态
 };
 
 /**
@@ -56,17 +135,33 @@ private:
 class RpcCancellationSource {
 public:
     RpcCancellationSource()
-        : m_state(std::make_shared<std::atomic<bool>>(false))
+        : m_state(std::make_shared<RpcCancellationState>())
     {
     }
 
     /// @brief 请求取消
-    void cancel() const { m_state->store(true, std::memory_order_release); }
+    void cancel() const {
+        const bool already_cancelled = m_state->cancelled.exchange(true, std::memory_order_acq_rel);
+        if (already_cancelled) {
+            return;
+        }
+
+        auto registration = m_state->callbacks.load(std::memory_order_acquire);
+        while (registration) {
+            const bool did_notify = registration->notifyIfActive();
+            if (!did_notify) {
+                registration->deactivate();
+            }
+            std::shared_ptr<RpcCancellationRegistration> next = registration->next;
+            registration.swap(next);
+        }
+    }
+
     /// @brief 获取传递给RpcCallOptions的token
     RpcCancellationToken token() const { return RpcCancellationToken(m_state); }
 
 private:
-    std::shared_ptr<std::atomic<bool>> m_state;  ///< 共享取消状态
+    std::shared_ptr<RpcCancellationState> m_state;  ///< 共享取消状态
 };
 
 /**

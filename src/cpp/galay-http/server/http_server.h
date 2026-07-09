@@ -371,6 +371,24 @@ public:
 
 protected:
     /**
+     * @brief 将 server 拥有的 root task 绑定到当前 Runtime 后提交到指定调度器。
+     * @details `RuntimeHandle::current()` 依赖 TaskState 中的 runtime 指针；server
+     *          自己使用裸 scheduler 投递时必须显式绑定，否则路由 handler 内无法
+     *          安全使用 RuntimeHandle 派生 blocking task。
+     */
+    template <typename T>
+    bool scheduleRuntimeTask(Scheduler* scheduler, Task<T> task) {
+        if (scheduler == nullptr || !task.isValid()) {
+            return false;
+        }
+
+        TaskRef task_ref = galay::kernel::detail::TaskAccess::detachTask(std::move(task));
+        galay::kernel::detail::setTaskRuntime(task_ref, &m_runtime);
+        galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
+        return scheduler->schedule(std::move(task_ref));
+    }
+
+    /**
      * @brief 内部启动实现
      * @return 成功返回 true
      * @details 初始化 runtime 并在每个 IO 调度器上启动 serverLoop
@@ -385,7 +403,13 @@ protected:
         }
 
 
-        m_runtime.start();
+        auto runtime_start = m_runtime.start();
+        if (!runtime_start.has_value()) {
+            HTTP_LOG_ERROR("[runtime] [start-fail]",
+                           "error={}",
+                           runtime_start.error().message());
+            return false;
+        }
 
         if (!startPlugins()) {
             m_runtime.stop();
@@ -406,7 +430,7 @@ protected:
                 m_listeners.clear();
                 return false;
             }
-            m_listeners.emplace_back(std::move(*listener));
+            m_listeners.push_back(std::move(*listener));
         }
 
         m_running.store(true);
@@ -416,7 +440,16 @@ protected:
         for (size_t i = 0; i < io_scheduler_count; i++) {
             auto* scheduler = m_runtime.getIOScheduler(i);
             if (scheduler) {
-                scheduleTask(scheduler, serverLoop(scheduler, &m_listeners[i]));
+                if (!scheduleRuntimeTask(scheduler, serverLoop(scheduler, &m_listeners[i]))) {
+                    HTTP_LOG_ERROR("[runtime] [schedule-fail]",
+                                   "context=server-loop index={}",
+                                   i);
+                    m_running.store(false);
+                    stopStartedPlugins();
+                    m_runtime.stop();
+                    m_listeners.clear();
+                    return false;
+                }
             }
         }
 
@@ -478,7 +511,10 @@ protected:
                 HttpConnImpl<SocketType> conn(std::move(client_socket));
 
                 // 在当前调度器上处理连接
-                scheduleTask(scheduler, m_handler(std::move(conn)));
+                if (!scheduleRuntimeTask(scheduler, m_handler(std::move(conn)))) {
+                    HTTP_LOG_ERROR("[runtime] [schedule-fail]",
+                                   "context=connection-handler");
+                }
             }
         }
 
@@ -739,7 +775,7 @@ protected:
             }
 
             // 阶段 13：投递 TLS 连接处理任务，投递失败时关闭客户端 socket
-            if (!scheduleTask(target_scheduler, handleSslConnection(std::move(client_socket)))) {
+            if (!this->scheduleRuntimeTask(target_scheduler, handleSslConnection(std::move(client_socket)))) {
                 auto close_result = co_await client_socket.close();
                 if (!close_result) {
                     HTTP_LOG_WARN("[socket] [close-fail]",

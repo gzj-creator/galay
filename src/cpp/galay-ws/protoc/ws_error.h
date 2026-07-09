@@ -13,6 +13,9 @@
 
 #include "ws_base.h"
 #include "../../galay-kernel/common/error.h"
+#ifdef GALAY_SSL_FEATURE_ENABLED
+#include "../../galay-ssl/common/error.h"
+#endif
 #include <string>
 
 namespace galay::websocket
@@ -79,6 +82,23 @@ public:
             m_code = kWsSendError;
         }
     }
+
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    /**
+     * @brief 从 SSL 错误构造 WebSocket 错误
+     * @param ssl_error galay-ssl 返回的 SSL 错误
+     * @details 供 SSL awaitable 将底层 SSL 错误直接转换为 WebSocket 层错误。
+     */
+    explicit WsError(const galay::ssl::SslError& ssl_error)
+        : m_extra_msg(ssl_error.message())
+        , m_code(kWsConnectionError)
+    {
+        if (ssl_error.code() == galay::ssl::SslErrorCode::kPeerClosed) {
+            m_extra_msg = "Connection closed by peer";
+            m_code = kWsConnectionClosed;
+        }
+    }
+#endif
 
     WsErrorCode code() const { return m_code; } ///< 获取错误码
 

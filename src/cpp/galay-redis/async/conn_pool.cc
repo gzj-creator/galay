@@ -1,22 +1,74 @@
 #include "conn_pool.h"
 #include <galay/cpp/galay-redis/base/redis_log.h>
 #include <algorithm>
+#include <cstdint>
+#include <functional>
+#include <limits>
+#include <thread>
+#include <type_traits>
+#include <utility>
 
 namespace galay::redis
 {
     namespace
     {
-        void decrementActive(std::atomic<size_t>& active) noexcept
+        template <typename T>
+        void incrementCounter(std::atomic<T>& counter,
+                              T delta = T{1},
+                              std::memory_order order = std::memory_order_acq_rel) noexcept
+        requires std::is_integral_v<T>
         {
-            size_t current = active.load(std::memory_order_acquire);
+            const T previous = counter.fetch_add(delta, order);
+            if (previous > std::numeric_limits<T>::max() - delta) {
+                counter.store(std::numeric_limits<T>::max(), std::memory_order_release);
+            }
+        }
+
+        void decrementCounter(std::atomic<size_t>& counter) noexcept
+        {
+            size_t current = counter.load(std::memory_order_acquire);
             while (current > 0) {
-                if (active.compare_exchange_weak(current,
-                                                 current - 1,
-                                                 std::memory_order_acq_rel,
-                                                 std::memory_order_acquire)) {
+                if (counter.compare_exchange_weak(current,
+                                                  current - 1,
+                                                  std::memory_order_acq_rel,
+                                                  std::memory_order_acquire)) {
                     return;
                 }
             }
+        }
+
+        void decrementActive(std::atomic<size_t>& active) noexcept
+        {
+            decrementCounter(active);
+        }
+
+        template <typename OptionalT, typename... Args>
+        bool emplaceOptional(OptionalT& target, Args&&... args)
+        {
+            auto& stored = target.emplace(std::forward<Args>(args)...);
+            return std::addressof(stored) == std::addressof(*target);
+        }
+
+        void setAcquireError(std::optional<RedisError>& target,
+                             RedisErrorType type,
+                             std::string message)
+        {
+            const bool stored = emplaceOptional(target, type, std::move(message));
+            if (!stored) {
+                REDIS_LOG_ERROR("[client]", "Failed to store Redis pool acquire error state");
+            }
+        }
+
+        size_t mixedThreadShardIndex(const void* pool, size_t shard_count) noexcept
+        {
+            auto h = static_cast<uint64_t>(std::hash<std::thread::id>{}(std::this_thread::get_id()));
+            h ^= static_cast<uint64_t>(reinterpret_cast<uintptr_t>(pool) >> 4);
+            h ^= h >> 33;
+            h *= 0xff51afd7ed558ccdULL;
+            h ^= h >> 33;
+            h *= 0xc4ceb9fe1a85ec53ULL;
+            h ^= h >> 33;
+            return static_cast<size_t>(h & (shard_count - 1));
         }
     } // namespace
 
@@ -41,48 +93,29 @@ namespace galay::redis
         m_start_time = std::chrono::steady_clock::now();
         if (m_pool == nullptr) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is missing");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is missing");
             return SuspendAction::Error;
         }
         if (!m_pool->m_is_initialized) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool not initialized");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool not initialized");
             return SuspendAction::Error;
         }
         if (m_pool->m_is_shutting_down) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is shutting down");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Connection pool is shutting down");
             return SuspendAction::Error;
         }
 
-        while (!m_pool->m_available_connections.empty()) {
-            auto conn = m_pool->m_available_connections.front();
-            m_pool->m_available_connections.pop();
-
-            if (conn && !conn->isClosed() && conn->isHealthy()) {
-                conn->updateLastUsed();
-                m_connection = std::move(conn);
-                m_pool->m_total_acquired++;
-                m_pool->m_active_connections.fetch_add(1, std::memory_order_acq_rel);
-                m_state = State::Ready;
-                break;
-            }
-
-            auto it = std::find(m_pool->m_all_connections.begin(),
-                                m_pool->m_all_connections.end(),
-                                conn);
-            if (it != m_pool->m_all_connections.end()) {
-                m_pool->m_all_connections.erase(it);
-            }
-            m_pool->m_total_destroyed++;
+        m_connection = m_pool->tryAcquireAvailable();
+        if (m_connection) {
+            incrementCounter(m_pool->m_total_acquired);
+            incrementCounter(m_pool->m_active_connections);
+            m_state = State::Ready;
         }
 
         if (m_state == State::Ready) {
-        } else if (m_pool->m_all_connections.size() < m_pool->m_config.max_connections) {
-            auto client = std::make_shared<RedisClient<>>(m_pool->m_scheduler);
-            m_connection = std::make_shared<PooledConnection>(client, m_pool->m_scheduler);
-            m_pool->m_all_connections.push_back(m_connection);
-            m_pool->m_total_created++;
+        } else if ((m_connection = m_pool->createConnectionSlot())) {
             m_state = State::Creating;
         } else {
             m_waiter = std::make_shared<detail::RedisPoolWaiter>(std::move(waiter_waker));
@@ -90,10 +123,20 @@ namespace galay::redis
                 m_state = State::EnqueueFailed;
                 return SuspendAction::Error;
             }
-            m_pool->m_waiters.push(m_waiter);
-            m_pool->m_waiting_requests.fetch_add(1);
+            if (!m_pool->enqueueWaiter(m_waiter)) {
+                m_state = State::EnqueueFailed;
+                m_waiter.reset();
+                return SuspendAction::Error;
+            }
+            incrementCounter(m_pool->m_waiting_requests);
             m_wait_counted = true;
             m_state = State::Waiting;
+            if (m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
+                const bool woke_waiter = m_pool->wakeOneWaiterFromAvailable();
+                if (!woke_waiter && m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
+                    REDIS_LOG_DEBUG("[client]", "Redis pool waiter queued while idle wake raced");
+                }
+            }
             return SuspendAction::Wait;
         }
 
@@ -103,7 +146,7 @@ namespace galay::redis
         }
         if (m_state != State::Creating || !m_connection) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid connection acquire state");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid connection acquire state");
             return SuspendAction::Error;
         }
 
@@ -111,8 +154,16 @@ namespace galay::redis
         options.username = m_pool->m_config.username;
         options.password = m_pool->m_config.password;
         options.db_index = m_pool->m_config.db_index;
-        m_connect_awaitable.emplace(
+        const bool connect_stored = emplaceOptional(
+            m_connect_awaitable,
             m_connection->get()->connect(m_pool->m_config.host, m_pool->m_config.port, std::move(options)));
+        if (!connect_stored) {
+            m_state = State::Error;
+            setAcquireError(m_error,
+                            RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
+                            "Failed to store Redis connect awaitable");
+            return SuspendAction::Error;
+        }
         return SuspendAction::Connect;
     }
 
@@ -135,13 +186,7 @@ namespace galay::redis
             m_connect_awaitable.reset();
             if (!connect_result) {
                 if (m_pool != nullptr) {
-                    auto it = std::find(m_pool->m_all_connections.begin(),
-                                        m_pool->m_all_connections.end(),
-                                        m_connection);
-                    if (it != m_pool->m_all_connections.end()) {
-                        m_pool->m_all_connections.erase(it);
-                        m_pool->m_total_destroyed++;
-                    }
+                    m_pool->destroyConnectionSlot(m_connection);
                 }
                 m_state = State::Invalid;
                 m_connection.reset();
@@ -151,8 +196,8 @@ namespace galay::redis
             m_connection->setHealthy(true);
             m_connection->updateLastUsed();
             if (m_pool != nullptr) {
-                m_pool->m_total_acquired++;
-                m_pool->m_active_connections.fetch_add(1, std::memory_order_acq_rel);
+                incrementCounter(m_pool->m_total_acquired);
+                incrementCounter(m_pool->m_active_connections);
                 m_pool->recordAcquireStats(m_start_time);
             }
             m_state = State::Invalid;
@@ -161,7 +206,7 @@ namespace galay::redis
 
         if (m_state == State::Waiting) {
             if (m_wait_counted && m_pool != nullptr) {
-                m_pool->m_waiting_requests.fetch_sub(1);
+                decrementCounter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
 
@@ -182,8 +227,8 @@ namespace galay::redis
             m_state = State::Invalid;
             if (connection) {
                 if (m_pool != nullptr) {
-                    m_pool->m_total_acquired++;
-                    m_pool->m_active_connections.fetch_add(1, std::memory_order_acq_rel);
+                    incrementCounter(m_pool->m_total_acquired);
+                    incrementCounter(m_pool->m_active_connections);
                     m_pool->recordAcquireStats(m_start_time);
                 }
                 m_connection = std::move(connection);
@@ -235,7 +280,7 @@ namespace galay::redis
                 }
             }
             if (m_wait_counted && m_pool != nullptr) {
-                m_pool->m_waiting_requests.fetch_sub(1);
+                decrementCounter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
         }
@@ -251,7 +296,7 @@ namespace galay::redis
         // 验证配置
         if (!m_config.validate()) {
             REDIS_LOG_ERROR("[client]", "Invalid connection pool configuration");
-            m_is_shutting_down = true;
+            m_is_shutting_down.store(true, std::memory_order_release);
         }
 
         REDIS_LOG_INFO("[client]", "Connection pool created: host={}:{}, min={}, max={}, initial={}",
@@ -291,7 +336,7 @@ namespace galay::redis
             return {};
         }
 
-        m_is_initialized = true;
+        m_is_initialized.store(true, std::memory_order_release);
         REDIS_LOG_INFO("[client]", "Connection pool initialized lazily");
         return {};
     }
@@ -319,72 +364,44 @@ namespace galay::redis
             ~WaitingGuard()
             {
                 if (counter != nullptr) {
-                    counter->fetch_sub(1);
+                    decrementCounter(*counter);
                 }
             }
         };
 
-        m_waiting_requests.fetch_add(1);
+        incrementCounter(m_waiting_requests);
         WaitingGuard waiting_guard{&m_waiting_requests};
 
-        std::unique_lock<std::mutex> lock(m_mutex);
-
-        while (!m_available_connections.empty()) {
-            auto conn = m_available_connections.front();
-            m_available_connections.pop();
-
-            if (!conn->isClosed() && conn->isHealthy()) {
-                conn->updateLastUsed();
-                m_total_acquired++;
-                m_active_connections.fetch_add(1, std::memory_order_acq_rel);
-                lock.unlock();
-                recordAcquireStats(start_time);
-                return conn;
-            }
-
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
-            }
-            m_total_destroyed++;
+        if (auto conn = tryAcquireAvailable()) {
+            incrementCounter(m_total_acquired);
+            incrementCounter(m_active_connections);
+            recordAcquireStats(start_time);
+            return conn;
         }
 
-        const bool can_create = m_all_connections.size() < m_config.max_connections;
-        lock.unlock();
+        auto result = getConnectionSync();
+        if (result) {
+            auto conn = result.value();
+            conn->updateLastUsed();
+            incrementCounter(m_total_acquired);
+            incrementCounter(m_active_connections);
+            recordAcquireStats(start_time);
 
-        if (can_create) {
-            auto result = getConnectionSync();
-            if (result) {
-                auto conn = result.value();
-                conn->updateLastUsed();
-                m_total_acquired++;
-                m_active_connections.fetch_add(1, std::memory_order_acq_rel);
-                recordAcquireStats(start_time);
-
-                size_t total_connections = 0;
-                {
-                    std::lock_guard<std::mutex> stats_lock(m_mutex);
-                    total_connections = m_all_connections.size();
-                }
-                REDIS_LOG_DEBUG("[client]", "Created and acquired new connection, total: {}", total_connections);
-                return conn;
-            }
-
-            REDIS_LOG_WARN("[client]", "Failed to create new connection: {}", result.error().message());
-            return std::unexpected(result.error());
+            REDIS_LOG_DEBUG("[client]", "Created and acquired new connection, total: {}",
+                         m_live_connections.load(std::memory_order_acquire));
+            return conn;
         }
 
-        return std::unexpected(RedisError(
-            RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR,
-            "Connection pool exhausted"
-        ));
+        REDIS_LOG_WARN("[client]", "Failed to create new connection: {}", result.error().message());
+        return std::unexpected(result.error());
     }
 
     void RedisConnectionPool::recordAcquireStats(std::chrono::steady_clock::time_point start_time)
     {
         const auto elapsed = std::chrono::steady_clock::now() - start_time;
         const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-        m_total_acquire_time_ms += elapsed_ms;
+        const auto elapsed_ms_u64 = static_cast<uint64_t>(elapsed_ms < 0 ? 0 : elapsed_ms);
+        incrementCounter(m_total_acquire_time_ms, elapsed_ms_u64);
 
         double current_max = m_max_acquire_time_ms.load();
         while (elapsed_ms > current_max) {
@@ -400,6 +417,142 @@ namespace galay::redis
                 break;
             }
         }
+    }
+
+    size_t RedisConnectionPool::idleShardIndex() const noexcept
+    {
+        return mixedThreadShardIndex(this, kIdleShardCount);
+    }
+
+    std::shared_ptr<PooledConnection> RedisConnectionPool::tryAcquireAvailable()
+    {
+        const size_t start = idleShardIndex();
+        for (size_t i = 0; i < kIdleShardCount; ++i) {
+            auto& shard = m_available_shards[(start + i) & (kIdleShardCount - 1)];
+            std::shared_ptr<PooledConnection> conn;
+            while (shard.available.try_dequeue(conn)) {
+                decrementCounter(m_idle_connections);
+                if (conn && !conn->isClosed() && conn->isHealthy()) {
+                    conn->updateLastUsed();
+                    return conn;
+                }
+                destroyConnectionSlot(conn);
+            }
+        }
+        return nullptr;
+    }
+
+    std::shared_ptr<PooledConnection> RedisConnectionPool::createConnectionSlot()
+    {
+        size_t current = m_live_connections.load(std::memory_order_acquire);
+        while (current < m_config.max_connections) {
+            if (m_live_connections.compare_exchange_weak(current,
+                                                         current + 1,
+                                                         std::memory_order_acq_rel,
+                                                         std::memory_order_acquire)) {
+                auto client = std::make_shared<RedisClient<>>(m_scheduler);
+                auto conn = std::make_shared<PooledConnection>(client, m_scheduler);
+                incrementCounter(m_total_created);
+                return conn;
+            }
+        }
+        return nullptr;
+    }
+
+    void RedisConnectionPool::destroyConnectionSlot(std::shared_ptr<PooledConnection>& conn)
+    {
+        if (!conn) {
+            return;
+        }
+        conn->setHealthy(false);
+        conn.reset();
+        decrementCounter(m_live_connections);
+        incrementCounter(m_total_destroyed);
+    }
+
+    bool RedisConnectionPool::returnToAvailable(std::shared_ptr<PooledConnection> conn)
+    {
+        if (!conn) {
+            return false;
+        }
+        const size_t shard_index = idleShardIndex();
+        auto queued = conn;
+        if (!m_available_shards[shard_index].available.enqueue(std::move(queued))) {
+            destroyConnectionSlot(conn);
+            return false;
+        }
+        incrementCounter(m_idle_connections);
+        return true;
+    }
+
+    bool RedisConnectionPool::enqueueWaiter(std::shared_ptr<detail::RedisPoolWaiter> waiter)
+    {
+        return waiter != nullptr && m_waiters.enqueue(std::move(waiter));
+    }
+
+    bool RedisConnectionPool::completeOneWaiter(
+        std::shared_ptr<PooledConnection> conn,
+        std::shared_ptr<detail::RedisPoolWaiter>& waiter_to_wake)
+    {
+        if (!conn) {
+            return false;
+        }
+
+        std::shared_ptr<detail::RedisPoolWaiter> waiter;
+        while (m_waiters.try_dequeue(waiter)) {
+            if (waiter == nullptr) {
+                continue;
+            }
+
+            conn->updateLastUsed();
+            waiter->connection = conn;
+            if (!detail::try_complete_waiter(waiter->state,
+                                             detail::PoolWaiterState::Completed)) {
+                waiter->connection.reset();
+                continue;
+            }
+
+            waiter_to_wake = std::move(waiter);
+            return true;
+        }
+        return false;
+    }
+
+    bool RedisConnectionPool::wakeOneWaiterFromAvailable()
+    {
+        auto conn = tryAcquireAvailable();
+        if (!conn) {
+            return false;
+        }
+
+        std::shared_ptr<detail::RedisPoolWaiter> waiter_to_wake;
+        if (!completeOneWaiter(conn, waiter_to_wake)) {
+            const bool returned = returnToAvailable(std::move(conn));
+            if (!returned) {
+                REDIS_LOG_WARN("[client]", "Failed to return Redis connection after waiter wake race");
+            }
+            return false;
+        }
+
+        waiter_to_wake->waker.wakeUp();
+        return true;
+    }
+
+    size_t RedisConnectionPool::drainAvailableConnections(
+        std::vector<std::shared_ptr<PooledConnection>>* drained)
+    {
+        size_t count = 0;
+        for (auto& shard : m_available_shards) {
+            std::shared_ptr<PooledConnection> conn;
+            while (shard.available.try_dequeue(conn)) {
+                decrementCounter(m_idle_connections);
+                ++count;
+                if (drained != nullptr && conn) {
+                    drained->push_back(std::move(conn));
+                }
+            }
+        }
+        return count;
     }
 
     void RedisConnectionPool::release(std::shared_ptr<PooledConnection> conn)
@@ -419,55 +572,33 @@ namespace galay::redis
         // 检查连接是否健康
         if (conn->isClosed() || !conn->isHealthy()) {
             REDIS_LOG_WARN("[client]", "Unhealthy connection released, removing from pool");
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
-            }
-            m_total_destroyed++;
+            destroyConnectionSlot(conn);
             decrementActive(m_active_connections);
             return;
         }
 
         // 如果连接数超过最大值，销毁连接
-        if (m_all_connections.size() > m_config.max_connections) {
+        if (m_live_connections.load(std::memory_order_acquire) > m_config.max_connections) {
             REDIS_LOG_DEBUG("[client]", "Pool size exceeds max, destroying connection");
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
-            }
-            m_total_destroyed++;
+            destroyConnectionSlot(conn);
             decrementActive(m_active_connections);
             return;
         }
 
-        while (!m_waiters.empty()) {
-            auto waiter = m_waiters.front();
-            m_waiters.pop();
-            if (waiter == nullptr) {
-                continue;
-            }
-
-            conn->updateLastUsed();
-            waiter->connection = conn;
-            if (!detail::try_complete_waiter(waiter->state,
-                                             detail::PoolWaiterState::Completed)) {
-                waiter->connection.reset();
-                continue;
-            }
-
-            waiter_to_wake = std::move(waiter);
-            break;
-        }
-
-        if (!waiter_to_wake) {
+        const bool completed_waiter = completeOneWaiter(conn, waiter_to_wake);
+        if (!completed_waiter) {
             // 归还到可用连接池
-            m_available_connections.push(conn);
+            const bool returned = returnToAvailable(conn);
+            if (!returned) {
+                REDIS_LOG_WARN("[client]", "Failed to return Redis connection to idle pool");
+            }
         }
-        m_total_released++;
+        incrementCounter(m_total_released);
         decrementActive(m_active_connections);
 
         REDIS_LOG_DEBUG("[client]", "Connection released to pool, available: {}, total: {}",
-                     m_available_connections.size(), m_all_connections.size());
+                     m_idle_connections.load(std::memory_order_acquire),
+                     m_live_connections.load(std::memory_order_acquire));
 
         if (waiter_to_wake) {
             waiter_to_wake->waker.wakeUp();
@@ -482,30 +613,26 @@ namespace galay::redis
         // 带重试的连接创建
         for (int attempt = 0; attempt < m_config.max_reconnect_attempts; ++attempt) {
             if (attempt > 0) {
-                m_reconnect_attempts++;
+                incrementCounter(m_reconnect_attempts);
                 REDIS_LOG_INFO("[client]", "Reconnect attempt {}/{} for {}:{}",
                             attempt + 1, m_config.max_reconnect_attempts,
                             m_config.host, m_config.port);
             }
 
-            auto client = std::make_shared<RedisClient<>>(m_scheduler);
-            auto conn = std::make_shared<PooledConnection>(client, m_scheduler);
-
-            // 同步辅助路径只登记客户端槽位；协程 acquire 路径负责真实连接。
-
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_all_connections.push_back(conn);
-                m_total_created++;
+            auto conn = createConnectionSlot();
+            if (!conn) {
+                return std::unexpected(RedisError(
+                    RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR,
+                    "Connection pool exhausted"));
             }
 
             if (attempt > 0) {
-                m_reconnect_successes++;
+                incrementCounter(m_reconnect_successes);
                 REDIS_LOG_INFO("[client]", "Reconnect succeeded on attempt {}", attempt + 1);
             }
 
             REDIS_LOG_DEBUG("[client]", "Connection created successfully, total: {}",
-                         m_all_connections.size());
+                         m_live_connections.load(std::memory_order_acquire));
             return conn;
         }
 
@@ -533,47 +660,16 @@ namespace galay::redis
             return;
         }
 
-        REDIS_LOG_INFO("[client]", "Running health check on {} connections", m_all_connections.size());
-
-        std::vector<std::shared_ptr<PooledConnection>> unhealthy_connections;
-
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            for (auto& conn : m_all_connections) {
-                if (!checkConnectionHealthSync(conn)) {
-                    unhealthy_connections.push_back(conn);
-                }
-            }
-
-            if (!unhealthy_connections.empty()) {
-                // 从可用连接中移除
-                std::queue<std::shared_ptr<PooledConnection>> temp_queue;
-                while (!m_available_connections.empty()) {
-                    auto c = m_available_connections.front();
-                    m_available_connections.pop();
-                    if (c->isHealthy()) {
-                        temp_queue.push(c);
-                    }
-                }
-                m_available_connections = std::move(temp_queue);
-
-                // 从所有连接中移除
-                m_all_connections.erase(
-                    std::remove_if(m_all_connections.begin(), m_all_connections.end(),
-                        [](const auto& conn) { return !conn->isHealthy(); }),
-                    m_all_connections.end()
-                );
-
-                m_total_destroyed += unhealthy_connections.size();
-
-                REDIS_LOG_WARN("[client]", "Removed {} unhealthy connections, remaining: {}",
-                            unhealthy_connections.size(), m_all_connections.size());
-            }
+        REDIS_LOG_INFO("[client]", "Running health check on {} connections",
+                     m_live_connections.load(std::memory_order_acquire));
+        const size_t removed = cleanupUnhealthyConnections();
+        if (removed > 0) {
+            REDIS_LOG_WARN("[client]", "Removed {} unhealthy connections, remaining: {}",
+                        removed, m_live_connections.load(std::memory_order_acquire));
         }
 
         // 如果连接数低于最小值，创建新连接
-        size_t current_size = m_all_connections.size();
+        size_t current_size = m_live_connections.load(std::memory_order_acquire);
         while (current_size < m_config.min_connections) {
             auto result = getConnectionSync();
             if (!result) {
@@ -582,12 +678,12 @@ namespace galay::redis
                 break;
             }
 
-            // 将新连接加入可用队列
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
-                current_size = m_all_connections.size();
+            auto conn = result.value();
+            if (!returnToAvailable(conn)) {
+                REDIS_LOG_ERROR("[client]", "Failed to enqueue replacement connection");
+                break;
             }
+            current_size = m_live_connections.load(std::memory_order_acquire);
 
             REDIS_LOG_INFO("[client]", "Created replacement connection, total: {}", current_size);
         }
@@ -598,39 +694,28 @@ namespace galay::redis
         REDIS_LOG_INFO("[client]", "Running idle connection cleanup");
 
         std::vector<std::shared_ptr<PooledConnection>> idle_connections;
-
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            // 检查可用连接中的空闲连接
-            std::queue<std::shared_ptr<PooledConnection>> temp_queue;
-            while (!m_available_connections.empty()) {
-                auto conn = m_available_connections.front();
-                m_available_connections.pop();
-
-                if (conn->getIdleTime() > m_config.idle_timeout &&
-                    m_all_connections.size() > m_config.min_connections) {
-                    idle_connections.push_back(conn);
-                } else {
-                    temp_queue.push(conn);
-                }
-            }
-            m_available_connections = std::move(temp_queue);
+        const size_t drained_count = drainAvailableConnections(&idle_connections);
+        if (drained_count == 0) {
+            return;
         }
 
-        // 移除空闲连接
-        if (!idle_connections.empty()) {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            for (auto& conn : idle_connections) {
-                auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-                if (it != m_all_connections.end()) {
-                    m_all_connections.erase(it);
-                    m_total_destroyed++;
+        size_t removed = 0;
+        for (auto& conn : idle_connections) {
+            if (conn && conn->getIdleTime() > m_config.idle_timeout &&
+                m_live_connections.load(std::memory_order_acquire) > m_config.min_connections) {
+                destroyConnectionSlot(conn);
+                ++removed;
+            } else if (conn) {
+                const bool returned = returnToAvailable(conn);
+                if (!returned) {
+                    REDIS_LOG_WARN("[client]", "Failed to return Redis connection during idle cleanup");
                 }
             }
+        }
 
+        if (removed > 0) {
             REDIS_LOG_INFO("[client]", "Cleaned up {} idle connections, remaining: {}",
-                        idle_connections.size(), m_all_connections.size());
+                        removed, m_live_connections.load(std::memory_order_acquire));
         }
     }
 
@@ -638,12 +723,7 @@ namespace galay::redis
     {
         REDIS_LOG_INFO("[client]", "Warming up connection pool to {} connections", m_config.min_connections);
 
-        size_t current_size;
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            current_size = m_all_connections.size();
-        }
-
+        size_t current_size = m_live_connections.load(std::memory_order_acquire);
         size_t created = 0;
         while (current_size < m_config.min_connections) {
             auto result = getConnectionSync();
@@ -652,12 +732,12 @@ namespace galay::redis
                 break;
             }
 
-            // 将新连接加入可用队列
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
-                current_size = m_all_connections.size();
+            auto conn = result.value();
+            if (!returnToAvailable(conn)) {
+                REDIS_LOG_ERROR("[client]", "Failed to enqueue warmup connection");
+                break;
             }
+            current_size = m_live_connections.load(std::memory_order_acquire);
             created++;
         }
 
@@ -668,45 +748,28 @@ namespace galay::redis
     {
         REDIS_LOG_INFO("[client]", "Cleaning up unhealthy connections");
 
-        std::vector<std::shared_ptr<PooledConnection>> unhealthy_connections;
+        std::vector<std::shared_ptr<PooledConnection>> idle_connections;
+        const size_t drained_count = drainAvailableConnections(&idle_connections);
+        if (drained_count == 0) {
+            return 0;
+        }
 
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            // 找出所有不健康的连接
-            for (auto& conn : m_all_connections) {
-                if (conn->isClosed() || !conn->isHealthy()) {
-                    unhealthy_connections.push_back(conn);
+        size_t removed = 0;
+        for (auto& conn : idle_connections) {
+            if (!conn || conn->isClosed() || !conn->isHealthy()) {
+                destroyConnectionSlot(conn);
+                ++removed;
+            } else {
+                const bool returned = returnToAvailable(conn);
+                if (!returned) {
+                    REDIS_LOG_WARN("[client]", "Failed to return Redis connection during health cleanup");
                 }
-            }
-
-            if (!unhealthy_connections.empty()) {
-                // 从可用连接中移除
-                std::queue<std::shared_ptr<PooledConnection>> temp_queue;
-                while (!m_available_connections.empty()) {
-                    auto c = m_available_connections.front();
-                    m_available_connections.pop();
-                    if (!c->isClosed() && c->isHealthy()) {
-                        temp_queue.push(c);
-                    }
-                }
-                m_available_connections = std::move(temp_queue);
-
-                // 从所有连接中移除
-                m_all_connections.erase(
-                    std::remove_if(m_all_connections.begin(), m_all_connections.end(),
-                        [](const auto& conn) { return conn->isClosed() || !conn->isHealthy(); }),
-                    m_all_connections.end()
-                );
-
-                m_total_destroyed += unhealthy_connections.size();
             }
         }
 
-        size_t removed = unhealthy_connections.size();
         if (removed > 0) {
             REDIS_LOG_INFO("[client]", "Cleaned up {} unhealthy connections, remaining: {}",
-                        removed, m_all_connections.size());
+                        removed, m_live_connections.load(std::memory_order_acquire));
         }
 
         return removed;
@@ -722,11 +785,7 @@ namespace galay::redis
 
         size_t created = 0;
         for (size_t i = 0; i < count; ++i) {
-            size_t current_size;
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                current_size = m_all_connections.size();
-            }
+            const size_t current_size = m_live_connections.load(std::memory_order_acquire);
 
             // 检查是否超过最大连接数
             if (current_size >= m_config.max_connections) {
@@ -741,16 +800,16 @@ namespace galay::redis
                 break;
             }
 
-            // 将新连接加入可用队列
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
+            auto conn = result.value();
+            if (!returnToAvailable(conn)) {
+                REDIS_LOG_ERROR("[client]", "Failed to enqueue expanded connection");
+                break;
             }
             created++;
         }
 
         REDIS_LOG_INFO("[client]", "Pool expansion complete, created {} connections, total: {}",
-                     created, m_all_connections.size());
+                     created, m_live_connections.load(std::memory_order_acquire));
         return created;
     }
 
@@ -758,80 +817,48 @@ namespace galay::redis
     {
         REDIS_LOG_INFO("[client]", "Shrinking pool to {} connections", target_size);
 
-        std::vector<std::shared_ptr<PooledConnection>> connections_to_remove;
-
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            // 确保不低于最小连接数
-            if (target_size < m_config.min_connections) {
-                target_size = m_config.min_connections;
-                REDIS_LOG_WARN("[client]", "Target size adjusted to min_connections: {}", target_size);
-            }
-
-            // 如果当前连接数已经小于等于目标，不需要缩容
-            if (m_all_connections.size() <= target_size) {
-                REDIS_LOG_INFO("[client]", "Current size ({}) <= target size ({}), no shrink needed",
-                            m_all_connections.size(), target_size);
-                return 0;
-            }
-
-            // 从可用连接中移除多余的连接
-            size_t to_remove = m_all_connections.size() - target_size;
-            std::queue<std::shared_ptr<PooledConnection>> temp_queue;
-
-            while (!m_available_connections.empty() && connections_to_remove.size() < to_remove) {
-                auto conn = m_available_connections.front();
-                m_available_connections.pop();
-                connections_to_remove.push_back(conn);
-            }
-
-            // 将剩余的连接放回队列
-            while (!m_available_connections.empty()) {
-                temp_queue.push(m_available_connections.front());
-                m_available_connections.pop();
-            }
-            m_available_connections = std::move(temp_queue);
-
-            // 从所有连接中移除
-            for (auto& conn : connections_to_remove) {
-                auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-                if (it != m_all_connections.end()) {
-                    m_all_connections.erase(it);
-                }
-            }
-
-            m_total_destroyed += connections_to_remove.size();
+        // 确保不低于最小连接数
+        if (target_size < m_config.min_connections) {
+            target_size = m_config.min_connections;
+            REDIS_LOG_WARN("[client]", "Target size adjusted to min_connections: {}", target_size);
         }
 
-        size_t removed = connections_to_remove.size();
+        if (m_live_connections.load(std::memory_order_acquire) <= target_size) {
+            REDIS_LOG_INFO("[client]", "Current size ({}) <= target size ({}), no shrink needed",
+                        m_live_connections.load(std::memory_order_acquire), target_size);
+            return 0;
+        }
+
+        size_t removed = 0;
+        while (m_live_connections.load(std::memory_order_acquire) > target_size) {
+            auto conn = tryAcquireAvailable();
+            if (!conn) {
+                break;
+            }
+            destroyConnectionSlot(conn);
+            ++removed;
+        }
+
         REDIS_LOG_INFO("[client]", "Pool shrink complete, removed {} connections, remaining: {}",
-                     removed, m_all_connections.size());
+                     removed, m_live_connections.load(std::memory_order_acquire));
         return removed;
     }
 
     void RedisConnectionPool::shutdown()
     {
-        if (m_is_shutting_down) {
+        if (m_is_shutting_down.exchange(true, std::memory_order_acq_rel)) {
             return;
         }
 
-        m_is_shutting_down = true;
         REDIS_LOG_INFO("[client]", "Shutting down connection pool");
 
-        std::vector<std::shared_ptr<PooledConnection>> all_connections;
+        std::vector<std::shared_ptr<PooledConnection>> idle_connections;
         std::vector<std::shared_ptr<detail::RedisPoolWaiter>> waiters_to_wake;
 
-        all_connections = m_all_connections;
-        m_all_connections.clear();
+        const size_t drained_count = drainAvailableConnections(&idle_connections);
 
-        // 清空可用连接队列
-        while (!m_available_connections.empty()) {
-            m_available_connections.pop();
-        }
-        while (!m_waiters.empty()) {
-            auto waiter = m_waiters.front();
-            m_waiters.pop();
+        std::shared_ptr<detail::RedisPoolWaiter> waiter;
+        while (m_waiters.try_dequeue(waiter)) {
             if (waiter == nullptr) {
                 continue;
             }
@@ -841,21 +868,23 @@ namespace galay::redis
             }
         }
         m_active_connections.store(0, std::memory_order_release);
+        m_idle_connections.store(0, std::memory_order_release);
+        m_live_connections.store(0, std::memory_order_release);
 
         for (auto& waiter : waiters_to_wake) {
             waiter->waker.wakeUp();
         }
 
-        m_is_initialized = false;
+        m_is_initialized.store(false, std::memory_order_release);
         REDIS_LOG_INFO("[client]", "Connection pool shutdown complete, closed {} connections",
-                     all_connections.size());
+                     drained_count);
     }
 
     RedisConnectionPool::PoolStats RedisConnectionPool::getStats() const
     {
         PoolStats stats;
-        stats.total_connections = m_all_connections.size();
-        stats.available_connections = m_available_connections.size();
+        stats.total_connections = m_live_connections.load(std::memory_order_acquire);
+        stats.available_connections = m_idle_connections.load(std::memory_order_acquire);
         stats.active_connections = m_active_connections.load(std::memory_order_acquire);
         stats.waiting_requests = m_waiting_requests.load();
         stats.total_acquired = m_total_acquired.load();
@@ -914,54 +943,29 @@ namespace galay::redis
         m_start_time = std::chrono::steady_clock::now();
         if (m_pool == nullptr) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is missing");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is missing");
             return SuspendAction::Error;
         }
         if (!m_pool->m_is_initialized) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool not initialized");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool not initialized");
             return SuspendAction::Error;
         }
         if (m_pool->m_is_shutting_down) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is shutting down");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "TLS connection pool is shutting down");
             return SuspendAction::Error;
         }
 
-        while (!m_pool->m_available_connections.empty()) {
-            auto conn = m_pool->m_available_connections.front();
-            m_pool->m_available_connections.pop();
-
-            if (conn && !conn->isClosed() && conn->isHealthy()) {
-                conn->updateLastUsed();
-                m_connection = std::move(conn);
-                m_pool->m_total_acquired++;
-                m_pool->m_active_connections.fetch_add(1, std::memory_order_acq_rel);
-                m_state = State::Ready;
-                break;
-            }
-
-            auto it = std::find(m_pool->m_all_connections.begin(),
-                                m_pool->m_all_connections.end(),
-                                conn);
-            if (it != m_pool->m_all_connections.end()) {
-                m_pool->m_all_connections.erase(it);
-            }
-            m_pool->m_total_destroyed++;
+        m_connection = m_pool->tryAcquireAvailable();
+        if (m_connection) {
+            incrementCounter(m_pool->m_total_acquired);
+            incrementCounter(m_pool->m_active_connections);
+            m_state = State::Ready;
         }
 
         if (m_state == State::Ready) {
-        } else if (m_pool->m_all_connections.size() < m_pool->m_config.max_connections) {
-            AsyncRedisConfig async_config;
-            async_config.send_timeout = m_pool->m_config.connect_timeout;
-            async_config.recv_timeout = m_pool->m_config.connect_timeout;
-            auto client = std::make_shared<RedissClient>(
-                m_pool->m_scheduler,
-                async_config,
-                m_pool->m_config.tls_config);
-            m_connection = std::make_shared<PooledRedissConnection>(client, m_pool->m_scheduler);
-            m_pool->m_all_connections.push_back(m_connection);
-            m_pool->m_total_created++;
+        } else if ((m_connection = m_pool->createConnectionSlot())) {
             m_state = State::Creating;
         } else {
             m_waiter = std::make_shared<detail::RedissPoolWaiter>(std::move(waiter_waker));
@@ -969,10 +973,20 @@ namespace galay::redis
                 m_state = State::EnqueueFailed;
                 return SuspendAction::Error;
             }
-            m_pool->m_waiters.push(m_waiter);
-            m_pool->m_waiting_requests.fetch_add(1);
+            if (!m_pool->enqueueWaiter(m_waiter)) {
+                m_state = State::EnqueueFailed;
+                m_waiter.reset();
+                return SuspendAction::Error;
+            }
+            incrementCounter(m_pool->m_waiting_requests);
             m_wait_counted = true;
             m_state = State::Waiting;
+            if (m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
+                const bool woke_waiter = m_pool->wakeOneWaiterFromAvailable();
+                if (!woke_waiter && m_pool->m_idle_connections.load(std::memory_order_acquire) > 0) {
+                    REDIS_LOG_DEBUG("[client]", "TLS Redis pool waiter queued while idle wake raced");
+                }
+            }
             return SuspendAction::Wait;
         }
 
@@ -982,7 +996,7 @@ namespace galay::redis
         }
         if (m_state != State::Creating || !m_connection) {
             m_state = State::Error;
-            m_error.emplace(RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid TLS connection acquire state");
+            setAcquireError(m_error, RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR, "Invalid TLS connection acquire state");
             return SuspendAction::Error;
         }
 
@@ -990,8 +1004,16 @@ namespace galay::redis
         options.username = m_pool->m_config.username;
         options.password = m_pool->m_config.password;
         options.db_index = m_pool->m_config.db_index;
-        m_connect_awaitable.emplace(
+        const bool connect_stored = emplaceOptional(
+            m_connect_awaitable,
             m_connection->get()->connect(m_pool->m_config.host, m_pool->m_config.port, std::move(options)));
+        if (!connect_stored) {
+            m_state = State::Error;
+            setAcquireError(m_error,
+                            RedisErrorType::REDIS_ERROR_TYPE_INTERNAL_ERROR,
+                            "Failed to store TLS Redis connect awaitable");
+            return SuspendAction::Error;
+        }
         return SuspendAction::Connect;
     }
 
@@ -1014,13 +1036,7 @@ namespace galay::redis
             m_connect_awaitable.reset();
             if (!connect_result) {
                 if (m_pool != nullptr) {
-                    auto it = std::find(m_pool->m_all_connections.begin(),
-                                        m_pool->m_all_connections.end(),
-                                        m_connection);
-                    if (it != m_pool->m_all_connections.end()) {
-                        m_pool->m_all_connections.erase(it);
-                        m_pool->m_total_destroyed++;
-                    }
+                    m_pool->destroyConnectionSlot(m_connection);
                 }
                 m_state = State::Invalid;
                 m_connection.reset();
@@ -1030,8 +1046,8 @@ namespace galay::redis
             m_connection->setHealthy(true);
             m_connection->updateLastUsed();
             if (m_pool != nullptr) {
-                m_pool->m_total_acquired++;
-                m_pool->m_active_connections.fetch_add(1, std::memory_order_acq_rel);
+                incrementCounter(m_pool->m_total_acquired);
+                incrementCounter(m_pool->m_active_connections);
                 m_pool->recordAcquireStats(m_start_time);
             }
             m_state = State::Invalid;
@@ -1040,7 +1056,7 @@ namespace galay::redis
 
         if (m_state == State::Waiting) {
             if (m_wait_counted && m_pool != nullptr) {
-                m_pool->m_waiting_requests.fetch_sub(1);
+                decrementCounter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
 
@@ -1061,8 +1077,8 @@ namespace galay::redis
             m_state = State::Invalid;
             if (connection) {
                 if (m_pool != nullptr) {
-                    m_pool->m_total_acquired++;
-                    m_pool->m_active_connections.fetch_add(1, std::memory_order_acq_rel);
+                    incrementCounter(m_pool->m_total_acquired);
+                    incrementCounter(m_pool->m_active_connections);
                     m_pool->recordAcquireStats(m_start_time);
                 }
                 m_connection = std::move(connection);
@@ -1114,7 +1130,7 @@ namespace galay::redis
                 }
             }
             if (m_wait_counted && m_pool != nullptr) {
-                m_pool->m_waiting_requests.fetch_sub(1);
+                decrementCounter(m_pool->m_waiting_requests);
                 m_wait_counted = false;
             }
         }
@@ -1127,7 +1143,7 @@ namespace galay::redis
     {
         if (!m_config.validate()) {
             REDIS_LOG_ERROR("[client]", "Invalid TLS connection pool configuration");
-            m_is_shutting_down = true;
+            m_is_shutting_down.store(true, std::memory_order_release);
         }
 
         REDIS_LOG_INFO("[client]", "TLS connection pool created: host={}:{}, min={}, max={}, initial={}",
@@ -1177,9 +1193,10 @@ namespace galay::redis
                 break;
             }
 
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
+            auto conn = result.value();
+            if (!returnToAvailable(conn)) {
+                REDIS_LOG_ERROR("[client]", "Failed to enqueue initial TLS connection");
+                break;
             }
             ++created_count;
         }
@@ -1191,7 +1208,7 @@ namespace galay::redis
             ));
         }
 
-        m_is_initialized = true;
+        m_is_initialized.store(true, std::memory_order_release);
         REDIS_LOG_INFO("[client]", "TLS connection pool initialized with {} connections", created_count);
         return {};
     }
@@ -1219,72 +1236,44 @@ namespace galay::redis
             ~WaitingGuard()
             {
                 if (counter != nullptr) {
-                    counter->fetch_sub(1);
+                    decrementCounter(*counter);
                 }
             }
         };
 
-        m_waiting_requests.fetch_add(1);
+        incrementCounter(m_waiting_requests);
         WaitingGuard waiting_guard{&m_waiting_requests};
 
-        std::unique_lock<std::mutex> lock(m_mutex);
-
-        while (!m_available_connections.empty()) {
-            auto conn = m_available_connections.front();
-            m_available_connections.pop();
-
-            if (!conn->isClosed() && conn->isHealthy()) {
-                conn->updateLastUsed();
-                m_total_acquired++;
-                m_active_connections.fetch_add(1, std::memory_order_acq_rel);
-                lock.unlock();
-                recordAcquireStats(start_time);
-                return conn;
-            }
-
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
-            }
-            m_total_destroyed++;
+        if (auto conn = tryAcquireAvailable()) {
+            incrementCounter(m_total_acquired);
+            incrementCounter(m_active_connections);
+            recordAcquireStats(start_time);
+            return conn;
         }
 
-        const bool can_create = m_all_connections.size() < m_config.max_connections;
-        lock.unlock();
+        auto result = getConnectionSync();
+        if (result) {
+            auto conn = result.value();
+            conn->updateLastUsed();
+            incrementCounter(m_total_acquired);
+            incrementCounter(m_active_connections);
+            recordAcquireStats(start_time);
 
-        if (can_create) {
-            auto result = getConnectionSync();
-            if (result) {
-                auto conn = result.value();
-                conn->updateLastUsed();
-                m_total_acquired++;
-                m_active_connections.fetch_add(1, std::memory_order_acq_rel);
-                recordAcquireStats(start_time);
-
-                size_t total_connections = 0;
-                {
-                    std::lock_guard<std::mutex> stats_lock(m_mutex);
-                    total_connections = m_all_connections.size();
-                }
-                REDIS_LOG_DEBUG("[client]", "Created and acquired new TLS connection, total: {}", total_connections);
-                return conn;
-            }
-
-            REDIS_LOG_WARN("[client]", "Failed to create new TLS connection: {}", result.error().message());
-            return std::unexpected(result.error());
+            REDIS_LOG_DEBUG("[client]", "Created and acquired new TLS connection, total: {}",
+                         m_live_connections.load(std::memory_order_acquire));
+            return conn;
         }
 
-        return std::unexpected(RedisError(
-            RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR,
-            "No available TLS connections"
-        ));
+        REDIS_LOG_WARN("[client]", "Failed to create new TLS connection: {}", result.error().message());
+        return std::unexpected(result.error());
     }
 
     void RedissConnectionPool::recordAcquireStats(std::chrono::steady_clock::time_point start_time)
     {
         const auto elapsed = std::chrono::steady_clock::now() - start_time;
         const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
-        m_total_acquire_time_ms += elapsed_ms;
+        const auto elapsed_ms_u64 = static_cast<uint64_t>(elapsed_ms < 0 ? 0 : elapsed_ms);
+        incrementCounter(m_total_acquire_time_ms, elapsed_ms_u64);
 
         double current_max = m_max_acquire_time_ms.load();
         while (elapsed_ms > current_max) {
@@ -1300,6 +1289,148 @@ namespace galay::redis
                 break;
             }
         }
+    }
+
+    size_t RedissConnectionPool::idleShardIndex() const noexcept
+    {
+        return mixedThreadShardIndex(this, kIdleShardCount);
+    }
+
+    std::shared_ptr<PooledRedissConnection> RedissConnectionPool::tryAcquireAvailable()
+    {
+        const size_t start = idleShardIndex();
+        for (size_t i = 0; i < kIdleShardCount; ++i) {
+            auto& shard = m_available_shards[(start + i) & (kIdleShardCount - 1)];
+            std::shared_ptr<PooledRedissConnection> conn;
+            while (shard.available.try_dequeue(conn)) {
+                decrementCounter(m_idle_connections);
+                if (conn && !conn->isClosed() && conn->isHealthy()) {
+                    conn->updateLastUsed();
+                    return conn;
+                }
+                destroyConnectionSlot(conn);
+            }
+        }
+        return nullptr;
+    }
+
+    std::shared_ptr<PooledRedissConnection> RedissConnectionPool::createConnectionSlot()
+    {
+        size_t current = m_live_connections.load(std::memory_order_acquire);
+        while (current < m_config.max_connections) {
+            if (m_live_connections.compare_exchange_weak(current,
+                                                         current + 1,
+                                                         std::memory_order_acq_rel,
+                                                         std::memory_order_acquire)) {
+                AsyncRedisConfig async_config;
+                async_config.send_timeout = m_config.connect_timeout;
+                async_config.recv_timeout = m_config.connect_timeout;
+                auto client = std::make_shared<RedissClient>(
+                    m_scheduler,
+                    async_config,
+                    m_config.tls_config);
+                auto conn = std::make_shared<PooledRedissConnection>(client, m_scheduler);
+                incrementCounter(m_total_created);
+                return conn;
+            }
+        }
+        return nullptr;
+    }
+
+    void RedissConnectionPool::destroyConnectionSlot(std::shared_ptr<PooledRedissConnection>& conn)
+    {
+        if (!conn) {
+            return;
+        }
+        conn->setHealthy(false);
+        conn.reset();
+        decrementCounter(m_live_connections);
+        incrementCounter(m_total_destroyed);
+    }
+
+    bool RedissConnectionPool::returnToAvailable(std::shared_ptr<PooledRedissConnection> conn)
+    {
+        if (!conn) {
+            return false;
+        }
+        const size_t shard_index = idleShardIndex();
+        auto queued = conn;
+        if (!m_available_shards[shard_index].available.enqueue(std::move(queued))) {
+            destroyConnectionSlot(conn);
+            return false;
+        }
+        incrementCounter(m_idle_connections);
+        return true;
+    }
+
+    bool RedissConnectionPool::enqueueWaiter(std::shared_ptr<detail::RedissPoolWaiter> waiter)
+    {
+        return waiter != nullptr && m_waiters.enqueue(std::move(waiter));
+    }
+
+    bool RedissConnectionPool::completeOneWaiter(
+        std::shared_ptr<PooledRedissConnection> conn,
+        std::shared_ptr<detail::RedissPoolWaiter>& waiter_to_wake)
+    {
+        if (!conn) {
+            return false;
+        }
+
+        std::shared_ptr<detail::RedissPoolWaiter> waiter;
+        while (m_waiters.try_dequeue(waiter)) {
+            if (waiter == nullptr) {
+                continue;
+            }
+
+            conn->updateLastUsed();
+            waiter->connection = conn;
+            if (!detail::try_complete_waiter(waiter->state,
+                                             detail::PoolWaiterState::Completed)) {
+                waiter->connection.reset();
+                continue;
+            }
+
+            waiter_to_wake = std::move(waiter);
+            return true;
+        }
+        return false;
+    }
+
+    bool RedissConnectionPool::wakeOneWaiterFromAvailable()
+    {
+        auto conn = tryAcquireAvailable();
+        if (!conn) {
+            return false;
+        }
+
+        std::shared_ptr<detail::RedissPoolWaiter> waiter_to_wake;
+        if (!completeOneWaiter(conn, waiter_to_wake)) {
+            const bool returned = returnToAvailable(std::move(conn));
+            if (!returned) {
+                REDIS_LOG_WARN("[client]", "Failed to return TLS Redis connection after waiter wake race");
+            }
+            return false;
+        }
+
+        waiter_to_wake->waker.wakeUp();
+        return true;
+    }
+
+    size_t RedissConnectionPool::drainAvailableConnections(
+        std::vector<std::shared_ptr<PooledRedissConnection>>* drained)
+    {
+        size_t count = 0;
+        for (auto& shard : m_available_shards) {
+            std::shared_ptr<PooledRedissConnection> conn;
+            while (shard.available.try_dequeue(conn)) {
+                decrementCounter(m_idle_connections);
+                ++count;
+                if (drained != nullptr && conn) {
+                    drained->push_back(std::move(conn));
+                }
+            }
+        }
+        return count;
     }
 
     void RedissConnectionPool::release(std::shared_ptr<PooledRedissConnection> conn)
@@ -1318,53 +1449,31 @@ namespace galay::redis
 
         if (conn->isClosed() || !conn->isHealthy()) {
             REDIS_LOG_WARN("[client]", "Unhealthy TLS connection released, removing from pool");
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
-            }
-            m_total_destroyed++;
+            destroyConnectionSlot(conn);
             decrementActive(m_active_connections);
             return;
         }
 
-        if (m_all_connections.size() > m_config.max_connections) {
+        if (m_live_connections.load(std::memory_order_acquire) > m_config.max_connections) {
             REDIS_LOG_DEBUG("[client]", "TLS pool size exceeds max, destroying connection");
-            auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-            if (it != m_all_connections.end()) {
-                m_all_connections.erase(it);
-            }
-            m_total_destroyed++;
+            destroyConnectionSlot(conn);
             decrementActive(m_active_connections);
             return;
         }
 
-        while (!m_waiters.empty()) {
-            auto waiter = m_waiters.front();
-            m_waiters.pop();
-            if (waiter == nullptr) {
-                continue;
+        const bool completed_waiter = completeOneWaiter(conn, waiter_to_wake);
+        if (!completed_waiter) {
+            const bool returned = returnToAvailable(conn);
+            if (!returned) {
+                REDIS_LOG_WARN("[client]", "Failed to return TLS Redis connection to idle pool");
             }
-
-            conn->updateLastUsed();
-            waiter->connection = conn;
-            if (!detail::try_complete_waiter(waiter->state,
-                                             detail::PoolWaiterState::Completed)) {
-                waiter->connection.reset();
-                continue;
-            }
-
-            waiter_to_wake = std::move(waiter);
-            break;
         }
-
-        if (!waiter_to_wake) {
-            m_available_connections.push(conn);
-        }
-        m_total_released++;
+        incrementCounter(m_total_released);
         decrementActive(m_active_connections);
 
         REDIS_LOG_DEBUG("[client]", "TLS connection released to pool, available: {}, total: {}",
-                      m_available_connections.size(), m_all_connections.size());
+                      m_idle_connections.load(std::memory_order_acquire),
+                      m_live_connections.load(std::memory_order_acquire));
 
         if (waiter_to_wake) {
             waiter_to_wake->waker.wakeUp();
@@ -1378,35 +1487,26 @@ namespace galay::redis
 
         for (int attempt = 0; attempt < m_config.max_reconnect_attempts; ++attempt) {
             if (attempt > 0) {
-                m_reconnect_attempts++;
+                incrementCounter(m_reconnect_attempts);
                 REDIS_LOG_INFO("[client]", "TLS reconnect attempt {}/{} for {}:{}",
                              attempt + 1, m_config.max_reconnect_attempts,
                              m_config.host, m_config.port);
             }
 
-            AsyncRedisConfig async_config;
-            async_config.send_timeout = m_config.connect_timeout;
-            async_config.recv_timeout = m_config.connect_timeout;
-
-            auto client = std::make_shared<RedissClient>(
-                m_scheduler,
-                async_config,
-                m_config.tls_config);
-            auto conn = std::make_shared<PooledRedissConnection>(client, m_scheduler);
-
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_all_connections.push_back(conn);
-                m_total_created++;
+            auto conn = createConnectionSlot();
+            if (!conn) {
+                return std::unexpected(RedisError(
+                    RedisErrorType::REDIS_ERROR_TYPE_TIMEOUT_ERROR,
+                    "TLS connection pool exhausted"));
             }
 
             if (attempt > 0) {
-                m_reconnect_successes++;
+                incrementCounter(m_reconnect_successes);
                 REDIS_LOG_INFO("[client]", "TLS reconnect succeeded on attempt {}", attempt + 1);
             }
 
             REDIS_LOG_DEBUG("[client]", "TLS connection created successfully, total: {}",
-                          m_all_connections.size());
+                          m_live_connections.load(std::memory_order_acquire));
             return conn;
         }
 
@@ -1431,44 +1531,15 @@ namespace galay::redis
             return;
         }
 
-        REDIS_LOG_INFO("[client]", "Running TLS health check on {} connections", m_all_connections.size());
-
-        std::vector<std::shared_ptr<PooledRedissConnection>> unhealthy_connections;
-
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            for (auto& conn : m_all_connections) {
-                if (!checkConnectionHealthSync(conn)) {
-                    unhealthy_connections.push_back(conn);
-                }
-            }
-
-            if (!unhealthy_connections.empty()) {
-                std::queue<std::shared_ptr<PooledRedissConnection>> temp_queue;
-                while (!m_available_connections.empty()) {
-                    auto c = m_available_connections.front();
-                    m_available_connections.pop();
-                    if (c->isHealthy()) {
-                        temp_queue.push(c);
-                    }
-                }
-                m_available_connections = std::move(temp_queue);
-
-                m_all_connections.erase(
-                    std::remove_if(m_all_connections.begin(), m_all_connections.end(),
-                        [](const auto& conn) { return !conn->isHealthy(); }),
-                    m_all_connections.end()
-                );
-
-                m_total_destroyed += unhealthy_connections.size();
-
-                REDIS_LOG_WARN("[client]", "Removed {} unhealthy TLS connections, remaining: {}",
-                             unhealthy_connections.size(), m_all_connections.size());
-            }
+        REDIS_LOG_INFO("[client]", "Running TLS health check on {} connections",
+                     m_live_connections.load(std::memory_order_acquire));
+        const size_t removed = cleanupUnhealthyConnections();
+        if (removed > 0) {
+            REDIS_LOG_WARN("[client]", "Removed {} unhealthy TLS connections, remaining: {}",
+                         removed, m_live_connections.load(std::memory_order_acquire));
         }
 
-        size_t current_size = m_all_connections.size();
+        size_t current_size = m_live_connections.load(std::memory_order_acquire);
         while (current_size < m_config.min_connections) {
             auto result = getConnectionSync();
             if (!result) {
@@ -1477,11 +1548,12 @@ namespace galay::redis
                 break;
             }
 
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
-                current_size = m_all_connections.size();
+            auto conn = result.value();
+            if (!returnToAvailable(conn)) {
+                REDIS_LOG_ERROR("[client]", "Failed to enqueue replacement TLS connection");
+                break;
             }
+            current_size = m_live_connections.load(std::memory_order_acquire);
 
             REDIS_LOG_INFO("[client]", "Created replacement TLS connection, total: {}", current_size);
         }
@@ -1492,37 +1564,28 @@ namespace galay::redis
         REDIS_LOG_INFO("[client]", "Running TLS idle connection cleanup");
 
         std::vector<std::shared_ptr<PooledRedissConnection>> idle_connections;
-
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            std::queue<std::shared_ptr<PooledRedissConnection>> temp_queue;
-            while (!m_available_connections.empty()) {
-                auto conn = m_available_connections.front();
-                m_available_connections.pop();
-
-                if (conn->getIdleTime() > m_config.idle_timeout &&
-                    m_all_connections.size() > m_config.min_connections) {
-                    idle_connections.push_back(conn);
-                } else {
-                    temp_queue.push(conn);
-                }
-            }
-            m_available_connections = std::move(temp_queue);
+        const size_t drained_count = drainAvailableConnections(&idle_connections);
+        if (drained_count == 0) {
+            return;
         }
 
-        if (!idle_connections.empty()) {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            for (auto& conn : idle_connections) {
-                auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-                if (it != m_all_connections.end()) {
-                    m_all_connections.erase(it);
-                    m_total_destroyed++;
+        size_t removed = 0;
+        for (auto& conn : idle_connections) {
+            if (conn && conn->getIdleTime() > m_config.idle_timeout &&
+                m_live_connections.load(std::memory_order_acquire) > m_config.min_connections) {
+                destroyConnectionSlot(conn);
+                ++removed;
+            } else if (conn) {
+                const bool returned = returnToAvailable(conn);
+                if (!returned) {
+                    REDIS_LOG_WARN("[client]", "Failed to return TLS Redis connection during idle cleanup");
                 }
             }
+        }
 
+        if (removed > 0) {
             REDIS_LOG_INFO("[client]", "Cleaned up {} idle TLS connections, remaining: {}",
-                         idle_connections.size(), m_all_connections.size());
+                         removed, m_live_connections.load(std::memory_order_acquire));
         }
     }
 
@@ -1530,12 +1593,7 @@ namespace galay::redis
     {
         REDIS_LOG_INFO("[client]", "Warming up TLS connection pool to {} connections", m_config.min_connections);
 
-        size_t current_size;
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-            current_size = m_all_connections.size();
-        }
-
+        size_t current_size = m_live_connections.load(std::memory_order_acquire);
         size_t created = 0;
         while (current_size < m_config.min_connections) {
             auto result = getConnectionSync();
@@ -1545,11 +1603,12 @@ namespace galay::redis
                 break;
             }
 
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
-                current_size = m_all_connections.size();
+            auto conn = result.value();
+            if (!returnToAvailable(conn)) {
+                REDIS_LOG_ERROR("[client]", "Failed to enqueue warmup TLS connection");
+                break;
             }
+            current_size = m_live_connections.load(std::memory_order_acquire);
             created++;
         }
 
@@ -1560,42 +1619,28 @@ namespace galay::redis
     {
         REDIS_LOG_INFO("[client]", "Cleaning up unhealthy TLS connections");
 
-        std::vector<std::shared_ptr<PooledRedissConnection>> unhealthy_connections;
+        std::vector<std::shared_ptr<PooledRedissConnection>> idle_connections;
+        const size_t drained_count = drainAvailableConnections(&idle_connections);
+        if (drained_count == 0) {
+            return 0;
+        }
 
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            for (auto& conn : m_all_connections) {
-                if (conn->isClosed() || !conn->isHealthy()) {
-                    unhealthy_connections.push_back(conn);
+        size_t removed = 0;
+        for (auto& conn : idle_connections) {
+            if (!conn || conn->isClosed() || !conn->isHealthy()) {
+                destroyConnectionSlot(conn);
+                ++removed;
+            } else {
+                const bool returned = returnToAvailable(conn);
+                if (!returned) {
+                    REDIS_LOG_WARN("[client]", "Failed to return TLS Redis connection during health cleanup");
                 }
-            }
-
-            if (!unhealthy_connections.empty()) {
-                std::queue<std::shared_ptr<PooledRedissConnection>> temp_queue;
-                while (!m_available_connections.empty()) {
-                    auto c = m_available_connections.front();
-                    m_available_connections.pop();
-                    if (!c->isClosed() && c->isHealthy()) {
-                        temp_queue.push(c);
-                    }
-                }
-                m_available_connections = std::move(temp_queue);
-
-                m_all_connections.erase(
-                    std::remove_if(m_all_connections.begin(), m_all_connections.end(),
-                        [](const auto& conn) { return conn->isClosed() || !conn->isHealthy(); }),
-                    m_all_connections.end()
-                );
-
-                m_total_destroyed += unhealthy_connections.size();
             }
         }
 
-        size_t removed = unhealthy_connections.size();
         if (removed > 0) {
             REDIS_LOG_INFO("[client]", "Cleaned up {} unhealthy TLS connections, remaining: {}",
-                         removed, m_all_connections.size());
+                         removed, m_live_connections.load(std::memory_order_acquire));
         }
 
         return removed;
@@ -1611,11 +1656,7 @@ namespace galay::redis
 
         size_t created = 0;
         for (size_t i = 0; i < count; ++i) {
-            size_t current_size;
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                current_size = m_all_connections.size();
-            }
+            const size_t current_size = m_live_connections.load(std::memory_order_acquire);
 
             if (current_size >= m_config.max_connections) {
                 REDIS_LOG_WARN("[client]", "Cannot expand TLS pool: reached max connections ({})", m_config.max_connections);
@@ -1629,15 +1670,16 @@ namespace galay::redis
                 break;
             }
 
-            {
-                std::lock_guard<std::mutex> lock(m_mutex);
-                m_available_connections.push(result.value());
+            auto conn = result.value();
+            if (!returnToAvailable(conn)) {
+                REDIS_LOG_ERROR("[client]", "Failed to enqueue expanded TLS connection");
+                break;
             }
             created++;
         }
 
         REDIS_LOG_INFO("[client]", "TLS pool expansion complete, created {} connections, total: {}",
-                     created, m_all_connections.size());
+                     created, m_live_connections.load(std::memory_order_acquire));
         return created;
     }
 
@@ -1645,74 +1687,47 @@ namespace galay::redis
     {
         REDIS_LOG_INFO("[client]", "Shrinking TLS pool to {} connections", target_size);
 
-        std::vector<std::shared_ptr<PooledRedissConnection>> connections_to_remove;
-
-        {
-            std::lock_guard<std::mutex> lock(m_mutex);
-
-            if (target_size < m_config.min_connections) {
-                target_size = m_config.min_connections;
-                REDIS_LOG_WARN("[client]", "TLS target size adjusted to min_connections: {}", target_size);
-            }
-
-            if (m_all_connections.size() <= target_size) {
-                REDIS_LOG_INFO("[client]", "Current TLS size ({}) <= target size ({}), no shrink needed",
-                             m_all_connections.size(), target_size);
-                return 0;
-            }
-
-            size_t to_remove = m_all_connections.size() - target_size;
-            std::queue<std::shared_ptr<PooledRedissConnection>> temp_queue;
-
-            while (!m_available_connections.empty() && connections_to_remove.size() < to_remove) {
-                auto conn = m_available_connections.front();
-                m_available_connections.pop();
-                connections_to_remove.push_back(conn);
-            }
-
-            while (!m_available_connections.empty()) {
-                temp_queue.push(m_available_connections.front());
-                m_available_connections.pop();
-            }
-            m_available_connections = std::move(temp_queue);
-
-            for (auto& conn : connections_to_remove) {
-                auto it = std::find(m_all_connections.begin(), m_all_connections.end(), conn);
-                if (it != m_all_connections.end()) {
-                    m_all_connections.erase(it);
-                }
-            }
-
-            m_total_destroyed += connections_to_remove.size();
+        if (target_size < m_config.min_connections) {
+            target_size = m_config.min_connections;
+            REDIS_LOG_WARN("[client]", "TLS target size adjusted to min_connections: {}", target_size);
         }
 
-        size_t removed = connections_to_remove.size();
+        if (m_live_connections.load(std::memory_order_acquire) <= target_size) {
+            REDIS_LOG_INFO("[client]", "Current TLS size ({}) <= target size ({}), no shrink needed",
+                         m_live_connections.load(std::memory_order_acquire), target_size);
+            return 0;
+        }
+
+        size_t removed = 0;
+        while (m_live_connections.load(std::memory_order_acquire) > target_size) {
+            auto conn = tryAcquireAvailable();
+            if (!conn) {
+                break;
+            }
+            destroyConnectionSlot(conn);
+            ++removed;
+        }
+
         REDIS_LOG_INFO("[client]", "TLS pool shrink complete, removed {} connections, remaining: {}",
-                     removed, m_all_connections.size());
+                     removed, m_live_connections.load(std::memory_order_acquire));
         return removed;
     }
 
     void RedissConnectionPool::shutdown()
     {
-        if (m_is_shutting_down) {
+        if (m_is_shutting_down.exchange(true, std::memory_order_acq_rel)) {
             return;
         }
 
-        m_is_shutting_down = true;
         REDIS_LOG_INFO("[client]", "Shutting down TLS connection pool");
 
-        std::vector<std::shared_ptr<PooledRedissConnection>> all_connections;
+        std::vector<std::shared_ptr<PooledRedissConnection>> idle_connections;
         std::vector<std::shared_ptr<detail::RedissPoolWaiter>> waiters_to_wake;
 
-        all_connections = m_all_connections;
-        m_all_connections.clear();
+        const size_t drained_count = drainAvailableConnections(&idle_connections);
 
-        while (!m_available_connections.empty()) {
-            m_available_connections.pop();
-        }
-        while (!m_waiters.empty()) {
-            auto waiter = m_waiters.front();
-            m_waiters.pop();
+        std::shared_ptr<detail::RedissPoolWaiter> waiter;
+        while (m_waiters.try_dequeue(waiter)) {
             if (waiter == nullptr) {
                 continue;
             }
@@ -1722,21 +1737,23 @@ namespace galay::redis
             }
         }
         m_active_connections.store(0, std::memory_order_release);
+        m_idle_connections.store(0, std::memory_order_release);
+        m_live_connections.store(0, std::memory_order_release);
 
         for (auto& waiter : waiters_to_wake) {
             waiter->waker.wakeUp();
         }
 
-        m_is_initialized = false;
+        m_is_initialized.store(false, std::memory_order_release);
         REDIS_LOG_INFO("[client]", "TLS connection pool shutdown complete, closed {} connections",
-                     all_connections.size());
+                     drained_count);
     }
 
     RedissConnectionPool::PoolStats RedissConnectionPool::getStats() const
     {
         PoolStats stats;
-        stats.total_connections = m_all_connections.size();
-        stats.available_connections = m_available_connections.size();
+        stats.total_connections = m_live_connections.load(std::memory_order_acquire);
+        stats.available_connections = m_idle_connections.load(std::memory_order_acquire);
         stats.active_connections = m_active_connections.load(std::memory_order_acquire);
         stats.waiting_requests = m_waiting_requests.load();
         stats.total_acquired = m_total_acquired.load();

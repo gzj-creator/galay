@@ -2,7 +2,11 @@
 
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <optional>
+#include <sstream>
 #include <string>
 
 using namespace galay::redis::protocol;
@@ -71,6 +75,60 @@ bool expectOwnedStringReply(std::string input,
         return false;
     }
     return true;
+}
+
+std::optional<std::string> readFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path);
+    if (!input) {
+        std::cerr << "failed to open " << path << "\n";
+        return std::nullopt;
+    }
+
+    std::ostringstream buffer;
+    buffer << input.rdbuf();
+    return buffer.str();
+}
+
+std::filesystem::path repoRoot()
+{
+    std::filesystem::path file = __FILE__;
+    return file.parent_path().parent_path().parent_path().parent_path();
+}
+
+std::optional<std::string> bodyAfter(const std::string& text, const std::string& signature)
+{
+    const auto signature_pos = text.find(signature);
+    if (signature_pos == std::string::npos) {
+        std::cerr << "missing source boundary signature: " << signature << "\n";
+        return std::nullopt;
+    }
+
+    const auto open_pos = text.find('{', signature_pos);
+    if (open_pos == std::string::npos) {
+        std::cerr << "missing source boundary body: " << signature << "\n";
+        return std::nullopt;
+    }
+
+    size_t depth = 0;
+    for (size_t i = open_pos; i < text.size(); ++i) {
+        if (text[i] == '{') {
+            ++depth;
+        } else if (text[i] == '}') {
+            --depth;
+            if (depth == 0) {
+                return text.substr(open_pos, i - open_pos + 1);
+            }
+        }
+    }
+
+    std::cerr << "unterminated source boundary body: " << signature << "\n";
+    return std::nullopt;
+}
+
+bool contains(const std::string& text, const std::string& needle)
+{
+    return text.find(needle) != std::string::npos;
 }
 
 bool testStringReplyOwnership()
@@ -167,6 +225,45 @@ bool testAggregateLengthBoundaries()
     return true;
 }
 
+bool testDoubleParseBoundaries()
+{
+    RespParser parser;
+    RedisReply reply;
+    const std::string input = ",1.25\r\n";
+    auto parsed = parser.parseFast(input.data(), input.size(), &reply);
+    if (!parsed) {
+        std::cerr << "double parse failed with " << static_cast<int>(parsed.error()) << "\n";
+        return false;
+    }
+    if (reply.getType() != RespType::Double || reply.asDouble() != 1.25) {
+        std::cerr << "double parse returned wrong value\n";
+        return false;
+    }
+    if (!expectFastParseError(",1.2x\r\n", ParseError::InvalidFormat, "double trailing garbage")) {
+        return false;
+    }
+    if (!expectFastParseError(",1e999999\r\n", ParseError::InvalidFormat, "double out of range")) {
+        return false;
+    }
+
+    const auto protocol_source = readFile(repoRoot() / "src/cpp/galay-redis/protoc/redis_protocol.cc");
+    if (!protocol_source) {
+        return false;
+    }
+    const auto double_body = bodyAfter(*protocol_source, "RespParser::parseDoubleFast");
+    if (!double_body) {
+        return false;
+    }
+    for (const auto* forbidden : {"std::stod", "try", "catch", "std::string str"}) {
+        if (contains(*double_body, forbidden)) {
+            std::cerr << "RESP double parser hot path must use explicit parse errors, not "
+                      << forbidden << "\n";
+            return false;
+        }
+    }
+    return true;
+}
+
 } // namespace
 
 int main()
@@ -181,6 +278,9 @@ int main()
         return 1;
     }
     if (!testAggregateLengthBoundaries()) {
+        return 1;
+    }
+    if (!testDoubleParseBoundaries()) {
         return 1;
     }
     std::cout << "T21-RedisRespBoundaries PASS\n";

@@ -59,6 +59,19 @@ void assert_static_contracts() {
     static_assert(!std::is_move_constructible_v<LruCache<int, int>>);
     static_assert(!std::is_move_assignable_v<LruCache<int, int>>);
 
+    static_assert(!std::is_copy_constructible_v<Mvcc<std::string>>);
+    static_assert(!std::is_copy_assignable_v<Mvcc<std::string>>);
+    static_assert(!std::is_move_constructible_v<Mvcc<std::string>>);
+    static_assert(!std::is_move_assignable_v<Mvcc<std::string>>);
+    static_assert(!std::is_copy_constructible_v<Transaction<std::string>>);
+    static_assert(!std::is_copy_assignable_v<Transaction<std::string>>);
+    static_assert(!std::is_move_constructible_v<Transaction<std::string>>);
+    static_assert(!std::is_move_assignable_v<Transaction<std::string>>);
+    static_assert(!std::is_copy_constructible_v<VersionedValue<std::string>>);
+    static_assert(!std::is_copy_assignable_v<VersionedValue<std::string>>);
+    static_assert(std::is_nothrow_move_constructible_v<VersionedValue<std::string>>);
+    static_assert(std::is_nothrow_move_assignable_v<VersionedValue<std::string>>);
+
     static_assert(std::is_copy_constructible_v<ByteMetaData>);
     static_assert(std::is_copy_assignable_v<ByteMetaData>);
     static_assert(std::is_copy_constructible_v<HuffmanCode>);

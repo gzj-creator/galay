@@ -68,6 +68,9 @@ std::string SslError::message() const
         case SslErrorCode::kTimeout:
             oss << "Operation timed out";
             break;
+        case SslErrorCode::kBufferTooLarge:
+            oss << "Buffer length exceeds SSL BIO limit";
+            break;
         case SslErrorCode::kUnknown:
         default:
             oss << "Unknown SSL error";

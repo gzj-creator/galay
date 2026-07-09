@@ -60,6 +60,16 @@ typedef struct C_IOResult {
 const char* galay_coro_ioresult_string(C_IOResultCode code);
 
 /**
+ * @brief 返回 C_IOResultCode 的稳定错误字符串。
+ *
+ * @param code C 协程/I/O 结果码，允许传入未知枚举值。
+ * @return 静态字符串；不会返回 NULL，未知值返回 "unknown"。
+ * @note 该函数是 C ABI `*_get_error` 约定入口，语义与
+ * `galay_coro_ioresult_string` 完全一致。
+ */
+const char* galay_coro_ioresult_get_error(C_IOResultCode code);
+
+/**
  * @brief 将 C_IOResultCode 归一化为 galay_status_t。
  *
  * @param code C 协程/I/O 结果码，允许传入未知枚举值。

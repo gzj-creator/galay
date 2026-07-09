@@ -95,17 +95,35 @@ inline bool FileWriteIOContext::handleComplete(struct io_uring_cqe* cqe,
 
 inline bool FileWatchIOContext::handleComplete(struct io_uring_cqe* cqe,
                                                [[maybe_unused]] GHandle handle) {
-    auto result = io::handleFileWatch(cqe, m_buffer);
+    auto result = io::handleFileWatch(cqe, m_buffer, m_ready_events);
     if(!result && IOError::contains(result.error().code(), kNotReady)) return false;
     m_result = std::move(result);
     return true;
 }
 
 inline bool SendFileIOContext::handleComplete(struct io_uring_cqe* cqe, GHandle handle) {
-    auto result = io::handleSendFile(cqe, handle, m_file_fd, m_offset, m_count);
-    if(!result && IOError::contains(result.error().code(), kNotReady)) return false;
-    m_result = std::move(result);
-    return true;
+    while (m_count > 0) {
+        auto result = io::handleSendFile(cqe, handle, m_file_fd, m_offset, m_count);
+        if (!result) {
+            if (IOError::contains(result.error().code(), kNotReady)) {
+                return false;
+            }
+            auto& stored = (m_result = std::unexpected(result.error()));
+            return !stored.has_value();
+        }
+
+        const size_t sent = result.value();
+        if (sent == 0) {
+            auto& stored = (m_result = m_transferred);
+            return stored.has_value();
+        }
+        m_offset += static_cast<off_t>(sent);
+        m_count -= sent;
+        m_transferred += sent;
+    }
+
+    auto& stored = (m_result = m_transferred);
+    return stored.has_value();
 }
 
 #else // kqueue / epoll
@@ -191,10 +209,28 @@ inline bool FileWatchIOContext::handleComplete([[maybe_unused]] GHandle handle) 
 }
 
 inline bool SendFileIOContext::handleComplete(GHandle handle) {
-    auto result = io::handleSendFile(handle, m_file_fd, m_offset, m_count);
-    if(!result && IOError::contains(result.error().code(), kNotReady)) return false;
-    m_result = std::move(result);
-    return true;
+    while (m_count > 0) {
+        auto result = io::handleSendFile(handle, m_file_fd, m_offset, m_count);
+        if (!result) {
+            if (IOError::contains(result.error().code(), kNotReady)) {
+                return false;
+            }
+            auto& stored = (m_result = std::unexpected(result.error()));
+            return !stored.has_value();
+        }
+
+        const size_t sent = result.value();
+        if (sent == 0) {
+            auto& stored = (m_result = m_transferred);
+            return stored.has_value();
+        }
+        m_offset += static_cast<off_t>(sent);
+        m_count -= sent;
+        m_transferred += sent;
+    }
+
+    auto& stored = (m_result = m_transferred);
+    return stored.has_value();
 }
 
 #endif // USE_IOURING

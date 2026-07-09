@@ -20,6 +20,25 @@ using namespace galay::http2;
 
 namespace {
 
+#ifdef GALAY_SSL_FEATURE_ENABLED
+struct SslReadContractState {
+    using ResultType = std::expected<int, Http2ErrorCode>;
+
+    bool hasResult() const { return true; }
+    ResultType takeResult() { return 0; }
+    bool parseFromRingBuffer() { return false; }
+    bool completeIfClosing() { return false; }
+    bool prepareRecvWindow(char*& buffer, size_t& length) {
+        buffer = nullptr;
+        length = 0;
+        return false;
+    }
+    void setSslRecvError(const galay::ssl::SslError&) {}
+    void setProtocolError(Http2ErrorCode, std::string_view) {}
+    void onBytesReceived(size_t) {}
+};
+#endif
+
 template<typename T>
 concept HasClone = requires(const T& value) {
     value.clone();
@@ -235,6 +254,17 @@ int main()
     static_assert(std::is_copy_assignable_v<Http2FrameHeader>);
     static_assert(std::is_copy_constructible_v<Http2ErrorCode>);
     static_assert(std::is_copy_assignable_v<Http2ErrorCode>);
+    static_assert(std::is_copy_constructible_v<Http2Error>);
+    static_assert(std::is_copy_assignable_v<Http2Error>);
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    static_assert(std::is_constructible_v<Http2Error, const galay::ssl::SslError&>);
+    static_assert(std::same_as<
+                  galay::http2::detail::Http2SslReadMachine<SslReadContractState>::result_type,
+                  std::expected<int, Http2Error>>);
+    static_assert(std::same_as<
+                  galay::http2::detail::Http2SslWriteMachine::result_type,
+                  std::expected<bool, Http2Error>>);
+#endif
     static_assert(std::is_copy_constructible_v<Http2Settings>);
     static_assert(std::is_copy_assignable_v<Http2Settings>);
     static_assert(std::is_copy_constructible_v<Http2RuntimeConfig>);

@@ -179,7 +179,7 @@ public:
     void onSend(std::expected<size_t, galay::ssl::SslError> result) {
         if (!result) {
             m_writer->resetPendingState();
-            m_result = std::unexpected(WsError(kWsSendError, result.error().message()));
+            m_result = std::unexpected(WsError(result.error()));
             return;
         }
 

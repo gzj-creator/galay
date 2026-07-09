@@ -22,6 +22,11 @@ const char* galay_coro_ioresult_string(C_IOResultCode code)
     }
 }
 
+const char* galay_coro_ioresult_get_error(C_IOResultCode code)
+{
+    return galay_coro_ioresult_string(code);
+}
+
 galay_status_t galay_coro_ioresult_to_status(C_IOResultCode code)
 {
     switch (code) {

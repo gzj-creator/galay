@@ -50,6 +50,11 @@ std::string makeBulkFrame(size_t payload_size)
     return std::string("$") + std::to_string(payload_size) + "\r\n" + payload + "\r\n";
 }
 
+std::string makeDoubleFrame()
+{
+    return ",12345.6789\r\n";
+}
+
 bool verifyFrame(std::string_view frame, RespType expected_type, size_t expected_payload_size)
 {
     RespParser parser;
@@ -66,6 +71,13 @@ bool verifyFrame(std::string_view frame, RespType expected_type, size_t expected
     if (reply.getType() != expected_type) {
         std::cerr << "verify returned unexpected RESP type\n";
         return false;
+    }
+    if (expected_type == RespType::Double) {
+        if (reply.asDouble() != 12345.6789) {
+            std::cerr << "verify double payload mismatch\n";
+            return false;
+        }
+        return true;
     }
     const std::string value = reply.asString();
     if (value.size() != expected_payload_size) {
@@ -147,6 +159,7 @@ int main(int argc, char* argv[])
 
     const std::string simple_frame = makeSimpleFrame(2);
     const std::string bulk_frame = makeBulkFrame(bulk_payload_size);
+    const std::string double_frame = makeDoubleFrame();
 
     std::cout << "Redis RESP parser throughput\n"
               << "iterations=" << iterations
@@ -156,6 +169,9 @@ int main(int argc, char* argv[])
         return 1;
     }
     if (!runScenario("bulk-string", bulk_frame, RespType::BulkString, bulk_payload_size, iterations)) {
+        return 1;
+    }
+    if (!runScenario("double", double_frame, RespType::Double, 0, iterations)) {
         return 1;
     }
 

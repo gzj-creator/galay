@@ -37,6 +37,13 @@ struct VersionedValue {
 
     VersionedValue(Version v, std::unique_ptr<T> val, bool del = false)
         : version(v), value(std::move(val)), deleted(del) {}
+
+    VersionedValue(VersionedValue&&) noexcept = default;
+    VersionedValue& operator=(VersionedValue&&) noexcept = default;
+
+private:
+    VersionedValue(const VersionedValue&) = delete;
+    VersionedValue& operator=(const VersionedValue&) = delete;
 };
 
 /**
@@ -48,6 +55,9 @@ template<typename T>
 class Mvcc {
 public:
     Mvcc() : m_currentVersion(0) {}
+
+    Mvcc(Mvcc&&) = delete;
+    Mvcc& operator=(Mvcc&&) = delete;
 
     /**
      * @brief 获取指定版本号的值
@@ -272,6 +282,9 @@ public:
     }
 
 private:
+    Mvcc(const Mvcc&) = delete;
+    Mvcc& operator=(const Mvcc&) = delete;
+
     mutable std::shared_mutex m_mutex;
     std::atomic<Version> m_currentVersion;
     std::map<Version, std::unique_ptr<VersionedValue<T>>> m_versions;
@@ -327,6 +340,9 @@ public:
         , m_startVersion(mvcc.currentVersion())
         , m_committed(false) {}
 
+    Transaction(Transaction&&) = delete;
+    Transaction& operator=(Transaction&&) = delete;
+
     /**
      * @brief 读取事务开始时的值
      * @return 值指针
@@ -364,6 +380,9 @@ public:
     bool isCommitted() const { return m_committed; }
 
 private:
+    Transaction(const Transaction&) = delete;
+    Transaction& operator=(const Transaction&) = delete;
+
     Mvcc<T>& m_mvcc;
     Version m_startVersion;
     std::unique_ptr<T> m_pendingValue;

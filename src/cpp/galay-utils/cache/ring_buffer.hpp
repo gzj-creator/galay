@@ -22,7 +22,6 @@
 #include <expected>
 #include <limits>
 #include <span>
-#include <stdexcept>
 #include <string_view>
 #include <type_traits>
 #include <utility>
@@ -809,8 +808,7 @@ public:
 
     /**
      * @brief 构造固定容量环形缓冲区
-     * @param capacity 缓冲区容量，必须大于 0；mmap 后端会按页向上对齐
-     * @throws std::invalid_argument capacity 为 0 时保留既有抛出行为
+     * @param capacity 缓冲区容量；为 0 时使用默认容量，mmap 后端会按页向上对齐
      * @note mmap 资源创建失败时自动降级到 vector 后端，不影响功能可用性。
      */
     explicit RingBuffer(size_t capacity = kDefaultCapacity)
@@ -820,6 +818,19 @@ public:
     RingBuffer& operator=(const RingBuffer&) = delete;
     RingBuffer(RingBuffer&& other) noexcept = default;
     RingBuffer& operator=(RingBuffer&& other) noexcept = default;
+
+    /**
+     * @brief 创建固定容量环形缓冲区并显式返回失败原因
+     * @param capacity 缓冲区容量，必须大于 0；mmap 后端会按页向上对齐
+     * @return 成功时返回 RingBuffer；容量非法时返回 RingBufferError::kInvalidCapacity
+     * @note 该工厂不使用异常表达可恢复的容量校验失败；mmap 资源创建失败仍按构造函数语义降级到 vector 后端。
+     */
+    [[nodiscard]] static std::expected<RingBuffer, RingBufferError> create(size_t capacity) {
+        if (capacity == 0) {
+            return std::unexpected(RingBufferError::kInvalidCapacity);
+        }
+        return RingBuffer(makeImpl(capacity));
+    }
 
     /**
      * @brief 显式复制当前可读内容到新的独立环形缓冲区
@@ -1016,9 +1027,12 @@ private:
     using Impl = detail::VectorRingBufferImpl;
 #endif
 
+    explicit RingBuffer(Impl impl) noexcept
+        : m_impl(std::move(impl)) {}
+
     static Impl makeImpl(size_t capacity) {
         if (capacity == 0) {
-            throw std::invalid_argument("RingBuffer capacity must be greater than 0");
+            capacity = kDefaultCapacity;
         }
 #if GALAY_UTILS_RING_BUFFER_HAS_MMAP
         if constexpr (Strategy == RingBufferBackendStrategy::Vector) {

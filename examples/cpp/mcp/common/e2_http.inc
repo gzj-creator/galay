@@ -5,6 +5,11 @@ struct ClientRunState {
     std::atomic<bool> done{false};
 };
 
+static void finishClientRun(int code, int& exitCode, ClientRunState* state) {
+    exitCode = code;
+    state->done.store(true, std::memory_order_release);
+}
+
 /**
  * @brief 简单的HTTP服务器示例
  *
@@ -190,17 +195,12 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
                         const std::string& url,
                         int& exitCode,
                         ClientRunState* state) {
-    auto finish = [&](int code) {
-        exitCode = code;
-        state->done.store(true, std::memory_order_release);
-    };
-
     // 连接到服务器
     std::cout << "Connecting to " << url << "..." << std::endl;
     auto connectResult = co_await client.connect();
     if (!connectResult) {
         std::cerr << "Failed to connect: " << connectResult.error().message() << std::endl;
-        finish(1);
+        finishClientRun(1, exitCode, state);
         co_return;
     }
 
@@ -210,7 +210,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     co_await client.initialize("example-http-client", "1.0.0", initResult);
     if (!initResult) {
         std::cerr << "Failed to initialize: " << initResult.error().message() << std::endl;
-        finish(1);
+        finishClientRun(1, exitCode, state);
         co_return;
     }
 
@@ -313,7 +313,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
     co_await client.disconnectAsync();
     std::cout << "\nClient disconnected." << std::endl;
 
-    finish(0);
+    finishClientRun(0, exitCode, state);
     co_return;
 }
 

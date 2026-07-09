@@ -8,6 +8,7 @@
 
 #include "../protoc/http2_hpack.h"
 
+#include <atomic>
 #include <cstdint>
 #include <ctime>
 #include <filesystem>
@@ -33,12 +34,46 @@ struct H2StaticFileRequest {
     std::string range;
 };
 
+/**
+ * @brief HTTP/2 静态文件小文件 body 的异步发布槽。
+ *
+ * @details cache 元数据只由连接 IO owner 同步访问；body 由 blocking worker 读完后
+ *          通过原子 shared_ptr 发布，后续连接可无锁复用同一份小文件内容。
+ */
+class H2StaticFileBodyCacheSlot {
+public:
+    H2StaticFileBodyCacheSlot() = default;
+    H2StaticFileBodyCacheSlot(const H2StaticFileBodyCacheSlot&) = delete;
+    H2StaticFileBodyCacheSlot& operator=(const H2StaticFileBodyCacheSlot&) = delete;
+    H2StaticFileBodyCacheSlot(H2StaticFileBodyCacheSlot&&) = delete;
+    H2StaticFileBodyCacheSlot& operator=(H2StaticFileBodyCacheSlot&&) = delete;
+
+    std::shared_ptr<const std::string> load() const noexcept {
+        return m_body.load(std::memory_order_acquire);
+    }
+
+    bool storeIfEmpty(std::shared_ptr<const std::string> body) noexcept {
+        if (!body) {
+            return false;
+        }
+        std::shared_ptr<const std::string> expected;
+        return m_body.compare_exchange_strong(expected,
+                                              std::move(body),
+                                              std::memory_order_acq_rel,
+                                              std::memory_order_acquire);
+    }
+
+private:
+    std::atomic<std::shared_ptr<const std::string>> m_body;
+};
+
 struct H2StaticFileLookup {
     std::filesystem::path file_path;
     std::string etag;
     std::string content_type = "application/octet-stream";
     std::shared_ptr<const std::string> body;
     std::shared_ptr<const std::string> encoded_headers;
+    std::shared_ptr<H2StaticFileBodyCacheSlot> body_cache_slot;
     std::vector<Http2HeaderField> headers;
     uintmax_t file_size = 0;
     std::time_t last_modified = 0;
@@ -46,14 +81,17 @@ struct H2StaticFileLookup {
     uintmax_t range_end = 0;
     int status = 404;
     bool body_cached = false;
+    bool body_cacheable = false;
 };
 
 struct H2StaticFileFastLookup {
     std::filesystem::path file_path;
     std::shared_ptr<const std::string> body;
     std::shared_ptr<const std::string> encoded_headers;
+    std::shared_ptr<H2StaticFileBodyCacheSlot> body_cache_slot;
     uintmax_t content_length = 0;
     bool body_cached = false;
+    bool body_cacheable = false;
 };
 
 class H2StaticFileCache;
@@ -91,10 +129,12 @@ private:
         std::string content_type;
         std::shared_ptr<const std::string> body;
         std::shared_ptr<const std::string> encoded_headers;
+        std::shared_ptr<H2StaticFileBodyCacheSlot> body_cache_slot;
         std::vector<Http2HeaderField> headers;
         uintmax_t file_size = 0;
         std::time_t last_modified = 0;
         bool body_cached = false;
+        bool body_cacheable = false;
     };
 
     // 返回指向内部缓存的临时视图；调用方必须在当前同步调用栈内消费，不能保存。

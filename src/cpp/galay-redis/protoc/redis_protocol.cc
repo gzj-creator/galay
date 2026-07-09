@@ -1,6 +1,8 @@
 #include "redis_protocol.h"
 #include <cstring>
 #include <charconv>
+#include <cerrno>
+#include <cstdlib>
 #include <limits>
 
 #if defined(__SSE2__)
@@ -444,11 +446,22 @@ namespace galay::redis::protocol
         if (!crlf_pos) {
             return std::unexpected(ParseError::Incomplete);
         }
-        std::string str(data + 1, *crlf_pos - 1);
-        double value;
-        try {
-            value = std::stod(str);
-        } catch (...) {
+        // 当前 libc++ 未提供 std::from_chars(double)（重载被删除），故用 strtod 解析；
+        // strtod 需要 NUL 结尾缓冲区，这里限制文本长度并拷贝到栈缓冲。
+        constexpr size_t kMaxRespDoubleTextLength = 127;
+        const size_t double_text_length = *crlf_pos - 1;
+        if (double_text_length == 0 || double_text_length > kMaxRespDoubleTextLength) {
+            return std::unexpected(ParseError::InvalidFormat);
+        }
+        std::array<char, kMaxRespDoubleTextLength + 1> number_text{};
+        std::memcpy(number_text.data(), data + 1, double_text_length);
+        number_text[double_text_length] = '\0';
+
+        errno = 0;
+        char* parsed_end = nullptr;
+        const double value = std::strtod(number_text.data(), &parsed_end);
+        if (errno == ERANGE ||
+            parsed_end != number_text.data() + double_text_length) {
             return std::unexpected(ParseError::InvalidFormat);
         }
 

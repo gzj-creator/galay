@@ -1551,7 +1551,7 @@ namespace galay::http
             }
         }
 
-        return std::move(result);
+        return result;
 
     }
 

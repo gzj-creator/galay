@@ -63,6 +63,39 @@ namespace galay::redis
         m_type = REDIS_ERROR_TYPE_CONNECTION_ERROR;
     }
 
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    RedisError::RedisError(const galay::ssl::SslError& ssl_error)
+        : m_extra_msg(ssl_error.message())
+        , m_type(REDIS_ERROR_TYPE_CONNECTION_ERROR)
+    {
+        using galay::ssl::SslErrorCode;
+
+        switch (ssl_error.code()) {
+        case SslErrorCode::kTimeout:
+        case SslErrorCode::kHandshakeTimeout:
+            m_type = REDIS_ERROR_TYPE_TIMEOUT_ERROR;
+            return;
+        case SslErrorCode::kPeerClosed:
+            m_type = REDIS_ERROR_TYPE_CONNECTION_CLOSED;
+            return;
+        case SslErrorCode::kReadFailed:
+            m_type = REDIS_ERROR_TYPE_RECV_ERROR;
+            return;
+        case SslErrorCode::kWriteFailed:
+            m_type = REDIS_ERROR_TYPE_SEND_ERROR;
+            return;
+        case SslErrorCode::kVerificationFailed:
+        case SslErrorCode::kHandshakeFailed:
+        case SslErrorCode::kSNISetFailed:
+            m_type = REDIS_ERROR_TYPE_CONNECTION_ERROR;
+            return;
+        default:
+            m_type = REDIS_ERROR_TYPE_CONNECTION_ERROR;
+            return;
+        }
+    }
+#endif
+
     RedisErrorType RedisError::type() const
     {
         return m_type;

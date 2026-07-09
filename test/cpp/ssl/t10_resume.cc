@@ -52,10 +52,10 @@ void transferPending(SslEngine& from, SslEngine& to)
 {
     while (from.pendingEncryptedOutput() > 0) {
         std::vector<char> buffer(from.pendingEncryptedOutput());
-        const int produced = from.extractEncryptedOutput(buffer.data(), buffer.size());
-        expect(produced > 0, "extractEncryptedOutput failed");
-        expect(to.feedEncryptedInput(buffer.data(), static_cast<size_t>(produced)) == produced,
-               "feedEncryptedInput failed");
+        const auto produced = from.extractEncryptedOutput(buffer.data(), buffer.size());
+        expect(produced && *produced > 0, "extractEncryptedOutput failed");
+        const auto fed = to.feedEncryptedInput(buffer.data(), *produced);
+        expect(fed && *fed == *produced, "feedEncryptedInput failed");
     }
 }
 
@@ -97,9 +97,9 @@ std::vector<char> producePeerRecord(SslSocket& peer)
     expect(peer.m_engine.pendingEncryptedOutput() > 0, "peer engine produced no ciphertext");
 
     std::vector<char> ciphertext(peer.m_engine.pendingEncryptedOutput());
-    const int produced = peer.m_engine.extractEncryptedOutput(ciphertext.data(), ciphertext.size());
-    expect(produced > 0, "peer extractEncryptedOutput failed");
-    ciphertext.resize(static_cast<size_t>(produced));
+    const auto produced = peer.m_engine.extractEncryptedOutput(ciphertext.data(), ciphertext.size());
+    expect(produced && *produced > 0, "peer extractEncryptedOutput failed");
+    ciphertext.resize(*produced);
     return ciphertext;
 }
 

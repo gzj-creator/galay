@@ -43,6 +43,24 @@ void test_mmap_error_surface() {
     require(!invalid, "mmap ring creation with zero capacity must fail");
     require(invalid.error() == RingBufferError::kInvalidCapacity,
             "zero capacity must report kInvalidCapacity");
+
+    auto invalid_ring = galay::utils::RingBuffer<>::create(0);
+    require(!invalid_ring, "public ring creation with zero capacity must fail without throwing");
+    require(invalid_ring.error() == RingBufferError::kInvalidCapacity,
+            "public zero capacity creation must report kInvalidCapacity");
+
+    auto valid_ring = galay::utils::RingBuffer<>::create(128);
+    require(valid_ring.has_value(), "public ring creation with positive capacity must succeed");
+    require(valid_ring->capacity() >= 128, "public ring creation must preserve requested capacity");
+}
+
+void test_public_constructor_zero_capacity_falls_back() {
+    galay::utils::RingBuffer<> buffer(0);
+    require(buffer.capacity() >= galay::utils::RingBuffer<>::kDefaultCapacity,
+            "zero-capacity constructor must fall back to a usable default capacity");
+    constexpr std::string_view data = "x";
+    require(buffer.write(data) == data.size(),
+            "zero-capacity constructor fallback buffer must accept writes");
 }
 
 void test_threshold_buffer_uses_single_iovec_across_wrap() {
@@ -87,6 +105,7 @@ void test_threshold_buffer_uses_single_iovec_across_wrap() {
 int main() {
 #if defined(__unix__) || defined(__APPLE__)
     test_mmap_error_surface();
+    test_public_constructor_zero_capacity_falls_back();
     test_threshold_buffer_uses_single_iovec_across_wrap();
 #endif
     return 0;

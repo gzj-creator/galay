@@ -77,8 +77,9 @@ void alarmHandler(int)
         message = "[T79] timeout before test stage was set\n";
         break;
     }
-    (void)::write(STDERR_FILENO, message, std::strlen(message));
-    ::_exit(2);
+    const size_t message_size = std::strlen(message);
+    const ssize_t write_result = ::write(STDERR_FILENO, message, message_size);
+    ::_exit(write_result < 0 || static_cast<size_t>(write_result) != message_size ? 3 : 2);
 }
 
 [[noreturn]] void fail(const std::string& message)

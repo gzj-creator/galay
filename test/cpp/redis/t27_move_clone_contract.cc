@@ -7,6 +7,9 @@
 #include <galay/cpp/galay-redis/protoc/connection.h>
 #include <galay/cpp/galay-redis/protoc/redis_protocol.h>
 #include <galay/cpp/galay-redis/sync/redis_session.h>
+#ifdef GALAY_SSL_FEATURE_ENABLED
+#include <galay/cpp/galay-ssl/common/error.h>
+#endif
 
 #include <array>
 #include <iostream>
@@ -81,6 +84,9 @@ static_assert(std::is_copy_constructible_v<RespEncoder>);
 static_assert(std::is_copy_assignable_v<RespEncoder>);
 static_assert(std::is_copy_constructible_v<RedisError>);
 static_assert(std::is_copy_assignable_v<RedisError>);
+#ifdef GALAY_SSL_FEATURE_ENABLED
+static_assert(std::is_constructible_v<RedisError, const galay::ssl::SslError&>);
+#endif
 static_assert(!std::is_copy_constructible_v<RedisConnectionPool>);
 static_assert(!std::is_move_constructible_v<RedisConnectionPool>);
 

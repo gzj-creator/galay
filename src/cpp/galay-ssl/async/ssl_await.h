@@ -158,9 +158,43 @@ struct SslMachineAction {
 };
 
 /**
+ * @brief 内部辅助类型
+ */
+namespace detail {
+
+/**
+ * @brief 提取 std::expected 的 value_type 和 error_type
+ * @tparam ResultT expected 类型
+ */
+template <typename ResultT>
+struct expected_traits;
+
+template <typename T, typename E>
+struct expected_traits<std::expected<T, E>> {
+    using value_type = T;   ///< 值类型
+    using error_type = E;   ///< 错误类型
+};
+
+} // namespace detail
+
+/**
+ * @brief SSL awaitable 结果类型概念
+ * @tparam ResultT 状态机结果类型
+ * @details 结果必须是 std::expected<T, E>，且 E 可由 SslError 构造。
+ */
+template <typename ResultT>
+concept SslAwaitableResult =
+    requires {
+        typename detail::expected_traits<std::remove_cvref_t<ResultT>>::error_type;
+    } && std::is_constructible_v<
+             typename detail::expected_traits<std::remove_cvref_t<ResultT>>::error_type,
+             SslError>;
+
+/**
  * @brief SSL 可等待状态机概念
  * @tparam MachineT 状态机类型
- * @details 约束状态机必须提供 advance、onHandshake、onRecv、onSend、onShutdown 接口
+ * @details 约束状态机必须提供 advance、onHandshake、onRecv、onSend、onShutdown 接口，
+ *          且 result_type 必须是错误类型可由 SslError 构造的 std::expected。
  */
 template <typename MachineT>
 concept SslAwaitableStateMachine =
@@ -175,7 +209,7 @@ concept SslAwaitableStateMachine =
         { machine.onRecv(std::move(recv_result)) } -> std::same_as<void>;
         { machine.onSend(std::move(send_result)) } -> std::same_as<void>;
         { machine.onShutdown(std::move(shutdown_result)) } -> std::same_as<void>;
-    };
+    } && SslAwaitableResult<typename MachineT::result_type>;
 
 /**
  * @brief SSL 握手上下文
@@ -378,43 +412,6 @@ public:
 private:
     SslBuilderOutcome<ResultT>& m_owner;  ///< 所属结果容器
 };
-
-/**
- * @brief 内部辅助类型
- */
-namespace detail {
-
-/**
- * @brief 判断类型是否为 std::expected 的类型特征
- * @tparam T 待判断类型
- */
-template <typename T>
-struct is_expected : std::false_type {};
-
-template <typename T, typename E>
-struct is_expected<std::expected<T, E>> : std::true_type {};
-
-/**
- * @brief is_expected 的便捷变量模板
- * @tparam ResultT 待判断类型
- */
-template <typename ResultT>
-constexpr bool is_expected_v = is_expected<std::remove_cvref_t<ResultT>>::value;
-
-/**
- * @brief 提取 std::expected 的 value_type 和 error_type
- * @tparam ResultT expected 类型
- */
-template <typename ResultT>
-struct expected_traits;
-
-template <typename T, typename E>
-struct expected_traits<std::expected<T, E>> {
-    using value_type = T;   ///< 值类型
-    using error_type = E;   ///< 错误类型
-};
-
-} // namespace detail
 
 /**
  * @brief SSL IO 操作驱动器
@@ -660,6 +657,10 @@ class SslStateMachineAwaitable
     , public TimeoutSupport<SslStateMachineAwaitable<MachineT>> {
 public:
     using result_type = typename MachineT::result_type;  ///< 操作结果类型
+    using ErrorT = typename detail::expected_traits<std::remove_cvref_t<result_type>>::error_type;
+    static_assert(
+        std::is_constructible_v<ErrorT, SslError>,
+        "SslStateMachineAwaitable error_type must be constructible from SslError");
 
     /**
      * @brief 构造状态机可等待对象
@@ -689,7 +690,7 @@ public:
      */
     bool await_ready()
     {
-        return m_result_set || m_error.has_value() || SequenceAwaitableBase::m_error.has_value();
+        return m_result_set || SequenceAwaitableBase::m_error.has_value();
     }
 
     /**
@@ -720,25 +721,12 @@ public:
         if (m_result_set) {
             return std::move(*m_result);
         }
-        if (m_error.has_value()) {
-            if constexpr (detail::is_expected_v<result_type>) {
-                using ErrorT = typename detail::expected_traits<result_type>::error_type;
-                if constexpr (std::is_constructible_v<ErrorT, SslError>) {
-                    return std::unexpected(ErrorT(*m_error));
-                }
-            }
-        }
         if (SequenceAwaitableBase::m_error.has_value()) {
             // Sequence registration can fail immediately before the SSL machine
             // produces a driver-level SslError. Bridge that base error instead of aborting.
-            if constexpr (detail::is_expected_v<result_type>) {
-                using ErrorT = typename detail::expected_traits<result_type>::error_type;
-                if constexpr (std::is_constructible_v<ErrorT, SslError>) {
-                    return std::unexpected(ErrorT(bridgeSequenceError(*SequenceAwaitableBase::m_error)));
-                }
-            }
+            return makeUnexpected(bridgeSequenceError(*SequenceAwaitableBase::m_error));
         }
-        std::abort();
+        return makeUnexpected(SslError(SslErrorCode::kUnknown));
     }
 
     /**
@@ -803,7 +791,7 @@ public:
         }
         m_running_signal = SslMachineSignal::kContinue;
         (void)pump();
-        if (!m_result_set && !m_error.has_value()) {
+        if (!m_result_set) {
             setFailure(SslError(SslErrorCode::kTimeout));
         }
     }
@@ -931,17 +919,15 @@ private:
         return SslError(SslErrorCode::kUnknown);
     }
 
+    auto makeUnexpected(const SslError& error) -> result_type
+    {
+        return std::unexpected(ErrorT(error));
+    }
+
     void setFailure(SslError error)
     {
-        if constexpr (detail::is_expected_v<result_type>) {
-            using ErrorT = typename detail::expected_traits<result_type>::error_type;
-            if constexpr (std::is_constructible_v<ErrorT, SslError>) {
-                m_result = std::unexpected(ErrorT(std::move(error)));
-                m_result_set = true;
-                return;
-            }
-        }
-        m_error = std::move(error);
+        m_result = makeUnexpected(error);
+        m_result_set = true;
     }
 
     void activateRead()
@@ -1035,7 +1021,7 @@ private:
     SequenceProgress pump()
     {
         for (size_t i = 0; i < kInlineTransitionCap; ++i) {
-            if (m_result_set || m_error.has_value()) {
+            if (m_result_set) {
                 return SequenceProgress::kCompleted;
             }
             if (m_has_active_task) {
@@ -1077,7 +1063,6 @@ private:
     SslOperationDriver m_driver;
     IOTask m_active_task{};
     std::optional<result_type> m_result;
-    std::optional<SslError> m_error;
     SslSocket* m_socket = nullptr;
     ActiveKind m_active_kind = ActiveKind::kNone;
     SslMachineSignal m_running_signal = SslMachineSignal::kContinue;
@@ -1301,10 +1286,12 @@ public:
  * 每步可附带用户回调处理结果。支持解析步骤的循环重入（如协议解析需要更多数据时）。
  */
 template <typename ResultT, size_t InlineN, typename FlowT>
+requires SslAwaitableResult<ResultT>
 class SslLinearMachine
 {
 public:
     using result_type = ResultT;                              ///< 结果类型
+    using ErrorT = typename detail::expected_traits<std::remove_cvref_t<result_type>>::error_type;
     using OpsT = SslBuilderOps<ResultT, InlineN>;             ///< 操作辅助类型
 
     static constexpr size_t kInvalidIndex = static_cast<size_t>(-1);  ///< 无效索引常量
@@ -1503,9 +1490,6 @@ public:
     {
         if (m_result.has_value()) {
             return SslMachineAction<result_type>::complete(std::move(*m_result));
-        }
-        if (m_error.has_value()) {
-            return SslMachineAction<result_type>::fail(*m_error);
         }
         if (m_cursor >= m_nodes.size()) {
             setError(SslError(SslErrorCode::kUnknown));
@@ -1827,23 +1811,13 @@ private:
 
     void setError(SslError error)
     {
-        if constexpr (detail::is_expected_v<result_type>) {
-            using ErrorT = typename detail::expected_traits<result_type>::error_type;
-            if constexpr (std::is_constructible_v<ErrorT, SslError>) {
-                m_result = std::unexpected(ErrorT(std::move(error)));
-                return;
-            }
-        }
-        m_error = std::move(error);
+        m_result = std::unexpected(ErrorT(error));
     }
 
     SslMachineAction<result_type> emitActionFromOutcome()
     {
         if (m_result.has_value()) {
             return SslMachineAction<result_type>::complete(std::move(*m_result));
-        }
-        if (m_error.has_value()) {
-            return SslMachineAction<result_type>::fail(*m_error);
         }
         return SslMachineAction<result_type>::continue_();
     }
@@ -1867,7 +1841,6 @@ private:
     SslSendContext m_send_context;
     SslShutdownContext m_shutdown_context;
     std::optional<result_type> m_result;
-    std::optional<SslError> m_error;
 };
 
 } // namespace detail
@@ -1891,6 +1864,7 @@ private:
  * @endcode
  */
 template <typename ResultT, size_t InlineN = 4, typename FlowT = void>
+requires SslAwaitableResult<ResultT>
 class SslAwaitableBuilder
 {
 public:
@@ -2059,6 +2033,7 @@ private:
  * @details 仅支持 fromStateMachine 方式创建可等待对象，不提供链式构建 API
  */
 template <typename ResultT, size_t InlineN>
+requires SslAwaitableResult<ResultT>
 class SslAwaitableBuilder<ResultT, InlineN, void>
 {
 public:

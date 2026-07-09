@@ -2,13 +2,16 @@
 #include <galay/cpp/galay-http/client/http_client.h>
 #include <galay/cpp/galay-http/common/http_log.h>
 #include <galay/cpp/galay-kernel/common/file_descriptor.h>
+#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/core/runtime.h>
 #include "http_etag.h"
 #include "http_range.h"
 #include <galay/cpp/galay-http/protoc/http_response.h>
 #include <galay/cpp/galay-http/builder/http_builder.h>
 #include <algorithm>
 #include <array>
-#include <sstream>
+#include <cerrno>
+#include <expected>
 #include <set>
 #include <cctype>
 #include <memory>
@@ -36,6 +39,106 @@ namespace {
 constexpr size_t kProxyMaxIdleConnectionsPerUpstream = 32;
 constexpr size_t kProxyRawRelayBufferSize = 16 * 1024;
 thread_local std::unordered_map<std::string, std::vector<std::unique_ptr<HttpClient>>> g_proxyClientPools;
+
+enum class StaticFileReadErrorCode : uint8_t
+{
+    kOpenFailed,
+    kReadFailed,
+    kShortRead,
+    kCloseFailed,
+};
+
+struct StaticFileReadError
+{
+    size_t expected_bytes = 0;
+    size_t actual_bytes = 0;
+    int error_number = 0;
+    int close_error_number = 0;
+    StaticFileReadErrorCode code = StaticFileReadErrorCode::kReadFailed;
+};
+
+const char* staticFileReadErrorName(StaticFileReadErrorCode code) noexcept
+{
+    switch (code) {
+        case StaticFileReadErrorCode::kOpenFailed:
+            return "open failed";
+        case StaticFileReadErrorCode::kReadFailed:
+            return "read failed";
+        case StaticFileReadErrorCode::kShortRead:
+            return "short read";
+        case StaticFileReadErrorCode::kCloseFailed:
+            return "close failed";
+    }
+    return "unknown";
+}
+
+std::expected<std::string, StaticFileReadError> readStaticFileBlocking(const std::string& filePath,
+                                                                       size_t fileSize)
+{
+    const int fd = ::open(filePath.c_str(), O_RDONLY);
+    if (fd < 0) {
+        return std::unexpected(StaticFileReadError{
+            .expected_bytes = fileSize,
+            .actual_bytes = 0,
+            .error_number = errno,
+            .close_error_number = 0,
+            .code = StaticFileReadErrorCode::kOpenFailed,
+        });
+    }
+
+    std::string content(fileSize, '\0');
+    size_t total_read = 0;
+    while (total_read < fileSize) {
+        const size_t remaining = fileSize - total_read;
+        const size_t read_size = std::min(
+            remaining,
+            static_cast<size_t>(std::numeric_limits<ssize_t>::max()));
+        const ssize_t bytes_read = ::read(fd, content.data() + total_read, read_size);
+        if (bytes_read < 0) {
+            const int read_errno = errno;
+            int close_errno = 0;
+            const int close_result = ::close(fd);
+            if (close_result != 0) {
+                close_errno = errno;
+            }
+            return std::unexpected(StaticFileReadError{
+                .expected_bytes = fileSize,
+                .actual_bytes = total_read,
+                .error_number = read_errno,
+                .close_error_number = close_errno,
+                .code = StaticFileReadErrorCode::kReadFailed,
+            });
+        }
+        if (bytes_read == 0) {
+            int close_errno = 0;
+            const int close_result = ::close(fd);
+            if (close_result != 0) {
+                close_errno = errno;
+            }
+            return std::unexpected(StaticFileReadError{
+                .expected_bytes = fileSize,
+                .actual_bytes = total_read,
+                .error_number = 0,
+                .close_error_number = close_errno,
+                .code = StaticFileReadErrorCode::kShortRead,
+            });
+        }
+        total_read += static_cast<size_t>(bytes_read);
+    }
+
+    const int close_result = ::close(fd);
+    if (close_result != 0) {
+        return std::unexpected(StaticFileReadError{
+            .expected_bytes = fileSize,
+            .actual_bytes = total_read,
+            .error_number = errno,
+            .close_error_number = 0,
+            .code = StaticFileReadErrorCode::kCloseFailed,
+        });
+    }
+
+    return content;
+}
 
 std::string toLowerAscii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -398,8 +501,7 @@ RouteMatch HttpRouter::findHandler(HttpMethod method, const std::string& path)
     // 2. 尝试模糊匹配 - 使用Trie树（O(k)，k为路径段数）
     auto fuzzyIt = m_fuzzyRoutes.find(method);
     if (fuzzyIt != m_fuzzyRoutes.end() && fuzzyIt->second) {
-        auto segments = splitPath(path);
-        result.handler = searchRoute(fuzzyIt->second.get(), segments, result.params);
+        result.handler = searchRoutePath(fuzzyIt->second.get(), path, result.params);
     }
 
     return result;  // 未找到，handler为nullptr
@@ -448,12 +550,22 @@ bool HttpRouter::isFuzzyPattern(const std::string& path) const
 std::vector<std::string> HttpRouter::splitPath(const std::string& path) const
 {
     std::vector<std::string> segments;
-    std::stringstream ss(path);
-    std::string segment;
-
-    while (std::getline(ss, segment, '/')) {
-        if (!segment.empty()) {
-            segments.push_back(segment);
+    size_t offset = 0;
+    while (offset < path.size()) {
+        while (offset < path.size() && path[offset] == '/') {
+            ++offset;
+        }
+        if (offset >= path.size()) {
+            break;
+        }
+        const size_t segment_begin = offset;
+        while (offset < path.size() && path[offset] != '/') {
+            ++offset;
+        }
+        std::string& inserted = segments.emplace_back(
+            path.substr(segment_begin, offset - segment_begin));
+        if (inserted.empty()) {
+            segments.pop_back();
         }
     }
 
@@ -505,21 +617,23 @@ void HttpRouter::insertRoute(RouteTrieNode* root, const std::vector<std::string>
 }
 
 HttpRouteHandler* HttpRouter::searchRoute(RouteTrieNode* root, const std::vector<std::string>& segments,
-                                          std::map<std::string, std::string>& params)
+                                          RouteParams& params)
 {
     params.clear();
     std::vector<std::string> paramValues;
 
     // 使用递归进行深度优先搜索，收集参数值到 paramValues
-    std::function<HttpRouteHandler*(RouteTrieNode*, size_t)> dfs =
-        [&](RouteTrieNode* node, size_t depth) -> HttpRouteHandler* {
+    auto dfs = [&](auto&& self, RouteTrieNode* node, size_t depth) -> HttpRouteHandler* {
 
         // 到达路径末尾
         if (depth == segments.size()) {
             if (node->isEnd) {
                 // 用终端节点的 paramNames 和收集到的 paramValues 构建 params
                 for (size_t i = 0; i < node->paramNames.size() && i < paramValues.size(); ++i) {
-                    params[node->paramNames[i]] = paramValues[i];
+                    const bool inserted = params.emplace(node->paramNames[i], paramValues[i]);
+                    if (!inserted) {
+                        return nullptr;
+                    }
                 }
                 return &node->handler;
             }
@@ -531,7 +645,7 @@ HttpRouteHandler* HttpRouter::searchRoute(RouteTrieNode* root, const std::vector
         // 1. 优先尝试精确匹配
         auto exactIt = node->children.find(segment);
         if (exactIt != node->children.end()) {
-            auto result = dfs(exactIt->second.get(), depth + 1);
+            auto result = self(self, exactIt->second.get(), depth + 1);
             if (result) return result;
         }
 
@@ -539,7 +653,7 @@ HttpRouteHandler* HttpRouter::searchRoute(RouteTrieNode* root, const std::vector
         auto paramIt = node->children.find(":param");
         if (paramIt != node->children.end()) {
             paramValues.push_back(segment);
-            auto result = dfs(paramIt->second.get(), depth + 1);
+            auto result = self(self, paramIt->second.get(), depth + 1);
             if (result) return result;
             paramValues.pop_back();
         }
@@ -547,7 +661,7 @@ HttpRouteHandler* HttpRouter::searchRoute(RouteTrieNode* root, const std::vector
         // 3. 尝试单段通配符（*）
         auto wildcardIt = node->children.find("*");
         if (wildcardIt != node->children.end()) {
-            auto result = dfs(wildcardIt->second.get(), depth + 1);
+            auto result = self(self, wildcardIt->second.get(), depth + 1);
             if (result) return result;
         }
 
@@ -563,7 +677,126 @@ HttpRouteHandler* HttpRouter::searchRoute(RouteTrieNode* root, const std::vector
         return nullptr;
     };
 
-    return dfs(root, 0);
+    return dfs(dfs, root, 0);
+}
+
+namespace {
+
+bool nextRouteSegment(std::string_view path,
+                      size_t offset,
+                      std::string_view& segment,
+                      size_t& next_offset)
+{
+    while (offset < path.size() && path[offset] == '/') {
+        ++offset;
+    }
+    if (offset >= path.size()) {
+        segment = {};
+        next_offset = offset;
+        return false;
+    }
+
+    const size_t segment_begin = offset;
+    while (offset < path.size() && path[offset] != '/') {
+        ++offset;
+    }
+    segment = path.substr(segment_begin, offset - segment_begin);
+    next_offset = offset;
+    return true;
+}
+
+RouteTrieNode* findChildBySegment(RouteTrieNode* node, std::string_view segment)
+{
+    if (node == nullptr) {
+        return nullptr;
+    }
+    for (auto& [key, child] : node->children) {
+        if (key.size() == segment.size() &&
+            std::string_view(key.data(), key.size()) == segment) {
+            return child.get();
+        }
+    }
+    return nullptr;
+}
+
+} // namespace
+
+HttpRouteHandler* HttpRouter::searchRoutePath(RouteTrieNode* root,
+                                              std::string_view path,
+                                              RouteParams& params)
+{
+    params.clear();
+    std::vector<std::string_view> paramValues;
+    paramValues.reserve(8);
+    return searchRoutePathRecursive(root, path, 0, paramValues, params);
+}
+
+HttpRouteHandler* HttpRouter::searchRoutePathRecursive(
+    RouteTrieNode* node,
+    std::string_view path,
+    size_t offset,
+    std::vector<std::string_view>& paramValues,
+    RouteParams& params)
+{
+    if (node == nullptr) {
+        return nullptr;
+    }
+
+    std::string_view segment;
+    size_t next_offset = offset;
+    const bool has_segment = nextRouteSegment(path, offset, segment, next_offset);
+    if (!has_segment) {
+        if (!node->isEnd) {
+            return nullptr;
+        }
+        for (size_t i = 0; i < node->paramNames.size() && i < paramValues.size(); ++i) {
+            const bool inserted = params.emplace(node->paramNames[i], paramValues[i]);
+            if (!inserted) {
+                return nullptr;
+            }
+        }
+        return &node->handler;
+    }
+
+    if (auto* exact = findChildBySegment(node, segment)) {
+        auto* result = searchRoutePathRecursive(exact, path, next_offset, paramValues, params);
+        if (result != nullptr) {
+            return result;
+        }
+    }
+
+    if (auto paramIt = node->children.find(":param"); paramIt != node->children.end()) {
+        paramValues.push_back(segment);
+        auto* result = searchRoutePathRecursive(paramIt->second.get(),
+                                                path,
+                                                next_offset,
+                                                paramValues,
+                                                params);
+        if (result != nullptr) {
+            return result;
+        }
+        paramValues.pop_back();
+    }
+
+    if (auto wildcardIt = node->children.find("*"); wildcardIt != node->children.end()) {
+        auto* result = searchRoutePathRecursive(wildcardIt->second.get(),
+                                                path,
+                                                next_offset,
+                                                paramValues,
+                                                params);
+        if (result != nullptr) {
+            return result;
+        }
+    }
+
+    if (auto greedyIt = node->children.find("**"); greedyIt != node->children.end()) {
+        auto* greedyNode = greedyIt->second.get();
+        if (greedyNode != nullptr && greedyNode->isEnd) {
+            return &greedyNode->handler;
+        }
+    }
+
+    return nullptr;
 }
 
 bool HttpRouter::validatePath(const std::string& path, std::string& error) const
@@ -1578,10 +1811,10 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
     switch (mode) {
         case FileTransferMode::MEMORY: {
-            // 内存模式：将文件完整读入内存后发送
-            std::ifstream file(filePath, std::ios::binary);
-            if (!file) {
-                HTTP_LOG_ERROR("[file] [open-fail]", "path={}", filePath);
+            // 内存模式：文件读取交给 blocking executor，当前协程只挂起等待结果。
+            auto runtime = galay::kernel::RuntimeHandle::current();
+            if (!runtime.has_value()) {
+                HTTP_LOG_ERROR("[file] [runtime-missing]", "path={}", filePath);
                 auto error_response = Http1_1ResponseBuilder()
                     .status(HttpStatusCode::InternalServerError_500)
                     .body("500 Internal Server Error")
@@ -1595,8 +1828,92 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 co_return;
             }
 
-            std::string content(fileSize, '\0');
-            file.read(&content[0], fileSize);
+            using StaticFileReadResult = std::expected<std::string, StaticFileReadError>;
+            auto read_waiter = std::make_shared<galay::kernel::AsyncWaiter<StaticFileReadResult>>();
+            auto blocking_task = runtime->spawnBlocking(
+                [filePath, fileSize, read_waiter]() mutable {
+                    StaticFileReadResult read_result = readStaticFileBlocking(filePath, fileSize);
+                    const bool notified = read_waiter->notify(std::move(read_result));
+                    if (!notified) {
+                        HTTP_LOG_WARN("[file] [async-read-notify-duplicate]", "path={}", filePath);
+                    }
+                });
+            if (!blocking_task.has_value()) {
+                HTTP_LOG_ERROR("[file] [async-read-submit-fail]",
+                               "path={} error={}",
+                               filePath,
+                               blocking_task.error().message());
+                auto error_response = Http1_1ResponseBuilder()
+                    .status(HttpStatusCode::InternalServerError_500)
+                    .body("500 Internal Server Error")
+                    .buildMove();
+                auto send_result = co_await writer.send(error_response.toString());
+                if (!send_result) {
+                    HTTP_LOG_ERROR("[send] [read-submit-error-fail]",
+                                   "error={}",
+                                   send_result.error().message());
+                }
+                co_return;
+            }
+            if (!blocking_task->isValid()) {
+                HTTP_LOG_ERROR("[file] [async-read-invalid-handle]", "path={}", filePath);
+                auto error_response = Http1_1ResponseBuilder()
+                    .status(HttpStatusCode::InternalServerError_500)
+                    .body("500 Internal Server Error")
+                    .buildMove();
+                auto send_result = co_await writer.send(error_response.toString());
+                if (!send_result) {
+                    HTTP_LOG_ERROR("[send] [read-handle-error-fail]",
+                                   "error={}",
+                                   send_result.error().message());
+                }
+                co_return;
+            }
+
+            auto awaited_read = co_await read_waiter->wait();
+            if (!awaited_read.has_value()) {
+                HTTP_LOG_ERROR("[file] [async-read-await-fail]",
+                               "path={} error={}",
+                               filePath,
+                               awaited_read.error().message());
+                auto error_response = Http1_1ResponseBuilder()
+                    .status(HttpStatusCode::InternalServerError_500)
+                    .body("500 Internal Server Error")
+                    .buildMove();
+                auto send_result = co_await writer.send(error_response.toString());
+                if (!send_result) {
+                    HTTP_LOG_ERROR("[send] [read-await-error-fail]",
+                                   "error={}",
+                                   send_result.error().message());
+                }
+                co_return;
+            }
+
+            StaticFileReadResult file_read = std::move(awaited_read.value());
+            if (!file_read.has_value()) {
+                const StaticFileReadError& read_error = file_read.error();
+                HTTP_LOG_ERROR("[file] [async-read-fail]",
+                               "path={} code={} errno={} close_errno={} expected={} actual={}",
+                               filePath,
+                               staticFileReadErrorName(read_error.code),
+                               read_error.error_number,
+                               read_error.close_error_number,
+                               read_error.expected_bytes,
+                               read_error.actual_bytes);
+                auto error_response = Http1_1ResponseBuilder()
+                    .status(HttpStatusCode::InternalServerError_500)
+                    .body("500 Internal Server Error")
+                    .buildMove();
+                auto send_result = co_await writer.send(error_response.toString());
+                if (!send_result) {
+                    HTTP_LOG_ERROR("[send] [read-error-fail]",
+                                   "error={}",
+                                   send_result.error().message());
+                }
+                co_return;
+            }
+
+            std::string content = std::move(file_read.value());
             response.setBodyStr(std::move(content));
 
             while (true) {

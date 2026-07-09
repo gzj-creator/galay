@@ -45,7 +45,13 @@ namespace galay::http
         copy.m_bodyParsed = m_bodyParsed;
         copy.m_headerLength = m_headerLength;
         copy.m_chunkParser = m_chunkParser.clone();
-        copy.m_routeParams = m_routeParams;
+        copy.m_routeParams = m_routeParams.clone();
+        if (m_routeParamMapCache.has_value()) {
+            auto& cache = copy.m_routeParamMapCache.emplace(*m_routeParamMapCache);
+            if (cache.size() != m_routeParamMapCache->size()) {
+                copy.m_routeParamMapCache.reset();
+            }
+        }
         copy.m_headerParsed = m_headerParsed;
         return copy;
     }
@@ -259,27 +265,48 @@ namespace galay::http
         m_headerParsed = false;
         m_chunkParser.reset();
         m_routeParams.clear();
+        m_routeParamMapCache.reset();
     }
 
     // ==================== 路由参数方法实现 ====================
     void HttpRequest::setRouteParams(std::map<std::string, std::string>&& params)
     {
+        RouteParams compact;
+        for (const auto& [name, value] : params) {
+            const bool inserted = compact.emplace(name, value);
+            if (!inserted) {
+                compact.clear();
+                break;
+            }
+        }
+        m_routeParams = std::move(compact);
+        m_routeParamMapCache.reset();
+    }
+
+    void HttpRequest::setRouteParams(RouteParams&& params)
+    {
         m_routeParams = std::move(params);
+        m_routeParamMapCache.reset();
     }
 
     const std::map<std::string, std::string>& HttpRequest::routeParams() const
     {
-        return m_routeParams;
+        if (!m_routeParamMapCache.has_value()) {
+            auto materialized = m_routeParams.toMap();
+            auto& cache = m_routeParamMapCache.emplace(std::move(materialized));
+            return cache;
+        }
+        return *m_routeParamMapCache;
     }
 
     std::string HttpRequest::getRouteParam(const std::string& name, const std::string& defaultValue) const
     {
-        auto it = m_routeParams.find(name);
-        return it != m_routeParams.end() ? it->second : defaultValue;
+        const std::string* value = m_routeParams.find(name);
+        return value != nullptr ? *value : defaultValue;
     }
 
     bool HttpRequest::hasRouteParam(const std::string& name) const
     {
-        return m_routeParams.find(name) != m_routeParams.end();
+        return m_routeParams.contains(name);
     }
 }

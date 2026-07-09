@@ -643,6 +643,11 @@ const char* galay_etcd_error_string(galay_etcd_error_code_t code)
     return "unknown";
 }
 
+const char* galay_etcd_get_error(galay_etcd_error_code_t code)
+{
+    return galay_etcd_error_string(code);
+}
+
 galay_status_t galay_etcd_error_status(galay_etcd_error_code_t code)
 {
     switch (code) {

@@ -16,10 +16,10 @@
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/waker.h"
+#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <array>
 #include <memory>
-#include <queue>
 #include <vector>
-#include <mutex>
 #include <atomic>
 #include <chrono>
 #include <coroutine>
@@ -670,6 +670,16 @@ namespace galay::redis
         std::expected<std::shared_ptr<PooledConnection>, RedisError>
         acquireSync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
         void recordAcquireStats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
+        std::shared_ptr<PooledConnection> tryAcquireAvailable(); ///< 从分片空闲队列非阻塞获取健康连接
+        std::shared_ptr<PooledConnection> createConnectionSlot(); ///< 预留容量并创建待连接槽位
+        void destroyConnectionSlot(std::shared_ptr<PooledConnection>& conn); ///< 销毁已计入容量的连接槽位
+        bool returnToAvailable(std::shared_ptr<PooledConnection> conn); ///< 将健康连接放回分片空闲队列
+        bool enqueueWaiter(std::shared_ptr<detail::RedisPoolWaiter> waiter); ///< 注册等待连接的协程
+        bool completeOneWaiter(std::shared_ptr<PooledConnection> conn,
+                               std::shared_ptr<detail::RedisPoolWaiter>& waiter_to_wake); ///< 尝试把连接转交给等待者
+        bool wakeOneWaiterFromAvailable(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
+        size_t drainAvailableConnections(std::vector<std::shared_ptr<PooledConnection>>* drained = nullptr); ///< 清空空闲分片
+        size_t idleShardIndex() const noexcept; ///< 当前线程对应的空闲分片
 
         /**
          * @brief 获取或创建连接（内部方法，同步）
@@ -682,14 +692,21 @@ namespace galay::redis
         bool checkConnectionHealthSync(std::shared_ptr<PooledConnection> conn);
 
     private:
+        static constexpr size_t kIdleShardCount = 16;
+        static_assert((kIdleShardCount & (kIdleShardCount - 1)) == 0,
+                      "Redis pool idle shard count must be a power of two");
+
+        struct alignas(64) IdleShard
+        {
+            moodycamel::ConcurrentQueue<std::shared_ptr<PooledConnection>> available; ///< 分片空闲连接队列
+        };
+
         IOScheduler* m_scheduler;                                            ///< IO 调度器
         ConnectionPoolConfig m_config;                                       ///< 连接池配置
 
-        // 连接管理
-        std::queue<std::shared_ptr<PooledConnection>> m_available_connections; ///< 可用连接队列
-        std::queue<std::shared_ptr<detail::RedisPoolWaiter>> m_waiters;         ///< 等待连接的协程队列
-        std::vector<std::shared_ptr<PooledConnection>> m_all_connections;      ///< 所有连接列表
-        mutable std::mutex m_mutex;                                            ///< 互斥锁
+        // 连接管理：空闲连接按线程分片，waiter 使用线程安全队列，协程路径不阻塞 OS 线程。
+        std::array<IdleShard, kIdleShardCount> m_available_shards;             ///< 分片空闲连接队列
+        moodycamel::ConcurrentQueue<std::shared_ptr<detail::RedisPoolWaiter>> m_waiters; ///< 等待连接的协程队列
 
         // 统计信息
         std::atomic<uint64_t> m_total_acquired{0};       ///< 总获取次数
@@ -707,6 +724,8 @@ namespace galay::redis
         std::atomic<uint64_t> m_total_acquire_time_ms{0};  ///< 总获取时间（毫秒）
         std::atomic<double> m_max_acquire_time_ms{0.0};    ///< 最大获取时间（毫秒）
         std::atomic<size_t> m_peak_active_connections{0};  ///< 峰值活跃连接数
+        std::atomic<size_t> m_live_connections{0};         ///< 已创建或正在连接的连接槽位数
+        std::atomic<size_t> m_idle_connections{0};         ///< 当前空闲队列中的连接数
         std::atomic<bool> m_is_initialized{false};         ///< 是否已初始化
         std::atomic<bool> m_is_shutting_down{false};       ///< 是否正在关闭
 
@@ -759,16 +778,33 @@ namespace galay::redis
         std::expected<std::shared_ptr<PooledRedissConnection>, RedisError>
         acquireSync(std::chrono::steady_clock::time_point start_time); ///< 同步获取连接实现
         void recordAcquireStats(std::chrono::steady_clock::time_point start_time); ///< 记录获取连接统计
+        std::shared_ptr<PooledRedissConnection> tryAcquireAvailable(); ///< 从分片空闲队列非阻塞获取健康连接
+        std::shared_ptr<PooledRedissConnection> createConnectionSlot(); ///< 预留容量并创建待连接槽位
+        void destroyConnectionSlot(std::shared_ptr<PooledRedissConnection>& conn); ///< 销毁已计入容量的连接槽位
+        bool returnToAvailable(std::shared_ptr<PooledRedissConnection> conn); ///< 将健康连接放回分片空闲队列
+        bool enqueueWaiter(std::shared_ptr<detail::RedissPoolWaiter> waiter); ///< 注册等待连接的协程
+        bool completeOneWaiter(std::shared_ptr<PooledRedissConnection> conn,
+                               std::shared_ptr<detail::RedissPoolWaiter>& waiter_to_wake); ///< 尝试把连接转交给等待者
+        bool wakeOneWaiterFromAvailable(); ///< 从空闲队列唤醒一个等待者，避免 enqueue/release 竞态
+        size_t drainAvailableConnections(std::vector<std::shared_ptr<PooledRedissConnection>>* drained = nullptr); ///< 清空空闲分片
+        size_t idleShardIndex() const noexcept; ///< 当前线程对应的空闲分片
         std::expected<std::shared_ptr<PooledRedissConnection>, RedisError> getConnectionSync(); ///< 获取或创建连接
         bool checkConnectionHealthSync(std::shared_ptr<PooledRedissConnection> conn); ///< 检查连接健康状态
 
     private:
+        static constexpr size_t kIdleShardCount = 16;
+        static_assert((kIdleShardCount & (kIdleShardCount - 1)) == 0,
+                      "Rediss pool idle shard count must be a power of two");
+
+        struct alignas(64) IdleShard
+        {
+            moodycamel::ConcurrentQueue<std::shared_ptr<PooledRedissConnection>> available; ///< 分片空闲连接队列
+        };
+
         IOScheduler* m_scheduler;                                                    ///< IO 调度器
         RedissConnectionPoolConfig m_config;                                         ///< 连接池配置
-        std::queue<std::shared_ptr<PooledRedissConnection>> m_available_connections; ///< 可用连接队列
-        std::queue<std::shared_ptr<detail::RedissPoolWaiter>> m_waiters;             ///< 等待连接的协程队列
-        std::vector<std::shared_ptr<PooledRedissConnection>> m_all_connections;      ///< 所有连接列表
-        mutable std::mutex m_mutex;                                                  ///< 互斥锁
+        std::array<IdleShard, kIdleShardCount> m_available_shards;                   ///< 分片空闲连接队列
+        moodycamel::ConcurrentQueue<std::shared_ptr<detail::RedissPoolWaiter>> m_waiters; ///< 等待连接的协程队列
 
         std::atomic<uint64_t> m_total_acquired{0};       ///< 总获取次数
         std::atomic<uint64_t> m_total_released{0};       ///< 总归还次数
@@ -784,6 +820,8 @@ namespace galay::redis
         std::atomic<uint64_t> m_total_acquire_time_ms{0};  ///< 总获取时间（毫秒）
         std::atomic<double> m_max_acquire_time_ms{0.0};    ///< 最大获取时间（毫秒）
         std::atomic<size_t> m_peak_active_connections{0};  ///< 峰值活跃连接数
+        std::atomic<size_t> m_live_connections{0};         ///< 已创建或正在连接的连接槽位数
+        std::atomic<size_t> m_idle_connections{0};         ///< 当前空闲队列中的连接数
         std::atomic<bool> m_is_initialized{false};         ///< 是否已初始化
         std::atomic<bool> m_is_shutting_down{false};       ///< 是否正在关闭
     };

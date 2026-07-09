@@ -77,6 +77,17 @@
         "GALAY_BUILD_C_API": "OFF",
         "GALAY_DISABLE_IOURING": "OFF"
       }
+    },
+    {
+      "name": "linux-perf-release",
+      "displayName": "Linux performance release",
+      "description": "Build all C++ modules and benchmarks with RelWithDebInfo and frame pointers.",
+      "inherits": "linux-perf",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -fno-omit-frame-pointer",
+        "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -fno-omit-frame-pointer"
+      }
     }
   ],
   "buildPresets": [
@@ -91,6 +102,10 @@
     {
       "name": "linux-perf",
       "configurePreset": "linux-perf"
+    },
+    {
+      "name": "linux-perf-release",
+      "configurePreset": "linux-perf-release"
     }
   ],
   "testPresets": [

@@ -674,6 +674,11 @@ const char* galay_rpc_error_string(galay_rpc_error_code_t code)
     return "Unknown";
 }
 
+const char* galay_rpc_get_error(galay_rpc_error_code_t code)
+{
+    return galay_rpc_error_string(code);
+}
+
 galay_status_t galay_rpc_error_to_status(galay_rpc_error_code_t code)
 {
     switch (code) {

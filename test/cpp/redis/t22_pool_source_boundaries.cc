@@ -134,6 +134,64 @@ int main()
         return 1;
     }
 
+    if (!contains(pool_header, "moodycamel::ConcurrentQueue")) {
+        std::cerr << "redis async pool shared state must use non-blocking concurrent queues\n";
+        return 1;
+    }
+
+    for (const auto* forbidden : {
+             "std::queue<std::shared_ptr<PooledConnection>> m_available_connections",
+             "std::queue<std::shared_ptr<detail::RedisPoolWaiter>> m_waiters",
+             "std::vector<std::shared_ptr<PooledConnection>> m_all_connections",
+             "std::queue<std::shared_ptr<PooledRedissConnection>> m_available_connections",
+             "std::queue<std::shared_ptr<detail::RedissPoolWaiter>> m_waiters",
+             "std::vector<std::shared_ptr<PooledRedissConnection>> m_all_connections",
+         }) {
+        if (contains(pool_header, forbidden)) {
+            std::cerr << "redis async pool must not keep cross-thread shared state in blocking STL containers: "
+                      << forbidden << "\n";
+            return 1;
+        }
+    }
+
+    for (const auto* forbidden : {
+             "(void)m_pool->wakeOneWaiterFromAvailable()",
+             "(void)returnToAvailable",
+             "(void)completeOneWaiter",
+             "(void)drainAvailableConnections",
+             "(void)wakeOneWaiterFromAvailable",
+         }) {
+        if (contains(pool_source, forbidden)) {
+            std::cerr << "redis pool must handle non-void state helper result explicitly: "
+                      << forbidden << "\n";
+            return 1;
+        }
+    }
+
+    for (const auto* forbidden : {
+             "m_is_initialized = true",
+             "m_is_initialized = false",
+             "m_is_shutting_down = true",
+             "m_is_shutting_down = false",
+         }) {
+        if (contains(pool_source, forbidden)) {
+            std::cerr << "redis pool must update atomic lifecycle flags with store(), not ignored operator=: "
+                      << forbidden << "\n";
+            return 1;
+        }
+    }
+
+    for (const auto* forbidden : {
+             "m_error.emplace(",
+             "m_connect_awaitable.emplace(",
+         }) {
+        if (contains(pool_source, forbidden)) {
+            std::cerr << "redis pool must bind and use optional emplace() return values explicitly: "
+                      << forbidden << "\n";
+            return 1;
+        }
+    }
+
     if (!contains(rediss_prepare_suspend, "connect(") &&
         !contains(pool_header, "RedissConnectOperation")) {
         std::cerr << "Rediss pool acquire path must run async connect before returning a new lease\n";
