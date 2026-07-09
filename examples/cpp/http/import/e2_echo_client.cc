@@ -36,7 +36,7 @@ Task<bool> sendEchoRequest(const std::string& url, const std::string& message) {
         co_return false;
     }
 
-    auto response_opt = result.value();
+    auto response_opt = std::move(result.value());
     if (!response_opt.has_value()) {
         std::cerr << "Request incomplete\n";
         co_return false;

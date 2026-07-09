@@ -34,6 +34,9 @@
 #include <cstring>
 #include <expected>
 #include <limits>
+#include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 namespace galay::rpc
@@ -159,6 +162,24 @@ class RpcRequest {
 public:
     RpcRequest() = default;
 
+private:
+    RpcRequest(const RpcRequest&) = delete;
+    RpcRequest& operator=(const RpcRequest&) = delete;
+public:
+
+    RpcRequest(RpcRequest&& other) noexcept
+    {
+        moveFrom(std::move(other));
+    }
+
+    RpcRequest& operator=(RpcRequest&& other) noexcept
+    {
+        if (this != &other) {
+            moveFrom(std::move(other));
+        }
+        return *this;
+    }
+
     /**
      * @brief 构造请求
      * @param request_id 请求ID
@@ -169,6 +190,24 @@ public:
         : m_request_id(request_id)
         , m_service_name(service)
         , m_method_name(method) {}
+
+    /**
+     * @brief 显式深拷贝请求
+     * @return 持有独立payload缓冲的新请求
+     *
+     * @note 借用payload会被复制为自有缓冲，避免clone结果继续依赖外部内存。
+     */
+    RpcRequest clone() const {
+        RpcRequest copy;
+        copy.m_request_id = m_request_id;
+        copy.m_call_mode = m_call_mode;
+        copy.m_end_of_stream = m_end_of_stream;
+        copy.m_service_name = m_service_name;
+        copy.m_method_name = m_method_name;
+        copy.m_metadata = m_metadata;
+        copy.copyPayloadFromView(payloadView());
+        return copy;
+    }
 
     /// @brief 获取请求ID
     uint32_t requestId() const { return m_request_id; }
@@ -443,6 +482,53 @@ public:
     }
 
 private:
+    void moveFrom(RpcRequest&& other) noexcept {
+        m_request_id = other.m_request_id;
+        m_call_mode = other.m_call_mode;
+        m_end_of_stream = other.m_end_of_stream;
+        m_service_name = std::move(other.m_service_name);
+        m_method_name = std::move(other.m_method_name);
+        m_metadata = std::move(other.m_metadata);
+        m_payload = std::move(other.m_payload);
+        m_payload_view = other.m_payload_view;
+        m_payload_owned = other.m_payload_owned;
+        updateOwnedPayloadView();
+        other.resetMovedPayload();
+    }
+
+    void updateOwnedPayloadView() const {
+        if (!m_payload_owned) {
+            return;
+        }
+        m_payload_view = RpcPayloadView{
+            m_payload.data(),
+            m_payload.size(),
+            nullptr,
+            0
+        };
+    }
+
+    void resetMovedPayload() noexcept {
+        m_payload.clear();
+        m_payload_view = RpcPayloadView{};
+        m_payload_owned = true;
+    }
+
+    void copyPayloadFromView(const RpcPayloadView& view) {
+        const size_t total = view.size();
+        m_payload.resize(total);
+        size_t offset = 0;
+        if (view.segment1_len > 0) {
+            std::memcpy(m_payload.data(), view.segment1, view.segment1_len);
+            offset += view.segment1_len;
+        }
+        if (view.segment2_len > 0) {
+            std::memcpy(m_payload.data() + offset, view.segment2, view.segment2_len);
+        }
+        m_payload_owned = true;
+        updateOwnedPayloadView();
+    }
+
     size_t metadataWireSize() const {
         if (m_metadata.empty()) {
             return 0;
@@ -532,6 +618,24 @@ class RpcResponse {
 public:
     RpcResponse() = default;
 
+private:
+    RpcResponse(const RpcResponse&) = delete;
+    RpcResponse& operator=(const RpcResponse&) = delete;
+public:
+
+    RpcResponse(RpcResponse&& other) noexcept
+    {
+        moveFrom(std::move(other));
+    }
+
+    RpcResponse& operator=(RpcResponse&& other) noexcept
+    {
+        if (this != &other) {
+            moveFrom(std::move(other));
+        }
+        return *this;
+    }
+
     /**
      * @brief 构造响应
      * @param request_id 对应的请求ID
@@ -540,6 +644,22 @@ public:
     RpcResponse(uint32_t request_id, RpcErrorCode error_code = RpcErrorCode::OK)
         : m_request_id(request_id)
         , m_error_code(error_code) {}
+
+    /**
+     * @brief 显式深拷贝响应
+     * @return 持有独立payload缓冲的新响应
+     *
+     * @note 借用payload会被复制为自有缓冲，避免clone结果继续依赖外部内存。
+     */
+    RpcResponse clone() const {
+        RpcResponse copy;
+        copy.m_request_id = m_request_id;
+        copy.m_call_mode = m_call_mode;
+        copy.m_end_of_stream = m_end_of_stream;
+        copy.m_error_code = m_error_code;
+        copy.copyPayloadFromView(payloadView());
+        return copy;
+    }
 
     /// @brief 获取请求ID
     uint32_t requestId() const { return m_request_id; }
@@ -711,6 +831,51 @@ public:
     }
 
 private:
+    void moveFrom(RpcResponse&& other) noexcept {
+        m_request_id = other.m_request_id;
+        m_call_mode = other.m_call_mode;
+        m_end_of_stream = other.m_end_of_stream;
+        m_error_code = other.m_error_code;
+        m_payload = std::move(other.m_payload);
+        m_payload_view = other.m_payload_view;
+        m_payload_owned = other.m_payload_owned;
+        updateOwnedPayloadView();
+        other.resetMovedPayload();
+    }
+
+    void updateOwnedPayloadView() const {
+        if (!m_payload_owned) {
+            return;
+        }
+        m_payload_view = RpcPayloadView{
+            m_payload.data(),
+            m_payload.size(),
+            nullptr,
+            0
+        };
+    }
+
+    void resetMovedPayload() noexcept {
+        m_payload.clear();
+        m_payload_view = RpcPayloadView{};
+        m_payload_owned = true;
+    }
+
+    void copyPayloadFromView(const RpcPayloadView& view) {
+        const size_t total = view.size();
+        m_payload.resize(total);
+        size_t offset = 0;
+        if (view.segment1_len > 0) {
+            std::memcpy(m_payload.data(), view.segment1, view.segment1_len);
+            offset += view.segment1_len;
+        }
+        if (view.segment2_len > 0) {
+            std::memcpy(m_payload.data() + offset, view.segment2, view.segment2_len);
+        }
+        m_payload_owned = true;
+        updateOwnedPayloadView();
+    }
+
     void materializePayloadIfNeeded() const {
         if (m_payload_owned) {
             return;

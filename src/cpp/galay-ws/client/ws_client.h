@@ -100,6 +100,13 @@ struct WsClientUpgradeState {
         initialize();
     }
 
+private:
+    WsClientUpgradeState(const WsClientUpgradeState&) = delete;
+    WsClientUpgradeState& operator=(const WsClientUpgradeState&) = delete;
+public:
+    WsClientUpgradeState(WsClientUpgradeState&&) = delete;
+    WsClientUpgradeState& operator=(WsClientUpgradeState&&) = delete;
+
     bool isFinished() const {
         return m_result.has_value() || m_error.has_value();
     }
@@ -359,6 +366,13 @@ struct WsClientTcpUpgradeMachine {
     explicit WsClientTcpUpgradeMachine(std::shared_ptr<StateT> state)
         : m_state(std::move(state)) {}
 
+private:
+    WsClientTcpUpgradeMachine(const WsClientTcpUpgradeMachine&) = delete;
+    WsClientTcpUpgradeMachine& operator=(const WsClientTcpUpgradeMachine&) = delete;
+public:
+    WsClientTcpUpgradeMachine(WsClientTcpUpgradeMachine&&) noexcept = default;
+    WsClientTcpUpgradeMachine& operator=(WsClientTcpUpgradeMachine&&) noexcept = default;
+
     MachineAction<result_type> advance() {
         if (m_state->isFinished()) {
             return MachineAction<result_type>::complete(m_state->takeResult());
@@ -420,6 +434,13 @@ struct WsClientSslUpgradeMachine {
 
     explicit WsClientSslUpgradeMachine(std::shared_ptr<StateT> state)
         : m_state(std::move(state)) {}
+
+private:
+    WsClientSslUpgradeMachine(const WsClientSslUpgradeMachine&) = delete;
+    WsClientSslUpgradeMachine& operator=(const WsClientSslUpgradeMachine&) = delete;
+public:
+    WsClientSslUpgradeMachine(WsClientSslUpgradeMachine&&) noexcept = default;
+    WsClientSslUpgradeMachine& operator=(WsClientSslUpgradeMachine&&) noexcept = default;
 
     galay::ssl::SslMachineAction<result_type> advance() {
         if (m_state->isFinished()) {
@@ -538,6 +559,13 @@ public:
         , m_ws_conn_ptr(ws_conn_ptr)
     {
     }
+
+private:
+    WsUpgraderImpl(const WsUpgraderImpl&) = delete;
+    WsUpgraderImpl& operator=(const WsUpgraderImpl&) = delete;
+public:
+    WsUpgraderImpl(WsUpgraderImpl&&) noexcept = default;
+    WsUpgraderImpl& operator=(WsUpgraderImpl&&) noexcept = delete;
 
     Task<std::expected<bool, WsError>> operator()() {
         if (m_socket == nullptr || m_ring_buffer == nullptr || m_ws_conn_ptr == nullptr) {

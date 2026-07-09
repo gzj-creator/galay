@@ -49,6 +49,27 @@ namespace galay::kernel
     }
 
     /**
+     * @brief 移动构造；接管 other 的存储并清空源对象
+     * @param other 源缓冲区
+     */
+    Buffer::Buffer(Buffer&& other) noexcept
+        : m_data(other.m_data)
+    {
+        other.m_data = {};
+    }
+
+    /**
+     * @brief 显式深拷贝缓冲区存储
+     * @return 独立拥有相同容量和内容的新缓冲区
+     */
+    Buffer Buffer::clone() const
+    {
+        Buffer copy;
+        copy.m_data = galay::utils::deepCopyBytes(m_data);
+        return copy;
+    }
+
+    /**
      * @brief 将缓冲区内容清零但不释放内存
      */
     void Buffer::clear()
@@ -124,7 +145,7 @@ namespace galay::kernel
      * @param other 源缓冲区（移后为空）
      * @return 本对象的引用
      */
-    Buffer &Buffer::operator=(Buffer &&other)
+    Buffer &Buffer::operator=(Buffer &&other) noexcept
     {
         if(this != &other) {
             galay::utils::freeBytes(m_data);

@@ -62,6 +62,21 @@ private:
  */
 class JsonWriter {
 public:
+    JsonWriter() = default; ///< 默认构造
+    JsonWriter(JsonWriter&&) noexcept = default; ///< 移动构造，转移写入缓冲和上下文栈
+    JsonWriter& operator=(JsonWriter&&) noexcept = default; ///< 移动赋值，转移写入缓冲和上下文栈
+
+    /**
+     * @brief 显式复制当前写入状态
+     * @return 独立的JSON写入器副本
+     */
+    JsonWriter clone() const {
+        JsonWriter copy;
+        copy.m_out = m_out;
+        copy.m_stack = m_stack;
+        return copy;
+    }
+
     void startObject(); ///< 开始写入JSON对象
     void endObject(); ///< 结束JSON对象
     void startArray(); ///< 开始写入JSON数组
@@ -82,6 +97,9 @@ public:
     std::string takeString();
 
 private:
+    JsonWriter(const JsonWriter&) = delete; ///< 禁止隐式复制写入状态
+    JsonWriter& operator=(const JsonWriter&) = delete; ///< 禁止隐式复制写入状态
+
     /**
      * @brief 上下文类型枚举
      */

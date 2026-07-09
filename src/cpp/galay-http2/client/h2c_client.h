@@ -500,7 +500,7 @@ private:
         if (m_client->m_conn == nullptr) {
             error = Http2Conn::validateSettingsFrame(*settings);
             if (error == Http2ErrorCode::NoError) {
-                m_client->m_pending_peer_settings = *settings;
+                m_client->m_pending_peer_settings.emplace(settings->clone());
             }
         } else {
             error = m_client->m_conn->applyPeerSettings(*settings);

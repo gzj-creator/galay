@@ -74,9 +74,9 @@ public:
      * @param inputSchema 输入参数的JSON Schema
      * @param handler 工具处理函数
      */
-    void addTool(const std::string& name,
-                 const std::string& description,
-                 const JsonString& inputSchema,
+    void addTool(std::string name,
+                 std::string description,
+                 JsonString inputSchema,
                  ToolHandler handler);
 
     /**
@@ -87,10 +87,10 @@ public:
      * @param mimeType MIME类型
      * @param reader 资源读取函数
      */
-    void addResource(const std::string& uri,
-                     const std::string& name,
-                     const std::string& description,
-                     const std::string& mimeType,
+    void addResource(std::string uri,
+                     std::string name,
+                     std::string description,
+                     std::string mimeType,
                      ResourceReader reader);
 
     /**
@@ -100,9 +100,9 @@ public:
      * @param arguments 参数定义
      * @param getter 提示获取函数
      */
-    void addPrompt(const std::string& name,
-                   const std::string& description,
-                   const std::vector<PromptArgument>& arguments,
+    void addPrompt(std::string name,
+                   std::string description,
+                   std::vector<PromptArgument> arguments,
                    PromptGetter getter);
 
     /**
@@ -221,8 +221,16 @@ private:
      * @brief 工具注册信息
      */
     struct ToolInfo {
+        ToolInfo() = default; ///< 默认构造
+        ToolInfo(ToolInfo&&) noexcept = default; ///< 移动构造注册项
+        ToolInfo& operator=(ToolInfo&&) noexcept = default; ///< 移动赋值注册项
+
         Tool tool; ///< 工具定义
         ToolHandler handler; ///< 工具处理函数
+
+    private:
+        ToolInfo(const ToolInfo&) = delete;
+        ToolInfo& operator=(const ToolInfo&) = delete;
     };
     std::unordered_map<std::string, ToolInfo> m_tools; ///< 工具注册表
     mutable std::shared_mutex m_toolsMutex; ///< 工具注册表读写锁
@@ -231,8 +239,16 @@ private:
      * @brief 资源注册信息
      */
     struct ResourceInfo {
+        ResourceInfo() = default; ///< 默认构造
+        ResourceInfo(ResourceInfo&&) noexcept = default; ///< 移动构造注册项
+        ResourceInfo& operator=(ResourceInfo&&) noexcept = default; ///< 移动赋值注册项
+
         Resource resource; ///< 资源定义
         ResourceReader reader; ///< 资源读取函数
+
+    private:
+        ResourceInfo(const ResourceInfo&) = delete;
+        ResourceInfo& operator=(const ResourceInfo&) = delete;
     };
     std::unordered_map<std::string, ResourceInfo> m_resources; ///< 资源注册表
     mutable std::shared_mutex m_resourcesMutex; ///< 资源注册表读写锁
@@ -241,8 +257,16 @@ private:
      * @brief 提示注册信息
      */
     struct PromptInfo {
+        PromptInfo() = default; ///< 默认构造
+        PromptInfo(PromptInfo&&) noexcept = default; ///< 移动构造注册项
+        PromptInfo& operator=(PromptInfo&&) noexcept = default; ///< 移动赋值注册项
+
         Prompt prompt; ///< 提示定义
         PromptGetter getter; ///< 提示获取函数
+
+    private:
+        PromptInfo(const PromptInfo&) = delete;
+        PromptInfo& operator=(const PromptInfo&) = delete;
     };
     std::unordered_map<std::string, PromptInfo> m_prompts; ///< 提示注册表
     mutable std::shared_mutex m_promptsMutex; ///< 提示注册表读写锁

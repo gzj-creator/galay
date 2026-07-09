@@ -75,10 +75,18 @@ namespace galay::redis::protocol
     public:
         RedisReply();                                      ///< 默认构造（Null 类型）
         RedisReply(RespType type, RespData data);          ///< 从类型和数据构造
-        RedisReply(const RedisReply& other);               ///< 拷贝构造
+    private:
+        RedisReply(const RedisReply& other) = delete;      ///< 禁止隐式拷贝
+        RedisReply& operator=(const RedisReply& other) = delete; ///< 禁止隐式拷贝赋值
+    public:
         RedisReply(RedisReply&& other) noexcept;           ///< 移动构造
-        RedisReply& operator=(const RedisReply& other);    ///< 拷贝赋值
         RedisReply& operator=(RedisReply&& other) noexcept; ///< 移动赋值
+
+        /**
+         * @brief 显式克隆 RESP 回复
+         * @return 递归复制后的独立 RedisReply
+         */
+        [[nodiscard]] RedisReply clone() const;
 
         // 类型判断
         bool isSimpleString() const { return m_type == RespType::SimpleString; } ///< 判断是否为简单字符串

@@ -68,6 +68,13 @@ public:
     {
     }
 
+private:
+    WsSessionUpgraderImpl(const WsSessionUpgraderImpl&) = delete;
+    WsSessionUpgraderImpl& operator=(const WsSessionUpgraderImpl&) = delete;
+public:
+    WsSessionUpgraderImpl(WsSessionUpgraderImpl&&) noexcept = default;
+    WsSessionUpgraderImpl& operator=(WsSessionUpgraderImpl&&) noexcept = default;
+
     /**
      * @brief 返回升级 operation
      * @return 可以 co_await 的 operation 对象
@@ -111,6 +118,13 @@ public:
         {
             initUpgradeRequest();
         }
+
+    private:
+        UpgradeFlow(const UpgradeFlow&) = delete;
+        UpgradeFlow& operator=(const UpgradeFlow&) = delete;
+    public:
+        UpgradeFlow(UpgradeFlow&&) noexcept = default;
+        UpgradeFlow& operator=(UpgradeFlow&&) noexcept = default;
 
         void onSend(SequenceOps<ResultType, 4>& ops, SendIOContext& send_ctx) {
             if (!send_ctx.m_result) {
@@ -367,6 +381,13 @@ public:
         {
             initialize();
         }
+
+    private:
+        UpgradeState(const UpgradeState&) = delete;
+        UpgradeState& operator=(const UpgradeState&) = delete;
+    public:
+        UpgradeState(UpgradeState&&) noexcept = default;
+        UpgradeState& operator=(UpgradeState&&) noexcept = default;
 
         bool isFinished() const {
             return m_result.has_value() || m_error.has_value();
@@ -737,6 +758,13 @@ public:
         , m_upgraded(false)
     {
     }
+
+private:
+    WsSessionImpl(const WsSessionImpl&) = delete;
+    WsSessionImpl& operator=(const WsSessionImpl&) = delete;
+public:
+    WsSessionImpl(WsSessionImpl&&) = delete;
+    WsSessionImpl& operator=(WsSessionImpl&&) = delete;
 
     WsReaderImpl<SocketType>& getReader() {
         return m_reader;

@@ -24,6 +24,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 
 namespace galay::tracing {
 
@@ -264,11 +265,58 @@ struct LogField {
  * @details 包含日志级别、消息、源码位置、追踪上下文和时间戳的完整日志记录。
  */
 struct LogRecord {
-    LogLevel level{LogLevel::kInfo};                                     ///< 日志级别
-    std::string message;                                                 ///< 日志消息
-    SourceLocation source;                                               ///< 源码位置
-    std::optional<LogContext> context;                                   ///< 追踪上下文
-    std::chrono::system_clock::time_point timestamp{std::chrono::system_clock::now()}; ///< 时间戳
+    using Clock = std::chrono::system_clock; ///< 日志时间戳时钟
+
+    LogRecord() = default;
+
+    /**
+     * @brief 构造日志记录并获取消息与上下文所有权
+     * @param level 日志级别
+     * @param message 日志消息（移动保存）
+     * @param source 源码位置
+     * @param context 追踪上下文
+     * @param timestamp 日志时间戳
+     */
+    LogRecord(
+        LogLevel level,
+        std::string message,
+        SourceLocation source = {},
+        std::optional<LogContext> context = std::nullopt,
+        Clock::time_point timestamp = Clock::now())
+        : level(level),
+          message(std::move(message)),
+          source(source),
+          context(std::move(context)),
+          timestamp(timestamp) {
+    }
+
+    /**
+     * @brief 移动构造日志记录，转移消息和上下文所有权
+     */
+    LogRecord(LogRecord&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值日志记录，转移消息和上下文所有权
+     */
+    LogRecord& operator=(LogRecord&&) noexcept = default;
+
+    /**
+     * @brief 显式复制日志记录的拥有状态
+     * @return 拥有独立消息存储的新日志记录
+     */
+    [[nodiscard]] LogRecord clone() const {
+        return LogRecord(*this);
+    }
+
+    LogLevel level{LogLevel::kInfo};                     ///< 日志级别
+    std::string message;                                 ///< 日志消息
+    SourceLocation source;                               ///< 源码位置
+    std::optional<LogContext> context;                   ///< 追踪上下文
+    Clock::time_point timestamp{Clock::now()};           ///< 时间戳
+
+private:
+    LogRecord(const LogRecord&) = default;
+    LogRecord& operator=(const LogRecord&) = default;
 };
 
 /**

@@ -18,6 +18,14 @@ class MongoCommandBuilder
 {
 public:
     MongoCommandBuilder() = default;
+    MongoCommandBuilder(MongoCommandBuilder&&) noexcept = default;             ///< 移动构造，转移命令列表所有权
+    MongoCommandBuilder& operator=(MongoCommandBuilder&&) noexcept = default;  ///< 移动赋值，转移命令列表所有权
+
+    /**
+     * @brief 显式深拷贝命令列表
+     * @return 每个命令递归 clone 后的新 builder
+     */
+    [[nodiscard]] MongoCommandBuilder clone() const;
 
     void clear() noexcept;
     void reserve(size_t command_count);
@@ -41,6 +49,9 @@ public:
                                                                                 size_t reserve_per_command = 96);
 
 private:
+    MongoCommandBuilder(const MongoCommandBuilder&) = delete;
+    MongoCommandBuilder& operator=(const MongoCommandBuilder&) = delete;
+
     std::vector<MongoDocument> m_commands;
 };
 

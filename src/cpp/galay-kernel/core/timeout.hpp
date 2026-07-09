@@ -64,6 +64,11 @@ public:
     TimeoutTimer(Duration duration)
         : Timer(duration) {}
 
+private:
+    TimeoutTimer(const TimeoutTimer&) = delete;
+    TimeoutTimer& operator=(const TimeoutTimer&) = delete;
+public:
+
     void setWaker(Waker waker) { m_waker = waker; }
 
     void handleTimeout() override {
@@ -121,6 +126,9 @@ struct WithTimeout {
 
     WithTimeout(Awaitable& inner, std::chrono::milliseconds timeout)
         : m_inner(std::move(inner)), m_timer(std::make_shared<TimeoutTimer>(timeout)) {}
+
+    WithTimeout(WithTimeout&&) noexcept = default;
+    WithTimeout& operator=(WithTimeout&&) noexcept = default;
 
     auto timeout(std::chrono::milliseconds t) && {
         return WithTimeout<Awaitable>{std::move(m_inner), t};
@@ -195,6 +203,9 @@ struct WithTimeout {
         return m_inner.await_resume();
     }
 
+private:
+    WithTimeout(const WithTimeout&) = delete;
+    WithTimeout& operator=(const WithTimeout&) = delete;
 };
 
 }

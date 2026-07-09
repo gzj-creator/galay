@@ -881,7 +881,21 @@ namespace galay::redis
             .build();
     }
 
+    template struct detail::RedisExchangeSharedState<RingBufferBackendStrategy::Mmap>;
+    template struct detail::RedisExchangeMachine<RingBufferBackendStrategy::Mmap>;
+    template struct detail::RedisConnectSharedState<RingBufferBackendStrategy::Mmap>;
+    template struct detail::RedisConnectMachine<RingBufferBackendStrategy::Mmap>;
     template class RedisClient<RingBufferBackendStrategy::Mmap>;
+
+    template struct detail::RedisExchangeSharedState<RingBufferBackendStrategy::Vector>;
+    template struct detail::RedisExchangeMachine<RingBufferBackendStrategy::Vector>;
+    template struct detail::RedisConnectSharedState<RingBufferBackendStrategy::Vector>;
+    template struct detail::RedisConnectMachine<RingBufferBackendStrategy::Vector>;
     template class RedisClient<RingBufferBackendStrategy::Vector>;
+
+    template struct detail::RedisExchangeSharedState<RingBufferBackendStrategy::Auto>;
+    template struct detail::RedisExchangeMachine<RingBufferBackendStrategy::Auto>;
+    template struct detail::RedisConnectSharedState<RingBufferBackendStrategy::Auto>;
+    template struct detail::RedisConnectMachine<RingBufferBackendStrategy::Auto>;
     template class RedisClient<RingBufferBackendStrategy::Auto>;
 } // namespace galay::redis

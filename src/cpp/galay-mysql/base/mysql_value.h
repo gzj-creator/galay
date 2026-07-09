@@ -16,6 +16,7 @@
 #include <optional>
 #include <cstdint>
 #include <unordered_map>
+#include <utility>
 
 namespace galay::mysql
 {
@@ -85,6 +86,8 @@ class MysqlField
 {
 public:
     MysqlField() = default;
+    MysqlField(MysqlField&&) noexcept = default;
+    MysqlField& operator=(MysqlField&&) noexcept = default;
 
     /**
      * @brief 构造列定义
@@ -96,6 +99,12 @@ public:
      */
     MysqlField(std::string name, MysqlFieldType type, uint16_t flags,
                uint32_t column_length, uint8_t decimals);
+
+    /**
+     * @brief 显式复制列定义
+     * @return 拥有独立字符串存储的新列定义
+     */
+    [[nodiscard]] MysqlField clone() const;
 
     const std::string& name() const { return m_name; }             ///< 获取列名
     MysqlFieldType type() const { return m_type; }                 ///< 获取字段类型
@@ -134,6 +143,9 @@ private:
     uint16_t m_flags = 0;                           ///< 字段标志位
     MysqlFieldType m_type = MysqlFieldType::NULL_TYPE; ///< 字段类型
     uint8_t m_decimals = 0;                         ///< 小数位数
+
+    MysqlField(const MysqlField&) = delete;
+    MysqlField& operator=(const MysqlField&) = delete;
 };
 
 /**
@@ -145,12 +157,20 @@ class MysqlRow
 {
 public:
     MysqlRow() = default;
+    MysqlRow(MysqlRow&&) noexcept = default;
+    MysqlRow& operator=(MysqlRow&&) noexcept = default;
 
     /**
      * @brief 构造指定列值的行
      * @param values 列值数组
      */
     explicit MysqlRow(std::vector<std::optional<std::string>> values);
+
+    /**
+     * @brief 显式复制行数据
+     * @return 拥有独立列值字符串存储的新行
+     */
+    [[nodiscard]] MysqlRow clone() const;
 
     size_t size() const { return m_values.size(); }  ///< 获取列数
     bool empty() const { return m_values.empty(); }   ///< 判断是否为空行
@@ -216,6 +236,9 @@ public:
 
 private:
     std::vector<std::optional<std::string>> m_values; ///< 列值数组
+
+    MysqlRow(const MysqlRow&) = delete;
+    MysqlRow& operator=(const MysqlRow&) = delete;
 };
 
 /**
@@ -227,6 +250,14 @@ class MysqlResultSet
 {
 public:
     MysqlResultSet() = default;
+    MysqlResultSet(MysqlResultSet&&) noexcept = default;
+    MysqlResultSet& operator=(MysqlResultSet&&) noexcept = default;
+
+    /**
+     * @brief 显式复制完整结果集
+     * @return 拥有独立列定义、行数据和OK信息字符串的新结果集
+     */
+    [[nodiscard]] MysqlResultSet clone() const;
 
     /**
      * @brief 添加列定义
@@ -324,6 +355,9 @@ private:
     uint64_t m_last_insert_id = 0;         ///< 最后插入ID
     uint16_t m_warnings = 0;               ///< 警告数
     uint16_t m_status_flags = 0;           ///< 状态标志
+
+    MysqlResultSet(const MysqlResultSet&) = delete;
+    MysqlResultSet& operator=(const MysqlResultSet&) = delete;
 };
 
 } // namespace galay::mysql

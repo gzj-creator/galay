@@ -2319,7 +2319,7 @@ private:
             if (end_headers) {
                 auto payload = frame_view.payload();
                 if (end_stream && !m_conn.runtimeConfig().static_file_mounts.empty()) {
-                    auto decoder_snapshot = m_conn.decoder();
+                    auto decoder_snapshot = m_conn.decoder().clone();
                     auto target = m_conn.decoder().decodeRequestTarget(
                         reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
                     if (!target) {
@@ -2352,7 +2352,7 @@ private:
                     return true;
                 }
                 if (end_stream && !m_conn.runtimeConfig().static_routes.empty()) {
-                    auto decoder_snapshot = m_conn.decoder();
+                    auto decoder_snapshot = m_conn.decoder().clone();
                     auto target = m_conn.decoder().decodeRequestTarget(
                         reinterpret_cast<const uint8_t*>(payload.data()), payload.size());
                     if (!target) {

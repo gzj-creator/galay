@@ -32,6 +32,16 @@ public:
     explicit FileSpanExporter(const std::filesystem::path& path);
 
     /**
+     * @brief 文件导出器持有互斥锁和输出流，禁止移动
+     */
+    FileSpanExporter(FileSpanExporter&&) = delete;
+
+    /**
+     * @brief 文件导出器持有互斥锁和输出流，禁止移动赋值
+     */
+    FileSpanExporter& operator=(FileSpanExporter&&) = delete;
+
+    /**
      * @brief 将一批 Span 写入文件
      * @param spans 待导出的 Span 只读视图
      * @return 导出结果
@@ -53,6 +63,9 @@ public:
     bool shutdown(std::chrono::milliseconds timeout) override;
 
 private:
+    FileSpanExporter(const FileSpanExporter&) = delete;
+    FileSpanExporter& operator=(const FileSpanExporter&) = delete;
+
     std::mutex m_mutex;   ///< 文件写入互斥锁
     std::ofstream m_out;  ///< 文件输出流
 };

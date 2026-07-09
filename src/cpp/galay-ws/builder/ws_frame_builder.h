@@ -23,6 +23,8 @@ class WsFrameBuilder
 {
 public:
     WsFrameBuilder();
+    WsFrameBuilder(WsFrameBuilder&&) noexcept = default;
+    WsFrameBuilder& operator=(WsFrameBuilder&&) noexcept = default;
 
     WsFrameBuilder& opcode(WsOpcode opcode);
     WsFrameBuilder& fin(bool fin = true);
@@ -38,8 +40,12 @@ public:
 
     WsFrame build() const;
     WsFrame buildMove();
+    WsFrameBuilder clone() const;
 
 private:
+    WsFrameBuilder(const WsFrameBuilder&) = delete;
+    WsFrameBuilder& operator=(const WsFrameBuilder&) = delete;
+
     WsFrame m_frame;
 };
 

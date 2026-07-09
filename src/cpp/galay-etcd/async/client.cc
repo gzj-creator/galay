@@ -531,7 +531,7 @@ AsyncEtcdClusterClient::AttemptAwaitable AsyncEtcdClusterClient::nextAttempt(
     m_state.recordRetry();
     const auto backoff = m_state.backoffForAttempt(previous.attempt);
     if (decision == EtcdRetryDecision::RetrySameEndpoint) {
-        Attempt retry = previous;
+        Attempt retry = previous.clone();
         retry.attempt = previous.attempt + 1;
         retry.backoff = backoff;
         return AttemptAwaitable(std::move(retry));
@@ -581,12 +581,12 @@ AsyncEtcdClusterClient::AttemptResult AsyncEtcdClusterClient::makeAttempt(
             EtcdError(EtcdErrorType::InvalidEndpoint, "cluster endpoints are empty"));
     }
 
-    return Attempt{
-        .endpoint_index = *selected,
-        .attempt = attempt,
-        .config = configForEndpoint(*selected),
-        .backoff = backoff,
-    };
+    Attempt next;
+    next.endpoint_index = *selected;
+    next.attempt = attempt;
+    next.config = configForEndpoint(*selected);
+    next.backoff = backoff;
+    return next;
 }
 
 struct AsyncEtcdClient::WatchWorkerState

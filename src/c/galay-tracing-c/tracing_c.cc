@@ -969,12 +969,11 @@ galay_status_t galay_tracing_logger_log(galay_tracing_logger_t* logger,
     if (context != nullptr && context->context.isValid()) {
         trace_context = context->context;
     }
-    logger->logger->write(LogRecord{
-        .level = to_cpp_log_level(level),
-        .message = std::string(message, message_len),
-        .source = {},
-        .context = galay::tracing::makeLogContext(trace_context),
-    });
+    logger->logger->write(LogRecord(
+        to_cpp_log_level(level),
+        std::string(message, message_len),
+        {},
+        galay::tracing::makeLogContext(trace_context)));
     return GALAY_OK;
 }
 

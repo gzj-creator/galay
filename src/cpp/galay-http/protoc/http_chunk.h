@@ -108,6 +108,16 @@ private:
 class ChunkParser
 {
 public:
+    ChunkParser() = default;
+    ChunkParser(ChunkParser&&) noexcept = default;            ///< 移动构造
+    ChunkParser& operator=(ChunkParser&&) noexcept = default; ///< 移动赋值
+
+    /**
+     * @brief 显式复制 chunk 增量解析状态
+     * @return 独立的 ChunkParser 副本
+     */
+    ChunkParser clone() const;
+
     /**
      * @brief 从 iovec 增量解析 chunked body
      * @param iovecs 输入的 iovec 数组
@@ -126,6 +136,9 @@ public:
     void reset();
 
 private:
+    ChunkParser(const ChunkParser&) = delete;
+    ChunkParser& operator=(const ChunkParser&) = delete;
+
     enum class Phase
     {
         kSizeLine,

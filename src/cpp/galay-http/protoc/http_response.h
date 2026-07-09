@@ -31,6 +31,17 @@ public:
     using wptr = std::weak_ptr<HttpResponse>;    ///< 弱指针类型别名
     using uptr = std::unique_ptr<HttpResponse>;  ///< 独占指针类型别名
 
+    HttpResponse() = default;
+    HttpResponse(HttpResponse&&) noexcept = default;   ///< 移动构造
+    HttpResponse& operator=(HttpResponse&&) noexcept = default; ///< 移动赋值
+    ~HttpResponse() = default;
+
+    /**
+     * @brief 显式复制响应消息及其解析状态
+     * @return 独立的 HttpResponse 副本
+     */
+    HttpResponse clone() const;
+
     /**
      * @brief 获取响应头的可变引用
      * @return 响应头引用
@@ -114,6 +125,9 @@ public:
     void reset(); ///< 重置解析状态
 
 private:
+    HttpResponse(const HttpResponse&) = delete;
+    HttpResponse& operator=(const HttpResponse&) = delete;
+
     HttpResponseHeader m_header;          ///< 响应头
     std::string m_body;                   ///< 响应体原始数据
     size_t m_contentLength = 0;           ///< Content-Length 值

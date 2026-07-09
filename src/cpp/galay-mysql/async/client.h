@@ -407,11 +407,48 @@ public:
      * @brief 预处理语句结果
      */
     struct PrepareResult {
-        uint32_t statement_id;                      ///< 语句ID
-        uint16_t num_columns;                       ///< 列数
-        uint16_t num_params;                        ///< 参数数量
+        PrepareResult() = default;
+        PrepareResult(uint32_t statement_id_value,
+                      uint16_t num_columns_value,
+                      uint16_t num_params_value) noexcept
+            : statement_id(statement_id_value)
+            , num_columns(num_columns_value)
+            , num_params(num_params_value)
+        {
+        }
+        PrepareResult(PrepareResult&&) noexcept = default;
+        PrepareResult& operator=(PrepareResult&&) noexcept = default;
+
+        /**
+         * @brief 显式复制预处理结果
+         * @return 拥有独立字段定义存储的新预处理结果
+         */
+        [[nodiscard]] PrepareResult clone() const
+        {
+            PrepareResult copy;
+            copy.statement_id = statement_id;
+            copy.num_columns = num_columns;
+            copy.num_params = num_params;
+            copy.param_fields.reserve(param_fields.size());
+            for (const auto& field : param_fields) {
+                copy.param_fields.push_back(field.clone());
+            }
+            copy.column_fields.reserve(column_fields.size());
+            for (const auto& field : column_fields) {
+                copy.column_fields.push_back(field.clone());
+            }
+            return copy;
+        }
+
+        uint32_t statement_id = 0;                  ///< 语句ID
+        uint16_t num_columns = 0;                   ///< 列数
+        uint16_t num_params = 0;                    ///< 参数数量
         std::vector<MysqlField> param_fields;       ///< 参数字段定义
         std::vector<MysqlField> column_fields;      ///< 结果列字段定义
+
+    private:
+        PrepareResult(const PrepareResult&) = delete;
+        PrepareResult& operator=(const PrepareResult&) = delete;
     };
     using Result = std::expected<std::optional<PrepareResult>, MysqlError>; ///< 准备结果类型
 

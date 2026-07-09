@@ -17,6 +17,7 @@
 #include <array>
 #include <cstring>
 #include <string>
+#include <string_view>
 #include <cstdint>
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
@@ -56,6 +57,18 @@ namespace galay::kernel
          * @param str 源字符串
          */
         Buffer(const std::string& str);
+
+        /**
+         * @brief 移动构造，接管源缓冲区存储
+         * @param other 源缓冲区；移动后保持空且可析构
+         */
+        Buffer(Buffer&& other) noexcept;
+
+        /**
+         * @brief 显式深拷贝当前缓冲区
+         * @return 拥有独立存储且内容一致的新 Buffer
+         */
+        Buffer clone() const;
 
         /**
          * @brief 清除缓冲区内容（内存清零，保留分配）
@@ -107,7 +120,7 @@ namespace galay::kernel
         /**
          * @brief 移动赋值运算符
          */
-        Buffer& operator=(Buffer&& other);
+        Buffer& operator=(Buffer&& other) noexcept;
 
         ~Buffer();
 
@@ -120,6 +133,9 @@ namespace galay::kernel
         }
 
     private:
+        Buffer(const Buffer&) = delete;
+        Buffer& operator=(const Buffer&) = delete;
+
         ByteMetaData m_data;
     };
 

@@ -21,6 +21,23 @@ namespace galay::utils {
 class IniParser : public ConfigParser {
 public:
     IniParser() = default;
+    IniParser(IniParser&&) noexcept = default;
+    IniParser& operator=(IniParser&&) noexcept = default;
+
+    /**
+     * @brief 显式克隆 INI 解析状态
+     * @return 独立 IniParser 副本
+     */
+    [[nodiscard]] IniParser clone() const {
+        IniParser copy;
+        copy.m_values = m_values;
+        copy.m_last_error = m_last_error;
+        return copy;
+    }
+
+private:
+    IniParser(const IniParser&) = delete;
+    IniParser& operator=(const IniParser&) = delete;
 };
 
 } // namespace galay::utils

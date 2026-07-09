@@ -306,6 +306,22 @@ public:
     Span(std::string name, SpanContext context, std::string tracestate, SpanTimingPolicy timingPolicy);
 
     /**
+     * @brief 移动构造 Span，转移属性、事件和链接等拥有状态
+     */
+    Span(Span&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值 Span，转移属性、事件和链接等拥有状态
+     */
+    Span& operator=(Span&&) noexcept = default;
+
+    /**
+     * @brief 显式复制 Span 的完整拥有状态
+     * @return 拥有独立属性、事件和链接容器的新 Span
+     */
+    [[nodiscard]] Span clone() const;
+
+    /**
      * @brief 获取操作名称
      * @return 操作名称的字符串视图
      */
@@ -505,6 +521,9 @@ public:
     void end() noexcept;
 
 private:
+    Span(const Span&) = default;
+    Span& operator=(const Span&) = default;
+
     std::string m_name;                        ///< 操作名称
     std::string m_tracestate;                   ///< W3C tracestate
     SpanStatus m_status;                        ///< Span 状态

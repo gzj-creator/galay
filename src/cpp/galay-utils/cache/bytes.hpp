@@ -286,6 +286,14 @@ public:
     }
 
     /**
+     * @brief Deep-copy readable bytes into a new owned container
+     * @return Independent byte container; non-owning views become owned copies
+     */
+    [[nodiscard]] Bytes clone() const {
+        return Bytes(m_meta.data, m_meta.size);
+    }
+
+    /**
      * @brief Create a non-owning view over a mutable string
      * @param str Source string that must outlive the returned object
      * @return Non-owning byte container

@@ -82,25 +82,10 @@ namespace galay::redis::protocol
     {
     }
 
-    RedisReply::RedisReply(const RedisReply& other)
-        : m_data(other.m_data)
-        , m_type(other.m_type)
-    {
-    }
-
     RedisReply::RedisReply(RedisReply&& other) noexcept
         : m_data(std::move(other.m_data))
         , m_type(other.m_type)
     {
-    }
-
-    RedisReply& RedisReply::operator=(const RedisReply& other)
-    {
-        if (this != &other) {
-            m_type = other.m_type;
-            m_data = other.m_data;
-        }
-        return *this;
     }
 
     RedisReply& RedisReply::operator=(RedisReply&& other) noexcept
@@ -110,6 +95,39 @@ namespace galay::redis::protocol
             m_data = std::move(other.m_data);
         }
         return *this;
+    }
+
+    RedisReply RedisReply::clone() const
+    {
+        if (const auto* str = std::get_if<std::string>(&m_data)) {
+            return RedisReply(m_type, *str);
+        }
+        if (const auto* integer = std::get_if<int64_t>(&m_data)) {
+            return RedisReply(m_type, *integer);
+        }
+        if (const auto* number = std::get_if<double>(&m_data)) {
+            return RedisReply(m_type, *number);
+        }
+        if (const auto* boolean = std::get_if<bool>(&m_data)) {
+            return RedisReply(m_type, *boolean);
+        }
+        if (const auto* array = std::get_if<std::vector<RedisReply>>(&m_data)) {
+            std::vector<RedisReply> cloned_array;
+            cloned_array.reserve(array->size());
+            for (const auto& elem : *array) {
+                cloned_array.push_back(elem.clone());
+            }
+            return RedisReply(m_type, std::move(cloned_array));
+        }
+        if (const auto* map = std::get_if<std::vector<std::pair<RedisReply, RedisReply>>>(&m_data)) {
+            std::vector<std::pair<RedisReply, RedisReply>> cloned_map;
+            cloned_map.reserve(map->size());
+            for (const auto& [key, value] : *map) {
+                cloned_map.emplace_back(key.clone(), value.clone());
+            }
+            return RedisReply(m_type, std::move(cloned_map));
+        }
+        return RedisReply(m_type, std::monostate{});
     }
 
     void RedisReply::assignString(RespType type, const char* data, size_t length)

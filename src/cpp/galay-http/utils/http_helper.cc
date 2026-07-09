@@ -401,7 +401,8 @@ HttpResponse buildHtmlResponse(HttpStatusCode code, std::string body)
     // 成功响应
     HttpResponse HttpHelper::defaultOk(const std::string& type, std::string&& body)
     {
-        auto builder = Http1_1ResponseBuilder()
+        Http1_1ResponseBuilder builder;
+        builder
             .status(HttpStatusCode::OK_200)
             .header("Server", GALAY_SERVER)
             .header("Content-Type", MimeType::convertToMimeType(type));

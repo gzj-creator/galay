@@ -67,6 +67,13 @@ public:
 
     virtual ~RpcService() = default;
 
+private:
+    RpcService(const RpcService&) = delete;
+    RpcService& operator=(const RpcService&) = delete;
+public:
+    RpcService(RpcService&&) = delete;
+    RpcService& operator=(RpcService&&) = delete;
+
     /**
      * @brief 获取服务名称
      */

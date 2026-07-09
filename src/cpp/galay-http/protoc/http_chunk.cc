@@ -346,6 +346,17 @@ ChunkParser::parse(const std::vector<iovec>& iovecs,
     return std::pair<bool, size_t>{m_phase == Phase::kDone, consumed};
 }
 
+ChunkParser ChunkParser::clone() const
+{
+    ChunkParser copy;
+    copy.m_line_buffer = m_line_buffer;
+    copy.m_current_chunk_size = m_current_chunk_size;
+    copy.m_current_chunk_read = m_current_chunk_read;
+    copy.m_phase = m_phase;
+    copy.m_pending_cr = m_pending_cr;
+    return copy;
+}
+
 void ChunkParser::reset()
 {
     m_phase = Phase::kSizeLine;

@@ -478,7 +478,7 @@ std::expected<MongoMessage, MongoError> Connection::recvMessage()
         if (!decoded) {
             return std::unexpected(decoded.error());
         }
-        return decoded;
+        return std::move(decoded);
     }
 
     auto raw_or_err = recvMessageRaw();

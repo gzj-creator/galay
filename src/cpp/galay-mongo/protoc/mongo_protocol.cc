@@ -46,6 +46,15 @@ void appendInt32LE(std::string& out, int32_t value)
 
 } // namespace
 
+MongoMessage MongoMessage::clone() const
+{
+    MongoMessage copy;
+    copy.header = header;
+    copy.body = body.clone();
+    copy.flags = flags;
+    return copy;
+}
+
 std::expected<std::string, std::string> MongoProtocol::encodeOpMsg(int32_t request_id,
                                                                    const MongoDocument& body,
                                                                    int32_t flags)
@@ -215,7 +224,7 @@ std::expected<MongoMessage, MongoError> MongoProtocol::decodeMessage(const char*
                                           "OP_MSG body(section 0) missing"));
     }
 
-    return message;
+    return std::move(message);
 }
 
 std::expected<MongoMessage, MongoError>

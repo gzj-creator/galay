@@ -27,6 +27,18 @@ namespace mcp {
 class SchemaBuilder {
 public:
     SchemaBuilder() = default;
+    SchemaBuilder(SchemaBuilder&&) noexcept = default;
+    SchemaBuilder& operator=(SchemaBuilder&&) noexcept = default;
+
+    /**
+     * @brief 显式复制当前 Schema 构建状态
+     * @return 独立的 SchemaBuilder 副本
+     */
+    SchemaBuilder clone() const {
+        SchemaBuilder copy;
+        copy.m_properties = m_properties;
+        return copy;
+    }
 
     /**
      * @brief 添加字符串属性
@@ -224,6 +236,9 @@ public:
     }
 
 private:
+    SchemaBuilder(const SchemaBuilder&) = delete;
+    SchemaBuilder& operator=(const SchemaBuilder&) = delete;
+
     /**
      * @brief 属性类型枚举
      */
@@ -351,6 +366,20 @@ private:
  */
 class PromptArgumentBuilder {
 public:
+    PromptArgumentBuilder() = default;
+    PromptArgumentBuilder(PromptArgumentBuilder&&) noexcept = default;
+    PromptArgumentBuilder& operator=(PromptArgumentBuilder&&) noexcept = default;
+
+    /**
+     * @brief 显式复制当前提示参数构建状态
+     * @return 独立的 PromptArgumentBuilder 副本
+     */
+    PromptArgumentBuilder clone() const {
+        PromptArgumentBuilder copy;
+        copy.m_arguments = m_arguments;
+        return copy;
+    }
+
     /**
      * @brief 添加提示参数
      * @param name 参数名称
@@ -378,6 +407,9 @@ public:
     }
 
 private:
+    PromptArgumentBuilder(const PromptArgumentBuilder&) = delete;
+    PromptArgumentBuilder& operator=(const PromptArgumentBuilder&) = delete;
+
     std::vector<PromptArgument> m_arguments; ///< 参数列表
 };
 

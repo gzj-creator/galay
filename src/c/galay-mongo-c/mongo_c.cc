@@ -275,7 +275,7 @@ C_IOResult send_command(galay_mongo_client_t* client,
         return io_result_from_status(GALAY_PROTOCOL_ERROR);
     }
 
-    MongoReply mongo_reply(message.body);
+    MongoReply mongo_reply(message.body.clone());
     if (!mongo_reply.ok()) {
         return make_io_result(C_IOResultError, static_cast<int64_t>(GALAY_PROTOCOL_ERROR));
     }
@@ -391,7 +391,7 @@ galay_status_t galay_mongo_document_append_document(galay_mongo_document_t* docu
     if (document == nullptr || value == nullptr || validate_key(key) != GALAY_OK) {
         return GALAY_INVALID_ARGUMENT;
     }
-    document->document.append(key, value->document);
+    document->document.append(key, value->document.clone());
     return GALAY_OK;
 }
 
@@ -400,7 +400,7 @@ galay_status_t galay_mongo_document_append_array(galay_mongo_document_t* documen
     if (document == nullptr || value == nullptr || validate_key(key) != GALAY_OK) {
         return GALAY_INVALID_ARGUMENT;
     }
-    document->document.append(key, value->array);
+    document->document.append(key, value->array.clone());
     return GALAY_OK;
 }
 
@@ -540,7 +540,7 @@ galay_status_t galay_mongo_document_get_document(const galay_mongo_document_t* d
     const auto* found = find_value(document, key);
     if (found == nullptr) return GALAY_NOT_FOUND;
     if (out == nullptr || found->type() != MongoValueType::Document) return GALAY_INVALID_ARGUMENT;
-    *out = make_document(found->toDocument());
+    *out = make_document(found->toDocument().clone());
     return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
@@ -550,7 +550,7 @@ galay_status_t galay_mongo_document_get_array(const galay_mongo_document_t* docu
     const auto* found = find_value(document, key);
     if (found == nullptr) return GALAY_NOT_FOUND;
     if (out == nullptr || found->type() != MongoValueType::Array) return GALAY_INVALID_ARGUMENT;
-    *out = make_array(found->toArray());
+    *out = make_array(found->toArray().clone());
     return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
@@ -671,14 +671,14 @@ galay_status_t galay_mongo_array_append_null(galay_mongo_array_t* array)
 galay_status_t galay_mongo_array_append_document(galay_mongo_array_t* array, const galay_mongo_document_t* value)
 {
     if (array == nullptr || value == nullptr) return GALAY_INVALID_ARGUMENT;
-    array->array.append(value->document);
+    array->array.append(value->document.clone());
     return GALAY_OK;
 }
 
 galay_status_t galay_mongo_array_append_array(galay_mongo_array_t* array, const galay_mongo_array_t* value)
 {
     if (array == nullptr || value == nullptr) return GALAY_INVALID_ARGUMENT;
-    array->array.append(value->array);
+    array->array.append(value->array.clone());
     return GALAY_OK;
 }
 
@@ -771,7 +771,7 @@ galay_status_t galay_mongo_array_get_document(const galay_mongo_array_t* array, 
     const auto* found = array_value_at(array, index);
     if (found == nullptr) return GALAY_NOT_FOUND;
     if (out == nullptr || found->type() != MongoValueType::Document) return GALAY_INVALID_ARGUMENT;
-    *out = make_document(found->toDocument());
+    *out = make_document(found->toDocument().clone());
     return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
@@ -781,7 +781,7 @@ galay_status_t galay_mongo_array_get_array(const galay_mongo_array_t* array, siz
     const auto* found = array_value_at(array, index);
     if (found == nullptr) return GALAY_NOT_FOUND;
     if (out == nullptr || found->type() != MongoValueType::Array) return GALAY_INVALID_ARGUMENT;
-    *out = make_array(found->toArray());
+    *out = make_array(found->toArray().clone());
     return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
 }
 
@@ -861,9 +861,9 @@ galay_status_t galay_mongo_command_find_one(const char* database, const char* co
     }
     MongoDocument command;
     command.append("find", collection);
-    command.append("filter", filter->document);
+    command.append("filter", filter->document.clone());
     if (projection != nullptr) {
-        command.append("projection", projection->document);
+        command.append("projection", projection->document.clone());
     }
     command.append("limit", int32_t(1));
     command.append("singleBatch", true);
@@ -882,7 +882,7 @@ galay_status_t galay_mongo_command_insert_one(const char* database, const char* 
         return GALAY_INVALID_ARGUMENT;
     }
     MongoArray documents;
-    documents.append(document->document);
+    documents.append(document->document.clone());
     MongoDocument command;
     command.append("insert", collection);
     command.append("documents", std::move(documents));
@@ -903,8 +903,8 @@ galay_status_t galay_mongo_command_update_one(const char* database, const char* 
         return GALAY_INVALID_ARGUMENT;
     }
     MongoDocument item;
-    item.append("q", filter->document);
-    item.append("u", update->document);
+    item.append("q", filter->document.clone());
+    item.append("u", update->document.clone());
     item.append("upsert", upsert == GALAY_TRUE);
     MongoArray updates;
     updates.append(std::move(item));
@@ -926,7 +926,7 @@ galay_status_t galay_mongo_command_delete_one(const char* database, const char* 
         return GALAY_INVALID_ARGUMENT;
     }
     MongoDocument item;
-    item.append("q", filter->document);
+    item.append("q", filter->document.clone());
     item.append("limit", int32_t(1));
     MongoArray deletes;
     deletes.append(std::move(item));

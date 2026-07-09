@@ -13,6 +13,7 @@
 
 ### Changed
 
+- **C++ 对象所有权契约收敛为 move-only + 显式 clone**：覆盖 kernel / utils / HTTP / HTTP2 / WS / RPC / Redis / MySQL / Mongo / Etcd / MCP / SSL / tracing 等模块，非平凡状态对象禁用隐式拷贝，保留显式移动，并通过 `clone()` 暴露可审计的深拷贝入口；借用 payload / buffer 视图在 clone 时物化为独立自有存储，避免隐藏浅拷贝和生命周期悬空。
 - **RingBuffer 模板化支持后端策略选择**：`RingBuffer` 新增 `RingBufferBackendStrategy::{Mmap, Vector, Auto}` 模板参数，默认使用 `Mmap` 后端以提供跨环绕边界的单段连续 span/iovec 视图；`Vector` 保留原有双段环绕行为，`Auto` 按容量选择后端。
 - **协议客户端传播 RingBuffer 后端策略**：Redis / MySQL / RPC / HTTP2 / HTTP / WS / Mongo 等持有 RingBuffer 的连接、客户端、awaitable 与测试/示例/benchmark 类型补齐模板参数，默认保持 `RingBufferBackendStrategy::Mmap`，并保留显式 `Vector` 实例化覆盖。
 - **全模块结构体字段重排以优化内存布局**：对 kernel / http / http2 / ws / rpc / mcp / redis / mysql / mongo / etcd / ssl / tracing / utils 及全部 C ABI 模块（`src/c/galay-*-c`）中的 struct / class 成员按访问热点与尺寸重排，把分散的小尺寸标量、指针与 bool 收敛到更紧凑的位置以减少 padding、提升缓存命中率；同步更新聚合初始化 `{...}` 顺序与构造初始化列表顺序以匹配新声明顺序（消除 `-Wreorder`）。
@@ -21,11 +22,13 @@
 
 ### Added
 
+- **新增 ownership surface 测试与 clone/move 压力基准**：在 `test/cpp/{etcd,http,http2,kernel,mcp,mongo,mysql,redis,rpc,ssl,tracing,utils,ws}` 下新增 move-only / clone 契约测试，覆盖类型 trait、深拷贝独立性、移动后视图重绑定与注册项所有权；在对应 `benchmark/cpp/*` 模块新增 clone/move ownership pressure 基准，锁定迁移后的复制成本和移动路径行为。
 - **utils 新增跨平台进程优先级接口**：`Process` 新增 `priority()` / `setPriority()` 静态方法，POSIX 平台基于 `getpriority` / `setpriority`（nice 值 `[-20,19]`），Windows 平台映射到 priority class；新增 `ProcessPriorityError` 错误枚举与配套的 `processPriorityErrorString()` 错误描述函数，错误经 `std::expected<T, ProcessPriorityError>` 显式传播，errno / `GetLastError` 立即转换为具体错误码（遵循错误显式传播与每个错误码配套错误字符串的约定）。`module_prelude.hpp` 补齐 `<cerrno>` / `<sys/resource.h>` 头，并新增 `test/cpp/utils/t11_platform_process_system.cc` 白盒测试。
 - **utils Process 新增 CPU 核心亲和性接口**：`Process` 新增 `cpuAffinity()` / `setCpuAffinity()` 静态方法，Linux 基于 `sched_getaffinity` / `sched_setaffinity`，Windows 基于 process affinity mask，其他平台显式返回 `ProcessAffinityError::Unsupported`；新增 `processAffinityErrorString()`，并补齐边界测试、roundtrip benchmark 与 API/使用文档。
 
 ### Fixed
 
+- 修复 move-only 契约迁移后的 C API wrapper、示例与 benchmark 编译边界：Mongo C wrapper 对嵌套 document / array / reply 改为显式 `clone()`，tracing C wrapper 改用 `LogRecord` 构造函数，HTTP / RPC / WS / tracing 示例和吞吐 benchmark 改为移动取值或引用绑定，避免隐式拷贝 move-only 类型。
 - 修复 RingBuffer 模板化重构后的回归测试期望：HTTP recv window 与 MySQL multi-result source 测试对齐默认 `Mmap` 单段视图和模板化类型名；C coroutine ResumeToken 测试移除违反 no-exception 契约的抛异常入口用例。
 - 恢复 Linux examples/benchmarks 执行矩阵的稳定入口：新增 `scripts/verify_linux_exec_matrix.py` 兼容 shim，转发并重导出 `scripts/common/105_verify_linux_exec_matrix.py`，保持现有脚本测试可 import 旧路径。
 

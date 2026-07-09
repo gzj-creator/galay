@@ -68,6 +68,9 @@ struct Http2OutgoingFrame {
     WaiterPtr waiter;
 
     Http2OutgoingFrame() = default;
+    Http2OutgoingFrame(Http2OutgoingFrame&&) noexcept = default;
+    Http2OutgoingFrame& operator=(Http2OutgoingFrame&&) noexcept = default;
+
     Http2OutgoingFrame(Http2Frame::uptr f, WaiterPtr w = nullptr)
         : frame(std::move(f))
         , waiter(std::move(w))
@@ -209,6 +212,9 @@ private:
         }
         return owned_payload.size();
     }
+
+    Http2OutgoingFrame(const Http2OutgoingFrame&) = delete;
+    Http2OutgoingFrame& operator=(const Http2OutgoingFrame&) = delete;
 };
 
 /**
@@ -216,6 +222,10 @@ private:
  */
 struct Http2ChunkedBody
 {
+    Http2ChunkedBody() = default;
+    Http2ChunkedBody(Http2ChunkedBody&&) noexcept = default;
+    Http2ChunkedBody& operator=(Http2ChunkedBody&&) noexcept = default;
+
     bool empty() const { return m_total_bytes == 0; }
     size_t size() const { return m_total_bytes; }
     size_t chunkCount() const { return m_chunk_count; }
@@ -366,7 +376,23 @@ struct Http2ChunkedBody
         return coalesce();
     }
 
+    /**
+     * @brief 显式深拷贝分块 body 内容，缓存不作为语义状态复制。
+     * @return 独立持有相同 body 数据的新对象。
+     */
+    Http2ChunkedBody clone() const {
+        Http2ChunkedBody copy;
+        copy.m_single_chunk = m_single_chunk;
+        copy.m_chunks = m_chunks;
+        copy.m_total_bytes = m_total_bytes;
+        copy.m_chunk_count = m_chunk_count;
+        return copy;
+    }
+
 private:
+    Http2ChunkedBody(const Http2ChunkedBody&) = delete;
+    Http2ChunkedBody& operator=(const Http2ChunkedBody&) = delete;
+
     void ensureChunkVector() {
         if (m_chunk_count == 1 && m_chunks.empty()) {
             m_chunks.reserve(2);
@@ -486,6 +512,10 @@ inline H2StaticRoute makeH2StaticRoute(std::string path, H2StaticResponse respon
  */
 struct Http2Request
 {
+    Http2Request() = default;
+    Http2Request(Http2Request&&) noexcept = default;
+    Http2Request& operator=(Http2Request&&) noexcept = default;
+
     std::string method;
     std::string scheme;
     std::string authority;
@@ -531,7 +561,27 @@ struct Http2Request
     std::string takeCoalescedBody() { return body.takeCoalesced(); }
     std::string takeSingleBodyChunk() { return body.takeSingleChunk(); }
 
+    /**
+     * @brief 显式深拷贝请求状态，包括伪头、普通头、常用头缓存和 body。
+     * @return 独立持有相同请求数据的新对象。
+     */
+    Http2Request clone() const {
+        Http2Request copy;
+        copy.method = method;
+        copy.scheme = scheme;
+        copy.authority = authority;
+        copy.path = path;
+        copy.headers = headers;
+        copy.body = body.clone();
+        copy.m_common_headers = m_common_headers;
+        copy.m_common_header_present = m_common_header_present;
+        return copy;
+    }
+
 private:
+    Http2Request(const Http2Request&) = delete;
+    Http2Request& operator=(const Http2Request&) = delete;
+
     const std::string* getCommonHeaderPtr(std::string_view name) const {
         auto slot = detail::matchHttp2RequestCommonHeader(name);
         if (!slot) {
@@ -554,6 +604,10 @@ private:
  */
 struct Http2Response
 {
+    Http2Response() = default;
+    Http2Response(Http2Response&&) noexcept = default;
+    Http2Response& operator=(Http2Response&&) noexcept = default;
+
     int status = 200;
     std::vector<Http2HeaderField> headers;
     std::string body;
@@ -575,6 +629,22 @@ struct Http2Response
         headers.clear();
         body.clear();
     }
+
+    /**
+     * @brief 显式深拷贝响应状态。
+     * @return 独立持有相同 status、headers 和 body 的新对象。
+     */
+    Http2Response clone() const {
+        Http2Response copy;
+        copy.status = status;
+        copy.headers = headers;
+        copy.body = body;
+        return copy;
+    }
+
+private:
+    Http2Response(const Http2Response&) = delete;
+    Http2Response& operator=(const Http2Response&) = delete;
 };
 
 /**

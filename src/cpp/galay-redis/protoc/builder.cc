@@ -2,6 +2,46 @@
 
 namespace galay::redis
 {
+    RedisCommandBuilder::RedisCommandBuilder(RedisCommandBuilder&& other) noexcept
+        : m_encoded(std::move(other.m_encoded))
+        , m_storage(std::move(other.m_storage))
+        , m_arg_slices(std::move(other.m_arg_slices))
+        , m_commands(std::move(other.m_commands))
+        , m_views_dirty(true)
+    {
+        other.m_arg_views.clear();
+        other.m_command_views.clear();
+        other.m_views_dirty = true;
+    }
+
+    RedisCommandBuilder& RedisCommandBuilder::operator=(RedisCommandBuilder&& other) noexcept
+    {
+        if (this != &other) {
+            m_encoded = std::move(other.m_encoded);
+            m_storage = std::move(other.m_storage);
+            m_arg_slices = std::move(other.m_arg_slices);
+            m_commands = std::move(other.m_commands);
+            m_arg_views.clear();
+            m_command_views.clear();
+            m_views_dirty = true;
+            other.m_arg_views.clear();
+            other.m_command_views.clear();
+            other.m_views_dirty = true;
+        }
+        return *this;
+    }
+
+    RedisCommandBuilder RedisCommandBuilder::clone() const
+    {
+        RedisCommandBuilder cloned;
+        cloned.m_encoded = m_encoded;
+        cloned.m_storage = m_storage;
+        cloned.m_arg_slices = m_arg_slices;
+        cloned.m_commands = m_commands;
+        cloned.m_views_dirty = true;
+        return cloned;
+    }
+
     void RedisCommandBuilder::clear() noexcept
     {
         m_encoded.clear();
@@ -77,19 +117,18 @@ namespace galay::redis
     RedisEncodedCommand RedisCommandBuilder::build() const
     {
         const size_t replies = m_commands.empty() ? 1 : m_commands.size();
-        return RedisEncodedCommand{
-            .encoded = m_encoded,
-            .expected_replies = replies
-        };
+        RedisEncodedCommand out;
+        out.encoded = m_encoded;
+        out.expected_replies = replies;
+        return out;
     }
 
     RedisEncodedCommand RedisCommandBuilder::release()
     {
         const size_t replies = m_commands.empty() ? 1 : m_commands.size();
-        RedisEncodedCommand out{
-            .encoded = std::move(m_encoded),
-            .expected_replies = replies
-        };
+        RedisEncodedCommand out;
+        out.encoded = std::move(m_encoded);
+        out.expected_replies = replies;
         m_encoded.clear();
         return out;
     }

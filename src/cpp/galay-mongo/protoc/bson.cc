@@ -63,12 +63,12 @@ void writeDoubleLE(std::string& out, double value)
     writeInt64LE(out, static_cast<int64_t>(bits));
 }
 
-MongoArray decodeArrayFromDocument(const MongoDocument& array_as_document)
+MongoArray decodeArrayFromDocument(MongoDocument array_as_document)
 {
     MongoArray array;
     array.reserve(array_as_document.size());
-    for (const auto& [_, value] : array_as_document.fields()) {
-        array.append(value);
+    for (auto& [_, value] : array_as_document.fields()) {
+        array.append(std::move(value));
     }
     return array;
 }
@@ -194,7 +194,7 @@ BsonCodec::decodeDocument(const char* data, size_t len, size_t& consumed)
     }
 
     consumed = static_cast<size_t>(total_len);
-    return document;
+    return std::move(document);
 }
 
 void BsonCodec::writeInt32(std::string& out, int32_t value)
@@ -431,7 +431,7 @@ std::expected<MongoValue, std::string> BsonCodec::decodeElementValue(BsonType ty
             return std::unexpected(doc_or_err.error());
         }
         pos += consumed;
-        return MongoValue(decodeArrayFromDocument(doc_or_err.value()));
+        return MongoValue(decodeArrayFromDocument(std::move(doc_or_err.value())));
     }
     case BsonType::Binary: {
         auto blob_len_or_err = readInt32(data, len, pos);

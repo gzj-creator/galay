@@ -269,10 +269,10 @@ MongoDocument buildClientMetadata(const std::string& app_name)
     if (!app_name.empty()) {
         MongoDocument app;
         app.append("name", app_name);
-        client.append("application", app);
+        client.append("application", std::move(app));
     }
-    client.append("driver", driver);
-    client.append("os", os);
+    client.append("driver", std::move(driver));
+    client.append("os", std::move(os));
     return client;
 }
 
@@ -1133,7 +1133,7 @@ struct AsyncMongoClientInternals
             ++received;
         }
 
-        co_return responses;
+        co_return std::move(responses);
     }
 };
 

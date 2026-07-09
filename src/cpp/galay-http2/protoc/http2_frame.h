@@ -23,6 +23,7 @@
 #include <memory>
 #include <expected>
 #include <optional>
+#include <utility>
 
 namespace galay::http2
 {
@@ -133,7 +134,14 @@ public:
     virtual Http2ErrorCode parsePayload(const uint8_t* data, size_t length) = 0;
 
 protected:
+    Http2Frame(Http2Frame&&) noexcept = default;
+    Http2Frame& operator=(Http2Frame&&) noexcept = default;
+
     Http2FrameHeader m_header;
+
+private:
+    Http2Frame(const Http2Frame&) = delete;
+    Http2Frame& operator=(const Http2Frame&) = delete;
 };
 
 /**
@@ -144,6 +152,8 @@ class Http2DataFrame : public Http2Frame
 {
 public:
     Http2DataFrame() { m_header.type = Http2FrameType::Data; }
+    Http2DataFrame(Http2DataFrame&&) noexcept = default;
+    Http2DataFrame& operator=(Http2DataFrame&&) noexcept = default;
 
     // 设置数据
     void setData(std::string data) { m_data = std::move(data); }
@@ -165,8 +175,18 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2DataFrame clone() const {
+        Http2DataFrame copy;
+        copy.m_header = m_header;
+        copy.m_data = m_data;
+        copy.m_pad_length = m_pad_length;
+        return copy;
+    }
 
 private:
+    Http2DataFrame(const Http2DataFrame&) = delete;
+    Http2DataFrame& operator=(const Http2DataFrame&) = delete;
+
     std::string m_data;
     uint8_t m_pad_length = 0;
 };
@@ -179,6 +199,8 @@ class Http2HeadersFrame : public Http2Frame
 {
 public:
     Http2HeadersFrame() { m_header.type = Http2FrameType::Headers; }
+    Http2HeadersFrame(Http2HeadersFrame&&) noexcept = default;
+    Http2HeadersFrame& operator=(Http2HeadersFrame&&) noexcept = default;
 
     // 设置头部块片段
     void setHeaderBlock(std::string block) { m_header_block = std::move(block); }
@@ -219,8 +241,21 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2HeadersFrame clone() const {
+        Http2HeadersFrame copy;
+        copy.m_header = m_header;
+        copy.m_stream_dependency = m_stream_dependency;
+        copy.m_header_block = m_header_block;
+        copy.m_exclusive = m_exclusive;
+        copy.m_weight = m_weight;
+        copy.m_pad_length = m_pad_length;
+        return copy;
+    }
 
 private:
+    Http2HeadersFrame(const Http2HeadersFrame&) = delete;
+    Http2HeadersFrame& operator=(const Http2HeadersFrame&) = delete;
+
     uint32_t m_stream_dependency = 0;
     std::string m_header_block;
     bool m_exclusive = false;
@@ -236,6 +271,8 @@ class Http2PriorityFrame : public Http2Frame
 {
 public:
     Http2PriorityFrame() { m_header.type = Http2FrameType::Priority; }
+    Http2PriorityFrame(Http2PriorityFrame&&) noexcept = default;
+    Http2PriorityFrame& operator=(Http2PriorityFrame&&) noexcept = default;
 
     bool exclusive() const { return m_exclusive; }
     uint32_t streamDependency() const { return m_stream_dependency; }
@@ -249,8 +286,19 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2PriorityFrame clone() const {
+        Http2PriorityFrame copy;
+        copy.m_header = m_header;
+        copy.m_stream_dependency = m_stream_dependency;
+        copy.m_exclusive = m_exclusive;
+        copy.m_weight = m_weight;
+        return copy;
+    }
 
 private:
+    Http2PriorityFrame(const Http2PriorityFrame&) = delete;
+    Http2PriorityFrame& operator=(const Http2PriorityFrame&) = delete;
+
     uint32_t m_stream_dependency = 0;
     bool m_exclusive = false;
     uint8_t m_weight = 16;
@@ -264,14 +312,25 @@ class Http2RstStreamFrame : public Http2Frame
 {
 public:
     Http2RstStreamFrame() { m_header.type = Http2FrameType::RstStream; }
+    Http2RstStreamFrame(Http2RstStreamFrame&&) noexcept = default;
+    Http2RstStreamFrame& operator=(Http2RstStreamFrame&&) noexcept = default;
 
     Http2ErrorCode errorCode() const { return m_error_code; }
     void setErrorCode(Http2ErrorCode code) { m_error_code = code; }
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2RstStreamFrame clone() const {
+        Http2RstStreamFrame copy;
+        copy.m_header = m_header;
+        copy.m_error_code = m_error_code;
+        return copy;
+    }
 
 private:
+    Http2RstStreamFrame(const Http2RstStreamFrame&) = delete;
+    Http2RstStreamFrame& operator=(const Http2RstStreamFrame&) = delete;
+
     Http2ErrorCode m_error_code = Http2ErrorCode::NoError;
 };
 
@@ -283,6 +342,8 @@ class Http2SettingsFrame : public Http2Frame
 {
 public:
     Http2SettingsFrame() { m_header.type = Http2FrameType::Settings; }
+    Http2SettingsFrame(Http2SettingsFrame&&) noexcept = default;
+    Http2SettingsFrame& operator=(Http2SettingsFrame&&) noexcept = default;
 
     // ACK 标志
     bool isAck() const { return m_header.hasFlag(Http2FrameFlags::kAck); }
@@ -313,8 +374,17 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2SettingsFrame clone() const {
+        Http2SettingsFrame copy;
+        copy.m_header = m_header;
+        copy.m_settings = m_settings;
+        return copy;
+    }
 
 private:
+    Http2SettingsFrame(const Http2SettingsFrame&) = delete;
+    Http2SettingsFrame& operator=(const Http2SettingsFrame&) = delete;
+
     std::vector<Setting> m_settings;
 };
 
@@ -326,6 +396,8 @@ class Http2PushPromiseFrame : public Http2Frame
 {
 public:
     Http2PushPromiseFrame() { m_header.type = Http2FrameType::PushPromise; }
+    Http2PushPromiseFrame(Http2PushPromiseFrame&&) noexcept = default;
+    Http2PushPromiseFrame& operator=(Http2PushPromiseFrame&&) noexcept = default;
 
     uint32_t promisedStreamId() const { return m_promised_stream_id; }
     void setPromisedStreamId(uint32_t id) { m_promised_stream_id = id; }
@@ -344,8 +416,19 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2PushPromiseFrame clone() const {
+        Http2PushPromiseFrame copy;
+        copy.m_header = m_header;
+        copy.m_promised_stream_id = m_promised_stream_id;
+        copy.m_header_block = m_header_block;
+        copy.m_pad_length = m_pad_length;
+        return copy;
+    }
 
 private:
+    Http2PushPromiseFrame(const Http2PushPromiseFrame&) = delete;
+    Http2PushPromiseFrame& operator=(const Http2PushPromiseFrame&) = delete;
+
     uint32_t m_promised_stream_id = 0;
     std::string m_header_block;
     uint8_t m_pad_length = 0;
@@ -362,6 +445,8 @@ public:
         m_header.type = Http2FrameType::Ping;
         m_header.stream_id = 0;  // PING 帧必须在流 0 上
     }
+    Http2PingFrame(Http2PingFrame&&) noexcept = default;
+    Http2PingFrame& operator=(Http2PingFrame&&) noexcept = default;
 
     // ACK 标志
     bool isAck() const { return m_header.hasFlag(Http2FrameFlags::kAck); }
@@ -378,8 +463,17 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2PingFrame clone() const {
+        Http2PingFrame copy;
+        copy.m_header = m_header;
+        std::memcpy(copy.m_opaque_data, m_opaque_data, sizeof(m_opaque_data));
+        return copy;
+    }
 
 private:
+    Http2PingFrame(const Http2PingFrame&) = delete;
+    Http2PingFrame& operator=(const Http2PingFrame&) = delete;
+
     uint8_t m_opaque_data[8] = {0};
 };
 
@@ -394,6 +488,8 @@ public:
         m_header.type = Http2FrameType::GoAway;
         m_header.stream_id = 0;  // GOAWAY 帧必须在流 0 上
     }
+    Http2GoAwayFrame(Http2GoAwayFrame&&) noexcept = default;
+    Http2GoAwayFrame& operator=(Http2GoAwayFrame&&) noexcept = default;
 
     uint32_t lastStreamId() const { return m_last_stream_id; }
     void setLastStreamId(uint32_t id) { m_last_stream_id = id; }
@@ -406,8 +502,19 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2GoAwayFrame clone() const {
+        Http2GoAwayFrame copy;
+        copy.m_header = m_header;
+        copy.m_last_stream_id = m_last_stream_id;
+        copy.m_debug_data = m_debug_data;
+        copy.m_error_code = m_error_code;
+        return copy;
+    }
 
 private:
+    Http2GoAwayFrame(const Http2GoAwayFrame&) = delete;
+    Http2GoAwayFrame& operator=(const Http2GoAwayFrame&) = delete;
+
     uint32_t m_last_stream_id = 0;
     std::string m_debug_data;
     Http2ErrorCode m_error_code = Http2ErrorCode::NoError;
@@ -421,14 +528,25 @@ class Http2WindowUpdateFrame : public Http2Frame
 {
 public:
     Http2WindowUpdateFrame() { m_header.type = Http2FrameType::WindowUpdate; }
+    Http2WindowUpdateFrame(Http2WindowUpdateFrame&&) noexcept = default;
+    Http2WindowUpdateFrame& operator=(Http2WindowUpdateFrame&&) noexcept = default;
 
     uint32_t windowSizeIncrement() const { return m_window_size_increment; }
     void setWindowSizeIncrement(uint32_t increment) { m_window_size_increment = increment; }
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2WindowUpdateFrame clone() const {
+        Http2WindowUpdateFrame copy;
+        copy.m_header = m_header;
+        copy.m_window_size_increment = m_window_size_increment;
+        return copy;
+    }
 
 private:
+    Http2WindowUpdateFrame(const Http2WindowUpdateFrame&) = delete;
+    Http2WindowUpdateFrame& operator=(const Http2WindowUpdateFrame&) = delete;
+
     uint32_t m_window_size_increment = 0;
 };
 
@@ -440,6 +558,8 @@ class Http2ContinuationFrame : public Http2Frame
 {
 public:
     Http2ContinuationFrame() { m_header.type = Http2FrameType::Continuation; }
+    Http2ContinuationFrame(Http2ContinuationFrame&&) noexcept = default;
+    Http2ContinuationFrame& operator=(Http2ContinuationFrame&&) noexcept = default;
 
     const std::string& headerBlock() const { return m_header_block; }
     void setHeaderBlock(std::string block) { m_header_block = std::move(block); }
@@ -452,8 +572,17 @@ public:
 
     std::string serialize() const override;
     Http2ErrorCode parsePayload(const uint8_t* data, size_t length) override;
+    Http2ContinuationFrame clone() const {
+        Http2ContinuationFrame copy;
+        copy.m_header = m_header;
+        copy.m_header_block = m_header_block;
+        return copy;
+    }
 
 private:
+    Http2ContinuationFrame(const Http2ContinuationFrame&) = delete;
+    Http2ContinuationFrame& operator=(const Http2ContinuationFrame&) = delete;
+
     std::string m_header_block;
 };
 

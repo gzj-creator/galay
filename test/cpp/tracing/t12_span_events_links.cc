@@ -7,6 +7,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -97,7 +98,8 @@ void otlpJsonExporterEncodesEventsAndLinks() {
     span.end();
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
-    const std::vector spans{span};
+    std::vector<galay::tracing::Span> spans;
+    spans.push_back(std::move(span));
     assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
     assert(captured);
 }
@@ -113,7 +115,8 @@ void fileExporterEncodesEventsAndLinks() {
 
     {
         galay::tracing::FileSpanExporter exporter(path);
-        const std::vector spans{span};
+        std::vector<galay::tracing::Span> spans;
+        spans.push_back(std::move(span));
         assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
         assert(exporter.forceFlush(std::chrono::milliseconds(0)));
     }
@@ -139,7 +142,8 @@ void fileExporterEscapesJsonlControlCharacters() {
 
     {
         galay::tracing::FileSpanExporter exporter(path);
-        const std::vector spans{span};
+        std::vector<galay::tracing::Span> spans;
+        spans.push_back(std::move(span));
         assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
         assert(exporter.forceFlush(std::chrono::milliseconds(0)));
     }

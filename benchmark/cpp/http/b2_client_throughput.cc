@@ -81,7 +81,7 @@ Task<void> continuousWorker(int worker_id, const std::string& host, int port, co
             break;
         }
 
-        auto response_opt = result.value();
+        auto response_opt = std::move(result.value());
         if (!response_opt.has_value()) {
             continue;
         }

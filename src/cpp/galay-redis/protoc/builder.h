@@ -20,6 +20,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace galay::redis
@@ -41,6 +42,28 @@ namespace galay::redis
      */
     struct RedisEncodedCommand
     {
+        RedisEncodedCommand() = default; ///< 默认构造
+        RedisEncodedCommand(std::string encoded_data, size_t replies = 1)
+            : encoded(std::move(encoded_data))
+            , expected_replies(replies)
+        {
+        }
+    private:
+        RedisEncodedCommand(const RedisEncodedCommand&) = delete; ///< 禁止隐式拷贝
+        RedisEncodedCommand& operator=(const RedisEncodedCommand&) = delete; ///< 禁止隐式拷贝赋值
+    public:
+        RedisEncodedCommand(RedisEncodedCommand&&) noexcept = default; ///< 移动构造
+        RedisEncodedCommand& operator=(RedisEncodedCommand&&) noexcept = default; ///< 移动赋值
+
+        /**
+         * @brief 显式克隆已编码命令
+         * @return 独立复制后的命令包
+         */
+        [[nodiscard]] RedisEncodedCommand clone() const
+        {
+            return RedisEncodedCommand(encoded, expected_replies);
+        }
+
         std::string encoded;            ///< 已编码的 RESP 命令字符串
         size_t expected_replies = 1;    ///< 期望的回复数量
     };
@@ -55,6 +78,18 @@ namespace galay::redis
     {
     public:
         RedisCommandBuilder() = default;
+    private:
+        RedisCommandBuilder(const RedisCommandBuilder&) = delete;
+        RedisCommandBuilder& operator=(const RedisCommandBuilder&) = delete;
+    public:
+        RedisCommandBuilder(RedisCommandBuilder&& other) noexcept;
+        RedisCommandBuilder& operator=(RedisCommandBuilder&& other) noexcept;
+
+        /**
+         * @brief 显式克隆命令构建器
+         * @return 独立复制后的构建器，内部视图缓存会在首次访问时重建
+         */
+        [[nodiscard]] RedisCommandBuilder clone() const;
 
         /**
          * @brief 清空所有已添加的命令

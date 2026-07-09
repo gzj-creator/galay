@@ -25,6 +25,19 @@ namespace galay::utils {
 class ConfigParser : public ParserBase {
 public:
     ConfigParser() = default;
+    ConfigParser(ConfigParser&&) noexcept = default;
+    ConfigParser& operator=(ConfigParser&&) noexcept = default;
+
+    /**
+     * @brief 显式克隆配置解析状态
+     * @return 独立 ConfigParser 副本
+     */
+    [[nodiscard]] ConfigParser clone() const {
+        ConfigParser copy;
+        copy.m_values = m_values;
+        copy.m_last_error = m_last_error;
+        return copy;
+    }
 
     bool parseFile(const std::string& path) override {
         return parseFileContent(path);
@@ -118,6 +131,10 @@ public:
         }
         return parser_detail::splitCommaSeparated(*value);
     }
+
+private:
+    ConfigParser(const ConfigParser&) = delete;
+    ConfigParser& operator=(const ConfigParser&) = delete;
 
 protected:
     std::unordered_map<std::string, std::string> m_values;

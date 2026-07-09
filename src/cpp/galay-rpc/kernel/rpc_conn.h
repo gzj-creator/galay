@@ -507,6 +507,13 @@ public:
     }
 
 private:
+    RpcRequestWriteState(const RpcRequestWriteState&) = delete;
+    RpcRequestWriteState& operator=(const RpcRequestWriteState&) = delete;
+public:
+    RpcRequestWriteState(RpcRequestWriteState&&) = delete;
+    RpcRequestWriteState& operator=(RpcRequestWriteState&&) = delete;
+
+private:
     /// @brief 重建iovec数组
     void rebuildIovecs()
     {
@@ -631,6 +638,13 @@ public:
     {
         rebuildIovecs();
     }
+
+private:
+    RpcResponseWriteState(const RpcResponseWriteState&) = delete;
+    RpcResponseWriteState& operator=(const RpcResponseWriteState&) = delete;
+public:
+    RpcResponseWriteState(RpcResponseWriteState&&) = delete;
+    RpcResponseWriteState& operator=(RpcResponseWriteState&&) = delete;
 
 private:
     /// @brief 重建iovec数组
@@ -1061,6 +1075,20 @@ public:
     {
     }
 
+private:
+    RpcReaderImpl(const RpcReaderImpl&) = delete;
+    RpcReaderImpl& operator=(const RpcReaderImpl&) = delete;
+public:
+
+    RpcReaderImpl(RpcReaderImpl&& other) noexcept
+        : m_ring_buffer(other.m_ring_buffer)
+        , m_setting(other.m_setting)
+        , m_socket(other.m_socket)
+    {
+    }
+
+    RpcReaderImpl& operator=(RpcReaderImpl&&) = delete;
+
     /**
      * @brief 获取RPC请求
      * @param request 输出请求对象
@@ -1121,6 +1149,19 @@ public:
         , m_socket(socket)
     {
     }
+
+private:
+    RpcWriterImpl(const RpcWriterImpl&) = delete;
+    RpcWriterImpl& operator=(const RpcWriterImpl&) = delete;
+public:
+
+    RpcWriterImpl(RpcWriterImpl&& other) noexcept
+        : m_setting(other.m_setting)
+        , m_socket(other.m_socket)
+    {
+    }
+
+    RpcWriterImpl& operator=(RpcWriterImpl&&) = delete;
 
     /**
      * @brief 发送RPC请求

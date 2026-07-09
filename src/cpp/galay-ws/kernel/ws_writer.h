@@ -18,6 +18,8 @@
 #include "../protoc/ws_error.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/async/tcp_socket.h"
+#include <array>
+#include <cstdint>
 #include <expected>
 #include <optional>
 #include <string>
@@ -80,6 +82,13 @@ struct WsTcpWritevMachine {
     explicit WsTcpWritevMachine(WsWriterImpl<SocketType>* writer)
         : m_writer(writer) {}
 
+private:
+    WsTcpWritevMachine(const WsTcpWritevMachine&) = delete;
+    WsTcpWritevMachine& operator=(const WsTcpWritevMachine&) = delete;
+public:
+    WsTcpWritevMachine(WsTcpWritevMachine&&) noexcept = default;
+    WsTcpWritevMachine& operator=(WsTcpWritevMachine&&) noexcept = default;
+
     MachineAction<result_type> advance() {
         if (m_result.has_value()) {
             return MachineAction<result_type>::complete(std::move(*m_result));
@@ -140,6 +149,13 @@ struct WsSslSendMachine {
 
     explicit WsSslSendMachine(WsWriterImpl<SocketType>* writer)
         : m_writer(writer) {}
+
+private:
+    WsSslSendMachine(const WsSslSendMachine&) = delete;
+    WsSslSendMachine& operator=(const WsSslSendMachine&) = delete;
+public:
+    WsSslSendMachine(WsSslSendMachine&&) noexcept = default;
+    WsSslSendMachine& operator=(WsSslSendMachine&&) noexcept = default;
 
     galay::ssl::SslMachineAction<result_type> advance() {
         if (m_result.has_value()) {
@@ -239,6 +255,36 @@ public:
         , m_remaining_bytes(0)
     {
         m_writev_cursor.reserve(2);
+    }
+
+private:
+    WsWriterImpl(const WsWriterImpl&) = delete;
+    WsWriterImpl& operator=(const WsWriterImpl&) = delete;
+public:
+
+    /**
+     * @brief 移动构造，保留 pending 发送进度
+     * @details TCP writev 游标保存的是指向本对象缓冲区的 iovec，移动后会
+     *          重新绑定到新对象的 header/payload 存储。
+     */
+    WsWriterImpl(WsWriterImpl&& other) noexcept
+        : m_setting(other.m_setting)
+        , m_socket(other.m_socket)
+        , m_remaining_bytes(0)
+    {
+        moveFrom(std::move(other));
+    }
+
+    /**
+     * @brief 移动赋值，保留 pending 发送进度
+     * @details 与移动构造一样会重新绑定 TCP writev 游标到当前对象。
+     */
+    WsWriterImpl& operator=(WsWriterImpl&& other) noexcept {
+        if (this == &other) {
+            return *this;
+        }
+        moveFrom(std::move(other));
+        return *this;
     }
 
     auto sendText(const std::string& text, bool fin = true) {
@@ -349,8 +395,114 @@ public:
     }
 
 private:
+    enum class PendingWritevBuffer : uint8_t {
+        kHeader,
+        kPayload,
+    };
+
+    struct PendingWritevSegment {
+        size_t offset = 0;
+        size_t length = 0;
+        PendingWritevBuffer buffer = PendingWritevBuffer::kHeader;
+    };
+
+    struct PendingWritevSnapshot {
+        std::array<PendingWritevSegment, 2> segments{};
+        size_t count = 0;
+    };
+
     auto makeSendAwaitable() {
         return detail::buildSendAwaitable(*m_socket, *this);
+    }
+
+    static bool capturePendingSegment(const struct iovec& segment,
+                                      const std::string& buffer,
+                                      PendingWritevBuffer buffer_kind,
+                                      PendingWritevSnapshot& snapshot) noexcept {
+        if (buffer.empty() || segment.iov_base == nullptr || segment.iov_len == 0) {
+            return false;
+        }
+
+        const auto begin = reinterpret_cast<std::uintptr_t>(buffer.data());
+        const auto current = reinterpret_cast<std::uintptr_t>(segment.iov_base);
+        const auto end = begin + buffer.size();
+        if (current < begin || current >= end) {
+            return false;
+        }
+
+        const size_t offset = static_cast<size_t>(current - begin);
+        if (segment.iov_len > buffer.size() - offset ||
+            snapshot.count >= snapshot.segments.size()) {
+            return false;
+        }
+
+        snapshot.segments[snapshot.count++] = PendingWritevSegment{
+            .offset = offset,
+            .length = segment.iov_len,
+            .buffer = buffer_kind,
+        };
+        return true;
+    }
+
+    static PendingWritevSnapshot snapshotPendingWritev(const WsWriterImpl& writer) noexcept {
+        PendingWritevSnapshot snapshot;
+        const struct iovec* iovecs = writer.m_writev_cursor.data();
+        const size_t iovec_count = writer.m_writev_cursor.count();
+        for (size_t i = 0; i < iovec_count && snapshot.count < snapshot.segments.size(); ++i) {
+            if (capturePendingSegment(
+                    iovecs[i],
+                    writer.m_buffer,
+                    PendingWritevBuffer::kHeader,
+                    snapshot)) {
+                continue;
+            }
+            const bool captured_payload = capturePendingSegment(
+                iovecs[i],
+                writer.m_payload_buffer,
+                PendingWritevBuffer::kPayload,
+                snapshot);
+            if (!captured_payload) {
+                return snapshot;
+            }
+        }
+        return snapshot;
+    }
+
+    void restorePendingWritev(const PendingWritevSnapshot& snapshot) noexcept {
+        if (snapshot.count == 0) {
+            return;
+        }
+
+        m_writev_cursor.clear();
+        for (size_t i = 0; i < snapshot.count; ++i) {
+            const auto& segment = snapshot.segments[i];
+            std::string& buffer =
+                segment.buffer == PendingWritevBuffer::kHeader ? m_buffer : m_payload_buffer;
+            m_writev_cursor.append({
+                buffer.data() + segment.offset,
+                segment.length,
+            });
+        }
+        m_remaining_bytes = m_writev_cursor.remainingBytes();
+    }
+
+    void moveFrom(WsWriterImpl&& other) noexcept {
+        const PendingWritevSnapshot pending_writev = snapshotPendingWritev(other);
+
+        m_setting = other.m_setting;
+        m_socket = other.m_socket;
+        m_buffer = std::move(other.m_buffer);
+        m_payload_buffer = std::move(other.m_payload_buffer);
+        m_writev_cursor = std::move(other.m_writev_cursor);
+        m_remaining_bytes = other.m_remaining_bytes;
+        m_operation_counters = other.m_operation_counters;
+        m_fast_path_counters = other.m_fast_path_counters;
+        for (size_t i = 0; i < sizeof(m_masking_key); ++i) {
+            m_masking_key[i] = other.m_masking_key[i];
+        }
+
+        restorePendingWritev(pending_writev);
+        other.resetPendingState();
     }
 
     static constexpr bool canUseCommonTcpFastPath(WsOpcode opcode, bool fin, bool use_mask) {

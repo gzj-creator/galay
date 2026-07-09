@@ -106,6 +106,13 @@ struct WsEchoMachine {
         , m_opcode(&opcode)
         , m_preserve_message(preserve_message) {}
 
+private:
+    WsEchoMachine(const WsEchoMachine&) = delete;
+    WsEchoMachine& operator=(const WsEchoMachine&) = delete;
+public:
+    WsEchoMachine(WsEchoMachine&&) noexcept = default;
+    WsEchoMachine& operator=(WsEchoMachine&&) noexcept = default;
+
     MachineAction<result_type> advance() {
         ++m_conn->m_echo_counters.composite_advance_calls;
         if (m_result.has_value()) {
@@ -388,6 +395,13 @@ struct WsSslEchoMachine {
         , m_message(&message)
         , m_opcode(&opcode)
         , m_preserve_message(preserve_message) {}
+
+private:
+    WsSslEchoMachine(const WsSslEchoMachine&) = delete;
+    WsSslEchoMachine& operator=(const WsSslEchoMachine&) = delete;
+public:
+    WsSslEchoMachine(WsSslEchoMachine&&) noexcept = default;
+    WsSslEchoMachine& operator=(WsSslEchoMachine&&) noexcept = default;
 
     galay::ssl::SslMachineAction<result_type> advance() {
         ++m_conn->m_echo_counters.composite_advance_calls;
@@ -674,7 +688,7 @@ struct WsSslEchoLoopMachine {
     WsSslEchoLoopMachine(const WsSslEchoLoopMachine&) = delete;
     WsSslEchoLoopMachine& operator=(const WsSslEchoLoopMachine&) = delete;
 
-    WsSslEchoLoopMachine(WsSslEchoLoopMachine&& other)
+    WsSslEchoLoopMachine(WsSslEchoLoopMachine&& other) noexcept
         : m_conn(other.m_conn)
         , m_reader_setting(std::move(other.m_reader_setting))
         , m_message(std::move(other.m_message))
@@ -692,7 +706,7 @@ struct WsSslEchoLoopMachine {
         rebindOwnedReadState();
     }
 
-    WsSslEchoLoopMachine& operator=(WsSslEchoLoopMachine&& other) {
+    WsSslEchoLoopMachine& operator=(WsSslEchoLoopMachine&& other) noexcept {
         if (this == &other) {
             return *this;
         }

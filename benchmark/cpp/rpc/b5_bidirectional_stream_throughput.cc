@@ -118,7 +118,7 @@ Task<void> benchWorker(const BenchConfig& config, uint32_t worker_id) {
         if (!stream_result.has_value()) {
             break;
         }
-        auto stream = stream_result.value();
+        auto stream = std::move(stream_result.value());
         StreamMessage init_ack;
         StreamMessage echo_frame;
         StreamMessage tail_frame;

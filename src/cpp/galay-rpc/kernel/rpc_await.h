@@ -197,6 +197,15 @@ class RpcWriteStateBase
 public:
     using ResultType = ResultT;
 
+    RpcWriteStateBase() = default;
+private:
+    RpcWriteStateBase(const RpcWriteStateBase&) = delete;
+    RpcWriteStateBase& operator=(const RpcWriteStateBase&) = delete;
+public:
+    RpcWriteStateBase(RpcWriteStateBase&&) = delete;
+    RpcWriteStateBase& operator=(RpcWriteStateBase&&) = delete;
+    ~RpcWriteStateBase() = default;
+
     /// @brief 判断写入是否完成（出错或所有iovec已消耗）
     bool isComplete() const
     {
@@ -275,6 +284,13 @@ public:
             mutableIovecs().push_back(iovec{m_data.data(), m_data.size()});
         }
     }
+
+private:
+    RpcVectorWriteState(const RpcVectorWriteState&) = delete;
+    RpcVectorWriteState& operator=(const RpcVectorWriteState&) = delete;
+public:
+    RpcVectorWriteState(RpcVectorWriteState&&) = delete;
+    RpcVectorWriteState& operator=(RpcVectorWriteState&&) = delete;
 
 private:
     std::vector<char> m_data;  ///< 持有的数据缓冲区

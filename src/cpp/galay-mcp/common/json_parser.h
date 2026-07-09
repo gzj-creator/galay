@@ -37,8 +37,16 @@ struct JsonRpcRequestView {
  * @details 持有JSON文档及其解析出的请求视图
  */
 struct ParsedJsonRpcRequest {
+    ParsedJsonRpcRequest() = default; ///< 默认构造
+    ParsedJsonRpcRequest(ParsedJsonRpcRequest&&) noexcept = default; ///< 移动构造，保持DOM地址稳定
+    ParsedJsonRpcRequest& operator=(ParsedJsonRpcRequest&&) noexcept = default; ///< 移动赋值，保持DOM地址稳定
+
     JsonDocument document; ///< JSON文档（持有底层数据）
     JsonRpcRequestView request; ///< 解析出的请求视图
+
+private:
+    ParsedJsonRpcRequest(const ParsedJsonRpcRequest&) = delete; ///< 禁止隐式复制DOM与视图
+    ParsedJsonRpcRequest& operator=(const ParsedJsonRpcRequest&) = delete; ///< 禁止隐式复制DOM与视图
 };
 
 /**
@@ -58,8 +66,16 @@ struct JsonRpcResponseView {
  * @details 持有JSON文档及其解析出的响应视图
  */
 struct ParsedJsonRpcResponse {
+    ParsedJsonRpcResponse() = default; ///< 默认构造
+    ParsedJsonRpcResponse(ParsedJsonRpcResponse&&) noexcept = default; ///< 移动构造，保持DOM地址稳定
+    ParsedJsonRpcResponse& operator=(ParsedJsonRpcResponse&&) noexcept = default; ///< 移动赋值，保持DOM地址稳定
+
     JsonDocument document; ///< JSON文档（持有底层数据）
     JsonRpcResponseView response; ///< 解析出的响应视图
+
+private:
+    ParsedJsonRpcResponse(const ParsedJsonRpcResponse&) = delete; ///< 禁止隐式复制DOM与视图
+    ParsedJsonRpcResponse& operator=(const ParsedJsonRpcResponse&) = delete; ///< 禁止隐式复制DOM与视图
 };
 
 /**

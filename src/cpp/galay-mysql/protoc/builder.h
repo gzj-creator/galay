@@ -18,6 +18,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace galay::mysql::protocol
@@ -55,8 +56,23 @@ struct MysqlCommandView
  */
 struct MysqlEncodedBatch
 {
+    MysqlEncodedBatch() = default;
+    MysqlEncodedBatch(std::string encoded_data, size_t response_count) noexcept;
+    MysqlEncodedBatch(MysqlEncodedBatch&&) noexcept = default;
+    MysqlEncodedBatch& operator=(MysqlEncodedBatch&&) noexcept = default;
+
+    /**
+     * @brief 显式复制编码批量命令
+     * @return 拥有独立编码缓冲区的新批量命令
+     */
+    [[nodiscard]] MysqlEncodedBatch clone() const;
+
     std::string encoded;                    ///< 编码后的命令数据
     size_t expected_responses = 0;          ///< 预期响应数量
+
+private:
+    MysqlEncodedBatch(const MysqlEncodedBatch&) = delete;
+    MysqlEncodedBatch& operator=(const MysqlEncodedBatch&) = delete;
 };
 
 /**
@@ -68,6 +84,16 @@ class MysqlCommandBuilder
 {
 public:
     MysqlCommandBuilder() = default;
+    MysqlCommandBuilder(MysqlCommandBuilder&& other) noexcept;
+    MysqlCommandBuilder& operator=(MysqlCommandBuilder&& other) noexcept;
+
+    /**
+     * @brief 显式复制命令构建器
+     * @details 复制编码缓冲区和命令元数据，并丢弃旧视图缓存；下一次commands()
+     *          会重新生成指向新缓冲区的string_view。
+     * @return 拥有独立编码缓冲区的新构建器
+     */
+    [[nodiscard]] MysqlCommandBuilder clone() const;
 
     /**
      * @brief 清空所有已添加的命令
@@ -219,6 +245,9 @@ private:
     std::vector<CommandMeta> m_commands;                  ///< 命令元数据列表
     mutable std::vector<MysqlCommandView> m_command_views;///< 命令视图缓存
     mutable bool m_views_dirty = true;                    ///< 视图是否需要重建
+
+    MysqlCommandBuilder(const MysqlCommandBuilder&) = delete;
+    MysqlCommandBuilder& operator=(const MysqlCommandBuilder&) = delete;
 };
 
 } // namespace galay::mysql::protocol

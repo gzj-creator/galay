@@ -147,11 +147,36 @@ private:
  */
 struct MongoPipelineResponse
 {
+    MongoPipelineResponse() = default;
+    MongoPipelineResponse(MongoPipelineResponse&&) noexcept = default;             ///< 移动构造，转移响应或错误状态
+    MongoPipelineResponse& operator=(MongoPipelineResponse&&) noexcept = default;  ///< 移动赋值，转移响应或错误状态
+
     std::optional<MongoReply> reply;                 ///< 响应文档（成功时有效）
     std::optional<MongoError> error;                 ///< 错误信息（失败时有效）
     int32_t request_id = 0;                          ///< 对应的请求 ID
 
     bool ok() const { return reply.has_value(); }    ///< 判断该条命令是否成功
+
+    /**
+     * @brief 显式深拷贝 pipeline 单条响应
+     * @return reply 递归 clone、error 保持值复制后的新响应
+     */
+    [[nodiscard]] MongoPipelineResponse clone() const
+    {
+        MongoPipelineResponse copy;
+        copy.request_id = request_id;
+        if (reply.has_value()) {
+            copy.reply.emplace(reply->clone());
+        }
+        if (error.has_value()) {
+            copy.error.emplace(*error);
+        }
+        return copy;
+    }
+
+private:
+    MongoPipelineResponse(const MongoPipelineResponse&) = delete;
+    MongoPipelineResponse& operator=(const MongoPipelineResponse&) = delete;
 };
 
 using MongoConnectAwaitable = Task<std::expected<bool, MongoError>>;                                    ///< 连接操作的协程返回类型

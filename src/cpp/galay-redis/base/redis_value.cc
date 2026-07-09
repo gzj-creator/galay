@@ -38,6 +38,11 @@ namespace galay::redis
         return *this;
     }
 
+    RedisValue RedisValue::clone() const
+    {
+        return RedisValue(m_reply.clone());
+    }
+
     // 静态工厂方法：创建错误类型的RedisValue
     RedisValue RedisValue::fromError(const std::string& error_msg)
     {
@@ -107,7 +112,7 @@ namespace galay::redis
                 const auto& arr = m_reply.asArray();
                 cache.reserve(arr.size());
                 for (const auto& elem : arr) {
-                    cache.emplace_back(elem);
+                    cache.emplace_back(elem.clone());
                 }
             }
             m_array_cached = true;
@@ -120,7 +125,7 @@ namespace galay::redis
 
         result.reserve(m_cached_array->size());
         for (const auto& elem : *m_cached_array) {
-            result.emplace_back(elem.m_reply);
+            result.emplace_back(elem.clone());
         }
         return result;
     }
@@ -163,7 +168,7 @@ namespace galay::redis
                 for (const auto& [key, value] : map_data) {
                     cache.emplace(
                         key.asString(),
-                        RedisValue(value)
+                        RedisValue(value.clone())
                     );
                 }
             }
@@ -176,7 +181,7 @@ namespace galay::redis
         }
 
         for (const auto& [key, value] : *m_cached_map) {
-            result.emplace(key, RedisValue(value.m_reply));
+            result.emplace(key, value.clone());
         }
         return result;
     }
@@ -193,8 +198,7 @@ namespace galay::redis
             const auto& set_data = m_reply.asArray();  // Set uses array internally
             result.reserve(set_data.size());
             for (const auto& elem : set_data) {
-                // 使用拷贝构造，避免 const_cast
-                result.push_back(RedisValue(elem));
+                result.push_back(RedisValue(elem.clone()));
             }
         }
         return result;
@@ -217,8 +221,7 @@ namespace galay::redis
             const auto& push_data = m_reply.asArray();
             result.reserve(push_data.size());
             for (const auto& elem : push_data) {
-                // 使用拷贝构造，避免 const_cast
-                result.push_back(RedisValue(elem));
+                result.push_back(RedisValue(elem.clone()));
             }
         }
         return result;
@@ -264,5 +267,10 @@ namespace galay::redis
     {
         RedisValue::operator=(std::move(other));
         return *this;
+    }
+
+    RedisAsyncValue RedisAsyncValue::clone() const
+    {
+        return RedisAsyncValue(m_reply.clone());
     }
 }

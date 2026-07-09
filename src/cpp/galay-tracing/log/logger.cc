@@ -115,12 +115,11 @@ void appendFieldValue(std::string& message, const LogFieldValue& value) {
         appendFieldValue(message, field.value);
     }
 
-    return LogRecord{
-        .level = record.level,
-        .message = std::move(message),
-        .source = record.source,
-        .context = std::move(record.context),
-    };
+    return LogRecord(
+        record.level,
+        std::move(message),
+        record.source,
+        std::move(record.context));
 }
 
 } // namespace
@@ -131,7 +130,7 @@ std::atomic<const ErasedLogWriter*> g_defaultLogWriterPtr{nullptr};
 
 void ErasedLogWriter::writeStructuredFallback(StructuredLogRecord record) const {
     if (writeFn != nullptr) {
-        writeFn(object, makeLogRecord(record));
+        writeFn(object, makeLogRecord(std::move(record)));
     }
 }
 
@@ -193,10 +192,10 @@ void Logger::addSink(std::shared_ptr<LogSink> sink) {
     }
 
     std::lock_guard lock(m_mutex);
-    auto next = std::make_unique<SinkSnapshot>();
-    if (auto* current = m_sinkSnapshot.load(std::memory_order_acquire); current != nullptr) {
-        next->sinks = current->sinks;
-    }
+    auto* current = m_sinkSnapshot.load(std::memory_order_acquire);
+    auto next = current != nullptr
+        ? std::make_unique<SinkSnapshot>(current->clone())
+        : std::make_unique<SinkSnapshot>();
     next->sinks.push_back(std::move(sink));
     auto* snapshotPtr = next.get();
     m_sinkSnapshots.push_back(std::move(next));
@@ -218,7 +217,7 @@ void Logger::write(LogRecord record) {
 }
 
 void Logger::write(StructuredLogRecord record) {
-    publish(makeLogRecord(record));
+    publish(makeLogRecord(std::move(record)));
 }
 
 void Logger::publish(LogRecord record) {

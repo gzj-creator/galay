@@ -152,6 +152,10 @@ Span::Span(std::string name, SpanContext context, std::string tracestate, SpanTi
       m_context(std::move(context)) {
 }
 
+Span Span::clone() const {
+    return Span(*this);
+}
+
 void Span::end() noexcept {
     if (!m_ended) {
         if (m_startedAt != Clock::time_point{}) {

@@ -37,6 +37,12 @@ public:
     ~HttpRequest() = default;
 
     /**
+     * @brief 显式复制请求消息及其解析状态
+     * @return 独立的 HttpRequest 副本
+     */
+    HttpRequest clone() const;
+
+    /**
      * @brief 获取请求头的可变引用
      * @return 请求头引用
      */
@@ -147,6 +153,9 @@ public:
     bool hasRouteParam(const std::string& name) const;
 
 private:
+    HttpRequest(const HttpRequest&) = delete;
+    HttpRequest& operator=(const HttpRequest&) = delete;
+
     std::string m_body;                    ///< 请求体原始数据
     HttpRequestHeader m_header;            ///< 请求头
     size_t m_contentLength = 0;            ///< Content-Length 值

@@ -26,6 +26,9 @@ namespace galay::utils {
  */
 class ParserBase {
 public:
+    ParserBase() = default;
+    ParserBase(ParserBase&&) noexcept = default;
+    ParserBase& operator=(ParserBase&&) noexcept = default;
     virtual ~ParserBase() = default;
 
     /**
@@ -104,6 +107,10 @@ protected:
     }
 
     std::string m_last_error;
+
+private:
+    ParserBase(const ParserBase&) = delete;
+    ParserBase& operator=(const ParserBase&) = delete;
 };
 
 } // namespace galay::utils

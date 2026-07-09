@@ -70,62 +70,65 @@ void McpHttpServer::setProductionPolicy(McpProductionPolicy policy) {
     m_policy = std::move(policy);
 }
 
-void McpHttpServer::addTool(const std::string& name,
-                             const std::string& description,
-                             const JsonString& inputSchema,
+void McpHttpServer::addTool(std::string name,
+                             std::string description,
+                             JsonString inputSchema,
                              McpHttpServer::ToolHandler handler) {
     Tool tool;
-    tool.name = name;
-    tool.description = description;
-    tool.inputSchema = inputSchema;
+    tool.name = std::move(name);
+    tool.description = std::move(description);
+    tool.inputSchema = std::move(inputSchema);
 
     ToolInfo info;
-    info.tool = tool;
-    info.handler = handler;
+    info.tool = std::move(tool);
+    info.handler = std::move(handler);
 
-    m_tools[name] = info;
+    std::string key = info.tool.name;
+    m_tools.insert_or_assign(std::move(key), std::move(info));
     m_toolsListCache = protocol::buildListResultFromMap(
         m_tools, "tools",
         [](const ToolInfo& info) -> const Tool& { return info.tool; });
     m_toolsCacheDirty = false;
 }
 
-void McpHttpServer::addResource(const std::string& uri,
-                                 const std::string& name,
-                                 const std::string& description,
-                                 const std::string& mimeType,
+void McpHttpServer::addResource(std::string uri,
+                                 std::string name,
+                                 std::string description,
+                                 std::string mimeType,
                                  McpHttpServer::ResourceReader reader) {
     Resource resource;
-    resource.uri = uri;
-    resource.name = name;
-    resource.description = description;
-    resource.mimeType = mimeType;
+    resource.uri = std::move(uri);
+    resource.name = std::move(name);
+    resource.description = std::move(description);
+    resource.mimeType = std::move(mimeType);
 
     ResourceInfo info;
-    info.resource = resource;
-    info.reader = reader;
+    info.resource = std::move(resource);
+    info.reader = std::move(reader);
 
-    m_resources[uri] = info;
+    std::string key = info.resource.uri;
+    m_resources.insert_or_assign(std::move(key), std::move(info));
     m_resourcesListCache = protocol::buildListResultFromMap(
         m_resources, "resources",
         [](const ResourceInfo& info) -> const Resource& { return info.resource; });
     m_resourcesCacheDirty = false;
 }
 
-void McpHttpServer::addPrompt(const std::string& name,
-                               const std::string& description,
-                               const std::vector<PromptArgument>& arguments,
+void McpHttpServer::addPrompt(std::string name,
+                               std::string description,
+                               std::vector<PromptArgument> arguments,
                                McpHttpServer::PromptGetter getter) {
     Prompt prompt;
-    prompt.name = name;
-    prompt.description = description;
-    prompt.arguments = arguments;
+    prompt.name = std::move(name);
+    prompt.description = std::move(description);
+    prompt.arguments = std::move(arguments);
 
     PromptInfo info;
-    info.prompt = prompt;
-    info.getter = getter;
+    info.prompt = std::move(prompt);
+    info.getter = std::move(getter);
 
-    m_prompts[name] = info;
+    std::string key = info.prompt.name;
+    m_prompts.insert_or_assign(std::move(key), std::move(info));
     m_promptsListCache = protocol::buildListResultFromMap(
         m_prompts, "prompts",
         [](const PromptInfo& info) -> const Prompt& { return info.prompt; });
@@ -432,7 +435,7 @@ galay::kernel::Task<void> McpHttpServer::handleToolsCall(const JsonRpcRequestVie
             co_return;
         }
 
-        McpHttpServer::ToolHandler handler = it->second.handler;
+        const auto& handler = it->second.handler;
 
         JsonElement arguments = JsonHelper::emptyObject();
         JsonElement argsElement;
@@ -531,7 +534,7 @@ galay::kernel::Task<void> McpHttpServer::handleResourcesRead(const JsonRpcReques
             co_return;
         }
 
-        McpHttpServer::ResourceReader reader = it->second.reader;
+        const auto& reader = it->second.reader;
 
         // 调用资源读取函数（协程）
         std::expected<std::string, McpError> result;
@@ -636,7 +639,7 @@ galay::kernel::Task<void> McpHttpServer::handlePromptsGet(const JsonRpcRequestVi
             co_return;
         }
 
-        McpHttpServer::PromptGetter getter = it->second.getter;
+        const auto& getter = it->second.getter;
 
         // 调用提示获取函数（协程）
         std::expected<JsonString, McpError> result;

@@ -19,6 +19,7 @@
 #include <iostream>
 #include <string>
 #include <thread>
+#include <utility>
 
 using namespace galay::rpc;
 using namespace galay::kernel;
@@ -51,7 +52,7 @@ Task<void> runStreamClient(const std::string& host,
         co_await client.close();
         co_return;
     }
-    auto stream = stream_result.value();
+    auto stream = std::move(stream_result.value());
 
     auto send_result = co_await stream.sendInit();
     if (!send_result.has_value()) {

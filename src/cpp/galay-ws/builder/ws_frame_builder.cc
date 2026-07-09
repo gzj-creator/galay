@@ -85,4 +85,11 @@ WsFrame WsFrameBuilder::buildMove()
     return std::move(m_frame);
 }
 
+WsFrameBuilder WsFrameBuilder::clone() const
+{
+    WsFrameBuilder copy;
+    copy.m_frame = m_frame;
+    return copy;
+}
+
 } // namespace galay::websocket

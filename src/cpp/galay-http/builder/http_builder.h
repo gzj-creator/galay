@@ -29,6 +29,14 @@ public:
      * @param mode Header 归一化策略（默认 ClientSide，适合 Client 端）
      */
     explicit Http1_1RequestBuilder(HeaderPair::Mode mode = HeaderPair::Mode::ClientSide);
+    Http1_1RequestBuilder(Http1_1RequestBuilder&&) noexcept = default; ///< 移动构造
+    Http1_1RequestBuilder& operator=(Http1_1RequestBuilder&&) noexcept = default; ///< 移动赋值
+
+    /**
+     * @brief 显式复制请求构造器状态
+     * @return 独立的 Http1_1RequestBuilder 副本
+     */
+    Http1_1RequestBuilder clone() const;
 
     /**
      * @brief 设置 HTTP 方法
@@ -136,6 +144,9 @@ public:
     static Http1_1RequestBuilder options(const std::string& uri, HeaderPair::Mode mode = HeaderPair::Mode::ClientSide);
 
 private:
+    Http1_1RequestBuilder(const Http1_1RequestBuilder&) = delete;
+    Http1_1RequestBuilder& operator=(const Http1_1RequestBuilder&) = delete;
+
     HttpRequest m_request;
     std::string m_body;
 };
@@ -151,6 +162,14 @@ public:
      * @brief 构造函数
      */
     Http1_1ResponseBuilder();
+    Http1_1ResponseBuilder(Http1_1ResponseBuilder&&) noexcept = default; ///< 移动构造
+    Http1_1ResponseBuilder& operator=(Http1_1ResponseBuilder&&) noexcept = default; ///< 移动赋值
+
+    /**
+     * @brief 显式复制响应构造器状态
+     * @return 独立的 Http1_1ResponseBuilder 副本
+     */
+    Http1_1ResponseBuilder clone() const;
 
     /**
      * @brief 设置状态码
@@ -284,6 +303,9 @@ public:
     static Http1_1ResponseBuilder internalServerError();
 
 private:
+    Http1_1ResponseBuilder(const Http1_1ResponseBuilder&) = delete;
+    Http1_1ResponseBuilder& operator=(const Http1_1ResponseBuilder&) = delete;
+
     HttpResponse m_response;
     std::string m_body;
 };

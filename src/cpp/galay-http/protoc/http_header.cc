@@ -355,20 +355,32 @@ namespace galay::http
     {
     }
 
-    HeaderPair::HeaderPair(const HeaderPair &other)
-        : m_commonHeaders(other.m_commonHeaders)
-        , m_headerPairs(other.m_headerPairs)
-        , m_commonHeaderPresent(other.m_commonHeaderPresent)
-        , m_mode(other.m_mode)
+    HeaderPair HeaderPair::clone() const
     {
+        HeaderPair copy(m_mode);
+        copy.m_commonHeaders = m_commonHeaders;
+        copy.m_headerPairs = m_headerPairs;
+        copy.m_commonHeaderPresent = m_commonHeaderPresent;
+        return copy;
     }
 
-    HeaderPair::HeaderPair(HeaderPair &&other)
+    HeaderPair::HeaderPair(HeaderPair &&other) noexcept
         : m_commonHeaders(std::move(other.m_commonHeaders))
         , m_headerPairs(std::move(other.m_headerPairs))
         , m_commonHeaderPresent(other.m_commonHeaderPresent)
         , m_mode(other.m_mode)
     {
+    }
+
+    HeaderPair &HeaderPair::operator=(HeaderPair &&other) noexcept
+    {
+        if (this != &other) {
+            m_mode = other.m_mode;
+            m_commonHeaders = std::move(other.m_commonHeaders);
+            m_commonHeaderPresent = other.m_commonHeaderPresent;
+            m_headerPairs = std::move(other.m_headerPairs);
+        }
+        return *this;
     }
 
     bool HeaderPair::hasKey(const std::string &key) const
@@ -600,28 +612,6 @@ namespace galay::http
         if(!m_headerPairs.empty()) m_headerPairs.clear();
     }
 
-    HeaderPair &HeaderPair::operator=(const HeaderPair &other)
-    {
-        if (this != &other) {
-            m_mode = other.m_mode;
-            m_commonHeaders = other.m_commonHeaders;
-            m_commonHeaderPresent = other.m_commonHeaderPresent;
-            m_headerPairs = other.m_headerPairs;
-        }
-        return *this;
-    }
-
-    HeaderPair &HeaderPair::operator=(HeaderPair &&other)
-    {
-        if (this != &other) {
-            m_mode = other.m_mode;
-            m_commonHeaders = std::move(other.m_commonHeaders);
-            m_commonHeaderPresent = other.m_commonHeaderPresent;
-            m_headerPairs = std::move(other.m_headerPairs);
-        }
-        return *this;
-    }
-
     void HeaderPair::setCommonHeader(CommonHeaderIndex idx, std::string value)
     {
         size_t i = static_cast<size_t>(idx);
@@ -692,6 +682,32 @@ namespace galay::http
     HeaderPair& HttpRequestHeader::headerPairs()
     {
         return this->m_headerPairs;
+    }
+
+    HttpRequestHeader HttpRequestHeader::clone() const
+    {
+        HttpRequestHeader copy;
+        copy.m_uri = m_uri;
+        copy.m_argList = m_argList;
+        copy.m_headerPairs = m_headerPairs.clone();
+        copy.m_parseMethodStr = m_parseMethodStr;
+        copy.m_parseUriStr = m_parseUriStr;
+        copy.m_parseVersionStr = m_parseVersionStr;
+        copy.m_parseHeaderKey = m_parseHeaderKey;
+        copy.m_parseHeaderValue = m_parseHeaderValue;
+        copy.m_parsedBytes = m_parsedBytes;
+        copy.m_maxHeaderCount = m_maxHeaderCount;
+        copy.m_maxHeaderLineSize = m_maxHeaderLineSize;
+        copy.m_maxUriSize = m_maxUriSize;
+        copy.m_headerCount = m_headerCount;
+        copy.m_contentLengthValue = m_contentLengthValue;
+        copy.m_method = m_method;
+        copy.m_version = m_version;
+        copy.m_parseState = m_parseState;
+        copy.m_currentCommonHeaderIdx = m_currentCommonHeaderIdx;
+        copy.m_uriDecodeError = m_uriDecodeError;
+        copy.m_hasContentLength = m_hasContentLength;
+        return copy;
     }
 
     void HttpRequestHeader::setParseLimits(size_t max_header_count,
@@ -1364,7 +1380,7 @@ namespace galay::http
         this->m_uri = header.m_uri;
         this->m_version = header.m_version;
         this->m_argList = header.m_argList;
-        this->m_headerPairs = header.m_headerPairs;
+        this->m_headerPairs = header.m_headerPairs.clone();
     }
 
     void HttpRequestHeader::reset()
@@ -1637,6 +1653,22 @@ namespace galay::http
     HeaderPair& HttpResponseHeader::headerPairs()
     {
         return this->m_headerPairs;
+    }
+
+    HttpResponseHeader HttpResponseHeader::clone() const
+    {
+        HttpResponseHeader copy;
+        copy.m_headerPairs = m_headerPairs.clone();
+        copy.m_parseVersionStr = m_parseVersionStr;
+        copy.m_parseCodeStr = m_parseCodeStr;
+        copy.m_parseHeaderKey = m_parseHeaderKey;
+        copy.m_parseHeaderValue = m_parseHeaderValue;
+        copy.m_parsedBytes = m_parsedBytes;
+        copy.m_code = m_code;
+        copy.m_version = m_version;
+        copy.m_parseState = m_parseState;
+        copy.m_currentCommonHeaderIdx = m_currentCommonHeaderIdx;
+        return copy;
     }
 
     void HttpResponseHeader::commitParsedHeaderPair()
@@ -2263,6 +2295,6 @@ namespace galay::http
     {
         this->m_code = header.m_code;
         this->m_version = header.m_version;
-        this->m_headerPairs = header.m_headerPairs;
+        this->m_headerPairs = header.m_headerPairs.clone();
     }
 }

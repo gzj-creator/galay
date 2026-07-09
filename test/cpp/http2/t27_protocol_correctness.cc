@@ -227,7 +227,7 @@ void testSettingsInitialWindowDeltaAppliesToExistingStreams()
     Http2SettingsFrame settings;
     settings.addSetting(Http2SettingsId::InitialWindowSize,
                         kDefaultInitialWindowSize + 1000);
-    manager.handleConnectionFrame(std::make_unique<Http2SettingsFrame>(settings));
+    manager.handleConnectionFrame(std::make_unique<Http2SettingsFrame>(settings.clone()));
 
     assert(stream1->sendWindow() == static_cast<int32_t>(kDefaultInitialWindowSize + 900));
     assert(stream2->sendWindow() == static_cast<int32_t>(kDefaultInitialWindowSize + 800));
@@ -236,7 +236,7 @@ void testSettingsInitialWindowDeltaAppliesToExistingStreams()
     Http2SettingsFrame overflow;
     overflow.addSetting(Http2SettingsId::InitialWindowSize,
                         kDefaultInitialWindowSize + 1001);
-    manager.handleConnectionFrame(std::make_unique<Http2SettingsFrame>(overflow));
+    manager.handleConnectionFrame(std::make_unique<Http2SettingsFrame>(overflow.clone()));
 
     expectPendingAction(manager.m_pending_actions,
                         PendingAction::Type::SendGoaway,

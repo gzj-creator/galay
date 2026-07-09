@@ -121,6 +121,25 @@ public:
     }
 
     /**
+     * @brief 移动构造 Bloom Filter，转移位图和插入计数
+     */
+    BloomFilter(BloomFilter&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值 Bloom Filter，转移位图和插入计数
+     * @return 当前过滤器
+     */
+    BloomFilter& operator=(BloomFilter&&) noexcept = default;
+
+    /**
+     * @brief 显式深拷贝 Bloom Filter 状态
+     * @return 独立拥有位图和计数的过滤器副本
+     */
+    [[nodiscard]] BloomFilter clone() const {
+        return BloomFilter(*this);
+    }
+
+    /**
      * @brief 根据预计元素数和目标假阳性率构造 Bloom Filter
      * @param expectedItems 预计插入的不同元素数量，必须大于 0
      * @param falsePositiveRate 目标假阳性率，必须位于 (0, 1)
@@ -253,6 +272,9 @@ public:
     }
 
 private:
+    BloomFilter(const BloomFilter&) = default;
+    BloomFilter& operator=(const BloomFilter&) = default;
+
     uint64_t hashValue(const T& value) const {
         using Result = std::invoke_result_t<Hash, const T&>;
         static_assert(std::is_convertible_v<Result, uint64_t>,

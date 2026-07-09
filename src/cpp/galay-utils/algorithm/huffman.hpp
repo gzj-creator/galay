@@ -62,6 +62,25 @@ public:
     HuffmanTable() = default;
 
     /**
+     * @brief 移动构造编码表，转移正反向映射
+     */
+    HuffmanTable(HuffmanTable&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值编码表，转移正反向映射
+     * @return 当前编码表
+     */
+    HuffmanTable& operator=(HuffmanTable&&) noexcept = default;
+
+    /**
+     * @brief 显式深拷贝编码表
+     * @return 独立拥有正反向映射的编码表副本
+     */
+    [[nodiscard]] HuffmanTable clone() const {
+        return HuffmanTable(*this);
+    }
+
+    /**
      * @brief 添加符号编码映射
      * @param symbol 符号
      * @param code 编码值
@@ -155,6 +174,9 @@ public:
     }
 
 private:
+    HuffmanTable(const HuffmanTable&) = default;
+    HuffmanTable& operator=(const HuffmanTable&) = default;
+
     struct CodeKey {
         uint32_t code;
         uint8_t length;

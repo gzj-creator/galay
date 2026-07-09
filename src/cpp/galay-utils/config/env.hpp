@@ -25,6 +25,19 @@ namespace galay::utils {
 class EnvParser : public ParserBase {
 public:
     EnvParser() = default;
+    EnvParser(EnvParser&&) noexcept = default;
+    EnvParser& operator=(EnvParser&&) noexcept = default;
+
+    /**
+     * @brief 显式克隆环境变量解析状态
+     * @return 独立 EnvParser 副本
+     */
+    [[nodiscard]] EnvParser clone() const {
+        EnvParser copy;
+        copy.m_values = m_values;
+        copy.m_last_error = m_last_error;
+        return copy;
+    }
 
     bool parseFile(const std::string& path) override {
         return parseFileContent(path);
@@ -82,6 +95,9 @@ public:
     }
 
 private:
+    EnvParser(const EnvParser&) = delete;
+    EnvParser& operator=(const EnvParser&) = delete;
+
     std::unordered_map<std::string, std::string> m_values;
 };
 

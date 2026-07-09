@@ -45,6 +45,19 @@ enum class PipelineOpType
  */
 struct PipelineOp
 {
+    PipelineOp() = default;
+    PipelineOp(PipelineOp&&) noexcept = default;
+    PipelineOp& operator=(PipelineOp&&) noexcept = default;
+
+    /**
+     * @brief 显式复制 Pipeline 操作描述
+     * @return 当前操作的独立副本
+     */
+    [[nodiscard]] PipelineOp clone() const
+    {
+        return PipelineOp(*this);
+    }
+
     std::string key;                             ///< 目标键
     std::string value;                           ///< 写入的值（仅 Put 操作使用）
     std::optional<int64_t> limit = std::nullopt; ///< 返回数量限制（Get 操作使用）
@@ -104,6 +117,10 @@ struct PipelineOp
         op.prefix = prefix;
         return op;
     }
+
+private:
+    PipelineOp(const PipelineOp&) = default;
+    PipelineOp& operator=(const PipelineOp&) = default;
 };
 
 /**

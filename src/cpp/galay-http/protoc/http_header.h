@@ -118,8 +118,14 @@ namespace galay::http {
          * @param mode 存储模式，默认为服务端模式
          */
         explicit HeaderPair(Mode mode = Mode::ServerSide);
-        HeaderPair(const HeaderPair& other); ///< 拷贝构造
-        HeaderPair(HeaderPair&& other);      ///< 移动构造
+        HeaderPair(HeaderPair&& other) noexcept;      ///< 移动构造
+        HeaderPair& operator=(HeaderPair&& other) noexcept;      ///< 移动赋值
+
+        /**
+         * @brief 显式复制头部键值对状态
+         * @return 独立的 HeaderPair 副本
+         */
+        HeaderPair clone() const;
 
         /**
          * @brief 判断指定键名是否存在
@@ -200,9 +206,6 @@ namespace galay::http {
          */
         Mode mode() const { return m_mode; }
 
-        HeaderPair& operator=(const HeaderPair& other); ///< 拷贝赋值
-        HeaderPair& operator=(HeaderPair&& other);      ///< 移动赋值
-
         /**
          * @brief 设置常见头部字段（fast-path）
          * @param idx 常见头部索引
@@ -231,6 +234,9 @@ namespace galay::http {
         void forEachHeader(std::function<void(std::string_view, std::string_view)> callback) const;
 
     private:
+        HeaderPair(const HeaderPair& other) = delete;
+        HeaderPair& operator=(const HeaderPair& other) = delete;
+
         void setNormalizedUncommonHeaderPair(std::string key, std::string value);
         void mergeNormalizedUncommonHeaderPair(std::string key, std::string value);
 
@@ -248,6 +254,14 @@ namespace galay::http {
     {
     public:
         HttpRequestHeader() = default;
+        HttpRequestHeader(HttpRequestHeader&&) noexcept = default; ///< 移动构造
+        HttpRequestHeader& operator=(HttpRequestHeader&&) noexcept = default; ///< 移动赋值
+
+        /**
+         * @brief 显式复制请求头及其解析状态
+         * @return 独立的 HttpRequestHeader 副本
+         */
+        HttpRequestHeader clone() const;
 
         friend class HttpRequest;
 
@@ -345,6 +359,9 @@ namespace galay::http {
         void reset(); ///< 重置所有解析状态与数据
 
     private:
+        HttpRequestHeader(const HttpRequestHeader&) = delete;
+        HttpRequestHeader& operator=(const HttpRequestHeader&) = delete;
+
         /**
          * @brief 解析单个字符
          * @param c 输入字符
@@ -389,6 +406,16 @@ namespace galay::http {
     {
     public:
         using ptr = std::shared_ptr<HttpResponseHeader>; ///< 共享指针类型别名
+
+        HttpResponseHeader() = default;
+        HttpResponseHeader(HttpResponseHeader&&) noexcept = default; ///< 移动构造
+        HttpResponseHeader& operator=(HttpResponseHeader&&) noexcept = default; ///< 移动赋值
+
+        /**
+         * @brief 显式复制响应头及其解析状态
+         * @return 独立的 HttpResponseHeader 副本
+         */
+        HttpResponseHeader clone() const;
 
         friend class HttpResponse;
 
@@ -464,6 +491,9 @@ namespace galay::http {
         void reset(); ///< 重置所有解析状态与数据
 
     private:
+        HttpResponseHeader(const HttpResponseHeader&) = delete;
+        HttpResponseHeader& operator=(const HttpResponseHeader&) = delete;
+
         /**
          * @brief 解析单个字符
          * @param c 输入字符

@@ -45,6 +45,11 @@ public:
     SleepTimer(Duration duration)
         :Timer(duration) {}
 
+private:
+    SleepTimer(const SleepTimer&) = delete;
+    SleepTimer& operator=(const SleepTimer&) = delete;
+public:
+
     /**
      * @brief 存储超时时调用的 waker
      * @param waker 包装 coroutine_handle 的 waker
@@ -79,6 +84,9 @@ struct SleepAwaitable
     SleepAwaitable(Duration duration)
         :m_timer(std::make_shared<SleepTimer>(duration)) {}
 
+    SleepAwaitable(SleepAwaitable&&) noexcept = default;
+    SleepAwaitable& operator=(SleepAwaitable&&) noexcept = default;
+
     /**
      * @brief 始终返回 false，使协程挂起
      */
@@ -105,6 +113,9 @@ struct SleepAwaitable
      */
     void await_resume() {}
 
+private:
+    SleepAwaitable(const SleepAwaitable&) = delete;
+    SleepAwaitable& operator=(const SleepAwaitable&) = delete;
 };
 
 /**

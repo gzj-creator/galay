@@ -39,6 +39,20 @@ class TrieTree {
 public:
     TrieTree() : m_root(std::make_unique<TrieNode>()), m_size(0) {}
 
+    TrieTree(TrieTree&&) noexcept = default;
+    TrieTree& operator=(TrieTree&&) noexcept = default;
+
+    /**
+     * @brief 显式深拷贝整棵字典树
+     * @return 拥有独立节点的字典树副本
+     */
+    [[nodiscard]] TrieTree clone() const {
+        TrieTree copy;
+        copy.m_root = cloneNode(m_root.get());
+        copy.m_size = m_size;
+        return copy;
+    }
+
     /**
      * @brief 添加单词到字典树
      * @param word 待添加的单词
@@ -143,6 +157,23 @@ public:
     }
 
 private:
+    TrieTree(const TrieTree&) = delete;
+    TrieTree& operator=(const TrieTree&) = delete;
+
+    static std::unique_ptr<TrieNode> cloneNode(const TrieNode* node) {
+        if (node == nullptr) {
+            return nullptr;
+        }
+
+        auto copy = std::make_unique<TrieNode>();
+        copy->m_isEnd = node->m_isEnd;
+        copy->m_count = node->m_count;
+        for (const auto& [character, child] : node->children) {
+            copy->children.emplace(character, cloneNode(child.get()));
+        }
+        return copy;
+    }
+
     TrieNode* findNode(const std::string& prefix) const {
         TrieNode* node = m_root.get();
         for (char c : prefix) {

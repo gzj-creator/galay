@@ -67,12 +67,12 @@ bool test_bson_encode_decode()
     MongoDocument nested;
     nested.append("city", "shanghai");
     nested.append("zip", int32_t(200000));
-    doc.append("profile", nested);
+    doc.append("profile", std::move(nested));
 
     MongoArray tags;
     tags.append("cpp");
     tags.append("mongodb");
-    doc.append("tags", tags);
+    doc.append("tags", std::move(tags));
 
     const auto encoded = BsonCodec::encodeDocument(doc);
     if (!encoded) {

@@ -18,6 +18,14 @@ Http1_1RequestBuilder::Http1_1RequestBuilder(HeaderPair::Mode mode)
     m_request.header().headerPairs() = HeaderPair(mode);
 }
 
+Http1_1RequestBuilder Http1_1RequestBuilder::clone() const
+{
+    Http1_1RequestBuilder copy;
+    copy.m_request = m_request.clone();
+    copy.m_body = m_body;
+    return copy;
+}
+
 Http1_1RequestBuilder& Http1_1RequestBuilder::method(HttpMethod method)
 {
     m_request.header().method() = method;
@@ -103,8 +111,7 @@ Http1_1RequestBuilder& Http1_1RequestBuilder::form(const std::map<std::string, s
 
 HttpRequest Http1_1RequestBuilder::build()
 {
-    HttpRequest request_copy;
-    request_copy.header() = m_request.header();
+    HttpRequest request_copy = m_request.clone();
 
     if (!m_body.empty()) {
         std::string body_copy = m_body;
@@ -176,6 +183,14 @@ Http1_1ResponseBuilder::Http1_1ResponseBuilder()
     m_response.header().code() = HttpStatusCode::OK_200;
 }
 
+Http1_1ResponseBuilder Http1_1ResponseBuilder::clone() const
+{
+    Http1_1ResponseBuilder copy;
+    copy.m_response = m_response.clone();
+    copy.m_body = m_body;
+    return copy;
+}
+
 Http1_1ResponseBuilder& Http1_1ResponseBuilder::status(int code)
 {
     m_response.header().code() = static_cast<HttpStatusCode>(code);
@@ -242,8 +257,7 @@ Http1_1ResponseBuilder& Http1_1ResponseBuilder::text(const std::string& text)
 
 HttpResponse Http1_1ResponseBuilder::build()
 {
-    HttpResponse response_copy;
-    response_copy.header() = m_response.header();
+    HttpResponse response_copy = m_response.clone();
 
     if (!m_body.empty()) {
         std::string body_copy = m_body;

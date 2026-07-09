@@ -32,7 +32,18 @@ enum class ExportResult {
  */
 class SpanExporter {
 public:
+    SpanExporter() = default;
     virtual ~SpanExporter() = default;
+
+    /**
+     * @brief 移动构造导出器基类状态
+     */
+    SpanExporter(SpanExporter&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值导出器基类状态
+     */
+    SpanExporter& operator=(SpanExporter&&) noexcept = default;
 
     /**
      * @brief 导出一批 Span 到后端
@@ -54,6 +65,10 @@ public:
      * @return 成功关闭返回 true，超时或失败返回 false
      */
     virtual bool shutdown(std::chrono::milliseconds timeout);
+
+private:
+    SpanExporter(const SpanExporter&) = delete;
+    SpanExporter& operator=(const SpanExporter&) = delete;
 };
 
 } // namespace galay::tracing

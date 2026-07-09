@@ -204,6 +204,13 @@ namespace galay::redis
         {
         }
 
+    private:
+        PooledConnection(const PooledConnection&) = delete; ///< 禁止拷贝连接包装器
+        PooledConnection& operator=(const PooledConnection&) = delete; ///< 禁止拷贝赋值
+    public:
+        PooledConnection(PooledConnection&&) noexcept = default; ///< 允许移动所有权
+        PooledConnection& operator=(PooledConnection&&) noexcept = default; ///< 允许移动赋值
+
         RedisClient<>* get() { return m_client.get(); }              ///< 获取原始客户端指针
         const RedisClient<>* get() const { return m_client.get(); }  ///< 获取原始客户端指针（const）
 
@@ -262,6 +269,13 @@ namespace galay::redis
             , m_is_healthy(false)
         {
         }
+
+    private:
+        PooledRedissConnection(const PooledRedissConnection&) = delete; ///< 禁止拷贝连接包装器
+        PooledRedissConnection& operator=(const PooledRedissConnection&) = delete; ///< 禁止拷贝赋值
+    public:
+        PooledRedissConnection(PooledRedissConnection&&) noexcept = default; ///< 允许移动所有权
+        PooledRedissConnection& operator=(PooledRedissConnection&&) noexcept = default; ///< 允许移动赋值
 
         RedissClient* get() { return m_client.get(); }              ///< 获取原始客户端指针
         const RedissClient* get() const { return m_client.get(); }  ///< 获取原始客户端指针（const）

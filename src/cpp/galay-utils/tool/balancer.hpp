@@ -17,6 +17,7 @@
 #include <memory>
 #include <random>
 #include <optional>
+#include <utility>
 
 namespace galay::utils
 {
@@ -39,14 +40,31 @@ public:
      * @param nodes 节点列表
      */
     explicit RoundRobinLoadBalancer(const std::vector<Type>& nodes)
-        : m_index(0), m_nodes(nodes) {}
+        : m_nodes(nodes), m_index(0) {}
 
     /**
      * @brief 移动构造轮询负载均衡器
      * @param nodes 节点列表（右值）
      */
     explicit RoundRobinLoadBalancer(std::vector<Type>&& nodes)
-        : m_index(0), m_nodes(std::move(nodes)) {}
+        : m_nodes(std::move(nodes)), m_index(0) {}
+
+    /**
+     * @brief 移动构造负载均衡器，转移节点并重置源索引
+     */
+    RoundRobinLoadBalancer(RoundRobinLoadBalancer&& other) noexcept;
+
+    /**
+     * @brief 移动赋值负载均衡器，转移节点并重置源索引
+     * @return 当前负载均衡器
+     */
+    RoundRobinLoadBalancer& operator=(RoundRobinLoadBalancer&& other) noexcept;
+
+    /**
+     * @brief 显式克隆轮询状态
+     * @return 节点列表和当前索引一致的独立副本
+     */
+    [[nodiscard]] RoundRobinLoadBalancer clone() const;
 
     /**
      * @brief 选择下一个节点
@@ -67,8 +85,11 @@ public:
     void append(Type node);
 
 private:
-    std::atomic_uint32_t m_index;
+    RoundRobinLoadBalancer(const RoundRobinLoadBalancer&) = delete;
+    RoundRobinLoadBalancer& operator=(const RoundRobinLoadBalancer&) = delete;
+
     std::vector<Type> m_nodes;
+    std::atomic_uint32_t m_index;
 };
 
 /**
@@ -108,6 +129,25 @@ public:
     WeightRoundRobinLoadBalancer(std::vector<Type>&& nodes, const std::vector<uint32_t>& weights);
 
     /**
+     * @brief 移动构造负载均衡器
+     */
+    WeightRoundRobinLoadBalancer(WeightRoundRobinLoadBalancer&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值负载均衡器
+     * @return 当前负载均衡器
+     */
+    WeightRoundRobinLoadBalancer& operator=(WeightRoundRobinLoadBalancer&&) noexcept = default;
+
+    /**
+     * @brief 显式克隆加权轮询状态
+     * @return 节点、权重和调度状态一致的独立副本
+     */
+    [[nodiscard]] WeightRoundRobinLoadBalancer clone() const {
+        return WeightRoundRobinLoadBalancer(*this);
+    }
+
+    /**
      * @brief 选择下一个节点
      * @return 选中的节点，无节点时返回 std::nullopt
      */
@@ -127,6 +167,9 @@ public:
     void append(Type node, uint32_t weight);
 
 private:
+    WeightRoundRobinLoadBalancer(const WeightRoundRobinLoadBalancer&) = default;
+    WeightRoundRobinLoadBalancer& operator=(const WeightRoundRobinLoadBalancer&) = delete;
+
     std::vector<Node> m_nodes;
     size_t m_current_index = 0;
 };
@@ -157,6 +200,25 @@ public:
     explicit RandomLoadBalancer(std::vector<Type>&& nodes);
 
     /**
+     * @brief 移动构造负载均衡器
+     */
+    RandomLoadBalancer(RandomLoadBalancer&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值负载均衡器
+     * @return 当前负载均衡器
+     */
+    RandomLoadBalancer& operator=(RandomLoadBalancer&&) noexcept = default;
+
+    /**
+     * @brief 显式克隆随机负载均衡状态
+     * @return 节点和随机数状态一致的独立副本
+     */
+    [[nodiscard]] RandomLoadBalancer clone() const {
+        return RandomLoadBalancer(*this);
+    }
+
+    /**
      * @brief 随机选择一个节点
      * @return 选中的节点，无节点时返回 std::nullopt
      */
@@ -175,8 +237,11 @@ public:
     void append(Type node);
 
 private:
-    std::vector<Type> m_nodes;
+    RandomLoadBalancer(const RandomLoadBalancer&) = default;
+    RandomLoadBalancer& operator=(const RandomLoadBalancer&) = default;
+
     std::mt19937_64 m_rng;
+    std::vector<Type> m_nodes;
 };
 
 /**
@@ -212,6 +277,25 @@ public:
     WeightedRandomLoadBalancer(std::vector<Type>&& nodes, const std::vector<uint32_t>& weights);
 
     /**
+     * @brief 移动构造负载均衡器
+     */
+    WeightedRandomLoadBalancer(WeightedRandomLoadBalancer&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值负载均衡器
+     * @return 当前负载均衡器
+     */
+    WeightedRandomLoadBalancer& operator=(WeightedRandomLoadBalancer&&) noexcept = default;
+
+    /**
+     * @brief 显式克隆加权随机负载均衡状态
+     * @return 节点、权重和随机数状态一致的独立副本
+     */
+    [[nodiscard]] WeightedRandomLoadBalancer clone() const {
+        return WeightedRandomLoadBalancer(*this);
+    }
+
+    /**
      * @brief 按权重随机选择一个节点
      * @return 选中的节点，无节点时返回 std::nullopt
      */
@@ -231,9 +315,12 @@ public:
     void append(Type node, uint32_t weight);
 
 private:
+    WeightedRandomLoadBalancer(const WeightedRandomLoadBalancer&) = default;
+    WeightedRandomLoadBalancer& operator=(const WeightedRandomLoadBalancer&) = default;
+
+    std::mt19937 m_rng;
     std::vector<Node> m_nodes;
     uint32_t m_total_weight = 0;
-    std::mt19937 m_rng;
 };
 
 } // namespace galay::utils

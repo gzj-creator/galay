@@ -69,6 +69,14 @@ struct AioCommitAwaitable {
                        io_context_t aio_ctx, int event_fd,
                        std::vector<struct iocb*>&& pending_ptrs, size_t pending_count);
 
+    AioCommitAwaitable(AioCommitAwaitable&&) noexcept = default;
+    AioCommitAwaitable& operator=(AioCommitAwaitable&&) noexcept = default;
+
+private:
+    AioCommitAwaitable(const AioCommitAwaitable&) = delete;
+    AioCommitAwaitable& operator=(const AioCommitAwaitable&) = delete;
+
+public:
     /**
      * @brief 检查是否可以避免挂起
      * @return 如果没有待提交的操作则返回 true

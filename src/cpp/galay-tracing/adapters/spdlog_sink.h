@@ -34,12 +34,25 @@ public:
     explicit SpdlogSink(std::shared_ptr<spdlog::logger> logger);
 
     /**
+     * @brief 移动构造 spdlog Sink，转移 logger 共享句柄
+     */
+    SpdlogSink(SpdlogSink&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值 spdlog Sink，转移 logger 共享句柄
+     */
+    SpdlogSink& operator=(SpdlogSink&&) noexcept = default;
+
+    /**
      * @brief 将日志记录写入 spdlog
      * @param record 日志记录
      */
     void write(const LogRecord& record) override;
 
 private:
+    SpdlogSink(const SpdlogSink&) = delete;
+    SpdlogSink& operator=(const SpdlogSink&) = delete;
+
     std::shared_ptr<spdlog::logger> m_logger; ///< spdlog logger 实例
 };
 

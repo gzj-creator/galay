@@ -13,6 +13,10 @@ namespace galay::redis
     {
     }
 
+    RedisSession::RedisSession(RedisSession&& other) = default;
+
+    RedisSession& RedisSession::operator=(RedisSession&& other) = default;
+
     std::expected<void, RedisError> RedisSession::connect()
     {
         return connect(m_config.host,
@@ -308,6 +312,8 @@ namespace galay::redis
 
     RedisSession::~RedisSession()
     {
-        disconnect();
+        if (m_connection) {
+            m_connection->disconnect();
+        }
     }
 }

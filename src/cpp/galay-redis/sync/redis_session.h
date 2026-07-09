@@ -40,6 +40,12 @@ namespace galay::redis
          * @param config 连接配置
          */
         RedisSession(RedisSessionConfig config = {});
+    private:
+        RedisSession(const RedisSession&) = delete; ///< 禁止拷贝同步连接会话
+        RedisSession& operator=(const RedisSession&) = delete; ///< 禁止拷贝赋值
+    public:
+        RedisSession(RedisSession&& other);
+        RedisSession& operator=(RedisSession&& other);
 
         /**
          * @brief 使用构造时保存的 RedisSessionConfig 连接到 Redis 服务器

@@ -244,7 +244,8 @@ Task<void> handleRequest(HttpConn conn) {
         }
 
         // 发送响应
-        auto response_builder = Http1_1ResponseBuilder()
+        Http1_1ResponseBuilder response_builder;
+        response_builder
             .status(code)
             .header("Server", GALAY_SERVER)
             .header("Connection", keep_alive ? "keep-alive" : "close");

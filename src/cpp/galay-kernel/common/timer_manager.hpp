@@ -93,6 +93,9 @@ namespace galay::kernel
         {
         }
 
+        TimingWheelTimerManager(TimingWheelTimerManager&&) noexcept = default;
+        TimingWheelTimerManager& operator=(TimingWheelTimerManager&&) noexcept = default;
+
         /**
          * @brief 向时间轮添加定时器
          * @param timer Timer 的共享指针
@@ -264,6 +267,9 @@ namespace galay::kernel
         ~TimingWheelTimerManager() = default;
 
     private:
+        TimingWheelTimerManager(const TimingWheelTimerManager&) = delete;
+        TimingWheelTimerManager& operator=(const TimingWheelTimerManager&) = delete;
+
         /**
          * @brief 触发第1层当前槽中的所有定时器
          */

@@ -22,12 +22,11 @@ int main() {
         galay::tracing::SpanId::fromHex("00f067aa0ba902b7"),
         0x01);
 
-    sink.write(galay::tracing::LogRecord{
-        .level = galay::tracing::LogLevel::kInfo,
-        .message = "accepted",
-        .source = {"test.cc", 9, "main"},
-        .context = galay::tracing::makeLogContext(context),
-    });
+    sink.write(galay::tracing::LogRecord(
+        galay::tracing::LogLevel::kInfo,
+        "accepted",
+        {"test.cc", 9, "main"},
+        galay::tracing::makeLogContext(context)));
     logger->flush();
 
     const auto line = stream->str();

@@ -447,6 +447,16 @@ public:
      */
     explicit SslOperationDriver(SslSocket* socket);
 
+    /// @brief 禁用拷贝，驱动器持有单次 TLS/IO 进度状态
+private:
+    SslOperationDriver(const SslOperationDriver&) = delete;
+    SslOperationDriver& operator=(const SslOperationDriver&) = delete;
+public:
+
+    /// @brief 支持显式移动，用于转移尚未暴露等待上下文的驱动状态
+    SslOperationDriver(SslOperationDriver&&) noexcept = default;
+    SslOperationDriver& operator=(SslOperationDriver&&) noexcept = default;
+
     /**
      * @brief 启动握手操作
      */
@@ -662,6 +672,16 @@ public:
         , m_machine(std::move(machine))
         , m_driver(socket)
         , m_socket(socket) {}
+
+    /// @brief 禁用拷贝，awaitable 独占协程、IO 与状态机进度
+private:
+    SslStateMachineAwaitable(const SslStateMachineAwaitable&) = delete;
+    SslStateMachineAwaitable& operator=(const SslStateMachineAwaitable&) = delete;
+public:
+
+    /// @brief 支持挂起前移动，便于 `.timeout(...)` 包装器接管完整 awaitable 状态
+    SslStateMachineAwaitable(SslStateMachineAwaitable&&) noexcept = default;
+    SslStateMachineAwaitable& operator=(SslStateMachineAwaitable&&) noexcept = default;
 
     /**
      * @brief 检查操作是否已完成（无需挂起）
@@ -1119,6 +1139,14 @@ namespace detail {
 struct SslSingleHandshakeMachine {
     using result_type = std::expected<void, SslError>;  ///< 结果类型
 
+    SslSingleHandshakeMachine() = default;
+private:
+    SslSingleHandshakeMachine(const SslSingleHandshakeMachine&) = delete;
+    SslSingleHandshakeMachine& operator=(const SslSingleHandshakeMachine&) = delete;
+public:
+    SslSingleHandshakeMachine(SslSingleHandshakeMachine&&) noexcept = default;
+    SslSingleHandshakeMachine& operator=(SslSingleHandshakeMachine&&) noexcept = default;
+
     /**
      * @brief 推进状态机
      * @return 下一步动作
@@ -1154,6 +1182,13 @@ struct SslSingleRecvMachine {
     SslSingleRecvMachine(char* buffer, size_t length)
         : m_buffer(buffer)
         , m_length(length) {}
+
+private:
+    SslSingleRecvMachine(const SslSingleRecvMachine&) = delete;
+    SslSingleRecvMachine& operator=(const SslSingleRecvMachine&) = delete;
+public:
+    SslSingleRecvMachine(SslSingleRecvMachine&&) noexcept = default;
+    SslSingleRecvMachine& operator=(SslSingleRecvMachine&&) noexcept = default;
 
     /**
      * @brief 推进状态机
@@ -1193,6 +1228,13 @@ struct SslSingleSendMachine {
         : m_buffer(buffer)
         , m_length(length) {}
 
+private:
+    SslSingleSendMachine(const SslSingleSendMachine&) = delete;
+    SslSingleSendMachine& operator=(const SslSingleSendMachine&) = delete;
+public:
+    SslSingleSendMachine(SslSingleSendMachine&&) noexcept = default;
+    SslSingleSendMachine& operator=(SslSingleSendMachine&&) noexcept = default;
+
     /**
      * @brief 推进状态机
      * @return 下一步动作
@@ -1221,6 +1263,14 @@ struct SslSingleSendMachine {
  */
 struct SslSingleShutdownMachine {
     using result_type = std::expected<void, SslError>;  ///< 结果类型
+
+    SslSingleShutdownMachine() = default;
+private:
+    SslSingleShutdownMachine(const SslSingleShutdownMachine&) = delete;
+    SslSingleShutdownMachine& operator=(const SslSingleShutdownMachine&) = delete;
+public:
+    SslSingleShutdownMachine(SslSingleShutdownMachine&&) noexcept = default;
+    SslSingleShutdownMachine& operator=(SslSingleShutdownMachine&&) noexcept = default;
 
     /**
      * @brief 推进状态机
@@ -1310,6 +1360,16 @@ public:
     {
         (void)controller;
     }
+
+    /// @brief 禁用拷贝，线性状态机独占流水线进度与中间结果
+private:
+    SslLinearMachine(const SslLinearMachine&) = delete;
+    SslLinearMachine& operator=(const SslLinearMachine&) = delete;
+public:
+
+    /// @brief 支持显式移动，用于 builder 到 awaitable 的状态转移
+    SslLinearMachine(SslLinearMachine&&) noexcept = default;
+    SslLinearMachine& operator=(SslLinearMachine&&) noexcept = default;
 
     /**
      * @brief 创建握手节点

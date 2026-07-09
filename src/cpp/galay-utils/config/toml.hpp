@@ -28,6 +28,21 @@ namespace galay::utils {
 class TomlParser : public ParserBase {
 public:
     TomlParser() = default;
+    TomlParser(TomlParser&&) noexcept = default;
+    TomlParser& operator=(TomlParser&&) noexcept = default;
+
+    /**
+     * @brief 显式克隆 TOML 解析状态
+     * @return 独立 TomlParser 副本
+     */
+    [[nodiscard]] TomlParser clone() const {
+        TomlParser copy;
+        copy.m_values = m_values;
+        copy.m_arrays = m_arrays;
+        copy.m_sections = m_sections;
+        copy.m_last_error = m_last_error;
+        return copy;
+    }
 
     bool parseFile(const std::string& path) override {
         return parseFileContent(path);
@@ -171,6 +186,9 @@ public:
     }
 
 private:
+    TomlParser(const TomlParser&) = delete;
+    TomlParser& operator=(const TomlParser&) = delete;
+
     bool storeValue(const std::string& current_section, const std::string& key, const std::string& raw_value, int line_num) {
         std::vector<std::string> array_items;
         bool is_array = !raw_value.empty() && raw_value.front() == '[';

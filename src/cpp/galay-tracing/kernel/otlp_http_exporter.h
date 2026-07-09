@@ -117,6 +117,16 @@ public:
     OtlpHttpExporter(OtlpHttpExporterConfig config, OtlpHttpTransport transport);
 
     /**
+     * @brief 移动构造导出器，转移配置、请求头和传输函数
+     */
+    OtlpHttpExporter(OtlpHttpExporter&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值导出器，转移配置、请求头和传输函数
+     */
+    OtlpHttpExporter& operator=(OtlpHttpExporter&&) noexcept = default;
+
+    /**
      * @brief 导出一批 Span 到 OTLP 端点
      * @param spans 待导出的 Span 只读视图
      * @return 导出结果
@@ -138,6 +148,9 @@ public:
     bool shutdown(std::chrono::milliseconds timeout) override;
 
 private:
+    OtlpHttpExporter(const OtlpHttpExporter&) = delete;
+    OtlpHttpExporter& operator=(const OtlpHttpExporter&) = delete;
+
     OtlpHttpExporterConfig m_config;       ///< 导出器配置
     std::vector<OtlpHttpHeader> m_headers; ///< 编码后的请求头
     OtlpHttpTransport m_transport;         ///< HTTP 传输函数

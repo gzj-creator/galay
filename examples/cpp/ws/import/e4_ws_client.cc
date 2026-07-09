@@ -31,8 +31,8 @@ Task<bool> runWebSocketClient(const std::string& url) {
         co_return false;
     }
 
-    auto reader = session.getReader();
-    auto writer = session.getWriter();
+    auto& reader = session.getReader();
+    auto& writer = session.getWriter();
 
     std::string message;
     WsOpcode opcode{};

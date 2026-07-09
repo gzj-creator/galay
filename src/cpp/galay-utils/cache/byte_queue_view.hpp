@@ -42,6 +42,25 @@ public:
     }
 
     /**
+     * @brief 移动构造队列，转移底层存储和读偏移
+     */
+    ByteQueueView(ByteQueueView&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值队列，转移底层存储和读偏移
+     * @return 当前队列
+     */
+    ByteQueueView& operator=(ByteQueueView&&) noexcept = default;
+
+    /**
+     * @brief 显式深拷贝当前可读队列状态
+     * @return 独立拥有存储的队列副本
+     */
+    [[nodiscard]] ByteQueueView clone() const {
+        return ByteQueueView(*this);
+    }
+
+    /**
      * @brief 预留底层存储容量
      * @param capacity 至少预留的字节数
      */
@@ -154,6 +173,9 @@ public:
     }
 
 private:
+    ByteQueueView(const ByteQueueView&) = default;
+    ByteQueueView& operator=(const ByteQueueView&) = default;
+
     void compactIfNeeded() {
         const size_t readable = size();
         if (m_readOffset == 0) {

@@ -9,6 +9,7 @@
 #include <netdb.h>
 #include <cstring>
 #include <cerrno>
+#include <utility>
 
 namespace galay::redis::protocol
 {
@@ -17,6 +18,26 @@ namespace galay::redis::protocol
         , m_connected(false)
     {
         m_recv_buffer.resize(BUFFER_SIZE);
+    }
+
+    Connection::Connection(Connection&& other) noexcept
+        : m_recv_buffer(std::move(other.m_recv_buffer))
+        , m_socket_fd(std::exchange(other.m_socket_fd, -1))
+        , m_connected(std::exchange(other.m_connected, false))
+        , m_parser(std::move(other.m_parser))
+    {
+    }
+
+    Connection& Connection::operator=(Connection&& other) noexcept
+    {
+        if (this != &other) {
+            disconnect();
+            m_recv_buffer = std::move(other.m_recv_buffer);
+            m_socket_fd = std::exchange(other.m_socket_fd, -1);
+            m_connected = std::exchange(other.m_connected, false);
+            m_parser = std::move(other.m_parser);
+        }
+        return *this;
     }
 
     Connection::~Connection()

@@ -118,8 +118,8 @@ Task<void> benchmarkWebSocketClient(
 
     g_successful_connections.fetch_add(1);
 
-    auto ws_reader = session.getReader();
-    auto ws_writer = session.getWriter();
+    auto& ws_reader = session.getReader();
+    auto& ws_writer = session.getWriter();
     // 读取欢迎消息
     std::string welcome_msg;
     WsOpcode welcome_opcode;

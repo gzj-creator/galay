@@ -27,6 +27,7 @@
 #include <deque>
 #include <expected>
 #include <memory>
+#include <utility>
 #endif
 
 namespace galay::kernel
@@ -198,6 +199,22 @@ struct ReadyRecvChunk {
         Error    ///< 错误结果，下一次 recv 应返回对应错误
     };
 
+    ReadyRecvChunk() = default;
+
+    ReadyRecvChunk(ReadyRecvChunk&& other) noexcept
+    {
+        moveFrom(std::move(other));
+    }
+
+    ReadyRecvChunk& operator=(ReadyRecvChunk&& other) noexcept
+    {
+        if (this != &other) {
+            release();
+            moveFrom(std::move(other));
+        }
+        return *this;
+    }
+
     std::shared_ptr<void> owner;  ///< 持有底层 buffer pool 生命周期
     char* data = nullptr;  ///< buffer 起始地址
     uint16_t bid = 0;  ///< provided buffer id 标识
@@ -217,6 +234,30 @@ struct ReadyRecvChunk {
         offset = 0;
         length = 0;
         recycle = nullptr;
+    }
+
+private:
+    ReadyRecvChunk(const ReadyRecvChunk&) = delete;
+    ReadyRecvChunk& operator=(const ReadyRecvChunk&) = delete;
+
+    void moveFrom(ReadyRecvChunk&& other) noexcept
+    {
+        owner = std::move(other.owner);
+        data = other.data;
+        bid = other.bid;
+        offset = other.offset;
+        length = other.length;
+        kind = other.kind;
+        result = std::move(other.result);
+        recycle = other.recycle;
+
+        other.data = nullptr;
+        other.bid = 0;
+        other.offset = 0;
+        other.length = 0;
+        other.kind = Kind::Buffer;
+        other.result = size_t{0};
+        other.recycle = nullptr;
     }
 };
 #endif

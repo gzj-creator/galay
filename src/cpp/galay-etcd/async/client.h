@@ -664,6 +664,10 @@ private:
 class AsyncEtcdClientBuilder
 {
 public:
+    AsyncEtcdClientBuilder() = default;
+    AsyncEtcdClientBuilder(AsyncEtcdClientBuilder&&) noexcept = default;
+    AsyncEtcdClientBuilder& operator=(AsyncEtcdClientBuilder&&) noexcept = default;
+
     /**
      * @brief 设置 IO 调度器
      * @param scheduler IO 调度器指针
@@ -775,6 +779,15 @@ public:
     AsyncEtcdClient build() const;
 
     /**
+     * @brief 显式复制 builder 的离线配置状态
+     * @return 当前 builder 的独立副本
+     */
+    [[nodiscard]] AsyncEtcdClientBuilder clone() const
+    {
+        return AsyncEtcdClientBuilder(*this);
+    }
+
+    /**
      * @brief 仅构建配置对象而不创建客户端
      * @return 配置好的 EtcdConfig 实例
      */
@@ -793,6 +806,9 @@ public:
     }
 
 private:
+    AsyncEtcdClientBuilder(const AsyncEtcdClientBuilder&) = default;
+    AsyncEtcdClientBuilder& operator=(const AsyncEtcdClientBuilder&) = default;
+
     galay::kernel::IOScheduler* m_scheduler = nullptr; ///< IO 调度器指针
     EtcdConfig m_config{};                             ///< 客户端配置
 };
@@ -804,10 +820,27 @@ private:
  */
 struct AsyncEtcdClusterAttempt
 {
+    AsyncEtcdClusterAttempt() = default;
+    AsyncEtcdClusterAttempt(AsyncEtcdClusterAttempt&&) noexcept = default;
+    AsyncEtcdClusterAttempt& operator=(AsyncEtcdClusterAttempt&&) noexcept = default;
+
+    /**
+     * @brief 显式复制离线 retry attempt 快照
+     * @return 当前 attempt 的独立副本
+     */
+    [[nodiscard]] AsyncEtcdClusterAttempt clone() const
+    {
+        return AsyncEtcdClusterAttempt(*this);
+    }
+
     size_t endpoint_index = 0;                                           ///< 本次选择的 endpoint 下标
     size_t attempt = 0;                                                  ///< 当前请求内的第几次尝试，从 0 开始
     EtcdConfig config{};                                                 ///< 已绑定 endpoint 的配置副本
     std::chrono::milliseconds backoff = std::chrono::milliseconds::zero(); ///< 当前尝试前应遵守的退避时间
+
+private:
+    AsyncEtcdClusterAttempt(const AsyncEtcdClusterAttempt&) = default;
+    AsyncEtcdClusterAttempt& operator=(const AsyncEtcdClusterAttempt&) = default;
 };
 
 /**
@@ -825,6 +858,13 @@ public:
 
     explicit AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler = nullptr,
                                     EtcdConfig config = {});
+
+private:
+    AsyncEtcdClusterClient(const AsyncEtcdClusterClient&) = delete;
+    AsyncEtcdClusterClient& operator=(const AsyncEtcdClusterClient&) = delete;
+public:
+    AsyncEtcdClusterClient(AsyncEtcdClusterClient&&) noexcept = default;
+    AsyncEtcdClusterClient& operator=(AsyncEtcdClusterClient&&) noexcept = default;
 
     /**
      * @brief 开始一次离线 cluster 尝试规划
@@ -880,6 +920,8 @@ public:
     {
         m_config.endpoint.clear();
     }
+    AsyncEtcdClusterClientBuilder(AsyncEtcdClusterClientBuilder&&) noexcept = default;
+    AsyncEtcdClusterClientBuilder& operator=(AsyncEtcdClusterClientBuilder&&) noexcept = default;
 
     AsyncEtcdClusterClientBuilder& scheduler(galay::kernel::IOScheduler* scheduler)
     {
@@ -934,6 +976,15 @@ public:
 
     AsyncEtcdClusterClient build() const;
 
+    /**
+     * @brief 显式复制 builder 的离线配置状态
+     * @return 当前 builder 的独立副本
+     */
+    [[nodiscard]] AsyncEtcdClusterClientBuilder clone() const
+    {
+        return AsyncEtcdClusterClientBuilder(*this);
+    }
+
     EtcdConfig& buildConfig()
     {
         return m_config;
@@ -945,6 +996,9 @@ public:
     }
 
 private:
+    AsyncEtcdClusterClientBuilder(const AsyncEtcdClusterClientBuilder&) = default;
+    AsyncEtcdClusterClientBuilder& operator=(const AsyncEtcdClusterClientBuilder&) = default;
+
     galay::kernel::IOScheduler* m_scheduler = nullptr;
     EtcdConfig m_config{};
 };

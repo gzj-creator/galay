@@ -21,13 +21,28 @@ namespace galay::tracing {
  */
 class LogSink {
 public:
+    LogSink() = default;
     virtual ~LogSink() = default;
+
+    /**
+     * @brief 移动构造 Sink 基类状态
+     */
+    LogSink(LogSink&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值 Sink 基类状态
+     */
+    LogSink& operator=(LogSink&&) noexcept = default;
 
     /**
      * @brief 写入一条日志记录
      * @param record 日志记录
      */
     virtual void write(const LogRecord& record) = 0;
+
+private:
+    LogSink(const LogSink&) = delete;
+    LogSink& operator=(const LogSink&) = delete;
 };
 
 } // namespace galay::tracing

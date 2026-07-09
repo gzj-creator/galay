@@ -6,6 +6,7 @@
 #include <iostream>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 int main() {
@@ -50,7 +51,8 @@ int main() {
 
     galay::tracing::Span span("GET /orders", context);
     span.end();
-    const std::vector spans{span};
+    std::vector<galay::tracing::Span> spans;
+    spans.emplace_back(std::move(span));
 
     const auto result = exporter.exportSpans(std::span<const galay::tracing::Span>(spans.data(), spans.size()));
     if (result != galay::tracing::ExportResult::kSuccess || requests != 1 || endpoint != config.endpoint) {

@@ -3,6 +3,53 @@
 namespace galay::mysql::protocol
 {
 
+MysqlEncodedBatch::MysqlEncodedBatch(std::string encoded_data, size_t response_count) noexcept
+    : encoded(std::move(encoded_data))
+    , expected_responses(response_count)
+{
+}
+
+MysqlEncodedBatch MysqlEncodedBatch::clone() const
+{
+    MysqlEncodedBatch copy;
+    copy.encoded = encoded;
+    copy.expected_responses = expected_responses;
+    return copy;
+}
+
+MysqlCommandBuilder::MysqlCommandBuilder(MysqlCommandBuilder&& other) noexcept
+    : m_encoded(std::move(other.m_encoded))
+    , m_commands(std::move(other.m_commands))
+    , m_command_views()
+    , m_views_dirty(true)
+{
+    other.clear();
+}
+
+MysqlCommandBuilder& MysqlCommandBuilder::operator=(MysqlCommandBuilder&& other) noexcept
+{
+    if (this == &other) {
+        return *this;
+    }
+
+    m_encoded = std::move(other.m_encoded);
+    m_commands = std::move(other.m_commands);
+    m_command_views.clear();
+    m_views_dirty = true;
+    other.clear();
+    return *this;
+}
+
+MysqlCommandBuilder MysqlCommandBuilder::clone() const
+{
+    MysqlCommandBuilder copy;
+    copy.m_encoded = m_encoded;
+    copy.m_commands = m_commands;
+    copy.m_command_views.clear();
+    copy.m_views_dirty = true;
+    return copy;
+}
+
 void MysqlCommandBuilder::clear() noexcept
 {
     m_encoded.clear();
@@ -99,10 +146,7 @@ MysqlEncodedBatch MysqlCommandBuilder::build() const
     if (hasInvalidCommand()) {
         return MysqlEncodedBatch{};
     }
-    return MysqlEncodedBatch{
-        .encoded = m_encoded,
-        .expected_responses = m_commands.size()
-    };
+    return MysqlEncodedBatch(m_encoded, m_commands.size());
 }
 
 MysqlEncodedBatch MysqlCommandBuilder::release()
@@ -115,10 +159,7 @@ MysqlEncodedBatch MysqlCommandBuilder::release()
         return MysqlEncodedBatch{};
     }
 
-    MysqlEncodedBatch out{
-        .encoded = std::move(m_encoded),
-        .expected_responses = m_commands.size()
-    };
+    MysqlEncodedBatch out(std::move(m_encoded), m_commands.size());
     m_encoded.clear();
     m_commands.clear();
     m_command_views.clear();

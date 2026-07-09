@@ -117,10 +117,10 @@ struct ErasedLogWriter {
             return;
         }
         if (writeStructuredFn != nullptr) {
-            writeStructuredFn(object, record);
+            writeStructuredFn(object, std::move(record));
             return;
         }
-        writeStructuredFallback(record);
+        writeStructuredFallback(std::move(record));
     }
 
     /**
@@ -329,6 +329,42 @@ public:
     explicit Logger(LogLevel level = LogLevel::kTrace) noexcept;
 
     /**
+     * @brief Logger 持有互斥锁、原子快照指针和历史快照，禁止移动
+     */
+    Logger(Logger&&) = delete;
+
+    /**
+     * @brief Logger 持有互斥锁、原子快照指针和历史快照，禁止移动赋值
+     */
+    Logger& operator=(Logger&&) = delete;
+
+    /**
+     * @brief Sink 快照，用于无锁读取
+     * @details 复制快照必须通过 clone() 显式完成，避免隐藏 shared_ptr 容器复制成本。
+     */
+    struct SinkSnapshot {
+        SinkSnapshot() = default;
+        SinkSnapshot(SinkSnapshot&&) noexcept = default;
+        SinkSnapshot& operator=(SinkSnapshot&&) noexcept = default;
+
+        /**
+         * @brief 显式复制 Sink 指针容器
+         * @return 拥有独立 vector 存储的新快照，Sink 对象仍保持共享所有权
+         */
+        [[nodiscard]] SinkSnapshot clone() const {
+            SinkSnapshot copy;
+            copy.sinks = sinks;
+            return copy;
+        }
+
+        std::vector<std::shared_ptr<LogSink>> sinks; ///< Sink 列表
+
+    private:
+        SinkSnapshot(const SinkSnapshot&) = default;
+        SinkSnapshot& operator=(const SinkSnapshot&) = default;
+    };
+
+    /**
      * @brief 设置最低日志级别
      * @param level 新的最低级别
      */
@@ -372,12 +408,11 @@ public:
             return;
         }
 
-        publish(LogRecord{
-            .level = level,
-            .message = std::format(fmt, std::forward<Args>(args)...),
-            .source = source,
-            .context = makeLogContext(currentContext()),
-        });
+        publish(LogRecord(
+            level,
+            std::format(fmt, std::forward<Args>(args)...),
+            source,
+            makeLogContext(currentContext())));
     }
 
     /**
@@ -401,12 +436,11 @@ public:
             return;
         }
 
-        publish(LogRecord{
-            .level = level,
-            .message = std::format(fmt, std::forward<Args>(args)...),
-            .source = source,
-            .context = makeLogContext(std::move(context)),
-        });
+        publish(LogRecord(
+            level,
+            std::format(fmt, std::forward<Args>(args)...),
+            source,
+            makeLogContext(std::move(context))));
     }
 
     /**
@@ -423,17 +457,13 @@ public:
 
 private:
     /**
-     * @brief Sink 快照，用于无锁读取
-     */
-    struct SinkSnapshot {
-        std::vector<std::shared_ptr<LogSink>> sinks; ///< Sink 列表
-    };
-
-    /**
      * @brief 将日志记录发布到所有 Sink
      * @param record 日志记录
      */
     void publish(LogRecord record);
+
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
 
     std::mutex m_mutex;                                         ///< Sink 管理互斥锁
     std::vector<std::unique_ptr<SinkSnapshot>> m_sinkSnapshots; ///< Sink 快照历史
@@ -555,12 +585,11 @@ private:
             return;
         }
 
-        m_writer.write(LogRecord{
-            .level = kLevel,
-            .message = std::format(fmt, std::forward<Args>(args)...),
-            .source = m_source,
-            .context = m_context,
-        });
+        m_writer.write(LogRecord(
+            kLevel,
+            std::format(fmt, std::forward<Args>(args)...),
+            m_source,
+            m_context));
     }
 
     Writer m_writer;                     ///< 日志写入器
@@ -738,12 +767,11 @@ void logAt(SourceLocation source, std::format_string<Args...> fmt, Args&&... arg
         return;
     }
 
-    writer.write(LogRecord{
-        .level = kLevel,
-        .message = std::format(fmt, std::forward<Args>(args)...),
-        .source = source,
-        .context = makeLogContext(currentContext()),
-    });
+    writer.write(LogRecord(
+        kLevel,
+        std::format(fmt, std::forward<Args>(args)...),
+        source,
+        makeLogContext(currentContext())));
 }
 
 /**
@@ -766,12 +794,11 @@ void logWithContextAt(
         return;
     }
 
-    writer.write(LogRecord{
-        .level = kLevel,
-        .message = std::format(fmt, std::forward<Args>(args)...),
-        .source = source,
-        .context = makeLogContext(std::move(context)),
-    });
+    writer.write(LogRecord(
+        kLevel,
+        std::format(fmt, std::forward<Args>(args)...),
+        source,
+        makeLogContext(std::move(context))));
 }
 
 /**

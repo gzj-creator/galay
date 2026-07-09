@@ -49,8 +49,8 @@ Task<bool> runWebSocketClient(const std::string& url) {
     }
 
     // 5. 获取 Reader 和 Writer
-    auto reader = session.getReader();
-    auto writer = session.getWriter();
+    auto& reader = session.getReader();
+    auto& writer = session.getWriter();
 
     // 6. 读取欢迎消息
     std::string welcome_message;

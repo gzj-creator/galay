@@ -34,12 +34,25 @@ public:
     ConsoleSink();
 
     /**
+     * @brief 移动构造控制台 Sink，转移输出流指针
+     */
+    ConsoleSink(ConsoleSink&&) noexcept = default;
+
+    /**
+     * @brief 移动赋值控制台 Sink，转移输出流指针
+     */
+    ConsoleSink& operator=(ConsoleSink&&) noexcept = default;
+
+    /**
      * @brief 将日志记录写入控制台
      * @param record 日志记录
      */
     void write(const LogRecord& record) override;
 
 private:
+    ConsoleSink(const ConsoleSink&) = delete;
+    ConsoleSink& operator=(const ConsoleSink&) = delete;
+
     std::ostream* m_out; ///< 输出流指针
 };
 

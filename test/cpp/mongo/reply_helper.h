@@ -47,7 +47,7 @@ firstBatchFrontDocument(const galay::mongo::MongoReply& reply)
         return std::unexpected("cursor.firstBatch[0] is not document");
     }
 
-    return first.toDocument();
+    return first.toDocument().clone();
 }
 
 } // namespace mongo_test

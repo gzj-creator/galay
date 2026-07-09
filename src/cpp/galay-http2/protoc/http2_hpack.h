@@ -110,6 +110,8 @@ class HpackDynamicTable
 {
 public:
     HpackDynamicTable(size_t max_size = kDefaultHeaderTableSize);
+    HpackDynamicTable(HpackDynamicTable&&) noexcept = default;
+    HpackDynamicTable& operator=(HpackDynamicTable&&) noexcept = default;
 
     // 添加条目到动态表头部
     void add(const Http2HeaderField& field);
@@ -135,7 +137,23 @@ public:
     // 清空动态表
     void clear();
 
+    /**
+     * @brief 显式深拷贝 HPACK 动态表状态。
+     * @return 独立持有相同环形表内容和大小计数的新对象。
+     */
+    HpackDynamicTable clone() const {
+        HpackDynamicTable copy(m_max_size);
+        copy.m_ring = m_ring;
+        copy.m_head = m_head;
+        copy.m_count = m_count;
+        copy.m_current_size = m_current_size;
+        return copy;
+    }
+
 private:
+    HpackDynamicTable(const HpackDynamicTable&) = delete;
+    HpackDynamicTable& operator=(const HpackDynamicTable&) = delete;
+
     void evict();
 
     std::vector<Http2HeaderField> m_ring;  // 环形缓冲区
@@ -152,6 +170,8 @@ class HpackEncoder
 {
 public:
     HpackEncoder(size_t max_table_size = kDefaultHeaderTableSize);
+    HpackEncoder(HpackEncoder&&) noexcept = default;
+    HpackEncoder& operator=(HpackEncoder&&) noexcept = default;
 
     // 编码头部列表
     std::string encode(const std::vector<Http2HeaderField>& headers);
@@ -166,7 +186,23 @@ public:
     // 获取动态表
     HpackDynamicTable& dynamicTable() { return m_dynamic_table; }
 
+    /**
+     * @brief 显式深拷贝 HPACK 编码器动态状态。
+     * @return 独立持有相同动态表、表大小更新状态和编码策略的新对象。
+     */
+    HpackEncoder clone() const {
+        HpackEncoder copy;
+        copy.m_dynamic_table = m_dynamic_table.clone();
+        copy.m_pending_table_size = m_pending_table_size;
+        copy.m_use_huffman = m_use_huffman;
+        copy.m_table_size_update_pending = m_table_size_update_pending;
+        return copy;
+    }
+
 private:
+    HpackEncoder(const HpackEncoder&) = delete;
+    HpackEncoder& operator=(const HpackEncoder&) = delete;
+
     // 编码整数
     static void encodeInteger(uint32_t value, uint8_t prefix_bits, uint8_t prefix, std::string& output);
 
@@ -209,6 +245,8 @@ public:
     };
 
     HpackDecoder(size_t max_table_size = kDefaultHeaderTableSize);
+    HpackDecoder(HpackDecoder&&) noexcept = default;
+    HpackDecoder& operator=(HpackDecoder&&) noexcept = default;
 
     // 解码头部块
     std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> decode(const uint8_t* data, size_t length);
@@ -229,7 +267,21 @@ public:
     // 获取动态表
     HpackDynamicTable& dynamicTable() { return m_dynamic_table; }
 
+    /**
+     * @brief 显式深拷贝 HPACK 解码器动态状态。
+     * @return 独立持有相同动态表和限制参数的新对象。
+     */
+    HpackDecoder clone() const {
+        HpackDecoder copy(m_max_table_size);
+        copy.m_dynamic_table = m_dynamic_table.clone();
+        copy.m_max_header_list_size = m_max_header_list_size;
+        return copy;
+    }
+
 private:
+    HpackDecoder(const HpackDecoder&) = delete;
+    HpackDecoder& operator=(const HpackDecoder&) = delete;
+
     // 解码整数
     static std::expected<uint32_t, Http2ErrorCode> decodeInteger(const uint8_t*& data, const uint8_t* end, uint8_t prefix_bits);
 

@@ -76,6 +76,24 @@ class StreamMessage {
 public:
     StreamMessage() = default;
 
+private:
+    StreamMessage(const StreamMessage&) = delete;
+    StreamMessage& operator=(const StreamMessage&) = delete;
+public:
+
+    StreamMessage(StreamMessage&& other) noexcept
+    {
+        moveFrom(std::move(other));
+    }
+
+    StreamMessage& operator=(StreamMessage&& other) noexcept
+    {
+        if (this != &other) {
+            moveFrom(std::move(other));
+        }
+        return *this;
+    }
+
     /**
      * @brief 构造流消息
      * @param stream_id 流ID
@@ -89,6 +107,21 @@ public:
         if (data != nullptr && len > 0) {
             payload(data, len);
         }
+    }
+
+    /**
+     * @brief 显式深拷贝流消息
+     * @return 持有独立payload缓冲的新消息
+     *
+     * @note 借用payload会被复制为自有缓冲，避免clone结果继续依赖外部内存。
+     */
+    StreamMessage clone() const {
+        StreamMessage copy;
+        copy.m_stream_id = m_stream_id;
+        copy.m_is_end = m_is_end;
+        copy.m_msg_type = m_msg_type;
+        copy.copyPayloadFromView(payloadView());
+        return copy;
     }
 
     /// @brief 获取流ID
@@ -241,6 +274,50 @@ public:
     }
 
 private:
+    void moveFrom(StreamMessage&& other) noexcept {
+        m_stream_id = other.m_stream_id;
+        m_payload = std::move(other.m_payload);
+        m_payload_view = other.m_payload_view;
+        m_payload_owned = other.m_payload_owned;
+        m_is_end = other.m_is_end;
+        m_msg_type = other.m_msg_type;
+        updateOwnedPayloadView();
+        other.resetMovedPayload();
+    }
+
+    void updateOwnedPayloadView() const {
+        if (!m_payload_owned) {
+            return;
+        }
+        m_payload_view = RpcPayloadView{
+            m_payload.data(),
+            m_payload.size(),
+            nullptr,
+            0
+        };
+    }
+
+    void resetMovedPayload() noexcept {
+        m_payload.clear();
+        m_payload_view = RpcPayloadView{};
+        m_payload_owned = true;
+    }
+
+    void copyPayloadFromView(const RpcPayloadView& view) {
+        const size_t total = view.size();
+        m_payload.resize(total);
+        size_t offset = 0;
+        if (view.segment1_len > 0) {
+            std::memcpy(m_payload.data(), view.segment1, view.segment1_len);
+            offset += view.segment1_len;
+        }
+        if (view.segment2_len > 0) {
+            std::memcpy(m_payload.data() + offset, view.segment2, view.segment2_len);
+        }
+        m_payload_owned = true;
+        updateOwnedPayloadView();
+    }
+
     void materializePayloadIfNeeded() const {
         if (m_payload_owned) {
             return;
@@ -535,6 +612,13 @@ public:
         iovecs.push_back(iovec{m_header.data(), RPC_HEADER_SIZE});
     }
 
+private:
+    StreamFrameWriteState(const StreamFrameWriteState&) = delete;
+    StreamFrameWriteState& operator=(const StreamFrameWriteState&) = delete;
+public:
+    StreamFrameWriteState(StreamFrameWriteState&&) = delete;
+    StreamFrameWriteState& operator=(StreamFrameWriteState&&) = delete;
+
     /**
      * @brief 构造数据帧写入状态（拷贝模式）
      * @param stream_id 流ID
@@ -759,6 +843,22 @@ public:
         , m_limits(limits)
     {}
 
+private:
+    StreamReaderImpl(const StreamReaderImpl&) = delete;
+    StreamReaderImpl& operator=(const StreamReaderImpl&) = delete;
+public:
+
+    StreamReaderImpl(StreamReaderImpl&& other) noexcept
+        : m_ring_buffer(other.m_ring_buffer)
+        , m_socket(other.m_socket)
+        , m_limits(other.m_limits)
+    {
+        other.m_ring_buffer = nullptr;
+        other.m_socket = nullptr;
+    }
+
+    StreamReaderImpl& operator=(StreamReaderImpl&&) = delete;
+
     /**
      * @brief 获取流消息
      * @param msg 输出消息
@@ -792,6 +892,20 @@ public:
         : m_socket(&socket)
         , m_stream_id(stream_id)
     {}
+
+private:
+    StreamWriterImpl(const StreamWriterImpl&) = delete;
+    StreamWriterImpl& operator=(const StreamWriterImpl&) = delete;
+public:
+
+    StreamWriterImpl(StreamWriterImpl&& other) noexcept
+        : m_socket(other.m_socket)
+        , m_stream_id(other.m_stream_id)
+    {
+        other.m_socket = nullptr;
+    }
+
+    StreamWriterImpl& operator=(StreamWriterImpl&&) = delete;
 
     /**
      * @brief 更新当前写入器绑定的 stream_id
@@ -896,6 +1010,26 @@ public:
         , m_reader(ring_buffer, socket)
         , m_writer(socket, stream_id)
     {}
+
+private:
+    RpcStreamImpl(const RpcStreamImpl&) = delete;
+    RpcStreamImpl& operator=(const RpcStreamImpl&) = delete;
+public:
+
+    RpcStreamImpl(RpcStreamImpl&& other) noexcept
+        : m_socket(other.m_socket)
+        , m_ring_buffer(other.m_ring_buffer)
+        , m_stream_id(other.m_stream_id)
+        , m_service_name(std::move(other.m_service_name))
+        , m_method_name(std::move(other.m_method_name))
+        , m_reader(std::move(other.m_reader))
+        , m_writer(std::move(other.m_writer))
+    {
+        other.m_socket = nullptr;
+        other.m_ring_buffer = nullptr;
+    }
+
+    RpcStreamImpl& operator=(RpcStreamImpl&&) = delete;
 
     /// @brief 获取流ID
     uint32_t streamId() const { return m_stream_id; }

@@ -417,6 +417,13 @@ struct WsRingBufferTcpReadMachine {
     explicit WsRingBufferTcpReadMachine(std::shared_ptr<StateT> state)
         : m_state(std::move(state)) {}
 
+private:
+    WsRingBufferTcpReadMachine(const WsRingBufferTcpReadMachine&) = delete;
+    WsRingBufferTcpReadMachine& operator=(const WsRingBufferTcpReadMachine&) = delete;
+public:
+    WsRingBufferTcpReadMachine(WsRingBufferTcpReadMachine&&) noexcept = default;
+    WsRingBufferTcpReadMachine& operator=(WsRingBufferTcpReadMachine&&) noexcept = default;
+
     MachineAction<result_type> advance() {
         if (m_result.has_value()) {
             return MachineAction<result_type>::complete(std::move(*m_result));
@@ -467,6 +474,13 @@ struct WsRingBufferSslReadMachine {
 
     explicit WsRingBufferSslReadMachine(std::shared_ptr<StateT> state)
         : m_state(std::move(state)) {}
+
+private:
+    WsRingBufferSslReadMachine(const WsRingBufferSslReadMachine&) = delete;
+    WsRingBufferSslReadMachine& operator=(const WsRingBufferSslReadMachine&) = delete;
+public:
+    WsRingBufferSslReadMachine(WsRingBufferSslReadMachine&&) noexcept = default;
+    WsRingBufferSslReadMachine& operator=(WsRingBufferSslReadMachine&&) noexcept = default;
 
     galay::ssl::SslMachineAction<result_type> advance() {
         if (m_result.has_value()) {
@@ -527,6 +541,13 @@ struct WsFrameReadState {
         , m_setting(setting)
         , m_frame(&frame)
         , m_is_server(is_server) {}
+
+private:
+    WsFrameReadState(const WsFrameReadState&) = delete;
+    WsFrameReadState& operator=(const WsFrameReadState&) = delete;
+public:
+    WsFrameReadState(WsFrameReadState&&) noexcept = default;
+    WsFrameReadState& operator=(WsFrameReadState&&) noexcept = default;
 
     bool parseFromBuffer() {
         auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
@@ -667,6 +688,13 @@ struct WsMessageReadState {
         , m_use_mask(use_mask)
         , m_control_frame_callback(std::move(control_frame_callback))
         , m_enable_fast_path(enable_fast_path) {}
+
+private:
+    WsMessageReadState(const WsMessageReadState&) = delete;
+    WsMessageReadState& operator=(const WsMessageReadState&) = delete;
+public:
+    WsMessageReadState(WsMessageReadState&&) noexcept = default;
+    WsMessageReadState& operator=(WsMessageReadState&&) noexcept = default;
 
     void rebindStorage(std::string& message, WsOpcode& opcode) noexcept {
         m_message = &message;
@@ -1037,6 +1065,13 @@ public:
         , m_socket(&socket)
         , m_is_server(is_server)
         , m_use_mask(use_mask) {}
+
+private:
+    WsReaderImpl(const WsReaderImpl&) = delete;
+    WsReaderImpl& operator=(const WsReaderImpl&) = delete;
+public:
+    WsReaderImpl(WsReaderImpl&&) noexcept = default;
+    WsReaderImpl& operator=(WsReaderImpl&&) noexcept = default;
 
     /**
      * @brief 异步读取一个 WebSocket 帧

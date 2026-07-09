@@ -122,6 +122,37 @@ MongoValue MongoValue::fromTimestamp(uint64_t ts)
     return MongoValue(TimestampTag{}, ts);
 }
 
+MongoValue MongoValue::clone() const
+{
+    switch (type()) {
+    case MongoValueType::Null:
+        return MongoValue(nullptr);
+    case MongoValueType::Bool:
+        return MongoValue(std::get<bool>(m_storage));
+    case MongoValueType::Int32:
+        return MongoValue(std::get<int32_t>(m_storage));
+    case MongoValueType::Int64:
+        return MongoValue(std::get<int64_t>(m_storage));
+    case MongoValueType::Double:
+        return MongoValue(std::get<double>(m_storage));
+    case MongoValueType::String:
+        return MongoValue(std::get<std::string>(m_storage));
+    case MongoValueType::Binary:
+        return MongoValue(std::get<Binary>(m_storage));
+    case MongoValueType::Document:
+        return MongoValue(toDocument().clone());
+    case MongoValueType::Array:
+        return MongoValue(toArray().clone());
+    case MongoValueType::ObjectId:
+        return MongoValue(ObjectIdTag{}, std::get<std::string>(m_storage));
+    case MongoValueType::DateTime:
+        return MongoValue(DateTimeTag{}, std::get<int64_t>(m_storage));
+    case MongoValueType::Timestamp:
+        return MongoValue(TimestampTag{}, static_cast<uint64_t>(std::get<int64_t>(m_storage)));
+    }
+    return MongoValue(nullptr);
+}
+
 MongoValueType MongoValue::type() const
 {
     if (m_type_tag == MongoValueType::ObjectId) return MongoValueType::ObjectId;
@@ -240,6 +271,16 @@ MongoArray::MongoArray(std::vector<MongoValue> values)
 {
 }
 
+MongoArray MongoArray::clone() const
+{
+    MongoArray copy;
+    copy.reserve(m_values.size());
+    for (const auto& value : m_values) {
+        copy.append(value.clone());
+    }
+    return copy;
+}
+
 void MongoArray::append(MongoValue value)
 {
     m_values.push_back(std::move(value));
@@ -286,6 +327,16 @@ std::vector<MongoValue>& MongoArray::values()
 MongoDocument::MongoDocument(std::vector<Field> fields)
     : m_fields(std::move(fields))
 {
+}
+
+MongoDocument MongoDocument::clone() const
+{
+    MongoDocument copy;
+    copy.fields().reserve(m_fields.size());
+    for (const auto& [name, value] : m_fields) {
+        copy.append(name, value.clone());
+    }
+    return copy;
 }
 
 void MongoDocument::append(std::string key, MongoValue value)
@@ -394,6 +445,11 @@ std::vector<MongoDocument::Field>& MongoDocument::fields()
 MongoReply::MongoReply(MongoDocument document)
     : m_document(std::move(document))
 {
+}
+
+MongoReply MongoReply::clone() const
+{
+    return MongoReply(m_document.clone());
 }
 
 const MongoDocument& MongoReply::document() const

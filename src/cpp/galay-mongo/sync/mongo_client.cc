@@ -49,10 +49,10 @@ MongoDocument buildClientMetadata(const std::string& app_name)
     if (!app_name.empty()) {
         MongoDocument app;
         app.append("name", app_name);
-        client.append("application", app);
+        client.append("application", std::move(app));
     }
-    client.append("driver", driver);
-    client.append("os", os);
+    client.append("driver", std::move(driver));
+    client.append("os", std::move(os));
     return client;
 }
 
@@ -144,10 +144,10 @@ MongoResult MongoClient::findOne(const std::string& database,
 {
     MongoDocument command;
     command.append("find", collection);
-    command.append("filter", filter);
+    command.append("filter", filter.clone());
     command.append("limit", int32_t(1));
     if (!projection.empty()) {
-        command.append("projection", projection);
+        command.append("projection", projection.clone());
     }
     return runCommandRequest(database, command, true);
 }
@@ -157,11 +157,11 @@ MongoResult MongoClient::insertOne(const std::string& database,
                                     const MongoDocument& document)
 {
     MongoArray documents;
-    documents.append(document);
+    documents.append(document.clone());
 
     MongoDocument command;
     command.append("insert", collection);
-    command.append("documents", documents);
+    command.append("documents", std::move(documents));
     command.append("ordered", true);
     return runCommandRequest(database, command, true);
 }
@@ -173,17 +173,17 @@ MongoResult MongoClient::updateOne(const std::string& database,
                                     bool upsert)
 {
     MongoDocument update_item;
-    update_item.append("q", filter);
-    update_item.append("u", update);
+    update_item.append("q", filter.clone());
+    update_item.append("u", update.clone());
     update_item.append("multi", false);
     update_item.append("upsert", upsert);
 
     MongoArray updates;
-    updates.append(update_item);
+    updates.append(std::move(update_item));
 
     MongoDocument command;
     command.append("update", collection);
-    command.append("updates", updates);
+    command.append("updates", std::move(updates));
     command.append("ordered", true);
     return runCommandRequest(database, command, true);
 }
@@ -193,15 +193,15 @@ MongoResult MongoClient::deleteOne(const std::string& database,
                                     const MongoDocument& filter)
 {
     MongoDocument delete_item;
-    delete_item.append("q", filter);
+    delete_item.append("q", filter.clone());
     delete_item.append("limit", int32_t(1));
 
     MongoArray deletes;
-    deletes.append(delete_item);
+    deletes.append(std::move(delete_item));
 
     MongoDocument command;
     command.append("delete", collection);
-    command.append("deletes", deletes);
+    command.append("deletes", std::move(deletes));
     command.append("ordered", true);
     return runCommandRequest(database, command, true);
 }
@@ -219,7 +219,7 @@ MongoResult MongoClient::runCommandRequest(const std::string& database,
         return std::unexpected(MongoError(MONGO_ERROR_CONNECTION_CLOSED, "Not connected"));
     }
 
-    MongoDocument request = command;
+    MongoDocument request = command.clone();
     if (!request.has("$db")) {
         request.append("$db", database);
     }
@@ -265,7 +265,7 @@ MongoResult MongoClient::runCommandRequest(const std::string& database,
                                               : reply.errorMessage()));
     }
 
-    return reply;
+    return std::move(reply);
 }
 
 MongoVoidResult MongoClient::authenticateIfNeeded(const MongoConfig& config)

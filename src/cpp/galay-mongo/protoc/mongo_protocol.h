@@ -50,9 +50,23 @@ struct MongoMessageHeader
  */
 struct MongoMessage
 {
+    MongoMessage() = default;
+    MongoMessage(MongoMessage&&) noexcept = default;             ///< 移动构造，转移消息体所有权
+    MongoMessage& operator=(MongoMessage&&) noexcept = default;  ///< 移动赋值，转移消息体所有权
+
+    /**
+     * @brief 显式深拷贝解码后的消息
+     * @return 消息体递归 clone 后的新消息
+     */
+    [[nodiscard]] MongoMessage clone() const;
+
     MongoMessageHeader header;   ///< 消息头
     MongoDocument body;          ///< 消息体（Section Kind 0）
     int32_t flags = 0;           ///< OP_MSG 标志位
+
+private:
+    MongoMessage(const MongoMessage&) = delete;
+    MongoMessage& operator=(const MongoMessage&) = delete;
 };
 
 /**

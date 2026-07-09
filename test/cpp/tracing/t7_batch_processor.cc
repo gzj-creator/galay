@@ -17,7 +17,9 @@ namespace {
 class RecordingExporter final : public galay::tracing::SpanExporter {
 public:
     galay::tracing::ExportResult exportSpans(std::span<const galay::tracing::Span> spans) override {
-        exported.insert(exported.end(), spans.begin(), spans.end());
+        for (const auto& span : spans) {
+            exported.push_back(span.clone());
+        }
         exported_count.fetch_add(spans.size(), std::memory_order_release);
         return galay::tracing::ExportResult::kSuccess;
     }

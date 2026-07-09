@@ -104,7 +104,8 @@ concept SyncClientReturnsDirectResults = requires(
     { client.del(key) } -> std::same_as<galay::etcd::EtcdDeleteResult>;
     { client.grantLease(3) } -> std::same_as<galay::etcd::EtcdLeaseGrantResult>;
     { client.keepAliveOnce(lease_id) } -> std::same_as<galay::etcd::EtcdLeaseGrantResult>;
-    { client.pipeline(ops) } -> std::same_as<galay::etcd::EtcdPipelineResult>;
+    { client.pipeline(std::span<const PipelineOp>(ops.data(), ops.size())) } ->
+        std::same_as<galay::etcd::EtcdPipelineResult>;
 };
 
 template <typename ClientT>

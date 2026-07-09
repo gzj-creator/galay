@@ -44,7 +44,7 @@ static_assert(sizeof(galay::tracing::detail::DefaultLogWriter) <= sizeof(void*))
 class TestSink final : public galay::tracing::LogSink {
 public:
     void write(const galay::tracing::LogRecord& record) override {
-        records.push_back(record);
+        records.push_back(record.clone());
     }
 
     std::vector<galay::tracing::LogRecord> records;

@@ -291,7 +291,7 @@ galay::kernel::Task<void> HttpClientTransport::sendRequest(std::string_view meth
             continue;
         }
 
-        auto response = httpResult.value().value();
+        auto response = std::move(httpResult.value().value());
         if (response.header().isConnectionClose() || !response.header().isKeepAlive()) {
             m_connected = false;
         }

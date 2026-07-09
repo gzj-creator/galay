@@ -106,7 +106,7 @@ Task<bool> expectCancel(uint16_t port,
         co_await client.close();
         co_return false;
     }
-    auto stream = stream_result.value();
+    auto stream = std::move(stream_result.value());
 
     auto send_result = co_await stream.sendInit();
     if (!send_result.has_value()) {
@@ -138,7 +138,7 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
         state->done = true;
         co_return;
     }
-    auto stream = stream_result.value();
+    auto stream = std::move(stream_result.value());
 
     auto send_result = co_await stream.sendInit();
     if (!send_result.has_value()) {
@@ -224,7 +224,7 @@ Task<void> runStreamClient(uint16_t port, StreamResult* state)
         state->done = true;
         co_return;
     }
-    auto invalid_stream = invalid_stream_result.value();
+    auto invalid_stream = std::move(invalid_stream_result.value());
     send_result = co_await invalid_stream.sendData("not-init");
     StreamMessage cancel_msg;
     recv_result = co_await invalid_stream.read(cancel_msg);

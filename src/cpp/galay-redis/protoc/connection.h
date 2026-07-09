@@ -28,6 +28,12 @@ namespace galay::redis::protocol
     {
     public:
         Connection();
+    private:
+        Connection(const Connection&) = delete;
+        Connection& operator=(const Connection&) = delete;
+    public:
+        Connection(Connection&& other) noexcept;
+        Connection& operator=(Connection&& other) noexcept;
         ~Connection();
 
         /**

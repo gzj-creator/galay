@@ -58,6 +58,17 @@ class EtcdClusterState
 {
 public:
     explicit EtcdClusterState(EtcdProductionConfig production);
+    EtcdClusterState(EtcdClusterState&&) noexcept = default;
+    EtcdClusterState& operator=(EtcdClusterState&&) noexcept = default;
+
+    /**
+     * @brief 显式复制 cluster policy、health snapshot 与统计状态
+     * @return 当前状态的独立副本
+     */
+    [[nodiscard]] EtcdClusterState clone() const
+    {
+        return EtcdClusterState(*this);
+    }
 
     /**
      * @brief 选择下一次请求使用的端点下标
@@ -160,6 +171,9 @@ public:
     [[nodiscard]] size_t maxAttempts() const;
 
 private:
+    EtcdClusterState(const EtcdClusterState&) = default;
+    EtcdClusterState& operator=(const EtcdClusterState&) = default;
+
     [[nodiscard]] std::optional<size_t> selectStickyLeaderEndpoint() const;
     [[nodiscard]] bool hasAlternativeEndpoint(size_t excluded_index) const;
 
@@ -179,16 +193,32 @@ class EtcdClusterClient;
 class EtcdClusterClientBuilder
 {
 public:
+    EtcdClusterClientBuilder() = default;
+    EtcdClusterClientBuilder(EtcdClusterClientBuilder&&) noexcept = default;
+    EtcdClusterClientBuilder& operator=(EtcdClusterClientBuilder&&) noexcept = default;
+
     EtcdClusterClientBuilder& endpoint(std::string endpoint);
     EtcdClusterClientBuilder& apiPrefix(std::string prefix);
     EtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
     EtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
     EtcdClusterClientBuilder& config(EtcdConfig config);
 
+    /**
+     * @brief 显式复制 builder 的离线配置状态
+     * @return 当前 builder 的独立副本
+     */
+    [[nodiscard]] EtcdClusterClientBuilder clone() const
+    {
+        return EtcdClusterClientBuilder(*this);
+    }
+
     [[nodiscard]] EtcdClusterClient build() const;
     [[nodiscard]] const EtcdConfig& buildConfig() const;
 
 private:
+    EtcdClusterClientBuilder(const EtcdClusterClientBuilder&) = default;
+    EtcdClusterClientBuilder& operator=(const EtcdClusterClientBuilder&) = default;
+
     EtcdConfig m_config{};
 };
 
@@ -206,8 +236,8 @@ public:
 
     EtcdClusterClient(const EtcdClusterClient&) = delete;
     EtcdClusterClient& operator=(const EtcdClusterClient&) = delete;
-    EtcdClusterClient(EtcdClusterClient&&) = default;
-    EtcdClusterClient& operator=(EtcdClusterClient&&) = default;
+    EtcdClusterClient(EtcdClusterClient&&) noexcept = default;
+    EtcdClusterClient& operator=(EtcdClusterClient&&) noexcept = default;
     ~EtcdClusterClient() = default;
 
     [[nodiscard]] EtcdBoolResult put(

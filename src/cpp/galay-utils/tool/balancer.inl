@@ -7,6 +7,33 @@ namespace galay::utils
 {
 
 template<typename Type>
+inline RoundRobinLoadBalancer<Type>::RoundRobinLoadBalancer(RoundRobinLoadBalancer&& other) noexcept
+    : m_nodes(std::move(other.m_nodes))
+    , m_index(other.m_index.exchange(0, std::memory_order_relaxed))
+{
+}
+
+template<typename Type>
+inline RoundRobinLoadBalancer<Type>&
+RoundRobinLoadBalancer<Type>::operator=(RoundRobinLoadBalancer&& other) noexcept
+{
+    if (this != &other) {
+        m_nodes = std::move(other.m_nodes);
+        m_index.store(other.m_index.exchange(0, std::memory_order_relaxed),
+                      std::memory_order_relaxed);
+    }
+    return *this;
+}
+
+template<typename Type>
+inline RoundRobinLoadBalancer<Type> RoundRobinLoadBalancer<Type>::clone() const
+{
+    RoundRobinLoadBalancer copy(m_nodes);
+    copy.m_index.store(m_index.load(std::memory_order_relaxed), std::memory_order_relaxed);
+    return copy;
+}
+
+template<typename Type>
 inline std::optional<Type> RoundRobinLoadBalancer<Type>::select()
 {
     if (m_nodes.empty())
@@ -100,7 +127,8 @@ inline void WeightRoundRobinLoadBalancer<Type>::append(Type node, uint32_t weigh
 
 template<typename Type>
 inline RandomLoadBalancer<Type>::RandomLoadBalancer(const std::vector<Type>& nodes)
-    : m_nodes(nodes)
+    : m_rng()
+    , m_nodes(nodes)
 {
     std::random_device rd;
     m_rng.seed(rd());
@@ -108,7 +136,8 @@ inline RandomLoadBalancer<Type>::RandomLoadBalancer(const std::vector<Type>& nod
 
 template<typename Type>
 inline RandomLoadBalancer<Type>::RandomLoadBalancer(std::vector<Type>&& nodes)
-    : m_nodes(std::move(nodes))
+    : m_rng()
+    , m_nodes(std::move(nodes))
 {
     std::random_device rd;
     m_rng.seed(rd());

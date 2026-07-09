@@ -75,7 +75,8 @@ void configurableEndpointHeadersAndBodyAreSent() {
     };
 
     galay::tracing::OtlpHttpExporter exporter(config, transport);
-    const std::vector spans{makeSpan("span \"quoted\"")};
+    std::vector<galay::tracing::Span> spans;
+    spans.push_back(makeSpan("span \"quoted\""));
 
     assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
 
@@ -101,7 +102,8 @@ void nonSuccessStatusFailsExport() {
     };
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
-    const std::vector spans{makeSpan("failing")};
+    std::vector<galay::tracing::Span> spans;
+    spans.push_back(makeSpan("failing"));
 
     assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kFailure);
 }
@@ -116,7 +118,9 @@ void multipleSpansAreEncodedIntoOneRequest() {
     };
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
-    std::vector spans{makeSpan("first"), makeSpan("second")};
+    std::vector<galay::tracing::Span> spans;
+    spans.push_back(makeSpan("first"));
+    spans.push_back(makeSpan("second"));
 
     spans[1] = galay::tracing::Span("second", galay::tracing::TraceContext(
         galay::tracing::TraceId::fromHex("4bf92f3577b34da6a3ce929d0e0e4736"),
@@ -152,7 +156,8 @@ void semanticSpanFieldsAreEncoded() {
     span.end();
 
     galay::tracing::OtlpHttpExporter exporter({}, transport);
-    const std::vector spans{span};
+    std::vector<galay::tracing::Span> spans;
+    spans.push_back(std::move(span));
 
     assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
     assert(captured);
@@ -181,7 +186,8 @@ void resourceAndScopeMetadataAreEncoded() {
     };
 
     galay::tracing::OtlpHttpExporter exporter(config, transport);
-    const std::vector spans{makeSpan("resource")};
+    std::vector<galay::tracing::Span> spans;
+    spans.push_back(makeSpan("resource"));
 
     assert(exporter.exportSpans(std::span<const galay::tracing::Span>(spans)) == galay::tracing::ExportResult::kSuccess);
     assert(captured);

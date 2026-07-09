@@ -50,6 +50,10 @@ class EtcdClient;
 class EtcdClientBuilder
 {
 public:
+    EtcdClientBuilder() = default;
+    EtcdClientBuilder(EtcdClientBuilder&&) noexcept = default;
+    EtcdClientBuilder& operator=(EtcdClientBuilder&&) noexcept = default;
+
     /**
      * @brief 设置 etcd 服务端点地址
      * @param endpoint 端点地址，格式为 http(s)://host:port
@@ -150,6 +154,15 @@ public:
     EtcdClient build() const;
 
     /**
+     * @brief 显式复制 builder 的离线配置状态
+     * @return 当前 builder 的独立副本
+     */
+    [[nodiscard]] EtcdClientBuilder clone() const
+    {
+        return EtcdClientBuilder(*this);
+    }
+
+    /**
      * @brief 仅构建配置对象而不创建客户端
      * @return 配置好的 EtcdConfig 实例
      */
@@ -168,6 +181,9 @@ public:
     }
 
 private:
+    EtcdClientBuilder(const EtcdClientBuilder&) = default;
+    EtcdClientBuilder& operator=(const EtcdClientBuilder&) = default;
+
     EtcdConfig m_config{}; ///< 同步客户端配置
 };
 

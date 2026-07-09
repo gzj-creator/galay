@@ -10,6 +10,19 @@ namespace galay::http
        return m_header;
     }
 
+    HttpResponse HttpResponse::clone() const
+    {
+        HttpResponse copy;
+        copy.m_header = m_header.clone();
+        copy.m_body = m_body;
+        copy.m_contentLength = m_contentLength;
+        copy.m_bodyParsed = m_bodyParsed;
+        copy.m_headerLength = m_headerLength;
+        copy.m_chunkParser = m_chunkParser.clone();
+        copy.m_headerParsed = m_headerParsed;
+        return copy;
+    }
+
     std::string HttpResponse::getBodyStr()
     {
         return std::move(m_body);

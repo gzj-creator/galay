@@ -1510,7 +1510,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 .body(body)
                 .buildMove();
             if (isHeadRequest) {
-                HttpResponseHeader header = response.header();
+                HttpResponseHeader header = response.header().clone();
                 while (true) {
                     auto send_result = co_await writer.sendHeader(std::move(header));
                     if (!send_result || send_result.value()) break;
@@ -1542,7 +1542,8 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
     // 根据配置决定传输模式
     FileTransferMode mode = config.decideTransferMode(fileSize);
     // 构建响应头
-    auto responseBuilder = Http1_1ResponseBuilder()
+    Http1_1ResponseBuilder responseBuilder;
+    responseBuilder
         .status(HttpStatusCode::OK_200)
         .header("Content-Type", mimeType)
         .header("Last-Modified", lastModifiedStr)
@@ -1559,7 +1560,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
     if (isHeadRequest) {
         response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(fileSize));
-        HttpResponseHeader header = response.header();
+        HttpResponseHeader header = response.header().clone();
         while (true) {
             auto result = co_await writer.sendHeader(std::move(header));
             if (!result) {
@@ -1618,7 +1619,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
             response.header().headerPairs().addHeaderPair("Transfer-Encoding", "chunked");
 
             // 发送响应头（只发送头部，不包含 body）
-            HttpResponseHeader header = response.header();
+            HttpResponseHeader header = response.header().clone();
             auto headerResult = co_await writer.sendHeader(std::move(header));
             if (!headerResult) {
                 HTTP_LOG_ERROR("[send] [header-fail]",
@@ -1684,7 +1685,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
             response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(fileSize));
 
             // 发送响应头（只发送头部，不包含 body）
-            HttpResponseHeader header = response.header();
+            HttpResponseHeader header = response.header().clone();
             auto headerResult = co_await writer.sendHeader(std::move(header));
             if (!headerResult) {
                 HTTP_LOG_ERROR("[send] [header-fail]",
@@ -1760,7 +1761,8 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
     auto writer = conn.getWriter();
 
     // 构建 206 Partial Content 响应
-    auto responseBuilder = Http1_1ResponseBuilder()
+    Http1_1ResponseBuilder responseBuilder;
+    responseBuilder
         .status(HttpStatusCode::PartialContent_206)
         .header("Content-Type", mimeType)
         .header("Content-Range", HttpRangeParser::makeContentRange(range, fileSize))
@@ -1773,7 +1775,7 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
     auto response = responseBuilder.buildMove();
 
     // 发送响应头
-    HttpResponseHeader header = response.header();
+    HttpResponseHeader header = response.header().clone();
     auto headerResult = co_await writer.sendHeader(std::move(header));
     if (!headerResult) {
         HTTP_LOG_ERROR("[send] [header-fail]",
@@ -1884,7 +1886,8 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
 
     // 构建 206 Partial Content 响应（multipart/byteranges）
     std::string boundary = rangeResult.boundary;
-    auto responseBuilder = Http1_1ResponseBuilder()
+    Http1_1ResponseBuilder responseBuilder;
+    responseBuilder
         .status(HttpStatusCode::PartialContent_206)
         .header("Content-Type", "multipart/byteranges; boundary=" + boundary)
         .header("Last-Modified", lastModified)
@@ -1917,7 +1920,7 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
     response.header().headerPairs().addHeaderPair("Content-Length", std::to_string(totalLength));
 
     // 发送响应头
-    HttpResponseHeader header = response.header();
+    HttpResponseHeader header = response.header().clone();
     auto headerResult = co_await writer.sendHeader(std::move(header));
     if (!headerResult) {
         HTTP_LOG_ERROR("[send] [header-fail]",

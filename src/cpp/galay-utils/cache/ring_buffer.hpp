@@ -822,6 +822,25 @@ public:
     RingBuffer& operator=(RingBuffer&& other) noexcept = default;
 
     /**
+     * @brief 显式复制当前可读内容到新的独立环形缓冲区
+     * @return 容量一致、可读字节序列一致的缓冲区副本
+     * @note 复制不保留内部读写索引形状，只保证后续 read() 的字节序列一致。
+     */
+    [[nodiscard]] RingBuffer clone() const {
+        RingBuffer copy(capacity());
+        std::array<std::span<const std::byte>, 2> spans{};
+        const size_t span_count = readSpans(spans);
+        for (size_t index = 0; index < span_count; ++index) {
+            const size_t written = copy.write(spans[index].data(), spans[index].size());
+            if (written != spans[index].size()) {
+                copy.clear();
+                return copy;
+            }
+        }
+        return copy;
+    }
+
+    /**
      * @brief 获取可读字节数
      * @return 可读字节数
      */

@@ -72,6 +72,14 @@ public:
     MongoValue(Binary value);           ///< 构造 Binary 值
     MongoValue(MongoDocument value);    ///< 构造嵌套 Document 值
     MongoValue(MongoArray value);       ///< 构造 Array 值
+    MongoValue(MongoValue&&) noexcept = default;             ///< 移动构造，转移 BSON 值所有权
+    MongoValue& operator=(MongoValue&&) noexcept = default;  ///< 移动赋值，转移 BSON 值所有权
+
+    /**
+     * @brief 显式深拷贝 BSON 值
+     * @return 独立副本；嵌套 Document/Array 会递归 clone，不共享可变状态
+     */
+    [[nodiscard]] MongoValue clone() const;
 
     /// @name 工厂方法（用于 BSON 特殊类型，保留类型信息）
     /// @{
@@ -181,6 +189,9 @@ public:
     /// @}
 
 private:
+    MongoValue(const MongoValue&) = delete;
+    MongoValue& operator=(const MongoValue&) = delete;
+
     using DocumentPtr = std::shared_ptr<MongoDocument>;  ///< 文档共享指针类型
     using ArrayPtr = std::shared_ptr<MongoArray>;        ///< 数组共享指针类型
     using Storage = std::variant<std::nullptr_t,
@@ -215,12 +226,20 @@ class MongoArray
 {
 public:
     MongoArray() = default;
+    MongoArray(MongoArray&&) noexcept = default;             ///< 移动构造，转移数组元素所有权
+    MongoArray& operator=(MongoArray&&) noexcept = default;  ///< 移动赋值，转移数组元素所有权
 
     /**
      * @brief 从已有值列表构造
      * @param values 值列表
      */
     explicit MongoArray(std::vector<MongoValue> values);
+
+    /**
+     * @brief 显式深拷贝数组
+     * @return 元素递归 clone 后的新数组
+     */
+    [[nodiscard]] MongoArray clone() const;
 
     /**
      * @brief 追加一个元素
@@ -273,6 +292,9 @@ public:
     std::vector<MongoValue>& values();
 
 private:
+    MongoArray(const MongoArray&) = delete;
+    MongoArray& operator=(const MongoArray&) = delete;
+
     std::vector<MongoValue> m_values;  ///< 底层值存储
 };
 
@@ -287,12 +309,20 @@ public:
     using Field = std::pair<std::string, MongoValue>;  ///< 字段类型（键值对）
 
     MongoDocument() = default;
+    MongoDocument(MongoDocument&&) noexcept = default;             ///< 移动构造，转移字段所有权
+    MongoDocument& operator=(MongoDocument&&) noexcept = default;  ///< 移动赋值，转移字段所有权
 
     /**
      * @brief 从已有字段列表构造
      * @param fields 字段列表
      */
     explicit MongoDocument(std::vector<Field> fields);
+
+    /**
+     * @brief 显式深拷贝文档
+     * @return 字段值递归 clone 后的新文档
+     */
+    [[nodiscard]] MongoDocument clone() const;
 
     /**
      * @brief 追加字段（不检查重复键）
@@ -370,6 +400,9 @@ public:
     std::vector<Field>& fields();
 
 private:
+    MongoDocument(const MongoDocument&) = delete;
+    MongoDocument& operator=(const MongoDocument&) = delete;
+
     std::vector<Field> m_fields;  ///< 底层字段存储
 };
 
@@ -381,12 +414,20 @@ class MongoReply
 {
 public:
     MongoReply() = default;
+    MongoReply(MongoReply&&) noexcept = default;             ///< 移动构造，转移响应文档所有权
+    MongoReply& operator=(MongoReply&&) noexcept = default;  ///< 移动赋值，转移响应文档所有权
 
     /**
      * @brief 从原始响应文档构造
      * @param document 服务端响应文档
      */
     explicit MongoReply(MongoDocument document);
+
+    /**
+     * @brief 显式深拷贝响应
+     * @return 响应文档 clone 后的新响应
+     */
+    [[nodiscard]] MongoReply clone() const;
 
     /**
      * @brief 获取原始响应文档
@@ -425,6 +466,9 @@ public:
     std::string errorMessage() const;
 
 private:
+    MongoReply(const MongoReply&) = delete;
+    MongoReply& operator=(const MongoReply&) = delete;
+
     MongoDocument m_document;  ///< 原始响应文档
 };
 

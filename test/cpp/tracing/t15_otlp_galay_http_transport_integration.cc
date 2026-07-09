@@ -29,7 +29,8 @@ galay::tracing::Span makeSpan(std::string_view name) {
 galay::kernel::Task<galay::tracing::ExportResult> exportOnSchedulerThread() {
     auto transport = galay::tracing::makeGalayHttpOtlpTransport();
     galay::tracing::OtlpHttpExporter exporter({}, transport);
-    const std::vector spans{makeSpan("scheduler-thread")};
+    std::vector<galay::tracing::Span> spans;
+    spans.push_back(makeSpan("scheduler-thread"));
 
     co_return exporter.exportSpans(std::span<const galay::tracing::Span>(spans));
 }

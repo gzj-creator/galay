@@ -6,6 +6,16 @@
 namespace galay::mongo::protocol
 {
 
+MongoCommandBuilder MongoCommandBuilder::clone() const
+{
+    MongoCommandBuilder copy;
+    copy.reserve(m_commands.size());
+    for (const auto& command : m_commands) {
+        copy.append(command.clone());
+    }
+    return copy;
+}
+
 void MongoCommandBuilder::clear() noexcept
 {
     m_commands.clear();

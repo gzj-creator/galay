@@ -36,6 +36,12 @@ namespace galay::redis
         RedisValue& operator=(const RedisValue&) = delete; ///< 禁止拷贝赋值
 
         /**
+         * @brief 显式克隆 RedisValue
+         * @return 独立复制后的 RedisValue，转换缓存会按需重建
+         */
+        [[nodiscard]] RedisValue clone() const;
+
+        /**
          * @brief 从错误消息创建 RedisValue
          * @param error_msg 错误消息
          * @return 包含错误信息的 RedisValue
@@ -139,6 +145,7 @@ namespace galay::redis
         RedisAsyncValue& operator=(RedisAsyncValue&& other) noexcept; ///< 移动赋值
         RedisAsyncValue(const RedisAsyncValue&) = delete;      ///< 禁止拷贝
         RedisAsyncValue& operator=(const RedisAsyncValue&) = delete; ///< 禁止拷贝赋值
+        [[nodiscard]] RedisAsyncValue clone() const;           ///< 显式克隆异步值
         ~RedisAsyncValue() = default;
     };
 }
