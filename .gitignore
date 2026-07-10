@@ -52,6 +52,7 @@ coverage/
 *.profraw
 *.profdata
 benchmark/results/
+test_results/
 
 # Logs
 *.log

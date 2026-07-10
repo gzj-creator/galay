@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.1.0] - 2026-07-10
+
 ### Changed
 
 - **Linux 性能构建与同机压测口径落地**：新增 `linux-perf-release` CMake preset，使用 `RelWithDebInfo`、`-O2` 与 frame pointer 构建全模块 benchmark；在 Tencent 4C4G Linux 上补跑 clean `HEAD` baseline 与当前快照 5 轮同 workload 压测，记录 HTTP static、HTTP2 static、route match、writer layout、sendfile、utils、Redis pool 与 RPC cancel notify 的可比结果，并确认 current 构建 warning 为 0。
