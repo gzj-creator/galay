@@ -9,15 +9,18 @@
  * @example
  * @code
  * // 创建服务
- * auto echoService = std::make_shared<EchoService>();
+ * EchoService echoService;
  *
  * // 启动服务器
  * auto server = RpcServerBuilder()
  *     .host("0.0.0.0")
  *     .port(9000)
  *     .build();
- * server.registerService(echoService);
- * server.start();
+ * auto registered = server.registerService(echoService);
+ * if (!registered) {
+ *     return;
+ * }
+ * auto started = server.start();
  * @endcode
  */
 
@@ -33,10 +36,9 @@
 #include "../../galay-kernel/async/tcp_socket.h"
 #include <array>
 #include <cstdint>
-#include <memory>
+#include <expected>
 #include <optional>
 #include <string_view>
-#include <unordered_map>
 #include <atomic>
 
 #if defined(__linux__)
@@ -135,6 +137,8 @@ private:
  */
 class RpcServer {
 public:
+    static constexpr size_t kMaxRegisteredServices = 64;  ///< 单个服务器最多注册的服务数
+
     /**
      * @brief 构造函数
      * @param config 服务器配置
@@ -153,31 +157,122 @@ public:
 
     /**
      * @brief 注册服务
-     * @param service 服务实例
+     * @param service 服务实例；服务器不取得所有权，实例必须存活到服务器停止之后
+     * @return 成功返回void；服务名为空或重复时返回INVALID_REQUEST，容量耗尽时返回RESOURCE_EXHAUSTED
+     * @note 注册表使用固定内联存储，调用过程不执行堆分配；仅可在start()之前调用
      */
-    void registerService(std::shared_ptr<RpcService> service) {
-        m_services[service->name()] = std::move(service);
+    std::expected<void, RpcError> registerService(RpcService& service) {
+        if (m_running.load(std::memory_order_acquire)) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                            "Cannot register RPC service after server start"));
+        }
+        if (service.name().empty()) {
+            return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                            "RPC service name is empty"));
+        }
+        const size_t initial_index = serviceBucketIndex(service.name());
+        for (size_t probe = 0; probe < m_services.size(); ++probe) {
+            RpcService*& slot = m_services[(initial_index + probe) % m_services.size()];
+            if (slot == nullptr) {
+                slot = &service;
+                return {};
+            }
+            if (slot->name() == service.name()) {
+                return std::unexpected(RpcError(RpcErrorCode::INVALID_REQUEST,
+                                                "Duplicate RPC service name"));
+            }
+        }
+        return std::unexpected(RpcError(RpcErrorCode::RESOURCE_EXHAUSTED,
+                                        "RPC service registry capacity exceeded"));
     }
 
     /**
      * @brief 启动服务器
+     * @return 成功返回void；runtime、socket、bind、listen或任务调度失败时返回RpcError
+     * @note 返回成功时监听socket已经完成bind/listen；该函数不阻塞等待accept循环结束
      */
-    void start() {
+    std::expected<void, RpcError> start() {
+        if (m_running.load(std::memory_order_acquire)) {
+            return {};
+        }
         RPC_LOG_INFO("[server] [start]",
                      "host={} port={} backlog={}",
                      m_config.host,
                      m_config.port,
                      m_config.backlog);
-        m_running.store(true, std::memory_order_release);
-        m_runtime.start();
+        m_last_error.reset();
 
+        auto runtime_started = m_runtime.start();
+        if (!runtime_started.has_value()) {
+            RpcError error(RpcErrorCode::INTERNAL_ERROR,
+                           runtime_started.error().message());
+            RPC_LOG_ERROR("[server] [runtime] [start-fail]",
+                          "error={}", error.message());
+            return std::unexpected(std::move(error));
+        }
+
+        auto listener_result = TcpSocket::create(IPType::IPV4);
+        if (!listener_result.has_value()) {
+            RpcError error = RpcError::from(listener_result.error());
+            RPC_LOG_ERROR("[server] [socket] [create-fail]",
+                          "error={}", error.message());
+            m_runtime.stop();
+            return std::unexpected(std::move(error));
+        }
+        TcpSocket listener = std::move(*listener_result);
+
+        auto reuse_addr_result = listener.option().handleReuseAddr();
+        if (!reuse_addr_result.has_value()) {
+            RpcError error = RpcError::from(reuse_addr_result.error());
+            RPC_LOG_ERROR("[server] [socket] [reuseaddr-fail]",
+                          "error={}", error.message());
+            m_runtime.stop();
+            return std::unexpected(std::move(error));
+        }
+        auto non_block_result = listener.option().handleNonBlock();
+        if (!non_block_result.has_value()) {
+            RpcError error = RpcError::from(non_block_result.error());
+            RPC_LOG_ERROR("[server] [socket] [nonblock-fail]",
+                          "error={}", error.message());
+            m_runtime.stop();
+            return std::unexpected(std::move(error));
+        }
+
+        Host host(IPType::IPV4, m_config.host, m_config.port);
+        auto bind_result = listener.bind(host);
+        if (!bind_result.has_value()) {
+            RpcError error = RpcError::from(bind_result.error());
+            RPC_LOG_ERROR("[server] [bind] [fail]",
+                          "host={} port={} error={}",
+                          m_config.host,
+                          m_config.port,
+                          error.message());
+            m_runtime.stop();
+            return std::unexpected(std::move(error));
+        }
+        auto listen_result = listener.listen(m_config.backlog);
+        if (!listen_result.has_value()) {
+            RpcError error = RpcError::from(listen_result.error());
+            RPC_LOG_ERROR("[server] [listen] [fail]",
+                          "port={} backlog={} error={}",
+                          m_config.port,
+                          m_config.backlog,
+                          error.message());
+            m_runtime.stop();
+            return std::unexpected(std::move(error));
+        }
+
+        m_running.store(true, std::memory_order_release);
         auto* scheduler = m_runtime.getNextIOScheduler();
-        if (!scheduleTask(scheduler, acceptLoop())) {
-            m_last_error = RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule accept loop");
+        if (!scheduleTask(scheduler, acceptLoop(std::move(listener)))) {
+            RpcError error(RpcErrorCode::INTERNAL_ERROR,
+                           "Failed to schedule accept loop");
             RPC_LOG_ERROR("[server] [schedule] [fail]", "accept-loop");
             m_running.store(false, std::memory_order_release);
             m_runtime.stop();
+            return std::unexpected(std::move(error));
         }
+        return {};
     }
 
     /**
@@ -203,8 +298,8 @@ public:
     Runtime& runtime() { return m_runtime; }
 
     /**
-     * @brief 获取最近一次服务器错误（若有）
-     * @note 非线程安全：仅用于单线程启动阶段查询错误。
+     * @brief 获取最近一次异步运行错误（若有）
+     * @note 非线程安全，仅保留兼容诊断用途；启动失败必须读取start()返回值。
      */
     std::optional<RpcError> lastError() const {
         return m_last_error;
@@ -230,6 +325,11 @@ private:
             hash *= kFnvPrime;
         }
         return hash;
+    }
+
+    static size_t serviceBucketIndex(std::string_view service_name) {
+        return static_cast<size_t>(hashAppend(kFnvOffset, service_name) %
+                                   kMaxRegisteredServices);
     }
 
     static uint64_t buildRouteHash(std::string_view service_name,
@@ -323,67 +423,27 @@ private:
     }
 
     std::expected<RpcMethodHandler*, RpcErrorCode> resolveMethodHandler(const RpcRequest& request) {
-        auto service_it = m_services.find(request.serviceName());
-        if (service_it == m_services.end()) {
-            return std::unexpected(RpcErrorCode::SERVICE_NOT_FOUND);
+        const size_t initial_index = serviceBucketIndex(request.serviceName());
+        for (size_t probe = 0; probe < m_services.size(); ++probe) {
+            RpcService* service = m_services[(initial_index + probe) % m_services.size()];
+            if (service == nullptr) {
+                break;
+            }
+            if (service->name() == request.serviceName()) {
+                auto* handler = service->findMethod(request.methodName(), request.callMode());
+                if (handler == nullptr) {
+                    return std::unexpected(RpcErrorCode::METHOD_NOT_FOUND);
+                }
+                return handler;
+            }
         }
-
-        auto& service = service_it->second;
-        auto* handler = service->findMethod(request.methodName(), request.callMode());
-        if (handler == nullptr) {
-            return std::unexpected(RpcErrorCode::METHOD_NOT_FOUND);
-        }
-
-        return handler;
+        return std::unexpected(RpcErrorCode::SERVICE_NOT_FOUND);
     }
 
     /**
      * @brief 接受连接循环
      */
-    Task<void> acceptLoop() {
-        m_last_error.reset();
-
-        TcpSocket listener(IPType::IPV4);
-        auto reuse_addr_result = listener.option().handleReuseAddr();
-        if (!reuse_addr_result) {
-            m_last_error = RpcError::from(reuse_addr_result.error());
-            RPC_LOG_ERROR("[server] [socket] [reuseaddr-fail]",
-                          "error={}",
-                          m_last_error->message());
-            co_return;
-        }
-        auto non_block_result = listener.option().handleNonBlock();
-        if (!non_block_result) {
-            m_last_error = RpcError::from(non_block_result.error());
-            RPC_LOG_ERROR("[server] [socket] [nonblock-fail]",
-                          "error={}",
-                          m_last_error->message());
-            co_return;
-        }
-
-        Host host(IPType::IPV4, m_config.host, m_config.port);
-        auto bind_result = listener.bind(host);
-        if (!bind_result) {
-            m_last_error = RpcError::from(bind_result.error());
-            RPC_LOG_ERROR("[server] [bind] [fail]",
-                          "host={} port={} error={}",
-                          m_config.host,
-                          m_config.port,
-                          m_last_error->message());
-            co_return;
-        }
-
-        auto listen_result = listener.listen(m_config.backlog);
-        if (!listen_result) {
-            m_last_error = RpcError::from(listen_result.error());
-            RPC_LOG_ERROR("[server] [listen] [fail]",
-                          "port={} backlog={} error={}",
-                          m_config.port,
-                          m_config.backlog,
-                          m_last_error->message());
-            co_return;
-        }
-
+    Task<void> acceptLoop(TcpSocket listener) {
         while (m_running.load(std::memory_order_acquire)) {
             Host client_host;
             auto accept_result = co_await listener.accept(&client_host);
@@ -630,9 +690,9 @@ private:
 private:
     RpcServerConfig m_config;          ///< 服务器配置
     Runtime m_runtime;                 ///< 运行时
-    std::unordered_map<std::string, std::shared_ptr<RpcService>> m_services;  ///< 服务注册表
-    std::atomic<bool> m_running{false}; ///< 运行标志
+    std::array<RpcService*, kMaxRegisteredServices> m_services{};  ///< 无所有权、无分配服务注册表
     std::optional<RpcError> m_last_error; ///< 最后一次错误
+    std::atomic<bool> m_running{false}; ///< 运行标志
 };
 
 inline RpcServer RpcServerBuilder::build() const { return RpcServer(m_config); }

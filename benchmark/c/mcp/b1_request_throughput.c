@@ -1,6 +1,7 @@
 #include <galay/c/galay-mcp-c/mcp_c.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 static galay_status_t bench_tool(const char* arguments,
@@ -18,9 +19,9 @@ static galay_status_t bench_tool(const char* arguments,
         "{\"content\":[{\"type\":\"text\",\"text\":\"ok\"}],\"isError\":false}");
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
-    const int iterations = 1000;
+    int iterations = 1000;
     galay_mcp_server_t* server = NULL;
     galay_mcp_client_config_t* config = NULL;
     galay_mcp_client_t* client = NULL;
@@ -28,6 +29,15 @@ int main(void)
     clock_t started = 0;
     clock_t finished = 0;
     int exit_code = 0;
+
+    if (argc > 1) {
+        char* end = NULL;
+        const long parsed = strtol(argv[1], &end, 10);
+        if (end == argv[1] || *end != '\0' || parsed <= 0 || parsed > 100000000L) {
+            return 2;
+        }
+        iterations = (int)parsed;
+    }
 
     if (galay_mcp_stdio_server_create(&server) != GALAY_OK ||
         galay_mcp_server_add_tool(server,
@@ -59,7 +69,8 @@ int main(void)
         exit_code = 1;
         goto cleanup;
     }
-    if (printf("mcp stdio call throughput: %.2f ops/sec\n",
+    if (printf("mcp in_process_dispatch requests=%d throughput=%.2f ops/sec\n",
+               iterations,
                (double)iterations / ((double)(finished - started) / CLOCKS_PER_SEC)) < 0) {
         exit_code = 1;
     }

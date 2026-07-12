@@ -47,10 +47,11 @@ std::atomic<uint64_t> g_send_fail{0};
 std::atomic<uint64_t> g_recv_fail{0};
 std::atomic<uint64_t> g_peer_closed{0};
 
-void configureBenchmarkTlsContext(SslContext& ctx) {
+bool configureBenchmarkTlsContext(SslContext& ctx) {
     ctx.disableSessionCache();
     ctx.setSessionTimeout(0);
     ctx.disableSessionTickets();
+    return ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value();
 }
 
 std::string benchmarkCertPath(const char* name) {
@@ -265,7 +266,12 @@ void runClientThread(const std::string& host, uint16_t port,
         return;
     }
 
-    configureBenchmarkTlsContext(ctx);
+    if (!configureBenchmarkTlsContext(ctx)) {
+        metrics.errors += static_cast<uint64_t>(connections);
+        metrics.connections_done += static_cast<uint64_t>(connections);
+        mergeThreadMetrics(metrics);
+        return;
+    }
 
     // 加载CA证书，即使不验证（用于建立信任链）
     auto caResult = ctx.loadCACertificate(benchmarkCertPath("ca.crt"));

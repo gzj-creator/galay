@@ -7,7 +7,6 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <thread>
 
@@ -63,11 +62,28 @@ int main()
         .ioSchedulerCount(1)
         .computeSchedulerCount(0)
         .build();
-    server.registerService(std::make_shared<ManagedExampleService>());
-    server.start();
+    ManagedExampleService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register managed example service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto server_started = server.start();
+    if (!server_started.has_value()) {
+        std::cerr << "failed to start managed example server: "
+                  << server_started.error().message() << "\n";
+        return 1;
+    }
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    runtime.start();
+    auto runtime_started = runtime.start();
+    if (!runtime_started.has_value()) {
+        server.stop();
+        std::cerr << "failed to start managed example runtime: "
+                  << runtime_started.error().message() << "\n";
+        return 1;
+    }
     auto scheduled = runtime.spawn(runClient(port));
     if (!scheduled.has_value()) {
         runtime.stop();

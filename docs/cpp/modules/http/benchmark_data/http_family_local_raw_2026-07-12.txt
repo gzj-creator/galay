@@ -1,0 +1,47 @@
+HTTP family local fresh transcript — 2026-07-12
+
+Environment
+  OS: Darwin arm64 25.3.0
+  compiler: AppleClang 17.0.0
+  CMake: 4.0.2
+  OpenSSL linked by Galay: 3.6.2
+  wrk: 4.2.0
+  build: /tmp/galay-build-agent-http-20260712-full (Release)
+  ports: HTTP 18880, static 18881, HTTPS 18944, httpd 18082
+
+Galay native HTTP client, 100 persistent connections, 10 seconds
+  total_requests=1470435 success=1470435 failure=0
+  qps=146984.71 throughput=14.30MB/s avg=0.68ms
+  p50=0.66ms p90=1.08ms p95=1.20ms p99=1.37ms max=3.57ms
+
+wrk HTTP fixed 2-byte keep-alive, -t4 -c100 -d5s
+  run1: 58113.13 req/s p50=1.31ms p99=9.52ms
+  run2: 151719.18 req/s p50=602us p99=1.24ms
+  run3: 150513.16 req/s p50=606us p99=1.26ms
+
+wrk HTTPS fixed 2-byte keep-alive, -t4 -c100 -d5s
+  run1: 149324.82 req/s p50=428us p99=4.62ms timeout=1
+  run2: 169110.94 req/s p50=386us p99=1.80ms timeout=0
+  run3: 172002.95 req/s p50=383us p99=1.55ms timeout=0
+
+HTTPS negotiated transport
+  Protocol version: TLSv1.3
+  Ciphersuite: TLS_AES_256_GCM_SHA384
+  Peer certificate: CN=localhost (self-signed test certificate)
+  Signature type: rsa_pss_rsae_sha256
+  Negotiated TLS1.3 group: X25519MLKEM768
+
+Galay static 2-byte file, real stat+open+read+close, wrk -t4 -c100 -d10s
+  543649 requests in 10.10s
+  53813.26 req/s p50=1.85ms p99=3.77ms socket_errors=0
+
+Apache httpd 2.4.62 event MPM, same 2-byte file and wrk shape
+  run1: 48237.27 req/s p50=1.64ms p99=11.32ms read_errors=1
+  run2: 48261.73 req/s p50=1.56ms p99=13.89ms read_errors=3
+  Both runs are invalid for ranking because the correctness gate requires zero socket errors.
+
+C HTTP fresh targets
+  benchmark_c_http_client_server_throughput 100 -> exit 3, no output
+  benchmark_c_http_chunk_latency 100 -> exit 3, no output
+
+Raw command outputs remain in /tmp/galay-http-bench-20260712/ for this workspace session.

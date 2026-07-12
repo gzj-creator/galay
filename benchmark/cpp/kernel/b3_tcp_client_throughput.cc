@@ -71,7 +71,6 @@ std::vector<uint32_t> g_connect_samples_us;
 std::mutex g_connect_errors_mu;
 std::unordered_map<uint64_t, uint64_t> g_connect_error_hist;
 galay::benchmark::CompletionLatch* g_connected_latch = nullptr;
-galay::benchmark::StartGate* g_start_gate = nullptr;
 
 struct BenchConfig {
     std::string host = "127.0.0.1";
@@ -242,10 +241,6 @@ Task<void> benchClient(const BenchConfig& config, [[maybe_unused]] int clientId)
         co_return;
     }
 
-    if (g_start_gate != nullptr) {
-        g_start_gate->wait();
-    }
-
     // 准备测试数据
     std::string message(config.messageSize, 'X');
     char recvBuffer[8192];
@@ -285,8 +280,12 @@ void statsThread(const BenchConfig& config) {
         !g_connected_latch->waitFor(std::chrono::seconds(5))) {
         std::cout << "[warmup] connection gate timed out, starting with available clients" << std::endl;
     }
-    if (!config.connectOnly && g_start_gate != nullptr) {
-        g_start_gate->open();
+    if (!config.connectOnly) {
+        // 连接协程不能在事件循环线程上阻塞等待统一起跑；连接完成后直接进入
+        // echo 热身，并在正式计时前清零吞吐计数。
+        g_total_requests.store(0, std::memory_order_relaxed);
+        g_total_bytes.store(0, std::memory_order_relaxed);
+        g_success_count.store(0, std::memory_order_relaxed);
     }
 
     auto startTime = std::chrono::steady_clock::now();
@@ -424,9 +423,7 @@ int main(int argc, char* argv[]) {
 
     scheduler.start();
     galay::benchmark::CompletionLatch connected_latch(static_cast<std::size_t>(config.connections));
-    galay::benchmark::StartGate start_gate;
     g_connected_latch = &connected_latch;
-    g_start_gate = &start_gate;
 
     // 启动统计线程
     std::thread stats(statsThread, std::ref(config));
@@ -440,7 +437,6 @@ int main(int argc, char* argv[]) {
     // 等待统计线程结束
     stats.join();
     g_connected_latch = nullptr;
-    g_start_gate = nullptr;
 
     // 等待一下让所有协程完成
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

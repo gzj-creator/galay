@@ -1,0 +1,12 @@
+implementation,api,scenario,backend,connections,payload_bytes,metric,value,unit,status,note
+galay-ssl,C++,tls13_steady_state,kqueue,16,1024,round_trips_per_second,59479.6,req/s,ok,"1000 rounds/connection; TLS_AES_128_GCM_SHA256"
+galay-ssl,C++,tls13_steady_state,kqueue,16,1024,plaintext_throughput,116.171,MiB/s,ok,"in-process hot path"
+galay-ssl,C++,tls13_echo,kqueue,32,1024,requests_per_second,109589,req/s,ok,"1000 requests/connection; one server worker; errors=0"
+galay-ssl,C++,tls13_echo,kqueue,32,1024,plaintext_duplex_throughput,214.041,MiB/s,ok,"TLS_AES_128_GCM_SHA256; tickets/cache disabled"
+galay-ssl,C++,tls13_new_handshake,kqueue,5602,0,connections_per_real_second,933.667,conn/s,probe,"openssl s_time; 6 real seconds; fixed AES-128-GCM"
+galay-ssl,C++,tls13_new_handshake,kqueue,5602,0,connections_per_user_second,4668.33,conn/user-s,probe,"openssl s_time -new"
+openssl-3.6.2,C,tls13_new_handshake,kqueue,5683,0,connections_per_real_second,947.167,conn/s,probe,"openssl s_server/s_time; 6 real seconds; no_ticket; fixed AES-128-GCM"
+openssl-3.6.2,C,tls13_new_handshake,kqueue,5683,0,connections_per_user_second,4735.83,conn/user-s,probe,"same s_time client and certificate"
+galay-ssl,C,tls13_echo_smoke,kqueue,1,4,iterations,64,count,ok,"256 bytes each direction; correctness smoke, not throughput ranking"
+galay-ssl,C++,tls13_steady_state,epoll,16,1024,round_trips_per_second,22377.6,req/s,baseline_only,"Remote Linux GCC14 Release; 1000 rounds/connection; TLS_AES_128_GCM_SHA256"
+galay-ssl,C++,tls13_steady_state,epoll,16,1024,plaintext_throughput,43.7063,MiB/s,baseline_only,"Single remote Galay probe; no same-run OpenSSL steady-state competitor"

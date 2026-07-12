@@ -10,6 +10,7 @@
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <string_view>
 #include <thread>
 #include <galay/cpp/galay-kernel/async/udp_socket.h>
 #include <galay/cpp/galay-kernel/core/task.h>
@@ -39,7 +40,7 @@ std::atomic<bool> g_running{true};
 
 // 配置参数
 constexpr int NUM_SERVER_WORKERS = 4;      // 服务器工作协程数量
-constexpr int SERVER_PORT = 9090;          // 服务器端口
+int g_server_port = 9090;                  // 服务器端口
 
 // 全局调度器指针，用于信号处理
 IOScheduler* g_scheduler = nullptr;
@@ -63,7 +64,7 @@ Task<void> udpServerWorker(int worker_id) {
     setsockopt(socket.handle().fd, SOL_SOCKET, SO_RCVBUF,
                &recv_buf_size, sizeof(recv_buf_size));
 
-    Host bindHost(IPType::IPV4, "0.0.0.0", SERVER_PORT);
+    Host bindHost(IPType::IPV4, "0.0.0.0", g_server_port);
     auto bindResult = socket.bind(bindHost);
     if (!bindResult) {
         LogError("Worker {}: Failed to bind", worker_id);
@@ -71,7 +72,7 @@ Task<void> udpServerWorker(int worker_id) {
     }
 
     if (worker_id == 0) {
-        LogInfo("UDP Server workers started on 0.0.0.0:{}", SERVER_PORT);
+        LogInfo("UDP Server workers started on 0.0.0.0:{}", g_server_port);
     }
 
     char buffer[65536];
@@ -144,9 +145,23 @@ void statsReporter() {
 
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+    if (argc == 2 && std::string_view(argv[1]) == "--help") {
+        std::cout << "Usage: " << argv[0] << " [port]\n";
+        return 0;
+    }
+    if (argc > 2) {
+        return 1;
+    }
+    if (argc == 2) {
+        const int parsed_port = std::atoi(argv[1]);
+        if (parsed_port < 1 || parsed_port > 65535) {
+            return 1;
+        }
+        g_server_port = parsed_port;
+    }
     LogInfo("UDP Echo Server (Benchmark Mode)");
-    LogInfo("Configuration: {} workers, port {}", NUM_SERVER_WORKERS, SERVER_PORT);
+    LogInfo("Configuration: {} workers, port {}", NUM_SERVER_WORKERS, g_server_port);
 
     // 注册信号处理
     signal(SIGINT, signalHandler);

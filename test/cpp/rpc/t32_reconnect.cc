@@ -54,7 +54,10 @@ bool callPayloadEquals(const AwaitResult& result, const std::string& expected)
     return result->value()->isOk() && std::string(payload.begin(), payload.end()) == expected;
 }
 
-Task<void> startServerLater(uint16_t port, std::shared_ptr<RpcServer>* server_slot)
+Task<void> startServerLater(uint16_t port,
+                            std::shared_ptr<RpcServer>* server_slot,
+                            ReconnectService* service,
+                            TestState* state)
 {
     co_await sleep(std::chrono::milliseconds(60));
     auto server = std::make_shared<RpcServer>(RpcServerBuilder()
@@ -63,8 +66,20 @@ Task<void> startServerLater(uint16_t port, std::shared_ptr<RpcServer>* server_sl
         .ioSchedulerCount(1)
         .computeSchedulerCount(0)
         .buildConfig());
-    server->registerService(std::make_shared<ReconnectService>());
-    server->start();
+    auto registered = server->registerService(*service);
+    if (!registered.has_value()) {
+        state->ok = false;
+        state->error = registered.error().message();
+        state->done.store(true, std::memory_order_release);
+        co_return;
+    }
+    auto started = server->start();
+    if (!started.has_value()) {
+        state->ok = false;
+        state->error = started.error().message();
+        state->done.store(true, std::memory_order_release);
+        co_return;
+    }
     *server_slot = std::move(server);
     co_return;
 }
@@ -114,11 +129,17 @@ int main()
 {
     const uint16_t port = loopbackPort();
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    runtime.start();
+    auto runtime_started = runtime.start();
+    if (!runtime_started.has_value()) {
+        std::cerr << "failed to start reconnect runtime: "
+                  << runtime_started.error().message() << "\n";
+        return 1;
+    }
 
     std::shared_ptr<RpcServer> server;
-    auto starter = runtime.spawn(startServerLater(port, &server));
+    ReconnectService service;
     TestState state;
+    auto starter = runtime.spawn(startServerLater(port, &server, &service, &state));
     auto client = runtime.spawn(runReconnectClient(port, &state));
     if (!starter.has_value() || !client.has_value()) {
         runtime.stop();

@@ -75,7 +75,7 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "RingBuffer size: " << ring_buffer_size << " bytes\n";
 
-    auto service = std::make_shared<BenchEchoService>();
+    BenchEchoService service;
 
     auto server = RpcServerBuilder()
         .host("0.0.0.0")
@@ -84,8 +84,18 @@ int main(int argc, char* argv[]) {
         .backlog(kDefaultBacklog)
         .ringBufferSize(ring_buffer_size)
         .build();
-    server.registerService(service);
-    server.start();
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register benchmark service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto started = server.start();
+    if (!started.has_value()) {
+        std::cerr << "failed to start benchmark server: "
+                  << started.error().message() << "\n";
+        return 1;
+    }
 
     std::cout << "Server started. Press Ctrl+C to stop.\n";
 

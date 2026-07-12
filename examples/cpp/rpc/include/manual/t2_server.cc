@@ -86,8 +86,8 @@ int main(int argc, char* argv[]) {
     std::cout << "Starting RPC Server on port " << port << "...\n";
 
     // 创建服务
-    auto echoService = std::make_shared<EchoService>();
-    auto calcService = std::make_shared<CalcService>();
+    EchoService echoService;
+    CalcService calcService;
 
     // 启动服务器
     auto server = RpcServerBuilder()
@@ -96,9 +96,21 @@ int main(int argc, char* argv[]) {
         .ioSchedulerCount(2)
         .computeSchedulerCount(1)
         .build();
-    server.registerService(echoService);
-    server.registerService(calcService);
-    server.start();
+    auto echo_registered = server.registerService(echoService);
+    if (!echo_registered.has_value()) {
+        std::cerr << "Failed to register EchoService: " << echo_registered.error().message() << "\n";
+        return 1;
+    }
+    auto calc_registered = server.registerService(calcService);
+    if (!calc_registered.has_value()) {
+        std::cerr << "Failed to register CalcService: " << calc_registered.error().message() << "\n";
+        return 1;
+    }
+    auto started = server.start();
+    if (!started.has_value()) {
+        std::cerr << "Failed to start RPC server: " << started.error().message() << "\n";
+        return 1;
+    }
 
     std::cout << "RPC Server started. Press Ctrl+C to stop.\n";
     std::cout << "Registered services:\n";

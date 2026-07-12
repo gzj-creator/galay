@@ -11,6 +11,22 @@
 
 ## [Unreleased]
 
+### Added
+
+- **新增同 wire 的 libuv TCP/UDP echo 基线**：增加可选 `benchmark_c_kernel_libuv_echo_server`，通过 pkg-config 探测 libuv，并以单事件循环、相同 Galay client/wire workload 输出连接、吞吐与错误计数，支持在 kqueue / epoll 上进行可审计的同后端探针。
+- **归档 2026-07-12 跨协议 fresh benchmark 证据**：新增 kernel、HTTP、HTTP2、WS、SSL、MCP 与 RPC 的 CSV/TXT 原始记录，明确编译器、后端、协议形态、正确性门禁、blocked 原因及“仅基线/不参与排名”等状态。
+- **新增 RPC 服务器错误边界测试与注册压力 benchmark**：覆盖无 `shared_ptr` 注册表面、重复/容量耗尽错误、bind 失败同步返回及 stopped 状态；压力基准对 unary/stream 注册执行 128 万次验证，成功路径保持零堆分配。
+
+### Changed
+
+- **收敛 benchmark 公平性与可复现参数**：MCP benchmark 支持请求数参数并改用单调时钟；kernel TCP client 移除事件循环线程上的阻塞起跑门，UDP server 支持端口参数；SSL 吞吐与 steady-state 场景固定 TLS 1.3 AES-128-GCM ciphersuite并处理配置失败。
+- **明确 HTTP2/RPC 竞品对照边界**：h2load 脚本按工具能力启用 histogram，缺失时显式标记 percentile unavailable，并将 nghttpd echo 降级为互操作参考而非排名对象；RPC 脚本支持外部 build/result 目录，区分 network 与 in-process 场景，仅允许相同自定义 wire 的 fixture 参与排名，gRPC 仅作为不同协议 sidecar 状态记录。
+
+### Fixed
+
+- **RPC 服务器注册与启动改为显式错误传播**：`RpcServer` / `RpcStreamServer` 使用借用的 `RpcService&` 和固定 64 槽开放寻址表，移除注册所需的 `shared_ptr` 控制块与容器分配；注册返回 `std::expected<void, RpcError>`，显式报告空名称、重复、启动后注册和容量耗尽。
+- **RPC 启动成功语义对齐监听就绪**：`start()` 改为 `std::expected<void, RpcError>`，依次检查 runtime、socket、选项、bind、listen 与 accept-loop 调度，只有监听完成后才设置 running；同步更新 unary/stream 测试、benchmark、include/import 示例及 API 文档以处理所有返回值。
+
 ## [v4.1.0] - 2026-07-10
 
 ### Changed

@@ -90,15 +90,23 @@ int main(int argc, char* argv[]) {
     std::cout << "=== Echo RPC Server Example ===\n\n";
 
     // 创建服务
-    auto echoService = std::make_shared<EchoService>();
+    EchoService echoService;
 
     // 创建并启动服务器
     auto server = RpcServerBuilder()
         .host("0.0.0.0")
         .port(port)
         .build();
-    server.registerService(echoService);
-    server.start();
+    auto registered = server.registerService(echoService);
+    if (!registered.has_value()) {
+        std::cerr << "Failed to register service: " << registered.error().message() << "\n";
+        return 1;
+    }
+    auto started = server.start();
+    if (!started.has_value()) {
+        std::cerr << "Failed to start RPC server: " << started.error().message() << "\n";
+        return 1;
+    }
 
     std::cout << "Server listening on port " << port << "\n";
     std::cout << "Available methods:\n";

@@ -255,11 +255,28 @@ int main()
         .ioSchedulerCount(1)
         .computeSchedulerCount(0)
         .build();
-    server.registerService(std::make_shared<StreamLoopbackService>());
-    server.start();
+    StreamLoopbackService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register stream loopback service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto server_started = server.start();
+    if (!server_started.has_value()) {
+        std::cerr << "failed to start stream loopback server: "
+                  << server_started.error().message() << "\n";
+        return 1;
+    }
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    runtime.start();
+    auto runtime_started = runtime.start();
+    if (!runtime_started.has_value()) {
+        server.stop();
+        std::cerr << "failed to start stream loopback runtime: "
+                  << runtime_started.error().message() << "\n";
+        return 1;
+    }
 
     StreamResult state;
     if (!scheduleTask(runtime.getNextIOScheduler(), runStreamClient(port, &state))) {

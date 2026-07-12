@@ -1,0 +1,137 @@
+Transport benchmark raw summary, 2026-07-12
+===========================================
+
+Environment
+-----------
+commit: b227c20 (working tree dirty because this benchmark delivery and parallel agents were active)
+OS: macOS 26.3.1 (Darwin 25.3.0), arm64, Apple M4 Pro
+compiler: Apple clang 17.0.0
+cmake: 4.0.2
+libuv: 1.51.0
+libevent: 2.1.12-stable (available, not run in this probe)
+OpenSSL: 3.6.2
+build: build-agent-transport, Release, C/C++ benchmarks ON, C API ON
+backend: kqueue local probe; these results are not Linux/epoll claims
+
+TCP benchmark defect reproduced before the fix
+-----------------------------------------------
+The original client called StartGate::wait() inside the IO coroutine. With 32
+connections it printed "connection gate timed out" and all connect samples were
+about five seconds (p50=5005052 us). This was scheduler blocking, not connect
+latency. After the benchmark-only fix, the measured p50 was 883 us in the Galay
+run and 404 us against the libuv server.
+
+Galay C++ TCP, port 19202
+-------------------------
+command:
+  benchmark_kernel_tcp_server_throughput 19202 1
+  benchmark_kernel_tcp_client_throughput -h 127.0.0.1 -p 19202 -c 32 -s 1024 -d 5
+
+result:
+  Total Requests: 219199
+  Errors: 0
+  Average QPS: 43839
+  Average Throughput: 85.6246 MB/s
+  Connect Success: 32/32
+  Connect Latency(us): avg=790.219 p50=883 p90=1100 p99=1147 max=1163
+
+libuv TCP, port 19210, same Galay client
+-----------------------------------------
+command:
+  benchmark_c_kernel_libuv_echo_server tcp 19210
+  benchmark_kernel_tcp_client_throughput -h 127.0.0.1 -p 19210 -c 32 -s 1024 -d 5
+
+result:
+  libuv meta: version=1.51.0 backend=kqueue loops=1
+  Total Requests: 632235
+  Errors: 0
+  Average QPS: 126447
+  Average Throughput: 246.967 MB/s
+  Connect Success: 32/32
+  Connect Latency(us): avg=450.438 p50=404 p90=588 p99=632 max=671
+
+Galay C++ UDP, port 19223
+-------------------------
+command:
+  benchmark_kernel_udp_server_throughput 19223
+  benchmark_kernel_udp_client_throughput -h 127.0.0.1 -p 19223 -c 100 -m 1000000 -s 256 -d 5
+
+result:
+  Test Duration: 5.611 seconds
+  Total Packets Sent: 682360
+  Total Packets Received: 677207
+  Packet Loss Rate: 0.755173%
+  Received: 120693 pkt/s (29.466 MiB/s)
+  server: 682360 received / 682360 sent
+
+libuv UDP, port 19222, same Galay client
+-----------------------------------------
+command:
+  benchmark_c_kernel_libuv_echo_server udp 19222
+  benchmark_kernel_udp_client_throughput -h 127.0.0.1 -p 19222 -c 100 -m 1000000 -s 256 -d 5
+
+result:
+  libuv meta: version=1.51.0 backend=kqueue loops=1
+  Test Duration: 5.614 seconds
+  Total Packets Sent: 847140
+  Total Packets Received: 844170
+  Packet Loss Rate: 0.350591%
+  Received: 150369 pkt/s (36.7111 MiB/s)
+  server: 847140 echo requests, errors=0
+
+C API local loopback baselines
+------------------------------
+command:
+  benchmark_c_kernel_coro_tcp_echo_throughput -s 1024 -d 5 --io-schedulers 1
+result:
+  requests=222156 qps=44431.19 throughput_mb_per_sec=86.780
+  p50_us=16.00 p90_us=34.00 p99_us=120.00 errors=0
+
+command:
+  benchmark_c_kernel_udp_socket_throughput -s 256 -d 5 --io-schedulers 2
+result:
+  sent_datagrams=1383464 recv_datagrams=1383464
+  throughput_mb_s=67.485 errors=0
+
+Fairness notes
+--------------
+1. Galay and libuv server comparisons use the same Galay client binary, payload,
+   connection/client count, duration, loopback interface, and echo bytes.
+2. Both servers use one event loop. Galay UDP uses four worker coroutines on that
+   loop; libuv uses one receive callback on one loop.
+3. The libuv UDP common path reuses a fixed 64 KiB receive buffer and calls
+   uv_udp_try_send. It allocates only on the asynchronous fallback path.
+4. The machine was not isolated and results are single local probes. Do not turn
+   the ratios into a release ranking; repeat randomized runs on dedicated Linux
+   epoll hardware before publishing a competitive claim.
+
+Remote Linux/GCC14 epoll post-fix probes
+----------------------------------------
+environment:
+  Ubuntu Linux 6.8 x86_64, 4 cores
+  GCC 14.2, Release -O3 -DNDEBUG
+  libuv 1.48.0, epoll
+
+Galay C++ TCP, port 19300:
+  benchmark_kernel_tcp_server_throughput 19300 1
+  benchmark_kernel_tcp_client_throughput -h 127.0.0.1 -p 19300 -c 32 -s 1024 -d 5
+  requests=334090 qps=66818 duplex=130.504 MiB/s errors=0
+  connect p50=837us p90=1441us p99=1599us
+
+libuv TCP, port 19301, same Galay client:
+  requests=364494 qps=72898 duplex=142.380 MiB/s errors=0
+  connect p50=1114us p90=1865us p99=2048us
+
+Galay C++ UDP, port 19310:
+  clients=100 payload=256B duration=5.6s
+  sent=779250 received=776045 receive_rate=138579 datagrams/s loss=0.411293%
+
+libuv UDP, port 19311, same Galay client:
+  sent=722030 received=717035 receive_rate=128042 datagrams/s loss=0.691800%
+
+Remote raw files remain under:
+  /tmp/galay-bench-root-20260712/results-root/linux_tcp_*_fixed.txt
+  /tmp/galay-bench-root-20260712/results-root/linux_udp_*_fixed.txt
+
+These are still single loopback probes on a small shared VM. They validate that
+the corrected harness works on epoll, but are not a publishable seven-run ranking.

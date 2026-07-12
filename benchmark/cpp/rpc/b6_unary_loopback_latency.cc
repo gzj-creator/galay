@@ -129,11 +129,28 @@ int main(int argc, char* argv[])
         .ioSchedulerCount(1)
         .computeSchedulerCount(0)
         .build();
-    server.registerService(std::make_shared<BenchLoopbackService>());
-    server.start();
+    BenchLoopbackService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register loopback benchmark service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto server_started = server.start();
+    if (!server_started.has_value()) {
+        std::cerr << "failed to start loopback benchmark server: "
+                  << server_started.error().message() << "\n";
+        return 1;
+    }
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    runtime.start();
+    auto runtime_started = runtime.start();
+    if (!runtime_started.has_value()) {
+        server.stop();
+        std::cerr << "failed to start loopback benchmark runtime: "
+                  << runtime_started.error().message() << "\n";
+        return 1;
+    }
 
     BenchResult result;
     if (!scheduleTask(runtime.getNextIOScheduler(), runBenchmarkClient(port, iterations, &result))) {

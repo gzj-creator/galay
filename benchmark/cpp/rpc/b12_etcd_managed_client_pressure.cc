@@ -8,7 +8,6 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -190,8 +189,19 @@ int main(int argc, char** argv)
         .ioSchedulerCount(server_io_schedulers)
         .computeSchedulerCount(0)
         .build();
-    server.registerService(std::make_shared<BenchEtcdEchoService>());
-    server.start();
+    BenchEtcdEchoService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register etcd pressure service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto started = server.start();
+    if (!started.has_value()) {
+        std::cerr << "failed to start etcd pressure server: "
+                  << started.error().message() << "\n";
+        return 1;
+    }
 
     RpcEndpointInfo info;
     info.host = "127.0.0.1";
@@ -232,7 +242,12 @@ int main(int argc, char** argv)
         .ioSchedulerCount(client_io_schedulers)
         .computeSchedulerCount(0)
         .build();
-    runtime.start();
+    auto runtime_started = runtime.start();
+    if (!runtime_started.has_value()) {
+        cleanup();
+        return fail("failed to start pressure runtime: " +
+                    std::string(runtime_started.error().message()));
+    }
 
     std::vector<BenchState> states(concurrency);
     std::vector<JoinHandle<void>> handles;

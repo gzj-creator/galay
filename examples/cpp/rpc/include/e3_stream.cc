@@ -120,8 +120,17 @@ int main(int argc, char* argv[]) {
         .ioSchedulerCount(resolved_io_count)
         .ringBufferSize(ring_buffer_size)
         .build();
-    server.registerService(std::make_shared<StreamExampleService>());
-    server.start();
+    StreamExampleService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "Failed to register stream service: " << registered.error().message() << "\n";
+        return 1;
+    }
+    auto started = server.start();
+    if (!started.has_value()) {
+        std::cerr << "Failed to start stream server: " << started.error().message() << "\n";
+        return 1;
+    }
 
     std::cout << "=== Stream RPC Server Example ===\n";
     std::cout << "listen: 0.0.0.0:" << port << "\n";

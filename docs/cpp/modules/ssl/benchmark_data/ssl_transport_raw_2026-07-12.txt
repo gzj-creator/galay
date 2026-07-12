@@ -1,0 +1,80 @@
+SSL benchmark raw summary, 2026-07-12
+=====================================
+
+Environment matches transport_raw_2026-07-12.txt. All ranked TLS entries use
+OpenSSL 3.6.2, TLS 1.3, TLS_AES_128_GCM_SHA256, the same certificate/key, and no
+session reuse. Galay explicitly disables its session cache and tickets; native
+OpenSSL s_server uses -no_ticket. Results are local macOS/kqueue probes.
+
+Galay steady-state hot path
+---------------------------
+command:
+  build-agent-transport/benchmark/cpp/ssl/benchmark_ssl_tls_steady_state
+result:
+  Connections: 16, rounds/conn: 1000, payload bytes: 1024
+  Client send/recv ops: 16000/16000
+  Server recv/send ops: 16000/16000
+  elapsed: 269 ms
+  Echo round-trips/sec: 59479.6
+  plaintext throughput: 116.171 MiB/s
+
+Galay external echo server/client, port 19443
+------------------------------------------------
+command:
+  benchmark_ssl_tls_server_throughput 19443 server.crt server.key 4096 1
+  benchmark_ssl_tls_client_throughput 127.0.0.1 19443 32 1000 1024 1 3
+result:
+  Total requests: 32000
+  Total errors: 0
+  Duration: 292 ms
+  Requests/sec: 109589
+  Throughput: 214.041 MB/s
+
+New TLS 1.3 handshake comparison
+--------------------------------
+Galay command:
+  benchmark_ssl_tls_server_throughput 19444 server.crt server.key 4096 1
+  openssl s_time -connect 127.0.0.1:19444 -new -tls1_3 \
+    -ciphersuites TLS_AES_128_GCM_SHA256 -time 5 \
+    -no-CAfile -no-CApath -no-CAstore
+Galay result:
+  5602 connections in 1.20s; 4668.33 connections/user sec
+  5602 connections in 6 real seconds
+
+OpenSSL command:
+  openssl s_server -quiet -tls1_3 -no_ticket -accept 127.0.0.1:19445 \
+    -cert server.crt -key server.key \
+    -ciphersuites TLS_AES_128_GCM_SHA256
+  openssl s_time -connect 127.0.0.1:19445 -new -tls1_3 \
+    -ciphersuites TLS_AES_128_GCM_SHA256 -time 5 \
+    -no-CAfile -no-CApath -no-CAstore
+OpenSSL result:
+  5683 connections in 1.20s; 4735.83 connections/user sec
+  5683 connections in 6 real seconds
+
+The Galay server reached 98.57% of native OpenSSL by real-second connection
+count in this single run. This is a handshake-only probe, not TLS echo or HTTPS.
+
+C API smoke
+-----------
+command:
+  benchmark_c_ssl_tls_echo_throughput
+result:
+  tls echo iterations=64 server_bytes=256 client_bytes=256
+
+The C API target proves the C TLS echo path but does not expose enough iterations
+or timing to support a throughput comparison, so it is excluded from rankings.
+
+Remote Linux/GCC14 epoll steady-state probe
+-------------------------------------------
+command:
+  benchmark_ssl_tls_steady_state
+result:
+  connections=16 rounds_per_connection=1000 payload_bytes=1024
+  client_send_recv=16000/16000 server_recv_send=16000/16000
+  elapsed=715ms round_trips_per_second=22377.6
+  plaintext_throughput=43.7063 MiB/s
+
+This row confirms the fixed TLS_AES_128_GCM_SHA256 benchmark on Linux/GCC14.
+It is a single Galay baseline and has no same-run native OpenSSL steady-state
+fixture, so it is not used for a competitive ratio.

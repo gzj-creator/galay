@@ -1,0 +1,7 @@
+implementation,protocol,scenario,metric,value,unit,status,notes
+galay-http2,h2c,local_appleclang_release_build,exit_code,2,count,blocked,"AppleClang 17/libc++ rejects std::atomic<std::shared_ptr<const std::string>> in h2_static_file.h; production source is outside this benchmark-only task"
+galay-c-http2,h2c,local_appleclang_release_build,exit_code,2,count,blocked,"Depends on galay-http2, so no fresh C h2 target was produced; C HTTP/2 interoperability/ranking was not attempted"
+galay-http2,h2c,linux_epoll_post_echo_1kb,requests_per_second,251007,req/s,baseline_only,"Root-agent remote GCC14 Release; h2load nghttp2/1.59.0 -t2 -c20 -m100, warmup 2s + 10s; mean request 6.88ms; 0 failed; raw results-root/h2c_h2load.txt"
+galay-http2,h2_tls,linux_epoll_post_echo_1kb,requests_per_second,198261,req/s,baseline_only,"Root-agent remote GCC14 Release; same h2load shape; TLS1.3 AES128-GCM, ALPN h2; mean request 8.16ms; 0 failed; raw results-root/h2tls_h2load.txt"
+note,h2c_and_h2_tls,latency_percentiles,,text,unavailable,"Remote h2load 1.59.0 lacks --histogram; do not mix its mean latency with local h2load 1.69 percentile data"
+note,nghttpd_echo_upload,competitor_ranking,,text,disabled,"nghttpd --echo-upload is retained only as an interoperability/reference probe; the script no longer prints a Galay/nghttpd ratio or winner"

@@ -50,6 +50,7 @@ H2LOAD_THREADS_LIST="${H2LOAD_THREADS_LIST:-$H2LOAD_THREADS}"
 H2LOAD_CLIENTS_LIST="${H2LOAD_CLIENTS_LIST:-20 40 80}"
 H2LOAD_MAX_STREAMS_LIST="${H2LOAD_MAX_STREAMS_LIST:-100 250}"
 NGHTTPD_EXTRA_ARGS="${NGHTTPD_EXTRA_ARGS:-}"
+H2LOAD_SUPPORTS_HISTOGRAM=0
 
 TMP_DIR="$(mktemp -d)"
 PAYLOAD_FILE="$TMP_DIR/payload"
@@ -170,7 +171,12 @@ parse_h2load() {
     failed="$(awk '/^requests:/ { for (i = 1; i <= NF; i++) if ($i == "failed,") print $(i - 1) }' "$output" | tail -n1)"
     errored="$(awk '/^requests:/ { for (i = 1; i <= NF; i++) if ($i == "errored,") print $(i - 1) }' "$output" | tail -n1)"
     timeout="$(awk '/^requests:/ { for (i = 1; i <= NF; i++) if ($i == "timeout") print $(i - 1) }' "$output" | tail -n1)"
-    read -r p95 p99 < <(awk '/^request[[:space:]]*:/ { print $6, $7 }' "$output" | tail -n1)
+    if [[ "$H2LOAD_SUPPORTS_HISTOGRAM" == "1" ]]; then
+        read -r p95 p99 < <(awk '/^request[[:space:]]*:/ { print $6, $7 }' "$output" | tail -n1)
+    else
+        p95="unavailable"
+        p99="unavailable"
+    fi
 
     printf "%s %s %s %s %s %s\n" \
         "${req_s:-0}" "${p95:-n/a}" "${p99:-n/a}" \
@@ -193,6 +199,9 @@ run_h2load_case() {
 
     local h2load_args=()
     h2load_args=(-t"$H2LOAD_THREADS" -c"$H2LOAD_CLIENTS" -m"$H2LOAD_MAX_STREAMS")
+    if [[ "$H2LOAD_SUPPORTS_HISTOGRAM" == "1" ]]; then
+        h2load_args+=(--histogram)
+    fi
     if [[ -n "$H2LOAD_WINDOW_BITS" ]]; then
         h2load_args+=(-w"$H2LOAD_WINDOW_BITS")
     fi
@@ -200,21 +209,21 @@ run_h2load_case() {
     set +e
     if [[ -n "$H2LOAD_REQUESTS" ]]; then
         if [[ "$method" == "POST" ]]; then
-            h2load -n"$H2LOAD_REQUESTS" --histogram \
+            h2load -n"$H2LOAD_REQUESTS" \
                 "${h2load_args[@]}" \
                 -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
         else
-            h2load -n"$H2LOAD_REQUESTS" --histogram \
+            h2load -n"$H2LOAD_REQUESTS" \
                 "${h2load_args[@]}" \
                 "http://$HOST:$port$path" >"$output" 2>&1
         fi
     else
         if [[ "$method" == "POST" ]]; then
-            h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
+            h2load -D"$DURATION" --warm-up-time="$WARM_UP" \
                 "${h2load_args[@]}" \
                 -d "$PAYLOAD_FILE" "http://$HOST:$port$path" >"$output" 2>&1
         else
-            h2load -D"$DURATION" --warm-up-time="$WARM_UP" --histogram \
+            h2load -D"$DURATION" --warm-up-time="$WARM_UP" \
                 "${h2load_args[@]}" \
                 "http://$HOST:$port$path" >"$output" 2>&1
         fi
@@ -373,28 +382,28 @@ run_post_echo_best_matrix() {
     run_post_echo_best_for_impl "galay" "$summary_file"
     run_post_echo_best_for_impl "nghttpd" "$summary_file"
 
-    local galay_req nghttpd_req
-    galay_req="$(awk '$1 == "galay" { print $2 }' "$summary_file" | tail -n1)"
-    nghttpd_req="$(awk '$1 == "nghttpd" { print $2 }' "$summary_file" | tail -n1)"
-
     echo
-    printf "%-10s %12s %10s %10s %10s %10s %12s %14s %18s %16s %8s %8s\n" \
-        "impl" "best_req/s" "p95" "p99" "avg_cpu%" "max_cpu%" "max_rss_mib" \
+    printf "%-10s %-15s %12s %10s %10s %10s %10s %12s %14s %18s %16s %8s %8s\n" \
+        "impl" "role" "best_req/s" "p95" "p99" "avg_cpu%" "max_cpu%" "max_rss_mib" \
         "server_threads" "server_max_streams" "h2load_threads" "clients" "streams"
     awk '{
-        printf "%-10s %12s %10s %10s %10s %10s %12s %14s %18s %16s %8s %8s\n",
-               $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+        role = ($1 == "nghttpd") ? "reference_only" : "candidate"
+        printf "%-10s %-15s %12s %10s %10s %10s %10s %12s %14s %18s %16s %8s %8s\n",
+               $1, role, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
     }' "$summary_file"
-    awk -v galay="$galay_req" -v nghttpd="$nghttpd_req" 'BEGIN {
-        if (nghttpd > 0) {
-            printf "\ngalay/nghttpd best req/s ratio: %.2fx\n", galay / nghttpd
-        }
-    }'
+    echo
+    echo "ranking: disabled; nghttpd --echo-upload is a demo interoperability reference, not a scalable echo competitor"
 }
 
 require_cmd h2load
 require_cmd nghttpd
 require_cmd ps
+
+H2LOAD_HELP="$(h2load --help 2>&1)"
+if grep -q -- '--histogram' <<<"$H2LOAD_HELP"; then
+    H2LOAD_SUPPORTS_HISTOGRAM=1
+fi
+unset H2LOAD_HELP
 
 if [[ "$MODE" != "--post-echo" &&
       "$MODE" != "--post-echo-best" &&
@@ -423,13 +432,19 @@ fi
 
 printf "hello-h2c-mux" >"$PAYLOAD_FILE"
 
-echo "HTTP/2 h2load external comparison"
+echo "HTTP/2 h2load external probe"
 echo "h2load:  $(h2load --version)"
 echo "nghttpd: $(nghttpd --version)"
+if [[ "$H2LOAD_SUPPORTS_HISTOGRAM" == "1" ]]; then
+    echo "latency_percentiles=p95,p99"
+else
+    echo "latency_percentiles=unavailable"
+fi
 echo "build:   $BUILD_DIR (CMAKE_BUILD_TYPE=$BUILD_TYPE)"
 echo "payload: $(wc -c <"$PAYLOAD_FILE" | tr -d ' ') bytes"
 if [[ "$MODE" == "--post-echo" || "$MODE" == "--post-echo-best" ]]; then
     echo "mode:    POST echo"
+    echo "fairness: nghttpd --echo-upload is a reference-only interoperability probe; do not use for competitor ranking"
     if [[ "$MODE" == "--post-echo-best" ]]; then
         echo "matrix:  server_threads=[$SERVER_IO_THREADS_LIST], server_max_streams=[$SERVER_MAX_STREAMS_LIST]"
         echo "matrix:  h2load_threads=[$H2LOAD_THREADS_LIST], clients=[$H2LOAD_CLIENTS_LIST], streams=[$H2LOAD_MAX_STREAMS_LIST]"
@@ -483,7 +498,7 @@ if [[ "$MODE" == "--post-echo" ]]; then
         --echo-upload "$NGHTTPD_PORT" >"$TMP_DIR/nghttpd.server.log" 2>&1 &
     NGHTTPD_PID="$!"
     wait_for_port "$NGHTTPD_PORT"
-    run_h2load_case "nghttpd-echo-upload" "$NGHTTPD_PORT" "$NGHTTPD_PID" "/echo" "POST"
+    run_h2load_case "nghttpd-echo-upload-ref" "$NGHTTPD_PORT" "$NGHTTPD_PID" "/echo" "POST"
     kill "$NGHTTPD_PID" 2>/dev/null || true
     wait "$NGHTTPD_PID" 2>/dev/null || true
     NGHTTPD_PID=""

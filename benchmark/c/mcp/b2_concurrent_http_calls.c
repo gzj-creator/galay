@@ -3,6 +3,7 @@
 #include <galay/c/galay-mcp-c/mcp_c.h>
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 typedef struct BenchmarkState {
@@ -60,7 +61,13 @@ static void client_entry(void* arg)
     }
 }
 
-int main(void)
+static double elapsed_seconds(struct timespec started, struct timespec finished)
+{
+    return (double)(finished.tv_sec - started.tv_sec) +
+        (double)(finished.tv_nsec - started.tv_nsec) / 1000000000.0;
+}
+
+int main(int argc, char** argv)
 {
     C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
     galay_kernel_runtime_t runtime = {0};
@@ -73,9 +80,21 @@ int main(void)
     const char* host = NULL;
     uint16_t port = 0;
     char url[128];
-    clock_t started = 0;
-    clock_t finished = 0;
+    struct timespec started = {0};
+    struct timespec finished = {0};
+    int64_t join_timeout_ms = 5000;
     int exit_code = 0;
+
+    state.requests = 1000;
+    if (argc > 1) {
+        char* end = NULL;
+        const long parsed = strtol(argv[1], &end, 10);
+        if (end == argv[1] || *end != '\0' || parsed < 2 || parsed > 1000000L) {
+            return 2;
+        }
+        state.requests = (int)parsed;
+    }
+    join_timeout_ms += (int64_t)state.requests * 2;
 
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
@@ -100,21 +119,30 @@ int main(void)
 
     state.server = server;
     state.client = client;
-    state.requests = 33;
-    started = clock();
+    if (clock_gettime(CLOCK_MONOTONIC, &started) != 0) {
+        exit_code = 1;
+        goto cleanup;
+    }
     if (galay_coro_spawn(&runtime, server_entry, &state, NULL, &server_task).code != C_IOResultOk ||
         galay_coro_spawn(&runtime, client_entry, &state, NULL, &client_task).code != C_IOResultOk ||
-        galay_coro_join(&client_task, 5000).code != C_IOResultOk ||
-        galay_coro_join(&server_task, 5000).code != C_IOResultOk ||
+        galay_coro_join(&client_task, join_timeout_ms).code != C_IOResultOk ||
+        galay_coro_join(&server_task, join_timeout_ms).code != C_IOResultOk ||
         state.failed != 0 ||
         state.calls != state.requests - 1) {
         exit_code = 1;
         goto cleanup;
     }
-    finished = clock();
-    if (printf("mcp http calls: %d requests in %.2f sec\n",
+    if (clock_gettime(CLOCK_MONOTONIC, &finished) != 0) {
+        exit_code = 1;
+        goto cleanup;
+    }
+    const double seconds = elapsed_seconds(started, finished);
+    if (seconds <= 0.0 ||
+        printf("mcp http_post_keepalive requests=%d tool_calls=%d seconds=%.6f throughput=%.2f req/s\n",
                state.requests,
-               (double)(finished - started) / CLOCKS_PER_SEC) < 0) {
+               state.calls,
+               seconds,
+               (double)state.requests / seconds) < 0) {
         exit_code = 1;
     }
 

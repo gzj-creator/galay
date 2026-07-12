@@ -689,14 +689,15 @@ public:
 ```cpp
 class RpcServer {
 public:
+    static constexpr size_t kMaxRegisteredServices = 64;
     explicit RpcServer(const RpcServerConfig& config);
     ~RpcServer();  // 自动调用 stop()
 
-    // 注册服务（启动前调用）
-    void registerService(std::shared_ptr<RpcService> service);
+    // 注册借用的服务实例（启动前调用，不执行堆分配）
+    std::expected<void, RpcError> registerService(RpcService& service);
 
-    // 启动服务器（非阻塞，内部启动 Runtime 和 accept 循环）
-    void start();
+    // 完成 Runtime/socket/bind/listen 后启动 accept 循环
+    std::expected<void, RpcError> start();
 
     // 停止服务器
     void stop();
@@ -707,7 +708,7 @@ public:
     // 获取内部 Runtime
     Runtime& runtime();
 
-    // 获取最近一次启动/运行错误
+    // 获取最近一次异步运行错误；启动失败读取 start() 返回值
     std::optional<RpcError> lastError() const;
 };
 ```
@@ -715,19 +716,25 @@ public:
 补充说明：
 
 - 头文件中的 `RouteCacheEntry` 是 `RpcServer` 私有路由缓存项，只用于最近命中优化；它不会出现在注册 / 调用公共接口里，也不应被业务代码持有。
+- `registerService` 不取得所有权，服务实例必须存活到服务器停止之后；服务名为空、重复或超过 64 个时通过 `std::expected` 返回错误。
+- `start()` 返回成功时监听 socket 已完成 `bind/listen`；runtime、socket、bind、listen 或 accept-loop 调度失败会直接返回 `RpcError`。
 
 **使用示例：**
 
 ```cpp
-auto service = std::make_shared<EchoService>();
+EchoService service;
 
 RpcServerConfig config;
 config.host = "0.0.0.0";
 config.port = 9000;
 
 RpcServer server(config);
-server.registerService(service);
-server.start();
+if (auto registered = server.registerService(service); !registered) {
+    return 1;
+}
+if (auto started = server.start(); !started) {
+    return 1;
+}
 
 // 等待停止信号
 while (server.isRunning()) {
@@ -1089,10 +1096,11 @@ public:
 
 class RpcStreamServer {
 public:
+    static constexpr size_t kMaxRegisteredServices = 64;
     explicit RpcStreamServer(const RpcStreamServerConfig& config);
     ~RpcStreamServer();
-    void registerService(std::shared_ptr<RpcService> service);
-    void start();
+    std::expected<void, RpcError> registerService(RpcService& service);
+    std::expected<void, RpcError> start();
     void stop();
     bool isRunning() const;
     Runtime& runtime();

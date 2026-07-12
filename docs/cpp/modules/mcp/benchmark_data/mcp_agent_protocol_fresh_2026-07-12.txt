@@ -1,0 +1,46 @@
+# fresh Release MCP audit (AppleClang 17, macOS arm64)
+build_dir=/tmp/galay-build-agent-protocol
+cmake_build_type=Release
+cxx_flags=-O3 -DNDEBUG
+
+## In-process dispatch (not OS stdio pipe)
+command=benchmark_c_mcp_request_throughput 200000
+requests=200000
+throughput_ops_per_second=996830.08
+scope=in-process-stdio-loopback-dispatch
+
+## Real HTTP POST over loopback, one initialized keep-alive client
+command=benchmark_c_mcp_concurrent_http_calls 1000
+requests=1000
+tool_calls=999
+seconds=0.092376
+throughput_requests_per_second=10825.32
+scope=real-http-post-keepalive-loopback
+correctness=999-tool-handlers-invoked;zero-call-errors
+
+## JSON and registration internal paths
+command=benchmark_mcp_json_document_parse_throughput 200000
+parses_per_second=6073970
+average_ns_per_parse=164.637
+parser_object_allocations=0
+checksum=1407000
+scope=in-process-json-document-parse
+
+command=benchmark_mcp_registration_move_pressure 100
+stdio_registration_elapsed_us=193174
+http_registration_elapsed_us=190405
+total_callable_copies=0
+scope=in-process-registration-ownership
+
+## Invalid result excluded
+command=benchmark_mcp_policy_defaults
+output=Elapsed:0us
+status=invalid
+reason=timer-resolution-or-constant-folding;not-a-publishable-throughput-result
+
+## Transport/competitor status
+cpp_stdio_pipe=blocked:no-matching-bidirectional-server-fixture-for-add-and-file-test-workload
+cpp_http_client=blocked:no-matching-echo-and-example-resource-benchmark-server-fixture
+official_node_sdk=blocked:not-installed
+official_python_sdk=blocked:not-installed
+official_sdk_ranking=not_allowed-unless-transport-and-request-semantics-match

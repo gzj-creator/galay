@@ -288,6 +288,13 @@ int main()
         return 2;
     }
 
+    if (!expect(server_ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value(),
+                "set server TLS 1.3 ciphersuite failed") ||
+        !expect(client_ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value(),
+                "set client TLS 1.3 ciphersuite failed")) {
+        return 2;
+    }
+
     if (!expect(server_ctx.loadCertificate(benchmarkCertPath("server.crt")).has_value(), "load server cert failed") ||
         !expect(server_ctx.loadPrivateKey(benchmarkCertPath("server.key")).has_value(), "load server key failed") ||
         !expect(client_ctx.loadCACertificate(benchmarkCertPath("ca.crt")).has_value(), "load CA failed")) {

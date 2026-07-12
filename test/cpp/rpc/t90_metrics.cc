@@ -7,7 +7,6 @@
 #include <atomic>
 #include <chrono>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -74,11 +73,28 @@ int main()
 {
     const auto p = port();
     auto server = RpcServerBuilder().host("127.0.0.1").port(p).ioSchedulerCount(1).computeSchedulerCount(0).build();
-    server.registerService(std::make_shared<MetricsService>());
-    server.start();
+    MetricsService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register metrics service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto server_started = server.start();
+    if (!server_started.has_value()) {
+        std::cerr << "failed to start metrics server: "
+                  << server_started.error().message() << "\n";
+        return 1;
+    }
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    runtime.start();
+    auto runtime_started = runtime.start();
+    if (!runtime_started.has_value()) {
+        server.stop();
+        std::cerr << "failed to start metrics runtime: "
+                  << runtime_started.error().message() << "\n";
+        return 1;
+    }
     State state;
     auto scheduled = runtime.spawn(run(p, &state));
     if (!scheduled.has_value()) {

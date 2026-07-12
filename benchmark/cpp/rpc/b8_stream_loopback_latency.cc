@@ -191,8 +191,19 @@ int main(int argc, char** argv)
         .computeSchedulerCount(0)
         .ringBufferSize(256 * 1024)
         .build();
-    server.registerService(std::make_shared<StreamBenchService>());
-    server.start();
+    StreamBenchService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register stream loopback benchmark service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto started = server.start();
+    if (!started.has_value()) {
+        std::cerr << "failed to start stream loopback benchmark server: "
+                  << started.error().message() << "\n";
+        return 1;
+    }
 
     Stats stats;
     const auto begin = std::chrono::steady_clock::now();

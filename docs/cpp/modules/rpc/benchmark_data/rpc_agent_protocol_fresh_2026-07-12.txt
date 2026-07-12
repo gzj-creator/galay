@@ -1,0 +1,78 @@
+# fresh Release RPC audit (AppleClang 17, macOS arm64)
+build_dir=/tmp/galay-build-agent-protocol
+cmake_build_type=Release
+cxx_flags=-O3 -DNDEBUG
+
+## Build blocker for network/managed targets
+status=blocked
+compiler=AppleClang 17 libc++
+diagnostic=rpc_call.h:69 std::atomic<std::shared_ptr<RpcCancellationRegistration>> rejected because shared_ptr is not trivially copyable
+affected=managed_client,cancel_notify,connection_pool,and network targets including rpc_call.h
+production_change=not_attempted
+
+## Fresh in-process results (not network RPC QPS)
+command=benchmark_rpc_stream_pressure 20000 256
+frames_per_second=15068300
+bytes_per_second=4098570000
+p50_ns=41
+p99_ns=42
+errors=0
+scope=in-process-stream-frame-validate-and-serialize
+
+command=benchmark_rpc_payload_scaling 20000 256
+qps=3971010
+bytes_per_second=1159540000
+boundary_rejections=100000
+errors=0
+scope=in-process-wire-serialize-deserialize
+
+command=benchmark_rpc_unary_mode_route_cache -n 200000
+lookup_per_second=29128863.47
+p50_ns=0
+p95_ns=42
+p99_ns=42
+errors=0
+scope=in-process-route-cache
+
+command=benchmark_c_rpc_unary_concurrency 200000
+ops_per_second=23421946.36
+scope=C-ABI-envelope-codec-smoke
+
+command=benchmark_c_rpc_streaming_throughput 200000
+frames_per_second=49443757.73
+scope=C-ABI-stream-codec-smoke
+
+## Comparison audit
+same_wire_reference=blocked:not-configured
+grpc_cpp_plugin=blocked:not-installed
+grpc_ranking_allowed=false
+grpc_reason=HTTP2+protobuf wire differs from galay custom frame
+script_302_output=ranking_rule=same-wire-only;grpc_comparison_class=sidecar_not_ranked
+
+## Remote Linux/GCC14 network loopback
+environment=Ubuntu Linux 6.8 x86_64;4 cores;GCC 14.2;Release -O3 -DNDEBUG;epoll
+
+command=benchmark_rpc_unary_loopback_latency 5000
+operations=5000
+errors=0
+elapsed_sec=0.376071
+ops_per_sec=13295.3
+latency_us_p50=72
+latency_us_p90=95
+latency_us_p99=124
+latency_us_max=214
+scope=real-loopback-tcp-unary
+
+command=benchmark_rpc_stream_loopback_latency -n 5000 -s 1024
+connected=1
+echoed=5000
+errors=0
+frames_per_second=16590.72
+throughput_mib_per_second=32.40
+latency_us_p50=57
+latency_us_p95=84
+latency_us_p99=102
+scope=real-loopback-tcp-stream
+
+note=remote rows are single Galay baseline probes; no same-wire competitor fixture was available, so no RPC ranking is published
+raw=/tmp/galay-bench-root-20260712/results-root/rpc_unary_loopback.txt;/tmp/galay-bench-root-20260712/results-root/rpc_stream_loopback.txt

@@ -10,7 +10,6 @@
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
-#include <memory>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -166,8 +165,19 @@ int main()
         .ioSchedulerCount(1)
         .computeSchedulerCount(0)
         .build();
-    server.registerService(std::make_shared<EtcdEchoService>());
-    server.start();
+    EtcdEchoService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register etcd echo service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto server_started = server.start();
+    if (!server_started.has_value()) {
+        std::cerr << "failed to start etcd echo server: "
+                  << server_started.error().message() << "\n";
+        return 1;
+    }
 
     RpcEndpointInfo info;
     info.host = "127.0.0.1";
@@ -224,7 +234,12 @@ int main()
     discovery.set("EtcdEcho", toManagedEndpoints(*discovered));
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    runtime.start();
+    auto runtime_started = runtime.start();
+    if (!runtime_started.has_value()) {
+        cleanup();
+        return fail("failed to start managed client runtime: " +
+                    std::string(runtime_started.error().message()));
+    }
 
     TestState state;
     auto scheduled = runtime.spawn(runManagedCall(&discovery, &state));

@@ -101,8 +101,19 @@ int main(int argc, char* argv[]) {
         .ringBufferSize(ring_buffer_size)
         .backlog(1024)
         .build();
-    server.registerService(std::make_shared<StreamBenchService>());
-    server.start();
+    StreamBenchService service;
+    auto registered = server.registerService(service);
+    if (!registered.has_value()) {
+        std::cerr << "failed to register stream benchmark service: "
+                  << registered.error().message() << "\n";
+        return 1;
+    }
+    auto started = server.start();
+    if (!started.has_value()) {
+        std::cerr << "failed to start stream benchmark server: "
+                  << started.error().message() << "\n";
+        return 1;
+    }
 
     std::cout << "=== RPC Stream Benchmark Server ===\n";
     std::cout << "Port: " << port << "\n";

@@ -45,10 +45,11 @@ struct ServerStartupState {
     std::atomic<int> failed{0};
 };
 
-void configureBenchmarkTlsContext(SslContext& ctx) {
+bool configureBenchmarkTlsContext(SslContext& ctx) {
     ctx.disableSessionCache();
     ctx.setSessionTimeout(0);
     ctx.disableSessionTickets();
+    return ctx.setCiphersuites("TLS_AES_128_GCM_SHA256").has_value();
 }
 
 std::unique_ptr<SslContext> createBenchmarkServerContext(const std::string& certFile,
@@ -58,7 +59,9 @@ std::unique_ptr<SslContext> createBenchmarkServerContext(const std::string& cert
         return nullptr;
     }
 
-    configureBenchmarkTlsContext(*ctx);
+    if (!configureBenchmarkTlsContext(*ctx)) {
+        return nullptr;
+    }
 
     auto certResult = ctx->loadCertificate(certFile);
     if (!certResult) {

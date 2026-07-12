@@ -1,0 +1,83 @@
+# fresh Release WS/WSS run (AppleClang 17, macOS arm64)
+build_dir=/tmp/galay-build-agent-protocol
+cmake_build_type=Release
+cxx_flags=-O3 -DNDEBUG
+note=loopback socket runs required sandbox escalation; all listed runs completed with zero connection failures
+
+## Galay WS echo
+command=benchmark_ws_ws_server_throughput 19185 4 + benchmark_ws_ws_client_throughput 100 5 1024 ws://127.0.0.1:19185/ws
+connections_total=100
+connections_successful=100
+connections_failed=0
+messages_sent=735258
+messages_received=735358
+duration_seconds=5.005
+messages_per_second=146905
+sent_mb_per_second=143.462
+rtt_min_ms=0.010
+rtt_avg_ms=0.679090
+rtt_max_ms=5.198
+
+## Gorilla cross-language reference, same Galay client
+command=GOMAXPROCS=4 gorilla_echo -port 19186 -path /ws + benchmark_ws_ws_client_throughput 100 5 1024 ws://127.0.0.1:19186/ws
+gorilla_version=github.com/gorilla/websocket@v1.5.3
+go_version=go1.24.3
+connections_total=100
+connections_successful=100
+connections_failed=0
+messages_sent=510544
+messages_received=510644
+duration_seconds=5.004
+messages_per_second=102027
+sent_mb_per_second=99.6359
+rtt_min_ms=0.016
+rtt_avg_ms=0.978338
+rtt_max_ms=20.252
+comparison_class=cross-language-reference-not-direct-cpp-ranking
+
+## Galay WSS echo
+command=benchmark_ws_wss_server_throughput 19443 4 test/cpp/ws/test.crt test/cpp/ws/test.key + benchmark_ws_wss_client_throughput wss://127.0.0.1:19443/ws 50 3 1024
+certificate=repository-self-signed
+peer_verification=disabled-by-benchmark-client
+connections_total=50
+connections_successful=50
+connections_failed=0
+messages_sent=511552
+messages_received=511602
+duration_seconds=3.002
+messages_per_second=170404
+sent_mb_per_second=166.410
+rtt_min_ms=0.014
+rtt_avg_ms=0.290666
+rtt_max_ms=10.797
+comparison_class=galay-baseline-only
+
+## Fairness/status
+uwebsockets=blocked:not-installed
+boost_beast=blocked:not-installed
+latency_percentiles=blocked:client-reports-only-min-avg-max
+gorilla_ranking=not_allowed:cross-language-reference-and-no-server-resource-sample
+wss_competitor=blocked:no-direct-comparable-local-fixture
+
+## Remote Linux/GCC14 epoll baselines
+environment=Ubuntu Linux 6.8 x86_64;4 cores;GCC 14.2;Release -O3 -DNDEBUG
+
+command=benchmark_ws_ws_server_throughput 19220 2 on + benchmark_ws_ws_client_throughput 100 10 1024 ws://127.0.0.1:19220/ws
+connections_successful=100
+connections_failed=0
+messages_sent=640195
+messages_received=640291
+messages_per_second=64013.1
+rtt_avg_ms=1.55821
+scope=single-galay-baseline
+
+command=benchmark_ws_wss_server_throughput 19221 2 test/cpp/ws/test.crt test/cpp/ws/test.key on + benchmark_ws_wss_client_throughput wss://127.0.0.1:19221/ws 100 10 1024
+connections_successful=100
+connections_failed=0
+messages_sent=402064
+messages_received=402152
+messages_per_second=39808.3
+rtt_avg_ms=2.31384
+scope=single-galay-baseline
+
+note=remote rows use a different machine and workload duration from the local Gorilla reference; they are not cross-compared
