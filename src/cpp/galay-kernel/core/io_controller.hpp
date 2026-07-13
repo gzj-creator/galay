@@ -318,6 +318,9 @@ struct IOController {
         , m_sequence_owner{other.m_sequence_owner[READ], other.m_sequence_owner[WRITE]}
         , m_sequence_interest_mask(other.m_sequence_interest_mask)
         , m_sequence_armed_mask(other.m_sequence_armed_mask)
+#ifdef USE_KQUEUE
+        , m_simple_armed_mask(other.m_simple_armed_mask)
+#endif
         , m_owner_scheduler(other.m_owner_scheduler.load(std::memory_order_acquire))
 #ifdef USE_EPOLL
         , m_registered_events(other.m_registered_events)
@@ -364,6 +367,9 @@ struct IOController {
             m_sequence_owner[WRITE] = other.m_sequence_owner[WRITE];
             m_sequence_interest_mask = other.m_sequence_interest_mask;
             m_sequence_armed_mask = other.m_sequence_armed_mask;
+#ifdef USE_KQUEUE
+            m_simple_armed_mask = other.m_simple_armed_mask;
+#endif
             m_owner_scheduler.store(other.m_owner_scheduler.load(std::memory_order_acquire),
                                     std::memory_order_release);
 #ifdef USE_EPOLL
@@ -406,6 +412,9 @@ struct IOController {
         m_sequence_owner[WRITE] = nullptr;
         m_sequence_interest_mask = 0;
         m_sequence_armed_mask = 0;
+#ifdef USE_KQUEUE
+        m_simple_armed_mask = 0;
+#endif
         m_owner_scheduler.store(nullptr, std::memory_order_release);
 #ifdef USE_EPOLL
         m_registered_events = 0;
@@ -607,6 +616,9 @@ struct IOController {
     std::atomic<Scheduler*> m_owner_scheduler{nullptr};  ///< direct C TCP I/O 绑定的 owner scheduler；C++ awaitable 不依赖该字段
     uint8_t m_sequence_interest_mask = 0;  ///< sequence 关心的 READ/WRITE 位掩码
     uint8_t m_sequence_armed_mask = 0;  ///< 已经向 reactor 注册的 READ/WRITE 位掩码
+#ifdef USE_KQUEUE
+    uint8_t m_simple_armed_mask = 0;  ///< kqueue 普通 awaitable 需要保留的 READ/WRITE 注册位
+#endif
 #ifdef USE_EPOLL
     uint32_t m_registered_events = 0;          ///< epoll 已注册的事件掩码缓存
 #endif

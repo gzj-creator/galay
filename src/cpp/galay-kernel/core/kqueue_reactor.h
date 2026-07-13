@@ -67,7 +67,7 @@ public:
     /**
      * @brief 将 m_pending_changes 中的 kevent 提交到内核
      * @return 0 成功；-1 失败（已记录 lastError，失败的 batch 会保留待下次重试）
-     * @note 当前运行时主要走立即注册，此接口保留给可选批量场景，并在每轮 follow-up 后尝试提交
+     * @note 简单 awaitable 的注册变更先进入 batch；sequence 仍同步提交以保持时序
      */
     int flushPendingChanges();
 
@@ -77,12 +77,17 @@ private:
     };
 
     void processEvent(struct kevent& ev);  ///< 消费单个 kevent 事件并唤醒对应 awaitable
+    int updateSimpleInterest(IOController* controller,
+                             IOController::Index slot,
+                             bool desired);  ///< 更新普通 awaitable 的逻辑兴趣位，并按需缓存物理 kevent 变更
+    void deleteOneShotRegistration(int fd, int16_t filter);  ///< 删除一次性注册并把非 ENOENT 错误写入 lastError
+    void discardPendingChanges(IOController* controller);  ///< 丢弃指定 controller 尚未提交的注册变更
     int syncSequenceRegistration(IOController* controller);  ///< 同步 sequence awaitable 的注册状态
     int applySequenceInterest(IOController* controller, uint8_t desired_mask);  ///< 把 sequence 感兴趣的读写位应用到 kqueue
     RegistrationEntry* registrationEntryForController(IOController* controller);  ///< 获取 fd 对应的稳定注册入口
     void retireRegistrationEntry(IOController* controller);  ///< 退役 fd 对应注册入口，保留地址以过滤晚到事件
 
-    static constexpr size_t BATCH_THRESHOLD = 32;  ///< 预留给批量注册场景的提交阈值
+    static constexpr size_t BATCH_THRESHOLD = 32;  ///< 达到该数量时提前提交，避免注册延迟无界增长
     static constexpr uintptr_t WAKE_IDENT = 1;  ///< 固定 EVFILT_USER 唤醒标识
 
     int m_kqueue_fd = -1;  ///< kqueue 描述符

@@ -49,7 +49,7 @@ public:
     H2StaticFileBodyCacheSlot& operator=(H2StaticFileBodyCacheSlot&&) = delete;
 
     std::shared_ptr<const std::string> load() const noexcept {
-        return m_body.load(std::memory_order_acquire);
+        return std::atomic_load_explicit(&m_body, std::memory_order_acquire);
     }
 
     bool storeIfEmpty(std::shared_ptr<const std::string> body) noexcept {
@@ -57,14 +57,16 @@ public:
             return false;
         }
         std::shared_ptr<const std::string> expected;
-        return m_body.compare_exchange_strong(expected,
-                                              std::move(body),
-                                              std::memory_order_acq_rel,
-                                              std::memory_order_acquire);
+        return std::atomic_compare_exchange_strong_explicit(
+            &m_body,
+            &expected,
+            std::move(body),
+            std::memory_order_acq_rel,
+            std::memory_order_acquire);
     }
 
 private:
-    std::atomic<std::shared_ptr<const std::string>> m_body;
+    std::shared_ptr<const std::string> m_body;  ///< 通过 shared_ptr 原子自由函数发布和读取
 };
 
 struct H2StaticFileLookup {
