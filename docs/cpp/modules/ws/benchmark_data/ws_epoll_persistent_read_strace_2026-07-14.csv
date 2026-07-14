@@ -1,0 +1,9 @@
+variant,duration_s,client_msg_s,syscall,calls,errors,calls_per_sendmsg
+baseline,10,6632.3,sendmsg,66387,0,1.000000
+baseline,10,6632.3,readv,69896,3528,1.052858
+baseline,10,6632.3,epoll_wait,311,1,0.004685
+baseline,10,6632.3,epoll_ctl,7022,0,0.105774
+optimized,10,6866.7,sendmsg,68731,0,1.000000
+optimized,10,6866.7,readv,71848,3131,1.045349
+optimized,10,6866.7,epoll_wait,301,1,0.004380
+optimized,10,6866.7,epoll_ctl,36,0,0.000524

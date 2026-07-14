@@ -1,0 +1,29 @@
+==================================================
+Connection Pool Benchmark (B2)
+==================================================
+Host: 127.0.0.1:6398
+Workers: 10
+Operations per worker: 5000
+Pool min/max: 10/10
+Planned operations: 100000
+==================================================
+
+==================================================
+Benchmark Results
+==================================================
+Finished: yes
+Duration: 1957ms
+Success: 100000
+Error: 0
+Timeout: 0
+Ops/sec: 51098
+Success rate: 100%
+
+Pool stats:
+  total_connections: 1
+  available_connections: 1
+  active_connections: 0
+  total_acquired: 50000
+  total_released: 50000
+  peak_active_connections: 1
+==================================================

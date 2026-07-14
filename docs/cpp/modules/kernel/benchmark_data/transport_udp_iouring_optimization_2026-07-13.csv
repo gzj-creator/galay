@@ -1,0 +1,7 @@
+variant,run,duration_s,warmup_s,clients,payload_bytes,server_cpus,client_cpus,recv_pkt_s,packet_loss_pct
+head_one_shot,1,30,5,100,256,0-1,2-3,144357,0.292015
+head_one_shot,2,30,5,100,256,0-1,2-3,145985,0.360581
+head_one_shot,3,30,5,100,256,0-1,2-3,138326,0.696430
+multishot_recvmsg,1,30,5,100,256,0-1,2-3,147162,0.451617
+multishot_recvmsg,2,30,5,100,256,0-1,2-3,151630,0.409212
+multishot_recvmsg,3,30,5,100,256,0-1,2-3,160128,0.557879

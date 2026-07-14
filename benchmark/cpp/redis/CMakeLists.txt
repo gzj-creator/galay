@@ -17,3 +17,28 @@ foreach(benchmark_source IN LISTS GALAY_REDIS_BENCHMARK_SOURCES)
     string(REGEX REPLACE "^b[0-9]+_" "" scenario_name "${benchmark_name}")
     galay_add_redis_benchmark(benchmark_redis_${scenario_name} ${benchmark_source})
 endforeach()
+
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(GALAY_BENCH_HIREDIS QUIET IMPORTED_TARGET hiredis)
+endif()
+
+if(TARGET PkgConfig::GALAY_BENCH_HIREDIS)
+    find_package(Threads REQUIRED)
+    file(GLOB GALAY_HIREDIS_BENCHMARK_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/compare/hiredis*.cc"
+    )
+    add_executable(benchmark_redis_hiredis_client_throughput ${GALAY_HIREDIS_BENCHMARK_SOURCES})
+    target_link_libraries(benchmark_redis_hiredis_client_throughput
+        PRIVATE
+            PkgConfig::GALAY_BENCH_HIREDIS
+            Threads::Threads
+    )
+    set_target_properties(benchmark_redis_hiredis_client_throughput PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+else()
+    message(STATUS "Skipping benchmark_redis_hiredis_client_throughput: hiredis not found")
+endif()

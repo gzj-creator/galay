@@ -642,7 +642,8 @@ int main(int argc, char* argv[])
     g_alloc_tracking_enabled.store(false, std::memory_order_relaxed);
     runtime.stop();
 
-    const auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(bench_end - bench_start).count();
+    const double duration_ms =
+        std::chrono::duration<double, std::milli>(bench_end - bench_start).count();
     std::int64_t success = 0;
     std::int64_t error = 0;
     std::int64_t timeout = 0;
@@ -677,7 +678,7 @@ int main(int argc, char* argv[])
     std::cout << "Error: " << error << std::endl;
     std::cout << "Timeout: " << timeout << std::endl;
     if (duration_ms > 0) {
-        const double qps = static_cast<double>(success) / (static_cast<double>(duration_ms) / 1000.0);
+        const double qps = static_cast<double>(success) / (duration_ms / 1000.0);
         std::cout << "Ops/sec: " << static_cast<std::int64_t>(qps) << std::endl;
     }
     if (!latencies.empty()) {

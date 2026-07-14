@@ -1,0 +1,11 @@
+Mode: normal
+Clients: 10
+Operations per client: 5000
+Batch size: 1
+Success: 100000
+Error: 0
+Timeout: 0
+Duration: 565.771ms
+Ops/sec: 176750
+Request latency p50 (us): 54
+Request latency p99 (us): 96

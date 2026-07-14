@@ -17,18 +17,28 @@
 - **新增同 wire 的 libuv TCP/UDP echo 基线**：增加可选 `benchmark_c_kernel_libuv_echo_server`，通过 pkg-config 探测 libuv，并以单事件循环、相同 Galay client/wire workload 输出连接、吞吐与错误计数，支持在 kqueue / epoll 上进行可审计的同后端探针。
 - **归档 2026-07-12 跨协议 fresh benchmark 证据**：新增 kernel、HTTP、HTTP2、WS、SSL、MCP 与 RPC 的 CSV/TXT 原始记录，明确编译器、后端、协议形态、正确性门禁、blocked 原因及“仅基线/不参与排名”等状态。
 - **新增 RPC 服务器错误边界测试与注册压力 benchmark**：覆盖无 `shared_ptr` 注册表面、重复/容量耗尽错误、bind 失败同步返回及 stopped 状态；压力基准对 unary/stream 注册执行 128 万次验证，成功路径保持零堆分配。
+- **io_uring 支持 UDP multishot recvmsg**：`IOUringReactor` 新增基于 `IORING_OP_RECVMSG_MULTISHOT` + provided buffer ring 的 UDP 数据报接收路径，运行时探测内核（≥6.0）与 liburing 能力，能力不足时回退兼容 one-shot recvmsg；新增独立 UDP buffer group（`kRecvFromBufferGroup=1`，单缓冲覆盖最大 UDP payload 与 recvmsg 元数据），并通过 `m_recvmsg_multishot_confirmed` 区分真正的能力缺失与运行期 `EINVAL`。
+- **epoll 支持持久 READ 兴趣**：`EpollReactor` 为 recv/readv 引入 `armPersistentRead`，跨 awaitable 持久保留 `EPOLLIN`，配合注册前非阻塞乐观读消除重复 `epoll_ctl`；WS 固定口径下 `epoll_ctl` 由 7,022 降至 36，吞吐提升 3.86%。
+- **新增 UDP multishot 与 epoll 持久读回归测试**：`kernel.iouudp_multishot(_src)` 覆盖能力门控、recvmsg 元数据解析、one-shot 回退、截断丢余量与多源端口回填；`kernel.epoll_persistent_read(_source)` 覆盖 recv/readv 完成后保留 READ 兴趣与解除语义。
+- **新增跨协议竞品基准对照目标与脚本**：benchmark 通过 pkg-config 探测并构建 `libmysqlclient` / `hiredis` 对照压测目标；新增 etcd/etcdctl、MySQL/libmysqlclient+mysqlslap、Redis/hiredis+官方 redis-benchmark+连接池自对照、以及 UDP/WS 传输（libuv / libwebsockets）固定口径对比脚本。
 
 ### Changed
 
 - **优化 kqueue 稳态注册与多 fd 批量提交**：`IOController` 新增简单槽位 armed mask，recv/readv 的 `EVFILT_READ` 完成后常驻，send/writev 的 `EVFILT_WRITE` 仍按需 arm/disarm；简单 awaitable 的 kevent 变更进入 `m_pending_changes`，在 poll 边界或 32 项阈值统一提交，并与 sequence 兴趣位取并集避免误删。macOS 32 连接 / 1024B / 5s 中位吞吐由 `156,267 QPS` 提升至 `172,594 QPS`，约提升 `10.45%`。
 - **收敛 benchmark 公平性与可复现参数**：MCP benchmark 支持请求数参数并改用单调时钟；kernel TCP client 移除事件循环线程上的阻塞起跑门，UDP server 支持端口参数；SSL 吞吐与 steady-state 场景固定 TLS 1.3 AES-128-GCM ciphersuite并处理配置失败。
 - **明确 HTTP2/RPC 竞品对照边界**：h2load 脚本按工具能力启用 histogram，缺失时显式标记 percentile unavailable，并将 nghttpd echo 降级为互操作参考而非排名对象；RPC 脚本支持外部 build/result 目录，区分 network 与 in-process 场景，仅允许相同自定义 wire 的 fixture 参与排名，gRPC 仅作为不同协议 sidecar 状态记录。
+- **Redis 异步客户端吞吐计时改用双精度毫秒**：`b1_async_client_throughput` 的压测时长由整型毫秒截断改为 `duration<double, std::milli>`，避免短样本 QPS 的量化误差。
 
 ### Fixed
 
 - **修复 Apple libc++ 的 atomic shared_ptr 构建兼容与 kqueue 清理错误可观测性**：RPC cancellation 回调链、endpoint 快照与 HTTP/2 静态文件 body cache 由 `std::atomic<std::shared_ptr<T>>` 改为普通 `shared_ptr` + shared_ptr 原子自由函数，保留并发读取期间的引用计数生命周期；kqueue 路径同步处理 `kevent` / `close` 结果，并在 remove/close 时丢弃尚未提交的变更。
 - **RPC 服务器注册与启动改为显式错误传播**：`RpcServer` / `RpcStreamServer` 使用借用的 `RpcService&` 和固定 64 槽开放寻址表，移除注册所需的 `shared_ptr` 控制块与容器分配；注册返回 `std::expected<void, RpcError>`，显式报告空名称、重复、启动后注册和容量耗尽。
 - **RPC 启动成功语义对齐监听就绪**：`start()` 改为 `std::expected<void, RpcError>`，依次检查 runtime、socket、选项、bind、listen 与 accept-loop 调度，只有监听完成后才设置 running；同步更新 unary/stream 测试、benchmark、include/import 示例及 API 文档以处理所有返回值。
+
+### Docs
+
+- **补齐跨平台与全模块竞品性能文档**：新增 `docs/cpp/cross_platform_network_benchmark_2026-07-13.md` 跨平台 C/C++ 网络竞品对比，更新 etcd/http2/kernel/mongo/mysql/redis/rpc/ssl/tracing/ws 各模块性能测试文档，归档 UDP multishot 优化、epoll 持久读与各竞品对照的原始 CSV、图表与 raw 数据；`docs/machine_config.md` 追加 2026-07-13 全模块对比执行快照。
+- **纳入 WS 竞品依赖**：仓库新增 `thirdparty/libwebsockets-4.5.8.tar.gz`（附 SHA-256），供跨平台 WebSocket 明文 echo 竞品基准复现。
 
 ## [v4.1.0] - 2026-07-10
 

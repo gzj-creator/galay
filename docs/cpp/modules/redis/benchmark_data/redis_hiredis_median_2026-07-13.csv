@@ -1,0 +1,9 @@
+implementation,mode,batch_size,median_ops_sec,median_p50_us,median_p99_us,galay_vs_hiredis_pct
+galay,normal,1,172101,56,98,3.01
+hiredis,normal,1,167067,55,101,0.00
+galay,pipeline,10,992490,84,120,-3.77
+hiredis,pipeline,10,1031339,87,193,0.00
+galay,pipeline,50,2108473,206,366,54.38
+hiredis,pipeline,50,1365785,324,856,0.00
+galay,pipeline,100,1817617,372,481,32.73
+hiredis,pipeline,100,1369409,665,1504,0.00

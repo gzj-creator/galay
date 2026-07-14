@@ -1,0 +1,8 @@
+mysqlslap: [Warning] Using a password on the command line interface can be insecure.
+Benchmark
+	Average number of seconds to run all queries: 0.071 seconds
+	Minimum number of seconds to run all queries: 0.071 seconds
+	Maximum number of seconds to run all queries: 0.071 seconds
+	Number of clients running queries: 8
+	Average number of queries per client: 1000
+

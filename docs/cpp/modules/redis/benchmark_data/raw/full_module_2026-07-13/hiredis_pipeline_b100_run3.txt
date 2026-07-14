@@ -1,0 +1,11 @@
+Mode: pipeline
+Clients: 10
+Operations per client: 5000
+Batch size: 100
+Success: 50000
+Error: 0
+Timeout: 0
+Duration: 36.5121ms
+Ops/sec: 1369409
+Request latency p50 (us): 665
+Request latency p99 (us): 1356

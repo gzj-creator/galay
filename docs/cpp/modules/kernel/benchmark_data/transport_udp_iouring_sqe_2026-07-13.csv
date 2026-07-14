@@ -1,0 +1,3 @@
+variant,window_s,recv_pkt_s,io_uring_submit_req,io_uring_complete,sys_enter_io_uring_enter
+head_one_shot,10,138335,2927551,2927549,739601
+multishot_recvmsg,10,137879,1469663,2934682,803974

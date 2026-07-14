@@ -1,0 +1,28 @@
+==================================================
+Redis Client Benchmark (B1)
+==================================================
+Host: 127.0.0.1:6398
+Clients: 10
+Operations per client: 5000
+Mode: normal
+Timeout (ms): -1
+Client buffer size: 65536
+Allocation tracking: off
+Planned operations: 100000
+==================================================
+
+==================================================
+Benchmark Results
+==================================================
+Finished: yes
+Completed clients: 10/10
+Duration: 571.171ms
+Success: 100000
+Error: 0
+Timeout: 0
+Ops/sec: 175079
+Requests measured: 100000
+Request latency p50 (us): 56
+Request latency p99 (us): 96
+Success rate: 100%
+==================================================

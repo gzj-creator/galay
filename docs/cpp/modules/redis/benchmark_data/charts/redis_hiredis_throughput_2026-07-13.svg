@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="960" viewBox="0 0 960 960">
+  <rect width="960" height="960" fill="#ffffff"/>
+  <text x="480" y="38" text-anchor="middle" font-family="Arial" font-size="22" fill="#111827">Redis throughput median (10 clients, 3 runs)</text>
+  <line x1="90" y1="470" x2="920" y2="470" stroke="#111827"/>
+  <line x1="90" y1="80" x2="90" y2="470" stroke="#111827"/>
+  <g font-family="Arial" font-size="12" fill="#4b5563">
+    <text x="80" y="474" text-anchor="end">0</text>
+    <text x="80" y="376" text-anchor="end">0.6M</text>
+    <text x="80" y="279" text-anchor="end">1.2M</text>
+    <text x="80" y="181" text-anchor="end">1.8M</text>
+    <text x="80" y="84" text-anchor="end">2.4M</text>
+  </g>
+  <g stroke="#e5e7eb">
+    <line x1="90" y1="373" x2="920" y2="373"/>
+    <line x1="90" y1="275" x2="920" y2="275"/>
+    <line x1="90" y1="178" x2="920" y2="178"/>
+    <line x1="90" y1="80" x2="920" y2="80"/>
+  </g>
+  <g fill="#2563eb">
+    <rect x="135" y="442" width="62" height="28"/>
+    <rect x="335" y="309" width="62" height="161"/>
+    <rect x="535" y="127" width="62" height="343"/>
+    <rect x="735" y="175" width="62" height="295"/>
+  </g>
+  <g fill="#f59e0b">
+    <rect x="202" y="443" width="62" height="27"/>
+    <rect x="402" y="302" width="62" height="168"/>
+    <rect x="602" y="248" width="62" height="222"/>
+    <rect x="802" y="247" width="62" height="223"/>
+  </g>
+  <g font-family="Arial" font-size="12" fill="#111827" text-anchor="middle">
+    <text x="199" y="505">normal SET+GET</text>
+    <text x="399" y="505">pipeline 10</text>
+    <text x="599" y="505">pipeline 50</text>
+    <text x="799" y="505">pipeline 100</text>
+    <text x="166" y="434">172K</text><text x="233" y="435">167K</text>
+    <text x="366" y="301">992K</text><text x="433" y="294">1.03M</text>
+    <text x="566" y="119">2.11M</text><text x="633" y="240">1.37M</text>
+    <text x="766" y="167">1.82M</text><text x="833" y="239">1.37M</text>
+  </g>
+  <rect x="690" y="26" width="16" height="16" fill="#2563eb"/><text x="712" y="39" font-family="Arial" font-size="12">Galay</text>
+  <rect x="780" y="26" width="16" height="16" fill="#f59e0b"/><text x="802" y="39" font-family="Arial" font-size="12">hiredis 1.3.0</text>
+</svg>

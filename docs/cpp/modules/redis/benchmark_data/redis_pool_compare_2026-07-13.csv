@@ -1,0 +1,4 @@
+round,workers,operations_per_worker,pool_min,pool_max,success,error,timeout,ops_sec,valid,raw_file
+1,10,5000,10,10,100000,0,0,51098,true,docs/cpp/modules/redis/benchmark_data/raw/full_module_2026-07-13/galay_pool_run1.txt
+2,10,5000,10,10,100000,0,0,60532,true,docs/cpp/modules/redis/benchmark_data/raw/full_module_2026-07-13/galay_pool_run2.txt
+3,10,5000,10,10,100000,0,0,61349,true,docs/cpp/modules/redis/benchmark_data/raw/full_module_2026-07-13/galay_pool_run3.txt

@@ -1,0 +1,7 @@
+implementation,backend,round,order,duration_s,warmup_s,clients,payload_bytes,recv_pkt_s,packet_loss_pct,server_validation
+galay_iouring_multishot,io_uring,1,1,30,5,100,256,135705,0.189523,recv_equals_sent
+libuv_1.48.0,epoll,1,2,30,5,100,256,141924,0.287573,errors_0
+libuv_1.48.0,epoll,2,1,30,5,100,256,139600,0.248955,errors_0
+galay_iouring_multishot,io_uring,2,2,30,5,100,256,138241,0.216589,recv_equals_sent
+galay_iouring_multishot,io_uring,3,1,30,5,100,256,145237,0.285610,recv_equals_sent
+libuv_1.48.0,epoll,3,2,30,5,100,256,139712,0.129110,errors_0

@@ -1026,7 +1026,6 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
         break;
     case IOEventType::READV:
     case IOEventType::FILEREAD:
-    case IOEventType::RECVFROM:
     case IOEventType::FILEWATCH:
         m_type = static_cast<IOEventType>(
             (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
@@ -1034,6 +1033,18 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
         m_awaitable[READ] = awaitable;
 #ifdef USE_IOURING
         advanceSqeGeneration(READ);
+#endif
+        break;
+    case IOEventType::RECVFROM:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
+        m_awaitable[READ] = awaitable;
+#ifdef USE_IOURING
+        if (!m_recvfrom_multishot_armed) {
+            advanceSqeGeneration(READ);
+        }
+        m_recvfrom_result_assigned = false;
 #endif
         break;
     case IOEventType::ACCEPT:
@@ -1083,11 +1094,19 @@ inline void IOController::removeAwaitable(IOEventType type) {
         break;
     case IOEventType::READV:
     case IOEventType::FILEREAD:
-    case IOEventType::RECVFROM:
     case IOEventType::FILEWATCH:
         m_awaitable[READ] = nullptr;
 #ifdef USE_IOURING
         advanceSqeGeneration(READ);
+#endif
+        break;
+    case IOEventType::RECVFROM:
+        m_awaitable[READ] = nullptr;
+#ifdef USE_IOURING
+        if (!m_recvfrom_multishot_armed) {
+            advanceSqeGeneration(READ);
+        }
+        m_recvfrom_result_assigned = false;
 #endif
         break;
     case IOEventType::ACCEPT:

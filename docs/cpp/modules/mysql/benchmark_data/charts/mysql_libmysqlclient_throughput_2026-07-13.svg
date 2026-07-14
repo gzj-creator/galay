@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="520" viewBox="0 0 720 520">
+  <rect width="720" height="520" fill="#ffffff"/>
+  <text x="360" y="38" text-anchor="middle" font-family="Arial" font-size="22" fill="#111827">MySQL SELECT 1 median QPS (8 clients, 3 runs)</text>
+  <line x1="90" y1="440" x2="680" y2="440" stroke="#111827"/>
+  <line x1="90" y1="80" x2="90" y2="440" stroke="#111827"/>
+  <g font-family="Arial" font-size="12" fill="#4b5563">
+    <text x="80" y="444" text-anchor="end">0</text>
+    <text x="80" y="324" text-anchor="end">50K</text>
+    <text x="80" y="204" text-anchor="end">100K</text>
+    <text x="80" y="84" text-anchor="end">150K</text>
+  </g>
+  <g stroke="#e5e7eb"><line x1="90" y1="320" x2="680" y2="320"/><line x1="90" y1="200" x2="680" y2="200"/><line x1="90" y1="80" x2="680" y2="80"/></g>
+  <rect x="190" y="123" width="130" height="317" fill="#2563eb"/>
+  <rect x="420" y="208" width="130" height="232" fill="#f59e0b"/>
+  <g font-family="Arial" text-anchor="middle" fill="#111827">
+    <text x="255" y="112" font-size="15">131,946</text>
+    <text x="485" y="197" font-size="15">96,659</text>
+    <text x="255" y="470" font-size="14">Galay</text>
+    <text x="485" y="470" font-size="14">libmysqlclient 9.3.0</text>
+  </g>
+</svg>

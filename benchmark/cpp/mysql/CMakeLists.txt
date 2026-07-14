@@ -28,3 +28,32 @@ foreach(benchmark_source IN LISTS GALAY_MYSQL_BENCHMARK_SOURCES)
     endif()
     galay_add_mysql_benchmark(${target_name} ${benchmark_source})
 endforeach()
+
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(GALAY_BENCH_MYSQLCLIENT QUIET IMPORTED_TARGET mysqlclient)
+endif()
+
+if(TARGET PkgConfig::GALAY_BENCH_MYSQLCLIENT)
+    find_package(Threads REQUIRED)
+    file(GLOB GALAY_MYSQLCLIENT_BENCHMARK_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/compare/libmysqlclient*.cc"
+    )
+    add_executable(benchmark_mysql_libmysqlclient_query_pressure ${GALAY_MYSQLCLIENT_BENCHMARK_SOURCES})
+    target_include_directories(benchmark_mysql_libmysqlclient_query_pressure
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/common
+    )
+    target_link_libraries(benchmark_mysql_libmysqlclient_query_pressure
+        PRIVATE
+            PkgConfig::GALAY_BENCH_MYSQLCLIENT
+            Threads::Threads
+    )
+    set_target_properties(benchmark_mysql_libmysqlclient_query_pressure PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+else()
+    message(STATUS "Skipping benchmark_mysql_libmysqlclient_query_pressure: mysqlclient not found")
+endif()

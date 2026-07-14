@@ -1,0 +1,15 @@
+Endpoint      : http://127.0.0.1:23790
+Mode          : mixed(put+get)
+Workers       : 8
+Ops/worker    : 500
+Value size    : 64 bytes
+IO schedulers : 4
+Total ops     : 4000
+Success       : 4000
+Failure       : 0
+Duration      : 8.71093 s
+Throughput    : 459.193 ops/s
+Latency p50   : 16017 us
+Latency p95   : 27996 us
+Latency p99   : 30013 us
+Latency max   : 38962 us

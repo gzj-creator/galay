@@ -1,0 +1,7 @@
+implementation,backend,round,order,duration_s,warmup_s,clients,payload_bytes,server_io_threads,msg_s,avg_rtt_ms,successful_connections,failed_connections
+galay_epoll,epoll,1,1,30,5,32,1024,1,56173.2,0.568768,32,0
+libwebsockets_4.5.8,epoll,1,2,30,5,32,1024,1,75840.1,0.421186,32,0
+libwebsockets_4.5.8,epoll,2,1,30,5,32,1024,1,65879.4,0.484978,32,0
+galay_epoll,epoll,2,2,30,5,32,1024,1,52332.1,0.610586,32,0
+galay_epoll,epoll,3,1,30,5,32,1024,1,52841.4,0.604824,32,0
+libwebsockets_4.5.8,epoll,3,2,30,5,32,1024,1,67929.2,0.470321,32,0

@@ -1,0 +1,14 @@
+
+=== libmysqlclient Query Pressure Summary ===
+mode: normal
+clients: 8
+queries_per_client: 1000
+total_queries: 8000
+success: 8000
+failed: 0
+elapsed_sec: 0.0834347
+qps: 95883.4
+p50_latency_ms: 0.054541
+p95_latency_ms: 0.073292
+p99_latency_ms: 0.100375
+max_latency_ms: 1.02513

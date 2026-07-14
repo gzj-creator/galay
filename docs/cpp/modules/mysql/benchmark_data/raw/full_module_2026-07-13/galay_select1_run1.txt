@@ -1,0 +1,19 @@
+MySQL config: host=127.0.0.1, port=3306, user=root, db=test
+Benchmark config: clients=8, queries_per_client=1000, warmup=100, timeout_sec=180, mode=normal, batch_size=16, buffer_size=16384, alloc_stats=off
+SQL: SELECT 1
+Running sync pressure benchmark...
+
+=== B1 Sync Pressure Summary ===
+mode: normal
+clients: 8
+queries_per_client: 1000
+total_queries: 8000
+success: 8000
+failed: 0
+elapsed_sec: 0.0745047
+qps: 107376
+avg_latency_ms: 0.0609876
+p50_latency_ms: 0.053917
+p95_latency_ms: 0.090958
+p99_latency_ms: 0.163667
+max_latency_ms: 1.12787

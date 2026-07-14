@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 使用 Linux io_uring 满足高吞吐异步 IO 的 ReactorType concept。
- * 支持 multishot accept/recv（配合 provided buffer ring）、
+ * 支持 multishot accept/recv/recvmsg（配合 provided buffer ring）、
  * send_zc（用于大负载零拷贝发送）和 eventfd 跨线程唤醒。
  */
 
@@ -70,6 +70,10 @@ public:
 private:
     int submitMultishotAccept(IOController* controller);  ///< 为 listener 提交持久 multishot accept SQE
     int submitMultishotRecv(IOController* controller);  ///< 为 socket 提交持久 multishot recv SQE
+    int submitMultishotRecvFrom(IOController* controller);  ///< 为 UDP socket 提交持久 multishot recvmsg SQE
+    std::expected<void, IOError> initializeRecvFromBufferPool();  ///< 首次 UDP recvfrom 时惰性初始化 provided-buffer ring
+    int addRecvFromOneShot(IOController* controller,
+                           RecvFromAwaitable* awaitable);  ///< 能力不足时提交兼容 one-shot recvmsg SQE
     bool shouldUseSendZc(size_t length) const noexcept;  ///< 当前 send 请求是否应走 send_zc 路径
     void prepareSendSqe(struct io_uring_sqe* sqe,
                         SqeRequestHandle* handle,
@@ -88,12 +92,20 @@ private:
     void processRecvCompletion(IOController* controller,
                                RecvAwaitable* awaitable,
                                struct io_uring_cqe* cqe);  ///< 处理 multishot recv CQE 并交付/缓存 ready recv 数据
+    void processRecvFromCompletion(IOController* controller,
+                                   RecvFromAwaitable* awaitable,
+                                   SqeRequestHandle* handle,
+                                   struct io_uring_cqe* cqe);  ///< 解析 multishot recvmsg CQE 并按数据报交付 payload/源地址
     void processCompletion(struct io_uring_cqe* cqe);  ///< 消费单个 CQE 并唤醒对应 awaitable
     void ensureWakeReadArmed();  ///< 确保 eventfd 的唤醒读请求已提交到 ring
 
     static constexpr uint16_t kRecvBufferGroup = 0;  ///< provided buffer ring 使用的固定 buffer group id
     static constexpr uint16_t kRecvBufferCount = 256;  ///< provided buffer ring 中预留的 buffer 数量
     static constexpr size_t kRecvBufferSize = 8192;  ///< 单个 provided buffer 的容量
+    static constexpr uint16_t kRecvFromBufferGroup = 1;  ///< UDP recvmsg 使用的独立 buffer group id
+    static constexpr uint16_t kRecvFromBufferCount = 256;  ///< UDP provided buffer ring 的 buffer 数量
+    static constexpr size_t kRecvFromBufferSize =
+        65536 + sizeof(uint32_t) * 4 + sizeof(sockaddr_storage);  ///< 覆盖最大 UDP payload 与 recvmsg 元数据
     static constexpr size_t kSendZcThreshold = 4096;  ///< 大于等于该阈值的 send 请求优先尝试 send_zc
 
     struct io_uring m_ring {};  ///< io_uring ring 实例
@@ -103,7 +115,10 @@ private:
     bool m_ring_initialized = false;  ///< io_uring ring 是否已经初始化
     bool m_wake_read_armed = false;  ///< eventfd 读请求是否已挂到 ring
     bool m_send_zc_supported = false;  ///< 当前内核/liburing 是否支持 IORING_OP_SEND_ZC
+    bool m_recvmsg_multishot_supported = false;  ///< 内核>=6.0、liburing 与 RECVMSG opcode 均支持 multishot
+    bool m_recvmsg_multishot_confirmed = false;  ///< 是否已收到成功 CQE，避免把后续 EINVAL 误判为能力缺失
     std::shared_ptr<void> m_recv_buffer_pool;  ///< recv provided buffer ring 的共享所有权
+    std::shared_ptr<void> m_recvfrom_buffer_pool;  ///< UDP recvmsg provided buffer ring 的共享所有权
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
 };
 

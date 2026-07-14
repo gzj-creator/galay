@@ -1,0 +1,9 @@
+variant,run,duration_s,warmup_s,connections,payload_bytes,server_io_threads,server_cpus,client_cpus,throughput_msg_s,avg_rtt_ms,failed
+baseline,1,30,5,32,1024,1,0-1,2-3,52251.5,0.611722,0
+baseline,2,30,5,32,1024,1,0-1,2-3,52802.9,0.605333,0
+baseline,3,30,5,32,1024,1,0-1,2-3,57041.3,0.560284,0
+baseline,median,30,5,32,1024,1,0-1,2-3,52802.9,0.605333,0
+optimized,1,30,5,32,1024,1,0-1,2-3,54686.8,0.584463,0
+optimized,2,30,5,32,1024,1,0-1,2-3,55095.4,0.580124,0
+optimized,3,30,5,32,1024,1,0-1,2-3,54842.3,0.582805,0
+optimized,median,30,5,32,1024,1,0-1,2-3,54842.3,0.582805,0

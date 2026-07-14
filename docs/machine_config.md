@@ -131,3 +131,41 @@ cmake --build build-release --parallel
 - 测试人员: Codex
 - 测试轮次: 环境探测与可复现压测准备
 - 数据可重现性: 正式 Release 压测尚未完成；模块报告中的 blocked/unavailable 记录可按补跑命令复现。
+
+## 2026-07-13 全模块对比执行快照
+
+### Galay 与构建
+
+- Git 版本：`v4.1.0-2-gadd1629-dirty`
+- Git commit：`add162959bd0bbeff6b6d5f7bfc7762a4bdb3a6a`
+- 构建目录：`build-release/`
+- `CMAKE_BUILD_TYPE=Release`
+- `CMAKE_CXX_FLAGS_RELEASE=-O3 -DNDEBUG`
+- `GALAY_BUILD_BENCHMARKS=ON`
+- `BUILD_TESTING=ON`
+- `GALAY_BUILD_C_API=OFF`
+
+### 本轮实际使用版本
+
+| 组件 | 版本 |
+|---|---|
+| Redis server / redis-benchmark | 8.0.1 |
+| hiredis | 1.3.0 |
+| MySQL server / mysqlslap / libmysqlclient | 9.3.0（pkg-config `mysqlclient` 24） |
+| etcd / etcdctl | 3.6.0 |
+| nghttp / nghttpd / nghttpx / h2load / libnghttp2 | 1.69.0 |
+
+Redis 与 etcd 均由对比脚本启动隔离 loopback 实例；MySQL 使用本机 `127.0.0.1:3306`，只执行 `SELECT 1`。
+
+### 外部工具链安装结果
+
+已授权执行 Homebrew 安装：h2o、grpc、ghz、opentelemetry-cpp、nginx、boost、
+mongo-c-driver、mongo-cxx-driver。公式与依赖可解析，但从 `ghcr.io` 下载 bottle 时出现
+`curl: (35) Recv failure: Connection reset by peer`，安装命令退出 1。
+
+安装后复核仍为 unavailable：`h2o`、`grpc_cpp_plugin`、`ghz`、`nginx`、
+pkg-config `grpc++`、`opentelemetry-cpp`、`libmongoc-1.0`、`libmongocxx`。
+
+按后续“一模块一个业界标杆”的收敛口径，真正影响主排名的只剩 gRPC C++、
+OpenTelemetry C++、Boost.Asio、mongo-cxx-driver 和尚未安装的 etcd-cpp-apiv3；
+h2o、ghz、nginx 等只是可选工具，不再作为模块完成条件。

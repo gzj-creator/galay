@@ -1,0 +1,4 @@
+run,duration_s,warmup_s,clients,payload_bytes,server_io_threads,server_cpus,client_cpus,msg_s,failed_connections
+1,30,5,32,1024,1,0-1,2-3,52865.5,0
+2,30,5,32,1024,1,0-1,2-3,51399.7,0
+3,30,5,32,1024,1,0-1,2-3,52530.4,0

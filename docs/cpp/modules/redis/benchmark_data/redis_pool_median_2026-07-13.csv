@@ -1,0 +1,3 @@
+scenario,workers,operations_per_worker,pool_min,pool_max,median_ops_sec,classification
+galay_connection_pool,10,5000,10,10,60532,internal-pool-vs-dedicated-connection
+galay_dedicated_connections,10,5000,10,10,172101,internal-pool-vs-dedicated-connection

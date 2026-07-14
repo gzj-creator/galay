@@ -1,0 +1,13 @@
+implementation,mode,round,workers,ops_per_worker,value_size,io_schedulers,success,failure,throughput_ops_sec,p50_us,p95_us,p99_us,valid,raw_file
+galay-sync,put,1,8,500,64,4,4000,0,895.769,8009,16194,20141,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-sync_put_run1.txt
+galay-sync,mixed,1,8,500,64,4,4000,0,459.732,16015,28024,30903,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-sync_mixed_run1.txt
+galay-async,put,1,8,500,64,4,4000,0,886.804,8011,18053,21924,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-async_put_run1.txt
+galay-async,mixed,1,8,500,64,4,4000,0,455.638,16024,27932,30695,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-async_mixed_run1.txt
+galay-sync,put,2,8,500,64,4,4000,0,885.97,8008,16235,20442,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-sync_put_run2.txt
+galay-sync,mixed,2,8,500,64,4,4000,0,458.373,16018,27958,32033,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-sync_mixed_run2.txt
+galay-async,put,2,8,500,64,4,4000,0,877.917,8015,16417,24078,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-async_put_run2.txt
+galay-async,mixed,2,8,500,64,4,4000,0,456.967,16020,28004,30199,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-async_mixed_run2.txt
+galay-sync,put,3,8,500,64,4,4000,0,879.252,8016,16341,21075,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-sync_put_run3.txt
+galay-sync,mixed,3,8,500,64,4,4000,0,459.444,16019,27139,29381,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-sync_mixed_run3.txt
+galay-async,put,3,8,500,64,4,4000,0,877.427,8021,17979,20950,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-async_put_run3.txt
+galay-async,mixed,3,8,500,64,4,4000,0,459.193,16017,27996,30013,true,docs/cpp/modules/etcd/benchmark_data/raw/full_module_2026-07-13/galay-async_mixed_run3.txt

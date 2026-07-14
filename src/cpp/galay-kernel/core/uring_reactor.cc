@@ -4,7 +4,7 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 使用 Linux io_uring 实现 IO 事件注册、multishot accept/recv
+ * @details 使用 Linux io_uring 实现 IO 事件注册、multishot accept/recv/recvmsg
  * （配合 provided buffer ring）、send_zc 门控、sequence SQE 提交和 CQE 处理。
  */
 
@@ -17,13 +17,24 @@
 #include <sys/eventfd.h>
 #include <sys/poll.h>
 #include <sys/socket.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
+#include <algorithm>
+#include <charconv>
 #include <cerrno>
 #include <cstring>
 #include <expected>
 #include <memory>
+#include <string_view>
 #include <vector>
+
+#if IO_URING_VERSION_MAJOR > 2 || \
+    (IO_URING_VERSION_MAJOR == 2 && IO_URING_VERSION_MINOR >= 2)
+#define GALAY_HAS_IO_URING_RECVMSG_MULTISHOT 1
+#else
+#define GALAY_HAS_IO_URING_RECVMSG_MULTISHOT 0
+#endif
 
 namespace galay::kernel {
 
@@ -89,6 +100,37 @@ inline bool resolveSequenceSlot(IOEventType type, IOController::Index& slot) {
     }
     return false;
 }
+
+#if GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
+inline bool kernelAtLeast(unsigned required_major, unsigned required_minor) noexcept
+{
+    utsname info{};
+    if (::uname(&info) != 0) {
+        return false;
+    }
+
+    const std::string_view release(info.release);
+    const size_t major_end = release.find('.');
+    if (major_end == std::string_view::npos) {
+        return false;
+    }
+    const size_t minor_end = release.find('.', major_end + 1);
+    const size_t minor_length = (minor_end == std::string_view::npos ? release.size() : minor_end) -
+                                (major_end + 1);
+
+    unsigned major = 0;
+    unsigned minor = 0;
+    const auto major_result = std::from_chars(release.data(), release.data() + major_end, major);
+    const auto minor_result = std::from_chars(release.data() + major_end + 1,
+                                              release.data() + major_end + 1 + minor_length,
+                                              minor);
+    if (major_result.ec != std::errc{} || minor_result.ec != std::errc{}) {
+        return false;
+    }
+    return major > required_major ||
+           (major == required_major && minor >= required_minor);
+}
+#endif
 
 struct HandleRecycleGuard {
     SqeRequestHandle* handle = nullptr;
@@ -280,14 +322,25 @@ std::expected<void, IOError> IOUringReactor::start()
     }
     m_recv_buffer_pool = std::static_pointer_cast<void>(std::move(recv_pool));
 
+    bool recvmsg_opcode_supported = false;
     if (io_uring_probe* probe = io_uring_get_probe_ring(&m_ring); probe != nullptr) {
         m_send_zc_supported = io_uring_opcode_supported(probe, IORING_OP_SEND_ZC) != 0;
+        recvmsg_opcode_supported = io_uring_opcode_supported(probe, IORING_OP_RECVMSG) != 0;
         io_uring_free_probe(probe);
     }
+
+#if GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
+    m_recvmsg_multishot_supported = recvmsg_opcode_supported && kernelAtLeast(6, 0);
+#else
+    (void)recvmsg_opcode_supported;
+#endif
     return {};
 }
 
 IOUringReactor::~IOUringReactor() {
+    if (m_recvfrom_buffer_pool) {
+        recvBufferPool(m_recvfrom_buffer_pool)->shutdown();
+    }
     if (m_recv_buffer_pool) {
         recvBufferPool(m_recv_buffer_pool)->shutdown();
     }
@@ -632,6 +685,98 @@ int IOUringReactor::addFileWrite(IOController* controller) {
 int IOUringReactor::addRecvFrom(IOController* controller) {
     auto* awaitable = controller->getAwaitable<RecvFromAwaitable>();
     if (awaitable == nullptr) return -1;
+    if (controller->tryConsumeReadyRecvFrom(awaitable->m_buffer,
+                                            awaitable->m_length,
+                                            awaitable->m_from,
+                                            awaitable->m_result)) {
+        return kImmediateReady;
+    }
+    if (m_recvmsg_multishot_supported) {
+        if (!m_recvfrom_buffer_pool) {
+            auto pool_ready = initializeRecvFromBufferPool();
+            if (!pool_ready) {
+                const auto error = pool_ready.error();
+                detail::storeBackendError(
+                    m_last_error_code,
+                    ioErrorCodeFromError(error),
+                    systemCodeFromError(error));
+                m_recvmsg_multishot_supported = false;
+                m_recvmsg_multishot_confirmed = false;
+            }
+        }
+        if (controller->m_recvfrom_multishot_armed) {
+            return 0;
+        }
+        if (m_recvmsg_multishot_supported) {
+            return submitMultishotRecvFrom(controller);
+        }
+    }
+    return addRecvFromOneShot(controller, awaitable);
+}
+
+std::expected<void, IOError> IOUringReactor::initializeRecvFromBufferPool()
+{
+    auto recvfrom_pool = std::make_shared<RecvBufferPool>(&m_ring,
+                                                          kRecvFromBufferCount,
+                                                          kRecvFromBufferGroup,
+                                                          kRecvFromBufferSize);
+    auto pool_ready = recvfrom_pool->initialize();
+    if (!pool_ready) {
+        return std::unexpected(pool_ready.error());
+    }
+    m_recvfrom_buffer_pool = std::static_pointer_cast<void>(std::move(recvfrom_pool));
+    return {};
+}
+
+int IOUringReactor::submitMultishotRecvFrom(IOController* controller)
+{
+#if !GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
+    (void)controller;
+    return -EOPNOTSUPP;
+#else
+    if (controller == nullptr || controller->m_handle == GHandle::invalid() ||
+        !m_recvfrom_buffer_pool) {
+        return -EINVAL;
+    }
+
+    controller->advanceSqeGeneration(IOController::READ);
+    auto* handle = controller->makeSqeRequest(IOController::READ);
+    if (handle == nullptr) {
+        return -ENOMEM;
+    }
+
+    auto* message = handle->arena != nullptr ? handle->arena->recvFromMessage() : nullptr;
+    if (message == nullptr) {
+        handle->recycle();
+        return -EINVAL;
+    }
+
+    struct io_uring_sqe* sqe = io_uring_get_sqe(&m_ring);
+    if (!sqe) {
+        handle->recycle();
+        return -EAGAIN;
+    }
+
+    std::memset(message, 0, sizeof(*message));
+    message->msg_namelen = sizeof(sockaddr_storage);
+
+    io_uring_prep_recvmsg_multishot(sqe, controller->m_handle.fd, message, 0);
+    sqe->flags |= IOSQE_BUFFER_SELECT;
+    sqe->buf_group = kRecvFromBufferGroup;
+    io_uring_sqe_set_data(sqe, handle);
+    handle->persistent = true;
+    controller->m_recvfrom_multishot_handle = handle;
+    controller->m_recvfrom_multishot_armed = true;
+    return 0;
+#endif
+}
+
+int IOUringReactor::addRecvFromOneShot(IOController* controller,
+                                       RecvFromAwaitable* awaitable)
+{
+    if (controller == nullptr || awaitable == nullptr) {
+        return -EINVAL;
+    }
     auto* handle = controller->makeSqeRequest(IOController::READ);
     if (handle == nullptr) {
         return -ENOMEM;
@@ -645,7 +790,6 @@ int IOUringReactor::addRecvFrom(IOController* controller) {
 
     std::memset(&awaitable->m_msg, 0, sizeof(awaitable->m_msg));
     std::memset(&awaitable->m_addr, 0, sizeof(awaitable->m_addr));
-
     awaitable->m_iov.iov_base = awaitable->m_buffer;
     awaitable->m_iov.iov_len = awaitable->m_length;
     awaitable->m_msg.msg_iov = &awaitable->m_iov;
@@ -1012,7 +1156,9 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     auto* base = static_cast<AwaitableBase*>(controller->m_awaitable[slot]);
     if (!base) {
         if (slot == IOController::READ) {
-            if (controller->m_recv_multishot_armed) {
+            if (controller->m_recvfrom_multishot_armed) {
+                processRecvFromCompletion(controller, nullptr, handle, cqe);
+            } else if (controller->m_recv_multishot_armed) {
                 processRecvCompletion(controller, nullptr, cqe);
             } else if (controller->m_accept_multishot_armed) {
                 processAcceptCompletion(controller, nullptr, cqe);
@@ -1118,14 +1264,18 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     }
     case RECVFROM: {
         auto* awaitable = static_cast<RecvFromAwaitable*>(base);
-        if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+        if (controller->m_recvfrom_multishot_armed) {
+            processRecvFromCompletion(controller, awaitable, handle, cqe);
         } else {
-            const int ret = addRecvFrom(controller);
-            if (ret < 0) {
-                awaitable->m_result =
-                    std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
+            if (awaitable->handleComplete(cqe, controller->m_handle)) {
                 awaitable->m_waker.wakeUp();
+            } else {
+                const int ret = addRecvFrom(controller);
+                if (ret < 0) {
+                    awaitable->m_result =
+                        std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
+                    awaitable->m_waker.wakeUp();
+                }
             }
         }
         break;
@@ -1354,6 +1504,118 @@ void IOUringReactor::processRecvCompletion(IOController* controller,
     controller->m_recv_multishot_armed = false;
 }
 
+void IOUringReactor::processRecvFromCompletion(IOController* controller,
+                                               RecvFromAwaitable* awaitable,
+                                               SqeRequestHandle* handle,
+                                               struct io_uring_cqe* cqe)
+{
+#if !GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
+    (void)controller;
+    (void)awaitable;
+    (void)handle;
+    (void)cqe;
+    return;
+#else
+    if (controller == nullptr || handle == nullptr || cqe == nullptr) {
+        return;
+    }
+
+    const bool more = (cqe->flags & IORING_CQE_F_MORE) != 0;
+    const bool cancelled = cqe->res == -ECANCELED;
+    const bool buffer_exhausted = cqe->res == -ENOBUFS;
+    const bool transient = cqe->res == -EAGAIN || cqe->res == -EWOULDBLOCK ||
+                           cqe->res == -EINTR;
+    const bool unsupported = cqe->res == -EOPNOTSUPP ||
+                             (cqe->res == -EINVAL && !m_recvmsg_multishot_confirmed);
+
+    if (cqe->res >= 0) {
+        m_recvmsg_multishot_confirmed = true;
+        ReadyRecvDatagram datagram;
+        if ((cqe->flags & IORING_CQE_F_BUFFER) == 0 || !m_recvfrom_buffer_pool) {
+            datagram.kind = ReadyRecvDatagram::Kind::Error;
+            datagram.result = std::unexpected(
+                IOError(kRecvFailed, static_cast<uint32_t>(EINVAL)));
+        } else {
+            const uint16_t bid = cqeBufferId(cqe);
+            auto* pool = recvBufferPool(m_recvfrom_buffer_pool);
+            datagram.owner = m_recvfrom_buffer_pool;
+            datagram.recycle = recycleRecvBuffer;
+            datagram.bid = bid;
+            datagram.data = pool != nullptr ? pool->data(bid) : nullptr;
+
+            auto* message = handle->arena != nullptr
+                ? handle->arena->recvFromMessage()
+                : nullptr;
+            auto* output = datagram.data != nullptr && message != nullptr
+                ? io_uring_recvmsg_validate(datagram.data, cqe->res, message)
+                : nullptr;
+            if (output == nullptr || output->namelen < sizeof(sa_family_t)) {
+                datagram.kind = ReadyRecvDatagram::Kind::Error;
+                datagram.result = std::unexpected(
+                    IOError(kRecvFailed, static_cast<uint32_t>(EINVAL)));
+            } else {
+                const size_t source_length = std::min(
+                    {static_cast<size_t>(output->namelen),
+                     static_cast<size_t>(message->msg_namelen),
+                     sizeof(datagram.source)});
+                std::memset(&datagram.source, 0, sizeof(datagram.source));
+                std::memcpy(&datagram.source,
+                            io_uring_recvmsg_name(output),
+                            source_length);
+                datagram.data = static_cast<char*>(io_uring_recvmsg_payload(output, message));
+                datagram.length = io_uring_recvmsg_payload_length(output, cqe->res, message);
+            }
+        }
+        controller->enqueueReadyRecvFrom(std::move(datagram));
+    } else if (!transient && !buffer_exhausted && !cancelled && !unsupported) {
+        ReadyRecvDatagram datagram;
+        datagram.kind = ReadyRecvDatagram::Kind::Error;
+        datagram.result = std::unexpected(
+            IOError(kRecvFailed, static_cast<uint32_t>(-cqe->res)));
+        controller->enqueueReadyRecvFrom(std::move(datagram));
+    }
+
+    if (awaitable != nullptr && !cancelled && !controller->m_recvfrom_result_assigned &&
+        controller->tryConsumeReadyRecvFrom(awaitable->m_buffer,
+                                            awaitable->m_length,
+                                            awaitable->m_from,
+                                            awaitable->m_result)) {
+        controller->m_recvfrom_result_assigned = true;
+        awaitable->m_waker.wakeUp();
+    }
+
+    if (more) {
+        return;
+    }
+
+    controller->m_recvfrom_multishot_handle = nullptr;
+    controller->m_recvfrom_multishot_armed = false;
+    if (unsupported) {
+        m_recvmsg_multishot_supported = false;
+        m_recvmsg_multishot_confirmed = false;
+    }
+    if (controller->m_handle == GHandle::invalid() || awaitable == nullptr ||
+        controller->m_recvfrom_result_assigned || cancelled) {
+        return;
+    }
+
+    int ret = 0;
+    if (m_recvmsg_multishot_supported) {
+        ret = submitMultishotRecvFrom(controller);
+    } else {
+        ret = addRecvFromOneShot(controller, awaitable);
+    }
+    if (ret < 0) {
+        awaitable->m_result =
+            std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
+        controller->m_recvfrom_result_assigned = true;
+        awaitable->m_waker.wakeUp();
+    }
+#endif
+}
+
 }  // namespace galay::kernel
+
+#undef GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
 
 #endif  // USE_IOURING

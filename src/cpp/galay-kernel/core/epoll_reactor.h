@@ -42,6 +42,7 @@ public:
 
     void notify();  ///< 从其他线程唤醒阻塞中的 epoll_wait
     GHandle getHandle() const;  ///< 返回测试可见的 eventfd 读端句柄
+    GHandle getPollHandle() const;  ///< 返回 epoll 实例句柄，供派生 scheduler 的后端诊断使用
     std::expected<void, IOError> start();  ///< 显式初始化 epoll 和 eventfd，失败时返回 IOError
 
     int addAccept(IOController* controller);  ///< 注册 accept 等待；1=立即完成，0=已登记，<0=错误
@@ -74,6 +75,7 @@ private:
     };
 
     uint32_t buildEvents(IOController* controller) const;  ///< 根据控制器状态计算目标 epoll 事件掩码
+    int armPersistentRead(IOController* controller);  ///< 为 recv/readv 保留持久 EPOLLET READ 兴趣
     int applyEvents(IOController* controller, uint32_t events);  ///< 把计算出的 epoll 事件掩码写入本地 pending 队列
     int processSequence(IOEventType type, IOController* controller);  ///< 处理 sequence awaitable 的注册/同步逻辑
     void processEvent(struct epoll_event& ev);  ///< 消费单个 epoll 事件并唤醒对应 awaitable

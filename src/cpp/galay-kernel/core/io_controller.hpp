@@ -77,14 +77,14 @@ struct SqeState {
 struct SqeHandleArena;
 
 struct SqeRequestHandle {
-    SqeState* state = nullptr;  ///< 借用的 SQE 状态；真实生命周期由 handle arena 保活
     std::shared_ptr<SqeHandleArena> arena;  ///< 持有句柄池生命周期，保证晚到 CQE 仍可安全回收
+    SqeState* state = nullptr;  ///< 借用的 SQE 状态；真实生命周期由 handle arena 保活
+    SqeRequestHandle* next_free = nullptr;  ///< 空闲链表指针
     uint64_t generation = 0;  ///< 本次提交时观测到的 generation
     bool persistent = false;  ///< 是否绑定到会产生多次 CQE 的持久请求
     bool notify_expected = false;  ///< 当前请求是否还在等待 zero-copy notification CQE
     bool notify_received = false;  ///< 是否已经收到 zero-copy notification CQE
     bool result_completed = false;  ///< 业务完成 CQE 是否已经处理完毕
-    SqeRequestHandle* next_free = nullptr;  ///< 空闲链表指针
 
     void recycle() noexcept;  ///< 将请求句柄归还到所属池
 };
@@ -154,6 +154,12 @@ struct SqeHandleArena {
     SqeState* state() noexcept { return &m_state; }
     const SqeState* state() const noexcept { return &m_state; }
 
+    /**
+     * @brief 返回持久 UDP recvmsg 使用的稳定 msghdr
+     * @return arena 生命周期内地址稳定的 msghdr；只允许所属 READ handle 在 in-flight 期间使用
+     */
+    msghdr* recvFromMessage() noexcept { return &m_recvfrom_message; }
+
 private:
     struct Block {
         static constexpr size_t kHandleCount = 8;
@@ -176,6 +182,7 @@ private:
         return true;
     }
 
+    msghdr m_recvfrom_message{};  ///< UDP multishot recvmsg 的稳定参数存储
     SqeState m_state;  ///< 由 arena 保活的稳定 SQE 状态对象
     std::unique_ptr<Block> m_blocks;  ///< 所有已分配 handle 块
     SqeRequestHandle* m_free = nullptr;  ///< 空闲 handle 单链表头
@@ -260,6 +267,79 @@ private:
         other.recycle = nullptr;
     }
 };
+
+/**
+ * @brief recvfrom ready queue 的单个完整数据报
+ * @details UDP 数据报只允许整包消费一次；用户缓冲不足时复制可容纳的前缀并丢弃余量，
+ *          不得像 TCP 流一样把余量交给下一次 recvfrom。
+ */
+struct ReadyRecvDatagram {
+    enum class Kind : uint8_t {
+        Buffer,  ///< 正常数据报，允许长度为 0
+        Error    ///< 错误结果
+    };
+
+    ReadyRecvDatagram() = default;
+
+    ReadyRecvDatagram(ReadyRecvDatagram&& other) noexcept
+    {
+        moveFrom(std::move(other));
+    }
+
+    ReadyRecvDatagram& operator=(ReadyRecvDatagram&& other) noexcept
+    {
+        if (this != &other) {
+            release();
+            moveFrom(std::move(other));
+        }
+        return *this;
+    }
+
+    sockaddr_storage source{};  ///< 数据报源地址；仅 Buffer 类型有效
+    std::shared_ptr<void> owner;  ///< 持有底层 UDP buffer pool 生命周期
+    std::expected<size_t, IOError> result = 0;  ///< Error 类型交付给 awaitable 的错误
+    void (*recycle)(const std::shared_ptr<void>&, uint16_t) noexcept = nullptr;  ///< 归还 buffer 到 ring 的回调
+    char* data = nullptr;  ///< 数据报 payload 起始地址
+    size_t length = 0;  ///< 当前数据报 payload 长度
+    uint16_t bid = 0;  ///< provided buffer id 标识
+    Kind kind = Kind::Buffer;  ///< 数据报类型
+
+    void release() noexcept
+    {
+        if (recycle != nullptr && owner) {
+            recycle(owner, bid);
+        }
+        owner.reset();
+        data = nullptr;
+        length = 0;
+        bid = 0;
+        recycle = nullptr;
+    }
+
+private:
+    ReadyRecvDatagram(const ReadyRecvDatagram&) = delete;
+    ReadyRecvDatagram& operator=(const ReadyRecvDatagram&) = delete;
+
+    void moveFrom(ReadyRecvDatagram&& other) noexcept
+    {
+        source = other.source;
+        owner = std::move(other.owner);
+        result = std::move(other.result);
+        recycle = other.recycle;
+        data = other.data;
+        length = other.length;
+        bid = other.bid;
+        kind = other.kind;
+
+        other.owner.reset();
+        other.data = nullptr;
+        other.length = 0;
+        other.bid = 0;
+        other.kind = Kind::Buffer;
+        other.result = size_t{0};
+        other.recycle = nullptr;
+    }
+};
 #endif
 
 struct IOController {
@@ -323,6 +403,7 @@ struct IOController {
 #endif
         , m_owner_scheduler(other.m_owner_scheduler.load(std::memory_order_acquire))
 #ifdef USE_EPOLL
+        , m_persistent_events(other.m_persistent_events)
         , m_registered_events(other.m_registered_events)
 #endif
 #ifdef USE_IOURING
@@ -332,12 +413,16 @@ struct IOController {
         , m_sqe_state{nullptr, nullptr}
         , m_ready_accepts(std::move(other.m_ready_accepts))
         , m_ready_recvs(std::move(other.m_ready_recvs))
+        , m_ready_recvfrom(std::move(other.m_ready_recvfrom))
         , m_accept_multishot_handle(other.m_accept_multishot_handle)
         , m_recv_multishot_handle(other.m_recv_multishot_handle)
+        , m_recvfrom_multishot_handle(other.m_recvfrom_multishot_handle)
         , m_accept_multishot_armed(other.m_accept_multishot_armed)
         , m_recv_multishot_armed(other.m_recv_multishot_armed)
+        , m_recvfrom_multishot_armed(other.m_recvfrom_multishot_armed)
         , m_accept_result_assigned(other.m_accept_result_assigned)
         , m_recv_result_assigned(other.m_recv_result_assigned)
+        , m_recvfrom_result_assigned(other.m_recvfrom_result_assigned)
 #endif
     {
 #ifdef USE_IOURING
@@ -373,6 +458,7 @@ struct IOController {
             m_owner_scheduler.store(other.m_owner_scheduler.load(std::memory_order_acquire),
                                     std::memory_order_release);
 #ifdef USE_EPOLL
+            m_persistent_events = other.m_persistent_events;
             m_registered_events = other.m_registered_events;
 #endif
 #ifdef USE_IOURING
@@ -383,12 +469,16 @@ struct IOController {
             m_sqe_state[WRITE] = m_sqe_handle_pool[WRITE] ? m_sqe_handle_pool[WRITE]->state() : nullptr;
             m_ready_accepts = std::move(other.m_ready_accepts);
             m_ready_recvs = std::move(other.m_ready_recvs);
+            m_ready_recvfrom = std::move(other.m_ready_recvfrom);
             m_accept_multishot_handle = other.m_accept_multishot_handle;
             m_recv_multishot_handle = other.m_recv_multishot_handle;
+            m_recvfrom_multishot_handle = other.m_recvfrom_multishot_handle;
             m_accept_multishot_armed = other.m_accept_multishot_armed;
             m_recv_multishot_armed = other.m_recv_multishot_armed;
+            m_recvfrom_multishot_armed = other.m_recvfrom_multishot_armed;
             m_accept_result_assigned = other.m_accept_result_assigned;
             m_recv_result_assigned = other.m_recv_result_assigned;
+            m_recvfrom_result_assigned = other.m_recvfrom_result_assigned;
             rebindSqeState();
             // moved-from controller 不能失效当前 controller 已接管的状态。
             other.m_sqe_state[READ] = nullptr;
@@ -417,6 +507,7 @@ struct IOController {
 #endif
         m_owner_scheduler.store(nullptr, std::memory_order_release);
 #ifdef USE_EPOLL
+        m_persistent_events = 0;
         m_registered_events = 0;
 #endif
 #ifdef USE_IOURING
@@ -427,12 +518,16 @@ struct IOController {
         m_sqe_state[WRITE] = m_sqe_handle_pool[WRITE]->state();
         m_ready_accepts.clear();
         m_ready_recvs.clear();
+        m_ready_recvfrom.clear();
         m_accept_multishot_handle = nullptr;
         m_recv_multishot_handle = nullptr;
+        m_recvfrom_multishot_handle = nullptr;
         m_accept_multishot_armed = false;
         m_recv_multishot_armed = false;
+        m_recvfrom_multishot_armed = false;
         m_accept_result_assigned = false;
         m_recv_result_assigned = false;
+        m_recvfrom_result_assigned = false;
 #endif
     }
 
@@ -593,6 +688,61 @@ struct IOController {
             m_ready_recvs.pop_front();
         }
     }
+
+    /**
+     * @brief 将完整 UDP 数据报缓存到 controller 侧队列
+     * @param datagram 已完成但尚未交付给用户的内部数据报
+     */
+    void enqueueReadyRecvFrom(ReadyRecvDatagram&& datagram)
+    {
+        m_ready_recvfrom.push_back(std::move(datagram));
+    }
+
+    /**
+     * @brief 尝试消费一个缓存 UDP 数据报
+     * @param buffer 用户接收缓冲
+     * @param capacity 用户缓冲容量
+     * @param from 可选源地址输出
+     * @param result 输出复制字节数或错误
+     * @return true 表示消费了一个完整数据报或错误；false 表示队列为空
+     */
+    bool tryConsumeReadyRecvFrom(char* buffer,
+                                 size_t capacity,
+                                 Host* from,
+                                 std::expected<size_t, IOError>& result)
+    {
+        if (m_ready_recvfrom.empty()) {
+            return false;
+        }
+
+        auto& datagram = m_ready_recvfrom.front();
+        if (datagram.kind == ReadyRecvDatagram::Kind::Error) {
+            result = datagram.result;
+        } else {
+            const size_t bytes = std::min(datagram.length, capacity);
+            if (bytes > 0) {
+                std::memcpy(buffer, datagram.data, bytes);
+            }
+            if (from != nullptr) {
+                *from = Host::fromSockAddr(datagram.source);
+            }
+            result = bytes;
+        }
+        datagram.release();
+        m_ready_recvfrom.pop_front();
+        return true;
+    }
+
+    /**
+     * @brief 归还所有尚未交付的 UDP provided buffers
+     */
+    void clearReadyRecvFrom() noexcept
+    {
+        while (!m_ready_recvfrom.empty()) {
+            m_ready_recvfrom.front().release();
+            m_ready_recvfrom.pop_front();
+        }
+    }
 #endif
 
     /**
@@ -620,19 +770,24 @@ struct IOController {
     uint8_t m_simple_armed_mask = 0;  ///< kqueue 普通 awaitable 需要保留的 READ/WRITE 注册位
 #endif
 #ifdef USE_EPOLL
-    uint32_t m_registered_events = 0;          ///< epoll 已注册的事件掩码缓存
+    uint32_t m_persistent_events = 0;  ///< epoll 跨 awaitable 保留的事件掩码；当前仅持久保留 EPOLLIN
+    uint32_t m_registered_events = 0;  ///< epoll 已注册的事件掩码缓存
 #endif
 #ifdef USE_IOURING
     std::shared_ptr<SqeHandleArena> m_sqe_handle_pool[SIZE];  ///< io_uring READ/WRITE 槽位句柄池
     SqeState* m_sqe_state[SIZE] = {nullptr, nullptr};  ///< 借用 handle arena 内部的稳定 SQE 状态
     std::deque<GHandle> m_ready_accepts;  ///< listener 缓存的 accepted fd，供下一次 accept() 直接消费
     std::deque<ReadyRecvChunk> m_ready_recvs;  ///< socket 缓存的 ready recv 片段，供下一次 recv() 直接消费
+    std::deque<ReadyRecvDatagram> m_ready_recvfrom;  ///< UDP socket 缓存的完整数据报
     SqeRequestHandle* m_accept_multishot_handle = nullptr;  ///< 当前 listener 持有的 multishot accept handle
     SqeRequestHandle* m_recv_multishot_handle = nullptr;  ///< 当前 socket 持有的 multishot recv handle
+    SqeRequestHandle* m_recvfrom_multishot_handle = nullptr;  ///< 当前 UDP socket 持有的 multishot recvmsg handle
     bool m_accept_multishot_armed = false;  ///< listener 当前是否已挂上 multishot accept SQE
     bool m_recv_multishot_armed = false;  ///< socket 当前是否已挂上 multishot recv SQE
+    bool m_recvfrom_multishot_armed = false;  ///< UDP socket 当前是否已挂上 multishot recvmsg SQE
     bool m_accept_result_assigned = false;  ///< 当前 suspended accept awaitable 是否已写入一个结果
     bool m_recv_result_assigned = false;  ///< 当前 suspended recv awaitable 是否已写入一个结果
+    bool m_recvfrom_result_assigned = false;  ///< 当前 suspended recvfrom awaitable 是否已写入一个结果
 #endif
 
     /**
@@ -649,12 +804,16 @@ private:
     void clearSqeState() noexcept {
         clearAcceptedHandles();
         clearReadyRecvs();
+        clearReadyRecvFrom();
         m_accept_multishot_handle = nullptr;
         m_recv_multishot_handle = nullptr;
+        m_recvfrom_multishot_handle = nullptr;
         m_accept_multishot_armed = false;
         m_recv_multishot_armed = false;
+        m_recvfrom_multishot_armed = false;
         m_accept_result_assigned = false;
         m_recv_result_assigned = false;
+        m_recvfrom_result_assigned = false;
         for (auto* state : m_sqe_state) {
             if (state == nullptr) {
                 continue;

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="520" viewBox="0 0 820 520">
+  <rect width="820" height="520" fill="#ffffff"/>
+  <text x="410" y="38" text-anchor="middle" font-family="Arial" font-size="22" fill="#111827">Galay etcd client median throughput (8 workers, 3 runs)</text>
+  <line x1="90" y1="440" x2="780" y2="440" stroke="#111827"/>
+  <line x1="90" y1="80" x2="90" y2="440" stroke="#111827"/>
+  <g stroke="#e5e7eb"><line x1="90" y1="260" x2="780" y2="260"/><line x1="90" y1="80" x2="780" y2="80"/></g>
+  <g font-family="Arial" font-size="12" fill="#4b5563"><text x="80" y="444" text-anchor="end">0</text><text x="80" y="264" text-anchor="end">500</text><text x="80" y="84" text-anchor="end">1000 ops/s</text></g>
+  <rect x="135" y="121" width="100" height="319" fill="#2563eb"/>
+  <rect x="285" y="124" width="100" height="316" fill="#60a5fa"/>
+  <rect x="485" y="275" width="100" height="165" fill="#2563eb"/>
+  <rect x="635" y="276" width="100" height="164" fill="#60a5fa"/>
+  <g font-family="Arial" text-anchor="middle" fill="#111827" font-size="13">
+    <text x="185" y="111">886.0</text><text x="335" y="114">877.9</text><text x="535" y="265">459.4</text><text x="685" y="266">457.0</text>
+    <text x="185" y="470">sync put</text><text x="335" y="470">async put</text><text x="535" y="470">sync mixed</text><text x="685" y="470">async mixed</text>
+  </g>
+</svg>
