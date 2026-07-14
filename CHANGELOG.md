@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.2.0] - 2026-07-14
+
 ### Added
 
 - **新增 kqueue READ 常驻与注册 batch 边界测试**：增加 `kernel.kqueue_persistent_read` 与 `kernel.kqueue_registration_batch_source`，覆盖 recv/readv 完成后保留 READ 兴趣、send/writev 完成后解除 WRITE 兴趣，以及简单 awaitable 变更进入 pending batch 的源码约束。

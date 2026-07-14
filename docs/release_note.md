@@ -50,3 +50,21 @@
 - **错误传播改为 std::expected 显式化并去异常**：SSL 引擎 BIO 接口、SSL 状态机错误映射（`mapSslError` + 编译期 concept 约束，移除 `std::abort()` 兜底）、RESP double 解析（`strtod` 替代会 throw 的 `std::stod`）、RingBuffer 工厂等路径统一改为返回值显式传播错误，移除异常控制流。
 - **热路径性能治理**：HTTP/1 与 HTTP/2 静态文件链路异步化（blocking executor + `AsyncWaiter` + server 级共享 cache）；Redis pool 与 RPC 取消通知热路径降低跨线程竞争与取消路径资源放大；HTTP route / writer 与 utils 路由 / 分配优化、LRU 惰性刷新、ConsistentHash 弱内存序；新增 `linux-perf-release` CMake preset 与同机压测口径。
 - **修复与覆盖**：修复 Linux io_uring / sendfile 进度回归、epoll AIO 与 file watcher 事件处理边界、etcd HTTP 头 token 误命中与 Linux GCC 14 warning 等问题；补齐 C ABI `*_get_error` 错误字符串入口、ownership surface 测试、SSL BIO 边界测试与 RESP 解析 benchmark 等覆盖。
+
+## v4.2.0 - 2026-07-14
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`feat: io_uring 支持 UDP multishot recvmsg 与 epoll 持久读，补齐跨协议竞品基准`
+- **Git tag**：`v4.2.0`
+
+### 变更摘要
+
+本次为 `v4.1.0` 之后的次版本发版，自 v4.1.0 以来累计 3 个提交（`a8a6e18`、`add1629`、`4ff9db1`），主线为内核 IO reactor 新能力（io_uring UDP multishot recvmsg、epoll 持久读）与跨协议竞品基准体系，并含 kqueue 稳态优化、RPC 错误边界强化与 Apple libc++ 兼容修复。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.2.0`。
+
+- **io_uring 支持 UDP multishot recvmsg**：`IOUringReactor` 新增基于 `IORING_OP_RECVMSG_MULTISHOT` + provided buffer ring 的 UDP 数据报接收路径，运行时探测内核（≥6.0）与 liburing 能力并回退兼容 one-shot recvmsg；独立 UDP buffer group 与完整数据报 ready 队列按整包交付 payload 与源地址，缓冲不足时丢弃余量保持 UDP 数据报边界。Linux 6.8 绑核 30s 三轮中位 `151,630 pkt/s`，相对 one-shot +5.04%；与 libuv 1.48.0 同口径基本持平（-1.05%，小于自身 CV）。
+- **epoll 支持持久 READ 兴趣**：`EpollReactor` 为 recv/readv 引入 `armPersistentRead`，跨 awaitable 持久保留 `EPOLLIN` 并配合注册前非阻塞乐观读消除重复 `epoll_ctl`；WS 固定口径 `epoll_ctl` 由 7,022 降至 36，吞吐 +3.86%。
+- **kqueue 稳态注册与多 fd 批量提交优化**：recv/readv 的 `EVFILT_READ` 完成后常驻、send/writev 的 `EVFILT_WRITE` 按需 arm/disarm，简单 awaitable kevent 变更进入 pending batch 统一提交；macOS 32 连接 / 1024B / 5s 中位吞吐 +10.45%。
+- **跨协议竞品基准体系**：benchmark 通过 pkg-config 探测并构建 libmysqlclient / hiredis 对照目标；新增 etcd/etcdctl、MySQL/libmysqlclient+mysqlslap、Redis/hiredis+官方 redis-benchmark+连接池自对照、UDP/WS 传输（libuv / libwebsockets）固定口径竞品脚本；新增跨平台 C/C++ 网络竞品对比文档，各模块性能测试文档与原始 CSV/图表/raw 数据归档。
+- **RPC 错误边界强化**：RPC 服务器注册与启动改为 `std::expected` 显式错误传播，移除注册所需的 `shared_ptr` 控制块与容器分配；`start()` 语义对齐监听就绪，新增注册表面 / 重复 / 容量耗尽 / bind 失败边界测试与注册压力 benchmark。
+- **Apple libc++ 兼容与 kqueue 清理可观测性**：`std::atomic<std::shared_ptr<T>>` 改为普通 `shared_ptr` + 原子自由函数修复 libc++ 构建兼容；kqueue 路径同步处理 `kevent` / `close` 结果并在 remove/close 时丢弃未提交变更。
+- **纳入 WS 竞品依赖**：仓库新增 `thirdparty/libwebsockets-4.5.8.tar.gz`（附 SHA-256），供跨平台 WebSocket 明文 echo 竞品基准复现。
