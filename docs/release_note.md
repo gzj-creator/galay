@@ -68,3 +68,18 @@
 - **RPC 错误边界强化**：RPC 服务器注册与启动改为 `std::expected` 显式错误传播，移除注册所需的 `shared_ptr` 控制块与容器分配；`start()` 语义对齐监听就绪，新增注册表面 / 重复 / 容量耗尽 / bind 失败边界测试与注册压力 benchmark。
 - **Apple libc++ 兼容与 kqueue 清理可观测性**：`std::atomic<std::shared_ptr<T>>` 改为普通 `shared_ptr` + 原子自由函数修复 libc++ 构建兼容；kqueue 路径同步处理 `kevent` / `close` 结果并在 remove/close 时丢弃未提交变更。
 - **纳入 WS 竞品依赖**：仓库新增 `thirdparty/libwebsockets-4.5.8.tar.gz`（附 SHA-256），供跨平台 WebSocket 明文 echo 竞品基准复现。
+
+## v4.2.1 - 2026-07-15
+
+- **版本级别**：小版本（trivial）
+- **Git 提交消息**：`feat: 新增 Debug 构建开关并发布 v4.2.1`
+- **Git tag**：`v4.2.1`
+
+### 变更摘要
+
+本次为 `v4.2.0` 之后的小版本发版，新增统一的 Debug 构建开关，并将 fresh 单配置构建的默认类型收敛为 Release。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.2.1`。
+
+- **新增 `GALAY_BUILD_DEBUG`**：开关默认关闭；fresh 单配置构建默认使用 `Release`，开启后强制使用 `Debug`。多配置生成器设置对应默认配置，同时保留 `--config` 的标准显式选择能力。
+- **保留非 Debug 显式构建类型**：`RelWithDebInfo`、`MinSizeRel` 等显式配置不被默认 Release 覆盖，现有 Linux 性能 preset 继续使用 `RelWithDebInfo`、`-O2` 与 frame pointer。
+- **对齐 CMake presets**：开发类 presets 改用 `GALAY_BUILD_DEBUG=ON`，`linux-perf-release` 显式关闭该开关，避免 Debug 默认值覆盖性能构建配置。
+- **补齐配置回归测试**：新增 `config.build_type_option`，覆盖默认 Release、Debug 开关与 `RelWithDebInfo` 保留路径；tracing 配置测试同步使用新开关。全部 7 个 `config.*` CTest 通过。

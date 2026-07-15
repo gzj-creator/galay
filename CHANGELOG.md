@@ -11,6 +11,16 @@
 
 ## [Unreleased]
 
+## [v4.2.1] - 2026-07-15
+
+### Added
+
+- **新增 Debug 构建开关**：`cmake/option.cmake` 增加 `GALAY_BUILD_DEBUG`，默认关闭；单配置生成器在未显式选择其他非 Debug 构建类型时默认使用 `Release`，开启后切换为 `Debug`。多配置生成器同步设置默认构建配置，并保留通过 `--config` 显式选择配置的标准行为。
+
+### Changed
+
+- **对齐 preset 与配置测试**：`developer-full`、`consumer-minimal` 和 `linux-perf` 通过 `GALAY_BUILD_DEBUG=ON` 保持开发期 Debug 语义，`linux-perf-release` 显式关闭该开关并继续保留 `RelWithDebInfo` 与 frame pointer 配置；新增 `config.build_type_option`，覆盖默认 Release、显式 Debug 与显式 `RelWithDebInfo` 三条配置路径，tracing 配置测试同步改用新开关。
+
 ## [v4.2.0] - 2026-07-14
 
 ### Added

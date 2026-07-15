@@ -1,5 +1,19 @@
 include_guard(GLOBAL)
 
+option(GALAY_BUILD_DEBUG "Build with Debug configuration instead of Release" OFF)
+
+if(CMAKE_CONFIGURATION_TYPES)
+    if(GALAY_BUILD_DEBUG)
+        set(CMAKE_DEFAULT_BUILD_TYPE "Debug" CACHE STRING "Default build configuration" FORCE)
+    else()
+        set(CMAKE_DEFAULT_BUILD_TYPE "Release" CACHE STRING "Default build configuration" FORCE)
+    endif()
+elseif(GALAY_BUILD_DEBUG)
+    set(CMAKE_BUILD_TYPE "Debug" CACHE STRING "Build type" FORCE)
+elseif(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Build type" FORCE)
+endif()
+
 option(GALAY_BUILD_UTILS "Build the utils module" ON)
 option(GALAY_BUILD_KERNEL "Build the kernel module" ON)
 option(GALAY_BUILD_SSL "Build the ssl module" ON)

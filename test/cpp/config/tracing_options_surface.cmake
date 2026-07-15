@@ -41,7 +41,7 @@ set(default_configure_command
     -B "${default_build_dir}"
     -G "${GALAY_CMAKE_GENERATOR}"
     "-DCMAKE_CXX_COMPILER=${GALAY_CXX_COMPILER}"
-    -DCMAKE_BUILD_TYPE=Debug
+    -DGALAY_BUILD_DEBUG=ON
     -DBUILD_TESTING=OFF
     -DGALAY_BUILD_EXAMPLES=OFF
     -DGALAY_BUILD_BENCHMARKS=OFF
@@ -71,7 +71,7 @@ set(transport_configure_command
     -B "${transport_build_dir}"
     -G "${GALAY_CMAKE_GENERATOR}"
     "-DCMAKE_CXX_COMPILER=${GALAY_CXX_COMPILER}"
-    -DCMAKE_BUILD_TYPE=Debug
+    -DGALAY_BUILD_DEBUG=ON
     -DBUILD_TESTING=OFF
     -DGALAY_BUILD_EXAMPLES=OFF
     -DGALAY_BUILD_BENCHMARKS=OFF
@@ -106,7 +106,7 @@ set(spdlog_configure_command
     -B "${spdlog_build_dir}"
     -G "${GALAY_CMAKE_GENERATOR}"
     "-DCMAKE_CXX_COMPILER=${GALAY_CXX_COMPILER}"
-    -DCMAKE_BUILD_TYPE=Debug
+    -DGALAY_BUILD_DEBUG=ON
     -DBUILD_TESTING=OFF
     -DGALAY_BUILD_SSL=OFF
     -DGALAY_BUILD_HTTP=OFF

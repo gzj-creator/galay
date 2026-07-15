@@ -44,6 +44,16 @@ add_test(
 )
 
 add_test(
+    NAME config.build_type_option
+    COMMAND ${CMAKE_COMMAND}
+        -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}
+        -D GALAY_BINARY_DIR=${CMAKE_BINARY_DIR}
+        -D GALAY_CMAKE_GENERATOR=${CMAKE_GENERATOR}
+        -D GALAY_CXX_COMPILER=${CMAKE_CXX_COMPILER}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/build_type_option.cmake
+)
+
+add_test(
     NAME config.tracing_options_surface
     COMMAND ${CMAKE_COMMAND}
         -D GALAY_SOURCE_DIR=${PROJECT_SOURCE_DIR}

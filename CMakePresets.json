@@ -11,8 +11,8 @@
       "hidden": true,
       "binaryDir": "${sourceDir}/build/${presetName}",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "GALAY_BUILD_DEBUG": "ON",
         "GALAY_ENABLE_CPP23_MODULES": "OFF"
       }
     },
@@ -85,6 +85,7 @@
       "inherits": "linux-perf",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
+        "GALAY_BUILD_DEBUG": "OFF",
         "CMAKE_C_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -fno-omit-frame-pointer",
         "CMAKE_CXX_FLAGS_RELWITHDEBINFO": "-O2 -g -DNDEBUG -fno-omit-frame-pointer"
       }

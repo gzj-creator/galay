@@ -1,4 +1,4 @@
-module(name = "galay", version = "4.2.0")
+module(name = "galay", version = "4.2.1")
 
 bazel_dep(name = "rules_cc", version = "0.1.1")
 bazel_dep(name = "platforms", version = "0.0.11")
