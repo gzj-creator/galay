@@ -14,6 +14,7 @@
 ### Changed
 
 - **协程客户端 awaitable/池实现下沉 details**：galay-etcd / galay-mysql / galay-redis 三个异步客户端把 awaitable 与池 awaitable 的实现从主 `client.{h,cc}` / `conn_pool.{h,cc}` 迁入新增的 `details/awaitable.{h,inl}` 与 `details/pool_awaitable.{h,inl}`，公开头/源大幅瘦身（mysql `client.cc` 净减约 2000 行），主头文件只保留接口与类型声明。
+- **HTTP/2 与 RPC 客户端 awaitable 边界统一**：将 `CaptureSchedulerAwaitable`、`H2cUpgradeAwaitable`、`RecvRpcResponseChainAwaitable` 及 RPC 响应读取状态迁入各模块 `details/*_awaitable.{h,inl}`；公开 client 头仅保留前置声明、接口与 details include，并保留任意 `Strategy` / `SocketType` 模板实例化能力。
 - **EtcdClusterClient 重构为无锁 EtcdClient 池**：移除原 cluster wrapper 的 `put/get/del/grantLease/keepAliveOnce/pipeline` 等逐请求方法与内置重试/健康探测循环，改为为每个 endpoint 预建固定数量 `EtcdClient`、通过 `tryAcquire()` 返回 move-only RAII 租约 `EtcdClientLease` 的无锁空闲队列模型，并提供 `acquireConnected()` / `withClient()` 高阶入口；租约析构或 `release()` 归还连接，池空返回新增 `EtcdErrorType::PoolExhausted`。
 - **galay-mcp 命名空间统一为 C++17 形式**：15 个 mcp 头/源由旧式嵌套 `namespace galay { namespace mcp {` 改为 `namespace galay::mcp {`，不改任何符号名。
 - **池 state 缓存行对齐**：etcd cluster 池状态字段与 redis 连接池 `IdleShard` 按 `alignas(64)` 对齐，降低多线程取还路径的伪共享。
@@ -22,6 +23,10 @@
 
 - **cluster 连接复用配置与池便捷 API**：`EtcdProductionConfig` 新增 `connections_per_endpoint` 字段，`EtcdClusterClientBuilder` 新增 `connectionsPerEndpoint()`；mysql / redis 连接池补齐 `LeaseAwaitable` 等高阶便捷 awaitable。
 - **新增 cluster 连接复用 benchmark / 测试 / 示例**：`b6_cluster_connection_reuse`、`t18_cluster_connection_reuse`、`t19_pool_convenience` 与 `e3_client_pool`（import + include 两种形式）覆盖无锁池取还吞吐、池空返回 `PoolExhausted`、租约析构归还、多线程并发安全与池 move 后仍可用等契约。
+
+### Fixed
+
+- **修复 h2c 客户端测试的 listener 启动竞态与错误漏检**：`H2cServer` 新增无锁 `isReady()`，仅在 listener 完成 bind/listen 后报告就绪；`http2.h2ccl` 改为有界等待可观测 ready 状态，并完整处理 connect/shutdown 的 Task 外层与业务内层 `std::expected` 错误。
 
 ### Docs
 

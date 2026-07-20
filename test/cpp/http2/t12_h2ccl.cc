@@ -22,6 +22,20 @@ enum class ClientStage : int {
 static std::atomic<ClientStage> g_stage{ClientStage::Init};
 static std::atomic<bool> g_done{false};
 static std::atomic<bool> g_ok{false};
+static std::string g_error;
+
+bool waitForServerReady(const H2cServer& server,
+                        std::chrono::milliseconds timeout)
+{
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (server.isReady()) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    }
+    return server.isReady();
+}
 
 Task<void> handleStream(Http2Stream::ptr stream) {
     auto request_done = co_await stream->waitRequestComplete();
@@ -44,6 +58,12 @@ Task<void> runClient(uint16_t port) {
 
     auto connect_result = co_await client.connect("127.0.0.1", port);
     if (!connect_result) {
+        g_error = connect_result.error().message();
+        g_done = true;
+        co_return;
+    }
+    if (!connect_result.value()) {
+        g_error = connect_result.value().error().message();
         g_done = true;
         co_return;
     }
@@ -51,6 +71,7 @@ Task<void> runClient(uint16_t port) {
 
     auto upgrade_result = co_await client.upgrade("/shutdown");
     if (!upgrade_result) {
+        g_error = upgrade_result.error().toString();
         g_done = true;
         co_return;
     }
@@ -58,6 +79,7 @@ Task<void> runClient(uint16_t port) {
 
     auto stream = client.post("/shutdown", "ping", "text/plain");
     if (!stream) {
+        g_error = "failed to allocate request stream";
         g_done = true;
         co_return;
     }
@@ -66,6 +88,7 @@ Task<void> runClient(uint16_t port) {
     if (!response_done ||
         stream->response().status != 200 ||
         stream->response().body != "ping") {
+        g_error = "response did not complete with expected status/body";
         g_done = true;
         co_return;
     }
@@ -73,6 +96,12 @@ Task<void> runClient(uint16_t port) {
 
     auto shutdown_result = co_await client.shutdown();
     if (!shutdown_result) {
+        g_error = shutdown_result.error().message();
+        g_done = true;
+        co_return;
+    }
+    if (!shutdown_result.value()) {
+        g_error = shutdown_result.value().error().toString();
         g_done = true;
         co_return;
     }
@@ -95,17 +124,35 @@ int main() {
         .streamHandler(handleStream)
         .build());
     server.start();
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-    runtime.start();
-    auto* scheduler = runtime.getNextIOScheduler();
-    if (!scheduler) {
-        std::cerr << "[T43] missing IO scheduler\n";
+    const bool listener_ready = waitForServerReady(server, std::chrono::seconds(5));
+    if (!listener_ready) {
+        std::cerr << "[T43] h2c listener did not become ready\n";
         server.stop();
         return 1;
     }
-    scheduleTask(scheduler, runClient(port));
+
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    auto runtime_start = runtime.start();
+    if (!runtime_start.has_value()) {
+        std::cerr << "[T43] client runtime failed to start: "
+                  << runtime_start.error().message() << "\n";
+        server.stop();
+        return 1;
+    }
+    auto* scheduler = runtime.getNextIOScheduler();
+    if (!scheduler) {
+        std::cerr << "[T43] missing IO scheduler\n";
+        runtime.stop();
+        server.stop();
+        return 1;
+    }
+    const bool scheduled = scheduleTask(scheduler, runClient(port));
+    if (!scheduled) {
+        std::cerr << "[T43] failed to schedule client task\n";
+        runtime.stop();
+        server.stop();
+        return 1;
+    }
 
     for (int i = 0; i < 100; ++i) {
         if (g_done.load(std::memory_order_acquire)) {
@@ -124,7 +171,8 @@ int main() {
     }
     if (!g_ok.load(std::memory_order_acquire)) {
         std::cerr << "[T43] client shutdown did not complete successfully, stage "
-                  << static_cast<int>(g_stage.load(std::memory_order_acquire)) << "\n";
+                  << static_cast<int>(g_stage.load(std::memory_order_acquire))
+                  << ": " << g_error << "\n";
         return 1;
     }
 

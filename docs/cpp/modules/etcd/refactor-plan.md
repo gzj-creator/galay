@@ -245,11 +245,14 @@ co_return co_await std::forward<Fn>(fn)(*lease);
 
 ## Phase 5 — 其余客户端/连接池 awaitable 拆分（✅ 已完成）
 
-后续要求将审计结论扩展为实际拆分，范围限定在客户端和连接池，不扩展到 kernel、RPC、HTTP2 中与协议对象紧耦合的局部/嵌套 awaitable。
+后续要求将审计结论扩展为实际拆分，范围限定在客户端和连接池拥有的自定义 awaitable；协议内核中与连接/流对象紧耦合的局部 operation 保持原边界。
 
 - Redis/Rediss 客户端：`src/cpp/galay-redis/details/awaitable.{h,inl}`
 - Redis/Rediss 池：`src/cpp/galay-redis/details/pool_awaitable.{h,inl}`
 - MySQL 池：`src/cpp/galay-mysql/details/pool_awaitable.{h,inl}`
+- HTTP/2 TLS 客户端：`src/cpp/galay-http2/details/h2_client_awaitable.{h,inl}`
+- HTTP/2 h2c 客户端：`src/cpp/galay-http2/details/h2c_client_awaitable.{h,inl}`
+- RPC 客户端：`src/cpp/galay-rpc/details/client_awaitable.{h,inl}`
 
 原 `async/redis_client.{h,cc}`、`async/conn_pool.{h,cc}` 与 MySQL `async/conn_pool.{h,cc}` 只保留前置声明、公开接口及单一 include。MySQL 池保留原嵌套类型身份 `MysqlConnectionPool::AcquireAwaitable` / `LeaseAwaitable`，不改 ABI 符号。
 
@@ -259,10 +262,12 @@ co_return co_await std::forward<Fn>(fn)(*lease);
 - `galay-redis/details/pool_awaitable.inl` 只由 `async/conn_pool.cc` include。
 - `galay-mysql/details/pool_awaitable.inl` 只由 `async/conn_pool.cc` include。
 
+HTTP/2 与 RPC 继续支持任意 `Strategy` / `SocketType` 模板实例，因此不采用单一 TU 实例化：对应 `details/*.h` 在文件末包含 `*.inl`，公开 client 头只保留前置声明、接口与 details include。HTTP、Mongo、MCP 仅暴露 `Task`/底层 socket awaitable，WebSocket 使用协议 upgrade operation，无独立命名的客户端 Awaitable 类，不新建空壳 details 类型。
+
 **验证**：
 ```bash
 cmake --build build -j
-ctest --test-dir build --output-on-failure -R "redis.t22.pool.source.boundaries|mysql.t14.pool.coroutine.source"
+ctest --test-dir build --output-on-failure -R "redis.t22.pool.source.boundaries|mysql.t14.pool.coroutine.source|http2.client_awaitable_source|rpc.t105.client.awaitable.source"
 ```
 
 ---

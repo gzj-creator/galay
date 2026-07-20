@@ -61,134 +61,6 @@ using ::galay::utils::RingBuffer;
 template<typename SocketType, RingBufferBackendStrategy Strategy>
 class RpcClientImpl;
 
-namespace detail {
-
-/**
- * @brief 期望特定request_id的RPC响应读取状态
- *
- * @details 从RingBuffer中解析响应消息，并验证request_id与期望值匹配。
- */
-template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-class ExpectedRpcResponseReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>
-{
-public:
-    using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
-
-    ExpectedRpcResponseReadState(RingBuffer<Strategy>& ring_buffer,
-                                 const RpcReaderSetting& setting,
-                                 uint32_t expected_request_id,
-                                 RpcResponse& response)
-        : Base(ring_buffer)
-        , m_setting(&setting)
-        , m_expected_request_id(expected_request_id)
-        , m_response(&response)
-    {
-    }
-
-    /// @brief 从RingBuffer中尝试解析期望的响应消息
-    bool parseFromRingBuffer()
-    {
-        if (this->ringBuffer().readable() == 0) {
-            return false;
-        }
-
-        std::array<struct iovec, 2> read_iovecs{};
-        const size_t read_iovecs_count = this->ringBuffer().getReadIovecs(read_iovecs);
-        if (read_iovecs_count == 0) {
-            return false;
-        }
-
-        const std::span<const iovec> read_span(read_iovecs.data(), read_iovecs_count);
-        auto parse_result = tryParseResponseMessage(read_span,
-                                                    iovecsReadableBytes(read_span),
-                                                    m_setting->max_message_size,
-                                                    *m_response);
-        if (!parse_result.has_value()) {
-            this->setReadError(parse_result.error());
-            return true;
-        }
-
-        if (parse_result.value() == 0) {
-            return false;
-        }
-
-        if (m_response->requestId() != m_expected_request_id) {
-            this->setReadError(RpcError(RpcErrorCode::INVALID_RESPONSE,
-                                        "Mismatched response request id"));
-            return true;
-        }
-
-        this->ringBuffer().consume(parse_result.value());
-        return true;
-    }
-
-private:
-    const RpcReaderSetting* m_setting = nullptr;  ///< 读取配置
-    uint32_t m_expected_request_id = 0;           ///< 期望的请求ID
-    RpcResponse* m_response = nullptr;            ///< 输出响应对象
-};
-
-}  // namespace detail
-
-/**
- * @brief 接收RPC响应的链式等待体
- *
- * @details 支持超时控制的RPC响应接收协程等待体，
- *          内部使用状态机驱动readv直到收到完整响应。
- * @tparam SocketType Socket类型
- */
-template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-class RecvRpcResponseChainAwaitable
-    : public TimeoutSupport<RecvRpcResponseChainAwaitable<SocketType, Strategy>> {
-public:
-    using Result = detail::RpcAwaitableResult;
-    using ReadState = detail::ExpectedRpcResponseReadState<Strategy>;
-
-    /**
-     * @brief 构造响应接收等待体
-     * @param ring_buffer 环形缓冲区
-     * @param setting 读取配置
-     * @param expected_request_id 期望匹配的请求ID
-     * @param response 输出响应对象
-     */
-    RecvRpcResponseChainAwaitable(RingBuffer<Strategy>& ring_buffer,
-                                  const RpcReaderSetting& setting,
-                                  uint32_t expected_request_id,
-                                  RpcResponse& response)
-        : m_state(std::make_shared<ReadState>(
-            ring_buffer,
-            setting,
-            expected_request_id,
-            response))
-        , m_inner(
-            AwaitableBuilder<Result>::fromStateMachine(
-                nullptr,
-                detail::RpcRingBufferReadMachine<ReadState>(m_state))
-                .build())
-    {}
-
-    RecvRpcResponseChainAwaitable(RecvRpcResponseChainAwaitable&&) noexcept = default;
-    RecvRpcResponseChainAwaitable& operator=(RecvRpcResponseChainAwaitable&&) noexcept = default;
-    RecvRpcResponseChainAwaitable(const RecvRpcResponseChainAwaitable&) = delete;
-    RecvRpcResponseChainAwaitable& operator=(const RecvRpcResponseChainAwaitable&) = delete;
-
-    bool await_ready() { return m_inner.await_ready(); }  ///< 检查是否已就绪
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)  ///< 挂起协程
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }  ///< 恢复协程并返回结果
-    void markTimeout() { m_inner.markTimeout(); }  ///< 标记超时
-
-private:
-    using InnerAwaitable =
-        StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
-
-    std::shared_ptr<ReadState> m_state;  ///< 读取状态
-    InnerAwaitable m_inner;  ///< 内部状态机等待体
-};
-
 /// @brief RPC调用结果类型
 using RpcCallResult = std::expected<std::optional<RpcResponse>, RpcError>;
 
@@ -640,5 +512,7 @@ using RpcClient = RpcClientImpl<TcpSocket>;
 inline RpcClient RpcClientBuilder::build() const { return RpcClient(m_config); }
 
 } // namespace galay::rpc
+
+#include "../details/client_awaitable.h"
 
 #endif // GALAY_RPC_CLIENT_H

@@ -76,30 +76,7 @@ struct H2RequestMachine;
 template<RingBufferBackendStrategy Strategy>
 auto buildRequestOperation(H2Client<Strategy>& client, Http2Request&& request);
 
-class CaptureSchedulerAwaitable {
-public:
-    explicit CaptureSchedulerAwaitable(Scheduler** out) noexcept
-        : m_out(out)
-    {
-    }
-
-    bool await_ready() const noexcept {
-        return false;
-    }
-
-    template<typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) noexcept {
-        if (m_out != nullptr) {
-            *m_out = handle.promise().taskRefView().belongScheduler();
-        }
-        return false;
-    }
-
-    void await_resume() const noexcept {}
-
-private:
-    Scheduler** m_out = nullptr;
-};
+#include "../details/h2_client_awaitable.h"
 } // namespace detail
 
 /**

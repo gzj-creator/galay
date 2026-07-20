@@ -378,6 +378,16 @@ public:
     bool isRunning() const {
         return m_running.load();
     }
+
+    /**
+     * @brief 检查至少一个 h2c listener 是否已完成 bind/listen。
+     * @return 服务器正在运行且已有 listener 可接受连接时返回 true。
+     * @note 该查询无锁、不阻塞，供启动编排和测试等待可观测就绪状态。
+     */
+    bool isReady() const {
+        return m_running.load(std::memory_order_acquire) &&
+               m_listening_loop_count.load(std::memory_order_acquire) > 0;
+    }
     
     Runtime& getRuntime() {
         return m_runtime;
@@ -490,7 +500,11 @@ private:
         // 阶段 1：注册 serverLoop 退出守卫，确保循环结束时扣减运行计数
         struct LoopExitGuard {
             H2cServer* server;
+            bool listening = false;
             ~LoopExitGuard() {
+                if (listening) {
+                    server->m_listening_loop_count.fetch_sub(1, std::memory_order_acq_rel);
+                }
                 server->m_server_loop_count.fetch_sub(1, std::memory_order_acq_rel);
             }
         } guard{this};
@@ -546,6 +560,9 @@ private:
                            listen_result.error().message());
             co_return;
         }
+
+        m_listening_loop_count.fetch_add(1, std::memory_order_release);
+        guard.listening = true;
 
         // 阶段 8：主 accept 循环，运行期间持续等待新连接
         while (m_running.load()) {
@@ -911,6 +928,7 @@ private:
     std::size_t m_started_plugin_count = 0;
     std::atomic<bool> m_running;
     std::atomic<size_t> m_server_loop_count{0};
+    std::atomic<size_t> m_listening_loop_count{0};
 };
 
 inline H2cServer H2cServerBuilder::build() const {
