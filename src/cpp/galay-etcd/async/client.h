@@ -22,7 +22,6 @@
 #include "../base/network_cfg.h"
 #include "../base/etcd_types.h"
 #include "../base/etcd_value.h"
-#include "../cluster/etcd_cluster_client.h"
 
 #include "../../galay-http/kernel/http_session.h"
 #include "../../galay-kernel/async/tcp_socket.h"
@@ -42,11 +41,45 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
 namespace galay::etcd
 {
+
+class AsyncEtcdClient;
+
+namespace details
+{
+class ConnectAwaitable;
+class CloseAwaitable;
+class PostJsonAwaitable;
+class JsonOpAwaitableBase;
+class PutAwaitable;
+class GetAwaitable;
+class DeleteAwaitable;
+class GrantLeaseAwaitable;
+class KeepAliveAwaitable;
+class PipelineAwaitable;
+struct AsyncEtcdClientPoolState;
+
+template <typename TaskType>
+struct AsyncEtcdTaskValue;
+
+template <typename T>
+struct AsyncEtcdTaskValue<galay::kernel::Task<T>>
+{
+    using type = T;
+};
+
+template <class Fn>
+using AsyncEtcdOperationResult = typename AsyncEtcdTaskValue<
+    std::remove_cvref_t<std::invoke_result_t<Fn&, AsyncEtcdClient&>>>::type;
+
+template <class Fn>
+using AsyncEtcdOperationValue = typename AsyncEtcdOperationResult<Fn>::value_type;
+} // namespace details
 
 /**
  * @brief etcd 异步客户端
@@ -63,432 +96,15 @@ public:
     using PipelineItemResult = galay::etcd::PipelineItemResult; ///< Pipeline 操作结果
     using WatchTaskHandler = std::function<galay::kernel::Task<void>(EtcdWatchResponse)>;   ///< Watch 协程回调处理器
     using WatchFunctionHandler = std::function<void(EtcdWatchResponse)>;                    ///< Watch 普通函数回调处理器
-
-private:
-    using ConnectIoAwaitable =
-        decltype(std::declval<galay::async::TcpSocket&>().connect(std::declval<const galay::kernel::Host&>()));
-    using CloseIoAwaitable = decltype(std::declval<galay::async::TcpSocket&>().close());
-    using HttpSerializedRequestAwaitable =
-        decltype(std::declval<galay::http::HttpSession&>().sendSerializedRequest(
-            std::declval<std::string>()));
-
-    /**
-     * @brief IO Awaitable 基类模板
-     * @tparam AwaitableType 底层 IO Awaitable 类型
-     * @details 为底层 IO 操作提供统一的协程接口封装
-     */
-    template <typename AwaitableType>
-    class IoAwaitableBase
-    {
-    protected:
-        explicit IoAwaitableBase(AsyncEtcdClient& client)
-            : m_client(&client)
-        {
-        }
-
-        void startIo(AwaitableType&& awaitable)
-        {
-            m_awaitable.emplace(std::move(awaitable));
-        }
-
-        bool awaitReady() const noexcept
-        {
-            return !m_awaitable.has_value();
-        }
-
-        template <typename Promise>
-        bool awaitSuspend(std::coroutine_handle<Promise> handle)
-        {
-            return m_awaitable->await_suspend(handle);
-        }
-
-        std::optional<AwaitableType>& awaitable()
-        {
-            return m_awaitable;
-        }
-
-        const std::optional<AwaitableType>& awaitable() const
-        {
-            return m_awaitable;
-        }
-
-        AsyncEtcdClient* m_client = nullptr;
-
-    private:
-        std::optional<AwaitableType> m_awaitable;
-    };
-
-public:
-    /**
-     * @brief 连接操作 Awaitable
-     * @details 封装与 etcd 服务端的 TCP 连接建立过程，
-     *          返回布尔值表示连接是否成功。
-     */
-    class ConnectAwaitable
-    {
-    public:
-        using Result = EtcdBoolResult; ///< 操作结果类型
-
-        /**
-         * @brief 构造连接 Awaitable
-         * @param client 异步客户端引用
-         */
-        ConnectAwaitable(AsyncEtcdClient& client);
-
-        ConnectAwaitable(const ConnectAwaitable&) = delete;
-        ConnectAwaitable& operator=(const ConnectAwaitable&) = delete;
-        ConnectAwaitable(ConnectAwaitable&&) noexcept = default;
-        ConnectAwaitable& operator=(ConnectAwaitable&&) noexcept = default;
-
-        bool await_ready() noexcept; ///< 检查连接是否已完成
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return m_inner->await_suspend(handle);
-        }
-        Result await_resume(); ///< 获取连接结果
-
-    private:
-        /**
-         * @brief 连接状态机阶段
-         */
-        enum class Phase {
-            Connect, ///< 正在连接
-            Done     ///< 连接完成
-        };
-
-        /**
-         * @brief 连接操作的共享状态
-         */
-        struct SharedState {
-            explicit SharedState(AsyncEtcdClient& client);
-
-            galay::kernel::Host host;                 ///< 目标主机
-            std::optional<Result> result;             ///< 连接结果
-            AsyncEtcdClient* client = nullptr;       ///< 客户端指针
-            Phase phase = Phase::Done;                ///< 当前阶段
-        };
-
-        /**
-         * @brief 连接状态机
-         * @details 驱动 TCP 连接的建立过程，处理连接回调
-         */
-        struct Machine {
-            using result_type = Result;
-            static constexpr galay::kernel::SequenceOwnerDomain kSequenceOwnerDomain =
-                galay::kernel::SequenceOwnerDomain::Write;
-
-            explicit Machine(std::shared_ptr<SharedState> state);
-
-            galay::kernel::MachineAction<result_type> advance(); ///< 推进状态机
-            void onConnect(std::expected<void, galay::kernel::IOError> result); ///< 连接回调
-            void onRead(std::expected<size_t, galay::kernel::IOError>);   ///< 读取回调
-            void onWrite(std::expected<size_t, galay::kernel::IOError>);  ///< 写入回调
-
-        private:
-            std::shared_ptr<SharedState> m_state;
-        };
-
-        using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>;
-
-        std::shared_ptr<SharedState> m_state;
-        std::unique_ptr<InnerAwaitable> m_inner;
-    };
-
-    /**
-     * @brief 关闭连接 Awaitable
-     * @details 封装 TCP 连接关闭过程，返回布尔值表示是否成功关闭。
-     */
-    class CloseAwaitable : private IoAwaitableBase<CloseIoAwaitable>
-    {
-    public:
-        /**
-         * @brief 构造关闭 Awaitable
-         * @param client 异步客户端引用
-         */
-        CloseAwaitable(AsyncEtcdClient& client);
-
-        CloseAwaitable(const CloseAwaitable&) = delete;
-        CloseAwaitable& operator=(const CloseAwaitable&) = delete;
-        CloseAwaitable(CloseAwaitable&&) noexcept = default;
-        CloseAwaitable& operator=(CloseAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept; ///< 检查关闭是否已完成
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return awaitSuspend(handle);
-        }
-        EtcdBoolResult await_resume(); ///< 获取关闭结果
-    };
-
-    /**
-     * @brief JSON POST 请求 Awaitable
-     * @details 封装向 etcd 服务端发送 JSON POST 请求并接收响应的过程。
-     */
-    class PostJsonAwaitable
-    {
-    public:
-        /**
-         * @brief 构造 JSON POST Awaitable
-         * @param client 异步客户端引用
-         * @param api_path API 路径
-         * @param body JSON 请求体
-         * @param force_timeout 可选的强制超时时间
-         */
-        PostJsonAwaitable(AsyncEtcdClient& client,
-                          std::string api_path,
-                          std::string body,
-                          std::optional<std::chrono::milliseconds> force_timeout);
-
-        PostJsonAwaitable(const PostJsonAwaitable&) = delete;
-        PostJsonAwaitable& operator=(const PostJsonAwaitable&) = delete;
-        PostJsonAwaitable(PostJsonAwaitable&&) noexcept = default;
-        PostJsonAwaitable& operator=(PostJsonAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept; ///< 检查请求是否已完成
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return m_ctx->awaitable.await_suspend(handle);
-        }
-        std::expected<std::string, EtcdError> await_resume(); ///< 获取响应体或错误
-
-    private:
-        /**
-         * @brief POST 请求上下文
-         */
-        struct Context
-        {
-            AsyncEtcdClient* owner = nullptr;            ///< 客户端指针
-            HttpSerializedRequestAwaitable awaitable;    ///< HTTP 请求 Awaitable
-
-            Context(AsyncEtcdClient& client,
-                    std::string api_path,
-                    std::string body);
-        };
-        std::optional<Context> m_ctx;
-    };
-
-private:
-    /**
-     * @brief JSON 操作 Awaitable 基类
-     * @details 为所有基于 JSON POST 的 etcd 操作(Put/Get/Delete/Lease/Pipeline)
-     *          提供统一的 POST 请求发起和结果解析框架。
-     */
-    class JsonOpAwaitableBase
-    {
-    protected:
-        explicit JsonOpAwaitableBase(AsyncEtcdClient& client);
-
-        void startPost(std::string api_path,
-                       std::string body,
-                       std::optional<std::chrono::milliseconds> force_timeout = std::nullopt);
-        bool awaitReady() const noexcept;
-        template <typename Promise>
-        bool awaitSuspend(std::coroutine_handle<Promise> handle)
-        {
-            return m_post_awaitable->await_suspend(handle);
-        }
-        std::expected<std::string, EtcdError> resumePost();
-
-        AsyncEtcdClient* m_client = nullptr;
-        std::optional<PostJsonAwaitable> m_post_awaitable;
-    };
-
-public:
-    /**
-     * @brief Put 操作 Awaitable
-     * @details 向 etcd 写入一个键值对，可选绑定租约 ID。
-     */
-    class PutAwaitable : private JsonOpAwaitableBase
-    {
-    public:
-        /**
-         * @brief 构造 Put Awaitable
-         * @param client 异步客户端引用
-         * @param key 键名
-         * @param value 值
-         * @param lease_id 可选的租约 ID
-         */
-        PutAwaitable(AsyncEtcdClient& client,
-                     std::string key,
-                     std::string value,
-                     std::optional<int64_t> lease_id);
-
-        PutAwaitable(const PutAwaitable&) = delete;
-        PutAwaitable& operator=(const PutAwaitable&) = delete;
-        PutAwaitable(PutAwaitable&&) noexcept = default;
-        PutAwaitable& operator=(PutAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept; ///< 检查 Put 操作是否已完成
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return awaitSuspend(handle);
-        }
-        EtcdBoolResult await_resume(); ///< 获取 Put 操作结果
-    };
-
-    /**
-     * @brief Get 操作 Awaitable
-     * @details 从 etcd 读取键值对，支持精确匹配和前缀查询。
-     */
-    class GetAwaitable : private JsonOpAwaitableBase
-    {
-    public:
-        /**
-         * @brief 构造 Get Awaitable
-         * @param client 异步客户端引用
-         * @param key 键名
-         * @param prefix 是否为前缀查询
-         * @param limit 返回数量限制
-         */
-        GetAwaitable(AsyncEtcdClient& client,
-                     std::string key,
-                     bool prefix,
-                     std::optional<int64_t> limit);
-
-        GetAwaitable(const GetAwaitable&) = delete;
-        GetAwaitable& operator=(const GetAwaitable&) = delete;
-        GetAwaitable(GetAwaitable&&) noexcept = default;
-        GetAwaitable& operator=(GetAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept; ///< 检查 Get 操作是否已完成
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return awaitSuspend(handle);
-        }
-        EtcdGetResult await_resume(); ///< 获取查询到的键值对列表
-    };
-
-    /**
-     * @brief Delete 操作 Awaitable
-     * @details 从 etcd 删除键值对，支持精确删除和前缀删除。
-     */
-    class DeleteAwaitable : private JsonOpAwaitableBase
-    {
-    public:
-        /**
-         * @brief 构造 Delete Awaitable
-         * @param client 异步客户端引用
-         * @param key 键名
-         * @param prefix 是否为前缀删除
-         */
-        DeleteAwaitable(AsyncEtcdClient& client,
-                        std::string key,
-                        bool prefix);
-
-        DeleteAwaitable(const DeleteAwaitable&) = delete;
-        DeleteAwaitable& operator=(const DeleteAwaitable&) = delete;
-        DeleteAwaitable(DeleteAwaitable&&) noexcept = default;
-        DeleteAwaitable& operator=(DeleteAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept; ///< 检查 Delete 操作是否已完成
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return awaitSuspend(handle);
-        }
-        EtcdDeleteResult await_resume(); ///< 获取删除数量
-    };
-
-    /**
-     * @brief GrantLease 操作 Awaitable
-     * @details 向 etcd 申请一个指定 TTL 的租约。
-     */
-    class GrantLeaseAwaitable : private JsonOpAwaitableBase
-    {
-    public:
-        /**
-         * @brief 构造 GrantLease Awaitable
-         * @param client 异步客户端引用
-         * @param ttl_seconds 租约存活时间（秒）
-         */
-        GrantLeaseAwaitable(AsyncEtcdClient& client, int64_t ttl_seconds);
-
-        GrantLeaseAwaitable(const GrantLeaseAwaitable&) = delete;
-        GrantLeaseAwaitable& operator=(const GrantLeaseAwaitable&) = delete;
-        GrantLeaseAwaitable(GrantLeaseAwaitable&&) noexcept = default;
-        GrantLeaseAwaitable& operator=(GrantLeaseAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept;
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return awaitSuspend(handle);
-        }
-        EtcdLeaseGrantResult await_resume(); ///< 获取分配的租约 ID
-    };
-
-    /**
-     * @brief KeepAlive 操作 Awaitable
-     * @details 向 etcd 发送一次租约续期请求。
-     */
-    class KeepAliveAwaitable : private JsonOpAwaitableBase
-    {
-    public:
-        /**
-         * @brief 构造 KeepAlive Awaitable
-         * @param client 异步客户端引用
-         * @param lease_id 需要续期的租约 ID
-         */
-        KeepAliveAwaitable(AsyncEtcdClient& client, int64_t lease_id);
-
-        KeepAliveAwaitable(const KeepAliveAwaitable&) = delete;
-        KeepAliveAwaitable& operator=(const KeepAliveAwaitable&) = delete;
-        KeepAliveAwaitable(KeepAliveAwaitable&&) noexcept = default;
-        KeepAliveAwaitable& operator=(KeepAliveAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept;
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return awaitSuspend(handle);
-        }
-        EtcdLeaseGrantResult await_resume(); ///< 获取续期后的租约 ID
-
-    private:
-        int64_t m_lease_id = 0; ///< 待续期的租约 ID
-    };
-
-    /**
-     * @brief Pipeline 事务 Awaitable
-     * @details 将多个操作(Put/Get/Delete)打包为 etcd 事务(Txn)一次性提交。
-     */
-    class PipelineAwaitable : private JsonOpAwaitableBase
-    {
-    public:
-        /**
-         * @brief 构造 Pipeline Awaitable（span 版本）
-         * @param client 异步客户端引用
-         * @param operations Pipeline 操作列表
-         */
-        PipelineAwaitable(AsyncEtcdClient& client, std::span<const PipelineOp> operations);
-        /**
-         * @brief 构造 Pipeline Awaitable（vector 版本）
-         * @param client 异步客户端引用
-         * @param operations Pipeline 操作列表
-         */
-        PipelineAwaitable(AsyncEtcdClient& client, std::vector<PipelineOp> operations);
-
-        PipelineAwaitable(const PipelineAwaitable&) = delete;
-        PipelineAwaitable& operator=(const PipelineAwaitable&) = delete;
-        PipelineAwaitable(PipelineAwaitable&&) noexcept = default;
-        PipelineAwaitable& operator=(PipelineAwaitable&&) noexcept = default;
-
-        bool await_ready() const noexcept;
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return awaitSuspend(handle);
-        }
-        EtcdPipelineResult await_resume(); ///< 获取 Pipeline 操作结果列表
-
-    private:
-        std::vector<PipelineOpType> m_operation_types; ///< 各操作对应的类型列表
-    };
+    using ConnectAwaitable = details::ConnectAwaitable;             ///< 连接操作 Awaitable
+    using CloseAwaitable = details::CloseAwaitable;                 ///< 关闭操作 Awaitable
+    using PostJsonAwaitable = details::PostJsonAwaitable;           ///< JSON POST 内部 Awaitable
+    using PutAwaitable = details::PutAwaitable;                     ///< Put 操作 Awaitable
+    using GetAwaitable = details::GetAwaitable;                     ///< Get 操作 Awaitable
+    using DeleteAwaitable = details::DeleteAwaitable;               ///< Delete 操作 Awaitable
+    using GrantLeaseAwaitable = details::GrantLeaseAwaitable;       ///< GrantLease 操作 Awaitable
+    using KeepAliveAwaitable = details::KeepAliveAwaitable;         ///< KeepAlive 操作 Awaitable
+    using PipelineAwaitable = details::PipelineAwaitable;           ///< Pipeline 操作 Awaitable
 
     /**
      * @brief 构造异步 etcd 客户端
@@ -605,6 +221,17 @@ public:
     [[nodiscard]] bool connected() const;
 
 private:
+    friend class details::ConnectAwaitable;
+    friend class details::CloseAwaitable;
+    friend class details::PostJsonAwaitable;
+    friend class details::JsonOpAwaitableBase;
+    friend class details::PutAwaitable;
+    friend class details::GetAwaitable;
+    friend class details::DeleteAwaitable;
+    friend class details::GrantLeaseAwaitable;
+    friend class details::KeepAliveAwaitable;
+    friend class details::PipelineAwaitable;
+
     struct WatchWorkerState;
 
     void resetLastOperation();
@@ -613,7 +240,7 @@ private:
 
     [[nodiscard]] EtcdBoolResult currentBoolResult() const;
     std::expected<std::string, EtcdError> resumePostOrCurrent(
-        std::optional<PostJsonAwaitable>& post_awaitable);
+        PostJsonAwaitable* post_awaitable);
     [[nodiscard]] std::string buildSerializedPostRequest(std::string_view api_path,
                                                          std::string_view body) const;
 
@@ -813,49 +440,59 @@ private:
     EtcdConfig m_config{};                             ///< 客户端配置
 };
 
+class AsyncEtcdClusterClient;
+
 /**
- * @brief async cluster wrapper 单次尝试快照
- * @details 仅承载离线 policy loop 需要的信息，不触发真实网络 I/O。
- *          `config` 是调用侧随后真正发起 I/O 时应使用的 endpoint 绑定配置副本。
+ * @brief AsyncEtcdClient 池租约
+ * @details move-only RAII 句柄，保证同一个 AsyncEtcdClient 同时只由一个调用协程使用。
+ *          租约析构或调用 release() 时会把 client 归还无锁空闲队列。
+ * @note client 仍绑定创建它的 IOScheduler；租约不会迁移或重新绑定 scheduler。
+ * @note 所有由 client 创建的 awaitable 都必须在租约归还前完成。
  */
-struct AsyncEtcdClusterAttempt
+class AsyncEtcdClientLease
 {
-    AsyncEtcdClusterAttempt() = default;
-    AsyncEtcdClusterAttempt(AsyncEtcdClusterAttempt&&) noexcept = default;
-    AsyncEtcdClusterAttempt& operator=(AsyncEtcdClusterAttempt&&) noexcept = default;
+public:
+    AsyncEtcdClientLease() noexcept = default;
+    AsyncEtcdClientLease(AsyncEtcdClientLease&& other) noexcept;
+    AsyncEtcdClientLease& operator=(AsyncEtcdClientLease&& other) noexcept;
+    AsyncEtcdClientLease(const AsyncEtcdClientLease&) = delete;
+    AsyncEtcdClientLease& operator=(const AsyncEtcdClientLease&) = delete;
+    ~AsyncEtcdClientLease();
 
-    /**
-     * @brief 显式复制离线 retry attempt 快照
-     * @return 当前 attempt 的独立副本
-     */
-    [[nodiscard]] AsyncEtcdClusterAttempt clone() const
-    {
-        return AsyncEtcdClusterAttempt(*this);
-    }
-
-    size_t endpoint_index = 0;                                           ///< 本次选择的 endpoint 下标
-    size_t attempt = 0;                                                  ///< 当前请求内的第几次尝试，从 0 开始
-    EtcdConfig config{};                                                 ///< 已绑定 endpoint 的配置副本
-    std::chrono::milliseconds backoff = std::chrono::milliseconds::zero(); ///< 当前尝试前应遵守的退避时间
+    /** @brief 获取租约持有的 client；空租约返回 nullptr。 */
+    [[nodiscard]] AsyncEtcdClient* get() const noexcept;
+    /** @brief 解引用租约持有的 client。 */
+    [[nodiscard]] AsyncEtcdClient& operator*() const noexcept;
+    /** @brief 访问租约持有的 client。 */
+    [[nodiscard]] AsyncEtcdClient* operator->() const noexcept;
+    /** @brief 判断租约是否持有 client。 */
+    [[nodiscard]] explicit operator bool() const noexcept;
+    /** @brief 提前归还 client；可重复调用且不阻塞。 */
+    void release() noexcept;
 
 private:
-    AsyncEtcdClusterAttempt(const AsyncEtcdClusterAttempt&) = default;
-    AsyncEtcdClusterAttempt& operator=(const AsyncEtcdClusterAttempt&) = default;
+    friend class AsyncEtcdClusterClient;
+
+    AsyncEtcdClientLease(
+        std::shared_ptr<details::AsyncEtcdClientPoolState> state,
+        AsyncEtcdClient* client) noexcept;
+
+    std::shared_ptr<details::AsyncEtcdClientPoolState> m_state;
+    AsyncEtcdClient* m_client = nullptr;
 };
 
+using AsyncEtcdClientAcquireResult = std::expected<AsyncEtcdClientLease, EtcdError>;
+
 /**
- * @brief async etcd cluster client 的最小离线 wrapper
- * @details 当前仅暴露 coroutine-friendly 的端点选择与重试控制面。
- *          不做真实网络请求，不提供 async cluster `connect/put/get/del` API，
- *          也不引入后台 health probe 线程。
+ * @brief 多端点 AsyncEtcdClient 无锁池
+ * @details 为每个 endpoint 创建固定数量且绑定同一 IOScheduler 的 AsyncEtcdClient。
+ *          调用方通过 tryAcquire() 获取独占租约，再直接 co_await client 操作；池本身
+ *          不执行连接、请求、重试或健康检查。
+ * @note tryAcquire() 不挂起、不阻塞；池空时返回 EtcdErrorType::PoolExhausted。
  */
 class AsyncEtcdClusterClient
 {
 public:
-    using Attempt = AsyncEtcdClusterAttempt;
-    using AttemptResult = std::expected<Attempt, EtcdError>;
-    using AttemptAwaitable = galay::kernel::ReadyAwaitable<AttemptResult>;
-
     explicit AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler = nullptr,
                                     EtcdConfig config = {});
 
@@ -865,61 +502,51 @@ private:
 public:
     AsyncEtcdClusterClient(AsyncEtcdClusterClient&&) noexcept = default;
     AsyncEtcdClusterClient& operator=(AsyncEtcdClusterClient&&) noexcept = default;
+    ~AsyncEtcdClusterClient() = default;
 
     /**
-     * @brief 开始一次离线 cluster 尝试规划
-     * @return 立即就绪的 AttemptAwaitable，成功时返回首个应尝试的 endpoint 配置
+     * @brief 尝试获取一个独占 AsyncEtcdClient 租约
+     * @return 成功返回租约；配置无效、池内部失败或暂无空闲 client 时返回 EtcdError
+     * @note 该操作只访问无锁队列，不挂起协程，也不执行网络连接。
      */
-    [[nodiscard]] AttemptAwaitable beginAttempt();
+    [[nodiscard]] AsyncEtcdClientAcquireResult tryAcquire();
 
     /**
-     * @brief 根据上一次错误规划下一次离线重试
-     * @param previous 上一次尝试快照
-     * @param error 上一次尝试对应的错误分类
-     * @return 立即就绪的 AttemptAwaitable；失败时直接返回 fail-fast 错误
-     * @note 调用侧负责使用返回的 `Attempt.config` 执行真实 I/O。
+     * @brief 异步获取独占租约并确保 client 已连接
+     * @return Task 完成后返回已连接租约，或返回池获取、建连对应的 EtcdError
+     * @note 建连由池绑定的 IOScheduler 挂起推进，不阻塞调用线程；错误路径自动归还租约。
      */
-    [[nodiscard]] AttemptAwaitable nextAttempt(const Attempt& previous, EtcdError error);
+    [[nodiscard]] galay::kernel::Task<AsyncEtcdClientAcquireResult> acquireConnected();
 
     /**
-     * @brief 记录一次由调用侧完成的成功尝试
-     * @param attempt 成功的尝试快照
-     * @param when 成功时间
-     * @note 该方法只更新 health snapshot / stats，不执行任何网络操作。
+     * @brief 使用一个已连接的独占 client 执行异步操作
+     * @tparam Fn 可调用对象类型，签名为 `Task<std::expected<T, EtcdError>>(AsyncEtcdClient&)`
+     * @param fn 按值保存到协程 frame 的异步操作，支持移动传入
+     * @return Task 完成后返回操作结果；Task 调度/消费错误映射为 Internal
+     * @note 方法只通过 co_await 挂起，不阻塞线程；租约会跨所有挂起点存活，并在任意返回路径自动归还。
      */
-    void markSuccess(
-        const Attempt& attempt,
-        std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+    template <class Fn>
+    [[nodiscard]] auto withClient(Fn fn) -> galay::kernel::Task<
+        std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>;
 
-    [[nodiscard]] const std::vector<EtcdEndpointHealthSnapshot>& getEndpointSnapshots() const;
-    [[nodiscard]] EtcdClientStats getStats() const;
-    [[nodiscard]] galay::kernel::IOScheduler* scheduler() const;
+    /** @brief 返回池持有的 client 总数。 */
+    [[nodiscard]] size_t size() const noexcept;
+    /** @brief 返回当前空闲 client 数量的并发快照。 */
+    [[nodiscard]] size_t idleCount() const noexcept;
+    /** @brief 返回池内 AsyncEtcdClient 固定绑定的 IOScheduler。 */
+    [[nodiscard]] galay::kernel::IOScheduler* scheduler() const noexcept;
 
 private:
-    [[nodiscard]] EtcdConfig configForEndpoint(size_t index) const;
-    [[nodiscard]] AttemptResult makeAttempt(
-        size_t attempt,
-        std::chrono::milliseconds backoff);
-
-private:
-    galay::kernel::IOScheduler* m_scheduler = nullptr;
-    EtcdConfig m_config{};
-    EtcdClusterState m_state;
+    std::shared_ptr<details::AsyncEtcdClientPoolState> m_state;
 };
 
 /**
- * @brief async cluster wrapper 构建器
- * @details 保持与 `AsyncEtcdClientBuilder` 接近的配置 surface，
- *          但当前 build 出来的对象只负责离线 policy loop，
- *          不代表已经具备真实 async cluster KV I/O 能力。
+ * @brief AsyncEtcdClient 无锁池构建器
  */
 class AsyncEtcdClusterClientBuilder
 {
 public:
-    AsyncEtcdClusterClientBuilder()
-    {
-        m_config.endpoint.clear();
-    }
+    AsyncEtcdClusterClientBuilder() = default;
     AsyncEtcdClusterClientBuilder(AsyncEtcdClusterClientBuilder&&) noexcept = default;
     AsyncEtcdClusterClientBuilder& operator=(AsyncEtcdClusterClientBuilder&&) noexcept = default;
 
@@ -950,6 +577,12 @@ public:
         return *this;
     }
 
+    AsyncEtcdClusterClientBuilder& connectionsPerEndpoint(size_t count)
+    {
+        m_config.production.connections_per_endpoint = count;
+        return *this;
+    }
+
     AsyncEtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout)
     {
         m_config.request_timeout = timeout;
@@ -977,7 +610,7 @@ public:
     AsyncEtcdClusterClient build() const;
 
     /**
-     * @brief 显式复制 builder 的离线配置状态
+     * @brief 显式复制 builder 配置状态
      * @return 当前 builder 的独立副本
      */
     [[nodiscard]] AsyncEtcdClusterClientBuilder clone() const
@@ -999,11 +632,39 @@ private:
     AsyncEtcdClusterClientBuilder(const AsyncEtcdClusterClientBuilder&) = default;
     AsyncEtcdClusterClientBuilder& operator=(const AsyncEtcdClusterClientBuilder&) = default;
 
-    galay::kernel::IOScheduler* m_scheduler = nullptr;
     EtcdConfig m_config{};
+    galay::kernel::IOScheduler* m_scheduler = nullptr;
 };
 
 } // namespace galay::etcd
+
+#include "../details/awaitable.h"
+
+template <class Fn>
+auto galay::etcd::AsyncEtcdClusterClient::withClient(Fn fn) -> galay::kernel::Task<
+    std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>
+{
+    auto lease_result = tryAcquire();
+    if (!lease_result.has_value()) {
+        co_return std::unexpected(lease_result.error());
+    }
+
+    auto lease = std::move(*lease_result);
+    if (!lease->connected()) {
+        auto connected = co_await lease->connect();
+        if (!connected.has_value()) {
+            co_return std::unexpected(connected.error());
+        }
+    }
+
+    auto operation_task_result = co_await std::invoke(fn, *lease);
+    if (!operation_task_result.has_value()) {
+        co_return std::unexpected(EtcdError(
+            EtcdErrorType::Internal,
+            std::string(operation_task_result.error().message())));
+    }
+    co_return std::move(operation_task_result.value());
+}
 
 inline galay::etcd::AsyncEtcdClient galay::etcd::AsyncEtcdClientBuilder::build() const
 {

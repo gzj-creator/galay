@@ -97,6 +97,7 @@ struct EtcdProductionConfig
     std::vector<std::string> endpoints;                         ///< etcd 集群端点列表
     EtcdRetryConfig retry;                                      ///< 重试配置
     std::chrono::milliseconds health_interval{5000};           ///< 健康检查间隔
+    size_t connections_per_endpoint = 1;                        ///< 每个端点创建的 client 数量，必须大于 0
     EtcdEndpointPolicy endpoint_policy = EtcdEndpointPolicy::FirstHealthy; ///< 端点选择策略
     bool prefer_leader = false;                                 ///< 是否优先 leader
 };

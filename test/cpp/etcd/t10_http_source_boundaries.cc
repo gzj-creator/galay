@@ -38,7 +38,41 @@ int main()
     const auto root = repoRoot();
     const auto sync_client = readFile(root / "src/cpp/galay-etcd/sync/etcd_client.cc");
     const auto async_client = readFile(root / "src/cpp/galay-etcd/async/client.cc");
+    const auto async_header = readFile(root / "src/cpp/galay-etcd/async/client.h");
+    const auto awaitable_header =
+        readFile(root / "src/cpp/galay-etcd/details/awaitable.h");
+    const auto awaitable_implementation =
+        readFile(root / "src/cpp/galay-etcd/details/awaitable.inl");
     const auto internal_header = readFile(root / "src/cpp/galay-etcd/base/etcd_internal.h");
+
+    if (!contains(awaitable_header, "namespace galay::etcd::details")) {
+        std::cerr << "etcd awaitable types must live in the details namespace\n";
+        return 1;
+    }
+    if (!contains(async_client, "#include \"../details/awaitable.inl\"") ||
+        !contains(awaitable_implementation, "details::ConnectAwaitable::") ||
+        contains(async_client, "details::ConnectAwaitable::")) {
+        std::cerr << "etcd awaitable implementations must stay in details/awaitable.inl\n";
+        return 1;
+    }
+    for (const auto* awaitable_type : {
+             "class ConnectAwaitable\n{",
+             "class CloseAwaitable :",
+             "class PostJsonAwaitable\n{",
+             "class PutAwaitable :",
+             "class GetAwaitable :",
+             "class DeleteAwaitable :",
+             "class GrantLeaseAwaitable :",
+             "class KeepAliveAwaitable :",
+             "class PipelineAwaitable :",
+         }) {
+        if (!contains(awaitable_header, awaitable_type) ||
+            contains(async_header, awaitable_type)) {
+            std::cerr << "etcd awaitable definition must stay in details/awaitable.h: "
+                      << awaitable_type << '\n';
+            return 1;
+        }
+    }
 
     for (const auto* required : {
              "chunk size overflows buffer bounds",

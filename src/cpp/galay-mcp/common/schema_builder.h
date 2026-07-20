@@ -16,8 +16,7 @@
 #include <string>
 #include <vector>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 /**
  * @brief JSON Schema 构建器
@@ -413,6 +412,5 @@ private:
     std::vector<PromptArgument> m_arguments; ///< 参数列表
 };
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 #endif // GALAY_MCP_COMMON_MCPSCHEMABUILDER_H

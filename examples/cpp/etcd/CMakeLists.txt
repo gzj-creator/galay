@@ -24,6 +24,7 @@ endfunction()
 
 set(GALAY_ETCD_EXAMPLE_SCENARIO_e1_basic sync_basic)
 set(GALAY_ETCD_EXAMPLE_SCENARIO_e2_basic async_basic)
+set(GALAY_ETCD_EXAMPLE_SCENARIO_e3_client_pool client_pool)
 
 file(GLOB GALAY_ETCD_INCLUDE_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/include/*.cc")
 foreach(example_source IN LISTS GALAY_ETCD_INCLUDE_EXAMPLE_SOURCES)

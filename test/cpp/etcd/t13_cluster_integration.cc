@@ -79,15 +79,24 @@ int main()
         .productionConfig(production)
         .build();
 
+    auto client_lease = client.tryAcquire();
+    if (!client_lease.has_value()) {
+        return fail("cluster acquire failed: " + client_lease.error().message());
+    }
+    auto connect = client_lease->get()->connect();
+    if (!connect.has_value()) {
+        return fail("cluster connect failed: " + connect.error().message());
+    }
+
     const std::string key = "/galay-etcd/cluster/" + nowSuffix();
     const std::string value = "value-" + nowSuffix();
 
-    auto put = client.put(key, value);
+    auto put = client_lease->get()->put(key, value);
     if (!put.has_value()) {
         return fail("cluster put failed: " + put.error().message());
     }
 
-    auto get = client.get(key);
+    auto get = client_lease->get()->get(key);
     if (!get.has_value()) {
         return fail("cluster get failed: " + get.error().message());
     }
@@ -95,9 +104,14 @@ int main()
         return fail("cluster get value mismatch");
     }
 
-    auto del = client.del(key);
+    auto del = client_lease->get()->del(key);
     if (!del.has_value() || *del <= 0) {
         return fail("cluster delete failed");
+    }
+
+    auto close = client_lease->get()->close();
+    if (!close.has_value()) {
+        return fail("cluster close failed: " + close.error().message());
     }
 
     std::cout << "ETCD CLUSTER INTEGRATION TEST PASSED\n";

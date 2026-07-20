@@ -7,7 +7,7 @@ namespace galay::etcd
 
 namespace
 {
-constexpr std::array<const char*, 12> kErrorMessages = {
+constexpr std::array<const char*, 13> kErrorMessages = {
     "success",
     "invalid endpoint",
     "invalid parameter",
@@ -19,6 +19,7 @@ constexpr std::array<const char*, 12> kErrorMessages = {
     "http error",
     "server error",
     "parse error",
+    "client pool exhausted",
     "internal error",
 };
 }

@@ -2,8 +2,7 @@
 #include <galay/cpp/galay-mcp/common/mcp_base.h>
 #include <sstream>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 std::string McpError::toString() const {
     std::ostringstream oss;
@@ -45,5 +44,4 @@ int McpError::toJsonRpcErrorCode() const {
     }
 }
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp

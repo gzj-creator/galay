@@ -1,7 +1,6 @@
 #include <galay/cpp/galay-mcp/common/json_parser.h>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 namespace {
 
@@ -106,5 +105,4 @@ std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_
     return parsed;
 }
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp

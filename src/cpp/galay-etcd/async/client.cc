@@ -13,6 +13,7 @@
 #include <cstring>
 #include <exception>
 #include <fcntl.h>
+#include <limits>
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <poll.h>
@@ -21,6 +22,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <utility>
+#include <concurrentqueue/moodycamel/concurrentqueue.h>
 
 namespace galay::etcd
 {
@@ -31,6 +33,25 @@ namespace
 {
 
 constexpr size_t kMaxWatchHeaderBytes = 64 * 1024;
+
+size_t configuredEndpointCount(const EtcdConfig& config)
+{
+    if (!config.production.endpoints.empty()) {
+        return config.production.endpoints.size();
+    }
+    return config.endpoint.empty() ? 0 : 1;
+}
+
+size_t queueCapacityForConfig(const EtcdConfig& config)
+{
+    const size_t endpoint_count = configuredEndpointCount(config);
+    const size_t per_endpoint = config.production.connections_per_endpoint;
+    if (endpoint_count == 0 || per_endpoint == 0 ||
+        endpoint_count > std::numeric_limits<size_t>::max() / per_endpoint) {
+        return 1;
+    }
+    return endpoint_count * per_endpoint;
+}
 
 EtcdError mapHttpError(const galay::http::HttpError& error)
 {
@@ -463,98 +484,216 @@ bool dispatchWatchLines(
 
 } // namespace
 
-AsyncEtcdClusterClient::AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler,
-                                               EtcdConfig config)
-    : m_scheduler(scheduler)
-    , m_config(std::move(config))
-    , m_state([this] {
-        EtcdProductionConfig production = m_config.production;
-        if (production.endpoints.empty() && !m_config.endpoint.empty()) {
-            production.endpoints.push_back(m_config.endpoint);
+namespace details
+{
+
+struct AsyncEtcdClientPoolState
+{
+    AsyncEtcdClientPoolState(
+        galay::kernel::IOScheduler* owner_scheduler,
+        EtcdConfig config)
+        : idle_clients(queueCapacityForConfig(config))
+        , scheduler(owner_scheduler)
+    {
+        std::vector<std::string> endpoints = config.production.endpoints;
+        if (endpoints.empty() && !config.endpoint.empty()) {
+            endpoints.push_back(config.endpoint);
         }
-        return production;
-    }())
-{
-}
+        if (endpoints.empty()) {
+            init_error.emplace(
+                EtcdErrorType::InvalidEndpoint,
+                "cluster endpoints are empty");
+            return;
+        }
 
-AsyncEtcdClusterClient::AttemptAwaitable AsyncEtcdClusterClient::beginAttempt()
-{
-    m_state.recordRequest();
-    return AttemptAwaitable(makeAttempt(0, std::chrono::milliseconds::zero()));
-}
+        const size_t per_endpoint = config.production.connections_per_endpoint;
+        if (per_endpoint == 0) {
+            init_error.emplace(
+                EtcdErrorType::InvalidParam,
+                "connections_per_endpoint must be greater than zero");
+            return;
+        }
+        if (endpoints.size() > std::numeric_limits<size_t>::max() / per_endpoint) {
+            init_error.emplace(
+                EtcdErrorType::InvalidParam,
+                "configured async client pool size overflows size_t");
+            return;
+        }
 
-AsyncEtcdClusterClient::AttemptAwaitable AsyncEtcdClusterClient::nextAttempt(
-    const Attempt& previous,
-    EtcdError error)
-{
-    const EtcdRetryDecision decision = m_state.classifyRetry(error, previous.attempt);
-    m_state.markFailure(
-        previous.endpoint_index,
-        error,
-        decision == EtcdRetryDecision::RetryNextEndpoint);
-    if (decision == EtcdRetryDecision::FailFast) {
-        return AttemptAwaitable(std::unexpected(std::move(error)));
+        const size_t total = endpoints.size() * per_endpoint;
+        clients.reserve(total);
+        for (const auto& endpoint : endpoints) {
+            for (size_t index = 0; index < per_endpoint; ++index) {
+                EtcdConfig client_config = config;
+                client_config.endpoint = endpoint;
+                auto client = std::make_unique<AsyncEtcdClient>(
+                    scheduler,
+                    std::move(client_config));
+                AsyncEtcdClient* const client_ptr = client.get();
+                clients.push_back(std::move(client));
+                const bool enqueued = idle_clients.enqueue(client_ptr);
+                if (!enqueued) {
+                    queue_failed.store(true, std::memory_order_release);
+                    init_error.emplace(
+                        EtcdErrorType::Internal,
+                        "failed to initialize async client pool queue");
+                    return;
+                }
+            }
+        }
     }
 
-    m_state.recordRetry();
-    const auto backoff = m_state.backoffForAttempt(previous.attempt);
-    if (decision == EtcdRetryDecision::RetrySameEndpoint) {
-        Attempt retry = previous.clone();
-        retry.attempt = previous.attempt + 1;
-        retry.backoff = backoff;
-        return AttemptAwaitable(std::move(retry));
+    void release(AsyncEtcdClient* client) noexcept
+    {
+        if (client == nullptr) {
+            return;
+        }
+        const bool enqueued = idle_clients.enqueue(client);
+        if (!enqueued) {
+            queue_failed.store(true, std::memory_order_release);
+            return;
+        }
+        borrowed_count.fetch_sub(1, std::memory_order_acq_rel);
     }
 
-    return AttemptAwaitable(makeAttempt(previous.attempt + 1, backoff));
+    alignas(64) moodycamel::ConcurrentQueue<AsyncEtcdClient*> idle_clients;
+    alignas(64) std::atomic<size_t> borrowed_count{0};
+    alignas(64) std::atomic<bool> queue_failed{false};
+    std::optional<EtcdError> init_error;
+    std::vector<std::unique_ptr<AsyncEtcdClient>> clients;
+    galay::kernel::IOScheduler* scheduler = nullptr;
+};
+
+} // namespace details
+
+AsyncEtcdClientLease::AsyncEtcdClientLease(
+    std::shared_ptr<details::AsyncEtcdClientPoolState> state,
+    AsyncEtcdClient* client) noexcept
+    : m_state(std::move(state))
+    , m_client(client)
+{
 }
 
-void AsyncEtcdClusterClient::markSuccess(
-    const Attempt& attempt,
-    std::chrono::system_clock::time_point when)
+AsyncEtcdClientLease::AsyncEtcdClientLease(AsyncEtcdClientLease&& other) noexcept
+    : m_state(std::move(other.m_state))
+    , m_client(std::exchange(other.m_client, nullptr))
 {
-    m_state.markSuccess(attempt.endpoint_index, when);
 }
 
-const std::vector<EtcdEndpointHealthSnapshot>& AsyncEtcdClusterClient::getEndpointSnapshots() const
+AsyncEtcdClientLease& AsyncEtcdClientLease::operator=(AsyncEtcdClientLease&& other) noexcept
 {
-    return m_state.getEndpointSnapshots();
-}
-
-EtcdClientStats AsyncEtcdClusterClient::getStats() const
-{
-    return m_state.getStats();
-}
-
-galay::kernel::IOScheduler* AsyncEtcdClusterClient::scheduler() const
-{
-    return m_scheduler;
-}
-
-EtcdConfig AsyncEtcdClusterClient::configForEndpoint(size_t index) const
-{
-    EtcdConfig config = m_config;
-    if (index < config.production.endpoints.size()) {
-        config.endpoint = config.production.endpoints[index];
+    if (this != &other) {
+        release();
+        m_state = std::move(other.m_state);
+        m_client = std::exchange(other.m_client, nullptr);
     }
-    return config;
+    return *this;
 }
 
-AsyncEtcdClusterClient::AttemptResult AsyncEtcdClusterClient::makeAttempt(
-    size_t attempt,
-    std::chrono::milliseconds backoff)
+AsyncEtcdClientLease::~AsyncEtcdClientLease()
 {
-    const std::optional<size_t> selected = m_state.selectEndpoint();
-    if (!selected.has_value()) {
+    release();
+}
+
+AsyncEtcdClient* AsyncEtcdClientLease::get() const noexcept
+{
+    return m_client;
+}
+
+AsyncEtcdClient& AsyncEtcdClientLease::operator*() const noexcept
+{
+    return *m_client;
+}
+
+AsyncEtcdClient* AsyncEtcdClientLease::operator->() const noexcept
+{
+    return m_client;
+}
+
+AsyncEtcdClientLease::operator bool() const noexcept
+{
+    return m_client != nullptr;
+}
+
+void AsyncEtcdClientLease::release() noexcept
+{
+    AsyncEtcdClient* const client = std::exchange(m_client, nullptr);
+    auto state = std::move(m_state);
+    if (state != nullptr && client != nullptr) {
+        state->release(client);
+    }
+}
+
+AsyncEtcdClusterClient::AsyncEtcdClusterClient(
+    galay::kernel::IOScheduler* scheduler,
+    EtcdConfig config)
+    : m_state(std::make_shared<details::AsyncEtcdClientPoolState>(
+          scheduler,
+          std::move(config)))
+{
+}
+
+AsyncEtcdClientAcquireResult AsyncEtcdClusterClient::tryAcquire()
+{
+    if (m_state == nullptr) {
         return std::unexpected(
-            EtcdError(EtcdErrorType::InvalidEndpoint, "cluster endpoints are empty"));
+            EtcdError(EtcdErrorType::Internal, "async client pool is moved from"));
+    }
+    if (m_state->init_error.has_value()) {
+        return std::unexpected(*m_state->init_error);
+    }
+    if (m_state->queue_failed.load(std::memory_order_acquire)) {
+        return std::unexpected(
+            EtcdError(EtcdErrorType::Internal, "async client pool queue failed"));
     }
 
-    Attempt next;
-    next.endpoint_index = *selected;
-    next.attempt = attempt;
-    next.config = configForEndpoint(*selected);
-    next.backoff = backoff;
-    return next;
+    AsyncEtcdClient* client = nullptr;
+    const bool dequeued = m_state->idle_clients.try_dequeue(client);
+    if (!dequeued || client == nullptr) {
+        return std::unexpected(
+            EtcdError(EtcdErrorType::PoolExhausted, "no idle AsyncEtcdClient"));
+    }
+    m_state->borrowed_count.fetch_add(1, std::memory_order_acq_rel);
+    return AsyncEtcdClientLease(m_state, client);
+}
+
+galay::kernel::Task<AsyncEtcdClientAcquireResult>
+AsyncEtcdClusterClient::acquireConnected()
+{
+    auto lease_result = tryAcquire();
+    if (!lease_result.has_value()) {
+        co_return std::unexpected(lease_result.error());
+    }
+
+    auto lease = std::move(*lease_result);
+    if (!lease->connected()) {
+        auto connected = co_await lease->connect();
+        if (!connected.has_value()) {
+            co_return std::unexpected(connected.error());
+        }
+    }
+    co_return AsyncEtcdClientAcquireResult(std::move(lease));
+}
+
+size_t AsyncEtcdClusterClient::size() const noexcept
+{
+    return m_state == nullptr ? 0 : m_state->clients.size();
+}
+
+size_t AsyncEtcdClusterClient::idleCount() const noexcept
+{
+    if (m_state == nullptr) {
+        return 0;
+    }
+    const size_t borrowed = m_state->borrowed_count.load(std::memory_order_acquire);
+    return borrowed >= m_state->clients.size()
+        ? 0
+        : m_state->clients.size() - borrowed;
+}
+
+galay::kernel::IOScheduler* AsyncEtcdClusterClient::scheduler() const noexcept
+{
+    return m_state == nullptr ? nullptr : m_state->scheduler;
 }
 
 struct AsyncEtcdClient::WatchWorkerState
@@ -604,365 +743,7 @@ AsyncEtcdClient::~AsyncEtcdClient()
     stopWatchWorkers();
 }
 
-AsyncEtcdClient::PostJsonAwaitable::Context::Context(AsyncEtcdClient& client,
-                                                     std::string api_path,
-                                                     std::string body)
-    : owner(&client)
-    , awaitable(client.m_http_session->sendSerializedRequest(
-          client.buildSerializedPostRequest(api_path, body)))
-{
-}
-
-AsyncEtcdClient::PostJsonAwaitable::PostJsonAwaitable(AsyncEtcdClient& client,
-                                                 std::string api_path,
-                                                 std::string body,
-                                                 std::optional<std::chrono::milliseconds> force_timeout)
-    : m_ctx(std::nullopt)
-{
-    if (!client.m_connected || client.m_socket == nullptr || client.m_http_session == nullptr) {
-        client.setError(EtcdErrorType::NotConnected, "etcd client is not connected");
-        return;
-    }
-
-    m_ctx.emplace(client, std::move(api_path), std::move(body));
-
-    if (force_timeout.has_value()) {
-        m_ctx->awaitable.timeout(force_timeout.value());
-    } else if (client.m_network_config.isRequestTimeoutEnabled()) {
-        m_ctx->awaitable.timeout(client.m_network_config.request_timeout);
-    }
-}
-
-bool AsyncEtcdClient::PostJsonAwaitable::await_ready() const noexcept
-{
-    return !m_ctx.has_value();
-}
-
-std::expected<std::string, EtcdError> AsyncEtcdClient::PostJsonAwaitable::await_resume()
-{
-    if (!m_ctx.has_value()) {
-        ETCD_LOG_WARN("[async] [request]", "request rejected error=etcd client is not connected");
-        return std::unexpected(EtcdError(EtcdErrorType::NotConnected, "etcd client is not connected"));
-    }
-
-    auto response_result = m_ctx->awaitable.await_resume();
-    if (!response_result.has_value()) {
-        const auto mapped = mapHttpError(response_result.error());
-        m_ctx->owner->setError(mapped);
-        ETCD_LOG_ERROR("[async] [request]", "http request failed endpoint={} error={}",
-                       m_ctx->owner->m_config.endpoint,
-                       mapped.message());
-        return std::unexpected(mapped);
-    }
-
-    if (!response_result->has_value()) {
-        EtcdError error(EtcdErrorType::Internal, "http response incomplete");
-        m_ctx->owner->setError(error);
-        ETCD_LOG_ERROR("[async] [request]", "http response incomplete endpoint={}",
-                       m_ctx->owner->m_config.endpoint);
-        return std::unexpected(error);
-    }
-
-    auto response = std::move(response_result->value());
-    const int status_code = static_cast<int>(response.header().code());
-    const std::string response_body = response.getBodyStr();
-
-    if (status_code < 200 || status_code >= 300) {
-        EtcdError error(
-            EtcdErrorType::Server,
-            "HTTP status=" + std::to_string(status_code) +
-            ", body=" + response_body);
-        m_ctx->owner->setError(error);
-        ETCD_LOG_WARN("[async] [request]", "unexpected http status endpoint={} status={} body_size={}",
-                      m_ctx->owner->m_config.endpoint,
-                      status_code,
-                      response_body.size());
-        return std::unexpected(error);
-    }
-
-    ETCD_LOG_DEBUG("[async] [request]", "request completed endpoint={} status={} body_size={}",
-                   m_ctx->owner->m_config.endpoint,
-                   status_code,
-                   response_body.size());
-
-    return response_body;
-}
-
-AsyncEtcdClient::JsonOpAwaitableBase::JsonOpAwaitableBase(AsyncEtcdClient& client)
-    : m_client(&client)
-{
-}
-
-void AsyncEtcdClient::JsonOpAwaitableBase::startPost(
-    std::string api_path,
-    std::string body,
-    std::optional<std::chrono::milliseconds> force_timeout)
-{
-    m_post_awaitable.emplace(*m_client, std::move(api_path), std::move(body), force_timeout);
-}
-
-bool AsyncEtcdClient::JsonOpAwaitableBase::awaitReady() const noexcept
-{
-    return !m_post_awaitable.has_value() || m_post_awaitable->await_ready();
-}
-
-std::expected<std::string, EtcdError> AsyncEtcdClient::JsonOpAwaitableBase::resumePost()
-{
-    return m_client->resumePostOrCurrent(m_post_awaitable);
-}
-
-AsyncEtcdClient::PutAwaitable::PutAwaitable(AsyncEtcdClient& client,
-                                       std::string key,
-                                       std::string value,
-                                       std::optional<int64_t> lease_id)
-    : JsonOpAwaitableBase(client)
-{
-    m_client->resetLastOperation();
-    auto body = buildPutRequestBody(key, value, lease_id);
-    if (!body.has_value()) {
-        m_client->setError(body.error());
-        return;
-    }
-
-    startPost("/kv/put", std::move(body.value()));
-}
-
-bool AsyncEtcdClient::PutAwaitable::await_ready() const noexcept
-{
-    return awaitReady();
-}
-
-EtcdBoolResult AsyncEtcdClient::PutAwaitable::await_resume()
-{
-    auto response_body = resumePost();
-    if (!response_body.has_value()) {
-        return std::unexpected(response_body.error());
-    }
-
-    auto put_result = parsePutResponse(response_body.value());
-    if (!put_result.has_value()) {
-        m_client->setError(put_result.error());
-        return std::unexpected(put_result.error());
-    }
-
-    return true;
-}
-
-AsyncEtcdClient::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& owner)
-    : client(&owner)
-{
-    client->resetLastOperation();
-    if (client->m_scheduler == nullptr) {
-        EtcdError error(EtcdErrorType::Internal, "IOScheduler is null");
-        client->setError(error);
-        ETCD_LOG_ERROR("[async] [connect]", "scheduler is null endpoint={}",
-                       client->m_config.endpoint);
-        result = std::unexpected(error);
-        return;
-    }
-
-    if (client->m_connected && client->m_socket != nullptr && client->m_http_session != nullptr) {
-        ETCD_LOG_DEBUG("[async] [connect]", "already connected endpoint={}",
-                       client->m_config.endpoint);
-        result = true;
-        return;
-    }
-
-    if (!client->m_endpoint_valid || !client->m_server_host.has_value()) {
-        const std::string message = client->m_endpoint_error.empty()
-            ? "invalid endpoint"
-            : client->m_endpoint_error;
-        EtcdError error(EtcdErrorType::InvalidEndpoint, message);
-        client->setError(error);
-        ETCD_LOG_ERROR("[async] [connect]", "invalid endpoint endpoint={} error={}",
-                       client->m_config.endpoint,
-                       error.message());
-        result = std::unexpected(error);
-        return;
-    }
-
-    try {
-        client->m_socket = std::make_unique<galay::async::TcpSocket>(client->m_ip_type);
-        auto nonblock_result = client->m_socket->option().handleNonBlock();
-        if (!nonblock_result.has_value()) {
-            EtcdError error = mapKernelIoError(nonblock_result.error(), EtcdErrorType::Connection);
-            client->setError(error);
-            ETCD_LOG_ERROR("[async] [connect]", "set nonblocking failed endpoint={} error={}",
-                           client->m_config.endpoint,
-                           error.message());
-            client->m_socket.reset();
-            client->m_connected = false;
-            result = std::unexpected(error);
-            return;
-        }
-
-        if (client->m_network_config.tcp_no_delay) {
-            auto nodelay_result = client->m_socket->option().handleTcpNoDelay();
-            if (!nodelay_result.has_value()) {
-                EtcdError error = mapKernelIoError(nodelay_result.error(), EtcdErrorType::Connection);
-                client->setError(error);
-                ETCD_LOG_ERROR("[async] [connect]", "set TCP_NODELAY failed endpoint={} error={}",
-                               client->m_config.endpoint,
-                               error.message());
-                client->m_socket.reset();
-                client->m_connected = false;
-                result = std::unexpected(error);
-                return;
-            }
-        }
-
-        host = client->m_server_host.value();
-        phase = Phase::Connect;
-        ETCD_LOG_INFO("[async] [connect]", "connecting endpoint={}",
-                      client->m_config.endpoint);
-    } catch (const std::exception& ex) {
-        EtcdError error(EtcdErrorType::Connection, ex.what());
-        client->setError(error);
-        ETCD_LOG_ERROR("[async] [connect]", "prepare connect failed endpoint={} error={}",
-                       client->m_config.endpoint,
-                       error.message());
-        client->m_http_session.reset();
-        client->m_socket.reset();
-        client->m_connected = false;
-        result = std::unexpected(error);
-    }
-}
-
-AsyncEtcdClient::ConnectAwaitable::Machine::Machine(std::shared_ptr<SharedState> state)
-    : m_state(std::move(state))
-{
-}
-
-galay::kernel::MachineAction<AsyncEtcdClient::ConnectAwaitable::Result>
-AsyncEtcdClient::ConnectAwaitable::Machine::advance()
-{
-    if (m_state->result.has_value()) {
-        return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
-    }
-
-    if (m_state->phase == Phase::Connect) {
-        return galay::kernel::MachineAction<result_type>::waitConnect(m_state->host);
-    }
-
-    m_state->result = m_state->client->currentBoolResult();
-    return galay::kernel::MachineAction<result_type>::complete(std::move(*m_state->result));
-}
-
-void AsyncEtcdClient::ConnectAwaitable::Machine::onConnect(
-    std::expected<void, galay::kernel::IOError> result)
-{
-    if (!result.has_value()) {
-        EtcdError error = mapKernelIoError(result.error());
-        m_state->client->setError(error);
-        ETCD_LOG_ERROR("[async] [connect]", "connect failed endpoint={} error={}",
-                       m_state->client->m_config.endpoint,
-                       error.message());
-        m_state->client->m_http_session.reset();
-        m_state->client->m_socket.reset();
-        m_state->client->m_connected = false;
-        m_state->result = std::unexpected(error);
-        m_state->phase = Phase::Done;
-        return;
-    }
-
-    try {
-        m_state->client->m_http_session = std::make_unique<galay::http::HttpSession>(
-            *m_state->client->m_socket,
-            m_state->client->m_network_config.buffer_size);
-        m_state->client->m_connected = true;
-        m_state->result = true;
-        ETCD_LOG_INFO("[async] [connect]", "connected endpoint={}",
-                      m_state->client->m_config.endpoint);
-    } catch (const std::exception& ex) {
-        EtcdError error(EtcdErrorType::Internal,
-                        std::string("create http session failed: ") + ex.what());
-        m_state->client->setError(error);
-        ETCD_LOG_ERROR("[async] [connect]", "create http session failed endpoint={} error={}",
-                       m_state->client->m_config.endpoint,
-                       error.message());
-        m_state->client->m_http_session.reset();
-        m_state->client->m_socket.reset();
-        m_state->client->m_connected = false;
-        m_state->result = std::unexpected(error);
-    }
-
-    m_state->phase = Phase::Done;
-}
-
-void AsyncEtcdClient::ConnectAwaitable::Machine::onRead(
-    std::expected<size_t, galay::kernel::IOError>)
-{
-}
-
-void AsyncEtcdClient::ConnectAwaitable::Machine::onWrite(
-    std::expected<size_t, galay::kernel::IOError>)
-{
-}
-
-AsyncEtcdClient::ConnectAwaitable::ConnectAwaitable(AsyncEtcdClient& client)
-    : m_state(std::make_shared<SharedState>(client))
-{
-    auto* controller =
-        client.m_socket != nullptr ? client.m_socket->controller() : &invalidController();
-    m_inner = std::make_unique<InnerAwaitable>(
-        galay::kernel::AwaitableBuilder<Result>::fromStateMachine(
-            controller,
-            Machine(m_state))
-            .build());
-}
-
-bool AsyncEtcdClient::ConnectAwaitable::await_ready() noexcept
-{
-    return m_inner->await_ready();
-}
-
-EtcdBoolResult AsyncEtcdClient::ConnectAwaitable::await_resume()
-{
-    return m_inner->await_resume();
-}
-
-AsyncEtcdClient::CloseAwaitable::CloseAwaitable(AsyncEtcdClient& client)
-    : IoAwaitableBase(client)
-{
-    m_client->resetLastOperation();
-    if (m_client->m_socket == nullptr) {
-        m_client->m_http_session.reset();
-        m_client->m_connected = false;
-        return;
-    }
-    startIo(m_client->m_socket->close());
-}
-
-bool AsyncEtcdClient::CloseAwaitable::await_ready() const noexcept
-{
-    return awaitReady();
-}
-
-EtcdBoolResult AsyncEtcdClient::CloseAwaitable::await_resume()
-{
-    EtcdBoolResult result = true;
-    auto& io_awaitable = awaitable();
-    if (io_awaitable.has_value()) {
-        auto close_result = io_awaitable->await_resume();
-        if (!close_result.has_value()) {
-            EtcdError error = mapKernelIoError(close_result.error());
-            m_client->setError(error);
-            ETCD_LOG_ERROR("[async] [close]", "close failed endpoint={} error={}",
-                           m_client->m_config.endpoint,
-                           error.message());
-            result = std::unexpected(error);
-        }
-    } else {
-        result = m_client->currentBoolResult();
-    }
-
-    m_client->stopWatchWorkers();
-    m_client->m_http_session.reset();
-    m_client->m_socket.reset();
-    m_client->m_connected = false;
-    ETCD_LOG_INFO("[async] [close]", "closed endpoint={}", m_client->m_config.endpoint);
-    return result;
-}
+#include "../details/awaitable.inl"
 
 AsyncEtcdClient::PostJsonAwaitable AsyncEtcdClient::postJsonInternal(
     const std::string& api_path,
@@ -992,198 +773,6 @@ std::string AsyncEtcdClient::buildSerializedPostRequest(std::string_view api_pat
     request.append("\r\n\r\n");
     request.append(body.data(), body.size());
     return request;
-}
-
-AsyncEtcdClient::GetAwaitable::GetAwaitable(AsyncEtcdClient& client,
-                                       std::string key,
-                                       bool prefix,
-                                       std::optional<int64_t> limit)
-    : JsonOpAwaitableBase(client)
-{
-    m_client->resetLastOperation();
-    auto body = buildGetRequestBody(key, prefix, limit);
-    if (!body.has_value()) {
-        m_client->setError(body.error());
-        return;
-    }
-
-    startPost("/kv/range", std::move(body.value()));
-}
-
-bool AsyncEtcdClient::GetAwaitable::await_ready() const noexcept
-{
-    return awaitReady();
-}
-
-EtcdGetResult AsyncEtcdClient::GetAwaitable::await_resume()
-{
-    auto response_body = resumePost();
-    if (!response_body.has_value()) {
-        return std::unexpected(response_body.error());
-    }
-
-    auto kvs_result = parseGetResponseKvs(response_body.value());
-    if (!kvs_result.has_value()) {
-        m_client->setError(kvs_result.error());
-        return std::unexpected(kvs_result.error());
-    }
-
-    return kvs_result.value();
-}
-
-AsyncEtcdClient::DeleteAwaitable::DeleteAwaitable(AsyncEtcdClient& client,
-                                             std::string key,
-                                             bool prefix)
-    : JsonOpAwaitableBase(client)
-{
-    m_client->resetLastOperation();
-    auto body = buildDeleteRequestBody(key, prefix);
-    if (!body.has_value()) {
-        m_client->setError(body.error());
-        return;
-    }
-
-    startPost("/kv/deleterange", std::move(body.value()));
-}
-
-bool AsyncEtcdClient::DeleteAwaitable::await_ready() const noexcept
-{
-    return awaitReady();
-}
-
-EtcdDeleteResult AsyncEtcdClient::DeleteAwaitable::await_resume()
-{
-    auto response_body = resumePost();
-    if (!response_body.has_value()) {
-        return std::unexpected(response_body.error());
-    }
-
-    auto deleted_result = parseDeleteResponseDeletedCount(response_body.value());
-    if (!deleted_result.has_value()) {
-        m_client->setError(deleted_result.error());
-        return std::unexpected(deleted_result.error());
-    }
-    return deleted_result.value();
-}
-
-AsyncEtcdClient::GrantLeaseAwaitable::GrantLeaseAwaitable(AsyncEtcdClient& client, int64_t ttl_seconds)
-    : JsonOpAwaitableBase(client)
-{
-    m_client->resetLastOperation();
-    auto body = buildLeaseGrantRequestBody(ttl_seconds);
-    if (!body.has_value()) {
-        m_client->setError(body.error());
-        return;
-    }
-
-    startPost("/lease/grant", std::move(body.value()));
-}
-
-bool AsyncEtcdClient::GrantLeaseAwaitable::await_ready() const noexcept
-{
-    return awaitReady();
-}
-
-EtcdLeaseGrantResult AsyncEtcdClient::GrantLeaseAwaitable::await_resume()
-{
-    auto response_body = resumePost();
-    if (!response_body.has_value()) {
-        return std::unexpected(response_body.error());
-    }
-
-    auto lease_result = parseLeaseGrantResponseId(response_body.value());
-    if (!lease_result.has_value()) {
-        m_client->setError(lease_result.error());
-        return std::unexpected(lease_result.error());
-    }
-    return lease_result.value();
-}
-
-AsyncEtcdClient::KeepAliveAwaitable::KeepAliveAwaitable(AsyncEtcdClient& client, int64_t lease_id)
-    : JsonOpAwaitableBase(client)
-    , m_lease_id(lease_id)
-{
-    m_client->resetLastOperation();
-    auto body = buildLeaseKeepAliveRequestBody(m_lease_id);
-    if (!body.has_value()) {
-        m_client->setError(body.error());
-        return;
-    }
-
-    std::optional<std::chrono::milliseconds> timeout = std::nullopt;
-    if (!m_client->m_network_config.isRequestTimeoutEnabled()) {
-        timeout = std::chrono::seconds(5);
-    }
-
-    startPost("/lease/keepalive", std::move(body.value()), timeout);
-}
-
-bool AsyncEtcdClient::KeepAliveAwaitable::await_ready() const noexcept
-{
-    return awaitReady();
-}
-
-EtcdLeaseGrantResult AsyncEtcdClient::KeepAliveAwaitable::await_resume()
-{
-    auto response_body = resumePost();
-    if (!response_body.has_value()) {
-        return std::unexpected(response_body.error());
-    }
-
-    auto keepalive_result = parseLeaseKeepAliveResponseId(response_body.value(), m_lease_id);
-    if (!keepalive_result.has_value()) {
-        m_client->setError(keepalive_result.error());
-        return std::unexpected(keepalive_result.error());
-    }
-
-    return keepalive_result.value();
-}
-
-AsyncEtcdClient::PipelineAwaitable::PipelineAwaitable(AsyncEtcdClient& client,
-                                                      std::span<const PipelineOp> operations)
-    : JsonOpAwaitableBase(client)
-{
-    m_client->resetLastOperation();
-    m_operation_types.reserve(operations.size());
-    for (const auto& op : operations) {
-        m_operation_types.push_back(op.type);
-    }
-
-    auto body = buildTxnBody(operations);
-    if (!body.has_value()) {
-        m_client->setError(body.error());
-        return;
-    }
-    startPost("/kv/txn", std::move(body.value()));
-}
-
-AsyncEtcdClient::PipelineAwaitable::PipelineAwaitable(AsyncEtcdClient& client,
-                                                      std::vector<PipelineOp> operations)
-    : PipelineAwaitable(client, std::span<const PipelineOp>(operations.data(), operations.size()))
-{
-}
-
-bool AsyncEtcdClient::PipelineAwaitable::await_ready() const noexcept
-{
-    return awaitReady();
-}
-
-EtcdPipelineResult AsyncEtcdClient::PipelineAwaitable::await_resume()
-{
-    auto response_body = resumePost();
-    if (!response_body.has_value()) {
-        return std::unexpected(response_body.error());
-    }
-
-    auto pipeline_results = parsePipelineTxnResponse(
-        response_body.value(),
-        std::span<const PipelineOpType>(m_operation_types.data(), m_operation_types.size()));
-    if (!pipeline_results.has_value()) {
-        m_client->setError(pipeline_results.error());
-        return std::unexpected(pipeline_results.error());
-    }
-
-    return pipeline_results.value();
 }
 
 AsyncEtcdClient::ConnectAwaitable AsyncEtcdClient::connect()
@@ -1604,9 +1193,9 @@ EtcdBoolResult AsyncEtcdClient::currentBoolResult() const
 }
 
 std::expected<std::string, EtcdError> AsyncEtcdClient::resumePostOrCurrent(
-    std::optional<PostJsonAwaitable>& post_awaitable)
+    PostJsonAwaitable* post_awaitable)
 {
-    if (!post_awaitable.has_value()) {
+    if (post_awaitable == nullptr) {
         if (m_last_error.isOk()) {
             return std::unexpected(EtcdError(EtcdErrorType::Internal, "post awaitable not started"));
         }

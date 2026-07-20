@@ -19,8 +19,7 @@
 #include <string_view>
 #include <vector>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 using JsonString = std::string; ///< JSON字符串类型别名
 using JsonElement = simdjson::dom::element; ///< JSON元素类型别名
@@ -152,7 +151,6 @@ public:
     static const JsonElement& emptyObject(); ///< 获取空对象的静态引用
 };
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 
 #endif // GALAY_MCP_COMMON_MCPJSON_H

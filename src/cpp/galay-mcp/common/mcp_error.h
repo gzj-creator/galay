@@ -14,8 +14,7 @@
 #include <string>
 #include <system_error>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 /**
  * @brief MCP错误码枚举
@@ -403,7 +402,6 @@ private:
     McpErrorCode m_code; ///< 错误码
 };
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 
 #endif // GALAY_MCP_COMMON_MCPERROR_H

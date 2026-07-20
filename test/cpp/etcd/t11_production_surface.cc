@@ -10,6 +10,7 @@
  */
 
 #include <galay/cpp/galay-etcd/async/client.h>
+#include <galay/cpp/galay-etcd/cluster/etcd_cluster_client.h>
 #include <galay/cpp/galay-etcd/sync/etcd_client.h>
 
 #include <chrono>
@@ -23,11 +24,14 @@ using galay::etcd::AsyncEtcdClient;
 using galay::etcd::AsyncEtcdClientBuilder;
 using galay::etcd::AsyncEtcdClusterClient;
 using galay::etcd::AsyncEtcdClusterClientBuilder;
+using galay::etcd::AsyncEtcdClientAcquireResult;
 using galay::etcd::EtcdClient;
+using galay::etcd::EtcdClientAcquireResult;
 using galay::etcd::EtcdClientBuilder;
+using galay::etcd::EtcdClusterClient;
+using galay::etcd::EtcdClusterClientBuilder;
 using galay::etcd::EtcdClientStats;
 using galay::etcd::EtcdCredentialConfig;
-using galay::etcd::EtcdEndpointHealthSnapshot;
 using galay::etcd::EtcdEndpointPolicy;
 using galay::etcd::EtcdProductionConfig;
 using galay::etcd::EtcdRetryConfig;
@@ -38,7 +42,7 @@ namespace {
 template <typename BuilderT>
 concept AcceptsProductionConfig = requires(BuilderT builder, EtcdProductionConfig config) {
     { builder.productionConfig(config) } -> std::same_as<BuilderT&>;
-    { builder.buildConfig().production.endpoints } -> std::same_as<std::vector<std::string>&>;
+    builder.buildConfig().production.endpoints;
 };
 
 template <typename ClientT>
@@ -46,9 +50,11 @@ concept HasStatsSnapshot = requires(const ClientT& client) {
     { client.getStats() } -> std::same_as<EtcdClientStats>;
 };
 
-template <typename ClientT>
-concept HasEndpointSnapshots = requires(const ClientT& client) {
-    { client.getEndpointSnapshots() } -> std::same_as<const std::vector<EtcdEndpointHealthSnapshot>&>;
+template <typename PoolT, typename AcquireResultT>
+concept HasPoolSurface = requires(PoolT& pool, const PoolT& const_pool) {
+    { pool.tryAcquire() } -> std::same_as<AcquireResultT>;
+    { const_pool.size() } -> std::same_as<size_t>;
+    { const_pool.idleCount() } -> std::same_as<size_t>;
 };
 
 static_assert(std::is_enum_v<EtcdEndpointPolicy>);
@@ -58,11 +64,12 @@ static_assert(std::is_default_constructible_v<EtcdProductionConfig>);
 static_assert(std::is_default_constructible_v<EtcdClientStats>);
 static_assert(AcceptsProductionConfig<EtcdClientBuilder>);
 static_assert(AcceptsProductionConfig<AsyncEtcdClientBuilder>);
+static_assert(AcceptsProductionConfig<EtcdClusterClientBuilder>);
 static_assert(AcceptsProductionConfig<AsyncEtcdClusterClientBuilder>);
 static_assert(HasStatsSnapshot<EtcdClient>);
 static_assert(HasStatsSnapshot<AsyncEtcdClient>);
-static_assert(HasStatsSnapshot<AsyncEtcdClusterClient>);
-static_assert(HasEndpointSnapshots<AsyncEtcdClusterClient>);
+static_assert(HasPoolSurface<EtcdClusterClient, EtcdClientAcquireResult>);
+static_assert(HasPoolSurface<AsyncEtcdClusterClient, AsyncEtcdClientAcquireResult>);
 
 bool contains(const std::string& text, const std::string& needle)
 {
@@ -86,6 +93,7 @@ int main()
     production.endpoint_policy = EtcdEndpointPolicy::RoundRobin;
     production.prefer_leader = true;
     production.retry.attempts = 5;
+    production.connections_per_endpoint = 2;
 
     const auto sync_config = EtcdClientBuilder()
         .productionConfig(production)
@@ -107,6 +115,7 @@ int main()
         .productionConfig(production)
         .buildConfig();
     if (async_cluster_config.production.endpoints.size() != 2 ||
+        async_cluster_config.production.connections_per_endpoint != 2 ||
         async_cluster_config.endpoint != "http://127.0.0.1:2379") {
         return 6;
     }

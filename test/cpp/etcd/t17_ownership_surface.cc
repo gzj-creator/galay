@@ -16,11 +16,12 @@
 
 using galay::etcd::AsyncEtcdClient;
 using galay::etcd::AsyncEtcdClientBuilder;
-using galay::etcd::AsyncEtcdClusterAttempt;
 using galay::etcd::AsyncEtcdClusterClient;
 using galay::etcd::AsyncEtcdClusterClientBuilder;
+using galay::etcd::AsyncEtcdClientLease;
 using galay::etcd::EtcdClient;
 using galay::etcd::EtcdClientBuilder;
+using galay::etcd::EtcdClientLease;
 using galay::etcd::EtcdClusterClient;
 using galay::etcd::EtcdClusterClientBuilder;
 using galay::etcd::EtcdClusterState;
@@ -72,6 +73,7 @@ EtcdProductionConfig makeProduction()
     production.retry.initial_backoff = std::chrono::milliseconds(10);
     production.retry.max_backoff = std::chrono::milliseconds(40);
     production.retry.jitter = false;
+    production.connections_per_endpoint = 2;
     return production;
 }
 
@@ -89,11 +91,17 @@ static_assert(std::is_nothrow_move_constructible_v<EtcdClusterState>);
 static_assert(std::is_nothrow_move_assignable_v<EtcdClusterState>);
 static_assert(HasValueClone<EtcdClusterState>);
 
-static_assert(!std::is_copy_constructible_v<AsyncEtcdClusterAttempt>);
-static_assert(!std::is_copy_assignable_v<AsyncEtcdClusterAttempt>);
-static_assert(std::is_nothrow_move_constructible_v<AsyncEtcdClusterAttempt>);
-static_assert(std::is_nothrow_move_assignable_v<AsyncEtcdClusterAttempt>);
-static_assert(HasValueClone<AsyncEtcdClusterAttempt>);
+static_assert(!std::is_copy_constructible_v<EtcdClientLease>);
+static_assert(!std::is_copy_assignable_v<EtcdClientLease>);
+static_assert(std::is_nothrow_move_constructible_v<EtcdClientLease>);
+static_assert(std::is_nothrow_move_assignable_v<EtcdClientLease>);
+static_assert(HasNoValueClone<EtcdClientLease>);
+
+static_assert(!std::is_copy_constructible_v<AsyncEtcdClientLease>);
+static_assert(!std::is_copy_assignable_v<AsyncEtcdClientLease>);
+static_assert(std::is_nothrow_move_constructible_v<AsyncEtcdClientLease>);
+static_assert(std::is_nothrow_move_assignable_v<AsyncEtcdClientLease>);
+static_assert(HasNoValueClone<AsyncEtcdClientLease>);
 
 static_assert(!std::is_copy_constructible_v<AsyncEtcdClusterClient>);
 static_assert(!std::is_copy_assignable_v<AsyncEtcdClusterClient>);
@@ -194,19 +202,6 @@ int main()
         return fail("EtcdClusterState clone should preserve selection cursor");
     }
 
-    AsyncEtcdClusterAttempt attempt;
-    attempt.endpoint_index = 2;
-    attempt.attempt = 3;
-    attempt.config.endpoint = "http://127.0.0.1:32379";
-    attempt.backoff = std::chrono::milliseconds(40);
-    AsyncEtcdClusterAttempt attempt_clone = attempt.clone();
-    if (attempt_clone.endpoint_index != attempt.endpoint_index ||
-        attempt_clone.attempt != attempt.attempt ||
-        attempt_clone.config.endpoint != attempt.config.endpoint ||
-        attempt_clone.backoff != attempt.backoff) {
-        return fail("AsyncEtcdClusterAttempt clone should duplicate retry snapshot");
-    }
-
     EtcdClientBuilder sync_builder;
     sync_builder.endpoint("http://127.0.0.1:2379")
         .apiPrefix("/v3")
@@ -226,6 +221,7 @@ int main()
         .requestTimeout(std::chrono::milliseconds(300));
     EtcdClusterClientBuilder cluster_builder_clone = cluster_builder.clone();
     if (cluster_builder_clone.buildConfig().production.endpoints.size() != 3 ||
+        cluster_builder_clone.buildConfig().production.connections_per_endpoint != 2 ||
         cluster_builder_clone.buildConfig().request_timeout != std::chrono::milliseconds(300)) {
         return fail("EtcdClusterClientBuilder clone should preserve production config");
     }
@@ -245,17 +241,21 @@ int main()
         .requestTimeout(std::chrono::milliseconds(400));
     AsyncEtcdClusterClientBuilder async_cluster_builder_clone = async_cluster_builder.clone();
     if (async_cluster_builder_clone.buildConfig().production.endpoints.size() != 3 ||
+        async_cluster_builder_clone.buildConfig().production.connections_per_endpoint != 2 ||
         async_cluster_builder_clone.buildConfig().request_timeout != std::chrono::milliseconds(400)) {
         return fail("AsyncEtcdClusterClientBuilder clone should preserve production config");
     }
 
     AsyncEtcdClusterClient async_cluster = async_cluster_builder_clone.build();
+    auto async_lease = async_cluster.tryAcquire();
+    if (!async_lease.has_value()) {
+        return fail("AsyncEtcdClusterClient should provide a client lease");
+    }
     AsyncEtcdClusterClient moved_async_cluster(std::move(async_cluster));
-    auto moved_attempt = moved_async_cluster.beginAttempt().await_resume();
-    if (!moved_attempt.has_value() ||
-        moved_attempt->endpoint_index != 0 ||
-        moved_attempt->config.endpoint != "http://127.0.0.1:2379") {
-        return fail("moved AsyncEtcdClusterClient should retain offline policy state");
+    async_lease->release();
+    if (moved_async_cluster.size() != 6 ||
+        moved_async_cluster.idleCount() != moved_async_cluster.size()) {
+        return fail("moved AsyncEtcdClusterClient should retain pool state");
     }
 
     std::cout << "ETCD OWNERSHIP SURFACE TEST PASSED\n";

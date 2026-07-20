@@ -34,6 +34,7 @@ enum class EtcdErrorType
     Http,               ///< HTTP 协议错误
     Server,             ///< etcd 服务端返回错误
     Parse,              ///< JSON 解析错误
+    PoolExhausted,      ///< client 池暂无空闲 client
     Internal,           ///< 内部错误
 };
 

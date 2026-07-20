@@ -4,8 +4,7 @@
 #include <functional>
 #include <utility>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 JsonDocument::JsonDocument(JsonDocument&& other) noexcept
     : m_buffer(std::move(other.m_buffer)),
@@ -366,5 +365,4 @@ const JsonElement& JsonHelper::emptyObject() {
     return emptyDoc.root();
 }
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp

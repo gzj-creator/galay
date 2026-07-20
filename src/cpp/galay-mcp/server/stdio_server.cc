@@ -5,8 +5,7 @@
 #include <stdexcept>
 #include <mutex>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 namespace {
 
@@ -627,5 +626,4 @@ std::expected<void, McpError> McpStdioServer::writeMessage(const JsonString& mes
     }
 }
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp

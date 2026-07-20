@@ -1,25 +1,22 @@
 /**
  * @file t14_async_cluster_integration.cc
- * @brief 用途：验证 async cluster offline policy wrapper 的 gated integration surface。
+ * @brief 验证 AsyncEtcdClusterClient 租约池可取得 client 并完成真实 KV 请求。
  */
 
 #include <galay/cpp/galay-etcd/async/client.h>
 
 #include "integration_config.h"
 
+#include <galay/cpp/galay-kernel/core/runtime.h>
+
+#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <thread>
+#include <utility>
 #include <vector>
-
-using galay::etcd::AsyncEtcdClusterClient;
-using galay::etcd::AsyncEtcdClusterClientBuilder;
-using galay::etcd::EtcdEndpointHealthState;
-using galay::etcd::EtcdEndpointPolicy;
-using galay::etcd::EtcdError;
-using galay::etcd::EtcdErrorType;
-using galay::etcd::EtcdProductionConfig;
 
 namespace
 {
@@ -54,6 +51,87 @@ std::vector<std::string> parseEndpoints(const char* raw)
     return endpoints;
 }
 
+std::string nowSuffix()
+{
+    const auto now = std::chrono::high_resolution_clock::now().time_since_epoch();
+    return std::to_string(
+        std::chrono::duration_cast<std::chrono::microseconds>(now).count());
+}
+
+galay::kernel::Task<void> runPoolCase(
+    galay::kernel::IOScheduler* scheduler,
+    galay::etcd::EtcdProductionConfig production,
+    std::atomic<bool>* done,
+    int* exit_code)
+{
+    auto finish = [&](int code) {
+        *exit_code = code;
+        done->store(true, std::memory_order_release);
+    };
+
+    const size_t expected_size =
+        production.endpoints.size() * production.connections_per_endpoint;
+    auto pool = galay::etcd::AsyncEtcdClusterClientBuilder()
+        .scheduler(scheduler)
+        .productionConfig(std::move(production))
+        .build();
+    if (pool.size() != expected_size || pool.idleCount() != expected_size) {
+        finish(fail("async cluster pool size mismatch"));
+        co_return;
+    }
+
+    auto lease = pool.tryAcquire();
+    if (!lease.has_value()) {
+        finish(fail("async cluster acquire failed: " + lease.error().message()));
+        co_return;
+    }
+
+    auto connect = co_await lease->get()->connect();
+    if (!connect.has_value()) {
+        finish(fail("async cluster connect failed: " + connect.error().message()));
+        co_return;
+    }
+
+    const std::string key = "/galay-etcd/async-cluster-pool/" + nowSuffix();
+    const std::string value = "value-" + nowSuffix();
+    auto put = co_await lease->get()->put(key, value);
+    if (!put.has_value()) {
+        finish(fail("async cluster put failed: " + put.error().message()));
+        co_return;
+    }
+
+    auto get = co_await lease->get()->get(key);
+    if (!get.has_value()) {
+        finish(fail("async cluster get failed: " + get.error().message()));
+        co_return;
+    }
+    if (get->empty() || get->front().value != value) {
+        finish(fail("async cluster get value mismatch"));
+        co_return;
+    }
+
+    auto del = co_await lease->get()->del(key);
+    if (!del.has_value() || *del <= 0) {
+        finish(fail("async cluster delete failed"));
+        co_return;
+    }
+
+    auto close = co_await lease->get()->close();
+    if (!close.has_value()) {
+        finish(fail("async cluster close failed: " + close.error().message()));
+        co_return;
+    }
+
+    lease->release();
+    if (pool.idleCount() != pool.size()) {
+        finish(fail("async cluster lease should return client to pool"));
+        co_return;
+    }
+
+    std::cout << "ETCD ASYNC CLUSTER POOL INTEGRATION TEST PASSED\n";
+    finish(0);
+}
+
 } // namespace
 
 int main()
@@ -69,85 +147,44 @@ int main()
         return etcd_test::kEtcdTestSkippedExitCode;
     }
 
-    EtcdProductionConfig production;
+    galay::etcd::EtcdProductionConfig production;
     production.endpoints = endpoints;
-    production.endpoint_policy = EtcdEndpointPolicy::RoundRobin;
-    production.retry.attempts = 3;
-    production.retry.initial_backoff = std::chrono::milliseconds(7);
-    production.retry.max_backoff = std::chrono::milliseconds(21);
-    production.retry.jitter = false;
+    production.connections_per_endpoint = 2;
 
-    const auto timeout = std::chrono::milliseconds(123);
-    AsyncEtcdClusterClient client = AsyncEtcdClusterClientBuilder()
-        .productionConfig(production)
-        .apiPrefix("/galay-it")
-        .requestTimeout(timeout)
+    galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
+        .ioSchedulerCount(1)
+        .computeSchedulerCount(0)
         .build();
-
-    auto first_attempt_awaitable = client.beginAttempt();
-    if (!first_attempt_awaitable.await_ready()) {
-        return fail("beginAttempt should be immediately ready for offline policy wrapper");
+    auto start_result = runtime.start();
+    if (!start_result.has_value()) {
+        return fail("runtime start failed");
     }
 
-    auto first_attempt = first_attempt_awaitable.await_resume();
-    if (!first_attempt.has_value()) {
-        return fail("beginAttempt failed: " + first_attempt.error().message());
-    }
-    if (first_attempt->endpoint_index != 0 ||
-        first_attempt->attempt != 0 ||
-        first_attempt->config.endpoint != endpoints[0] ||
-        first_attempt->config.api_prefix != "/galay-it" ||
-        first_attempt->config.request_timeout != timeout ||
-        first_attempt->backoff != std::chrono::milliseconds::zero()) {
-        return fail("first attempt should inject builder endpoint/api_prefix/timeout into config");
+    auto* scheduler = runtime.getNextIOScheduler();
+    if (scheduler == nullptr) {
+        runtime.stop();
+        return fail("failed to get io scheduler");
     }
 
-    auto second_attempt = client.nextAttempt(
-        *first_attempt,
-        EtcdError(EtcdErrorType::Connection, "dial failed")).await_resume();
-    if (!second_attempt.has_value()) {
-        return fail("connection retry failed: " + second_attempt.error().message());
-    }
-    if (second_attempt->endpoint_index != 1 ||
-        second_attempt->attempt != 1 ||
-        second_attempt->config.endpoint != endpoints[1] ||
-        second_attempt->config.api_prefix != "/galay-it" ||
-        second_attempt->config.request_timeout != timeout ||
-        second_attempt->backoff != std::chrono::milliseconds(7)) {
-        return fail("connection retry should advance to the next configured endpoint");
+    std::atomic<bool> done{false};
+    int exit_code = 1;
+    const bool scheduled = galay::kernel::scheduleTask(
+        scheduler,
+        runPoolCase(scheduler, std::move(production), &done, &exit_code));
+    if (!scheduled) {
+        runtime.stop();
+        return fail("failed to schedule async cluster pool task");
     }
 
-    auto third_attempt = client.nextAttempt(
-        *second_attempt,
-        EtcdError(EtcdErrorType::Server, "server unavailable")).await_resume();
-    if (!third_attempt.has_value()) {
-        return fail("server retry failed: " + third_attempt.error().message());
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(120);
+    while (!done.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
-    if (third_attempt->endpoint_index != 1 ||
-        third_attempt->attempt != 2 ||
-        third_attempt->config.endpoint != endpoints[1] ||
-        third_attempt->config.api_prefix != "/galay-it" ||
-        third_attempt->config.request_timeout != timeout ||
-        third_attempt->backoff != std::chrono::milliseconds(14)) {
-        return fail("server retry should stay on the same selected endpoint");
+    if (!done.load(std::memory_order_acquire)) {
+        exit_code = fail("async cluster pool integration timeout");
     }
 
-    client.markSuccess(*third_attempt);
-    const auto& snapshots = client.getEndpointSnapshots();
-    if (snapshots.size() != endpoints.size() ||
-        snapshots[0].state != EtcdEndpointHealthState::Unhealthy ||
-        snapshots[1].state != EtcdEndpointHealthState::Healthy) {
-        return fail("offline async cluster snapshots should reflect retry outcomes");
-    }
-
-    const auto stats = client.getStats();
-    if (stats.requests != 1 ||
-        stats.retries != 2 ||
-        stats.request_failures != 2 ||
-        stats.endpoint_switches != 1) {
-        return fail("offline async cluster stats should reflect retry loop");
-    }
-
-    std::cout << "ETCD ASYNC CLUSTER INTEGRATION TEST PASSED\n";
-    return 0;
+    runtime.stop();
+    return exit_code;
 }

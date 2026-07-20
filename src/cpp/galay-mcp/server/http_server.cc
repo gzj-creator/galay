@@ -2,8 +2,7 @@
 #include <galay/cpp/galay-mcp/common/mcp_log.h>
 #include <galay/cpp/galay-mcp/common/protocol_utils.h>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 namespace {
 
@@ -693,5 +692,4 @@ const JsonString& McpHttpServer::getPromptsListResult() {
     return m_promptsListCache;
 }
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp

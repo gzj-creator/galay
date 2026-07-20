@@ -20,8 +20,7 @@
 #include <string>
 #include <string_view>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 /**
  * @brief MCP传输层资源限制
@@ -88,7 +87,6 @@ struct McpProductionPolicy {
     McpHttpAuthPolicy http_auth; ///< HTTP认证策略
 };
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 
 #endif // GALAY_MCP_COMMON_MCPPOLICY_H

@@ -3,15 +3,12 @@
  * @brief 用途：锁定 ETCD cluster policy、health snapshot 与 retry/backoff 的离线行为。
  */
 
-#include <galay/cpp/galay-etcd/async/client.h>
 #include <galay/cpp/galay-etcd/cluster/etcd_cluster_client.h>
 
 #include <chrono>
 #include <iostream>
 #include <string>
 
-using galay::etcd::AsyncEtcdClusterClient;
-using galay::etcd::AsyncEtcdClusterClientBuilder;
 using galay::etcd::EtcdClientStats;
 using galay::etcd::EtcdClusterState;
 using galay::etcd::EtcdEndpointHealthState;
@@ -195,76 +192,6 @@ int main()
     const auto sticky_leader_fallback = sticky_leader_state.selectEndpoint();
     if (!sticky_leader_fallback.has_value() || *sticky_leader_fallback == 2) {
         return fail("sticky leader policy should fall back when leader becomes unhealthy");
-    }
-
-    AsyncEtcdClusterClient empty_async_cluster = AsyncEtcdClusterClientBuilder().build();
-    auto empty_attempt = empty_async_cluster.beginAttempt();
-    if (!empty_attempt.await_ready()) {
-        return fail("offline async cluster beginAttempt should be immediately ready");
-    }
-    auto empty_result = empty_attempt.await_resume();
-    if (empty_result.has_value() ||
-        empty_result.error().type() != EtcdErrorType::InvalidEndpoint) {
-        return fail("empty async cluster should fail with invalid endpoint");
-    }
-
-    AsyncEtcdClusterClient async_cluster = AsyncEtcdClusterClientBuilder()
-        .productionConfig(production)
-        .build();
-
-    auto first_attempt = async_cluster.beginAttempt().await_resume();
-    if (!first_attempt.has_value() ||
-        first_attempt->endpoint_index != 0 ||
-        first_attempt->attempt != 0 ||
-        first_attempt->config.endpoint != "http://127.0.0.1:2379" ||
-        first_attempt->backoff != std::chrono::milliseconds::zero()) {
-        return fail("async cluster should pick first endpoint for first attempt");
-    }
-
-    auto second_attempt = async_cluster.nextAttempt(
-        *first_attempt,
-        EtcdError(EtcdErrorType::Connection, "dial failed")).await_resume();
-    if (!second_attempt.has_value() ||
-        second_attempt->endpoint_index != 1 ||
-        second_attempt->attempt != 1 ||
-        second_attempt->config.endpoint != "http://127.0.0.1:22379" ||
-        second_attempt->backoff != std::chrono::milliseconds(10)) {
-        return fail("connection retry should switch to next endpoint with initial backoff");
-    }
-
-    auto third_attempt = async_cluster.nextAttempt(
-        *second_attempt,
-        EtcdError(EtcdErrorType::Server, "server unavailable")).await_resume();
-    if (!third_attempt.has_value() ||
-        third_attempt->endpoint_index != 1 ||
-        third_attempt->attempt != 2 ||
-        third_attempt->config.endpoint != "http://127.0.0.1:22379" ||
-        third_attempt->backoff != std::chrono::milliseconds(20)) {
-        return fail("server retry should stay on same endpoint with exponential backoff");
-    }
-
-    auto fail_fast = async_cluster.nextAttempt(
-        *third_attempt,
-        EtcdError(EtcdErrorType::InvalidParam, "bad key")).await_resume();
-    if (fail_fast.has_value() ||
-        fail_fast.error().type() != EtcdErrorType::InvalidParam) {
-        return fail("invalid param should fail fast in async retry loop");
-    }
-
-    async_cluster.markSuccess(*second_attempt);
-    const auto& async_snapshots = async_cluster.getEndpointSnapshots();
-    if (async_snapshots.size() != 3 ||
-        async_snapshots[0].state != EtcdEndpointHealthState::Unhealthy ||
-        async_snapshots[1].state != EtcdEndpointHealthState::Healthy) {
-        return fail("async cluster snapshots should mirror offline retry outcomes");
-    }
-
-    const EtcdClientStats async_stats = async_cluster.getStats();
-    if (async_stats.requests != 1 ||
-        async_stats.retries != 2 ||
-        async_stats.request_failures != 3 ||
-        async_stats.endpoint_switches != 1) {
-        return fail("async cluster stats should track offline retry loop");
     }
 
     std::cout << "ETCD CLUSTER POLICY TEST PASSED\n";

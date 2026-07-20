@@ -1,11 +1,37 @@
 #include "etcd_cluster_client.h"
 
 #include <algorithm>
-#include <thread>
+#include <atomic>
+#include <limits>
 #include <utility>
+#include <concurrentqueue/moodycamel/concurrentqueue.h>
 
 namespace galay::etcd
 {
+
+namespace
+{
+
+size_t configuredEndpointCount(const EtcdConfig& config)
+{
+    if (!config.production.endpoints.empty()) {
+        return config.production.endpoints.size();
+    }
+    return config.endpoint.empty() ? 0 : 1;
+}
+
+size_t queueCapacityForConfig(const EtcdConfig& config)
+{
+    const size_t endpoint_count = configuredEndpointCount(config);
+    const size_t per_endpoint = config.production.connections_per_endpoint;
+    if (endpoint_count == 0 || per_endpoint == 0 ||
+        endpoint_count > std::numeric_limits<size_t>::max() / per_endpoint) {
+        return 1;
+    }
+    return endpoint_count * per_endpoint;
+}
+
+} // namespace
 
 EtcdClusterState::EtcdClusterState(EtcdProductionConfig production)
     : m_production(std::move(production))
@@ -178,6 +204,7 @@ EtcdRetryDecision EtcdClusterState::classifyRetry(const EtcdError& error, size_t
     case EtcdErrorType::InvalidEndpoint:
     case EtcdErrorType::InvalidParam:
     case EtcdErrorType::Parse:
+    case EtcdErrorType::PoolExhausted:
     case EtcdErrorType::Internal:
         return EtcdRetryDecision::FailFast;
     }
@@ -244,6 +271,140 @@ bool EtcdClusterState::hasAlternativeEndpoint(size_t excluded_index) const
     return false;
 }
 
+namespace details
+{
+
+struct EtcdClientPoolState
+{
+    explicit EtcdClientPoolState(EtcdConfig config)
+        : idle_clients(queueCapacityForConfig(config))
+    {
+        std::vector<std::string> endpoints = config.production.endpoints;
+        if (endpoints.empty() && !config.endpoint.empty()) {
+            endpoints.push_back(config.endpoint);
+        }
+        if (endpoints.empty()) {
+            init_error.emplace(
+                EtcdErrorType::InvalidEndpoint,
+                "cluster endpoints are empty");
+            return;
+        }
+
+        const size_t per_endpoint = config.production.connections_per_endpoint;
+        if (per_endpoint == 0) {
+            init_error.emplace(
+                EtcdErrorType::InvalidParam,
+                "connections_per_endpoint must be greater than zero");
+            return;
+        }
+        if (endpoints.size() > std::numeric_limits<size_t>::max() / per_endpoint) {
+            init_error.emplace(
+                EtcdErrorType::InvalidParam,
+                "configured client pool size overflows size_t");
+            return;
+        }
+
+        const size_t total = endpoints.size() * per_endpoint;
+        clients.reserve(total);
+        for (const auto& endpoint : endpoints) {
+            for (size_t index = 0; index < per_endpoint; ++index) {
+                EtcdConfig client_config = config;
+                client_config.endpoint = endpoint;
+                auto client = std::make_unique<EtcdClient>(std::move(client_config));
+                EtcdClient* const client_ptr = client.get();
+                clients.push_back(std::move(client));
+                const bool enqueued = idle_clients.enqueue(client_ptr);
+                if (!enqueued) {
+                    queue_failed.store(true, std::memory_order_release);
+                    init_error.emplace(
+                        EtcdErrorType::Internal,
+                        "failed to initialize sync client pool queue");
+                    return;
+                }
+            }
+        }
+    }
+
+    void release(EtcdClient* client) noexcept
+    {
+        if (client == nullptr) {
+            return;
+        }
+        const bool enqueued = idle_clients.enqueue(client);
+        if (!enqueued) {
+            queue_failed.store(true, std::memory_order_release);
+            return;
+        }
+        borrowed_count.fetch_sub(1, std::memory_order_acq_rel);
+    }
+
+    alignas(64) moodycamel::ConcurrentQueue<EtcdClient*> idle_clients;
+    alignas(64) std::atomic<size_t> borrowed_count{0};
+    alignas(64) std::atomic<bool> queue_failed{false};
+    std::optional<EtcdError> init_error;
+    std::vector<std::unique_ptr<EtcdClient>> clients;
+};
+
+} // namespace details
+
+EtcdClientLease::EtcdClientLease(
+    std::shared_ptr<details::EtcdClientPoolState> state,
+    EtcdClient* client) noexcept
+    : m_state(std::move(state))
+    , m_client(client)
+{
+}
+
+EtcdClientLease::EtcdClientLease(EtcdClientLease&& other) noexcept
+    : m_state(std::move(other.m_state))
+    , m_client(std::exchange(other.m_client, nullptr))
+{
+}
+
+EtcdClientLease& EtcdClientLease::operator=(EtcdClientLease&& other) noexcept
+{
+    if (this != &other) {
+        release();
+        m_state = std::move(other.m_state);
+        m_client = std::exchange(other.m_client, nullptr);
+    }
+    return *this;
+}
+
+EtcdClientLease::~EtcdClientLease()
+{
+    release();
+}
+
+EtcdClient* EtcdClientLease::get() const noexcept
+{
+    return m_client;
+}
+
+EtcdClient& EtcdClientLease::operator*() const noexcept
+{
+    return *m_client;
+}
+
+EtcdClient* EtcdClientLease::operator->() const noexcept
+{
+    return m_client;
+}
+
+EtcdClientLease::operator bool() const noexcept
+{
+    return m_client != nullptr;
+}
+
+void EtcdClientLease::release() noexcept
+{
+    EtcdClient* const client = std::exchange(m_client, nullptr);
+    auto state = std::move(m_state);
+    if (state != nullptr && client != nullptr) {
+        state->release(client);
+    }
+}
+
 EtcdClusterClientBuilder& EtcdClusterClientBuilder::endpoint(std::string endpoint)
 {
     m_config.endpoint = std::move(endpoint);
@@ -271,6 +432,12 @@ EtcdClusterClientBuilder& EtcdClusterClientBuilder::productionConfig(EtcdProduct
     return *this;
 }
 
+EtcdClusterClientBuilder& EtcdClusterClientBuilder::connectionsPerEndpoint(size_t count)
+{
+    m_config.production.connections_per_endpoint = count;
+    return *this;
+}
+
 EtcdClusterClientBuilder& EtcdClusterClientBuilder::config(EtcdConfig config)
 {
     m_config = std::move(config);
@@ -278,106 +445,63 @@ EtcdClusterClientBuilder& EtcdClusterClientBuilder::config(EtcdConfig config)
 }
 
 EtcdClusterClient::EtcdClusterClient(EtcdConfig config)
-    : m_config(std::move(config))
-    , m_state([this] {
-        EtcdProductionConfig production = m_config.production;
-        if (production.endpoints.empty() && !m_config.endpoint.empty()) {
-            production.endpoints.push_back(m_config.endpoint);
-        }
-        return production;
-    }())
+    : m_state(std::make_shared<details::EtcdClientPoolState>(std::move(config)))
 {
 }
 
-EtcdBoolResult EtcdClusterClient::put(
-    const std::string& key,
-    const std::string& value,
-    std::optional<int64_t> lease_id)
+EtcdClientAcquireResult EtcdClusterClient::tryAcquire()
 {
-    return execute<EtcdBoolResult>([&](EtcdClient& client) {
-        return client.put(key, value, lease_id);
-    });
-}
-
-EtcdGetResult EtcdClusterClient::get(
-    const std::string& key,
-    bool prefix,
-    std::optional<int64_t> limit)
-{
-    return execute<EtcdGetResult>([&](EtcdClient& client) {
-        return client.get(key, prefix, limit);
-    });
-}
-
-EtcdDeleteResult EtcdClusterClient::del(const std::string& key, bool prefix)
-{
-    return execute<EtcdDeleteResult>([&](EtcdClient& client) {
-        return client.del(key, prefix);
-    });
-}
-
-EtcdLeaseGrantResult EtcdClusterClient::grantLease(int64_t ttl_seconds)
-{
-    return execute<EtcdLeaseGrantResult>([&](EtcdClient& client) {
-        return client.grantLease(ttl_seconds);
-    });
-}
-
-EtcdLeaseGrantResult EtcdClusterClient::keepAliveOnce(int64_t lease_id)
-{
-    return execute<EtcdLeaseGrantResult>([&](EtcdClient& client) {
-        return client.keepAliveOnce(lease_id);
-    });
-}
-
-EtcdPipelineResult EtcdClusterClient::pipeline(std::span<const PipelineOp> operations)
-{
-    return execute<EtcdPipelineResult>([&](EtcdClient& client) {
-        return client.pipeline(operations);
-    });
-}
-
-EtcdPipelineResult EtcdClusterClient::pipeline(std::vector<PipelineOp> operations)
-{
-    return pipeline(std::span<const PipelineOp>(operations.data(), operations.size()));
-}
-
-const std::vector<EtcdEndpointHealthSnapshot>& EtcdClusterClient::getEndpointSnapshots() const
-{
-    return m_state.getEndpointSnapshots();
-}
-
-EtcdClientStats EtcdClusterClient::getStats() const
-{
-    return m_state.getStats();
-}
-
-void EtcdClusterClient::runDueHealthProbes()
-{
-    for (const size_t index : m_state.collectDueProbes()) {
-        EtcdClient client(configForEndpoint(index));
-        auto connect_result = client.connect();
-        if (connect_result.has_value()) {
-            auto close_result = client.close();
-            if (close_result.has_value()) {
-                m_state.markProbeSuccess(index);
-            } else {
-                m_state.markProbeFailure(index, close_result.error());
-            }
-            continue;
-        }
-        m_state.markProbeFailure(index, connect_result.error());
+    if (m_state == nullptr) {
+        return std::unexpected(
+            EtcdError(EtcdErrorType::Internal, "sync client pool is moved from"));
     }
+    if (m_state->init_error.has_value()) {
+        return std::unexpected(*m_state->init_error);
+    }
+    if (m_state->queue_failed.load(std::memory_order_acquire)) {
+        return std::unexpected(
+            EtcdError(EtcdErrorType::Internal, "sync client pool queue failed"));
+    }
+
+    EtcdClient* client = nullptr;
+    const bool dequeued = m_state->idle_clients.try_dequeue(client);
+    if (!dequeued || client == nullptr) {
+        return std::unexpected(
+            EtcdError(EtcdErrorType::PoolExhausted, "no idle sync EtcdClient"));
+    }
+    m_state->borrowed_count.fetch_add(1, std::memory_order_acq_rel);
+    return EtcdClientLease(m_state, client);
 }
 
-EtcdConfig EtcdClusterClient::configForEndpoint(size_t index) const
+EtcdClientAcquireResult EtcdClusterClient::acquireConnected()
 {
-    EtcdConfig config = m_config;
-    const auto& snapshots = m_state.getEndpointSnapshots();
-    if (index < snapshots.size()) {
-        config.endpoint = snapshots[index].endpoint;
+    auto lease = tryAcquire();
+    if (!lease.has_value()) {
+        return std::unexpected(lease.error());
     }
-    return config;
+    if (!lease->get()->connected()) {
+        auto connected = lease->get()->connect();
+        if (!connected.has_value()) {
+            return std::unexpected(connected.error());
+        }
+    }
+    return lease;
+}
+
+size_t EtcdClusterClient::size() const noexcept
+{
+    return m_state == nullptr ? 0 : m_state->clients.size();
+}
+
+size_t EtcdClusterClient::idleCount() const noexcept
+{
+    if (m_state == nullptr) {
+        return 0;
+    }
+    const size_t borrowed = m_state->borrowed_count.load(std::memory_order_acquire);
+    return borrowed >= m_state->clients.size()
+        ? 0
+        : m_state->clients.size() - borrowed;
 }
 
 } // namespace galay::etcd

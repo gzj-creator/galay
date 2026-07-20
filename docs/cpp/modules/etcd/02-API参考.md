@@ -75,7 +75,7 @@ struct EtcdConfig : EtcdNetworkConfig {
 补充语义：
 
 - `endpoint` 仍是当前 sync/async client 的实际请求地址
-- `production.endpoints` 为后续 cluster wrapper 预留；builder 收到非空 endpoints 时，会把首个地址同步回 `endpoint`，保持既有单端点行为不变
+- `production.endpoints` 是同步与异步 cluster pool 的 endpoint 来源；单 client builder 收到非空 endpoints 时仍会把首个地址同步回 `endpoint`
 - `credentials` 当前只提供配置承载与脱敏输出，不会自动启用 auth 流程
 
 ### `EtcdEndpointPolicy` / `EtcdRetryDecision`
@@ -127,9 +127,10 @@ struct EtcdCredentialConfig {
 ```cpp
 struct EtcdProductionConfig {
     std::vector<std::string> endpoints;
-    EtcdEndpointPolicy endpoint_policy = EtcdEndpointPolicy::FirstHealthy;
     EtcdRetryConfig retry;
     std::chrono::milliseconds health_interval{5000};
+    size_t connections_per_endpoint = 1;
+    EtcdEndpointPolicy endpoint_policy = EtcdEndpointPolicy::FirstHealthy;
     bool prefer_leader = false;
 };
 ```
@@ -137,6 +138,7 @@ struct EtcdProductionConfig {
 语义：
 
 - `endpoints` 是 cluster policy 可选择的候选 endpoint 列表
+- `connections_per_endpoint` 控制两个 cluster pool 为每个 endpoint 创建的 client 数量，必须大于 0
 - `prefer_leader` 当前只影响 `StickyLeader` 下的“最近一次成功端点” hint；不是独立的 leader 探测机制
 
 ### `EtcdKeyValue`
@@ -215,7 +217,6 @@ struct EtcdClientStats {
 语义：
 
 - `EtcdClient::getStats()` / `AsyncEtcdClient::getStats()` 当前返回只读快照
-- `AsyncEtcdClusterClient::getStats()` 返回 offline policy loop 的统计快照，不代表真实网络 I/O 已接入
 - 在本 task 完成后，普通单端点 client 默认仍返回零值；真实计数由后续生产 wrapper 接入
 
 ### `EtcdErrorType` 与 `EtcdError`
@@ -233,6 +234,7 @@ enum class EtcdErrorType {
     Http,
     Server,
     Parse,
+    PoolExhausted,
     Internal,
 };
 
@@ -362,6 +364,46 @@ public:
 - `keepAliveOnce()` 在未开启 `request_timeout` 时，会对这次续约请求使用固定 5 秒超时
 - `pipeline()` 是固定格式的 txn 批量请求：`compare=[]`、`failure=[]`，只公开 success 分支
 
+### `EtcdClusterClient` / `EtcdClientLease`
+
+```cpp
+class EtcdClusterClientBuilder {
+public:
+    EtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
+    EtcdClusterClientBuilder& connectionsPerEndpoint(size_t count);
+    EtcdClusterClient build() const;
+};
+
+class EtcdClusterClient {
+public:
+    EtcdClientAcquireResult tryAcquire();
+    EtcdClientAcquireResult acquireConnected();
+
+    template <class Fn>
+    auto withClient(Fn&& fn)
+        -> std::expected<
+            typename std::invoke_result_t<Fn, EtcdClient&>::value_type,
+            EtcdError>;
+
+    size_t size() const noexcept;
+    size_t idleCount() const noexcept;
+};
+
+class EtcdClientLease {
+public:
+    EtcdClient* get() const noexcept;
+    EtcdClient* operator->() const noexcept;
+    void release() noexcept;
+};
+```
+
+- `withClient(fn)` 是常规入口：取得租约、在需要时同步连接、执行 `fn(EtcdClient&)`，并返回 `std::expected<T, EtcdError>`
+- `acquireConnected()` 适合需要跨多个操作持有同一 client 的场景；它返回已经连接的 move-only 租约
+- `tryAcquire()` 仍作为低阶非阻塞入口保留：只访问无锁空闲队列，不连接网络、不执行请求
+- 池空返回 `EtcdErrorType::PoolExhausted`
+- 租约为 move-only；`withClient()` 的成功、建连失败、回调错误路径都会由 RAII 自动归还，手动租约析构或 `release()` 也会归还
+- pool 本身可移动，已经借出的租约仍会归还到同一共享 pool state
+
 ## 4. 异步客户端
 
 `galay-etcd/base/etcd_types.h` 中公开了这些结果类型：
@@ -400,22 +442,6 @@ public:
 };
 ```
 
-### `AsyncEtcdClusterAttempt`
-
-```cpp
-struct AsyncEtcdClusterAttempt {
-    size_t endpoint_index = 0;
-    size_t attempt = 0;
-    EtcdConfig config{};
-    std::chrono::milliseconds backoff = std::chrono::milliseconds::zero();
-};
-```
-
-语义补充：
-
-- `config` 是已经注入 endpoint / `api_prefix` / timeout 等 builder 配置的副本
-- 它只描述“下一次应该怎么尝试”，不代表库已经替调用侧发起了网络请求
-
 ### `AsyncEtcdClusterClientBuilder`
 
 ```cpp
@@ -425,6 +451,7 @@ public:
     AsyncEtcdClusterClientBuilder& endpoint(std::string endpoint);
     AsyncEtcdClusterClientBuilder& apiPrefix(std::string prefix);
     AsyncEtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
+    AsyncEtcdClusterClientBuilder& connectionsPerEndpoint(size_t count);
     AsyncEtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
     AsyncEtcdClusterClientBuilder& bufferSize(size_t size);
     AsyncEtcdClusterClientBuilder& keepAlive(bool enabled);
@@ -435,40 +462,40 @@ public:
 };
 ```
 
-语义补充：
-
-- 该 builder 复用与 `AsyncEtcdClientBuilder` 接近的配置 surface
-- `build()` 返回的是 offline policy wrapper，不是具备 `put/get/delete` 的 async cluster KV client
+该 builder 为所有池内 client 绑定同一个 `IOScheduler`；每个 client 仍只能在该 scheduler 的协程上下文中执行 I/O。
 
 ### `AsyncEtcdClusterClient`
 
 ```cpp
 class AsyncEtcdClusterClient {
 public:
-    using Attempt = AsyncEtcdClusterAttempt;
-    using AttemptResult = std::expected<Attempt, EtcdError>;
-    using AttemptAwaitable = galay::kernel::ReadyAwaitable<AttemptResult>;
-
     explicit AsyncEtcdClusterClient(galay::kernel::IOScheduler* scheduler = nullptr,
                                     EtcdConfig config = {});
+    AsyncEtcdClientAcquireResult tryAcquire();
+    galay::kernel::Task<AsyncEtcdClientAcquireResult> acquireConnected();
 
-    AttemptAwaitable beginAttempt();
-    AttemptAwaitable nextAttempt(const Attempt& previous, EtcdError error);
-    void markSuccess(const Attempt& attempt,
-                     std::chrono::system_clock::time_point when = std::chrono::system_clock::now());
+    template <class Fn>
+    auto withClient(Fn fn) -> galay::kernel::Task<
+        std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>;
 
-    const std::vector<EtcdEndpointHealthSnapshot>& getEndpointSnapshots() const;
-    EtcdClientStats getStats() const;
-    galay::kernel::IOScheduler* scheduler() const;
+    size_t size() const noexcept;
+    size_t idleCount() const noexcept;
+    galay::kernel::IOScheduler* scheduler() const noexcept;
 };
 ```
 
 语义补充：
 
-- `beginAttempt()` / `nextAttempt()` 都是立即就绪的 awaitable，用来承载 coroutine-friendly 的离线重试决策
-- 调用侧需要拿着 `Attempt.config` 自己决定如何执行真实 I/O；库当前没有 async cluster `connect/put/get/del`
-- `markSuccess()` 只更新 snapshot / stats，并为 `StickyLeader` 留下最近一次成功端点 hint
-- `StickyLeader` 仍然不是 leader status 感知；这里只是重试策略表面
+- `withClient(fn)` 接受 `Task<std::expected<T, EtcdError>>(AsyncEtcdClient&)` 形式的操作；它自动取得租约、按需异步连接并等待操作完成
+- `fn` 按值保存在协程 frame 中，租约也会 move 到 frame 局部，因此两者都能安全跨越所有 `co_await`
+- 回调 Task 的调度或结果消费错误会映射为 `EtcdErrorType::Internal`，并在 `EtcdError::message()` 中保留原 `TaskResultError` 消息；操作自身的 `EtcdError` 原样传播
+- `acquireConnected()` 返回自动完成连接的租约，适合在一个协程中连续执行多个操作
+- `tryAcquire()` 仍作为低阶入口保留；它本身不挂起协程，池空时立即返回 `PoolExhausted`
+- 成功返回 move-only `AsyncEtcdClientLease`，调用方随后直接 `co_await lease->connect()/get()/put()`
+- `withClient()` 保证租约在成功、建连失败、回调错误以及任意 `co_return` 路径自动归还
+- `Task<T>` 的 `co_await` 仍遵循 kernel 契约，最外层返回 `std::expected<T, TaskResultError>`；调用方应先检查 Task 层，再检查内部 etcd 操作结果
+- 租约保证单个 `AsyncEtcdClient` 不会同时借给多个调用方
+- pool 不执行透明 retry、failover 或后台连接维护
 
 ### `AsyncEtcdClient`
 

@@ -37,21 +37,21 @@ int main()
 {
     const auto root = repoRoot();
     const auto sync_client = readFile(root / "src/cpp/galay-mysql/sync/mysql_client.cc");
-    const auto async_client = readFile(root / "src/cpp/galay-mysql/async/client.cc");
+    const auto async_awaitable = readFile(root / "src/cpp/galay-mysql/details/awaitable.inl");
 
     for (const auto* capability : {
              "CLIENT_MULTI_STATEMENTS",
              "CLIENT_MULTI_RESULTS",
              "CLIENT_PS_MULTI_RESULTS",
          }) {
-        if (!contains(sync_client, capability) || !contains(async_client, capability)) {
+        if (!contains(sync_client, capability) || !contains(async_awaitable, capability)) {
             std::cerr << "mysql clients must keep multi-result capability: " << capability << "\n";
             return 1;
         }
     }
 
-    if (!contains(async_client, "MysqlPipelineAwaitable<Strategy>::Machine::finalizeCurrentResult") ||
-        !contains(async_client, "m_state->results.push_back")) {
+    if (!contains(async_awaitable, "MysqlPipelineAwaitable<Strategy>::Machine::finalizeCurrentResult") ||
+        !contains(async_awaitable, "m_state->results.push_back")) {
         std::cerr << "async pipeline must preserve per-response result boundaries\n";
         return 1;
     }

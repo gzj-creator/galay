@@ -21,8 +21,7 @@
 #include <vector>
 #include <cstdint>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 
 constexpr const char* MCP_VERSION = "2024-11-05"; ///< MCP协议版本号
@@ -293,7 +292,6 @@ namespace ErrorCodes {
     constexpr int SERVER_ERROR_END = -32000; ///< 服务器错误范围结束
 }
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 
 #endif // GALAY_MCP_COMMON_MCPBASE_H

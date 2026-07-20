@@ -18,8 +18,7 @@
 #include <string_view>
 #include <vector>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 namespace protocol {
 
 /**
@@ -150,7 +149,6 @@ JsonString buildListResultFromMap(const MapType& map, const char* key, Extractor
 }
 
 } // namespace protocol
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 
 #endif // GALAY_MCP_COMMON_MCPPROTOCOLUTILS_H

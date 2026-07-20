@@ -22,8 +22,7 @@
 #include <memory>
 #include <atomic>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 /**
  * @brief 基于HTTP的MCP服务器
@@ -298,7 +297,6 @@ private:
     std::atomic<bool> m_initialized; ///< 初始化状态
 };
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 
 #endif // GALAY_MCP_SERVER_MCPHTTPSERVER_H

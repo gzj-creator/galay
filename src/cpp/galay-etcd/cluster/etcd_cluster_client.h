@@ -17,10 +17,12 @@
 #include <cstddef>
 #include <cstdint>
 #include <expected>
+#include <functional>
+#include <memory>
 #include <optional>
-#include <span>
 #include <string>
-#include <thread>
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace galay::etcd
@@ -185,7 +187,51 @@ private:
     std::optional<size_t> m_leader_hint = std::nullopt;
 };
 
+namespace details
+{
+struct EtcdClientPoolState;
+} // namespace details
+
 class EtcdClusterClient;
+
+/**
+ * @brief 同步 EtcdClient 池租约
+ * @details move-only RAII 句柄，保证同一个 EtcdClient 同时只由一个调用方使用。
+ *          租约析构或调用 release() 时会把 client 归还无锁空闲队列。
+ */
+class EtcdClientLease
+{
+public:
+    EtcdClientLease() noexcept = default;
+    EtcdClientLease(EtcdClientLease&& other) noexcept;
+    EtcdClientLease& operator=(EtcdClientLease&& other) noexcept;
+    EtcdClientLease(const EtcdClientLease&) = delete;
+    EtcdClientLease& operator=(const EtcdClientLease&) = delete;
+    ~EtcdClientLease();
+
+    /** @brief 获取租约持有的 client；空租约返回 nullptr。 */
+    [[nodiscard]] EtcdClient* get() const noexcept;
+    /** @brief 解引用租约持有的 client。 */
+    [[nodiscard]] EtcdClient& operator*() const noexcept;
+    /** @brief 访问租约持有的 client。 */
+    [[nodiscard]] EtcdClient* operator->() const noexcept;
+    /** @brief 判断租约是否持有 client。 */
+    [[nodiscard]] explicit operator bool() const noexcept;
+    /** @brief 提前归还 client；可重复调用且不阻塞。 */
+    void release() noexcept;
+
+private:
+    friend class EtcdClusterClient;
+
+    EtcdClientLease(
+        std::shared_ptr<details::EtcdClientPoolState> state,
+        EtcdClient* client) noexcept;
+
+    std::shared_ptr<details::EtcdClientPoolState> m_state;
+    EtcdClient* m_client = nullptr;
+};
+
+using EtcdClientAcquireResult = std::expected<EtcdClientLease, EtcdError>;
 
 /**
  * @brief ETCD cluster client 构建器
@@ -201,10 +247,11 @@ public:
     EtcdClusterClientBuilder& apiPrefix(std::string prefix);
     EtcdClusterClientBuilder& requestTimeout(std::chrono::milliseconds timeout);
     EtcdClusterClientBuilder& productionConfig(EtcdProductionConfig config);
+    EtcdClusterClientBuilder& connectionsPerEndpoint(size_t count);
     EtcdClusterClientBuilder& config(EtcdConfig config);
 
     /**
-     * @brief 显式复制 builder 的离线配置状态
+     * @brief 显式复制 builder 配置状态
      * @return 当前 builder 的独立副本
      */
     [[nodiscard]] EtcdClusterClientBuilder clone() const
@@ -223,15 +270,15 @@ private:
 };
 
 /**
- * @brief etcd 同步 cluster wrapper
- * @details 该类在每次请求时按 policy 选择 endpoint，并在网络级失败时切换端点重试。
- *          当前仅包装已有同步 `EtcdClient`，不引入后台健康检查线程。
+ * @brief 多端点同步 EtcdClient 无锁池
+ * @details 为每个 endpoint 创建固定数量的 EtcdClient。调用方通过 tryAcquire()
+ *          获取独占租约并直接执行 connect/put/get 等操作；池本身不代替调用方执行请求、
+ *          重试或健康检查。
+ * @note tryAcquire() 不阻塞；池空时返回 EtcdErrorType::PoolExhausted。
  */
 class EtcdClusterClient
 {
 public:
-    using PipelineOp = galay::etcd::PipelineOp;
-
     explicit EtcdClusterClient(EtcdConfig config = {});
 
     EtcdClusterClient(const EtcdClusterClient&) = delete;
@@ -240,109 +287,47 @@ public:
     EtcdClusterClient& operator=(EtcdClusterClient&&) noexcept = default;
     ~EtcdClusterClient() = default;
 
-    [[nodiscard]] EtcdBoolResult put(
-        const std::string& key,
-        const std::string& value,
-        std::optional<int64_t> lease_id = std::nullopt);
-    [[nodiscard]] EtcdGetResult get(
-        const std::string& key,
-        bool prefix = false,
-        std::optional<int64_t> limit = std::nullopt);
-    [[nodiscard]] EtcdDeleteResult del(const std::string& key, bool prefix = false);
-    [[nodiscard]] EtcdLeaseGrantResult grantLease(int64_t ttl_seconds);
-    [[nodiscard]] EtcdLeaseGrantResult keepAliveOnce(int64_t lease_id);
-    [[nodiscard]] EtcdPipelineResult pipeline(std::span<const PipelineOp> operations);
-    [[nodiscard]] EtcdPipelineResult pipeline(std::vector<PipelineOp> operations);
+    /**
+     * @brief 尝试获取一个独占 EtcdClient 租约
+     * @return 成功返回租约；配置无效、池内部失败或暂无空闲 client 时返回 EtcdError
+     * @note 该操作只访问无锁队列，不连接网络且不阻塞调用线程。
+     */
+    [[nodiscard]] EtcdClientAcquireResult tryAcquire();
 
-    [[nodiscard]] const std::vector<EtcdEndpointHealthSnapshot>& getEndpointSnapshots() const;
-    [[nodiscard]] EtcdClientStats getStats() const;
+    /**
+     * @brief 获取独占租约并确保 client 已连接
+     * @return 成功返回已连接租约；池获取或同步建连失败时返回 EtcdError
+     * @note 该方法会执行同步网络连接，租约在错误路径上自动归还。
+     */
+    [[nodiscard]] EtcdClientAcquireResult acquireConnected();
 
-private:
-    [[nodiscard]] EtcdConfig configForEndpoint(size_t index) const;
-    void runDueHealthProbes();
-
-    template <typename Result, typename Operation>
-    [[nodiscard]] Result execute(Operation&& operation)
+    /**
+     * @brief 使用一个已连接的独占 client 执行同步操作
+     * @tparam Fn 可调用对象类型，签名为 `std::expected<T, EtcdError>(EtcdClient&)`
+     * @param fn 要执行的同步操作
+     * @return 操作结果；池获取、建连或操作失败均通过 EtcdError 返回
+     * @note 租约在成功和所有错误路径上都会自动归还；该方法可能同步阻塞。
+     */
+    template <class Fn>
+    [[nodiscard]] auto withClient(Fn&& fn)
+        -> std::expected<
+            typename std::invoke_result_t<Fn, EtcdClient&>::value_type,
+            EtcdError>
     {
-        runDueHealthProbes();
-        m_state.recordRequest();
-
-        std::optional<size_t> sticky_endpoint = std::nullopt;
-        std::optional<EtcdError> last_error = std::nullopt;
-        const size_t max_attempts = m_state.maxAttempts();
-
-        for (size_t attempt = 0; attempt < max_attempts; ++attempt) {
-            const std::optional<size_t> selected = sticky_endpoint.has_value()
-                ? sticky_endpoint
-                : m_state.selectEndpoint();
-            sticky_endpoint.reset();
-
-            if (!selected.has_value()) {
-                break;
-            }
-
-            EtcdClient client(configForEndpoint(*selected));
-            auto connect_result = client.connect();
-            if (!connect_result.has_value()) {
-                last_error = connect_result.error();
-            } else {
-                Result result = operation(client);
-                auto close_result = client.close();
-                if (!close_result.has_value()) {
-                    last_error = close_result.error();
-                    const EtcdRetryDecision close_decision =
-                        m_state.classifyRetry(*last_error, attempt);
-                    m_state.markFailure(
-                        *selected,
-                        *last_error,
-                        close_decision == EtcdRetryDecision::RetryNextEndpoint);
-                    if (close_decision == EtcdRetryDecision::FailFast ||
-                        attempt + 1 >= max_attempts) {
-                        return std::unexpected(*last_error);
-                    }
-                    m_state.recordRetry();
-                    if (close_decision == EtcdRetryDecision::RetrySameEndpoint) {
-                        sticky_endpoint = *selected;
-                    }
-                    const auto backoff = m_state.backoffForAttempt(attempt);
-                    if (backoff.count() > 0) {
-                        std::this_thread::sleep_for(backoff);
-                    }
-                    continue;
-                }
-                if (result.has_value()) {
-                    m_state.markSuccess(*selected);
-                    return result;
-                }
-                last_error = result.error();
-            }
-
-            const EtcdRetryDecision decision = m_state.classifyRetry(*last_error, attempt);
-            m_state.markFailure(*selected, *last_error, decision == EtcdRetryDecision::RetryNextEndpoint);
-            if (decision == EtcdRetryDecision::FailFast || attempt + 1 >= max_attempts) {
-                return std::unexpected(*last_error);
-            }
-
-            m_state.recordRetry();
-            if (decision == EtcdRetryDecision::RetrySameEndpoint) {
-                sticky_endpoint = *selected;
-            }
-
-            const auto backoff = m_state.backoffForAttempt(attempt);
-            if (backoff.count() > 0) {
-                std::this_thread::sleep_for(backoff);
-            }
+        auto lease = acquireConnected();
+        if (!lease.has_value()) {
+            return std::unexpected(lease.error());
         }
-
-        if (last_error.has_value()) {
-            return std::unexpected(*last_error);
-        }
-        return std::unexpected(EtcdError(EtcdErrorType::InvalidEndpoint, "cluster endpoints are empty"));
+        return std::invoke(std::forward<Fn>(fn), **lease);
     }
 
+    /** @brief 返回池持有的 client 总数。 */
+    [[nodiscard]] size_t size() const noexcept;
+    /** @brief 返回当前空闲 client 数量的并发快照。 */
+    [[nodiscard]] size_t idleCount() const noexcept;
+
 private:
-    EtcdConfig m_config;
-    EtcdClusterState m_state;
+    std::shared_ptr<details::EtcdClientPoolState> m_state;
 };
 
 } // namespace galay::etcd

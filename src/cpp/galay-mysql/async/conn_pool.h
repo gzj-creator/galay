@@ -4,8 +4,8 @@
  * @author galay-mysql
  * @version 1.0.0
  *
- * @details 提供异步MySQL连接池管理，支持连接获取、归还、自动创建和等待。
- *          使用AcquireAwaitable实现协程友好的连接获取。
+ * @details 提供异步MySQL连接池管理，支持连接获取、归还、自动创建和等待；
+ *          acquire/lease 等待体分离在 details/pool_awaitable.h/.inl。
  */
 
 #ifndef GALAY_MYSQL_CONNECTION_POOL_H
@@ -110,113 +110,8 @@ public:
     MysqlConnectionPool(const MysqlConnectionPool&) = delete;             ///< 禁止拷贝构造
     MysqlConnectionPool& operator=(const MysqlConnectionPool&) = delete;  ///< 禁止拷贝赋值
 
-    /**
-     * @brief 获取连接的Awaitable
-     * @details 如果池中有空闲连接则立即返回，否则创建新连接或挂起等待。
-     * @note 不阻塞调用线程；调用方需保证连接池在等待体完成前保持存活。
-     */
-    class AcquireAwaitable
-    {
-    public:
-        /**
-         * @brief 构造获取连接等待体
-         * @param pool 连接池引用
-         */
-        AcquireAwaitable(MysqlConnectionPool& pool);
-
-        bool await_ready() const noexcept; ///< 检查是否已完成
-        /**
-         * @brief 挂起协程，等待连接获取
-         * @tparam Promise 协程Promise类型
-         * @param handle 协程句柄
-         * @return 是否需要挂起
-         */
-        template <typename Promise>
-        requires requires(const Promise& promise) {
-            { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
-        }
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            if (m_state != State::Invalid) {
-                return false;
-            }
-
-            m_client = m_pool.tryAcquire();
-            if (m_client) {
-                m_state = State::Ready;
-                m_connect_awaitable.reset();
-                return false;
-            }
-
-            m_client = m_pool.createClient();
-            if (m_client) {
-                m_state = State::Creating;
-                m_connect_awaitable.emplace(*m_client, m_pool.m_mysql_config);
-                return m_connect_awaitable->await_suspend(handle);
-            }
-
-            m_state = State::Waiting;
-            m_connect_awaitable.reset();
-            m_waiter = std::make_shared<detail::MysqlPoolWaiter>(galay::kernel::Waker(handle));
-            if (!m_pool.enqueueWaiter(m_waiter)) {
-                m_state = State::EnqueueFailed;
-                return false;
-            }
-            if (m_pool.m_idle_connections.load(std::memory_order_acquire) > 0) {
-                (void)m_pool.wakeOneWaiter();
-            }
-            return true;
-        }
-        /**
-         * @brief 获取连接获取结果
-         * @return 成功时返回客户端指针，失败时返回错误
-         */
-        std::expected<std::optional<AsyncMysqlClient<>*>, MysqlError> await_resume();
-
-    private:
-        /**
-         * @brief 等待体状态枚举
-         */
-        enum class State {
-            Invalid,  ///< 无效状态
-            Ready,    ///< 有空闲连接
-            Waiting,  ///< 等待连接释放
-            Creating, ///< 正在创建新连接
-            EnqueueFailed, ///< 等待队列入队失败
-        };
-
-        MysqlConnectionPool& m_pool;                                ///< 连接池引用
-        AsyncMysqlClient<>* m_client = nullptr;                        ///< 客户端指针
-        std::shared_ptr<detail::MysqlPoolWaiter> m_waiter;           ///< 等待队列节点
-        std::optional<MysqlConnectAwaitable<>> m_connect_awaitable;    ///< 连接等待体
-        State m_state = State::Invalid;                              ///< 当前状态
-    };
-
-    /**
-     * @brief 获取连接租约的Awaitable
-     * @details 包装现有acquire()路径，成功时返回RAII租约，租约析构会归还连接。
-     * @note 不阻塞调用线程；调用方需保证连接池在等待体和租约生命周期内保持存活。
-     */
-    class LeaseAwaitable
-    {
-    public:
-        explicit LeaseAwaitable(MysqlConnectionPool& pool);
-
-        bool await_ready() const noexcept;
-        template <typename Promise>
-        requires requires(const Promise& promise) {
-            { promise.taskRefView() } -> std::same_as<const galay::kernel::TaskRef&>;
-        }
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return m_acquire.await_suspend(handle);
-        }
-        std::expected<std::optional<MysqlPoolLease>, MysqlError> await_resume();
-
-    private:
-        MysqlConnectionPool& m_pool; ///< 生成租约的连接池
-        AcquireAwaitable m_acquire;  ///< 底层连接获取等待体
-    };
+    class AcquireAwaitable; ///< 连接获取等待体，完整定义位于 details/pool_awaitable.h
+    class LeaseAwaitable;   ///< RAII 租约获取等待体，完整定义位于 details/pool_awaitable.h
 
     /**
      * @brief 获取一个连接
@@ -271,5 +166,7 @@ private:
 };
 
 } // namespace galay::mysql
+
+#include "../details/pool_awaitable.h"
 
 #endif // GALAY_MYSQL_CONNECTION_POOL_H

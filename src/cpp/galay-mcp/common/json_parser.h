@@ -18,8 +18,7 @@
 #include <string>
 #include <string_view>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 /**
  * @brief JSON-RPC请求视图
@@ -92,7 +91,6 @@ std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_vi
  */
 std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_view body);
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp
 
 #endif // GALAY_MCP_COMMON_MCPJSONPARSER_H

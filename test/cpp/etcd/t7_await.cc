@@ -10,6 +10,7 @@
  */
 
 #include <galay/cpp/galay-etcd/async/client.h>
+#include <galay/cpp/galay-etcd/details/awaitable.h>
 #include <galay/cpp/galay-etcd/sync/etcd_client.h>
 
 #include <concepts>
@@ -160,6 +161,24 @@ static_assert(!HasLastResponseBody<AsyncEtcdClient>);
 static_assert(SyncClientReturnsDirectResults<EtcdClient>);
 static_assert(AsyncClientReturnsDirectResults<AsyncEtcdClient>);
 static_assert(HasAsyncWatchOverloads<AsyncEtcdClient>);
+static_assert(std::same_as<AsyncEtcdClient::ConnectAwaitable,
+                           galay::etcd::details::ConnectAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::CloseAwaitable,
+                           galay::etcd::details::CloseAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::PostJsonAwaitable,
+                           galay::etcd::details::PostJsonAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::PutAwaitable,
+                           galay::etcd::details::PutAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::GetAwaitable,
+                           galay::etcd::details::GetAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::DeleteAwaitable,
+                           galay::etcd::details::DeleteAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::GrantLeaseAwaitable,
+                           galay::etcd::details::GrantLeaseAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::KeepAliveAwaitable,
+                           galay::etcd::details::KeepAliveAwaitable>);
+static_assert(std::same_as<AsyncEtcdClient::PipelineAwaitable,
+                           galay::etcd::details::PipelineAwaitable>);
 
 int main()
 {

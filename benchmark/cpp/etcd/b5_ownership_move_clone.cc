@@ -25,6 +25,7 @@ galay::etcd::EtcdProductionConfig makeProduction(int64_t retry_attempts)
     production.retry.initial_backoff = std::chrono::milliseconds(1);
     production.retry.max_backoff = std::chrono::milliseconds(8);
     production.retry.jitter = false;
+    production.connections_per_endpoint = 2;
     return production;
 }
 
@@ -97,26 +98,14 @@ int main(int argc, char** argv)
     auto async_cluster = galay::etcd::AsyncEtcdClusterClientBuilder()
         .productionConfig(makeProduction(iterations + 4))
         .build();
-    auto attempt = async_cluster.beginAttempt().await_resume();
-    if (!attempt.has_value()) {
-        std::cerr << "beginAttempt failed: " << attempt.error().message() << '\n';
-        return 1;
-    }
     for (int64_t i = 0; i < iterations; ++i) {
-        galay::etcd::EtcdError error(
-            (i % 3) == 0 ? galay::etcd::EtcdErrorType::Server
-                         : galay::etcd::EtcdErrorType::Connection,
-            "bench");
-        auto next = async_cluster.nextAttempt(*attempt, std::move(error)).await_resume();
-        if (!next.has_value()) {
-            std::cerr << "nextAttempt failed: " << next.error().message() << '\n';
+        auto lease = async_cluster.tryAcquire();
+        if (!lease.has_value()) {
+            std::cerr << "async pool acquire failed: " << lease.error().message() << '\n';
             return 1;
         }
-        checksum += next->endpoint_index;
-        checksum += next->attempt;
-        attempt = std::move(next);
+        checksum += lease->get() != nullptr ? 1 : 0;
     }
-    async_cluster.markSuccess(*attempt);
     const auto async_end = std::chrono::steady_clock::now();
 
     const auto pipeline_us =
@@ -129,7 +118,7 @@ int main(int argc, char** argv)
     std::cout << "Iterations        : " << iterations << '\n';
     std::cout << "Pipeline clone us : " << pipeline_us << '\n';
     std::cout << "State clone us    : " << state_us << '\n';
-    std::cout << "Async retry us    : " << async_us << '\n';
+    std::cout << "Async pool us     : " << async_us << '\n';
     std::cout << "Moved ops         : " << moved_ops.size() << '\n';
     std::cout << "Checksum          : " << checksum << '\n';
     return 0;

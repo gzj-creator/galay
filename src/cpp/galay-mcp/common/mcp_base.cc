@@ -1,7 +1,6 @@
 #include <galay/cpp/galay-mcp/common/mcp_base.h>
 
-namespace galay {
-namespace mcp {
+namespace galay::mcp {
 
 namespace {
 
@@ -728,5 +727,4 @@ std::expected<JsonRpcError, McpError> JsonRpcError::fromJson(const JsonElement& 
     return e;
 }
 
-} // namespace mcp
-} // namespace galay
+} // namespace galay::mcp

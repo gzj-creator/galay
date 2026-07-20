@@ -73,7 +73,17 @@ bool hasBlockingLockToken(const std::string& text)
 int main()
 {
     const auto root = repoRoot();
+    const auto client_header = readFile(root / "src/cpp/galay-redis/async/redis_client.h");
+    const auto client_source = readFile(root / "src/cpp/galay-redis/async/redis_client.cc");
+    const auto client_awaitable_header =
+        readFile(root / "src/cpp/galay-redis/details/awaitable.h");
+    const auto client_awaitable_inline =
+        readFile(root / "src/cpp/galay-redis/details/awaitable.inl");
     const auto pool_header = readFile(root / "src/cpp/galay-redis/async/conn_pool.h");
+    const auto pool_awaitable_header =
+        readFile(root / "src/cpp/galay-redis/details/pool_awaitable.h");
+    const auto pool_awaitable_inline =
+        readFile(root / "src/cpp/galay-redis/details/pool_awaitable.inl");
     const auto waiter_state_header = readFile(root / "src/cpp/galay-redis/async/conn_pool_waiter_state.h");
     const auto pool_source = readFile(root / "src/cpp/galay-redis/async/conn_pool.cc");
     const auto session_source = readFile(root / "src/cpp/galay-redis/sync/redis_session.cc");
@@ -85,27 +95,59 @@ int main()
              "暂时创建未连接的客户端",
              "No available connections",
          }) {
-        if (contains(pool_header, forbidden) || contains(pool_source, forbidden)) {
+        if (contains(pool_header, forbidden) || contains(pool_source, forbidden) ||
+            contains(pool_awaitable_header, forbidden) ||
+            contains(pool_awaitable_inline, forbidden)) {
             std::cerr << "redis pool must not use old blocking/unconnected placeholder path: "
                       << forbidden << "\n";
             return 1;
         }
     }
 
+    if (contains(client_header, "struct RedisExchangeMachine") ||
+        contains(client_header, "struct RedisConnectMachine") ||
+        contains(client_source, "RedisExchangeMachine<Strategy>::advance") ||
+        contains(client_source, "RedisConnectMachine<Strategy>::advance") ||
+        !contains(client_awaitable_header, "struct RedisExchangeMachine") ||
+        !contains(client_awaitable_header, "struct RedisConnectMachine") ||
+        !contains(client_awaitable_inline, "RedisExchangeMachine<Strategy>::advance") ||
+        !contains(client_awaitable_inline, "RedisConnectMachine<Strategy>::advance")) {
+        std::cerr << "redis client awaitable declarations/definitions must live in details/awaitable files\n";
+        return 1;
+    }
+
+    for (const auto* awaitable : {
+             "class PoolInitializeAwaitable :",
+             "class PoolAcquireAwaitable :",
+             "class RedissPoolInitializeAwaitable :",
+             "class RedissPoolAcquireAwaitable :",
+         }) {
+        if (contains(pool_header, awaitable) || !contains(pool_awaitable_header, awaitable)) {
+            std::cerr << "redis pool awaitable declarations must live in details/pool_awaitable.h: "
+                      << awaitable << "\n";
+            return 1;
+        }
+    }
+    if (contains(pool_source, "PoolAcquireAwaitable::prepareSuspend") ||
+        !contains(pool_awaitable_inline, "PoolAcquireAwaitable::prepareSuspend")) {
+        std::cerr << "redis pool awaitable definitions must live in details/pool_awaitable.inl\n";
+        return 1;
+    }
+
     const auto redis_prepare_suspend =
-        bodyAfter(pool_source, "PoolAcquireAwaitable::prepareSuspend");
+        bodyAfter(pool_awaitable_inline, "PoolAcquireAwaitable::prepareSuspend");
     const auto redis_await_resume =
-        bodyAfter(pool_source, "PoolAcquireAwaitable::await_resume");
+        bodyAfter(pool_awaitable_inline, "PoolAcquireAwaitable::await_resume");
     const auto redis_mark_timeout =
-        bodyAfter(pool_source, "PoolAcquireAwaitable::markTimeout");
+        bodyAfter(pool_awaitable_inline, "PoolAcquireAwaitable::markTimeout");
     const auto redis_await_suspend =
-        bodyAfter(pool_header, "bool await_suspend(std::coroutine_handle<Promise> handle)");
+        bodyAfter(pool_awaitable_header, "bool await_suspend(std::coroutine_handle<Promise> handle)");
     const auto rediss_prepare_suspend =
-        bodyAfter(pool_source, "RedissPoolAcquireAwaitable::prepareSuspend");
+        bodyAfter(pool_awaitable_inline, "RedissPoolAcquireAwaitable::prepareSuspend");
     const auto rediss_await_resume =
-        bodyAfter(pool_source, "RedissPoolAcquireAwaitable::await_resume");
+        bodyAfter(pool_awaitable_inline, "RedissPoolAcquireAwaitable::await_resume");
     const auto rediss_mark_timeout =
-        bodyAfter(pool_source, "RedissPoolAcquireAwaitable::markTimeout");
+        bodyAfter(pool_awaitable_inline, "RedissPoolAcquireAwaitable::markTimeout");
 
     for (const auto* forbidden : {"std::mutex", "std::lock_guard", "std::unique_lock"}) {
         if (contains(redis_prepare_suspend, forbidden) ||
@@ -185,7 +227,7 @@ int main()
              "m_error.emplace(",
              "m_connect_awaitable.emplace(",
          }) {
-        if (contains(pool_source, forbidden)) {
+        if (contains(pool_source, forbidden) || contains(pool_awaitable_inline, forbidden)) {
             std::cerr << "redis pool must bind and use optional emplace() return values explicitly: "
                       << forbidden << "\n";
             return 1;
