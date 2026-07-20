@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.3.0] - 2026-07-20
+
 ### Changed
 
 - **协程客户端 awaitable/池实现下沉 details**：galay-etcd / galay-mysql / galay-redis 三个异步客户端把 awaitable 与池 awaitable 的实现从主 `client.{h,cc}` / `conn_pool.{h,cc}` 迁入新增的 `details/awaitable.{h,inl}` 与 `details/pool_awaitable.{h,inl}`，公开头/源大幅瘦身（mysql `client.cc` 净减约 2000 行），主头文件只保留接口与类型声明。

@@ -83,3 +83,23 @@
 - **保留非 Debug 显式构建类型**：`RelWithDebInfo`、`MinSizeRel` 等显式配置不被默认 Release 覆盖，现有 Linux 性能 preset 继续使用 `RelWithDebInfo`、`-O2` 与 frame pointer。
 - **对齐 CMake presets**：开发类 presets 改用 `GALAY_BUILD_DEBUG=ON`，`linux-perf-release` 显式关闭该开关，避免 Debug 默认值覆盖性能构建配置。
 - **补齐配置回归测试**：新增 `config.build_type_option`，覆盖默认 Release、Debug 开关与 `RelWithDebInfo` 保留路径；tracing 配置测试同步使用新开关。全部 7 个 `config.*` CTest 通过。
+
+## v4.3.0 - 2026-07-20
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`chore: 发版 v4.3.0 并对齐构建版本号`
+- **Git tag**：`v4.3.0`
+
+### 变更摘要
+
+本次为 `v4.2.1` 之后的次版本发版，自 v4.2.1 以来累计 2 个提交（`e8bd857`、`c35cec0`），主线为协程客户端模块的整体重构：awaitable / 池实现下沉 `details/`、`EtcdClusterClient` 重构为无锁 EtcdClient 池租约模型、galay-mcp 命名空间统一为 C++17 形式、HTTP/2 与 RPC 客户端 awaitable 边界统一，并补齐 cluster 连接复用能力与缓存行对齐，附带 h2c 测试就绪竞态修复与 etcd 模块文档更新。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.3.0`。
+
+- **协程客户端 awaitable/池实现下沉 details**：galay-etcd / galay-mysql / galay-redis 三个异步客户端把 awaitable 与池 awaitable 实现迁入 `details/awaitable.{h,inl}` 与 `details/pool_awaitable.{h,inl}`，公开头/源大幅瘦身（mysql `client.cc` 净减约 2000 行），主头只保留接口与类型声明。
+- **HTTP/2 与 RPC 客户端 awaitable 边界统一**：`CaptureSchedulerAwaitable`、`H2cUpgradeAwaitable`、`RecvRpcResponseChainAwaitable` 及 RPC 响应读取状态迁入各模块 `details/*_awaitable.{h,inl}`；公开 client 头仅保留前置声明、接口与 details include，并保留任意 `Strategy` / `SocketType` 模板实例化能力。
+- **EtcdClusterClient 重构为无锁池**：移除原 cluster wrapper 的 `put/get/del/grantLease/keepAliveOnce/pipeline` 等逐请求方法与内置重试/健康探测循环，改为按 endpoint 预建固定数量 `EtcdClient`、通过 `tryAcquire()` 返回 move-only RAII 租约 `EtcdClientLease` 的无锁空闲队列模型，新增 `acquireConnected()` / `withClient()` 高阶入口；新增 `EtcdErrorType::PoolExhausted`、`EtcdProductionConfig::connections_per_endpoint` 与 `EtcdClusterClientBuilder::connectionsPerEndpoint()`；租约析构或 `release()` 归还连接，错误路径自动归还。
+- **galay-mcp 命名空间统一为 C++17 形式**：15 个 mcp 头/源由旧式嵌套 `namespace galay { namespace mcp {` 改为 `namespace galay::mcp {`，不改符号名。
+- **池 state 缓存行对齐**：etcd cluster 池状态字段与 redis 连接池 `IdleShard` 按 `alignas(64)` 对齐，降低多线程取还路径的伪共享。
+- **cluster 连接复用配置与池便捷 API**：mysql / redis 连接池补齐 `LeaseAwaitable` 等高阶便捷 awaitable。
+- **新增 cluster 连接复用 benchmark / 测试 / 示例**：`b6_cluster_connection_reuse`、`t18_cluster_connection_reuse`、`t19_pool_convenience` 与 `e3_client_pool`（import + include 两种形式）覆盖无锁池取还吞吐、池空返回 `PoolExhausted`、租约析构归还、多线程并发安全与池 move 后可用契约。
+- **修复 h2c 客户端测试的 listener 启动竞态与错误漏检**：`H2cServer` 新增无锁 `isReady()`，仅在 listener 完成 bind/listen 后报告就绪；`http2.h2ccl` 改为有界等待可观测 ready 状态，并完整处理 connect/shutdown 的 `std::expected` 错误。
+- **更新 etcd 模块文档**：同步架构设计 / API 参考 / 使用指南 / 示例 / 性能测试 / 常见问题，新增 `docs/cpp/modules/etcd/refactor-plan.md` 重构执行文档。
