@@ -508,42 +508,46 @@
 
 | 模块 | 头文件 | 主要类型 |
 |---|---|---|
-| App | `galay-utils/app/app.hpp` | `ArgType`、`ArgValue`、`Arg`、`Cmd`、`App` |
+| App | `galay-utils/app/app.hpp` | `CliErrorCode`、`CliError`、`CliValue<T>`、`Opt<T>`、`Positional<T>`、`Cmd`、`App` |
 | Parser | `galay-utils/config/parser_manager.hpp` | `ParserBase`、`ConfigParser`、`IniParser`、`EnvParser`、`TomlParser`、`ParserManager` |
 | Process | `galay-utils/process/process.hpp` | `ProcessId`、`ExitStatus`、`ProcessPriorityError`、`ProcessAffinityError`、`Process` |
 
 ### `App`
 
-- `ArgType`
-  - `Bool` / `Int` / `Float` / `Double` / `String`
-- `ArgValue`
-  - `using Value = std::variant<bool, int, float, double, std::string>`
-  - `ArgValue()`
-  - `ArgValue(Value)`
-  - `as<T>()`
-  - `isSet()`
-  - `set(Value)`
-- `Arg`
-  - `Arg()`
-  - `Arg(std::string longName, std::string description)`
-  - `shortName(char)`
-  - `type(ArgType)`
-  - `required(bool = true)`
-  - `defaultValue(...)`
-  - `flag(bool = true)`
-  - `longName()` / `shortName()` / `description()`
-  - `type()` / `isRequired()` / `isFlag()` / `defaultValue()`
+- 头文件拆分：`app/error.hpp`（错误类型）、`app/value.hpp`（无异常类型转换）、`app/arg.hpp`（选项）、`app/positional.hpp`（位置参数）、`app/cmd.hpp`（命令与解析）、`app/app.hpp`（入口，聚合以上全部）
+- `CliErrorCode`
+  - `UnknownOption` / `MissingValue` / `InvalidValue` / `MissingRequired` / `NotInChoices` / `UnknownSubcommand` / `HelpRequested` / `VersionRequested`
+- `cliErrorString(CliErrorCode) -> const char*`
+- `CliError`
+  - `code` / `source` / `detail`
+  - `isTermination()`：`HelpRequested` 与 `VersionRequested` 为正常终止
+  - `message()`
+- `CliValue<T>`（转换器，支持 `bool`、整数、浮点、`std::string`）
+  - `typeName()` / `parse(std::string_view) -> std::expected<T, std::string>` / `toString(const T&)`
+- `Opt<T>`
+  - `def(T)` / `required(bool = true)` / `multi(bool = true)` / `choices(std::vector<std::string>)`
+  - `bind(T*)` / `bindAll(std::vector<T>*)`
+  - `value()` / `values()` / `isSet()` / `name()` / `shortName()` / `description()`
+- `Positional<T>`
+  - `def(T)` / `required(bool = true)` / `many(bool = true)` / `choices(...)`
+  - `bind(T*)` / `bindAll(std::vector<T>*)`
+  - `value()` / `values()` / `isSet()`
 - `Cmd`
-  - `addArg(Arg)`
-  - `addSubcommand(std::unique_ptr<Cmd>)`
-  - `callback(Callback)`
-  - `get(name)` / `getAs<T>(name)` / `has(name)`
-  - `positional()`
-  - `name()` / `description()`
-  - `printHelp()`
+  - `opt<T>(name, shortName, description)` / `opt<T>(name, description)`
+  - `flag(name, shortName, description)` / `flag(name, description)`
+  - `pos<T>(name, description)`
+  - `sub(name, description)` / `on(CmdCallback)`
+  - `has(name)` / `rest()` / `selected()`
+  - `name()` / `description()` / `printHelp(std::ostream&)`
 - `App`
   - `App(std::string name, std::string description = "")`
-  - `run(int argc, char* argv[])`
+  - `version(std::string)`：声明后 `--version` 生效
+  - `parseArgs(int argc, const char* const* argv) -> std::expected<void, CliError>`
+  - `run(int argc, const char* const* argv, std::ostream& out = std::cout, std::ostream& err = std::cerr) -> int`
+- 语义：全程零异常；`--opt=value`、`-o value`、`-ovalue`、短选项合并、`--no-flag` 取反、`--` 之后全部按位置参数处理；`multi()` / `many()` 累积全部取值；解析失败时 `run()` 输出错误与帮助并返回 1，帮助/版本返回 0；同一 `App` 可重复解析，每次解析前自动重置状态
+- 子命令优先级：非选项 token 先匹配子命令名，未命中再交给位置参数；因此根命令即使定义了 `many()` 位置参数，子命令依然可达
+- 帮助优先：`--help` / `-h` 出现在 `--` 之前时优先于必选校验，`app sub --help` 输出的是子命令帮助而非父命令缺参错误
+- 帮助输出顺序与声明顺序一致，左列自动对齐；标志位默认为假时不显示 `(default: ...)`
 
 ### `Parser`
 

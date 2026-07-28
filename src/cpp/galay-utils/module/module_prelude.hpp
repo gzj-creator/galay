@@ -28,6 +28,9 @@
 #if __has_include(<cerrno>)
 #include <cerrno>
 #endif
+#if __has_include(<charconv>)
+#include <charconv>
+#endif
 #if __has_include(<chrono>)
 #include <chrono>
 #endif
@@ -114,6 +117,9 @@
 #endif
 #if __has_include(<optional>)
 #include <optional>
+#endif
+#if __has_include(<ostream>)
+#include <ostream>
 #endif
 #if __has_include(<queue>)
 #include <queue>

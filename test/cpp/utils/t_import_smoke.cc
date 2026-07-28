@@ -70,8 +70,11 @@ int main() {
     huffman.addCode('a', 0, 1);
     assert(huffman.hasSymbol('a'));
 
-    ArgValue value(std::string("7"));
-    assert(value.as<int>() == 7);
+    App cliApp("smoke");
+    auto& cliCount = cliApp.opt<int>("count", 'c', "count").def(1);
+    const char* cliArgv[] = {"smoke", "-c", "7"};
+    assert(cliApp.parseArgs(3, cliArgv).has_value());
+    assert(cliCount.value() == 7);
 
     auto parser = ParserManager::instance().createParser("config.ini");
     assert(parser != nullptr);

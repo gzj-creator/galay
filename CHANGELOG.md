@@ -11,6 +11,23 @@
 
 ## [Unreleased]
 
+## [v4.4.0] - 2026-07-28
+
+### Added
+
+- **新增类型安全 CLI 声明与解析接口**：`App` / `Cmd` 提供 `opt<T>()`、`flag()`、`pos<T>()`、`sub()` 与 `on()`，支持默认值、必选参数、外部变量绑定、重复参数、候选集合、命名位置参数和多级子命令；数值转换与解析错误统一通过 `std::expected` 显式传播，不再依赖异常。
+- **补齐现代命令行语义**：支持 `--opt=value`、`-o value`、`-ovalue`、短选项合并、`--no-flag`、`--` 终止符、帮助/版本正常终止与可重复解析；父子命令必选校验、位置参数和帮助输出顺序均由新增边界测试覆盖。
+
+### Changed
+
+- **拆分 CLI 公开头文件边界**：将原集中在 `app/app.hpp` 的实现拆分为 `error.hpp`、`value.hpp`、`arg.hpp`、`positional.hpp`、`cmd.hpp` 与聚合入口 `app.hpp`，并同步 module prelude 所需标准库头。
+- **替换旧 CLI 公开接口**：移除 `ArgType`、`ArgValue`、`Arg`、`addArg()`、`getAs()` 等旧接口，统一迁移到编译期类型确定的 `Opt<T>` / `Positional<T>` API；该变化对直接使用旧接口的调用方不兼容。
+- **构建版本号升级至 4.4.0**：同步更新 `CMakeLists.txt` 与 `MODULE.bazel`。
+
+### Docs
+
+- 更新 utils API 参考与使用指南，补充类型安全 CLI、手动处理 `CliError`、变量绑定和子命令解析示例。
+
 ## [v4.3.0] - 2026-07-20
 
 ### Changed

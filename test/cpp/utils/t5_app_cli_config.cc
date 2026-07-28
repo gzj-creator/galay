@@ -1,5 +1,7 @@
 #include "test_common.hpp"
 
+#include <sstream>
+
 void test_parser() {
     std::cout << "=== Testing Parser ===" << std::endl;
 
@@ -223,34 +225,326 @@ ports = [8080, 8081]
 
 // ==================== App (Args) Tests ====================
 
-void test_app() {
-    std::cout << "=== Testing App ===" << std::endl;
-
+void test_app_basic() {
     App app("test-app", "Test application");
 
-    app.addArg(Arg("name", "User name").shortName('n').required());
-    app.addArg(Arg("count", "Count").shortName('c').type(ArgType::Int).defaultValue(1));
-    app.addArg(Arg("verbose", "Verbose mode").shortName('v').flag());
+    int boundCount = 0;
+    auto& name = app.opt<std::string>("name", 'n', "User name").required();
+    auto& count = app.opt<int>("count", 'c', "Count").def(1).bind(&boundCount);
+    auto& verbose = app.flag("verbose", 'v', "Verbose mode");
+    auto& ratio = app.opt<double>("ratio", "Ratio").def(0.5);
 
     bool callbackCalled = false;
-    app.callback([&callbackCalled](galay::utils::Cmd& cmd) {
+    app.on([&](galay::utils::Cmd&) {
         callbackCalled = true;
-        assert(cmd.getAs<std::string>("name") == "John");
-        assert(cmd.getAs<int>("count") == 5);
-        assert(cmd.getAs<bool>("verbose") == true);
         return 0;
     });
 
-    char* argv[] = {const_cast<char*>("test-app"),
-                   const_cast<char*>("--name"),
-                   const_cast<char*>("John"),
-                   const_cast<char*>("-c"),
-                   const_cast<char*>("5"),
-                   const_cast<char*>("-v")};
-    int result = app.run(6, argv);
-
-    assert(result == 0);
+    const char* argv[] = {"test-app", "--name", "John", "-c", "5", "-v", "--ratio=0.25"};
+    assert(app.run(7, argv) == 0);
     assert(callbackCalled);
+    assert(name.value() == "John");
+    assert(count.value() == 5 && boundCount == 5);
+    assert(verbose.value());
+    assert(ratio.value() == 0.25);
+    assert(app.has("name") && !app.has("nope"));
+}
+
+void test_app_defaults_and_errors() {
+    std::ostringstream out;
+    std::ostringstream err;
+
+    App app("test-app");
+    auto& count = app.opt<int>("count", 'c', "Count").def(7);
+    auto& required = app.opt<std::string>("who", 'w', "Who").required();
+
+    const char* missing[] = {"test-app"};
+    assert(app.run(1, missing, out, err) == 1);
+    assert(err.str().find("missing required argument: --who") != std::string::npos);
+    assert(!required.isSet());
+    assert(count.value() == 7);
+
+    err.str({});
+    const char* badValue[] = {"test-app", "-w", "x", "-c", "12abc"};
+    assert(app.run(5, badValue, out, err) == 1);
+    assert(err.str().find("invalid value: -c") != std::string::npos);
+
+    err.str({});
+    const char* unknown[] = {"test-app", "-w", "x", "--nope"};
+    assert(app.run(4, unknown, out, err) == 1);
+    assert(err.str().find("unknown option: --nope") != std::string::npos);
+
+    err.str({});
+    const char* noValue[] = {"test-app", "-w"};
+    assert(app.run(2, noValue, out, err) == 1);
+    assert(err.str().find("missing value: -w") != std::string::npos);
+
+    // 重复解析不残留上一次状态
+    const char* good[] = {"test-app", "-w", "y"};
+    assert(app.run(3, good, out, err) == 0);
+    assert(required.value() == "y" && count.value() == 7);
+}
+
+void test_app_flags_and_multi() {
+    App app("test-app");
+    auto& color = app.flag("color", "Colored output").def(true);
+    auto& quiet = app.flag("quiet", 'q', "Quiet");
+    auto& tags = app.opt<std::string>("tag", 't', "Tags").multi();
+
+    std::vector<std::string> boundTags;
+    tags.bindAll(&boundTags);
+
+    const char* argv[] = {"test-app", "--no-color", "-q", "-t", "a", "--tag=b", "-tc"};
+    assert(app.run(7, argv) == 0);
+    assert(!color.value());
+    assert(quiet.value());
+    assert(tags.values().size() == 3);
+    assert(tags.values()[0] == "a" && tags.values()[2] == "c");
+    assert(tags.value() == "c");
+    assert(boundTags == tags.values());
+}
+
+void test_app_positional_and_choices() {
+    App app("test-app");
+    auto& mode = app.opt<std::string>("mode", 'm', "Mode").choices({"fast", "slow"}).def("fast");
+    auto& input = app.pos<std::string>("input", "Input file").required();
+    auto& extras = app.pos<int>("extra", "Extra numbers").many();
+
+    const char* argv[] = {"test-app", "-m", "slow", "in.txt", "1", "2", "3"};
+    assert(app.run(7, argv) == 0);
+    assert(mode.value() == "slow");
+    assert(input.value() == "in.txt");
+    assert(extras.values().size() == 3 && extras.values()[2] == 3);
+    assert(app.rest().empty());
+
+    std::ostringstream out;
+    std::ostringstream err;
+    const char* badChoice[] = {"test-app", "-m", "medium", "in.txt"};
+    assert(app.run(4, badChoice, out, err) == 1);
+    assert(err.str().find("value not allowed: -m") != std::string::npos);
+
+    err.str({});
+    const char* missingPositional[] = {"test-app"};
+    assert(app.run(1, missingPositional, out, err) == 1);
+    assert(err.str().find("missing required argument: input") != std::string::npos);
+}
+
+void test_app_end_of_options() {
+    App app("test-app");
+    auto& flag = app.flag("verbose", 'v', "Verbose");
+    auto& rest = app.pos<std::string>("args", "Passthrough").many();
+
+    const char* argv[] = {"test-app", "-v", "--", "-v", "--nope", "plain"};
+    assert(app.run(6, argv) == 0);
+    assert(flag.value());
+    assert(rest.values().size() == 3);
+    assert(rest.values()[0] == "-v" && rest.values()[1] == "--nope");
+}
+
+void test_app_subcommands() {
+    App app("git-like", "Subcommand test");
+    app.version("2.0.0");
+
+    auto& clone = app.sub("clone", "Clone a repo");
+    auto& depth = clone.opt<int>("depth", 'd', "Depth").def(0);
+    auto& url = clone.pos<std::string>("url", "Repo url").required();
+
+    auto& remote = app.sub("remote", "Remote ops");
+    auto& add = remote.sub("add", "Add remote");
+    auto& remoteName = add.pos<std::string>("name", "Remote name").required();
+
+    int cloneHits = 0;
+    int addHits = 0;
+    clone.on([&](galay::utils::Cmd&) { ++cloneHits; return 3; });
+    add.on([&](galay::utils::Cmd&) { ++addHits; return 4; });
+
+    const char* cloneArgv[] = {"git-like", "clone", "-d", "1", "http://repo"};
+    assert(app.run(5, cloneArgv) == 3);
+    assert(cloneHits == 1 && addHits == 0);
+    assert(depth.value() == 1 && url.value() == "http://repo");
+
+    const char* addArgv[] = {"git-like", "remote", "add", "origin"};
+    assert(app.run(4, addArgv) == 4);
+    assert(addHits == 1 && remoteName.value() == "origin");
+    assert(app.selected().name() == "add");
+
+    std::ostringstream out;
+    std::ostringstream err;
+    const char* unknownSub[] = {"git-like", "nosuch"};
+    assert(app.run(2, unknownSub, out, err) == 1);
+    assert(err.str().find("unknown subcommand: nosuch") != std::string::npos);
+}
+
+void test_app_help_and_version() {
+    App app("helper", "Helper description");
+    app.version("1.2.3");
+    app.opt<int>("port", 'p', "Listen port").def(8080);
+    app.flag("verbose", 'v', "Verbose");
+    app.opt<std::string>("mode", "Mode").choices({"a", "b"});
+    app.pos<std::string>("file", "Input file").required();
+    app.sub("run", "Run it");
+
+    std::ostringstream out;
+    std::ostringstream err;
+    const char* helpArgv[] = {"helper", "--help"};
+    assert(app.run(2, helpArgv, out, err) == 0);
+
+    const std::string help = out.str();
+    assert(help.find("Usage: helper <command> [options] <file>") != std::string::npos);
+    assert(help.find("Helper description") != std::string::npos);
+    assert(help.find("Commands:") != std::string::npos);
+    assert(help.find("Arguments:") != std::string::npos);
+    assert(help.find("-p, --port <int>") != std::string::npos);
+    assert(help.find("(default: 8080)") != std::string::npos);
+    assert(help.find("{a|b}") != std::string::npos);
+    assert(help.find("[required]") != std::string::npos);
+    assert(help.find("--help") != std::string::npos);
+    // 帮助顺序必须与声明顺序一致
+    assert(help.find("--port") < help.find("--verbose"));
+    assert(help.find("--verbose") < help.find("--mode"));
+
+    out.str({});
+    const char* versionArgv[] = {"helper", "--version"};
+    assert(app.run(2, versionArgv, out, err) == 0);
+    assert(out.str() == "1.2.3\n");
+}
+
+void test_app_parse_only() {
+    App app("parse-only");
+    auto& port = app.opt<unsigned short>("port", 'p', "Port").def(80);
+
+    const char* argv[] = {"parse-only", "-p", "443"};
+    auto parsed = app.parseArgs(3, argv);
+    assert(parsed.has_value());
+    assert(port.value() == 443);
+
+    const char* overflow[] = {"parse-only", "-p", "99999"};
+    auto failed = app.parseArgs(3, overflow);
+    assert(!failed.has_value());
+    assert(failed.error().code == CliErrorCode::InvalidValue);
+    assert(failed.error().detail == "99999");
+    assert(std::string(cliErrorString(failed.error().code)) == "invalid value");
+    assert(failed.error().message().find("--port") == std::string::npos);
+    assert(failed.error().message().find("-p") != std::string::npos);
+
+    const char* helpArgv[] = {"parse-only", "-h"};
+    auto helped = app.parseArgs(2, helpArgv);
+    assert(!helped.has_value());
+    assert(helped.error().code == CliErrorCode::HelpRequested);
+    assert(helped.error().isTermination());
+}
+
+void test_app_edge_cases() {
+    // 子命令内出错时帮助应来自子命令
+    {
+        App app("git");
+        auto& clone = app.sub("clone", "Clone repo");
+        clone.opt<int>("depth", 'd', "Depth").def(0);
+        std::ostringstream out;
+        std::ostringstream err;
+        const char* argv[] = {"git", "clone", "--nope"};
+        assert(app.run(3, argv, out, err) == 1);
+        assert(err.str().find("Usage: clone") != std::string::npos);
+    }
+    // 未声明版本时 --version 属于未知选项
+    {
+        App app("tool");
+        std::ostringstream out;
+        std::ostringstream err;
+        const char* argv[] = {"tool", "--version"};
+        assert(app.run(2, argv, out, err) == 1);
+        assert(err.str().find("unknown option: --version") != std::string::npos);
+    }
+    // 用户占用 -h 时不再抢占为帮助
+    {
+        App app("tool");
+        auto& host = app.opt<std::string>("host", 'h', "Host");
+        const char* argv[] = {"tool", "-h", "localhost"};
+        assert(app.run(3, argv) == 0);
+        assert(host.value() == "localhost");
+    }
+    // 单个 "-" 按位置参数处理，负数取值不被误判为选项
+    {
+        App app("tool");
+        auto& file = app.pos<std::string>("file", "File");
+        auto& offset = app.opt<int>("offset", 'o', "Offset").def(0);
+        const char* argv[] = {"tool", "--offset=-5", "-"};
+        assert(app.run(3, argv) == 0);
+        assert(file.value() == "-" && offset.value() == -5);
+    }
+    // 未被命名位置参数消费的剩余参数进 rest()
+    {
+        App app("tool");
+        const char* argv[] = {"tool", "a", "b"};
+        assert(app.run(3, argv) == 0);
+        assert(app.rest().size() == 2 && app.rest()[1] == "b");
+    }
+    // 根命令带 many() 位置参数时，子命令仍可被识别
+    {
+        App app("tool");
+        auto& files = app.pos<std::string>("files", "Files").many();
+        auto& sub = app.sub("build", "Build");
+        int hits = 0;
+        sub.on([&](galay::utils::Cmd&) { ++hits; return 0; });
+
+        const char* argv[] = {"tool", "build"};
+        assert(app.run(2, argv) == 0);
+        assert(hits == 1 && files.values().empty());
+
+        const char* plain[] = {"tool", "a.txt", "b.txt"};
+        assert(app.run(3, plain) == 0);
+        assert(hits == 1 && files.values().size() == 2);
+    }
+    // 子命令 --help 不应先触发父命令的必选校验
+    {
+        App app("tool");
+        app.opt<std::string>("name", 'n', "Name").required();
+        auto& sub = app.sub("serve", "Serve");
+        sub.opt<int>("port", 'p', "Port").def(80);
+        std::ostringstream out;
+        std::ostringstream err;
+        const char* argv[] = {"tool", "serve", "--help"};
+        assert(app.run(3, argv, out, err) == 0);
+        assert(err.str().empty());
+        assert(out.str().find("Usage: serve") != std::string::npos);
+        assert(out.str().find("--port") != std::string::npos);
+    }
+    // 缺少必选参数时 --help 仍应正常输出
+    {
+        App app("tool");
+        app.opt<std::string>("name", 'n', "Name").required();
+        std::ostringstream out;
+        std::ostringstream err;
+        const char* argv[] = {"tool", "--help"};
+        assert(app.run(2, argv, out, err) == 0);
+        assert(err.str().empty());
+        assert(out.str().find("Usage: tool") != std::string::npos);
+    }
+    // "--" 之后的 --help 属于普通取值，不触发帮助
+    {
+        App app("tool");
+        auto& rest = app.pos<std::string>("rest", "Rest").many();
+        std::ostringstream out;
+        std::ostringstream err;
+        const char* argv[] = {"tool", "--", "--help"};
+        assert(app.run(3, argv, out, err) == 0);
+        assert(out.str().empty());
+        assert(rest.values().size() == 1 && rest.values()[0] == "--help");
+    }
+}
+
+void test_app() {
+    std::cout << "=== Testing App ===" << std::endl;
+
+    test_app_basic();
+    test_app_defaults_and_errors();
+    test_app_flags_and_multi();
+    test_app_positional_and_choices();
+    test_app_end_of_options();
+    test_app_subcommands();
+    test_app_help_and_version();
+    test_app_parse_only();
+    test_app_edge_cases();
 
     std::cout << "App tests passed!" << std::endl;
 }

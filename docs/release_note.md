@@ -103,3 +103,19 @@
 - **新增 cluster 连接复用 benchmark / 测试 / 示例**：`b6_cluster_connection_reuse`、`t18_cluster_connection_reuse`、`t19_pool_convenience` 与 `e3_client_pool`（import + include 两种形式）覆盖无锁池取还吞吐、池空返回 `PoolExhausted`、租约析构归还、多线程并发安全与池 move 后可用契约。
 - **修复 h2c 客户端测试的 listener 启动竞态与错误漏检**：`H2cServer` 新增无锁 `isReady()`，仅在 listener 完成 bind/listen 后报告就绪；`http2.h2ccl` 改为有界等待可观测 ready 状态，并完整处理 connect/shutdown 的 `std::expected` 错误。
 - **更新 etcd 模块文档**：同步架构设计 / API 参考 / 使用指南 / 示例 / 性能测试 / 常见问题，新增 `docs/cpp/modules/etcd/refactor-plan.md` 重构执行文档。
+
+## v4.4.0 - 2026-07-28
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`feat: 重构类型安全 CLI 解析接口并发布 v4.4.0`
+- **Git tag**：`v4.4.0`
+
+### 变更摘要
+
+本次为 `v4.3.0` 之后的次版本发版，主线为重构 galay-utils 命令行解析能力：以编译期类型安全的 `Opt<T>` / `Positional<T>` 替换旧 `Arg` / `ArgValue` 接口，新增完整的选项、位置参数、变量绑定、多级子命令和帮助输出语义，并将错误统一为 `std::expected<void, CliError>` 显式传播。该公开 API 替换对直接使用旧 CLI 接口的调用方不兼容；由于未获得升级主版本的明确授权，本次按新增功能保守发布为 `v4.4.0`。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.4.0`。
+
+- **类型安全 CLI API**：新增 `opt<T>()`、`flag()`、`pos<T>()`、`sub()` 与 `on()` 声明入口，支持默认值、必选参数、外部变量绑定、重复参数、候选集合、命名位置参数和多级子命令；解析结果可直接通过 `value()` / `values()` 获取。
+- **无异常错误传播**：数值转换使用 `std::from_chars` 或无异常浮点回退，解析失败通过 `CliErrorCode` / `CliError` 与 `std::expected` 返回；帮助和版本请求作为正常终止状态处理。
+- **现代命令行语义**：支持 `--opt=value`、`-o value`、`-ovalue`、短选项合并、`--no-flag`、`--` 终止符、重复解析状态重置，以及父子命令必选校验和帮助优先级。
+- **公开头边界重组**：将 CLI 实现拆分为 `app/{error,value,arg,positional,cmd,app}.hpp`，聚合入口与 C++ module prelude 同步更新；旧 `ArgType`、`ArgValue`、`Arg`、`addArg()`、`getAs()` 等接口不再保留。
+- **测试与文档同步**：扩展 `utils.app_cli_config` 覆盖成功路径、无效值、必选参数、候选集合、位置参数、子命令、帮助/版本和重复解析边界；更新 utils API 参考与使用指南。全新 Release 构建下 `utils` 标签 19/19 通过。
