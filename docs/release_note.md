@@ -119,3 +119,17 @@
 - **现代命令行语义**：支持 `--opt=value`、`-o value`、`-ovalue`、短选项合并、`--no-flag`、`--` 终止符、重复解析状态重置，以及父子命令必选校验和帮助优先级。
 - **公开头边界重组**：将 CLI 实现拆分为 `app/{error,value,arg,positional,cmd,app}.hpp`，聚合入口与 C++ module prelude 同步更新；旧 `ArgType`、`ArgValue`、`Arg`、`addArg()`、`getAs()` 等接口不再保留。
 - **测试与文档同步**：扩展 `utils.app_cli_config` 覆盖成功路径、无效值、必选参数、候选集合、位置参数、子命令、帮助/版本和重复解析边界；更新 utils API 参考与使用指南。全新 Release 构建下 `utils` 标签 19/19 通过。
+
+## v4.4.1 - 2026-07-28
+
+- **版本级别**：小版本（trivial）
+- **Git 提交消息**：`refactor: 收敛 App 命令行执行入口并发布 v4.4.1`
+- **Git tag**：`v4.4.1`
+
+### 变更摘要
+
+本次为 `v4.4.0` 之后的小版本发版，主线为收敛 galay-utils 的 `App` 公开执行入口：删除缺少实际使用场景的 `parseArgs()` 仅解析接口，统一由 `run()` 完成参数解析、帮助/版本处理、错误输出和命令回调执行。解析失败仍在内部通过 `std::expected<void, CliError>` 显式传播，再由 `run()` 转换为进程退出码。该公开 API 删除对直接调用 `parseArgs()` 的源码不兼容；版本级别按用户明确要求保持为小版本。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.4.1`。
+
+- **收敛 `App` 公开 API**：删除 `App::parseArgs()` 及其公开文档，保留 `run()` 作为唯一命令行生命周期入口。
+- **测试与文档对齐**：移除 parse-only 专用测试，module import smoke 改为调用 `run()`；utils API 参考与使用指南不再展示已删除入口。
+- **验证结果**：重新配置并构建 utils 测试，`utils` 标签 19/19 通过，`git diff --check` 通过。

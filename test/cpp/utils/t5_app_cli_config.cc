@@ -409,31 +409,6 @@ void test_app_help_and_version() {
     assert(out.str() == "1.2.3\n");
 }
 
-void test_app_parse_only() {
-    App app("parse-only");
-    auto& port = app.opt<unsigned short>("port", 'p', "Port").def(80);
-
-    const char* argv[] = {"parse-only", "-p", "443"};
-    auto parsed = app.parseArgs(3, argv);
-    assert(parsed.has_value());
-    assert(port.value() == 443);
-
-    const char* overflow[] = {"parse-only", "-p", "99999"};
-    auto failed = app.parseArgs(3, overflow);
-    assert(!failed.has_value());
-    assert(failed.error().code == CliErrorCode::InvalidValue);
-    assert(failed.error().detail == "99999");
-    assert(std::string(cliErrorString(failed.error().code)) == "invalid value");
-    assert(failed.error().message().find("--port") == std::string::npos);
-    assert(failed.error().message().find("-p") != std::string::npos);
-
-    const char* helpArgv[] = {"parse-only", "-h"};
-    auto helped = app.parseArgs(2, helpArgv);
-    assert(!helped.has_value());
-    assert(helped.error().code == CliErrorCode::HelpRequested);
-    assert(helped.error().isTermination());
-}
-
 void test_app_edge_cases() {
     // 子命令内出错时帮助应来自子命令
     {
@@ -543,7 +518,6 @@ void test_app() {
     test_app_end_of_options();
     test_app_subcommands();
     test_app_help_and_version();
-    test_app_parse_only();
     test_app_edge_cases();
 
     std::cout << "App tests passed!" << std::endl;

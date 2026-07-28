@@ -8,7 +8,7 @@
  *          解析后直接 `value()` 取值或通过 `bind()` 写回外部变量。
  *          支持长短选项、`--opt=value`、`-o value`、短选项合并、`--no-flag` 取反、
  *          `--` 终止符、重复参数累积、候选集合校验、命名位置参数与多级子命令。
- *          全程零异常，错误通过 `std::expected<void, CliError>` 传播。
+ *          全程零异常，解析错误在内部显式传播，并由 `run()` 转换为进程退出码。
  *
  * @code
  * using namespace galay::utils;
@@ -48,16 +48,6 @@ public:
     App& version(std::string text) {
         m_versionText = std::move(text);
         return *this;
-    }
-
-    /**
-     * @brief 仅解析参数，不执行回调
-     * @param argc 参数个数
-     * @param argv 参数数组
-     * @return 成功返回空，失败或请求帮助/版本返回 `CliError`
-     */
-    [[nodiscard]] std::expected<void, CliError> parseArgs(int argc, const char* const* argv) {
-        return parse(argc, argv, 1);
     }
 
     /**

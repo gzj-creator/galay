@@ -542,7 +542,6 @@
 - `App`
   - `App(std::string name, std::string description = "")`
   - `version(std::string)`：声明后 `--version` 生效
-  - `parseArgs(int argc, const char* const* argv) -> std::expected<void, CliError>`
   - `run(int argc, const char* const* argv, std::ostream& out = std::cout, std::ostream& err = std::cerr) -> int`
 - 语义：全程零异常；`--opt=value`、`-o value`、`-ovalue`、短选项合并、`--no-flag` 取反、`--` 之后全部按位置参数处理；`multi()` / `many()` 累积全部取值；解析失败时 `run()` 输出错误与帮助并返回 1，帮助/版本返回 0；同一 `App` 可重复解析，每次解析前自动重置状态
 - 子命令优先级：非选项 token 先匹配子命令名，未命中再交给位置参数；因此根命令即使定义了 `many()` 位置参数，子命令依然可达

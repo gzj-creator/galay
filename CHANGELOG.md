@@ -11,6 +11,17 @@
 
 ## [Unreleased]
 
+## [v4.4.1] - 2026-07-28
+
+### Changed
+
+- **收敛 `App` 命令行执行入口**：删除仅解析参数的公开 `parseArgs()` 接口，`App` 统一通过 `run()` 负责参数解析、帮助/版本处理、错误输出与命令回调执行；该变更对直接调用 `parseArgs()` 的源码不兼容。
+- **构建版本号升级至 4.4.1**：同步更新 `CMakeLists.txt` 与 `MODULE.bazel`。
+
+### Docs
+
+- 同步更新 utils API 参考与使用指南，移除 `parseArgs()` 及手动处理 `CliError` 的示例；相关边界测试与 module import smoke 改为验证唯一 `run()` 入口。
+
 ## [v4.4.0] - 2026-07-28
 
 ### Added

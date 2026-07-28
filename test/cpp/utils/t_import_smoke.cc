@@ -73,7 +73,7 @@ int main() {
     App cliApp("smoke");
     auto& cliCount = cliApp.opt<int>("count", 'c', "count").def(1);
     const char* cliArgv[] = {"smoke", "-c", "7"};
-    assert(cliApp.parseArgs(3, cliArgv).has_value());
+    assert(cliApp.run(3, cliArgv) == 0);
     assert(cliCount.value() == 7);
 
     auto parser = ParserManager::instance().createParser("config.ini");
