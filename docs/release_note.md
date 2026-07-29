@@ -133,3 +133,19 @@
 - **收敛 `App` 公开 API**：删除 `App::parseArgs()` 及其公开文档，保留 `run()` 作为唯一命令行生命周期入口。
 - **测试与文档对齐**：移除 parse-only 专用测试，module import smoke 改为调用 `run()`；utils API 参考与使用指南不再展示已删除入口。
 - **验证结果**：重新配置并构建 utils 测试，`utils` 标签 19/19 通过，`git diff --check` 通过。
+
+## v4.4.2 - 2026-07-29
+
+- **版本级别**：小版本（trivial，用户指定）
+- **Git 提交消息**：`feat: 扩展 App 版本短选项与空参数帮助并发布 v4.4.2`
+- **Git tag**：`v4.4.2`
+
+### 变更摘要
+
+本次为 `v4.4.1` 之后的小版本发版，主线为补齐 galay-utils `App` 的版本短选项与空参数帮助语义。`version()` 现在复用普通 flag 注册路径，可显式声明 `-v` 等短名；无命令行实参时 `run()` 直接输出 Usage。配套补齐 CLI 压力基准，并修正 RingBuffer 测试中已经落后于 `std::expected` 错误契约和 mmap 降级语义的断言。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.4.2`。
+
+- **版本短选项复用普通 option 注册**：`App::version(text, shortName)` 内部通过 `flag("version", shortName, ...)` 注册真实选项，短名、长名、帮助展示和查找统一走 `Cmd` 既有流程；`version("1.2.3", 'v')` 同时支持 `-v` / `--version`，默认 `shortName='\0'` 保持既有仅长选项行为。
+- **空参数直接输出 Usage**：顶层 `App::run()` 在 `argc <= 1` 时打印帮助并返回 0，避免命令无参数时静默结束或先报告必选参数缺失。
+- **CLI 边界测试与压力覆盖**：`utils.app_cli_config` 新增版本短名、帮助标签和空参数 Usage 断言；新增 `benchmark_utils_app_cli_dispatch_pressure`，10 万次压力下空参数帮助约 57 万次/秒、版本短选项约 187 万次/秒。
+- **RingBuffer 测试对齐显式错误传播**：零容量边界改为检查 `RingBuffer::create(0)` 返回 `RingBufferError::kInvalidCapacity`，移除旧 `try/catch`；默认后端 iovec 断言允许 mmap 创建失败后合法降级为 vector，并校验全部片段总长度。
+- **验证结果**：`utils.app_cli_config` 通过，`utils.buffer_queue_ring` 连续运行 10 次通过，CLI 压力基准通过，`git diff --check` 通过。当前受限 macOS 环境的 utils 全量测试仍有 3 项既有环境/专项假设失败：进程优先级设置权限，以及两个 mmap 专项用例在 mmap 创建失败并降级 vector 后仍要求单 iovec；均不由本次改动引入。

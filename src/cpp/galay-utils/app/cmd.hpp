@@ -155,6 +155,7 @@ protected:
     std::vector<std::string> m_rest;
     CmdCallback m_callback;
     Cmd* m_activeSub{nullptr};
+    ArgBase* m_versionOption{nullptr};
 
 private:
     /// 按长名查找选项
@@ -236,10 +237,6 @@ Cmd::handleLong(std::string_view token, int argc, const char* const* argv, int& 
     if (body == "help") {
         return std::unexpected(makeCliError(CliErrorCode::HelpRequested, m_name));
     }
-    if (body == "version" && !m_versionText.empty()) {
-        return std::unexpected(makeCliError(CliErrorCode::VersionRequested, m_versionText));
-    }
-
     ArgBase* option = findLong(body);
     bool negated = false;
     if (option == nullptr && body.starts_with("no-")) {
@@ -251,6 +248,13 @@ Cmd::handleLong(std::string_view token, int argc, const char* const* argv, int& 
     }
     if (option == nullptr) {
         return std::unexpected(makeCliError(CliErrorCode::UnknownOption, std::string("--").append(body)));
+    }
+
+    if (option == m_versionOption) {
+        if (negated) {
+            return std::unexpected(makeCliError(CliErrorCode::UnknownOption, std::string("--no-").append(body)));
+        }
+        return std::unexpected(makeCliError(CliErrorCode::VersionRequested, m_versionText));
     }
 
     const std::string reported = std::string("--").append(option->name());
@@ -291,6 +295,10 @@ Cmd::handleShort(std::string_view token, int argc, const char* const* argv, int&
         ArgBase* option = findShort(letter);
         if (option == nullptr) {
             return std::unexpected(makeCliError(CliErrorCode::UnknownOption, std::string("-").append(1, letter)));
+        }
+
+        if (option == m_versionOption) {
+            return std::unexpected(makeCliError(CliErrorCode::VersionRequested, m_versionText));
         }
 
         const std::string reported = std::string("-").append(1, letter);
@@ -561,9 +569,6 @@ inline void Cmd::printHelp(std::ostream& out) const {
                          detail::optionSuffix(*option));
     }
     detail::writeRow(out, helpLabel, width, "show this help", {});
-    if (!m_versionText.empty()) {
-        detail::writeRow(out, "    --version", width, "show version", {});
-    }
     out.flush();
 }
 

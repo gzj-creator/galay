@@ -44,9 +44,15 @@ public:
     explicit App(std::string name, std::string description = "")
         : Cmd(std::move(name), std::move(description)) {}
 
-    /// 声明版本文本，声明后 `--version` 生效
-    App& version(std::string text) {
+    /**
+     * @brief 声明版本选项
+     * @param text 触发版本选项时输出的文本
+     * @param shortName 短选项名，`'\0'` 表示仅注册 `--version`
+     * @return 当前应用引用
+     */
+    App& version(std::string text, char shortName = '\0') {
         m_versionText = std::move(text);
+        m_versionOption = &flag("version", shortName, "show version");
         return *this;
     }
 
@@ -60,6 +66,11 @@ public:
      */
     int run(int argc, const char* const* argv, std::ostream& out = std::cout,
             std::ostream& err = std::cerr) {
+        if (argc <= 1) {
+            printHelp(out);
+            return 0;
+        }
+
         auto parsed = parse(argc, argv, 1);
         if (parsed) {
             return execute();

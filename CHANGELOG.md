@@ -11,6 +11,22 @@
 
 ## [Unreleased]
 
+## [v4.4.2] - 2026-07-29
+
+### Added
+
+- **`App::version()` 支持注册版本短选项**：新增可选 `shortName` 参数，内部复用普通 `flag()` 选项注册与查找流程；调用 `version("1.2.3", 'v')` 后同时支持 `-v` / `--version`，未指定短名时继续仅注册 `--version`。
+- **新增 CLI 分派压力基准**：覆盖无参数 Usage 输出与版本短选项分派，两条路径各执行 10 万次并校验返回状态。
+
+### Changed
+
+- **空参数调用直接显示帮助**：顶层 `App::run()` 在没有命令行实参时输出 Usage 并返回成功，不再静默执行空回调或先触发必选参数错误。
+- **构建版本号升级至 4.4.2**：同步更新 `CMakeLists.txt` 与 `MODULE.bazel`。
+
+### Fixed
+
+- **对齐 RingBuffer 测试与显式错误契约**：零容量测试改为检查 `RingBuffer::create(0)` 返回的 `RingBufferError::kInvalidCapacity`，移除过期异常断言；默认 mmap 后端测试兼容资源创建失败后降级 vector 的一段或两段 iovec 公开语义。
+
 ## [v4.4.1] - 2026-07-28
 
 ### Changed

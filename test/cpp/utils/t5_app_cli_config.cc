@@ -258,8 +258,8 @@ void test_app_defaults_and_errors() {
     auto& count = app.opt<int>("count", 'c', "Count").def(7);
     auto& required = app.opt<std::string>("who", 'w', "Who").required();
 
-    const char* missing[] = {"test-app"};
-    assert(app.run(1, missing, out, err) == 1);
+    const char* missing[] = {"test-app", "--count", "7"};
+    assert(app.run(3, missing, out, err) == 1);
     assert(err.str().find("missing required argument: --who") != std::string::npos);
     assert(!required.isSet());
     assert(count.value() == 7);
@@ -324,8 +324,8 @@ void test_app_positional_and_choices() {
     assert(err.str().find("value not allowed: -m") != std::string::npos);
 
     err.str({});
-    const char* missingPositional[] = {"test-app"};
-    assert(app.run(1, missingPositional, out, err) == 1);
+    const char* missingPositional[] = {"test-app", "--mode", "fast"};
+    assert(app.run(3, missingPositional, out, err) == 1);
     assert(err.str().find("missing required argument: input") != std::string::npos);
 }
 
@@ -377,9 +377,9 @@ void test_app_subcommands() {
 
 void test_app_help_and_version() {
     App app("helper", "Helper description");
-    app.version("1.2.3");
+    app.version("1.2.3", 'v');
     app.opt<int>("port", 'p', "Listen port").def(8080);
-    app.flag("verbose", 'v', "Verbose");
+    app.flag("verbose", 'q', "Verbose");
     app.opt<std::string>("mode", "Mode").choices({"a", "b"});
     app.pos<std::string>("file", "Input file").required();
     app.sub("run", "Run it");
@@ -399,6 +399,7 @@ void test_app_help_and_version() {
     assert(help.find("{a|b}") != std::string::npos);
     assert(help.find("[required]") != std::string::npos);
     assert(help.find("--help") != std::string::npos);
+    assert(help.find("-v, --version") != std::string::npos);
     // 帮助顺序必须与声明顺序一致
     assert(help.find("--port") < help.find("--verbose"));
     assert(help.find("--verbose") < help.find("--mode"));
@@ -407,6 +408,16 @@ void test_app_help_and_version() {
     const char* versionArgv[] = {"helper", "--version"};
     assert(app.run(2, versionArgv, out, err) == 0);
     assert(out.str() == "1.2.3\n");
+
+    out.str({});
+    const char* shortVersionArgv[] = {"helper", "-v"};
+    assert(app.run(2, shortVersionArgv, out, err) == 0);
+    assert(out.str() == "1.2.3\n");
+
+    out.str({});
+    const char* emptyArgv[] = {"helper"};
+    assert(app.run(1, emptyArgv, out, err) == 0);
+    assert(out.str().find("Usage: helper <command> [options] <file>") != std::string::npos);
 }
 
 void test_app_edge_cases() {

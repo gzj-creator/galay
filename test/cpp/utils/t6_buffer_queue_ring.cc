@@ -77,13 +77,9 @@ void test_ring_buffer() {
     using VectorRingBuffer = RingBuffer<RingBufferBackendStrategy::Vector>;
 
     {
-        bool thrown = false;
-        try {
-            DefaultRingBuffer invalid(0);
-        } catch (const std::invalid_argument&) {
-            thrown = true;
-        }
-        assert(thrown);
+        auto invalid = DefaultRingBuffer::create(0);
+        assert(!invalid.has_value());
+        assert(invalid.error() == RingBufferError::kInvalidCapacity);
     }
 
     {
@@ -158,8 +154,12 @@ void test_ring_buffer() {
 
         std::array<struct iovec, 2> readIovecs{};
         const size_t readCount = buffer.getReadIovecs(readIovecs);
-        assert(readCount == 1);
-        assert(readIovecs[0].iov_len == buffer.readable());
+        assert(readCount >= 1 && readCount <= readIovecs.size());
+        size_t readableLength = 0;
+        for (size_t index = 0; index < readCount; ++index) {
+            readableLength += readIovecs[index].iov_len;
+        }
+        assert(readableLength == buffer.readable());
     }
 
     {
