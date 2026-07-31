@@ -20,6 +20,7 @@
 
 - **统一异步 I/O 文件与公开类型命名**：C++ 头文件和实现统一改为 `async_aio`、`async_tcp`、`async_udp`、`async_file_watcher`，公开类型改为 `AsyncAio`、`AsyncTcpSocket`、`AsyncUdpSocket`、`AsyncFileWatcher`；C wrapper 同步采用带 `_c` 后缀的新文件名，保留现有 C ABI 函数与句柄名称。
 - **异步同步原语归入 async 模块**：`async_mutex` 与 `async_waiter` 从 C++ `concurrency` 和 C `concurrency-c` 目录迁入对应 `async` / `async-c` 目录，并同步更新模块入口、安装边界、源码、文档、测试、示例与 benchmark 引用。
+- **收敛 `BoundedChannel` 生产实现与维护文档**：删除 `GALAY_BQ_DIAG_*` 临时编译分支，保留唯一的关闭检查、waiter-aware 和 ring 退避路径；补全公开 API、协程 awaitable、ring 与 waiter helper 的参数、返回值、错误、并发和生命周期注释。
 
 ### Fixed
 
