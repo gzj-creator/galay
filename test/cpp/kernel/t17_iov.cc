@@ -1,6 +1,6 @@
 /**
  * @file t17_iov.cc
- * @brief 用途：验证 `readv/writev` 聚合读写在 `TcpSocket` 场景下的结果正确性。
+ * @brief 用途：验证 `readv/writev` 聚合读写在 `AsyncTcpSocket` 场景下的结果正确性。
  * 关键覆盖点：分散缓冲区写入、聚合读取、字节数统计与载荷一致性。
  * 通过条件：读写结果与预期完全一致，测试返回 0。
  */
@@ -8,7 +8,7 @@
 #include <cstring>
 #include <atomic>
 #include <array>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -33,7 +33,7 @@ std::atomic<bool> g_test_passed{false};
 // 服务器协程 - 使用 readv 接收数据
 Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] Starting...");
-    TcpSocket listener;
+    AsyncTcpSocket listener;
 
     auto optResult = listener.option().handleReuseAddr();
     if (!optResult) {
@@ -72,7 +72,7 @@ Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
 
     LogInfo("[Server] Client connected from {}:{}", clientHost.ip(), clientHost.port());
 
-    TcpSocket client(acceptResult.value());
+    AsyncTcpSocket client(acceptResult.value());
     optResult = client.option().handleNonBlock();
     if (!optResult) {
         LogError("[Server] Failed to set client non-block: {}", optResult.error().message());
@@ -154,7 +154,7 @@ Task<void> writevClient([[maybe_unused]] IOScheduler* scheduler) {
     }
 
     LogInfo("[Client] Starting...");
-    TcpSocket client;
+    AsyncTcpSocket client;
     auto optResult = client.option().handleNonBlock();
     if (!optResult) {
         LogError("[Client] Failed to set non-block: {}", optResult.error().message());
@@ -222,7 +222,7 @@ Task<void> writevClient([[maybe_unused]] IOScheduler* scheduler) {
 }
 
 int main() {
-    LogInfo("=== TcpSocket readv/writev Test ===");
+    LogInfo("=== AsyncTcpSocket readv/writev Test ===");
 
 #ifdef USE_KQUEUE
     LogInfo("Using KqueueScheduler (macOS)");

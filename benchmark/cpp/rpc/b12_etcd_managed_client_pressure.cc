@@ -190,10 +190,10 @@ int main(int argc, char** argv)
         .computeSchedulerCount(0)
         .build();
     BenchEtcdEchoService service;
-    auto registered = server.registerService(service);
-    if (!registered.has_value()) {
+    auto service_registered = server.registerService(service);
+    if (!service_registered.has_value()) {
         std::cerr << "failed to register etcd pressure service: "
-                  << registered.error().message() << "\n";
+                  << service_registered.error().message() << "\n";
         return 1;
     }
     auto started = server.start();
@@ -218,10 +218,10 @@ int main(int argc, char** argv)
         server.stop();
     };
 
-    auto registered = registry.registerEndpoint(info);
-    if (!registered.has_value()) {
+    auto endpoint_registered = registry.registerEndpoint(info);
+    if (!endpoint_registered.has_value()) {
         cleanup();
-        return fail("register endpoint failed: " + registered.error().message());
+        return fail("register endpoint failed: " + endpoint_registered.error().message());
     }
 
     auto discovered = registry.discover("BenchEtcdEcho");

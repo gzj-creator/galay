@@ -66,7 +66,7 @@ uint32_t frameStreamId(const std::string& bytes) {
 
 bool assertInboundUsesLocalMaxFrameSizeForRejection() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     ok &= check(conn.applyLocalSettings(
@@ -89,7 +89,7 @@ bool assertInboundUsesLocalMaxFrameSizeForRejection() {
 
 bool assertInboundIgnoresPeerMaxFrameSizeForAcceptance() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     ok &= check(conn.applyLocalSettings(
@@ -116,7 +116,7 @@ bool assertInboundIgnoresPeerMaxFrameSizeForAcceptance() {
 
 bool assertOutboundDataSplitsByPeerMaxFrameSize() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     ok &= check(conn.applyPeerSettings(
@@ -161,7 +161,7 @@ bool assertOutboundDataSplitsByPeerMaxFrameSize() {
 
 bool assertOutboundHeadersSplitByPeerMaxFrameSize() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -219,7 +219,7 @@ bool assertOutboundHeadersSplitByPeerMaxFrameSize() {
 
 bool assertOutboundHeaderBlockCapRejectsOversize() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -243,7 +243,7 @@ bool assertOutboundHeaderBlockCapRejectsOversize() {
 
 bool assertOutboundCombinedHeadersAndDataRespectPeerLimits() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -316,7 +316,7 @@ bool assertOutboundCombinedHeadersAndDataRespectPeerLimits() {
 
 bool assertOutboundCombinedHeaderBlockCapRejectsOversize() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -340,7 +340,7 @@ bool assertOutboundCombinedHeaderBlockCapRejectsOversize() {
 
 bool assertOutboundDataBatchSplitsByPeerMaxFrameSize() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     ok &= check(conn.applyPeerSettings(
@@ -375,7 +375,7 @@ bool assertOutboundDataBatchSplitsByPeerMaxFrameSize() {
 
 bool assertOutboundDataChunksSplitByPeerMaxFrameSize() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     ok &= check(conn.applyPeerSettings(

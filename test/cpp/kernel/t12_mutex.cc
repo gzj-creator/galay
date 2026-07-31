@@ -10,7 +10,7 @@
 #include <chrono>
 #include <thread>
 #include <vector>
-#include <galay/cpp/galay-kernel/concurrency/async_mutex.h>
+#include <galay/cpp/galay-kernel/async/async_mutex.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"

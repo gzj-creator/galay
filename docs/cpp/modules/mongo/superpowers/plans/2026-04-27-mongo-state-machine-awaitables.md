@@ -40,7 +40,7 @@
 Replace the include block with this shape, preserving existing project includes:
 
 ```cpp
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/common/error.h>
 #include <galay/cpp/galay-kernel/common/host.hpp>
 #include <galay/cpp/galay-kernel/core/awaitable.h>

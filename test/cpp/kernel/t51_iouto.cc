@@ -9,7 +9,7 @@
 
 #ifdef USE_IOURING
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 
@@ -31,14 +31,14 @@ struct TestState {
 };
 
 Task<void> acceptTimeoutThenClose(TestState* state) {
-    auto listener_result = TcpSocket::create(IPType::IPV4);
+    auto listener_result = AsyncTcpSocket::create(IPType::IPV4);
     if (!listener_result) {
         state->setup_error.store(1, std::memory_order_release);
         state->done.store(true, std::memory_order_release);
         co_return;
     }
 
-    TcpSocket listener = std::move(*listener_result);
+    AsyncTcpSocket listener = std::move(*listener_result);
     auto reuse = listener.option().handleReuseAddr();
     auto nonblock = listener.option().handleNonBlock();
     auto bind = listener.bind(Host(IPType::IPV4, "127.0.0.1", 0));

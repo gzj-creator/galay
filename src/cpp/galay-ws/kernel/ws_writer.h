@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 提供 WsWriterImpl 模板类，支持将文本、二进制和控制帧
- *          异步写入 TcpSocket 或 SslSocket。TCP 模式使用 writev 零拷贝，
+ *          异步写入 AsyncTcpSocket 或 SslSocket。TCP 模式使用 writev 零拷贝，
  *          SSL 模式使用 send。内部实现快速路径优化常用帧的发送。
  */
 
@@ -17,7 +17,7 @@
 #include "../protoc/ws_frame.h"
 #include "../protoc/ws_error.h"
 #include "../../galay-kernel/core/awaitable.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include <array>
 #include <cstdint>
 #include <expected>
@@ -50,7 +50,7 @@ template<typename T>
 struct is_tcp_socket : std::false_type {};
 
 template<>
-struct is_tcp_socket<TcpSocket> : std::true_type {};
+struct is_tcp_socket<AsyncTcpSocket> : std::true_type {};
 
 template<typename T>
 inline constexpr bool is_tcp_socket_v = is_tcp_socket<T>::value;
@@ -226,7 +226,7 @@ auto buildSendAwaitable(SocketType& socket, WsWriterImpl<SocketType>& writer) {
 
 /**
  * @brief WebSocket 写入器模板类
- * @tparam SocketType Socket 类型（TcpSocket 或 SslSocket）
+ * @tparam SocketType Socket 类型（AsyncTcpSocket 或 SslSocket）
  * @details 将 WebSocket 帧（文本、二进制、控制帧）异步写入 Socket。
  *          TCP 模式使用 writev 零拷贝，SSL 模式使用 send。
  *          内部实现快速路径优化常用帧的序列化。
@@ -719,7 +719,7 @@ private:
     friend struct detail::WsSslEchoMachine<SocketType>;
 };
 
-using WsWriter = WsWriterImpl<TcpSocket>;
+using WsWriter = WsWriterImpl<AsyncTcpSocket>;
 
 } // namespace galay::websocket
 

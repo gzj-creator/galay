@@ -23,7 +23,7 @@
 #include <galay/cpp/galay-kernel/async/async_file.h>
 #elif defined(USE_EPOLL)
 #include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
-#include <galay/cpp/galay-kernel/async/aio_file.h>
+#include <galay/cpp/galay-kernel/async/async_aio.h>
 #endif
 
 using namespace galay::kernel;
@@ -52,9 +52,9 @@ struct BenchConfig {
 
 #if defined(USE_EPOLL)
 // Epoll/AIO 压测 - 支持批量操作
-Task<void> benchmarkWorkerAIO(galay::async::AioFile* file, int worker_id, const BenchConfig& config) {
-    char* read_buffer = galay::async::AioFile::allocAlignedBuffer(config.block_size * config.batch_size);
-    char* write_buffer = galay::async::AioFile::allocAlignedBuffer(config.block_size * config.batch_size);
+Task<void> benchmarkWorkerAIO(galay::async::AsyncAio* file, int worker_id, const BenchConfig& config) {
+    char* read_buffer = galay::async::AsyncAio::allocAlignedBuffer(config.block_size * config.batch_size);
+    char* write_buffer = galay::async::AsyncAio::allocAlignedBuffer(config.block_size * config.batch_size);
 
     if (!read_buffer || !write_buffer) {
         LogError("[Worker {}] Failed to allocate aligned buffers", worker_id);
@@ -110,8 +110,8 @@ Task<void> benchmarkWorkerAIO(galay::async::AioFile* file, int worker_id, const 
         ops++;
     }
 
-    galay::async::AioFile::freeAlignedBuffer(read_buffer);
-    galay::async::AioFile::freeAlignedBuffer(write_buffer);
+    galay::async::AsyncAio::freeAlignedBuffer(read_buffer);
+    galay::async::AsyncAio::freeAlignedBuffer(write_buffer);
     co_return;
 }
 
@@ -123,12 +123,12 @@ void runEpollBenchmark(const BenchConfig& config) {
     EpollScheduler scheduler;
     scheduler.start();
 
-    std::vector<galay::async::AioFile*> files;
+    std::vector<galay::async::AsyncAio*> files;
     std::vector<std::atomic<bool>*> done_flags;
 
     // 为每个 worker 创建独立的文件
     for (int i = 0; i < config.num_workers; ++i) {
-        auto* file = new galay::async::AioFile();
+        auto* file = new galay::async::AsyncAio();
         std::string filename = config.test_dir + "/galay_bench_" + std::to_string(i) + ".dat";
 
         auto open_result = file->open(filename, galay::async::AioOpenMode::ReadWrite);

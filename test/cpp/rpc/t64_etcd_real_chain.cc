@@ -166,10 +166,10 @@ int main()
         .computeSchedulerCount(0)
         .build();
     EtcdEchoService service;
-    auto registered = server.registerService(service);
-    if (!registered.has_value()) {
+    auto service_registered = server.registerService(service);
+    if (!service_registered.has_value()) {
         std::cerr << "failed to register etcd echo service: "
-                  << registered.error().message() << "\n";
+                  << service_registered.error().message() << "\n";
         return 1;
     }
     auto server_started = server.start();
@@ -194,10 +194,10 @@ int main()
         server.stop();
     };
 
-    auto registered = registry.registerEndpoint(info);
-    if (!registered.has_value()) {
+    auto endpoint_registered = registry.registerEndpoint(info);
+    if (!endpoint_registered.has_value()) {
         cleanup();
-        return fail("register endpoint failed: " + registered.error().message());
+        return fail("register endpoint failed: " + endpoint_registered.error().message());
     }
 
     galay::etcd::EtcdConfig etcd_config;

@@ -14,7 +14,7 @@
 #ifndef GALAY_MYSQL_ASYNC_CLIENT_H
 #define GALAY_MYSQL_ASYNC_CLIENT_H
 
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/task.h"
@@ -44,7 +44,7 @@
 namespace galay::mysql
 {
 
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using galay::kernel::IOScheduler;
 using galay::kernel::Host;
 using galay::kernel::IOError;
@@ -327,7 +327,7 @@ public:
 
     // ======================== 内部访问 ========================
 
-    TcpSocket& socket() { return m_socket; }                   ///< 获取TCP套接字引用
+    AsyncTcpSocket& socket() { return m_socket; }                   ///< 获取TCP套接字引用
     RingBuffer<Strategy>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
     const RingBuffer<Strategy>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
     protocol::MysqlParser& parser() { return m_parser; }       ///< 获取协议解析器引用
@@ -342,7 +342,7 @@ private:
     friend class details::MysqlStmtExecuteAwaitable<Strategy>;
     friend class details::MysqlPipelineAwaitable<Strategy>;
 
-    TcpSocket m_socket;                             ///< TCP套接字
+    AsyncTcpSocket m_socket;                             ///< TCP套接字
     IOScheduler* m_scheduler;                       ///< IO调度器指针
     AsyncMysqlConfig m_config;                      ///< 异步配置
     RingBuffer<Strategy> m_ring_buffer;             ///< 接收环形缓冲区

@@ -147,9 +147,9 @@ typedef struct GalayCoreCoroWaitOps {
 /**
  * @brief 提交 TCP accept awaitable 并等待完成。
  *
- * @param listener_socket 内部 TcpSocket 指针，必须非 NULL 且处于监听状态。
+ * @param listener_socket 内部 AsyncTcpSocket 指针，必须非 NULL 且处于监听状态。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
- * @param out_socket 输出 accepted TcpSocket 指针地址；*out_socket 必须为 NULL。
+ * @param out_socket 输出 accepted AsyncTcpSocket 指针地址；*out_socket 必须为 NULL。
  * @param out_peer 可选输出 peer 地址；不需要时传 NULL。
  * @param timeout_ms 负数无限等待，0 立即返回 Timeout，正数为毫秒超时。
  * @param user_data runtime token，必须非 NULL，由 wait_ops 管理完成和释放。
@@ -171,7 +171,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_accept(GalayCoreTcpSocket* listener_so
 /**
  * @brief 提交 TCP connect awaitable 并等待完成。
  *
- * @param socket 内部 TcpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param host 远端地址，必须非 NULL 且为有效 IPv4/IPv6 host。
  * @param timeout_ms 负数无限等待，0 立即返回 Timeout，正数为毫秒超时。
@@ -193,7 +193,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_connect(GalayCoreTcpSocket* socket,
 /**
  * @brief 提交 TCP recv awaitable 并等待完成。
  *
- * @param socket 内部 TcpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param buffer 输出缓冲区，必须非 NULL。
  * @param length 最多接收字节数，必须大于 0。
@@ -216,7 +216,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_recv(GalayCoreTcpSocket* socket,
 /**
  * @brief 提交 TCP send awaitable 并等待完成。
  *
- * @param socket 内部 TcpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param buffer 待发送数据，必须非 NULL。
  * @param length 待发送字节数，必须大于 0。
@@ -238,7 +238,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_send(GalayCoreTcpSocket* socket,
 /**
  * @brief 提交 TCP readv awaitable 并等待完成。
  *
- * @param socket 内部 TcpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param iovecs 输出 galay_iovec_t 数组，必须非 NULL。
  * @param count iovec 数量，必须大于 0。
@@ -260,7 +260,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_readv(GalayCoreTcpSocket* socket,
 /**
  * @brief 提交 TCP writev awaitable 并等待完成。
  *
- * @param socket 内部 TcpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param iovecs 输入 galay_iovec_t 数组，必须非 NULL。
  * @param count iovec 数量，必须大于 0。
@@ -282,7 +282,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_writev(GalayCoreTcpSocket* socket,
 /**
  * @brief 提交 TCP sendfile awaitable 并等待完成。
  *
- * @param socket 内部 TcpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param file_fd 待读取文件描述符，必须非负，调用方仍拥有该 fd。
  * @param offset 文件偏移，必须非负。
@@ -306,7 +306,7 @@ GalayCoreCoroIOResult galay_core_coro_tcp_sendfile(GalayCoreTcpSocket* socket,
 /**
  * @brief 在 IOScheduler 上关闭 TCP socket。
  *
- * @param socket 内部 TcpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须与 socket controller 所属 scheduler 匹配。
  * @param timeout_ms 为 ABI 对称保留；当前实现不等待 timeout，只执行 close 注册。
  * @return 成功返回 Ok；参数、scheduler 或挂起操作状态不允许关闭时返回 Invalid；

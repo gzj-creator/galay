@@ -16,7 +16,7 @@
 #include "../protoc/http2_frame.h"
 #include "../protoc/http2_hpack.h"
 #include "../protoc/http2_error.h"
-#include "../../galay-kernel/concurrency/async_waiter.h"
+#include "../../galay-kernel/async/async_waiter.h"
 #include "../../galay-kernel/concurrency/mpsc_channel.h"
 #include "../../galay-kernel/concurrency/unsafe_channel.h"
 #include <string>

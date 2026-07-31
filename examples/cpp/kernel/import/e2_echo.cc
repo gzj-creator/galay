@@ -26,7 +26,7 @@ std::atomic<bool> g_server_done{false};
 std::atomic<bool> g_client_done{false};
 
 Task<void> echoServer() {
-    TcpSocket listener;
+    AsyncTcpSocket listener;
 
     auto optResult = listener.option().handleReuseAddr();
     if (!optResult) {
@@ -62,7 +62,7 @@ Task<void> echoServer() {
         co_return;
     }
 
-    TcpSocket client(accepted.value());
+    AsyncTcpSocket client(accepted.value());
     optResult = client.option().handleNonBlock();
     if (!optResult) {
         co_await client.close();
@@ -91,7 +91,7 @@ Task<void> echoClient() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     auto optResult = socket.option().handleNonBlock();
     if (!optResult) {
         g_client_done.store(true, std::memory_order_release);

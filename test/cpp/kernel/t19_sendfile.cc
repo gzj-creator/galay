@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <thread>
 #include <chrono>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
@@ -76,7 +76,7 @@ bool verifyFile(size_t expected_size) {
 }
 
 // 服务器处理客户端
-Task<void> handleClient(TcpSocket client, size_t file_size) {
+Task<void> handleClient(AsyncTcpSocket client, size_t file_size) {
     int file_fd = open(TEST_FILE, O_RDONLY);
     if (file_fd < 0) {
         LogError("Failed to open file");
@@ -121,7 +121,7 @@ Task<void> handleClient(TcpSocket client, size_t file_size) {
 
 // 服务器
 Task<void> server(size_t file_size) {
-    TcpSocket listener;
+    AsyncTcpSocket listener;
     listener.option().handleReuseAddr();
     listener.option().handleNonBlock();
 
@@ -148,7 +148,7 @@ Task<void> server(size_t file_size) {
         co_return;
     }
 
-    TcpSocket client(acceptResult.value());
+    AsyncTcpSocket client(acceptResult.value());
     client.option().handleNonBlock();
 
     auto handleResult = co_await handleClient(std::move(client), file_size);
@@ -167,7 +167,7 @@ Task<void> client() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     socket.option().handleNonBlock();
 
     Host serverHost(IPType::IPV4, "127.0.0.1", TEST_PORT);

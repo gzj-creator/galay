@@ -93,7 +93,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 1: Multiple complete buffered frames\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Build 3 PING frames
@@ -123,7 +123,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 2: Complete frame + partial trailing frame\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Build 2 frames
@@ -150,7 +150,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 3: Oversize frame header validation\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Inbound frame parsing must obey local advertised max_frame_size.
@@ -175,7 +175,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 4: max_count limit\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Build 5 SETTINGS frames
@@ -199,7 +199,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 5: Empty buffer\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Parse empty buffer
@@ -265,7 +265,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 7: Batch awaitable with buffered frames (await_ready)\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Build and feed 3 PING frames
@@ -291,7 +291,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 8: Batch awaitable with empty buffer (suspends)\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Empty buffer - awaitable should NOT be ready (will suspend)
@@ -305,7 +305,7 @@ int main() {
     {
         std::cout << "[T37] Scenario 9: Batch awaitable respects max_frames in await_ready\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // Build 5 frames

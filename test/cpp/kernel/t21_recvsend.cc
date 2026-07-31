@@ -12,7 +12,7 @@
 #include <chrono>
 #include <vector>
 #include <sys/socket.h>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -48,9 +48,9 @@ constexpr size_t  kRecvBuf  = 64 * 1024;   // 64KB recv buffer
 constexpr int     kSockBuf  = 64 * 1024;   // 64KB SO_SNDBUF/SO_RCVBUF — 制造背压但不至于太小
 
 // 使用共享指针管理 socket 生命周期
-static std::shared_ptr<TcpSocket> g_server_client;
-static std::shared_ptr<TcpSocket> g_server_listener;
-static std::shared_ptr<TcpSocket> g_client_sock;
+static std::shared_ptr<AsyncTcpSocket> g_server_client;
+static std::shared_ptr<AsyncTcpSocket> g_server_listener;
+static std::shared_ptr<AsyncTcpSocket> g_client_sock;
 
 // 构造填充数据：用可辨识的 pattern 方便调试
 static std::vector<char> makeSendBuf(char tag) {
@@ -69,7 +69,7 @@ static void shrinkSocketBuf(int fd) {
 // ==================== 通用收发协程 ====================
 
 // recv 端：用小 buffer 接收，制造背压
-Task<void> recvLoop(std::shared_ptr<TcpSocket> sock,
+Task<void> recvLoop(std::shared_ptr<AsyncTcpSocket> sock,
                     std::atomic<int64_t>& counter,
                     const char* label) {
     char buffer[kRecvBuf];
@@ -93,7 +93,7 @@ Task<void> recvLoop(std::shared_ptr<TcpSocket> sock,
 }
 
 // send 端：每轮发 256KB，处理 partial write
-Task<void> sendLoop(std::shared_ptr<TcpSocket> sock,
+Task<void> sendLoop(std::shared_ptr<AsyncTcpSocket> sock,
                     std::atomic<int>& counter,
                     const char* label,
                     char tag) {
@@ -118,7 +118,7 @@ Task<void> sendLoop(std::shared_ptr<TcpSocket> sock,
 // ==================== Server ====================
 
 Task<void> serverMain(IOScheduler* scheduler) {
-    g_server_listener = std::make_shared<TcpSocket>();
+    g_server_listener = std::make_shared<AsyncTcpSocket>();
     g_server_listener->option().handleReuseAddr();
     g_server_listener->option().handleNonBlock();
 
@@ -146,7 +146,7 @@ Task<void> serverMain(IOScheduler* scheduler) {
 
     LogInfo("[Server] client connected from {}:{}", clientHost.ip(), clientHost.port());
 
-    g_server_client = std::make_shared<TcpSocket>(acceptResult.value());
+    g_server_client = std::make_shared<AsyncTcpSocket>(acceptResult.value());
     g_server_client->option().handleNonBlock();
     shrinkSocketBuf(g_server_client->handle().fd);
 
@@ -163,7 +163,7 @@ Task<void> clientMain(IOScheduler* scheduler) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    g_client_sock = std::make_shared<TcpSocket>();
+    g_client_sock = std::make_shared<AsyncTcpSocket>();
     g_client_sock->option().handleNonBlock();
     shrinkSocketBuf(g_client_sock->handle().fd);
 

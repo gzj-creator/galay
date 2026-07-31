@@ -12,7 +12,7 @@
  */
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
+#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result_c.h>
 
 #ifdef __cplusplus

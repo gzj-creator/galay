@@ -40,18 +40,56 @@ int main()
 {
     const auto root = projectRoot();
     const std::vector<std::filesystem::path> public_headers = {
+        root / "galay-kernel" / "async" / "async_tcp.h",
+        root / "galay-kernel" / "async" / "async_udp.h",
+        root / "galay-kernel" / "async" / "async_file_watcher.h",
+        root / "galay-kernel" / "async" / "async_file.h",
+        root / "galay-kernel" / "async" / "async_aio.h",
+        root / "galay-kernel" / "async" / "async_mutex.h",
+        root / "galay-kernel" / "async" / "async_waiter.h",
+    };
+    const std::vector<std::filesystem::path> legacy_headers = {
         root / "galay-kernel" / "async" / "tcp_socket.h",
         root / "galay-kernel" / "async" / "udp_socket.h",
         root / "galay-kernel" / "async" / "file_watcher.h",
-        root / "galay-kernel" / "async" / "async_file.h",
         root / "galay-kernel" / "async" / "aio_file.h",
+        root / "galay-kernel" / "concurrency" / "async_mutex.h",
+        root / "galay-kernel" / "concurrency" / "async_waiter.h",
     };
 
+    std::vector<std::filesystem::path> missing_headers;
     std::vector<std::filesystem::path> polluted_headers;
     for (const auto& header : public_headers) {
+        if (!std::filesystem::is_regular_file(header)) {
+            missing_headers.push_back(header.lexically_relative(root));
+            continue;
+        }
         if (fileContainsPattern(header, "using namespace galay::kernel;")) {
             polluted_headers.push_back(header.lexically_relative(root));
         }
+    }
+
+    std::vector<std::filesystem::path> remaining_legacy_headers;
+    for (const auto& header : legacy_headers) {
+        if (std::filesystem::exists(header)) {
+            remaining_legacy_headers.push_back(header.lexically_relative(root));
+        }
+    }
+
+    if (!missing_headers.empty()) {
+        std::cerr << "renamed public async headers should exist:\n";
+        for (const auto& header : missing_headers) {
+            std::cerr << "  - " << header.string() << '\n';
+        }
+        return 1;
+    }
+
+    if (!remaining_legacy_headers.empty()) {
+        std::cerr << "legacy public async headers should be removed:\n";
+        for (const auto& header : remaining_legacy_headers) {
+            std::cerr << "  - " << header.string() << '\n';
+        }
+        return 1;
     }
 
     if (!polluted_headers.empty()) {

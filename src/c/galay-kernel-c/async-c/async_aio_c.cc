@@ -1,7 +1,7 @@
-#include "aio_file_c.h"
+#include "async_aio_c.h"
 
 #ifdef USE_EPOLL
-#include "../../../cpp/galay-kernel/async/aio_file.h"
+#include "../../../cpp/galay-kernel/async/async_aio.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
 #include <galay/c/galay-bridge-c/coro-c/c_coro_aio_file_bridge.h>
@@ -45,9 +45,9 @@ galay::async::AioOpenMode to_cpp_open_mode(C_AioFileOpenMode mode)
     return galay::async::AioOpenMode::ReadWrite;
 }
 
-galay::async::AioFile* to_cpp_file(galay_kernel_aio_file_t* c_file)
+galay::async::AsyncAio* to_cpp_file(galay_kernel_aio_file_t* c_file)
 {
-    return static_cast<galay::async::AioFile*>(c_file->file);
+    return static_cast<galay::async::AsyncAio*>(c_file->file);
 }
 
 C_AioFileResultCode from_cpp_io_error(const galay::kernel::IOError& error)
@@ -287,7 +287,7 @@ C_AioFileResultCode galay_kernel_aio_file_create(galay_kernel_aio_file_t* c_file
 #ifndef USE_EPOLL
     return C_AioFileOperationUnsupported;
 #else
-    auto* file = new (std::nothrow) galay::async::AioFile(max_events);
+    auto* file = new (std::nothrow) galay::async::AsyncAio(max_events);
     if (file == nullptr)
     {
         return C_AioFileMemoryAllocFailed;
@@ -522,7 +522,7 @@ C_AioFileResultCode galay_kernel_aio_file_alloc_aligned_buffer(
 #ifndef USE_EPOLL
     return C_AioFileOperationUnsupported;
 #else
-    auto* allocated = galay::async::AioFile::allocAlignedBuffer(size, alignment);
+    auto* allocated = galay::async::AsyncAio::allocAlignedBuffer(size, alignment);
     if (allocated == nullptr)
     {
         return C_AioFileMemoryAllocFailed;
@@ -539,7 +539,7 @@ C_AioFileResultCode galay_kernel_aio_file_free_aligned_buffer(char* buffer)
     (void)buffer;
     return C_AioFileOperationUnsupported;
 #else
-    galay::async::AioFile::freeAlignedBuffer(buffer);
+    galay::async::AsyncAio::freeAlignedBuffer(buffer);
     return C_AioFileSuccess;
 #endif
 }

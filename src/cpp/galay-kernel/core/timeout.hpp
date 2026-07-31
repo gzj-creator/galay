@@ -113,7 +113,7 @@ struct TimeoutSupport {
  * @brief 超时包装器
  *
  * @details 对于 io_uring，使用独立的 timeout 操作；对于 epoll/kqueue，使用 timerfd。
- * 定时器状态存储在 IOController 中，生命周期与 TcpSocket 绑定。
+ * 定时器状态存储在 IOController 中，生命周期与 AsyncTcpSocket 绑定。
  */
 template<typename Awaitable>
 struct WithTimeout {

@@ -76,7 +76,7 @@ void expectPendingAction(const std::deque<PendingAction>& actions,
 
 void testOutboundDataWaitsForStreamWindow()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -103,7 +103,7 @@ void testOutboundDataWaitsForStreamWindow()
 
 void testOutboundDataWaitsForConnectionWindow()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -146,7 +146,7 @@ void testPendingDataWaiterNotifiedOnClose()
 
 void testIncomingDataChecksConnectionRecvWindowFirst()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
     auto stream = conn.createStream(5);
@@ -167,7 +167,7 @@ void testIncomingDataChecksConnectionRecvWindowFirst()
 
 void testIncomingDataChecksStreamRecvWindow()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
     auto stream = conn.createStream(7);
@@ -186,7 +186,7 @@ void testIncomingDataChecksStreamRecvWindow()
 
 void testWindowUpdateOverflow()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -215,7 +215,7 @@ void testWindowUpdateOverflow()
 
 void testSettingsInitialWindowDeltaAppliesToExistingStreams()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -247,7 +247,7 @@ void testSettingsInitialWindowDeltaAppliesToExistingStreams()
 
 void testUnknownExtensionFrameIsConsumedAndIgnored()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     const auto unknown = frameBytes(static_cast<Http2FrameType>(0x0b), 0, 1, "ext");
@@ -267,7 +267,7 @@ void testDataBuilderSplitsPayloadAtDefaultMaxFrameSize()
     const std::string payload(kDefaultMaxFrameSize + 3, 'x');
     const auto bytes = Http2FrameBuilder::dataBytes(15, payload, true);
 
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     conn.feedData(bytes.data(), bytes.size());
 
@@ -284,7 +284,7 @@ void testDataBuilderSplitsPayloadAtDefaultMaxFrameSize()
 
 void testSendDataFrameRejectsInsufficientSendWindow()
 {
-    TcpSocket socket(GHandle{-1});
+    AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     auto stream = conn.createStream(19);
     stream->setState(Http2StreamState::Open);

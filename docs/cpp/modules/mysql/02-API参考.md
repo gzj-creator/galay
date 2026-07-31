@@ -345,7 +345,7 @@ public:
     auto close();
     bool isClosed() const;
 
-    TcpSocket& socket();
+    AsyncTcpSocket& socket();
     galay::utils::RingBuffer& ringBuffer();
     const galay::utils::RingBuffer& ringBuffer() const;
     protocol::MysqlParser& parser();
@@ -365,11 +365,11 @@ public:
 
 使用约束：
 
-- 从公开头和当前示例 / 测试可以确认：单个 `AsyncMysqlClient` 暴露的是同一套 `TcpSocket`、`RingBuffer`、`MysqlParser`、`MysqlEncoder` 状态，因此 canonical API **不承诺** 对同一实例的并发 `query()` / `prepare()` / `stmtExecute()` / `batch()` / `pipeline()` 调用安全；需要并发时应改用多个 client 或 `MysqlConnectionPool`。
+- 从公开头和当前示例 / 测试可以确认：单个 `AsyncMysqlClient` 暴露的是同一套 `AsyncTcpSocket`、`RingBuffer`、`MysqlParser`、`MysqlEncoder` 状态，因此 canonical API **不承诺** 对同一实例的并发 `query()` / `prepare()` / `stmtExecute()` / `batch()` / `pipeline()` 调用安全；需要并发时应改用多个 client 或 `MysqlConnectionPool`。
 - `query()` / `prepare()` / `stmtExecute()` / `batch()` / `pipeline()` / 事务辅助通常都应在 `connect()` 成功之后调用。
 - `stmtExecute()` 的 `param_types` 是可选 span；编码器在 `param_types.size() < params.size()` 时，会把剩余参数按 `MysqlFieldType::VAR_STRING` 编码。
 - `beginTransaction()` / `commit()` / `rollback()` / `ping()` / `useDatabase()` 都只是 `query()` 的语法糖；其中 `ping()` 实际发送的是 `SELECT 1`，不是 `COM_PING`。
-- `close()` 会先把 `isClosed()` 置为 `true`，然后直接转发到上游 `TcpSocket::close()`；因此消费者应按仓库示例那样使用 `co_await client.close();`。本仓库自身不会在这一步额外发送 MySQL `QUIT` 包。
+- `close()` 会先把 `isClosed()` 置为 `true`，然后直接转发到上游 `AsyncTcpSocket::close()`；因此消费者应按仓库示例那样使用 `co_await client.close();`。本仓库自身不会在这一步额外发送 MySQL `QUIT` 包。
 - `isClosed()` 是本地生命周期标记，不是“服务端仍在线”的探针；连接被服务端断开时，仍应以随后一次 awaitable 的返回值为准。
 - 真实消费入口：`examples/mysql/include/e1_query.cc`、`examples/mysql/include/e5_pipeline.cc`、`test/mysql/t3_client.cc`、`test/mysql/t6_transaction.cc`、`test/mysql/t7_stmt.cc`。
 

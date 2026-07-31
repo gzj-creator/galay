@@ -3,7 +3,7 @@
  * @brief 验证 readv/writev 借用数组 count 越界不 abort，改为可检查错误。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 #include <array>
 #include <iostream>
@@ -26,7 +26,7 @@ bool hasParamInvalid(const std::expected<size_t, galay::kernel::IOError>& result
 
 bool invalidReadvCountReturnsError()
 {
-    galay::async::TcpSocket socket(GHandle::invalid());
+    galay::async::AsyncTcpSocket socket(GHandle::invalid());
     std::array<struct iovec, 1> iovecs{};
 
     auto awaitable = socket.readv(iovecs, iovecs.size() + 1);
@@ -39,7 +39,7 @@ bool invalidReadvCountReturnsError()
 
 bool invalidWritevCountReturnsError()
 {
-    galay::async::TcpSocket socket(GHandle::invalid());
+    galay::async::AsyncTcpSocket socket(GHandle::invalid());
     std::array<struct iovec, 1> iovecs{};
 
     auto awaitable = socket.writev(iovecs, iovecs.size() + 1);

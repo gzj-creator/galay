@@ -7,7 +7,7 @@
 
 /**
  * @file c_coro_file_watcher_bridge.h
- * @brief C++ kernel core 暴露的 C 协程 FileWatcher adapter。
+ * @brief C++ kernel core 暴露的 C 协程 AsyncFileWatcher adapter。
  *
  * @details 该内部 C 风格桥接把 FileWatchAwaitable/IOController 细节限制在
  * kernel core 内，C ABI wrapper 只负责 C coroutine wait token 和结果码转换。
@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /**
- * @brief FileWatcher 事件位掩码。
+ * @brief AsyncFileWatcher 事件位掩码。
  *
  * @details 事件值与底层文件监听事件语义对应，可按位组合。All 表示当前 bridge
  * 暴露的全部事件位。
@@ -41,7 +41,7 @@ typedef enum GalayCoreCoroFileWatchEvent {
 } GalayCoreCoroFileWatchEvent;
 
 /**
- * @brief FileWatcher 单次事件结果。
+ * @brief AsyncFileWatcher 单次事件结果。
  *
  * @details name 为内联固定长度缓存，成功返回时包含以 '\0' 结尾的相对名称或空串。
  * out_result 由调用方提供并拥有。
@@ -53,9 +53,9 @@ typedef struct GalayCoreCoroFileWatchResult {
 } GalayCoreCoroFileWatchResult;
 
 /**
- * @brief 提交 FileWatcher watch awaitable 并等待一个事件。
+ * @brief 提交 AsyncFileWatcher watch awaitable 并等待一个事件。
  *
- * @param watcher 内部 FileWatcher 指针，必须非 NULL。
+ * @param watcher 内部 AsyncFileWatcher 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param out_result 输出事件结果，必须非 NULL。
  * @param timeout_ms 负数无限等待，0 立即返回 Timeout，正数为毫秒超时。

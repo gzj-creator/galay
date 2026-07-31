@@ -7,7 +7,7 @@
 #include <galay/cpp/galay-http/kernel/http_reader.h>
 #undef private
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 int main() {
     using namespace galay::http;
@@ -17,7 +17,7 @@ int main() {
 
     RingBuffer ring_buffer(4096);
     HttpReaderSetting setting;
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     HttpReader reader(ring_buffer, setting, socket);
 
     HttpRequest request1;

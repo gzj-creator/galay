@@ -6,11 +6,11 @@
 
 - 仓库里有哪些 UDP 相关 benchmark / test / example
 - 哪些结果是当前 fresh evidence，哪些只是入口保留
-- 先去哪里看 `UdpSocket` 的真实用法
+- 先去哪里看 `AsyncUdpSocket` 的真实用法
 
 ## 当前稳定事实
 
-- `UdpSocket` 是公开 API，接口与边界以 `docs/02-API参考.md` 为准
+- `AsyncUdpSocket` 是公开 API，接口与边界以 `docs/02-API参考.md` 为准
 - 2026-03-15 已重新执行本地 kqueue fresh UDP 验证
 - `T5-udp_socket`、`T6-udp_server`、`T7-udp_client` 已纳入全量 `test matrix` 并通过
 - `E5-UdpEcho` 已 fresh 运行通过
@@ -27,14 +27,14 @@
 
 ## 源码 / 验证锚点
 
-- 源码：`galay-kernel/async/udp_socket.h`、`galay-kernel/async/udp_socket.cc`
+- 源码：`galay-kernel/async/async_udp.h`、`galay-kernel/async/async_udp.cc`
 - 测试：`test/t5_udp.cc`、`test/t6_udp.cc`、`test/t7_udp.cc`
 - 示例：`examples/include/e5_udp.cc`
 - benchmark：`benchmark/b4_udp.cc`、`benchmark/b5_udp.cc`、`benchmark/b6_udp.cc`
 
 ## RAG 关键词
 
-- `UdpSocket`
+- `AsyncUdpSocket`
 - `UDP echo`
 - `B4-UdpServer`
 - `B5-UdpClient`

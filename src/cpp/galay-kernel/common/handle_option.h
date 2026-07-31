@@ -13,7 +13,7 @@
  * - 局部抑制 socket 写入触发 SIGPIPE（SO_NOSIGPIPE）
  *
  * @code
- * TcpSocket socket(scheduler);
+ * AsyncTcpSocket socket(scheduler);
  * socket.create();
  *
  * // 链式选项调用
@@ -50,7 +50,7 @@ namespace galay::kernel
  * - 失败时返回包含系统错误码的 IOError
  * - 跨平台：Linux / macOS / Windows
  *
- * @see TcpSocket::option()
+ * @see AsyncTcpSocket::option()
  */
 class HandleOption
 {

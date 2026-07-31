@@ -11,7 +11,7 @@
 #include <chrono>
 #include <vector>
 #include <csignal>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -59,7 +59,7 @@ void signalHandler(int signum) {
 Task<void> udpBenchmarkClient(int client_id) {
     g_active_clients.fetch_add(1, std::memory_order_relaxed);
 
-    UdpSocket socket;
+    AsyncUdpSocket socket;
     socket.option().handleNonBlock();
 
     // 设置发送缓冲区大小

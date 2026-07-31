@@ -7,7 +7,7 @@
 
 /**
  * @file c_coro_aio_file_bridge.h
- * @brief C++ kernel core 暴露的 C 协程 AioFile commit adapter。
+ * @brief C++ kernel core 暴露的 C 协程 AsyncAio commit adapter。
  *
  * @details 该内部 bridge 仅在 USE_EPOLL 后端可用；不支持时 direct API 返回
  * GalayCoreCoroIOResultError/sys_errno=ENOTSUP。
@@ -18,9 +18,9 @@ extern "C" {
 #endif
 
 /**
- * @brief 提交 AioFile pending requests 并等待 commit 完成。
+ * @brief 提交 AsyncAio pending requests 并等待 commit 完成。
  *
- * @param file 内部 AioFile 指针，必须非 NULL 且处于有效状态。
+ * @param file 内部 AsyncAio 指针，必须非 NULL 且处于有效状态。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param results 调用方提供的结果数组，容量至少为 result_capacity。
  * @param result_capacity results 可容纳的 ssize_t 条目数，必须大于 0。

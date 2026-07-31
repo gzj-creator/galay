@@ -13,7 +13,7 @@
 
 #include "http_reader.h"
 #include "http_writer.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-utils/cache/ring_buffer.hpp"
 
 namespace galay::websocket {
@@ -35,7 +35,7 @@ using ::galay::utils::RingBuffer;
 
 /**
  * @brief HTTP连接模板类
- * @tparam SocketType Socket类型（TcpSocket 或 SslSocket）
+ * @tparam SocketType Socket类型（AsyncTcpSocket 或 SslSocket）
  * @details 封装HTTP连接的底层资源和配置，不处理业务逻辑
  */
 template<typename SocketType>
@@ -174,8 +174,8 @@ private:
     HttpWriterSetting m_default_writer_setting;
 };
 
-// 类型别名 - HTTP (TcpSocket)
-using HttpConn = HttpConnImpl<TcpSocket>;
+// 类型别名 - HTTP (AsyncTcpSocket)
+using HttpConn = HttpConnImpl<AsyncTcpSocket>;
 
 } // namespace galay::http
 

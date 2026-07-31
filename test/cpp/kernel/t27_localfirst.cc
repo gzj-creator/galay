@@ -5,7 +5,7 @@
  * 通过条件：观察到本地优先语义且断言成立，测试返回 0。
  */
 
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/common/timer_manager.hpp>
 #include <galay/cpp/galay-kernel/core/task.h>
 

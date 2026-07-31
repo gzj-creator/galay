@@ -270,14 +270,14 @@ void verifyWriterTimeoutMapsToSendTimeout()
                 kSendTimeOut,
                 "writer timeout helper should map to kSendTimeOut");
 
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     HttpWriterSetting setting;
-    HttpWriterImpl<TcpSocket> writer(setting, socket);
+    HttpWriterImpl<AsyncTcpSocket> writer(setting, socket);
     [[maybe_unused]] auto send_operation = writer.send("x", 1);
     require(writer.getRemainingBytes() == 1,
             "writer send should stage one byte before advancing write machine");
 
-    galay::http::detail::HttpTcpWriteMachine<galay::async::TcpSocket, false> machine(&writer);
+    galay::http::detail::HttpTcpWriteMachine<galay::async::AsyncTcpSocket, false> machine(&writer);
     machine.onWrite(std::unexpected(galay::kernel::IOError(galay::kernel::kTimeout, 0)));
     auto action = machine.advance();
 

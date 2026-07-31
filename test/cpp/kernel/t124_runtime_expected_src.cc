@@ -125,15 +125,15 @@ int main()
     const auto root = cppRoot();
     const std::vector<std::filesystem::path> source_paths = {
         project_root / "src" / "c" / "galay-kernel-c" / "core-c" / "runtime_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "tcp_socket_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "udp_socket_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_tcp_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_udp_c.cc",
         project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_file_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "aio_file_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "file_watcher_c.cc",
-        root / "galay-kernel" / "async" / "tcp_socket.h",
-        root / "galay-kernel" / "async" / "tcp_socket.cc",
-        root / "galay-kernel" / "async" / "udp_socket.h",
-        root / "galay-kernel" / "async" / "udp_socket.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_aio_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_file_watcher_c.cc",
+        root / "galay-kernel" / "async" / "async_tcp.h",
+        root / "galay-kernel" / "async" / "async_tcp.cc",
+        root / "galay-kernel" / "async" / "async_udp.h",
+        root / "galay-kernel" / "async" / "async_udp.cc",
         root / "galay-kernel" / "core" / "scheduler.hpp",
         root / "galay-kernel" / "core" / "runtime.h",
         root / "galay-kernel" / "core" / "runtime.cc",
@@ -176,18 +176,18 @@ int main()
                     "Runtime::start() must return std::expected<void, RuntimeError>",
                     failures);
 
-    const auto tcp_h = readAll(root / "galay-kernel" / "async" / "tcp_socket.h");
-    requireContains(root / "galay-kernel" / "async" / "tcp_socket.h",
+    const auto tcp_h = readAll(root / "galay-kernel" / "async" / "async_tcp.h");
+    requireContains(root / "galay-kernel" / "async" / "async_tcp.h",
                     tcp_h,
-                    "static std::expected<TcpSocket, galay::kernel::IOError> create(",
-                    "TcpSocket must expose an expected-based create factory",
+                    "static std::expected<AsyncTcpSocket, galay::kernel::IOError> create(",
+                    "AsyncTcpSocket must expose an expected-based create factory",
                     failures);
 
-    const auto udp_h = readAll(root / "galay-kernel" / "async" / "udp_socket.h");
-    requireContains(root / "galay-kernel" / "async" / "udp_socket.h",
+    const auto udp_h = readAll(root / "galay-kernel" / "async" / "async_udp.h");
+    requireContains(root / "galay-kernel" / "async" / "async_udp.h",
                     udp_h,
-                    "static std::expected<UdpSocket, galay::kernel::IOError> create(",
-                    "UdpSocket must expose an expected-based create factory",
+                    "static std::expected<AsyncUdpSocket, galay::kernel::IOError> create(",
+                    "AsyncUdpSocket must expose an expected-based create factory",
                     failures);
 
     const std::vector<std::pair<std::filesystem::path, std::string>> reactor_headers = {

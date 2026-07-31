@@ -11,16 +11,16 @@
 ### galay-kernel
 - **用途**: C++23 协程运行时内核——多调度器 Runtime、`Task<T>` 协程、异步 TCP/UDP/文件 IO、通道与同步原语、定时器。
 - **CMake link**: `galay::kernel`（异步 socket 类型在 `galay::async` 命名空间，同库提供，无独立 target）
-- **头文件前缀**: `<galay/cpp/galay-kernel/...>`（如 `core/runtime.h`、`core/task.h`、`async/tcp_socket.h`）
-- **命名空间**: `galay::kernel`（Runtime/Task/调度器/Host/通道/mutex/sleep），`galay::async`（TcpSocket/UdpSocket/AsyncFile）
+- **头文件前缀**: `<galay/cpp/galay-kernel/...>`（如 `core/runtime.h`、`core/task.h`、`async/async_tcp.h`）
+- **命名空间**: `galay::kernel`（Runtime/Task/调度器/Host/通道/mutex/sleep），`galay::async`（AsyncTcpSocket/AsyncUdpSocket/AsyncFile）
 - **核心类型与接口**:
   - `RuntimeBuilder` — `RuntimeBuilder& ioSchedulerCount(size_t)`、`computeSchedulerCount(size_t)`、`sequentialAffinity(size_t ioCount, size_t computeCount)`、`bool customAffinity(std::vector<uint32_t> io, std::vector<uint32_t> compute)`、`Runtime build() const`
   - `Runtime` — `std::expected<void, RuntimeError> start()`、`void stop()`、`template<T> std::expected<T, RuntimeError> blockOn(Task<T>)`、`template<T> std::expected<JoinHandle<T>, RuntimeError> spawn(Task<T>)`、`template<F> std::expected<JoinHandle<...>, RuntimeError> spawnBlocking(F&&)`、`RuntimeHandle handle()`、`IOScheduler* getNextIOScheduler()`
   - `RuntimeHandle` — `static std::expected<RuntimeHandle, RuntimeError> current()`、`static std::optional<RuntimeHandle> tryCurrent()`、`spawn(...)`、`spawnBlocking(...)`
   - `Task<T>` — 协程返回类型，只移动；`auto operator co_await()`；`bool done()`
   - `JoinHandle<T>` — `std::expected<T, TaskResultError> join()`、`std::expected<void, TaskResultError> wait() const`
-  - `galay::async::TcpSocket` — `static std::expected<TcpSocket, IOError> create(IPType = IPV4)`；`std::expected<void, IOError> bind(const Host&)`、`listen(int backlog = 128)`；`HandleOption option()`（`handleReuseAddr()`/`handleNonBlock()`）；`co_await`: `accept(Host*)→GHandle`、`connect(const Host&)`、`recv(char*, size_t)→size_t`、`send(const char*, size_t)→size_t`、`readv/writev(std::span<const iovec>)`、`sendfile(int fd, off_t, size_t)`、`close()`；也可 `TcpSocket(GHandle)` 从已接受 fd 构造
-  - `galay::async::UdpSocket` — `static std::expected<UdpSocket, IOError> create(IPType)`、`bind(const Host&)`；`co_await`: `recvfrom(char*, size_t, Host* from)`、`sendto(const char*, size_t, const Host& to)`、`close()`
+  - `galay::async::AsyncTcpSocket` — `static std::expected<AsyncTcpSocket, IOError> create(IPType = IPV4)`；`std::expected<void, IOError> bind(const Host&)`、`listen(int backlog = 128)`；`HandleOption option()`（`handleReuseAddr()`/`handleNonBlock()`）；`co_await`: `accept(Host*)→GHandle`、`connect(const Host&)`、`recv(char*, size_t)→size_t`、`send(const char*, size_t)→size_t`、`readv/writev(std::span<const iovec>)`、`sendfile(int fd, off_t, size_t)`、`close()`；也可 `AsyncTcpSocket(GHandle)` 从已接受 fd 构造
+  - `galay::async::AsyncUdpSocket` — `static std::expected<AsyncUdpSocket, IOError> create(IPType)`、`bind(const Host&)`；`co_await`: `recvfrom(char*, size_t, Host* from)`、`sendto(const char*, size_t, const Host& to)`、`close()`
   - `Host` / `IPType{IPV4,IPV6}` — `Host(IPType, const std::string& ip, uint16_t port)`、`bool valid()`、`std::string ip()`、`uint16_t port()`
   - `galay::async::AsyncFile` — `std::expected<void, IOError> open(const std::string&, FileOpenMode, int perm = 0644)`、`co_await read/write/close`、`std::expected<size_t, IOError> size()`、`sync()`
   - `MpscChannel<T>` — `bool send(T&&)`/`sendBatch(...)`；`co_await recv()→std::expected<T, IOError>`、`recvBatch(size_t)`（可 `.timeout(...)`）；`std::optional<T> tryRecv()`、`size_t size()`
@@ -29,13 +29,13 @@
   - `IOError` — `code()`、`std::string message()`；错误码 `kTimeout`、`kConnectFailed` 等
 - **最小示例**:
 ```cpp
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 using namespace galay::async;
 using namespace galay::kernel;
 
 Task<void> echoServer() {
-    TcpSocket listener;
+    AsyncTcpSocket listener;
     listener.option().handleReuseAddr();
     listener.option().handleNonBlock();
     if (!listener.bind(Host(IPType::IPV4, "127.0.0.1", 9082))) co_return;
@@ -45,7 +45,7 @@ Task<void> echoServer() {
     auto accepted = co_await listener.accept(&peer);
     if (!accepted) { co_await listener.close(); co_return; }
 
-    TcpSocket client(accepted.value());
+    AsyncTcpSocket client(accepted.value());
     client.option().handleNonBlock();
     char buf[256]{};
     auto n = co_await client.recv(buf, sizeof(buf));

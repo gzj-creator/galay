@@ -57,7 +57,7 @@ benchmark 只做吞吐、延迟或压力 smoke，不替代 correctness test。�
 
 | 模块 | 当前状态 | 本轮 worker 验收点 |
 |---|---|---|
-| kernel | direct C coroutine 基础较完整，AioFile commit/sleep/timer/socket option residual 待补 | AioFile suspending bridge、`galay_coro_sleep`、kernel example/benchmark/docs 更新 |
+| kernel | direct C coroutine 基础较完整，AsyncAio commit/sleep/timer/socket option residual 待补 | AsyncAio suspending bridge、`galay_coro_sleep`、kernel example/benchmark/docs 更新 |
 | http | 协议 helper 已有，async runtime 缺失 | C client/server/session/stream loopback、route callback、timeout/error 覆盖 |
 | ws | frame helper 已有，async runtime 缺失 | upgrade loopback、text/binary/ping/pong/close、fragment/mask 错误覆盖 |
 | http2 | frame/settings/ping/HPACK helper 已有，async runtime 缺失 | h2c client/server/stream、flow control、RST/GOAWAY/settings ack 覆盖 |

@@ -8,14 +8,14 @@
 #include <galay/cpp/galay-http/kernel/http_writer.h>
 #undef private
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 int main() {
     using namespace galay::http;
     using namespace galay::async;
 
-    TcpSocket socket(IPType::IPV4);
-    HttpWriterImpl<TcpSocket> writer(HttpWriterSetting(), socket);
+    AsyncTcpSocket socket(IPType::IPV4);
+    HttpWriterImpl<AsyncTcpSocket> writer(HttpWriterSetting(), socket);
 
     static constexpr std::string_view kPayload =
         "HTTP/1.1 200 OK\r\n"

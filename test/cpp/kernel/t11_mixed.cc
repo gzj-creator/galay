@@ -11,7 +11,7 @@
 #include <thread>
 #include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
 

@@ -23,7 +23,7 @@
 
 #ifdef USE_EPOLL
 #include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
-#include <galay/cpp/galay-kernel/async/aio_file.h>
+#include <galay/cpp/galay-kernel/async/async_aio.h>
 #endif
 
 #ifdef USE_IOURING
@@ -205,7 +205,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
     {
         g_total++;
         LogInfo("[Epoll/AIO] Test 1: Single read...");
-        galay::async::AioFile file;
+        galay::async::AsyncAio file;
         auto openResult = file.open(aioTestFile, galay::async::AioOpenMode::Read);
         if (!openResult) {
             LogError("[Epoll/AIO] Failed to open file: {}", openResult.error().message());
@@ -214,7 +214,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        char* buffer = galay::async::AioFile::allocAlignedBuffer(4096);
+        char* buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
         if (!buffer) {
             LogError("[Epoll/AIO] Failed to allocate aligned buffer");
             g_failed++;
@@ -241,14 +241,14 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             }
         }
 
-        galay::async::AioFile::freeAlignedBuffer(buffer);
+        galay::async::AsyncAio::freeAlignedBuffer(buffer);
     }
 
     // 测试2: 批量读取
     {
         g_total++;
         LogInfo("[Epoll/AIO] Test 2: Batch read (3 requests)...");
-        galay::async::AioFile file;
+        galay::async::AsyncAio file;
         auto openResult = file.open(aioTestFile, galay::async::AioOpenMode::Read);
         if (!openResult) {
             LogError("[Epoll/AIO] Failed to open file: {}", openResult.error().message());
@@ -257,9 +257,9 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        char* buffer1 = galay::async::AioFile::allocAlignedBuffer(4096);
-        char* buffer2 = galay::async::AioFile::allocAlignedBuffer(4096);
-        char* buffer3 = galay::async::AioFile::allocAlignedBuffer(4096);
+        char* buffer1 = galay::async::AsyncAio::allocAlignedBuffer(4096);
+        char* buffer2 = galay::async::AsyncAio::allocAlignedBuffer(4096);
+        char* buffer3 = galay::async::AsyncAio::allocAlignedBuffer(4096);
 
         if (!buffer1 || !buffer2 || !buffer3) {
             LogError("[Epoll/AIO] Failed to allocate aligned buffers");
@@ -295,9 +295,9 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             }
         }
 
-        galay::async::AioFile::freeAlignedBuffer(buffer1);
-        galay::async::AioFile::freeAlignedBuffer(buffer2);
-        galay::async::AioFile::freeAlignedBuffer(buffer3);
+        galay::async::AsyncAio::freeAlignedBuffer(buffer1);
+        galay::async::AsyncAio::freeAlignedBuffer(buffer2);
+        galay::async::AsyncAio::freeAlignedBuffer(buffer3);
     }
 
     // 测试3: 写入
@@ -305,7 +305,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
         g_total++;
         LogInfo("[Epoll/AIO] Test 3: Write...");
         const char* writeTestFile = "/tmp/galay_aio_write_test.dat";
-        galay::async::AioFile file;
+        galay::async::AsyncAio file;
         auto openResult = file.open(writeTestFile, galay::async::AioOpenMode::Write);
         if (!openResult) {
             LogError("[Epoll/AIO] Failed to open file for write: {}", openResult.error().message());
@@ -314,7 +314,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        char* buffer = galay::async::AioFile::allocAlignedBuffer(4096);
+        char* buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
         if (!buffer) {
             LogError("[Epoll/AIO] Failed to allocate aligned buffer");
             g_failed++;
@@ -322,7 +322,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             co_return;
         }
 
-        const char* writeContent = "Written by Epoll AioFile test!\n";
+        const char* writeContent = "Written by Epoll AsyncAio test!\n";
         memset(buffer, 0, 4096);
         strcpy(buffer, writeContent);
 
@@ -344,7 +344,7 @@ Task<void> test_epoll_file_io(std::atomic<bool>* done) {
             }
         }
 
-        galay::async::AioFile::freeAlignedBuffer(buffer);
+        galay::async::AsyncAio::freeAlignedBuffer(buffer);
         std::remove(writeTestFile);
     }
 

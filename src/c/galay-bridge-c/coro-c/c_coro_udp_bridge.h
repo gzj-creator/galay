@@ -18,7 +18,7 @@ extern "C" {
 /**
  * @brief 提交 UDP recvfrom awaitable 并等待完成。
  *
- * @param socket 内部 UdpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncUdpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param buffer 输出缓冲区；length 为 0 时可为 NULL。
  * @param length 最多接收字节数。
@@ -44,7 +44,7 @@ GalayCoreCoroIOResult galay_core_coro_udp_recvfrom(GalayCoreUdpSocket* socket,
 /**
  * @brief 提交 UDP sendto awaitable 并等待完成。
  *
- * @param socket 内部 UdpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncUdpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
  * @param buffer 待发送数据；length 为 0 时可为 NULL。
  * @param length 待发送字节数。
@@ -69,7 +69,7 @@ GalayCoreCoroIOResult galay_core_coro_udp_sendto(GalayCoreUdpSocket* socket,
 /**
  * @brief 在 IOScheduler 上关闭 UDP socket。
  *
- * @param socket 内部 UdpSocket 指针，必须非 NULL。
+ * @param socket 内部 AsyncUdpSocket 指针，必须非 NULL。
  * @param scheduler 内部 IOScheduler 指针，必须与 socket controller 所属 scheduler 匹配。
  * @param timeout_ms 为 ABI 对称保留；当前实现不等待 timeout，只执行 close 注册。
  * @return 成功返回 Ok；参数、scheduler 或挂起操作状态不允许关闭时返回 Invalid；

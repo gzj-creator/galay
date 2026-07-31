@@ -297,7 +297,7 @@ static int scan_tree(const char* relative_dir, int* scanned_files, int direct_as
 
 static int require_direct_tcp_c_api_uses_core_bridge(void)
 {
-    const char* relative_path = "src/c/galay-kernel-c/async-c/tcp_socket_c.cc";
+    const char* relative_path = "src/c/galay-kernel-c/async-c/async_tcp_c.cc";
     char full_path[kMaxPath];
     if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
         return 1;

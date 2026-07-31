@@ -4,7 +4,7 @@
  * @author galay-http
  * @version 1.0.0
  *
- * @details 提供 WsReaderImpl 模板类，支持从 TcpSocket 或 SslSocket 读取
+ * @details 提供 WsReaderImpl 模板类，支持从 AsyncTcpSocket 或 SslSocket 读取
  *          WebSocket 帧和消息。内部使用快速路径优化单帧消息的解析。
  *          支持 UTF-8 校验、掩码解掩和分片消息重组。
  */
@@ -16,7 +16,7 @@
 #include "../../galay-http/common/iovec_utils.h"
 #include "../protoc/ws_error.h"
 #include "../protoc/ws_frame.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
 #include "../../galay-kernel/core/awaitable.h"
@@ -1027,7 +1027,7 @@ auto buildReadOperation(SocketType& socket, std::shared_ptr<StateT> state) {
 
 /**
  * @brief WebSocket 读取器模板类
- * @tparam SocketType Socket 类型（TcpSocket 或 SslSocket）
+ * @tparam SocketType Socket 类型（AsyncTcpSocket 或 SslSocket）
  * @details 从 Socket 异步读取 WebSocket 帧和消息，
  *          支持快速路径优化、UTF-8 校验、掩码解掩和分片消息重组。
  */
@@ -1111,7 +1111,7 @@ private:
     OperationCounters m_operation_counters;
 };
 
-using WsReader = WsReaderImpl<TcpSocket>;
+using WsReader = WsReaderImpl<AsyncTcpSocket>;
 
 } // namespace galay::websocket
 

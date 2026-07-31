@@ -1,16 +1,16 @@
-#ifndef GALAY_KERNEL_AIO_FILE_C_H
-#define GALAY_KERNEL_AIO_FILE_C_H
+#ifndef GALAY_KERNEL_ASYNC_AIO_C_H
+#define GALAY_KERNEL_ASYNC_AIO_C_H
 
 #include "../coro-c/coro_result_c.h"
 #include <stddef.h>
 #include <sys/types.h>
 
 /**
- * @file aio_file_c.h
- * @brief Galay kernel AioFile 的 C ABI 封装。
+ * @file async_aio_c.h
+ * @brief Galay kernel AsyncAio 的 C ABI 封装。
  *
  * @details 该头文件只暴露 C 可见的轻量句柄和结果码，实际文件对象生命周期
- * 由实现文件中的 C++ galay::async::AioFile 承载。AioFile 仅在 USE_EPOLL
+ * 由实现文件中的 C++ galay::async::AsyncAio 承载。AsyncAio 仅在 USE_EPOLL
  * 后端可用，其他后端的函数会返回 C_AioFileOperationUnsupported。
  */
 
@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 /**
- * @brief AioFile C ABI 操作结果码。
+ * @brief AsyncAio C ABI 操作结果码。
  */
 typedef enum C_AioFileResultCode {
     C_AioFileSuccess,                 ///< 操作成功。
@@ -27,13 +27,13 @@ typedef enum C_AioFileResultCode {
     C_AioFileMemoryAllocFailed,       ///< 内存分配失败。
     C_AioFileIOFailed,                ///< 底层 IO 操作失败。
     C_AioFileOperationInvalid,        ///< 当前文件状态不允许执行该操作。
-    C_AioFileOperationUnsupported,    ///< 当前后端不支持 AioFile。
+    C_AioFileOperationUnsupported,    ///< 当前后端不支持 AsyncAio。
 } C_AioFileResultCode;
 
 /**
- * @brief AioFile 打开模式。
+ * @brief AsyncAio 打开模式。
  *
- * @note 所有模式在 USE_EPOLL 后端都会使用底层 AioFile 的 O_DIRECT 语义，
+ * @note 所有模式在 USE_EPOLL 后端都会使用底层 AsyncAio 的 O_DIRECT 语义，
  * 调用方需要使用 galay_kernel_aio_file_alloc_aligned_buffer 分配对齐缓冲区。
  */
 typedef enum C_AioFileOpenMode {
@@ -43,16 +43,16 @@ typedef enum C_AioFileOpenMode {
 } C_AioFileOpenMode;
 
 /**
- * @brief AioFile C 句柄。
+ * @brief AsyncAio C 句柄。
  *
- * @note file 指向内部 C++ AioFile 对象，调用方不能解引用或直接释放。
+ * @note file 指向内部 C++ AsyncAio 对象，调用方不能解引用或直接释放。
  */
 typedef struct galay_kernel_aio_file {
-    void* file;        ///< 内部 AioFile 对象指针。
+    void* file;        ///< 内部 AsyncAio 对象指针。
 } galay_kernel_aio_file_t;
 
 /**
- * @brief 将 AioFile 结果码转换为可读错误信息。
+ * @brief 将 AsyncAio 结果码转换为可读错误信息。
  *
  * @param code C_AioFileResultCode 结果码。
  * @return 指向静态错误字符串的指针，调用方不需要释放。
@@ -60,33 +60,33 @@ typedef struct galay_kernel_aio_file {
 const char* galay_kernel_aio_file_get_error(C_AioFileResultCode code);
 
 /**
- * @brief 创建 AioFile。
+ * @brief 创建 AsyncAio。
  *
- * @param c_file 输出 AioFile 句柄；成功时其 file 字段指向内部 AioFile。
+ * @param c_file 输出 AsyncAio 句柄；成功时其 file 字段指向内部 AsyncAio。
  * @param max_events AIO 队列深度，必须大于 0。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
  * 内存分配失败返回 C_AioFileMemoryAllocFailed；非 USE_EPOLL 后端返回 C_AioFileOperationUnsupported。
  *
  * @note 底层 libaio/eventfd 初始化失败会在后续 open/commit 路径通过 IO 结果暴露；
- * 当前 C++ AioFile 构造函数本身不返回初始化错误。
+ * 当前 C++ AsyncAio 构造函数本身不返回初始化错误。
  */
 C_AioFileResultCode galay_kernel_aio_file_create(galay_kernel_aio_file_t* c_file, int max_events);
 
 /**
- * @brief 销毁 AioFile 内部资源。
+ * @brief 销毁 AsyncAio 内部资源。
  *
- * @param c_file 由 galay_kernel_aio_file_create 初始化的 AioFile 句柄。
+ * @param c_file 由 galay_kernel_aio_file_create 初始化的 AsyncAio 句柄。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
  * 非 USE_EPOLL 后端返回 C_AioFileOperationUnsupported。
  *
- * @note 该函数会释放 c_file->file 指向的内部 AioFile，并将其置空。
+ * @note 该函数会释放 c_file->file 指向的内部 AsyncAio，并将其置空。
  */
 C_AioFileResultCode galay_kernel_aio_file_destroy(galay_kernel_aio_file_t* c_file);
 
 /**
  * @brief 以指定模式打开文件。
  *
- * @param c_file AioFile 句柄。
+ * @param c_file AsyncAio 句柄。
  * @param path 文件路径，不能为空。
  * @param mode 文件打开模式。
  * @param permissions 创建文件时使用的权限。
@@ -103,7 +103,7 @@ C_AioFileResultCode galay_kernel_aio_file_open(
 /**
  * @brief 预注册一个异步读操作，等待 commit 批量提交。
  *
- * @param c_file 已打开的 AioFile 句柄。
+ * @param c_file 已打开的 AsyncAio 句柄。
  * @param buffer 对齐的目标缓冲区；必须存活到 commit 完成。
  * @param length 读取字节数，必须大于 0。
  * @param offset 文件偏移量，不能为负数。
@@ -119,7 +119,7 @@ C_AioFileResultCode galay_kernel_aio_file_pre_read(
 /**
  * @brief 预注册一个异步写操作，等待 commit 批量提交。
  *
- * @param c_file 已打开的 AioFile 句柄。
+ * @param c_file 已打开的 AsyncAio 句柄。
  * @param buffer 对齐的源缓冲区；必须存活到 commit 完成。
  * @param length 写入字节数，必须大于 0。
  * @param offset 文件偏移量，不能为负数。
@@ -135,16 +135,16 @@ C_AioFileResultCode galay_kernel_aio_file_pre_write(
 /**
  * @brief 清空已预注册但尚未提交的 AIO 操作。
  *
- * @param c_file AioFile 句柄。
+ * @param c_file AsyncAio 句柄。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
  * 非 USE_EPOLL 后端返回 C_AioFileOperationUnsupported。
  */
 C_AioFileResultCode galay_kernel_aio_file_clear(galay_kernel_aio_file_t* c_file);
 
 /**
- * @brief 关闭 AioFile 当前文件描述符。
+ * @brief 关闭 AsyncAio 当前文件描述符。
  *
- * @param c_file AioFile 句柄；关闭后仍需调用 destroy 释放句柄对象。
+ * @param c_file AsyncAio 句柄；关闭后仍需调用 destroy 释放句柄对象。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
  * 非 USE_EPOLL 后端返回 C_AioFileOperationUnsupported。
  */
@@ -153,7 +153,7 @@ C_AioFileResultCode galay_kernel_aio_file_close(galay_kernel_aio_file_t* c_file)
 /**
  * @brief 查询当前文件大小。
  *
- * @param c_file 已打开的 AioFile 句柄。
+ * @param c_file 已打开的 AsyncAio 句柄。
  * @param size 输出文件大小。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
  * 文件未打开返回 C_AioFileOperationInvalid；IO 失败返回 C_AioFileIOFailed；
@@ -166,7 +166,7 @@ C_AioFileResultCode galay_kernel_aio_file_size(
 /**
  * @brief 将当前文件数据同步到稳定存储。
  *
- * @param c_file 已打开的 AioFile 句柄。
+ * @param c_file 已打开的 AsyncAio 句柄。
  * @return 成功返回 C_AioFileSuccess；参数无效返回 C_AioFileParameterInvalid；
  * 文件未打开返回 C_AioFileOperationInvalid；IO 失败返回 C_AioFileIOFailed；
  * 非 USE_EPOLL 后端返回 C_AioFileOperationUnsupported。
@@ -198,7 +198,7 @@ C_AioFileResultCode galay_kernel_aio_file_free_aligned_buffer(char* buffer);
 /**
  * @brief 挂起当前 C coroutine 并提交所有已预注册的 AIO 操作。
  *
- * @param c_file AioFile 句柄。
+ * @param c_file AsyncAio 句柄。
  * @param results 调用方提供的结果数组；成功时写入每个 AIO 操作的 ssize_t 返回值。
  * @param result_capacity results 可容纳的元素数。
  * @param out_count 输出实际结果数量。

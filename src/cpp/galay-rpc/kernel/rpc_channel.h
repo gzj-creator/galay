@@ -19,8 +19,8 @@
 #include "../protoc/rpc_error.h"
 #include "../protoc/rpc_message.h"
 #include "../../galay-kernel/common/sleep.hpp"
-#include "../../galay-kernel/concurrency/async_waiter.h"
-#include "../../galay-kernel/concurrency/async_mutex.h"
+#include "../../galay-kernel/async/async_waiter.h"
+#include "../../galay-kernel/async/async_mutex.h"
 #include "../../galay-kernel/concurrency/mpsc_channel.h"
 #include "../../galay-kernel/core/scheduler.hpp"
 
@@ -1159,7 +1159,7 @@ private:
     bool m_tcp_no_delay = true;                ///< 是否为连接 socket 启用 TCP_NODELAY
 };
 
-using RpcChannel = RpcChannelImpl<TcpSocket>;
+using RpcChannel = RpcChannelImpl<AsyncTcpSocket>;
 
 }  // namespace galay::rpc
 

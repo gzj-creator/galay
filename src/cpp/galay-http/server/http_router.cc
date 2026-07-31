@@ -2,7 +2,7 @@
 #include <galay/cpp/galay-http/client/http_client.h>
 #include <galay/cpp/galay-http/common/http_log.h>
 #include <galay/cpp/galay-kernel/common/file_descriptor.h>
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include "http_etag.h"
 #include "http_range.h"
@@ -385,8 +385,8 @@ Task<void> connectProxyUpstream(HttpClient& client,
     co_return;
 }
 
-Task<void> relayRawUpstreamToDownstream(TcpSocket& upstream,
-                                        TcpSocket& downstream,
+Task<void> relayRawUpstreamToDownstream(AsyncTcpSocket& upstream,
+                                        AsyncTcpSocket& downstream,
                                         std::chrono::milliseconds downstream_write_timeout,
                                         bool& ok,
                                         std::string& err_msg)

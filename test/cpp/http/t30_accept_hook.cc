@@ -160,7 +160,7 @@ std::string sendRawHttp(uint16_t port)
     return response;
 }
 
-Task<bool> firstAcceptHook(TcpSocket& socket, const Host&, TestState* state)
+Task<bool> firstAcceptHook(AsyncTcpSocket& socket, const Host&, TestState* state)
 {
     state->first_count.fetch_add(1);
     if (socket.handle().fd >= 0) {
@@ -170,7 +170,7 @@ Task<bool> firstAcceptHook(TcpSocket& socket, const Host&, TestState* state)
     co_return true;
 }
 
-Task<bool> secondAcceptHook(TcpSocket&, const Host&, TestState* state)
+Task<bool> secondAcceptHook(AsyncTcpSocket&, const Host&, TestState* state)
 {
     int prior_second_count = state->second_count.load();
     if (state->first_count.load() > prior_second_count) {
@@ -181,7 +181,7 @@ Task<bool> secondAcceptHook(TcpSocket&, const Host&, TestState* state)
     co_return true;
 }
 
-class FirstPlugin final : public plugin::AcceptPlugin<TcpSocket> {
+class FirstPlugin final : public plugin::AcceptPlugin<AsyncTcpSocket> {
 public:
     explicit FirstPlugin(TestState* state)
         : m_state(state) {}
@@ -195,7 +195,7 @@ public:
         m_state->first_stop_count.fetch_add(1);
     }
 
-    Task<bool> handle(Runtime&, TcpSocket& socket, const Host& client_host) override {
+    Task<bool> handle(Runtime&, AsyncTcpSocket& socket, const Host& client_host) override {
         auto continuing = co_await firstAcceptHook(socket, client_host, m_state);
         co_return continuing.value_or(false);
     }
@@ -204,7 +204,7 @@ private:
     TestState* m_state;
 };
 
-class SecondPlugin final : public plugin::AcceptPlugin<TcpSocket> {
+class SecondPlugin final : public plugin::AcceptPlugin<AsyncTcpSocket> {
 public:
     explicit SecondPlugin(TestState* state)
         : m_state(state) {}
@@ -218,7 +218,7 @@ public:
         m_state->second_stop_count.fetch_add(1);
     }
 
-    Task<bool> handle(Runtime&, TcpSocket& socket, const Host& client_host) override {
+    Task<bool> handle(Runtime&, AsyncTcpSocket& socket, const Host& client_host) override {
         auto continuing = co_await secondAcceptHook(socket, client_host, m_state);
         co_return continuing.value_or(false);
     }
@@ -227,7 +227,7 @@ private:
     TestState* m_state;
 };
 
-class FailingStartPlugin final : public plugin::AcceptPlugin<TcpSocket> {
+class FailingStartPlugin final : public plugin::AcceptPlugin<AsyncTcpSocket> {
 public:
     explicit FailingStartPlugin(std::atomic<int>* stop_count)
         : m_stop_count(stop_count) {}
@@ -240,7 +240,7 @@ public:
         m_stop_count->fetch_add(1);
     }
 
-    Task<bool> handle(Runtime&, TcpSocket&, const Host&) override {
+    Task<bool> handle(Runtime&, AsyncTcpSocket&, const Host&) override {
         co_return true;
     }
 
@@ -373,7 +373,7 @@ int main()
     waitForCount(state.second_stop_count, 1, "second plugin stop should run once");
 
     if (state.valid_socket_count.load() != 2) {
-        fail("accept hook should receive a valid TcpSocket");
+        fail("accept hook should receive a valid AsyncTcpSocket");
     }
     if (state.ordered_second_count.load() != 2) {
         fail("second hook should run after first hook for each accept");

@@ -1,6 +1,6 @@
-#include "tcp_socket_c.h"
+#include "async_tcp_c.h"
 
-#include "../../../cpp/galay-kernel/async/tcp_socket.h"
+#include "../../../cpp/galay-kernel/async/async_tcp.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
 #include <galay/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.h>
@@ -194,9 +194,9 @@ GalayCoreTcpSocket* to_core_socket(void* socket)
     return reinterpret_cast<GalayCoreTcpSocket*>(socket);
 }
 
-galay::async::TcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
+galay::async::AsyncTcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
 {
-    return reinterpret_cast<galay::async::TcpSocket*>(socket);
+    return reinterpret_cast<galay::async::AsyncTcpSocket*>(socket);
 }
 
 struct WaitRequestScope {
@@ -334,12 +334,12 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_create(
     }
 
     c_socket->socket = nullptr;
-    auto result = galay::async::TcpSocket::create(from_c_ip_type_to_cpp_ip_type(type));
+    auto result = galay::async::AsyncTcpSocket::create(from_c_ip_type_to_cpp_ip_type(type));
     if (!result) {
         return C_TcpSocketMemoryAllocFailed;
     }
 
-    auto* socket = new (std::nothrow) galay::async::TcpSocket(std::move(*result));
+    auto* socket = new (std::nothrow) galay::async::AsyncTcpSocket(std::move(*result));
     if (socket == nullptr) {
         return C_TcpSocketMemoryAllocFailed;
     }
@@ -353,7 +353,7 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_destroy(galay_kernel_tcp_socket_t*
     if (c_socket == nullptr) {
         return C_TcpSocketParameterInvalid;
     }
-    delete static_cast<galay::async::TcpSocket*>(c_socket->socket);
+    delete static_cast<galay::async::AsyncTcpSocket*>(c_socket->socket);
     c_socket->socket = nullptr;
     return C_TcpSocketSuccess;
 }
@@ -372,7 +372,7 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_bind(
         return C_TcpSocketParameterInvalid;
     }
 
-    auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
+    auto* socket = static_cast<galay::async::AsyncTcpSocket*>(c_socket->socket);
     auto reuse_addr = socket->option().handleReuseAddr();
     if (!reuse_addr) {
         return from_cpp_io_error(reuse_addr.error());
@@ -393,7 +393,7 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_listen(
         return C_TcpSocketParameterInvalid;
     }
 
-    auto* socket = static_cast<galay::async::TcpSocket*>(c_socket->socket);
+    auto* socket = static_cast<galay::async::AsyncTcpSocket*>(c_socket->socket);
     auto listened = socket->listen(backlog);
     return listened ? C_TcpSocketSuccess : from_cpp_io_error(listened.error());
 }
@@ -406,7 +406,7 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_local_endpoint(
         return C_TcpSocketParameterInvalid;
     }
 
-    const auto* socket = static_cast<const galay::async::TcpSocket*>(c_socket->socket);
+    const auto* socket = static_cast<const galay::async::AsyncTcpSocket*>(c_socket->socket);
     sockaddr_storage storage{};
     socklen_t length = sizeof(storage);
     if (::getsockname(socket->handle().fd, reinterpret_cast<sockaddr*>(&storage), &length) != 0) {

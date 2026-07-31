@@ -34,7 +34,7 @@ Http2Stream::ptr makeDecodedRequest(Http2StreamManager& manager,
 } // namespace
 
 int main() {
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
     manager.m_active_conn_mode = true;

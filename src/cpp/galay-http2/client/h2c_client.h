@@ -18,7 +18,7 @@
 #include "../../galay-http/protoc/http_request.h"
 #include "../../galay-http/protoc/http_response.h"
 #include "../../galay-http/builder/http_builder.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-utils/cache/ring_buffer.hpp"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/task.h"
@@ -122,7 +122,7 @@ public:
         m_host = host;
         m_port = port;
         m_authority = m_host + ":" + std::to_string(m_port);
-        m_socket = std::make_unique<TcpSocket>(IPType::IPV4);
+        m_socket = std::make_unique<AsyncTcpSocket>(IPType::IPV4);
         m_ring_buffer = std::make_unique<RingBuffer<Strategy>>(m_ring_buffer_size);
         auto r = m_socket->option().handleNonBlock();
         if (!r) {
@@ -150,7 +150,7 @@ public:
     Task<std::expected<bool, Http2Error>> shutdown();
 
     bool isUpgraded() const { return m_upgraded; }
-    Http2ConnImpl<TcpSocket, Strategy>* getConn() { return m_conn.get(); }
+    Http2ConnImpl<AsyncTcpSocket, Strategy>* getConn() { return m_conn.get(); }
 
 private:
     friend struct H2cUpgradeMachine<Strategy>;
@@ -161,9 +161,9 @@ private:
     std::string m_authority;
     uint16_t m_port;
     size_t m_ring_buffer_size;
-    std::unique_ptr<TcpSocket> m_socket;
+    std::unique_ptr<AsyncTcpSocket> m_socket;
     std::unique_ptr<RingBuffer<Strategy>> m_ring_buffer;
-    std::unique_ptr<Http2ConnImpl<TcpSocket, Strategy>> m_conn;
+    std::unique_ptr<Http2ConnImpl<AsyncTcpSocket, Strategy>> m_conn;
     std::optional<Http2SettingsFrame> m_pending_peer_settings;
     bool m_upgraded;
     std::expected<bool, Http2Error> m_upgrade_result{true};

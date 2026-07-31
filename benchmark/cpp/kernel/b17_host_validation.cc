@@ -3,8 +3,8 @@
  * @brief 衡量 Host 校验和 bind 参数错误快路径成本。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 
 #include <chrono>
 #include <iomanip>
@@ -63,13 +63,13 @@ int main()
     });
 
     measure("tcp invalid bind fast path", iterations, [](std::size_t i) {
-        galay::async::TcpSocket socket(GHandle::invalid());
+        galay::async::AsyncTcpSocket socket(GHandle::invalid());
         galay::kernel::Host host(galay::kernel::IPType::IPV4, "not-an-ip", 0);
         return requireParamInvalid(socket.bind(host)) + (i & 1U);
     });
 
     measure("udp invalid bind fast path", iterations, [](std::size_t i) {
-        galay::async::UdpSocket socket(GHandle::invalid());
+        galay::async::AsyncUdpSocket socket(GHandle::invalid());
         galay::kernel::Host host(galay::kernel::IPType::IPV4, "not-an-ip", 0);
         return requireParamInvalid(socket.bind(host)) + (i & 1U);
     });

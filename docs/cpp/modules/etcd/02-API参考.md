@@ -601,7 +601,7 @@ public:
 
 - 来源：`client.connect()`
 - `await_ready()`：当 `IOScheduler*` 为空、endpoint 无效、或 client 已经连上并持有 socket / session 时立即返回 `true`
-- `await_suspend()`：把协程挂到 `TcpSocket::connect(...)`
+- `await_suspend()`：把协程挂到 `AsyncTcpSocket::connect(...)`
 - `await_resume()`：
   - 若前面没有真正启动 I/O，则直接回放当前 `EtcdBoolResult`
   - I/O 成功后创建 `HttpSession`、置 `connected() = true`
@@ -611,7 +611,7 @@ public:
 
 - 来源：`client.close()`
 - `await_ready()`：当 client 当前没有 socket 时立即返回 `true`
-- `await_suspend()`：把协程挂到 `TcpSocket::close()`
+- `await_suspend()`：把协程挂到 `AsyncTcpSocket::close()`
 - `await_resume()`：
   - 如果底层 close 出错，返回映射后的连接错误
   - 无论成功还是失败，都会重置 `HttpSession` / socket，并把 `connected() = false`

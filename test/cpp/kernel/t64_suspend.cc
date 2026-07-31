@@ -1,6 +1,6 @@
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
-#include <galay/cpp/galay-kernel/concurrency/async_mutex.h>
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_mutex.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/unsafe_channel.h>
 #include <galay/cpp/galay-kernel/core/task.h>

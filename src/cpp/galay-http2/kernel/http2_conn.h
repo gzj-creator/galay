@@ -6,7 +6,7 @@
  *
  * @details 提供 Http2ConnImpl 模板类，封装 HTTP/2 连接的完整生命周期，
  *          包括 SETTINGS 握手、流管理、流量控制和帧读写。
- *          支持 TcpSocket 和 SslSocket 两种底层传输。
+ *          支持 AsyncTcpSocket 和 SslSocket 两种底层传输。
  */
 
 #ifndef GALAY_HTTP2_CONN_H
@@ -27,7 +27,7 @@
 #include "../../galay-kernel/common/error.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/timeout.hpp"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include <unordered_map>
 #include <memory>
 #include <expected>
@@ -2065,7 +2065,7 @@ private:
     std::unique_ptr<Http2ConnectionCore> m_connection_core;
 };
 
-using Http2Conn = Http2ConnImpl<galay::async::TcpSocket>;
+using Http2Conn = Http2ConnImpl<galay::async::AsyncTcpSocket>;
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 using Http2sConn = Http2ConnImpl<galay::ssl::SslSocket>;

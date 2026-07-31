@@ -19,7 +19,7 @@
 #include "../../galay-http/builder/http_builder.h"
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/io_handlers.hpp"
 #include "../../galay-utils/encoding/base64.hpp"
@@ -95,7 +95,7 @@ private:
 namespace detail {
 
 /**
- * @brief WebSocket Session 升级 operation - TcpSocket 版本（AwaitableBuilder SEND+RECV+PARSE）
+ * @brief WebSocket Session 升级 operation - AsyncTcpSocket 版本（AwaitableBuilder SEND+RECV+PARSE）
  */
 template<typename SocketType>
 class WsSessionUpgradeOperation<SocketType, false>
@@ -838,7 +838,7 @@ private:
     bool m_upgraded;
 };
 
-using WsSession = WsSessionImpl<TcpSocket>;
+using WsSession = WsSessionImpl<AsyncTcpSocket>;
 
 } // namespace galay::websocket
 

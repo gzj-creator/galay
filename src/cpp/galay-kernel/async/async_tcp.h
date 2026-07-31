@@ -1,5 +1,5 @@
 /**
- * @file tcp_socket.h
+ * @file async_tcp.h
  * @brief 异步TCP Socket封装
  * @author galay-kernel
  * @version 1.0.0
@@ -12,7 +12,7 @@
  * @code
  * // 服务端示例
  * Task<void> server() {
- *     TcpSocket listener;
+ *     AsyncTcpSocket listener;
  *     listener.option().handleReuseAddr();
  *     listener.option().handleNonBlock();
  *     listener.bind(Host(IPType::IPV4, "0.0.0.0", 8080));
@@ -29,7 +29,7 @@
  *
  * // 客户端示例
  * Task<void> client() {
- *     TcpSocket socket;
+ *     AsyncTcpSocket socket;
  *     socket.option().handleNonBlock();
  *
  *     co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", 8080));
@@ -43,8 +43,8 @@
  * @endcode
  */
 
-#ifndef GALAY_KERNEL_ASYNC_TCP_SOCKET_H
-#define GALAY_KERNEL_ASYNC_TCP_SOCKET_H
+#ifndef GALAY_KERNEL_ASYNC_TCP_H
+#define GALAY_KERNEL_ASYNC_TCP_H
 
 #include "../common/defn.hpp"
 #include "../common/error.h"
@@ -73,7 +73,7 @@ namespace galay::async
  *
  * @see IOScheduler, HandleOption, Host
  */
-class TcpSocket
+class AsyncTcpSocket
 {
 public:
     /**
@@ -81,16 +81,16 @@ public:
      * @param type IP协议类型（IPV4/IPV6）
      * @note 兼容旧调用；创建失败时内部句柄保持 invalid。需要错误原因时请使用 create()。
      */
-    explicit TcpSocket(galay::kernel::IPType type = galay::kernel::IPType::IPV4);
+    explicit AsyncTcpSocket(galay::kernel::IPType type = galay::kernel::IPType::IPV4);
 
     /**
      * @brief 创建 TCP socket 并以返回值报告系统调用错误。
      * @param type IP 协议类型（IPV4/IPV6）
-     * @return 成功返回可用 TcpSocket；socket() 或 socket 局部选项配置失败时返回 IOError。
+     * @return 成功返回可用 AsyncTcpSocket；socket() 或 socket 局部选项配置失败时返回 IOError。
      * @note 不启动任何协程，也不阻塞；适合 C ABI/FFI 边界显式映射错误。
      *       支持 SO_NOSIGPIPE 的平台会在创建时启用该 socket 局部选项。
      */
-    static std::expected<TcpSocket, galay::kernel::IOError> create(
+    static std::expected<AsyncTcpSocket, galay::kernel::IOError> create(
         galay::kernel::IPType type = galay::kernel::IPType::IPV4);
 
     /**
@@ -98,31 +98,31 @@ public:
      * @param handle 已有的socket句柄（如accept返回的句柄）
      * @note 用于包装已存在的socket，如服务端accept得到的客户端连接
      */
-    explicit TcpSocket(GHandle handle);
+    explicit AsyncTcpSocket(GHandle handle);
 
     /**
      * @brief 析构函数
      * @note 关闭仍由对象持有的 socket；若已通过 close() 关闭则不重复关闭
      */
-    ~TcpSocket();
+    ~AsyncTcpSocket();
 
     /// @brief 禁用拷贝构造
-    TcpSocket(const TcpSocket&) = delete;
+    AsyncTcpSocket(const AsyncTcpSocket&) = delete;
     /// @brief 禁用拷贝赋值
-    TcpSocket& operator=(const TcpSocket&) = delete;
+    AsyncTcpSocket& operator=(const AsyncTcpSocket&) = delete;
 
     /**
      * @brief 移动构造函数
      * @param other 被移动的对象，移动后other变为无效状态
      */
-    TcpSocket(TcpSocket&& other) noexcept;
+    AsyncTcpSocket(AsyncTcpSocket&& other) noexcept;
 
     /**
      * @brief 移动赋值运算符
      * @param other 被移动的对象
      * @return 当前对象的引用
      */
-    TcpSocket& operator=(TcpSocket&& other) noexcept;
+    AsyncTcpSocket& operator=(AsyncTcpSocket&& other) noexcept;
 
     /**
      * @brief 获取底层socket句柄
@@ -188,7 +188,7 @@ public:
      * Host clientHost;
      * auto result = co_await listener.accept(&clientHost);
      * if (result) {
-     *     TcpSocket client(scheduler, result.value());
+     *     AsyncTcpSocket client(scheduler, result.value());
      *     // 处理客户端连接
      * }
      * @endcode
@@ -426,4 +426,4 @@ private:
 
 } // namespace galay::async
 
-#endif // GALAY_KERNEL_ASYNC_TCP_SOCKET_H
+#endif // GALAY_KERNEL_ASYNC_TCP_H

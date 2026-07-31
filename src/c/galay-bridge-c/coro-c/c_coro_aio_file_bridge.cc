@@ -1,7 +1,7 @@
 #include "c_coro_aio_file_bridge.h"
 
 #ifdef USE_EPOLL
-#include <galay/cpp/galay-kernel/async/aio_file.h>
+#include <galay/cpp/galay-kernel/async/async_aio.h>
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 
@@ -43,7 +43,7 @@ C_IOResult merge_cleanup_result(C_IOResult primary, C_IOResult cleanup)
 #ifdef USE_EPOLL
 
 using galay::async::AioCommitAwaitable;
-using galay::async::AioFile;
+using galay::async::AsyncAio;
 using galay::kernel::IOController;
 using galay::kernel::IOError;
 using galay::kernel::IOScheduler;
@@ -67,9 +67,9 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-AioFile* to_cpp_file(GalayCoreAioFile* file)
+AsyncAio* to_cpp_file(GalayCoreAioFile* file)
 {
-    return reinterpret_cast<AioFile*>(file);
+    return reinterpret_cast<AsyncAio*>(file);
 }
 
 Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)

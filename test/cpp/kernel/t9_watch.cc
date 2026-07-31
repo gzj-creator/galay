@@ -1,11 +1,11 @@
 /**
  * @file t9_watch.cc
- * @brief 用途：验证 `FileWatcher` 对文件变更事件的监听与通知行为。
+ * @brief 用途：验证 `AsyncFileWatcher` 对文件变更事件的监听与通知行为。
  * 关键覆盖点：文件监听注册、修改事件捕获、回调或结果通知触发。
  * 通过条件：文件变更事件被正确观察到，测试按预期返回 0。
  */
 
-#include <galay/cpp/galay-kernel/async/file_watcher.h>
+#include <galay/cpp/galay-kernel/async/async_file_watcher.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "result_writer.h"
 #include "test/cpp/common/stdout_log.h"
@@ -42,7 +42,7 @@ std::atomic<int> g_event_count{0};
 std::atomic<int> g_test1_events{0};
 Task<void> watchAllEventsTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
-    FileWatcher watcher;
+    AsyncFileWatcher watcher;
 
     auto result = watcher.addWatch(path, FileWatchEvent::All);
     if (!result) {
@@ -70,7 +70,7 @@ std::atomic<int> g_test2_modify_events{0};
 std::atomic<int> g_test2_attrib_events{0};
 Task<void> watchModifyOnlyTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
-    FileWatcher watcher;
+    AsyncFileWatcher watcher;
 
     // 只监控 Modify 事件
     auto result = watcher.addWatch(path, FileWatchEvent::Modify);
@@ -103,7 +103,7 @@ std::atomic<int> g_test3_modify_events{0};
 std::atomic<int> g_test3_attrib_events{0};
 Task<void> watchAttribOnlyTask([[maybe_unused]] IOScheduler* scheduler, const std::string& path)
 {
-    FileWatcher watcher;
+    AsyncFileWatcher watcher;
 
     // 只监控 Attrib 事件
     auto result = watcher.addWatch(path, FileWatchEvent::Attrib);
@@ -222,7 +222,7 @@ void evaluateResults()
 int main()
 {
     LogInfo("========================================");
-    LogInfo("FileWatcher Event Filter Test");
+    LogInfo("AsyncFileWatcher Event Filter Test");
     LogInfo("========================================\n");
 
 #ifdef USE_IOURING

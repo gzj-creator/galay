@@ -9,7 +9,7 @@
 #include <galay/cpp/galay-ws/kernel/ws_conn.h>
 #undef private
 
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using galay::kernel::MachineSignal;
 using galay::utils::RingBuffer;
 using namespace galay::websocket;
@@ -70,7 +70,7 @@ RingBuffer<> makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 
 
 int main() {
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         WsConn conn(std::move(socket), true);
         auto reader = conn.getReader();
         auto writer = conn.getWriter(WsWriterSetting::byServer());
@@ -98,7 +98,7 @@ int main() {
     }
 
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         WsConn conn(std::move(socket), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
@@ -112,11 +112,11 @@ int main() {
     }
 
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         WsConn conn(std::move(socket), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
-        galay::websocket::detail::WsEchoMachine<TcpSocket> machine(
+        galay::websocket::detail::WsEchoMachine<AsyncTcpSocket> machine(
             &conn,
             WsReaderSetting(),
             WsWriterSetting::byServer(),
@@ -174,7 +174,7 @@ int main() {
     }
 
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         WsConn conn(std::move(socket), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
@@ -187,11 +187,11 @@ int main() {
     }
 
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         WsConn conn(std::move(socket), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
-        galay::websocket::detail::WsEchoMachine<TcpSocket> machine(
+        galay::websocket::detail::WsEchoMachine<AsyncTcpSocket> machine(
             &conn,
             WsReaderSetting(),
             WsWriterSetting::byServer(),
@@ -231,13 +231,13 @@ int main() {
     }
 
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         const std::string payload = "wrapped-zero-copy-hit";
         auto ring = makeWrappedFrameBuffer(encodeMaskedFrame(WsOpcode::Text, payload));
         WsConn conn(std::move(socket), std::move(ring), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
-        galay::websocket::detail::WsEchoMachine<TcpSocket> machine(
+        galay::websocket::detail::WsEchoMachine<AsyncTcpSocket> machine(
             &conn,
             WsReaderSetting(),
             WsWriterSetting::byServer(),
@@ -263,11 +263,11 @@ int main() {
     }
 
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         WsConn conn(std::move(socket), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
-        auto machine = galay::websocket::detail::WsEchoMachine<TcpSocket>(
+        auto machine = galay::websocket::detail::WsEchoMachine<AsyncTcpSocket>(
             &conn,
             WsReaderSetting(),
             WsWriterSetting::byServer(),
@@ -306,11 +306,11 @@ int main() {
     }
 
     {
-        TcpSocket socket;
+        AsyncTcpSocket socket;
         WsConn conn(std::move(socket), true);
         std::string message;
         WsOpcode opcode = WsOpcode::Close;
-        galay::websocket::detail::WsEchoMachine<TcpSocket> machine(
+        galay::websocket::detail::WsEchoMachine<AsyncTcpSocket> machine(
             &conn,
             WsReaderSetting(),
             WsWriterSetting::byServer(),

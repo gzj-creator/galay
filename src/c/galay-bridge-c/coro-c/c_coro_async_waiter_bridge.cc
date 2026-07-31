@@ -1,6 +1,6 @@
 #include "c_coro_async_waiter_bridge.h"
 
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/core/scheduler.hpp>
 #include <galay/cpp/galay-kernel/core/waker.h>
 

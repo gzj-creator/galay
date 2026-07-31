@@ -9,7 +9,7 @@ namespace galay::http::plugin {
 
 /**
  * @brief HTTP 服务端 accept 阶段插件基类。
- * @tparam SocketType 接入得到的 socket 类型，例如 TcpSocket 或 SslSocket。
+ * @tparam SocketType 接入得到的 socket 类型，例如 AsyncTcpSocket 或 SslSocket。
  * @details
  * - server 注册成功后接管插件实例生命周期，插件实例不得同时注册到多个 server。
  * - `start()` 在 runtime 启动后、accept loop 投递前按注册顺序调用。

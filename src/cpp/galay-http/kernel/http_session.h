@@ -16,7 +16,7 @@
 #include "http_writer.h"
 #include "../protoc/http_request.h"
 #include "../protoc/http_response.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
 #include "../../galay-kernel/core/awaitable.h"
@@ -372,7 +372,7 @@ auto buildSessionOperation(HttpSessionImpl<SocketType>& session, HttpRequest&& r
     using ResultType = typename State::ResultType;
     auto state = std::make_shared<State>(session, std::move(request));
 
-    if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+    if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
         return AwaitableBuilder<ResultType>::fromStateMachine(
                    session.getSocket().controller(),
                    HttpSessionTcpMachine<SocketType>(std::move(state)))
@@ -403,7 +403,7 @@ auto buildSessionOperation(HttpSessionImpl<SocketType>& session, std::string&& s
     using ResultType = typename State::ResultType;
     auto state = std::make_shared<State>(session, std::move(serialized_request));
 
-    if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+    if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
         return AwaitableBuilder<ResultType>::fromStateMachine(
                    session.getSocket().controller(),
                    HttpSessionTcpMachine<SocketType>(std::move(state)))
@@ -425,7 +425,7 @@ auto buildSessionOperation(HttpSessionImpl<SocketType>& session, std::string&& s
 
 /**
  * @brief HTTP 客户端会话模板类
- * @tparam SocketType Socket 类型（TcpSocket 或 SslSocket）
+ * @tparam SocketType Socket 类型（AsyncTcpSocket 或 SslSocket）
  * @details 整合 HTTP 请求发送与响应接收，提供便捷的 HTTP 方法调用接口。
  *          内部使用状态机驱动发送-接收-解析流程，支持连接复用。
  */
@@ -670,7 +670,7 @@ private:
     HttpWriterImpl<SocketType> m_writer;                     ///< 写入器
 };
 
-using HttpSession = HttpSessionImpl<TcpSocket>; ///< HTTP 明文会话类型别名
+using HttpSession = HttpSessionImpl<AsyncTcpSocket>; ///< HTTP 明文会话类型别名
 
 } // namespace galay::http
 

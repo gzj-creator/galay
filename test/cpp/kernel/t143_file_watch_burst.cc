@@ -12,7 +12,7 @@
 
 #ifdef USE_EPOLL
 
-#include <galay/cpp/galay-kernel/async/file_watcher.h>
+#include <galay/cpp/galay-kernel/async/async_file_watcher.h>
 #include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 
 #include <cerrno>
@@ -32,7 +32,7 @@ Task<void> watchCreates(const std::filesystem::path& dir,
                         std::atomic<int>* create_count,
                         std::atomic<bool>* done)
 {
-    galay::async::FileWatcher watcher;
+    galay::async::AsyncFileWatcher watcher;
     auto watch_result = watcher.addWatch(dir.string(), FileWatchEvent::Create);
     if (!watch_result) {
         done->store(true, std::memory_order_release);

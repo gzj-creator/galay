@@ -8,7 +8,7 @@
 #include <iostream>
 #include <atomic>
 #include <string_view>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -39,7 +39,7 @@ Task<void> udpServer() {
     LogInfo("UDP Server starting...");
 
     // 创建UDP socket
-    UdpSocket socket;
+    AsyncUdpSocket socket;
 
     // 设置socket选项
     auto optResult = socket.option().handleReuseAddr();
@@ -102,7 +102,7 @@ Task<void> udpClient() {
     LogInfo("UDP Client starting...");
 
     // 创建UDP socket
-    UdpSocket socket;
+    AsyncUdpSocket socket;
 
     // 设置非阻塞模式
     auto optResult = socket.option().handleNonBlock();

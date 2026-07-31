@@ -41,7 +41,7 @@ bool verifyServer(const std::filesystem::path& path, const std::string& text) {
                   << "] expected multiple schedulers for reuseport acceptors\n";
         return false;
     }
-    if (!containsText(text, "std::vector<TcpSocket> listeners;")) {
+    if (!containsText(text, "std::vector<AsyncTcpSocket> listeners;")) {
         std::cerr << "[" << path.filename().string()
                   << "] expected one listener per scheduler\n";
         return false;

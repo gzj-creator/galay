@@ -52,9 +52,9 @@ static_assert(std::same_as<
     decltype(std::declval<RpcStreamServer&>().start()),
     std::expected<void, RpcError>>);
 
-std::expected<std::pair<TcpSocket, uint16_t>, std::string> reservePort()
+std::expected<std::pair<AsyncTcpSocket, uint16_t>, std::string> reservePort()
 {
-    auto listener = TcpSocket::create(IPType::IPV4);
+    auto listener = AsyncTcpSocket::create(IPType::IPV4);
     if (!listener.has_value()) {
         return std::unexpected("failed to create blocking listener");
     }
@@ -79,7 +79,7 @@ std::expected<std::pair<TcpSocket, uint16_t>, std::string> reservePort()
         return std::unexpected("failed to query blocking listener port");
     }
 
-    return std::pair<TcpSocket, uint16_t>(
+    return std::pair<AsyncTcpSocket, uint16_t>(
         std::move(*listener),
         ntohs(address.sin_port));
 }

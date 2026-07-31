@@ -2,7 +2,7 @@
 #include "integration_config.h"
 
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>

@@ -11,7 +11,7 @@
 #include <cstring>
 #include <thread>
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -36,7 +36,7 @@ std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_passed{false};
 
 Task<void> borrowedServer([[maybe_unused]] IOScheduler* scheduler) {
-    TcpSocket listener;
+    AsyncTcpSocket listener;
 
     auto opt = listener.option().handleReuseAddr();
     if (!opt) {
@@ -73,7 +73,7 @@ Task<void> borrowedServer([[maybe_unused]] IOScheduler* scheduler) {
         co_return;
     }
 
-    TcpSocket client(acceptResult.value());
+    AsyncTcpSocket client(acceptResult.value());
     client.option().handleNonBlock();
 
     char header[16]{};
@@ -122,7 +122,7 @@ Task<void> borrowedClient([[maybe_unused]] IOScheduler* scheduler) {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    TcpSocket client;
+    AsyncTcpSocket client;
     auto opt = client.option().handleNonBlock();
     if (!opt) {
         LogError("[Client] non-block failed: {}", opt.error().message());

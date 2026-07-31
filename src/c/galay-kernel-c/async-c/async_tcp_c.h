@@ -1,5 +1,5 @@
-#ifndef GALAY_KERNEL_TCP_SOCKET_C_H
-#define GALAY_KERNEL_TCP_SOCKET_C_H
+#ifndef GALAY_KERNEL_ASYNC_TCP_C_H
+#define GALAY_KERNEL_ASYNC_TCP_C_H
 
 #include "../common-c/host.h"
 #include "../coro-c/coro_result_c.h"
@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 /**
- * @file tcp_socket_c.h
+ * @file async_tcp_c.h
  * @brief Galay kernel TCP socket 的 direct C coroutine ABI。
  *
  * @details 该头文件保留 TCP socket 生命周期同步操作；会挂起的 I/O 操作必须在
@@ -36,11 +36,11 @@ typedef enum C_TcpSocketResultCode {
 /**
  * @brief TCP socket C 句柄。
  *
- * @note socket 指向内部 C++ TcpSocket 对象，调用方不能解引用或直接释放。句柄
+ * @note socket 指向内部 C++ AsyncTcpSocket 对象，调用方不能解引用或直接释放。句柄
  * 本身可按值存放，但同一底层 socket 的生命周期必须由一个所有者串行管理。
  */
 typedef struct galay_kernel_tcp_socket {
-    void* socket;           ///< 内部 TcpSocket 对象指针。
+    void* socket;           ///< 内部 AsyncTcpSocket 对象指针。
 } galay_kernel_tcp_socket_t;
 
 /**
@@ -56,7 +56,7 @@ const char* galay_kernel_tcp_socket_get_error(C_TcpSocketResultCode code);
 /**
  * @brief 创建 TCP socket。
  *
- * @param c_socket 输出 socket 句柄；成功时写入内部 TcpSocket 指针。
+ * @param c_socket 输出 socket 句柄；成功时写入内部 AsyncTcpSocket 指针。
  * @param type IP 地址族，必须是 C_IPTypeIPV4 或 C_IPTypeIPV6。
  * @return 成功返回 C_TcpSocketSuccess；参数非法返回 C_TcpSocketParameterInvalid；
  * 底层创建或内存分配失败返回 C_TcpSocketMemoryAllocFailed。

@@ -13,7 +13,7 @@
 #include "rpc_await.h"
 #include "../protoc/rpc_message.h"
 #include "../protoc/rpc_error.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/task.h"
 #include "../../galay-utils/cache/ring_buffer.hpp"
@@ -1194,10 +1194,10 @@ private:
     SocketType& m_socket;               ///< Socket引用
 };
 
-/// @brief RPC读取器类型别名（TcpSocket）
-using RpcReader = RpcReaderImpl<TcpSocket>;
-/// @brief RPC写入器类型别名（TcpSocket）
-using RpcWriter = RpcWriterImpl<TcpSocket>;
+/// @brief RPC读取器类型别名（AsyncTcpSocket）
+using RpcReader = RpcReaderImpl<AsyncTcpSocket>;
+/// @brief RPC写入器类型别名（AsyncTcpSocket）
+using RpcWriter = RpcWriterImpl<AsyncTcpSocket>;
 
 /**
  * @brief RPC连接模板类
@@ -1299,8 +1299,8 @@ private:
     RpcWriterSetting m_writer_setting;          ///< 写入配置
 };
 
-/// @brief RPC连接类型别名（TcpSocket）
-using RpcConn = RpcConnImpl<TcpSocket>;
+/// @brief RPC连接类型别名（AsyncTcpSocket）
+using RpcConn = RpcConnImpl<AsyncTcpSocket>;
 
 } // namespace galay::rpc
 

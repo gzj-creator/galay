@@ -12,7 +12,7 @@
 #include <csignal>
 #include <string_view>
 #include <thread>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -53,7 +53,7 @@ void signalHandler(int signum) {
 
 // UDP Echo服务器工作协程 - 多协程并发处理
 Task<void> udpServerWorker(int worker_id) {
-    UdpSocket socket;
+    AsyncUdpSocket socket;
 
     socket.option().handleReuseAddr();
     socket.option().handleReusePort();  // 关键：允许多个socket绑定同一端口

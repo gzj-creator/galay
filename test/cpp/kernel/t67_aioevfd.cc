@@ -1,6 +1,6 @@
 /**
  * @file t67_aioevfd.cc
- * @brief 用途：验证 `epoll + AioFile` 在同一文件对象上连续两次 `commit()` 时会重新注册 AIO eventfd。
+ * @brief 用途：验证 `epoll + AsyncAio` 在同一文件对象上连续两次 `commit()` 时会重新注册 AIO eventfd。
  * 关键覆盖点：第一次 AIO 完成后的 `EPOLL_CTL_DEL` 收尾、第二次 `commit()` 的重新注册、顺序 write->read 链路。
  * 通过条件：测试在超时前完成，第二次 read 成功返回并读回第一次 write 的内容。
  */
@@ -11,7 +11,7 @@
 
 #ifdef USE_EPOLL
 
-#include <galay/cpp/galay-kernel/async/aio_file.h>
+#include <galay/cpp/galay-kernel/async/async_aio.h>
 #include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 
 #include <atomic>
@@ -27,18 +27,18 @@ namespace {
 Task<void> aioWriteThenRead(std::atomic<bool>* done, std::atomic<bool>* passed)
 {
     const char* path = "/tmp/galay_epoll_aio_eventfd_rearm_test.dat";
-    galay::async::AioFile file;
+    galay::async::AsyncAio file;
     auto open_result = file.open(path, galay::async::AioOpenMode::ReadWrite);
     if (!open_result) {
         done->store(true, std::memory_order_release);
         co_return;
     }
 
-    char* write_buffer = galay::async::AioFile::allocAlignedBuffer(4096);
-    char* read_buffer = galay::async::AioFile::allocAlignedBuffer(4096);
+    char* write_buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
+    char* read_buffer = galay::async::AsyncAio::allocAlignedBuffer(4096);
     if (!write_buffer || !read_buffer) {
-        galay::async::AioFile::freeAlignedBuffer(write_buffer);
-        galay::async::AioFile::freeAlignedBuffer(read_buffer);
+        galay::async::AsyncAio::freeAlignedBuffer(write_buffer);
+        galay::async::AsyncAio::freeAlignedBuffer(read_buffer);
         std::remove(path);
         done->store(true, std::memory_order_release);
         co_return;
@@ -66,8 +66,8 @@ Task<void> aioWriteThenRead(std::atomic<bool>* done, std::atomic<bool>* passed)
         passed->store(read_ok, std::memory_order_release);
     }
 
-    galay::async::AioFile::freeAlignedBuffer(write_buffer);
-    galay::async::AioFile::freeAlignedBuffer(read_buffer);
+    galay::async::AsyncAio::freeAlignedBuffer(write_buffer);
+    galay::async::AsyncAio::freeAlignedBuffer(read_buffer);
     std::remove(path);
     done->store(true, std::memory_order_release);
     co_return;

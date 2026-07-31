@@ -437,7 +437,7 @@ namespace galay::redis
             AsyncRedisConfig config;
             RedissClientConfig tls_config;
             std::shared_ptr<galay::utils::RingBuffer<>> ring_buffer;
-            TcpSocket ready_socket;
+            AsyncTcpSocket ready_socket;
             std::optional<RedisError> boot_error;
             galay::ssl::SslContext ssl_context;
             std::optional<galay::ssl::SslSocket> socket;
@@ -470,7 +470,7 @@ namespace galay::redis
             AsyncRedisConfig config;
             RedissClientConfig tls_config;
             std::shared_ptr<galay::utils::RingBuffer<>> ring_buffer;
-            TcpSocket ready_socket;
+            AsyncTcpSocket ready_socket;
             bool is_closed = true;
             std::optional<RedisError> boot_error;
         };

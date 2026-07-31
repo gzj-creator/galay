@@ -1,5 +1,5 @@
-#ifndef GALAY_KERNEL_FILE_WATCHER_C_H
-#define GALAY_KERNEL_FILE_WATCHER_C_H
+#ifndef GALAY_KERNEL_ASYNC_FILE_WATCHER_C_H
+#define GALAY_KERNEL_ASYNC_FILE_WATCHER_C_H
 
 #include "../coro-c/coro_result_c.h"
 #include <stdbool.h>
@@ -7,11 +7,11 @@
 #include <stdint.h>
 
 /**
- * @file file_watcher_c.h
- * @brief Galay kernel FileWatcher 的 C ABI 封装。
+ * @file async_file_watcher_c.h
+ * @brief Galay kernel AsyncFileWatcher 的 C ABI 封装。
  *
  * @details 该头文件只暴露 C 可见的轻量句柄、事件位掩码和结果码，
- * 实际文件监控生命周期由实现文件中的 C++ galay::async::FileWatcher 承载。
+ * 实际文件监控生命周期由实现文件中的 C++ galay::async::AsyncFileWatcher 承载。
  */
 
 #ifdef __cplusplus
@@ -19,7 +19,7 @@ extern "C" {
 #endif
 
 /**
- * @brief FileWatcher C ABI 操作结果码。
+ * @brief AsyncFileWatcher C ABI 操作结果码。
  */
 typedef enum C_FileWatcherResultCode {
     C_FileWatcherSuccess,               ///< 操作成功。
@@ -54,16 +54,16 @@ typedef enum C_FileWatchEvent {
 } C_FileWatchEvent;
 
 /**
- * @brief FileWatcher C 句柄。
+ * @brief AsyncFileWatcher C 句柄。
  *
- * @note watcher 指向内部 C++ FileWatcher 对象，调用方不能解引用或直接释放。
+ * @note watcher 指向内部 C++ AsyncFileWatcher 对象，调用方不能解引用或直接释放。
  */
 typedef struct galay_kernel_file_watcher {
-    void* watcher;          ///< 内部 FileWatcher 对象指针。
+    void* watcher;          ///< 内部 AsyncFileWatcher 对象指针。
 } galay_kernel_file_watcher_t;
 
 /**
- * @brief FileWatcher watch 结果。
+ * @brief AsyncFileWatcher watch 结果。
  *
  * @note name 始终以 '\0' 结尾；在按文件监控或后端不提供文件名时可能为空。
  */
@@ -75,7 +75,7 @@ typedef struct galay_kernel_file_watcher_watch_result {
 } galay_kernel_file_watcher_watch_result_t;
 
 /**
- * @brief 将 FileWatcher 结果码转换为可读错误信息。
+ * @brief 将 AsyncFileWatcher 结果码转换为可读错误信息。
  *
  * @param code C_FileWatcherResultCode 结果码。
  * @return 指向静态错误字符串的指针，调用方不需要释放。
@@ -83,9 +83,9 @@ typedef struct galay_kernel_file_watcher_watch_result {
 const char* galay_kernel_file_watcher_get_error(C_FileWatcherResultCode code);
 
 /**
- * @brief 创建 FileWatcher。
+ * @brief 创建 AsyncFileWatcher。
  *
- * @param c_watcher 输出 watcher 句柄；成功时其 watcher 字段指向内部 FileWatcher。
+ * @param c_watcher 输出 watcher 句柄；成功时其 watcher 字段指向内部 AsyncFileWatcher。
  * @return 成功返回 C_FileWatcherSuccess；参数无效返回 C_FileWatcherParameterInvalid；
  * 内存分配失败返回 C_FileWatcherMemoryAllocFailed；后端不支持返回 C_FileWatcherOperationUnsupported。
  *
@@ -95,12 +95,12 @@ C_FileWatcherResultCode galay_kernel_file_watcher_create(
     galay_kernel_file_watcher_t* c_watcher);
 
 /**
- * @brief 销毁 FileWatcher 内部资源。
+ * @brief 销毁 AsyncFileWatcher 内部资源。
  *
  * @param c_watcher 由 galay_kernel_file_watcher_create 初始化的 watcher 句柄。
  * @return 成功返回 C_FileWatcherSuccess；参数无效返回 C_FileWatcherParameterInvalid。
  *
- * @note 该函数会释放 c_watcher->watcher 指向的内部 FileWatcher，并将其置空。
+ * @note 该函数会释放 c_watcher->watcher 指向的内部 AsyncFileWatcher，并将其置空。
  */
 C_FileWatcherResultCode galay_kernel_file_watcher_destroy(
     galay_kernel_file_watcher_t* c_watcher);
@@ -108,7 +108,7 @@ C_FileWatcherResultCode galay_kernel_file_watcher_destroy(
 /**
  * @brief 注册路径以进行文件系统变更监控。
  *
- * @param c_watcher FileWatcher 句柄。
+ * @param c_watcher AsyncFileWatcher 句柄。
  * @param path 要监控的文件或目录路径；不能为空。
  * @param events 要监控的事件位掩码，必须是 C_FileWatchEvent* 的有效组合。
  * @param watch_descriptor 输出监控描述符。
@@ -124,7 +124,7 @@ C_FileWatcherResultCode galay_kernel_file_watcher_add_watch(
 /**
  * @brief 移除先前注册的监控。
  *
- * @param c_watcher FileWatcher 句柄。
+ * @param c_watcher AsyncFileWatcher 句柄。
  * @param watch_descriptor add_watch 返回的监控描述符。
  * @return 成功返回 C_FileWatcherSuccess；参数无效返回 C_FileWatcherParameterInvalid；
  * IO 失败返回 C_FileWatcherIOFailed；后端不支持返回 C_FileWatcherOperationUnsupported。
@@ -136,7 +136,7 @@ C_FileWatcherResultCode galay_kernel_file_watcher_remove_watch(
 /**
  * @brief 查询监控描述符关联的路径。
  *
- * @param c_watcher FileWatcher 句柄。
+ * @param c_watcher AsyncFileWatcher 句柄。
  * @param watch_descriptor add_watch 返回的监控描述符。
  * @param buffer 调用方提供的输出缓冲区。
  * @param buffer_size 输出缓冲区字节数，必须能容纳完整路径和结尾 '\0'。
@@ -151,7 +151,7 @@ C_FileWatcherResultCode galay_kernel_file_watcher_get_path(
 /**
  * @brief 挂起当前 C coroutine 并等待一个文件系统事件。
  *
- * @param c_watcher FileWatcher 句柄。
+ * @param c_watcher AsyncFileWatcher 句柄。
  * @param out_result 输出 watch 结果；成功或超时时写入 code/events/name/is_dir。
  * @param timeout_ms 负数无限等待，0 不提交 watch 并直接返回超时，正数为毫秒超时。
  * @return 成功事件返回 C_IOResultOk；超时返回 C_IOResultTimeout；参数、

@@ -17,7 +17,7 @@ Task<void> test_get(IOScheduler* scheduler)
 {
 
     // 创建socket并连接
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     auto nonblock_result = socket.option().handleNonBlock();
     if (!nonblock_result) {
         co_return;
@@ -71,7 +71,7 @@ Task<void> test_post(IOScheduler* scheduler)
 {
 
     // 创建socket并连接
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     auto nonblock_result = socket.option().handleNonBlock();
     if (!nonblock_result) {
         co_return;
@@ -123,7 +123,7 @@ Task<void> test_multiple_requests(IOScheduler* scheduler)
 {
 
     // 创建socket并连接
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     auto nonblock_result = socket.option().handleNonBlock();
     if (!nonblock_result) {
         co_return;

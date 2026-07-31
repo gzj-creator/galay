@@ -2,7 +2,7 @@
 #include <galay/cpp/galay-mysql/async/conn_pool.h>
 
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
 #include <atomic>

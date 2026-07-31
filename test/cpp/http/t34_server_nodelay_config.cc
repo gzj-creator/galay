@@ -182,7 +182,7 @@ int observePlainServerTcpNoDelay(bool tcp_no_delay)
         .tcpNoDelay(tcp_no_delay)
         .build());
 
-    require(server.addAcceptPlugin(std::make_unique<NoDelayProbePlugin<TcpSocket>>(&state)),
+    require(server.addAcceptPlugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
             "nodelay probe plugin should register");
 
     server.start([&state](HttpConn conn) -> Task<void> {

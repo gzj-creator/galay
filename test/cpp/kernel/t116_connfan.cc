@@ -7,7 +7,7 @@
 
 #include <galay/cpp/galay-kernel/common/host.hpp>
 #include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 #include <atomic>
 #include <chrono>
@@ -33,7 +33,7 @@ using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 
 using namespace galay::kernel;
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 
 namespace {
 
@@ -106,7 +106,7 @@ void acceptAll(int listen_fd, TestState* state)
 
 Task<void> connectTask(TestState* state, uint16_t port)
 {
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     auto result = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", port));

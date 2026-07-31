@@ -32,11 +32,11 @@ std::pair<HttpErrorCode, ssize_t> parseRequest(std::string& raw)
 
 bool sessionRejectsOversizedResponse(std::string& raw)
 {
-    galay::async::TcpSocket socket;
+    galay::async::AsyncTcpSocket socket;
     HttpReaderSetting setting;
     setting.setMaxBodySize(4);
     HttpSession session(socket, 1024, setting);
-    galay::http::detail::HttpSessionState<galay::async::TcpSocket> state(
+    galay::http::detail::HttpSessionState<galay::async::AsyncTcpSocket> state(
         session, std::string("GET / HTTP/1.1\r\n\r\n"));
 
     require(session.getRingBuffer().write(raw.data(), raw.size()) == raw.size(),

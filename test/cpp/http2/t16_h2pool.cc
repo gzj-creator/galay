@@ -91,7 +91,7 @@ int main() {
     assert(!reused->waitResponseComplete().await_ready());
     assert(!reused->getFrame().await_ready());
 
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
     manager.m_active_conn_mode = true;

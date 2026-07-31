@@ -20,7 +20,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -75,7 +75,7 @@ uint16_t boundPort(int fd) {
 
 #ifdef USE_IOURING
 Task<void> sendTwoChunks() {
-    TcpSocket listener;
+    AsyncTcpSocket listener;
 
     auto opt = listener.option().handleReuseAddr();
     if (!opt) {
@@ -119,7 +119,7 @@ Task<void> sendTwoChunks() {
         co_return;
     }
 
-    TcpSocket client(acceptResult.value());
+    AsyncTcpSocket client(acceptResult.value());
     client.option().handleNonBlock();
 
     auto first = co_await client.send(firstPayload().data(), firstPayload().size());

@@ -35,7 +35,7 @@ using namespace galay::kernel;
 Task<void> test_web_socket_client(IOScheduler* scheduler) {
 
     // 创建 socket 并连接
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     auto nonblock_result = socket.option().handleNonBlock();
     if (!nonblock_result) {
         co_return;

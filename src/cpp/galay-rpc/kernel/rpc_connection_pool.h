@@ -15,7 +15,7 @@
 
 #include "rpc_channel.h"
 #include "../protoc/rpc_error.h"
-#include "../../galay-kernel/concurrency/async_waiter.h"
+#include "../../galay-kernel/async/async_waiter.h"
 #include "../../galay-kernel/core/task.h"
 
 #include <chrono>

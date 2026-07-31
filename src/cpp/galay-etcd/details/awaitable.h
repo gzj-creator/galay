@@ -14,9 +14,9 @@ namespace galay::etcd::details
 {
 
 using ConnectIoAwaitable =
-    decltype(std::declval<galay::async::TcpSocket&>().connect(
+    decltype(std::declval<galay::async::AsyncTcpSocket&>().connect(
         std::declval<const galay::kernel::Host&>()));
-using CloseIoAwaitable = decltype(std::declval<galay::async::TcpSocket&>().close());
+using CloseIoAwaitable = decltype(std::declval<galay::async::AsyncTcpSocket&>().close());
 using HttpSerializedRequestAwaitable =
     decltype(std::declval<galay::http::HttpSession&>().sendSerializedRequest(
         std::declval<std::string>()));

@@ -41,8 +41,8 @@
 #if __has_include(<functional>)
 #include <functional>
 #endif
-#if __has_include("../../galay-kernel/async/tcp_socket.h")
-#include "../../galay-kernel/async/tcp_socket.h"
+#if __has_include("../../galay-kernel/async/async_tcp.h")
+#include "../../galay-kernel/async/async_tcp.h"
 #endif
 #if __has_include("../../galay-utils/cache/ring_buffer.hpp")
 #include "../../galay-utils/cache/ring_buffer.hpp"
@@ -53,8 +53,8 @@
 #if __has_include("../../galay-kernel/common/host.hpp")
 #include "../../galay-kernel/common/host.hpp"
 #endif
-#if __has_include("../../galay-kernel/concurrency/async_waiter.h")
-#include "../../galay-kernel/concurrency/async_waiter.h"
+#if __has_include("../../galay-kernel/async/async_waiter.h")
+#include "../../galay-kernel/async/async_waiter.h"
 #endif
 #if __has_include("../../galay-kernel/core/awaitable.h")
 #include "../../galay-kernel/core/awaitable.h"

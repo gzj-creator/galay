@@ -1,9 +1,9 @@
 /**
  * @file t130_socket_raii.cc
- * @brief 验证 TcpSocket 对已拥有 fd 的 RAII 关闭语义。
+ * @brief 验证 AsyncTcpSocket 对已拥有 fd 的 RAII 关闭语义。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 #include <cerrno>
 #include <fcntl.h>
@@ -40,10 +40,10 @@ bool destructorClosesOwnedSocket()
     }
 
     {
-        galay::async::TcpSocket socket(GHandle{.fd = fd});
+        galay::async::AsyncTcpSocket socket(GHandle{.fd = fd});
     }
 
-    return check(isClosed(fd), "TcpSocket destructor should close the owned fd");
+    return check(isClosed(fd), "AsyncTcpSocket destructor should close the owned fd");
 }
 
 bool moveAssignmentClosesPreviousSocketAndTransfersNewOne()
@@ -61,8 +61,8 @@ bool moveAssignmentClosesPreviousSocketAndTransfersNewOne()
     }
 
     {
-        galay::async::TcpSocket target(GHandle{.fd = oldFd});
-        galay::async::TcpSocket source(GHandle{.fd = newFd});
+        galay::async::AsyncTcpSocket target(GHandle{.fd = oldFd});
+        galay::async::AsyncTcpSocket source(GHandle{.fd = newFd});
         target = std::move(source);
 
         if (!check(isClosed(oldFd), "move assignment should close the replaced fd")) {

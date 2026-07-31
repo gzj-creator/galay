@@ -1,5 +1,5 @@
 /**
- * @file udp_socket.h
+ * @file async_udp.h
  * @brief 异步UDP Socket封装
  * @author galay-kernel
  * @version 1.0.0
@@ -12,7 +12,7 @@
  * @code
  * // 服务端示例
  * Task<void> server() {
- *     UdpSocket socket;
+ *     AsyncUdpSocket socket;
  *     socket.option().handleReuseAddr();
  *     socket.option().handleNonBlock();
  *     socket.bind(Host(IPType::IPV4, "0.0.0.0", 8080));
@@ -30,7 +30,7 @@
  *
  * // 客户端示例
  * Task<void> client() {
- *     UdpSocket socket;
+ *     AsyncUdpSocket socket;
  *     socket.option().handleNonBlock();
  *
  *     Host server(IPType::IPV4, "127.0.0.1", 8080);
@@ -45,8 +45,8 @@
  * @endcode
  */
 
-#ifndef GALAY_KERNEL_ASYNC_UDP_SOCKET_H
-#define GALAY_KERNEL_ASYNC_UDP_SOCKET_H
+#ifndef GALAY_KERNEL_ASYNC_UDP_H
+#define GALAY_KERNEL_ASYNC_UDP_H
 
 #include "../common/defn.hpp"
 #include "../common/error.h"
@@ -75,7 +75,7 @@ namespace galay::async
  *
  * @see IOScheduler, HandleOption, Host
  */
-class UdpSocket
+class AsyncUdpSocket
 {
 public:
     /**
@@ -83,15 +83,15 @@ public:
      * @param type IP协议类型（IPV4/IPV6）
      * @note 兼容旧调用；创建失败时内部句柄保持 invalid。需要错误原因时请使用 create()。
      */
-    explicit UdpSocket(galay::kernel::IPType type = galay::kernel::IPType::IPV4);
+    explicit AsyncUdpSocket(galay::kernel::IPType type = galay::kernel::IPType::IPV4);
 
     /**
      * @brief 创建 UDP socket 并以返回值报告系统调用错误。
      * @param type IP 协议类型（IPV4/IPV6）
-     * @return 成功返回可用 UdpSocket；socket() 失败时返回 IOError(kOpenFailed, errno)。
+     * @return 成功返回可用 AsyncUdpSocket；socket() 失败时返回 IOError(kOpenFailed, errno)。
      * @note 不启动任何协程，也不阻塞；适合 C ABI/FFI 边界显式映射错误。
      */
-    static std::expected<UdpSocket, galay::kernel::IOError> create(
+    static std::expected<AsyncUdpSocket, galay::kernel::IOError> create(
         galay::kernel::IPType type = galay::kernel::IPType::IPV4);
 
     /**
@@ -99,31 +99,31 @@ public:
      * @param handle 已有的socket句柄
      * @note 用于包装已存在的socket
      */
-    explicit UdpSocket(GHandle handle);
+    explicit AsyncUdpSocket(GHandle handle);
 
     /**
      * @brief 析构函数
      * @note 同步关闭仍由对象持有的 socket；协程路径仍可显式 co_await close() 获取错误。
      */
-    ~UdpSocket();
+    ~AsyncUdpSocket();
 
     /// @brief 禁用拷贝构造
-    UdpSocket(const UdpSocket&) = delete;
+    AsyncUdpSocket(const AsyncUdpSocket&) = delete;
     /// @brief 禁用拷贝赋值
-    UdpSocket& operator=(const UdpSocket&) = delete;
+    AsyncUdpSocket& operator=(const AsyncUdpSocket&) = delete;
 
     /**
      * @brief 移动构造函数
      * @param other 被移动的对象，移动后other变为无效状态
      */
-    UdpSocket(UdpSocket&& other) noexcept;
+    AsyncUdpSocket(AsyncUdpSocket&& other) noexcept;
 
     /**
      * @brief 移动赋值运算符
      * @param other 被移动的对象
      * @return 当前对象的引用
      */
-    UdpSocket& operator=(UdpSocket&& other) noexcept;
+    AsyncUdpSocket& operator=(AsyncUdpSocket&& other) noexcept;
 
     /**
      * @brief 获取底层socket句柄
@@ -247,4 +247,4 @@ private:
 
 } // namespace galay::async
 
-#endif // GALAY_KERNEL_ASYNC_UDP_SOCKET_H
+#endif // GALAY_KERNEL_ASYNC_UDP_H

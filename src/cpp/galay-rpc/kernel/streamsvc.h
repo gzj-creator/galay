@@ -15,7 +15,7 @@
 #include "rpc_service.h"
 #include "rpc_stream.h"
 #include "../utils/runtime_compat.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/runtime.h"
 #include <array>
 #include <atomic>
@@ -193,7 +193,7 @@ public:
             return std::unexpected(std::move(error));
         }
 
-        auto listener_result = TcpSocket::create(IPType::IPV4);
+        auto listener_result = AsyncTcpSocket::create(IPType::IPV4);
         if (!listener_result.has_value()) {
             RpcError error = RpcError::from(listener_result.error());
             RPC_LOG_ERROR("[stream-server] [socket] [create-fail]",
@@ -201,7 +201,7 @@ public:
             m_runtime.stop();
             return std::unexpected(std::move(error));
         }
-        TcpSocket listener = std::move(*listener_result);
+        AsyncTcpSocket listener = std::move(*listener_result);
 
         auto reuse_addr_result = listener.option().handleReuseAddr();
         if (!reuse_addr_result.has_value()) {
@@ -311,7 +311,7 @@ private:
         return std::unexpected(RpcErrorCode::SERVICE_NOT_FOUND);
     }
 
-    Task<void> acceptLoop(TcpSocket listener) {
+    Task<void> acceptLoop(AsyncTcpSocket listener) {
         while (m_running.load(std::memory_order_acquire)) {
             Host client_host;
             auto accept_result = co_await listener.accept(&client_host);
@@ -327,7 +327,7 @@ private:
             if (!scheduleTask(scheduler, handleConnection(accept_result.value()))) {
                 m_last_error = RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to schedule stream connection handler");
                 RPC_LOG_ERROR("[stream-server] [schedule] [fail]", "connection-handler");
-                TcpSocket socket(accept_result.value());
+                AsyncTcpSocket socket(accept_result.value());
                 auto close_result = co_await socket.close();
                 if (!close_result) {
                     m_last_error = RpcError::from(close_result.error());
@@ -349,7 +349,7 @@ private:
     }
 
     Task<void> handleConnection(GHandle handle) {
-        TcpSocket socket(handle);
+        AsyncTcpSocket socket(handle);
         auto non_block_result = socket.option().handleNonBlock();
         if (!non_block_result) {
             m_last_error = RpcError::from(non_block_result.error());

@@ -17,7 +17,7 @@ using namespace galay::async;
 Task<void> test_connection_failure(IOScheduler* scheduler)
 {
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     // 连接到不存在的服务器
@@ -37,7 +37,7 @@ Task<void> test_connection_failure(IOScheduler* scheduler)
 Task<void> test_server_close_connection(IOScheduler* scheduler)
 {
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
@@ -82,7 +82,7 @@ Task<void> test_server_close_connection(IOScheduler* scheduler)
 Task<void> test_multiple_requests(IOScheduler* scheduler)
 {
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
@@ -133,7 +133,7 @@ Task<void> test_multiple_requests(IOScheduler* scheduler)
 Task<void> test_large_request_body(IOScheduler* scheduler)
 {
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
@@ -182,7 +182,7 @@ Task<void> test_large_request_body(IOScheduler* scheduler)
 Task<void> test404NotFound(IOScheduler* scheduler)
 {
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
@@ -231,7 +231,7 @@ Task<void> test404NotFound(IOScheduler* scheduler)
 Task<void> test_empty_response(IOScheduler* scheduler)
 {
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);

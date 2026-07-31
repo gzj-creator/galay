@@ -171,7 +171,7 @@ bool H2cUpgradeAwaitable<Strategy>::finalizeTransport(
         return false;
     }
 
-    client.m_conn = std::make_unique<Http2ConnImpl<TcpSocket, Strategy>>(
+    client.m_conn = std::make_unique<Http2ConnImpl<AsyncTcpSocket, Strategy>>(
         std::move(*client.m_socket), std::move(*client.m_ring_buffer));
     auto local_settings = Http2Conn::makeSettingsFrameFromConfig(client.m_config, 0);
     if (client.m_conn->applyLocalSettings(local_settings) != Http2ErrorCode::NoError) {

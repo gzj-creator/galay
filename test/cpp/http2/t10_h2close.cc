@@ -34,7 +34,7 @@ int main() {
     {
         std::cout << "[T41] Scenario 1: initiateClose() only marks closing and keeps protocol flags\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         if (!check(!conn.isClosing(), "new conn should not be closing")) return 1;
@@ -57,7 +57,7 @@ int main() {
     {
         std::cout << "[T41] Scenario 2: initiateClose() is idempotent on invalid fd\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         errno = 0;

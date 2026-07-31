@@ -30,7 +30,7 @@
 - 若 `concurrentqueue` 头文件不在标准系统前缀，consumer 需要额外传入 `GALAY_KERNEL_CONCURRENTQUEUE_INCLUDE_DIR`
 - 稳定 direct-include 入口以本页“稳定公开头快速索引”和实际安装树中的公开头为准
 - 当前源码尚未额外导出 `GALAY_KERNEL_SUPPORTED_HEADERS` / `GALAY_KERNEL_INTERNAL_HEADERS` 这类头文件边界变量
-- `awaitable.h`、`io_controller.hpp`、`timeout.hpp`、`scheduler.hpp`、`io_scheduler.hpp` 默认仍属于低层扩展 / 排障入口；日常业务优先使用 `Runtime`、`TcpSocket`、`UdpSocket` 等高层接口
+- `awaitable.h`、`io_controller.hpp`、`timeout.hpp`、`scheduler.hpp`、`io_scheduler.hpp` 默认仍属于低层扩展 / 排障入口；日常业务优先使用 `Runtime`、`AsyncTcpSocket`、`AsyncUdpSocket` 等高层接口
 - 其中 `awaitable.h` 在 `v3.2.0` 起承载正式的组合式扩展面：`SequenceAwaitable`、`SequenceStep`、`AwaitableBuilder`、`ParseStatus`
 - `v3.3.0` 进一步补充 `AwaitContext`、`SequenceOwnerDomain` 与共享 state-machine `.timeout(...)` 收口，便于 builder / direct awaitable 统一扩展
 - 当前工作树未包含受版本控制的 package consumer fixture；如需验证安装消费，请单独准备最小 consumer 工程
@@ -51,11 +51,11 @@
   - `galay-kernel/core/timer_scheduler.h`
   - `galay-kernel/core/awaitable.h`（仅当你要做底层组合 Awaitable / 协议扩展）
 - 网络与文件：
-  - `galay-kernel/async/tcp_socket.h`
-  - `galay-kernel/async/udp_socket.h`
+  - `galay-kernel/async/async_tcp.h`
+  - `galay-kernel/async/async_udp.h`
   - `galay-kernel/async/async_file.h`
-  - `galay-kernel/async/aio_file.h`
-  - `galay-kernel/async/file_watcher.h`
+  - `galay-kernel/async/async_aio.h`
+  - `galay-kernel/async/async_file_watcher.h`
 - 通用辅助：
   - `galay-kernel/common/handle_option.h`
   - `galay-kernel/common/host.hpp`
@@ -65,8 +65,8 @@
   - `galay-utils/cache/byte_queue_view.hpp`
   - `galay-kernel/common/error.h`
 - 并发：
-  - `galay-kernel/concurrency/async_mutex.h`
-  - `galay-kernel/concurrency/async_waiter.h`
+  - `galay-kernel/async/async_mutex.h`
+  - `galay-kernel/async/async_waiter.h`
   - `galay-kernel/concurrency/mpsc_channel.h`
   - `galay-kernel/concurrency/unsafe_channel.h`
 - 模块：
@@ -85,11 +85,11 @@
   - `AsyncMutex` / `MpscChannel<T>` / `UnsafeChannel<T>` / `AsyncWaiter<T>`
   - `FileWatchEvent` / `FileWatchResult`
 - `galay::async`
-  - `TcpSocket`
-  - `UdpSocket`
+  - `AsyncTcpSocket`
+  - `AsyncUdpSocket`
   - `AsyncFile`
-  - `AioFile`
-  - `FileWatcher`
+  - `AsyncAio`
+  - `AsyncFileWatcher`
 
 ## 模块门面 `galay.kernel`
 
@@ -108,11 +108,11 @@
 
 - 通用类型：`defn.hpp`、`error.h`、`host.hpp`、`handle_option.h`、`buffer.h`、`sleep.hpp`
 - Runtime：`task.h`、`scheduler.hpp`、`io_scheduler.hpp`、`compute_scheduler.h`、`runtime.h`、`timer_scheduler.h`
-- 并发：`mpsc_channel.h`、`unsafe_channel.h`、`async_mutex.h`、`async_waiter.h`
-- IO：`tcp_socket.h`、`udp_socket.h`、`file_watcher.h`
+- 并发：`mpsc_channel.h`、`unsafe_channel.h`
+- Async：`async_mutex.h`、`async_waiter.h`、`async_tcp.h`、`async_udp.h`、`async_file_watcher.h`
 - 平台裁剪：
   - `async_file.h` 仅在 `USE_KQUEUE` 或 `USE_IOURING`
-  - `aio_file.h` 仅在 `USE_EPOLL`
+  - `async_aio.h` 仅在 `USE_EPOLL`
 
 注意：
 
@@ -569,8 +569,8 @@ builder iovec 公开面：
 头文件：
 
 - `galay-kernel/common/handle_option.h`
-- `galay-kernel/async/tcp_socket.h`
-- `galay-kernel/async/udp_socket.h`
+- `galay-kernel/async/async_tcp.h`
+- `galay-kernel/async/async_udp.h`
 
 `HandleOption` 公开方法：
 
@@ -582,10 +582,10 @@ builder iovec 公开面：
 
 当前没有 `handleTcpNoDelay()`。
 
-`TcpSocket` 关键接口：
+`AsyncTcpSocket` 关键接口：
 
-- `explicit TcpSocket(IPType type = IPType::IPV4)`
-- `explicit TcpSocket(GHandle handle)`
+- `explicit AsyncTcpSocket(IPType type = IPType::IPV4)`
+- `explicit AsyncTcpSocket(GHandle handle)`
 - `GHandle handle() const`
 - `IOController* controller()`
 - `HandleOption option()`
@@ -602,10 +602,10 @@ builder iovec 公开面：
 - `SendFileAwaitable sendfile(int file_fd, off_t offset, size_t count)`
 - `CloseAwaitable close()`
 
-`UdpSocket` 关键接口：
+`AsyncUdpSocket` 关键接口：
 
-- `explicit UdpSocket(IPType type = IPType::IPV4)`
-- `explicit UdpSocket(GHandle handle)`
+- `explicit AsyncUdpSocket(IPType type = IPType::IPV4)`
+- `explicit AsyncUdpSocket(GHandle handle)`
 - `GHandle handle() const`
 - `IOController* controller()`
 - `HandleOption option()`
@@ -619,8 +619,8 @@ builder iovec 公开面：
 头文件：
 
 - `galay-kernel/async/async_file.h`
-- `galay-kernel/async/aio_file.h`
-- `galay-kernel/async/file_watcher.h`
+- `galay-kernel/async/async_aio.h`
+- `galay-kernel/async/async_file_watcher.h`
 - `galay-kernel/core/watch_defs.hpp`
 
 `AsyncFile`：
@@ -635,10 +635,10 @@ builder iovec 公开面：
 - `std::expected<size_t, IOError> size() const`
 - `std::expected<void, IOError> sync()`
 
-`AioFile`：
+`AsyncAio`：
 
 - 仅在 `USE_EPOLL` 下公开
-- `AioFile(int max_events = 64)`
+- `AsyncAio(int max_events = 64)`
 - `std::expected<void, IOError> open(const std::string& path, AioOpenMode mode, int permissions = 0644)`
 - `void preRead(char* buffer, size_t length, off_t offset)`
 - `void preWrite(const char* buffer, size_t length, off_t offset)`
@@ -654,9 +654,9 @@ builder iovec 公开面：
 - `static char* allocAlignedBuffer(size_t size, size_t alignment = 512)`
 - `static void freeAlignedBuffer(char* buffer)`
 
-`FileWatcher`：
+`AsyncFileWatcher`：
 
-- `FileWatcher()`
+- `AsyncFileWatcher()`
 - `std::expected<int, IOError> addWatch(const std::string& path, FileWatchEvent events = FileWatchEvent::All)`
 - `std::expected<void, IOError> removeWatch(int wd)`
 - `FileWatchAwaitable watch()`
@@ -675,10 +675,10 @@ builder iovec 公开面：
 
 头文件：
 
-- `galay-kernel/concurrency/async_mutex.h`
+- `galay-kernel/async/async_mutex.h`
 - `galay-kernel/concurrency/mpsc_channel.h`
 - `galay-kernel/concurrency/unsafe_channel.h`
-- `galay-kernel/concurrency/async_waiter.h`
+- `galay-kernel/async/async_waiter.h`
 
 `AsyncMutex`：
 
@@ -748,7 +748,7 @@ builder iovec 公开面：
 - `bind/open/listen/sync` 这类立即执行接口通常直接返回 `std::expected<..., IOError>`
 - `connect/accept/recv/send/read/write/sleep/lock/wait` 这类异步入口统一返回 awaitable，业务代码应直接 `co_await`
 - 失败原因统一通过 `IOError` 或对应 awaitable 的 `await_resume()` 结果暴露，不应依赖日志文本推断
-- 平台相关能力按头文件和编译宏裁剪：`AsyncFile` 只在 `USE_KQUEUE` / `USE_IOURING` 下可用，`AioFile` 只在 `USE_EPOLL` 下可用
+- 平台相关能力按头文件和编译宏裁剪：`AsyncFile` 只在 `USE_KQUEUE` / `USE_IOURING` 下可用，`AsyncAio` 只在 `USE_EPOLL` 下可用
 
 所有权与生命周期：
 
@@ -756,7 +756,7 @@ builder iovec 公开面：
 - `Bytes` 的构造函数族是 owning 深拷贝；`Bytes::fromString(...)` / `fromCString(...)` 是 non-owning 视图，底层存储必须由调用方保活
 - `Buffer` 持有自己的动态缓冲；`RingBuffer` 也是 owning 固定容量缓冲，但不会自动扩容
 - `sleep(...)` 依赖全局 `TimerScheduler`；如果运行时还没启动计时器，`sleep` 对应的底层定时器注册不会成功
-- `TcpSocket` / `UdpSocket` / `AsyncFile` / `AioFile` / `FileWatcher` 都围绕底层句柄工作，关闭后不应继续复用旧句柄语义
+- `AsyncTcpSocket` / `AsyncUdpSocket` / `AsyncFile` / `AsyncAio` / `AsyncFileWatcher` 都围绕底层句柄工作，关闭后不应继续复用旧句柄语义
 
 并发边界：
 
@@ -783,10 +783,10 @@ builder iovec 公开面：
 - `Bytes` / `ByteMetaData` / `Buffer` / `RingBuffer` / `IOError` / `Host` / `IPType`：
   - 先看本页 `地址、错误与字节缓冲工具`
   - 再看 `docs/03-使用指南.md`、`docs/07-常见问题.md`
-- `TcpSocket` / `UdpSocket` / `HandleOption`：
+- `AsyncTcpSocket` / `AsyncUdpSocket` / `HandleOption`：
   - 先看本页 `HandleOption / 网络 IO`
   - 再看 `docs/03-使用指南.md` 与 `docs/06-高级主题.md`
-- `AsyncFile` / `AioFile` / `FileWatcher`：
+- `AsyncFile` / `AsyncAio` / `AsyncFileWatcher`：
   - 先看本页 `文件 IO 与文件监控`
   - 再看 `docs/03-使用指南.md`、`docs/06-高级主题.md`
 - `AsyncMutex` / `MpscChannel<T>` / `UnsafeChannel<T>` / `AsyncWaiter<T>`：

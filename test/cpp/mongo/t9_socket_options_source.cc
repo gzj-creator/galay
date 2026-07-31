@@ -81,7 +81,7 @@ int main()
     }
 
     if (!contains(async_client, "client.m_socket.option().handleTcpNoDelay()")) {
-        std::cerr << "async TCP_NODELAY must use TcpSocket HandleOption directly\n";
+        std::cerr << "async TCP_NODELAY must use AsyncTcpSocket HandleOption directly\n";
         return 1;
     }
 

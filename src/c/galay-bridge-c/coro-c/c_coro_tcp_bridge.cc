@@ -1,6 +1,6 @@
 #include "c_coro_tcp_bridge.h"
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 #include <galay/cpp/galay-kernel/core/timer_scheduler.h>
@@ -22,7 +22,7 @@
 namespace
 {
 
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using galay::kernel::AcceptAwaitable;
 using galay::kernel::ConnectAwaitable;
 using galay::kernel::IOController;
@@ -147,9 +147,9 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-TcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
+AsyncTcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
 {
-    return reinterpret_cast<TcpSocket*>(socket);
+    return reinterpret_cast<AsyncTcpSocket*>(socket);
 }
 
 Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)
@@ -558,13 +558,13 @@ private:
             return make_result(C_IOResultInvalid);
         }
 
-        TcpSocket accepted_socket(*m_result);
+        AsyncTcpSocket accepted_socket(*m_result);
         auto non_block = accepted_socket.option().handleNonBlock();
         if (!non_block) {
             return from_io_error(non_block.error());
         }
 
-        m_pending_socket.reset(new (std::nothrow) TcpSocket(std::move(accepted_socket)));
+        m_pending_socket.reset(new (std::nothrow) AsyncTcpSocket(std::move(accepted_socket)));
         if (!m_pending_socket) {
             return make_result(C_IOResultError, ENOMEM);
         }
@@ -589,7 +589,7 @@ private:
     galay::kernel::Host m_peer;
     GalayCoreTcpSocket** m_out_socket = nullptr;
     C_Host* m_out_peer = nullptr;
-    std::unique_ptr<TcpSocket> m_pending_socket;
+    std::unique_ptr<AsyncTcpSocket> m_pending_socket;
 };
 
 struct CoroConnectOperation final: public ConnectAwaitable, public CoroTcpOperationBase {

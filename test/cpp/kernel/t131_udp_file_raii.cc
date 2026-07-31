@@ -1,9 +1,9 @@
 /**
  * @file t131_udp_file_raii.cc
- * @brief 验证 UdpSocket/AsyncFile 对已拥有 fd 的 RAII 关闭语义。
+ * @brief 验证 AsyncUdpSocket/AsyncFile 对已拥有 fd 的 RAII 关闭语义。
  */
 
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 #include <galay/cpp/galay-kernel/async/async_file.h>
@@ -46,10 +46,10 @@ bool udpDestructorClosesOwnedSocket()
     }
 
     {
-        galay::async::UdpSocket socket(GHandle{.fd = fd});
+        galay::async::AsyncUdpSocket socket(GHandle{.fd = fd});
     }
 
-    return check(isClosed(fd), "UdpSocket destructor should close the owned fd");
+    return check(isClosed(fd), "AsyncUdpSocket destructor should close the owned fd");
 }
 
 bool udpMoveAssignmentClosesPreviousSocketAndTransfersNewOne()
@@ -67,11 +67,11 @@ bool udpMoveAssignmentClosesPreviousSocketAndTransfersNewOne()
     }
 
     {
-        galay::async::UdpSocket target(GHandle{.fd = oldFd});
-        galay::async::UdpSocket source(GHandle{.fd = newFd});
+        galay::async::AsyncUdpSocket target(GHandle{.fd = oldFd});
+        galay::async::AsyncUdpSocket source(GHandle{.fd = newFd});
         target = std::move(source);
 
-        if (!check(isClosed(oldFd), "UdpSocket move assignment should close the replaced fd")) {
+        if (!check(isClosed(oldFd), "AsyncUdpSocket move assignment should close the replaced fd")) {
             return false;
         }
         if (!check(!isClosed(newFd), "moved UDP fd should stay owned by destination")) {
@@ -79,7 +79,7 @@ bool udpMoveAssignmentClosesPreviousSocketAndTransfersNewOne()
         }
     }
 
-    return check(isClosed(newFd), "UdpSocket destination destructor should close the moved fd");
+    return check(isClosed(newFd), "AsyncUdpSocket destination destructor should close the moved fd");
 }
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)

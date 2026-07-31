@@ -70,8 +70,8 @@
 - `Task` / `TaskRef` / `then` / `co_await` / `sleep`：`docs/02-API参考.md`、`docs/11-协程.md`
 - `Bytes` / `ByteMetaData` / `Buffer` / `RingBuffer`：`docs/02-API参考.md`、`docs/16-环形缓冲区.md`
 - `Host` / `IPType` / `IOError`：`docs/02-API参考.md`
-- `TcpSocket` / `UdpSocket`：`docs/02-API参考.md`、`docs/12-网络IO.md`
-- `AsyncFile` / `AioFile` / `sendfile`：`docs/02-API参考.md`、`docs/13-文件IO.md`、`docs/17-零拷贝发送文件.md`
-- `FileWatcher`：`docs/02-API参考.md`、`docs/19-文件监控.md`
+- `AsyncTcpSocket` / `AsyncUdpSocket`：`docs/02-API参考.md`、`docs/12-网络IO.md`
+- `AsyncFile` / `AsyncAio` / `sendfile`：`docs/02-API参考.md`、`docs/13-文件IO.md`、`docs/17-零拷贝发送文件.md`
+- `AsyncFileWatcher`：`docs/02-API参考.md`、`docs/19-文件监控.md`
 - `AsyncMutex` / `MpscChannel` / `UnsafeChannel` / `UnsafeChannelWakeMode` / `AsyncWaiter`：`docs/02-API参考.md`、`docs/14-并发.md`、`docs/20-异步同步原语.md`
 - `TimerScheduler` / `CBTimer`：`docs/02-API参考.md`、`docs/15-定时器调度器.md`

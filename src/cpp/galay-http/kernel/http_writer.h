@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 提供 HttpWriterImpl 模板类，支持将 HTTP 响应、请求和 chunked 数据
- * 写入 TcpSocket 或 SslSocket。内部使用 iovec 零拷贝技术，
+ * 写入 AsyncTcpSocket 或 SslSocket。内部使用 iovec 零拷贝技术，
  * 结合异步状态机实现高效的非阻塞写入。
  */
 
@@ -20,7 +20,7 @@
 #include "../protoc/http_error.h"
 #include "../protoc/http_chunk.h"
 #include "../../galay-kernel/core/awaitable.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include <array>
 #include <chrono>
 #include <expected>
@@ -56,7 +56,7 @@ template<typename T>
 struct is_tcp_socket : std::false_type {};
 
 template<>
-struct is_tcp_socket<TcpSocket> : std::true_type {};
+struct is_tcp_socket<AsyncTcpSocket> : std::true_type {};
 
 /**
  * @brief 判断 T 是否为 TCP Socket 的内联常量
@@ -260,7 +260,7 @@ auto buildSendAwaitable(SocketType& socket, HttpWriterImpl<SocketType>& writer) 
 
 /**
  * @brief HTTP 写入器模板类
- * @tparam SocketType Socket 类型（TcpSocket 或 SslSocket）
+ * @tparam SocketType Socket 类型（AsyncTcpSocket 或 SslSocket）
  * @details 将 HTTP 响应、请求和 chunked 数据异步写入 Socket。
  *          TCP 模式使用 writev 零拷贝，SSL 模式使用 send。
  */
@@ -603,7 +603,7 @@ private:
     FastPathCounters m_fast_path_counters;
 };
 
-using HttpWriter = HttpWriterImpl<TcpSocket>;
+using HttpWriter = HttpWriterImpl<AsyncTcpSocket>;
 
 } // namespace galay::http
 

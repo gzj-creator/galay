@@ -11,7 +11,7 @@
 #include <cstring>
 #include <string_view>
 #include <thread>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/port_cfg.h"
 #include "test/cpp/common/stdout_log.h"
@@ -72,7 +72,7 @@ std::atomic<bool> g_test_done{false};
 Task<void> udpEchoServer() {
     g_total++;
     LogInfo("UDP Server starting...");
-    UdpSocket socket;
+    AsyncUdpSocket socket;
     LogDebug("Socket created, fd={}", socket.handle().fd);
 
     // 设置选项
@@ -148,7 +148,7 @@ Task<void> udpEchoServer() {
 }
 
 Task<void> peerUdpClient() {
-    UdpSocket socket;
+    AsyncUdpSocket socket;
     socket.option().handleNonBlock();
 
     Host serverHost(IPType::IPV4, "127.0.0.1", udpTestPort());

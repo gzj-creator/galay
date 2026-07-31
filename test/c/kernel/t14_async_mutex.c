@@ -1,4 +1,4 @@
-#include <galay/c/galay-kernel-c/concurrency-c/async_mutex_c.h>
+#include <galay/c/galay-kernel-c/async-c/async_mutex_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 

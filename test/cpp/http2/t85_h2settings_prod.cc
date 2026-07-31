@@ -70,7 +70,7 @@ bool assertSettingsValueValidation() {
 
 bool assertSettingsFrameValidation() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
     Http2StreamManager manager(conn);
 
@@ -120,7 +120,7 @@ bool assertSettingsFrameValidation() {
 
 bool assertHpackLimitsFollowSettings() {
     bool ok = true;
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     Http2SettingsFrame local_limits;

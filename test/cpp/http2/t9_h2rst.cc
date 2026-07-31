@@ -63,7 +63,7 @@ int main() {
     {
         std::cout << "[T38] Scenario 1: forEachStream iteration contract\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // 创建几个流
@@ -88,7 +88,7 @@ int main() {
     {
         std::cout << "[T38] Scenario 2: Stream state filtering contract\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // 创建流并设置不同状态
@@ -145,7 +145,7 @@ int main() {
     {
         std::cout << "[T38] Scenario 4: Batch RST_STREAM construction\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         // 创建多个活跃流
@@ -173,7 +173,7 @@ int main() {
     {
         std::cout << "[T38] Scenario 5: onRstStreamSent state transition\n";
 
-        TcpSocket socket(GHandle{-1});
+        AsyncTcpSocket socket(GHandle{-1});
         Http2Conn conn(std::move(socket));
 
         auto stream = conn.createStream(1);

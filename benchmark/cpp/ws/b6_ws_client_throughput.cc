@@ -13,7 +13,7 @@
 #include <thread>
 #include <cstdlib>
 #include <string_view>
-#include <galay/cpp/galay-kernel/concurrency/async_mutex.h>
+#include <galay/cpp/galay-kernel/async/async_mutex.h>
 #include <galay/cpp/galay-http/client/http_client.h>
 #include <galay/cpp/galay-ws/kernel/ws_conn.h>
 #include <galay/cpp/galay-http/builder/http_builder.h>

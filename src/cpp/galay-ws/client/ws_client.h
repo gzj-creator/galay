@@ -20,7 +20,7 @@
 #include "../../galay-http/protoc/http_request.h"
 #include "../../galay-http/protoc/http_response.h"
 #include "../../galay-http/builder/http_builder.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
 #include "../../galay-kernel/core/awaitable.h"
@@ -75,7 +75,7 @@ class WsClientBuilder {
 public:
     WsClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
     WsClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
-    WsClientImpl<TcpSocket> build() const;
+    WsClientImpl<AsyncTcpSocket> build() const;
     WsClientConfig buildConfig() const { return m_config; }
 
 private:
@@ -330,7 +330,7 @@ private:
     }
 
     const char* logScheme() const {
-        if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+        if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
             return "ws";
         } else {
             return "wss";
@@ -503,7 +503,7 @@ auto buildWsClientUpgradeOperation(SocketType* socket,
 
     auto state = std::make_shared<StateT>(socket, ring_buffer, url, ws_conn_ptr);
 
-    if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+    if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
         IOController* controller = socket != nullptr ? socket->controller() : nullptr;
         if (ws_conn_ptr != nullptr && *ws_conn_ptr != nullptr) {
             controller = (*ws_conn_ptr)->socket().controller();
@@ -620,7 +620,7 @@ public:
 
         m_url = parsed_url.value();
 
-        if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+        if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
             if (m_url.is_secure) {
                 co_return std::unexpected(IOError(kParamInvalid, 0));
             }
@@ -695,7 +695,7 @@ public:
      * @note 明文 `WsClient` 一般不需要显式调用；`WssClient` 则应在升级前先完成 TLS 握手
      */
     Task<std::expected<void, IOError>> handshake()
-    requires std::is_same_v<SocketType, TcpSocket>
+    requires std::is_same_v<SocketType, AsyncTcpSocket>
     {
         if (!m_socket) {
             co_return std::unexpected(IOError(kNotReady, 0));
@@ -725,8 +725,8 @@ protected:
     WsUrl m_url;
 };
 
-using WsUpgrader = WsUpgraderImpl<TcpSocket>;
-using WsClient = WsClientImpl<TcpSocket>;
+using WsUpgrader = WsUpgraderImpl<AsyncTcpSocket>;
+using WsClient = WsClientImpl<AsyncTcpSocket>;
 inline WsClient WsClientBuilder::build() const { return WsClient(m_config); }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED

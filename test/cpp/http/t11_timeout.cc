@@ -23,7 +23,7 @@ Task<void> test_http_client_awaitable_timeout(IOScheduler* scheduler)
 {
     std::cout << "=== Test 1: HttpClientAwaitable Timeout ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
@@ -81,7 +81,7 @@ Task<void> test_reader_writer_awaitable_timeout(IOScheduler* scheduler)
 {
     std::cout << "=== Test 2: SendResponseAwaitable & GetResponseAwaitable Timeout ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, "127.0.0.1", 8080);
@@ -184,15 +184,15 @@ Task<void> test_get_chunk_awaitable_timeout(IOScheduler* scheduler)
 }
 
 /**
- * @brief 测试底层 TcpSocket Awaitable 超时
+ * @brief 测试底层 AsyncTcpSocket Awaitable 超时
  */
 Task<void> test_tcp_socket_awaitable_timeout(IOScheduler* scheduler)
 {
-    std::cout << "=== Test 5: TcpSocket Awaitable Timeout ===" << std::endl;
+    std::cout << "=== Test 5: AsyncTcpSocket Awaitable Timeout ===" << std::endl;
 
     // 测试 ConnectAwaitable.timeout()
     std::cout << "Testing ConnectAwaitable.timeout()..." << std::endl;
-    TcpSocket socket1(IPType::IPV4);
+    AsyncTcpSocket socket1(IPType::IPV4);
     socket1.option().handleNonBlock();
 
     auto start = std::chrono::steady_clock::now();
@@ -210,7 +210,7 @@ Task<void> test_tcp_socket_awaitable_timeout(IOScheduler* scheduler)
 
     // 测试 RecvAwaitable.timeout()
     std::cout << "Testing RecvAwaitable.timeout()..." << std::endl;
-    TcpSocket socket2(IPType::IPV4);
+    AsyncTcpSocket socket2(IPType::IPV4);
     socket2.option().handleNonBlock();
 
     Host host2(IPType::IPV4, "127.0.0.1", 8080);
@@ -278,7 +278,7 @@ int main()
         std::cout << "Summary: All Awaitable Types Support Timeout" << std::endl;
         std::cout << "========================================" << std::endl;
         std::cout << std::endl;
-        std::cout << "✓ TcpSocket Awaitables (ConnectAwaitable, RecvAwaitable, SendAwaitable, etc.)" << std::endl;
+        std::cout << "✓ AsyncTcpSocket Awaitables (ConnectAwaitable, RecvAwaitable, SendAwaitable, etc.)" << std::endl;
         std::cout << "✓ HttpClientAwaitable" << std::endl;
         std::cout << "✓ GetRequestAwaitable" << std::endl;
         std::cout << "✓ GetResponseAwaitable" << std::endl;

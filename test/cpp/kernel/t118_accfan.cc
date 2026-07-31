@@ -7,7 +7,7 @@
 
 #include <galay/cpp/galay-kernel/common/host.hpp>
 #include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 #include <atomic>
 #include <chrono>
@@ -28,7 +28,7 @@ using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 
 using namespace galay::kernel;
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 
 namespace {
 
@@ -63,7 +63,7 @@ void expect(bool condition, const char* message)
 
 Task<void> runServer(TestState* state)
 {
-    TcpSocket listener(IPType::IPV4);
+    AsyncTcpSocket listener(IPType::IPV4);
     listener.option().handleReuseAddr();
     listener.option().handleNonBlock();
 
@@ -87,7 +87,7 @@ Task<void> runServer(TestState* state)
         }
         state->accepted.fetch_add(1, std::memory_order_relaxed);
 
-        TcpSocket peer(std::move(accepted.value()));
+        AsyncTcpSocket peer(std::move(accepted.value()));
         (void)co_await peer.close();
     }
 
@@ -96,7 +96,7 @@ Task<void> runServer(TestState* state)
 
 Task<void> runClient(TestState* state)
 {
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     auto connected = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", kPort));

@@ -1,15 +1,15 @@
 /**
- * @file aio_file.cc
+ * @file async_aio.cc
  * @brief 基于 Linux AIO (libaio) 的异步文件操作实现
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 包含 AioFile 和 AioCommitAwaitable 的具体实现。
+ * @details 包含 AsyncAio 和 AioCommitAwaitable 的具体实现。
  * 管理 libaio 上下文生命周期、基于 eventfd 的完成通知，
  * 以及通过 posix_memalign 进行对齐缓冲区分配。
  */
 
-#include "aio_file.h"
+#include "async_aio.h"
 
 #ifdef USE_EPOLL
 
@@ -60,14 +60,14 @@ std::expected<std::vector<ssize_t>, IOError> AioCommitAwaitable::await_resume()
 }
 
 // ============================================================================
-// AioFile 实现
+// AsyncAio 实现
 // ============================================================================
 
 /**
- * @brief 构造 AioFile 并初始化 libaio 上下文和 eventfd
+ * @brief 构造 AsyncAio 并初始化 libaio 上下文和 eventfd
  * @param max_events 最大并发 AIO 事件数
  */
-AioFile::AioFile(int max_events)
+AsyncAio::AsyncAio(int max_events)
     : m_handle(GHandle::invalid())
     , m_controller(GHandle::invalid())
     , m_aio_ctx(0)
@@ -86,7 +86,7 @@ AioFile::AioFile(int max_events)
 /**
  * @brief 析构函数；关闭文件、销毁 AIO 上下文并关闭 eventfd
  */
-AioFile::~AioFile()
+AsyncAio::~AsyncAio()
 {
     close();
     if (m_aio_ctx) {
@@ -101,7 +101,7 @@ AioFile::~AioFile()
  * @brief 移动构造函数；转移所有资源，使源对象无效
  * @param other 被移动的对象
  */
-AioFile::AioFile(AioFile&& other) noexcept
+AsyncAio::AsyncAio(AsyncAio&& other) noexcept
     : m_handle(other.m_handle)
     , m_controller(std::move(other.m_controller))
     , m_aio_ctx(other.m_aio_ctx)
@@ -120,7 +120,7 @@ AioFile::AioFile(AioFile&& other) noexcept
  * @param other 被移动的对象
  * @return 当前对象的引用
  */
-AioFile& AioFile::operator=(AioFile&& other) noexcept
+AsyncAio& AsyncAio::operator=(AsyncAio&& other) noexcept
 {
     if (this != &other) {
         close();
@@ -154,7 +154,7 @@ AioFile& AioFile::operator=(AioFile&& other) noexcept
  * @param permissions 文件创建权限（默认 0644）
  * @return 成功返回 void，失败返回带 kOpenFailed 的 IOError
  */
-std::expected<void, IOError> AioFile::open(const std::string& path, AioOpenMode mode, int permissions)
+std::expected<void, IOError> AsyncAio::open(const std::string& path, AioOpenMode mode, int permissions)
 {
     int flags = static_cast<int>(mode);
     int fd = ::open(path.c_str(), flags, permissions);
@@ -171,7 +171,7 @@ std::expected<void, IOError> AioFile::open(const std::string& path, AioOpenMode 
  * @param length 要读取的字节数
  * @param offset 起始文件偏移量
  */
-void AioFile::preRead(char* buffer, size_t length, off_t offset)
+void AsyncAio::preRead(char* buffer, size_t length, off_t offset)
 {
     struct iocb cb;
     std::memset(&cb, 0, sizeof(cb));
@@ -187,7 +187,7 @@ void AioFile::preRead(char* buffer, size_t length, off_t offset)
  * @param length 要写入的字节数
  * @param offset 起始文件偏移量
  */
-void AioFile::preWrite(const char* buffer, size_t length, off_t offset)
+void AsyncAio::preWrite(const char* buffer, size_t length, off_t offset)
 {
     struct iocb cb;
     std::memset(&cb, 0, sizeof(cb));
@@ -201,7 +201,7 @@ void AioFile::preWrite(const char* buffer, size_t length, off_t offset)
  * @brief 将多个读操作批量入队，每个转发到 preRead
  * @param reads (buffer, length, offset) 元组向量
  */
-void AioFile::preReadBatch(const std::vector<std::tuple<char*, size_t, off_t>>& reads)
+void AsyncAio::preReadBatch(const std::vector<std::tuple<char*, size_t, off_t>>& reads)
 {
     for (const auto& [buffer, length, offset] : reads) {
         preRead(buffer, length, offset);
@@ -212,7 +212,7 @@ void AioFile::preReadBatch(const std::vector<std::tuple<char*, size_t, off_t>>& 
  * @brief 将多个写操作批量入队，每个转发到 preWrite
  * @param writes (buffer, length, offset) 元组向量
  */
-void AioFile::preWriteBatch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes)
+void AsyncAio::preWriteBatch(const std::vector<std::tuple<const char*, size_t, off_t>>& writes)
 {
     for (const auto& [buffer, length, offset] : writes) {
         preWrite(buffer, length, offset);
@@ -227,7 +227,7 @@ void AioFile::preWriteBatch(const std::vector<std::tuple<const char*, size_t, of
  *
  * @return AioCommitAwaitable，将提交并等待所有待处理的操作
  */
-AioCommitAwaitable AioFile::commit()
+AioCommitAwaitable AsyncAio::commit()
 {
     // 更新指针数组
     m_pending_ptrs.clear();
@@ -246,7 +246,7 @@ AioCommitAwaitable AioFile::commit()
 /**
  * @brief 丢弃所有待处理但未提交的 iocb 和指针
  */
-void AioFile::clear()
+void AsyncAio::clear()
 {
     m_pending_cbs.clear();
     m_pending_ptrs.clear();
@@ -255,7 +255,7 @@ void AioFile::clear()
 /**
  * @brief 如果文件描述符当前处于打开状态则关闭它
  */
-void AioFile::close()
+void AsyncAio::close()
 {
     if (m_handle.fd >= 0) {
         ::close(m_handle.fd);
@@ -267,7 +267,7 @@ void AioFile::close()
  * @brief 通过 fstat 查询当前文件大小
  * @return 成功时返回文件大小（字节），失败时返回带 kStatFailed 的 IOError
  */
-std::expected<size_t, IOError> AioFile::size() const
+std::expected<size_t, IOError> AsyncAio::size() const
 {
     struct stat st;
     if (fstat(m_handle.fd, &st) < 0) {
@@ -280,7 +280,7 @@ std::expected<size_t, IOError> AioFile::size() const
  * @brief 通过 fsync 将文件数据刷入稳定存储
  * @return 成功返回 void，失败返回带 kSyncFailed 的 IOError
  */
-std::expected<void, IOError> AioFile::sync()
+std::expected<void, IOError> AsyncAio::sync()
 {
     if (fsync(m_handle.fd) < 0) {
         return std::unexpected(IOError(kSyncFailed, errno));
@@ -295,7 +295,7 @@ std::expected<void, IOError> AioFile::sync()
  * @param alignment 对齐边界（字节，默认 512）
  * @return 指向对齐缓冲区的指针，分配失败时返回 nullptr
  */
-char* AioFile::allocAlignedBuffer(size_t size, size_t alignment)
+char* AsyncAio::allocAlignedBuffer(size_t size, size_t alignment)
 {
     void* ptr = nullptr;
     if (posix_memalign(&ptr, alignment, size) != 0) {
@@ -308,7 +308,7 @@ char* AioFile::allocAlignedBuffer(size_t size, size_t alignment)
  * @brief 释放先前由 allocAlignedBuffer 分配的缓冲区
  * @param buffer 指向待释放缓冲区的指针
  */
-void AioFile::freeAlignedBuffer(char* buffer)
+void AsyncAio::freeAlignedBuffer(char* buffer)
 {
     free(buffer);
 }

@@ -21,7 +21,7 @@
 #include <sys/utsname.h>
 #include <unistd.h>
 
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -94,7 +94,7 @@ bool hostShouldSupportRecvmsgMultishot()
 #ifdef USE_IOURING
 Task<void> receiveBurst()
 {
-    UdpSocket socket;
+    AsyncUdpSocket socket;
     auto option = socket.option().handleReuseAddr();
     if (!option) {
         fail("reuse addr failed: " + option.error().message());

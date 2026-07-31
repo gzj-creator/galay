@@ -537,56 +537,56 @@ struct RpcWriterSetting {
 };
 ```
 
-#### RpcReader (RpcReaderImpl\<TcpSocket\>)
+#### RpcReader (RpcReaderImpl\<AsyncTcpSocket\>)
 
 ```cpp
 class RpcReader {
 public:
-    RpcReader(RingBuffer& ring_buffer, const RpcReaderSetting& setting, TcpSocket& socket);
+    RpcReader(RingBuffer& ring_buffer, const RpcReaderSetting& setting, AsyncTcpSocket& socket);
 
     // 获取 RPC 请求（服务端使用）
     // 返回 Awaitable: true=解析完成, false=需要继续读取
-    GetRpcRequestAwaitable<TcpSocket> getRequest(RpcRequest& request);
+    GetRpcRequestAwaitable<AsyncTcpSocket> getRequest(RpcRequest& request);
 
     // 获取 RPC 响应（客户端使用）
-    GetRpcResponseAwaitable<TcpSocket> getResponse(RpcResponse& response);
+    GetRpcResponseAwaitable<AsyncTcpSocket> getResponse(RpcResponse& response);
 
     // 获取消息头（流式传输使用）
-    GetRpcHeaderAwaitable<TcpSocket> getHeader(RpcHeader& header);
+    GetRpcHeaderAwaitable<AsyncTcpSocket> getHeader(RpcHeader& header);
 
     // 获取消息体（流式传输使用）
-    GetRpcBodyAwaitable<TcpSocket> getBody(char* body, size_t body_len);
+    GetRpcBodyAwaitable<AsyncTcpSocket> getBody(char* body, size_t body_len);
 };
 ```
 
 补充公开别名：
 
-- `GetHeaderAwaitable = GetRpcHeaderAwaitable<TcpSocket>`：要求 RingBuffer 至少已有 `RPC_HEADER_SIZE` 字节；头部反序列化失败时返回 `RpcError(INVALID_REQUEST, "Invalid header")`
-- `GetBodyAwaitable = GetRpcBodyAwaitable<TcpSocket>`：要求 RingBuffer 至少已有 `body_len` 字节；成功后会消费这段字节并把内容拷贝到调用方提供的缓冲区
+- `GetHeaderAwaitable = GetRpcHeaderAwaitable<AsyncTcpSocket>`：要求 RingBuffer 至少已有 `RPC_HEADER_SIZE` 字节；头部反序列化失败时返回 `RpcError(INVALID_REQUEST, "Invalid header")`
+- `GetBodyAwaitable = GetRpcBodyAwaitable<AsyncTcpSocket>`：要求 RingBuffer 至少已有 `body_len` 字节；成功后会消费这段字节并把内容拷贝到调用方提供的缓冲区
 
-#### RpcWriter (RpcWriterImpl\<TcpSocket\>)
+#### RpcWriter (RpcWriterImpl\<AsyncTcpSocket\>)
 
 ```cpp
 class RpcWriter {
 public:
-    RpcWriter(const RpcWriterSetting& setting, TcpSocket& socket);
+    RpcWriter(const RpcWriterSetting& setting, AsyncTcpSocket& socket);
 
     // 发送 RPC 请求
-    SendRpcRequestAwaitable<TcpSocket> sendRequest(const RpcRequest& request);
+    SendRpcRequestAwaitable<AsyncTcpSocket> sendRequest(const RpcRequest& request);
 
     // 发送 RPC 响应
-    SendRpcResponseAwaitable<TcpSocket> sendResponse(const RpcResponse& response);
+    SendRpcResponseAwaitable<AsyncTcpSocket> sendResponse(const RpcResponse& response);
 
     // 发送原始数据（流式传输使用）
-    SendRawDataAwaitable<TcpSocket> sendRaw(const char* data, size_t len);
+    SendRawDataAwaitable<AsyncTcpSocket> sendRaw(const char* data, size_t len);
 };
 ```
 
 补充公开别名：
 
-- `SendRawAwaitable = SendRawDataAwaitable<TcpSocket>`：`sendRaw(const char*, size_t)` 会先把数据复制进内部 `std::vector<char>`；`len == 0` 时 `await_ready()` 直接为 `true`
+- `SendRawAwaitable = SendRawDataAwaitable<AsyncTcpSocket>`：`sendRaw(const char*, size_t)` 会先把数据复制进内部 `std::vector<char>`；`len == 0` 时 `await_ready()` 直接为 `true`
 
-#### RpcConn (RpcConnImpl\<TcpSocket\>)
+#### RpcConn (RpcConnImpl\<AsyncTcpSocket\>)
 
 ```cpp
 class RpcConn {
@@ -609,7 +609,7 @@ public:
     RpcWriter getWriter();
 
     // 获取底层 socket
-    TcpSocket& socket();
+    AsyncTcpSocket& socket();
 
     // 关闭连接
     CloseAwaitable close();
@@ -773,7 +773,7 @@ public:
 };
 ```
 
-#### RpcClient (RpcClientImpl\<TcpSocket\>)
+#### RpcClient (RpcClientImpl\<AsyncTcpSocket\>)
 
 ```cpp
 class RpcClient {
@@ -828,7 +828,7 @@ public:
     RpcWriter getWriter();
 
     // 获取底层 socket 和 RingBuffer（高级扩展/自定义协议桥接）
-    TcpSocket& socket();
+    AsyncTcpSocket& socket();
     RingBuffer& ringBuffer();
 };
 ```
@@ -966,55 +966,55 @@ public:
 };
 ```
 
-#### StreamReader (StreamReaderImpl\<TcpSocket\>)
+#### StreamReader (StreamReaderImpl\<AsyncTcpSocket\>)
 
 ```cpp
 class StreamReader {
 public:
-    StreamReader(RingBuffer& ring_buffer, TcpSocket& socket);
+    StreamReader(RingBuffer& ring_buffer, AsyncTcpSocket& socket);
 
     // 获取流消息
     // 返回 Awaitable: true=接收完成, false=需要继续
-    GetStreamMessageAwaitable<TcpSocket> getMessage(StreamMessage& msg);
+    GetStreamMessageAwaitable<AsyncTcpSocket> getMessage(StreamMessage& msg);
 };
 ```
 
 补充公开名词：
 
-- `GetStreamMessageAwaitable<TcpSocket>` 是 `StreamReader::getMessage(...)` 的真实等待体类型
+- `GetStreamMessageAwaitable<AsyncTcpSocket>` 是 `StreamReader::getMessage(...)` 的真实等待体类型
 - 其内部私有状态机 `State { ReadHeader, ReadBody }` 只用于跨多次 `co_await` 保留解析进度，不是业务侧可以设置的流模式
 
-#### StreamWriter (StreamWriterImpl\<TcpSocket\>)
+#### StreamWriter (StreamWriterImpl\<AsyncTcpSocket\>)
 
 ```cpp
 class StreamWriter {
 public:
-    StreamWriter(TcpSocket& socket, uint32_t stream_id);
+    StreamWriter(AsyncTcpSocket& socket, uint32_t stream_id);
 
     // 发送流数据
-    SendStreamDataAwaitable<TcpSocket> sendData(const char* data, size_t len);
-    SendStreamDataAwaitable<TcpSocket> sendData(const std::string& data);
+    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const char* data, size_t len);
+    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const std::string& data);
 
     // 发送流初始化请求
-    SendStreamDataAwaitable<TcpSocket> sendInit(const std::string& service, const std::string& method);
+    SendStreamDataAwaitable<AsyncTcpSocket> sendInit(const std::string& service, const std::string& method);
 
     // 发送流初始化确认
-    SendStreamDataAwaitable<TcpSocket> sendInitAck();
+    SendStreamDataAwaitable<AsyncTcpSocket> sendInitAck();
 
     // 发送流结束
-    SendStreamDataAwaitable<TcpSocket> sendEnd();
+    SendStreamDataAwaitable<AsyncTcpSocket> sendEnd();
 
     // 发送流取消
-    SendStreamDataAwaitable<TcpSocket> sendCancel();
+    SendStreamDataAwaitable<AsyncTcpSocket> sendCancel();
 };
 ```
 
-#### RpcStream (RpcStreamImpl\<TcpSocket\>)
+#### RpcStream (RpcStreamImpl\<AsyncTcpSocket\>)
 
 ```cpp
 class RpcStream {
 public:
-    RpcStream(TcpSocket& socket, RingBuffer& ring_buffer, uint32_t stream_id,
+    RpcStream(AsyncTcpSocket& socket, RingBuffer& ring_buffer, uint32_t stream_id,
               std::string service_name = {}, std::string method_name = {});
 
     uint32_t streamId() const;
@@ -1025,16 +1025,16 @@ public:
     StreamReader& getReader();
     StreamWriter& getWriter();
 
-    GetStreamMessageAwaitable<TcpSocket> read(StreamMessage& msg);
-    SendStreamDataAwaitable<TcpSocket> sendInit();
-    SendStreamDataAwaitable<TcpSocket> sendInit(const std::string& service, const std::string& method);
-    SendStreamDataAwaitable<TcpSocket> sendInitAck();
-    SendStreamDataAwaitable<TcpSocket> sendData(const char* data, size_t len);
-    SendStreamDataAwaitable<TcpSocket> sendData(const std::string& data);
-    SendStreamDataAwaitable<TcpSocket> sendEnd();
-    SendStreamDataAwaitable<TcpSocket> sendCancel();
+    GetStreamMessageAwaitable<AsyncTcpSocket> read(StreamMessage& msg);
+    SendStreamDataAwaitable<AsyncTcpSocket> sendInit();
+    SendStreamDataAwaitable<AsyncTcpSocket> sendInit(const std::string& service, const std::string& method);
+    SendStreamDataAwaitable<AsyncTcpSocket> sendInitAck();
+    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const char* data, size_t len);
+    SendStreamDataAwaitable<AsyncTcpSocket> sendData(const std::string& data);
+    SendStreamDataAwaitable<AsyncTcpSocket> sendEnd();
+    SendStreamDataAwaitable<AsyncTcpSocket> sendCancel();
 
-    TcpSocket& socket();
+    AsyncTcpSocket& socket();
     RingBuffer& ringBuffer();
 };
 ```

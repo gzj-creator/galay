@@ -33,7 +33,7 @@
 #include "rpc_interceptor.h"
 #include "../utils/runtime_compat.h"
 #include "../../galay-kernel/core/runtime.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include <array>
 #include <cstdint>
 #include <expected>
@@ -211,7 +211,7 @@ public:
             return std::unexpected(std::move(error));
         }
 
-        auto listener_result = TcpSocket::create(IPType::IPV4);
+        auto listener_result = AsyncTcpSocket::create(IPType::IPV4);
         if (!listener_result.has_value()) {
             RpcError error = RpcError::from(listener_result.error());
             RPC_LOG_ERROR("[server] [socket] [create-fail]",
@@ -219,7 +219,7 @@ public:
             m_runtime.stop();
             return std::unexpected(std::move(error));
         }
-        TcpSocket listener = std::move(*listener_result);
+        AsyncTcpSocket listener = std::move(*listener_result);
 
         auto reuse_addr_result = listener.option().handleReuseAddr();
         if (!reuse_addr_result.has_value()) {
@@ -443,7 +443,7 @@ private:
     /**
      * @brief 接受连接循环
      */
-    Task<void> acceptLoop(TcpSocket listener) {
+    Task<void> acceptLoop(AsyncTcpSocket listener) {
         while (m_running.load(std::memory_order_acquire)) {
             Host client_host;
             auto accept_result = co_await listener.accept(&client_host);
@@ -509,7 +509,7 @@ private:
             // 读取请求（co_await直到完整消息）
             RpcRequest request;
             RpcHeader header;
-            auto result = co_await GetRpcHeaderAwaitable<TcpSocket>(conn.ringBuffer(), header, conn.socket());
+            auto result = co_await GetRpcHeaderAwaitable<AsyncTcpSocket>(conn.ringBuffer(), header, conn.socket());
             if (!result) {
                 // 错误，关闭连接
                 m_last_error = result.error();
@@ -528,7 +528,7 @@ private:
             }
 
             if (header.m_type == static_cast<uint8_t>(RpcMessageType::HEARTBEAT)) {
-                auto heartbeat_result = co_await SendRawDataAwaitable<TcpSocket>(
+                auto heartbeat_result = co_await SendRawDataAwaitable<AsyncTcpSocket>(
                     rpcBuildHeartbeatFrame(header.m_request_id),
                     conn.socket());
                 if (!heartbeat_result) {
@@ -575,7 +575,7 @@ private:
 
             std::vector<char> request_body(header.m_body_length);
             if (header.m_body_length > 0) {
-                result = co_await GetRpcBodyAwaitable<TcpSocket>(
+                result = co_await GetRpcBodyAwaitable<AsyncTcpSocket>(
                     conn.ringBuffer(),
                     request_body.data(),
                     request_body.size(),

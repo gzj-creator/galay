@@ -1,4 +1,4 @@
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
+#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 
 static int expect_runtime_status(C_RuntimeResultCode actual, C_RuntimeResultCode expected)

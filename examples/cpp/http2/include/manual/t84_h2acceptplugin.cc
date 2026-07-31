@@ -240,10 +240,10 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
         .build());
 
     bool registered_blacklist =
-        server.addAcceptPlugin(std::make_unique<OneAndBlockPlugin<TcpSocket>>(
+        server.addAcceptPlugin(std::make_unique<OneAndBlockPlugin<AsyncTcpSocket>>(
             &gate_count, &gate_start_count, &gate_stop_count));
     bool registered_downstream = server.addAcceptPlugin(
-        std::make_unique<CountingPlugin<TcpSocket>>(
+        std::make_unique<CountingPlugin<AsyncTcpSocket>>(
             &downstream_count, &downstream_start_count, &downstream_stop_count, true));
     if (!registered_blacklist || !registered_downstream) {
         fail("h2c accept plugins should register before start");
@@ -259,7 +259,7 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
                        "blacklisted h2c connection should stop downstream plugin");
 
     bool registered_after_start = server.addAcceptPlugin(
-        std::make_unique<CountingPlugin<TcpSocket>>(
+        std::make_unique<CountingPlugin<AsyncTcpSocket>>(
             &downstream_count, &downstream_start_count, &downstream_stop_count, true));
     if (registered_after_start) {
         fail("h2c accept plugin registration after start should be rejected");

@@ -3,7 +3,7 @@
  * @brief 验证 kernel 不修改全局 SIGPIPE，socket 写路径使用局部 SIGPIPE 抑制。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/io_handlers.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
@@ -225,7 +225,7 @@ bool linuxWritevDoesNotDeliverSigpipe()
 #if defined(SO_NOSIGPIPE)
 bool tcpCreateEnablesNoSigpipe()
 {
-    auto socket = galay::async::TcpSocket::create(galay::kernel::IPType::IPV4);
+    auto socket = galay::async::AsyncTcpSocket::create(galay::kernel::IPType::IPV4);
     if (!check(socket.has_value(), "failed to create TCP socket")) {
         return false;
     }

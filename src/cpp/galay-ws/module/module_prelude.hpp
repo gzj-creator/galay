@@ -272,8 +272,8 @@
 #if __has_include("../../galay-http/utils/http_helper.h")
 #include "../../galay-http/utils/http_helper.h"
 #endif
-#if __has_include("../../galay-kernel/async/tcp_socket.h")
-#include "../../galay-kernel/async/tcp_socket.h"
+#if __has_include("../../galay-kernel/async/async_tcp.h")
+#include "../../galay-kernel/async/async_tcp.h"
 #endif
 #if __has_include("../../galay-utils/cache/ring_buffer.hpp")
 #include "../../galay-utils/cache/ring_buffer.hpp"
@@ -284,8 +284,8 @@
 #if __has_include("../../galay-kernel/common/sleep.hpp")
 #include "../../galay-kernel/common/sleep.hpp"
 #endif
-#if __has_include("../../galay-kernel/concurrency/async_waiter.h")
-#include "../../galay-kernel/concurrency/async_waiter.h"
+#if __has_include("../../galay-kernel/async/async_waiter.h")
+#include "../../galay-kernel/async/async_waiter.h"
 #endif
 #if __has_include("../../galay-kernel/concurrency/unsafe_channel.h")
 #include "../../galay-kernel/concurrency/unsafe_channel.h"

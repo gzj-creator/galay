@@ -13,7 +13,7 @@
 
 #include "../kernel/http_session.h"
 #include "../common/http_log.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/task.h"
 #include "../protoc/http_header.h"
 #include <algorithm>
@@ -136,7 +136,7 @@ class HttpClientBuilder {
 public:
     HttpClientBuilder& tcpNoDelay(bool v) { m_config.tcp_no_delay = v; return *this; }
     HttpClientBuilder& headerMode(HeaderPair::Mode v) { m_config.header_mode = v; return *this; }
-    HttpClientImpl<TcpSocket> build() const;
+    HttpClientImpl<AsyncTcpSocket> build() const;
     HttpClientConfig buildConfig() const                       { return m_config; }
 private:
     HttpClientConfig m_config;
@@ -197,7 +197,7 @@ public:
 
         m_url = parsed_url.value();
 
-        if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+        if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
             if (m_url.is_secure) {
                 co_return std::unexpected(IOError(kParamInvalid, 0));
             }
@@ -284,8 +284,8 @@ protected:
     HttpUrl m_url;
 };
 
-// 类型别名 - HTTP (TcpSocket)
-using HttpClient = HttpClientImpl<TcpSocket>;
+// 类型别名 - HTTP (AsyncTcpSocket)
+using HttpClient = HttpClientImpl<AsyncTcpSocket>;
 inline HttpClient HttpClientBuilder::build() const { return HttpClient(m_config); }
 
 } // namespace galay::http

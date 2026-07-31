@@ -1,5 +1,5 @@
 /**
- * @file aio_file.h
+ * @file async_aio.h
  * @brief 基于 Linux AIO (libaio) 的异步文件操作
  * @author galay-kernel
  * @version 1.0.0
@@ -12,8 +12,8 @@
  * 仅在使用 USE_EPOLL 编译时可用。
  */
 
-#ifndef GALAY_AIO_FILE_H
-#define GALAY_AIO_FILE_H
+#ifndef GALAY_KERNEL_ASYNC_AIO_H
+#define GALAY_KERNEL_ASYNC_AIO_H
 
 #ifdef USE_EPOLL
 
@@ -49,9 +49,9 @@ enum class AioOpenMode : int {
 };
 
 /**
- * @brief AioFile 前向声明
+ * @brief AsyncAio 前向声明
  */
-class AioFile;
+class AsyncAio;
 
 /**
  * @brief AIO 提交结果的可等待对象
@@ -116,7 +116,7 @@ public:
  * @brief Linux AIO 风格的异步文件操作
  *
  * 使用方式:
- *   AioFile file(scheduler);
+ *   AsyncAio file(scheduler);
  *   file.open("test.txt", AioOpenMode::Read);
  *
  *   // 准备多个操作
@@ -135,35 +135,35 @@ public:
  * @note 所有 I/O 操作均需要 O_DIRECT 对齐的缓冲区。
  * @note 仅在使用 USE_EPOLL 编译时可用。
  */
-class AioFile
+class AsyncAio
 {
 public:
     /**
-     * @brief 构造 AioFile，指定 AIO 队列深度
+     * @brief 构造 AsyncAio，指定 AIO 队列深度
      * @param max_events 最大并发 AIO 事件数（默认 64）
      */
-    AioFile(int max_events = 64);
+    AsyncAio(int max_events = 64);
 
     /**
      * @brief 析构函数；关闭文件并销毁 AIO 上下文
      */
-    ~AioFile();
+    ~AsyncAio();
 
-    AioFile(const AioFile&) = delete;
-    AioFile& operator=(const AioFile&) = delete;
+    AsyncAio(const AsyncAio&) = delete;
+    AsyncAio& operator=(const AsyncAio&) = delete;
 
     /**
      * @brief 移动构造函数；转移所有资源的所有权
      * @param other 被移动的对象；移动后处于无效状态
      */
-    AioFile(AioFile&& other) noexcept;
+    AsyncAio(AsyncAio&& other) noexcept;
 
     /**
      * @brief 移动赋值运算符；先释放当前资源再转移
      * @param other 被移动的对象
      * @return 当前对象的引用
      */
-    AioFile& operator=(AioFile&& other) noexcept;
+    AsyncAio& operator=(AsyncAio&& other) noexcept;
 
     /**
      * @brief 以指定模式打开文件（强制使用 O_DIRECT）
@@ -321,4 +321,4 @@ inline bool galay::async::AioCommitAwaitable::await_suspend(std::coroutine_handl
 
 #endif // USE_EPOLL
 
-#endif // GALAY_AIO_FILE_H
+#endif // GALAY_KERNEL_ASYNC_AIO_H

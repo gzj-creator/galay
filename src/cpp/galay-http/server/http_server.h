@@ -20,7 +20,7 @@
 #include "../builder/http_builder.h"
 #include "../utils/http_helper.h"
 #include "../plugin/common/defn.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/runtime.h"
 #include <memory>
 #include <atomic>
@@ -117,7 +117,7 @@ public:
         m_config.affinity.custom_compute_cpus = std::move(compute_cpus);
         return true;
     }
-    HttpServerImpl<TcpSocket> build() const; ///< 构建 HTTP 服务器实例
+    HttpServerImpl<AsyncTcpSocket> build() const; ///< 构建 HTTP 服务器实例
     HttpServerConfig buildConfig() const                { return m_config; } ///< 导出配置
 private:
     HttpServerConfig m_config;
@@ -183,7 +183,7 @@ public:
      * - 进行路由匹配和缺省 404 响应
      * - 在循环结束后关闭连接
      *
-     * 该模式当前仅支持明文 `TcpSocket` 路由处理；HTTPS 仍应通过显式 handler 控制读写流程。
+     * 该模式当前仅支持明文 `AsyncTcpSocket` 路由处理；HTTPS 仍应通过显式 handler 控制读写流程。
      */
     void start(HttpRouter&& router) {
         m_router = std::move(router);
@@ -292,7 +292,7 @@ public:
                     continue;
                 }
 
-                if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+                if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
                     co_await (*handler)(conn, std::move(request));
                 } else {
                     break;
@@ -462,7 +462,7 @@ protected:
      * @details 每个 IO 调度器上运行一个独立的 serverLoop，
      *          创建独立的 listener socket，利用 SO_REUSEPORT 实现多线程 accept。
      */
-    virtual Task<void> serverLoop(IOScheduler* scheduler, TcpSocket* listener) {
+    virtual Task<void> serverLoop(IOScheduler* scheduler, AsyncTcpSocket* listener) {
         if (listener == nullptr) {
             co_return;
         }
@@ -527,7 +527,7 @@ protected:
      * @return 成功返回 Socket 对象，失败返回 std::nullopt
      */
     virtual std::optional<SocketType> createClientSocket(GHandle fd) {
-        if constexpr (std::is_same_v<SocketType, TcpSocket>) {
+        if constexpr (std::is_same_v<SocketType, AsyncTcpSocket>) {
             return SocketType(fd);
         } else {
             // SslSocket 需要在派生类中实现
@@ -571,8 +571,8 @@ protected:
         co_return true;
     }
 
-    std::expected<TcpSocket, IOError> createListenerSocket() {
-        auto listener = TcpSocket::create(IPType::IPV4);
+    std::expected<AsyncTcpSocket, IOError> createListenerSocket() {
+        auto listener = AsyncTcpSocket::create(IPType::IPV4);
         if (!listener) {
             return std::unexpected(listener.error());
         }
@@ -602,13 +602,13 @@ protected:
     std::vector<std::unique_ptr<plugin::AcceptPlugin<SocketType>>> m_accept_plugins; ///< accept 后顺序执行的插件列表
     std::size_t m_started_plugin_count = 0;  ///< 已成功启动且需要反序停止的插件数量
     std::optional<HttpRouter> m_router;     ///< 路由表（路由模式下使用）
-    std::vector<TcpSocket> m_listeners;     ///< 每个 IO 调度器独立 listener，stop() 同步关闭
+    std::vector<AsyncTcpSocket> m_listeners;     ///< 每个 IO 调度器独立 listener，stop() 同步关闭
     std::atomic<bool> m_running;            ///< 运行状态标志
 };
 
-// 类型别名 - HTTP (TcpSocket)
-using HttpConnHandler = HttpConnHandlerImpl<TcpSocket>;
-using HttpServer = HttpServerImpl<TcpSocket>;
+// 类型别名 - HTTP (AsyncTcpSocket)
+using HttpConnHandler = HttpConnHandlerImpl<AsyncTcpSocket>;
+using HttpServer = HttpServerImpl<AsyncTcpSocket>;
 inline HttpServer HttpServerBuilder::build() const { return HttpServer(m_config); }
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
@@ -717,7 +717,7 @@ protected:
         return galay::ssl::SslSocket(&m_ssl_ctx, fd);
     }
 
-    Task<void> serverLoop(IOScheduler* scheduler, TcpSocket* listener) override {
+    Task<void> serverLoop(IOScheduler* scheduler, AsyncTcpSocket* listener) override {
         if (listener == nullptr) {
             co_return;
         }

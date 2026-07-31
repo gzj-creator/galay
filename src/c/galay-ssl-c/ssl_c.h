@@ -20,7 +20,7 @@
 #define GALAY_C_SSL_SSL_C_H
 
 #include <galay/c/galay-common-c/common/galay_c_error.h>
-#include <galay/c/galay-kernel-c/async-c/tcp_socket_c.h>
+#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
 #include <galay/c/galay-kernel-c/common-c/host.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result_c.h>
 

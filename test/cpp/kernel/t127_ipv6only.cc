@@ -6,8 +6,8 @@
  */
 
 #include <galay/cpp/galay-kernel/common/handle_option.h>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 
 #include <cerrno>
 #include <cstring>
@@ -44,17 +44,17 @@ bool contains(const std::string& text, const std::string& needle)
 bool verifySourceSetsDefaultDualStack()
 {
     const auto root = std::filesystem::path(GALAY_SOURCE_ROOT);
-    const auto tcp_source = root / "galay-kernel" / "async" / "tcp_socket.cc";
-    const auto udp_source = root / "galay-kernel" / "async" / "udp_socket.cc";
+    const auto tcp_source = root / "galay-kernel" / "async" / "async_tcp.cc";
+    const auto udp_source = root / "galay-kernel" / "async" / "async_udp.cc";
     const auto tcp_text = readAll(tcp_source);
     const auto udp_text = readAll(udp_source);
 
     if (!contains(tcp_text, "handleIPv6Only(false)")) {
-        std::cerr << "[T127] TcpSocket::openHandle must explicitly disable IPV6_V6ONLY for IPv6 sockets\n";
+        std::cerr << "[T127] AsyncTcpSocket::openHandle must explicitly disable IPV6_V6ONLY for IPv6 sockets\n";
         return false;
     }
     if (!contains(udp_text, "handleIPv6Only(false)")) {
-        std::cerr << "[T127] UdpSocket::openHandle must explicitly disable IPV6_V6ONLY for IPv6 sockets\n";
+        std::cerr << "[T127] AsyncUdpSocket::openHandle must explicitly disable IPV6_V6ONLY for IPv6 sockets\n";
         return false;
     }
     return true;
@@ -135,9 +135,9 @@ bool verifyHandleIpv6Only()
 
 bool verifySocketFactoriesDefaultToDualStack()
 {
-    auto tcp_socket = galay::async::TcpSocket::create(IPType::IPV6);
+    auto tcp_socket = galay::async::AsyncTcpSocket::create(IPType::IPV6);
     if (!tcp_socket) {
-        std::cerr << "[T127] TcpSocket::create(IPV6) failed: " << tcp_socket.error().message() << "\n";
+        std::cerr << "[T127] AsyncTcpSocket::create(IPV6) failed: " << tcp_socket.error().message() << "\n";
         return false;
     }
 
@@ -146,23 +146,23 @@ bool verifySocketFactoriesDefaultToDualStack()
         return false;
     }
     if (value != 0) {
-        std::cerr << "[T127] TcpSocket::create(IPV6) must default to dual-stack\n";
+        std::cerr << "[T127] AsyncTcpSocket::create(IPV6) must default to dual-stack\n";
         return false;
     }
 
     auto tcp_only = tcp_socket->option().handleIPv6Only(true);
     if (!tcp_only) {
-        std::cerr << "[T127] TcpSocket explicit IPv6-only failed: " << tcp_only.error().message() << "\n";
+        std::cerr << "[T127] AsyncTcpSocket explicit IPv6-only failed: " << tcp_only.error().message() << "\n";
         return false;
     }
     if (!readIpv6Only(tcp_socket->handle().fd, value) || value == 0) {
-        std::cerr << "[T127] TcpSocket explicit IPv6-only override did not take effect\n";
+        std::cerr << "[T127] AsyncTcpSocket explicit IPv6-only override did not take effect\n";
         return false;
     }
 
-    auto udp_socket = galay::async::UdpSocket::create(IPType::IPV6);
+    auto udp_socket = galay::async::AsyncUdpSocket::create(IPType::IPV6);
     if (!udp_socket) {
-        std::cerr << "[T127] UdpSocket::create(IPV6) failed: " << udp_socket.error().message() << "\n";
+        std::cerr << "[T127] AsyncUdpSocket::create(IPV6) failed: " << udp_socket.error().message() << "\n";
         return false;
     }
 
@@ -171,17 +171,17 @@ bool verifySocketFactoriesDefaultToDualStack()
         return false;
     }
     if (value != 0) {
-        std::cerr << "[T127] UdpSocket::create(IPV6) must default to dual-stack\n";
+        std::cerr << "[T127] AsyncUdpSocket::create(IPV6) must default to dual-stack\n";
         return false;
     }
 
     auto udp_only = udp_socket->option().handleIPv6Only(true);
     if (!udp_only) {
-        std::cerr << "[T127] UdpSocket explicit IPv6-only failed: " << udp_only.error().message() << "\n";
+        std::cerr << "[T127] AsyncUdpSocket explicit IPv6-only failed: " << udp_only.error().message() << "\n";
         return false;
     }
     if (!readIpv6Only(udp_socket->handle().fd, value) || value == 0) {
-        std::cerr << "[T127] UdpSocket explicit IPv6-only override did not take effect\n";
+        std::cerr << "[T127] AsyncUdpSocket explicit IPv6-only override did not take effect\n";
         return false;
     }
 

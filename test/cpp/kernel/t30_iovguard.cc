@@ -10,7 +10,7 @@
 #include <iostream>
 #include <sys/uio.h>
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 namespace {
 
@@ -29,7 +29,7 @@ bool hasParamInvalid(const std::expected<size_t, galay::kernel::IOError>& result
 
 bool invalidReadvCountReturnsError()
 {
-    galay::async::TcpSocket socket(GHandle::invalid());
+    galay::async::AsyncTcpSocket socket(GHandle::invalid());
     std::array<struct iovec, 2> iovecs{};
 
     auto awaitable = socket.readv(iovecs, iovecs.size() + 1);
@@ -42,7 +42,7 @@ bool invalidReadvCountReturnsError()
 
 bool invalidWritevCountReturnsError()
 {
-    galay::async::TcpSocket socket(GHandle::invalid());
+    galay::async::AsyncTcpSocket socket(GHandle::invalid());
     char header[] = "guard";
     char body[] = "check";
     std::array<struct iovec, 2> iovecs{};

@@ -1,5 +1,5 @@
 /**
- * @file file_watcher.h
+ * @file async_file_watcher.h
  * @brief 异步文件和目录变更监控
  * @author galay-kernel
  * @version 1.0.0
@@ -13,11 +13,11 @@
  * 在使用 USE_IOURING、USE_EPOLL 或 USE_KQUEUE 编译时可用。
  */
 
-#ifndef GALAY_ASYNC_FILE_WATCHER_H
-#define GALAY_ASYNC_FILE_WATCHER_H
+#ifndef GALAY_KERNEL_ASYNC_FILE_WATCHER_H
+#define GALAY_KERNEL_ASYNC_FILE_WATCHER_H
 
 
-// FileWatcher 支持:
+// AsyncFileWatcher 支持:
 // - Linux: inotify (io_uring/epoll)
 // - macOS: kqueue EVFILT_VNODE
 
@@ -42,7 +42,7 @@ namespace galay::async
  *
  * @code
  * Task<void> watchFile() {
- *     FileWatcher watcher;
+ *     AsyncFileWatcher watcher;
  *     auto result = watcher.addWatch("/path/to/file", FileWatchEvent::Modify);
  *     if (!result) {
  *         // 处理错误
@@ -70,40 +70,40 @@ namespace galay::async
  * - macOS：kqueue EVFILT_VNODE
  *
  * 典型用法：
- * 1. 构造 FileWatcher
+ * 1. 构造 AsyncFileWatcher
  * 2. 为每个要监控的路径调用 addWatch()
  * 3. 在循环中 co_await watch() 接收事件
  *
  * @note 不可拷贝；可移动。
  */
-class FileWatcher
+class AsyncFileWatcher
 {
 public:
     /**
-     * @brief 构造 FileWatcher 并初始化平台特定的后端
+     * @brief 构造 AsyncFileWatcher 并初始化平台特定的后端
      */
-    FileWatcher();
+    AsyncFileWatcher();
 
     /**
      * @brief 析构函数；移除所有监控并释放资源
      */
-    ~FileWatcher();
+    ~AsyncFileWatcher();
 
-    FileWatcher(const FileWatcher&) = delete;
-    FileWatcher& operator=(const FileWatcher&) = delete;
+    AsyncFileWatcher(const AsyncFileWatcher&) = delete;
+    AsyncFileWatcher& operator=(const AsyncFileWatcher&) = delete;
 
     /**
      * @brief 移动构造函数；转移监控状态
      * @param other 被移动的对象
      */
-    FileWatcher(FileWatcher&& other) noexcept;
+    AsyncFileWatcher(AsyncFileWatcher&& other) noexcept;
 
     /**
      * @brief 移动赋值运算符；清理当前状态后再转移
      * @param other 被移动的对象
      * @return 当前对象的引用
      */
-    FileWatcher& operator=(FileWatcher&& other) noexcept;
+    AsyncFileWatcher& operator=(AsyncFileWatcher&& other) noexcept;
 
     /**
      * @brief 注册路径以进行文件系统变更监控
@@ -175,4 +175,4 @@ private:
 
 #endif // USE_IOURING || USE_EPOLL || USE_KQUEUE
 
-#endif // GALAY_ASYNC_FILE_WATCHER_H
+#endif // GALAY_KERNEL_ASYNC_FILE_WATCHER_H

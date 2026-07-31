@@ -1,6 +1,6 @@
 #include "c_coro_file_watcher_bridge.h"
 
-#include <galay/cpp/galay-kernel/async/file_watcher.h>
+#include <galay/cpp/galay-kernel/async/async_file_watcher.h>
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 
@@ -18,7 +18,7 @@ namespace
 
 using C_IOResult = GalayCoreCoroIOResult;
 using C_IOResultCode = GalayCoreCoroIOResultCode;
-using galay::async::FileWatcher;
+using galay::async::AsyncFileWatcher;
 using galay::kernel::FileWatchAwaitable;
 using galay::kernel::IOController;
 using galay::kernel::IOError;
@@ -83,9 +83,9 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-FileWatcher* to_cpp_watcher(GalayCoreFileWatcher* watcher)
+AsyncFileWatcher* to_cpp_watcher(GalayCoreFileWatcher* watcher)
 {
-    return reinterpret_cast<FileWatcher*>(watcher);
+    return reinterpret_cast<AsyncFileWatcher*>(watcher);
 }
 
 Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)

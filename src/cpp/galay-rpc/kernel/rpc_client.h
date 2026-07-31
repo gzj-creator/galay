@@ -97,7 +97,7 @@ public:
     /// @brief 设置metrics回调
     RpcClientBuilder& metricsCallback(RpcMetricCallback callback) { m_config.channel_options.metrics_callback = std::move(callback); return *this; }
     /// @brief 构建RpcClient实例
-    RpcClientImpl<TcpSocket, RingBufferBackendStrategy::Mmap> build() const;
+    RpcClientImpl<AsyncTcpSocket, RingBufferBackendStrategy::Mmap> build() const;
     /// @brief 仅导出配置
     RpcClientConfig buildConfig() const                       { return m_config; }
 
@@ -505,10 +505,10 @@ private:
     bool m_connected = false;                      ///< 最近一次连接是否成功
 };
 
-/// @brief RPC调用等待体类型别名（TcpSocket）
-using RpcCallAwaitable = RpcCallAwaitableImpl<TcpSocket>;
-/// @brief RPC客户端类型别名（TcpSocket）
-using RpcClient = RpcClientImpl<TcpSocket>;
+/// @brief RPC调用等待体类型别名（AsyncTcpSocket）
+using RpcCallAwaitable = RpcCallAwaitableImpl<AsyncTcpSocket>;
+/// @brief RPC客户端类型别名（AsyncTcpSocket）
+using RpcClient = RpcClientImpl<AsyncTcpSocket>;
 inline RpcClient RpcClientBuilder::build() const { return RpcClient(m_config); }
 
 } // namespace galay::rpc

@@ -119,8 +119,8 @@ void checkMpscAwaitSuspend(std::vector<std::string>& failures,
 int main() {
     const auto root = projectRoot();
     const auto mpsc_path = root / "galay-kernel" / "concurrency" / "mpsc_channel.h";
-    const auto waiter_path = root / "galay-kernel" / "concurrency" / "async_waiter.h";
-    const auto mutex_path = root / "galay-kernel" / "concurrency" / "async_mutex.h";
+    const auto waiter_path = root / "galay-kernel" / "async" / "async_waiter.h";
+    const auto mutex_path = root / "galay-kernel" / "async" / "async_mutex.h";
     const auto c_bridge_path = std::filesystem::path(GALAY_PROJECT_ROOT) /
         "src" / "c" / "galay-bridge-c" / "coro-c" / "c_coro_async_waiter_bridge.cc";
 

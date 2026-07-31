@@ -45,10 +45,10 @@ int main() {
     static_assert(HasRawFrameViewSurface<Http2RawFrameView>,
                   "Http2RawFrameView must expose header, bytes(), payload(), streamId() and type helpers");
 
-    static_assert(HasFastDispatchHelper<Http2StreamManagerImpl<galay::async::TcpSocket>>,
-                  "Http2StreamManagerImpl<TcpSocket> must expose tryDispatchServerActiveFrameView(raw_view)");
+    static_assert(HasFastDispatchHelper<Http2StreamManagerImpl<galay::async::AsyncTcpSocket>>,
+                  "Http2StreamManagerImpl<AsyncTcpSocket> must expose tryDispatchServerActiveFrameView(raw_view)");
 
-    galay::async::TcpSocket socket(GHandle{-1});
+    galay::async::AsyncTcpSocket socket(GHandle{-1});
     Http2Conn conn(std::move(socket));
 
     const auto headers = Http2FrameBuilder::headersBytes(1, "abc", false, true);

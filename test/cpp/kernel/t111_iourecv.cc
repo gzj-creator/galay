@@ -20,7 +20,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -91,7 +91,7 @@ bool sendAll(int fd, const char* data, size_t length) {
 
 #ifdef USE_IOURING
 Task<void> recvTwiceWithStaging() {
-    TcpSocket listener;
+    AsyncTcpSocket listener;
 
     auto opt = listener.option().handleReuseAddr();
     if (!opt) {
@@ -137,7 +137,7 @@ Task<void> recvTwiceWithStaging() {
         co_return;
     }
 
-    TcpSocket client(acceptResult.value());
+    AsyncTcpSocket client(acceptResult.value());
     client.option().handleNonBlock();
 
     const auto sent_deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(500);

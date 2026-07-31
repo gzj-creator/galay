@@ -10,7 +10,7 @@
 #include <memory>
 #include <string>
 
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using galay::utils::RingBuffer;
 using namespace galay::websocket;
 
@@ -86,18 +86,18 @@ bool exerciseBuilderCloneMove(size_t iteration)
 
 bool exerciseReaderWriterMove(size_t iteration)
 {
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     RingBuffer ring(4096);
 
     WsReaderSetting reader_setting;
-    WsReaderImpl<TcpSocket> reader(ring, reader_setting, socket, true, false);
-    WsReaderImpl<TcpSocket> moved_reader(std::move(reader));
+    WsReaderImpl<AsyncTcpSocket> reader(ring, reader_setting, socket, true, false);
+    WsReaderImpl<AsyncTcpSocket> moved_reader(std::move(reader));
 
     const std::string payload(64 + (iteration % 17), 'x');
-    WsWriterImpl<TcpSocket> writer(WsWriterSetting::byServer(), socket);
+    WsWriterImpl<AsyncTcpSocket> writer(WsWriterSetting::byServer(), socket);
     auto send_operation = writer.sendText(payload);
     const bool operation_ready = send_operation.await_ready();
-    WsWriterImpl<TcpSocket> moved_writer(std::move(writer));
+    WsWriterImpl<AsyncTcpSocket> moved_writer(std::move(writer));
 
     return !operation_ready &&
            moved_writer.getRemainingBytes() >= payload.size() &&
@@ -107,25 +107,25 @@ bool exerciseReaderWriterMove(size_t iteration)
 
 bool exerciseSessionAndUpgraderState(size_t)
 {
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     RingBuffer ring(4096);
     WsUrl url = makeLocalUrl();
     WsReaderSetting reader_setting;
     WsWriterSetting writer_setting = WsWriterSetting::byClient();
-    std::unique_ptr<WsConnImpl<TcpSocket>> ws_conn;
+    std::unique_ptr<WsConnImpl<AsyncTcpSocket>> ws_conn;
 
-    WsSessionImpl<TcpSocket> session(socket, url, writer_setting, 4096, reader_setting);
-    WsSessionUpgraderImpl<TcpSocket> session_upgrader = session.upgrade();
-    WsSessionUpgraderImpl<TcpSocket> moved_session_upgrader(std::move(session_upgrader));
+    WsSessionImpl<AsyncTcpSocket> session(socket, url, writer_setting, 4096, reader_setting);
+    WsSessionUpgraderImpl<AsyncTcpSocket> session_upgrader = session.upgrade();
+    WsSessionUpgraderImpl<AsyncTcpSocket> moved_session_upgrader(std::move(session_upgrader));
 
-    WsUpgraderImpl<TcpSocket> client_upgrader(
+    WsUpgraderImpl<AsyncTcpSocket> client_upgrader(
         &socket,
         &ring,
         url,
         reader_setting,
         writer_setting,
         &ws_conn);
-    WsUpgraderImpl<TcpSocket> moved_client_upgrader(std::move(client_upgrader));
+    WsUpgraderImpl<AsyncTcpSocket> moved_client_upgrader(std::move(client_upgrader));
 
     return !session.isUpgraded();
 }

@@ -17,18 +17,18 @@ using namespace galay::async;
 using namespace galay::kernel;
 using namespace galay::rpc;
 
-static_assert(!std::derived_from<GetRpcRequestAwaitable<TcpSocket>, ReadvAwaitable>);
-static_assert(!std::derived_from<GetRpcResponseAwaitable<TcpSocket>, ReadvAwaitable>);
-static_assert(!std::derived_from<GetRpcHeaderAwaitable<TcpSocket>, ReadvAwaitable>);
-static_assert(!std::derived_from<GetRpcBodyAwaitable<TcpSocket>, ReadvAwaitable>);
+static_assert(!std::derived_from<GetRpcRequestAwaitable<AsyncTcpSocket>, ReadvAwaitable>);
+static_assert(!std::derived_from<GetRpcResponseAwaitable<AsyncTcpSocket>, ReadvAwaitable>);
+static_assert(!std::derived_from<GetRpcHeaderAwaitable<AsyncTcpSocket>, ReadvAwaitable>);
+static_assert(!std::derived_from<GetRpcBodyAwaitable<AsyncTcpSocket>, ReadvAwaitable>);
 
-static_assert(!std::derived_from<SendRpcRequestAwaitable<TcpSocket>, WritevAwaitable>);
-static_assert(!std::derived_from<SendRpcResponseAwaitable<TcpSocket>, WritevAwaitable>);
-static_assert(!std::derived_from<SendRawDataAwaitable<TcpSocket>, WritevAwaitable>);
-static_assert(!std::derived_from<SendStreamDataAwaitable<TcpSocket>, WritevAwaitable>);
-static_assert(!std::derived_from<GetStreamMessageAwaitable<TcpSocket>, ReadvAwaitable>);
+static_assert(!std::derived_from<SendRpcRequestAwaitable<AsyncTcpSocket>, WritevAwaitable>);
+static_assert(!std::derived_from<SendRpcResponseAwaitable<AsyncTcpSocket>, WritevAwaitable>);
+static_assert(!std::derived_from<SendRawDataAwaitable<AsyncTcpSocket>, WritevAwaitable>);
+static_assert(!std::derived_from<SendStreamDataAwaitable<AsyncTcpSocket>, WritevAwaitable>);
+static_assert(!std::derived_from<GetStreamMessageAwaitable<AsyncTcpSocket>, ReadvAwaitable>);
 
-static_assert(!std::derived_from<RecvRpcResponseChainAwaitable<TcpSocket>, ReadvIOContext>);
+static_assert(!std::derived_from<RecvRpcResponseChainAwaitable<AsyncTcpSocket>, ReadvIOContext>);
 
 int main()
 {

@@ -15,7 +15,7 @@
 #include <galay/cpp/galay-http/kernel/http_writer.h>
 #undef private
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 
 using namespace galay::http;
 using namespace galay::async;
@@ -62,8 +62,8 @@ int main(int argc, char** argv)
         }
     }
 
-    TcpSocket socket(IPType::IPV4);
-    HttpWriterImpl<TcpSocket> writer(HttpWriterSetting(), socket);
+    AsyncTcpSocket socket(IPType::IPV4);
+    HttpWriterImpl<AsyncTcpSocket> writer(HttpWriterSetting(), socket);
     const std::string header =
         "HTTP/1.1 200 OK\r\n"
         "Content-Type: text/plain\r\n"

@@ -25,7 +25,7 @@
 #include "../../galay-http/kernel/http_conn.h"
 #include "../../galay-http/builder/http_builder.h"
 #include "../../galay-http/plugin/common/defn.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/runtime.h"
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include "../../galay-ssl/ssl/ssl_context.h"
@@ -311,7 +311,7 @@ inline void waitForLoopDrain(const std::atomic<size_t>& loop_count,
  * @brief HTTP/1.1 降级处理器类型
  */
 using Http1FallbackHandler = std::function<Task<void>(
-    galay::http::HttpConnImpl<TcpSocket>, galay::http::HttpRequestHeader)>;
+    galay::http::HttpConnImpl<AsyncTcpSocket>, galay::http::HttpRequestHeader)>;
 
 /**
  * @brief h2c 服务器 (HTTP/2 over cleartext)
@@ -403,7 +403,7 @@ public:
      * - `stop()` 在 runtime 停止前按注册反序调用。
      * - `handle()` 返回 false 时停止后续插件，并跳过当前连接的 HTTP/2 处理。
      */
-    bool addAcceptPlugin(std::unique_ptr<galay::http::plugin::AcceptPlugin<TcpSocket>> plugin) {
+    bool addAcceptPlugin(std::unique_ptr<galay::http::plugin::AcceptPlugin<AsyncTcpSocket>> plugin) {
         if (m_running.load() || !plugin) {
             return false;
         }
@@ -511,7 +511,7 @@ private:
 
         // 阶段 2：创建当前 IO 调度器专属的 listener socket
         // Each serverLoop creates its own listener socket
-        TcpSocket listener(IPType::IPV4);
+        AsyncTcpSocket listener(IPType::IPV4);
 
         // 阶段 3：配置 listener 复用地址，允许快速重启绑定同一地址
         auto reuse_result = listener.option().handleReuseAddr();
@@ -585,7 +585,7 @@ private:
                           client_host.port());
 
             // 阶段 10：根据 accept 得到的句柄构造 TCP 客户端 socket
-            TcpSocket client_socket(*accept_result);
+            AsyncTcpSocket client_socket(*accept_result);
             // 阶段 11：配置客户端 socket 为非阻塞模式
             auto nonblock_result = client_socket.option().handleNonBlock();
             if (!nonblock_result) {
@@ -641,8 +641,8 @@ private:
     /**
      * @brief 处理新连接
      */
-    Task<void> handleConnection(TcpSocket socket) {
-        Http2ConnImpl<TcpSocket> conn(std::move(socket));
+    Task<void> handleConnection(AsyncTcpSocket socket) {
+        Http2ConnImpl<AsyncTcpSocket> conn(std::move(socket));
 
         // 配置本地设置
         auto local_settings = Http2Conn::makeSettingsFrameFromConfig(m_config);
@@ -713,7 +713,7 @@ private:
         co_return;
     }
 
-    Task<void> readAtLeast(Http2ConnImpl<TcpSocket>& conn, size_t n) {
+    Task<void> readAtLeast(Http2ConnImpl<AsyncTcpSocket>& conn, size_t n) {
         auto& rb = conn.ringBuffer();
         while (rb.readable() < n) {
             auto write_iovecs = borrowWriteIovecs(rb);
@@ -732,7 +732,7 @@ private:
      * @param protocol 输出协议类型
      * @param upgrade_request 输出首个 HTTP/1.1 请求头（Upgrade/Http1 路径）
      */
-    Task<void> detectProtocol(Http2ConnImpl<TcpSocket>& conn,
+    Task<void> detectProtocol(Http2ConnImpl<AsyncTcpSocket>& conn,
                               DetectedProtocol& protocol,
                               galay::http::HttpRequestHeader& upgrade_request) {
         protocol = DetectedProtocol::Unknown;
@@ -866,9 +866,9 @@ private:
         co_return;
     }
 
-    Task<void> handleHttp1Fallback(Http2ConnImpl<TcpSocket>&& h2_conn,
+    Task<void> handleHttp1Fallback(Http2ConnImpl<AsyncTcpSocket>&& h2_conn,
                                    galay::http::HttpRequestHeader first_request_header) {
-        galay::http::HttpConnImpl<TcpSocket> conn(
+        galay::http::HttpConnImpl<AsyncTcpSocket> conn(
             std::move(h2_conn.socket()), std::move(h2_conn.ringBuffer()));
 
         if (m_http1_fallback) {
@@ -901,7 +901,7 @@ private:
         }
     }
 
-    Task<bool> runAcceptPlugins(TcpSocket& client_socket, const Host& client_host) {
+    Task<bool> runAcceptPlugins(AsyncTcpSocket& client_socket, const Host& client_host) {
         for (auto& plugin : m_accept_plugins) {
             auto plugin_result = co_await plugin->handle(getRuntime(), client_socket, client_host);
             if (!plugin_result) {
@@ -924,7 +924,7 @@ private:
     Http2ConnectionHandler m_stream_handler;
     Http2ActiveConnHandler m_active_conn_handler;
     Http1FallbackHandler m_http1_fallback;
-    std::vector<std::unique_ptr<galay::http::plugin::AcceptPlugin<TcpSocket>>> m_accept_plugins;
+    std::vector<std::unique_ptr<galay::http::plugin::AcceptPlugin<AsyncTcpSocket>>> m_accept_plugins;
     std::size_t m_started_plugin_count = 0;
     std::atomic<bool> m_running;
     std::atomic<size_t> m_server_loop_count{0};
@@ -1293,7 +1293,7 @@ private:
         } guard{this};
 
         // 阶段 2：创建当前 IO 调度器专属的 TCP listener socket
-        TcpSocket listener(IPType::IPV4);
+        AsyncTcpSocket listener(IPType::IPV4);
 
         // 阶段 3：配置 listener 复用地址，允许快速重启绑定同一地址
         auto reuse_result = listener.option().handleReuseAddr();

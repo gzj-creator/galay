@@ -164,7 +164,7 @@ endif()
 file(WRITE "${consumer_source_dir}/main.cc"
     "#include <galay/cpp/galay-kernel/core/runtime.h>\n"
     "#include <galay/cpp/galay-kernel/core/awaitable.h>\n"
-    "#include <galay/cpp/galay-kernel/async/tcp_socket.h>\n"
+    "#include <galay/cpp/galay-kernel/async/async_tcp.h>\n"
     "#include <galay/cpp/galay-kernel/common/buffer.h>\n"
     "#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>\n"
     "int main() { return 0; }\n")

@@ -13,7 +13,7 @@
 #include <thread>
 #include <csignal>
 #include <vector>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "benchmark/cpp/common/benchmark_sync.h"
 #include "test/cpp/common/stdout_log.h"
@@ -98,7 +98,7 @@ void signalHandler([[maybe_unused]] int signum) {
 
 // 处理单个客户端连接 - 使用用户自管双段 iovec
 Task<void> handleClient(GHandle clientHandle) {
-    TcpSocket client(clientHandle);
+    AsyncTcpSocket client(clientHandle);
     client.option().handleNonBlock();
 
     std::array<char, kPrefixBytes> prefix{};
@@ -137,7 +137,7 @@ Task<void> handleClient(GHandle clientHandle) {
 }
 
 // 接受连接的协程
-Task<void> acceptLoop(IOScheduler* scheduler, TcpSocket* listener) {
+Task<void> acceptLoop(IOScheduler* scheduler, AsyncTcpSocket* listener) {
     while (g_running.load(std::memory_order_relaxed)) {
         Host clientHost;
         auto acceptResult = co_await listener->accept(&clientHost);
@@ -218,7 +218,7 @@ int main(int argc, char* argv[]) {
 #endif
 
     std::vector<std::unique_ptr<IOSchedulerType>> schedulers;
-    std::vector<TcpSocket> listeners;
+    std::vector<AsyncTcpSocket> listeners;
     schedulers.reserve(static_cast<size_t>(scheduler_count));
     listeners.reserve(static_cast<size_t>(scheduler_count));
 
@@ -228,7 +228,7 @@ int main(int argc, char* argv[]) {
         scheduler->start();
         schedulers.push_back(std::move(scheduler));
 
-        TcpSocket listener;
+        AsyncTcpSocket listener;
         auto opt = listener.option().handleReuseAddr();
         if (!opt) {
             LogError("Failed to set SO_REUSEADDR: {}", opt.error().message());

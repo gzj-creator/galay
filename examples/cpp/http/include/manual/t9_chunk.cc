@@ -10,7 +10,7 @@
 #include <galay/cpp/galay-http/protoc/http_request.h>
 #include <galay/cpp/galay-http/protoc/http_response.h>
 #include <galay/cpp/galay-http/builder/http_builder.h>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
@@ -37,7 +37,7 @@ using namespace galay::async;
 std::atomic<int> g_request_count{0};
 
 // 处理客户端连接
-Task<void> handleClient(TcpSocket client, Host clientHost) {
+Task<void> handleClient(AsyncTcpSocket client, Host clientHost) {
 
     client.option().handleNonBlock();
 
@@ -138,7 +138,7 @@ Task<void> handleClient(TcpSocket client, Host clientHost) {
 // Chunk测试服务器
 Task<void> chunkedTestServer() {
 
-    TcpSocket listener;
+    AsyncTcpSocket listener;
 
     // 设置选项
     auto optResult = listener.option().handleReuseAddr();
@@ -175,7 +175,7 @@ Task<void> chunkedTestServer() {
 
 
         // 创建客户端socket
-        TcpSocket client(acceptResult.value());
+        AsyncTcpSocket client(acceptResult.value());
         client.option().handleNonBlock();
 
         // 创建RingBuffer和HttpReader/Writer

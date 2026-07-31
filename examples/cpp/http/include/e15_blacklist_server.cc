@@ -57,7 +57,7 @@ int main(int argc, char* argv[]) {
         .build());
 
     if (!server.addAcceptPlugin(
-            std::make_unique<BlackList<galay::async::TcpSocket>>(config))) {
+            std::make_unique<BlackList<galay::async::AsyncTcpSocket>>(config))) {
         std::cerr << "Failed to register blacklist accept plugin\n";
         return 1;
     }

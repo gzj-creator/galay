@@ -11,7 +11,7 @@
 
 int main() {
 #ifdef GALAY_SSL_FEATURE_ENABLED
-    using galay::async::TcpSocket;
+    using galay::async::AsyncTcpSocket;
     using galay::utils::RingBuffer;
     using namespace galay::websocket;
 
@@ -25,8 +25,8 @@ int main() {
         return 1;
     }
 
-    TcpSocket tcp_socket;
-    WsReaderImpl<TcpSocket> ws_reader(ring, setting, tcp_socket, true, false);
+    AsyncTcpSocket tcp_socket;
+    WsReaderImpl<AsyncTcpSocket> ws_reader(ring, setting, tcp_socket, true, false);
     if (!ws_reader.messageFastPathEnabled()) {
         std::cerr << "[T65] WS reader should keep message fast path enabled\n";
         return 1;

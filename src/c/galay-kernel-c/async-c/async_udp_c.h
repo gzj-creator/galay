@@ -1,5 +1,5 @@
-#ifndef GALAY_KERNEL_UDP_SOCKET_C_H
-#define GALAY_KERNEL_UDP_SOCKET_C_H
+#ifndef GALAY_KERNEL_ASYNC_UDP_C_H
+#define GALAY_KERNEL_ASYNC_UDP_C_H
 
 #include "../common-c/host.h"
 #include "../coro-c/coro_result_c.h"
@@ -7,7 +7,7 @@
 #include <stdint.h>
 
 /**
- * @file udp_socket_c.h
+ * @file async_udp_c.h
  * @brief Galay kernel UDP socket 的 direct C coroutine ABI。
  *
  * @details 该头文件保留 UDP socket 生命周期同步操作；会挂起的 I/O 操作必须在
@@ -35,11 +35,11 @@ typedef enum C_UdpSocketResultCode {
 /**
  * @brief UDP socket C 句柄。
  *
- * @note socket 指向内部 C++ UdpSocket 对象，调用方不能解引用或直接释放。生命周期
+ * @note socket 指向内部 C++ AsyncUdpSocket 对象，调用方不能解引用或直接释放。生命周期
  * 由 create/destroy 管理。
  */
 typedef struct galay_kernel_udp_socket {
-    void* socket;      ///< 内部 UdpSocket 对象指针。
+    void* socket;      ///< 内部 AsyncUdpSocket 对象指针。
 } galay_kernel_udp_socket_t;
 
 /**
@@ -55,7 +55,7 @@ const char* galay_kernel_udp_socket_get_error(C_UdpSocketResultCode code);
 /**
  * @brief 创建 UDP socket。
  *
- * @param c_socket 输出 socket 句柄；成功时写入内部 UdpSocket 指针。
+ * @param c_socket 输出 socket 句柄；成功时写入内部 AsyncUdpSocket 指针。
  * @param type IP 地址族，必须是 C_IPTypeIPV4 或 C_IPTypeIPV6。
  * @return 成功返回 C_UdpSocketSuccess；参数非法返回
  * C_UdpSocketParameterInvalid；底层创建或内存分配失败返回

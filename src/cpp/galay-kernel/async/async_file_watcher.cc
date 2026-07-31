@@ -1,17 +1,17 @@
 /**
- * @file file_watcher.cc
+ * @file async_file_watcher.cc
  * @brief 异步文件和目录变更监控实现
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details FileWatcher 的平台特定实现：
+ * @details AsyncFileWatcher 的平台特定实现：
  * - Linux (io_uring/epoll)：使用 inotify 进行事件监控
  * - macOS (kqueue)：使用文件描述符和 EVFILT_VNODE
  *
  * 包含在 Linux 上将通用 FileWatchEvent 位掩码转换为平台原生 inotify 掩码的辅助函数。
  */
 
-#include "file_watcher.h"
+#include "async_file_watcher.h"
 #include "../common/defn.hpp"
 
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
@@ -63,9 +63,9 @@ static uint32_t toInotifyMask(FileWatchEvent events)
 #endif
 
 /**
- * @brief 构造 FileWatcher；在 Linux 上初始化 inotify，在 macOS 上延迟初始化
+ * @brief 构造 AsyncFileWatcher；在 Linux 上初始化 inotify，在 macOS 上延迟初始化
  */
-FileWatcher::FileWatcher()
+AsyncFileWatcher::AsyncFileWatcher()
     : m_controller(GHandle::invalid())
     , m_watch_fd(-1)
 #ifdef USE_KQUEUE
@@ -82,7 +82,7 @@ FileWatcher::FileWatcher()
 /**
  * @brief 析构函数；移除所有监控并关闭所有文件描述符
  */
-FileWatcher::~FileWatcher()
+AsyncFileWatcher::~AsyncFileWatcher()
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
     if (m_controller.m_handle.fd >= 0) {
@@ -103,7 +103,7 @@ FileWatcher::~FileWatcher()
  * @brief 移动构造函数；从 other 转移监控状态
  * @param other 被移动的对象
  */
-FileWatcher::FileWatcher(FileWatcher&& other) noexcept
+AsyncFileWatcher::AsyncFileWatcher(AsyncFileWatcher&& other) noexcept
     : m_controller(std::move(other.m_controller))
     , m_ready_events(std::move(other.m_ready_events))
     , m_watches(std::move(other.m_watches))
@@ -120,7 +120,7 @@ FileWatcher::FileWatcher(FileWatcher&& other) noexcept
  * @param other 被移动的对象
  * @return 当前对象的引用
  */
-FileWatcher& FileWatcher::operator=(FileWatcher&& other) noexcept
+AsyncFileWatcher& AsyncFileWatcher::operator=(AsyncFileWatcher&& other) noexcept
 {
     if (this != &other) {
         // 清理当前资源
@@ -160,7 +160,7 @@ FileWatcher& FileWatcher::operator=(FileWatcher&& other) noexcept
  * @param events 要监控的事件类型
  * @return 监控描述符（Linux：inotify wd，macOS：文件 fd），或 IOError
  */
-std::expected<int, IOError> FileWatcher::addWatch(const std::string& path, FileWatchEvent events)
+std::expected<int, IOError> AsyncFileWatcher::addWatch(const std::string& path, FileWatchEvent events)
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
     if (m_controller.m_handle.fd < 0) {
@@ -204,7 +204,7 @@ std::expected<int, IOError> FileWatcher::addWatch(const std::string& path, FileW
  * @param wd 要移除的监控描述符
  * @return 成功返回 void，描述符无效或移除失败时返回 IOError
  */
-std::expected<void, IOError> FileWatcher::removeWatch(int wd)
+std::expected<void, IOError> AsyncFileWatcher::removeWatch(int wd)
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
     if (m_controller.m_handle.fd < 0) {
@@ -255,7 +255,7 @@ std::expected<void, IOError> FileWatcher::removeWatch(int wd)
  *
  * @return 绑定到该监控器控制器的 FileWatchAwaitable
  */
-FileWatchAwaitable FileWatcher::watch()
+FileWatchAwaitable AsyncFileWatcher::watch()
 {
 #ifdef USE_KQUEUE
     return FileWatchAwaitable(&m_controller,
@@ -271,7 +271,7 @@ FileWatchAwaitable FileWatcher::watch()
  * @param wd 监控描述符
  * @return 注册的路径字符串，未找到时返回空字符串
  */
-std::string FileWatcher::getPath(int wd) const
+std::string AsyncFileWatcher::getPath(int wd) const
 {
     auto it = m_watches.find(wd);
     if (it != m_watches.end()) {

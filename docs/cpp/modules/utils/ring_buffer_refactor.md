@@ -151,12 +151,12 @@ ctest --test-dir build --output-on-failure -R 'utils|kernel'
 - `src/cpp/galay-http2/client/h2c_client.h` —— HTTP2 client 模板化
 
 ### 不受影响
-- `src/cpp/galay-kernel/async/tcp_socket.h` —— 不持有 RingBuffer，只接受 `iovec*`
+- `src/cpp/galay-kernel/async/async_tcp.h` —— 不持有 RingBuffer，只接受 `iovec*`
 
 ## 注意事项
 
 1. **二进制膨胀**：每个不同的 `Strategy` 实例化会生成一份代码。可通过显式实例化缓解（`ring_buffer.cc` 中 `template class RingBuffer<RingBufferBackendStrategy::Mmap>`）。
-2. **`TcpSocket` 不变**：它只接受 `iovec*` 调 `readv`/`writev`，不持有 RingBuffer，无需模板化。
+2. **`AsyncTcpSocket` 不变**：它只接受 `iovec*` 调 `readv`/`writev`，不持有 RingBuffer，无需模板化。
 3. **向后兼容**：`Vector` 策略保持 2 段环绕行为，现有代码显式指定 `Vector` 策略时可保持原有行为。
 4. **默认行为变更**：默认策略从 `Auto`（阈值 64KB）改为 `Mmap`，网络场景默认单段视图。
 

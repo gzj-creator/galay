@@ -1,6 +1,6 @@
-#include "file_watcher_c.h"
+#include "async_file_watcher_c.h"
 
-#include "../../../cpp/galay-kernel/async/file_watcher.h"
+#include "../../../cpp/galay-kernel/async/async_file_watcher.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
 #include <galay/c/galay-bridge-c/coro-c/c_coro_file_watcher_bridge.h>
@@ -41,14 +41,14 @@ bool timeout_fits_chrono(uint64_t timeout_ms)
 
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
 
-galay::async::FileWatcher* to_cpp_watcher(galay_kernel_file_watcher_t* watcher)
+galay::async::AsyncFileWatcher* to_cpp_watcher(galay_kernel_file_watcher_t* watcher)
 {
-    return static_cast<galay::async::FileWatcher*>(watcher->watcher);
+    return static_cast<galay::async::AsyncFileWatcher*>(watcher->watcher);
 }
 
-const galay::async::FileWatcher* to_cpp_watcher(const galay_kernel_file_watcher_t* watcher)
+const galay::async::AsyncFileWatcher* to_cpp_watcher(const galay_kernel_file_watcher_t* watcher)
 {
-    return static_cast<const galay::async::FileWatcher*>(watcher->watcher);
+    return static_cast<const galay::async::AsyncFileWatcher*>(watcher->watcher);
 }
 
 galay::kernel::FileWatchEvent to_cpp_events(C_FileWatchEvent events)
@@ -290,7 +290,7 @@ C_FileWatcherResultCode galay_kernel_file_watcher_create(
     }
 
 #if defined(USE_IOURING) || defined(USE_EPOLL) || defined(USE_KQUEUE)
-    auto* watcher = new (std::nothrow) galay::async::FileWatcher();
+    auto* watcher = new (std::nothrow) galay::async::AsyncFileWatcher();
     if (watcher == nullptr)
     {
         return C_FileWatcherMemoryAllocFailed;

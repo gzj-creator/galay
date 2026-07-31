@@ -1110,12 +1110,12 @@ private:
     StreamWriterImpl<SocketType> m_writer;                   ///< 流写入器
 };
 
-/// @brief 流读取器类型别名（TcpSocket）
-using StreamReader = StreamReaderImpl<TcpSocket>;
-/// @brief 流写入器类型别名（TcpSocket）
-using StreamWriter = StreamWriterImpl<TcpSocket>;
-/// @brief RPC流会话类型别名（TcpSocket）
-using RpcStream = RpcStreamImpl<TcpSocket>;
+/// @brief 流读取器类型别名（AsyncTcpSocket）
+using StreamReader = StreamReaderImpl<AsyncTcpSocket>;
+/// @brief 流写入器类型别名（AsyncTcpSocket）
+using StreamWriter = StreamWriterImpl<AsyncTcpSocket>;
+/// @brief RPC流会话类型别名（AsyncTcpSocket）
+using RpcStream = RpcStreamImpl<AsyncTcpSocket>;
 
 } // namespace galay::rpc
 

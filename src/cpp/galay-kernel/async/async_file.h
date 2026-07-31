@@ -7,14 +7,14 @@
  * @details 构建在 IO 调度器的可等待类型之上的简单异步文件抽象。
  * 支持 open、read、write、close、size 和 sync 操作。
  * 仅在使用 USE_KQUEUE 或 USE_IOURING 编译时可用。
- * 对于基于 epoll 的系统，请使用 AioFile。
+ * 对于基于 epoll 的系统，请使用 AsyncAio。
  */
 
 #ifndef GALAY_ASYNC_FILE_H
 #define GALAY_ASYNC_FILE_H
 
 // AsyncFile 仅用于 kqueue (macOS) 和 io_uring (Linux)
-// epoll 平台请使用 AioFile
+// epoll 平台请使用 AsyncAio
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 
@@ -30,7 +30,7 @@ namespace galay::async
 /**
  * @brief 标准异步文件操作的文件打开模式
  *
- * @details 与 AioFile 不同，这些模式不强制使用 O_DIRECT。
+ * @details 与 AsyncAio 不同，这些模式不强制使用 O_DIRECT。
  * 支持只读、只写、读写、追加和截断模式。
  */
 enum class FileOpenMode : int {
@@ -45,9 +45,9 @@ enum class FileOpenMode : int {
  * @brief 基于 kqueue 和 io_uring 后端的协程友好异步文件
  *
  * @details 封装 IOController，通过调度器的可等待类型提供独立的异步读、写和关闭操作。
- * 不支持 AioFile 使用的批量 preRead/preWrite/commit 模式。
+ * 不支持 AsyncAio 使用的批量 preRead/preWrite/commit 模式。
  *
- * @note 对于基于 epoll 的系统，请使用 AioFile。
+ * @note 对于基于 epoll 的系统，请使用 AsyncAio。
  */
 class AsyncFile
 {

@@ -80,7 +80,7 @@ int main() {
     const auto root_build = root / "BUILD.bazel";
     const auto kernel_build = source_root / "galay-kernel" / "BUILD";
     const auto kernel_cmake = source_root / "galay-kernel" / "CMakeLists.txt";
-    const auto aio_file_h = source_root / "galay-kernel" / "async" / "aio_file.h";
+    const auto aio_file_h = source_root / "galay-kernel" / "async" / "async_aio.h";
     const auto defn_hpp = source_root / "galay-kernel" / "common" / "defn.hpp";
     const auto kqueue_scheduler_h = source_root / "galay-kernel" / "core" / "kqueue_scheduler.h";
 

@@ -26,7 +26,7 @@ std::atomic<bool> g_server_done{false};
 std::atomic<bool> g_client_done{false};
 
 Task<void> udpServer() {
-    UdpSocket socket;
+    AsyncUdpSocket socket;
 
     auto optResult = socket.option().handleReuseAddr();
     if (!optResult) {
@@ -68,7 +68,7 @@ Task<void> udpClient() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    UdpSocket socket;
+    AsyncUdpSocket socket;
     auto optResult = socket.option().handleNonBlock();
     if (!optResult) {
         g_client_done.store(true, std::memory_order_release);

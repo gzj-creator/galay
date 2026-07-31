@@ -28,12 +28,12 @@ namespace {
 
 [[noreturn]] void fail(const std::string& message);
 
-class SetSendBufferPlugin final : public plugin::AcceptPlugin<TcpSocket> {
+class SetSendBufferPlugin final : public plugin::AcceptPlugin<AsyncTcpSocket> {
 public:
     explicit SetSendBufferPlugin(int size)
         : m_size(size) {}
 
-    Task<bool> handle(Runtime&, TcpSocket& socket, const Host&) override
+    Task<bool> handle(Runtime&, AsyncTcpSocket& socket, const Host&) override
     {
         if (::setsockopt(socket.handle().fd, SOL_SOCKET, SO_SNDBUF, &m_size, sizeof(m_size)) != 0) {
             fail("setsockopt SO_SNDBUF failed in accept plugin, errno=" + std::to_string(errno));

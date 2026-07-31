@@ -27,7 +27,7 @@ Task<void> test_request_timeout(IOScheduler* scheduler)
 
     try {
         // 创建socket并连接
-        TcpSocket socket(IPType::IPV4);
+        AsyncTcpSocket socket(IPType::IPV4);
         auto nonblock_result = socket.option().handleNonBlock();
         if (!nonblock_result) {
             co_return;
@@ -87,7 +87,7 @@ Task<void> test_connect_timeout(IOScheduler* scheduler)
 
     try {
         // 尝试连接到不存在的服务器（使用不可路由的 IP）
-        TcpSocket socket(IPType::IPV4);
+        AsyncTcpSocket socket(IPType::IPV4);
         auto nonblock_result = socket.option().handleNonBlock();
         if (!nonblock_result) {
             co_return;
@@ -118,7 +118,7 @@ Task<void> test_server_disconnect(IOScheduler* scheduler)
 
     try {
         // 创建socket并连接
-        TcpSocket socket(IPType::IPV4);
+        AsyncTcpSocket socket(IPType::IPV4);
         auto nonblock_result = socket.option().handleNonBlock();
         if (!nonblock_result) {
             co_return;
@@ -179,7 +179,7 @@ Task<void> test_receive_timeout(IOScheduler* scheduler)
 
     try {
         // 创建socket并连接
-        TcpSocket socket(IPType::IPV4);
+        AsyncTcpSocket socket(IPType::IPV4);
         auto nonblock_result = socket.option().handleNonBlock();
         if (!nonblock_result) {
             co_return;
@@ -236,7 +236,7 @@ Task<void> test_timeout_retry(IOScheduler* scheduler)
 
     try {
         // 创建socket并连接
-        TcpSocket socket(IPType::IPV4);
+        AsyncTcpSocket socket(IPType::IPV4);
         auto nonblock_result = socket.option().handleNonBlock();
         if (!nonblock_result) {
             co_return;
@@ -305,7 +305,7 @@ Task<void> test_normal_request_with_timeout(IOScheduler* scheduler)
 
     try {
         // 创建socket并连接
-        TcpSocket socket(IPType::IPV4);
+        AsyncTcpSocket socket(IPType::IPV4);
         auto nonblock_result = socket.option().handleNonBlock();
         if (!nonblock_result) {
             co_return;

@@ -9,7 +9,7 @@
 #include "../common/conn_info_storage.hpp"
 #include "../common/defn.h"
 
-#include "../../../galay-kernel/concurrency/async_mutex.h"
+#include "../../../galay-kernel/async/async_mutex.h"
 
 #include <algorithm>
 #include <chrono>
@@ -118,7 +118,7 @@ struct BlackListConfig {
 
 /**
  * @brief 基于 accept plugin 的 HTTP 接入黑名单插件。
- * @tparam SocketType 接入阶段传入的 socket 类型，例如 TcpSocket 或 SslSocket。
+ * @tparam SocketType 接入阶段传入的 socket 类型，例如 AsyncTcpSocket 或 SslSocket。
  * @details 同一 SocketType 的所有 BlackList 插件实例共享一份 ConnInfoStorage 和
  *          AsyncMutex，确保多 serverLoop、多插件实例对同一客户端地址使用同一份统计。
  *          配置归插件实例私有；插件只在 accept 阶段决定是否继续后续插件/业务处理，

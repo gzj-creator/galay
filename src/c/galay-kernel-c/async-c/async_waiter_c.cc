@@ -1,9 +1,9 @@
-#include "async_mutex_c.h"
+#include "async_waiter_c.h"
 
-#include "../../../cpp/galay-kernel/concurrency/async_mutex.h"
+#include "../../../cpp/galay-kernel/async/async_waiter.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
-#include <galay/c/galay-bridge-c/coro-c/c_coro_async_mutex_bridge.h>
+#include <galay/c/galay-bridge-c/coro-c/c_coro_async_waiter_bridge.h>
 
 #include <chrono>
 #include <cstdint>
@@ -14,14 +14,14 @@
 namespace
 {
 
-galay::kernel::AsyncMutex* to_cpp_mutex(galay_kernel_async_mutex_t* c_mutex)
+galay::kernel::AsyncWaiter<void>* to_cpp_waiter(galay_kernel_async_waiter_t* waiter)
 {
-    return static_cast<galay::kernel::AsyncMutex*>(c_mutex->mutex);
+    return static_cast<galay::kernel::AsyncWaiter<void>*>(waiter->waiter);
 }
 
-const galay::kernel::AsyncMutex* to_cpp_mutex(const galay_kernel_async_mutex_t* c_mutex)
+const galay::kernel::AsyncWaiter<void>* to_cpp_waiter(const galay_kernel_async_waiter_t* waiter)
 {
-    return static_cast<const galay::kernel::AsyncMutex*>(c_mutex->mutex);
+    return static_cast<const galay::kernel::AsyncWaiter<void>*>(waiter->waiter);
 }
 
 C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
@@ -113,9 +113,9 @@ GalayCoreIOScheduler* current_scheduler()
         galay::kernel::coro_c::currentTaskOwnerScheduler());
 }
 
-GalayCoreAsyncMutex* to_core_mutex(void* mutex)
+GalayCoreAsyncWaiter* to_core_waiter(void* waiter)
 {
-    return reinterpret_cast<GalayCoreAsyncMutex*>(mutex);
+    return reinterpret_cast<GalayCoreAsyncWaiter*>(waiter);
 }
 
 struct WaitRequestScope {
@@ -225,83 +225,92 @@ C_IOResult submit_with_wait(Submit&& submit)
 
 } // namespace
 
-const char* galay_kernel_async_mutex_get_error(C_AsyncMutexResultCode code)
+const char* galay_kernel_async_waiter_get_error(C_AsyncWaiterResultCode code)
 {
     switch (code)
     {
-    case C_AsyncMutexSuccess:
+    case C_AsyncWaiterSuccess:
         return "success";
-    case C_AsyncMutexParameterInvalid:
+    case C_AsyncWaiterParameterInvalid:
         return "parameter invalid";
-    case C_AsyncMutexMemoryAllocFailed:
+    case C_AsyncWaiterMemoryAllocFailed:
         return "memory allocation failed";
-    case C_AsyncMutexIOFailed:
+    case C_AsyncWaiterIOFailed:
         return "io failed";
-    case C_AsyncMutexOperationInvalid:
+    case C_AsyncWaiterOperationInvalid:
         return "operation invalid";
-    case C_AsyncMutexTimeout:
+    case C_AsyncWaiterTimeout:
         return "timeout";
     }
-    return "unknown async mutex error";
+    return "unknown async waiter error";
 }
 
-C_AsyncMutexResultCode galay_kernel_async_mutex_create(galay_kernel_async_mutex_t* c_mutex)
+C_AsyncWaiterResultCode galay_kernel_async_waiter_create(galay_kernel_async_waiter_t* c_waiter)
 {
-    if (c_mutex == nullptr)
+    if (c_waiter == nullptr)
     {
-        return C_AsyncMutexParameterInvalid;
+        return C_AsyncWaiterParameterInvalid;
     }
 
-    c_mutex->mutex = nullptr;
-    auto* mutex = new (std::nothrow) galay::kernel::AsyncMutex();
-    if (mutex == nullptr)
+    c_waiter->waiter = nullptr;
+    auto* waiter = new (std::nothrow) galay::kernel::AsyncWaiter<void>();
+    if (waiter == nullptr)
     {
-        return C_AsyncMutexMemoryAllocFailed;
+        return C_AsyncWaiterMemoryAllocFailed;
     }
 
-    c_mutex->mutex = mutex;
-    return C_AsyncMutexSuccess;
+    c_waiter->waiter = waiter;
+    return C_AsyncWaiterSuccess;
 }
 
-C_AsyncMutexResultCode galay_kernel_async_mutex_destroy(galay_kernel_async_mutex_t* c_mutex)
+C_AsyncWaiterResultCode galay_kernel_async_waiter_destroy(galay_kernel_async_waiter_t* c_waiter)
 {
-    if (c_mutex == nullptr)
+    if (c_waiter == nullptr)
     {
-        return C_AsyncMutexParameterInvalid;
+        return C_AsyncWaiterParameterInvalid;
     }
 
-    delete to_cpp_mutex(c_mutex);
-    c_mutex->mutex = nullptr;
-    return C_AsyncMutexSuccess;
+    delete to_cpp_waiter(c_waiter);
+    c_waiter->waiter = nullptr;
+    return C_AsyncWaiterSuccess;
 }
 
-bool galay_kernel_async_mutex_is_locked(const galay_kernel_async_mutex_t* c_mutex)
+bool galay_kernel_async_waiter_is_waiting(const galay_kernel_async_waiter_t* c_waiter)
 {
-    if (c_mutex == nullptr || c_mutex->mutex == nullptr)
+    if (c_waiter == nullptr || c_waiter->waiter == nullptr)
     {
         return false;
     }
-
-    return to_cpp_mutex(c_mutex)->isLocked();
+    return to_cpp_waiter(c_waiter)->isWaiting();
 }
 
-C_AsyncMutexResultCode galay_kernel_async_mutex_unlock(galay_kernel_async_mutex_t* c_mutex)
+bool galay_kernel_async_waiter_is_ready(const galay_kernel_async_waiter_t* c_waiter)
 {
-    if (c_mutex == nullptr || c_mutex->mutex == nullptr)
+    if (c_waiter == nullptr || c_waiter->waiter == nullptr)
     {
-        return C_AsyncMutexParameterInvalid;
+        return false;
+    }
+    return to_cpp_waiter(c_waiter)->isReady();
+}
+
+C_AsyncWaiterResultCode galay_kernel_async_waiter_notify(galay_kernel_async_waiter_t* c_waiter)
+{
+    if (c_waiter == nullptr || c_waiter->waiter == nullptr)
+    {
+        return C_AsyncWaiterParameterInvalid;
     }
 
-    to_cpp_mutex(c_mutex)->unlock();
-    return C_AsyncMutexSuccess;
+    return to_cpp_waiter(c_waiter)->notify()
+        ? C_AsyncWaiterSuccess
+        : C_AsyncWaiterOperationInvalid;
 }
 
-C_IOResult galay_kernel_async_mutex_lock(
-    galay_kernel_async_mutex_t* c_mutex,
+C_IOResult galay_kernel_async_waiter_wait(
+    galay_kernel_async_waiter_t* c_waiter,
     int64_t timeout_ms)
 {
     GalayCoreIOScheduler* scheduler = current_scheduler();
-    if (c_mutex == nullptr || c_mutex->mutex == nullptr ||
+    if (c_waiter == nullptr || c_waiter->waiter == nullptr ||
         scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
     }
@@ -311,10 +320,10 @@ C_IOResult galay_kernel_async_mutex_lock(
 
     return submit_with_wait(
         [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_async_mutex_lock(to_core_mutex(c_mutex->mutex),
-                                                    scheduler,
-                                                    timeout_ms,
-                                                    user_data,
-                                                    wait_ops);
+            return galay_core_coro_async_waiter_wait(to_core_waiter(c_waiter->waiter),
+                                                     scheduler,
+                                                     timeout_ms,
+                                                     user_data,
+                                                     wait_ops);
         });
 }

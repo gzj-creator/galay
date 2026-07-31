@@ -1,6 +1,6 @@
 /**
  * @file t2_tcp.cc
- * @brief 用途：验证 `TcpSocket` 的基础连接、发送和接收能力。
+ * @brief 用途：验证 `AsyncTcpSocket` 的基础连接、发送和接收能力。
  * 关键覆盖点：主动连接、基础收发接口、错误码与连接状态的基本行为。
  * 通过条件：连接与收发断言全部成立，测试流程正常结束并返回 0。
  */
@@ -9,7 +9,7 @@
 #include <iostream>
 #include <cstring>
 #include <string_view>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/port_cfg.h"
 #include "test/cpp/common/stdout_log.h"
@@ -40,7 +40,7 @@ uint16_t tcpTestPort() {
 // Echo服务器协程
 Task<void> echoServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("Server starting...");
-    TcpSocket listener;
+    AsyncTcpSocket listener;
     // 设置选项
     auto optResult = listener.option().handleReuseAddr();
     if (!optResult) {
@@ -84,7 +84,7 @@ Task<void> echoServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("Client connected from {}:{}", clientHost.ip(), clientHost.port());
 
     // 创建客户端socket
-    TcpSocket client(acceptResult.value());
+    AsyncTcpSocket client(acceptResult.value());
     client.option().handleNonBlock();
 
     // Echo循环
@@ -122,7 +122,7 @@ Task<void> echoServer([[maybe_unused]] IOScheduler* scheduler) {
 // 客户端协程
 Task<void> echoClient([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("Client starting...");
-    TcpSocket client;
+    AsyncTcpSocket client;
     LogDebug("Client socket created, fd={}", client.handle().fd);
 
     client.option().handleNonBlock();
@@ -165,7 +165,7 @@ Task<void> echoClient([[maybe_unused]] IOScheduler* scheduler) {
 }
 
 int main() {
-    LogInfo("TcpSocket Test");
+    LogInfo("AsyncTcpSocket Test");
 
 #ifdef USE_KQUEUE
     LogInfo("Using KqueueScheduler (macOS)");

@@ -30,18 +30,18 @@ using ::galay::utils::ByteQueueView;
 #include "../concurrency/mpsc_channel.h"
 #include "../concurrency/bounded_channel.h"
 #include "../concurrency/unsafe_channel.h"
-#include "../concurrency/async_mutex.h"
-#include "../concurrency/async_waiter.h"
 
-#include "../async/tcp_socket.h"
-#include "../async/udp_socket.h"
-#include "../async/file_watcher.h"
+#include "../async/async_mutex.h"
+#include "../async/async_waiter.h"
+#include "../async/async_tcp.h"
+#include "../async/async_udp.h"
+#include "../async/async_file_watcher.h"
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 #include "../async/async_file.h"
 #endif
 
 #ifdef USE_EPOLL
-#include "../async/aio_file.h"
+#include "../async/async_aio.h"
 #endif
 }

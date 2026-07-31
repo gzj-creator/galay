@@ -1,6 +1,6 @@
 #include "c_coro_async_mutex_bridge.h"
 
-#include <galay/cpp/galay-kernel/concurrency/async_mutex.h>
+#include <galay/cpp/galay-kernel/async/async_mutex.h>
 #include <galay/cpp/galay-kernel/core/scheduler.hpp>
 #include <galay/cpp/galay-kernel/core/waker.h>
 

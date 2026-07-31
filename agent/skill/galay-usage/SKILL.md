@@ -42,12 +42,12 @@ galay 是一个基于 **C++23 协程** 的高性能异步网络与协议框架�
 
 ```cpp
 #include <galay/cpp/galay-kernel/core/runtime.h>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 using namespace galay::kernel;
 using namespace galay::async;
 
 Task<int> fetch() {
-    auto sock = TcpSocket::create();                 // std::expected<TcpSocket, IOError>
+    auto sock = AsyncTcpSocket::create();                 // std::expected<AsyncTcpSocket, IOError>
     if (!sock) co_return -1;
     sock->option().handleNonBlock();
     if (auto c = co_await sock->connect(Host(IPType::IPV4, "127.0.0.1", 8080)); !c)

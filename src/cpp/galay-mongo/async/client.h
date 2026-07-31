@@ -15,7 +15,7 @@
 #ifndef GALAY_MONGO_ASYNC_CLIENT_H
 #define GALAY_MONGO_ASYNC_CLIENT_H
 
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/common/error.h"
 #include "../../galay-kernel/common/host.hpp"
 #include "../../galay-kernel/core/io_scheduler.hpp"
@@ -40,7 +40,7 @@
 namespace galay::mongo
 {
 
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using galay::kernel::IOError;
 using galay::kernel::IOScheduler;
 using galay::kernel::Task;
@@ -267,7 +267,7 @@ public:
 
     bool isClosed() const { return m_is_closed; }  ///< 判断连接是否已关闭
 
-    TcpSocket& socket() { return m_socket; }        ///< 获取底层 TCP socket 的可变引用
+    AsyncTcpSocket& socket() { return m_socket; }        ///< 获取底层 TCP socket 的可变引用
     galay::utils::RingBuffer<>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
     const galay::utils::RingBuffer<>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
 
@@ -287,7 +287,7 @@ private:
     int32_t reserveRequestIdBlock(size_t count);
 
     AsyncMongoConfig m_config = AsyncMongoConfig::noTimeout();       ///< 异步客户端配置
-    TcpSocket m_socket;                                              ///< 底层 TCP socket
+    AsyncTcpSocket m_socket;                                              ///< 底层 TCP socket
     galay::utils::RingBuffer<> m_ring_buffer;                        ///< 接收环形缓冲区
     std::string m_decode_scratch;                                    ///< 解码用的临时缓冲区
     std::string m_ping_template_db;                                  ///< ping 命令模板数据库名

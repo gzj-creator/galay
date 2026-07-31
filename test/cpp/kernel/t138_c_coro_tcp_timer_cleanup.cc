@@ -3,7 +3,7 @@
  * @brief 验证 C coroutine TCP bridge 在 timeout timer 注册失败后清理 reactor 状态。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/core/timer_scheduler.h>
@@ -74,7 +74,7 @@ GalayCoreCoroWaitOps makeWaitOps(ManualWaitState* state)
     };
 }
 
-GalayCoreTcpSocket* toCoreSocket(TcpSocket* socket)
+GalayCoreTcpSocket* toCoreSocket(AsyncTcpSocket* socket)
 {
     return reinterpret_cast<GalayCoreTcpSocket*>(socket);
 }
@@ -105,7 +105,7 @@ int connectPosixClient(uint16_t port)
     return fd;
 }
 
-bool createLoopbackPair(TcpSocket* listener, TcpSocket* accepted, int* client_fd)
+bool createLoopbackPair(AsyncTcpSocket* listener, AsyncTcpSocket* accepted, int* client_fd)
 {
     auto bound = listener->bind(Host(IPType::IPV4, "127.0.0.1", 0));
     if (!bound.has_value()) {
@@ -138,7 +138,7 @@ bool createLoopbackPair(TcpSocket* listener, TcpSocket* accepted, int* client_fd
         std::cerr << "[T138] accept failed\n";
         return false;
     }
-    *accepted = TcpSocket(GHandle{.fd = server_fd});
+    *accepted = AsyncTcpSocket(GHandle{.fd = server_fd});
     auto non_block = accepted->option().handleNonBlock();
     if (!non_block.has_value()) {
         std::cerr << "[T138] server nonblock failed\n";
@@ -148,7 +148,7 @@ bool createLoopbackPair(TcpSocket* listener, TcpSocket* accepted, int* client_fd
 }
 
 #ifdef USE_KQUEUE
-bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, TcpSocket& socket)
+bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, AsyncTcpSocket& socket)
 {
     auto* kqueue_scheduler = dynamic_cast<KqueueScheduler*>(scheduler);
     if (kqueue_scheduler == nullptr) {
@@ -174,7 +174,7 @@ bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, TcpSocket& socket
     return false;
 }
 #elif defined(USE_EPOLL)
-bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, TcpSocket& socket)
+bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, AsyncTcpSocket& socket)
 {
     auto* epoll_scheduler = dynamic_cast<EpollScheduler*>(scheduler);
     if (epoll_scheduler == nullptr) {
@@ -189,7 +189,7 @@ bool verifyBackendRegistrationWasRemoved(Scheduler* scheduler, TcpSocket& socket
     return false;
 }
 #else
-bool verifyBackendRegistrationWasRemoved(Scheduler*, TcpSocket&)
+bool verifyBackendRegistrationWasRemoved(Scheduler*, AsyncTcpSocket&)
 {
     return true;
 }
@@ -213,8 +213,8 @@ bool verifyTimerAddFailureLeavesSocketReusable()
         return false;
     }
 
-    TcpSocket listener;
-    TcpSocket server;
+    AsyncTcpSocket listener;
+    AsyncTcpSocket server;
     int client_fd = -1;
     if (!createLoopbackPair(&listener, &server, &client_fd)) {
         runtime.stop();

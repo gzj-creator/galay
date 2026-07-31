@@ -24,7 +24,7 @@ Task<void> test_get_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 1: GET Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -80,7 +80,7 @@ Task<void> test_post_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 2: POST Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -137,7 +137,7 @@ Task<void> test_put_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 3: PUT Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -194,7 +194,7 @@ Task<void> test_delete_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 4: DELETE Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -249,7 +249,7 @@ Task<void> test_head_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 5: HEAD Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -305,7 +305,7 @@ Task<void> test_options_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 6: OPTIONS Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -367,7 +367,7 @@ Task<void> test_patch_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 7: PATCH Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -424,7 +424,7 @@ Task<void> test_trace_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 8: TRACE Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);
@@ -479,7 +479,7 @@ Task<void> test_connect_method(IOScheduler* scheduler)
 {
     std::cout << "=== Test 9: CONNECT Method ===" << std::endl;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     socket.option().handleNonBlock();
 
     Host host(IPType::IPV4, TEST_HOST, TEST_PORT);

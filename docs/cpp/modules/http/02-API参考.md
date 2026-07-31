@@ -158,7 +158,7 @@ struct HttpServerConfig {
 
 `HttpServer` 的常用生命周期方法：
 
-- `addAcceptPlugin(std::unique_ptr<plugin::AcceptPlugin<TcpSocket>> plugin)`
+- `addAcceptPlugin(std::unique_ptr<plugin::AcceptPlugin<AsyncTcpSocket>> plugin)`
 - `start(ConnHandler handler)`
 - `start(HttpRouter&& router)`
 - `stop()`
@@ -194,7 +194,7 @@ public:
 #include <galay/cpp/galay-http/plugin/blacklist/blacklist.hpp>
 
 server.addAcceptPlugin(
-    std::make_unique<galay::http::plugin::BlackList<TcpSocket>>(100));
+    std::make_unique<galay::http::plugin::BlackList<AsyncTcpSocket>>(100));
 ```
 
 `BlackListConfig::exclude_ips` 可配置不受 blacklist 策略限制的客户端 IP。命中后当前 blacklist

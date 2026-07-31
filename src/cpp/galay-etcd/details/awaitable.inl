@@ -183,7 +183,7 @@ details::ConnectAwaitable::SharedState::SharedState(AsyncEtcdClient& owner)
     }
 
     try {
-        client->m_socket = std::make_unique<galay::async::TcpSocket>(client->m_ip_type);
+        client->m_socket = std::make_unique<galay::async::AsyncTcpSocket>(client->m_ip_type);
         auto nonblock_result = client->m_socket->option().handleNonBlock();
         if (!nonblock_result.has_value()) {
             EtcdError error = mapKernelIoError(nonblock_result.error(), EtcdErrorType::Connection);

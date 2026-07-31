@@ -1,11 +1,11 @@
 /**
  * @file t119_connbld.cc
- * @brief 用途：在同一 IO scheduler 下并发压测 `TcpSocket::connect` 与 `AwaitableBuilder::connect` 的混合路径。
+ * @brief 用途：在同一 IO scheduler 下并发压测 `AsyncTcpSocket::connect` 与 `AwaitableBuilder::connect` 的混合路径。
  * 关键覆盖点：高并发 paired client/server 建连、传统 connect awaitable 与 sequence/state-machine connect 桥接并发共存。
  * 通过条件：所有建连成功、服务端 accept 计数完整、无 connect 超时/失败。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/common/host.hpp>
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/task.h>
@@ -36,7 +36,7 @@ using TestScheduler = galay::kernel::KqueueScheduler;
 #endif
 
 using namespace galay::kernel;
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using namespace std::chrono_literals;
 
 namespace {
@@ -105,7 +105,7 @@ struct BuilderConnectFlow {
     }
 };
 
-std::expected<uint16_t, IOError> localPort(const TcpSocket& socket) {
+std::expected<uint16_t, IOError> localPort(const AsyncTcpSocket& socket) {
     sockaddr_storage storage{};
     socklen_t length = sizeof(storage);
     if (::getsockname(socket.handle().fd, reinterpret_cast<sockaddr*>(&storage), &length) != 0) {
@@ -119,12 +119,12 @@ std::expected<uint16_t, IOError> localPort(const TcpSocket& socket) {
 }
 
 Task<void> runServer(TestState* state) {
-    auto listener_result = TcpSocket::create(IPType::IPV4);
+    auto listener_result = AsyncTcpSocket::create(IPType::IPV4);
     if (!listener_result) {
         fail(state, "listener socket create failed: " + listener_result.error().message());
         co_return;
     }
-    TcpSocket listener = std::move(*listener_result);
+    AsyncTcpSocket listener = std::move(*listener_result);
     listener.option().handleReuseAddr();
     listener.option().handleNonBlock();
 
@@ -157,7 +157,7 @@ Task<void> runServer(TestState* state) {
         }
         state->accepted.fetch_add(1, std::memory_order_relaxed);
 
-        TcpSocket peer(std::move(accepted.value()));
+        AsyncTcpSocket peer(std::move(accepted.value()));
         (void)co_await peer.close();
     }
 
@@ -169,12 +169,12 @@ Task<void> runPlainClient(TestState* state) {
                       "127.0.0.1",
                       static_cast<uint16_t>(state->port.load(std::memory_order_acquire)));
     for (int round = 0; round < kRoundsPerClient; ++round) {
-        auto socket_result = TcpSocket::create(IPType::IPV4);
+        auto socket_result = AsyncTcpSocket::create(IPType::IPV4);
         if (!socket_result) {
             recordOpenFailure(state, "plain", round, socket_result.error());
             continue;
         }
-        TcpSocket socket = std::move(*socket_result);
+        AsyncTcpSocket socket = std::move(*socket_result);
         auto non_block = socket.option().handleNonBlock();
         if (!non_block) {
             recordConnectFailure(state, "plain", round, non_block.error());
@@ -201,12 +201,12 @@ Task<void> runBuilderClient(TestState* state) {
                       "127.0.0.1",
                       static_cast<uint16_t>(state->port.load(std::memory_order_acquire)));
     for (int round = 0; round < kRoundsPerClient; ++round) {
-        auto socket_result = TcpSocket::create(IPType::IPV4);
+        auto socket_result = AsyncTcpSocket::create(IPType::IPV4);
         if (!socket_result) {
             recordOpenFailure(state, "builder", round, socket_result.error());
             continue;
         }
-        TcpSocket socket = std::move(*socket_result);
+        AsyncTcpSocket socket = std::move(*socket_result);
         auto non_block = socket.option().handleNonBlock();
         if (!non_block) {
             recordConnectFailure(state, "builder", round, non_block.error());

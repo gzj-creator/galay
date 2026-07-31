@@ -5,12 +5,12 @@
 
 int main()
 {
-    using galay::async::TcpSocket;
+    using galay::async::AsyncTcpSocket;
     using galay::http::HttpSession;
     using galay::http::detail::HttpSessionState;
     using galay::kernel::IPType;
 
-    TcpSocket socket(IPType::IPV4);
+    AsyncTcpSocket socket(IPType::IPV4);
     HttpSession session(socket);
 
     std::string raw_request =
@@ -23,7 +23,7 @@ int main()
         "\r\n"
         "{\"k\":\"v\"}";
 
-    HttpSessionState<TcpSocket> state(session, std::move(raw_request));
+    HttpSessionState<AsyncTcpSocket> state(session, std::move(raw_request));
 
     if (state.sendRemaining() == 0) {
         std::cerr << "[T78] serialized request should expose pending bytes\n";

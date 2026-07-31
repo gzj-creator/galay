@@ -66,7 +66,7 @@ public:
     }
 
     /**
-     * @brief 设置 writev 聚合阈值（仅 TcpSocket）
+     * @brief 设置 writev 聚合阈值（仅 AsyncTcpSocket）
      * @details 当 header+body 总长度 <= threshold 时，改为单缓冲 send；
      *          设为 0 表示始终使用 writev。
      */

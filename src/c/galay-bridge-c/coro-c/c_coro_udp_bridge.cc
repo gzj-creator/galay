@@ -1,6 +1,6 @@
 #include "c_coro_udp_bridge.h"
 
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 
@@ -16,7 +16,7 @@
 namespace
 {
 
-using galay::async::UdpSocket;
+using galay::async::AsyncUdpSocket;
 using galay::kernel::IOController;
 using galay::kernel::IOError;
 using galay::kernel::IOScheduler;
@@ -132,9 +132,9 @@ C_IOResult from_io_error(const IOError& error)
     return make_result(C_IOResultError, io_error_sys_errno(error));
 }
 
-UdpSocket* to_cpp_socket(GalayCoreUdpSocket* socket)
+AsyncUdpSocket* to_cpp_socket(GalayCoreUdpSocket* socket)
 {
-    return reinterpret_cast<UdpSocket*>(socket);
+    return reinterpret_cast<AsyncUdpSocket*>(socket);
 }
 
 Scheduler* to_io_scheduler(GalayCoreIOScheduler* scheduler_handle)

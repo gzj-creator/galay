@@ -1,6 +1,6 @@
 /**
  * @file t5_udp.cc
- * @brief 用途：验证 `UdpSocket` 的基础发送、接收与地址处理能力。
+ * @brief 用途：验证 `AsyncUdpSocket` 的基础发送、接收与地址处理能力。
  * 关键覆盖点：无连接报文收发、地址绑定与回传、基础错误路径处理。
  * 通过条件：UDP 收发结果与预期一致，测试按预期结束并返回 0。
  */
@@ -9,7 +9,7 @@
 #include <iostream>
 #include <cstring>
 #include <string_view>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/port_cfg.h"
 #include "test/cpp/common/stdout_log.h"
@@ -40,7 +40,7 @@ uint16_t udpTestPort() {
 // UDP Echo服务器协程
 Task<void> udpEchoServer() {
     LogInfo("UDP Server starting...");
-    UdpSocket socket;
+    AsyncUdpSocket socket;
     LogDebug("Socket created, fd={}", socket.handle().fd);
 
     // 设置选项
@@ -98,7 +98,7 @@ Task<void> udpEchoServer() {
 // UDP客户端协程
 Task<void> udpEchoClient() {
     LogInfo("UDP Client starting...");
-    UdpSocket socket;
+    AsyncUdpSocket socket;
     LogDebug("Client socket created, fd={}", socket.handle().fd);
 
     socket.option().handleNonBlock();
@@ -143,7 +143,7 @@ Task<void> udpEchoClient() {
 }
 
 int main() {
-    LogInfo("UdpSocket Test");
+    LogInfo("AsyncUdpSocket Test");
 
 #ifdef USE_KQUEUE
     LogInfo("Using KqueueScheduler (macOS)");

@@ -11,7 +11,7 @@
 #ifndef GALAY_REDIS_CLIENT_H
 #define GALAY_REDIS_CLIENT_H
 
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/task.h"
 #include "../../galay-kernel/core/timeout.hpp"
@@ -44,7 +44,7 @@
 
 namespace galay::redis
 {
-    using galay::async::TcpSocket;
+    using galay::async::AsyncTcpSocket;
     using galay::kernel::IOScheduler;
     using galay::kernel::Host;
     using galay::kernel::IOError;
@@ -475,7 +475,7 @@ namespace galay::redis
 
         // ======================== 连接管理 ========================
 
-        TcpSocket& socket() { return m_socket; }                               ///< 获取底层 TCP 套接字
+        AsyncTcpSocket& socket() { return m_socket; }                               ///< 获取底层 TCP 套接字
         protocol::RespParser& parser() { return m_parser; }                    ///< 获取 RESP 解析器
         galay::utils::RingBuffer<Strategy>& ringBuffer() { return *m_ring_buffer; } ///< 获取接收环形缓冲区
         const galay::utils::RingBuffer<Strategy>& ringBuffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
@@ -496,7 +496,7 @@ namespace galay::redis
 
     private:
         // 成员变量
-        TcpSocket m_socket;                                   ///< TCP 套接字
+        AsyncTcpSocket m_socket;                                   ///< TCP 套接字
         AsyncRedisConfig m_config;                            ///< 异步配置
         std::shared_ptr<galay::utils::RingBuffer<Strategy>> m_ring_buffer; ///< 接收环形缓冲区
         IOScheduler* m_scheduler;                             ///< IO 调度器

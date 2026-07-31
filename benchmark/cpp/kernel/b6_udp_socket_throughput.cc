@@ -11,7 +11,7 @@
 #include <chrono>
 #include <vector>
 #include "benchmark/cpp/common/benchmark_sync.h"
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -50,7 +50,7 @@ constexpr auto CLIENT_DRAIN_TIMEOUT = std::chrono::milliseconds(250);
 
 // UDP Echo服务器工作协程 - 多协程并发处理
 Task<void> udpServerWorker(int worker_id) {
-    UdpSocket socket;
+    AsyncUdpSocket socket;
 
     socket.option().handleReuseAddr();
     socket.option().handleReusePort();  // 关键：允许多个socket绑定同一端口
@@ -108,7 +108,7 @@ Task<void> udpServerWorker(int worker_id) {
 
 // UDP客户端协程 - 流水线模式
 Task<void> udpBenchmarkClient(int client_id) {
-    UdpSocket socket;
+    AsyncUdpSocket socket;
 
     socket.option().handleNonBlock();
 

@@ -4,7 +4,7 @@
  * @author galay-http
  * @version 1.0.0
  *
- * @details 提供 HttpReaderImpl 模板类，支持从 TcpSocket 或 SslSocket 读取
+ * @details 提供 HttpReaderImpl 模板类，支持从 AsyncTcpSocket 或 SslSocket 读取
  * HTTP 请求、HTTP 响应和 HTTP Chunk 数据。
  * 内部使用 RingBuffer + iovec 零拷贝技术，结合异步状态机实现高效的
  * 非阻塞读取。支持明文 TCP（readv）和 SSL 两种 IO 模式。
@@ -20,7 +20,7 @@
 #include "../protoc/parse_utils.h"
 #include "../protoc/http_request.h"
 #include "../protoc/http_response.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
 #include "../../galay-kernel/core/awaitable.h"
@@ -765,7 +765,7 @@ auto buildReadOperation(SocketType& socket, std::shared_ptr<StateT> state) {
 
 /**
  * @brief HTTP 读取器模板类
- * @tparam SocketType Socket 类型（TcpSocket 或 SslSocket）
+ * @tparam SocketType Socket 类型（AsyncTcpSocket 或 SslSocket）
  * @details 从 Socket 异步读取 HTTP 请求、响应和 chunked 数据。
  *          内部使用 RingBuffer + iovec 零拷贝技术和异步状态机。
  */
@@ -1058,7 +1058,7 @@ private:
     std::shared_ptr<detail::HttpRequestReadState> m_request_read_state; ///< 可复用的请求读取状态
 };
 
-using HttpReader = HttpReaderImpl<TcpSocket>; ///< HTTP 明文读取器类型别名
+using HttpReader = HttpReaderImpl<AsyncTcpSocket>; ///< HTTP 明文读取器类型别名
 
 } // namespace galay::http
 

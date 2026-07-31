@@ -5,8 +5,8 @@
  * 通过条件：超时任务返回 timeout，持锁任务释放后新的 probe 任务仍能成功获取锁。
  */
 
-#include <galay/cpp/galay-kernel/concurrency/async_mutex.h>
-#include <galay/cpp/galay-kernel/concurrency/async_waiter.h>
+#include <galay/cpp/galay-kernel/async/async_mutex.h>
+#include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include <atomic>

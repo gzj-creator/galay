@@ -16,7 +16,7 @@
 #include <galay/cpp/galay-ws/server/ws_upgrade.h>
 #undef private
 
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using galay::kernel::MachineSignal;
 using galay::utils::RingBuffer;
 using namespace galay::http;
@@ -196,7 +196,7 @@ void testFragmentedTextValidatesWholeUtf8()
 
 void testEchoZeroCopyHonorsReaderLimits()
 {
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     auto ring = RingBuffer(1024);
     writeAll(ring, encodeMaskedFrame(WsOpcode::Text, "12345"));
     WsConn conn(std::move(socket), std::move(ring), true);
@@ -207,7 +207,7 @@ void testEchoZeroCopyHonorsReaderLimits()
 
     std::string message;
     WsOpcode opcode = WsOpcode::Close;
-    galay::websocket::detail::WsEchoMachine<TcpSocket> machine(
+    galay::websocket::detail::WsEchoMachine<AsyncTcpSocket> machine(
         &conn,
         reader_setting,
         WsWriterSetting::byServer(),

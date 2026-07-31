@@ -3,8 +3,8 @@
  * @brief 压测资源 RAII 关闭与 iovec 参数错误快路径。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 #include <galay/cpp/galay-kernel/async/async_file.h>
@@ -82,12 +82,12 @@ int main()
               << std::setw(16) << "ops/s" << '\n';
 
     measure("udp create+destruct", iterations, [](std::size_t i) {
-        galay::async::UdpSocket socket;
+        galay::async::AsyncUdpSocket socket;
         return static_cast<std::size_t>(socket.handle().fd >= 0) + (i & 1U);
     });
 
     measure("invalid readv/writev count", iterations, [](std::size_t i) {
-        galay::async::TcpSocket socket(GHandle::invalid());
+        galay::async::AsyncTcpSocket socket(GHandle::invalid());
         std::array<struct iovec, 1> iovecs{};
         auto readv = socket.readv(iovecs, 2);
         auto writev = socket.writev(iovecs, 2);

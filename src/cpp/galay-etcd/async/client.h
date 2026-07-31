@@ -24,7 +24,7 @@
 #include "../base/etcd_value.h"
 
 #include "../../galay-http/kernel/http_session.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/common/host.hpp"
 #include "../../galay-kernel/core/io_scheduler.hpp"
 
@@ -263,7 +263,7 @@ private:
     std::optional<galay::kernel::Host> m_server_host;                      ///< 解析后的服务端主机地址
     std::string m_endpoint_error;                                          ///< 端点解析错误信息
 
-    std::unique_ptr<galay::async::TcpSocket> m_socket;                     ///< TCP 套接字
+    std::unique_ptr<galay::async::AsyncTcpSocket> m_socket;                     ///< TCP 套接字
     std::unique_ptr<galay::http::HttpSession> m_http_session;              ///< HTTP 会话
 
     EtcdError m_last_error;                                                ///< 最后一次错误

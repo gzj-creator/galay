@@ -16,6 +16,15 @@
 - **新增高性能有界 MPMC 异步通道**：`BoundedChannel<T>` 基于固定容量 Vyukov ring 提供线程安全的 `trySend()` / `tryRecv()`、协程 `send()` / `recv()` / `recvBatch()`、超时、关闭唤醒和 move-only 元素支持；新增 `kClosed` 错误码并导出到 kernel module facade。Apple AArch64 竞争退避使用 `isb` CPU hint，CAS miss 在当前调用内保持用户态重试，4P4C/4096 同机中位吞吐达到约 113.4M msg/s，追平并略超 Rust Crossbeam `ArrayQueue` 的约 109.2M msg/s。
 - **补齐有界通道正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、超时、批量接收、move-only 与 4P4C/256/4096 MPMC 测试；新增线程放置辅助、C++ 吞吐/延迟 benchmark 和 Rust Crossbeam `ArrayQueue` / bounded channel 对照程序。
 
+### Changed
+
+- **统一异步 I/O 文件与公开类型命名**：C++ 头文件和实现统一改为 `async_aio`、`async_tcp`、`async_udp`、`async_file_watcher`，公开类型改为 `AsyncAio`、`AsyncTcpSocket`、`AsyncUdpSocket`、`AsyncFileWatcher`；C wrapper 同步采用带 `_c` 后缀的新文件名，保留现有 C ABI 函数与句柄名称。
+- **异步同步原语归入 async 模块**：`async_mutex` 与 `async_waiter` 从 C++ `concurrency` 和 C `concurrency-c` 目录迁入对应 `async` / `async-c` 目录，并同步更新模块入口、安装边界、源码、文档、测试、示例与 benchmark 引用。
+
+### Fixed
+
+- **修复全量构建中的 RPC etcd 注册变量重定义**：区分服务注册与 endpoint 注册的局部结果变量，消除两个测试/压力基准目标在同一作用域内重复声明导致的编译失败。
+
 ## [v4.4.2] - 2026-07-29
 
 ### Added

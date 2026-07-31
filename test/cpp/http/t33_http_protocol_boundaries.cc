@@ -181,11 +181,11 @@ void testRangeAmplificationCaps()
 
 void testSessionRejectsOversizedResponseBody()
 {
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     HttpReaderSetting setting;
     setting.setMaxBodySize(4);
     HttpSession session(socket, 1024, setting);
-    galay::http::detail::HttpSessionState<galay::async::TcpSocket> state(
+    galay::http::detail::HttpSessionState<galay::async::AsyncTcpSocket> state(
         session, std::string("GET / HTTP/1.1\r\n\r\n"));
 
     const std::string raw =

@@ -14,7 +14,7 @@
 #include "ws_reader.h"
 #include "ws_writer.h"
 #include "../../galay-http/kernel/http_conn.h"
-#include "../../galay-kernel/async/tcp_socket.h"
+#include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-utils/cache/bytes.hpp"
 #include "../../galay-utils/cache/ring_buffer.hpp"
 
@@ -1044,7 +1044,7 @@ private:
 
 /**
  * @brief WebSocket连接模板类
- * @tparam SocketType Socket类型（TcpSocket 或 SslSocket）
+ * @tparam SocketType Socket类型（AsyncTcpSocket 或 SslSocket）
  * @details 封装WebSocket连接的底层资源，不持有reader/writer，通过接口构造返回
  */
 template<typename SocketType>
@@ -1251,7 +1251,7 @@ private:
 };
 
 // 类型别名 - WebSocket over TCP
-using WsConn = WsConnImpl<TcpSocket>;
+using WsConn = WsConnImpl<AsyncTcpSocket>;
 
 } // namespace galay::websocket
 

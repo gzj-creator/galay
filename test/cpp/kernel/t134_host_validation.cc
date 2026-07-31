@@ -3,8 +3,8 @@
  * @brief 验证 Host 字符串构造和 socket bind 的参数错误边界。
  */
 
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
-#include <galay/cpp/galay-kernel/async/udp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
+#include <galay/cpp/galay-kernel/async/async_udp.h>
 
 #include <iostream>
 
@@ -44,7 +44,7 @@ bool invalidHostFamilyIsRejected()
 
 bool tcpBindRejectsInvalidHost()
 {
-    galay::async::TcpSocket socket(GHandle::invalid());
+    galay::async::AsyncTcpSocket socket(GHandle::invalid());
     galay::kernel::Host host(galay::kernel::IPType::IPV4, "not-an-ip", 0);
 
     return check(hasParamInvalid(socket.bind(host)), "tcp bind should return kParamInvalid for invalid Host");
@@ -52,7 +52,7 @@ bool tcpBindRejectsInvalidHost()
 
 bool udpBindRejectsInvalidHost()
 {
-    galay::async::UdpSocket socket(GHandle::invalid());
+    galay::async::AsyncUdpSocket socket(GHandle::invalid());
     galay::kernel::Host host(galay::kernel::IPType::IPV4, "not-an-ip", 0);
 
     return check(hasParamInvalid(socket.bind(host)), "udp bind should return kParamInvalid for invalid Host");

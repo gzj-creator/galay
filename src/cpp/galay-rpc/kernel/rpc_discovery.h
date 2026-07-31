@@ -13,7 +13,7 @@
 
 #include "rpc_endpoint.h"
 #include "rpc_service.h"
-#include "../../galay-kernel/concurrency/async_mutex.h"
+#include "../../galay-kernel/async/async_mutex.h"
 #include "../../galay-kernel/common/balancer.hpp"
 #include <string>
 #include <vector>

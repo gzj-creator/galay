@@ -16,7 +16,7 @@
 #include "../protoc/http2_base.h"
 #include "../protoc/http2_frame.h"
 #include "../../galay-http/common/iovec_utils.h"
-#include "../../galay-kernel/concurrency/async_waiter.h"
+#include "../../galay-kernel/async/async_waiter.h"
 #include "../../galay-kernel/concurrency/mpsc_channel.h"
 #include "../../galay-kernel/common/sleep.hpp"
 #include "../../galay-kernel/core/runtime.h"
@@ -1495,7 +1495,7 @@ private:
 
             if (!write_state.empty()) {
                 if constexpr (requires(SocketType& socket, std::vector<iovec>& vec) { socket.writev(vec); }) {
-                    // 支持 writev 的 socket（如 TcpSocket）：一次批量发送
+                    // 支持 writev 的 socket（如 AsyncTcpSocket）：一次批量发送
                     while (!write_state.empty()) {
                         const auto iovec_count = std::min(write_state.count(), kMaxWritevIovecs);
                         auto result = co_await m_conn.socket().writev(
@@ -3089,7 +3089,7 @@ private:
 };
 
 // 类型别名
-using Http2StreamManager = Http2StreamManagerImpl<galay::async::TcpSocket>;
+using Http2StreamManager = Http2StreamManagerImpl<galay::async::AsyncTcpSocket>;
 
 } // namespace galay::http2
 

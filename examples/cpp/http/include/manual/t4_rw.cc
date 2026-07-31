@@ -8,7 +8,7 @@
 #include <thread>
 #include <chrono>
 #include <cctype>
-#include <galay/cpp/galay-kernel/async/tcp_socket.h>
+#include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
 #ifdef USE_KQUEUE
@@ -106,7 +106,7 @@ bool parseExpectedResponseSize(const std::string& response, size_t& expected_siz
 // 客户端测试
 Task<void> test_client(int test_id, std::string path) {
 
-    TcpSocket client;
+    AsyncTcpSocket client;
     client.option().handleNonBlock();
 
     // 连接到服务器

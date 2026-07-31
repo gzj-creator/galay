@@ -178,7 +178,7 @@ private:
     ProbeState* m_state;
 };
 
-Task<std::expected<void, IOError>> closeTcpSocket(TcpSocket* socket)
+Task<std::expected<void, IOError>> closeTcpSocket(AsyncTcpSocket* socket)
 {
     if (socket == nullptr) {
         co_return std::unexpected(IOError(kNotReady, 0));
@@ -220,7 +220,7 @@ int observeH2cServerTcpNoDelay(bool tcp_no_delay)
         })
         .build());
 
-    require(server.addAcceptPlugin(std::make_unique<NoDelayProbePlugin<TcpSocket>>(&state)),
+    require(server.addAcceptPlugin(std::make_unique<NoDelayProbePlugin<AsyncTcpSocket>>(&state)),
             "h2c nodelay probe plugin should register");
 
     server.start();

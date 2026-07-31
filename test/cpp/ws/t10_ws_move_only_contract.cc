@@ -9,7 +9,7 @@
 #include <type_traits>
 #include <utility>
 
-using galay::async::TcpSocket;
+using galay::async::AsyncTcpSocket;
 using namespace galay::websocket;
 namespace ws_detail = galay::websocket::detail;
 
@@ -72,50 +72,50 @@ static_assert(!std::is_copy_assignable_v<ws_detail::WsRingBufferTcpReadMachine<w
 static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsRingBufferTcpReadMachine<ws_detail::WsFrameReadState>>);
 static_assert(kMoveAssignableOrStableAddress<ws_detail::WsRingBufferTcpReadMachine<ws_detail::WsFrameReadState>>);
 
-static_assert(!std::is_copy_constructible_v<WsReaderImpl<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<WsReaderImpl<TcpSocket>>);
-static_assert(std::is_nothrow_move_constructible_v<WsReaderImpl<TcpSocket>>);
-static_assert(std::is_nothrow_move_assignable_v<WsReaderImpl<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<WsReaderImpl<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<WsReaderImpl<AsyncTcpSocket>>);
+static_assert(std::is_nothrow_move_constructible_v<WsReaderImpl<AsyncTcpSocket>>);
+static_assert(std::is_nothrow_move_assignable_v<WsReaderImpl<AsyncTcpSocket>>);
 
-static_assert(!std::is_copy_constructible_v<ws_detail::WsTcpWritevMachine<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<ws_detail::WsTcpWritevMachine<TcpSocket>>);
-static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsTcpWritevMachine<TcpSocket>>);
-static_assert(kMoveAssignableOrStableAddress<ws_detail::WsTcpWritevMachine<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<ws_detail::WsTcpWritevMachine<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<ws_detail::WsTcpWritevMachine<AsyncTcpSocket>>);
+static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsTcpWritevMachine<AsyncTcpSocket>>);
+static_assert(kMoveAssignableOrStableAddress<ws_detail::WsTcpWritevMachine<AsyncTcpSocket>>);
 
-static_assert(!std::is_copy_constructible_v<WsWriterImpl<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<WsWriterImpl<TcpSocket>>);
-static_assert(std::is_nothrow_move_constructible_v<WsWriterImpl<TcpSocket>>);
-static_assert(std::is_nothrow_move_assignable_v<WsWriterImpl<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<WsWriterImpl<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<WsWriterImpl<AsyncTcpSocket>>);
+static_assert(std::is_nothrow_move_constructible_v<WsWriterImpl<AsyncTcpSocket>>);
+static_assert(std::is_nothrow_move_assignable_v<WsWriterImpl<AsyncTcpSocket>>);
 
-static_assert(!std::is_copy_constructible_v<ws_detail::WsEchoMachine<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<ws_detail::WsEchoMachine<TcpSocket>>);
-static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsEchoMachine<TcpSocket>>);
-static_assert(kMoveAssignableOrStableAddress<ws_detail::WsEchoMachine<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<ws_detail::WsEchoMachine<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<ws_detail::WsEchoMachine<AsyncTcpSocket>>);
+static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsEchoMachine<AsyncTcpSocket>>);
+static_assert(kMoveAssignableOrStableAddress<ws_detail::WsEchoMachine<AsyncTcpSocket>>);
 
-static_assert(!std::is_copy_constructible_v<ws_detail::WsClientUpgradeState<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<ws_detail::WsClientUpgradeState<TcpSocket>>);
-static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsClientUpgradeState<TcpSocket>>);
-static_assert(kMoveAssignableOrStableAddress<ws_detail::WsClientUpgradeState<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>);
+static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>);
+static_assert(kMoveAssignableOrStableAddress<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>);
 
-static_assert(!std::is_copy_constructible_v<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<TcpSocket>>>);
-static_assert(!std::is_copy_assignable_v<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<TcpSocket>>>);
-static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<TcpSocket>>>);
-static_assert(kMoveAssignableOrStableAddress<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<TcpSocket>>>);
+static_assert(!std::is_copy_constructible_v<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>>);
+static_assert(!std::is_copy_assignable_v<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>>);
+static_assert(kMoveConstructibleOrStableAddress<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>>);
+static_assert(kMoveAssignableOrStableAddress<ws_detail::WsClientTcpUpgradeMachine<ws_detail::WsClientUpgradeState<AsyncTcpSocket>>>);
 
-static_assert(!std::is_copy_constructible_v<WsUpgraderImpl<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<WsUpgraderImpl<TcpSocket>>);
-static_assert(kMoveConstructibleOrStableAddress<WsUpgraderImpl<TcpSocket>>);
-static_assert(kMoveAssignableOrStableAddress<WsUpgraderImpl<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<WsUpgraderImpl<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<WsUpgraderImpl<AsyncTcpSocket>>);
+static_assert(kMoveConstructibleOrStableAddress<WsUpgraderImpl<AsyncTcpSocket>>);
+static_assert(kMoveAssignableOrStableAddress<WsUpgraderImpl<AsyncTcpSocket>>);
 
-static_assert(!std::is_copy_constructible_v<WsSessionUpgraderImpl<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<WsSessionUpgraderImpl<TcpSocket>>);
-static_assert(std::is_nothrow_move_constructible_v<WsSessionUpgraderImpl<TcpSocket>>);
-static_assert(std::is_nothrow_move_assignable_v<WsSessionUpgraderImpl<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<WsSessionUpgraderImpl<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<WsSessionUpgraderImpl<AsyncTcpSocket>>);
+static_assert(std::is_nothrow_move_constructible_v<WsSessionUpgraderImpl<AsyncTcpSocket>>);
+static_assert(std::is_nothrow_move_assignable_v<WsSessionUpgraderImpl<AsyncTcpSocket>>);
 
-static_assert(!std::is_copy_constructible_v<WsSessionImpl<TcpSocket>>);
-static_assert(!std::is_copy_assignable_v<WsSessionImpl<TcpSocket>>);
-static_assert(kMoveConstructibleOrStableAddress<WsSessionImpl<TcpSocket>>);
-static_assert(kMoveAssignableOrStableAddress<WsSessionImpl<TcpSocket>>);
+static_assert(!std::is_copy_constructible_v<WsSessionImpl<AsyncTcpSocket>>);
+static_assert(!std::is_copy_assignable_v<WsSessionImpl<AsyncTcpSocket>>);
+static_assert(kMoveConstructibleOrStableAddress<WsSessionImpl<AsyncTcpSocket>>);
+static_assert(kMoveAssignableOrStableAddress<WsSessionImpl<AsyncTcpSocket>>);
 
 static_assert(!std::is_copy_constructible_v<WsFrameBuilder>);
 static_assert(!std::is_copy_assignable_v<WsFrameBuilder>);

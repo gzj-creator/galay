@@ -55,7 +55,7 @@ bool createTestFile() {
 }
 
 Task<void> sendfileServer() {
-    TcpSocket listener;
+    AsyncTcpSocket listener;
     listener.option().handleReuseAddr();
     listener.option().handleNonBlock();
 
@@ -80,7 +80,7 @@ Task<void> sendfileServer() {
         co_return;
     }
 
-    TcpSocket client(accepted.value());
+    AsyncTcpSocket client(accepted.value());
     client.option().handleNonBlock();
 
     int fd = ::open(kTestFile, O_RDONLY);
@@ -112,7 +112,7 @@ Task<void> sendfileClient() {
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    TcpSocket socket;
+    AsyncTcpSocket socket;
     socket.option().handleNonBlock();
 
     auto connected = co_await socket.connect(Host(IPType::IPV4, "127.0.0.1", kPort));

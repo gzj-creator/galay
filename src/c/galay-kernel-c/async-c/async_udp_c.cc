@@ -1,6 +1,6 @@
-#include "udp_socket_c.h"
+#include "async_udp_c.h"
 
-#include "../../../cpp/galay-kernel/async/udp_socket.h"
+#include "../../../cpp/galay-kernel/async/async_udp.h"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
 #include <galay/c/galay-bridge-c/coro-c/c_coro_udp_bridge.h>
@@ -328,12 +328,12 @@ C_UdpSocketResultCode galay_kernel_udp_socket_create(
     }
 
     c_socket->socket = nullptr;
-    auto result = galay::async::UdpSocket::create(from_c_ip_type_to_cpp_ip_type(type));
+    auto result = galay::async::AsyncUdpSocket::create(from_c_ip_type_to_cpp_ip_type(type));
     if (!result) {
         return from_cpp_io_error(result.error());
     }
 
-    auto* socket = new (std::nothrow) galay::async::UdpSocket(std::move(*result));
+    auto* socket = new (std::nothrow) galay::async::AsyncUdpSocket(std::move(*result));
     if (socket == nullptr) {
         return C_UdpSocketMemoryAllocFailed;
     }
@@ -347,7 +347,7 @@ C_UdpSocketResultCode galay_kernel_udp_socket_destroy(galay_kernel_udp_socket_t*
     if (c_socket == nullptr) {
         return C_UdpSocketParameterInvalid;
     }
-    delete static_cast<galay::async::UdpSocket*>(c_socket->socket);
+    delete static_cast<galay::async::AsyncUdpSocket*>(c_socket->socket);
     c_socket->socket = nullptr;
     return C_UdpSocketSuccess;
 }
@@ -366,7 +366,7 @@ C_UdpSocketResultCode galay_kernel_udp_socket_bind(
         return C_UdpSocketParameterInvalid;
     }
 
-    auto* socket = static_cast<galay::async::UdpSocket*>(c_socket->socket);
+    auto* socket = static_cast<galay::async::AsyncUdpSocket*>(c_socket->socket);
     auto reuse_addr = socket->option().handleReuseAddr();
     if (!reuse_addr) {
         return C_UdpSocketIOFailed;
@@ -387,7 +387,7 @@ C_UdpSocketResultCode galay_kernel_udp_socket_local_endpoint(
         return C_UdpSocketParameterInvalid;
     }
 
-    const auto* socket = static_cast<const galay::async::UdpSocket*>(c_socket->socket);
+    const auto* socket = static_cast<const galay::async::AsyncUdpSocket*>(c_socket->socket);
     sockaddr_storage storage{};
     socklen_t length = sizeof(storage);
     if (::getsockname(socket->handle().fd, reinterpret_cast<sockaddr*>(&storage), &length) != 0) {
