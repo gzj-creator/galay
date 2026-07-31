@@ -32,7 +32,8 @@ const char* error_string[] = {
     "Failed to sync file",
     "Failed to seek file",
     "Operation timeout",
-    "Not running on IO scheduler"
+    "Not running on IO scheduler",
+    "Channel closed"
 };
 
 /**

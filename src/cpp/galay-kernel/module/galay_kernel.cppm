@@ -28,6 +28,7 @@ using ::galay::utils::ByteQueueView;
 #include "../core/timer_scheduler.h"
 
 #include "../concurrency/mpsc_channel.h"
+#include "../concurrency/bounded_channel.h"
 #include "../concurrency/unsafe_channel.h"
 #include "../concurrency/async_mutex.h"
 #include "../concurrency/async_waiter.h"
