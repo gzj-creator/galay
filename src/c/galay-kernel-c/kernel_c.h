@@ -22,6 +22,7 @@
 #include "async-c/async_udp_c.h"
 #include "async-c/async_mutex_c.h"
 #include "async-c/async_waiter_c.h"
+#include "concurrency-c/bounded_channel_c.h"
 #include "concurrency-c/mpsc_channel_c.h"
 #include "concurrency-c/unsafe_channel_c.h"
 
