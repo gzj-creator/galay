@@ -435,6 +435,9 @@ struct TimeoutSupport {
  *
  * @details 对于 io_uring，使用独立的 timeout 操作；对于 epoll/kqueue，使用 timerfd。
  * 定时器状态存储在 IOController 中，生命周期与 AsyncTcpSocket 绑定。
+ * @note 构造时通过 make_shared 分配 TimeoutTimer。timer manager 可能在取消后仍短暂
+ *       持有 Timer::ptr，因此该对象不能安全改成 awaiter/channel 的裸成员。当前全局
+ *       allocator OOM 不通过 inner awaitable 的 std::expected 返回。
  */
 template<typename Awaitable>
 struct WithTimeout {

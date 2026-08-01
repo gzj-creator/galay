@@ -22,6 +22,9 @@
 #if __has_include(<atomic>)
 #include <atomic>
 #endif
+#if __has_include(<bit>)
+#include <bit>
+#endif
 #if __has_include(<cctype>)
 #include <cctype>
 #endif
@@ -109,6 +112,9 @@
 #if __has_include(<memory>)
 #include <memory>
 #endif
+#if __has_include(<new>)
+#include <new>
+#endif
 #if __has_include(<mutex>)
 #include <mutex>
 #endif
@@ -138,6 +144,9 @@
 #endif
 #if __has_include(<signal.h>)
 #include <signal.h>
+#endif
+#if __has_include(<span>)
+#include <span>
 #endif
 #if __has_include(<sstream>)
 #include <sstream>

@@ -39,7 +39,8 @@ enum IOErrorCode : uint32_t {
     kSeekFailed,           ///< 定位文件偏移失败
     kTimeout,              ///< 操作超时
     kNotRunningOnIOScheduler, ///< 未在 I/O 调度器上运行
-    kClosed                    ///< 通道已关闭
+    kClosed,                  ///< 通道已关闭
+    kOutOfMemory              ///< 内存分配失败
 };
 
 /**

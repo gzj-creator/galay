@@ -30,6 +30,8 @@ using ::galay::utils::ByteQueueView;
 #include "../concurrency/mpsc_channel.h"
 #include "../concurrency/bounded_channel.h"
 #include "../concurrency/unsafe_channel.h"
+#include "../concurrency/spsc/bounded_channel.h"
+#include "../concurrency/spsc/unbounded_channel.h"
 
 #include "../async/async_mutex.h"
 #include "../async/async_waiter.h"

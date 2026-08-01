@@ -33,7 +33,8 @@ const char* error_string[] = {
     "Failed to seek file",
     "Operation timeout",
     "Not running on IO scheduler",
-    "Channel closed"
+    "Channel closed",
+    "Out of memory"
 };
 
 /**

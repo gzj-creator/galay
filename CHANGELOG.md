@@ -13,6 +13,8 @@
 
 ### Added
 
+- **新增 SPSC 专用数据面与异步通道**：`galay-utils` 提供运行时容量 `SpscRingBuffer<T>` 与成员内持槽位的 `StaticSpscRingBuffer<T, N>`；`galay-kernel` 在两个公开头中提供 `Ring` / `StaticRing`、约 4 KiB 分块复用的 `UnboundedQueue`，以及支持 move-only、批量收发、调用方缓冲区与 timeout 的 `BoundedChannel<T, N>` / `UnboundedChannel<T>`。`BoundedChannel` 另提供 close/drain；动态 ring 与无界分块的构造或扩容失败通过显式错误或布尔结果返回。
+- **补齐 SPSC 正确性与跨语言性能验证**：新增 ring 核心、无界跨块复用、窄游标回绕、异步 timeout 竞争、非法容量/OOM、安装消费和最终 drain 回归测试；新增严格 1P1C paired runner，以相同 `uint64_t` 序列、容量、yield 退避、FIFO/数量/checksum 门禁和 ABBA 配对样本对照 Rust Crossbeam，并输出 bootstrap 95% 置信区间、CV、原始样本与二进制哈希。
 - **新增高性能有界 MPMC 异步通道**：`galay::mpmc::BoundedChannel<T>` 基于固定容量 Vyukov ring 提供线程安全的 `trySend()` / `tryRecv()`、协程 `send()` / `recv()` / `recvBatch()`、超时、关闭唤醒和 move-only 元素支持；关闭位与 reservation cursor 共用同一 `tail` 原子，保证 close 前已取得的 reservation 完成发布并排空后才返回 `kClosed`。Apple AArch64 竞争退避使用 `isb` CPU hint，CAS miss 在当前调用内保持用户态重试。
 - **新增 MPMC 无界异步通道**：`galay::mpmc::UnboundedChannel<T>` 提供显式 producer/consumer token、默认线程本地 producer 缓存、单条与批量收发、异步接收、超时及 close/drain；producer 通过 0/1 SC active publication 与 close 建立全序，接收方仅在全部 producer 静止且二次 dequeue 仍为空时返回 `kClosed`。
 - **补齐 MPMC 正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、timeout 竞争、move-only、producer publication 线性化及无界队列两波跨 block 复用测试；新增独立进程 paired runner，严格统一 2P2C / 4P4C、8 字节单调 payload、yield backoff、完整 checksum/drain，每组至少采集 15 对交替样本并输出 bootstrap 95% CI，在 macOS 仅接受 `perf-class-only` 线程放置。Rust 对照仅保留 Crossbeam `ArrayQueue` 与 `crossbeam-channel`，旧的单消费者结果不再参与 MPMC 结论。
@@ -20,6 +22,7 @@
 
 ### Changed
 
+- **收敛 SPSC 热路径、存储与公开文件边界**：纯 polling ring 使用单调游标、对端游标缓存和缓存行隔离，成功稳态无 CAS/原子 RMW；无界队列移除逐消息 consumed 原子写并把跨块分配下沉为冷路径。异步 waiter/timeout 控制面与极限吞吐数据面分离，内核实现收敛为 bounded/unbounded 两个公开头，ring 基础设施统一复用 `galay-utils/cache/spsc_ring_buffer.hpp`；编译期容量 specialization 不分配槽位内存。
 - **统一异步 I/O 文件与公开类型命名**：C++ 头文件和实现统一改为 `async_aio`、`async_tcp`、`async_udp`、`async_file_watcher`，公开类型改为 `AsyncAio`、`AsyncTcpSocket`、`AsyncUdpSocket`、`AsyncFileWatcher`；C wrapper 同步采用带 `_c` 后缀的新文件名，保留现有 C ABI 函数与句柄名称。
 - **异步同步原语归入 async 模块**：`async_mutex` 与 `async_waiter` 从 C++ `concurrency` 和 C `concurrency-c` 目录迁入对应 `async` / `async-c` 目录，并同步更新模块入口、安装边界、源码、文档、测试、示例与 benchmark 引用。
 - **收敛 `BoundedChannel` 生产实现与维护文档**：删除 `GALAY_BQ_DIAG_*` 临时编译分支，保留唯一的关闭检查、waiter-aware 和 ring 退避路径；补全公开 API、协程 awaitable、ring 与 waiter helper 的参数、返回值、错误、并发和生命周期注释。
@@ -29,6 +32,7 @@
 
 ### Fixed
 
+- **修复 SPSC 跨块与异步完成竞态**：修复无界队列跨块越界和回收链 double-free、有界 timeout 最终检查竞态、过期 timer 立即通知误唤醒，以及 benchmark 在 producer 完成后单次空读便退出造成的潜在伪失败；consumer 现在按预期数量完成最终 drain。
 - **修复全量构建中的 RPC etcd 注册变量重定义**：区分服务注册与 endpoint 注册的局部结果变量，消除两个测试/压力基准目标在同一作用域内重复声明导致的编译失败。
 - **修复 channel timeout 完成竞争与提前恢复风险**：新增延迟唤醒门和事务式完成状态机，使 timeout 与破坏性 enqueue/dequeue 只产生一个完成者；完成事件在 `await_suspend` 发布结束前只记录 pending，避免协程提前恢复并销毁仍在访问的 awaiter/channel。
 

@@ -19,6 +19,7 @@ export {
 #include "../cache/bytes.hpp"
 #include "../cache/byte_queue_view.hpp"
 #include "../cache/ring_buffer.hpp"
+#include "../cache/spsc_ring_buffer.hpp"
 #include "../tool/thread.hpp"
 #include "../tool/circuit_breaker.hpp"
 #include "../tool/rate_limiter.hpp"

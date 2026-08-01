@@ -29,14 +29,22 @@ public:
      * @brief 在给定地址注册等待者
      *
      * @param waiter_address  标识等待实体的指针；不可为空
-     * @return true 注册成功；false waiter_address 为空
+     * @return true 注册成功；false 地址为空或槽位仍被前一个 waiter 占用
      */
     bool arm(void* waiter_address) noexcept {
         if (!waiter_address) {
             return false;
         }
-        m_waiter.store(waiter_address, std::memory_order_release);
-        m_generation.fetch_add(1, std::memory_order_acq_rel);
+        void* expected = nullptr;
+        if (!m_waiter.compare_exchange_strong(expected,
+                                              waiter_address,
+                                              std::memory_order_release,
+                                              std::memory_order_relaxed)) {
+            return false;
+        }
+        [[maybe_unused]] const uint64_t previous_generation =
+            m_generation.fetch_add(1, std::memory_order_acq_rel);
+        // 返回值只是旧代数；调用方只依赖成功注册后的单调递增副作用。
         return true;
     }
 

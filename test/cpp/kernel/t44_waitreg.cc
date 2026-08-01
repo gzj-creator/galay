@@ -33,6 +33,15 @@ int main() {
         return 1;
     }
 
+    if (registration.arm(second_waiter)) {
+        std::cerr << "[T44] arm must not overwrite an occupied waiter slot\n";
+        return 1;
+    }
+    if (registration.generation() != 1) {
+        std::cerr << "[T44] rejected arm must not advance generation\n";
+        return 1;
+    }
+
     void* signaled = registration.consumeWake();
     if (signaled != first_waiter) {
         std::cerr << "[T44] expected first waiter to be signaled\n";

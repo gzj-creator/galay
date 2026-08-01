@@ -59,11 +59,20 @@
 #if __has_include(<format>)
 #include <format>
 #endif
+#if __has_include(<limits>)
+#include <limits>
+#endif
 #if __has_include(<memory>)
 #include <memory>
 #endif
+#if __has_include(<new>)
+#include <new>
+#endif
 #if __has_include(<optional>)
 #include <optional>
+#endif
+#if __has_include(<span>)
+#include <span>
 #endif
 #if __has_include(<string>)
 #include <string>

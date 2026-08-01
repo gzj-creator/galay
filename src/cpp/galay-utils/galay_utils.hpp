@@ -48,6 +48,9 @@
 /// 环形缓冲区
 #include "cache/ring_buffer.hpp"
 
+/// 单生产者单消费者 typed 环形缓冲区
+#include "cache/spsc_ring_buffer.hpp"
+
 /// 线程池
 #include "tool/thread.hpp"
 

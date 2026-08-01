@@ -21,7 +21,10 @@ foreach(required_source_path
         "src/cpp/galay-kernel/core/runtime.h"
         "src/cpp/galay-kernel/core/task.h"
         "src/cpp/galay-kernel/common/error.h"
+        "src/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
+        "src/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
         "src/cpp/galay-utils/cache/ring_buffer.hpp"
+        "src/cpp/galay-utils/cache/spsc_ring_buffer.hpp"
         "src/cpp/galay-http/client/http_client.h"
         "src/cpp/galay-mcp/server/stdio_server.h")
     if(NOT EXISTS "${GALAY_SOURCE_DIR}/${required_source_path}")
@@ -34,6 +37,10 @@ foreach(forbidden_source_path
         "src/kernel/kernel/runtime.h"
         "src/kernel"
         "src/utils"
+        "src/cpp/galay-kernel/concurrency/spsc/ring.h"
+        "src/cpp/galay-kernel/concurrency/spsc/unbounded_queue.h"
+        "src/cpp/galay-kernel/concurrency/spsc/detail/ring.h"
+        "src/cpp/galay-kernel/concurrency/spsc/detail/unbounded_queue.h"
         "src/http"
         "src/mcp"
         "src/galay-kernel"
@@ -93,7 +100,10 @@ foreach(required_header
         "include/galay/cpp/galay-kernel/core/runtime.h"
         "include/galay/cpp/galay-kernel/core/task.h"
         "include/galay/cpp/galay-kernel/common/error.h"
-        "include/galay/cpp/galay-utils/cache/ring_buffer.hpp")
+        "include/galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
+        "include/galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
+        "include/galay/cpp/galay-utils/cache/ring_buffer.hpp"
+        "include/galay/cpp/galay-utils/cache/spsc_ring_buffer.hpp")
     if(NOT EXISTS "${prefix_dir}/${required_header}")
         message(FATAL_ERROR "Missing installed header: ${required_header}")
     endif()
@@ -122,6 +132,10 @@ foreach(forbidden_header
         "include/kernel/kernel/runtime.h"
         "include/galay-kernel/core/runtime.h"
         "include/galay-kernel/kernel/runtime.h"
+        "include/galay/cpp/galay-kernel/concurrency/spsc/ring.h"
+        "include/galay/cpp/galay-kernel/concurrency/spsc/unbounded_queue.h"
+        "include/galay/cpp/galay-kernel/concurrency/spsc/detail/ring.h"
+        "include/galay/cpp/galay-kernel/concurrency/spsc/detail/unbounded_queue.h"
         "include/utils/cache/ring_buffer.hpp"
         "include/http/client/http_client.h"
         "include/mcp/server/stdio_server.h")
@@ -166,8 +180,21 @@ file(WRITE "${consumer_source_dir}/main.cc"
     "#include <galay/cpp/galay-kernel/core/awaitable.h>\n"
     "#include <galay/cpp/galay-kernel/async/async_tcp.h>\n"
     "#include <galay/cpp/galay-kernel/common/buffer.h>\n"
+    "#include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>\n"
+    "#include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>\n"
     "#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>\n"
-    "int main() { return 0; }\n")
+    "#include <galay/cpp/galay-utils/cache/spsc_ring_buffer.hpp>\n"
+    "int main() {\n"
+    "  galay::utils::SpscRingBuffer<int> utils_ring(2);\n"
+    "  galay::utils::StaticSpscRingBuffer<int, 2> utils_static_ring;\n"
+    "  galay::spsc::Ring<int> kernel_ring(2);\n"
+    "  galay::spsc::StaticRing<int, 2> kernel_static_ring;\n"
+    "  galay::spsc::UnboundedQueue<int> queue;\n"
+    "  return utils_ring.error() == galay::utils::SpscRingBufferError::kNone &&\n"
+    "      utils_static_ring.capacity() == 2 &&\n"
+    "      kernel_ring.error() == galay::spsc::RingError::kNone &&\n"
+    "      kernel_static_ring.capacity() == 2 && queue.valid() ? 0 : 1;\n"
+    "}\n")
 
 file(WRITE "${consumer_source_dir}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.20)
