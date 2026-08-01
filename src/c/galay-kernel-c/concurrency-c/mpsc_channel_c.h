@@ -49,11 +49,11 @@ typedef struct C_MpscChannelMessage {
 /**
  * @brief MpscChannel C 句柄。
  *
- * @note channel 指向内部 C++ MpscChannel<C_MpscChannelMessage> 对象，调用方不能
+ * @note channel 指向内部 C++ galay::mpsc::UnboundedChannel<C_MpscChannelMessage> 对象，调用方不能
  * 解引用或直接释放。
  */
 typedef struct galay_kernel_mpsc_channel {
-    void* channel;       ///< 内部 MpscChannel<C_MpscChannelMessage> 对象指针。
+    void* channel;       ///< 内部 galay::mpsc::UnboundedChannel<C_MpscChannelMessage> 对象指针。
 } galay_kernel_mpsc_channel_t;
 
 /**

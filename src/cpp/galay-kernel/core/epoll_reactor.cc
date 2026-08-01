@@ -96,6 +96,12 @@ std::expected<void, IOError> EpollReactor::start()
 }
 
 EpollReactor::~EpollReactor() {
+    for (auto& [fd, entry] : m_registration_entries) {
+        (void)fd;
+        if (entry && entry->controller) {
+            entry->controller->releaseRegistrationOwnerSlot();
+        }
+    }
     if (m_epoll_fd != -1) {
         close(m_epoll_fd);
     }
@@ -129,13 +135,13 @@ EpollReactor::RegistrationEntry* EpollReactor::registrationEntryForController(IO
     auto it = m_registration_entries.find(fd);
     if (it == m_registration_entries.end()) {
         auto entry = std::make_unique<RegistrationEntry>();
-        entry->controller = controller;
         auto* raw = entry.get();
+        controller->bindRegistrationOwnerSlot(&raw->controller);
         m_registration_entries.emplace(fd, std::move(entry));
         return raw;
     }
 
-    it->second->controller = controller;
+    controller->bindRegistrationOwnerSlot(&it->second->controller);
     return it->second.get();
 }
 
@@ -149,15 +155,19 @@ void EpollReactor::retireRegistrationEntry(IOController* controller) {
     if (it == m_registration_entries.end()) {
         return;
     }
+    if (it->second->controller != controller) {
+        return;
+    }
 
-    it->second->controller = nullptr;
+    controller->releaseRegistrationOwnerSlot();
     m_retired_entries.push_back(std::move(it->second));
     m_registration_entries.erase(it);
 }
 
 size_t EpollReactor::findPendingChangeIndex(IOController* controller) const {
     for (size_t index = 0; index < m_pending_changes.size(); ++index) {
-        if (m_pending_changes[index].controller == controller) {
+        auto* entry = m_pending_changes[index].entry;
+        if (entry != nullptr && entry->controller == controller) {
             return index;
         }
     }
@@ -200,7 +210,7 @@ int EpollReactor::armPersistentRead(IOController* controller) {
 
     // 2026-07-14 WS 固定口径：持久 EPOLLIN 令 epoll_ctl 7,022 -> 36，吞吐提升 3.86%。
     // 正确性依赖 addRecv/addReadv 在注册前先做非阻塞乐观读取，即使旧边沿被消费也能直接取走残留数据。
-    // 持久注册期间 controller 仍可能移动；每次挂起前重绑稳定入口，避免晚到事件指向 moved-from 对象。
+    // 持久注册期间 controller 仍可能移动；稳定入口通过 controller 的反向槽位在移动时原位重绑。
     if (registrationEntryForController(controller) == nullptr) {
         return -1;
     }
@@ -235,8 +245,12 @@ int EpollReactor::applyEvents(IOController* controller, uint32_t events) {
         if (events == controller->m_registered_events) {
             return 0;
         }
+        auto* entry = registrationEntryForController(controller);
+        if (entry == nullptr) {
+            return -1;
+        }
         m_pending_changes.push_back(PendingChange{
-            .controller = controller,
+            .entry = entry,
             .events = events,
         });
     }
@@ -251,7 +265,7 @@ int EpollReactor::flushPendingChanges() {
     size_t index = 0;
     while (index < m_pending_changes.size()) {
         PendingChange change = m_pending_changes[index];
-        auto* controller = change.controller;
+        auto* controller = change.entry ? change.entry->controller : nullptr;
         if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
             erasePendingChange(index);
             continue;
@@ -288,11 +302,7 @@ int EpollReactor::flushPendingChanges() {
 
         struct epoll_event ev;
         ev.events = events;
-        ev.data.ptr = registrationEntryForController(controller);
-        if (ev.data.ptr == nullptr) {
-            erasePendingChange(index);
-            continue;
-        }
+        ev.data.ptr = change.entry;
 
         int ret = -1;
         if (controller->m_registered_events == 0) {

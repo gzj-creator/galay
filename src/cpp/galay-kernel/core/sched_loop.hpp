@@ -78,6 +78,16 @@ void runIOSchedulerEventLoop(std::atomic<bool>& running,
         poll_fn();
         wake_coordinator.markAwake();
     }
+
+    // stop() 会先关闭 resume admission，再清除 running。此处必须在 owner
+    // 线程排空关闭前已接纳的恢复请求，保证 scheduleResume(true) 不会丢任务。
+    while (core.hasPendingWork()) {
+        (void)core.runLocalFollowupPasses(
+            local_followup_pass_limit,
+            std::forward<ResumeFn>(resume_fn),
+            [&](size_t drained) { wake_coordinator.onRemoteCollected(drained); });
+        post_passes_fn();
+    }
 }
 
 }  // namespace detail

@@ -1,6 +1,6 @@
 #include "mpsc_channel_c.h"
 
-#include "../../../cpp/galay-kernel/concurrency/mpsc_channel.h"
+#include "../../../cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h"
 #include "../coro-c/coro_task_c.h"
 
 #include <chrono>
@@ -13,7 +13,7 @@
 namespace
 {
 
-using CppMpscChannel = galay::kernel::MpscChannel<C_MpscChannelMessage>;
+using CppMpscChannel = galay::mpsc::UnboundedChannel<C_MpscChannelMessage>;
 
 CppMpscChannel* to_cpp_channel(galay_kernel_mpsc_channel_t* channel)
 {

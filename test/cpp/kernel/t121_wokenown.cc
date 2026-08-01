@@ -81,6 +81,11 @@ struct WakeOwnershipState {
     std::atomic<int> completed{0};
 };
 
+Task<void> resumeLifecycleTask(std::atomic<int>* resumed) {
+    resumed->fetch_add(1, std::memory_order_release);
+    co_return;
+}
+
 Task<void> notifyWaitersOnSource(std::vector<std::unique_ptr<AsyncWaiter<void>>>* waiters) {
     for (auto& waiter : *waiters) {
         (void)waiter->notify();
@@ -231,9 +236,56 @@ bool runWokenTaskStaysOnOwnerScenario() {
     return true;
 }
 
+bool runResumeAdmissionLifecycleScenario() {
+    IOSchedulerType scheduler;
+    std::atomic<int> resumed{0};
+
+    const bool accepted_before_start = scheduler.scheduleResume(
+        detail::TaskAccess::detachTask(resumeLifecycleTask(&resumed)));
+
+    const auto started = scheduler.start();
+    if (!started.has_value()) {
+        std::cerr << "[T120] " << kBackendName
+                  << " failed to start lifecycle scheduler: "
+                  << started.error().message() << "\n";
+        return false;
+    }
+
+    const bool accepted_while_running = scheduler.scheduleResume(
+        detail::TaskAccess::detachTask(resumeLifecycleTask(&resumed)));
+    scheduler.stop();
+
+    const bool accepted_after_stop = scheduler.scheduleResume(
+        detail::TaskAccess::detachTask(resumeLifecycleTask(&resumed)));
+    const auto restarted = scheduler.start();
+    if (!restarted.has_value()) {
+        std::cerr << "[T120] " << kBackendName
+                  << " failed to restart lifecycle scheduler: "
+                  << restarted.error().message() << "\n";
+        return false;
+    }
+    scheduler.stop();
+
+    const int resumed_count = resumed.load(std::memory_order_acquire);
+    if (accepted_before_start || !accepted_while_running ||
+        accepted_after_stop || resumed_count != 1) {
+        std::cerr << "[T120] " << kBackendName
+                  << " resume lifecycle mismatch: before_start="
+                  << accepted_before_start
+                  << " running=" << accepted_while_running
+                  << " after_stop=" << accepted_after_stop
+                  << " resumed=" << resumed_count << "\n";
+        return false;
+    }
+    return true;
+}
+
 } // namespace
 
 int main() {
+    if (!runResumeAdmissionLifecycleScenario()) {
+        return 1;
+    }
     if (!runWokenTaskStaysOnOwnerScenario()) {
         return 1;
     }

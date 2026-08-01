@@ -1,11 +1,11 @@
 /**
  * @file t53_prefetch.cc
- * @brief 用途：验证 `MpscChannel` 单条接收路径的预取优化不会破坏语义。
+ * @brief 用途：验证 `galay::mpsc::UnboundedChannel` 单条接收路径的预取优化不会破坏语义。
  * 关键覆盖点：单次接收预取、backlog 消耗、预取上限与最终一致性。
  * 通过条件：预取优化下消息仍完整可见，测试返回 0。
  */
 
-#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include "test/cpp/common/mpsc_access.h"
 
 #include <iostream>
@@ -18,7 +18,7 @@ int main() {
     constexpr size_t kDefaultBatchSize = 4;
     constexpr size_t kPrefetchLimit = 3;
 
-    MpscChannel<int> channel(kDefaultBatchSize, kPrefetchLimit);
+    galay::mpsc::UnboundedChannel<int> channel(kDefaultBatchSize, kPrefetchLimit);
     for (int i = 0; i < kMessageCount; ++i) {
         if (!channel.send(i)) {
             std::cerr << "[T53] failed to preload message " << i << "\n";
@@ -32,7 +32,7 @@ int main() {
         return 1;
     }
 
-    const size_t prefetched = MpscChannelTestAccess::prefetchedCount(channel);
+    const size_t prefetched = galay::mpsc::UnboundedChannelTestAccess::prefetchedCount(channel);
     if (prefetched == 0) {
         std::cerr << "[T53] expected single recv prefetch buffer to be populated\n";
         return 1;
@@ -75,7 +75,7 @@ int main() {
         }
     }
 
-    if (MpscChannelTestAccess::prefetchedCount(channel) != 0) {
+    if (galay::mpsc::UnboundedChannelTestAccess::prefetchedCount(channel) != 0) {
         std::cerr << "[T53] expected prefetch buffer to be empty after full drain\n";
         return 1;
     }

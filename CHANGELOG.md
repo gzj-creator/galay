@@ -19,6 +19,8 @@
 - **新增 MPMC 无界异步通道**：`galay::mpmc::UnboundedChannel<T>` 提供显式 producer/consumer token、默认线程本地 producer 缓存、单条与批量收发、异步接收、超时及 close/drain；producer 通过 0/1 SC active publication 与 close 建立全序，接收方仅在全部 producer 静止且二次 dequeue 仍为空时返回 `kClosed`。
 - **补齐 MPMC 正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、timeout 竞争、move-only、producer publication 线性化及无界队列两波跨 block 复用测试；新增独立进程 paired runner，严格统一 2P2C / 4P4C、8 字节单调 payload、yield backoff、完整 checksum/drain，每组至少采集 15 对交替样本并输出 bootstrap 95% CI，在 macOS 仅接受 `perf-class-only` 线程放置。Rust 对照仅保留 Crossbeam `ArrayQueue` 与 `crossbeam-channel`，旧的单消费者结果不再参与 MPMC 结论。
 - **新增 `BoundedChannel` C ABI**：提供创建/销毁、同步单条与批量收发、C coroutine 超时等待、关闭和容量状态查询，完整映射公开错误码及 `*_get_error()` 字符串；新增边界/协程测试、公共头 smoke 和 1P1C/4P4C 吞吐 benchmark。
+- **新增 MPSC 专用有界与无界通道**：`galay::mpsc::BoundedChannel<T>` 使用多生产者 tail CAS 与单消费者 head；`galay::mpsc::UnboundedChannel<T>` 使用每 producer 独占的分块 SPSC 流、token/TLS 流缓存和高水位复用，单消费者稳态路径不做 cursor CAS/RMW；配套 close/drain、timeout、move-only、批量收发与边界/竞态测试。
+- **新增 MPSC C++/Rust 成对性能验证入口**：提供同 workload 的 bounded/unbounded 1P1C–8P1C C++ 与 Crossbeam 程序、校准/交替采样 runner、FIFO/checksum/计数门禁、bootstrap 95% 置信区间与原始证据输出。
 
 ### Changed
 
@@ -29,12 +31,17 @@
 - **优化 `BoundedChannel` C 热路径与压测口径**：成功发送不再重复读取关闭状态，批量和协程路径复用已校验的内部收发函数；吞吐 benchmark 改为完整消息计数、Release 预热/中位数采样和线程局部统计，消除共享原子与 cache-line 伪共享造成的测量偏差。
 - **优化 MPMC 数据面与基准隔离能力**：无界队列显式冻结 `BLOCK_SIZE=64`、empty counter threshold 32、explicit index 32、consumer rotation quota 32，并把初始池固定为 1024 个元素以消除不同 block 大小的预分配偏差；发送完成后的 waiter pump 外提为 unlikely 冷函数，避免同步轮询热路径内联完整控制面。B25 与独立 paired runner 可拆分 raw 数据面和 token wrapper 成本；20M 消息、15 对样本下 2P2C 稳定超过 Crossbeam，但 4P4C 仍落后，因此不保留全面胜出结论。
 - **收紧 MPMC 元素异常契约**：Bounded 元素必须不可抛移动构造，Unbounded 元素必须不可抛默认构造、移动构造和移动赋值，复制发送仅对不可抛复制构造类型开放；避免元素操作异常使无界 producer 永久保持 active，或穿过 `noexcept` 完成路径终止进程。
+- **Waker 恢复改用 owner scheduler 无分配入口**：`TaskState` 内嵌 resume 链接，compute/epoll/kqueue/io_uring scheduler 统一通过专用 MPSC admission 回到 owner 线程；普通注入与 resume 批次公平轮转，`stop()` 先关闭接纳再由 owner 排空，成功恢复热路径不经历堆分配。
+- **统一并发通道命名空间与消费边界**：移除旧 `mpsc_channel.h` / `unsafe_channel.h` / 顶层 `bounded_channel.h`，C ABI 保留原符号但切换到 `galay::{mpmc,mpsc,spsc}` 实现；HTTP/2、RPC、module facade、示例、测试、benchmark 和文档同步迁移。
 
 ### Fixed
 
 - **修复 SPSC 跨块与异步完成竞态**：修复无界队列跨块越界和回收链 double-free、有界 timeout 最终检查竞态、过期 timer 立即通知误唤醒，以及 benchmark 在 producer 完成后单次空读便退出造成的潜在伪失败；consumer 现在按预期数量完成最终 drain。
 - **修复全量构建中的 RPC etcd 注册变量重定义**：区分服务注册与 endpoint 注册的局部结果变量，消除两个测试/压力基准目标在同一作用域内重复声明导致的编译失败。
 - **修复 channel timeout 完成竞争与提前恢复风险**：新增延迟唤醒门和事务式完成状态机，使 timeout 与破坏性 enqueue/dequeue 只产生一个完成者；完成事件在 `await_suspend` 发布结束前只记录 pending，避免协程提前恢复并销毁仍在访问的 awaiter/channel。
+- **修复 HTTP/2 间歇 coredump**：epoll/kqueue reactor 改为持有稳定 registration entry，`IOController` 移动时通过反向 owner 槽原位重绑，避免晚到事件访问 moved-from `SslSocket` 中已释放的 controller；事件分发热路径不新增锁、原子、查表或分配。
+- **修复 MPSC waiter/close 与发送失败处理**：vector batch waiter 在 arming 窗口改用无分配发布检查，避免分配失败遗留 arming phase；HTTP/2 出站队列、benchmark 与示例完整检查 `send` / `sendBatch` / scheduler 返回值，失败时显式关闭连接或标记压测失败。
+- **修复 C++23 module 与并行测试契约**：补齐 kernel module prelude 和 `extern "C++"` 声明归属，安装导出支持 kernel BMI，include/import 示例在 GCC 14 Debug module 配置下可编译运行；CTest 对共享 TCP/UDP 测试端口加资源锁，避免 `-j2` 内部争用。
 
 ## [v4.4.2] - 2026-07-29
 

@@ -48,13 +48,13 @@ KqueueReactor::RegistrationEntry* KqueueReactor::registrationEntryForController(
     auto it = m_registration_entries.find(fd);
     if (it == m_registration_entries.end()) {
         auto entry = std::make_unique<RegistrationEntry>();
-        entry->controller = controller;
         auto* raw = entry.get();
+        controller->bindRegistrationOwnerSlot(&raw->controller);
         m_registration_entries.emplace(fd, std::move(entry));
         return raw;
     }
 
-    it->second->controller = controller;
+    controller->bindRegistrationOwnerSlot(&it->second->controller);
     return it->second.get();
 }
 
@@ -68,8 +68,11 @@ void KqueueReactor::retireRegistrationEntry(IOController* controller) {
     if (it == m_registration_entries.end()) {
         return;
     }
+    if (it->second->controller != controller) {
+        return;
+    }
 
-    it->second->controller = nullptr;
+    controller->releaseRegistrationOwnerSlot();
     m_retired_entries.push_back(std::move(it->second));
     m_registration_entries.erase(it);
 }
@@ -112,6 +115,12 @@ std::expected<void, IOError> KqueueReactor::start()
 }
 
 KqueueReactor::~KqueueReactor() {
+    for (auto& [fd, entry] : m_registration_entries) {
+        (void)fd;
+        if (entry && entry->controller) {
+            entry->controller->releaseRegistrationOwnerSlot();
+        }
+    }
     if (m_kqueue_fd != -1) {
         const int close_result = galay_close(m_kqueue_fd);
         if (close_result != 0) {

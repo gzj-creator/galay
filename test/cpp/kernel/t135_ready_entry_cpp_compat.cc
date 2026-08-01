@@ -106,9 +106,10 @@ class NullScheduler final : public Scheduler {
 public:
     std::expected<void, IOError> start() override { return {}; }
     void stop() override {}
-    bool schedule(TaskRef) override { return false; }
-    bool scheduleDeferred(TaskRef) override { return false; }
-    bool scheduleImmediately(TaskRef) override { return false; }
+    bool schedule(TaskRef) noexcept override { return false; }
+    bool scheduleResume(TaskRef) noexcept override { return false; }
+    bool scheduleDeferred(TaskRef) noexcept override { return false; }
+    bool scheduleImmediately(TaskRef) noexcept override { return false; }
     bool addTimer(Timer::ptr) override { return false; }
     SchedulerType type() override { return kComputeScheduler; }
 };

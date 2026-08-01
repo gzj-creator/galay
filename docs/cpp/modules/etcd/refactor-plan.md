@@ -78,7 +78,7 @@ ctest --test-dir build --output-on-failure -R "mcp"
 
 ## Phase 2 — 池 state 缓存行对齐（alignas 64）
 
-**约定**：纯 `alignas(64)`（见 `src/cpp/galay-kernel/concurrency/mpsc_channel.h:386`、`common/balancer.hpp:95`）。把两个热 atomic 与队列隔离到独立缓存行，冷成员分组。**不改队列语义、不加 mutex。**
+**约定**：纯 `alignas(64)`（见 `src/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h:395`、`common/balancer.hpp:95`）。把两个热 atomic 与队列隔离到独立缓存行，冷成员分组。**不改队列语义、不加 mutex。**
 
 **2a. 同步 `details::EtcdClientPoolState`**（`src/cpp/galay-etcd/cluster/etcd_cluster_client.cc`，结构体约在 274-346 行）
 把成员声明改为：

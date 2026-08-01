@@ -67,8 +67,12 @@
 - 并发：
   - `galay-kernel/async/async_mutex.h`
   - `galay-kernel/async/async_waiter.h`
-  - `galay-kernel/concurrency/mpsc_channel.h`
-  - `galay-kernel/concurrency/unsafe_channel.h`
+  - `galay-kernel/concurrency/mpmc/bounded_channel.h`
+  - `galay-kernel/concurrency/mpmc/unbounded_channel.h`
+  - `galay-kernel/concurrency/mpsc/bounded_channel.h`
+  - `galay-kernel/concurrency/mpsc/unbounded_channel.h`
+  - `galay-kernel/concurrency/spsc/bounded_channel.h`
+  - `galay-kernel/concurrency/spsc/unbounded_channel.h`
 - 模块：
   - `galay-kernel/module/module_prelude.hpp`
   - `galay-kernel/module/galay_kernel.cppm`
@@ -82,7 +86,7 @@
   - `sleep(...)`
   - `TimerScheduler`
   - `HandleOption`
-  - `AsyncMutex` / `MpscChannel<T>` / `UnsafeChannel<T>` / `AsyncWaiter<T>`
+  - `AsyncMutex` / `galay::{mpmc,mpsc,spsc}` channel / `AsyncWaiter<T>`
   - `FileWatchEvent` / `FileWatchResult`
 - `galay::async`
   - `AsyncTcpSocket`
@@ -108,7 +112,7 @@
 
 - 通用类型：`defn.hpp`、`error.h`、`host.hpp`、`handle_option.h`、`buffer.h`、`sleep.hpp`
 - Runtime：`task.h`、`scheduler.hpp`、`io_scheduler.hpp`、`compute_scheduler.h`、`runtime.h`、`timer_scheduler.h`
-- 并发：`mpsc_channel.h`、`unsafe_channel.h`
+- 并发：`mpmc/`、`mpsc/`、`spsc/` 下的有界与无界 channel
 - Async：`async_mutex.h`、`async_waiter.h`、`async_tcp.h`、`async_udp.h`、`async_file_watcher.h`
 - 平台裁剪：
   - `async_file.h` 仅在 `USE_KQUEUE` 或 `USE_IOURING`
@@ -676,8 +680,12 @@ builder iovec 公开面：
 头文件：
 
 - `galay-kernel/async/async_mutex.h`
-- `galay-kernel/concurrency/mpsc_channel.h`
-- `galay-kernel/concurrency/unsafe_channel.h`
+- `galay-kernel/concurrency/mpmc/bounded_channel.h`
+- `galay-kernel/concurrency/mpmc/unbounded_channel.h`
+- `galay-kernel/concurrency/mpsc/bounded_channel.h`
+- `galay-kernel/concurrency/mpsc/unbounded_channel.h`
+- `galay-kernel/concurrency/spsc/bounded_channel.h`
+- `galay-kernel/concurrency/spsc/unbounded_channel.h`
 - `galay-kernel/async/async_waiter.h`
 
 `AsyncMutex`：
@@ -687,32 +695,53 @@ builder iovec 公开面：
 - `void unlock()`
 - `bool isLocked() const`
 
-`MpscChannel<T>`：
+有界 channel 公共接口（`galay::{mpmc,mpsc,spsc}::BoundedChannel<T>`）：
+
+- `explicit BoundedChannel(size_t capacity)`
+- `bool trySend(T&& value)`
+- `BoundedSendAwaitable<T> send(T&& value)`
+- `std::optional<T> tryRecv()`
+- `BoundedRecvAwaitable<T> recv()`
+- `std::optional<std::vector<T>> tryRecvBatch(size_t count)`
+- `BoundedRecvBatchAwaitable<T> recvBatch(size_t count)`
+- `void close()` / `bool isClosed() const`
+- `size_t capacity() const` / `size_t size() const` / `bool empty() const` / `bool full() const`
+
+`galay::mpmc::UnboundedChannel<T>`：
+
+- `bool send(T&& value)` / `bool sendBatch(...)`
+- `std::optional<T> tryRecv()` / `std::optional<std::vector<T>> tryRecvBatch(size_t count)`
+- `UnboundedRecvAwaitable<T> recv()` / `UnboundedRecvBatchAwaitable<T> recvBatch(size_t count)`
+- `void close()` / `bool isClosed() const`
+- `size_t size() const` / `bool empty() const`
+
+`galay::mpsc::UnboundedChannel<T>`：
 
 - `bool send(T&& value)`
 - `bool send(const T& value)`
 - `bool sendBatch(const std::vector<T>& values)`
 - `bool sendBatch(std::vector<T>&& values)`
-- `MpscRecvAwaitable<T> recv()`
-- `MpscRecvBatchAwaitable<T> recvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
+- `UnboundedRecvAwaitable<T> recv()`
+- `UnboundedRecvBatchAwaitable<T> recvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
 - `std::optional<T> tryRecv()`
 - `std::optional<std::vector<T>> tryRecvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
+- `bool close()` / `bool isClosed() const` / `bool isClosedAndDrained() const`
 - `size_t size() const`
 - `bool empty() const`
 
-注意：当前没有 `close()`，发送端也是同步 `bool send(...)`，不是 `co_await channel.send(...)`。
+注意：发送和关闭都是同步 `bool` 返回，不是 awaitable；首个 `close()` 调用者取得关闭权并返回 `true`。
 
-`UnsafeChannelWakeMode` / `UnsafeChannel<T>`：
+`galay::spsc::WakeMode` / `galay::spsc::UnboundedChannel<T>`：
 
-- `enum class UnsafeChannelWakeMode { Inline, Deferred }`
-- `explicit UnsafeChannel(UnsafeChannelWakeMode wake_mode = UnsafeChannelWakeMode::Inline)`
+- `enum class WakeMode { Inline, Deferred }`
+- `explicit UnboundedChannel(WakeMode wake_mode = WakeMode::Inline)`
 - `bool send(T&& value, bool immediately = false)`
 - `bool send(const T& value, bool immediately = false)`
 - `bool sendBatch(const std::vector<T>& values, bool immediately = false)`
 - `bool sendBatch(std::vector<T>&& values, bool immediately = false)`
-- `UnsafeRecvAwaitable<T> recv()`
-- `UnsafeRecvBatchAwaitable<T> recvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
-- `UnsafeRecvBatchedAwaitable<T> recvBatched(size_t limit)`
+- `UnboundedRecvAwaitable<T> recv()`
+- `UnboundedRecvBatchAwaitable<T> recvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
+- `UnboundedRecvBatchedAwaitable<T> recvBatched(size_t limit)`
 - `std::optional<T> tryRecv()`
 - `std::optional<std::vector<T>> tryRecvBatch(size_t maxCount = DEFAULT_BATCH_SIZE)`
 - `size_t size() const`
@@ -720,9 +749,9 @@ builder iovec 公开面：
 
 语义说明：
 
-- `UnsafeChannel<T>` 只允许同一调度器 / 同一线程上下文内使用；它不是线程安全容器
-- `UnsafeChannelWakeMode::Inline` 会在生产者路径上直接 `handle.resume()` 唤醒 waiter
-- `UnsafeChannelWakeMode::Deferred` 在 waiter 已绑定调度器时会走 `waiter.resume()` 的调度路径；如果 waiter 没有关联调度器，当前实现会回退为内联恢复
+- `galay::spsc::UnboundedChannel<T>` 是跨线程 SPSC 分块队列；调用方必须保证同一时刻只有一个生产者调用流和一个消费者调用流
+- 稳态通过分缓存线 producer/consumer cursor 与 acquire/release 发布，不使用 cursor CAS，也不逐消息分配
+- 调度器拥有的 waiter 无论 `WakeMode` 取值都通过 `Waker` 返回 owner scheduler；`Inline` 只为无 scheduler、同线程手工驱动协程保留兼容直接恢复
 - `recvBatched(limit)` 只有在队列累计到 `limit` 条或发送端使用 `immediately=true` 时才会唤醒等待者
 - `recv()` / `recvBatch()` / `recvBatched(...).timeout(...)` 超时后都会返回 `unexpected(IOError(kTimeout, 0))`
 - `recvBatched(limit).timeout(...)` 当前不会自动把“未达到 limit 的部分数据”作为成功结果返回；部分数据会继续留在队列中，调用方可再用 `tryRecvBatch()` 或后续 `recv*()` 取出
@@ -760,9 +789,10 @@ builder iovec 公开面：
 
 并发边界：
 
-- `MpscChannel<T>` 的发送端是同步 `bool send(...)`，不是 awaitable；不要写成 `co_await channel.send(...)`
-- `UnsafeChannel<T>` 是显式的非线程安全通道，只适合同线程 / 受控调度上下文
-- `UnsafeChannelWakeMode::Deferred` 只是把唤醒动作切到调度器排队路径，不会把 `UnsafeChannel<T>` 变成跨线程安全 channel
+- MPMC/MPSC/SPSC 的 `BoundedChannel<T>::send(...)` 返回 awaitable；队列满时挂起协程
+- `galay::mpmc::UnboundedChannel<T>` 与 `galay::mpsc::UnboundedChannel<T>` 的发送端是同步 `bool send(...)`
+- `galay::spsc::UnboundedChannel<T>` 支持一个生产者线程和一个消费者线程并发访问；不得并发启动第二个同侧操作
+- `galay::spsc::WakeMode::Deferred` 显式要求通过 owner scheduler 恢复；调度器拥有的 `Inline` waiter 同样不会在生产者线程直接恢复
 - `AsyncWaiter<T>` / `AsyncMutex` 用于协程同步，不是跨进程或跨机器同步原语
 
 ## 交叉验证入口
@@ -771,7 +801,7 @@ builder iovec 公开面：
 - 公开 API 面当前主要通过 `test/` 与 `examples/` 交叉验证
 - 调度 / 运行时：`test/t10_compute.cc`、`test/t11_mixed.cc`
 - task / sleep：`test/t1_chain.cc`
-- 并发：`test/t12_mutex.cc`、`test/t13_mpsc.cc`、`test/t15_unsafe.cc`
+- 并发：`test/t12_mutex.cc`、`test/t13_mpsc.cc`、`test/t15_unsafe.cc`、`test/t152_bounded_topology.cc`、`test/t153_spsc_unbounded.cc`
 - 定时器：`test/t14_wheel.cc`、`test/t16_timer.cc`
 - 真实示例总览：`docs/04-示例代码.md`
 
@@ -789,7 +819,7 @@ builder iovec 公开面：
 - `AsyncFile` / `AsyncAio` / `AsyncFileWatcher`：
   - 先看本页 `文件 IO 与文件监控`
   - 再看 `docs/03-使用指南.md`、`docs/06-高级主题.md`
-- `AsyncMutex` / `MpscChannel<T>` / `UnsafeChannel<T>` / `AsyncWaiter<T>`：
+- `AsyncMutex` / `galay::{mpmc,mpsc,spsc}` channel / `AsyncWaiter<T>`：
   - 先看本页 `并发原语`
   - 再看 `docs/03-使用指南.md` 与 `docs/07-常见问题.md`
 - `find_package(galay)` / 已安装头文件边界：

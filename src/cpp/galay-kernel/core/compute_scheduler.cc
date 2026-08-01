@@ -20,6 +20,7 @@ namespace galay::kernel
  */
 ComputeScheduler::ComputeScheduler()
 {
+    m_resumeQueue.close();
 }
 
 /**
@@ -42,6 +43,10 @@ std::expected<void, IOError> ComputeScheduler::start()
     if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
         return {};  // 已经在运行
     }
+    if (!m_resumeQueue.reopen()) {
+        m_running.store(false, std::memory_order_release);
+        return std::unexpected(IOError(kNotReady, 0));
+    }
 
     std::promise<void> thread_ready;
     auto ready = thread_ready.get_future();
@@ -59,18 +64,16 @@ std::expected<void, IOError> ComputeScheduler::start()
 /**
  * @brief 停止计算工作线程
  *
- * @details 将停止信号入队并等待工作线程结束。
- * 线程在退出前会排空剩余任务。若已停止则不做任何操作。
+ * @details 先关闭专用恢复接纳，再切换运行状态并等待工作线程结束。
+ * 线程在退出前会排空已接纳恢复和普通任务。若已停止则保持接纳关闭。
  */
 void ComputeScheduler::stop()
 {
+    m_resumeQueue.close();
     bool expected = true;
     if (!m_running.compare_exchange_strong(expected, false, std::memory_order_acq_rel)) {
         return;  // 已经停止
     }
-
-    // 发送停止信号唤醒等待的线程
-    m_queue.enqueue(ComputeTask{TaskRef{}, true});
 
     // 等待线程结束
     if (m_thread.joinable()) {
@@ -84,13 +87,20 @@ void ComputeScheduler::stop()
  * @param task  待调度的任务
  * @return true 任务绑定并入队成功；false 任务无效
  */
-bool ComputeScheduler::schedule(TaskRef task)
+bool ComputeScheduler::schedule(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
     }
-    m_queue.enqueue(ComputeTask{std::move(task)});
-    return true;
+    return m_queue.enqueue(ComputeTask{std::move(task)});
+}
+
+bool ComputeScheduler::scheduleResume(TaskRef task) noexcept
+{
+    if (!bindTask(task)) {
+        return false;
+    }
+    return m_resumeQueue.push(std::move(task));
 }
 
 /**
@@ -100,7 +110,7 @@ bool ComputeScheduler::schedule(TaskRef task)
  * @return true 任务绑定并入队成功
  * @note 当前实现与 schedule() 相同，保留以作语义区分
  */
-bool ComputeScheduler::scheduleDeferred(TaskRef task)
+bool ComputeScheduler::scheduleDeferred(TaskRef task) noexcept
 {
     return schedule(std::move(task));
 }
@@ -111,7 +121,7 @@ bool ComputeScheduler::scheduleDeferred(TaskRef task)
  * @param task  待执行的任务
  * @return true 任务绑定并恢复成功；false 绑定失败
  */
-bool ComputeScheduler::scheduleImmediately(TaskRef task)
+bool ComputeScheduler::scheduleImmediately(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -130,25 +140,39 @@ void ComputeScheduler::workerLoop()
 {
     ComputeTask task;
 
-    while (true) {
-        // 阻塞等待任务（无超时，由任务驱动）
-        if (!m_queue.wait_dequeue_timed(task, std::chrono::milliseconds(1))) {
+    while (m_running.load(std::memory_order_acquire)) {
+        drainResumeQueue();
+        if (m_queue.try_dequeue(task)) {
+            Scheduler::resume(task.task);
             continue;
         }
-        // 停止信号
-        if (task.is_stop_signal) {
-            break;
+        if (!m_resumeQueue.empty()) {
+            continue;
+        }
+        // 两条队列都为空时短暂阻塞，避免空闲线程持续自旋。
+        if (!m_queue.wait_dequeue_timed(task, std::chrono::milliseconds(1))) {
+            continue;
         }
         // 执行协程
         Scheduler::resume(task.task);
     }
 
     // 退出前处理剩余任务
+    drainResumeQueue();
     while (m_queue.try_dequeue(task)) {
-        if (task.is_stop_signal) {
-            continue;
-        }
         Scheduler::resume(task.task);
+        drainResumeQueue();
+    }
+    drainResumeQueue();
+}
+
+void ComputeScheduler::drainResumeQueue()
+{
+    TaskState* ready = detail::TaskResumeQueue::reverse(
+        m_resumeQueue.takeAll());
+    while (ready != nullptr) {
+        TaskRef task = detail::TaskResumeQueue::popFront(ready);
+        Scheduler::resume(task);
     }
 }
 

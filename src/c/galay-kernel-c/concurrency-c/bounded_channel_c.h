@@ -12,7 +12,7 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details C wrapper 内部持有 C++ BoundedChannel<C_BoundedChannelMessage>，支持
+ * @details C wrapper 内部持有 C++ galay::mpmc::BoundedChannel<C_BoundedChannelMessage>，支持
  * 多生产者和多消费者并发访问。wrapper 只复制消息结构体，不复制、不释放 data
  * 指向的 payload；调用方必须保证 payload 在消费者完成使用前保持有效。
  */
@@ -48,7 +48,7 @@ typedef struct C_BoundedChannelMessage {
 /**
  * @brief BoundedChannel C 句柄。
  *
- * @note channel 指向内部 C++ BoundedChannel<C_BoundedChannelMessage>，调用方
+ * @note channel 指向内部 C++ galay::mpmc::BoundedChannel<C_BoundedChannelMessage>，调用方
  * 不能解引用或直接释放。
  */
 typedef struct galay_kernel_bounded_channel {

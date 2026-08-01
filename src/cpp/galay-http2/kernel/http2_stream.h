@@ -17,8 +17,8 @@
 #include "../protoc/http2_hpack.h"
 #include "../protoc/http2_error.h"
 #include "../../galay-kernel/async/async_waiter.h"
-#include "../../galay-kernel/concurrency/mpsc_channel.h"
-#include "../../galay-kernel/concurrency/unsafe_channel.h"
+#include "../../galay-kernel/concurrency/mpsc/unbounded_channel.h"
+#include "../../galay-kernel/concurrency/spsc/unbounded_channel.h"
 #include <string>
 #include <string_view>
 #include <vector>
@@ -1092,7 +1092,7 @@ public:
      * @brief 批量获取帧（至少 1 帧，最多 max_count）
      * @return co_await 后得到 expected<vector<uptr>, IOError>
      */
-    auto getFrames(size_t max_count = galay::kernel::UnsafeChannel<Http2Frame::uptr>::DEFAULT_BATCH_SIZE) {
+    auto getFrames(size_t max_count = galay::spsc::UnboundedChannel<Http2Frame::uptr>::DEFAULT_BATCH_SIZE) {
         return m_frame_channel.recvBatch(max_count);
     }
 
@@ -1503,7 +1503,7 @@ private:
         // made_progress only reports whether queued DATA was flushed after attaching IO.
     }
 
-    void attachIO(galay::kernel::MpscChannel<Http2OutgoingFrame>* send_channel,
+    void attachIO(galay::mpsc::UnboundedChannel<Http2OutgoingFrame>* send_channel,
                   HpackEncoder* encoder,
                   HpackDecoder* decoder,
                   int32_t* conn_send_window = nullptr,
@@ -1538,7 +1538,7 @@ private:
     Http2Response m_response;
 
     // 帧通道
-    galay::kernel::UnsafeChannel<Http2Frame::uptr> m_frame_channel;
+    galay::spsc::UnboundedChannel<Http2Frame::uptr> m_frame_channel;
     bool m_frame_queue_closed = false;
     bool m_frame_queue_enabled = true;
     std::optional<Http2GoAwayError> m_goaway_error;
@@ -1555,7 +1555,7 @@ private:
     bool m_exclusive = false;
 
     // 发送队列和编解码器（由 StreamManager 绑定）
-    galay::kernel::MpscChannel<Http2OutgoingFrame>* m_send_channel = nullptr;
+    galay::mpsc::UnboundedChannel<Http2OutgoingFrame>* m_send_channel = nullptr;
     std::vector<Http2OutgoingFrame>* m_send_queue = nullptr;
     HpackEncoder* m_encoder = nullptr;
     HpackDecoder* m_decoder = nullptr;

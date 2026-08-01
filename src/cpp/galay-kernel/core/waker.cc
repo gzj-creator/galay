@@ -197,7 +197,7 @@ Waker::Waker(detail::ResumeToken token) noexcept
  *
  * @return 所属 Scheduler 指针，若任务未绑定则返回 nullptr
  */
-Scheduler* Waker::getScheduler()
+Scheduler* Waker::getScheduler() noexcept
 {
     return m_token.scheduler();
 }
@@ -205,10 +205,11 @@ Scheduler* Waker::getScheduler()
 /**
  * @brief 请求在所属调度器上恢复持有任务
  *
- * @details 调用 detail::requestTaskResume，原子地将任务标记为已入队
- * 并提交到调度器。若任务已入队、无效或已完成，请求被静默忽略。
+ * @details 调用 detail::requestTaskResume，原子地将任务标记为已入队并通过
+ * owner scheduler 的无分配 resume admission 提交。若任务已入队、无效或已
+ * 完成，请求被静默忽略。
  */
-void Waker::wakeUp()
+void Waker::wakeUp() noexcept
 {
     (void)m_token.requestResume();
 }

@@ -209,8 +209,8 @@
 #if __has_include("../../galay-kernel/async/async_waiter.h")
 #include "../../galay-kernel/async/async_waiter.h"
 #endif
-#if __has_include("../../galay-kernel/concurrency/unsafe_channel.h")
-#include "../../galay-kernel/concurrency/unsafe_channel.h"
+#if __has_include("../../galay-kernel/concurrency/spsc/unbounded_channel.h")
+#include "../../galay-kernel/concurrency/spsc/unbounded_channel.h"
 #endif
 #if __has_include("../../galay-kernel/core/awaitable.h")
 #include "../../galay-kernel/core/awaitable.h"

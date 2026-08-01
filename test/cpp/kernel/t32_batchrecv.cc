@@ -1,11 +1,11 @@
 /**
  * @file t32_batchrecv.cc
- * @brief 用途：验证 `MpscChannel` 批量接收接口能够持续推进消费进度。
+ * @brief 用途：验证 `galay::mpsc::UnboundedChannel` 批量接收接口能够持续推进消费进度。
  * 关键覆盖点：批量 drain backlog、单轮进度推进、无消息时等待再恢复。
  * 通过条件：批量接收不会停滞且统计符合预期，测试返回 0。
  */
 
-#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 
 #include <atomic>
@@ -22,6 +22,7 @@ namespace {
 constexpr int64_t kMessageCount = 100000;
 
 std::atomic<bool> g_done{false};
+std::atomic<bool> g_send_failed{false};
 std::atomic<int64_t> g_received{0};
 std::atomic<int64_t> g_sum{0};
 
@@ -38,12 +39,17 @@ bool waitUntil(const std::atomic<bool>& flag,
     return flag.load(std::memory_order_acquire);
 }
 
-Task<void> batchConsumer(MpscChannel<int64_t>* channel) {
+Task<void> batchConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel) {
     int64_t received = 0;
     int64_t sum = 0;
     while (received < kMessageCount) {
         auto batch = co_await channel->recvBatch(256);
         if (!batch) {
+            if (g_send_failed.load(std::memory_order_acquire) ||
+                channel->isClosed()) {
+                g_done.store(true, std::memory_order_release);
+                co_return;
+            }
             continue;
         }
         for (int64_t value : *batch) {
@@ -61,14 +67,30 @@ Task<void> batchConsumer(MpscChannel<int64_t>* channel) {
 }  // namespace
 
 int main() {
-    MpscChannel<int64_t> channel;
+    galay::mpsc::UnboundedChannel<int64_t> channel;
     ComputeScheduler scheduler;
-    scheduler.start();
-    scheduler.schedule(detail::TaskAccess::detachTask(batchConsumer(&channel)));
+    const auto schedulerStarted = scheduler.start();
+    if (!schedulerStarted.has_value()) {
+        std::cerr << "[T32] failed to start consumer scheduler\n";
+        return 1;
+    }
+    const bool scheduled = scheduler.schedule(
+        detail::TaskAccess::detachTask(batchConsumer(&channel)));
+    if (!scheduled) {
+        scheduler.stop();
+        std::cerr << "[T32] failed to schedule batch consumer\n";
+        return 1;
+    }
 
     std::thread producer([&]() {
         for (int64_t i = 0; i < kMessageCount; ++i) {
-            channel.send(i);
+            if (!channel.send(i)) {
+                g_send_failed.store(true, std::memory_order_release);
+                if (!channel.close() && !channel.isClosed()) {
+                    g_send_failed.store(true, std::memory_order_release);
+                }
+                break;
+            }
         }
     });
 
@@ -78,7 +100,9 @@ int main() {
 
     if (!done) {
         const auto tail = channel.tryRecvBatch(256);
-        std::cerr << "[T32] batch consumer did not make progress to completion, received="
+        std::cerr << "[T32] batch consumer did not make progress to completion, send_failed="
+                  << g_send_failed.load(std::memory_order_acquire)
+                  << " received="
                   << g_received.load(std::memory_order_acquire)
                   << " channel.size=" << channel.size()
                   << " tail_batch=" << (tail ? tail->size() : 0) << "\n";
@@ -86,9 +110,12 @@ int main() {
     }
 
     const int64_t expected_sum = (kMessageCount - 1) * kMessageCount / 2;
-    if (g_received.load(std::memory_order_acquire) != kMessageCount ||
+    if (g_send_failed.load(std::memory_order_acquire) ||
+        g_received.load(std::memory_order_acquire) != kMessageCount ||
         g_sum.load(std::memory_order_acquire) != expected_sum) {
-        std::cerr << "[T32] expected received=" << kMessageCount
+        std::cerr << "[T32] send_failed="
+                  << g_send_failed.load(std::memory_order_acquire)
+                  << ", expected received=" << kMessageCount
                   << " sum=" << expected_sum
                   << ", got received=" << g_received.load(std::memory_order_acquire)
                   << " sum=" << g_sum.load(std::memory_order_acquire) << "\n";

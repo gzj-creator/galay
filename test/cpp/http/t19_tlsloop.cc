@@ -93,6 +93,8 @@ public:
         return RecvAwaitable(this, buffer, length);
     }
 
+    GHandle handle() const noexcept { return GHandle::invalid(); }
+
     size_t sendCallCount() const { return m_send_call_count; }
     size_t recvCallCount() const { return m_recv_call_count; }
 

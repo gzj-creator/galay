@@ -378,6 +378,9 @@ struct IOController {
      * @note 在 io_uring 模式下会主动使历史 SQE 请求失效
      */
     ~IOController() {
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+        releaseRegistrationOwnerSlot();
+#endif
 #ifdef USE_IOURING
         clearSqeState();
 #endif
@@ -425,6 +428,9 @@ struct IOController {
         , m_recvfrom_result_assigned(other.m_recvfrom_result_assigned)
 #endif
     {
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+        adoptRegistrationOwnerSlot(other);
+#endif
 #ifdef USE_IOURING
         m_sqe_state[READ] = m_sqe_handle_pool[READ] ? m_sqe_handle_pool[READ]->state() : nullptr;
         m_sqe_state[WRITE] = m_sqe_handle_pool[WRITE] ? m_sqe_handle_pool[WRITE]->state() : nullptr;
@@ -444,6 +450,9 @@ struct IOController {
      */
     IOController& operator=(IOController&& other) noexcept {
         if (this != &other) {
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+            releaseRegistrationOwnerSlot();
+#endif
             m_handle = other.m_handle;
             m_type = other.m_type;
             m_awaitable[READ] = other.m_awaitable[READ];
@@ -484,16 +493,59 @@ struct IOController {
             other.m_sqe_state[READ] = nullptr;
             other.m_sqe_state[WRITE] = nullptr;
 #endif
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+            adoptRegistrationOwnerSlot(other);
+#endif
             other.resetMovedFrom();
         }
         return *this;
     }
+
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+    /**
+     * @brief 绑定 reactor 稳定注册入口中的 controller 槽位
+     * @note 仅在所属 IO 调度器线程调用；无需原子或锁。
+     */
+    void bindRegistrationOwnerSlot(IOController** owner_slot) noexcept {
+        if (m_registration_owner_slot == owner_slot) {
+            if (owner_slot != nullptr) {
+                *owner_slot = this;
+            }
+            return;
+        }
+
+        releaseRegistrationOwnerSlot();
+        if (owner_slot != nullptr) {
+            auto* previous_owner = *owner_slot;
+            if (previous_owner != nullptr && previous_owner != this) {
+                previous_owner->m_registration_owner_slot = nullptr;
+            }
+            *owner_slot = this;
+        }
+        m_registration_owner_slot = owner_slot;
+    }
+
+    /**
+     * @brief 解除 reactor 稳定注册入口对当前 controller 的引用
+     */
+    void releaseRegistrationOwnerSlot() noexcept {
+        if (m_registration_owner_slot != nullptr) {
+            if (*m_registration_owner_slot == this) {
+                *m_registration_owner_slot = nullptr;
+            }
+            m_registration_owner_slot = nullptr;
+        }
+    }
+#endif
 
     /**
      * @brief 将 moved-from 对象重置到安全空状态
      * @note 供移动构造/赋值后清理源对象使用
      */
     void resetMovedFrom() noexcept {
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+        releaseRegistrationOwnerSlot();
+#endif
         m_handle = GHandle::invalid();
         m_type = IOEventType::INVALID;
         m_awaitable[READ] = nullptr;
@@ -764,6 +816,9 @@ struct IOController {
     void* m_awaitable[IOController::SIZE] = {nullptr, nullptr};  ///< READ/WRITE 槽位上的 awaitable 指针
     SequenceAwaitableBase* m_sequence_owner[IOController::SIZE] = {nullptr, nullptr};  ///< READ/WRITE 槽位所属的 sequence awaitable
     std::atomic<Scheduler*> m_owner_scheduler{nullptr};  ///< direct C TCP I/O 绑定的 owner scheduler；C++ awaitable 不依赖该字段
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+    IOController** m_registration_owner_slot = nullptr;  ///< reactor 稳定入口的 owner 槽；移动时原位重绑
+#endif
     uint8_t m_sequence_interest_mask = 0;  ///< sequence 关心的 READ/WRITE 位掩码
     uint8_t m_sequence_armed_mask = 0;  ///< 已经向 reactor 注册的 READ/WRITE 位掩码
 #ifdef USE_KQUEUE
@@ -830,6 +885,21 @@ private:
             }
             state->owner.store(this, std::memory_order_release);
         }
+    }
+#endif
+
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+private:
+    void adoptRegistrationOwnerSlot(IOController& other) noexcept {
+        m_registration_owner_slot = other.m_registration_owner_slot;
+        if (m_registration_owner_slot != nullptr) {
+            if (*m_registration_owner_slot == &other) {
+                *m_registration_owner_slot = this;
+            } else {
+                m_registration_owner_slot = nullptr;
+            }
+        }
+        other.m_registration_owner_slot = nullptr;
     }
 #endif
 };

@@ -210,8 +210,21 @@ struct CoroFileWatcherOperation final: public FileWatchAwaitable {
         if (m_finished) {
             return true;
         }
-        const CoroFileWatcherCompletionPhase phase =
+        CoroFileWatcherCompletionPhase phase =
             m_state.phase.load(std::memory_order_acquire);
+        if (phase == CoroFileWatcherCompletionPhase::Pending) {
+            CoroFileWatcherCompletionPhase expected =
+                CoroFileWatcherCompletionPhase::Pending;
+            if (m_state.phase.compare_exchange_strong(
+                    expected,
+                    CoroFileWatcherCompletionPhase::Completed,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                phase = CoroFileWatcherCompletionPhase::Completed;
+            } else {
+                phase = expected;
+            }
+        }
         if (phase == CoroFileWatcherCompletionPhase::TimedOut ||
             phase == CoroFileWatcherCompletionPhase::Cancelled) {
             m_finished = true;

@@ -36,8 +36,7 @@ namespace galay::kernel
  * 协程的原调度器通过 coro.belongScheduler() 获取。
  */
 struct ComputeTask {
-    TaskRef task;                  ///< 轻量任务引用
-    bool is_stop_signal = false;    ///< 是否为停止信号
+    TaskRef task;  ///< 轻量任务引用
 };
 
 /**
@@ -81,14 +80,14 @@ public:
 
     /**
      * @brief 启动调度器
-     * @return 成功返回 void；当前实现不会产生 IOError
+     * @return 成功返回 void；前一运行周期未完整排空恢复队列时返回 kNotReady
      * @note 创建工作线程并开始处理任务
      */
     std::expected<void, IOError> start() override;
 
     /**
      * @brief 停止调度器
-     * @note 等待工作线程结束
+     * @note 先拒绝新的恢复请求，再由工作线程排空已接纳任务并结束
      */
     void stop() override;
 
@@ -98,7 +97,14 @@ public:
      * @return true 任务已成功入队；false 任务无效或已绑定到其他调度器
      * @note 任务会在线程池中的计算线程恢复执行
      */
-    bool schedule(TaskRef task) override;
+    bool schedule(TaskRef task) noexcept override;
+
+    /**
+     * @brief 无分配接纳已停泊任务的恢复请求。
+     * @return live scheduler 接管成功返回 true；未启动、已停止、任务无效或 owner
+     *         不匹配返回 false。
+     */
+    bool scheduleResume(TaskRef task) noexcept override;
 
     /**
      * @brief 将计算任务按延后语义排入工作线程
@@ -106,14 +112,14 @@ public:
      * @return true 任务已成功入队；false 任务无效或已绑定到其他调度器
      * @note 当前实现与 schedule() 共享同一工作队列，但保留独立语义入口
      */
-    bool scheduleDeferred(TaskRef task) override;
+    bool scheduleDeferred(TaskRef task) noexcept override;
 
     /**
      * @brief 立即执行任务（在当前线程）
      * @param task 要执行的任务
      * @return true 如果成功执行，false 如果任务已绑定到其他调度器
      */
-    bool scheduleImmediately(TaskRef task) override;
+    bool scheduleImmediately(TaskRef task) noexcept override;
 
     /**
      * @brief 检查调度器是否正在运行
@@ -133,13 +139,19 @@ public:
     }
 private:
     /**
-     * @brief 工作线程函数
+     * @brief 排空一次 resume admission 快照
+     * @details 恢复期间新产生的请求留到下一轮；下一轮先尝试一个普通任务，
+     *          普通队列为空时则立即继续恢复，兼顾公平性和连续 resume 吞吐。
      */
+    void drainResumeQueue();
+
+    /** @brief 工作线程函数 */
     void workerLoop();
 
 private:
     std::thread m_thread;                                       ///< 工作线程
     moodycamel::BlockingConcurrentQueue<ComputeTask> m_queue;   ///< 任务队列（阻塞）
+    detail::TaskResumeQueue m_resumeQueue;                       ///< Waker 专用无分配恢复队列
     std::atomic<bool> m_running{false};                         ///< 运行状态
 };
 

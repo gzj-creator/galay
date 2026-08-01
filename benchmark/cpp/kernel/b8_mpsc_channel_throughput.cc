@@ -1,6 +1,6 @@
 /**
  * @file b8_mpsc.cc
- * @brief 用途：压测 `MpscChannel` 在跨线程与跨运行时场景下的通信性能。
+ * @brief 用途：压测 `galay::mpsc::UnboundedChannel` 在跨线程与跨运行时场景下的通信性能。
  * 关键覆盖点：单/多生产者吞吐、批量接收、延迟采样、跨 runtime 场景与正确性统计。
  * 通过条件：所有压测阶段完成并输出吞吐或延迟结果，进程无崩溃、卡死或超时。
  */
@@ -14,7 +14,7 @@
 #include <mutex>
 #include <numeric>
 #include "benchmark/cpp/common/benchmark_sync.h"
-#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 #include "test/cpp/common/stdout_log.h"
@@ -43,6 +43,7 @@ std::atomic<int64_t> g_latency_sum_ns{0};
 std::atomic<int64_t> g_latency_count{0};
 std::atomic<bool> g_consumer_done{false};
 std::atomic<bool> g_consumer_ready{false};
+std::atomic<bool> g_benchmark_failed{false};
 galay::benchmark::CompletionLatch* g_consumer_done_latch = nullptr;
 
 // 正确性验证
@@ -82,16 +83,21 @@ struct LatencySample {
 // ============== 消费者协程 ==============
 
 // 简单消费者（吞吐量测试）
-Task<void> simpleConsumer(MpscChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> simpleConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     g_consumer_ready.store(true, std::memory_order_release);
     int64_t received = 0;
     int64_t sum = 0;
     while (received < expected_count) {
         auto value = co_await channel->recv();
-        if (value) {
-            ++received;
-            sum += *value;
+        if (!value) {
+            if (IOError::contains(value.error().code(), kTimeout)) {
+                continue;
+            }
+            g_benchmark_failed.store(true, std::memory_order_release);
+            break;
         }
+        ++received;
+        sum += *value;
     }
     g_received.store(received, std::memory_order_relaxed);
     g_sum.store(sum, std::memory_order_relaxed);
@@ -103,18 +109,23 @@ Task<void> simpleConsumer(MpscChannel<int64_t>* channel, int64_t expected_count)
 }
 
 // 批量消费者
-Task<void> batchConsumer(MpscChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> batchConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     g_consumer_ready.store(true, std::memory_order_release);
     int64_t received = 0;
     int64_t sum = 0;
     while (received < expected_count) {
         auto batch = co_await channel->recvBatch(256);
-        if (batch) {
-            for (int64_t v : *batch) {
-                sum += v;
+        if (!batch) {
+            if (IOError::contains(batch.error().code(), kTimeout)) {
+                continue;
             }
-            received += batch->size();
+            g_benchmark_failed.store(true, std::memory_order_release);
+            break;
         }
+        for (int64_t v : *batch) {
+            sum += v;
+        }
+        received += batch->size();
     }
     g_received.store(received, std::memory_order_relaxed);
     g_sum.store(sum, std::memory_order_relaxed);
@@ -126,19 +137,24 @@ Task<void> batchConsumer(MpscChannel<int64_t>* channel, int64_t expected_count) 
 }
 
 // 延迟测试消费者
-Task<void> latencyConsumer(MpscChannel<TimestampedMessage>* channel, int64_t expected_count) {
+Task<void> latencyConsumer(galay::mpsc::UnboundedChannel<TimestampedMessage>* channel, int64_t expected_count) {
     int64_t received = 0;
     int64_t latency_sum_ns = 0;
     g_consumer_ready.store(true, std::memory_order_release);
     while (received < expected_count) {
         auto msg = co_await channel->recv();
-        if (msg) {
-            auto now = std::chrono::steady_clock::now();
-            auto latency_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                now - msg->send_time).count();
-            latency_sum_ns += latency_ns;
-            ++received;
+        if (!msg) {
+            if (IOError::contains(msg.error().code(), kTimeout)) {
+                continue;
+            }
+            g_benchmark_failed.store(true, std::memory_order_release);
+            break;
         }
+        auto now = std::chrono::steady_clock::now();
+        auto latency_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now - msg->send_time).count();
+        latency_sum_ns += latency_ns;
+        ++received;
     }
     g_received.store(received, std::memory_order_relaxed);
     g_latency_sum_ns.store(latency_sum_ns, std::memory_order_relaxed);
@@ -151,16 +167,21 @@ Task<void> latencyConsumer(MpscChannel<TimestampedMessage>* channel, int64_t exp
 }
 
 // 正确性验证消费者
-Task<void> correctnessConsumer(MpscChannel<int64_t>* channel, int64_t expected_count) {
+Task<void> correctnessConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t expected_count) {
     while (g_received < expected_count) {
         auto value = co_await channel->recv();
-        if (value) {
-            {
-                std::lock_guard<std::mutex> lock(g_received_mutex);
-                g_received_set.insert(*value);
+        if (!value) {
+            if (IOError::contains(value.error().code(), kTimeout)) {
+                continue;
             }
-            g_received.fetch_add(1, std::memory_order_relaxed);
+            g_benchmark_failed.store(true, std::memory_order_release);
+            break;
         }
+        {
+            std::lock_guard<std::mutex> lock(g_received_mutex);
+            g_received_set.insert(*value);
+        }
+        g_received.fetch_add(1, std::memory_order_relaxed);
     }
     g_consumer_done = true;
     co_return;
@@ -169,45 +190,78 @@ Task<void> correctnessConsumer(MpscChannel<int64_t>* channel, int64_t expected_c
 // ============== 生产者函数 ==============
 
 // 单线程生产者
-void singleProducer(MpscChannel<int64_t>* channel, int64_t count) {
-    
+void singleProducer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t count) {
+    int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
-        channel->send(i);
+        if (!channel->send(i)) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  single producer send failed after {} messages", sent);
+            if (!channel->close() && !channel->isClosed()) {
+                LogError("  channel close failed after single producer send failure");
+            }
+            break;
+        }
+        ++sent;
     }
-    g_sent.store(count, std::memory_order_relaxed);
+    g_sent.store(sent, std::memory_order_relaxed);
 }
 
 // 多线程生产者
-void multiProducer(MpscChannel<int64_t>* channel, int64_t start, int64_t count) {
-    
+void multiProducer(galay::mpsc::UnboundedChannel<int64_t>* channel, int64_t start, int64_t count) {
+    int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
-        channel->send(start + i);
+        if (!channel->send(start + i)) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  producer starting at {} send failed after {} messages", start, sent);
+            if (!channel->close() && !channel->isClosed()) {
+                LogError("  channel close failed after multi-producer send failure");
+            }
+            break;
+        }
+        ++sent;
     }
-    g_sent.fetch_add(count, std::memory_order_relaxed);
+    g_sent.fetch_add(sent, std::memory_order_relaxed);
 }
 
 // 延迟测试生产者
-void latencyProducer(MpscChannel<TimestampedMessage>* channel, int64_t count) {
-
+void latencyProducer(galay::mpsc::UnboundedChannel<TimestampedMessage>* channel, int64_t count) {
+    int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
         TimestampedMessage msg;
         msg.id = i;
         msg.send_time = std::chrono::steady_clock::now();
-        channel->send(std::move(msg));
+        if (!channel->send(std::move(msg))) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  latency producer send failed after {} messages", sent);
+            if (!channel->close() && !channel->isClosed()) {
+                LogError("  channel close failed after latency send failure");
+            }
+            break;
+        }
+        ++sent;
     }
-    g_sent.store(count, std::memory_order_relaxed);
+    g_sent.store(sent, std::memory_order_relaxed);
 }
 
-Task<void> crossSchedulerProducer(MpscChannel<int64_t>* channel,
+Task<void> crossSchedulerProducer(galay::mpsc::UnboundedChannel<int64_t>* channel,
                                   int64_t count,
                                   galay::benchmark::CompletionLatch* completion_latch) {
+    int64_t sent = 0;
     for (int64_t i = 0; i < count; ++i) {
-        channel->send(i);
+        if (!channel->send(i)) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  cross-scheduler producer send failed after {} messages", sent);
+            if (!channel->close() && !channel->isClosed()) {
+                LogError("  channel close failed after cross-scheduler send failure");
+            }
+            break;
+        }
+        ++sent;
         if (i != 0 && (i % 100) == 0) {
             co_yield true;
         }
     }
-    g_sent.store(count, std::memory_order_relaxed);
+    g_sent.store(sent, std::memory_order_relaxed);
     if (completion_latch) {
         completion_latch->arrive();
     }
@@ -229,14 +283,25 @@ void benchSingleProducerThroughput(int64_t message_count) {
         while (true) {
             resetCounters();
 
-            MpscChannel<int64_t> channel;
+            galay::mpsc::UnboundedChannel<int64_t> channel;
             ComputeScheduler scheduler;
 
-            scheduler.start();
+            auto started = scheduler.start();
+            if (!started) {
+                g_benchmark_failed.store(true, std::memory_order_release);
+                LogError("  failed to start single-producer scheduler");
+                return;
+            }
             galay::benchmark::CompletionLatch consumer_done_latch(1);
             g_consumer_done_latch = &consumer_done_latch;
 
-            scheduleTask(scheduler, simpleConsumer(&channel, sample_message_count));
+            if (!scheduleTask(scheduler, simpleConsumer(&channel, sample_message_count))) {
+                g_benchmark_failed.store(true, std::memory_order_release);
+                LogError("  failed to schedule single-producer consumer");
+                g_consumer_done_latch = nullptr;
+                scheduler.stop();
+                return;
+            }
             if (!galay::benchmark::waitForFlag(g_consumer_ready, 2s)) {
                 LogError("  consumer did not become ready before throughput run");
                 g_consumer_done_latch = nullptr;
@@ -272,6 +337,11 @@ void benchSingleProducerThroughput(int64_t message_count) {
             producer.join();
             g_consumer_done_latch = nullptr;
             scheduler.stop();
+
+            if (g_benchmark_failed.load(std::memory_order_acquire)) {
+                LogError("  single-producer throughput sample failed");
+                return;
+            }
 
             if (elapsed < PRODUCER_MIN_SAMPLE_DURATION) {
                 sample_message_count *= 2;
@@ -320,13 +390,24 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
          ++sample_index) {
         resetCounters();
 
-        MpscChannel<int64_t> channel;
+        galay::mpsc::UnboundedChannel<int64_t> channel;
         ComputeScheduler scheduler;
 
-        scheduler.start();
+        auto started = scheduler.start();
+        if (!started) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  failed to start multi-producer scheduler");
+            return;
+        }
         galay::benchmark::CompletionLatch consumer_done_latch(1);
         g_consumer_done_latch = &consumer_done_latch;
-        scheduleTask(scheduler, simpleConsumer(&channel, total_messages));
+        if (!scheduleTask(scheduler, simpleConsumer(&channel, total_messages))) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  failed to schedule multi-producer consumer");
+            g_consumer_done_latch = nullptr;
+            scheduler.stop();
+            return;
+        }
         if (!galay::benchmark::waitForFlag(g_consumer_ready, 2s)) {
             LogError("  consumer did not become ready before multi-producer run");
             g_consumer_done_latch = nullptr;
@@ -355,6 +436,11 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
 
         g_consumer_done_latch = nullptr;
         scheduler.stop();
+
+        if (g_benchmark_failed.load(std::memory_order_acquire)) {
+            LogError("  multi-producer throughput sample failed");
+            return;
+        }
 
         samples.push_back({
             .elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0,
@@ -390,13 +476,24 @@ void benchBatchReceiveThroughput(int64_t message_count) {
         while (true) {
             resetCounters();
 
-            MpscChannel<int64_t> channel;
+            galay::mpsc::UnboundedChannel<int64_t> channel;
             ComputeScheduler scheduler;
 
-            scheduler.start();
+            auto started = scheduler.start();
+            if (!started) {
+                g_benchmark_failed.store(true, std::memory_order_release);
+                LogError("  failed to start batch scheduler");
+                return;
+            }
             galay::benchmark::CompletionLatch consumer_done_latch(1);
             g_consumer_done_latch = &consumer_done_latch;
-            scheduleTask(scheduler, batchConsumer(&channel, sample_message_count));
+            if (!scheduleTask(scheduler, batchConsumer(&channel, sample_message_count))) {
+                g_benchmark_failed.store(true, std::memory_order_release);
+                LogError("  failed to schedule batch consumer");
+                g_consumer_done_latch = nullptr;
+                scheduler.stop();
+                return;
+            }
             if (!galay::benchmark::waitForFlag(g_consumer_ready, 2s)) {
                 LogError("  consumer did not become ready before batch run");
                 g_consumer_done_latch = nullptr;
@@ -418,6 +515,11 @@ void benchBatchReceiveThroughput(int64_t message_count) {
             producer.join();
             g_consumer_done_latch = nullptr;
             scheduler.stop();
+
+            if (g_benchmark_failed.load(std::memory_order_acquire)) {
+                LogError("  batch throughput sample failed");
+                return;
+            }
 
             if (elapsed < BATCH_MIN_SAMPLE_DURATION) {
                 sample_message_count *= 2;
@@ -463,13 +565,24 @@ void benchLatency(int64_t message_count) {
     for (std::size_t sample_index = 0; sample_index < LATENCY_SAMPLE_COUNT; ++sample_index) {
         resetCounters();
 
-        MpscChannel<TimestampedMessage> channel;
+        galay::mpsc::UnboundedChannel<TimestampedMessage> channel;
         ComputeScheduler scheduler;
 
-        scheduler.start();
+        auto started = scheduler.start();
+        if (!started) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  failed to start latency scheduler");
+            return;
+        }
         galay::benchmark::CompletionLatch consumer_done_latch(1);
         g_consumer_done_latch = &consumer_done_latch;
-        scheduleTask(scheduler, latencyConsumer(&channel, message_count));
+        if (!scheduleTask(scheduler, latencyConsumer(&channel, message_count))) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  failed to schedule latency consumer");
+            g_consumer_done_latch = nullptr;
+            scheduler.stop();
+            return;
+        }
 
         if (!galay::benchmark::waitForFlag(g_consumer_ready, 2s)) {
             LogError("  consumer did not become ready before latency run");
@@ -487,6 +600,11 @@ void benchLatency(int64_t message_count) {
         producer.join();
         g_consumer_done_latch = nullptr;
         scheduler.stop();
+
+        if (g_benchmark_failed.load(std::memory_order_acquire)) {
+            LogError("  latency sample failed");
+            return;
+        }
 
         samples.push_back({
             .avg_latency_us = (double)g_latency_sum_ns.load(std::memory_order_relaxed) /
@@ -510,11 +628,21 @@ void benchCorrectness(int producer_count, int64_t total_messages) {
             producer_count, total_messages);
     resetCounters();
 
-    MpscChannel<int64_t> channel;
+    galay::mpsc::UnboundedChannel<int64_t> channel;
     ComputeScheduler scheduler;
 
-    scheduler.start();
-    scheduleTask(scheduler, correctnessConsumer(&channel, total_messages));
+    auto started = scheduler.start();
+    if (!started) {
+        g_benchmark_failed.store(true, std::memory_order_release);
+        LogError("  failed to start correctness scheduler");
+        return;
+    }
+    if (!scheduleTask(scheduler, correctnessConsumer(&channel, total_messages))) {
+        g_benchmark_failed.store(true, std::memory_order_release);
+        LogError("  failed to schedule correctness consumer");
+        scheduler.stop();
+        return;
+    }
 
     int64_t per_producer = total_messages / producer_count;
 
@@ -573,13 +701,24 @@ void benchCrossScheduler(int64_t message_count) {
          ++sample_index) {
         resetCounters();
 
-        MpscChannel<int64_t> channel;
+        galay::mpsc::UnboundedChannel<int64_t> channel;
         ComputeScheduler consumerScheduler;
 
-        consumerScheduler.start();
+        auto consumer_started = consumerScheduler.start();
+        if (!consumer_started) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  failed to start cross-scheduler consumer scheduler");
+            return;
+        }
         galay::benchmark::CompletionLatch consumer_done_latch(1);
         g_consumer_done_latch = &consumer_done_latch;
-        scheduleTask(consumerScheduler, simpleConsumer(&channel, message_count));
+        if (!scheduleTask(consumerScheduler, simpleConsumer(&channel, message_count))) {
+            g_benchmark_failed.store(true, std::memory_order_release);
+            LogError("  failed to schedule cross-scheduler consumer");
+            g_consumer_done_latch = nullptr;
+            consumerScheduler.stop();
+            return;
+        }
         if (!galay::benchmark::waitForFlag(g_consumer_ready, 2s)) {
             LogError("  consumer did not become ready before cross-scheduler run");
             g_consumer_done_latch = nullptr;
@@ -593,12 +732,31 @@ void benchCrossScheduler(int64_t message_count) {
 
         std::thread producer_thread([&]() {
             ComputeScheduler producerScheduler;
-            producerScheduler.start();
+            auto producer_started = producerScheduler.start();
+            if (!producer_started) {
+                g_benchmark_failed.store(true, std::memory_order_release);
+                LogError("  failed to start cross-scheduler producer scheduler");
+                producer_ready_latch.arrive();
+                if (!channel.close() && !channel.isClosed()) {
+                    LogError("  channel close failed after producer scheduler start failure");
+                }
+                producer_done_latch.arrive();
+                return;
+            }
             producer_ready_latch.arrive();
             start_gate.wait();
-            scheduleTask(
-                producerScheduler,
-                crossSchedulerProducer(&channel, message_count, &producer_done_latch));
+            if (!scheduleTask(
+                    producerScheduler,
+                    crossSchedulerProducer(&channel, message_count, &producer_done_latch))) {
+                g_benchmark_failed.store(true, std::memory_order_release);
+                LogError("  failed to schedule cross-scheduler producer");
+                if (!channel.close() && !channel.isClosed()) {
+                    LogError("  channel close failed after producer scheduling failure");
+                }
+                producer_done_latch.arrive();
+                producerScheduler.stop();
+                return;
+            }
             producer_done_latch.wait();
             producerScheduler.stop();
         });
@@ -623,6 +781,11 @@ void benchCrossScheduler(int64_t message_count) {
         producer_thread.join();
         g_consumer_done_latch = nullptr;
         consumerScheduler.stop();
+
+        if (g_benchmark_failed.load(std::memory_order_acquire)) {
+            LogError("  cross-scheduler sample failed");
+            return;
+        }
 
         samples.push_back({
             .elapsed_ms = static_cast<double>(elapsed_ns) / 1'000'000.0,
@@ -657,25 +820,43 @@ void benchSustained(int duration_sec) {
     LogInfo("--- Sustained Load Test ({}s) ---", duration_sec);
     resetCounters();
 
-    MpscChannel<int64_t> channel;
+    galay::mpsc::UnboundedChannel<int64_t> channel;
     ComputeScheduler scheduler;
 
     std::atomic<bool> running{true};
 
     // 消费者协程
-    auto sustainedConsumer = [](MpscChannel<int64_t>* ch, std::atomic<bool>* run) -> Task<void> {
-        while (*run || ch->size() > 0) {
+    auto sustainedConsumer = [](galay::mpsc::UnboundedChannel<int64_t>* ch) -> Task<void> {
+        for (;;) {
             auto value = co_await ch->recv();
-            if (value) {
-                g_received.fetch_add(1, std::memory_order_relaxed);
+            if (!value) {
+                if (IOError::contains(value.error().code(), kTimeout)) {
+                    continue;
+                }
+                if (IOError::contains(value.error().code(), kClosed)) {
+                    break;
+                }
+                g_benchmark_failed.store(true, std::memory_order_release);
+                break;
             }
+            g_received.fetch_add(1, std::memory_order_relaxed);
         }
         g_consumer_done = true;
         co_return;
     };
 
-    scheduler.start();
-    scheduleTask(scheduler, sustainedConsumer(&channel, &running));
+    auto started = scheduler.start();
+    if (!started) {
+        g_benchmark_failed.store(true, std::memory_order_release);
+        LogError("  failed to start sustained scheduler");
+        return;
+    }
+    if (!scheduleTask(scheduler, sustainedConsumer(&channel))) {
+        g_benchmark_failed.store(true, std::memory_order_release);
+        LogError("  failed to schedule sustained consumer");
+        scheduler.stop();
+        return;
+    }
 
     auto start = std::chrono::steady_clock::now();
     auto end_time = start + std::chrono::seconds(duration_sec);
@@ -685,8 +866,17 @@ void benchSustained(int duration_sec) {
     for(auto& producer: producers) {
         producer = std::thread([&]() {
             int64_t id = 0;
-            while (running) {
-                channel.send(id++);
+            while (running.load(std::memory_order_acquire)) {
+                if (!channel.send(id)) {
+                    g_benchmark_failed.store(true, std::memory_order_release);
+                    running.store(false, std::memory_order_release);
+                    LogError("  sustained producer send failed after {} messages", id);
+                    if (!channel.close() && !channel.isClosed()) {
+                        LogError("  channel close failed after sustained send failure");
+                    }
+                    break;
+                }
+                ++id;
                 g_sent.fetch_add(1, std::memory_order_relaxed);
             }
         });
@@ -694,12 +884,13 @@ void benchSustained(int duration_sec) {
 
     // 监控
     int64_t last_received = 0;
+    int64_t recent_receive_rate = 0;
     while (std::chrono::steady_clock::now() < end_time) {
         std::this_thread::sleep_for(1s);
         int64_t current = g_received.load();
-        int64_t delta = current - last_received;
+        recent_receive_rate = current - last_received;
         LogInfo("  throughput: {}/s, total sent: {}, received: {}",
-                delta, g_sent.load(), current);
+                recent_receive_rate, g_sent.load(), current);
         last_received = current;
     }
 
@@ -708,14 +899,27 @@ void benchSustained(int duration_sec) {
         producer.join();
     }
 
-    // 等待消费者处理完剩余消息
-    const auto drain_timeout = std::chrono::seconds(std::max(duration_sec * 2, 10));
-    if (!galay::benchmark::waitForFlag(g_consumer_done, drain_timeout, 10ms) && channel.size() > 0) {
+    if (!channel.close() && !channel.isClosed()) {
+        g_benchmark_failed.store(true, std::memory_order_release);
+        LogError("  failed to close sustained channel after producers stopped");
+    }
+
+    // 根据实测消费速率给积压留出排空时间，且保留总超时避免 benchmark 卡死。
+    const int64_t sent = g_sent.load(std::memory_order_relaxed);
+    const int64_t received = g_received.load(std::memory_order_relaxed);
+    const int64_t pending = std::max<int64_t>(sent - received, 0);
+    const int64_t receive_rate = std::max<int64_t>(recent_receive_rate, 1);
+    const int64_t estimated_seconds =
+        pending / receive_rate + (pending % receive_rate != 0 ? 1 : 0);
+    const int64_t drain_timeout_seconds = std::max<int64_t>(
+        10, std::min<int64_t>(estimated_seconds, 55) * 2 + 10);
+    const auto drain_timeout = std::chrono::seconds(drain_timeout_seconds);
+    if (!galay::benchmark::waitForFlag(g_consumer_done, drain_timeout, 10ms)) {
+        g_benchmark_failed.store(true, std::memory_order_release);
         LogError("  consumer drain timed out after {}s with {} queued messages remaining",
                  drain_timeout.count(),
                  channel.size());
     }
-    std::this_thread::sleep_for(100ms);
 
     scheduler.stop();
 
@@ -723,42 +927,57 @@ void benchSustained(int duration_sec) {
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     double avg_throughput = (double)g_received / ms * 1000.0;
 
+    if (g_sent.load(std::memory_order_relaxed) !=
+        g_received.load(std::memory_order_relaxed)) {
+        g_benchmark_failed.store(true, std::memory_order_release);
+        LogError("  sustained benchmark lost messages: sent={}, received={}",
+                 g_sent.load(std::memory_order_relaxed),
+                 g_received.load(std::memory_order_relaxed));
+    }
+
     LogInfo("  total: sent={}, received={}, avg throughput: {:.0f}/s",
             g_sent.load(), g_received.load(), avg_throughput);
 }
 
 int main() {
-    LogInfo("=== MpscChannel Benchmark ===");
+    LogInfo("=== galay::mpsc::UnboundedChannel Benchmark ===");
     LogInfo("role: cross-thread MPSC channel, single-consumer correctness path");
-    LogInfo("note: use B9-UnsafeChannel for same-thread/high-performance channel measurements");
+    LogInfo("note: use B9-galay::spsc::UnboundedChannel for same-thread/high-performance channel measurements");
     LogInfo("");
 
     // 1. 单生产者吞吐量
     benchSingleProducerThroughput(THROUGHPUT_MESSAGES);
+    if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 2. 多生产者吞吐量
     benchMultiProducerThroughput(4, THROUGHPUT_MESSAGES);
+    if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 3. 批量接收吞吐量
     benchBatchReceiveThroughput(THROUGHPUT_MESSAGES * 5);
+    if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 4. 延迟测试
     benchLatency(LATENCY_MESSAGES);
+    if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 5. 正确性验证
     benchCorrectness(4, CORRECTNESS_MESSAGES);
+    if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 6. 跨调度器测试
     benchCrossScheduler(THROUGHPUT_MESSAGES);
+    if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     // 7. 持续压力测试
     benchSustained(5);
+    if (g_benchmark_failed.load(std::memory_order_acquire)) return 1;
     LogInfo("");
 
     LogInfo("=== Benchmark Complete ===");

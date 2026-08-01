@@ -29,6 +29,7 @@ EpollScheduler::EpollScheduler(int max_events, int batch_size)
     // epoll reactor 注册和删除事件必须保持 owner 线程亲和；被窃取的
     // IO 协程仍会通过其所属 scheduler 的 reactor 提交，跨线程执行不安全。
     m_worker.setStealingEnabled(false);
+    m_worker.closeResumeAdmission();
 }
 
 EpollScheduler::~EpollScheduler()
@@ -47,6 +48,10 @@ std::expected<void, IOError> EpollScheduler::start()
         m_running.store(false, std::memory_order_release);
         return std::unexpected(reactor_ready.error());
     }
+    if (!m_worker.reopenResumeAdmission()) {
+        m_running.store(false, std::memory_order_release);
+        return std::unexpected(IOError(kNotReady, 0));
+    }
 
     std::promise<void> thread_ready;
     auto ready = thread_ready.get_future();
@@ -63,6 +68,7 @@ std::expected<void, IOError> EpollScheduler::start()
 
 void EpollScheduler::stop()
 {
+    m_worker.closeResumeAdmission();
     if (!m_running.exchange(false, std::memory_order_acq_rel)) {
         return;
     }
@@ -159,7 +165,7 @@ std::optional<IOError> EpollScheduler::lastError() const
     return detail::loadBackendError(m_last_error_code);
 }
 
-bool EpollScheduler::schedule(TaskRef task)
+bool EpollScheduler::schedule(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -171,6 +177,25 @@ bool EpollScheduler::schedule(TaskRef task)
     }
 
     const auto queue_was_empty = m_worker.scheduleInjected(std::move(task));
+    if (!queue_was_empty.has_value()) {
+        return false;
+    }
+    m_wake_coordinator.requestWake(*queue_was_empty, [this]() { notify(); });
+    return true;
+}
+
+bool EpollScheduler::scheduleResume(TaskRef task) noexcept
+{
+    if (!bindTask(task)) {
+        return false;
+    }
+
+    if (std::this_thread::get_id() == m_threadId) {
+        m_worker.scheduleLocal(std::move(task));
+        return true;
+    }
+
+    const auto queue_was_empty = m_worker.scheduleResume(std::move(task));
     if (!queue_was_empty.has_value()) {
         return false;
     }
@@ -197,7 +222,7 @@ bool EpollScheduler::scheduleReadyEntry(detail::ReadyEntry& entry)
     return true;
 }
 
-bool EpollScheduler::scheduleDeferred(TaskRef task)
+bool EpollScheduler::scheduleDeferred(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -216,7 +241,7 @@ bool EpollScheduler::scheduleDeferred(TaskRef task)
     return true;
 }
 
-bool EpollScheduler::scheduleImmediately(TaskRef task)
+bool EpollScheduler::scheduleImmediately(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;

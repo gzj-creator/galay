@@ -62,6 +62,9 @@
 #if __has_include(<limits>)
 #include <limits>
 #endif
+#if __has_include(<list>)
+#include <list>
+#endif
 #if __has_include(<memory>)
 #include <memory>
 #endif

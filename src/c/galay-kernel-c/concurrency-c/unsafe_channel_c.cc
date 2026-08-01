@@ -1,6 +1,6 @@
 #include "unsafe_channel_c.h"
 
-#include "../../../cpp/galay-kernel/concurrency/unsafe_channel.h"
+#include "../../../cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
 #include "../coro-c/coro_task_c.h"
 #include "../coro-c/coro_wait_c.h"
 
@@ -13,7 +13,7 @@
 namespace
 {
 
-using CppUnsafeChannel = galay::kernel::UnsafeChannel<C_UnsafeChannelMessage>;
+using CppUnsafeChannel = galay::spsc::UnboundedChannel<C_UnsafeChannelMessage>;
 
 CppUnsafeChannel* to_cpp_channel(galay_kernel_unsafe_channel_t* channel)
 {
@@ -31,16 +31,16 @@ bool is_valid_wake_mode(C_UnsafeChannelWakeMode wake_mode)
            wake_mode == C_UnsafeChannelWakeModeDeferred;
 }
 
-galay::kernel::UnsafeChannelWakeMode to_cpp_wake_mode(C_UnsafeChannelWakeMode wake_mode)
+galay::spsc::WakeMode to_cpp_wake_mode(C_UnsafeChannelWakeMode wake_mode)
 {
     switch (wake_mode)
     {
     case C_UnsafeChannelWakeModeInline:
-        return galay::kernel::UnsafeChannelWakeMode::Inline;
+        return galay::spsc::WakeMode::Inline;
     case C_UnsafeChannelWakeModeDeferred:
-        return galay::kernel::UnsafeChannelWakeMode::Deferred;
+        return galay::spsc::WakeMode::Deferred;
     }
-    return galay::kernel::UnsafeChannelWakeMode::Inline;
+    return galay::spsc::WakeMode::Inline;
 }
 
 C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)

@@ -15,6 +15,8 @@ namespace {
 class MockSslSocket {
 public:
     MockSslSocket() = default;
+
+    GHandle handle() const noexcept { return GHandle::invalid(); }
 };
 
 } // namespace

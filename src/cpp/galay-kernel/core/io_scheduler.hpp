@@ -391,6 +391,38 @@ struct IOSchedulerWorkerState {
     }
 
     /**
+     * @brief 无分配接纳已停泊 C++ 任务的恢复请求。
+     * @return 有值表示接纳成功，值为 true 时接纳前没有远端待办；无效任务返回
+     *         std::nullopt。
+     * @details TaskState 自带侵入链接，因此该路径不依赖 ConcurrentQueue 分配。
+     */
+    std::optional<bool> scheduleResume(TaskRef task) noexcept {
+        if (!task.isValid()) {
+            return std::nullopt;
+        }
+        const bool was_empty =
+            injected_outstanding.fetch_add(1, std::memory_order_acq_rel) == 0;
+        if (!ready_resume_queue.push(std::move(task))) {
+            injected_outstanding.fetch_sub(1, std::memory_order_acq_rel);
+            return std::nullopt;
+        }
+        return was_empty;
+    }
+
+    /** @brief 停止接纳新的 owner-only 恢复请求；已接纳节点仍由 owner 排空。 */
+    void closeResumeAdmission() noexcept {
+        ready_resume_queue.close();
+    }
+
+    /**
+     * @brief 在 scheduler 重启前重新开放恢复请求。
+     * @return 前一运行周期已完整排空时返回 true；仍有 owner 本地节点时返回 false。
+     */
+    [[nodiscard]] bool reopenResumeAdmission() noexcept {
+        return ready_resume_local == nullptr && ready_resume_queue.reopen();
+    }
+
+    /**
      * @brief 将跨线程注入队列中的任务搬运到本地队列
      * @return 实际拉取并转移到本地队列的任务数量
      */
@@ -402,7 +434,17 @@ struct IOSchedulerWorkerState {
         if (remaining == 0) {
             return 0;
         }
-        const size_t target = std::min(remaining, ready_inject_buffer.size());
+        const bool resume_pending = hasPendingResume();
+        size_t normal_capacity = remaining;
+        if (resume_pending) {
+            if (remaining > 1) {
+                normal_capacity = remaining - 1;
+            } else if (prefer_resume_on_single_slot) {
+                normal_capacity = 0;
+            }
+        }
+        const size_t target =
+            std::min(normal_capacity, ready_inject_buffer.size());
         const size_t count = ready_inject_queue.try_dequeue_bulk(ready_inject_buffer.data(), target);
         if (count > 0) {
             owner_drained_injected_once.store(true, std::memory_order_release);
@@ -418,8 +460,62 @@ struct IOSchedulerWorkerState {
             fallbackToInject(entry);
             detail::releaseReadyEntry(entry);
         }
+
+        size_t resume_count = 0;
+        if (count < remaining) {
+            if (ready_resume_local == nullptr) {
+                ready_resume_local = detail::TaskResumeQueue::reverse(
+                    ready_resume_queue.takeAll());
+            }
+            const size_t resume_limit = remaining - count;
+            TaskState* resume_batch = ready_resume_local;
+            TaskState* resume_batch_tail = nullptr;
+            size_t selected = 0;
+            while (ready_resume_local != nullptr && selected < resume_limit) {
+                resume_batch_tail = ready_resume_local;
+                ready_resume_local = ready_resume_local->m_resume_queue_next;
+                ++selected;
+            }
+            if (resume_batch_tail != nullptr) {
+                resume_batch_tail->m_resume_queue_next = nullptr;
+                // local_ring 的 owner 端使用 pop_back()；反转本批节点后写入，
+                // 才能让已经转成 FIFO 的 ready_resume_local 仍按 oldest-first 恢复。
+                resume_batch = detail::TaskResumeQueue::reverse(resume_batch);
+            }
+            while (resume_batch != nullptr) {
+                TaskRef task = detail::TaskResumeQueue::popFront(resume_batch);
+                detail::ReadyEntry entry(std::move(task));
+                if (!local_ring.push_back(entry)) {
+                    TaskRef restored = detail::readyEntryToTaskRef(entry);
+                    TaskState* state =
+                        detail::TaskRefStorageAccess::releaseState(restored);
+                    state->m_resume_queue_next = resume_batch;
+                    TaskState* restored_fifo =
+                        detail::TaskResumeQueue::reverse(state);
+                    TaskState* restored_tail = restored_fifo;
+                    while (restored_tail->m_resume_queue_next != nullptr) {
+                        restored_tail = restored_tail->m_resume_queue_next;
+                    }
+                    restored_tail->m_resume_queue_next = ready_resume_local;
+                    ready_resume_local = restored_fifo;
+                    break;
+                }
+                ++resume_count;
+            }
+        }
+        if (resume_count > 0) {
+            owner_drained_injected_once.store(true, std::memory_order_release);
+            injected_outstanding.fetch_sub(resume_count, std::memory_order_acq_rel);
+        }
+        if (remaining == 1 && resume_pending) {
+            if (resume_count > 0) {
+                prefer_resume_on_single_slot = false;
+            } else if (count > 0) {
+                prefer_resume_on_single_slot = true;
+            }
+        }
         polls_since_inject = 0;
-        return count;
+        return count + resume_count;
     }
 
     /**
@@ -428,6 +524,11 @@ struct IOSchedulerWorkerState {
      */
     bool hasPendingInjected() const {
         return injected_outstanding.load(std::memory_order_acquire) > 0;
+    }
+
+    /** @brief 是否仍有专用 resume 节点尚未搬入本地 ready ring。 */
+    bool hasPendingResume() const noexcept {
+        return ready_resume_local != nullptr || !ready_resume_queue.empty();
     }
 
     /**
@@ -551,6 +652,8 @@ struct IOSchedulerWorkerState {
     ChaseLevTaskRing local_ring;        ///< 调度器线程本地固定容量 Chase-Lev ring
     moodycamel::ConcurrentQueue<detail::ReadyEntry> ready_inject_queue;  ///< 实际使用的语言中立跨线程注入队列
     std::vector<detail::ReadyEntry> ready_inject_buffer;  ///< ready_inject_queue 批量转移缓冲
+    detail::TaskResumeQueue ready_resume_queue;  ///< Waker 专用无分配跨线程恢复队列
+    TaskState* ready_resume_local = nullptr;  ///< owner 已摘取、尚未搬入本地 ring 的恢复链
     size_t self_index = 0;  ///< worker 在 steal-domain 中的位置
     std::span<IOScheduler* const> siblings;  ///< steal-domain 的只读 sibling 视图
 
@@ -579,6 +682,7 @@ struct IOSchedulerWorkerState {
     std::atomic<bool> owner_drained_injected_once{false};  ///< owner 线程是否已处理过注入队列
     bool lifo_enabled = true;  ///< 是否允许优先从 ready_lifo_slot 取任务
     bool stealing_enabled = true;  ///< 当前后端是否允许在 sibling 线程上恢复 stolen task
+    bool prefer_resume_on_single_slot = true;  ///< 普通注入与 resume 同时积压时轮换最后一个 ring 槽
 
 private:
     void clearPendingReadyEntries() noexcept {
@@ -592,6 +696,9 @@ private:
         for (auto& buffered : ready_inject_buffer) {
             detail::releaseReadyEntry(buffered);
         }
+        detail::TaskResumeQueue::releaseAll(ready_resume_local);
+        ready_resume_local = nullptr;
+        detail::TaskResumeQueue::releaseAll(ready_resume_queue.takeAll());
         injected_outstanding.store(0, std::memory_order_release);
     }
 

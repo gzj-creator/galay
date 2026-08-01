@@ -8,10 +8,13 @@
 #include <iostream>
 #include <atomic>
 #include <chrono>
+#include <coroutine>
+#include <thread>
 #include <vector>
 #include <cmath>
 #include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
+#include <galay/cpp/galay-kernel/core/waker.h>
 #include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
@@ -88,6 +91,9 @@ Task<void> computeTask(AsyncWaiter<int>* waiter) {
 // 测试9：AsyncWaiter<void> 无返回值
 std::atomic<bool> g_test9_done{false};
 
+// 测试10：专用 resume admission 只能在 scheduler 运行期接纳任务
+std::atomic<int> g_test10_resume_count{0};
+
 Task<void> computeTaskVoid(AsyncWaiter<void>* waiter) {
     // 模拟计算
     volatile int sum = 0;
@@ -96,6 +102,65 @@ Task<void> computeTaskVoid(AsyncWaiter<void>* waiter) {
     }
     g_test9_done = true;
     waiter->notify();
+    co_return;
+}
+
+Task<void> resumeLifecycleTask() {
+    g_test10_resume_count.fetch_add(1, std::memory_order_relaxed);
+    co_return;
+}
+
+Task<void> resumeProbeTask() {
+    co_return;
+}
+
+Task<void> stopDrainBlocker(std::atomic<bool>* started,
+                            std::atomic<bool>* release) {
+    started->store(true, std::memory_order_release);
+    while (!release->load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    co_return;
+}
+
+Task<void> stopDrainStep(std::atomic<int>* steps) {
+    steps->fetch_add(1, std::memory_order_release);
+    co_return;
+}
+
+struct SelfWakeAwaitable {
+    bool await_ready() const noexcept { return false; }
+
+    template <typename Promise>
+    bool await_suspend(std::coroutine_handle<Promise> handle) const noexcept {
+        Waker(handle).wakeUp();
+        return true;
+    }
+
+    void await_resume() const noexcept {}
+};
+
+Task<void> selfWakeTask(std::atomic<bool>* started,
+                        std::atomic<bool>* release,
+                        std::atomic<int>* resumptions,
+                        std::atomic<bool>* done,
+                        int iterations) {
+    started->store(true, std::memory_order_release);
+    while (!release->load(std::memory_order_acquire)) {
+        std::this_thread::yield();
+    }
+    for (int i = 0; i < iterations; ++i) {
+        co_await SelfWakeAwaitable{};
+        resumptions->fetch_add(1, std::memory_order_release);
+    }
+    done->store(true, std::memory_order_release);
+    co_return;
+}
+
+Task<void> recordResumeProgress(std::atomic<int>* resumptions,
+                                std::atomic<int>* observed) {
+    observed->store(resumptions->load(std::memory_order_acquire),
+                    std::memory_order_release);
     co_return;
 }
 
@@ -325,6 +390,161 @@ void runTests() {
             g_passed++;
         } else {
             LogError("[Test 9] FAILED: AsyncWaiter<void> not ready");
+        }
+    }
+
+    // 测试10：未启动/停止后拒绝 resume，重启不得恢复旧请求
+    {
+        LogInfo("[Test 10] Resume admission lifecycle...");
+        g_total++;
+
+        ComputeScheduler scheduler;
+        const bool acceptedBeforeStart = scheduler.scheduleResume(
+            detail::TaskAccess::detachTask(resumeLifecycleTask()));
+
+        const auto started = scheduler.start();
+        bool acceptedWhileRunning = false;
+        if (started.has_value()) {
+            acceptedWhileRunning = scheduler.scheduleResume(
+                detail::TaskAccess::detachTask(resumeLifecycleTask()));
+        }
+        scheduler.stop();
+
+        const bool acceptedAfterStop = scheduler.scheduleResume(
+            detail::TaskAccess::detachTask(resumeLifecycleTask()));
+        const auto restarted = scheduler.start();
+        scheduler.stop();
+
+        const int resumed = g_test10_resume_count.load(std::memory_order_acquire);
+        if (!acceptedBeforeStart && started.has_value() &&
+            acceptedWhileRunning && !acceptedAfterStop &&
+            restarted.has_value() && resumed == 1) {
+            LogInfo("[Test 10] PASSED: stopped scheduler rejects resume admission");
+            g_passed++;
+        } else {
+            LogError(
+                "[Test 10] FAILED: before_start={}, started={}, running={}, "
+                "after_stop={}, restarted={}, resumed={}",
+                acceptedBeforeStart,
+                started.has_value(),
+                acceptedWhileRunning,
+                acceptedAfterStop,
+                restarted.has_value(),
+                resumed);
+        }
+    }
+
+    // 测试11：stop 关闭 resume admission 后仍排空普通任务产生的 continuation
+    {
+        LogInfo("[Test 11] Stop drains completion continuations...");
+        g_total++;
+
+        ComputeScheduler scheduler;
+        std::atomic<bool> blockerStarted{false};
+        std::atomic<bool> releaseBlocker{false};
+        std::atomic<int> continuationSteps{0};
+        bool passed = false;
+
+        const auto started = scheduler.start();
+        if (started.has_value()) {
+            const bool blockerScheduled = scheduler.schedule(
+                detail::TaskAccess::detachTask(
+                    stopDrainBlocker(&blockerStarted, &releaseBlocker)));
+            const auto blockerDeadline = std::chrono::steady_clock::now() + 1500ms;
+            while (blockerScheduled &&
+                   !blockerStarted.load(std::memory_order_acquire) &&
+                   std::chrono::steady_clock::now() < blockerDeadline) {
+                std::this_thread::yield();
+            }
+
+            const bool chainScheduled = blockerScheduled &&
+                blockerStarted.load(std::memory_order_acquire) &&
+                scheduler.schedule(detail::TaskAccess::detachTask(
+                    stopDrainStep(&continuationSteps)
+                        .then(stopDrainStep(&continuationSteps))));
+
+            std::thread stopper([&scheduler]() { scheduler.stop(); });
+            const auto stopDeadline = std::chrono::steady_clock::now() + 1500ms;
+            while (scheduler.isRunning() &&
+                   std::chrono::steady_clock::now() < stopDeadline) {
+                std::this_thread::yield();
+            }
+            const bool resumeRejected = !scheduler.scheduleResume(
+                detail::TaskAccess::detachTask(resumeProbeTask()));
+            releaseBlocker.store(true, std::memory_order_release);
+            stopper.join();
+
+            passed = chainScheduled && resumeRejected &&
+                continuationSteps.load(std::memory_order_acquire) == 2;
+        } else {
+            scheduler.stop();
+        }
+
+        if (passed) {
+            LogInfo("[Test 11] PASSED: stop drained both continuation steps");
+            g_passed++;
+        } else {
+            LogError("[Test 11] FAILED: continuation_steps={}",
+                     continuationSteps.load(std::memory_order_acquire));
+        }
+    }
+
+    // 测试12：持续 self-wake 不能饿死已经排队的普通计算任务
+    {
+        LogInfo("[Test 12] Resume queue fairness...");
+        g_total++;
+
+        constexpr int kSelfWakeIterations = 1000;
+        ComputeScheduler scheduler;
+        std::atomic<bool> selfWakeStarted{false};
+        std::atomic<bool> releaseSelfWake{false};
+        std::atomic<bool> selfWakeDone{false};
+        std::atomic<int> resumptions{0};
+        std::atomic<int> markerObserved{-1};
+        bool scheduled = false;
+
+        const auto started = scheduler.start();
+        if (started.has_value()) {
+            const bool selfWakeScheduled = scheduler.schedule(
+                detail::TaskAccess::detachTask(selfWakeTask(
+                    &selfWakeStarted,
+                    &releaseSelfWake,
+                    &resumptions,
+                    &selfWakeDone,
+                    kSelfWakeIterations)));
+            const auto startDeadline = std::chrono::steady_clock::now() + 1500ms;
+            while (selfWakeScheduled &&
+                   !selfWakeStarted.load(std::memory_order_acquire) &&
+                   std::chrono::steady_clock::now() < startDeadline) {
+                std::this_thread::yield();
+            }
+            scheduled = selfWakeScheduled &&
+                selfWakeStarted.load(std::memory_order_acquire) &&
+                scheduler.schedule(detail::TaskAccess::detachTask(
+                    recordResumeProgress(&resumptions, &markerObserved)));
+            releaseSelfWake.store(true, std::memory_order_release);
+
+            const auto finishDeadline = std::chrono::steady_clock::now() + 5s;
+            while ((!selfWakeDone.load(std::memory_order_acquire) ||
+                    markerObserved.load(std::memory_order_acquire) < 0) &&
+                   std::chrono::steady_clock::now() < finishDeadline) {
+                std::this_thread::yield();
+            }
+            scheduler.stop();
+        }
+
+        const int markerAt = markerObserved.load(std::memory_order_acquire);
+        if (started.has_value() && scheduled &&
+            selfWakeDone.load(std::memory_order_acquire) &&
+            markerAt >= 0 && markerAt < kSelfWakeIterations) {
+            LogInfo("[Test 12] PASSED: normal task ran after {} resumptions",
+                    markerAt);
+            g_passed++;
+        } else {
+            LogError("[Test 12] FAILED: marker_at={}, resumptions={}, done={}",
+                     markerAt,
+                     resumptions.load(std::memory_order_acquire),
+                     selfWakeDone.load(std::memory_order_acquire));
         }
     }
 

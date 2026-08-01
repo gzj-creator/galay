@@ -1,6 +1,6 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
-#include <galay/cpp/galay-kernel/concurrency/unsafe_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>
 
 #include <atomic>
 #include <chrono>
@@ -14,7 +14,7 @@ namespace {
 
 std::atomic<int> g_result{0};
 
-Task<void> receiver(UnsafeChannel<int>* channel) {
+Task<void> receiver(galay::spsc::UnboundedChannel<int>* channel) {
     auto value = co_await channel->recv();
     if (!value) {
         std::cerr << "receiver failed: " << value.error().message() << "\n";
@@ -32,7 +32,7 @@ Task<void> receiver(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> sender(UnsafeChannel<int>* channel) {
+Task<void> sender(galay::spsc::UnboundedChannel<int>* channel) {
     co_await galay::kernel::sleep(50ms);
     channel->send(42);
     co_return;
@@ -44,7 +44,7 @@ int main() {
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
     runtime.start();
 
-    UnsafeChannel<int> channel;
+    galay::spsc::UnboundedChannel<int> channel;
     auto receiver_join = runtime.spawn(receiver(&channel));
     auto sender_join = runtime.spawn(sender(&channel));
     if (!receiver_join || !sender_join) {

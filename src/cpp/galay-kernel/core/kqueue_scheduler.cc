@@ -38,6 +38,7 @@ KqueueScheduler::KqueueScheduler(int max_events, int batch_size)
     // kqueue reactor 注册和删除事件必须保持 owner 线程亲和；被窃取的
     // IO 协程仍会通过其所属 scheduler 的 reactor 提交，跨线程执行不安全。
     m_worker.setStealingEnabled(false);
+    m_worker.closeResumeAdmission();
 }
 
 KqueueScheduler::~KqueueScheduler()
@@ -55,6 +56,10 @@ std::expected<void, IOError> KqueueScheduler::start()
         m_running.store(false, std::memory_order_release);
         return std::unexpected(reactor_ready.error());
     }
+    if (!m_worker.reopenResumeAdmission()) {
+        m_running.store(false, std::memory_order_release);
+        return std::unexpected(IOError(kNotReady, 0));
+    }
 
     std::promise<void> thread_ready;
     auto ready = thread_ready.get_future();
@@ -71,6 +76,7 @@ std::expected<void, IOError> KqueueScheduler::start()
 
 void KqueueScheduler::stop()
 {
+    m_worker.closeResumeAdmission();
     if (!m_running.exchange(false, std::memory_order_acq_rel)) {
         return; // 已经停止
     }
@@ -152,7 +158,7 @@ std::optional<IOError> KqueueScheduler::lastError() const
     return detail::loadBackendError(m_last_error_code);
 }
 
-bool KqueueScheduler::schedule(TaskRef task)
+bool KqueueScheduler::schedule(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -164,6 +170,25 @@ bool KqueueScheduler::schedule(TaskRef task)
     }
 
     const auto queue_was_empty = m_worker.scheduleInjected(std::move(task));
+    if (!queue_was_empty.has_value()) {
+        return false;
+    }
+    m_wake_coordinator.requestWake(*queue_was_empty, [this]() { notify(); });
+    return true;
+}
+
+bool KqueueScheduler::scheduleResume(TaskRef task) noexcept
+{
+    if (!bindTask(task)) {
+        return false;
+    }
+
+    if (std::this_thread::get_id() == m_threadId) {
+        m_worker.scheduleLocal(std::move(task));
+        return true;
+    }
+
+    const auto queue_was_empty = m_worker.scheduleResume(std::move(task));
     if (!queue_was_empty.has_value()) {
         return false;
     }
@@ -190,7 +215,7 @@ bool KqueueScheduler::scheduleReadyEntry(detail::ReadyEntry& entry)
     return true;
 }
 
-bool KqueueScheduler::scheduleDeferred(TaskRef task)
+bool KqueueScheduler::scheduleDeferred(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -209,7 +234,7 @@ bool KqueueScheduler::scheduleDeferred(TaskRef task)
     return true;
 }
 
-bool KqueueScheduler::scheduleImmediately(TaskRef task)
+bool KqueueScheduler::scheduleImmediately(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;

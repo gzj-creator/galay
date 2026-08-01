@@ -8,14 +8,15 @@
 
 /**
  * @file unsafe_channel_c.h
- * @brief Galay kernel UnsafeChannel 的 C ABI 封装。
+ * @brief Galay kernel SPSC UnboundedChannel 的兼容 C ABI 封装。
  *
- * @details 该头文件封装单调度器、非线程安全的 UnsafeChannel。C ABI 只复制
+ * @details `UnsafeChannel` 是保留的 ABI 名称，底层现为跨线程 SPSC 分块队列。
+ * C ABI 只复制
  * C_UnsafeChannelMessage 结构体本身，不复制、不释放 data 指向的 payload。
  * 调用方必须保证 payload 在消费者读取前保持有效。
  *
- * @warning UnsafeChannel 仅适合同一 scheduler 内协程通信；不要跨线程或跨
- * scheduler 调用。direct recv API 必须在 C coroutine 内调用，等待时通过
+ * @warning 只允许一个生产者调用流和一个消费者调用流；同侧不得并发调用。
+ * direct recv API 必须在 C coroutine 内调用，等待时通过
  * galay_coro_yield 挂起当前 C coroutine，不创建 C++ Task wrapper。
  */
 
@@ -27,7 +28,7 @@ extern "C" {
  * @brief UnsafeChannel 唤醒策略。
  */
 typedef enum C_UnsafeChannelWakeMode {
-    C_UnsafeChannelWakeModeInline,    ///< 发送侧内联恢复等待协程，可能重入调用栈。
+    C_UnsafeChannelWakeModeInline,    ///< 无 owner scheduler 的同线程兼容直接恢复。
     C_UnsafeChannelWakeModeDeferred,  ///< 通过 scheduler 延迟恢复等待协程。
 } C_UnsafeChannelWakeMode;
 
@@ -58,11 +59,11 @@ typedef struct C_UnsafeChannelMessage {
 /**
  * @brief UnsafeChannel C 句柄。
  *
- * @note channel 指向内部 C++ UnsafeChannel<C_UnsafeChannelMessage> 对象，
+ * @note channel 指向内部 C++ galay::spsc::UnboundedChannel<C_UnsafeChannelMessage> 对象，
  * 调用方不能解引用或直接释放。
  */
 typedef struct galay_kernel_unsafe_channel {
-    void* channel;       ///< 内部 UnsafeChannel<C_UnsafeChannelMessage> 对象指针。
+    void* channel;       ///< 内部 galay::spsc::UnboundedChannel<C_UnsafeChannelMessage> 对象指针。
 } galay_kernel_unsafe_channel_t;
 
 /**

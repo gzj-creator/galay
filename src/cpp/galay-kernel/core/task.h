@@ -107,7 +107,7 @@ bool scheduleTask(const TaskRef& task) noexcept;  ///< 将任务按普通语义�
 bool scheduleTaskDeferred(const TaskRef& task) noexcept;  ///< 将任务按延后语义提交给其所属调度器
 bool scheduleTaskImmediately(const TaskRef& task) noexcept;  ///< 在所属调度器线程上立即恢复任务
 bool requestTaskResume(const TaskRef& task) noexcept;  ///< 请求恢复已暂停任务；失败时返回 false
-bool requestTaskResumeState(TaskState* state) noexcept;  ///< 通过裸状态请求恢复；调用方必须持有有效引用
+bool requestTaskResumeState(TaskState* state) noexcept;  ///< 通过 owner scheduler 的无分配入口请求恢复；调用方必须持有有效引用
 std::thread::id schedulerThreadId(Scheduler* scheduler) noexcept;  ///< 查询调度器线程 ID；scheduler 为空时返回默认值
 void completeTaskState(const TaskRef& task) noexcept;  ///< 标记任务完成并触发 continuation 清理
 void attachTaskContinuation(const TaskRef& task, TaskRef next) noexcept;  ///< 为任务追加下一段 continuation
@@ -187,6 +187,7 @@ struct alignas(64) TaskState
     std::coroutine_handle<> m_handle = nullptr;  ///< 底层协程句柄
     Scheduler* m_scheduler = nullptr;  ///< 任务所属调度器
     Runtime* m_runtime = nullptr;  ///< 任务继承到的 Runtime 上下文
+    TaskState* m_resume_queue_next = nullptr;  ///< owner scheduler 专用侵入式 resume 链接
     void (*m_destroy_result)(TaskState&) noexcept = nullptr;  ///< 销毁尚未消费的结果对象
     std::atomic<TaskWaiter*> m_waiter{nullptr};  ///< 惰性分配的等待器，仅 join/wait 路径需要
     std::atomic<uint64_t> m_refs{1};  ///< TaskRef 引用计数
@@ -196,6 +197,7 @@ struct alignas(64) TaskState
     ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果的存储形态
     std::atomic<bool> m_done{false};  ///< 任务是否已经执行完成
     std::atomic<bool> m_queued{false};  ///< 任务是否已在调度队列中
+    std::atomic<bool> m_resume_queue_claimed{false};  ///< 已被专用 resume admission 接管，直到恢复或释放
     std::atomic<bool> m_resume_owner_only{false};  ///< 本次由 waker/timeout 恢复的任务必须回到 owner scheduler 线程执行
     std::atomic<bool> m_result_consumed{false};  ///< 任务结果是否已被 join/await 消费
 };
@@ -788,6 +790,169 @@ struct TaskRefStorageAccess
 };
 
 /**
+ * @brief 多生产者、单 owner 消费者的无分配任务恢复队列。
+ * @details 每个已停泊任务通过 TaskState 内嵌链接进入栈；owner 一次摘取整条链后
+ *          反转为近似 FIFO。push 成功即接管传入 TaskRef 的唯一引用。
+ * @note 同一 TaskState 在被 owner 摘取前最多只能入队一次；该不变量由
+ *       requestTaskResumeState() 的 m_queued 仲裁保证。
+ */
+class TaskResumeQueue
+{
+public:
+    TaskResumeQueue() noexcept = default;
+    TaskResumeQueue(const TaskResumeQueue&) = delete;
+    TaskResumeQueue& operator=(const TaskResumeQueue&) = delete;
+
+    ~TaskResumeQueue()
+    {
+        close();
+        releaseAll(takeAll());
+    }
+
+    [[nodiscard]] bool push(TaskRef task) noexcept
+    {
+        if (!task.isValid()) {
+            return false;
+        }
+
+        TaskState* state = TaskRefStorageAccess::releaseState(task);
+        bool expected = false;
+        if (!state->m_resume_queue_claimed.compare_exchange_strong(
+                expected,
+                true,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            [[maybe_unused]] TaskRef rejected =
+                TaskRefStorageAccess::adoptState(state);
+            return false;
+        }
+
+        uintptr_t head = m_head.load(std::memory_order_acquire);
+        for (;;) {
+            if ((head & kClosedBit) != 0) {
+                state->m_resume_queue_next = nullptr;
+                state->m_resume_queue_claimed.store(false,
+                                                    std::memory_order_release);
+                [[maybe_unused]] TaskRef rejected =
+                    TaskRefStorageAccess::adoptState(state);
+                return false;
+            }
+            state->m_resume_queue_next = decode(head);
+            const uintptr_t desired = encode(state);
+            if (m_head.compare_exchange_weak(
+                    head,
+                    desired,
+                    std::memory_order_release,
+                    std::memory_order_acquire)) {
+                return true;
+            }
+        }
+    }
+
+    [[nodiscard]] TaskState* takeAll() noexcept
+    {
+        uintptr_t head = m_head.load(std::memory_order_acquire);
+        for (;;) {
+            const uintptr_t replacement = head & kClosedBit;
+            if (m_head.compare_exchange_weak(
+                    head,
+                    replacement,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
+                return decode(head);
+            }
+        }
+    }
+
+    [[nodiscard]] bool empty() const noexcept
+    {
+        return decode(m_head.load(std::memory_order_acquire)) == nullptr;
+    }
+
+    void close() noexcept
+    {
+        const uintptr_t previous =
+            m_head.fetch_or(kClosedBit, std::memory_order_acq_rel);
+        if ((previous & kClosedBit) != 0) {
+            return;
+        }
+    }
+
+    [[nodiscard]] bool reopen() noexcept
+    {
+        uintptr_t state = m_head.load(std::memory_order_acquire);
+        if (state == 0) {
+            return true;
+        }
+        if (state != kClosedBit) {
+            return false;
+        }
+        return m_head.compare_exchange_strong(
+            state,
+            0,
+            std::memory_order_acq_rel,
+            std::memory_order_acquire);
+    }
+
+    [[nodiscard]] bool isClosed() const noexcept
+    {
+        return (m_head.load(std::memory_order_acquire) & kClosedBit) != 0;
+    }
+
+    [[nodiscard]] static TaskState* reverse(TaskState* head) noexcept
+    {
+        TaskState* reversed = nullptr;
+        while (head != nullptr) {
+            TaskState* next = head->m_resume_queue_next;
+            head->m_resume_queue_next = reversed;
+            reversed = head;
+            head = next;
+        }
+        return reversed;
+    }
+
+    [[nodiscard]] static TaskRef popFront(TaskState*& head) noexcept
+    {
+        if (head == nullptr) {
+            return {};
+        }
+        TaskState* state = head;
+        head = state->m_resume_queue_next;
+        state->m_resume_queue_next = nullptr;
+        return TaskRefStorageAccess::adoptState(state);
+    }
+
+    static void releaseAll(TaskState* head) noexcept
+    {
+        while (head != nullptr) {
+            TaskRef released = popFront(head);
+            if (TaskState* state = released.state(); state != nullptr) {
+                state->m_resume_queue_claimed.store(false,
+                                                    std::memory_order_release);
+            }
+        }
+    }
+
+private:
+    static constexpr uintptr_t kClosedBit = 1;
+
+    static uintptr_t encode(TaskState* state) noexcept
+    {
+        return reinterpret_cast<uintptr_t>(state);
+    }
+
+    static TaskState* decode(uintptr_t state) noexcept
+    {
+        return reinterpret_cast<TaskState*>(state & ~kClosedBit);
+    }
+
+    static_assert(alignof(TaskState) >= 2,
+                  "TaskState alignment must leave one pointer tag bit free");
+
+    std::atomic<uintptr_t> m_head{0};
+};
+
+/**
  * @brief ready queue 中的语言中立就绪项类别。
  * @details C++ 任务使用 TaskState；C 协程任务通过 ReadyEntryCoroHeader 暴露调度 hook。
  */
@@ -980,6 +1145,7 @@ inline bool resumeTaskState(TaskState* state)
         return false;
     }
     state->m_queued.store(false, std::memory_order_relaxed);
+    state->m_resume_queue_claimed.store(false, std::memory_order_release);
     state->m_resume_owner_only.store(false, std::memory_order_relaxed);
     if (state->m_runtime == nullptr || state->m_runtime == currentRuntime()) {
         state->m_handle.resume();

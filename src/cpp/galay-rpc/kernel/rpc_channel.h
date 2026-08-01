@@ -21,7 +21,7 @@
 #include "../../galay-kernel/common/sleep.hpp"
 #include "../../galay-kernel/async/async_waiter.h"
 #include "../../galay-kernel/async/async_mutex.h"
-#include "../../galay-kernel/concurrency/mpsc_channel.h"
+#include "../../galay-kernel/concurrency/mpsc/unbounded_channel.h"
 #include "../../galay-kernel/core/scheduler.hpp"
 
 #include <atomic>
@@ -1148,7 +1148,7 @@ private:
     AsyncMutex m_state_mutex;                  ///< 串行化pending/heartbeat表访问
     RpcOutboundBackpressure m_outbound_backpressure;  ///< 出站队列背压计数
     RpcMetricsSink m_metrics;                  ///< 指标回调
-    MpscChannel<OutboundCall> m_outbound;      ///< 线程安全出站队列
+    galay::mpsc::UnboundedChannel<OutboundCall> m_outbound;      ///< 线程安全出站队列
     std::unordered_map<uint32_t, std::shared_ptr<RpcChannelPendingHeartbeat>> m_pending_heartbeats;  ///< heartbeat等待表
     size_t m_ring_buffer_size;                 ///< ring buffer大小
     std::atomic<size_t> m_pending_count{0};    ///< 无锁诊断用pending数量快照

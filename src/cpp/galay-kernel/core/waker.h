@@ -108,9 +108,14 @@ public:
     Waker& operator=(const Waker& other) = default;  ///< 拷贝赋值唤醒器
     Waker& operator=(Waker&& other) noexcept = default;  ///< 移动赋值唤醒器
 
-    Scheduler* getScheduler();  ///< 返回关联任务的所属调度器；无任务时返回 nullptr
+    Scheduler* getScheduler() noexcept;  ///< 返回关联任务的所属调度器；无任务时返回 nullptr
 
-    void wakeUp();  ///< 请求恢复关联任务；若任务无效或调度器不可用则静默忽略
+    /**
+     * @brief 通过 owner scheduler 的无分配入口请求恢复关联任务。
+     * @note 重复请求、无效 token 或已完成任务是安全 no-op。有效 waiter 要求其
+     *       owner scheduler 仍在运行；停止 scheduler 前必须先结束所有异步等待。
+     */
+    void wakeUp() noexcept;
 
 private:
     detail::ResumeToken m_token;  ///< 被唤醒的目标 token

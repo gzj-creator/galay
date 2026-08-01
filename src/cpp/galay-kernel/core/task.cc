@@ -185,7 +185,7 @@ bool requestTaskResumeState(TaskState* state) noexcept
         return false;
     }
     state->m_resume_owner_only.store(true, std::memory_order_release);
-    if (state->m_scheduler->schedule(TaskRef(state, true))) {
+    if (state->m_scheduler->scheduleResume(TaskRef(state, true))) {
         return true;
     }
 
@@ -223,21 +223,49 @@ void completeTaskState(const TaskRef& task) noexcept
     state->m_done.store(true, std::memory_order_release);
     notifyTaskWaiters(*state);
 
-    if (state->m_then.has_value()) {
-        TaskRef nextThen = std::move(*state->m_then);
-        state->m_then.reset();
-        if (auto* scheduler = nextThen.belongScheduler()) {
-            scheduler->schedule(std::move(nextThen));
+    auto schedule_continuation = [](std::optional<TaskRef>& continuation) {
+        if (!continuation.has_value()) {
+            return;
         }
-    }
 
-    if (state->m_next.has_value()) {
-        TaskRef next = std::move(*state->m_next);
-        state->m_next.reset();
-        if (auto* scheduler = next.belongScheduler()) {
-            scheduler->schedule(std::move(next));
+        TaskRef next = std::move(*continuation);
+        continuation.reset();
+        if (requestTaskResume(next)) {
+            return;
         }
-    }
+
+        auto* nextState = next.state();
+        auto* scheduler = next.belongScheduler();
+        bool expected = false;
+        // stop() 会先关闭 resume admission 再排空普通任务。只有 owner 线程
+        // 可以把 completion continuation 降级到普通延后队列，避免跨线程恢复。
+        if (nextState != nullptr && scheduler != nullptr &&
+            !nextState->m_done.load(std::memory_order_acquire) &&
+            std::this_thread::get_id() == schedulerThreadId(scheduler) &&
+            nextState->m_queued.compare_exchange_strong(
+                expected,
+                true,
+                std::memory_order_acq_rel,
+                std::memory_order_acquire)) {
+            nextState->m_resume_owner_only.store(true,
+                                                 std::memory_order_release);
+            if (scheduler->scheduleDeferred(next)) {
+                return;
+            }
+            nextState->m_resume_owner_only.store(false,
+                                                 std::memory_order_release);
+            nextState->m_queued.store(false, std::memory_order_release);
+        }
+
+        if (nextState != nullptr &&
+            !nextState->m_done.load(std::memory_order_acquire) &&
+            !nextState->m_queued.load(std::memory_order_acquire)) {
+            continuation = std::move(next);
+        }
+    };
+
+    schedule_continuation(state->m_then);
+    schedule_continuation(state->m_next);
 }
 
 bool waitTaskCompletion(const TaskRef& task)

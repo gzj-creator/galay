@@ -15,7 +15,7 @@ namespace
         std::expected<void, IOError> start() override { return {}; }
         void stop() override {}
 
-        bool schedule(TaskRef task) override
+        bool schedule(TaskRef task) noexcept override
         {
             if (!bindTask(task)) {
                 return false;
@@ -25,12 +25,17 @@ namespace
             return true;
         }
 
-        bool scheduleDeferred(TaskRef task) override
+        bool scheduleResume(TaskRef task) noexcept override
         {
             return schedule(std::move(task));
         }
 
-        bool scheduleImmediately(TaskRef task) override
+        bool scheduleDeferred(TaskRef task) noexcept override
+        {
+            return schedule(std::move(task));
+        }
+
+        bool scheduleImmediately(TaskRef task) noexcept override
         {
             if (!bindTask(task)) {
                 return false;

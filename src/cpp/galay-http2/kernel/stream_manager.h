@@ -17,7 +17,7 @@
 #include "../protoc/http2_frame.h"
 #include "../../galay-http/common/iovec_utils.h"
 #include "../../galay-kernel/async/async_waiter.h"
-#include "../../galay-kernel/concurrency/mpsc_channel.h"
+#include "../../galay-kernel/concurrency/mpsc/unbounded_channel.h"
 #include "../../galay-kernel/common/sleep.hpp"
 #include "../../galay-kernel/core/runtime.h"
 #include <cerrno>
@@ -186,7 +186,7 @@ public:
     }
 
     RecvBatchAwaitable recvBatch(
-        size_t max_count = galay::kernel::UnsafeChannel<Http2Stream::ptr>::DEFAULT_BATCH_SIZE) {
+        size_t max_count = galay::spsc::UnboundedChannel<Http2Stream::ptr>::DEFAULT_BATCH_SIZE) {
         return RecvBatchAwaitable(this, max_count);
     }
 
@@ -300,7 +300,7 @@ public:
     Http2ConnContext& operator=(Http2ConnContext&&) = delete;
 
     auto getActiveStreams(
-        size_t max_count = galay::kernel::UnsafeChannel<Http2Stream::ptr>::DEFAULT_BATCH_SIZE) {
+        size_t max_count = galay::spsc::UnboundedChannel<Http2Stream::ptr>::DEFAULT_BATCH_SIZE) {
         return GetActiveStreamsAwaitable(this, max_count);
     }
 
@@ -411,12 +411,12 @@ public:
      */
     void enqueueSendFrame(Http2Frame::uptr frame,
                           const Http2OutgoingFrame::WaiterPtr& waiter = nullptr) {
-        m_send_channel.send(Http2OutgoingFrame{std::move(frame), waiter});
+        enqueueOutgoingItem(Http2OutgoingFrame{std::move(frame), waiter});
     }
 
     void enqueueSendBytes(std::string bytes,
                           const Http2OutgoingFrame::WaiterPtr& waiter = nullptr) {
-        m_send_channel.send(Http2OutgoingFrame{std::move(bytes), waiter});
+        enqueueOutgoingItem(Http2OutgoingFrame{std::move(bytes), waiter});
     }
 
     template<typename FrameType>
@@ -424,7 +424,7 @@ public:
                           const Http2OutgoingFrame::WaiterPtr& waiter = nullptr) {
         using FrameT = std::decay_t<FrameType>;
         static_assert(std::is_base_of_v<Http2Frame, FrameT>, "FrameType must derive from Http2Frame");
-        m_send_channel.send(
+        enqueueOutgoingItem(
             Http2OutgoingFrame{std::make_unique<FrameT>(std::forward<FrameType>(frame)), waiter});
     }
 
@@ -475,7 +475,7 @@ public:
             }
             m_running = false;
             if (writer_started) {
-                m_send_channel.send(Http2OutgoingFrame{});
+                enqueueOutgoingItem(Http2OutgoingFrame{});
             }
             m_writer_ready.notify();
             closeActiveStreamQueue();
@@ -486,7 +486,7 @@ public:
         m_writer_ready.notify();
         if (!scheduleTask(scheduler, readerLoopThenCleanup(std::move(handler)))) {
             m_running = false;
-            m_send_channel.send(Http2OutgoingFrame{});
+            enqueueOutgoingItem(Http2OutgoingFrame{});
             closeActiveStreamQueue();
             m_stop_waiter.notify();
             return false;
@@ -564,7 +564,7 @@ private:
 
             // 批量入队 RST_STREAM 帧
             for (auto& frame : rst_frames) {
-                m_send_channel.send(std::move(frame));
+                enqueueOutgoingItem(std::move(frame));
             }
 
             // 等待 RST_STREAM 帧发送完成
@@ -600,6 +600,7 @@ private:
         m_last_frame_recv_at = std::chrono::steady_clock::now();
         m_waiting_ping_ack = false;
         m_static_response_batch.clear();
+        m_send_channel_failed.store(false, std::memory_order_release);
         if (m_static_response_batch.capacity() < 64) {
             m_static_response_batch.reserve(64);
         }
@@ -631,7 +632,7 @@ private:
         bool monitor_started = co_await startDetachedTask(monitorLoopThenNotify(&m_monitor_done));
         if (!monitor_started) {
             m_running = false;
-            m_send_channel.send(Http2OutgoingFrame{});
+            enqueueOutgoingItem(Http2OutgoingFrame{});
             m_monitor_done.notify();
             m_writer_ready.notify();
             closeActiveStreamQueue();
@@ -650,7 +651,7 @@ private:
         }
 
         m_running = false;
-        m_send_channel.send(Http2OutgoingFrame{});
+        enqueueOutgoingItem(Http2OutgoingFrame{});
         co_await m_writer_done.wait();
         co_await m_monitor_done.wait();
         m_stop_waiter.notify();
@@ -678,7 +679,7 @@ private:
         }
 
         m_running = false;
-        m_send_channel.send(Http2OutgoingFrame{});
+        enqueueOutgoingItem(Http2OutgoingFrame{});
         co_await m_writer_done.wait();
         co_await m_monitor_done.wait();
         m_stop_waiter.notify();
@@ -745,6 +746,32 @@ private:
     static constexpr auto kSslIoOwnerHotWaitInterval = std::chrono::milliseconds(1);
     static constexpr auto kSslIoOwnerActivePollInterval = std::chrono::milliseconds(5);
     static constexpr auto kSslIoOwnerIdlePollInterval = std::chrono::milliseconds(50);
+    static constexpr auto kWriterStopPollInterval = std::chrono::milliseconds(50);
+
+    void enqueueOutgoingItem(Http2OutgoingFrame&& item) {
+        auto waiter = item.waiter;
+        if (m_send_channel.send(std::move(item))) {
+            return;
+        }
+        if (waiter) {
+            waiter->notify();
+        }
+        m_send_channel_failed.store(true, std::memory_order_release);
+        m_conn.initiateClose();
+    }
+
+    void enqueueOutgoingBatch(std::vector<Http2OutgoingFrame>&& items) {
+        if (m_send_channel.sendBatch(std::move(items))) {
+            return;
+        }
+        for (auto& item : items) {
+            if (item.waiter) {
+                item.waiter->notify();
+            }
+        }
+        m_send_channel_failed.store(true, std::memory_order_release);
+        m_conn.initiateClose();
+    }
 
     void collectOutgoingFrame(Http2OutgoingFrame&& item,
                               std::vector<Http2OutgoingFrame>& outgoing_batch,
@@ -1435,8 +1462,13 @@ private:
         waiters.reserve(64);
 
         while (true) {
-            auto item_result = co_await m_send_channel.recv();
+            auto item_result =
+                co_await m_send_channel.recv().timeout(kWriterStopPollInterval);
             if (!item_result) {
+                if (IOError::contains(item_result.error().code(), kTimeout) &&
+                    !m_send_channel_failed.load(std::memory_order_acquire)) {
+                    continue;
+                }
                 break;
             }
 
@@ -1740,7 +1772,9 @@ private:
         if (stream_id == 0) {
             return;
         }
-        m_retire_stream_channel.send(stream_id);
+        if (!m_retire_stream_channel.send(stream_id)) {
+            m_conn.initiateClose();
+        }
     }
 
     void drainRetiredStreams() {
@@ -2016,7 +2050,7 @@ private:
         m_conn.adjustConnSendWindow(-static_cast<int32_t>(total));
     }
 
-    static bool enqueueStaticFileReadFailure(MpscChannel<Http2OutgoingFrame>* send_channel,
+    static bool enqueueStaticFileReadFailure(galay::mpsc::UnboundedChannel<Http2OutgoingFrame>* send_channel,
                                              uint32_t stream_id) {
         if (send_channel == nullptr) {
             return false;
@@ -2905,7 +2939,7 @@ private:
         if (m_static_response_batch.empty()) {
             return;
         }
-        m_send_channel.sendBatch(std::move(m_static_response_batch));
+        enqueueOutgoingBatch(std::move(m_static_response_batch));
         m_static_response_batch.clear();
     }
 
@@ -3077,15 +3111,16 @@ private:
     Http2StreamPool m_stream_pool;
 
     // 发送通道：空指针表示关闭信号
-    MpscChannel<Http2OutgoingFrame> m_send_channel;
+    galay::mpsc::UnboundedChannel<Http2OutgoingFrame> m_send_channel;
     std::vector<Http2OutgoingFrame> m_static_response_batch;
+    std::atomic<bool> m_send_channel_failed{false};
 
     // 待处理动作队列
     std::deque<PendingAction> m_pending_actions;
 
     // 待 spawn 的流队列（按优先级排序）
     std::priority_queue<Http2Stream::ptr, std::vector<Http2Stream::ptr>, StreamPriorityCompare> m_pending_spawns;
-    MpscChannel<uint32_t> m_retire_stream_channel;
+    galay::mpsc::UnboundedChannel<uint32_t> m_retire_stream_channel;
 };
 
 // 类型别名

@@ -1,6 +1,6 @@
 /**
  * @file t15_unsafe.cc
- * @brief 用途：验证 `UnsafeChannel` 在单调度器协程通信场景下的正确性。
+ * @brief 用途：验证 `galay::spsc::UnboundedChannel` 在单调度器协程通信场景下的正确性。
  * 关键覆盖点：协程生产消费、`co_yield` 协作、消息完整性和关闭行为。
  * 通过条件：消息收发结果符合预期，所有子测试通过并返回 0。
  */
@@ -8,7 +8,7 @@
 #include <atomic>
 #include <chrono>
 #include <vector>
-#include <galay/cpp/galay-kernel/concurrency/unsafe_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
@@ -36,7 +36,7 @@ std::atomic<int> g_total{0};
 std::atomic<bool> g_test1_done{false};
 int g_test1_received{0};
 
-Task<void> test_basic_send_recv(UnsafeChannel<int>* channel) {
+Task<void> test_basic_send_recv(galay::spsc::UnboundedChannel<int>* channel) {
     auto value = co_await channel->recv();
     if (value && *value == 42) {
         g_test1_received = *value;
@@ -45,7 +45,7 @@ Task<void> test_basic_send_recv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_basic_sender(UnsafeChannel<int>* channel) {
+Task<void> test_basic_sender(galay::spsc::UnboundedChannel<int>* channel) {
     channel->send(42);
     co_return;
 }
@@ -57,7 +57,7 @@ int g_test2_sum{0};
 std::atomic<bool> g_test2_done{false};
 constexpr int TEST2_COUNT = 10;
 
-Task<void> test_multiple_recv(UnsafeChannel<int>* channel) {
+Task<void> test_multiple_recv(galay::spsc::UnboundedChannel<int>* channel) {
     for (int i = 0; i < TEST2_COUNT; ++i) {
         auto value = co_await channel->recv();
         if (value) {
@@ -68,7 +68,7 @@ Task<void> test_multiple_recv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_multiple_send(UnsafeChannel<int>* channel) {
+Task<void> test_multiple_send(galay::spsc::UnboundedChannel<int>* channel) {
     for (int i = 0; i < TEST2_COUNT; ++i) {
         channel->send(i + 1);
         co_yield true;
@@ -82,7 +82,7 @@ Task<void> test_multiple_send(UnsafeChannel<int>* channel) {
 int g_test3_total{0};
 std::atomic<bool> g_test3_done{false};
 
-Task<void> test_batch_recv(UnsafeChannel<int>* channel) {
+Task<void> test_batch_recv(galay::spsc::UnboundedChannel<int>* channel) {
     auto batch = co_await channel->recvBatch(100);
     if (batch) {
         for (int v : *batch) {
@@ -93,7 +93,7 @@ Task<void> test_batch_recv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_batch_send(UnsafeChannel<int>* channel) {
+Task<void> test_batch_send(galay::spsc::UnboundedChannel<int>* channel) {
     std::vector<int> data = {1, 2, 3, 4, 5};
     channel->sendBatch(data);
     co_return;
@@ -105,7 +105,7 @@ Task<void> test_batch_send(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test4_done{false};
 int g_test4_value{0};
 
-Task<void> test_try_recv(UnsafeChannel<int>* channel) {
+Task<void> test_try_recv(galay::spsc::UnboundedChannel<int>* channel) {
     // 先尝试接收（应该为空）
     auto empty = channel->tryRecv();
     if (empty) {
@@ -122,7 +122,7 @@ Task<void> test_try_recv(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_try_recv_sender(UnsafeChannel<int>* channel) {
+Task<void> test_try_recv_sender(galay::spsc::UnboundedChannel<int>* channel) {
     co_yield true;  // 让消费者先执行
     channel->send(99);
     co_return;
@@ -137,7 +137,7 @@ std::atomic<bool> g_test5_done{false};
 constexpr int TEST5_PRODUCER_COUNT = 5;
 constexpr int TEST5_MSG_PER_PRODUCER = 10;
 
-Task<void> test_multi_producer_consumer(UnsafeChannel<int>* channel) {
+Task<void> test_multi_producer_consumer(galay::spsc::UnboundedChannel<int>* channel) {
     int expected = TEST5_PRODUCER_COUNT * TEST5_MSG_PER_PRODUCER;
     while (g_test5_recv_count < expected) {
         auto value = co_await channel->recv();
@@ -150,7 +150,7 @@ Task<void> test_multi_producer_consumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_producer(UnsafeChannel<int>* channel, int id) {
+Task<void> test_producer(galay::spsc::UnboundedChannel<int>* channel, int id) {
     for (int i = 0; i < TEST5_MSG_PER_PRODUCER; ++i) {
         channel->send(id * 100 + i);
         co_yield true;
@@ -165,7 +165,7 @@ std::atomic<bool> g_test6_waiting{false};
 std::atomic<bool> g_test6_received{false};
 std::atomic<bool> g_test6_done{false};
 
-Task<void> test_empty_channel_wait(UnsafeChannel<int>* channel) {
+Task<void> test_empty_channel_wait(galay::spsc::UnboundedChannel<int>* channel) {
     g_test6_waiting = true;
     auto value = co_await channel->recv();
     g_test6_received = value.has_value();
@@ -173,7 +173,7 @@ Task<void> test_empty_channel_wait(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_delayed_send(UnsafeChannel<int>* channel) {
+Task<void> test_delayed_send(galay::spsc::UnboundedChannel<int>* channel) {
     // 等待消费者开始等待
     while (!g_test6_waiting) {
         co_yield true;
@@ -187,7 +187,7 @@ Task<void> test_delayed_send(UnsafeChannel<int>* channel) {
 // ============================================================================
 std::atomic<bool> g_test7_done{false};
 
-Task<void> test_size_and_empty(UnsafeChannel<int>* channel) {
+Task<void> test_size_and_empty(galay::spsc::UnboundedChannel<int>* channel) {
     // 消费所有数据
     while (!channel->empty()) {
         co_await channel->recv();
@@ -203,7 +203,7 @@ int g_test8_total{0};
 int g_test8_count{0};
 std::atomic<bool> g_test8_done{false};
 
-Task<void> test_batch_recv_multiple(UnsafeChannel<int>* channel) {
+Task<void> test_batch_recv_multiple(galay::spsc::UnboundedChannel<int>* channel) {
     // 接收所有数据
     for (int i = 0; i < 3; ++i) {
         auto batch = co_await channel->recvBatch(100);
@@ -218,7 +218,7 @@ Task<void> test_batch_recv_multiple(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_batch_send_multiple(UnsafeChannel<int>* channel) {
+Task<void> test_batch_send_multiple(galay::spsc::UnboundedChannel<int>* channel) {
     std::vector<int> batch1 = {1, 2, 3};
     std::vector<int> batch2 = {4, 5, 6, 7};
     std::vector<int> batch3 = {8, 9, 10};
@@ -237,7 +237,7 @@ Task<void> test_batch_send_multiple(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test9_done{false};
 std::string g_test9_result;
 
-Task<void> test_string_recv(UnsafeChannel<std::string>* channel) {
+Task<void> test_string_recv(galay::spsc::UnboundedChannel<std::string>* channel) {
     auto value = co_await channel->recv();
     if (value) {
         g_test9_result = *value;
@@ -246,8 +246,8 @@ Task<void> test_string_recv(UnsafeChannel<std::string>* channel) {
     co_return;
 }
 
-Task<void> test_string_send(UnsafeChannel<std::string>* channel) {
-    channel->send(std::string("Hello, UnsafeChannel!"));
+Task<void> test_string_send(galay::spsc::UnboundedChannel<std::string>* channel) {
+    channel->send(std::string("Hello, galay::spsc::UnboundedChannel!"));
     co_return;
 }
 
@@ -259,7 +259,7 @@ int g_test10_received_count{0};
 int g_test10_sum{0};
 constexpr int TEST10_LIMIT = 10;
 
-Task<void> test_recv_batched_limit(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_limit(galay::spsc::UnboundedChannel<int>* channel) {
     auto result = co_await channel->recvBatched(TEST10_LIMIT);
     if (result) {
         g_test10_received_count = result->size();
@@ -271,7 +271,7 @@ Task<void> test_recv_batched_limit(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_recv_batched_sender(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_sender(galay::spsc::UnboundedChannel<int>* channel) {
     // 逐个发送，当达到 limit 时应该唤醒消费者
     for (int i = 1; i <= TEST10_LIMIT; ++i) {
         channel->send(i);
@@ -287,7 +287,7 @@ std::atomic<bool> g_test11_done{false};
 int g_test11_received_count{0};
 int g_test11_sum{0};
 
-Task<void> test_recv_batched_timeout(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_timeout(galay::spsc::UnboundedChannel<int>* channel) {
     // 等待 100 条或 100ms 超时
     auto result = co_await channel->recvBatched(100).timeout(100ms);
     if (!result) {
@@ -304,7 +304,7 @@ Task<void> test_recv_batched_timeout(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_recv_batched_timeout_sender(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_timeout_sender(galay::spsc::UnboundedChannel<int>* channel) {
     // 只发送 5 条，不足 100 条，会超时
     for (int i = 1; i <= 5; ++i) {
         channel->send(i);
@@ -319,7 +319,7 @@ Task<void> test_recv_batched_timeout_sender(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test12_done{false};
 bool g_test12_got_error{false};
 
-Task<void> test_recv_batched_timeout_empty(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_timeout_empty(galay::spsc::UnboundedChannel<int>* channel) {
     // 等待 100 条或 50ms 超时，但没有数据发送
     auto result = co_await channel->recvBatched(100).timeout(50ms);
     if (!result) {
@@ -335,7 +335,7 @@ Task<void> test_recv_batched_timeout_empty(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test13_done{false};
 int g_test13_received_count{0};
 
-Task<void> test_recv_batched_ready(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_ready(galay::spsc::UnboundedChannel<int>* channel) {
     // 队列已有 20 条数据，limit 是 10，应该立即返回所有数据
     auto result = co_await channel->recvBatched(10);
     if (result) {
@@ -352,7 +352,7 @@ std::atomic<bool> g_test14_done{false};
 int g_test14_batched_count{0};
 int g_test14_single_value{0};
 
-Task<void> test_recv_batched_mixed(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_mixed(galay::spsc::UnboundedChannel<int>* channel) {
     // 先用 recvBatched 接收
     auto batch = co_await channel->recvBatched(5);
     if (batch) {
@@ -369,7 +369,7 @@ Task<void> test_recv_batched_mixed(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_recv_batched_mixed_sender(UnsafeChannel<int>* channel) {
+Task<void> test_recv_batched_mixed_sender(galay::spsc::UnboundedChannel<int>* channel) {
     // 发送 5 条触发 recvBatched
     for (int i = 1; i <= 5; ++i) {
         channel->send(i);
@@ -387,7 +387,7 @@ int g_test15_received{0};
 std::atomic<bool> g_test15_done{false};
 constexpr int TEST15_TOTAL = 1000;
 
-Task<void> test_high_concurrency_consumer(UnsafeChannel<int>* channel) {
+Task<void> test_high_concurrency_consumer(galay::spsc::UnboundedChannel<int>* channel) {
     while (g_test15_received < TEST15_TOTAL) {
         auto value = co_await channel->recv();
         if (value) {
@@ -398,7 +398,7 @@ Task<void> test_high_concurrency_consumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_high_concurrency_producer(UnsafeChannel<int>* channel, int start, int count) {
+Task<void> test_high_concurrency_producer(galay::spsc::UnboundedChannel<int>* channel, int start, int count) {
     for (int i = 0; i < count; ++i) {
         channel->send(start + i);
         if (i % 10 == 0) {
@@ -415,7 +415,7 @@ std::atomic<bool> g_test16_done{false};
 int g_test16_received_count{0};
 int g_test16_sum{0};
 
-Task<void> test_send_immediately_consumer(UnsafeChannel<int>* channel) {
+Task<void> test_send_immediately_consumer(galay::spsc::UnboundedChannel<int>* channel) {
     // 使用 recvBatched(100)，正常情况下需要等到 100 条
     auto result = co_await channel->recvBatched(100).timeout(100ms);
     if (result) {
@@ -428,7 +428,7 @@ Task<void> test_send_immediately_consumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_send_immediately_sender(UnsafeChannel<int>* channel) {
+Task<void> test_send_immediately_sender(galay::spsc::UnboundedChannel<int>* channel) {
     // 只发送 5 条，但最后一条使用 immediately=true
     for (int i = 1; i <= 4; ++i) {
         channel->send(i, false);  // 不立即唤醒
@@ -445,7 +445,7 @@ Task<void> test_send_immediately_sender(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test17_done{false};
 int g_test17_received_count{0};
 
-Task<void> test_send_batch_immediately_consumer(UnsafeChannel<int>* channel) {
+Task<void> test_send_batch_immediately_consumer(galay::spsc::UnboundedChannel<int>* channel) {
     auto result = co_await channel->recvBatched(100).timeout(100ms);
     if (result) {
         g_test17_received_count = result->size();
@@ -454,7 +454,7 @@ Task<void> test_send_batch_immediately_consumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_send_batch_immediately_sender(UnsafeChannel<int>* channel) {
+Task<void> test_send_batch_immediately_sender(galay::spsc::UnboundedChannel<int>* channel) {
     std::vector<int> batch = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
     // 批量发送 10 条，使用 immediately=true 立即唤醒
     channel->sendBatch(batch, true);
@@ -467,7 +467,7 @@ Task<void> test_send_batch_immediately_sender(UnsafeChannel<int>* channel) {
 std::atomic<bool> g_test18_done{false};
 int g_test18_received_count{0};
 
-Task<void> test_immediately_compare_consumer(UnsafeChannel<int>* channel) {
+Task<void> test_immediately_compare_consumer(galay::spsc::UnboundedChannel<int>* channel) {
     // 使用普通 recv，不使用 recvBatched
     int count = 0;
     for (int i = 0; i < 3; ++i) {
@@ -481,7 +481,7 @@ Task<void> test_immediately_compare_consumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_immediately_compare_sender(UnsafeChannel<int>* channel) {
+Task<void> test_immediately_compare_sender(galay::spsc::UnboundedChannel<int>* channel) {
     // 发送 3 条数据，第 3 条使用 immediately=true
     channel->send(1, false);  // 不立即唤醒
     co_yield true;
@@ -498,7 +498,7 @@ std::atomic<bool> g_test19_done{false};
 int g_test19_received_count{0};
 int g_test19_sum{0};
 
-Task<void> test_timeout_auto_return(UnsafeChannel<int>* channel) {
+Task<void> test_timeout_auto_return(galay::spsc::UnboundedChannel<int>* channel) {
     // 尝试等待 100 条数据，但只会收到 5 条，超时后返回错误
     auto result = co_await channel->recvBatched(100).timeout(50ms);
 
@@ -517,7 +517,7 @@ Task<void> test_timeout_auto_return(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> test_timeout_auto_return_sender(UnsafeChannel<int>* channel) {
+Task<void> test_timeout_auto_return_sender(galay::spsc::UnboundedChannel<int>* channel) {
     // 一次性发送 5 条数据，不足 100 条，immediately=false 不会唤醒
     for (int i = 1; i <= 5; ++i) {
         channel->send(i, false);
@@ -530,7 +530,7 @@ Task<void> test_timeout_auto_return_sender(UnsafeChannel<int>* channel) {
 // ============================================================================
 void runTests() {
     LogInfo("========================================");
-    LogInfo("UnsafeChannel Unit Tests");
+    LogInfo("galay::spsc::UnboundedChannel Unit Tests");
     LogInfo("========================================");
 
 #if defined(USE_EPOLL) || defined(USE_KQUEUE) || defined(USE_IOURING)
@@ -541,7 +541,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_basic_send_recv(&channel)));
@@ -570,7 +570,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_multiple_recv(&channel)));
@@ -601,7 +601,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_batch_recv(&channel)));
@@ -632,7 +632,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_try_recv(&channel)));
@@ -662,7 +662,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_multi_producer_consumer(&channel)));
@@ -697,7 +697,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_empty_channel_wait(&channel)));
@@ -726,7 +726,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         // 发送数据
         for (int i = 0; i < 5; ++i) {
@@ -764,7 +764,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_batch_recv_multiple(&channel)));
@@ -798,7 +798,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<std::string> channel;
+        galay::spsc::UnboundedChannel<std::string> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_string_recv(&channel)));
@@ -812,7 +812,7 @@ void runTests() {
 
         scheduler.stop();
 
-        if (g_test9_done && g_test9_result == "Hello, UnsafeChannel!") {
+        if (g_test9_done && g_test9_result == "Hello, galay::spsc::UnboundedChannel!") {
             LogInfo("[PASS] String channel: result=\"{}\"", g_test9_result);
             g_passed++;
         } else {
@@ -827,7 +827,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_limit(&channel)));
@@ -858,7 +858,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_timeout(&channel)));
@@ -888,7 +888,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_timeout_empty(&channel)));
@@ -915,7 +915,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         // 预先发送 20 条数据
         for (int i = 1; i <= 20; ++i) {
@@ -948,7 +948,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_recv_batched_mixed(&channel)));
@@ -977,7 +977,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_high_concurrency_consumer(&channel)));
@@ -1012,7 +1012,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_send_immediately_consumer(&channel)));
@@ -1042,7 +1042,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_send_batch_immediately_consumer(&channel)));
@@ -1070,7 +1070,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_immediately_compare_consumer(&channel)));
@@ -1098,7 +1098,7 @@ void runTests() {
         g_total++;
 
         IOSchedulerType scheduler;
-        UnsafeChannel<int> channel;
+        galay::spsc::UnboundedChannel<int> channel;
 
         scheduler.start();
         scheduler.schedule(detail::TaskAccess::detachTask(test_timeout_auto_return(&channel)));

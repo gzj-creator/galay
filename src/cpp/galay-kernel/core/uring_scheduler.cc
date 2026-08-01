@@ -30,6 +30,7 @@ IOUringScheduler::IOUringScheduler(int queue_depth, int batch_size)
     // io_uring SQE 获取/提交在每个调度器内保持单线程；被窃取的协程
     // 仍可通过其所属 reactor 提交，因此跨线程窃取不安全。
     m_worker.setStealingEnabled(false);
+    m_worker.closeResumeAdmission();
 }
 
 IOUringScheduler::~IOUringScheduler()
@@ -48,6 +49,10 @@ std::expected<void, IOError> IOUringScheduler::start()
         m_running.store(false, std::memory_order_release);
         return std::unexpected(reactor_ready.error());
     }
+    if (!m_worker.reopenResumeAdmission()) {
+        m_running.store(false, std::memory_order_release);
+        return std::unexpected(IOError(kNotReady, 0));
+    }
 
     std::promise<void> thread_ready;
     auto ready = thread_ready.get_future();
@@ -64,6 +69,7 @@ std::expected<void, IOError> IOUringScheduler::start()
 
 void IOUringScheduler::stop()
 {
+    m_worker.closeResumeAdmission();
     if (!m_running.exchange(false, std::memory_order_acq_rel)) {
         return;
     }
@@ -160,7 +166,7 @@ std::optional<IOError> IOUringScheduler::lastError() const
     return detail::loadBackendError(m_last_error_code);
 }
 
-bool IOUringScheduler::schedule(TaskRef task)
+bool IOUringScheduler::schedule(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -172,6 +178,25 @@ bool IOUringScheduler::schedule(TaskRef task)
     }
 
     const auto queue_was_empty = m_worker.scheduleInjected(std::move(task));
+    if (!queue_was_empty.has_value()) {
+        return false;
+    }
+    m_wake_coordinator.requestWake(*queue_was_empty, [this]() { notify(); });
+    return true;
+}
+
+bool IOUringScheduler::scheduleResume(TaskRef task) noexcept
+{
+    if (!bindTask(task)) {
+        return false;
+    }
+
+    if (std::this_thread::get_id() == m_threadId) {
+        m_worker.scheduleLocal(std::move(task));
+        return true;
+    }
+
+    const auto queue_was_empty = m_worker.scheduleResume(std::move(task));
     if (!queue_was_empty.has_value()) {
         return false;
     }
@@ -198,7 +223,7 @@ bool IOUringScheduler::scheduleReadyEntry(detail::ReadyEntry& entry)
     return true;
 }
 
-bool IOUringScheduler::scheduleDeferred(TaskRef task)
+bool IOUringScheduler::scheduleDeferred(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -217,7 +242,7 @@ bool IOUringScheduler::scheduleDeferred(TaskRef task)
     return true;
 }
 
-bool IOUringScheduler::scheduleImmediately(TaskRef task)
+bool IOUringScheduler::scheduleImmediately(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;

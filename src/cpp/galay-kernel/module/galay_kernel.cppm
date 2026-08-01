@@ -4,7 +4,7 @@ module;
 
 export module galay.kernel;
 
-export {
+export extern "C++" {
 #include "../common/defn.hpp"
 #include "../common/error.h"
 #include "../common/file_descriptor.h"
@@ -27,9 +27,10 @@ using ::galay::utils::ByteQueueView;
 #include "../core/runtime.h"
 #include "../core/timer_scheduler.h"
 
-#include "../concurrency/mpsc_channel.h"
-#include "../concurrency/bounded_channel.h"
-#include "../concurrency/unsafe_channel.h"
+#include "../concurrency/mpmc/bounded_channel.h"
+#include "../concurrency/mpmc/unbounded_channel.h"
+#include "../concurrency/mpsc/bounded_channel.h"
+#include "../concurrency/mpsc/unbounded_channel.h"
 #include "../concurrency/spsc/bounded_channel.h"
 #include "../concurrency/spsc/unbounded_channel.h"
 

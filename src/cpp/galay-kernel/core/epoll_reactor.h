@@ -70,7 +70,7 @@ private:
     };
 
     struct PendingChange {
-        IOController* controller = nullptr;  ///< 对应控制器
+        RegistrationEntry* entry = nullptr;  ///< 稳定注册入口；controller 移动后仍可解析当前 owner
         uint32_t events = EPOLLET;  ///< 目标事件掩码；仅 EPOLLET 表示删除注册
     };
 

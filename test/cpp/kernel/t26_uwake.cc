@@ -1,11 +1,11 @@
 /**
  * @file t26_uwake.cc
- * @brief 用途：验证 `UnsafeChannel` 延迟唤醒后消费者仍能继续接收数据。
+ * @brief 用途：验证 `galay::spsc::UnboundedChannel` 延迟唤醒后消费者仍能继续接收数据。
  * 关键覆盖点：延迟唤醒时机、消息可见性、消费者恢复后继续推进消费。
  * 通过条件：延迟唤醒不导致丢消息或卡死，测试返回 0。
  */
 
-#include <galay/cpp/galay-kernel/concurrency/unsafe_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <atomic>
 #include <chrono>
@@ -19,7 +19,7 @@ static std::atomic<bool> g_done{false};
 static int g_batch_size = 0;
 static int g_sum = 0;
 
-Task<void> batchConsumer(UnsafeChannel<int>* channel) {
+Task<void> batchConsumer(galay::spsc::UnboundedChannel<int>* channel) {
     auto batch = co_await channel->recvBatch(8);
     if (batch) {
         g_batch_size = static_cast<int>(batch->size());
@@ -31,7 +31,7 @@ Task<void> batchConsumer(UnsafeChannel<int>* channel) {
     co_return;
 }
 
-Task<void> batchProducer(UnsafeChannel<int>* channel) {
+Task<void> batchProducer(galay::spsc::UnboundedChannel<int>* channel) {
     channel->send(1);
     channel->send(2);
     co_return;
@@ -48,7 +48,7 @@ int main() {
         return 1;
     }
 
-    UnsafeChannel<int> channel{UnsafeChannelWakeMode::Deferred};
+    galay::spsc::UnboundedChannel<int> channel{galay::spsc::WakeMode::Deferred};
     scheduler->schedule(detail::TaskAccess::detachTask(batchConsumer(&channel)));
     scheduler->schedule(detail::TaskAccess::detachTask(batchProducer(&channel)));
 

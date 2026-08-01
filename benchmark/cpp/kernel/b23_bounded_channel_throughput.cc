@@ -3,8 +3,8 @@
  * @brief 有界 MPMC channel 吞吐、延迟和关闭收尾压测。
  */
 
-#include <galay/cpp/galay-kernel/concurrency/bounded_channel.h>
-#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpmc/bounded_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "benchmark/cpp/common/benchmark_affinity.h"
@@ -187,7 +187,7 @@ ThroughputResult runBounded(int producerCount, int consumerCount, size_t capacit
 
 ThroughputResult runMpsc(int producerCount)
 {
-    MpscChannel<int64_t> channel;
+    galay::mpsc::UnboundedChannel<int64_t> channel;
     return runThreaded(
         producerCount,
         1,
@@ -198,7 +198,7 @@ ThroughputResult runMpsc(int producerCount)
 
 LatencyStats runLatency(size_t capacity, int64_t messageCount)
 {
-    BoundedChannel<TimestampedMessage> channel(capacity);
+    galay::mpmc::BoundedChannel<TimestampedMessage> channel(capacity);
     std::atomic<bool> producerDone{false};
     std::vector<int64_t> latencies;
     latencies.reserve(static_cast<size_t>(messageCount));
@@ -247,7 +247,7 @@ struct AsyncBenchmarkState {
     std::atomic<int64_t> received{0};
 };
 
-Task<void> asyncConsumer(BoundedChannel<int64_t>* channel,
+Task<void> asyncConsumer(galay::mpmc::BoundedChannel<int64_t>* channel,
                          int64_t messageCount,
                          AsyncBenchmarkState* state)
 {
@@ -264,7 +264,7 @@ Task<void> asyncConsumer(BoundedChannel<int64_t>* channel,
 
 double runAsyncHandoff(size_t capacity, int64_t messageCount)
 {
-    BoundedChannel<int64_t> channel(capacity);
+    galay::mpmc::BoundedChannel<int64_t> channel(capacity);
     AsyncBenchmarkState state;
     ComputeScheduler scheduler;
     auto started = scheduler.start();
@@ -293,7 +293,7 @@ double runAsyncHandoff(size_t capacity, int64_t messageCount)
 
 bool runCloseCheck()
 {
-    BoundedChannel<int64_t> channel(256);
+    galay::mpmc::BoundedChannel<int64_t> channel(256);
     std::atomic<int64_t> received{0};
     std::thread consumer([&]() {
         for (;;) {
@@ -323,7 +323,7 @@ bool runCloseCheck()
 void printThroughput(const char* name, int producerCount, int consumerCount, size_t capacity)
 {
     for (int sample = 0; sample < kWarmupSamples; ++sample) {
-        const auto warmup = runBounded<BoundedChannel<int64_t>>(
+        const auto warmup = runBounded<galay::mpmc::BoundedChannel<int64_t>>(
             producerCount, consumerCount, capacity);
         if (warmup.received != kMessages) {
             std::cout << name << " warmup_failed received=" << warmup.received << '\n';
@@ -336,7 +336,7 @@ void printThroughput(const char* name, int producerCount, int consumerCount, siz
     int64_t received = 0;
     auto placement = galay::benchmark::ThreadPlacement::kUnsupported;
     for (int sample = 0; sample < kSamples; ++sample) {
-        const auto result = runBounded<BoundedChannel<int64_t>>(
+        const auto result = runBounded<galay::mpmc::BoundedChannel<int64_t>>(
             producerCount, consumerCount, capacity);
         samples.push_back(result.messagesPerSecond);
         received = result.received;

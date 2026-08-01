@@ -1,6 +1,6 @@
 #include "bounded_channel_c.h"
 
-#include "../../../cpp/galay-kernel/concurrency/bounded_channel.h"
+#include "../../../cpp/galay-kernel/concurrency/mpmc/bounded_channel.h"
 #include "../coro-c/coro_wait_c.h"
 
 #include <chrono>
@@ -11,7 +11,7 @@
 namespace
 {
 
-using CppBoundedChannel = galay::kernel::BoundedChannel<C_BoundedChannelMessage>;
+using CppBoundedChannel = galay::mpmc::BoundedChannel<C_BoundedChannelMessage>;
 
 CppBoundedChannel* to_cpp_channel(galay_kernel_bounded_channel_t* channel)
 {

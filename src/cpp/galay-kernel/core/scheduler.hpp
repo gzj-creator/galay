@@ -90,19 +90,31 @@ public:
      * @brief 直接提交已绑定调度器的任务引用
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    virtual bool schedule(TaskRef task) = 0;
+    virtual bool schedule(TaskRef task) noexcept = 0;
+
+    /**
+     * @brief 接纳已停泊任务的恢复请求。
+     * @param task 已绑定到本调度器的停泊任务引用。
+     * @return live scheduler 成功接管任务返回 true；无效、owner 不匹配或调度器
+     *         已停止接纳恢复时返回 false。
+     * @details 实现必须无分配、不可抛异常，并保证成功接纳的任务只在 owner
+     *          scheduler 线程恢复。该入口供 Waker/timeout/completion 使用，不能
+     *          回退为跨线程内联恢复。
+     * @note 调用方必须在停止或销毁 scheduler 前关闭异步源并等待所有 waiter 退出。
+     */
+    virtual bool scheduleResume(TaskRef task) noexcept = 0;
 
     /**
      * @brief 延后提交已绑定调度器的任务引用
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    virtual bool scheduleDeferred(TaskRef task) = 0;
+    virtual bool scheduleDeferred(TaskRef task) noexcept = 0;
 
     /**
      * @brief 立即在当前线程恢复任务
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    virtual bool scheduleImmediately(TaskRef task) = 0;
+    virtual bool scheduleImmediately(TaskRef task) noexcept = 0;
 
     /**
      * @brief 添加定时器到内部时间轮
@@ -139,7 +151,7 @@ protected:
      * @return true 任务原本未绑定或已绑定到当前调度器；false 任务无状态或属于其他调度器
      * @note 该辅助函数只修改任务所属调度器，不负责入队或恢复执行
      */
-    bool bindTask(TaskRef& task);
+    bool bindTask(TaskRef& task) noexcept;
 
     /**
      * @brief 在当前线程恢复任务
@@ -214,7 +226,7 @@ inline bool scheduleReadyEntry(ReadyEntry& entry) noexcept
 
 }  // namespace detail
 
-inline bool Scheduler::bindTask(TaskRef& task) {
+inline bool Scheduler::bindTask(TaskRef& task) noexcept {
     auto* state = task.state();
     if (!state) {
         return false;

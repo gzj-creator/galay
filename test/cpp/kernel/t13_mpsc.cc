@@ -1,6 +1,6 @@
 /**
  * @file t13_mpsc.cc
- * @brief 用途：验证 `MpscChannel` 在多生产者单消费者场景下的正确性。
+ * @brief 用途：验证 `galay::mpsc::UnboundedChannel` 在多生产者单消费者场景下的正确性。
  * 关键覆盖点：跨线程发送、协程接收、消息完整性与顺序、关闭与唤醒行为。
  * 通过条件：消息不丢失不重复，所有子测试通过并返回 0。
  */
@@ -8,11 +8,14 @@
 #include <iostream>
 #include <atomic>
 #include <chrono>
+#include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
-#include <galay/cpp/galay-kernel/concurrency/mpsc_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include "test/cpp/common/mpsc_access.h"
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
 
@@ -29,7 +32,7 @@ std::atomic<int> g_total{0};
 std::atomic<bool> g_test1_done{false};
 std::atomic<int> g_test1_received{0};
 
-Task<void> test_basic_send_recv(MpscChannel<int>* channel) {
+Task<void> test_basic_send_recv(galay::mpsc::UnboundedChannel<int>* channel) {
     auto value = co_await channel->recv();
     if (value && *value == 42) {
         g_test1_received = *value;
@@ -45,7 +48,7 @@ std::atomic<int> g_test2_sum{0};
 std::atomic<bool> g_test2_done{false};
 constexpr int TEST2_COUNT = 10;
 
-Task<void> test_multiple_send_recv(MpscChannel<int>* channel) {
+Task<void> test_multiple_send_recv(galay::mpsc::UnboundedChannel<int>* channel) {
     for (int i = 0; i < TEST2_COUNT; ++i) {
         auto value = co_await channel->recv();
         if (value) {
@@ -62,7 +65,7 @@ Task<void> test_multiple_send_recv(MpscChannel<int>* channel) {
 std::atomic<int> g_test3_total{0};
 std::atomic<bool> g_test3_done{false};
 
-Task<void> test_batch_send_recv(MpscChannel<int>* channel) {
+Task<void> test_batch_send_recv(galay::mpsc::UnboundedChannel<int>* channel) {
     auto batch = co_await channel->recvBatch(100);
     if (batch) {
         for (int v : *batch) {
@@ -79,7 +82,7 @@ Task<void> test_batch_send_recv(MpscChannel<int>* channel) {
 std::atomic<bool> g_test4_done{false};
 std::atomic<int> g_test4_value{0};
 
-Task<void> test_try_recv(MpscChannel<int>* channel) {
+Task<void> test_try_recv(galay::mpsc::UnboundedChannel<int>* channel) {
     // 先尝试接收（应该有数据，因为主线程已经发送了）
     auto value = channel->tryRecv();
     if (value) {
@@ -103,25 +106,38 @@ Task<void> test_try_recv(MpscChannel<int>* channel) {
 std::atomic<int> g_test5_sum{0};
 std::atomic<int> g_test5_recv_count{0};
 std::atomic<bool> g_test5_done{false};
+std::atomic<bool> g_test5_send_failed{false};
 constexpr int TEST5_PRODUCER_COUNT = 5;
 constexpr int TEST5_MSG_PER_PRODUCER = 10;
 
-Task<void> test_multi_producer_consumer(MpscChannel<int>* channel) {
+Task<void> test_multi_producer_consumer(galay::mpsc::UnboundedChannel<int>* channel) {
     int expected = TEST5_PRODUCER_COUNT * TEST5_MSG_PER_PRODUCER;
     while (g_test5_recv_count < expected) {
         auto value = co_await channel->recv();
-        if (value) {
-            g_test5_sum.fetch_add(*value, std::memory_order_relaxed);
-            g_test5_recv_count.fetch_add(1, std::memory_order_relaxed);
+        if (!value) {
+            if (g_test5_send_failed.load(std::memory_order_acquire) ||
+                channel->isClosed()) {
+                g_test5_done = true;
+                co_return;
+            }
+            continue;
         }
+        g_test5_sum.fetch_add(*value, std::memory_order_relaxed);
+        g_test5_recv_count.fetch_add(1, std::memory_order_relaxed);
     }
     g_test5_done = true;
     co_return;
 }
 
-void producerThread(MpscChannel<int>* channel, int id) {
+void producerThread(galay::mpsc::UnboundedChannel<int>* channel, int id) {
     for (int i = 0; i < TEST5_MSG_PER_PRODUCER; ++i) {
-        channel->send(id * 100 + i);
+        if (!channel->send(id * 100 + i)) {
+            g_test5_send_failed.store(true, std::memory_order_release);
+            if (!channel->close() && !channel->isClosed()) {
+                g_test5_send_failed.store(true, std::memory_order_release);
+            }
+            return;
+        }
         // 移除 sleep，让生产者尽快发送
     }
 }
@@ -133,7 +149,7 @@ std::atomic<bool> g_test6_waiting{false};
 std::atomic<bool> g_test6_received{false};
 std::atomic<bool> g_test6_done{false};
 
-Task<void> test_empty_channel_wait(MpscChannel<int>* channel) {
+Task<void> test_empty_channel_wait(galay::mpsc::UnboundedChannel<int>* channel) {
     g_test6_waiting = true;
     auto value = co_await channel->recv();
     g_test6_received = value.has_value();
@@ -145,11 +161,16 @@ Task<void> test_empty_channel_wait(MpscChannel<int>* channel) {
 // 测试7：size() 和 empty()
 // ============================================================================
 std::atomic<bool> g_test7_done{false};
+std::atomic<bool> g_test7_recv_failed{false};
 
-Task<void> test_size_and_empty(MpscChannel<int>* channel) {
+Task<void> test_size_and_empty(galay::mpsc::UnboundedChannel<int>* channel) {
     // 消费所有数据
     while (!channel->empty()) {
-        co_await channel->recv();
+        auto value = co_await channel->recv();
+        if (!value.has_value()) {
+            g_test7_recv_failed.store(true, std::memory_order_release);
+            break;
+        }
     }
     g_test7_done = true;
     co_return;
@@ -161,19 +182,26 @@ Task<void> test_size_and_empty(MpscChannel<int>* channel) {
 std::atomic<int> g_test8_total{0};
 std::atomic<int> g_test8_count{0};
 std::atomic<bool> g_test8_done{false};
+std::atomic<bool> g_test8_send_failed{false};
 
-Task<void> test_batch_send(MpscChannel<int>* channel) {
+Task<void> test_batch_send(galay::mpsc::UnboundedChannel<int>* channel) {
     // 接收所有数据（总共 10 个元素，分 3 批发送）
     int total_received = 0;
     while (total_received < 10) {
         auto batch = co_await channel->recvBatch(100);
-        if (batch) {
-            g_test8_count.fetch_add(batch->size(), std::memory_order_relaxed);
-            for (int v : *batch) {
-                g_test8_total.fetch_add(v, std::memory_order_relaxed);
+        if (!batch) {
+            if (g_test8_send_failed.load(std::memory_order_acquire) ||
+                channel->isClosed()) {
+                g_test8_done = true;
+                co_return;
             }
-            total_received += batch->size();
+            continue;
         }
+        g_test8_count.fetch_add(batch->size(), std::memory_order_relaxed);
+        for (int v : *batch) {
+            g_test8_total.fetch_add(v, std::memory_order_relaxed);
+        }
+        total_received += batch->size();
     }
     g_test8_done = true;
     co_return;
@@ -185,7 +213,7 @@ Task<void> test_batch_send(MpscChannel<int>* channel) {
 std::atomic<bool> g_test9_done{false};
 std::string g_test9_result;
 
-Task<void> test_string_channel(MpscChannel<std::string>* channel) {
+Task<void> test_string_channel(galay::mpsc::UnboundedChannel<std::string>* channel) {
     auto value = co_await channel->recv();
     if (value) {
         g_test9_result = *value;
@@ -200,22 +228,35 @@ Task<void> test_string_channel(MpscChannel<std::string>* channel) {
 std::atomic<int> g_test10_sent{0};
 std::atomic<int> g_test10_received{0};
 std::atomic<bool> g_test10_done{false};
+std::atomic<bool> g_test10_send_failed{false};
 constexpr int TEST10_TOTAL = 1000;
 
-Task<void> test_high_concurrency(MpscChannel<int>* channel) {
+Task<void> test_high_concurrency(galay::mpsc::UnboundedChannel<int>* channel) {
     while (g_test10_received < TEST10_TOTAL) {
         auto value = co_await channel->recv();
-        if (value) {
-            g_test10_received.fetch_add(1, std::memory_order_relaxed);
+        if (!value) {
+            if (g_test10_send_failed.load(std::memory_order_acquire) ||
+                channel->isClosed()) {
+                g_test10_done = true;
+                co_return;
+            }
+            continue;
         }
+        g_test10_received.fetch_add(1, std::memory_order_relaxed);
     }
     g_test10_done = true;
     co_return;
 }
 
-void highConcurrencyProducer(MpscChannel<int>* channel, int count) {
+void highConcurrencyProducer(galay::mpsc::UnboundedChannel<int>* channel, int count) {
     for (int i = 0; i < count; ++i) {
-        channel->send(i);
+        if (!channel->send(i)) {
+            g_test10_send_failed.store(true, std::memory_order_release);
+            if (!channel->close() && !channel->isClosed()) {
+                g_test10_send_failed.store(true, std::memory_order_release);
+            }
+            return;
+        }
         g_test10_sent.fetch_add(1, std::memory_order_relaxed);
     }
 }
@@ -227,25 +268,39 @@ std::atomic<int> g_test11_sum{0};
 std::atomic<int> g_test11_count{0};
 std::atomic<bool> g_test11_producer_done{false};
 std::atomic<bool> g_test11_consumer_done{false};
+std::atomic<bool> g_test11_send_failed{false};
 constexpr int TEST11_MSG_COUNT = 50;
 
-Task<void> test_cross_scheduler_producer(MpscChannel<int>* channel) {
+Task<void> test_cross_scheduler_producer(galay::mpsc::UnboundedChannel<int>* channel) {
 
     for (int i = 1; i <= TEST11_MSG_COUNT; ++i) {
-        channel->send(i);
+        if (!channel->send(i)) {
+            g_test11_send_failed.store(true, std::memory_order_release);
+            if (!channel->close() && !channel->isClosed()) {
+                g_test11_send_failed.store(true, std::memory_order_release);
+            }
+            g_test11_producer_done = true;
+            co_return;
+        }
         co_yield true;  // 让出执行权
     }
     g_test11_producer_done = true;
     co_return;
 }
 
-Task<void> test_cross_scheduler_consumer(MpscChannel<int>* channel) {
+Task<void> test_cross_scheduler_consumer(galay::mpsc::UnboundedChannel<int>* channel) {
     while (g_test11_count < TEST11_MSG_COUNT) {
         auto value = co_await channel->recv();
-        if (value) {
-            g_test11_sum.fetch_add(*value, std::memory_order_relaxed);
-            g_test11_count.fetch_add(1, std::memory_order_relaxed);
+        if (!value) {
+            if (g_test11_send_failed.load(std::memory_order_acquire) ||
+                channel->isClosed()) {
+                g_test11_consumer_done = true;
+                co_return;
+            }
+            continue;
         }
+        g_test11_sum.fetch_add(*value, std::memory_order_relaxed);
+        g_test11_count.fetch_add(1, std::memory_order_relaxed);
     }
     g_test11_consumer_done = true;
     co_return;
@@ -258,27 +313,41 @@ std::atomic<int> g_test12_sum{0};
 std::atomic<int> g_test12_count{0};
 std::atomic<int> g_test12_producers_done{0};
 std::atomic<bool> g_test12_consumer_done{false};
+std::atomic<bool> g_test12_send_failed{false};
 constexpr int TEST12_PRODUCER_COUNT = 3;
 constexpr int TEST12_MSG_PER_PRODUCER = 20;
 
-Task<void> test_multi_scheduler_producer(MpscChannel<int>* channel, int id) {
+Task<void> test_multi_scheduler_producer(galay::mpsc::UnboundedChannel<int>* channel, int id) {
 
     for (int i = 0; i < TEST12_MSG_PER_PRODUCER; ++i) {
-        channel->send(id * 100 + i);
+        if (!channel->send(id * 100 + i)) {
+            g_test12_send_failed.store(true, std::memory_order_release);
+            if (!channel->close() && !channel->isClosed()) {
+                g_test12_send_failed.store(true, std::memory_order_release);
+            }
+            g_test12_producers_done.fetch_add(1, std::memory_order_relaxed);
+            co_return;
+        }
         co_yield true;
     }
     g_test12_producers_done.fetch_add(1, std::memory_order_relaxed);
     co_return;
 }
 
-Task<void> test_multi_scheduler_consumer(MpscChannel<int>* channel) {
+Task<void> test_multi_scheduler_consumer(galay::mpsc::UnboundedChannel<int>* channel) {
     int expected = TEST12_PRODUCER_COUNT * TEST12_MSG_PER_PRODUCER;
     while (g_test12_count < expected) {
         auto value = co_await channel->recv();
-        if (value) {
-            g_test12_sum.fetch_add(*value, std::memory_order_relaxed);
-            g_test12_count.fetch_add(1, std::memory_order_relaxed);
+        if (!value) {
+            if (g_test12_send_failed.load(std::memory_order_acquire) ||
+                channel->isClosed()) {
+                g_test12_consumer_done = true;
+                co_return;
+            }
+            continue;
         }
+        g_test12_sum.fetch_add(*value, std::memory_order_relaxed);
+        g_test12_count.fetch_add(1, std::memory_order_relaxed);
     }
     g_test12_consumer_done = true;
     co_return;
@@ -290,29 +359,181 @@ Task<void> test_multi_scheduler_consumer(MpscChannel<int>* channel) {
 std::atomic<int> g_test13_sum{0};
 std::atomic<int> g_test13_count{0};
 std::atomic<bool> g_test13_done{false};
+std::atomic<bool> g_test13_send_failed{false};
 constexpr int TEST13_MSG_COUNT = 100;
 
 // 生产者协程 - 在同一调度器线程中发送数据
-Task<void> test_same_thread_producer(MpscChannel<int>* channel, int startValue, int count) {
+Task<void> test_same_thread_producer(galay::mpsc::UnboundedChannel<int>* channel, int startValue, int count) {
 
     for (int i = 0; i < count; ++i) {
-        channel->send(startValue + i);
+        if (!channel->send(startValue + i)) {
+            g_test13_send_failed.store(true, std::memory_order_release);
+            if (!channel->close() && !channel->isClosed()) {
+                g_test13_send_failed.store(true, std::memory_order_release);
+            }
+            co_return;
+        }
         co_yield true;  // 让出执行权，让消费者有机会接收
     }
     co_return;
 }
 
 // 消费者协程 - 在同一调度器线程中接收数据
-Task<void> test_same_thread_consumer(MpscChannel<int>* channel, int expectedCount) {
+Task<void> test_same_thread_consumer(galay::mpsc::UnboundedChannel<int>* channel, int expectedCount) {
     while (g_test13_count < expectedCount) {
         auto value = co_await channel->recv();
-        if (value) {
-            g_test13_sum.fetch_add(*value, std::memory_order_relaxed);
-            g_test13_count.fetch_add(1, std::memory_order_relaxed);
+        if (!value) {
+            if (g_test13_send_failed.load(std::memory_order_acquire) ||
+                channel->isClosed()) {
+                g_test13_done = true;
+                co_return;
+            }
+            continue;
         }
+        g_test13_sum.fetch_add(*value, std::memory_order_relaxed);
+        g_test13_count.fetch_add(1, std::memory_order_relaxed);
     }
     g_test13_done = true;
     co_return;
+}
+
+struct RegistrationRefState {
+    bool entered = false;
+    bool done = false;
+    bool timedOut = false;
+};
+
+Task<void> test_waiter_registration_ref_task(
+    galay::mpsc::UnboundedChannel<int>* channel,
+    RegistrationRefState* state) {
+    state->entered = true;
+    auto value = co_await channel->recv();
+    state->timedOut = !value &&
+        IOError::contains(value.error().code(), kTimeout);
+    state->done = true;
+    co_return;
+}
+
+bool test_waiter_registration_retains_task_reference() {
+    galay::mpsc::UnboundedChannel<int> channel;
+    RegistrationRefState state;
+    auto task = test_waiter_registration_ref_task(&channel, &state);
+    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto* taskState = keeper.state();
+    if (taskState == nullptr || !taskState->m_handle) {
+        return false;
+    }
+
+    const uint64_t refsBeforeSuspend =
+        taskState->m_refs.load(std::memory_order_acquire);
+    taskState->m_handle.resume();
+    const uint64_t refsWhileRegistered =
+        taskState->m_refs.load(std::memory_order_acquire);
+    const bool cleared =
+        galay::mpsc::UnboundedChannelTestAccess::clearWaiter(channel, taskState);
+    const uint64_t refsAfterClear =
+        taskState->m_refs.load(std::memory_order_acquire);
+    taskState->m_handle.resume();
+
+    return state.entered && refsWhileRegistered == refsBeforeSuspend + 1 &&
+        cleared && refsAfterClear == refsBeforeSuspend && state.done && state.timedOut;
+}
+
+Task<void> test_publish_epoch_task() {
+    co_return;
+}
+
+bool test_publish_epoch_lost_wake_boundary() {
+    galay::mpsc::UnboundedChannel<int> channel;
+    auto task = test_publish_epoch_task();
+    TaskRef keeper = detail::TaskAccess::taskRef(task);
+    auto* taskState = keeper.state();
+    if (taskState == nullptr || !taskState->m_handle) {
+        return false;
+    }
+
+    const bool sentBeforeArming = channel.send(41);
+    const bool beganBeforeRetry =
+        galay::mpsc::UnboundedChannelTestAccess::beginWaiterRegistration(channel);
+    auto first = channel.tryRecv();
+    galay::mpsc::UnboundedChannelTestAccess::cancelWaiterRegistration(channel);
+
+    const bool beganDuringArming =
+        galay::mpsc::UnboundedChannelTestAccess::beginWaiterRegistration(channel);
+    const bool sentDuringArming = channel.send(42);
+    const uint64_t refsBeforePublish =
+        taskState->m_refs.load(std::memory_order_acquire);
+    const bool shouldSuspend = galay::mpsc::UnboundedChannelTestAccess::publishWaiter(
+        channel, taskState);
+    const uint64_t refsAfterPublish =
+        taskState->m_refs.load(std::memory_order_acquire);
+    auto second = channel.tryRecv();
+    const bool cleared =
+        galay::mpsc::UnboundedChannelTestAccess::clearWaiter(channel, taskState);
+    const uint64_t refsAfterClear =
+        taskState->m_refs.load(std::memory_order_acquire);
+    taskState->m_handle.resume();
+
+    return sentBeforeArming && beganBeforeRetry && first.has_value() && *first == 41 &&
+        beganDuringArming && sentDuringArming && !shouldSuspend &&
+        refsAfterPublish == refsBeforePublish && second.has_value() && *second == 42 &&
+        !cleared && refsAfterClear == refsBeforePublish && channel.empty() &&
+        taskState->m_done.load(std::memory_order_acquire);
+}
+
+bool test_explicit_producer_token_api() {
+    galay::mpsc::UnboundedChannel<int> channel(1024, 4);
+    auto token = channel.makeProducerToken();
+    using Token = decltype(token);
+
+    static_assert(std::is_move_constructible_v<Token>);
+    static_assert(std::is_move_assignable_v<Token>);
+    static_assert(!std::is_copy_constructible_v<Token>);
+    static_assert(!std::is_copy_assignable_v<Token>);
+
+    const bool tokenValid = token.valid();
+    auto movedToken = std::move(token);
+    const bool movedTokenValid = movedToken.valid();
+    const bool sentSingle = channel.send(movedToken, 1);
+
+    const std::vector<int> copiedBatch{2, 3};
+    const bool sentCopiedBatch = channel.sendBatch(movedToken, copiedBatch);
+
+    std::vector<int> movedBatch{4, 5};
+    const bool sentMovedBatch = channel.sendBatch(movedToken, std::move(movedBatch));
+    const bool sentDefault = channel.send(6);
+
+    auto first = channel.tryRecv();
+    const bool pendingAfterPrefetch =
+        first.has_value() && channel.size() > 0 && !channel.empty();
+
+    auto second = channel.tryRecv();
+    const bool pendingWhileCached =
+        second.has_value() && channel.size() > 0 && !channel.empty();
+
+    size_t receivedCount = 0;
+    int receivedSum = 0;
+    if (first.has_value()) {
+        ++receivedCount;
+        receivedSum += *first;
+    }
+    if (second.has_value()) {
+        ++receivedCount;
+        receivedSum += *second;
+    }
+    while (true) {
+        auto value = channel.tryRecv();
+        if (!value.has_value()) {
+            break;
+        }
+        ++receivedCount;
+        receivedSum += *value;
+    }
+
+    return tokenValid && movedTokenValid && sentSingle && sentCopiedBatch &&
+        sentMovedBatch && sentDefault &&
+        pendingAfterPrefetch && pendingWhileCached && receivedCount == 6 &&
+        receivedSum == 21 && channel.size() == 0 && channel.empty();
 }
 
 // ============================================================================
@@ -320,7 +541,7 @@ Task<void> test_same_thread_consumer(MpscChannel<int>* channel, int expectedCoun
 // ============================================================================
 void runTests() {
     LogInfo("========================================");
-    LogInfo("MpscChannel Unit Tests");
+    LogInfo("galay::mpsc::UnboundedChannel Unit Tests");
     LogInfo("========================================");
 
     // 测试1：基本 send/recv
@@ -329,27 +550,32 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_basic_send_recv(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_basic_send_recv(&channel)));
 
-        channel.send(42);
+        const bool sent = channel.send(42);
+        if (!sent && !channel.close() && !channel.isClosed()) {
+            LogError("[FAIL] Basic send/recv: failed to close after send failure");
+        }
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test1_done) {
+        while (scheduled && !g_test1_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 5s) break;
         }
 
         scheduler.stop();
 
-        if (g_test1_done && g_test1_received == 42) {
+        if (scheduled && sent && g_test1_done && g_test1_received == 42) {
             LogInfo("[PASS] Basic send/recv: received={}", g_test1_received.load());
             g_passed++;
         } else {
-            LogError("[FAIL] Basic send/recv: done={}, received={}",
-                    g_test1_done.load(), g_test1_received.load());
+            LogError("[FAIL] Basic send/recv: sent={}, done={}, received={}",
+                    sent, g_test1_done.load(), g_test1_received.load());
             g_failed++;
         }
     }
@@ -360,33 +586,43 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_multiple_send_recv(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_multiple_send_recv(&channel)));
 
         // 发送数据
+        bool allSent = true;
         int expected_sum = 0;
         for (int i = 0; i < TEST2_COUNT; ++i) {
-            channel.send(i + 1);
+            if (!channel.send(i + 1)) {
+                allSent = false;
+                if (!channel.close() && !channel.isClosed()) {
+                    LogError("[FAIL] Multiple send/recv: failed to close after send failure");
+                }
+                break;
+            }
             expected_sum += (i + 1);
         }
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test2_done) {
+        while (scheduled && !g_test2_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 10s) break;
         }
 
         scheduler.stop();
 
-        if (g_test2_done && g_test2_sum == expected_sum) {
+        if (scheduled && allSent && g_test2_done &&
+            g_test2_sum == expected_sum) {
             LogInfo("[PASS] Multiple send/recv: sum={} (expected {})",
                     g_test2_sum.load(), expected_sum);
             g_passed++;
         } else {
-            LogError("[FAIL] Multiple send/recv: done={}, sum={} (expected {})",
-                    g_test2_done.load(), g_test2_sum.load(), expected_sum);
+            LogError("[FAIL] Multiple send/recv: all_sent={}, done={}, sum={} (expected {})",
+                    allSent, g_test2_done.load(), g_test2_sum.load(), expected_sum);
             g_failed++;
         }
     }
@@ -397,31 +633,36 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
         // 先发送数据
         std::vector<int> data = {1, 2, 3, 4, 5};
         int expected = 15;
-        channel.sendBatch(data);
+        const bool sent = channel.sendBatch(data);
+        if (!sent && !channel.close() && !channel.isClosed()) {
+            LogError("[FAIL] Batch send/recv: failed to close after send failure");
+        }
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_send_recv(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_batch_send_recv(&channel)));
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test3_done) {
+        while (scheduled && !g_test3_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 5s) break;
         }
 
         scheduler.stop();
 
-        if (g_test3_done && g_test3_total == expected) {
+        if (scheduled && sent && g_test3_done && g_test3_total == expected) {
             LogInfo("[PASS] Batch send/recv: total={} (expected {})",
                     g_test3_total.load(), expected);
             g_passed++;
         } else {
-            LogError("[FAIL] Batch send/recv: done={}, total={} (expected {})",
-                    g_test3_done.load(), g_test3_total.load(), expected);
+            LogError("[FAIL] Batch send/recv: sent={}, done={}, total={} (expected {})",
+                    sent, g_test3_done.load(), g_test3_total.load(), expected);
             g_failed++;
         }
     }
@@ -432,29 +673,34 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
+        const auto schedulerStarted = scheduler.start();
 
         // 先发送数据，确保数据在协程启动前就在 channel 中
-        channel.send(99);
+        const bool sent = channel.send(99);
+        if (!sent && !channel.close() && !channel.isClosed()) {
+            LogError("[FAIL] try_recv: failed to close after send failure");
+        }
 
-        scheduler.schedule(detail::TaskAccess::detachTask(test_try_recv(&channel)));
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_try_recv(&channel)));
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test4_done) {
+        while (scheduled && !g_test4_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 5s) break;
         }
 
         scheduler.stop();
 
-        if (g_test4_done && g_test4_value == 99) {
+        if (scheduled && sent && g_test4_done && g_test4_value == 99) {
             LogInfo("[PASS] try_recv: value={}", g_test4_value.load());
             g_passed++;
         } else {
-            LogError("[FAIL] try_recv: done={}, value={}",
-                    g_test4_done.load(), g_test4_value.load());
+            LogError("[FAIL] try_recv: sent={}, done={}, value={}",
+                    sent, g_test4_done.load(), g_test4_value.load());
             g_failed++;
         }
     }
@@ -466,10 +712,12 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_multi_producer_consumer(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_multi_producer_consumer(&channel)));
 
         // 启动多个生产者线程
         std::vector<std::thread> producers;
@@ -483,7 +731,7 @@ void runTests() {
         }
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test5_done) {
+        while (scheduled && !g_test5_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 10s) break;
         }
@@ -491,12 +739,15 @@ void runTests() {
         scheduler.stop();
 
         int expected_count = TEST5_PRODUCER_COUNT * TEST5_MSG_PER_PRODUCER;
-        if (g_test5_done && g_test5_recv_count == expected_count) {
+        if (scheduled &&
+            !g_test5_send_failed.load(std::memory_order_acquire) &&
+            g_test5_done && g_test5_recv_count == expected_count) {
             LogInfo("[PASS] Multi-producer: received={}, sum={}",
                     g_test5_recv_count.load(), g_test5_sum.load());
             g_passed++;
         } else {
-            LogError("[FAIL] Multi-producer: done={}, received={}/{}",
+            LogError("[FAIL] Multi-producer: send_failed={}, done={}, received={}/{}",
+                    g_test5_send_failed.load(std::memory_order_acquire),
                     g_test5_done.load(), g_test5_recv_count.load(), expected_count);
             g_failed++;
         }
@@ -508,35 +759,40 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_empty_channel_wait(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_empty_channel_wait(&channel)));
 
         // 等待消费者开始等待
         auto start = std::chrono::steady_clock::now();
-        while (!g_test6_waiting) {
+        while (scheduled && !g_test6_waiting) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 1s) break;
         }
 
         // 延迟发送
-        channel.send(123);
+        const bool sent = channel.send(123);
+        if (!sent && !channel.close() && !channel.isClosed()) {
+            LogError("[FAIL] Empty channel wait: failed to close after send failure");
+        }
 
         start = std::chrono::steady_clock::now();
-        while (!g_test6_done) {
+        while (scheduled && !g_test6_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 5s) break;
         }
 
         scheduler.stop();
 
-        if (g_test6_done && g_test6_received) {
+        if (scheduled && sent && g_test6_done && g_test6_received) {
             LogInfo("[PASS] Empty channel wait: received after wait");
             g_passed++;
         } else {
-            LogError("[FAIL] Empty channel wait: done={}, received={}",
-                    g_test6_done.load(), g_test6_received.load());
+            LogError("[FAIL] Empty channel wait: sent={}, done={}, received={}",
+                    sent, g_test6_done.load(), g_test6_received.load());
             g_failed++;
         }
     }
@@ -547,21 +803,30 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
         // 发送数据
+        bool allSent = true;
         for (int i = 0; i < 5; ++i) {
-            channel.send(i);
+            if (!channel.send(i)) {
+                allSent = false;
+                if (!channel.close() && !channel.isClosed()) {
+                    LogError("[FAIL] size/empty: failed to close after send failure");
+                }
+                break;
+            }
         }
 
         bool size_ok = (channel.size() == 5);
         bool not_empty = !channel.empty();
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_size_and_empty(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_size_and_empty(&channel)));
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test7_done) {
+        while (scheduled && !g_test7_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 5s) break;
         }
@@ -570,12 +835,14 @@ void runTests() {
 
         bool empty_after = channel.empty();
 
-        if (size_ok && not_empty && empty_after && g_test7_done) {
+        if (scheduled && allSent && size_ok && not_empty && empty_after &&
+            g_test7_done &&
+            !g_test7_recv_failed.load(std::memory_order_acquire)) {
             LogInfo("[PASS] size/empty: initial_size=5, empty_after=true");
             g_passed++;
         } else {
-            LogError("[FAIL] size/empty: size_ok={}, not_empty={}, empty_after={}",
-                    size_ok, not_empty, empty_after);
+            LogError("[FAIL] size/empty: all_sent={}, size_ok={}, not_empty={}, empty_after={}",
+                    allSent, size_ok, not_empty, empty_after);
             g_failed++;
         }
     }
@@ -586,22 +853,34 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_batch_send(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_batch_send(&channel)));
 
         // 批量发送
         std::vector<int> batch1 = {1, 2, 3};
         std::vector<int> batch2 = {4, 5, 6, 7};
         std::vector<int> batch3 = {8, 9, 10};
 
-        channel.sendBatch(batch1);
-        channel.sendBatch(batch2);
-        channel.sendBatch(batch3);
+        bool allSent = channel.sendBatch(batch1);
+        if (allSent) {
+            allSent = channel.sendBatch(batch2);
+        }
+        if (allSent) {
+            allSent = channel.sendBatch(batch3);
+        }
+        if (!allSent) {
+            g_test8_send_failed.store(true, std::memory_order_release);
+            if (!channel.close() && !channel.isClosed()) {
+                LogError("[FAIL] Batch send: failed to close after send failure");
+            }
+        }
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test8_done) {
+        while (scheduled && !g_test8_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 5s) break;
         }
@@ -611,13 +890,15 @@ void runTests() {
         int expected_total = 55;  // 1+2+...+10
         int expected_count = 10;
 
-        if (g_test8_done && g_test8_count == expected_count && g_test8_total == expected_total) {
+        if (scheduled && allSent && g_test8_done &&
+            g_test8_count == expected_count &&
+            g_test8_total == expected_total) {
             LogInfo("[PASS] Batch send: count={}, total={}",
                     g_test8_count.load(), g_test8_total.load());
             g_passed++;
         } else {
-            LogError("[FAIL] Batch send: done={}, count={}/{}, total={}/{}",
-                    g_test8_done.load(), g_test8_count.load(), expected_count,
+            LogError("[FAIL] Batch send: all_sent={}, done={}, count={}/{}, total={}/{}",
+                    allSent, g_test8_done.load(), g_test8_count.load(), expected_count,
                     g_test8_total.load(), expected_total);
             g_failed++;
         }
@@ -629,27 +910,33 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<std::string> channel;
+        galay::mpsc::UnboundedChannel<std::string> channel;
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_string_channel(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_string_channel(&channel)));
 
-        channel.send(std::string("Hello, Channel!"));
+        const bool sent = channel.send(std::string("Hello, Channel!"));
+        if (!sent && !channel.close() && !channel.isClosed()) {
+            LogError("[FAIL] String channel: failed to close after send failure");
+        }
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test9_done) {
+        while (scheduled && !g_test9_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 5s) break;
         }
 
         scheduler.stop();
 
-        if (g_test9_done && g_test9_result == "Hello, Channel!") {
+        if (scheduled && sent && g_test9_done &&
+            g_test9_result == "Hello, Channel!") {
             LogInfo("[PASS] String channel: result=\"{}\"", g_test9_result);
             g_passed++;
         } else {
-            LogError("[FAIL] String channel: done={}, result=\"{}\"",
-                    g_test9_done.load(), g_test9_result);
+            LogError("[FAIL] String channel: sent={}, done={}, result=\"{}\"",
+                    sent, g_test9_done.load(), g_test9_result);
             g_failed++;
         }
     }
@@ -660,10 +947,12 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
-        scheduler.schedule(detail::TaskAccess::detachTask(test_high_concurrency(&channel)));
+        const auto schedulerStarted = scheduler.start();
+        const bool scheduled = schedulerStarted.has_value() &&
+            scheduler.schedule(detail::TaskAccess::detachTask(
+                test_high_concurrency(&channel)));
 
         // 多线程发送
         std::vector<std::thread> senders;
@@ -677,19 +966,22 @@ void runTests() {
         }
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test10_done) {
+        while (scheduled && !g_test10_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 30s) break;
         }
 
         scheduler.stop();
 
-        if (g_test10_done && g_test10_received == TEST10_TOTAL) {
+        if (scheduled &&
+            !g_test10_send_failed.load(std::memory_order_acquire) &&
+            g_test10_done && g_test10_received == TEST10_TOTAL) {
             LogInfo("[PASS] High concurrency: sent={}, received={}",
                     g_test10_sent.load(), g_test10_received.load());
             g_passed++;
         } else {
-            LogError("[FAIL] High concurrency: done={}, sent={}, received={}/{}",
+            LogError("[FAIL] High concurrency: send_failed={}, done={}, sent={}, received={}/{}",
+                    g_test10_send_failed.load(std::memory_order_acquire),
                     g_test10_done.load(), g_test10_sent.load(),
                     g_test10_received.load(), TEST10_TOTAL);
             g_failed++;
@@ -701,19 +993,25 @@ void runTests() {
         LogInfo("\n--- Test 11: Cross-scheduler (producer/consumer on different schedulers) ---");
         g_total++;
 
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
         // 创建两个调度器
         ComputeScheduler producerScheduler;
         ComputeScheduler consumerScheduler;
+        std::atomic<bool> schedulingFailed{false};
 
         // 启动消费者调度器和协程
         std::thread consumerThread([&]() {
-            consumerScheduler.start();
-            consumerScheduler.schedule(detail::TaskAccess::detachTask(test_cross_scheduler_consumer(&channel)));
+            const auto schedulerStarted = consumerScheduler.start();
+            const bool scheduled = schedulerStarted.has_value() &&
+                consumerScheduler.schedule(detail::TaskAccess::detachTask(
+                    test_cross_scheduler_consumer(&channel)));
+            if (!scheduled) {
+                schedulingFailed.store(true, std::memory_order_release);
+            }
 
             auto start = std::chrono::steady_clock::now();
-            while (!g_test11_consumer_done) {
+            while (scheduled && !g_test11_consumer_done) {
                 // 使用调度器的空闲等待
                 if (std::chrono::steady_clock::now() - start > 30s) break;
             }
@@ -722,11 +1020,16 @@ void runTests() {
 
         // 启动生产者调度器和协程
         std::thread producerThread([&]() {
-            producerScheduler.start();
-            producerScheduler.schedule(detail::TaskAccess::detachTask(test_cross_scheduler_producer(&channel)));
+            const auto schedulerStarted = producerScheduler.start();
+            const bool scheduled = schedulerStarted.has_value() &&
+                producerScheduler.schedule(detail::TaskAccess::detachTask(
+                    test_cross_scheduler_producer(&channel)));
+            if (!scheduled) {
+                schedulingFailed.store(true, std::memory_order_release);
+            }
 
             auto start = std::chrono::steady_clock::now();
-            while (!g_test11_producer_done) {
+            while (scheduled && !g_test11_producer_done) {
                 // 使用调度器的空闲等待
                 if (std::chrono::steady_clock::now() - start > 30s) break;
             }
@@ -737,7 +1040,9 @@ void runTests() {
         consumerThread.join();
 
         int expected_sum = TEST11_MSG_COUNT * (TEST11_MSG_COUNT + 1) / 2;  // 1+2+...+50
-        bool passed = g_test11_producer_done && g_test11_consumer_done &&
+        bool passed = !schedulingFailed.load(std::memory_order_acquire) &&
+                      !g_test11_send_failed.load(std::memory_order_acquire) &&
+                      g_test11_producer_done && g_test11_consumer_done &&
                       (g_test11_count == TEST11_MSG_COUNT) &&
                       (g_test11_sum == expected_sum);
 
@@ -746,7 +1051,8 @@ void runTests() {
                     g_test11_count.load(), g_test11_sum.load(), expected_sum);
             g_passed++;
         } else {
-            LogError("[FAIL] Cross-scheduler: producer_done={}, consumer_done={}, count={}/{}, sum={}/{}",
+            LogError("[FAIL] Cross-scheduler: send_failed={}, producer_done={}, consumer_done={}, count={}/{}, sum={}/{}",
+                    g_test11_send_failed.load(std::memory_order_acquire),
                     g_test11_producer_done.load(), g_test11_consumer_done.load(),
                     g_test11_count.load(), TEST11_MSG_COUNT,
                     g_test11_sum.load(), expected_sum);
@@ -760,21 +1066,27 @@ void runTests() {
                 TEST12_PRODUCER_COUNT, TEST12_MSG_PER_PRODUCER);
         g_total++;
 
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
         std::vector<std::unique_ptr<ComputeScheduler>> producerSchedulers;
         std::vector<std::thread> producerThreads;
 
         // 消费者调度器
         ComputeScheduler consumerScheduler;
+        std::atomic<bool> schedulingFailed{false};
 
         // 启动消费者
         std::thread consumerThread([&]() {
-            consumerScheduler.start();
-            consumerScheduler.schedule(detail::TaskAccess::detachTask(test_multi_scheduler_consumer(&channel)));
+            const auto schedulerStarted = consumerScheduler.start();
+            const bool scheduled = schedulerStarted.has_value() &&
+                consumerScheduler.schedule(detail::TaskAccess::detachTask(
+                    test_multi_scheduler_consumer(&channel)));
+            if (!scheduled) {
+                schedulingFailed.store(true, std::memory_order_release);
+            }
 
             auto start = std::chrono::steady_clock::now();
-            while (!g_test12_consumer_done) {
+            while (scheduled && !g_test12_consumer_done) {
                 // 使用调度器的空闲等待
                 if (std::chrono::steady_clock::now() - start > 60s) break;
             }
@@ -788,12 +1100,19 @@ void runTests() {
 
         // 启动生产者
         for (int i = 0; i < TEST12_PRODUCER_COUNT; ++i) {
-            producerThreads.emplace_back([&producerSchedulers, &channel, i]() {
-                producerSchedulers[i]->start();
-                producerSchedulers[i]->schedule(detail::TaskAccess::detachTask(test_multi_scheduler_producer(&channel, i)));
+            producerThreads.emplace_back([&producerSchedulers, &channel,
+                                          &schedulingFailed, i]() {
+                const auto schedulerStarted = producerSchedulers[i]->start();
+                const bool scheduled = schedulerStarted.has_value() &&
+                    producerSchedulers[i]->schedule(
+                        detail::TaskAccess::detachTask(
+                            test_multi_scheduler_producer(&channel, i)));
+                if (!scheduled) {
+                    schedulingFailed.store(true, std::memory_order_release);
+                }
 
                 auto start = std::chrono::steady_clock::now();
-                while (g_test12_producers_done <= i) {
+                while (scheduled && g_test12_producers_done <= i) {
                     // 使用调度器的空闲等待
                     if (std::chrono::steady_clock::now() - start > 30s) break;
                 }
@@ -810,7 +1129,9 @@ void runTests() {
         consumerThread.join();
 
         int expected_count = TEST12_PRODUCER_COUNT * TEST12_MSG_PER_PRODUCER;
-        bool passed = (g_test12_producers_done == TEST12_PRODUCER_COUNT) &&
+        bool passed = !schedulingFailed.load(std::memory_order_acquire) &&
+                      !g_test12_send_failed.load(std::memory_order_acquire) &&
+                      (g_test12_producers_done == TEST12_PRODUCER_COUNT) &&
                       g_test12_consumer_done &&
                       (g_test12_count == expected_count);
 
@@ -819,7 +1140,8 @@ void runTests() {
                     g_test12_producers_done.load(), g_test12_count.load(), g_test12_sum.load());
             g_passed++;
         } else {
-            LogError("[FAIL] Multi-scheduler multi-producer: producers_done={}/{}, consumer_done={}, count={}/{}",
+            LogError("[FAIL] Multi-scheduler multi-producer: send_failed={}, producers_done={}/{}, consumer_done={}, count={}/{}",
+                    g_test12_send_failed.load(std::memory_order_acquire),
                     g_test12_producers_done.load(), TEST12_PRODUCER_COUNT,
                     g_test12_consumer_done.load(),
                     g_test12_count.load(), expected_count);
@@ -833,24 +1155,42 @@ void runTests() {
         g_total++;
 
         ComputeScheduler scheduler;
-        MpscChannel<int> channel;
+        galay::mpsc::UnboundedChannel<int> channel;
 
-        scheduler.start();
+        const auto schedulerStarted = scheduler.start();
+        bool scheduled = schedulerStarted.has_value();
 
         // 在同一个调度器中启动消费者和多个生产者
         // 这样 send 时 waiterScheduler->threadId() == std::this_thread::get_id()
         // 会走直接 resume 的高性能路径
-        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_consumer(&channel, TEST13_MSG_COUNT)));
+        if (scheduled) {
+            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+                test_same_thread_consumer(&channel, TEST13_MSG_COUNT)));
+        }
 
         // 启动多个生产者协程，每个发送一部分数据
         int perProducer = TEST13_MSG_COUNT / 4;
-        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, 0, perProducer)));
-        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, perProducer, perProducer)));
-        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, perProducer * 2, perProducer)));
-        scheduler.schedule(detail::TaskAccess::detachTask(test_same_thread_producer(&channel, perProducer * 3, perProducer)));
+        if (scheduled) {
+            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+                test_same_thread_producer(&channel, 0, perProducer)));
+        }
+        if (scheduled) {
+            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+                test_same_thread_producer(&channel, perProducer, perProducer)));
+        }
+        if (scheduled) {
+            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+                test_same_thread_producer(&channel, perProducer * 2,
+                                          perProducer)));
+        }
+        if (scheduled) {
+            scheduled = scheduler.schedule(detail::TaskAccess::detachTask(
+                test_same_thread_producer(&channel, perProducer * 3,
+                                          perProducer)));
+        }
 
         auto start = std::chrono::steady_clock::now();
-        while (!g_test13_done) {
+        while (scheduled && !g_test13_done) {
             // 使用调度器的空闲等待
             if (std::chrono::steady_clock::now() - start > 10s) break;
         }
@@ -859,7 +1199,9 @@ void runTests() {
 
         // 计算期望的 sum: 0+1+2+...+99 = 4950
         int expected_sum = TEST13_MSG_COUNT * (TEST13_MSG_COUNT - 1) / 2;
-        bool passed = g_test13_done &&
+        bool passed = scheduled &&
+                      !g_test13_send_failed.load(std::memory_order_acquire) &&
+                      g_test13_done &&
                       (g_test13_count == TEST13_MSG_COUNT) &&
                       (g_test13_sum == expected_sum);
 
@@ -868,9 +1210,79 @@ void runTests() {
                     g_test13_count.load(), g_test13_sum.load(), expected_sum);
             g_passed++;
         } else {
-            LogError("[FAIL] Same-thread multi-producer: done={}, count={}/{}, sum={}/{}",
+            LogError("[FAIL] Same-thread multi-producer: send_failed={}, done={}, count={}/{}, sum={}/{}",
+                    g_test13_send_failed.load(std::memory_order_acquire),
                     g_test13_done.load(), g_test13_count.load(), TEST13_MSG_COUNT,
                     g_test13_sum.load(), expected_sum);
+            g_failed++;
+        }
+    }
+
+    // 测试14：零长度批量接收应立即返回空批次，且不消费已有消息
+    {
+        LogInfo("\n--- Test 14: Zero-length batch receive ---");
+        g_total++;
+
+        galay::mpsc::UnboundedChannel<int> channel;
+        const bool sent = channel.send(7);
+        const auto immediate = channel.tryRecvBatch(0);
+        auto awaitable = channel.recvBatch(0);
+        const bool ready = awaitable.await_ready();
+        auto awaited = awaitable.await_resume();
+        const auto remaining = channel.tryRecv();
+
+        const bool passed = sent && immediate.has_value() && immediate->empty() &&
+                            ready && awaited.has_value() && awaited->empty() &&
+                            remaining.has_value() && *remaining == 7 && channel.empty();
+        if (passed) {
+            LogInfo("[PASS] Zero-length batch receive returns immediately without consuming");
+            g_passed++;
+        } else {
+            LogError("[FAIL] Zero-length batch receive: sent={}, immediate={}, ready={}, awaited={}, remaining={}",
+                     sent,
+                     immediate.has_value(),
+                     ready,
+                     awaited.has_value(),
+                     remaining.has_value());
+            g_failed++;
+        }
+    }
+
+    // 测试15：wait registration 必须独立保活挂起任务
+    {
+        LogInfo("\n--- Test 15: Waiter registration retains task state ---");
+        g_total++;
+        if (test_waiter_registration_retains_task_reference()) {
+            LogInfo("[PASS] Waiter registration retains exactly one task reference");
+            g_passed++;
+        } else {
+            LogError("[FAIL] Waiter registration did not retain/release task state correctly");
+            g_failed++;
+        }
+    }
+
+    // 测试16：Arming 期间已有发布时撤销 waiter，让当前协程同步重试而不自唤醒
+    {
+        LogInfo("\n--- Test 16: Publish-epoch lost-wake boundary ---");
+        g_total++;
+        if (test_publish_epoch_lost_wake_boundary()) {
+            LogInfo("[PASS] Pending publication cancels waiter registration without self-wake");
+            g_passed++;
+        } else {
+            LogError("[FAIL] Pending publication did not cancel waiter registration safely");
+            g_failed++;
+        }
+    }
+
+    // 测试17：显式 producer token 支持移动、批量发送及默认发送混用
+    {
+        LogInfo("\n--- Test 17: Explicit producer token API ---");
+        g_total++;
+        if (test_explicit_producer_token_api()) {
+            LogInfo("[PASS] Explicit producer token supports single, batch, move, and mixed sends");
+            g_passed++;
+        } else {
+            LogError("[FAIL] Explicit producer token API or prefetched size semantics are incorrect");
             g_failed++;
         }
     }

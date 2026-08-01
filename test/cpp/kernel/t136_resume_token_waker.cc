@@ -35,11 +35,98 @@ class NullScheduler final : public Scheduler {
 public:
     std::expected<void, IOError> start() override { return {}; }
     void stop() override {}
-    bool schedule(TaskRef) override { return false; }
-    bool scheduleDeferred(TaskRef) override { return false; }
-    bool scheduleImmediately(TaskRef) override { return false; }
+    bool schedule(TaskRef) noexcept override { return false; }
+    bool scheduleResume(TaskRef) noexcept override { return false; }
+    bool scheduleDeferred(TaskRef) noexcept override { return false; }
+    bool scheduleImmediately(TaskRef) noexcept override { return false; }
     bool addTimer(Timer::ptr) override { return false; }
     SchedulerType type() override { return kComputeScheduler; }
+};
+
+class ResumeOnlyScheduler final : public Scheduler {
+public:
+    ~ResumeOnlyScheduler() override { stop(); }
+
+    std::expected<void, IOError> start() override {
+        bool expected = false;
+        if (!m_running.compare_exchange_strong(
+                expected, true, std::memory_order_acq_rel)) {
+            return {};
+        }
+        m_thread = std::thread([this]() {
+            m_threadId = std::this_thread::get_id();
+            m_ready.store(true, std::memory_order_release);
+            while (m_running.load(std::memory_order_acquire)) {
+                drain();
+                std::this_thread::yield();
+            }
+            drain();
+        });
+        while (!m_ready.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+        return {};
+    }
+
+    void stop() override {
+        if (!m_running.exchange(false, std::memory_order_acq_rel)) {
+            return;
+        }
+        if (m_thread.joinable()) {
+            m_thread.join();
+        }
+    }
+
+    bool schedule(TaskRef) noexcept override {
+        m_regularScheduleCalls.fetch_add(1, std::memory_order_relaxed);
+        return false;
+    }
+
+    bool scheduleResume(TaskRef task) noexcept override {
+        if (!bindTask(task)) {
+            return false;
+        }
+        m_resumeScheduleCalls.fetch_add(1, std::memory_order_relaxed);
+        return m_resumeQueue.push(std::move(task));
+    }
+
+    bool scheduleDeferred(TaskRef) noexcept override { return false; }
+
+    bool scheduleImmediately(TaskRef task) noexcept override {
+        if (!bindTask(task)) {
+            return false;
+        }
+        resume(task);
+        return true;
+    }
+
+    bool addTimer(Timer::ptr) override { return false; }
+    SchedulerType type() override { return kComputeScheduler; }
+
+    int regularScheduleCalls() const noexcept {
+        return m_regularScheduleCalls.load(std::memory_order_acquire);
+    }
+
+    int resumeScheduleCalls() const noexcept {
+        return m_resumeScheduleCalls.load(std::memory_order_acquire);
+    }
+
+private:
+    void drain() {
+        TaskState* ready = detail::TaskResumeQueue::reverse(
+            m_resumeQueue.takeAll());
+        while (ready != nullptr) {
+            TaskRef task = detail::TaskResumeQueue::popFront(ready);
+            resume(task);
+        }
+    }
+
+    std::thread m_thread;
+    detail::TaskResumeQueue m_resumeQueue;
+    std::atomic<bool> m_running{false};
+    std::atomic<bool> m_ready{false};
+    std::atomic<int> m_regularScheduleCalls{0};
+    std::atomic<int> m_resumeScheduleCalls{0};
 };
 
 struct FakeResumeTokenState {
@@ -103,6 +190,20 @@ struct ManualSuspendAwaitable {
 
 Task<void> parkedTask(ManualWakeState* state) {
     co_await ManualSuspendAwaitable{state};
+    state->resumed_thread = std::this_thread::get_id();
+    state->resumed.fetch_add(1, std::memory_order_release);
+    co_return;
+}
+
+Task<void> completedChild() {
+    co_return;
+}
+
+Task<void> parentAwaitingCompletedChild(ManualWakeState* state) {
+    auto child = co_await completedChild();
+    if (!child.has_value()) {
+        co_return;
+    }
     state->resumed_thread = std::this_thread::get_id();
     state->resumed.fetch_add(1, std::memory_order_release);
     co_return;
@@ -222,6 +323,69 @@ bool verifyCppWakerStillCoalesces() {
     return true;
 }
 
+bool verifyCppWakerUsesResumeAdmission() {
+    ResumeOnlyScheduler scheduler;
+    auto started = scheduler.start();
+    if (!started.has_value()) {
+        std::cerr << "[T136] failed to start resume-only scheduler\n";
+        return false;
+    }
+
+    ManualWakeState state;
+    Task<void> task = parkedTask(&state);
+    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
+    if (!scheduler.scheduleImmediately(std::move(scheduled)) ||
+        !state.armed.load(std::memory_order_acquire)) {
+        std::cerr << "[T136] failed to park task on resume-only scheduler\n";
+        scheduler.stop();
+        return false;
+    }
+
+    state.waker.wakeUp();
+    const bool resumed = waitUntil([&]() {
+        return state.resumed.load(std::memory_order_acquire) == 1;
+    });
+    scheduler.stop();
+
+    if (!resumed || state.resumed_thread != scheduler.threadId() ||
+        scheduler.regularScheduleCalls() != 0 ||
+        scheduler.resumeScheduleCalls() != 1) {
+        std::cerr << "[T136] C++ Waker did not use owner-only resume admission\n";
+        return false;
+    }
+    return true;
+}
+
+bool verifyContinuationUsesResumeAdmission() {
+    ResumeOnlyScheduler scheduler;
+    auto started = scheduler.start();
+    if (!started.has_value()) {
+        std::cerr << "[T136] failed to start continuation scheduler\n";
+        return false;
+    }
+
+    ManualWakeState state;
+    Task<void> task = parentAwaitingCompletedChild(&state);
+    TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
+    if (!scheduler.scheduleImmediately(std::move(scheduled))) {
+        std::cerr << "[T136] failed to start parent continuation task\n";
+        scheduler.stop();
+        return false;
+    }
+
+    const bool resumed = waitUntil([&]() {
+        return state.resumed.load(std::memory_order_acquire) == 1;
+    });
+    scheduler.stop();
+    if (!resumed || state.resumed_thread != scheduler.threadId() ||
+        scheduler.regularScheduleCalls() != 0 ||
+        scheduler.resumeScheduleCalls() != 1) {
+        std::cerr << "[T136] task continuation did not use resume admission\n";
+        return false;
+    }
+    return true;
+}
+
 bool verifyInvalidWakerIsIgnored() {
     Waker waker;
     if (waker.getScheduler() != nullptr) {
@@ -242,6 +406,12 @@ int main() {
         return 1;
     }
     if (!verifyCppWakerStillCoalesces()) {
+        return 1;
+    }
+    if (!verifyCppWakerUsesResumeAdmission()) {
+        return 1;
+    }
+    if (!verifyContinuationUsesResumeAdmission()) {
         return 1;
     }
     if (!verifyInvalidWakerIsIgnored()) {

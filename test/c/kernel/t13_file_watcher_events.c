@@ -242,6 +242,14 @@ static int test_file_modify_event(void)
         (state.watch_result.events &
             (C_FileWatchEvent)(C_FileWatchEventModify | C_FileWatchEventCloseWrite)) == 0 ||
         state.watch_result.is_dir != 0) {
+        fprintf(stderr,
+            "file watcher result mismatch: io_code=%d sys_errno=%d watch_code=%d events=0x%x name=%s is_dir=%d\n",
+            (int)state.io_result.code,
+            state.io_result.sys_errno,
+            (int)state.watch_result.code,
+            (unsigned int)state.watch_result.events,
+            state.watch_result.name,
+            state.watch_result.is_dir ? 1 : 0);
         exit_code = 44;
         goto cleanup;
     }
