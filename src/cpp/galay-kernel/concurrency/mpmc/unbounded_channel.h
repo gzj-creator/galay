@@ -102,7 +102,7 @@ struct UnboundedQueueTraits : moodycamel::ConcurrentQueueDefaultTraits
     static constexpr size_t EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD = 32;
     static constexpr size_t EXPLICIT_INITIAL_INDEX_SIZE = 32;
     static constexpr std::uint32_t
-        EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE = 256;
+        EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE = 32;
 };
 
 inline constexpr size_t kUnboundedInitialPoolElements = 1024;
@@ -725,9 +725,21 @@ private:
         // pump 必须晚于 idle publication：close pump 若曾因本 producer 为 active 而暂缓，
         // 本次请求会在消息发布或失败收尾后重新检查。waiter 标志与注册方的无条件
         // requestRecvPump() 组成 SC 握手，因此无需在每次 send 尾部再次读取 closed。
-        if (waiterPathUsedAfterPublish()) {
-            requestRecvPump();
+        if (waiterPathUsedAfterPublish()) [[unlikely]] {
+            requestRecvPumpAfterSend();
         }
+    }
+
+    // 同步 tryRecv 压测中 waiter 路径从未启用；把完整 pump 状态机留在冷函数，
+    // 避免每条 send 的公共热路径因内联冷分支而膨胀。
+#if defined(_MSC_VER)
+    __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline, cold))
+#endif
+    void requestRecvPumpAfterSend() noexcept
+    {
+        requestRecvPump();
     }
 
     /** @brief 仅当 close 已发布且所有已登记 producer 均为 idle 时返回 true。 */

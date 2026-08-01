@@ -64,7 +64,7 @@ static_assert(QueueTraits::BLOCK_SIZE == 64);
 static_assert(QueueTraits::EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD == 32);
 static_assert(QueueTraits::EXPLICIT_INITIAL_INDEX_SIZE == 32);
 static_assert(
-    QueueTraits::EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE == 256);
+    QueueTraits::EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE == 32);
 static_assert(galay::mpmc::detail::kUnboundedInitialPoolElements == 1024);
 static_assert(galay::mpmc::UnboundedValue<int>);
 static_assert(std::default_initializable<ThrowingDefaultValue>);

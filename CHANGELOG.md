@@ -15,7 +15,7 @@
 
 - **新增高性能有界 MPMC 异步通道**：`galay::mpmc::BoundedChannel<T>` 基于固定容量 Vyukov ring 提供线程安全的 `trySend()` / `tryRecv()`、协程 `send()` / `recv()` / `recvBatch()`、超时、关闭唤醒和 move-only 元素支持；关闭位与 reservation cursor 共用同一 `tail` 原子，保证 close 前已取得的 reservation 完成发布并排空后才返回 `kClosed`。Apple AArch64 竞争退避使用 `isb` CPU hint，CAS miss 在当前调用内保持用户态重试。
 - **新增 MPMC 无界异步通道**：`galay::mpmc::UnboundedChannel<T>` 提供显式 producer/consumer token、默认线程本地 producer 缓存、单条与批量收发、异步接收、超时及 close/drain；producer 通过 0/1 SC active publication 与 close 建立全序，接收方仅在全部 producer 静止且二次 dequeue 仍为空时返回 `kClosed`。
-- **补齐 MPMC 正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、timeout 竞争、move-only、producer publication 线性化及无界队列两波跨 block 复用测试；C++ / Rust benchmark 严格统一为 2P2C、4P4C、500 万消息、1 次预热、7 个样本取中位数，并在 macOS 仅接受 `perf-class-only` 线程放置。Rust 对照仅保留 Crossbeam `ArrayQueue` 与 `crossbeam-channel`，旧的单消费者结果不再参与 MPMC 结论。
+- **补齐 MPMC 正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、timeout 竞争、move-only、producer publication 线性化及无界队列两波跨 block 复用测试；新增独立进程 paired runner，严格统一 2P2C / 4P4C、8 字节单调 payload、yield backoff、完整 checksum/drain，每组至少采集 15 对交替样本并输出 bootstrap 95% CI，在 macOS 仅接受 `perf-class-only` 线程放置。Rust 对照仅保留 Crossbeam `ArrayQueue` 与 `crossbeam-channel`，旧的单消费者结果不再参与 MPMC 结论。
 - **新增 `BoundedChannel` C ABI**：提供创建/销毁、同步单条与批量收发、C coroutine 超时等待、关闭和容量状态查询，完整映射公开错误码及 `*_get_error()` 字符串；新增边界/协程测试、公共头 smoke 和 1P1C/4P4C 吞吐 benchmark。
 
 ### Changed
@@ -24,7 +24,7 @@
 - **异步同步原语归入 async 模块**：`async_mutex` 与 `async_waiter` 从 C++ `concurrency` 和 C `concurrency-c` 目录迁入对应 `async` / `async-c` 目录，并同步更新模块入口、安装边界、源码、文档、测试、示例与 benchmark 引用。
 - **收敛 `BoundedChannel` 生产实现与维护文档**：删除 `GALAY_BQ_DIAG_*` 临时编译分支，保留唯一的关闭检查、waiter-aware 和 ring 退避路径；补全公开 API、协程 awaitable、ring 与 waiter helper 的参数、返回值、错误、并发和生命周期注释。
 - **优化 `BoundedChannel` C 热路径与压测口径**：成功发送不再重复读取关闭状态，批量和协程路径复用已校验的内部收发函数；吞吐 benchmark 改为完整消息计数、Release 预热/中位数采样和线程局部统计，消除共享原子与 cache-line 伪共享造成的测量偏差。
-- **优化 MPMC 数据面与基准隔离能力**：无界队列显式冻结 `BLOCK_SIZE=64`、empty counter threshold 32、explicit index 32、consumer rotation quota 256，并把初始池固定为 1024 个元素以消除不同 block 大小的预分配偏差；B25 同框轮换测量 raw default、raw current、wrapper raw 与 wrapper token 四条路径并输出 paired ratio。无界 MPMC 仍未超过 Crossbeam，不沿用旧的单消费者胜出结论。
+- **优化 MPMC 数据面与基准隔离能力**：无界队列显式冻结 `BLOCK_SIZE=64`、empty counter threshold 32、explicit index 32、consumer rotation quota 32，并把初始池固定为 1024 个元素以消除不同 block 大小的预分配偏差；发送完成后的 waiter pump 外提为 unlikely 冷函数，避免同步轮询热路径内联完整控制面。B25 与独立 paired runner 可拆分 raw 数据面和 token wrapper 成本；20M 消息、15 对样本下 2P2C 稳定超过 Crossbeam，但 4P4C 仍落后，因此不保留全面胜出结论。
 - **收紧 MPMC 元素异常契约**：Bounded 元素必须不可抛移动构造，Unbounded 元素必须不可抛默认构造、移动构造和移动赋值，复制发送仅对不可抛复制构造类型开放；避免元素操作异常使无界 producer 永久保持 active，或穿过 `noexcept` 完成路径终止进程。
 
 ### Fixed

@@ -18,3 +18,12 @@ foreach(benchmark_source IN LISTS GALAY_KERNEL_BENCHMARK_SOURCES)
     string(REGEX REPLACE "^b[0-9]+_" "" scenario_name "${benchmark_name}")
     galay_add_kernel_benchmark(benchmark_kernel_${scenario_name} ${benchmark_source})
 endforeach()
+
+file(GLOB GALAY_KERNEL_COMPARE_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/compare/*-paired/*.cc"
+)
+
+foreach(compare_source IN LISTS GALAY_KERNEL_COMPARE_SOURCES)
+    get_filename_component(compare_name "${compare_source}" NAME_WE)
+    galay_add_kernel_benchmark(benchmark_kernel_compare_${compare_name} ${compare_source})
+endforeach()
