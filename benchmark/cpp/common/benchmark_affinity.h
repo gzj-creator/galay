@@ -24,6 +24,7 @@ namespace galay::benchmark {
 enum class ThreadPlacement {
     kPinnedToCore,            ///< 已绑定到指定逻辑核（Linux）
     kPerformanceClassOnly,    ///< 仅限定在高性能核簇（Apple silicon 无法绑核）
+    kAffinityHintOnly,        ///< 仅设置了调度亲和标签，不代表绑定到指定核心
     kUnsupported              ///< 平台不提供任何放置控制
 };
 
@@ -39,6 +40,8 @@ inline const char* threadPlacementName(ThreadPlacement placement) noexcept
         return "pinned";
     case ThreadPlacement::kPerformanceClassOnly:
         return "perf-class-only";
+    case ThreadPlacement::kAffinityHintOnly:
+        return "affinity-hint-only";
     case ThreadPlacement::kUnsupported:
         return "unsupported";
     }
@@ -51,8 +54,8 @@ inline const char* threadPlacementName(ThreadPlacement placement) noexcept
  * @return 实际生效的放置方式，调用方必须据此标注结果可比性。
  *
  * @note Linux 通过 pthread_setaffinity_np 真正绑核。
- * @note Apple silicon 不支持 THREAD_AFFINITY_POLICY（返回 KERN_NOT_SUPPORTED），
- *       只能通过 QoS 把线程留在 P 核簇内，因此返回 kPerformanceClassOnly。
+ * @note Darwin 的 THREAD_AFFINITY_POLICY 只是调度亲和标签，不是 CPU 绑定；
+ *       QoS 成功时仅报告 kPerformanceClassOnly，不会把标签误报为 pinned。
  */
 inline ThreadPlacement pinCurrentThread(std::size_t coreIndex) noexcept
 {
@@ -68,21 +71,19 @@ inline ThreadPlacement pinCurrentThread(std::size_t coreIndex) noexcept
     }
     return ThreadPlacement::kUnsupported;
 #elif defined(__APPLE__)
-    // Apple silicon 上 THREAD_AFFINITY_POLICY 直接返回 KERN_NOT_SUPPORTED，
-    // 唯一可用的杠杆是 QoS：USER_INTERACTIVE 会把线程留在 P 核簇。
+    // Darwin affinity tag 只提示调度器把相关线程放在不同资源组，不绑定逻辑核。
     thread_affinity_policy_data_t policy = {static_cast<integer_t>(target + 1)};
-    const kern_return_t pinned = thread_policy_set(
+    const kern_return_t affinityHint = thread_policy_set(
         pthread_mach_thread_np(pthread_self()),
         THREAD_AFFINITY_POLICY,
         reinterpret_cast<thread_policy_t>(&policy),
         THREAD_AFFINITY_POLICY_COUNT);
-    if (pinned == KERN_SUCCESS) {
-        return ThreadPlacement::kPinnedToCore;
-    }
     if (pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0) == 0) {
         return ThreadPlacement::kPerformanceClassOnly;
     }
-    return ThreadPlacement::kUnsupported;
+    return affinityHint == KERN_SUCCESS
+        ? ThreadPlacement::kAffinityHintOnly
+        : ThreadPlacement::kUnsupported;
 #else
     (void)target;
     return ThreadPlacement::kUnsupported;

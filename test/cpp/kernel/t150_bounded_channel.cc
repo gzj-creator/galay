@@ -3,7 +3,7 @@
  * @brief 有界 MPMC channel 边界测试。
  */
 
-#include <galay/cpp/galay-kernel/concurrency/bounded_channel.h>
+#include <galay/cpp/galay-kernel/concurrency/mpmc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/core/compute_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "result_writer.h"
@@ -66,6 +66,46 @@ struct NonDefaultMoveOnly {
     int value;
 };
 
+struct ThrowingMoveValue {
+    ThrowingMoveValue() = default;
+    ThrowingMoveValue(const ThrowingMoveValue&) = delete;
+    ThrowingMoveValue& operator=(const ThrowingMoveValue&) = delete;
+    ThrowingMoveValue(ThrowingMoveValue&&) noexcept(false) {}
+    ThrowingMoveValue& operator=(ThrowingMoveValue&&) noexcept = default;
+};
+
+struct ThrowingMoveAssignValue {
+    ThrowingMoveAssignValue() = default;
+    ThrowingMoveAssignValue(ThrowingMoveAssignValue&&) noexcept = default;
+    ThrowingMoveAssignValue& operator=(ThrowingMoveAssignValue&&) noexcept(false)
+    {
+        return *this;
+    }
+};
+
+struct ThrowingCopyValue {
+    ThrowingCopyValue() = default;
+    ThrowingCopyValue(const ThrowingCopyValue&) noexcept(false) {}
+    ThrowingCopyValue(ThrowingCopyValue&&) noexcept = default;
+    ThrowingCopyValue& operator=(ThrowingCopyValue&&) noexcept = default;
+};
+
+template <typename T>
+concept HasBoundedCopySend = requires(galay::mpmc::BoundedChannel<T>& channel,
+                                      const T& value) {
+    channel.trySend(value);
+};
+
+static_assert(galay::mpmc::BoundedValue<NonDefaultMoveOnly>);
+static_assert(std::movable<ThrowingMoveValue>);
+static_assert(std::movable<ThrowingMoveAssignValue>);
+static_assert(std::copy_constructible<ThrowingCopyValue>);
+static_assert(!galay::mpmc::BoundedValue<ThrowingMoveValue>);
+static_assert(galay::mpmc::BoundedValue<ThrowingMoveAssignValue>);
+static_assert(galay::mpmc::BoundedValue<ThrowingCopyValue>);
+static_assert(HasBoundedCopySend<int>);
+static_assert(!HasBoundedCopySend<ThrowingCopyValue>);
+
 bool waitFor(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 2s)
 {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
@@ -78,7 +118,7 @@ bool waitFor(const std::atomic<bool>& flag, std::chrono::milliseconds timeout = 
     return flag.load(std::memory_order_acquire);
 }
 
-Task<void> receiveOne(BoundedChannel<int>* channel, TestState* state)
+Task<void> receiveOne(galay::mpmc::BoundedChannel<int>* channel, TestState* state)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->recv();
@@ -92,7 +132,7 @@ Task<void> receiveOne(BoundedChannel<int>* channel, TestState* state)
     co_return;
 }
 
-Task<void> sendOne(BoundedChannel<int>* channel, TestState* state, int value)
+Task<void> sendOne(galay::mpmc::BoundedChannel<int>* channel, TestState* state, int value)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->send(std::move(value));
@@ -102,7 +142,7 @@ Task<void> sendOne(BoundedChannel<int>* channel, TestState* state, int value)
     co_return;
 }
 
-Task<void> receiveWithTimeout(BoundedChannel<int>* channel, TestState* state)
+Task<void> receiveWithTimeout(galay::mpmc::BoundedChannel<int>* channel, TestState* state)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->recv().timeout(2ms);
@@ -111,7 +151,7 @@ Task<void> receiveWithTimeout(BoundedChannel<int>* channel, TestState* state)
     co_return;
 }
 
-Task<void> sendWithTimeout(BoundedChannel<int>* channel, TestState* state, int value)
+Task<void> sendWithTimeout(galay::mpmc::BoundedChannel<int>* channel, TestState* state, int value)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->send(std::move(value)).timeout(2ms);
@@ -121,7 +161,7 @@ Task<void> sendWithTimeout(BoundedChannel<int>* channel, TestState* state, int v
     co_return;
 }
 
-Task<void> receiveBatch(BoundedChannel<int>* channel, TestState* state, size_t count)
+Task<void> receiveBatch(galay::mpmc::BoundedChannel<int>* channel, TestState* state, size_t count)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->recvBatch(count);
@@ -136,7 +176,7 @@ Task<void> receiveBatch(BoundedChannel<int>* channel, TestState* state, size_t c
     co_return;
 }
 
-Task<void> sendUnique(BoundedChannel<std::unique_ptr<int>>* channel, TestState* state)
+Task<void> sendUnique(galay::mpmc::BoundedChannel<std::unique_ptr<int>>* channel, TestState* state)
 {
     state->entered.store(true, std::memory_order_release);
     auto result = co_await channel->send(std::make_unique<int>(123));
@@ -155,9 +195,9 @@ bool scheduleAndWait(ComputeScheduler& scheduler, Task<void>&& task, TestState& 
 
 bool testBasicAndCapacity()
 {
-    BoundedChannel<int> channel(3);
-    if (channel.capacity() != 4 || BoundedChannel<int>(1).capacity() != 2 ||
-        BoundedChannel<int>(0).capacity() != 2 || BoundedChannel<int>(1024).capacity() != 1024) {
+    galay::mpmc::BoundedChannel<int> channel(3);
+    if (channel.capacity() != 4 || galay::mpmc::BoundedChannel<int>(1).capacity() != 2 ||
+        galay::mpmc::BoundedChannel<int>(0).capacity() != 2 || galay::mpmc::BoundedChannel<int>(1024).capacity() != 1024) {
         return false;
     }
     if (!channel.trySend(42)) {
@@ -169,7 +209,7 @@ bool testBasicAndCapacity()
 
 bool testFullPreservesValue()
 {
-    BoundedChannel<std::string> channel(2);
+    galay::mpmc::BoundedChannel<std::string> channel(2);
     if (!channel.trySend(std::string("first")) || !channel.trySend(std::string("second"))) {
         return false;
     }
@@ -182,7 +222,7 @@ bool testFullPreservesValue()
 
 bool testAsyncSendWake()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     if (!channel.trySend(1) || !channel.trySend(2)) {
         return false;
     }
@@ -210,7 +250,7 @@ bool testAsyncSendWake()
 
 bool testAsyncReceiveWake()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     ComputeScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
@@ -232,7 +272,7 @@ bool testAsyncReceiveWake()
 
 bool testBatchAndMinimumCapacity()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     if (!channel.tryRecvBatch(0).has_value()) {
         return false;
     }
@@ -248,7 +288,7 @@ bool testBatchAndMinimumCapacity()
         }
     }
 
-    BoundedChannel<int> batchChannel(8);
+    galay::mpmc::BoundedChannel<int> batchChannel(8);
     for (int i = 0; i < 5; ++i) {
         if (!batchChannel.trySend(i)) {
             return false;
@@ -279,7 +319,7 @@ bool testBatchAndMinimumCapacity()
 
 bool testCloseAndDrain()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     if (!channel.trySend(10) || !channel.trySend(11)) {
         return false;
     }
@@ -312,7 +352,7 @@ bool testCloseAndDrain()
 
 bool testCloseWakesPendingSend()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     if (!channel.trySend(1) || !channel.trySend(2)) {
         return false;
     }
@@ -334,7 +374,7 @@ bool testCloseWakesPendingSend()
 
 bool testCloseWakesPendingReceive()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     ComputeScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
@@ -353,7 +393,7 @@ bool testCloseWakesPendingReceive()
 
 bool testTimeout()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     ComputeScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
@@ -368,7 +408,7 @@ bool testTimeout()
 
 bool testSendTimeout()
 {
-    BoundedChannel<int> channel(2);
+    galay::mpmc::BoundedChannel<int> channel(2);
     if (!channel.trySend(1) || !channel.trySend(2)) {
         return false;
     }
@@ -386,7 +426,7 @@ bool testSendTimeout()
 
 bool testMoveOnly()
 {
-    BoundedChannel<std::unique_ptr<int>> channel(2);
+    galay::mpmc::BoundedChannel<std::unique_ptr<int>> channel(2);
     auto value = std::make_unique<int>(99);
     if (!channel.trySend(std::move(value)) || value) {
         return false;
@@ -396,7 +436,7 @@ bool testMoveOnly()
         return false;
     }
 
-    BoundedChannel<std::unique_ptr<int>> asyncChannel(2);
+    galay::mpmc::BoundedChannel<std::unique_ptr<int>> asyncChannel(2);
     if (!asyncChannel.trySend(std::make_unique<int>(1)) ||
         !asyncChannel.trySend(std::make_unique<int>(2))) {
         return false;
@@ -421,7 +461,7 @@ bool testNonDefaultMoveOnly()
 {
     int destructionCount = 0;
     {
-        BoundedChannel<NonDefaultMoveOnly> channel(2);
+        galay::mpmc::BoundedChannel<NonDefaultMoveOnly> channel(2);
         if (!channel.trySend(NonDefaultMoveOnly(17, &destructionCount))) {
             return false;
         }
@@ -436,7 +476,7 @@ bool testNonDefaultMoveOnly()
 
     destructionCount = 0;
     {
-        BoundedChannel<NonDefaultMoveOnly> channel(2);
+        galay::mpmc::BoundedChannel<NonDefaultMoveOnly> channel(2);
         if (!channel.trySend(NonDefaultMoveOnly(23, &destructionCount))) {
             return false;
         }
@@ -452,7 +492,7 @@ bool testMpmc()
     constexpr int totalMessages = producerCount * messagesPerProducer;
 
     for (const size_t capacity : {size_t{256}, size_t{4096}}) {
-        BoundedChannel<int> channel(capacity);
+        galay::mpmc::BoundedChannel<int> channel(capacity);
         std::atomic<int> receivedCount{0};
         std::atomic<bool> producersDone{false};
         std::set<int> received;

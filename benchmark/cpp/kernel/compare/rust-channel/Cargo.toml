@@ -1,0 +1,9 @@
+[package]
+name = "galay-kernel-rust-channel-compare"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+crossbeam-channel = "=0.5.16"
+crossbeam-queue = "=0.3.13"
