@@ -10,6 +10,7 @@ function(galay_add_c_etcd_example target_name source_file)
 endfunction()
 
 file(GLOB GALAY_C_ETCD_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+galay_filter_unsupported_c_coro_sources(GALAY_C_ETCD_EXAMPLE_SOURCES)
 foreach(example_source IN LISTS GALAY_C_ETCD_EXAMPLE_SOURCES)
     get_filename_component(source_name "${example_source}" NAME_WE)
     string(REGEX REPLACE "^e[0-9]+_" "" scenario_name "${source_name}")

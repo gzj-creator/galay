@@ -30,7 +30,7 @@ if [[ ! -d "${build_dir}" ]]; then
   exit 1
 fi
 
-run cmake --build "${build_dir}" --target redis_t27_auth redis_t17_tls redis_t18_url redis_t19_topology redis_t13_cluster
+run cmake --build "${build_dir}" --target t20_auth t12_tls t13_url t14_topology t8_cluster
 mkdir -p "${base_dir}"
 
 wait_redis()
@@ -107,7 +107,7 @@ run env \
   GALAY_IT_ENABLE=1 \
   GALAY_REDIS_AUTH_URL=redis://galay:galay_redis_pass_123@127.0.0.1:16379/0 \
   GALAY_REDIS_AUTH_WRONG_URL=redis://galay:bad_password@127.0.0.1:16379/0 \
-  "${build_dir}/test/redis/redis_t27_auth"
+  "${build_dir}/test/cpp/redis/t20_auth"
 
 tls_dir="${base_dir}/tls"
 mkdir -p "${tls_dir}"
@@ -158,7 +158,7 @@ run env \
   GALAY_REDIS_TLS_CA="${tls_dir}/ca.crt" \
   GALAY_REDIS_TLS_VERIFY_PEER=1 \
   GALAY_REDIS_TLS_SERVER_NAME=localhost \
-  "${build_dir}/test/redis/redis_t17_tls"
+  "${build_dir}/test/cpp/redis/t12_tls"
 run env \
   GALAY_IT_ENABLE=1 \
   GALAY_REDIS_TLS_URL=rediss://localhost:16380/0 \
@@ -166,14 +166,14 @@ run env \
   GALAY_REDIS_TLS_CA="${tls_dir}/ca.crt" \
   GALAY_REDIS_TLS_VERIFY_PEER=1 \
   GALAY_REDIS_TLS_SERVER_NAME=localhost \
-  "${build_dir}/test/redis/redis_t18_url"
+  "${build_dir}/test/cpp/redis/t13_url"
 run env \
   GALAY_IT_ENABLE=1 \
-  GALAY_REDIS_TLS_URL=rediss://localhost:16380/0 \
+  GALAY_REDIS_TLS_URL=rediss://127.0.0.1:16380/0 \
   GALAY_REDIS_TLS_CA="${tls_dir}/ca.crt" \
   GALAY_REDIS_TLS_VERIFY_PEER=1 \
   GALAY_REDIS_TLS_SERVER_NAME=localhost \
-  "${build_dir}/test/redis/redis_t19_topology"
+  "${build_dir}/test/cpp/redis/t14_topology"
 
 cluster_dir="${base_dir}/cluster"
 mkdir -p "${cluster_dir}"
@@ -258,6 +258,6 @@ run env \
   GALAY_IT_SENTINEL_PORT=26380 \
   GALAY_IT_SENTINEL_MASTER_NAME=mymaster \
   GALAY_IT_TRIGGER_SENTINEL_FAILOVER=1 \
-  "${build_dir}/test/redis/redis_t13_cluster"
+  "${build_dir}/test/cpp/redis/t8_cluster"
 
 echo "Redis ACL/TLS/cluster/sentinel verification completed"

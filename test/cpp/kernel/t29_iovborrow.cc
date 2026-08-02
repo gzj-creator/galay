@@ -12,6 +12,7 @@
 #include <thread>
 
 #include <galay/cpp/galay-kernel/async/async_tcp.h>
+#include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -74,7 +75,13 @@ Task<void> borrowedServer([[maybe_unused]] IOScheduler* scheduler) {
     }
 
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    opt = client.option().handleNonBlock();
+    if (!opt) {
+        LogError("[Server] client non-block failed: {}", opt.error().message());
+        co_await client.close();
+        co_await listener.close();
+        co_return;
+    }
 
     char header[16]{};
     char body[32]{};
@@ -119,7 +126,7 @@ Task<void> borrowedServer([[maybe_unused]] IOScheduler* scheduler) {
 
 Task<void> borrowedClient([[maybe_unused]] IOScheduler* scheduler) {
     while (!g_server_ready.load(std::memory_order_acquire)) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        co_await galay::kernel::sleep(std::chrono::milliseconds(10));
     }
 
     AsyncTcpSocket client;
@@ -187,8 +194,12 @@ int main() {
 #endif
 
     scheduler.start();
-    scheduleTask(scheduler, borrowedServer(&scheduler));
-    scheduleTask(scheduler, borrowedClient(&scheduler));
+    if (!scheduleTask(scheduler, borrowedServer(&scheduler)) ||
+        !scheduleTask(scheduler, borrowedClient(&scheduler))) {
+        LogError("T29 failed to schedule server/client task");
+        scheduler.stop();
+        return 1;
+    }
 
     std::this_thread::sleep_for(std::chrono::seconds(3));
     scheduler.stop();

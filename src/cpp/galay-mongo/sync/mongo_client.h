@@ -52,8 +52,8 @@ public:
     MongoClient& operator=(MongoClient&& other) noexcept;  ///< 移动赋值运算符
 
     /**
-     * @brief 使用完整配置连接到 MongoDB（含认证）
-     * @param config MongoDB 连接配置
+     * @brief 使用完整配置连接到 MongoDB（含认证与同步 replica set server selection）
+     * @param config MongoDB 连接配置；seeds 非空时会发现成员、校验 replica set 并按读偏好选择节点
      * @return 成功返回 void，失败返回 MongoError
      */
     MongoVoidResult connect(const MongoConfig& config);

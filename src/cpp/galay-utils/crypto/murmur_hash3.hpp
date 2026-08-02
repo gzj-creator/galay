@@ -181,11 +181,10 @@ namespace galay::utils
         const uint32_t c2 = 0x1b873593;
 
         // Body
-        const uint32_t* blocks = reinterpret_cast<const uint32_t*>(data + nblocks * 4);
-
-        for (int i = -nblocks; i; i++)
+        for (int i = 0; i < nblocks; ++i)
         {
-            uint32_t k1 = blocks[i];
+            uint32_t k1 = 0;
+            std::memcpy(&k1, data + i * sizeof(k1), sizeof(k1));
 
             k1 *= c1;
             k1 = rotl32(k1, 15);
@@ -241,12 +240,12 @@ namespace galay::utils
         const uint64_t c2 = 0x4cf5ad432745937fULL;
 
         // Body
-        const uint64_t* blocks = reinterpret_cast<const uint64_t*>(data);
-
         for (int i = 0; i < nblocks; i++)
         {
-            uint64_t k1 = blocks[i * 2 + 0];
-            uint64_t k2 = blocks[i * 2 + 1];
+            uint64_t k1 = 0;
+            uint64_t k2 = 0;
+            std::memcpy(&k1, data + i * 16, sizeof(k1));
+            std::memcpy(&k2, data + i * 16 + sizeof(k1), sizeof(k2));
 
             k1 *= c1;
             k1 = rotl64(k1, 31);

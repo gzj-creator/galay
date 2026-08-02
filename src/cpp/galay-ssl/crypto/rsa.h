@@ -24,6 +24,16 @@ std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
     std::string_view payload,
     std::string_view pem_public_key);
 
+/**
+ * @brief Encrypt data with a PEM public key using RSA OAEP with SHA-1.
+ *
+ * This variant is required by wire protocols such as MySQL
+ * caching_sha2_password full authentication.
+ */
+std::expected<std::string, std::string> rsaOaepSha1EncryptWithPemPublicKey(
+    std::string_view payload,
+    std::string_view pem_public_key);
+
 } // namespace galay::ssl
 
 #endif // GALAY_SSL_CRYPTO_RSA_H

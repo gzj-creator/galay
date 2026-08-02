@@ -66,7 +66,10 @@ std::string publicKeyPem(EVP_PKEY* key)
     return {memory->data, memory->length};
 }
 
-bool decryptsWithSha256Oaep(EVP_PKEY* key, std::string_view ciphertext)
+bool decryptsWithOaep(EVP_PKEY* key,
+                      std::string_view ciphertext,
+                      const EVP_MD* digest,
+                      std::string_view expectedPlaintext)
 {
     OpenSslPtr<EVP_PKEY_CTX, EVP_PKEY_CTX_free> ctx(EVP_PKEY_CTX_new(key, nullptr), EVP_PKEY_CTX_free);
     if (!ctx || EVP_PKEY_decrypt_init(ctx.get()) <= 0) {
@@ -75,10 +78,10 @@ bool decryptsWithSha256Oaep(EVP_PKEY* key, std::string_view ciphertext)
     if (EVP_PKEY_CTX_set_rsa_padding(ctx.get(), RSA_PKCS1_OAEP_PADDING) <= 0) {
         return false;
     }
-    if (EVP_PKEY_CTX_set_rsa_oaep_md(ctx.get(), EVP_sha256()) <= 0) {
+    if (EVP_PKEY_CTX_set_rsa_oaep_md(ctx.get(), digest) <= 0) {
         return false;
     }
-    if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx.get(), EVP_sha256()) <= 0) {
+    if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx.get(), digest) <= 0) {
         return false;
     }
 
@@ -97,7 +100,7 @@ bool decryptsWithSha256Oaep(EVP_PKEY* key, std::string_view ciphertext)
         return false;
     }
     plaintext.resize(plainSize);
-    return plaintext == "galay-rsa-oaep-sha256";
+    return plaintext == expectedPlaintext;
 }
 
 void openSslGlobalInitIsCallOnce()
@@ -135,7 +138,18 @@ void rsaOaepUsesSha256ForOaepAndMgf1()
     const auto publicPem = publicKeyPem(key.get());
     auto encrypted = galay::ssl::rsaOaepEncryptWithPemPublicKey("galay-rsa-oaep-sha256", publicPem);
     assert(encrypted.has_value());
-    assert(decryptsWithSha256Oaep(key.get(), *encrypted));
+    assert(decryptsWithOaep(key.get(), *encrypted, EVP_sha256(), "galay-rsa-oaep-sha256"));
+}
+
+void rsaOaepSha1VariantUsesSha1ForOaepAndMgf1()
+{
+    auto key = generateRsaKey();
+    const auto publicPem = publicKeyPem(key.get());
+    auto encrypted = galay::ssl::rsaOaepSha1EncryptWithPemPublicKey(
+        "galay-rsa-oaep-sha1",
+        publicPem);
+    assert(encrypted.has_value());
+    assert(decryptsWithOaep(key.get(), *encrypted, EVP_sha1(), "galay-rsa-oaep-sha1"));
 }
 
 } // namespace
@@ -146,6 +160,7 @@ int main()
     hostnameReturnValueIsChecked();
     memoryBioInitializationIsIdempotent();
     rsaOaepUsesSha256ForOaepAndMgf1();
+    rsaOaepSha1VariantUsesSha1ForOaepAndMgf1();
     std::cout << "T14-SslSecurityLifecycle PASS\n";
     return 0;
 }

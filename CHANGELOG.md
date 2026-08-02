@@ -13,6 +13,7 @@
 
 ### Added
 
+- **新增全量验证回归覆盖**：补充 io_uring `connect(EISCONN)`、benchmark 测量合同与 `CompletionLatch` 生命周期测试，并扩展 Mongo replica set 单 seed 发现、读偏好、部分 seed 故障和 setName 不匹配集成场景。
 - **新增 SPSC 专用数据面与异步通道**：`galay-utils` 提供运行时容量 `SpscRingBuffer<T>` 与成员内持槽位的 `StaticSpscRingBuffer<T, N>`；`galay-kernel` 在两个公开头中提供 `Ring` / `StaticRing`、约 4 KiB 分块复用的 `UnboundedQueue`，以及支持 move-only、批量收发、调用方缓冲区与 timeout 的 `BoundedChannel<T, N>` / `UnboundedChannel<T>`。`BoundedChannel` 另提供 close/drain；动态 ring 与无界分块的构造或扩容失败通过显式错误或布尔结果返回。
 - **补齐 SPSC 正确性与跨语言性能验证**：新增 ring 核心、无界跨块复用、窄游标回绕、异步 timeout 竞争、非法容量/OOM、安装消费和最终 drain 回归测试；新增严格 1P1C paired runner，以相同 `uint64_t` 序列、容量、yield 退避、FIFO/数量/checksum 门禁和 ABBA 配对样本对照 Rust Crossbeam，并输出 bootstrap 95% 置信区间、CV、原始样本与二进制哈希。
 - **新增高性能有界 MPMC 异步通道**：`galay::mpmc::BoundedChannel<T>` 基于固定容量 Vyukov ring 提供线程安全的 `trySend()` / `tryRecv()`、协程 `send()` / `recv()` / `recvBatch()`、超时、关闭唤醒和 move-only 元素支持；关闭位与 reservation cursor 共用同一 `tail` 原子，保证 close 前已取得的 reservation 完成发布并排空后才返回 `kClosed`。Apple AArch64 竞争退避使用 `isb` CPU hint，CAS miss 在当前调用内保持用户态重试。
@@ -24,6 +25,8 @@
 
 ### Changed
 
+- **校正 kernel benchmark 的生产测量口径**：scheduler 场景改为验证 Runtime 对 IO scheduler 的 round-robin 分发与双 scheduler 扩展性，明确 reactor owner-affinity 下不启用 work stealing；UDP 改为固定时长持续压流并分离 measurement window 与 settled loss；RingBuffer 增加编译器可观测 checksum/barrier，区分 mmap 逻辑环绕与 vector 物理环绕，并明确仅代表单线程热缓存内存微基准。
+- **完善跨平台全量执行矩阵**：Linux/aarch64 对依赖未实现 stackful context 的 C tests/examples/benchmarks 按源码能力过滤，修正 libuv、自包含 Redis/RPC benchmark、长运行 MPSC benchmark、etcd/Redis 集成脚本和 HTTP/HTTP2 example 资源定位。
 - **收敛 SPSC 热路径、存储与公开文件边界**：纯 polling ring 使用单调游标、对端游标缓存和缓存行隔离，成功稳态无 CAS/原子 RMW；无界队列移除逐消息 consumed 原子写并把跨块分配下沉为冷路径。异步 waiter/timeout 控制面与极限吞吐数据面分离，内核实现收敛为 bounded/unbounded 两个公开头，ring 基础设施统一复用 `galay-utils/cache/spsc_ring_buffer.hpp`；编译期容量 specialization 不分配槽位内存。
 - **统一异步 I/O 文件与公开类型命名**：C++ 头文件和实现统一改为 `async_aio`、`async_tcp`、`async_udp`、`async_file_watcher`，公开类型改为 `AsyncAio`、`AsyncTcpSocket`、`AsyncUdpSocket`、`AsyncFileWatcher`；C wrapper 同步采用带 `_c` 后缀的新文件名，保留现有 C ABI 函数与句柄名称。
 - **异步同步原语归入 async 模块**：`async_mutex` 与 `async_waiter` 从 C++ `concurrency` 和 C `concurrency-c` 目录迁入对应 `async` / `async-c` 目录，并同步更新模块入口、安装边界、源码、文档、测试、示例与 benchmark 引用。
@@ -36,6 +39,8 @@
 
 ### Fixed
 
+- **修复跨后端与协议正确性问题**：io_uring connect 将 `EISCONN` 视为已连接，benchmark `CompletionLatch` 在报告完成前等待最后 arrival 退出同步对象，C UDP bridge 收敛 timeout/cancel 与 IO completion 竞争；同步 Mongo 支持 replica set 发现和读偏好选择，异步 Mongo 对未支持拓扑显式报错；MySQL `caching_sha2_password` 改用协议要求的 RSA OAEP-SHA1，MurmurHash3 改用 `memcpy` 消除未对齐读取 UB。
+- **修复全量测试中的返回值、并发与资源边界**：UDP benchmark、RingBuffer/readv 测试、timer 并发测试和 channel namespace 测试显式处理关键调度、socket option、计时器与 token 结果；测试 stdout 写入串行化，避免并行日志数据竞争。
 - **修复 SPSC 跨块与异步完成竞态**：修复无界队列跨块越界和回收链 double-free、有界 timeout 最终检查竞态、过期 timer 立即通知误唤醒，以及 benchmark 在 producer 完成后单次空读便退出造成的潜在伪失败；consumer 现在按预期数量完成最终 drain。
 - **修复全量构建中的 RPC etcd 注册变量重定义**：区分服务注册与 endpoint 注册的局部结果变量，消除两个测试/压力基准目标在同一作用域内重复声明导致的编译失败。
 - **修复 channel timeout 完成竞争与提前恢复风险**：新增延迟唤醒门和事务式完成状态机，使 timeout 与破坏性 enqueue/dequeue 只产生一个完成者；完成事件在 `await_suspend` 发布结束前只记录 pending，避免协程提前恢复并销毁仍在访问的 awaiter/channel。

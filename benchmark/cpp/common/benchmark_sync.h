@@ -13,55 +13,70 @@
 
 namespace galay::benchmark {
 
+/**
+ * @brief 可复用的 benchmark 完成闩锁。
+ *
+ * reset() 只能在上一轮没有并发 arrive()/wait()/ready() 时调用。调用方还必须保证
+ * arrival 总数不超过 target；wait()/ready() 报告完成后，最后一个有效 arrival 已不再
+ * 访问闩锁的 mutex 或 condition_variable，因此闩锁可以安全销毁。
+ */
 class CompletionLatch {
 public:
     explicit CompletionLatch(std::size_t target = 0)
-        : m_target(target) {}
+        : m_target(target),
+          m_ready(target == 0) {}
 
     void reset(std::size_t target) {
         std::lock_guard<std::mutex> lock(m_mutex);
         m_target = target;
-        m_count.store(0, std::memory_order_release);
+        m_count.store(0, std::memory_order_relaxed);
+        m_ready = target == 0;
+        if (m_ready) {
+            m_cv.notify_all();
+        }
     }
 
     void arrive(std::size_t count = 1) {
         if (count == 0) {
             return;
         }
+
+        const std::size_t target = m_target;
         const std::size_t current =
             m_count.fetch_add(count, std::memory_order_acq_rel) + count;
-        if (current >= m_target) {
-            std::lock_guard<std::mutex> lock(m_mutex);
+        if (current < target) {
+            return;
+        }
+
+        std::lock_guard<std::mutex> lock(m_mutex);
+        if (!m_ready) {
+            m_ready = true;
             m_cv.notify_all();
         }
     }
 
     [[nodiscard]] bool ready() const {
-        return m_count.load(std::memory_order_acquire) >= m_target;
+        std::lock_guard<std::mutex> lock(m_mutex);
+        return m_ready;
     }
 
     void wait() {
-        if (ready()) {
-            return;
-        }
         std::unique_lock<std::mutex> lock(m_mutex);
-        m_cv.wait(lock, [this]() { return ready(); });
+        m_cv.wait(lock, [this]() { return m_ready; });
     }
 
     template <typename Rep, typename Period>
     [[nodiscard]] bool waitFor(std::chrono::duration<Rep, Period> timeout) {
-        if (ready()) {
-            return true;
-        }
         std::unique_lock<std::mutex> lock(m_mutex);
-        return m_cv.wait_for(lock, timeout, [this]() { return ready(); });
+        return m_cv.wait_for(lock, timeout, [this]() { return m_ready; });
     }
 
 private:
-    std::atomic<std::size_t> m_count{0};
-    std::size_t m_target{0};
     mutable std::mutex m_mutex;
     std::condition_variable m_cv;
+    std::atomic<std::size_t> m_count{0};
+    std::size_t m_target{0};
+    bool m_ready{true};
 };
 
 class StartGate {

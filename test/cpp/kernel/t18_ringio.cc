@@ -12,6 +12,7 @@
 #include <atomic>
 #include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/common/buffer.h>
+#include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -229,8 +230,16 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] Starting...");
     AsyncTcpSocket listener;
 
-    listener.option().handleReuseAddr();
-    listener.option().handleNonBlock();
+    auto optionResult = listener.option().handleReuseAddr();
+    if (!optionResult) {
+        LogError("[Server] Failed to enable reuse addr: {}", optionResult.error().message());
+        co_return;
+    }
+    optionResult = listener.option().handleNonBlock();
+    if (!optionResult) {
+        LogError("[Server] Failed to enable non-block: {}", optionResult.error().message());
+        co_return;
+    }
 
     Host bindHost(IPType::IPV4, "127.0.0.1", 9091);
     auto bindResult = listener.bind(bindHost);
@@ -258,7 +267,13 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     LogInfo("[Server] Client connected from {}:{}", clientHost.ip(), clientHost.port());
 
     AsyncTcpSocket client(acceptResult.value());
-    client.option().handleNonBlock();
+    optionResult = client.option().handleNonBlock();
+    if (!optionResult) {
+        LogError("[Server] Failed to enable client non-block: {}", optionResult.error().message());
+        co_await client.close();
+        co_await listener.close();
+        co_return;
+    }
 
     // 使用 RingBuffer 接收数据
     DefaultRingBuffer recvBuffer(1024);
@@ -321,12 +336,16 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
 Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
     // 等待服务器就绪
     while (!g_server_ready) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        co_await galay::kernel::sleep(std::chrono::milliseconds(10));
     }
 
     LogInfo("[Client] Starting...");
     AsyncTcpSocket client;
-    client.option().handleNonBlock();
+    auto optionResult = client.option().handleNonBlock();
+    if (!optionResult) {
+        LogError("[Client] Failed to enable non-block: {}", optionResult.error().message());
+        co_return;
+    }
 
     Host serverHost(IPType::IPV4, "127.0.0.1", 9091);
     auto connectResult = co_await client.connect(serverHost);
@@ -409,11 +428,12 @@ int main() {
 
     scheduler.start();
 
-    // 启动服务器
-    scheduleTask(scheduler, ringBufferServer(&scheduler));
-
-    // 启动客户端
-    scheduleTask(scheduler, ringBufferClient(&scheduler));
+    if (!scheduleTask(scheduler, ringBufferServer(&scheduler)) ||
+        !scheduleTask(scheduler, ringBufferClient(&scheduler))) {
+        LogError("Failed to schedule RingBuffer server/client task");
+        scheduler.stop();
+        return 1;
+    }
 
     // 等待测试完成
     std::this_thread::sleep_for(std::chrono::seconds(3));

@@ -21,11 +21,10 @@ std::string getOpenSslError()
     return std::string(buffer);
 }
 
-} // namespace
-
-std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
+std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKeyAndDigest(
     std::string_view payload,
-    std::string_view pem_public_key)
+    std::string_view pem_public_key,
+    const EVP_MD* digest)
 {
     if (pem_public_key.empty()) {
         return std::unexpected("empty RSA public key");
@@ -59,12 +58,12 @@ std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
         EVP_PKEY_free(pkey);
         return std::unexpected("EVP_PKEY_CTX_set_rsa_padding failed: " + getOpenSslError());
     }
-    if (EVP_PKEY_CTX_set_rsa_oaep_md(ctx, EVP_sha256()) <= 0) {
+    if (EVP_PKEY_CTX_set_rsa_oaep_md(ctx, digest) <= 0) {
         EVP_PKEY_CTX_free(ctx);
         EVP_PKEY_free(pkey);
         return std::unexpected("EVP_PKEY_CTX_set_rsa_oaep_md failed: " + getOpenSslError());
     }
-    if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, EVP_sha256()) <= 0) {
+    if (EVP_PKEY_CTX_set_rsa_mgf1_md(ctx, digest) <= 0) {
         EVP_PKEY_CTX_free(ctx);
         EVP_PKEY_free(pkey);
         return std::unexpected("EVP_PKEY_CTX_set_rsa_mgf1_md failed: " + getOpenSslError());
@@ -96,6 +95,22 @@ std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
     EVP_PKEY_CTX_free(ctx);
     EVP_PKEY_free(pkey);
     return encrypted;
+}
+
+} // namespace
+
+std::expected<std::string, std::string> rsaOaepEncryptWithPemPublicKey(
+    std::string_view payload,
+    std::string_view pem_public_key)
+{
+    return rsaOaepEncryptWithPemPublicKeyAndDigest(payload, pem_public_key, EVP_sha256());
+}
+
+std::expected<std::string, std::string> rsaOaepSha1EncryptWithPemPublicKey(
+    std::string_view payload,
+    std::string_view pem_public_key)
+{
+    return rsaOaepEncryptWithPemPublicKeyAndDigest(payload, pem_public_key, EVP_sha1());
 }
 
 } // namespace galay::ssl

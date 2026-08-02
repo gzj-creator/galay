@@ -111,7 +111,7 @@ std::expected<std::string, std::string> AuthPlugin::cachingSha2FullAuth(const st
         }
     }
 
-    auto encrypted = galay::ssl::rsaOaepEncryptWithPemPublicKey(payload, public_key);
+    auto encrypted = galay::ssl::rsaOaepSha1EncryptWithPemPublicKey(payload, public_key);
     if (!encrypted) {
         return std::unexpected(encrypted.error());
     }

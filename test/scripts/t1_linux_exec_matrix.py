@@ -170,6 +170,32 @@ def main() -> int:
         matrix.single_executable_args("benchmark/c/kernel/benchmark_c_kernel_coro_tcp_iov_sendfile") == ("20",),
         "sendfile benchmark should run a short smoke workload",
     )
+    libuv_args = matrix.single_executable_args(
+        "benchmark/c/kernel/benchmark_c_kernel_libuv_echo_server"
+    )
+    check(
+        len(libuv_args) == 2 and libuv_args[0] == "tcp" and 1 <= int(libuv_args[1]) <= 65535,
+        "libuv echo server should receive a valid mode and port",
+    )
+    check(
+        matrix.classify_result(
+            "benchmark/cpp/kernel/benchmark_kernel_mpsc_unbounded_prefetch",
+            124,
+            True,
+            "",
+        ) == "LONG_RUNNING",
+        "MPSC prefetch stress benchmark timeout should be LONG_RUNNING",
+    )
+    for rel in (
+        "benchmark/c/redis/benchmark_c_redis_auth_pipeline_smoke",
+        "benchmark/cpp/rpc/benchmark_rpc_service_discovery_latency",
+    ):
+        check(not matrix.is_external_dep(rel), f"{rel} should not require an external service")
+        check(not matrix.is_long_running(rel), f"{rel} should receive the normal finite benchmark timeout")
+        check(
+            matrix.executable_timeout(rel, 30, 1, 3) == 30,
+            f"{rel} should receive the default timeout",
+        )
     ssl_pair = matrix.build_pair_plan(
         "examples/cpp/ssl/example_ssl_include_echo_client",
         ROOT / "build-local-full",

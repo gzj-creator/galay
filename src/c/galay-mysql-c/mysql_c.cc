@@ -1789,7 +1789,8 @@ C_IOResult galay_mysql_client_authenticate_async(galay_mysql_client_t* client,
             }
         }
 
-        auto encrypted = galay::ssl::rsaOaepEncryptWithPemPublicKey(password_payload, public_key_pem);
+        auto encrypted =
+            galay::ssl::rsaOaepSha1EncryptWithPemPublicKey(password_payload, public_key_pem);
         if (!encrypted || encrypted->size() > kMysqlWireMaxPacketPayload) {
             return io_result_from_status(GALAY_PROTOCOL_ERROR);
         }

@@ -18,6 +18,7 @@ function(galay_add_c_etcd_test source_file)
 endfunction()
 
 file(GLOB GALAY_C_ETCD_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+galay_filter_unsupported_c_coro_sources(GALAY_C_ETCD_TEST_SOURCES)
 foreach(test_source IN LISTS GALAY_C_ETCD_TEST_SOURCES)
     galay_add_c_etcd_test(${test_source})
 endforeach()

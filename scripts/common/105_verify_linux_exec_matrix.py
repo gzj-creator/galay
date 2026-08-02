@@ -40,6 +40,11 @@ EXTERNAL_PATTERNS = (
     "otlp",
 )
 
+SELF_CONTAINED_BENCHMARKS = (
+    "benchmark/c/redis/benchmark_c_redis_auth_pipeline_smoke",
+    "benchmark/cpp/rpc/benchmark_rpc_service_discovery_latency",
+)
+
 PEER_PATTERNS = (
     "_client",
     "client_",
@@ -60,6 +65,7 @@ LONG_RUNNING_PATTERNS = (
     "_latency",
     "_contention",
     "fast_path",
+    "benchmark_kernel_mpsc_unbounded_prefetch",
 )
 
 CRASH_CODES = {
@@ -104,6 +110,8 @@ def has_any(rel: str, patterns: tuple[str, ...]) -> bool:
 
 def is_external_dep(rel: str) -> bool:
     rel = normalize_rel(rel)
+    if has_any(rel, SELF_CONTAINED_BENCHMARKS):
+        return False
     return has_any(rel, EXTERNAL_PATTERNS)
 
 
@@ -116,6 +124,8 @@ def needs_peer(rel: str) -> bool:
 
 def is_long_running(rel: str) -> bool:
     rel = normalize_rel(rel)
+    if has_any(rel, SELF_CONTAINED_BENCHMARKS):
+        return False
     if is_external_dep(rel) or needs_peer(rel):
         return False
     return has_any(rel, LONG_RUNNING_PATTERNS)
@@ -218,6 +228,8 @@ def single_executable_args(rel: str) -> tuple[str, ...]:
         return ("100",)
     if rel == "benchmark/c/kernel/benchmark_c_kernel_coro_tcp_iov_sendfile":
         return ("20",)
+    if rel == "benchmark/c/kernel/benchmark_c_kernel_libuv_echo_server":
+        return ("tcp", str(find_free_port()))
     return ()
 
 
@@ -233,9 +245,9 @@ def source_root() -> Path:
 
 def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:
     rel = normalize_rel(rel)
-    port = find_free_port()
 
     if rel == "benchmark/c/kernel/benchmark_c_kernel_tcp_socket_client_throughput":
+        port = find_free_port()
         return PairPlan(
             server_rel="benchmark/c/kernel/benchmark_c_kernel_tcp_socket_server_throughput",
             server_args=(str(port), "1"),
@@ -245,6 +257,7 @@ def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:
         )
 
     if rel == "benchmark/cpp/ssl/benchmark_ssl_tls_client_throughput":
+        port = find_free_port()
         cert_dir = source_root() / "test" / "cpp" / "ssl" / "certs"
         return PairPlan(
             server_rel="benchmark/cpp/ssl/benchmark_ssl_tls_server_throughput",
@@ -261,6 +274,7 @@ def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:
         )
 
     if rel == "examples/c/ws/example_c_ws_echo_client":
+        port = find_free_port()
         return PairPlan(
             server_rel="examples/c/ws/example_c_ws_echo_server",
             server_args=(str(port),),
@@ -277,6 +291,7 @@ def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:
             "examples/cpp/ssl/example_ssl_import_echo_server",
     }
     if rel in ssl_pairs:
+        port = find_free_port()
         cert_dir = source_root() / "test" / "cpp" / "ssl" / "certs"
         return PairPlan(
             server_rel=ssl_pairs[rel],
@@ -293,6 +308,7 @@ def build_pair_plan(rel: str, build_root: Path) -> PairPlan | None:
             "examples/cpp/http/example_http_import_echo_server",
     }
     if rel in http_pairs:
+        port = find_free_port()
         return PairPlan(
             server_rel=http_pairs[rel],
             server_args=(str(port),),

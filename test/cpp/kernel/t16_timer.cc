@@ -320,6 +320,8 @@ void test_concurrent_add_and_cancel() {
 
     const int numTimers = 1000;
     std::atomic<int> firedCount{0};
+    std::atomic<int> publishedCount{0};
+    std::atomic<bool> addFailed{false};
     std::vector<Timer::ptr> timers(numTimers);
 
     // 线程1：添加定时器
@@ -328,23 +330,30 @@ void test_concurrent_add_and_cancel() {
             auto timer = std::make_shared<CBTimer>(100ms, [&firedCount]() {
                 firedCount.fetch_add(1, std::memory_order_relaxed);
             });
+            if (!scheduler->addTimer(timer)) {
+                addFailed.store(true, std::memory_order_release);
+            }
             timers[i] = timer;
-            scheduler->addTimer(timer);
+            publishedCount.store(i + 1, std::memory_order_release);
         }
     });
 
     // 线程2：取消部分定时器
     std::thread canceller([&]() {
-        std::this_thread::sleep_for(10ms);  // 等待一些定时器被添加
         for (int i = 0; i < numTimers; i += 2) {
-            if (timers[i]) {
-                timers[i]->cancel();
+            while (publishedCount.load(std::memory_order_acquire) <= i) {
+                std::this_thread::yield();
             }
+            timers[i]->cancel();
         }
     });
 
     adder.join();
     canceller.join();
+    if (addFailed.load(std::memory_order_acquire)) {
+        std::cerr << "Failed to add a timer during concurrent add/cancel test" << std::endl;
+        std::abort();
+    }
 
     // 等待定时器触发
     std::this_thread::sleep_for(150ms);

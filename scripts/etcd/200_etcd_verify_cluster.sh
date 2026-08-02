@@ -32,11 +32,13 @@ if [[ ! -d "${build_dir}" ]]; then
 fi
 
 run cmake --build "${build_dir}" --target \
-  T1-EtcdSmoke T2-EtcdPrefixOps T3-EtcdPipeline T4-AsyncEtcdSmoke T5-AsyncEtcdPipeline T9-AsyncEtcdTaskWatch
+  etcd_t1_smoke etcd_t2_prefix etcd_t3_pipe etcd_t4_smoke etcd_t5_pipe etcd_t8_task_watch \
+  etcd_t13_cluster_integration etcd_t14_async_cluster_integration
 
 mkdir -p "${base_dir}"
 
 initial_cluster='n1=http://127.0.0.1:12380,n2=http://127.0.0.1:12382,n3=http://127.0.0.1:12384'
+cluster_endpoints='http://127.0.0.1:12379,http://127.0.0.1:12381,http://127.0.0.1:12383'
 
 start_node()
 {
@@ -73,15 +75,19 @@ done
 run env ETCDCTL_API=3 etcdctl --endpoints="${endpoint}" endpoint status --write-out=table
 run env ETCDCTL_API=3 etcdctl --endpoints=http://127.0.0.1:12379,http://127.0.0.1:12381,http://127.0.0.1:12383 endpoint health
 
-run "${build_dir}/test/etcd/T1-EtcdSmoke" "${endpoint}"
-run "${build_dir}/test/etcd/T2-EtcdPrefixOps" "${endpoint}"
-run "${build_dir}/test/etcd/T3-EtcdPipeline" "${endpoint}"
-run "${build_dir}/test/etcd/T4-AsyncEtcdSmoke" "${endpoint}"
-run "${build_dir}/test/etcd/T5-AsyncEtcdPipeline" "${endpoint}"
-run "${build_dir}/test/etcd/T9-AsyncEtcdTaskWatch" "${endpoint}"
+run env GALAY_IT_ENABLE=1 "${build_dir}/test/cpp/etcd/etcd_t1_smoke" "${endpoint}"
+run env GALAY_IT_ENABLE=1 "${build_dir}/test/cpp/etcd/etcd_t2_prefix" "${endpoint}"
+run env GALAY_IT_ENABLE=1 "${build_dir}/test/cpp/etcd/etcd_t3_pipe" "${endpoint}"
+run env GALAY_IT_ENABLE=1 "${build_dir}/test/cpp/etcd/etcd_t4_smoke" "${endpoint}"
+run env GALAY_IT_ENABLE=1 "${build_dir}/test/cpp/etcd/etcd_t5_pipe" "${endpoint}"
+run env GALAY_IT_ENABLE=1 "${build_dir}/test/cpp/etcd/etcd_t8_task_watch" "${endpoint}"
+run env GALAY_IT_ENABLE=1 GALAY_ETCD_ENDPOINTS="${cluster_endpoints}" \
+  "${build_dir}/test/cpp/etcd/etcd_t13_cluster_integration"
+run env GALAY_IT_ENABLE=1 GALAY_ETCD_ENDPOINTS="${cluster_endpoints}" \
+  "${build_dir}/test/cpp/etcd/etcd_t14_async_cluster_integration"
 
-sync_example="${build_dir}/examples/etcd/example_etcd_include_sync_basic"
-async_example="${build_dir}/examples/etcd/example_etcd_include_async_basic"
+sync_example="${build_dir}/examples/cpp/etcd/example_etcd_include_sync_basic"
+async_example="${build_dir}/examples/cpp/etcd/example_etcd_include_async_basic"
 sync_example_available=0
 
 if [[ -f "${sync_example}" ]]; then

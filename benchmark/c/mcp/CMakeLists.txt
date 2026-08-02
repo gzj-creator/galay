@@ -10,6 +10,7 @@ function(galay_add_c_mcp_benchmark target_name source_file)
 endfunction()
 
 file(GLOB GALAY_C_MCP_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+galay_filter_unsupported_c_coro_sources(GALAY_C_MCP_BENCHMARK_SOURCES)
 foreach(benchmark_source IN LISTS GALAY_C_MCP_BENCHMARK_SOURCES)
     get_filename_component(source_name "${benchmark_source}" NAME_WE)
     string(REGEX REPLACE "^b[0-9]+_" "" scenario_name "${source_name}")

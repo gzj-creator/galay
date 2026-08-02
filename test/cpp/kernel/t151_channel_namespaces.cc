@@ -525,6 +525,9 @@ bool checkMpmcUnboundedWaiterHandshake()
 {
     galay::mpmc::UnboundedChannel<int> publicationChannel;
     auto producerToken = publicationChannel.makeProducerToken();
+    if (!producerToken.valid()) {
+        return false;
+    }
     const uint64_t defaultBefore =
         galay::mpmc::UnboundedChannelTestAccess::defaultProducerActiveState(
             publicationChannel);
@@ -538,10 +541,11 @@ bool checkMpmcUnboundedWaiterHandshake()
     const uint64_t tokenAfter =
         galay::mpmc::UnboundedChannelTestAccess::tokenActiveState<int>(producerToken);
     auto heldProducerToken = publicationChannel.makeProducerToken();
-    const bool permitHeld =
-        heldProducerToken.valid() &&
-        galay::mpmc::UnboundedChannelTestAccess::acquireSendPermit(
-            publicationChannel, heldProducerToken);
+    if (!heldProducerToken.valid()) {
+        return false;
+    }
+    const bool permitHeld = galay::mpmc::UnboundedChannelTestAccess::acquireSendPermit(
+        publicationChannel, heldProducerToken);
     const uint64_t activeState =
         galay::mpmc::UnboundedChannelTestAccess::tokenActiveState<int>(
             heldProducerToken);

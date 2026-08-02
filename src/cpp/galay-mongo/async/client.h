@@ -215,8 +215,8 @@ public:
 
     /**
      * @brief 使用完整配置连接到 MongoDB（含认证）
-     * @param config MongoDB 连接配置
-     * @return 连接成功返回 true，失败返回 MongoError
+     * @param config MongoDB 连接配置；当前多 seed/replica set 拓扑会显式返回不支持错误
+     * @return 连接成功返回 true，失败返回 MongoError；不静默忽略尚未支持的拓扑配置
      */
     MongoConnectAwaitable connect(MongoConfig config);
 

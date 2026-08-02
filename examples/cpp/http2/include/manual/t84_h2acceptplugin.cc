@@ -22,6 +22,10 @@ using namespace galay::http2;
 using namespace galay::kernel;
 using namespace std::chrono_literals;
 
+#ifndef GALAY_SOURCE_DIR
+#define GALAY_SOURCE_DIR "."
+#endif
+
 namespace {
 
 [[noreturn]] void fail(const char* message)
@@ -33,6 +37,7 @@ namespace {
 std::string resolveHttp2Asset(const char* name)
 {
     const char* dirs[] = {
+        GALAY_SOURCE_DIR "/test/cpp/http2",
         "test/cpp/http2",
         "../test/cpp/http2",
         "../../test/cpp/http2",

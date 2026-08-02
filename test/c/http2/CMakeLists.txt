@@ -11,6 +11,7 @@ function(galay_add_c_http2_test target_name source_file)
 endfunction()
 
 file(GLOB GALAY_C_HTTP2_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+galay_filter_unsupported_c_coro_sources(GALAY_C_HTTP2_TEST_SOURCES)
 foreach(test_source IN LISTS GALAY_C_HTTP2_TEST_SOURCES)
     get_filename_component(test_name "${test_source}" NAME_WE)
     galay_add_c_http2_test(${test_name} ${test_source})

@@ -212,8 +212,18 @@ struct CoroUdpOperationBase: public CoroUdpOperationInterface {
         if (finished()) {
             return true;
         }
-        const CoroUdpCompletionPhase phase =
-            m_state.phase.load(std::memory_order_acquire);
+        CoroUdpCompletionPhase phase = m_state.phase.load(std::memory_order_acquire);
+        if (phase == CoroUdpCompletionPhase::Pending) {
+            CoroUdpCompletionPhase expected = CoroUdpCompletionPhase::Pending;
+            if (m_state.phase.compare_exchange_strong(expected,
+                                                      CoroUdpCompletionPhase::Completed,
+                                                      std::memory_order_acq_rel,
+                                                      std::memory_order_acquire)) {
+                phase = CoroUdpCompletionPhase::Completed;
+            } else {
+                phase = expected;
+            }
+        }
         if (phase == CoroUdpCompletionPhase::TimedOut ||
             phase == CoroUdpCompletionPhase::Cancelled) {
             setFinished();
@@ -290,7 +300,7 @@ protected:
                                                    CoroUdpCompletionPhase::IoCompleting,
                                                    std::memory_order_acq_rel,
                                                    std::memory_order_acquire)) {
-            return expected == CoroUdpCompletionPhase::Completed;
+            return true;
         }
         const bool completed = fn();
         m_state.phase.store(completed ? CoroUdpCompletionPhase::Completed

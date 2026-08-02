@@ -10,6 +10,7 @@ function(galay_add_c_kernel_test target_name source_file)
 endfunction()
 
 file(GLOB GALAY_C_KERNEL_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+galay_filter_unsupported_c_coro_sources(GALAY_C_KERNEL_TEST_SOURCES)
 foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)
     get_filename_component(source_name "${test_source}" NAME_WE)
     if((source_name STREQUAL "t23_coro_task" OR

@@ -22,11 +22,11 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
     set(GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON
-        "Linux/aarch64 stackful C coroutine context switch is not implemented; C coroutine APIs return ENOTSUP and direct coroutine tests/benchmarks/examples are skipped."
+        "Linux/aarch64 stackful C coroutine context switch is not implemented; C coroutine APIs return ENOTSUP and coroutine-dependent C tests/benchmarks/examples are skipped."
         CACHE INTERNAL "C coroutine context unsupported reason" FORCE)
 else()
     set(GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON
-        "${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR} stackful C coroutine context switch is not implemented; C coroutine APIs return ENOTSUP and direct coroutine tests/benchmarks/examples are skipped."
+        "${CMAKE_SYSTEM_NAME}/${CMAKE_SYSTEM_PROCESSOR} stackful C coroutine context switch is not implemented; C coroutine APIs return ENOTSUP and coroutine-dependent C tests/benchmarks/examples are skipped."
         CACHE INTERNAL "C coroutine context unsupported reason" FORCE)
 endif()
 
@@ -35,6 +35,25 @@ if(GALAY_C_CORO_CONTEXT_SUPPORTED)
 else()
     message(STATUS "C stackful coroutine context support: disabled. ${GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON}")
 endif()
+
+function(galay_filter_unsupported_c_coro_sources source_list)
+    if(GALAY_C_CORO_CONTEXT_SUPPORTED)
+        return()
+    endif()
+
+    set(filtered_sources)
+    foreach(source_file IN LISTS ${source_list})
+        file(READ "${source_file}" source_text)
+        string(FIND "${source_text}" "galay_coro_spawn" spawn_position)
+        if(spawn_position EQUAL -1)
+            list(APPEND filtered_sources "${source_file}")
+        else()
+            get_filename_component(source_name "${source_file}" NAME_WE)
+            message(STATUS "Skipping ${source_name}: ${GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON}")
+        endif()
+    endforeach()
+    set(${source_list} "${filtered_sources}" PARENT_SCOPE)
+endfunction()
 
 add_library(galay-c-kernel ${galay_c_kernel_sources})
 add_library(galay::c-kernel ALIAS galay-c-kernel)

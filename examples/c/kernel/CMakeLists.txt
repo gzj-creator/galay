@@ -10,6 +10,7 @@ function(galay_add_c_kernel_example target_name source_file)
 endfunction()
 
 file(GLOB GALAY_C_KERNEL_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+galay_filter_unsupported_c_coro_sources(GALAY_C_KERNEL_EXAMPLE_SOURCES)
 foreach(example_source IN LISTS GALAY_C_KERNEL_EXAMPLE_SOURCES)
     get_filename_component(source_name "${example_source}" NAME_WE)
     if(source_name STREQUAL "e12_coro_tcp_echo" AND NOT GALAY_C_CORO_CONTEXT_SUPPORTED)

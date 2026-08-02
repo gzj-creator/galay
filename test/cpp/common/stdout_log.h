@@ -2,20 +2,29 @@
 #define GALAY_TEST_STDOUT_LOG_H
 
 #include <iostream>
+#include <mutex>
 #include <utility>
 
 namespace galay::test::stdoutlog
 {
 namespace detail
 {
+inline std::mutex& outputMutex()
+{
+    static std::mutex mutex;
+    return mutex;
+}
+
 inline void writeLine(std::ostream &os)
 {
+    std::lock_guard lock(outputMutex());
     os << '\n';
 }
 
 template<typename First, typename... Rest>
 inline void writeLine(std::ostream &os, First&& first, Rest&&... rest)
 {
+    std::lock_guard lock(outputMutex());
     os << std::forward<First>(first);
     ((os << ' ' << std::forward<Rest>(rest)), ...);
     os << '\n';

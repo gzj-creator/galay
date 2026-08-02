@@ -378,7 +378,7 @@ inline std::expected<size_t, IOError> handleWritev(struct io_uring_cqe* cqe)
 inline std::expected<void, IOError> handleConnect(struct io_uring_cqe* cqe)
 {
     int res = cqe->res;
-    if (res == 0) {
+    if (res == 0 || -res == EISCONN) {
         return {};
     }
     if (-res == EAGAIN || -res == EWOULDBLOCK || -res == EINTR) {

@@ -7,8 +7,11 @@
 
 #include <algorithm>
 #include <charconv>
+#include <chrono>
 #include <exception>
 #include <limits>
+#include <optional>
+#include <thread>
 
 namespace galay::mongo
 {
@@ -56,6 +59,134 @@ MongoDocument buildClientMetadata(const std::string& app_name)
     return client;
 }
 
+struct MongoServerCandidate
+{
+    MongoEndpoint endpoint;
+    std::chrono::steady_clock::duration round_trip_time{};
+    bool primary = false;
+    bool secondary = false;
+};
+
+std::optional<MongoEndpoint> parseAdvertisedEndpoint(const std::string& text)
+{
+    const size_t colon = text.rfind(':');
+    if (colon == std::string::npos || colon == 0 || colon + 1 >= text.size()) {
+        return std::nullopt;
+    }
+
+    uint32_t port = 0;
+    const char* begin = text.data() + colon + 1;
+    const char* end = text.data() + text.size();
+    const auto parsed = std::from_chars(begin, end, port);
+    if (parsed.ec != std::errc{} || parsed.ptr != end || port == 0 || port > 65535) {
+        return std::nullopt;
+    }
+
+    MongoEndpoint endpoint;
+    endpoint.host = text.substr(0, colon);
+    endpoint.port = static_cast<uint16_t>(port);
+    return endpoint;
+}
+
+void appendEndpointIfMissing(std::vector<MongoEndpoint>& endpoints, MongoEndpoint endpoint)
+{
+    const auto duplicate = std::find_if(
+        endpoints.begin(),
+        endpoints.end(),
+        [&endpoint](const MongoEndpoint& current) {
+            return current.host == endpoint.host && current.port == endpoint.port;
+        });
+    if (duplicate == endpoints.end()) {
+        endpoints.push_back(std::move(endpoint));
+    }
+}
+
+void appendAdvertisedEndpoints(const MongoDocument& hello,
+                               std::vector<MongoEndpoint>& endpoints)
+{
+    const auto append_text = [&endpoints](const std::string& text) {
+        auto endpoint = parseAdvertisedEndpoint(text);
+        if (endpoint) {
+            appendEndpointIfMissing(endpoints, std::move(*endpoint));
+        }
+    };
+
+    if (const MongoValue* hosts = hello.find("hosts"); hosts != nullptr && hosts->isArray()) {
+        for (const auto& host : hosts->toArray().values()) {
+            if (host.isString()) {
+                append_text(host.toString());
+            }
+        }
+    }
+    if (const MongoValue* passives = hello.find("passives");
+        passives != nullptr && passives->isArray()) {
+        for (const auto& host : passives->toArray().values()) {
+            if (host.isString()) {
+                append_text(host.toString());
+            }
+        }
+    }
+
+    const std::string primary = hello.getString("primary");
+    if (!primary.empty()) {
+        append_text(primary);
+    }
+}
+
+bool serverMatchesPreference(const MongoServerCandidate& candidate,
+                             MongoReadPreference preference)
+{
+    switch (preference) {
+    case MongoReadPreference::kPrimary:
+        return candidate.primary;
+    case MongoReadPreference::kPrimaryPreferred:
+    case MongoReadPreference::kSecondaryPreferred:
+    case MongoReadPreference::kNearest:
+        return candidate.primary || candidate.secondary;
+    case MongoReadPreference::kSecondary:
+        return candidate.secondary;
+    }
+    return false;
+}
+
+const MongoServerCandidate* selectServer(
+    const std::vector<MongoServerCandidate>& candidates,
+    MongoReadPreference preference)
+{
+    const auto fastest = [&candidates](bool primary, bool secondary) {
+        const MongoServerCandidate* selected = nullptr;
+        for (const auto& candidate : candidates) {
+            if ((primary && candidate.primary) || (secondary && candidate.secondary)) {
+                if (selected == nullptr ||
+                    candidate.round_trip_time < selected->round_trip_time) {
+                    selected = &candidate;
+                }
+            }
+        }
+        return selected;
+    };
+
+    switch (preference) {
+    case MongoReadPreference::kPrimary:
+        return fastest(true, false);
+    case MongoReadPreference::kPrimaryPreferred:
+        if (const auto* primary = fastest(true, false); primary != nullptr) {
+            return primary;
+        }
+        return fastest(false, true);
+    case MongoReadPreference::kSecondary:
+        return fastest(false, true);
+    case MongoReadPreference::kSecondaryPreferred:
+        if (const auto* secondary = fastest(false, true); secondary != nullptr) {
+            return secondary;
+        }
+        return fastest(true, false);
+    case MongoReadPreference::kNearest:
+        return fastest(true, true);
+    }
+    return nullptr;
+}
+
 } // namespace
 
 MongoClient::MongoClient() = default;
@@ -87,34 +218,158 @@ MongoClient& MongoClient::operator=(MongoClient&& other) noexcept
 
 MongoVoidResult MongoClient::connect(const MongoConfig& config)
 {
-    m_config = config;
+    const auto connect_and_hello = [this](const MongoConfig& candidate) -> MongoResult {
+        m_config = candidate;
+        const auto conn_options = protocol::Connection::ConnectOptions::fromMongoConfig(candidate);
+        auto connected = m_connection.connect(conn_options);
+        if (!connected) {
+            return std::unexpected(connected.error());
+        }
 
-    const auto conn_options = protocol::Connection::ConnectOptions::fromMongoConfig(config);
-    auto connected = m_connection.connect(conn_options);
-    if (!connected) {
-        return std::unexpected(connected.error());
+        m_next_request_id = 1;
+        MongoDocument hello;
+        hello.append("hello", int32_t(1));
+        hello.append("helloOk", true);
+        hello.append("client", buildClientMetadata(candidate.app_name));
+        const std::string hello_db = candidate.hello_database.empty()
+            ? "admin"
+            : candidate.hello_database;
+        return runCommandRequest(hello_db, hello, true);
+    };
+
+    const bool topology_requested =
+        !config.seeds.empty() ||
+        !config.topology.replica_set_name.empty() ||
+        config.topology.read_preference != MongoReadPreference::kPrimary;
+    if (!topology_requested) {
+        auto hello_result = connect_and_hello(config);
+        if (!hello_result) {
+            close();
+            return std::unexpected(hello_result.error());
+        }
+
+        auto auth_result = authenticateIfNeeded(config);
+        if (!auth_result) {
+            close();
+            return auth_result;
+        }
+        return {};
     }
 
-    m_next_request_id = 1;
-
-    MongoDocument hello;
-    hello.append("hello", int32_t(1));
-    hello.append("helloOk", true);
-    hello.append("client", buildClientMetadata(config.app_name));
-    const std::string hello_db = config.hello_database.empty() ? "admin" : config.hello_database;
-    auto hello_result = runCommandRequest(hello_db, hello, true);
-    if (!hello_result) {
-        close();
-        return std::unexpected(hello_result.error());
+    std::vector<MongoEndpoint> endpoints = config.seeds;
+    if (endpoints.empty()) {
+        endpoints.push_back({config.host, config.port});
     }
 
-    auto auth_result = authenticateIfNeeded(config);
-    if (!auth_result) {
-        close();
-        return auth_result;
+    const auto timeout = std::max(config.topology.server_selection_timeout,
+                                  std::chrono::milliseconds(0));
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    std::optional<MongoError> last_error;
+    bool first_scan = true;
+
+    while (first_scan || std::chrono::steady_clock::now() < deadline) {
+        first_scan = false;
+        std::vector<MongoServerCandidate> candidates;
+
+        for (size_t index = 0; index < endpoints.size(); ++index) {
+            MongoConfig candidate_config = config;
+            candidate_config.host = endpoints[index].host;
+            candidate_config.port = endpoints[index].port;
+
+            const auto now = std::chrono::steady_clock::now();
+            if (now < deadline) {
+                const auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    deadline - now);
+                const auto remaining_count = std::max<int64_t>(1, remaining.count());
+                candidate_config.connect_timeout_ms = static_cast<uint32_t>(
+                    std::min<int64_t>(candidate_config.connect_timeout_ms, remaining_count));
+            } else if (timeout == std::chrono::milliseconds(0)) {
+                candidate_config.connect_timeout_ms = 1;
+            }
+
+            const auto started = std::chrono::steady_clock::now();
+            auto hello_result = connect_and_hello(candidate_config);
+            const auto round_trip_time = std::chrono::steady_clock::now() - started;
+            if (!hello_result) {
+                last_error = hello_result.error();
+                close();
+                continue;
+            }
+
+            const MongoDocument& hello = hello_result->document();
+            appendAdvertisedEndpoints(hello, endpoints);
+
+            const std::string set_name = hello.getString("setName");
+            if (!config.topology.replica_set_name.empty() &&
+                set_name != config.topology.replica_set_name) {
+                last_error = MongoError(
+                    MONGO_ERROR_SERVER,
+                    "Replica set mismatch for " + candidate_config.host + ":" +
+                        std::to_string(candidate_config.port));
+                close();
+                continue;
+            }
+
+            MongoServerCandidate candidate;
+            candidate.endpoint = endpoints[index];
+            candidate.round_trip_time = round_trip_time;
+            candidate.primary = hello.getBool("isWritablePrimary", false) ||
+                                hello.getBool("ismaster", false);
+            candidate.secondary = hello.getBool("secondary", false);
+            if (candidate.primary || candidate.secondary) {
+                candidates.push_back(std::move(candidate));
+            }
+            close();
+        }
+
+        const MongoServerCandidate* selected =
+            selectServer(candidates, config.topology.read_preference);
+        if (selected != nullptr) {
+            MongoConfig selected_config = config;
+            selected_config.host = selected->endpoint.host;
+            selected_config.port = selected->endpoint.port;
+
+            auto hello_result = connect_and_hello(selected_config);
+            if (hello_result) {
+                const MongoDocument& hello = hello_result->document();
+                const std::string set_name = hello.getString("setName");
+                MongoServerCandidate confirmed;
+                confirmed.endpoint = selected->endpoint;
+                confirmed.primary = hello.getBool("isWritablePrimary", false) ||
+                                    hello.getBool("ismaster", false);
+                confirmed.secondary = hello.getBool("secondary", false);
+
+                const bool set_matches = config.topology.replica_set_name.empty() ||
+                    set_name == config.topology.replica_set_name;
+                if (set_matches &&
+                    serverMatchesPreference(confirmed, config.topology.read_preference)) {
+                    auto auth_result = authenticateIfNeeded(selected_config);
+                    if (!auth_result) {
+                        close();
+                        return auth_result;
+                    }
+                    return {};
+                }
+
+                last_error = MongoError(MONGO_ERROR_SERVER,
+                                        "Selected MongoDB server changed role or replica set");
+            } else {
+                last_error = hello_result.error();
+            }
+            close();
+        }
+
+        if (std::chrono::steady_clock::now() >= deadline) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
 
-    return {};
+    std::string message = "MongoDB server selection timed out";
+    if (last_error) {
+        message += ": " + last_error->message();
+    }
+    return std::unexpected(MongoError(MONGO_ERROR_TIMEOUT, std::move(message)));
 }
 
 MongoVoidResult MongoClient::connect(const std::string& host,

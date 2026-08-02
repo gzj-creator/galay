@@ -877,6 +877,18 @@ struct AsyncMongoClientInternals
 
     static MongoConnectAwaitable connect(AsyncMongoClient& client, MongoConfig config)
     {
+        if (config.seeds.size() > 1 ||
+            !config.topology.replica_set_name.empty() ||
+            config.topology.read_preference != MongoReadPreference::kPrimary) {
+            co_return std::unexpected(MongoError(
+                MONGO_ERROR_UNSUPPORTED,
+                "Async MongoDB replica set server selection is not supported"));
+        }
+        if (!config.seeds.empty()) {
+            config.host = config.seeds.front().host;
+            config.port = config.seeds.front().port;
+        }
+
         client.m_ring_buffer.clear();
         client.m_decode_scratch.clear();
 

@@ -19,6 +19,10 @@
 using namespace galay::http;
 using namespace galay::kernel;
 
+#ifndef GALAY_SOURCE_DIR
+#define GALAY_SOURCE_DIR "."
+#endif
+
 namespace {
 
 Task<void> upstreamEcho(HttpConn& conn, HttpRequest req)
@@ -136,6 +140,7 @@ Task<void> upstreamStream(HttpConn& conn, HttpRequest req)
 std::string resolveStaticDir()
 {
     const std::string candidates[] = {
+        GALAY_SOURCE_DIR "/test/cpp/http/static_files",
         "./test/cpp/http/static_files",
         "../test/cpp/http/static_files",
         "../../test/cpp/http/static_files",
