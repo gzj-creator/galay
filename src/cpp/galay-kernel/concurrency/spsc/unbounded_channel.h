@@ -164,7 +164,7 @@ public:
             }
             destroyChain(m_consumer.block);
         }
-        Block* recycled = m_recycled.exchange(nullptr, std::memory_order_acq_rel);
+        Block* recycled = m_recycled.exchange(nullptr, std::memory_order_relaxed);
         destroyChain(recycled);
     }
 
@@ -362,9 +362,6 @@ private:
         if (block == nullptr) {
             block = new (std::nothrow) Block;
         }
-        if (block != nullptr) {
-            block->next.store(nullptr, std::memory_order_relaxed);
-        }
         return block;
     }
 
@@ -428,7 +425,9 @@ private:
         if (consumer.index != kBlockCapacity) {
             return true;
         }
-        Block* next = consumer.block->next.load(std::memory_order_acquire);
+        // cachedPublished comes from the producer's release publication after
+        // the next-block link, so no second acquire is needed at the boundary.
+        Block* next = consumer.block->next.load(std::memory_order_relaxed);
         if (next == nullptr) {
             return false;
         }
@@ -436,7 +435,9 @@ private:
         consumer.block = next;
         consumer.index = 0;
         retired->next.store(nullptr, std::memory_order_relaxed);
-        Block* displaced = m_recycled.exchange(retired, std::memory_order_acq_rel);
+        // Only the producer consumes this publication; the displaced pointer
+        // was installed earlier by this same consumer.
+        Block* displaced = m_recycled.exchange(retired, std::memory_order_release);
         if (displaced != nullptr) {
             delete displaced;
         }
@@ -746,13 +747,17 @@ public:
         // construct_at 的返回值只回显目标地址，发布由 cursor 完成。
         ++producer.index;
 
-        // RMW 与首次 waiter 注册的 fetch_add(0) 组成无丢失唤醒握手；在 waiter
-        // 路径启用前跳过 waiter cache-line 访问，b25 1P1C 由约 17M 提升到约 108M msg/s。
+        // Polling-only sends use a release store; once waiter registration has
+        // started, publishProducerCount switches to the acq_rel RMW handshake
+        // paired with the waiter's fetch_add(0).
+        bool waiterPathUsed = false;
         const size_t previous =
-            producer.published.fetch_add(1, std::memory_order_acq_rel);
+            publishProducerCount(producer, 1, waiterPathUsed);
         const size_t published = previous + 1;
+        // WaiterPhase publishes waiter state; this monotonic flag only skips the
+        // control path before its first use and does not carry waiter data.
         if (immediately ||
-            m_waiterPathUsed.load(std::memory_order_acquire)) {
+            waiterPathUsed) {
             notifyConsumer(previous, published, immediately);
         }
         return true;
@@ -796,11 +801,12 @@ public:
             ++producer.index;
         }
 
+        bool waiterPathUsed = false;
         const size_t previous =
-            producer.published.fetch_add(count, std::memory_order_acq_rel);
+            publishProducerCount(producer, count, waiterPathUsed);
         const size_t published = previous + count;
         if (immediately ||
-            m_waiterPathUsed.load(std::memory_order_acquire)) {
+            waiterPathUsed) {
             notifyConsumer(previous, published, immediately);
         }
         return true;
@@ -833,11 +839,12 @@ public:
             ++producer.index;
         }
 
+        bool waiterPathUsed = false;
         const size_t previous =
-            producer.published.fetch_add(count, std::memory_order_acq_rel);
+            publishProducerCount(producer, count, waiterPathUsed);
         const size_t published = previous + count;
         if (immediately ||
-            m_waiterPathUsed.load(std::memory_order_acquire)) {
+            waiterPathUsed) {
             notifyConsumer(previous, published, immediately);
         }
         return true;
@@ -890,8 +897,12 @@ public:
     std::optional<T> tryRecv()
     {
         ConsumerState& consumer = m_consumer;
-        const size_t consumed = consumer.consumed.load(std::memory_order_relaxed);
-        const size_t published = m_producer.published.load(std::memory_order_acquire);
+        const size_t consumed = consumer.consumedValue;
+        size_t published = consumer.cachedPublished;
+        if (consumed == published) {
+            published = m_producer.published.load(std::memory_order_acquire);
+            consumer.cachedPublished = published;
+        }
         if (consumed == published || consumer.block == nullptr) {
             return std::nullopt;
         }
@@ -911,7 +922,8 @@ public:
         T value = std::move(*slot.value());
         std::destroy_at(slot.value());
         ++consumer.index;
-        consumer.consumed.store(consumed + 1, std::memory_order_release);
+        consumer.consumedValue = consumed + 1;
+        consumer.consumed.store(consumer.consumedValue, std::memory_order_release);
         if (m_waiterPathUsed.load(std::memory_order_relaxed)) {
             m_waiter.registration.clearPendingWake();
         }
@@ -932,8 +944,12 @@ public:
         }
 
         ConsumerState& consumer = m_consumer;
-        const size_t consumed = consumer.consumed.load(std::memory_order_relaxed);
-        const size_t published = m_producer.published.load(std::memory_order_acquire);
+        const size_t consumed = consumer.consumedValue;
+        size_t published = consumer.cachedPublished;
+        if (consumed == published) {
+            published = m_producer.published.load(std::memory_order_acquire);
+            consumer.cachedPublished = published;
+        }
         const size_t available = published - consumed;
         if (available == 0 || consumer.block == nullptr) {
             return 0;
@@ -962,7 +978,8 @@ public:
         if (received == 0) {
             return 0;
         }
-        consumer.consumed.store(consumed + received, std::memory_order_release);
+        consumer.consumedValue = consumed + received;
+        consumer.consumed.store(consumer.consumedValue, std::memory_order_release);
         if (m_waiterPathUsed.load(std::memory_order_relaxed)) {
             m_waiter.registration.clearPendingWake();
         }
@@ -983,8 +1000,12 @@ public:
         }
 
         ConsumerState& consumer = m_consumer;
-        const size_t consumed = consumer.consumed.load(std::memory_order_relaxed);
-        const size_t published = m_producer.published.load(std::memory_order_acquire);
+        const size_t consumed = consumer.consumedValue;
+        size_t published = consumer.cachedPublished;
+        if (consumed == published) {
+            published = m_producer.published.load(std::memory_order_acquire);
+            consumer.cachedPublished = published;
+        }
         const size_t available = published - consumed;
         if (available == 0 || consumer.block == nullptr) {
             return std::nullopt;
@@ -1014,7 +1035,8 @@ public:
         if (values.empty()) {
             return std::nullopt;
         }
-        consumer.consumed.store(consumed + values.size(), std::memory_order_release);
+        consumer.consumedValue = consumed + values.size();
+        consumer.consumed.store(consumer.consumedValue, std::memory_order_release);
         if (m_waiterPathUsed.load(std::memory_order_relaxed)) {
             m_waiter.registration.clearPendingWake();
         }
@@ -1080,6 +1102,7 @@ private:
         std::atomic<size_t> published{0};
         Block* block = nullptr;
         size_t index = 0;
+        size_t publishedValue = 0;
     };
 
     struct alignas(kCacheLine) ConsumerState
@@ -1087,6 +1110,8 @@ private:
         std::atomic<size_t> consumed{0};
         Block* block = nullptr;
         size_t index = 0;
+        size_t consumedValue = 0;
+        size_t cachedPublished = 0;
     };
 
     enum class WaiterPhase : uint8_t {
@@ -1132,6 +1157,32 @@ private:
             delete block;
             block = next;
         }
+    }
+
+    /**
+     * @brief Publish the producer count without an RMW before waiter mode is used.
+     * @details SPSC gives the producer exclusive ownership of the published
+     *          counter. A release store is sufficient for polling consumers;
+     *          waiter registration switches to the existing acq_rel RMW handshake
+     *          before any wake-up can depend on this publication.
+     */
+    [[nodiscard]] size_t publishProducerCount(ProducerState& producer,
+                                              size_t count,
+                                              bool& waiterPathUsed) noexcept
+    {
+        waiterPathUsed = m_waiterPathUsed.load(std::memory_order_relaxed);
+        if (waiterPathUsed) {
+            const size_t previous =
+                producer.published.fetch_add(count, std::memory_order_acq_rel);
+            producer.publishedValue = previous + count;
+            return previous;
+        }
+
+        const size_t previous = producer.publishedValue;
+        producer.publishedValue += count;
+        producer.published.store(
+            producer.publishedValue, std::memory_order_release);
+        return previous;
     }
 
     bool reserveProducerSlots(size_t count) noexcept
@@ -1302,7 +1353,7 @@ private:
                         expectedOwner,
                         nullptr,
                         std::memory_order_relaxed,
-                        std::memory_order_acquire)) {
+                        std::memory_order_relaxed)) {
                     return false;
                 }
                 // Idle 是唯一允许下一个 awaiter 复用 timer/threshold/registration 的发布点。

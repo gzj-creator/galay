@@ -25,6 +25,7 @@
 
 ### Changed
 
+- **优化 SPSC 无界通道轮询热路径**：缓存 producer/consumer 单调游标，polling 路径使用 release store，首次启用 waiter 后切换为 RMW 发布握手，并放宽仅由单消费者/生产者拥有的指针与 owner 清理操作的内存序。
 - **校正 kernel benchmark 的生产测量口径**：scheduler 场景改为验证 Runtime 对 IO scheduler 的 round-robin 分发与双 scheduler 扩展性，明确 reactor owner-affinity 下不启用 work stealing；UDP 改为固定时长持续压流并分离 measurement window 与 settled loss；RingBuffer 增加编译器可观测 checksum/barrier，区分 mmap 逻辑环绕与 vector 物理环绕，并明确仅代表单线程热缓存内存微基准。
 - **完善跨平台全量执行矩阵**：Linux/aarch64 对依赖未实现 stackful context 的 C tests/examples/benchmarks 按源码能力过滤，修正 libuv、自包含 Redis/RPC benchmark、长运行 MPSC benchmark、etcd/Redis 集成脚本和 HTTP/HTTP2 example 资源定位。
 - **收敛 SPSC 热路径、存储与公开文件边界**：纯 polling ring 使用单调游标、对端游标缓存和缓存行隔离，成功稳态无 CAS/原子 RMW；无界队列移除逐消息 consumed 原子写并把跨块分配下沉为冷路径。异步 waiter/timeout 控制面与极限吞吐数据面分离，内核实现收敛为 bounded/unbounded 两个公开头，ring 基础设施统一复用 `galay-utils/cache/spsc_ring_buffer.hpp`；编译期容量 specialization 不分配槽位内存。
