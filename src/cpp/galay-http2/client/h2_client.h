@@ -58,7 +58,7 @@ class H2Client;
 namespace detail
 {
 template<RingBufferBackendStrategy Strategy>
-inline bool parseFrameFromRingBuffer(RingBuffer<Strategy>& ring_buffer,
+inline bool parseFrameFromRingBuffer(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                      uint32_t max_frame_size,
                                      std::optional<Http2ErrorCode>& error,
                                      std::vector<uint8_t>& scratch,
@@ -217,7 +217,7 @@ namespace detail
 {
 
 template<RingBufferBackendStrategy Strategy>
-inline bool parseFrameFromRingBuffer(RingBuffer<Strategy>& ring_buffer,
+inline bool parseFrameFromRingBuffer(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                      uint32_t max_frame_size,
                                      std::optional<Http2ErrorCode>& error,
                                      std::vector<uint8_t>& scratch,

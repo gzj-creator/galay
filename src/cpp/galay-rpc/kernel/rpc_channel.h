@@ -401,7 +401,7 @@ public:
      */
     Task<std::expected<void, IOError>> connect(const std::string& host, uint16_t port) {
         m_socket = std::make_unique<SocketType>(IPType::IPV4);
-        m_ring_buffer = std::make_unique<RingBuffer<Strategy>>(m_ring_buffer_size);
+        m_ring_buffer = std::make_unique<RingBuffer<Strategy, std::dynamic_extent>>(m_ring_buffer_size);
         auto nonblock_result = m_socket->option().handleNonBlock();
         if (!nonblock_result) {
             m_socket.reset();
@@ -656,7 +656,7 @@ public:
     /// @brief 获取底层socket
     SocketType& socket() { return *m_socket; }
     /// @brief 获取RingBuffer
-    RingBuffer<Strategy>& ringBuffer() { return *m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return *m_ring_buffer; }
     /// @brief 获取读取配置
     const RpcReaderSetting& readerSetting() const { return m_reader_setting; }
     /// @brief 当前pending数量
@@ -1141,7 +1141,7 @@ private:
     };
 
     std::unique_ptr<SocketType> m_socket;       ///< 底层socket
-    std::unique_ptr<RingBuffer<Strategy>> m_ring_buffer;  ///< 读取ring buffer
+    std::unique_ptr<RingBuffer<Strategy, std::dynamic_extent>> m_ring_buffer;  ///< 读取ring buffer
     RpcReaderSetting m_reader_setting;         ///< 读取配置
     RpcWriterSetting m_writer_setting;         ///< 写入配置
     RpcChannelState m_state;                   ///< pending分发表

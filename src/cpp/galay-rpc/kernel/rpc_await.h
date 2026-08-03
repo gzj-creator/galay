@@ -74,7 +74,7 @@ inline void consumeWritevIovecs(std::vector<iovec>& iovecs, size_t consumed)
  * @return 是否有可写空间
  */
 template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-inline bool prepareRingBufferReadWindow(RingBuffer<Strategy>& ring_buffer,
+inline bool prepareRingBufferReadWindow(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                         std::array<struct iovec, 2>& read_iovecs,
                                         size_t& read_iov_count)
 {
@@ -114,7 +114,7 @@ class RpcRingBufferReadStateBase
 {
 public:
     using ResultType = ResultT;
-    using RingBufferType = RingBuffer<Strategy>;
+    using RingBufferType = RingBuffer<Strategy, std::dynamic_extent>;
 
     /**
      * @brief 构造读取状态基类

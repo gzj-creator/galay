@@ -25,7 +25,7 @@ class ExpectedRpcResponseReadState
 public:
     using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
 
-    ExpectedRpcResponseReadState(RingBuffer<Strategy>& ring_buffer,
+    ExpectedRpcResponseReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                  const RpcReaderSetting& setting,
                                  uint32_t expected_request_id,
                                  RpcResponse& response);
@@ -53,7 +53,7 @@ public:
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::ExpectedRpcResponseReadState<Strategy>;
 
-    RecvRpcResponseChainAwaitable(RingBuffer<Strategy>& ring_buffer,
+    RecvRpcResponseChainAwaitable(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                   const RpcReaderSetting& setting,
                                   uint32_t expected_request_id,
                                   RpcResponse& response);

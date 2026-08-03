@@ -51,7 +51,7 @@ void printResult(const Result& result) {
 
 #if defined(__unix__) || defined(__APPLE__)
 void benchWrappedIovec(std::size_t capacity, std::size_t iterations) {
-    galay::utils::RingBuffer<> buffer(capacity);
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(capacity);
     const std::size_t actualCapacity = buffer.capacity();
     std::vector<std::byte> prefix(actualCapacity - 64, std::byte{'a'});
     std::vector<std::byte> wrapped(256, std::byte{'b'});
@@ -92,7 +92,7 @@ int main() {
               << std::setw(14) << "MB/s" << '\n';
 
     {
-        galay::utils::RingBuffer<> buffer(capacity);
+        galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(capacity);
         auto result = measure("write+consume", iterations, chunk, [&](std::size_t i) {
             const auto written = buffer.write(writeData.data(), writeData.size());
             buffer.consume(written);
@@ -102,7 +102,7 @@ int main() {
     }
 
     {
-        galay::utils::RingBuffer<> buffer(capacity);
+        galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(capacity);
         auto result = measure("write+read", iterations, chunk, [&](std::size_t i) {
             const auto written = buffer.write(writeData.data(), writeData.size());
             const auto read = buffer.read(readData.data(), readData.size());
@@ -112,7 +112,7 @@ int main() {
     }
 
     {
-        galay::utils::RingBuffer<> buffer(4096);
+        galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(4096);
         auto result = measure("wrap-around", iterations, 256, [&](std::size_t i) {
             const auto written = buffer.write(writeData.data(), 256);
             buffer.consume(128);

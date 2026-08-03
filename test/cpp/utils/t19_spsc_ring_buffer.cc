@@ -3,7 +3,7 @@
  * @brief 验证 typed SPSC ring 的容量、移动语义、批量接口、回绕与跨线程 FIFO。
  */
 
-#include <galay/cpp/galay-utils/cache/spsc_ring_buffer.hpp>
+#include <galay/cpp/galay-utils/cache/type_ring_buffer.hpp>
 
 #include <array>
 #include <atomic>
@@ -61,6 +61,13 @@ static_assert(std::is_constructible_v<SpscRingBuffer<int>, size_t>);
 static_assert(!std::is_default_constructible_v<SpscRingBuffer<int>>);
 static_assert(sizeof(StaticSpscRingBuffer<uint64_t, 64>) >
               sizeof(StaticSpscRingBuffer<uint64_t, 2>));
+using IntRing = SpscRingBuffer<int>;
+static_assert(std::is_move_constructible_v<typename IntRing::Producer>);
+static_assert(std::is_nothrow_move_assignable_v<typename IntRing::Producer>);
+static_assert(!std::is_copy_constructible_v<typename IntRing::Producer>);
+static_assert(std::is_move_constructible_v<typename IntRing::Consumer>);
+static_assert(std::is_nothrow_move_assignable_v<typename IntRing::Consumer>);
+static_assert(!std::is_copy_constructible_v<typename IntRing::Consumer>);
 
 bool testErrorsAndCapacity()
 {
@@ -186,13 +193,15 @@ bool testCrossThreadFifo()
     if (ring.error() != SpscRingBufferError::kNone) {
         return false;
     }
+    auto endpoints = ring.split();
 
     std::atomic<bool> failed{false};
-    std::thread producer([&]() {
+    std::thread producer([
+        endpoint = std::move(endpoints.producer), &failed]() mutable {
         const auto deadline = std::chrono::steady_clock::now() + 5s;
         for (uint32_t sequence = 0; sequence < kMessages; ++sequence) {
             uint32_t value = sequence;
-            while (!ring.trySend(std::move(value))) {
+            while (!endpoint.trySend(std::move(value))) {
                 if (failed.load(std::memory_order_acquire) ||
                     std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -203,12 +212,13 @@ bool testCrossThreadFifo()
         }
     });
 
-    std::thread consumer([&]() {
+    std::thread consumer([
+        endpoint = std::move(endpoints.consumer), &failed]() mutable {
         const auto deadline = std::chrono::steady_clock::now() + 5s;
         uint32_t expected = 0;
         while (expected < kMessages) {
             uint32_t value = 0;
-            if (!ring.tryRecv(value)) {
+            if (!endpoint.tryRecv(value)) {
                 if (failed.load(std::memory_order_acquire) ||
                     std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -223,12 +233,15 @@ bool testCrossThreadFifo()
             }
             ++expected;
         }
+        uint32_t extra = 0;
+        if (endpoint.tryRecv(extra)) {
+            failed.store(true, std::memory_order_release);
+        }
     });
 
     producer.join();
     consumer.join();
-    return !failed.load(std::memory_order_acquire) &&
-        !ring.tryRecv().has_value();
+    return !failed.load(std::memory_order_acquire);
 }
 
 } // namespace

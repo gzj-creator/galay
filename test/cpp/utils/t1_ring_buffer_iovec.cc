@@ -14,7 +14,7 @@ int main()
 {
     using galay::utils::RingBufferBackendStrategy;
 
-    galay::utils::RingBuffer<> default_buffer(8);
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> default_buffer(8);
     const size_t default_capacity = default_buffer.capacity();
 
     std::vector<char> prefix(default_capacity - 2, 'x');
@@ -35,7 +35,7 @@ int main()
         return 1;
     }
 
-    galay::utils::RingBuffer<RingBufferBackendStrategy::Vector> buffer(8);
+    galay::utils::RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent> buffer(8);
 
     std::array<iovec, 2> write_iovecs{};
     count = buffer.getWriteIovecs(write_iovecs);

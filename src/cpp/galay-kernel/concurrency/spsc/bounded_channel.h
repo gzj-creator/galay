@@ -16,7 +16,7 @@
 #include "../../common/error.h"
 #include "../../core/waker.h"
 #include "../../core/timeout.hpp"
-#include "../../../galay-utils/cache/spsc_ring_buffer.hpp"
+#include "../../../galay-utils/cache/type_ring_buffer.hpp"
 #include <coroutine>
 
 #if defined(_MSC_VER)

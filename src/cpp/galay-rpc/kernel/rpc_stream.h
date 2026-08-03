@@ -462,7 +462,7 @@ class StreamMessageReadState : public RpcRingBufferReadStateBase<RpcAwaitableRes
 public:
     using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
 
-    StreamMessageReadState(RingBuffer<Strategy>& ring_buffer,
+    StreamMessageReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                            StreamMessage& message,
                            RpcStreamLimits limits = {})
         : Base(ring_buffer)
@@ -797,7 +797,7 @@ public:
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::StreamMessageReadState<Strategy>;
 
-    GetStreamMessageAwaitable(RingBuffer<Strategy>& ring_buffer,
+    GetStreamMessageAwaitable(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                               SocketType& socket,
                               StreamMessage& msg,
                               RpcStreamLimits limits = {})
@@ -837,7 +837,7 @@ private:
 template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class StreamReaderImpl {
 public:
-    StreamReaderImpl(RingBuffer<Strategy>& ring_buffer, SocketType& socket, RpcStreamLimits limits = {})
+    StreamReaderImpl(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer, SocketType& socket, RpcStreamLimits limits = {})
         : m_ring_buffer(&ring_buffer)
         , m_socket(&socket)
         , m_limits(limits)
@@ -869,7 +869,7 @@ public:
     }
 
 private:
-    RingBuffer<Strategy>* m_ring_buffer = nullptr;  ///< 环形缓冲区指针
+    RingBuffer<Strategy, std::dynamic_extent>* m_ring_buffer = nullptr;  ///< 环形缓冲区指针
     SocketType* m_socket = nullptr;       ///< Socket指针
     RpcStreamLimits m_limits;             ///< 流帧边界配置
 };
@@ -998,7 +998,7 @@ public:
      * @param method_name 方法名
      */
     RpcStreamImpl(SocketType& socket,
-                  RingBuffer<Strategy>& ring_buffer,
+                  RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                   uint32_t stream_id,
                   std::string service_name = {},
                   std::string method_name = {})
@@ -1098,11 +1098,11 @@ public:
     /// @brief 获取底层Socket
     SocketType& socket() { return *m_socket; }
     /// @brief 获取环形缓冲区
-    RingBuffer<Strategy>& ringBuffer() { return *m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return *m_ring_buffer; }
 
 private:
     SocketType* m_socket = nullptr;                          ///< Socket指针
-    RingBuffer<Strategy>* m_ring_buffer = nullptr;           ///< 环形缓冲区指针
+    RingBuffer<Strategy, std::dynamic_extent>* m_ring_buffer = nullptr;           ///< 环形缓冲区指针
     uint32_t m_stream_id;                                    ///< 流ID
     std::string m_service_name;                              ///< 服务名
     std::string m_method_name;                               ///< 方法名

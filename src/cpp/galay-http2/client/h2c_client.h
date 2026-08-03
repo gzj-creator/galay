@@ -123,7 +123,7 @@ public:
         m_port = port;
         m_authority = m_host + ":" + std::to_string(m_port);
         m_socket = std::make_unique<AsyncTcpSocket>(IPType::IPV4);
-        m_ring_buffer = std::make_unique<RingBuffer<Strategy>>(m_ring_buffer_size);
+        m_ring_buffer = std::make_unique<RingBuffer<Strategy, std::dynamic_extent>>(m_ring_buffer_size);
         auto r = m_socket->option().handleNonBlock();
         if (!r) {
             m_socket.reset();
@@ -162,7 +162,7 @@ private:
     uint16_t m_port;
     size_t m_ring_buffer_size;
     std::unique_ptr<AsyncTcpSocket> m_socket;
-    std::unique_ptr<RingBuffer<Strategy>> m_ring_buffer;
+    std::unique_ptr<RingBuffer<Strategy, std::dynamic_extent>> m_ring_buffer;
     std::unique_ptr<Http2ConnImpl<AsyncTcpSocket, Strategy>> m_conn;
     std::optional<Http2SettingsFrame> m_pending_peer_settings;
     bool m_upgraded;
@@ -213,7 +213,7 @@ struct H2cUpgradeMachine {
                     m_phase = Phase::kSendPrefaceSettings;
                     continue;
                 }
-                if (!prepareRecvWindow("RingBuffer<> full while waiting 101")) {
+                if (!prepareRecvWindow("RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> full while waiting 101")) {
                     return MachineAction<result_type>::complete(std::move(*m_result));
                 }
                 return MachineAction<result_type>::waitReadv(m_read_iov_storage.data(), m_read_iov_count);
@@ -230,7 +230,7 @@ struct H2cUpgradeMachine {
                     m_phase = Phase::kSendAck;
                     continue;
                 }
-                if (!prepareRecvWindow("RingBuffer<> full while waiting SETTINGS")) {
+                if (!prepareRecvWindow("RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> full while waiting SETTINGS")) {
                     return MachineAction<result_type>::complete(std::move(*m_result));
                 }
                 return MachineAction<result_type>::waitReadv(m_read_iov_storage.data(), m_read_iov_count);
@@ -513,7 +513,7 @@ private:
     }
 
     H2cClient<Strategy>* m_client = nullptr;
-    RingBuffer<Strategy>* m_ring_buffer = nullptr;
+    RingBuffer<Strategy, std::dynamic_extent>* m_ring_buffer = nullptr;
     Phase m_phase = Phase::kSendUpgrade;
     size_t m_send_offset = 0;
     std::string m_upgrade_request_buf;

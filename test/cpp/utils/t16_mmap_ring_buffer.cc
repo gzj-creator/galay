@@ -44,19 +44,19 @@ void test_mmap_error_surface() {
     require(invalid.error() == RingBufferError::kInvalidCapacity,
             "zero capacity must report kInvalidCapacity");
 
-    auto invalid_ring = galay::utils::RingBuffer<>::create(0);
+    auto invalid_ring = galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::create(0);
     require(!invalid_ring, "public ring creation with zero capacity must fail without throwing");
     require(invalid_ring.error() == RingBufferError::kInvalidCapacity,
             "public zero capacity creation must report kInvalidCapacity");
 
-    auto valid_ring = galay::utils::RingBuffer<>::create(128);
+    auto valid_ring = galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::create(128);
     require(valid_ring.has_value(), "public ring creation with positive capacity must succeed");
     require(valid_ring->capacity() >= 128, "public ring creation must preserve requested capacity");
 }
 
 void test_public_constructor_zero_capacity_falls_back() {
-    galay::utils::RingBuffer<> buffer(0);
-    require(buffer.capacity() >= galay::utils::RingBuffer<>::kDefaultCapacity,
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(0);
+    require(buffer.capacity() >= galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::kDefaultCapacity,
             "zero-capacity constructor must fall back to a usable default capacity");
     constexpr std::string_view data = "x";
     require(buffer.write(data) == data.size(),
@@ -64,9 +64,9 @@ void test_public_constructor_zero_capacity_falls_back() {
 }
 
 void test_threshold_buffer_uses_single_iovec_across_wrap() {
-    galay::utils::RingBuffer<> buffer(galay::utils::RingBuffer<>::kMmapThreshold);
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::kMmapThreshold);
     const std::size_t capacity = buffer.capacity();
-    require(capacity >= galay::utils::RingBuffer<>::kMmapThreshold,
+    require(capacity >= galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::kMmapThreshold,
             "mmap ring capacity must cover requested capacity");
 
     std::vector<char> prefix(capacity - 64, 'A');

@@ -381,7 +381,7 @@ public:
     /**
      * @brief 获取RingBuffer
      */
-    RingBuffer<Strategy>& ringBuffer() { return m_channel->ringBuffer(); }
+    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return m_channel->ringBuffer(); }
 
     /**
      * @brief 获取读取配置

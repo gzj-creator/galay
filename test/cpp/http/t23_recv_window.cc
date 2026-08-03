@@ -12,7 +12,7 @@ using namespace galay::websocket;
 
 namespace {
 
-bool writeAll(RingBuffer<>& ring, std::string_view bytes) {
+bool writeAll(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes) {
     return ring.write(bytes.data(), bytes.size()) == bytes.size();
 }
 
@@ -30,7 +30,7 @@ int main() {
     WsReaderSetting setting;
 
     {
-        RingBuffer<> ring(8);
+        RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring(8);
         if (!check(writeAll(ring, "abcdef"), "failed to seed wrapped frame buffer")) {
             return 1;
         }
@@ -58,7 +58,7 @@ int main() {
     }
 
     {
-        RingBuffer<> ring(8);
+        RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring(8);
         if (!check(writeAll(ring, "abcdef"), "failed to seed wrapped message buffer")) {
             return 1;
         }

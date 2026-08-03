@@ -93,7 +93,7 @@ namespace galay::redis
         }
 
         template<RingBufferBackendStrategy Strategy>
-        bool parseRepliesFromRingBuffer(galay::utils::RingBuffer<Strategy>& ring_buffer,
+        bool parseRepliesFromRingBuffer(galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                         protocol::RespParser& parser,
                                         std::string& parse_buffer,
                                         size_t expected_replies,
@@ -180,7 +180,7 @@ namespace galay::redis
     RedisClient<Strategy>::RedisClient(IOScheduler* scheduler,
                                        AsyncRedisConfig config)
         : m_config(config)
-        , m_ring_buffer(std::make_shared<galay::utils::RingBuffer<Strategy>>(config.buffer_size))
+        , m_ring_buffer(std::make_shared<galay::utils::RingBuffer<Strategy, std::dynamic_extent>>(config.buffer_size))
         , m_scheduler(scheduler)
     {
     }

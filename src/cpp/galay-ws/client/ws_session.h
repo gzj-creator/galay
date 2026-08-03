@@ -832,7 +832,7 @@ public:
 private:
     SocketType& m_socket;
     const WsUrl& m_url;
-    RingBuffer<> m_ring_buffer;
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_ring_buffer;
     WsReaderImpl<SocketType> m_reader;
     WsWriterImpl<SocketType> m_writer;
     bool m_upgraded;

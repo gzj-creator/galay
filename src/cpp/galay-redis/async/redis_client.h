@@ -477,8 +477,8 @@ namespace galay::redis
 
         AsyncTcpSocket& socket() { return m_socket; }                               ///< 获取底层 TCP 套接字
         protocol::RespParser& parser() { return m_parser; }                    ///< 获取 RESP 解析器
-        galay::utils::RingBuffer<Strategy>& ringBuffer() { return *m_ring_buffer; } ///< 获取接收环形缓冲区
-        const galay::utils::RingBuffer<Strategy>& ringBuffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
+        galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return *m_ring_buffer; } ///< 获取接收环形缓冲区
+        const galay::utils::RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() const { return *m_ring_buffer; } ///< 获取接收环形缓冲区
         const AsyncRedisConfig& asyncConfig() const { return m_config; }       ///< 获取异步配置
         void setClosed(bool closed) { m_is_closed = closed; }                  ///< 设置关闭状态
 
@@ -498,7 +498,7 @@ namespace galay::redis
         // 成员变量
         AsyncTcpSocket m_socket;                                   ///< TCP 套接字
         AsyncRedisConfig m_config;                            ///< 异步配置
-        std::shared_ptr<galay::utils::RingBuffer<Strategy>> m_ring_buffer; ///< 接收环形缓冲区
+        std::shared_ptr<galay::utils::RingBuffer<Strategy, std::dynamic_extent>> m_ring_buffer; ///< 接收环形缓冲区
         IOScheduler* m_scheduler;                             ///< IO 调度器
         bool m_is_closed = false;                             ///< 连接关闭标志
         protocol::RespParser m_parser;                        ///< RESP 协议解析器

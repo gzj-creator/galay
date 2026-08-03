@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **模板化 RingBuffer 容量并重命名 typed SPSC 实现**：`RingBuffer` 增加编译期容量参数，固定容量默认值为 4096，动态容量必须显式使用 `std::dynamic_extent`；新增容量 concept 和 Mmap 固定容量校验。typed SPSC 实现重命名为 `type_ring_buffer.hpp`，并移除冗余容量状态。
+
 ### Added
 
 - **新增全量验证回归覆盖**：补充 io_uring `connect(EISCONN)`、benchmark 测量合同与 `CompletionLatch` 生命周期测试，并扩展 Mongo replica set 单 seed 发现、读偏好、部分 seed 故障和 setName 不匹配集成场景。

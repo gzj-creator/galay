@@ -94,7 +94,7 @@ static_assert(requires(VectorMysqlClient& client, MysqlConfig config) {
                          std::declval<std::span<const std::optional<std::string>>>(),
                          std::declval<std::span<const uint8_t>>()) } -> std::same_as<VectorMysqlStmtExecuteAwaitable>;
     { client.batch(std::declval<std::span<const protocol::MysqlCommandView>>()) } -> std::same_as<VectorMysqlPipelineAwaitable>;
-    { client.ringBuffer() } -> std::same_as<RingBuffer<RingBufferBackendStrategy::Vector>&>;
+    { client.ringBuffer() } -> std::same_as<RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent>&>;
 });
 
 int main()

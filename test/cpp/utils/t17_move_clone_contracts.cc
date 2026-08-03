@@ -40,8 +40,8 @@ void assert_static_contracts() {
     assert_move_only_value_clone_contract<HuffmanTable<char>>();
     assert_move_only_value_clone_contract<TrieTree>();
     assert_move_only_value_clone_contract<Bytes>();
-    assert_move_only_value_clone_contract<RingBuffer<RingBufferBackendStrategy::Vector>>();
-    assert_move_only_value_clone_contract<RingBuffer<>>();
+    assert_move_only_value_clone_contract<RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent>>();
+    assert_move_only_value_clone_contract<RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>>();
 
     assert_move_only_parser_clone_contract<ConfigParser>();
     assert_move_only_parser_clone_contract<IniParser>();
@@ -191,7 +191,7 @@ void test_trie_bytes_and_ring_buffer_clone() {
     assert(view.toStringView() == "View");
     assert(bytesCopy.toStringView() == "view");
 
-    RingBuffer<RingBufferBackendStrategy::Vector> buffer(5);
+    RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent> buffer(5);
     assert(buffer.write("abcde", 5) == 5);
     char skipped[3]{};
     assert(buffer.read(skipped, sizeof(skipped)) == 3);
@@ -206,7 +206,7 @@ void test_trie_bytes_and_ring_buffer_clone() {
     assert(bufferCopy.read(copied, sizeof(copied)) == 4);
     assert(std::string_view(copied, sizeof(copied)) == "defg");
 
-    RingBuffer<> defaultBuffer(8);
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> defaultBuffer(8);
     assert(defaultBuffer.write("abcd", 4) == 4);
     auto defaultCopy = defaultBuffer.clone();
     defaultBuffer.clear();

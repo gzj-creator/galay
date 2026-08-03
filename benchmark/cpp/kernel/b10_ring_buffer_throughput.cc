@@ -195,7 +195,7 @@ void benchWrapAroundPerformance() {
                 fallback_physical_wraps, durationMs);
     }
 
-    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector> vector_buffer(
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> vector_buffer(
         SMALL_BUFFER_SIZE);
     totalWritten = 0;
     size_t physical_wraps = 0;

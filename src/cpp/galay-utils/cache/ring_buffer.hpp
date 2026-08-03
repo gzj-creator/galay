@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <bit>
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
@@ -65,6 +66,13 @@ enum class RingBufferBackendStrategy {
     Vector, ///< vector 后端，环绕时最多返回两段视图
     Auto    ///< 自动选择：大容量优先 mmap，小容量使用 vector
 };
+
+template<RingBufferBackendStrategy Strategy, size_t Capacity>
+concept ValidRingBufferCapacity =
+    (Capacity == std::dynamic_extent || Capacity > 0) &&
+    (Capacity == std::dynamic_extent ||
+     Strategy != RingBufferBackendStrategy::Mmap ||
+     std::has_single_bit(Capacity));
 
 /**
  * @brief RingBuffer 内部资源创建错误
@@ -800,7 +808,9 @@ decltype(auto) visitRingBufferImpl(Impl&& impl, Visitor&& visitor) {
  * @tparam Strategy 后端策略；默认 Mmap。
  * @warning 本类不提供线程安全保证。并发访问时调用方必须在外部同步。
  */
-template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
+template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap,
+         size_t Capacity = 4096>
+    requires ValidRingBufferCapacity<Strategy, Capacity>
 class RingBuffer {
 public:
     static constexpr size_t kDefaultCapacity = 4096;       ///< 默认容量
@@ -811,7 +821,16 @@ public:
      * @param capacity 缓冲区容量；为 0 时使用默认容量，mmap 后端会按页向上对齐
      * @note mmap 资源创建失败时自动降级到 vector 后端，不影响功能可用性。
      */
-    explicit RingBuffer(size_t capacity = kDefaultCapacity)
+    RingBuffer()
+        requires (Capacity != std::dynamic_extent)
+        : m_impl(makeImpl(Capacity)) {}
+
+    RingBuffer()
+        requires (Capacity == std::dynamic_extent)
+        : m_impl(makeImpl(kDefaultCapacity)) {}
+
+    explicit RingBuffer(size_t capacity)
+        requires (Capacity == std::dynamic_extent)
         : m_impl(makeImpl(capacity)) {}
 
     RingBuffer(const RingBuffer&) = delete;
@@ -825,7 +844,9 @@ public:
      * @return 成功时返回 RingBuffer；容量非法时返回 RingBufferError::kInvalidCapacity
      * @note 该工厂不使用异常表达可恢复的容量校验失败；mmap 资源创建失败仍按构造函数语义降级到 vector 后端。
      */
-    [[nodiscard]] static std::expected<RingBuffer, RingBufferError> create(size_t capacity) {
+    [[nodiscard]] static std::expected<RingBuffer, RingBufferError> create(size_t capacity)
+        requires (Capacity == std::dynamic_extent)
+    {
         if (capacity == 0) {
             return std::unexpected(RingBufferError::kInvalidCapacity);
         }
@@ -838,7 +859,13 @@ public:
      * @note 复制不保留内部读写索引形状，只保证后续 read() 的字节序列一致。
      */
     [[nodiscard]] RingBuffer clone() const {
-        RingBuffer copy(capacity());
+        RingBuffer copy = [&]() {
+            if constexpr (Capacity == std::dynamic_extent) {
+                return RingBuffer(capacity());
+            } else {
+                return RingBuffer();
+            }
+        }();
         std::array<std::span<const std::byte>, 2> spans{};
         const size_t span_count = readSpans(spans);
         for (size_t index = 0; index < span_count; ++index) {
@@ -1056,7 +1083,7 @@ private:
 };
 
 RingBuffer() -> RingBuffer<>;
-RingBuffer(size_t) -> RingBuffer<>;
+RingBuffer(size_t) -> RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>;
 
 } // namespace galay::utils
 

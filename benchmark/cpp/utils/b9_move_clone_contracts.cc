@@ -85,7 +85,7 @@ std::vector<char> makeHuffmanData(std::size_t items) {
     return data;
 }
 
-bool prepareRing(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector>& buffer,
+bool prepareRing(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent>& buffer,
                  std::string_view prefix,
                  std::string_view suffix) {
     const std::size_t prefix_written = buffer.write(prefix.data(), prefix.size());
@@ -185,7 +185,7 @@ int main(int argc, char** argv) {
 
     const std::string prefix(ringCapacity / 2, 'a');
     const std::string suffix(ringCapacity / 4, 'b');
-    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector> ring(ringCapacity);
+    galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> ring(ringCapacity);
     if (!prepareRing(ring, prefix, suffix)) {
         std::cerr << "failed to prepare ring buffer workload\n";
         return 1;
@@ -197,20 +197,20 @@ int main(int argc, char** argv) {
     }));
 
     {
-        std::vector<galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector>> copies;
+        std::vector<galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent>> copies;
         copies.reserve(iterations);
         for (std::size_t i = 0; i < iterations; ++i) {
             copies.emplace_back(ring.clone());
         }
         printResult(measure("RingBuffer move", iterations, [&](std::size_t i) {
-            galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector> moved(
+            galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> moved(
                 std::move(copies[i]));
             return moved.readable() + moved.capacity();
         }));
     }
 
     printResult(measure("RingBuffer construct+write", iterations, [&](std::size_t) {
-        galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector> constructed(ringCapacity);
+        galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> constructed(ringCapacity);
         const std::size_t written = constructed.write(prefix.data(), prefix.size());
         return written + constructed.capacity();
     }));

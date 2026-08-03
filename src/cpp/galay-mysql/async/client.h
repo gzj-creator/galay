@@ -328,8 +328,8 @@ public:
     // ======================== 内部访问 ========================
 
     AsyncTcpSocket& socket() { return m_socket; }                   ///< 获取TCP套接字引用
-    RingBuffer<Strategy>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
-    const RingBuffer<Strategy>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; } ///< 获取接收环形缓冲区
+    const RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() const { return m_ring_buffer; } ///< 获取接收环形缓冲区
     protocol::MysqlParser& parser() { return m_parser; }       ///< 获取协议解析器引用
     protocol::MysqlEncoder& encoder() { return m_encoder; }    ///< 获取协议编码器引用
     const AsyncMysqlConfig& asyncConfig() const { return m_config; } ///< 获取异步配置
@@ -345,7 +345,7 @@ private:
     AsyncTcpSocket m_socket;                             ///< TCP套接字
     IOScheduler* m_scheduler;                       ///< IO调度器指针
     AsyncMysqlConfig m_config;                      ///< 异步配置
-    RingBuffer<Strategy> m_ring_buffer;             ///< 接收环形缓冲区
+    RingBuffer<Strategy, std::dynamic_extent> m_ring_buffer;             ///< 接收环形缓冲区
     uint32_t m_server_capabilities = 0;             ///< 服务器能力标志
     protocol::MysqlParser m_parser;                 ///< 协议解析器
     protocol::MysqlEncoder m_encoder;               ///< 协议编码器

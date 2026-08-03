@@ -1185,7 +1185,7 @@ AsyncMongoClient::AsyncMongoClient(IOScheduler* scheduler,
                                    AsyncMongoConfig config)
     : m_config(std::move(config))
     , m_ring_buffer(m_config.buffer_size > 0 ? m_config.buffer_size
-                                             : galay::utils::RingBuffer<>::kDefaultCapacity)
+                                             : galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::kDefaultCapacity)
     , m_pipeline_reserve_per_command(std::max<size_t>(32, m_config.pipeline_reserve_per_command))
 {
     (void)scheduler;

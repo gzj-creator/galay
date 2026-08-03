@@ -1,6 +1,6 @@
 /**
- * @file spsc_ring_buffer.hpp
- * @brief 单生产者单消费者 typed 环形缓冲区
+ * @file type_ring_buffer.hpp
+ * @brief typed 单生产者单消费者环形缓冲区
  * @author galay-utils
  * @version 1.0.0
  *
@@ -9,8 +9,8 @@
  * 稳态成功路径不使用逐槽原子、CAS、原子 RMW 或锁。
  */
 
-#ifndef GALAY_UTILS_CACHE_SPSC_RING_BUFFER_HPP
-#define GALAY_UTILS_CACHE_SPSC_RING_BUFFER_HPP
+#ifndef GALAY_UTILS_CACHE_TYPE_RING_BUFFER_HPP
+#define GALAY_UTILS_CACHE_TYPE_RING_BUFFER_HPP
 
 #include <algorithm>
 #include <array>
@@ -140,8 +140,7 @@ public:
             return;
         }
         m_slots.reset(slots);
-        m_capacity = normalized;
-        m_mask = normalized - 1;
+        initializeLocalStorage(slots, normalized);
     }
 
     /**
@@ -152,6 +151,7 @@ public:
     SpscRingBuffer() noexcept
         requires kUsesStaticCapacity
     {
+        initializeLocalStorage(m_slots.data(), Capacity);
     }
 
     /**
@@ -165,12 +165,14 @@ public:
                 return;
             }
         }
-        const Cursor head = m_consumerLocal.position;
-        const size_t pending = cursorDistance(m_producerLocal.position, head);
+        const Cursor head = m_head.value.load(std::memory_order_relaxed);
+        const Cursor tail = m_tail.value.load(std::memory_order_relaxed);
+        const LocalCursor& consumer = m_consumerLocal;
+        const size_t pending = cursorDistance(tail, head);
         for (size_t offset = 0; offset < pending; ++offset) {
             const size_t index =
-                (static_cast<size_t>(head) + offset) & ringMask();
-            std::destroy_at(slotAt(index).value());
+                (static_cast<size_t>(head) + offset) & consumer.mask;
+            std::destroy_at(consumer.slots[index].value());
         }
     }
 
@@ -203,7 +205,7 @@ public:
      */
     [[nodiscard]] size_t capacity() const noexcept
     {
-        return ringCapacity();
+        return m_producerLocal.capacity;
     }
 
     /**
@@ -215,23 +217,7 @@ public:
      */
     [[nodiscard]] bool trySend(T&& value) noexcept
     {
-        const Cursor tail = m_producerLocal.position;
-        const size_t capacity = ringCapacity();
-        if (cursorDistance(tail, m_producerLocal.cachedPeer) >= capacity) {
-            m_producerLocal.cachedPeer =
-                m_head.value.load(std::memory_order_acquire);
-            if (cursorDistance(tail, m_producerLocal.cachedPeer) >= capacity) {
-                return false;
-            }
-        }
-
-        Slot& slot = slotAt(static_cast<size_t>(tail) & ringMask());
-        [[maybe_unused]] T* const stored =
-            std::construct_at(slot.storageAddress(), std::move(value));
-        const Cursor next = static_cast<Cursor>(tail + 1);
-        m_producerLocal.position = next;
-        m_tail.value.store(next, std::memory_order_release);
-        return true;
+        return trySendOne(m_producerLocal, m_head, m_tail, std::move(value));
     }
 
     /**
@@ -247,27 +233,29 @@ public:
             return 0;
         }
 
-        const Cursor tail = m_producerLocal.position;
-        const size_t capacity = ringCapacity();
-        size_t used = cursorDistance(tail, m_producerLocal.cachedPeer);
-        if (used >= capacity || values.size() > capacity - used) {
-            m_producerLocal.cachedPeer =
+        LocalCursor& producer = m_producerLocal;
+        const Cursor tail = producer.position;
+        size_t used = cursorDistance(tail, producer.cachedPeer);
+        if (used >= producer.capacity ||
+            values.size() > producer.capacity - used) {
+            producer.cachedPeer =
                 m_head.value.load(std::memory_order_acquire);
-            used = cursorDistance(tail, m_producerLocal.cachedPeer);
-            if (used >= capacity) {
+            used = cursorDistance(tail, producer.cachedPeer);
+            if (used >= producer.capacity) {
                 return 0;
             }
         }
 
-        const size_t count = std::min(values.size(), capacity - used);
+        const size_t count = std::min(values.size(), producer.capacity - used);
         for (size_t offset = 0; offset < count; ++offset) {
             const size_t index =
-                (static_cast<size_t>(tail) + offset) & ringMask();
+                (static_cast<size_t>(tail) + offset) & producer.mask;
             [[maybe_unused]] T* const stored = std::construct_at(
-                slotAt(index).storageAddress(), std::move(values[offset]));
+                producer.slots[index].storageAddress(),
+                std::move(values[offset]));
         }
         const Cursor next = static_cast<Cursor>(tail + static_cast<Cursor>(count));
-        m_producerLocal.position = next;
+        producer.position = next;
         m_tail.value.store(next, std::memory_order_release);
         return count;
     }
@@ -280,22 +268,7 @@ public:
      */
     [[nodiscard]] std::optional<T> tryRecv() noexcept
     {
-        const Cursor head = m_consumerLocal.position;
-        if (head == m_consumerLocal.cachedPeer) {
-            m_consumerLocal.cachedPeer =
-                m_tail.value.load(std::memory_order_acquire);
-            if (head == m_consumerLocal.cachedPeer) {
-                return std::nullopt;
-            }
-        }
-
-        Slot& slot = slotAt(static_cast<size_t>(head) & ringMask());
-        std::optional<T> value(std::in_place, std::move(*slot.value()));
-        std::destroy_at(slot.value());
-        const Cursor next = static_cast<Cursor>(head + 1);
-        m_consumerLocal.position = next;
-        m_head.value.store(next, std::memory_order_release);
-        return value;
+        return tryRecvOne(m_consumerLocal, m_head, m_tail);
     }
 
     /**
@@ -307,22 +280,7 @@ public:
     [[nodiscard]] bool tryRecv(T& output) noexcept
         requires std::is_nothrow_move_assignable_v<T>
     {
-        const Cursor head = m_consumerLocal.position;
-        if (head == m_consumerLocal.cachedPeer) {
-            m_consumerLocal.cachedPeer =
-                m_tail.value.load(std::memory_order_acquire);
-            if (head == m_consumerLocal.cachedPeer) {
-                return false;
-            }
-        }
-
-        Slot& slot = slotAt(static_cast<size_t>(head) & ringMask());
-        output = std::move(*slot.value());
-        std::destroy_at(slot.value());
-        const Cursor next = static_cast<Cursor>(head + 1);
-        m_consumerLocal.position = next;
-        m_head.value.store(next, std::memory_order_release);
-        return true;
+        return tryRecvOne(m_consumerLocal, m_head, m_tail, output);
     }
 
     /**
@@ -339,14 +297,15 @@ public:
             return 0;
         }
 
-        const Cursor head = m_consumerLocal.position;
+        LocalCursor& consumer = m_consumerLocal;
+        const Cursor head = consumer.position;
         const Cursor tail = m_tail.value.load(std::memory_order_acquire);
-        m_consumerLocal.cachedPeer = tail;
+        consumer.cachedPeer = tail;
         const size_t count = std::min(output.size(), cursorDistance(tail, head));
         for (size_t offset = 0; offset < count; ++offset) {
             const size_t index =
-                (static_cast<size_t>(head) + offset) & ringMask();
-            Slot& slot = slotAt(index);
+                (static_cast<size_t>(head) + offset) & consumer.mask;
+            Slot& slot = consumer.slots[index];
             output[offset] = std::move(*slot.value());
             std::destroy_at(slot.value());
         }
@@ -355,7 +314,7 @@ public:
         }
 
         const Cursor next = static_cast<Cursor>(head + static_cast<Cursor>(count));
-        m_consumerLocal.position = next;
+        consumer.position = next;
         m_head.value.store(next, std::memory_order_release);
         return count;
     }
@@ -365,6 +324,12 @@ private:
     static constexpr size_t kCacheLine = 128;
 #else
     static constexpr size_t kCacheLine = 64;
+#endif
+#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || \
+    defined(__ARM_ARCH_ISA_A64)
+    static constexpr size_t kPublishedCursorAlignment = 128;
+#else
+    static constexpr size_t kPublishedCursorAlignment = kCacheLine;
 #endif
 
     struct Slot
@@ -389,8 +354,8 @@ private:
         ? detail::kSpscRingBufferMaximumCapacity<Cursor>
         : kMaximumArrayCapacity;
 
-    /** @brief 单条共享发布游标，写端和读端之间独占一条缓存行。 */
-    struct alignas(kCacheLine) PublishedCursor
+    /** @brief 共享发布游标隔离空间预取的相邻缓存行。 */
+    struct alignas(kPublishedCursorAlignment) PublishedCursor
     {
         std::atomic<Cursor> value{0};
     };
@@ -398,9 +363,225 @@ private:
     /** @brief 单侧独占的本地游标和对端发布游标缓存。 */
     struct alignas(kCacheLine) LocalCursor
     {
+        Slot* slots = nullptr;
+        size_t capacity = 0;
+        size_t mask = 0;
         Cursor position = 0;
         Cursor cachedPeer = 0;
     };
+
+    /**
+     * @brief 独占端点持有的线程本地游标，不与另一端共享缓存线。
+     * @details Endpoint 常被 std::thread 的 heap closure 持有；128-byte 对齐
+     *          同时隔离 Intel 空间预取的相邻缓存线。
+     */
+    struct alignas(kPublishedCursorAlignment) EndpointCursor
+    {
+        Slot* slots = nullptr;
+        size_t capacity = 0;
+        size_t mask = 0;
+        Cursor position = 0;
+        Cursor cachedPeer = 0;
+    };
+
+    template <typename State>
+    [[nodiscard]] static bool trySendOne(State& producer,
+                                         PublishedCursor& head,
+                                         PublishedCursor& tail,
+                                         T&& value) noexcept
+    {
+        const Cursor position = producer.position;
+        if (cursorDistance(position, producer.cachedPeer) >= producer.capacity) {
+            producer.cachedPeer = head.value.load(std::memory_order_acquire);
+            if (cursorDistance(position, producer.cachedPeer) >= producer.capacity) {
+                return false;
+            }
+        }
+
+        Slot& slot =
+            producer.slots[static_cast<size_t>(position) & producer.mask];
+        [[maybe_unused]] T* const stored =
+            std::construct_at(slot.storageAddress(), std::move(value));
+        const Cursor next = static_cast<Cursor>(position + 1);
+        producer.position = next;
+        tail.value.store(next, std::memory_order_release);
+        return true;
+    }
+
+    template <typename State>
+    [[nodiscard]] static std::optional<T> tryRecvOne(
+        State& consumer,
+        PublishedCursor& head,
+        PublishedCursor& tail) noexcept
+    {
+        const Cursor position = consumer.position;
+        if (position == consumer.cachedPeer) {
+            consumer.cachedPeer = tail.value.load(std::memory_order_acquire);
+            if (position == consumer.cachedPeer) {
+                return std::nullopt;
+            }
+        }
+
+        Slot& slot =
+            consumer.slots[static_cast<size_t>(position) & consumer.mask];
+        std::optional<T> value(std::in_place, std::move(*slot.value()));
+        std::destroy_at(slot.value());
+        const Cursor next = static_cast<Cursor>(position + 1);
+        consumer.position = next;
+        head.value.store(next, std::memory_order_release);
+        return value;
+    }
+
+    template <typename State>
+    [[nodiscard]] static bool tryRecvOne(State& consumer,
+                                         PublishedCursor& head,
+                                         PublishedCursor& tail,
+                                         T& output) noexcept
+        requires std::is_nothrow_move_assignable_v<T>
+    {
+        const Cursor position = consumer.position;
+        if (position == consumer.cachedPeer) {
+            consumer.cachedPeer = tail.value.load(std::memory_order_acquire);
+            if (position == consumer.cachedPeer) {
+                return false;
+            }
+        }
+
+        Slot& slot =
+            consumer.slots[static_cast<size_t>(position) & consumer.mask];
+        output = std::move(*slot.value());
+        std::destroy_at(slot.value());
+        const Cursor next = static_cast<Cursor>(position + 1);
+        consumer.position = next;
+        head.value.store(next, std::memory_order_release);
+        return true;
+    }
+
+public:
+    /**
+     * @brief 借用 ring 的唯一 producer 端点。
+     * @note 端点不可复制；存活期间 ring 必须保持有效，且不得再调用 ring 的发送接口。
+     * @note 移动后源端点失效，不得继续调用。
+     */
+    class Producer
+    {
+    public:
+        Producer(const Producer&) = delete;
+        Producer& operator=(const Producer&) = delete;
+        Producer(Producer&& other) noexcept
+            : m_ring(std::exchange(other.m_ring, nullptr)),
+              m_local(other.m_local)
+        {
+        }
+
+        Producer& operator=(Producer&& other) noexcept
+        {
+            if (this != &other) {
+                m_ring = std::exchange(other.m_ring, nullptr);
+                m_local = other.m_local;
+            }
+            return *this;
+        }
+
+        /** @brief 尝试发布一条消息；满时返回 false 且 value 保持未移动。 */
+        [[nodiscard]] bool trySend(T&& value) noexcept
+        {
+            return trySendOne(
+                m_local, m_ring->m_head, m_ring->m_tail, std::move(value));
+        }
+
+    private:
+        friend class SpscRingBuffer;
+
+        explicit Producer(SpscRingBuffer* ring) noexcept
+            : m_ring(ring),
+              m_local{ring->m_producerLocal.slots,
+                      ring->m_producerLocal.capacity,
+                      ring->m_producerLocal.mask,
+                      ring->m_tail.value.load(std::memory_order_relaxed),
+                      ring->m_head.value.load(std::memory_order_relaxed)}
+        {
+        }
+
+        SpscRingBuffer* m_ring = nullptr;
+        EndpointCursor m_local;
+    };
+
+    /**
+     * @brief 借用 ring 的唯一 consumer 端点。
+     * @note 端点不可复制；存活期间 ring 必须保持有效，且不得再调用 ring 的接收接口。
+     * @note 移动后源端点失效，不得继续调用。
+     */
+    class Consumer
+    {
+    public:
+        Consumer(const Consumer&) = delete;
+        Consumer& operator=(const Consumer&) = delete;
+        Consumer(Consumer&& other) noexcept
+            : m_ring(std::exchange(other.m_ring, nullptr)),
+              m_local(other.m_local)
+        {
+        }
+
+        Consumer& operator=(Consumer&& other) noexcept
+        {
+            if (this != &other) {
+                m_ring = std::exchange(other.m_ring, nullptr);
+                m_local = other.m_local;
+            }
+            return *this;
+        }
+
+        /** @brief 尝试接收一条消息；空时返回 std::nullopt。 */
+        [[nodiscard]] std::optional<T> tryRecv() noexcept
+        {
+            return tryRecvOne(m_local, m_ring->m_head, m_ring->m_tail);
+        }
+
+        /** @brief 尝试把一条消息移动到调用方对象；空时返回 false。 */
+        [[nodiscard]] bool tryRecv(T& output) noexcept
+            requires std::is_nothrow_move_assignable_v<T>
+        {
+            return tryRecvOne(
+                m_local, m_ring->m_head, m_ring->m_tail, output);
+        }
+
+    private:
+        friend class SpscRingBuffer;
+
+        explicit Consumer(SpscRingBuffer* ring) noexcept
+            : m_ring(ring),
+              m_local{ring->m_consumerLocal.slots,
+                      ring->m_consumerLocal.capacity,
+                      ring->m_consumerLocal.mask,
+                      ring->m_head.value.load(std::memory_order_relaxed),
+                      ring->m_tail.value.load(std::memory_order_relaxed)}
+        {
+        }
+
+        SpscRingBuffer* m_ring = nullptr;
+        EndpointCursor m_local;
+    };
+
+    /** @brief 一次拆分得到的唯一 producer/consumer 端点。 */
+    struct Endpoints
+    {
+        Producer producer;
+        Consumer consumer;
+    };
+
+    /**
+     * @brief 为两个线程创建寄存器友好的独占端点。
+     * @return 借用当前 ring 的唯一 producer 和 consumer。
+     * @pre error() == kNone，调用期间没有并发访问，且之后不与 ring 直接 API 混用。
+     * @note ring 必须比返回的两个端点活得更久。
+     */
+    [[nodiscard]] Endpoints split() noexcept
+    {
+        return Endpoints{Producer(this), Consumer(this)};
+    }
+
+private:
 
     static constexpr size_t kStoredStaticCapacity =
         kUsesStaticCapacity ? Capacity : 0;
@@ -423,31 +604,14 @@ private:
         return std::bit_ceil(capacity);
     }
 
-    [[nodiscard]] size_t ringCapacity() const noexcept
+    void initializeLocalStorage(Slot* slots, size_t capacity) noexcept
     {
-        if constexpr (kUsesStaticCapacity) {
-            return Capacity;
-        } else {
-            return m_capacity;
-        }
-    }
-
-    [[nodiscard]] size_t ringMask() const noexcept
-    {
-        if constexpr (kUsesStaticCapacity) {
-            return Capacity - 1;
-        } else {
-            return m_mask;
-        }
-    }
-
-    [[nodiscard]] Slot& slotAt(size_t index) noexcept
-    {
-        if constexpr (kUsesStaticCapacity) {
-            return m_slots[index];
-        } else {
-            return m_slots.get()[index];
-        }
+        m_producerLocal.slots = slots;
+        m_producerLocal.capacity = capacity;
+        m_producerLocal.mask = capacity - 1;
+        m_consumerLocal.slots = slots;
+        m_consumerLocal.capacity = capacity;
+        m_consumerLocal.mask = capacity - 1;
     }
 
     [[nodiscard]] static size_t cursorDistance(Cursor newer, Cursor older) noexcept
@@ -461,8 +625,6 @@ private:
     LocalCursor m_producerLocal;
     LocalCursor m_consumerLocal;
     SlotStorage m_slots;
-    size_t m_capacity = 0;
-    size_t m_mask = 0;
     SpscRingBufferError m_error = SpscRingBufferError::kNone;
 };
 
@@ -494,4 +656,4 @@ using StaticSpscRingBuffer = SpscRingBuffer<T, Capacity, Cursor>;
 
 } // namespace galay::utils
 
-#endif // GALAY_UTILS_CACHE_SPSC_RING_BUFFER_HPP
+#endif // GALAY_UTILS_CACHE_TYPE_RING_BUFFER_HPP

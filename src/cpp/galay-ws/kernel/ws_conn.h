@@ -1075,7 +1075,7 @@ public:
     /**
      * @brief 直接构造
      */
-    WsConnImpl(SocketType&& socket, RingBuffer<>&& ring_buffer, bool is_server = true)
+    WsConnImpl(SocketType&& socket, RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>&& ring_buffer, bool is_server = true)
         : m_socket(std::move(socket))
         , m_ring_buffer(std::move(ring_buffer))
         , m_is_server(is_server)
@@ -1117,7 +1117,7 @@ public:
     /**
      * @brief 获取RingBuffer引用
      */
-    RingBuffer<>& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; }
 
     /**
      * @brief 获取WsReader
@@ -1243,7 +1243,7 @@ public:
 
 private:
     SocketType m_socket;
-    RingBuffer<> m_ring_buffer;
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_ring_buffer;
     bool m_is_server;
     EchoCounters m_echo_counters;
     std::string m_loop_message_scratch;

@@ -24,7 +24,7 @@ foreach(required_source_path
         "src/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "src/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
         "src/cpp/galay-utils/cache/ring_buffer.hpp"
-        "src/cpp/galay-utils/cache/spsc_ring_buffer.hpp"
+        "src/cpp/galay-utils/cache/type_ring_buffer.hpp"
         "src/cpp/galay-http/client/http_client.h"
         "src/cpp/galay-mcp/server/stdio_server.h")
     if(NOT EXISTS "${GALAY_SOURCE_DIR}/${required_source_path}")
@@ -103,7 +103,7 @@ foreach(required_header
         "include/galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "include/galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
         "include/galay/cpp/galay-utils/cache/ring_buffer.hpp"
-        "include/galay/cpp/galay-utils/cache/spsc_ring_buffer.hpp")
+        "include/galay/cpp/galay-utils/cache/type_ring_buffer.hpp")
     if(NOT EXISTS "${prefix_dir}/${required_header}")
         message(FATAL_ERROR "Missing installed header: ${required_header}")
     endif()
@@ -183,7 +183,7 @@ file(WRITE "${consumer_source_dir}/main.cc"
     "#include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>\n"
     "#include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>\n"
     "#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>\n"
-    "#include <galay/cpp/galay-utils/cache/spsc_ring_buffer.hpp>\n"
+    "#include <galay/cpp/galay-utils/cache/type_ring_buffer.hpp>\n"
     "int main() {\n"
     "  galay::utils::SpscRingBuffer<int> utils_ring(2);\n"
     "  galay::utils::StaticSpscRingBuffer<int, 2> utils_static_ring;\n"

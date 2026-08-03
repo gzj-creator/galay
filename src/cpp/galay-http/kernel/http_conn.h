@@ -59,7 +59,7 @@ public:
     {
     }
 
-    HttpConnImpl(SocketType&& socket, RingBuffer<>&& ring_buffer)
+    HttpConnImpl(SocketType&& socket, RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>&& ring_buffer)
         : m_socket(std::move(socket))
         , m_ring_buffer(std::move(ring_buffer))
     {
@@ -167,10 +167,10 @@ private:
      * @brief 获取RingBuffer（私有方法，仅供友元类使用）
      * @return RingBuffer引用
      */
-    RingBuffer<>& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; }
 
     SocketType m_socket;
-    RingBuffer<> m_ring_buffer;
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> m_ring_buffer;
     HttpWriterSetting m_default_writer_setting;
 };
 

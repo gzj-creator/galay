@@ -31,8 +31,10 @@
 using namespace galay::async;
 using namespace galay::kernel;
 
-using DefaultRingBuffer = RingBuffer<>;
-using VectorRingBuffer = RingBuffer<galay::utils::RingBufferBackendStrategy::Vector>;
+using DefaultRingBuffer = RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>;
+using VectorRingBuffer =
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Vector,
+               std::dynamic_extent>;
 
 std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_passed{false};
@@ -40,7 +42,7 @@ std::atomic<bool> g_test_passed{false};
 // ============ 单元测试 ============
 
 template<galay::utils::RingBufferBackendStrategy Strategy>
-std::string collectReadable(const RingBuffer<Strategy>& buffer) {
+std::string collectReadable(const RingBuffer<Strategy, std::dynamic_extent>& buffer) {
     std::array<struct iovec, 2> iovecs{};
     const size_t count = buffer.getReadIovecs(iovecs);
     std::string collected;

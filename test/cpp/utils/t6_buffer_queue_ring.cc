@@ -73,8 +73,8 @@ void test_byte_queue_view() {
 void test_ring_buffer() {
     std::cout << "=== Testing RingBuffer ===" << std::endl;
 
-    using DefaultRingBuffer = RingBuffer<>;
-    using VectorRingBuffer = RingBuffer<RingBufferBackendStrategy::Vector>;
+    using DefaultRingBuffer = RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>;
+    using VectorRingBuffer = RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent>;
 
     {
         auto invalid = DefaultRingBuffer::create(0);

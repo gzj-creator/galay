@@ -204,7 +204,7 @@ struct HttpRequestReadState {
      * @param setting 读取器配置
      * @param request 待填充的 HTTP 请求对象
      */
-    HttpRequestReadState(RingBuffer<>& ring_buffer,
+    HttpRequestReadState(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
                          const HttpReaderSetting& setting,
                          HttpRequest& request)
         : m_ring_buffer(&ring_buffer)
@@ -385,7 +385,7 @@ struct HttpRequestReadState {
         return true;
     }
 
-    RingBuffer<>* m_ring_buffer;                        ///< 环形缓冲区指针
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>* m_ring_buffer;                        ///< 环形缓冲区指针
     const HttpReaderSetting* m_setting;                 ///< 读取器配置指针
     HttpRequest* m_request;                             ///< HTTP 请求对象指针
     size_t m_total_received = 0;                        ///< 已接收总字节数
@@ -409,7 +409,7 @@ struct HttpResponseReadState {
      * @param setting 读取器配置
      * @param response 待填充的 HTTP 响应对象
      */
-    HttpResponseReadState(RingBuffer<>& ring_buffer,
+    HttpResponseReadState(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
                           const HttpReaderSetting& setting,
                           HttpResponse& response)
         : m_ring_buffer(&ring_buffer)
@@ -575,7 +575,7 @@ struct HttpResponseReadState {
         return true;
     }
 
-    RingBuffer<>* m_ring_buffer;                        ///< 环形缓冲区指针
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>* m_ring_buffer;                        ///< 环形缓冲区指针
     const HttpReaderSetting* m_setting;                 ///< 读取器配置指针
     HttpResponse* m_response;                           ///< HTTP 响应对象指针
     size_t m_total_received = 0;                        ///< 已接收总字节数
@@ -597,7 +597,7 @@ struct HttpChunkReadState {
      * @param setting 读取器配置
      * @param chunk_data 用于存储 chunk 数据的字符串引用
      */
-    HttpChunkReadState(RingBuffer<>& ring_buffer,
+    HttpChunkReadState(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
                        const HttpReaderSetting& setting,
                        std::string& chunk_data)
         : m_ring_buffer(&ring_buffer)
@@ -722,7 +722,7 @@ struct HttpChunkReadState {
         return m_is_last;
     }
 
-    RingBuffer<>* m_ring_buffer;                        ///< 环形缓冲区指针
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>* m_ring_buffer;                        ///< 环形缓冲区指针
     const HttpReaderSetting* m_setting;                 ///< 读取器配置指针
     std::string* m_chunk_data;                          ///< chunk 数据输出
     ChunkParser m_chunk_parser;                         ///< chunked body 增量解析状态
@@ -859,7 +859,7 @@ public:
      * @param setting 读取器配置
      * @param socket Socket 引用
      */
-    HttpReaderImpl(RingBuffer<>& ring_buffer, const HttpReaderSetting& setting, SocketType& socket)
+    HttpReaderImpl(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer, const HttpReaderSetting& setting, SocketType& socket)
         : m_ring_buffer(&ring_buffer)
         , m_setting(setting)
         , m_socket(&socket) {}
@@ -1052,7 +1052,7 @@ private:
         return m_request_read_state;
     }
 
-    RingBuffer<>* m_ring_buffer;                                        ///< 环形缓冲区指针
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>* m_ring_buffer;                                        ///< 环形缓冲区指针
     HttpReaderSetting m_setting;                                        ///< 读取器配置
     SocketType* m_socket;                                               ///< Socket 指针
     std::shared_ptr<detail::HttpRequestReadState> m_request_read_state; ///< 可复用的请求读取状态
