@@ -72,8 +72,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--producers",
         type=comma_separated_ints,
-        default=comma_separated_ints("1,2,4,8"),
-        help="comma-separated producer counts (default: 1,2,4,8)",
+        default=comma_separated_ints("2,4,8"),
+        help="comma-separated producer counts (default: 2,4,8)",
     )
     parser.add_argument("--capacity", type=int, default=4096)
     parser.add_argument("--initial-messages", type=int, default=1_000_000)
@@ -102,8 +102,8 @@ def parse_args() -> argparse.Namespace:
         parser.error("--cases must contain bounded and/or unbounded")
     if len(set(cases)) != len(cases):
         parser.error("--cases must not contain duplicates")
-    if any(value < 1 or value > 32 for value in args.producers):
-        parser.error("--producers values must be between 1 and 32")
+    if any(value < 2 or value > 32 for value in args.producers):
+        parser.error("--producers values must be between 2 and 32")
     if len(set(args.producers)) != len(args.producers):
         parser.error("--producers must not contain duplicates")
     if args.capacity < 2 or args.capacity & (args.capacity - 1):

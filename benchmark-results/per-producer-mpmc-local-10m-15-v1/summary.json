@@ -1,0 +1,84 @@
+{
+  "cpp_binary": "/Users/gongzhijie/Desktop/projects/git/galay/build-release/benchmark/cpp/kernel/benchmark_kernel_per_producer_mpmc_benchmark",
+  "generated_at": "2026-08-05T01:35:36.894726+08:00",
+  "results": [
+    {
+      "cpp": {
+        "coefficient_of_variation": 0.6596413485376214,
+        "max_messages_per_second": 276804000.0,
+        "mean_messages_per_second": 90393580.0,
+        "median_messages_per_second": 70647900.0,
+        "min_messages_per_second": 62405700.0,
+        "p10_messages_per_second": 63404440.0,
+        "p90_messages_per_second": 141253999.99999997,
+        "runs": 15,
+        "stddev_messages_per_second": 59627343.01034336
+      },
+      "messages": 10000000,
+      "paired": {
+        "cpp_win_rate": 0.13333333333333333,
+        "max_speedup": 2.52891940455,
+        "median_speedup": 0.778036668975,
+        "min_speedup": 0.6313641200149199,
+        "p10_speedup": 0.652972484665854,
+        "p90_speedup": 1.7205426639820836
+      },
+      "ring_capacity": 4096,
+      "rust": {
+        "coefficient_of_variation": 0.14262574749209264,
+        "max_messages_per_second": 117050047.12376373,
+        "mean_messages_per_second": 90389946.14025202,
+        "median_messages_per_second": 84309775.4284353,
+        "min_messages_per_second": 73177558.45959395,
+        "p10_messages_per_second": 80357616.02361573,
+        "p90_messages_per_second": 107479906.0632725,
+        "runs": 15,
+        "stddev_messages_per_second": 12891933.63402344
+      },
+      "stable_cpp_win": false,
+      "topology": "2p2c",
+      "total_capacity": 8192
+    },
+    {
+      "cpp": {
+        "coefficient_of_variation": 0.4103456232721841,
+        "max_messages_per_second": 153892000.0,
+        "mean_messages_per_second": 81801726.66666667,
+        "median_messages_per_second": 68343900.0,
+        "min_messages_per_second": 47670300.0,
+        "p10_messages_per_second": 51000240.0,
+        "p90_messages_per_second": 130293800.0,
+        "runs": 15,
+        "stddev_messages_per_second": 33566980.51377418
+      },
+      "messages": 10000000,
+      "paired": {
+        "cpp_win_rate": 0.26666666666666666,
+        "max_speedup": 2.0474060991000003,
+        "median_speedup": 0.7823398899051001,
+        "min_speedup": 0.38932149335,
+        "p10_speedup": 0.442123241234964,
+        "p90_speedup": 1.52506478679516
+      },
+      "ring_capacity": 4096,
+      "rust": {
+        "coefficient_of_variation": 0.2936944696790406,
+        "max_messages_per_second": 165557774.48961642,
+        "mean_messages_per_second": 99695127.8532181,
+        "median_messages_per_second": 100510888.80693455,
+        "min_messages_per_second": 46864208.49084042,
+        "p10_messages_per_second": 75095680.9819121,
+        "p90_messages_per_second": 133695376.61019641,
+        "runs": 15,
+        "stddev_messages_per_second": 29279907.70443504
+      },
+      "stable_cpp_win": false,
+      "topology": "4p4c",
+      "total_capacity": 16384
+    }
+  ],
+  "runs": 15,
+  "rust_binary": "/Users/gongzhijie/Desktop/projects/git/galay/benchmark/cpp/kernel/compare/rust-channel/target/release/mpmc_paired",
+  "schema": "galay.mpmc.per_producer_comparison.v1",
+  "warmups": 2
+}

@@ -399,7 +399,7 @@ fn benchmark() -> Result<(), String> {
         ChannelCase::Bounded => config.capacity,
     };
     println!(
-        "{{\"schema\":\"galay.mpmc.paired.v2\",\"language\":\"rust\",\"case\":\"{}\",\"path\":\"{}\",\"topology\":\"{}p{}c\",\"payload_bytes\":8,\"capacity\":{},\"messages\":{},\"elapsed_ns\":{},\"messages_per_second\":{},\"received\":{},\"checksum\":{},\"expected_checksum\":{},\"send_retries\":{},\"empty_retries\":{},\"placement\":\"{}\",\"backoff\":\"yield\",\"generator\":\"partitioned_monotonic_u64\",\"valid\":{}}}",
+        "{{\"schema\":\"galay.mpmc.paired.v2\",\"language\":\"rust\",\"implementation\":\"crossbeam-channel@0.5.16\",\"case\":\"{}\",\"path\":\"{}\",\"topology\":\"{}p{}c\",\"payload_bytes\":8,\"capacity\":{},\"messages\":{},\"elapsed_ns\":{},\"messages_per_second\":{},\"received\":{},\"checksum\":{},\"expected_checksum\":{},\"send_retries\":{},\"empty_retries\":{},\"placement\":\"{}\",\"backoff\":\"yield\",\"generator\":\"partitioned_monotonic_u64\",\"valid\":{}}}",
         config.channel_case.name(),
         config.channel_case.path(),
         config.producers,

@@ -42,9 +42,9 @@ struct Config
 {
     uint64_t messages = 1'000'000;
     size_t capacity = 4096;
-    size_t producers = 1;
+    size_t producers = 2;
     size_t producerCore = 0;
-    size_t consumerCore = 1;
+    size_t consumerCore = 2;
     CaseKind kind = CaseKind::kBounded;
 };
 
@@ -136,7 +136,7 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
             config.capacity = *parsed;
         } else if (option == "--producers") {
             auto parsed = parseUnsigned<size_t>(value);
-            if (!parsed || *parsed == 0 || *parsed > 32) {
+            if (!parsed || *parsed < 2 || *parsed > 32) {
                 return std::unexpected(ArgumentError::kInvalidTopology);
             }
             config.producers = *parsed;

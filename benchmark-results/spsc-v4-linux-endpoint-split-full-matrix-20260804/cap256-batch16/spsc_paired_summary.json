@@ -1,0 +1,181 @@
+{
+  "cases": [
+    {
+      "acceptance": {
+        "comparison_eligible": true,
+        "correctness_passed": true,
+        "cpp_cv_passed": true,
+        "max_cv_percent": 25.0,
+        "max_retry_ratio": 10.0,
+        "minimum_speedup": 1.05,
+        "passed": false,
+        "placement_passed": true,
+        "ratio_ci95_low_passed": false,
+        "retry_ratio_passed": true,
+        "rust_cv_passed": true,
+        "stability_passed": true
+      },
+      "backoff": "yield",
+      "batch_size": 16,
+      "calibration_floor_multiplier": 3.0,
+      "calibration_floor_seconds": 0.75,
+      "capacity": 256,
+      "case": "batch_bounded",
+      "messages": 137000000,
+      "summary": {
+        "cpp_messages_per_second": {
+          "cv_percent": 1.742381112445722,
+          "maximum": 153400137.21944594,
+          "mean": 147739420.0652816,
+          "median": 146979381.77309287,
+          "median_ci95_high": 149393872.20271534,
+          "median_ci95_low": 145896137.18316025,
+          "minimum": 143995867.88616663,
+          "p50": 146979381.77309287,
+          "p99": 153400137.21944594
+        },
+        "empty_retries": {
+          "cpp_median": 462869,
+          "max_over_min_floor_one": 1.2711222545051106,
+          "rust_median": 364142
+        },
+        "paired_cpp_over_rust": {
+          "cv_percent": 2.817045106495658,
+          "maximum": 0.9064136783851416,
+          "mean": 0.8805233947427158,
+          "median": 0.8844564561200002,
+          "median_ci95_high": 0.8968536829120013,
+          "median_ci95_low": 0.8765368571298637,
+          "minimum": 0.8060661289677387,
+          "p50": 0.8844564561200002,
+          "p99": 0.9064136783851416
+        },
+        "retry_ratio": {
+          "cpp": {
+            "empty": {
+              "cv_percent": 9.577766704363134,
+              "maximum": 0.0034399343065693432,
+              "mean": 0.003272407299270073,
+              "median": 0.0033786058394160586,
+              "median_ci95_high": 0.0034096131386861313,
+              "median_ci95_low": 0.003334043795620438,
+              "minimum": 0.002287189781021898,
+              "p50": 0.0033786058394160586,
+              "p99": 0.0034399343065693432
+            },
+            "full": {
+              "cv_percent": 3.5586446204462514,
+              "maximum": 0.003289992700729927,
+              "mean": 0.0031610515815085156,
+              "median": 0.003197671532846715,
+              "median_ci95_high": 0.003219051094890511,
+              "median_ci95_low": 0.0031173430656934306,
+              "minimum": 0.002879656934306569,
+              "p50": 0.003197671532846715,
+              "p99": 0.003289992700729927
+            },
+            "total": {
+              "cv_percent": 6.4563110248209945,
+              "maximum": 0.006708343065693431,
+              "mean": 0.006433458880778589,
+              "median": 0.006539817518248175,
+              "median_ci95_high": 0.006615802919708029,
+              "median_ci95_low": 0.006519795620437956,
+              "minimum": 0.005166846715328468,
+              "p50": 0.006539817518248175,
+              "p99": 0.006708343065693431
+            }
+          },
+          "rust": {
+            "empty": {
+              "cv_percent": 8.679519639950957,
+              "maximum": 0.002806810218978102,
+              "mean": 0.0026113654501216544,
+              "median": 0.002657970802919708,
+              "median_ci95_high": 0.0027344525547445256,
+              "median_ci95_low": 0.0025966569343065693,
+              "minimum": 0.0020783868613138685,
+              "p50": 0.002657970802919708,
+              "p99": 0.002806810218978102
+            },
+            "full": {
+              "cv_percent": 2.0130746263320334,
+              "maximum": 0.0027834087591240876,
+              "mean": 0.002705487104622871,
+              "median": 0.0027064379562043795,
+              "median_ci95_high": 0.0027484671532846715,
+              "median_ci95_low": 0.0026805693430656933,
+              "minimum": 0.0026007737226277374,
+              "p50": 0.0027064379562043795,
+              "p99": 0.0027834087591240876
+            },
+            "total": {
+              "cv_percent": 4.1967776512088735,
+              "maximum": 0.00559021897810219,
+              "mean": 0.005316852554744526,
+              "median": 0.00538243795620438,
+              "median_ci95_high": 0.005475313868613139,
+              "median_ci95_low": 0.005206839416058394,
+              "minimum": 0.0048321532846715325,
+              "p50": 0.00538243795620438,
+              "p99": 0.00559021897810219
+            }
+          }
+        },
+        "rust_messages_per_second": {
+          "cv_percent": 2.821274396039933,
+          "maximum": 182341592.6945312,
+          "mean": 167886464.52559662,
+          "median": 166446095.21712893,
+          "median_ci95_high": 167113354.36054397,
+          "median_ci95_low": 165827644.95287368,
+          "minimum": 164864771.7287906,
+          "p50": 166446095.21712893,
+          "p99": 182341592.6945312
+        }
+      }
+    }
+  ],
+  "config": {
+    "backoff": "yield",
+    "batch_size": 16,
+    "bootstrap_resamples": 10000,
+    "capacity": 256,
+    "cases": [
+      "batch_bounded"
+    ],
+    "consumer_core": 1,
+    "generator": "monotonic_u64",
+    "max_cv_percent": 25.0,
+    "max_retry_ratio": 10.0,
+    "minimum_speedup": 1.05,
+    "payload_bytes": 8,
+    "process_timeout": 300.0,
+    "producer_core": 0,
+    "samples": 15,
+    "target_seconds": 0.25,
+    "topology": "1p1c",
+    "warmups": 1
+  },
+  "environment": {
+    "binaries": {
+      "cpp": {
+        "path": "/tmp/galay-spsc-v4.t3Lzen/src/build-release/benchmark/cpp/kernel/benchmark_kernel_compare_spsc_paired",
+        "sha256": "6efa3d65e8bb1711cd85131e83d49e820ed7b9342622e73d25b415021565eaf9"
+      },
+      "rust": {
+        "path": "/tmp/galay-spsc-v4.t3Lzen/src/benchmark/cpp/kernel/compare/rust-channel/target/release/spsc_paired",
+        "sha256": "c3899cf0ceb0b4927f76e0e245d6594d4d0314eff6c8baf4ad628272b85320da"
+      }
+    },
+    "compilers": {
+      "cpp": "c++ (Ubuntu 14.2.0-4ubuntu2~24.04.1) 14.2.0\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis is free software; see the source for copying conditions.  There is NO\nwarranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.",
+      "rust": "rustc 1.99.0-nightly (11177f223 2026-08-02)\nbinary: rustc\ncommit-hash: 11177f2235f0c842b00f82c558ad9480c0c3a895\ncommit-date: 2026-08-02\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.0-nightly\nLLVM version: 22.1.8"
+    },
+    "machine": "x86_64",
+    "platform": "Linux-6.8.0-101-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3"
+  },
+  "generated_at": "2026-08-04T04:41:12.559392+00:00",
+  "schema": "galay.spsc.paired.report.v4"
+}

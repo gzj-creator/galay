@@ -13,9 +13,14 @@
 
 ### Changed
 
+- **校正并发通道基准口径与对照标识**：MPSC 吞吐、prefetch 和 C++/Rust paired runner 统一从 2P1C 起测，移除会退化为 SPSC 的 1P1C 默认场景；精简旧 MPSC 综合基准，只保留多生产者吞吐、正确性与压力覆盖，并在 MPMC Rust 输出中记录固定的 Crossbeam 实现版本。
 - **模板化 RingBuffer 容量并重命名 typed SPSC 实现**：`RingBuffer` 增加编译期容量参数，固定容量默认值为 4096，动态容量必须显式使用 `std::dynamic_extent`；新增容量 concept 和 Mmap 固定容量校验。typed SPSC 实现重命名为 `type_ring_buffer.hpp`，并移除冗余容量状态。
 - **优化 bounded SPSC 批处理数据面**：`Ring::split()` producer/consumer 独占本地 cursor，缓存对端 cursor，并将索引发布与回收收敛为每批一次；trivial 类型的环绕批处理使用两段 `memcpy`，减少逐元素原子访问和复制开销。
 - **统一底层 Ring 读写接口**：byte `RingBuffer`、`TypeRingBuffer<T>` 及 split endpoint 统一采用 `tryWrite` / `tryRead` 与 `tryWriteBatch` / `tryReadBatch` 命名，移除旧 `write` / `read`、`trySend` / `tryRecv` 接口；Channel 层继续保留 `send` / `recv` 语义。
+
+### Removed
+
+- **回退未成熟的 MPSC 统一工厂 API**：删除 `channel_factory.h` 及其示例和专项测试，避免把存在已知吞吐策略线程局部 producer 生命周期问题的包装层作为稳定公开入口；调用方继续直接选择已有的具体通道类型。
 
 ### Added
 
@@ -26,6 +31,7 @@
 - **新增高性能有界 MPMC 异步通道**：`galay::mpmc::BoundedChannel<T>` 基于固定容量 Vyukov ring 提供线程安全的 `trySend()` / `tryRecv()`、协程 `send()` / `recv()` / `recvBatch()`、超时、关闭唤醒和 move-only 元素支持；关闭位与 reservation cursor 共用同一 `tail` 原子，保证 close 前已取得的 reservation 完成发布并排空后才返回 `kClosed`。Apple AArch64 竞争退避使用 `isb` CPU hint，CAS miss 在当前调用内保持用户态重试。
 - **新增 MPMC 无界异步通道**：`galay::mpmc::UnboundedChannel<T>` 提供显式 producer/consumer token、默认线程本地 producer 缓存、单条与批量收发、异步接收、超时及 close/drain；producer 通过 0/1 SC active publication 与 close 建立全序，接收方仅在全部 producer 静止且二次 dequeue 仍为空时返回 `kClosed`。
 - **补齐 MPMC 正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、timeout 竞争、move-only、producer publication 线性化及无界队列两波跨 block 复用测试；新增独立进程 paired runner，严格统一 2P2C / 4P4C、8 字节单调 payload、yield backoff、完整 checksum/drain，每组至少采集 15 对交替样本并输出 bootstrap 95% CI，在 macOS 仅接受 `perf-class-only` 线程放置。Rust 对照仅保留 Crossbeam `ArrayQueue` 与 `crossbeam-channel`，旧的单消费者结果不再参与 MPMC 结论。
+- **归档并发通道原始性能证据**：新增 per-producer MPMC 本机与腾讯 Linux 的 2P2C/4P4C 对照样本，以及 SPSC v4 baseline、endpoint split、批量无界参考和最终矩阵的 CSV/JSON 结果，保留通过与未通过门禁的原始记录供后续复核。
 - **新增 `BoundedChannel` C ABI**：提供创建/销毁、同步单条与批量收发、C coroutine 超时等待、关闭和容量状态查询，完整映射公开错误码及 `*_get_error()` 字符串；新增边界/协程测试、公共头 smoke 和 1P1C/4P4C 吞吐 benchmark。
 - **新增 MPSC 专用有界与无界通道**：`galay::mpsc::BoundedChannel<T>` 使用多生产者 tail CAS 与单消费者 head；`galay::mpsc::UnboundedChannel<T>` 使用每 producer 独占的分块 SPSC 流、token/TLS 流缓存和高水位复用，单消费者稳态路径不做 cursor CAS/RMW；配套 close/drain、timeout、move-only、批量收发与边界/竞态测试。
 - **新增 MPSC C++/Rust 成对性能验证入口**：提供同 workload 的 bounded/unbounded 1P1C–8P1C C++ 与 Crossbeam 程序、校准/交替采样 runner、FIFO/checksum/计数门禁、bootstrap 95% 置信区间与原始证据输出。

@@ -1,0 +1,12 @@
+[package]
+name = "galay-kernel-rust-mpmc-paired"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "mpmc_paired"
+path = "../rust-channel/src/bin/mpmc_paired.rs"
+
+[dependencies]
+crossbeam-channel = "=0.5.16"

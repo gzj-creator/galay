@@ -171,9 +171,9 @@ fn parse_arguments() -> Result<Config, String> {
     let mut config = Config {
         messages: 1_000_000,
         capacity: 4096,
-        producers: 1,
+        producers: 2,
         producer_core: 0,
-        consumer_core: 1,
+        consumer_core: 2,
         kind: CaseKind::Bounded,
     };
     for pair in arguments.chunks_exact(2) {
@@ -217,8 +217,8 @@ fn parse_arguments() -> Result<Config, String> {
     if config.messages == 0 {
         return Err("message count must be positive".to_owned());
     }
-    if config.producers == 0 || config.producers > 32 {
-        return Err("producer count must be between 1 and 32".to_owned());
+    if config.producers < 2 || config.producers > 32 {
+        return Err("producer count must be between 2 and 32".to_owned());
     }
     if config.kind == CaseKind::Bounded
         && (config.capacity < 2 || !config.capacity.is_power_of_two())

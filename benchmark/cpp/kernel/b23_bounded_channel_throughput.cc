@@ -386,7 +386,7 @@ int main()
     printThroughput("bounded", 1, 4, 256);
     printThroughput("bounded", 4, 4, 256);
     printThroughput("bounded", 4, 4, 4096);
-    printMpscThroughput(1);
+    printMpscThroughput(2);
     printMpscThroughput(4);
     const double asyncWarmup = runAsyncHandoff(256, kMessages);
     if (asyncWarmup <= 0.0) {

@@ -148,7 +148,7 @@ bool runCase(size_t prefetchLimit, int producerCount)
     }
 
     std::cout << "mpsc_token topology="
-              << (producerCount == 1 ? "1p1c" : "4p1c")
+              << producerCount << "p1c"
               << " producers=" << producerCount
               << " prefetch=" << prefetchLimit
               << " messages=" << kMessages
@@ -166,7 +166,7 @@ bool runCase(size_t prefetchLimit, int producerCount)
 int main()
 {
     constexpr std::array<size_t, 4> kPrefetchLimits{0, 1, 4, 16};
-    constexpr std::array<int, 2> kProducerCounts{1, 4};
+    constexpr std::array<int, 2> kProducerCounts{2, 4};
     for (const int producerCount : kProducerCounts) {
         for (const size_t prefetchLimit : kPrefetchLimits) {
             if (!runCase(prefetchLimit, producerCount)) {
