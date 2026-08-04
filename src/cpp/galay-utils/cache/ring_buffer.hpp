@@ -487,24 +487,15 @@ private:
         if (full()) {
             return 0;
         }
-        size_t count = 0;
-        size_t remaining = writable();
-        if (m_writeIndex >= m_readIndex) {
-            const size_t first = std::min(remaining, capacity() - m_writeIndex);
-            if (first > 0) {
-                seg[count++] = {m_writeIndex, first};
-                remaining -= first;
-            }
-            if (remaining > 0 && m_readIndex > 0) {
-                seg[count++] = {0, std::min(remaining, m_readIndex)};
-            }
-        } else {
-            const size_t first = std::min(remaining, m_readIndex - m_writeIndex);
-            if (first > 0) {
-                seg[count++] = {m_writeIndex, first};
-            }
+        const size_t available = writable();
+        const size_t first = std::min(available, capacity() - m_writeIndex);
+        seg[0] = {m_writeIndex, first};
+        const size_t second = available - first;
+        if (second == 0) {
+            return 1;
         }
-        return count;
+        seg[1] = {0, second};
+        return 2;
     }
 
     /**
@@ -516,21 +507,15 @@ private:
         if (empty()) {
             return 0;
         }
-        size_t count = 0;
-        size_t remaining = readable();
-        if (m_readIndex < m_writeIndex) {
-            seg[count++] = {m_readIndex, remaining};
-        } else {
-            const size_t first = std::min(remaining, capacity() - m_readIndex);
-            if (first > 0) {
-                seg[count++] = {m_readIndex, first};
-                remaining -= first;
-            }
-            if (remaining > 0) {
-                seg[count++] = {0, remaining};
-            }
+        const size_t available = readable();
+        const size_t first = std::min(available, capacity() - m_readIndex);
+        seg[0] = {m_readIndex, first};
+        const size_t second = available - first;
+        if (second == 0) {
+            return 1;
         }
-        return count;
+        seg[1] = {0, second};
+        return 2;
     }
 
     std::vector<std::byte> m_buffer;
@@ -817,18 +802,19 @@ public:
     static constexpr size_t kMmapThreshold = 64 * 1024;    ///< mmap 后端启用阈值
 
     /**
-     * @brief 构造固定容量环形缓冲区
-     * @param capacity 缓冲区容量；为 0 时使用默认容量，mmap 后端会按页向上对齐
+     * @brief 使用编译期容量构造，动态容量 specialization 使用默认容量
      * @note mmap 资源创建失败时自动降级到 vector 后端，不影响功能可用性。
      */
     RingBuffer()
-        requires (Capacity != std::dynamic_extent)
-        : m_impl(makeImpl(Capacity)) {}
+        : m_impl(makeImpl(Capacity == std::dynamic_extent
+                              ? kDefaultCapacity
+                              : Capacity)) {}
 
-    RingBuffer()
-        requires (Capacity == std::dynamic_extent)
-        : m_impl(makeImpl(kDefaultCapacity)) {}
-
+    /**
+     * @brief 使用运行时容量构造环形缓冲区
+     * @param capacity 缓冲区容量；为 0 时使用默认容量，mmap 后端会按页向上对齐
+     * @note 仅动态容量 specialization 提供该构造函数。
+     */
     explicit RingBuffer(size_t capacity)
         requires (Capacity == std::dynamic_extent)
         : m_impl(makeImpl(capacity)) {}

@@ -137,10 +137,33 @@ int main()
                         content,
                         "constructionAddress",
                         "raw storage construction must not call std::launder before lifetime begins");
+        requireContains(
+            failures,
+            content,
+            "std::array<std::atomic<uint8_t>, kBlockCapacity> ready{}",
+            "each block must carry zero-initialized ready flags parallel to its slots");
+        const std::string slot = extractFunction(content, "struct Slot");
+        if (slot.empty()) {
+            failures.push_back("failed to locate MPSC slot storage");
+        } else {
+            requireNotContains(failures,
+                               slot,
+                               "std::atomic",
+                               "ready publication must not increase the slot stride");
+        }
+        requireContains(
+            failures,
+            content,
+            "(kBlockTargetBytes - ::galay::utils::kCacheLineSize)",
+            "block capacity must remain derived from the original slot storage");
         requireContains(failures,
                         content,
                         "kWaking",
                         "producer wake must keep the waiter slot non-rearmable until consumed");
+        requireContains(failures,
+                        content,
+                        "kPublished",
+                        "producer gate must distinguish published data from active construction");
 
         const std::string tokenValidity = extractFunction(
             content,
@@ -164,6 +187,42 @@ int main()
                 "lifetime->state.load(std::memory_order_acquire)",
                 "m_channel == channel",
                 "producer token validity must reject detached lifetime before comparing an expired channel pointer");
+        }
+
+        const std::string liveTokenValidity = extractFunction(
+            content,
+            "bool validForLiveChannel(\n"
+            "            const UnboundedChannel* channel) const noexcept");
+        if (liveTokenValidity.empty()) {
+            failures.push_back("failed to locate MPSC live-channel token check");
+        } else {
+            requireNotContains(
+                failures,
+                liveTokenValidity,
+                ".load(",
+                "live-channel token send hot path must not load lifetime state");
+            requireNotContains(
+                failures,
+                liveTokenValidity,
+                "ProducerLifetimeState",
+                "live-channel token send hot path must not inspect cold lifetime state");
+        }
+
+        const std::string tokenSend = extractFunction(
+            content, "bool send(ProducerToken& token, T&& value) noexcept");
+        if (tokenSend.empty()) {
+            failures.push_back("failed to locate MPSC token single send");
+        } else {
+            requireContains(
+                failures,
+                tokenSend,
+                "token.validForLiveChannel(this)",
+                "token single send must retain the live-channel hot-path check");
+            requireNotContains(
+                failures,
+                tokenSend,
+                "token.validFor(this)",
+                "token single send must not restore the lifetime acquire");
         }
 
         const std::string tryRecv =
@@ -234,6 +293,113 @@ int main()
                             "completed send must release the producer gate");
         }
 
+        const std::string reserveProducerSlots = extractFunction(
+            content,
+            "bool reserveProducerSlots(ProducerStream& stream, size_t count) noexcept");
+        if (reserveProducerSlots.empty()) {
+            failures.push_back("failed to locate MPSC producer slot reservation");
+        } else {
+            requireOrdered(
+                failures,
+                reserveProducerSlots,
+                "producer.block = first;",
+                "previousTail->next.store(first, std::memory_order_release)",
+                "a full-block producer cursor must advance before the old link becomes recyclable");
+        }
+
+        const std::string takeRecycledBlock = extractFunction(
+            content,
+            "Block* takeRecycledBlock(ProducerStream& stream) noexcept");
+        if (takeRecycledBlock.empty()) {
+            failures.push_back("failed to locate MPSC recycled block acquisition");
+        } else {
+            requireContains(
+                failures,
+                takeRecycledBlock,
+                "for (std::atomic<uint8_t>& flag : block->ready)",
+                "producer must reset every ready flag on a recycled block");
+            requireContains(
+                failures,
+                takeRecycledBlock,
+                "flag.store(0, std::memory_order_relaxed)",
+                "recycled ready flags must be reset with producer-owned relaxed stores");
+            requireOrdered(
+                failures,
+                takeRecycledBlock,
+                "flag.store(0, std::memory_order_relaxed)",
+                "block->next.store(nullptr, std::memory_order_relaxed)",
+                "recycled flags must be reset before the block is relinked");
+        }
+
+        const std::string publishStream = extractFunction(
+            content,
+            "TaskState* publishStream(ProducerStream& stream,");
+        if (publishStream.empty()) {
+            failures.push_back("failed to locate MPSC stream publication");
+        } else {
+            requireContains(
+                failures,
+                publishStream,
+                "readyBlock->ready[readyIndex].store(\n"
+                "                1, std::memory_order_relaxed)",
+                "batch publication must mark every slot after the first with relaxed stores");
+            requireContains(
+                failures,
+                publishStream,
+                "batchStartBlock->ready[batchStartIndex].store(\n"
+                "            1, std::memory_order_release)",
+                "batch first ready flag must be the release linearization point");
+            requireContains(
+                failures,
+                publishStream,
+                "stream.shared.published.store(producer.localPublished,\n"
+                "                                      std::memory_order_release)",
+                "diagnostic publication counter must remain a release snapshot");
+            requireNotContains(
+                failures,
+                publishStream,
+                "published.store(producer.localPublished,\n"
+                "                                      std::memory_order_seq_cst)",
+                "consumer-shared publication counter must not use seq_cst store");
+            requireContains(
+                failures,
+                publishStream,
+                "stream.control.gate.store(\n"
+                "            ProducerGate::kPublished,\n"
+                "            std::memory_order_seq_cst)",
+                "published data must join waiter ordering through the producer gate");
+            requireOrdered(
+                failures,
+                publishStream,
+                "activateReadyStream(stream)",
+                "readyBlock->ready[readyIndex].store",
+                "first ready stream membership must precede ready publication");
+            requireOrdered(
+                failures,
+                publishStream,
+                "readyBlock->ready[readyIndex].store",
+                "batchStartBlock->ready[batchStartIndex].store",
+                "later batch slots must be marked before the first slot commit");
+            requireOrdered(
+                failures,
+                publishStream,
+                "batchStartBlock->ready[batchStartIndex].store",
+                "published.store(producer.localPublished",
+                "batch ready commit must precede diagnostic publication");
+            requireOrdered(
+                failures,
+                publishStream,
+                "published.store(producer.localPublished",
+                "ProducerGate::kPublished",
+                "data publication must precede the published gate announcement");
+            requireOrdered(
+                failures,
+                publishStream,
+                "ProducerGate::kPublished",
+                "detachPublishedWaiter()",
+                "published gate announcement must precede waiter arbitration");
+        }
+
         const std::string singleSend = extractFunction(
             content,
             "bool sendToStream(ProducerStream& stream, T&& value) noexcept");
@@ -242,7 +408,16 @@ int main()
         } else {
             requireContains(failures,
                             singleSend,
-                            "TaskState* waiterState = publishStream(stream, 1);",
+                            "Block* const batchStartBlock = producer.block;",
+                            "single send must capture its normalized batch start block");
+            requireContains(failures,
+                            singleSend,
+                            "const size_t batchStartIndex = producer.index;",
+                            "single send must capture its normalized batch start index");
+            requireContains(failures,
+                            singleSend,
+                            "publishStream(\n"
+                            "            stream, batchStartBlock, batchStartIndex, 1);",
                             "empty single-send wake path must use a nullable raw waiter state");
             requireNotContains(failures,
                                singleSend,
@@ -254,7 +429,8 @@ int main()
                             "empty single-send wake path must bypass the out-of-line waker");
             requireOrdered(failures,
                            singleSend,
-                           "publishStream(stream, 1)",
+                           "publishStream(\n"
+                           "            stream, batchStartBlock, batchStartIndex, 1)",
                            "finishSend(stream);",
                            "single send must publish before releasing its producer gate");
             requireOrdered(failures,
@@ -270,6 +446,14 @@ int main()
         if (copyBatchSend.empty()) {
             failures.push_back("failed to locate MPSC copy batch send");
         } else {
+            requireContains(failures,
+                            copyBatchSend,
+                            "Block* const batchStartBlock = producer.block;",
+                            "copy batch send must capture its normalized first block");
+            requireContains(failures,
+                            copyBatchSend,
+                            "const size_t batchStartIndex = producer.index;",
+                            "copy batch send must capture its normalized first index");
             requireNotContains(failures,
                                copyBatchSend,
                                "TaskRef waiterTask",
@@ -280,7 +464,7 @@ int main()
                             "empty copy-batch wake path must bypass the out-of-line waker");
             requireOrdered(failures,
                            copyBatchSend,
-                           "publishStream(stream, values.size())",
+                           "stream, batchStartBlock, batchStartIndex, values.size())",
                            "finishSend(stream);",
                            "copy batch send must publish before releasing its producer gate");
             requireOrdered(failures,
@@ -296,6 +480,14 @@ int main()
         if (moveBatchSend.empty()) {
             failures.push_back("failed to locate MPSC move batch send");
         } else {
+            requireContains(failures,
+                            moveBatchSend,
+                            "Block* const batchStartBlock = producer.block;",
+                            "move batch send must capture its normalized first block");
+            requireContains(failures,
+                            moveBatchSend,
+                            "const size_t batchStartIndex = producer.index;",
+                            "move batch send must capture its normalized first index");
             requireNotContains(failures,
                                moveBatchSend,
                                "TaskRef waiterTask",
@@ -317,7 +509,7 @@ int main()
             }
             requireOrdered(failures,
                            moveBatchSend,
-                           "publishStream(stream, values.size())",
+                           "stream, batchStartBlock, batchStartIndex, values.size())",
                            "finishSend(stream);",
                            "move batch send must publish before releasing its producer gate");
             requireOrdered(failures,
@@ -325,6 +517,35 @@ int main()
                            "finishSend(stream);",
                            "wakeDetachedWaiter",
                            "move batch send must release its producer gate before waking a waiter");
+        }
+
+        const std::string popStream = extractFunction(
+            content,
+            "std::optional<T> tryPopStream(ProducerStream& stream) noexcept");
+        if (popStream.empty()) {
+            failures.push_back("failed to locate MPSC stream consumer hot path");
+        } else {
+            requireNotContains(
+                failures,
+                popStream,
+                "shared.published",
+                "consumer hot path must not read the diagnostic publication counter");
+            requireContains(
+                failures,
+                popStream,
+                "block.ready[consumer.index].load(std::memory_order_acquire)",
+                "consumer must acquire the current slot ready flag");
+            requireNotContains(
+                failures,
+                popStream,
+                ".ready[consumer.index].store",
+                "consumer must not clear producer-owned ready flags");
+            requireOrdered(
+                failures,
+                popStream,
+                "if (consumer.index == kBlockCapacity)",
+                "block.ready[consumer.index].load(std::memory_order_acquire)",
+                "consumer must normalize a block-end cursor before reading readiness");
         }
 
         const std::string close = extractFunction(content, "bool close() noexcept");
@@ -335,6 +556,11 @@ int main()
                             close,
                             "stream->control.gate.load(std::memory_order_seq_cst)",
                             "close must pair its cutoff with the producer seq_cst announcement");
+            requireContains(failures,
+                            close,
+                            "std::memory_order_seq_cst) !=\n"
+                            "                   ProducerGate::kOpen",
+                            "close must wait for constructing and published producer states");
             requireNotContains(failures,
                                close,
                                "stream->control.gate.store",
@@ -351,6 +577,35 @@ int main()
                            "close must detach all channel-owned waiter state before waking");
         }
 
+        const std::string singleAwaitSuspend = extractFunction(
+            content,
+            "bool UnboundedRecvAwaitable<T>::await_suspend(");
+        if (singleAwaitSuspend.empty()) {
+            failures.push_back("failed to locate MPSC single await_suspend");
+        } else {
+            const size_t registration =
+                singleAwaitSuspend.find("beginWaiterRegistration()");
+            const size_t publication = singleAwaitSuspend.find("publishWaiter(");
+            if (registration == std::string::npos ||
+                publication == std::string::npos || registration >= publication) {
+                failures.push_back(
+                    "single await_suspend must register before publishing waiter");
+            } else {
+                const std::string armingPath = singleAwaitSuspend.substr(
+                    registration, publication - registration);
+                requireNotContains(
+                    failures,
+                    armingPath,
+                    "tryReceiveNow()",
+                    "single waiter final check must not rely on a receive probe");
+                requireContains(
+                    failures,
+                    armingPath,
+                    "hasPublishedValueForWaiter()",
+                    "single waiter final check must scan producer gates");
+            }
+        }
+
         const std::string closedAndDrained =
             extractFunction(content, "bool isClosedAndDrained() const noexcept");
         if (closedAndDrained.empty()) {
@@ -360,6 +615,35 @@ int main()
                             closedAndDrained,
                             "m_closeState.load(std::memory_order_seq_cst)",
                             "waiter close recheck must share the waiter seq_cst order");
+        }
+
+        const std::string batchToAwaitSuspend = extractFunction(
+            content,
+            "bool UnboundedRecvBatchToAwaitable<T>::await_suspend(");
+        if (batchToAwaitSuspend.empty()) {
+            failures.push_back("failed to locate MPSC batch-to await_suspend");
+        } else {
+            const size_t registration =
+                batchToAwaitSuspend.find("beginWaiterRegistration()");
+            const size_t publication = batchToAwaitSuspend.find("publishWaiter(");
+            if (registration == std::string::npos ||
+                publication == std::string::npos || registration >= publication) {
+                failures.push_back(
+                    "batch-to await_suspend must register before publishing waiter");
+            } else {
+                const std::string armingPath = batchToAwaitSuspend.substr(
+                    registration, publication - registration);
+                requireNotContains(
+                    failures,
+                    armingPath,
+                    "tryReceiveNow()",
+                    "batch-to waiter final check must not rely on a drain probe");
+                requireContains(
+                    failures,
+                    armingPath,
+                    "hasPublishedValueForWaiter()",
+                    "batch-to waiter final check must scan producer gates");
+            }
         }
 
         const std::string batchAwaitSuspend = extractFunction(
@@ -433,8 +717,45 @@ int main()
             requireContains(
                 failures,
                 waiterReadiness,
+                "ProducerStream* stream = m_readyHead;",
+                "waiter readiness must retain the ready-stack publication path");
+            requireContains(
+                failures,
+                waiterReadiness,
+                "m_streamHead.load(std::memory_order_acquire)",
+                "waiter readiness must scan every registered producer stream");
+            requireContains(
+                failures,
+                waiterReadiness,
+                "control.gate.load(std::memory_order_seq_cst)",
+                "waiter readiness must join producer notification ordering through the gate");
+            requireContains(
+                failures,
+                waiterReadiness,
+                "ProducerGate::kPublished",
+                "waiter readiness must treat a published gate as immediately readable");
+            requireContains(
+                failures,
+                waiterReadiness,
+                "ProducerGate::kSending",
+                "waiter readiness must identify sends that will arbitrate after arming");
+            requireContains(
+                failures,
+                waiterReadiness,
+                "if (gate == ProducerGate::kSending) {\n"
+                "                if (stream->consumer.localConsumed !=\n"
+                "                    stream->shared.published.load(std::memory_order_acquire))",
+                "a sending stream must recheck previously published data before arming");
+            requireContains(
+                failures,
+                waiterReadiness,
+                "published.load(std::memory_order_acquire)",
+                "open producer streams must acquire the released publication counter");
+            requireNotContains(
+                failures,
+                waiterReadiness,
                 "published.load(std::memory_order_seq_cst)",
-                "waiter readiness must observe published data in the waiter SC order");
+                "waiter readiness must not restore seq_cst traffic on shared publication");
         }
     }
 

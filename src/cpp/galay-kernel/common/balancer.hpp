@@ -18,6 +18,8 @@
 #ifndef GALAY_KERNEL_COMMON_BALANCER_HPP
 #define GALAY_KERNEL_COMMON_BALANCER_HPP
 
+#include "../../galay-utils/common/defn.hpp"
+
 #include <atomic>
 #include <vector>
 #include <memory>
@@ -92,7 +94,7 @@ template<std::copy_constructible Type>
 class WeightRoundRobinLoadBalancer
 {
 private:
-    struct alignas(64) Node {
+    struct alignas(::galay::utils::kCacheLineSize) Node {
         Type node;
         int32_t current_weight;
         const int32_t fixed_weight;

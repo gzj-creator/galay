@@ -397,7 +397,7 @@ inline bool isKnownHttp2FrameType(Http2FrameType type) {
 }
 
 template<RingBufferBackendStrategy Strategy>
-inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer<Strategy>& ring_buffer,
+inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                                      uint32_t max_frame_size) {
     Http2BufferedFrameStatus status;
     if (ring_buffer.readable() < kHttp2FrameHeaderLength) {
@@ -425,7 +425,7 @@ inline Http2BufferedFrameStatus inspectBufferedFrame(RingBuffer<Strategy>& ring_
 
 template<RingBufferBackendStrategy Strategy>
 inline std::expected<Http2Frame::uptr, Http2ErrorCode>
-parseSingleBufferedFrame(RingBuffer<Strategy>& ring_buffer,
+parseSingleBufferedFrame(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                          uint32_t max_frame_size,
                          std::vector<uint8_t>& scratch) {
     while (true) {
@@ -473,7 +473,7 @@ parseSingleBufferedFrame(RingBuffer<Strategy>& ring_buffer,
 
 template<RingBufferBackendStrategy Strategy>
 inline std::expected<std::vector<Http2Frame::uptr>, Http2ErrorCode>
-parseBufferedFrameBatch(RingBuffer<Strategy>& ring_buffer,
+parseBufferedFrameBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                         uint32_t max_frame_size,
                         size_t max_frames,
                         std::vector<uint8_t>& scratch) {
@@ -531,7 +531,7 @@ parseBufferedFrameBatch(RingBuffer<Strategy>& ring_buffer,
 
 template<RingBufferBackendStrategy Strategy>
 inline std::expected<std::vector<Http2RawFrameView>, Http2ErrorCode>
-parseBufferedFrameViewBatch(RingBuffer<Strategy>& ring_buffer,
+parseBufferedFrameViewBatch(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                             uint32_t max_frame_size,
                             size_t max_frames) {
     std::vector<Http2RawFrameView> frames;
@@ -587,7 +587,7 @@ template<typename ValueT, RingBufferBackendStrategy Strategy>
 struct Http2ReadStateBase {
     using ResultType = std::expected<ValueT, Http2ErrorCode>;
 
-    Http2ReadStateBase(RingBuffer<Strategy>& ring_buffer,
+    Http2ReadStateBase(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                        Http2Settings& peer_settings,
                        bool* peer_closed = nullptr,
                        std::string* last_error_msg = nullptr,
@@ -626,7 +626,7 @@ struct Http2ReadStateBase {
             compactIovecs(m_write_iovecs.storage(), m_write_iovecs.size());
         m_write_iovecs.setCount(compact_count);
         if (m_write_iovecs.empty()) {
-            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<> is full");
+            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> is full");
             return false;
         }
         return true;
@@ -639,7 +639,7 @@ struct Http2ReadStateBase {
             return false;
         }
         if (!IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
-            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<> is full");
+            setProtocolError(Http2ErrorCode::ProtocolError, "RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> is full");
             return false;
         }
         return true;
@@ -693,7 +693,7 @@ protected:
         }
     }
 
-    RingBuffer<Strategy>* m_ring_buffer = nullptr;
+    RingBuffer<Strategy, std::dynamic_extent>* m_ring_buffer = nullptr;
     Http2Settings* m_peer_settings = nullptr;
     bool* m_peer_closed = nullptr;
     std::string* m_last_error_msg = nullptr;
@@ -730,7 +730,7 @@ template<RingBufferBackendStrategy Strategy>
 struct Http2FrameBatchReadState : Http2ReadStateBase<std::vector<Http2Frame::uptr>, Strategy> {
     using Base = Http2ReadStateBase<std::vector<Http2Frame::uptr>, Strategy>;
 
-    Http2FrameBatchReadState(RingBuffer<Strategy>& ring_buffer,
+    Http2FrameBatchReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                              Http2Settings& peer_settings,
                              size_t max_frames,
                              bool* peer_closed = nullptr,
@@ -764,7 +764,7 @@ template<RingBufferBackendStrategy Strategy>
 struct Http2FrameViewBatchReadState : Http2ReadStateBase<std::vector<Http2RawFrameView>, Strategy> {
     using Base = Http2ReadStateBase<std::vector<Http2RawFrameView>, Strategy>;
 
-    Http2FrameViewBatchReadState(RingBuffer<Strategy>& ring_buffer,
+    Http2FrameViewBatchReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                                  Http2Settings& peer_settings,
                                  size_t max_frames,
                                  bool* peer_closed = nullptr,
@@ -1250,7 +1250,7 @@ public:
         // 升级后需要扩展 buffer 大小以适应 HTTP/2
         if (m_ring_buffer.capacity() < 65536) {
             // 保留已有数据，扩展容量
-            RingBuffer<Strategy> new_buffer(65536);
+            RingBuffer<Strategy, std::dynamic_extent> new_buffer(65536);
             // 复制已有数据到新 buffer
             auto read_iovecs = borrowReadIovecs(m_ring_buffer);
             for (const auto& iov : read_iovecs) {
@@ -1276,7 +1276,7 @@ public:
     /**
      * @brief 从 Socket 和 RingBuffer 构造
      */
-    Http2ConnImpl(SocketType&& socket, RingBuffer<Strategy>&& ring_buffer)
+    Http2ConnImpl(SocketType&& socket, RingBuffer<Strategy, std::dynamic_extent>&& ring_buffer)
         : m_socket(std::move(socket))
         , m_ring_buffer(std::move(ring_buffer))
         , m_last_peer_stream_id(0)
@@ -1661,7 +1661,7 @@ public:
     /**
      * @brief 获取接收缓冲区引用
      */
-    RingBuffer<Strategy>& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; }
 
     /**
      * @brief 将数据放入接收缓冲区
@@ -2021,7 +2021,7 @@ private:
     friend class Http2StreamManagerImpl<SocketType, Strategy>;
 
     SocketType m_socket;
-    RingBuffer<Strategy> m_ring_buffer;
+    RingBuffer<Strategy, std::dynamic_extent> m_ring_buffer;
     std::vector<uint8_t> m_parse_buffer;  // 用于跨 iovec 边界的帧解析
 
     // 连接设置

@@ -1,6 +1,6 @@
 /**
  * @file b25_unbounded_channel_family_throughput.cc
- * @brief 压测 unbounded MPMC wrapper 与 raw moodycamel 数据面的同步吞吐。
+ * @brief 压测 unbounded MPMC 完整路径、raw 数据面与 moodycamel 基线吞吐。
  */
 
 #include <galay/cpp/galay-kernel/concurrency/mpmc/unbounded_channel.h>
@@ -21,7 +21,7 @@
 
 namespace galay::mpmc {
 
-/** @brief 仅供 B25 隔离同一 DataQueue 的 raw 与 send-permit 成本。 */
+/** @brief 仅供 B25 隔离当前分段队列的数据面与 waiter 通知成本。 */
 struct UnboundedChannelTestAccess
 {
     template <UnboundedValue T>
@@ -29,8 +29,8 @@ struct UnboundedChannelTestAccess
                         typename UnboundedChannel<T>::ProducerToken& token,
                         T&& value)
     {
-        return token.validFor(channel) && channel.m_queue.enqueue(
-            token.m_epochNode->queueToken, std::move(value));
+        return token.validFor(channel) &&
+            channel.template sendTokenFast<false>(token, std::move(value));
     }
 
     template <UnboundedValue T>
@@ -38,8 +38,18 @@ struct UnboundedChannelTestAccess
                         typename UnboundedChannel<T>::ConsumerToken& token,
                         T& value)
     {
-        return token.validFor(channel) &&
-            channel.m_queue.try_dequeue(token.m_token, value);
+        auto received = channel.tryRecv(token);
+        if (!received.has_value()) {
+            return false;
+        }
+        value = std::move(*received);
+        return true;
+    }
+
+    template <UnboundedValue T>
+    static constexpr size_t blockSize() noexcept
+    {
+        return UnboundedChannel<T>::kSlotsPerBlock;
     }
 };
 
@@ -52,8 +62,7 @@ constexpr int kWarmupSamples = 1;
 constexpr int kSamples = 7;
 constexpr int64_t kExpectedSum = (kMessages - 1) * kMessages / 2;
 using DefaultQueueTraits = moodycamel::ConcurrentQueueDefaultTraits;
-constexpr size_t kInitialPoolElements =
-    galay::mpmc::detail::kUnboundedInitialPoolElements;
+constexpr size_t kMoodyInitialPoolElements = 1024;
 
 enum class ChannelPath : uint8_t {
     kRaw,
@@ -218,8 +227,8 @@ template <typename QueueTraits>
 Measurement runRawQueue(int producerCount, int consumerCount)
 {
     using Queue = moodycamel::ConcurrentQueue<int64_t, QueueTraits>;
-    static_assert(kInitialPoolElements % QueueTraits::BLOCK_SIZE == 0);
-    Queue queue(kInitialPoolElements);
+    static_assert(kMoodyInitialPoolElements % QueueTraits::BLOCK_SIZE == 0);
+    Queue queue(kMoodyInitialPoolElements);
     std::atomic<bool> closed{false};
     std::atomic<bool> setupFailed{false};
     galay::benchmark::CompletionLatch ready(
@@ -364,7 +373,9 @@ void printSummary(const char* name,
                   size_t emptyCounterThreshold,
                   size_t initialIndexSize,
                   size_t implicitProducerHashSize,
+                  size_t initialPoolElements,
                   uint32_t consumerRotationQuota,
+                  bool moodyTraits,
                   const std::vector<Measurement>& samples)
 {
     std::vector<double> throughput;
@@ -389,14 +400,15 @@ void printSummary(const char* name,
               << " producers=" << producerCount
               << " consumers=" << consumerCount
               << " capacity=unbounded"
-              << " block_size=" << blockSize
-              << " empty_counter_threshold=" << emptyCounterThreshold
-              << " explicit_initial_index_size=" << initialIndexSize
-              << " implicit_producer_hash_size=" << implicitProducerHashSize
-              << " initial_pool_elements=" << kInitialPoolElements
-              << " initial_pool_blocks="
-              << (kInitialPoolElements / blockSize)
-              << " consumer_rotation_quota=" << consumerRotationQuota
+              << " block_size=" << blockSize;
+    if (moodyTraits) {
+        std::cout << " empty_counter_threshold=" << emptyCounterThreshold
+                  << " explicit_initial_index_size=" << initialIndexSize
+                  << " implicit_producer_hash_size=" << implicitProducerHashSize
+                  << " consumer_rotation_quota=" << consumerRotationQuota;
+    }
+    std::cout << " initial_pool_elements=" << initialPoolElements
+              << " initial_pool_blocks=" << (initialPoolElements / blockSize)
               << " measurement_scope=data_plane"
               << " messages=" << kMessages
               << " samples=" << samples.size()
@@ -446,14 +458,16 @@ bool printRatioSummary(const char* name,
 
 using Runner = Measurement (*)(int, int);
 
-struct TraitCase
+struct QueueCase
 {
     const char* name;
     size_t blockSize;
     size_t emptyCounterThreshold;
     size_t initialIndexSize;
     size_t implicitProducerHashSize;
+    size_t initialPoolElements;
     uint32_t consumerRotationQuota;
+    bool moodyTraits;
     Runner runner;
 };
 
@@ -461,7 +475,7 @@ template <size_t CaseCount>
 bool runCases(const char* topology,
               int producerCount,
               int consumerCount,
-              const std::array<TraitCase, CaseCount>& cases,
+              const std::array<QueueCase, CaseCount>& cases,
               std::array<std::vector<Measurement>, CaseCount>& samples)
 {
     size_t round = 0;
@@ -507,7 +521,9 @@ bool runCases(const char* topology,
                      cases[index].emptyCounterThreshold,
                      cases[index].initialIndexSize,
                      cases[index].implicitProducerHashSize,
+                     cases[index].initialPoolElements,
                      cases[index].consumerRotationQuota,
+                     cases[index].moodyTraits,
                      samples[index]);
     }
     return true;
@@ -515,38 +531,38 @@ bool runCases(const char* topology,
 
 bool runComparison(const char* topology, int producerCount, int consumerCount)
 {
-    using CurrentTraits = galay::mpmc::detail::UnboundedQueueTraits;
-    const std::array<TraitCase, 4> cases = {{
+    constexpr size_t kCurrentBlockSize =
+        galay::mpmc::UnboundedChannelTestAccess::blockSize<int64_t>();
+    const std::array<QueueCase, 3> cases = {{
         {"moody_raw_default",
          DefaultQueueTraits::BLOCK_SIZE,
          DefaultQueueTraits::EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD,
          DefaultQueueTraits::EXPLICIT_INITIAL_INDEX_SIZE,
          DefaultQueueTraits::INITIAL_IMPLICIT_PRODUCER_HASH_SIZE,
+         kMoodyInitialPoolElements,
          DefaultQueueTraits::EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE,
+         true,
          &runRawQueue<DefaultQueueTraits>},
-        {"moody_raw_current",
-         CurrentTraits::BLOCK_SIZE,
-         CurrentTraits::EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD,
-         CurrentTraits::EXPLICIT_INITIAL_INDEX_SIZE,
-         CurrentTraits::INITIAL_IMPLICIT_PRODUCER_HASH_SIZE,
-         CurrentTraits::EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE,
-         &runRawQueue<CurrentTraits>},
         {"mpmc_raw_current",
-         CurrentTraits::BLOCK_SIZE,
-         CurrentTraits::EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD,
-         CurrentTraits::EXPLICIT_INITIAL_INDEX_SIZE,
-         CurrentTraits::INITIAL_IMPLICIT_PRODUCER_HASH_SIZE,
-         CurrentTraits::EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE,
+         kCurrentBlockSize,
+         0,
+         0,
+         0,
+         kCurrentBlockSize,
+         0,
+         false,
          &runChannel<ChannelPath::kRaw>},
         {"mpmc_token",
-         CurrentTraits::BLOCK_SIZE,
-         CurrentTraits::EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD,
-         CurrentTraits::EXPLICIT_INITIAL_INDEX_SIZE,
-         CurrentTraits::INITIAL_IMPLICIT_PRODUCER_HASH_SIZE,
-         CurrentTraits::EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE,
+         kCurrentBlockSize,
+         0,
+         0,
+         0,
+         kCurrentBlockSize,
+         0,
+         false,
          &runChannel<ChannelPath::kToken>},
     }};
-    std::array<std::vector<Measurement>, 4> samples;
+    std::array<std::vector<Measurement>, 3> samples;
     if (!runCases(topology,
                   producerCount,
                   consumerCount,
@@ -555,18 +571,12 @@ bool runComparison(const char* topology, int producerCount, int consumerCount)
         return false;
     }
     bool ok = printRatioSummary(
-        "ratio_raw_current_over_default", topology, samples[1], samples[0]);
+        "ratio_embedded_raw_over_default", topology, samples[1], samples[0]);
     ok = printRatioSummary(
-             "ratio_embedded_raw_over_raw_current",
-             topology,
-             samples[2],
-             samples[1]) &&
+             "ratio_token_over_embedded_raw", topology, samples[2], samples[1]) &&
         ok;
     ok = printRatioSummary(
-             "ratio_token_over_embedded_raw", topology, samples[3], samples[2]) &&
-        ok;
-    ok = printRatioSummary(
-             "ratio_token_over_default_raw", topology, samples[3], samples[0]) &&
+             "ratio_token_over_default_raw", topology, samples[2], samples[0]) &&
         ok;
     return ok;
 }

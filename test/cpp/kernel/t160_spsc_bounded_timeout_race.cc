@@ -591,7 +591,7 @@ bool runStaticCapacityChannel()
         return false;
     }
     if (reinterpret_cast<uintptr_t>(&channel.m_slots) %
-            StaticBoundedChannel::kCacheLine != 0) {
+            galay::utils::kCacheLineSize != 0) {
         return false;
     }
 

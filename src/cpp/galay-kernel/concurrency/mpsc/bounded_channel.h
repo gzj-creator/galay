@@ -15,6 +15,7 @@
 #include "../../common/error.h"
 #include "../../core/timeout.hpp"
 #include "../../core/waker.h"
+#include "../../../galay-utils/common/defn.hpp"
 #include <coroutine>
 
 #if defined(_MSC_VER)
@@ -101,17 +102,10 @@ inline void cpuPause() noexcept
 class ProducerBackoff
 {
 public:
-    /** @brief 对 tail CAS 竞争执行有上限的指数自旋。 */
+    /** @brief 对一次 tail CAS 竞争执行一次短自旋，不推进 slot 等待退避。 */
     void spin() noexcept
     {
-        const uint32_t step = m_step < kSpinLimit ? m_step : kSpinLimit;
-        const uint32_t spins = 1U << step;
-        for (uint32_t i = 0; i < spins; ++i) {
-            cpuPause();
-        }
-        if (m_step <= kSpinLimit) {
-            ++m_step;
-        }
+        cpuPause();
     }
 
     /** @brief 等待 slot sequence 更新；持续等待后才让出时间片。 */
@@ -669,12 +663,7 @@ public:
     }
 
 private:
-    // Apple silicon 的一致性粒度是 128B，x86 是 64B；固定值保证公开模板布局稳定。
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-    static constexpr size_t kCacheLine = 128;
-#else
-    static constexpr size_t kCacheLine = 64;
-#endif
+    // 缓存行隔离大小由 galay-utils/common/defn.hpp 统一提供，保证公开模板布局稳定。
     static constexpr size_t kTailClosedBit =
         size_t{1} << (sizeof(size_t) * 8U - 1U);
     static constexpr size_t kTailPositionMask = kTailClosedBit - 1U;
@@ -807,8 +796,9 @@ private:
         }
 
     private:
-        alignas(kCacheLine) std::atomic<Node*> m_producerHead;
-        alignas(kCacheLine) Node* m_consumerTail;
+        alignas(::galay::utils::kCacheLineSize)
+            std::atomic<Node*> m_producerHead;
+        alignas(::galay::utils::kCacheLineSize) Node* m_consumerTail;
         Node m_stub;
     };
 
@@ -1391,12 +1381,14 @@ private:
     friend struct BoundedChannelTestAccess;
 
     // 生产者写 tail，唯一逻辑消费者写 head；分离缓存行避免一致性流量互相干扰。
-    alignas(kCacheLine) std::atomic<size_t> m_tail{0};
-    alignas(kCacheLine) std::atomic<size_t> m_head{0};
-    alignas(kCacheLine) std::atomic<uint8_t> m_pumpState{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<size_t> m_tail{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<size_t> m_head{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<uint8_t> m_pumpState{0};
     // 计数覆盖已排队及 pump 正在处理的入口，重排队期间不会短暂降为零。
-    alignas(kCacheLine) std::atomic<size_t> m_recvWaiterCount{0};
-    alignas(kCacheLine) std::atomic<size_t> m_sendWaiterCount{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<size_t> m_recvWaiterCount{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<size_t> m_sendWaiterCount{0};
     const size_t m_capacity;
     const size_t m_mask;
     std::vector<Slot> m_slots;

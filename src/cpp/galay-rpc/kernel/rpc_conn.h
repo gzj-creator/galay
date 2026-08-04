@@ -299,7 +299,7 @@ class RpcRequestReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult
 public:
     using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
 
-    RpcRequestReadState(RingBuffer<Strategy>& ring_buffer,
+    RpcRequestReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                         const RpcReaderSetting& setting,
                         RpcRequest& request)
         : Base(ring_buffer)
@@ -355,7 +355,7 @@ class RpcResponseReadState : public RpcRingBufferReadStateBase<RpcAwaitableResul
 public:
     using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
 
-    RpcResponseReadState(RingBuffer<Strategy>& ring_buffer,
+    RpcResponseReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                          const RpcReaderSetting& setting,
                          RpcResponse& response)
         : Base(ring_buffer)
@@ -411,7 +411,7 @@ class RpcHeaderReadState : public RpcRingBufferReadStateBase<RpcAwaitableResult,
 public:
     using Base = RpcRingBufferReadStateBase<RpcAwaitableResult, Strategy>;
 
-    RpcHeaderReadState(RingBuffer<Strategy>& ring_buffer, RpcHeader& header)
+    RpcHeaderReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer, RpcHeader& header)
         : Base(ring_buffer)
         , m_header(&header)
     {
@@ -460,7 +460,7 @@ public:
      * @param body 输出缓冲区
      * @param body_len 要读取的体长度
      */
-    RpcBodyReadState(RingBuffer<Strategy>& ring_buffer, char* body, size_t body_len)
+    RpcBodyReadState(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer, char* body, size_t body_len)
         : Base(ring_buffer)
         , m_body(body)
         , m_body_len(body_len)
@@ -716,7 +716,7 @@ public:
      * @param request 输出请求对象
      * @param socket Socket引用
      */
-    GetRpcRequestAwaitable(RingBuffer<Strategy>& ring_buffer,
+    GetRpcRequestAwaitable(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                            const RpcReaderSetting& setting,
                            RpcRequest& request,
                            SocketType& socket)
@@ -770,7 +770,7 @@ public:
      * @param response 输出响应对象
      * @param socket Socket引用
      */
-    GetRpcResponseAwaitable(RingBuffer<Strategy>& ring_buffer,
+    GetRpcResponseAwaitable(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
                             const RpcReaderSetting& setting,
                             RpcResponse& response,
                             SocketType& socket)
@@ -967,7 +967,7 @@ public:
      * @param header 输出消息头
      * @param socket Socket引用
      */
-    GetRpcHeaderAwaitable(RingBuffer<Strategy>& ring_buffer, RpcHeader& header, SocketType& socket)
+    GetRpcHeaderAwaitable(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer, RpcHeader& header, SocketType& socket)
         : m_state(std::make_shared<ReadState>(ring_buffer, header))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
@@ -1018,7 +1018,7 @@ public:
      * @param body_len 要读取的体长度
      * @param socket Socket引用
      */
-    GetRpcBodyAwaitable(RingBuffer<Strategy>& ring_buffer, char* body, size_t body_len, SocketType& socket)
+    GetRpcBodyAwaitable(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer, char* body, size_t body_len, SocketType& socket)
         : m_state(std::make_shared<ReadState>(ring_buffer, body, body_len))
         , m_inner(
             AwaitableBuilder<Result>::fromStateMachine(
@@ -1068,7 +1068,7 @@ public:
      * @param setting 读取配置
      * @param socket Socket引用
      */
-    RpcReaderImpl(RingBuffer<Strategy>& ring_buffer, const RpcReaderSetting& setting, SocketType& socket)
+    RpcReaderImpl(RingBuffer<Strategy, std::dynamic_extent>& ring_buffer, const RpcReaderSetting& setting, SocketType& socket)
         : m_ring_buffer(ring_buffer)
         , m_setting(setting)
         , m_socket(socket)
@@ -1122,7 +1122,7 @@ public:
     }
 
 private:
-    RingBuffer<Strategy>& m_ring_buffer;    ///< 环形缓冲区引用
+    RingBuffer<Strategy, std::dynamic_extent>& m_ring_buffer;    ///< 环形缓冲区引用
     const RpcReaderSetting& m_setting;      ///< 读取配置引用
     SocketType& m_socket;                   ///< Socket引用
 };
@@ -1278,7 +1278,7 @@ public:
     /**
      * @brief 获取RingBuffer
      */
-    RingBuffer<Strategy>& ringBuffer() { return m_ring_buffer; }
+    RingBuffer<Strategy, std::dynamic_extent>& ringBuffer() { return m_ring_buffer; }
 
     /**
      * @brief 关闭连接
@@ -1294,7 +1294,7 @@ private:
     }
 
     SocketType m_socket;                        ///< 底层Socket
-    RingBuffer<Strategy> m_ring_buffer;         ///< 环形缓冲区
+    RingBuffer<Strategy, std::dynamic_extent> m_ring_buffer;         ///< 环形缓冲区
     RpcReaderSetting m_reader_setting;          ///< 读取配置
     RpcWriterSetting m_writer_setting;          ///< 写入配置
 };

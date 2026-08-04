@@ -5,6 +5,7 @@
 
 #include <galay/cpp/galay-kernel/concurrency/mpsc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
+#include <galay/cpp/galay-utils/common/defn.hpp>
 #include "benchmark/cpp/common/benchmark_affinity.h"
 
 #include <algorithm>
@@ -64,7 +65,7 @@ struct Measurement
     bool sendOk = false;
 };
 
-struct alignas(128) StartState
+struct alignas(galay::utils::kCacheLineSize) StartState
 {
     std::atomic<size_t> ready{0};
     std::atomic<size_t> producersDone{0};

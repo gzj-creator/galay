@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import fcntl
 import hashlib
 import json
 import math
@@ -81,7 +82,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--calibration-probes", type=int, default=3)
     parser.add_argument("--calibration-attempts", type=int, default=5)
     parser.add_argument("--warmups", type=int, default=1)
-    parser.add_argument("--samples", type=int, default=15)
+    parser.add_argument("--samples", type=int, default=16)
     parser.add_argument("--bootstrap-resamples", type=int, default=10_000)
     parser.add_argument(
         "--process-timeout",
@@ -89,6 +90,8 @@ def parse_args() -> argparse.Namespace:
         default=300.0,
         help="per-run wall-clock timeout in seconds (default: 300)",
     )
+    parser.add_argument("--minimum-speedup", type=float, default=1.0)
+    parser.add_argument("--max-cv-percent", type=float, default=3.0)
     parser.add_argument("--producer-core", type=int, default=0)
     parser.add_argument("--consumer-core", type=int, default=8)
     args = parser.parse_args()
@@ -113,8 +116,11 @@ def parse_args() -> argparse.Namespace:
         parser.error("--target-seconds must be finite and positive")
     if args.calibration_probes <= 0 or args.calibration_attempts <= 0:
         parser.error("calibration counts must be positive")
-    if args.warmups < 1 or args.samples < 15:
-        parser.error("at least one warmup and 15 paired samples are required")
+    if args.warmups < 1 or args.samples < 16 or args.samples % 4 != 0:
+        parser.error(
+            "at least one warmup and a multiple of four paired samples "
+            "no smaller than 16 are required"
+        )
     if args.bootstrap_resamples < 1_000:
         parser.error("--bootstrap-resamples must be at least 1000")
     if (
@@ -122,6 +128,13 @@ def parse_args() -> argparse.Namespace:
         or args.process_timeout <= args.target_seconds * 1.50
     ):
         parser.error("--process-timeout must exceed 1.5 * --target-seconds")
+    if (
+        not math.isfinite(args.minimum_speedup)
+        or args.minimum_speedup < 1.0
+        or not math.isfinite(args.max_cv_percent)
+        or args.max_cv_percent <= 0.0
+    ):
+        parser.error("acceptance thresholds are invalid")
     if args.producer_core < 0 or args.consumer_core < 0:
         parser.error("core indices must be non-negative")
     largest_producer_end = args.producer_core + max(args.producers)
@@ -336,6 +349,20 @@ def bootstrap_median_ci(
     return percentile(medians, 0.025), percentile(medians, 0.975)
 
 
+def bootstrap_abba_block_median_ci(
+    values: list[float], resamples: int, seed: int
+) -> tuple[float, float]:
+    blocks = [values[index : index + 4] for index in range(0, len(values), 4)]
+    generator = random.Random(seed)
+    medians = []
+    for _ in range(resamples):
+        sample = []
+        for _ in blocks:
+            sample.extend(blocks[generator.randrange(len(blocks))])
+        medians.append(statistics.median(sample))
+    return percentile(medians, 0.025), percentile(medians, 0.975)
+
+
 def summarize(values: list[float], resamples: int, seed: int) -> dict[str, float]:
     mean = statistics.fmean(values)
     deviation = statistics.stdev(values)
@@ -445,23 +472,31 @@ def execute_scenario(
         for language in LANGUAGES
     }
     paired_ratios = []
+    ratios_by_run_order = {"cpp_first": [], "rust_first": []}
     for sample in range(args.samples):
+        pair = [row for row in sample_rows if row["sample_index"] == sample]
         cpp = next(
-            row
-            for row in sample_rows
-            if row["sample_index"] == sample and row["language"] == "cpp"
+            row for row in pair if row["language"] == "cpp"
         )
         rust = next(
-            row
-            for row in sample_rows
-            if row["sample_index"] == sample and row["language"] == "rust"
+            row for row in pair if row["language"] == "rust"
         )
-        paired_ratios.append(cpp["messages_per_second"] / rust["messages_per_second"])
+        ratio = cpp["messages_per_second"] / rust["messages_per_second"]
+        paired_ratios.append(ratio)
+        ratios_by_run_order[f"{pair[0]['language']}_first"].append(ratio)
 
     seed = (
         sum(ord(character) for character in case_name)
         + capacity
         + producers * 100_003
+    )
+    paired_summary = summarize(paired_ratios, args.bootstrap_resamples, seed + 2)
+    block_ci_low, block_ci_high = bootstrap_abba_block_median_ci(
+        paired_ratios, args.bootstrap_resamples, seed + 3
+    )
+    paired_summary.update(
+        abba_block_median_ci95_low=block_ci_low,
+        abba_block_median_ci95_high=block_ci_high,
     )
     summary = {
         "cpp_messages_per_second": summarize(
@@ -470,10 +505,32 @@ def execute_scenario(
         "rust_messages_per_second": summarize(
             by_language["rust"], args.bootstrap_resamples, seed + 1
         ),
-        "paired_cpp_over_rust": summarize(
-            paired_ratios, args.bootstrap_resamples, seed + 2
-        ),
+        "paired_cpp_over_rust": paired_summary,
+        "run_order_diagnostics": {
+            order: {
+                "samples": len(values),
+                "median": statistics.median(values),
+                "mean": statistics.fmean(values),
+                "minimum": min(values),
+                "maximum": max(values),
+            }
+            for order, values in ratios_by_run_order.items()
+        },
     }
+    acceptance = {
+        "minimum_speedup": args.minimum_speedup,
+        "max_cv_percent": args.max_cv_percent,
+        "paired_ratio_abba_block_ci95_low": block_ci_low,
+        "paired_ratio_ci_passed": block_ci_low > args.minimum_speedup,
+        "cpp_cv_passed": summary["cpp_messages_per_second"]["cv_percent"]
+        <= args.max_cv_percent,
+        "rust_cv_passed": summary["rust_messages_per_second"]["cv_percent"]
+        <= args.max_cv_percent,
+    }
+    acceptance["passed"] = all(
+        acceptance[field]
+        for field in ("paired_ratio_ci_passed", "cpp_cv_passed", "rust_cv_passed")
+    )
     return {
         "case": case_name,
         "topology": f"{producers}p1c",
@@ -484,6 +541,7 @@ def execute_scenario(
         "warmups": warmup_rows,
         "samples": sample_rows,
         "summary": summary,
+        "acceptance": acceptance,
     }
 
 
@@ -507,6 +565,7 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
                 "capacity": scenario["capacity"],
                 "messages": scenario["messages"],
                 "summary": scenario["summary"],
+                "acceptance": scenario["acceptance"],
             }
             for scenario in report["scenarios"]
         ],
@@ -548,6 +607,13 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
 
 def main() -> int:
     args = parse_args()
+    lock_path = Path("/tmp/galay_mpsc_paired.lock")
+    try:
+        benchmark_lock = lock_path.open("w")
+        fcntl.flock(benchmark_lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except (OSError, BlockingIOError) as error:
+        print(f"another MPSC benchmark owns {lock_path}: {error}", file=sys.stderr)
+        return 2
     try:
         binaries = {
             "cpp": args.cpp_binary.resolve(),
@@ -575,6 +641,8 @@ def main() -> int:
                 "samples": args.samples,
                 "bootstrap_resamples": args.bootstrap_resamples,
                 "process_timeout": args.process_timeout,
+                "minimum_speedup": args.minimum_speedup,
+                "max_cv_percent": args.max_cv_percent,
                 "producer_core": args.producer_core,
                 "consumer_core": args.consumer_core,
                 "payload_bytes": 8,
@@ -617,6 +685,7 @@ def main() -> int:
                     "capacity": scenario["capacity"],
                     "messages": scenario["messages"],
                     "summary": scenario["summary"],
+                    "acceptance": scenario["acceptance"],
                 },
                 sort_keys=True,
             )
@@ -624,7 +693,9 @@ def main() -> int:
     print(f"raw_json={args.output_dir / 'mpsc_paired_raw.json'}")
     print(f"raw_csv={args.output_dir / 'mpsc_paired_raw.csv'}")
     print(f"summary_json={args.output_dir / 'mpsc_paired_summary.json'}")
-    return 0
+    return 0 if all(
+        scenario["acceptance"]["passed"] for scenario in report["scenarios"]
+    ) else 4
 
 
 if __name__ == "__main__":

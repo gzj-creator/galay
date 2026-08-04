@@ -15,7 +15,6 @@
 #include <chrono>
 #include <concepts>
 #include <coroutine>
-#include <cstdlib>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -37,7 +36,7 @@ void* operator new(std::size_t size, const std::nothrow_t&) noexcept
     if (g_failNothrowAllocation.load(std::memory_order_acquire)) {
         return nullptr;
     }
-    return std::malloc(size == 0 ? 1 : size);
+    return ::operator new(size);
 }
 
 void* operator new[](std::size_t size, const std::nothrow_t& tag) noexcept
@@ -47,12 +46,12 @@ void* operator new[](std::size_t size, const std::nothrow_t& tag) noexcept
 
 void operator delete(void* storage, const std::nothrow_t&) noexcept
 {
-    std::free(storage);
+    ::operator delete(storage);
 }
 
 void operator delete[](void* storage, const std::nothrow_t&) noexcept
 {
-    std::free(storage);
+    ::operator delete(storage);
 }
 
 namespace {

@@ -100,7 +100,7 @@ private:
 template<typename Type>
 class WeightRoundRobinLoadBalancer
 {
-    struct alignas(64) Node { ///< 缓存行对齐，避免伪共享
+    struct alignas(kCacheLineSize) Node { ///< 缓存行对齐，避免伪共享
         Type node; ///< 节点值
         int32_t current_weight; ///< 当前动态权重
         const uint32_t fixed_weight; ///< 固定配置权重

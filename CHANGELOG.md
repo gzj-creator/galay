@@ -29,6 +29,7 @@
 
 ### Changed
 
+- **统一 SPSC API 注释与跨语言性能结论口径**：`spsc` 有界/无界通道的公开函数注释对齐 `galay/kernel/async` 的 Doxygen 风格，补齐参数、返回值、并发与生命周期约束；paired benchmark 明确区分 raw/batch bounded 与非等价 unbounded 对照，保存 Linux 1P1C 原始样本、CV、bootstrap 95% CI 和门禁结果，不再以单一场景宣称全面超过 Rust。
 - **优化 SPSC 无界通道轮询热路径**：缓存 producer/consumer 单调游标，polling 路径使用 release store，首次启用 waiter 后切换为 RMW 发布握手，并放宽仅由单消费者/生产者拥有的指针与 owner 清理操作的内存序。
 - **校正 kernel benchmark 的生产测量口径**：scheduler 场景改为验证 Runtime 对 IO scheduler 的 round-robin 分发与双 scheduler 扩展性，明确 reactor owner-affinity 下不启用 work stealing；UDP 改为固定时长持续压流并分离 measurement window 与 settled loss；RingBuffer 增加编译器可观测 checksum/barrier，区分 mmap 逻辑环绕与 vector 物理环绕，并明确仅代表单线程热缓存内存微基准。
 - **完善跨平台全量执行矩阵**：Linux/aarch64 对依赖未实现 stackful context 的 C tests/examples/benchmarks 按源码能力过滤，修正 libuv、自包含 Redis/RPC benchmark、长运行 MPSC benchmark、etcd/Redis 集成脚本和 HTTP/HTTP2 example 资源定位。
@@ -37,7 +38,7 @@
 - **异步同步原语归入 async 模块**：`async_mutex` 与 `async_waiter` 从 C++ `concurrency` 和 C `concurrency-c` 目录迁入对应 `async` / `async-c` 目录，并同步更新模块入口、安装边界、源码、文档、测试、示例与 benchmark 引用。
 - **收敛 `BoundedChannel` 生产实现与维护文档**：删除 `GALAY_BQ_DIAG_*` 临时编译分支，保留唯一的关闭检查、waiter-aware 和 ring 退避路径；补全公开 API、协程 awaitable、ring 与 waiter helper 的参数、返回值、错误、并发和生命周期注释。
 - **优化 `BoundedChannel` C 热路径与压测口径**：成功发送不再重复读取关闭状态，批量和协程路径复用已校验的内部收发函数；吞吐 benchmark 改为完整消息计数、Release 预热/中位数采样和线程局部统计，消除共享原子与 cache-line 伪共享造成的测量偏差。
-- **优化 MPMC 数据面与基准隔离能力**：无界队列显式冻结 `BLOCK_SIZE=64`、empty counter threshold 32、explicit index 32、consumer rotation quota 32，并把初始池固定为 1024 个元素以消除不同 block 大小的预分配偏差；发送完成后的 waiter pump 外提为 unlikely 冷函数，避免同步轮询热路径内联完整控制面。B25 与独立 paired runner 可拆分 raw 数据面和 token wrapper 成本；20M 消息、15 对样本下 2P2C 稳定超过 Crossbeam，但 4P4C 仍落后，因此不保留全面胜出结论。
+- **优化 MPMC 数据面与基准隔离能力**：无界队列改为 4096 槽可回收分段结构，使用单调 reservation cursor、块级复用和 token 局部块缓存，发送完成后的 waiter pump 外提为 unlikely 冷函数，避免同步轮询热路径内联完整控制面。B25 与独立 paired runner 可拆分当前分段队列 raw 数据面、token/waiter 通知成本和 moodycamel 默认基线；2P2C 可超过 Crossbeam，但 4P4C 仍落后，因此不保留全面胜出结论。
 - **收紧 MPMC 元素异常契约**：Bounded 元素必须不可抛移动构造，Unbounded 元素必须不可抛默认构造、移动构造和移动赋值，复制发送仅对不可抛复制构造类型开放；避免元素操作异常使无界 producer 永久保持 active，或穿过 `noexcept` 完成路径终止进程。
 - **Waker 恢复改用 owner scheduler 无分配入口**：`TaskState` 内嵌 resume 链接，compute/epoll/kqueue/io_uring scheduler 统一通过专用 MPSC admission 回到 owner 线程；普通注入与 resume 批次公平轮转，`stop()` 先关闭接纳再由 owner 排空，成功恢复热路径不经历堆分配。
 - **统一并发通道命名空间与消费边界**：移除旧 `mpsc_channel.h` / `unsafe_channel.h` / 顶层 `bounded_channel.h`，C ABI 保留原符号但切换到 `galay::{mpmc,mpsc,spsc}` 实现；HTTP/2、RPC、module facade、示例、测试、benchmark 和文档同步迁移。

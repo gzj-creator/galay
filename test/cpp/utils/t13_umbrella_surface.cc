@@ -26,16 +26,16 @@ int main()
         return 1;
     }
 
-    galay::utils::SpscRingBuffer<int> ring(2);
+    galay::utils::TypeRingBuffer<int> ring(2);
     int value = 7;
-    if (ring.error() != galay::utils::SpscRingBufferError::kNone ||
+    if (ring.error() != galay::utils::TypeRingBufferError::kNone ||
         !ring.trySend(std::move(value))) {
-        std::cerr << "[t13] SpscRingBuffer should be visible through galay_utils.hpp\n";
+        std::cerr << "[t13] TypeRingBuffer should be visible through galay_utils.hpp\n";
         return 1;
     }
     auto received = ring.tryRecv();
     if (!received.has_value() || *received != 7) {
-        std::cerr << "[t13] SpscRingBuffer umbrella surface should preserve values\n";
+        std::cerr << "[t13] TypeRingBuffer umbrella surface should preserve values\n";
         return 1;
     }
 

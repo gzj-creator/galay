@@ -1,12 +1,14 @@
 /**
  * @file spsc_paired.cc
- * @brief 与 Rust 使用同一协议测量 bounded/unbounded SPSC 1P1C 吞吐。
+ * @brief 与 Rust 使用同一协议测量 scalar/batch bounded 及 unbounded SPSC 吞吐。
  */
 
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>
+#include <galay/cpp/galay-utils/common/defn.hpp>
 #include "benchmark/cpp/common/benchmark_affinity.h"
 
+#include <algorithm>
 #include <atomic>
 #include <charconv>
 #include <chrono>
@@ -14,16 +16,30 @@
 #include <expected>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 #include <optional>
+#include <span>
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
+
+#if defined(__x86_64__) || defined(__i386__)
+#include <immintrin.h>
+#endif
 
 namespace {
 
 enum class CaseKind : uint8_t {
     kRawBounded,
+    kBatchBounded,
     kUnbounded,
+};
+
+enum class BackoffKind : uint8_t {
+    kYield,
+    kSpin,
+    kHybrid,
 };
 
 enum class ArgumentError : uint8_t {
@@ -32,15 +48,19 @@ enum class ArgumentError : uint8_t {
     kInvalidCase,
     kInvalidNumber,
     kInvalidCapacity,
+    kInvalidBatchSize,
+    kInvalidBackoff,
     kInvalidCorePair,
 };
 
 struct Config {
     uint64_t messages = 1'000'000;
     size_t capacity = 4096;
+    size_t batchSize = 64;
     size_t producerCore = 0;
     size_t consumerCore = 1;
     CaseKind kind = CaseKind::kRawBounded;
+    BackoffKind backoff = BackoffKind::kYield;
 };
 
 struct Measurement {
@@ -59,19 +79,19 @@ struct Measurement {
     bool sendOk = false;
 };
 
-struct alignas(128) StartState {
+struct alignas(galay::utils::kCacheLineSize) StartState {
     std::atomic<size_t> ready{0};
     std::atomic<bool> start{false};
 };
 
-struct alignas(128) ProducerResult {
+struct alignas(galay::utils::kCacheLineSize) ProducerResult {
     uint64_t fullRetries = 0;
     galay::benchmark::ThreadPlacement placement =
         galay::benchmark::ThreadPlacement::kUnsupported;
     bool readyOk = true;
 };
 
-struct alignas(128) ConsumerResult {
+struct alignas(galay::utils::kCacheLineSize) ConsumerResult {
     uint64_t emptyRetries = 0;
     uint64_t received = 0;
     uint64_t checksum = 0;
@@ -94,6 +114,10 @@ const char* argumentErrorName(ArgumentError error) noexcept
         return "invalid unsigned integer";
     case ArgumentError::kInvalidCapacity:
         return "bounded capacity must be a power of two and at least 2";
+    case ArgumentError::kInvalidBatchSize:
+        return "batch size must be positive and no larger than capacity";
+    case ArgumentError::kInvalidBackoff:
+        return "backoff must be yield, spin, or hybrid";
     case ArgumentError::kInvalidCorePair:
         return "producer and consumer cores must differ";
     }
@@ -105,10 +129,121 @@ const char* caseName(CaseKind kind) noexcept
     switch (kind) {
     case CaseKind::kRawBounded:
         return "raw_bounded";
+    case CaseKind::kBatchBounded:
+        return "batch_bounded";
     case CaseKind::kUnbounded:
         return "unbounded";
     }
     return "unknown";
+}
+
+const char* implementationName(CaseKind kind) noexcept
+{
+    switch (kind) {
+    case CaseKind::kRawBounded:
+        return "galay::spsc::Ring::split";
+    case CaseKind::kBatchBounded:
+        return "galay::spsc::Ring";
+    case CaseKind::kUnbounded:
+        return "galay::spsc::UnboundedChannel";
+    }
+    return "unknown";
+}
+
+const char* apiProfile(CaseKind kind) noexcept
+{
+    switch (kind) {
+    case CaseKind::kRawBounded:
+        return "bounded_spsc_polling_split";
+    case CaseKind::kBatchBounded:
+        return "bounded_spsc_batch_polling_split";
+    case CaseKind::kUnbounded:
+        return "unbounded_spsc_wait_capable_polling_path";
+    }
+    return "unknown";
+}
+
+const char* comparisonScope(CaseKind kind) noexcept
+{
+    return kind == CaseKind::kUnbounded
+        ? "nearest_available_measured_path"
+        : "equivalent_measured_api";
+}
+
+const char* backoffName(BackoffKind kind) noexcept
+{
+    switch (kind) {
+    case BackoffKind::kYield:
+        return "yield";
+    case BackoffKind::kSpin:
+        return "spin";
+    case BackoffKind::kHybrid:
+        return "hybrid";
+    }
+    return "unknown";
+}
+
+void cpuPause() noexcept
+{
+#if defined(__x86_64__) || defined(__i386__)
+    _mm_pause();
+#elif defined(__APPLE__) && defined(__aarch64__)
+    __asm__ __volatile__("isb" ::: "memory");
+#elif defined(__aarch64__) || defined(__arm__)
+    __asm__ __volatile__("yield" ::: "memory");
+#endif
+}
+
+class Backoff
+{
+public:
+    explicit Backoff(BackoffKind kind) noexcept : m_kind(kind) {}
+
+    void reset() noexcept
+    {
+        m_failures = 0;
+    }
+
+    void wait() noexcept
+    {
+        constexpr size_t kRetryLimit = 64;
+        constexpr size_t kMaximumSpinExponent = 6;
+        switch (m_kind) {
+        case BackoffKind::kYield:
+            std::this_thread::yield();
+            break;
+        case BackoffKind::kSpin:
+            if (m_failures < kRetryLimit) {
+                const size_t pauses = size_t{1} <<
+                    std::min(m_failures, kMaximumSpinExponent);
+                for (size_t pause = 0; pause < pauses; ++pause) {
+                    cpuPause();
+                }
+            } else {
+                std::this_thread::yield();
+            }
+            break;
+        case BackoffKind::kHybrid:
+            if (m_failures < kRetryLimit) {
+                cpuPause();
+            } else {
+                std::this_thread::yield();
+            }
+            break;
+        }
+        if (m_failures != std::numeric_limits<size_t>::max()) {
+            ++m_failures;
+        }
+    }
+
+private:
+    size_t m_failures = 0;
+    BackoffKind m_kind;
+};
+
+bool isBounded(CaseKind kind) noexcept
+{
+    return kind != CaseKind::kUnbounded;
 }
 
 template <typename UInt>
@@ -134,6 +269,8 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
         if (option == "--case") {
             if (value == "raw_bounded") {
                 config.kind = CaseKind::kRawBounded;
+            } else if (value == "batch_bounded") {
+                config.kind = CaseKind::kBatchBounded;
             } else if (value == "unbounded") {
                 config.kind = CaseKind::kUnbounded;
             } else {
@@ -151,6 +288,22 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
                 return std::unexpected(parsed.error());
             }
             config.capacity = *parsed;
+        } else if (option == "--batch-size") {
+            auto parsed = parseUnsigned<size_t>(value);
+            if (!parsed) {
+                return std::unexpected(parsed.error());
+            }
+            config.batchSize = *parsed;
+        } else if (option == "--backoff") {
+            if (value == "yield") {
+                config.backoff = BackoffKind::kYield;
+            } else if (value == "spin") {
+                config.backoff = BackoffKind::kSpin;
+            } else if (value == "hybrid") {
+                config.backoff = BackoffKind::kHybrid;
+            } else {
+                return std::unexpected(ArgumentError::kInvalidBackoff);
+            }
         } else if (option == "--producer-core") {
             auto parsed = parseUnsigned<size_t>(value);
             if (!parsed) {
@@ -168,9 +321,13 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
         }
     }
 
-    if (config.kind == CaseKind::kRawBounded &&
+    if (isBounded(config.kind) &&
         (config.capacity < 2 || (config.capacity & (config.capacity - 1)) != 0)) {
         return std::unexpected(ArgumentError::kInvalidCapacity);
+    }
+    if (config.kind == CaseKind::kBatchBounded &&
+        (config.batchSize == 0 || config.batchSize > config.capacity)) {
+        return std::unexpected(ArgumentError::kInvalidBatchSize);
     }
     if (config.producerCore == config.consumerCore) {
         return std::unexpected(ArgumentError::kInvalidCorePair);
@@ -191,10 +348,12 @@ template <typename Send, typename Receive>
 Measurement runPair(const Config& config, Send&& send, Receive&& receive)
 {
     StartState state;
-    ProducerResult producerResult;
-    ConsumerResult consumerResult;
+    ProducerResult producerOutput;
+    ConsumerResult consumerOutput;
 
-    std::thread producer([&]() {
+    std::thread producer([
+        &, send = std::forward<Send>(send)]() mutable {
+        ProducerResult producerResult;
         producerResult.placement =
             galay::benchmark::pinCurrentThread(config.producerCore);
         const size_t readyCount =
@@ -203,16 +362,21 @@ Measurement runPair(const Config& config, Send&& send, Receive&& receive)
         while (!state.start.load(std::memory_order_acquire)) {
             std::this_thread::yield();
         }
+        Backoff backoff(config.backoff);
         for (uint64_t sequence = 0; sequence < config.messages; ++sequence) {
             uint64_t pending = sequence;
             while (!send(pending)) {
                 ++producerResult.fullRetries;
-                std::this_thread::yield();
+                backoff.wait();
             }
+            backoff.reset();
         }
+        producerOutput = producerResult;
     });
 
-    std::thread consumer([&]() {
+    std::thread consumer([
+        &, receive = std::forward<Receive>(receive)]() mutable {
+        ConsumerResult consumerResult;
         consumerResult.placement =
             galay::benchmark::pinCurrentThread(config.consumerCore);
         const size_t readyCount =
@@ -221,6 +385,7 @@ Measurement runPair(const Config& config, Send&& send, Receive&& receive)
         while (!state.start.load(std::memory_order_acquire)) {
             std::this_thread::yield();
         }
+        Backoff backoff(config.backoff);
         while (consumerResult.received < config.messages) {
             uint64_t value = 0;
             if (receive(value)) {
@@ -228,12 +393,14 @@ Measurement runPair(const Config& config, Send&& send, Receive&& receive)
                     consumerResult.fifoOk && value == consumerResult.received;
                 consumerResult.checksum += value;
                 ++consumerResult.received;
+                backoff.reset();
                 continue;
             }
             ++consumerResult.emptyRetries;
             // 只按预期数量结束，避免 producer 完成后的瞬时空读造成伪失败。
-            std::this_thread::yield();
+            backoff.wait();
         }
+        consumerOutput = consumerResult;
     });
 
     while (state.ready.load(std::memory_order_acquire) != 2) {
@@ -248,8 +415,8 @@ Measurement runPair(const Config& config, Send&& send, Receive&& receive)
         std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
     const uint64_t elapsedValue = elapsedNs > 0 ? static_cast<uint64_t>(elapsedNs) : 0;
     const uint64_t expected = expectedChecksum(config.messages);
-    const bool sendOk = producerResult.readyOk &&
-        (producerResult.fullRetries == 0 || config.kind == CaseKind::kRawBounded);
+    const bool sendOk = producerOutput.readyOk &&
+        (producerOutput.fullRetries == 0 || isBounded(config.kind));
 
     return {
         .messagesPerSecond = elapsedValue > 0
@@ -257,14 +424,14 @@ Measurement runPair(const Config& config, Send&& send, Receive&& receive)
                 static_cast<double>(elapsedValue)
             : 0.0,
         .elapsedNs = elapsedValue,
-        .received = consumerResult.received,
-        .checksum = consumerResult.checksum,
+        .received = consumerOutput.received,
+        .checksum = consumerOutput.checksum,
         .expectedChecksum = expected,
-        .fullRetries = producerResult.fullRetries,
-        .emptyRetries = consumerResult.emptyRetries,
-        .producerPlacement = producerResult.placement,
-        .consumerPlacement = consumerResult.placement,
-        .fifoOk = consumerResult.readyOk && consumerResult.fifoOk,
+        .fullRetries = producerOutput.fullRetries,
+        .emptyRetries = consumerOutput.emptyRetries,
+        .producerPlacement = producerOutput.placement,
+        .consumerPlacement = consumerOutput.placement,
+        .fifoOk = consumerOutput.readyOk && consumerOutput.fifoOk,
         .sendOk = sendOk,
     };
 }
@@ -275,22 +442,146 @@ Measurement runBounded(const Config& config)
     if (channel.error() != galay::spsc::RingError::kNone) {
         return {};
     }
+    auto endpoints = channel.split();
     return runPair(
         config,
-        [&channel](uint64_t& value) { return channel.trySend(std::move(value)); },
-        [&channel](uint64_t& value) { return channel.tryRecv(value); });
+        [producer = std::move(endpoints.producer)](uint64_t& value) mutable {
+            return producer.trySend(std::move(value));
+        },
+        [consumer = std::move(endpoints.consumer)](uint64_t& value) mutable {
+            return consumer.tryRecv(value);
+        });
 }
 
 Measurement runUnbounded(const Config& config)
 {
-    galay::spsc::UnboundedQueue<uint64_t> channel;
+    galay::spsc::UnboundedChannel<uint64_t> channel;
     if (!channel.valid()) {
         return {};
     }
     return runPair(
         config,
         [&channel](uint64_t& value) { return channel.send(std::move(value)); },
-        [&channel](uint64_t& value) { return channel.tryRecv(value); });
+        [&channel](uint64_t& value) {
+            auto received = channel.tryRecv();
+            if (!received.has_value()) {
+                return false;
+            }
+            value = std::move(*received);
+            return true;
+        });
+}
+
+Measurement runBatchBounded(const Config& config)
+{
+    galay::spsc::Ring<uint64_t> channel(config.capacity);
+    if (channel.error() != galay::spsc::RingError::kNone) {
+        return {};
+    }
+    StartState state;
+    ProducerResult producerOutput;
+    ConsumerResult consumerOutput;
+
+    std::thread producer([&]() {
+        ProducerResult producerResult;
+        std::vector<uint64_t> values(config.batchSize);
+        producerResult.placement =
+            galay::benchmark::pinCurrentThread(config.producerCore);
+        const size_t readyCount =
+            state.ready.fetch_add(1, std::memory_order_release) + 1;
+        producerResult.readyOk = readyCount <= 2;
+        while (!state.start.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+
+        Backoff backoff(config.backoff);
+        uint64_t sent = 0;
+        while (sent < config.messages) {
+            const size_t count = static_cast<size_t>(std::min<uint64_t>(
+                config.batchSize, config.messages - sent));
+            for (size_t offset = 0; offset < count; ++offset) {
+                values[offset] = sent + offset;
+            }
+            size_t offset = 0;
+            while (offset < count) {
+                const size_t published = channel.trySendBatch(
+                    std::span<uint64_t>(values).subspan(offset, count - offset));
+                if (published == 0) {
+                    ++producerResult.fullRetries;
+                    backoff.wait();
+                    continue;
+                }
+                offset += published;
+                sent += published;
+                backoff.reset();
+            }
+        }
+        producerOutput = producerResult;
+    });
+
+    std::thread consumer([&]() {
+        ConsumerResult consumerResult;
+        std::vector<uint64_t> values(config.batchSize);
+        consumerResult.placement =
+            galay::benchmark::pinCurrentThread(config.consumerCore);
+        const size_t readyCount =
+            state.ready.fetch_add(1, std::memory_order_release) + 1;
+        consumerResult.readyOk = readyCount <= 2;
+        while (!state.start.load(std::memory_order_acquire)) {
+            std::this_thread::yield();
+        }
+
+        Backoff backoff(config.backoff);
+        while (consumerResult.received < config.messages) {
+            const size_t count = static_cast<size_t>(std::min<uint64_t>(
+                config.batchSize, config.messages - consumerResult.received));
+            const size_t received = channel.tryRecvBatch(
+                std::span<uint64_t>(values).first(count));
+            if (received == 0) {
+                ++consumerResult.emptyRetries;
+                backoff.wait();
+                continue;
+            }
+            for (size_t offset = 0; offset < received; ++offset) {
+                const uint64_t value = values[offset];
+                consumerResult.fifoOk = consumerResult.fifoOk &&
+                    value == consumerResult.received;
+                consumerResult.checksum += value;
+                ++consumerResult.received;
+            }
+            backoff.reset();
+        }
+        consumerOutput = consumerResult;
+    });
+
+    while (state.ready.load(std::memory_order_acquire) != 2) {
+        std::this_thread::yield();
+    }
+    const auto begin = std::chrono::steady_clock::now();
+    state.start.store(true, std::memory_order_release);
+    producer.join();
+    consumer.join();
+    const auto elapsed = std::chrono::steady_clock::now() - begin;
+    const auto elapsedNs =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(elapsed).count();
+    const uint64_t elapsedValue = elapsedNs > 0 ? static_cast<uint64_t>(elapsedNs) : 0;
+
+    return {
+        .messagesPerSecond = elapsedValue > 0
+            ? static_cast<double>(config.messages) * 1'000'000'000.0 /
+                static_cast<double>(elapsedValue)
+            : 0.0,
+        .elapsedNs = elapsedValue,
+        .received = consumerOutput.received,
+        .checksum = consumerOutput.checksum,
+        .expectedChecksum = expectedChecksum(config.messages),
+        .fullRetries = producerOutput.fullRetries,
+        .emptyRetries = consumerOutput.emptyRetries,
+        .producerPlacement = producerOutput.placement,
+        .consumerPlacement = consumerOutput.placement,
+        .fifoOk = consumerOutput.readyOk && consumerOutput.fifoOk,
+        .sendOk = producerOutput.readyOk,
+    };
 }
 
 } // namespace
@@ -307,22 +598,36 @@ int main(int argc, char** argv)
         return 2;
     }
 
-    const Measurement measurement = config->kind == CaseKind::kRawBounded
-        ? runBounded(*config)
-        : runUnbounded(*config);
+    const Measurement measurement = [&]() {
+        switch (config->kind) {
+        case CaseKind::kRawBounded:
+            return runBounded(*config);
+        case CaseKind::kBatchBounded:
+            return runBatchBounded(*config);
+        case CaseKind::kUnbounded:
+            return runUnbounded(*config);
+        }
+        return Measurement{};
+    }();
     const bool valid = measurement.elapsedNs > 0 && measurement.sendOk &&
         measurement.received == config->messages && measurement.fifoOk &&
         measurement.checksum == measurement.expectedChecksum;
     const size_t reportedCapacity =
-        config->kind == CaseKind::kRawBounded ? config->capacity : 0;
+        isBounded(config->kind) ? config->capacity : 0;
+    const size_t reportedBatchSize =
+        config->kind == CaseKind::kBatchBounded ? config->batchSize : 1;
 
     std::cout << std::setprecision(17) << std::boolalpha
-              << "{\"schema\":\"galay.spsc.paired.v1\""
+              << "{\"schema\":\"galay.spsc.paired.v3\""
               << ",\"language\":\"cpp\""
               << ",\"case\":\"" << caseName(config->kind) << "\""
+              << ",\"implementation\":\"" << implementationName(config->kind) << "\""
+              << ",\"api_profile\":\"" << apiProfile(config->kind) << "\""
+              << ",\"comparison_scope\":\"" << comparisonScope(config->kind) << "\""
               << ",\"topology\":\"1p1c\""
               << ",\"payload_bytes\":8"
               << ",\"capacity\":" << reportedCapacity
+              << ",\"batch_size\":" << reportedBatchSize
               << ",\"messages\":" << config->messages
               << ",\"elapsed_ns\":" << measurement.elapsedNs
               << ",\"messages_per_second\":" << measurement.messagesPerSecond
@@ -336,7 +641,7 @@ int main(int argc, char** argv)
               << galay::benchmark::threadPlacementName(measurement.producerPlacement) << "\""
               << ",\"consumer_placement\":\""
               << galay::benchmark::threadPlacementName(measurement.consumerPlacement) << "\""
-              << ",\"backoff\":\"yield\""
+              << ",\"backoff\":\"" << backoffName(config->backoff) << "\""
               << ",\"generator\":\"monotonic_u64\""
               << ",\"valid\":" << valid << "}\n";
     if (!std::cout.good()) {

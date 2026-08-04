@@ -19,6 +19,8 @@
 #ifndef GALAY_KERNEL_TASK_H
 #define GALAY_KERNEL_TASK_H
 
+#include "../../galay-utils/common/defn.hpp"
+
 #include <atomic>
 #include <array>
 #include <condition_variable>
@@ -162,7 +164,7 @@ private:
  * @brief 协程任务的共享状态块
  * @details 保存 coroutine handle、所属调度器、Runtime 上下文和 continuation 链。
  */
-struct alignas(64) TaskState
+struct alignas(::galay::utils::kCacheLineSize) TaskState
 {
     static constexpr size_t kInlineResultBytes = 32;
     enum class ResultStorageKind : uint8_t { Empty, Inline, Heap };

@@ -6,7 +6,7 @@ namespace galay::rpc::detail
 
 template<RingBufferBackendStrategy Strategy>
 ExpectedRpcResponseReadState<Strategy>::ExpectedRpcResponseReadState(
-    RingBuffer<Strategy>& ring_buffer,
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
     const RpcReaderSetting& setting,
     uint32_t expected_request_id,
     RpcResponse& response)
@@ -59,7 +59,7 @@ namespace galay::rpc
 
 template<typename SocketType, RingBufferBackendStrategy Strategy>
 RecvRpcResponseChainAwaitable<SocketType, Strategy>::RecvRpcResponseChainAwaitable(
-    RingBuffer<Strategy>& ring_buffer,
+    RingBuffer<Strategy, std::dynamic_extent>& ring_buffer,
     const RpcReaderSetting& setting,
     uint32_t expected_request_id,
     RpcResponse& response)

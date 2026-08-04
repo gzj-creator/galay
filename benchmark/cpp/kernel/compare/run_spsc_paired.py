@@ -24,9 +24,13 @@ REQUIRED_FIELDS = {
     "schema",
     "language",
     "case",
+    "implementation",
+    "api_profile",
+    "comparison_scope",
     "topology",
     "payload_bytes",
     "capacity",
+    "batch_size",
     "messages",
     "elapsed_ns",
     "messages_per_second",
@@ -43,6 +47,27 @@ REQUIRED_FIELDS = {
     "valid",
 }
 
+EXPECTED_IMPLEMENTATIONS = {
+    ("cpp", "raw_bounded"): "galay::spsc::Ring::split",
+    ("rust", "raw_bounded"): "rtrb::RingBuffer@0.3.4",
+    ("cpp", "batch_bounded"): "galay::spsc::Ring",
+    ("rust", "batch_bounded"): "rtrb::RingBuffer@0.3.4",
+    ("cpp", "unbounded"): "galay::spsc::UnboundedChannel",
+    ("rust", "unbounded"): "unbounded_spsc::channel@0.3.0",
+}
+
+API_PROFILES = {
+    "raw_bounded": ("bounded_spsc_polling_split", "equivalent_measured_api"),
+    "batch_bounded": (
+        "bounded_spsc_batch_polling_split",
+        "equivalent_measured_api",
+    ),
+    "unbounded": (
+        "unbounded_spsc_wait_capable_polling_path",
+        "nearest_available_measured_path",
+    ),
+}
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -53,10 +78,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument(
         "--cases",
-        default="raw_bounded,unbounded",
-        help="comma-separated subset of raw_bounded,unbounded",
+        default="raw_bounded,batch_bounded",
+        help="comma-separated subset of raw_bounded,batch_bounded,unbounded",
     )
     parser.add_argument("--capacity", type=int, default=4096)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument(
+        "--backoff", choices=("yield", "spin", "hybrid"), default="yield"
+    )
     parser.add_argument("--initial-messages", type=int, default=1_000_000)
     parser.add_argument("--max-messages", type=int, default=2_000_000_000)
     parser.add_argument("--target-seconds", type=float, default=1.0)
@@ -68,18 +97,26 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--process-timeout", type=float, default=300.0)
     parser.add_argument("--minimum-speedup", type=float, default=1.05)
     parser.add_argument("--max-cv-percent", type=float, default=3.0)
+    parser.add_argument("--max-retry-ratio", type=float, default=10.0)
     parser.add_argument("--producer-core", type=int, default=0)
     parser.add_argument("--consumer-core", type=int, default=1)
+    parser.add_argument("--cpp-compiler", default="c++")
+    parser.add_argument("--rust-compiler", default="rustc")
+    parser.add_argument("--rust-toolchain", default="nightly")
     args = parser.parse_args()
 
-    allowed_cases = {"raw_bounded", "unbounded"}
+    allowed_cases = {"raw_bounded", "batch_bounded", "unbounded"}
     cases = [value.strip() for value in args.cases.split(",") if value.strip()]
     if not cases or any(value not in allowed_cases for value in cases):
-        parser.error("--cases must contain raw_bounded and/or unbounded")
+        parser.error(
+            "--cases must contain raw_bounded, batch_bounded, and/or unbounded"
+        )
     if len(set(cases)) != len(cases):
         parser.error("--cases must not contain duplicates")
     if args.capacity < 2 or args.capacity & (args.capacity - 1):
         parser.error("--capacity must be a power of two and at least 2")
+    if args.batch_size <= 0 or args.batch_size > args.capacity:
+        parser.error("--batch-size must be positive and no larger than capacity")
     if args.initial_messages <= 0 or args.max_messages < args.initial_messages:
         parser.error("message bounds are invalid")
     if args.target_seconds < 1.0:
@@ -92,7 +129,11 @@ def parse_args() -> argparse.Namespace:
         parser.error("--bootstrap-resamples must be at least 1000")
     if args.process_timeout <= args.target_seconds:
         parser.error("--process-timeout must exceed --target-seconds")
-    if args.minimum_speedup <= 1.0 or args.max_cv_percent <= 0.0:
+    if (
+        args.minimum_speedup <= 1.0
+        or args.max_cv_percent <= 0.0
+        or args.max_retry_ratio < 1.0
+    ):
         parser.error("acceptance thresholds are invalid")
     if args.producer_core < 0 or args.consumer_core < 0:
         parser.error("core indices must be non-negative")
@@ -111,11 +152,32 @@ def binary_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def command_version(command: list[str]) -> str:
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10.0,
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise RuntimeError(f"failed to query {' '.join(command)}: {error}") from error
+    if completed.returncode != 0:
+        raise RuntimeError(
+            f"version command {' '.join(command)} failed: "
+            f"{completed.stderr.strip() or completed.stdout.strip()}"
+        )
+    return completed.stdout.strip()
+
+
 def run_once(
     binary: Path,
     language: str,
     case_name: str,
     capacity: int,
+    batch_size: int,
+    backoff: str,
     messages: int,
     producer_core: int,
     consumer_core: int,
@@ -127,6 +189,10 @@ def run_once(
         case_name,
         "--capacity",
         str(capacity),
+        "--batch-size",
+        str(batch_size),
+        "--backoff",
+        backoff,
         "--messages",
         str(messages),
         "--producer-core",
@@ -162,17 +228,23 @@ def run_once(
     missing = REQUIRED_FIELDS.difference(result)
     if missing:
         raise RuntimeError(f"{language} result misses fields: {sorted(missing)}")
-    expected_capacity = capacity if case_name == "raw_bounded" else 0
+    expected_capacity = capacity if case_name != "unbounded" else 0
+    expected_batch_size = batch_size if case_name == "batch_bounded" else 1
+    api_profile, comparison_scope = API_PROFILES[case_name]
     expected = {
-        "schema": "galay.spsc.paired.v1",
+        "schema": "galay.spsc.paired.v3",
         "language": language,
         "case": case_name,
+        "implementation": EXPECTED_IMPLEMENTATIONS[(language, case_name)],
+        "api_profile": api_profile,
+        "comparison_scope": comparison_scope,
         "topology": "1p1c",
         "payload_bytes": 8,
         "capacity": expected_capacity,
+        "batch_size": expected_batch_size,
         "messages": messages,
         "received": messages,
-        "backoff": "yield",
+        "backoff": backoff,
         "generator": "monotonic_u64",
         "valid": True,
         "fifo_ok": True,
@@ -219,7 +291,7 @@ def summarize(values: list[float], resamples: int, seed: int) -> dict[str, float
     return {
         "median": statistics.median(values),
         "mean": mean,
-        "cv_percent": deviation * 100.0 / mean,
+        "cv_percent": deviation * 100.0 / mean if mean != 0.0 else 0.0,
         "median_ci95_low": ci_low,
         "median_ci95_high": ci_high,
         "minimum": min(values),
@@ -232,10 +304,12 @@ def execute_case(
     binaries: dict[str, Path],
     case_name: str,
 ) -> dict[str, Any]:
-    capacity = args.capacity if case_name == "raw_bounded" else 0
+    capacity = args.capacity if case_name != "unbounded" else 0
     messages = args.initial_messages
     calibration_rows: list[dict[str, Any]] = []
-    calibration_floor = args.target_seconds * 1.50
+    # A 3x floor absorbs short-run frequency variance while preserving the
+    # requirement that every formal sample lasts at least target_seconds.
+    calibration_floor = args.target_seconds * 3.00
 
     for attempt in range(args.calibration_attempts):
         probe_rows = []
@@ -246,6 +320,8 @@ def execute_case(
                     language,
                     case_name,
                     capacity,
+                    args.batch_size,
+                    args.backoff,
                     messages,
                     args.producer_core,
                     args.consumer_core,
@@ -277,6 +353,8 @@ def execute_case(
                 language,
                 case_name,
                 capacity,
+                args.batch_size,
+                args.backoff,
                 messages,
                 args.producer_core,
                 args.consumer_core,
@@ -294,6 +372,8 @@ def execute_case(
                 language,
                 case_name,
                 capacity,
+                args.batch_size,
+                args.backoff,
                 messages,
                 args.producer_core,
                 args.consumer_core,
@@ -316,6 +396,10 @@ def execute_case(
             raise RuntimeError(
                 f"{case_name} sample {sample} used different C++/Rust placement"
             )
+    placement_passed = all(
+        producer == "pinned" and consumer == "pinned"
+        for producer, consumer in placements.values()
+    )
 
     by_language = {
         language: [
@@ -337,6 +421,16 @@ def execute_case(
         )
         paired_ratios.append(cpp["messages_per_second"] / rust["messages_per_second"])
 
+    retry_medians = {
+        language: statistics.median(
+            row["empty_retries"]
+            for row in sample_rows
+            if row["language"] == language
+        )
+        for language in LANGUAGES
+    }
+    retry_ratio = max(retry_medians.values()) / max(1.0, min(retry_medians.values()))
+
     seed = sum(ord(character) for character in case_name) + capacity
     summary = {
         "cpp_messages_per_second": summarize(
@@ -348,11 +442,17 @@ def execute_case(
         "paired_cpp_over_rust": summarize(
             paired_ratios, args.bootstrap_resamples, seed + 2
         ),
+        "empty_retries": {
+            "cpp_median": retry_medians["cpp"],
+            "rust_median": retry_medians["rust"],
+            "max_over_min_floor_one": retry_ratio,
+        },
     }
     ratio_summary = summary["paired_cpp_over_rust"]
     acceptance = {
         "minimum_speedup": args.minimum_speedup,
         "max_cv_percent": args.max_cv_percent,
+        "max_retry_ratio": args.max_retry_ratio,
         "ratio_ci95_low_passed": (
             ratio_summary["median_ci95_low"] > args.minimum_speedup
         ),
@@ -362,6 +462,8 @@ def execute_case(
         "rust_cv_passed": (
             summary["rust_messages_per_second"]["cv_percent"] <= args.max_cv_percent
         ),
+        "placement_passed": placement_passed,
+        "retry_ratio_passed": retry_ratio <= args.max_retry_ratio,
     }
     acceptance["passed"] = all(
         value for key, value in acceptance.items() if key.endswith("_passed")
@@ -369,6 +471,8 @@ def execute_case(
     return {
         "case": case_name,
         "capacity": capacity,
+        "batch_size": args.batch_size if case_name == "batch_bounded" else 1,
+        "backoff": args.backoff,
         "messages": messages,
         "calibration": calibration_rows,
         "warmups": warmup_rows,
@@ -394,6 +498,8 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
             {
                 "case": case["case"],
                 "capacity": case["capacity"],
+                "batch_size": case["batch_size"],
+                "backoff": case["backoff"],
                 "messages": case["messages"],
                 "summary": case["summary"],
                 "acceptance": case["acceptance"],
@@ -404,7 +510,8 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
     summary_json.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
 
     fieldnames = [
-        "phase", "attempt", "sample_index", "language", "case", "capacity",
+        "phase", "attempt", "sample_index", "language", "case",
+        "implementation", "api_profile", "comparison_scope", "capacity", "batch_size",
         "payload_bytes", "messages", "elapsed_ns", "messages_per_second",
         "received", "checksum", "expected_checksum", "fifo_ok", "full_retries",
         "empty_retries", "producer_placement", "consumer_placement", "backoff",
@@ -432,13 +539,24 @@ def main() -> int:
         if not binary.is_file():
             print(f"{language} binary not found: {binary}", file=sys.stderr)
             return 2
+    try:
+        compilers = {
+            "cpp": command_version([args.cpp_compiler, "--version"]),
+            "rust": command_version(
+                [args.rust_compiler, f"+{args.rust_toolchain}", "-vV"]
+            ),
+        }
+    except RuntimeError as error:
+        print(f"paired benchmark failed: {error}", file=sys.stderr)
+        return 1
 
     report = {
-        "schema": "galay.spsc.paired.report.v1",
+        "schema": "galay.spsc.paired.report.v3",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "config": {
             "cases": args.cases,
             "capacity": args.capacity,
+            "batch_size": args.batch_size,
             "target_seconds": args.target_seconds,
             "warmups": args.warmups,
             "samples": args.samples,
@@ -446,17 +564,19 @@ def main() -> int:
             "process_timeout": args.process_timeout,
             "minimum_speedup": args.minimum_speedup,
             "max_cv_percent": args.max_cv_percent,
+            "max_retry_ratio": args.max_retry_ratio,
             "producer_core": args.producer_core,
             "consumer_core": args.consumer_core,
             "payload_bytes": 8,
             "topology": "1p1c",
-            "backoff": "yield",
+            "backoff": args.backoff,
             "generator": "monotonic_u64",
         },
         "environment": {
             "platform": platform.platform(),
             "machine": platform.machine(),
             "python": platform.python_version(),
+            "compilers": compilers,
             "binaries": {
                 language: {
                     "path": str(binary),
@@ -480,6 +600,8 @@ def main() -> int:
         print(json.dumps({
             "case": case["case"],
             "capacity": case["capacity"],
+            "batch_size": case["batch_size"],
+            "backoff": case["backoff"],
             "messages": case["messages"],
             "summary": case["summary"],
             "acceptance": case["acceptance"],

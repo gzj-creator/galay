@@ -21,6 +21,12 @@ namespace galay::mpmc {
 struct UnboundedChannelTestAccess
 {
     template <UnboundedValue T>
+    inline static thread_local typename UnboundedChannel<T>::Block* heldBlock = nullptr;
+
+    template <UnboundedValue T>
+    inline static thread_local uint64_t heldPosition = 0;
+
+    template <UnboundedValue T>
     static bool holdRecvPump(UnboundedChannel<T>& channel) noexcept
     {
         uint8_t expected = 0;
@@ -61,8 +67,10 @@ struct UnboundedChannelTestAccess
         UnboundedChannel<T>& channel,
         typename UnboundedChannel<T>::ProducerToken& token) noexcept
     {
-        return token.validFor(channel) &&
-            channel.acquireSendPermit(*token.m_epochNode);
+        if (!token.validFor(channel) || heldBlock<T> != nullptr) {
+            return false;
+        }
+        return channel.reserveRange(&token, 1, heldBlock<T>, heldPosition<T>);
     }
 
     template <UnboundedValue T>
@@ -71,22 +79,25 @@ struct UnboundedChannelTestAccess
         typename UnboundedChannel<T>::ProducerToken& token,
         T&& value)
     {
-        if (!channel.m_queue.enqueue(
-                token.m_epochNode->queueToken, std::move(value))) {
+        if (!token.validFor(channel) || heldBlock<T> == nullptr) {
             return false;
         }
-        if (channel.waiterPathUsedAfterPublish()) {
-            channel.requestRecvPump();
-        }
+        auto& block = *heldBlock<T>;
+        auto& slot = block.slots[static_cast<size_t>(
+            heldPosition<T> & (UnboundedChannel<T>::kSlotsPerBlock - 1))];
+        std::construct_at(slot.value(), std::move(value));
+        slot.sequence.store(heldPosition<T> + 1, std::memory_order_release);
+        channel.releaseSendPublication();
         return true;
     }
 
     template <UnboundedValue T>
     static void releaseHeldSend(
-        UnboundedChannel<T>& channel,
-        typename UnboundedChannel<T>::ProducerToken& token) noexcept
+        UnboundedChannel<T>&,
+        typename UnboundedChannel<T>::ProducerToken&) noexcept
     {
-        channel.releaseSendPermit(*token.m_epochNode);
+        heldBlock<T> = nullptr;
+        heldPosition<T> = 0;
     }
 
     template <UnboundedValue T>
@@ -726,18 +737,17 @@ bool runCloseWaitsForInFlightSendAfterEnqueue()
             channel, producerToken, LifecycleValue(73, nullptr));
 
     channel.close();
-    const bool onlyValueReady = scheduler.readyCount() == 1;
+    const bool valueAndClosedReady = scheduler.readyCount() == 2;
     const bool valueResumed = scheduler.runOne();
     const int valuesBeforeRelease =
         static_cast<int>(firstState.receivedValue.load(std::memory_order_acquire)) +
         static_cast<int>(secondState.receivedValue.load(std::memory_order_acquire));
-    const bool noEarlyClosedWake = scheduler.readyCount() == 0;
+    const bool closedReady = scheduler.hasSingleReadyTask();
 
     if (permitAcquired) {
         galay::mpmc::UnboundedChannelTestAccess::releaseHeldSend(
             channel, producerToken);
     }
-    const bool closedReady = scheduler.hasSingleReadyTask();
     const bool closedResumed = scheduler.runOne();
     const int closedAfterRelease =
         static_cast<int>(firstState.receivedClosed.load(std::memory_order_acquire)) +
@@ -745,8 +755,8 @@ bool runCloseWaitsForInFlightSendAfterEnqueue()
 
     scheduler.releaseRetainedState();
     return firstStarted && secondStarted && permitAcquired && enqueued &&
-        onlyValueReady && valueResumed && valuesBeforeRelease == 1 &&
-        noEarlyClosedWake && closedReady && closedResumed && closedAfterRelease == 1 &&
+        valueAndClosedReady && valueResumed && valuesBeforeRelease == 1 &&
+        closedReady && closedResumed && closedAfterRelease == 1 &&
         firstState.resumeCount.load(std::memory_order_acquire) == 1 &&
         secondState.resumeCount.load(std::memory_order_acquire) == 1 &&
         firstTaskState->m_refs.load(std::memory_order_acquire) == 1 &&
@@ -805,15 +815,25 @@ bool runCloseScanAcrossRepeatedSendCycle()
     const bool noEarlyClosed =
         !galay::mpmc::UnboundedChannelTestAccess::closedAfterEmpty(channel, value);
 
+    const bool publishedAfterClose =
+        galay::mpmc::UnboundedChannelTestAccess::enqueueHeldSend(
+            channel, producerToken, 42);
     galay::mpmc::UnboundedChannelTestAccess::releaseHeldSend(
         channel, producerToken);
+    const bool secondPermitRejected =
+        !galay::mpmc::UnboundedChannelTestAccess::acquireHeldSend(
+            channel, producerToken);
+    const bool completedValue =
+        galay::mpmc::UnboundedChannelTestAccess::retryRecvBeforeClosed(
+            channel, value) && value == 42;
     const bool idleObserved =
         galay::mpmc::UnboundedChannelTestAccess::sendSideQuiescentAfterClose(
             channel);
     const bool closedAfterRelease =
         galay::mpmc::UnboundedChannelTestAccess::closedAfterEmpty(channel, value);
-    return activeObserved && noEarlyClosed && idleObserved && closedAfterRelease &&
-        channel.empty();
+    return activeObserved && noEarlyClosed && publishedAfterClose &&
+        secondPermitRejected && completedValue && idleObserved &&
+        closedAfterRelease && channel.empty();
 }
 
 }  // namespace

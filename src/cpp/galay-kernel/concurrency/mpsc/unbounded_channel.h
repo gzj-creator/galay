@@ -20,6 +20,7 @@
 #include "../../core/timeout.hpp"
 #include "../../core/wait_registration.h"
 #include "../../core/waker.h"
+#include "../../../galay-utils/common/defn.hpp"
 
 #include <algorithm>
 #include <array>
@@ -369,12 +370,6 @@ template <UnboundedValue T>
 class UnboundedChannel
 {
 private:
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64) || \
-    defined(_M_ARM64) || defined(_M_ARM64EC)
-    static constexpr size_t kCacheLine = 128;
-#else
-    static constexpr size_t kCacheLine = 64;
-#endif
     static constexpr size_t kBlockTargetBytes = 4096;
     static constexpr size_t kConsumerQuota = 64;
 
@@ -405,19 +400,24 @@ private:
     };
 
     static constexpr size_t kBlockCapacity =
-        (kBlockTargetBytes - kCacheLine) / sizeof(Slot) < 2
+        (kBlockTargetBytes - ::galay::utils::kCacheLineSize) /
+                sizeof(Slot) < 2
         ? 2
-        : (kBlockTargetBytes - kCacheLine) / sizeof(Slot);
+        : (kBlockTargetBytes - ::galay::utils::kCacheLineSize) /
+                sizeof(Slot);
 
     struct Block
     {
-        alignas(kCacheLine) std::atomic<Block*> next{nullptr};
+        alignas(::galay::utils::kCacheLineSize)
+            std::atomic<Block*> next{nullptr};
         std::array<Slot, kBlockCapacity> slots;
+        std::array<std::atomic<uint8_t>, kBlockCapacity> ready{};
     };
 
     enum class ProducerGate : uint8_t {
         kOpen,
         kSending,
+        kPublished,
     };
 
     enum class ProducerLifetimeState : uint8_t {
@@ -440,7 +440,7 @@ private:
             ProducerLifetimeState::kOwned};
     };
 
-    struct alignas(kCacheLine) ProducerCursor
+    struct alignas(::galay::utils::kCacheLineSize) ProducerCursor
     {
         uint64_t localPublished = 0;
         Block* block = nullptr;
@@ -448,7 +448,7 @@ private:
         bool activated = false;
     };
 
-    struct alignas(kCacheLine) ConsumerCursor
+    struct alignas(::galay::utils::kCacheLineSize) ConsumerCursor
     {
         std::atomic<uint64_t> consumed{0};
         uint64_t localConsumed = 0;
@@ -459,7 +459,7 @@ private:
 
     struct ProducerStream;
 
-    struct alignas(kCacheLine) StreamSharedState
+    struct alignas(::galay::utils::kCacheLineSize) StreamSharedState
     {
         std::atomic<uint64_t> published{0};
         std::atomic<Block*> recycledBlocks{nullptr};
@@ -467,7 +467,7 @@ private:
         std::atomic<bool> active{false};
     };
 
-    struct alignas(kCacheLine) ProducerControl
+    struct alignas(::galay::utils::kCacheLineSize) ProducerControl
     {
         std::atomic<ProducerGate> gate{ProducerGate::kOpen};
     };
@@ -529,7 +529,7 @@ private:
     };
 
     /** @brief 一个生产者独占写入、唯一消费者独占读取的分块流。 */
-    struct alignas(kCacheLine) ProducerStream
+    struct alignas(::galay::utils::kCacheLineSize) ProducerStream
     {
         ProducerStream(Block* first, ProducerLifetime* streamLifetime) noexcept
             : lifetime(streamLifetime)
@@ -721,6 +721,20 @@ public:
                 m_generation == channel->m_generation;
         }
 
+        /**
+         * @brief 校验一个存活 channel 的同步发送热路径所需的 token 关联。
+         * @pre channel 仍存活，且同一 token 未被其他线程并发移动或销毁。
+         * @note channel 的 send() 调用和 ProducerToken 的单生产者契约已满足此前提；
+         *       不读取 lifetime 状态，避免每条消息为析构后 valid() 查询付出 acquire。
+         */
+        [[nodiscard]] bool validForLiveChannel(
+            const UnboundedChannel* channel) const noexcept
+        {
+            return m_lifetime != nullptr && m_channel == channel &&
+                m_stream != nullptr && m_generation != 0 &&
+                m_generation == channel->m_generation;
+        }
+
         UnboundedChannel* m_channel = nullptr;
         ProducerStream* m_stream = nullptr;
         ProducerLifetime* m_lifetime = nullptr;
@@ -730,12 +744,12 @@ public:
     /**
      * @brief 构造 MPSC 通道。
      * @param defaultBatchSize recvBatch() 未指定上限时的默认值。
-     * @param singleRecvPrefetchLimit 单条接收后最多预取的消息数；默认预取 1 条。
-     *        b26_mpsc_unbounded_prefetch 的新数据面测量中，1 条预取修复了 1P1C
-     *        紧跟消费时的反复 active-stream 探测，同时仍保持 4P1C 明显领先。
+     * @param singleRecvPrefetchLimit 单条接收后最多预取的消息数；默认不预取。
+     *        b26 的新 ready 数据面测量表明同步单条接收直接轮转 stream 更快；
+     *        显式预取仍只在当前一个活跃 producer stream 时启用。
      */
     explicit UnboundedChannel(size_t defaultBatchSize = DEFAULT_BATCH_SIZE,
-                              size_t singleRecvPrefetchLimit = 1)
+                              size_t singleRecvPrefetchLimit = 0)
         : m_generation(nextGeneration())
         , m_defaultBatchSize(std::max<size_t>(1, defaultBatchSize))
         , m_singleRecvPrefetchLimit(singleRecvPrefetchLimit)
@@ -795,7 +809,8 @@ public:
      */
     [[nodiscard]] bool send(ProducerToken& token, T&& value) noexcept
     {
-        return token.validFor(this) && sendToStream(*token.m_stream, std::move(value));
+        return token.validForLiveChannel(this) &&
+            sendToStream(*token.m_stream, std::move(value));
     }
 
     /**
@@ -817,7 +832,7 @@ public:
     [[nodiscard]] bool send(ProducerToken& token, const T& value)
         noexcept requires std::is_nothrow_copy_constructible_v<T>
     {
-        if (!token.validFor(this)) {
+        if (!token.validForLiveChannel(this)) {
             return false;
         }
         T copy = value;
@@ -848,7 +863,7 @@ public:
                                  const std::vector<T>& values)
         noexcept requires std::is_nothrow_copy_constructible_v<T>
     {
-        if (!token.validFor(this)) {
+        if (!token.validForLiveChannel(this)) {
             return false;
         }
         if (values.empty()) {
@@ -881,7 +896,7 @@ public:
     [[nodiscard]] bool sendBatch(
         ProducerToken& token, std::vector<T>&& values) noexcept
     {
-        if (!token.validFor(this)) {
+        if (!token.validForLiveChannel(this)) {
             return false;
         }
         if (values.empty()) {
@@ -1104,8 +1119,8 @@ public:
             m_streamHead.load(std::memory_order_acquire);
         while (stream != nullptr) {
             size_t spins = 0;
-            while (stream->control.gate.load(std::memory_order_seq_cst) ==
-                   ProducerGate::kSending) {
+            while (stream->control.gate.load(std::memory_order_seq_cst) !=
+                   ProducerGate::kOpen) {
                 if (spins < 64) {
                     cpuPause();
                     ++spins;
@@ -1280,6 +1295,9 @@ private:
                     next,
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
+                for (std::atomic<uint8_t>& flag : block->ready) {
+                    flag.store(0, std::memory_order_relaxed);
+                }
                 block->next.store(nullptr, std::memory_order_relaxed);
                 return block;
             }
@@ -1371,7 +1389,15 @@ private:
             }
             last = block;
         }
-        producer.block->next.store(first, std::memory_order_release);
+        Block* const previousTail = producer.block;
+        if (remaining == 0) {
+            // consumer 一旦取得 next 就会回收 previousTail，并复用它的 next 作为
+            // recycle 链接；因此满块时必须先移动 producer 私有 cursor，再发布
+            // previousTail->next，不能在发布后重新读取这个共享链接。
+            producer.block = first;
+            producer.index = 0;
+        }
+        previousTail->next.store(first, std::memory_order_release);
         return true;
     }
 
@@ -1403,16 +1429,40 @@ private:
     }
 
     [[nodiscard]] TaskState* publishStream(ProducerStream& stream,
+                                           Block* batchStartBlock,
+                                           size_t batchStartIndex,
                                            size_t count) noexcept
     {
         ProducerCursor& producer = stream.producer;
         producer.localPublished += static_cast<uint64_t>(count);
-        stream.shared.published.store(producer.localPublished,
-                                      std::memory_order_seq_cst);
         if (!producer.activated) {
             activateReadyStream(stream);
             producer.activated = true;
         }
+        Block* readyBlock = batchStartBlock;
+        size_t readyIndex = batchStartIndex + 1;
+        for (size_t offset = 1; offset < count; ++offset) {
+            if (readyIndex == kBlockCapacity) {
+                readyBlock = readyBlock->next.load(std::memory_order_relaxed);
+                readyIndex = 0;
+            }
+            readyBlock->ready[readyIndex].store(
+                1, std::memory_order_relaxed);
+            ++readyIndex;
+        }
+        // 单消费者只有观察到批首 release 后才会进入本批；它同步此前的全部
+        // 构造和后续 slot 标记，因此批次不会暴露可见前缀。
+        batchStartBlock->ready[batchStartIndex].store(
+            1, std::memory_order_release);
+        // ready membership 和批次提交必须先于诊断计数；waiter 扫描可据此确认
+        // 已经存在可消费数据，而同步接收只读取块内 ready flag。
+        stream.shared.published.store(producer.localPublished,
+                                      std::memory_order_release);
+        // 消息数据和 ready membership 都先于 SC 通知状态可见，使 waiter arming
+        // 能区分仍在构造的发送与已经可消费的数据。
+        stream.control.gate.store(
+            ProducerGate::kPublished,
+            std::memory_order_seq_cst);
         return detachPublishedWaiter();
     }
 
@@ -1457,15 +1507,14 @@ private:
             return false;
         }
         ProducerCursor& producer = stream.producer;
-        if (producer.index == kBlockCapacity) {
-            producer.block = producer.block->next.load(std::memory_order_acquire);
-            producer.index = 0;
-        }
+        Block* const batchStartBlock = producer.block;
+        const size_t batchStartIndex = producer.index;
         [[maybe_unused]] T* const stored = std::construct_at(
             producer.block->slots[producer.index].constructionAddress(),
             std::move(value));
         ++producer.index;
-        TaskState* waiterState = publishStream(stream, 1);
+        TaskState* waiterState = publishStream(
+            stream, batchStartBlock, batchStartIndex, 1);
         // finishSend() 是本 sender 对 channel/stream 的最后一次访问。只有先
         // 释放 gate，内联恢复的 receiver 才能安全重入 close()。
         finishSend(stream);
@@ -1486,6 +1535,8 @@ private:
             return false;
         }
         ProducerCursor& producer = stream.producer;
+        Block* const batchStartBlock = producer.block;
+        const size_t batchStartIndex = producer.index;
         BatchConstructionGuard guard(producer);
         for (const T& value : values) {
             if (producer.index == kBlockCapacity) {
@@ -1498,7 +1549,8 @@ private:
             guard.recordConstructed();
         }
         guard.commit();
-        TaskState* waiterState = publishStream(stream, values.size());
+        TaskState* waiterState = publishStream(
+            stream, batchStartBlock, batchStartIndex, values.size());
         // waiter 已完全摘出，释放 gate 后的调度不再访问 channel/stream。
         finishSend(stream);
         if (waiterState != nullptr) {
@@ -1518,6 +1570,8 @@ private:
             return false;
         }
         ProducerCursor& producer = stream.producer;
+        Block* const batchStartBlock = producer.block;
+        const size_t batchStartIndex = producer.index;
         BatchConstructionGuard guard(producer);
         for (T& value : values) {
             if (producer.index == kBlockCapacity) {
@@ -1531,7 +1585,8 @@ private:
             guard.recordConstructed();
         }
         guard.commit();
-        TaskState* waiterState = publishStream(stream, values.size());
+        TaskState* waiterState = publishStream(
+            stream, batchStartBlock, batchStartIndex, values.size());
         // waiter 已完全摘出，释放 gate 后的调度不再访问 channel/stream。
         finishSend(stream);
         if (waiterState != nullptr) {
@@ -1543,15 +1598,6 @@ private:
     static std::optional<T> tryPopStream(ProducerStream& stream) noexcept
     {
         ConsumerCursor& consumer = stream.consumer;
-        if (consumer.localConsumed == consumer.observedPublished) {
-            consumer.observedPublished =
-                stream.shared.published.load(std::memory_order_seq_cst);
-            if (consumer.localConsumed == consumer.observedPublished) {
-                consumer.consumed.store(consumer.localConsumed,
-                                        std::memory_order_relaxed);
-                return std::nullopt;
-            }
-        }
         if (consumer.index == kBlockCapacity) {
             Block* next = consumer.block->next.load(std::memory_order_acquire);
             if (next == nullptr) {
@@ -1563,7 +1609,13 @@ private:
             recycleBlock(stream, retired);
         }
 
-        Slot& slot = consumer.block->slots[consumer.index];
+        Block& block = *consumer.block;
+        if (block.ready[consumer.index].load(std::memory_order_acquire) == 0) {
+            consumer.consumed.store(consumer.localConsumed,
+                                    std::memory_order_relaxed);
+            return std::nullopt;
+        }
+        Slot& slot = block.slots[consumer.index];
         T value = std::move(*slot.value());
         std::destroy_at(slot.value());
         ++consumer.index;
@@ -1664,7 +1716,8 @@ private:
 
     void tryPrefetchSingleRecvValues() noexcept
     {
-        if (m_singleRecvPrefetchLimit == 0 || prefetchedCount() != 0) {
+        if (m_singleRecvPrefetchLimit == 0 || m_activeStreamCount != 1 ||
+            prefetchedCount() != 0) {
             return;
         }
         while (m_singleRecvPrefetch.size() < m_singleRecvPrefetchLimit) {
@@ -1681,9 +1734,12 @@ private:
 
     /**
      * @brief waiter arming 后无分配检查是否已有可读消息。
-     * @details 首次 stream 激活通过 m_readyStack 的 seq_cst 发布/摘取加入 waiter
-     *          全序；已激活 stream 的 published seq_cst 计数与 waiter phase 共用
-     *          同一全序，因此检查返回 false 后的新发布必由 pending/armed 路径唤醒。
+     * @details 首次 stream 激活仍通过 m_readyStack 的 seq_cst 发布/摘取加入 waiter
+     *          全序。随后扫描所有已注册 stream：kSending 的 producer 尚未执行
+     *          waiter 仲裁，consumer 可继续 arming；kPublished 表示数据和 ready
+     *          membership 已发布，必须取消挂起；kOpen 时 acquire published 计数。
+     *          gate 与 waiter phase 共用 SC 全序，因此返回 false 后的新发布必由
+     *          pending/armed 路径唤醒。
      */
     [[nodiscard]] bool hasPublishedValueForWaiter() noexcept
     {
@@ -1694,10 +1750,36 @@ private:
         ProducerStream* stream = m_readyHead;
         while (stream != nullptr) {
             if (stream->consumer.localConsumed !=
-                stream->shared.published.load(std::memory_order_seq_cst)) {
+                stream->shared.published.load(std::memory_order_acquire)) {
                 return true;
             }
             stream = stream->shared.readyNext;
+        }
+
+        stream =
+            m_streamHead.load(std::memory_order_acquire);
+        while (stream != nullptr) {
+            const ProducerGate gate =
+                stream->control.gate.load(std::memory_order_seq_cst);
+            if (gate == ProducerGate::kPublished) {
+                return true;
+            }
+            // 读取 Sending 后再次检查上一轮发布：当前 sender 的 gate 发布同步
+            // 此前已完成的同 stream 发送，避免旧数据与本轮预留失败共同留下一个
+            // 已经 armed、却再无 producer 仲裁的 waiter。
+            if (gate == ProducerGate::kSending) {
+                if (stream->consumer.localConsumed !=
+                    stream->shared.published.load(std::memory_order_acquire)) {
+                    return true;
+                }
+                stream = stream->next;
+                continue;
+            }
+            if (stream->consumer.localConsumed !=
+                stream->shared.published.load(std::memory_order_acquire)) {
+                return true;
+            }
+            stream = stream->next;
         }
         return false;
     }
@@ -1708,7 +1790,7 @@ private:
      *         TaskState 指针，否则返回 nullptr。
      * @note 返回非空时 registration 已消费、timer 仲裁完成且 phase 已回到 Idle；
      *       arming race 返回空并由唯一 consumer 完成撤销。本函数不调用 scheduler，
-     *       因此可在 producer gate 仍为 kSending 时安全执行。非空返回值必须且只能
+     *       因此可在 producer gate 为 kPublished 时安全执行。非空返回值必须且只能
      *       传给 wakeDetachedWaiter() 一次。
      */
     [[nodiscard]] TaskState* detachPublishedWaiter() noexcept
@@ -1870,11 +1952,16 @@ private:
         return waiterState;
     }
 
-    alignas(kCacheLine) std::atomic<ProducerStream*> m_streamHead{nullptr};
-    alignas(kCacheLine) std::atomic<ProducerStream*> m_readyStack{nullptr};
-    alignas(kCacheLine) std::atomic<size_t> m_producerRegistrations{0};
-    alignas(kCacheLine) std::atomic<WaiterPhase> m_waiterPhase{WaiterPhase::kIdle};
-    alignas(kCacheLine) std::atomic<size_t> m_prefetchedVisible{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<ProducerStream*> m_streamHead{nullptr};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<ProducerStream*> m_readyStack{nullptr};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<size_t> m_producerRegistrations{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<WaiterPhase> m_waiterPhase{WaiterPhase::kIdle};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<size_t> m_prefetchedVisible{0};
     std::vector<T> m_singleRecvPrefetch;
     TimeoutTimer::ptr m_waiterTimer;
     WaitRegistration m_waiterRegistration;
@@ -1886,7 +1973,8 @@ private:
     size_t m_consumerQuotaUsed = 0;
     size_t m_prefetchIndex = 0;
     size_t m_activeStreamCount = 0;
-    alignas(kCacheLine) std::atomic<CloseState> m_closeState{CloseState::kOpen};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<CloseState> m_closeState{CloseState::kOpen};
 };
 
 template <UnboundedValue T>
@@ -1927,7 +2015,8 @@ inline bool UnboundedRecvAwaitable<T>::await_suspend(
         m_waiterState = nullptr;
         return false;
     }
-    if (tryReceiveNow() || channel->isClosedAndDrained()) {
+    if (channel->hasPublishedValueForWaiter() ||
+        channel->isClosedAndDrained()) {
         channel->cancelWaiterRegistration();
         m_waiterState = nullptr;
         return false;
@@ -2080,7 +2169,8 @@ inline bool UnboundedRecvBatchToAwaitable<T>::await_suspend(
         m_waiterState = nullptr;
         return false;
     }
-    if (tryReceiveNow() || channel->isClosedAndDrained()) {
+    if (channel->hasPublishedValueForWaiter() ||
+        channel->isClosedAndDrained()) {
         channel->cancelWaiterRegistration();
         m_waiterState = nullptr;
         return false;

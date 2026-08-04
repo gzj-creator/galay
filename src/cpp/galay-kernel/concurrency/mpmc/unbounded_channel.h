@@ -4,8 +4,8 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 使用 moodycamel::ConcurrentQueue 保存消息，并使用无锁等待队列管理挂起的
- * 多个消费者。发送不会因容量不足挂起；空队列接收只挂起协程，不阻塞调度器线程。
+ * @details 使用可回收分段保存消息，并使用无锁等待队列管理挂起的多个
+ * 消费者。发送不会因容量不足挂起；空队列接收只挂起协程，不阻塞调度器线程。
  */
 
 #ifndef GALAY_CONCURRENCY_MPMC_UNBOUNDED_CHANNEL_H
@@ -14,6 +14,7 @@
 #include "../../common/error.h"
 #include "../../core/timeout.hpp"
 #include "../../core/waker.h"
+#include "../../../galay-utils/common/defn.hpp"
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -22,9 +23,11 @@
 #endif
 
 #include <atomic>
+#include <array>
 #include <concepts>
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include <coroutine>
+#include <cstddef>
 #include <cstdint>
 #include <expected>
 #include <iterator>
@@ -96,17 +99,6 @@ struct UnboundedChannelWaiter
 
 namespace detail {
 
-struct UnboundedQueueTraits : moodycamel::ConcurrentQueueDefaultTraits
-{
-    static constexpr size_t BLOCK_SIZE = 64;
-    static constexpr size_t EXPLICIT_BLOCK_EMPTY_COUNTER_THRESHOLD = 32;
-    static constexpr size_t EXPLICIT_INITIAL_INDEX_SIZE = 32;
-    static constexpr std::uint32_t
-        EXPLICIT_CONSUMER_CONSUMPTION_QUOTA_BEFORE_ROTATE = 32;
-};
-
-inline constexpr size_t kUnboundedInitialPoolElements = 1024;
-
 inline void unboundedChannelCpuPause() noexcept
 {
 #if defined(_MSC_VER)
@@ -118,6 +110,17 @@ inline void unboundedChannelCpuPause() noexcept
 #elif defined(__aarch64__) || defined(__arm__)
     __asm__ __volatile__("yield" ::: "memory");
 #endif
+}
+
+inline void unboundedChannelBackoff(uint32_t& step) noexcept
+{
+    const uint32_t count = uint32_t{1} << (step < 6 ? step : 6);
+    for (uint32_t index = 0; index < count; ++index) {
+        unboundedChannelCpuPause();
+    }
+    if (step < 6) {
+        ++step;
+    }
 }
 
 template <UnboundedValue T>
@@ -252,41 +255,50 @@ template <UnboundedValue T>
 class UnboundedChannel
 {
 private:
-    using DataQueue = moodycamel::ConcurrentQueue<T, detail::UnboundedQueueTraits>;
-
     // AArch64 平台按 128B 隔离 producer publication 与 waiter 热状态；
-    // 其他当前支持平台使用 64B。常量固定在公开模板内，避免依赖非 ABI 稳定的
-    // std::hardware_destructive_interference_size。
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-    static constexpr size_t kCacheLine = 128;
-#else
-    static constexpr size_t kCacheLine = 64;
-#endif
+    // 其他当前支持平台使用 64B。固定值由 galay-utils/common/defn.hpp 统一提供。
     static constexpr uint8_t kPumpRunning = 1U;
     static constexpr uint8_t kRecvWork = 1U << 1U;
     static constexpr uint8_t kRecvWaiterPathUsed = 1U;
     static constexpr uint8_t kRecvCleanupPending = 1U << 1U;
-    static constexpr size_t kInitialDataQueueElements =
-        detail::kUnboundedInitialPoolElements;
+    static constexpr uint64_t kSlotsPerBlock = 4096;
+    static constexpr uint64_t kClosedBit = uint64_t{1} << 63U;
+    static constexpr uint64_t kPositionMask = kClosedBit - 1;
+    static constexpr uint64_t kInvalidBlockBase = UINT64_MAX;
 
-    struct alignas(kCacheLine) ProducerEpochNode
+    enum class BlockState : uint8_t {
+        kActive,
+        kRetired,
+    };
+
+    struct Slot
     {
-        explicit ProducerEpochNode(DataQueue& queue)
-            : queueToken(queue)
+        T* value() noexcept
         {
+            return std::launder(reinterpret_cast<T*>(storage));
         }
 
-        moodycamel::ProducerToken queueToken;
-        std::atomic<uint64_t> active{0};
-        ProducerEpochNode* next = nullptr;
+        std::atomic<uint64_t> sequence{0};
+        alignas(T) std::byte storage[sizeof(T)];
+    };
+
+    struct alignas(::galay::utils::kCacheLineSize) Block
+    {
+        std::atomic<Block*> next{nullptr};
+        std::atomic<uint64_t> base{kInvalidBlockBase};
+        std::atomic<BlockState> state{BlockState::kActive};
+        Block* poolNext = nullptr;
+        Block* allNext = nullptr;
+        std::array<Slot, kSlotsPerBlock> slots;
     };
 
     struct DefaultProducerCacheEntry
     {
         const UnboundedChannel* channel = nullptr;
-        ProducerEpochNode* producer = nullptr;
+        Block* block = nullptr;
         DefaultProducerCacheEntry* next = nullptr;
         uint64_t generation = 0;
+        uint64_t blockBase = kInvalidBlockBase;
     };
 
     /**
@@ -325,18 +337,20 @@ public:
         ProducerToken& operator=(const ProducerToken&) = delete;
 
         ProducerToken(ProducerToken&& other) noexcept
-            : m_epochNode(std::exchange(other.m_epochNode, nullptr)),
+            : m_block(std::exchange(other.m_block, nullptr)),
               m_channel(std::exchange(other.m_channel, nullptr)),
-              m_generation(std::exchange(other.m_generation, 0))
+              m_generation(std::exchange(other.m_generation, 0)),
+              m_blockBase(std::exchange(other.m_blockBase, kInvalidBlockBase))
         {
         }
 
         ProducerToken& operator=(ProducerToken&& other) noexcept
         {
             if (this != &other) {
-                std::swap(m_epochNode, other.m_epochNode);
+                std::swap(m_block, other.m_block);
                 std::swap(m_channel, other.m_channel);
                 std::swap(m_generation, other.m_generation);
+                std::swap(m_blockBase, other.m_blockBase);
             }
             return *this;
         }
@@ -344,8 +358,7 @@ public:
         /** @brief 返回 token 是否仍绑定有效通道 producer。 */
         bool valid() const noexcept
         {
-            return m_channel != nullptr && m_epochNode != nullptr &&
-                m_generation != 0;
+            return m_channel != nullptr && m_generation != 0;
         }
 
     private:
@@ -353,21 +366,24 @@ public:
         friend struct UnboundedChannelTestAccess;
 
         explicit ProducerToken(UnboundedChannel& channel)
-            : m_epochNode(channel.registerProducerEpoch()),
-              m_channel(m_epochNode != nullptr ? &channel : nullptr),
-              m_generation(m_epochNode != nullptr ? channel.m_generation : 0)
+            : m_block(channel.m_tailBlock.load(std::memory_order_acquire)),
+              m_channel(&channel),
+              m_generation(channel.m_generation),
+              m_blockBase(m_block != nullptr
+                    ? m_block->base.load(std::memory_order_acquire)
+                    : kInvalidBlockBase)
         {
         }
 
         bool validFor(const UnboundedChannel& channel) const noexcept
         {
-            return m_channel == &channel && m_epochNode != nullptr &&
-                m_generation == channel.m_generation;
+            return m_channel == &channel && m_generation == channel.m_generation;
         }
 
-        ProducerEpochNode* m_epochNode;
+        Block* m_block;
         UnboundedChannel* m_channel;
         uint64_t m_generation;
+        uint64_t m_blockBase;
     };
 
     /**
@@ -382,16 +398,18 @@ public:
         ConsumerToken& operator=(const ConsumerToken&) = delete;
 
         ConsumerToken(ConsumerToken&& other) noexcept
-            : m_token(std::move(other.m_token)),
-              m_channel(std::exchange(other.m_channel, nullptr))
+            : m_block(std::exchange(other.m_block, nullptr)),
+              m_channel(std::exchange(other.m_channel, nullptr)),
+              m_blockBase(std::exchange(other.m_blockBase, kInvalidBlockBase))
         {
         }
 
         ConsumerToken& operator=(ConsumerToken&& other) noexcept
         {
             if (this != &other) {
-                m_token.swap(other.m_token);
+                std::swap(m_block, other.m_block);
                 std::swap(m_channel, other.m_channel);
+                std::swap(m_blockBase, other.m_blockBase);
             }
             return *this;
         }
@@ -407,7 +425,11 @@ public:
         friend struct UnboundedChannelTestAccess;
 
         explicit ConsumerToken(UnboundedChannel& channel)
-            : m_token(channel.m_queue), m_channel(&channel)
+            : m_block(channel.m_headBlock.load(std::memory_order_acquire)),
+              m_channel(&channel),
+              m_blockBase(m_block != nullptr
+                    ? m_block->base.load(std::memory_order_acquire)
+                    : kInvalidBlockBase)
         {
         }
 
@@ -416,22 +438,35 @@ public:
             return m_channel == &channel;
         }
 
-        moodycamel::ConsumerToken m_token;
+        Block* m_block;
         UnboundedChannel* m_channel;
+        uint64_t m_blockBase;
     };
 
     UnboundedChannel() noexcept
-        : m_queue(kInitialDataQueueElements), m_generation(nextGeneration())
+        : m_generation(nextGeneration())
     {
+        Block* initial = allocateBlock(0);
+        m_headBlock.store(initial, std::memory_order_relaxed);
+        m_tailBlock.store(initial, std::memory_order_relaxed);
     }
     ~UnboundedChannel() noexcept
     {
-        ProducerEpochNode* node =
-            m_producerEpochHead.load(std::memory_order_relaxed);
-        while (node != nullptr) {
-            ProducerEpochNode* next = node->next;
-            delete node;
-            node = next;
+        Block* block = m_allBlocks;
+        while (block != nullptr) {
+            Block* next = block->allNext;
+            const uint64_t base = block->base.load(std::memory_order_relaxed);
+            if (base != kInvalidBlockBase) {
+                for (uint64_t offset = 0; offset < kSlotsPerBlock; ++offset) {
+                    Slot& slot = block->slots[static_cast<size_t>(offset)];
+                    if (slot.sequence.load(std::memory_order_relaxed) ==
+                        base + offset + 1) {
+                        std::destroy_at(slot.value());
+                    }
+                }
+            }
+            delete block;
+            block = next;
         }
     }
     UnboundedChannel(const UnboundedChannel&) = delete;
@@ -470,7 +505,7 @@ public:
         if (!token.validFor(*this)) {
             return false;
         }
-        return sendImpl(&token, std::move(value));
+        return sendTokenFast<true>(token, std::move(value));
     }
 
     /** @brief 复制并发送一条消息。 */
@@ -549,7 +584,7 @@ public:
         if (!token.validFor(*this)) {
             return std::nullopt;
         }
-        return tryRecvImpl(&token);
+        return tryRecvTokenFast(token);
     }
 
     /** @brief 异步接收一条消息；空时挂起协程。 */
@@ -590,7 +625,9 @@ public:
      */
     void close() noexcept
     {
-        if (m_closed.exchange(true, std::memory_order_seq_cst)) {
+        const uint64_t previous =
+            m_tail.fetch_or(kClosedBit, std::memory_order_acq_rel);
+        if ((previous & kClosedBit) != 0) {
             return;
         }
         requestRecvPump();
@@ -604,13 +641,16 @@ public:
      */
     bool isClosed() const noexcept
     {
-        return m_closed.load(std::memory_order_acquire);
+        return (m_tail.load(std::memory_order_acquire) & kClosedBit) != 0;
     }
 
     /** @brief 返回当前待消费消息的近似数量，仅供诊断。 */
     size_t size() const noexcept
     {
-        return m_queue.size_approx();
+        const uint64_t tail =
+            m_tail.load(std::memory_order_relaxed) & kPositionMask;
+        const uint64_t head = m_head.load(std::memory_order_relaxed);
+        return static_cast<size_t>(tail >= head ? tail - head : 0);
     }
 
     /** @brief 近似检查通道是否为空。 */
@@ -648,26 +688,256 @@ private:
         return cache;
     }
 
-    ProducerEpochNode* registerProducerEpoch() noexcept
+    void lockBlockPool() noexcept
     {
-        auto* node = new (std::nothrow) ProducerEpochNode(m_queue);
-        if (node == nullptr || !node->queueToken.valid()) {
-            delete node;
-            return nullptr;
-        }
-
-        node->next = m_producerEpochHead.load(std::memory_order_seq_cst);
-        while (!m_producerEpochHead.compare_exchange_weak(
-            node->next,
-            node,
-            std::memory_order_seq_cst,
-            std::memory_order_seq_cst)) {
+        while (m_blockPoolLock.test_and_set(std::memory_order_acquire)) {
             detail::unboundedChannelCpuPause();
         }
-        return node;
     }
 
-    ProducerEpochNode* defaultProducerEpoch() noexcept
+    void unlockBlockPool() noexcept
+    {
+        m_blockPoolLock.clear(std::memory_order_release);
+    }
+
+    bool blockSlotsAreFree(const Block& block) const noexcept
+    {
+        const uint64_t base = block.base.load(std::memory_order_acquire);
+        for (uint64_t offset = 0; offset < kSlotsPerBlock; ++offset) {
+            if (block.slots[static_cast<size_t>(offset)].sequence.load(
+                    std::memory_order_acquire) !=
+                base + offset + kSlotsPerBlock) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    Block* takeBlockLocked(uint64_t base) noexcept
+    {
+        Block* block = nullptr;
+        Block** link = &m_retiredBlocks;
+        while (*link != nullptr) {
+            if (blockSlotsAreFree(**link)) {
+                block = *link;
+                *link = block->poolNext;
+                block->poolNext = nullptr;
+                break;
+            }
+            link = &(*link)->poolNext;
+        }
+        if (block == nullptr) {
+            block = new (std::nothrow) Block;
+            if (block == nullptr) {
+                return nullptr;
+            }
+            block->allNext = m_allBlocks;
+            m_allBlocks = block;
+        }
+
+        block->next.store(nullptr, std::memory_order_relaxed);
+        block->state.store(BlockState::kActive, std::memory_order_relaxed);
+        for (uint64_t offset = 0; offset < kSlotsPerBlock; ++offset) {
+            block->slots[static_cast<size_t>(offset)].sequence.store(
+                base + offset, std::memory_order_relaxed);
+        }
+        block->base.store(base, std::memory_order_release);
+        return block;
+    }
+
+    Block* allocateBlock(uint64_t base) noexcept
+    {
+        lockBlockPool();
+        Block* block = takeBlockLocked(base);
+        unlockBlockPool();
+        return block;
+    }
+
+    Block* ensureNextBlock(Block& block, uint64_t nextBase) noexcept
+    {
+        const uint64_t expectedBase = nextBase - kSlotsPerBlock;
+        if (block.base.load(std::memory_order_acquire) != expectedBase ||
+            block.state.load(std::memory_order_acquire) != BlockState::kActive) {
+            return nullptr;
+        }
+        Block* next = block.next.load(std::memory_order_acquire);
+        if (next != nullptr) {
+            if (next->base.load(std::memory_order_acquire) != nextBase ||
+                next->state.load(std::memory_order_acquire) !=
+                    BlockState::kActive) {
+                return nullptr;
+            }
+            if ((m_tail.load(std::memory_order_acquire) & kPositionMask) >=
+                    nextBase ||
+                m_head.load(std::memory_order_acquire) >= nextBase) {
+                catchUpBlockAnchors();
+            }
+            return next;
+        }
+
+        lockBlockPool();
+        if (block.base.load(std::memory_order_acquire) != expectedBase ||
+            block.state.load(std::memory_order_acquire) != BlockState::kActive) {
+            unlockBlockPool();
+            return nullptr;
+        }
+        next = block.next.load(std::memory_order_acquire);
+        if (next == nullptr) {
+            next = takeBlockLocked(nextBase);
+            if (next != nullptr) {
+                block.next.store(next, std::memory_order_release);
+            }
+        } else if (next->base.load(std::memory_order_acquire) != nextBase ||
+                   next->state.load(std::memory_order_acquire) !=
+                       BlockState::kActive) {
+            next = nullptr;
+        }
+        unlockBlockPool();
+        if (next != nullptr) {
+            if ((m_tail.load(std::memory_order_acquire) & kPositionMask) >=
+                    nextBase ||
+                m_head.load(std::memory_order_acquire) >= nextBase) {
+                catchUpBlockAnchors();
+            }
+        }
+        return next;
+    }
+
+    void catchUpBlockAnchors() noexcept
+    {
+        lockBlockPool();
+        const uint64_t tailPosition =
+            m_tail.load(std::memory_order_acquire) & kPositionMask;
+        Block* tailBlock = m_tailBlock.load(std::memory_order_acquire);
+        while (tailBlock != nullptr) {
+            const uint64_t base =
+                tailBlock->base.load(std::memory_order_acquire);
+            if (base > kPositionMask - kSlotsPerBlock ||
+                base + kSlotsPerBlock > tailPosition) {
+                break;
+            }
+            Block* next = tailBlock->next.load(std::memory_order_acquire);
+            if (next == nullptr ||
+                next->base.load(std::memory_order_acquire) !=
+                    base + kSlotsPerBlock ||
+                next->state.load(std::memory_order_acquire) !=
+                    BlockState::kActive) {
+                break;
+            }
+            tailBlock = next;
+            m_tailBlock.store(tailBlock, std::memory_order_release);
+        }
+
+        const uint64_t headPosition = m_head.load(std::memory_order_acquire);
+        Block* headBlock = m_headBlock.load(std::memory_order_acquire);
+        while (headBlock != nullptr) {
+            const uint64_t base =
+                headBlock->base.load(std::memory_order_acquire);
+            if (base > kPositionMask - kSlotsPerBlock ||
+                base + kSlotsPerBlock > headPosition) {
+                break;
+            }
+            Block* next = headBlock->next.load(std::memory_order_acquire);
+            if (next == nullptr ||
+                next->base.load(std::memory_order_acquire) !=
+                    base + kSlotsPerBlock ||
+                next->state.load(std::memory_order_acquire) !=
+                    BlockState::kActive) {
+                break;
+            }
+            m_headBlock.store(next, std::memory_order_release);
+            if (m_tailBlock.load(std::memory_order_acquire) != headBlock &&
+                headBlock->state.load(std::memory_order_acquire) ==
+                    BlockState::kActive) {
+                headBlock->state.store(BlockState::kRetired,
+                                       std::memory_order_release);
+                headBlock->poolNext = m_retiredBlocks;
+                m_retiredBlocks = headBlock;
+            }
+            headBlock = next;
+        }
+        unlockBlockPool();
+    }
+
+#if defined(_MSC_VER)
+    __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline, cold))
+#endif
+    Block* tailBlockFor(Block*& cached,
+                        uint64_t& cachedBase,
+                        uint64_t position) noexcept
+    {
+        const uint64_t targetBase =
+            position & ~(kSlotsPerBlock - 1);
+        if (cached != nullptr && cachedBase == targetBase &&
+            cached->base.load(std::memory_order_acquire) == targetBase &&
+            cached->state.load(std::memory_order_acquire) == BlockState::kActive) {
+            return cached;
+        }
+
+        Block* block = m_tailBlock.load(std::memory_order_acquire);
+        while (block != nullptr) {
+            const uint64_t base = block->base.load(std::memory_order_acquire);
+            if (base == targetBase &&
+                block->state.load(std::memory_order_acquire) ==
+                    BlockState::kActive) {
+                cached = block;
+                cachedBase = base;
+                return block;
+            }
+            if (base > targetBase || base > kPositionMask - kSlotsPerBlock) {
+                return nullptr;
+            }
+            Block* next = ensureNextBlock(*block, base + kSlotsPerBlock);
+            if (next == nullptr) {
+                return nullptr;
+            }
+            block = next;
+        }
+        return nullptr;
+    }
+
+#if defined(_MSC_VER)
+    __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline, cold))
+#endif
+    Block* headBlockFor(Block*& cached,
+                        uint64_t& cachedBase,
+                        uint64_t position) noexcept
+    {
+        const uint64_t targetBase =
+            position & ~(kSlotsPerBlock - 1);
+        if (cached != nullptr && cachedBase == targetBase &&
+            cached->base.load(std::memory_order_acquire) == targetBase &&
+            cached->state.load(std::memory_order_acquire) == BlockState::kActive) {
+            return cached;
+        }
+
+        Block* block = m_headBlock.load(std::memory_order_acquire);
+        while (block != nullptr) {
+            const uint64_t base = block->base.load(std::memory_order_acquire);
+            if (base == targetBase &&
+                block->state.load(std::memory_order_acquire) ==
+                    BlockState::kActive) {
+                cached = block;
+                cachedBase = base;
+                return block;
+            }
+            if (base > targetBase) {
+                return nullptr;
+            }
+            Block* next = block->next.load(std::memory_order_acquire);
+            if (next == nullptr) {
+                return nullptr;
+            }
+            block = next;
+        }
+        return nullptr;
+    }
+
+    DefaultProducerCacheEntry* defaultProducerEntry() noexcept
     {
         DefaultProducerCache& cache = defaultProducerCache();
         DefaultProducerCacheEntry** link = &cache.head;
@@ -679,7 +949,7 @@ private:
                     entry->next = cache.head;
                     cache.head = entry;
                 }
-                return entry->producer;
+                return entry;
             }
             link = &entry->next;
         }
@@ -688,43 +958,91 @@ private:
         if (entry == nullptr) {
             return nullptr;
         }
-        ProducerEpochNode* producer = registerProducerEpoch();
-        if (producer == nullptr) {
-            delete entry;
-            return nullptr;
-        }
         entry->channel = this;
-        entry->producer = producer;
         entry->generation = m_generation;
+        entry->block = m_tailBlock.load(std::memory_order_acquire);
+        entry->blockBase = entry->block != nullptr
+            ? entry->block->base.load(std::memory_order_acquire)
+            : kInvalidBlockBase;
         entry->next = cache.head;
         cache.head = entry;
-        return producer;
+        return entry;
     }
 
-    /**
-     * @brief 在 producer 私有状态上发布 active send，再与 close 建立 SC 次序。
-     * @details 0 表示 idle，1 表示 enqueue 尚未结束。若本次 closed load 读到
-     *          false，则其 SC 次序先于 close store；close 后的 producer 扫描必然
-     *          看到本 producer 为 active，或看到 enqueue 完成后的 idle 状态。
-     * @return 成功取得发送权返回 true；close 已先发布时清除 active 并返回 false。
-     */
-    bool acquireSendPermit(ProducerEpochNode& producer) noexcept
+    bool reserveRange(ProducerToken* token,
+                      size_t count,
+                      Block*& firstBlock,
+                      uint64_t& firstPosition) noexcept
     {
-        producer.active.store(1, std::memory_order_seq_cst);
-        if (!m_closed.load(std::memory_order_seq_cst)) {
-            return true;
+        DefaultProducerCacheEntry* entry =
+            token == nullptr ? defaultProducerEntry() : nullptr;
+        if (token == nullptr && entry == nullptr) {
+            return false;
         }
-        releaseSendPermit(producer);
-        return false;
+        Block*& cachedBlock = token != nullptr ? token->m_block : entry->block;
+        uint64_t& cachedBase =
+            token != nullptr ? token->m_blockBase : entry->blockBase;
+
+        uint64_t tail = m_tail.load(std::memory_order_relaxed);
+        for (;;) {
+            if ((tail & kClosedBit) != 0) {
+                return false;
+            }
+            const uint64_t position = tail;
+            if (count > kPositionMask - position) {
+                return false;
+            }
+            Block* first = tailBlockFor(cachedBlock, cachedBase, position);
+            if (first == nullptr) {
+                const uint64_t latest =
+                    m_tail.load(std::memory_order_relaxed);
+                if (latest != tail) {
+                    tail = latest;
+                    detail::unboundedChannelCpuPause();
+                    continue;
+                }
+                return false;
+            }
+            Block* last = first;
+            const uint64_t lastPosition = position + count - 1;
+            uint64_t lastBase = first->base.load(std::memory_order_acquire);
+            while (lastPosition >= lastBase + kSlotsPerBlock) {
+                last = ensureNextBlock(*last, lastBase + kSlotsPerBlock);
+                if (last == nullptr) {
+                    const uint64_t latest =
+                        m_tail.load(std::memory_order_relaxed);
+                    if (latest != tail) {
+                        tail = latest;
+                        detail::unboundedChannelCpuPause();
+                        last = nullptr;
+                        break;
+                    }
+                    return false;
+                }
+                lastBase += kSlotsPerBlock;
+            }
+            if (last == nullptr) {
+                continue;
+            }
+
+            if (m_tail.compare_exchange_weak(tail,
+                                             position + count,
+                                             std::memory_order_relaxed,
+                                             std::memory_order_relaxed)) {
+                firstBlock = first;
+                firstPosition = position;
+                cachedBlock = last;
+                cachedBase = lastBase;
+                catchUpBlockAnchors();
+                return true;
+            }
+            detail::unboundedChannelCpuPause();
+        }
     }
 
-    /** @brief 发布 enqueue 完成后的 idle 状态，再推进已经启用的 recv waiter 路径。 */
-    void releaseSendPermit(ProducerEpochNode& producer) noexcept
+    /** @brief 发布入队完成后的 waiter work。 */
+    void releaseSendPublication() noexcept
     {
-        producer.active.store(0, std::memory_order_seq_cst);
-        // pump 必须晚于 idle publication：close pump 若曾因本 producer 为 active 而暂缓，
-        // 本次请求会在消息发布或失败收尾后重新检查。waiter 标志与注册方的无条件
-        // requestRecvPump() 组成 SC 握手，因此无需在每次 send 尾部再次读取 closed。
         if (waiterPathUsedAfterPublish()) [[unlikely]] {
             requestRecvPumpAfterSend();
         }
@@ -742,21 +1060,12 @@ private:
         requestRecvPump();
     }
 
-    /** @brief 仅当 close 已发布且所有已登记 producer 均为 idle 时返回 true。 */
+    /** @brief 仅当 close 已发布且所有保留位置均已被 consumer claim 时返回 true。 */
     bool sendSideQuiescentAfterClose() const noexcept
     {
-        if (!m_closed.load(std::memory_order_seq_cst)) {
-            return false;
-        }
-        ProducerEpochNode* producer =
-            m_producerEpochHead.load(std::memory_order_seq_cst);
-        while (producer != nullptr) {
-            if (producer->active.load(std::memory_order_seq_cst) != 0) {
-                return false;
-            }
-            producer = producer->next;
-        }
-        return true;
+        const uint64_t tail = m_tail.load(std::memory_order_acquire);
+        return (tail & kClosedBit) != 0 &&
+            (tail & kPositionMask) == m_head.load(std::memory_order_acquire);
     }
 
     /**
@@ -766,29 +1075,213 @@ private:
      */
     ClosedRecvProbe probeRecvAfterEmpty(T& value) noexcept
     {
-        if (!sendSideQuiescentAfterClose()) {
-            return ClosedRecvProbe::kOpen;
+        if (auto received = tryRecvImpl(nullptr); received.has_value()) {
+            value = std::move(*received);
+            return ClosedRecvProbe::kValue;
         }
-        return m_queue.try_dequeue(value)
-            ? ClosedRecvProbe::kValue
-            : ClosedRecvProbe::kClosed;
+        return sendSideQuiescentAfterClose()
+            ? ClosedRecvProbe::kClosed
+            : ClosedRecvProbe::kOpen;
     }
 
+#if defined(_MSC_VER)
+    __declspec(noinline)
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((noinline, cold))
+#endif
+    void prepareNextBlockAfterReservation(Block& block,
+                                          uint64_t blockBase) noexcept
+    {
+        if (blockBase <= kPositionMask - kSlotsPerBlock) {
+            Block* prepared =
+                ensureNextBlock(block, blockBase + kSlotsPerBlock);
+            if (prepared == nullptr) {
+                // 当前 reservation 已成功；预取失败由下次 rollover 重试。
+            }
+        }
+        catchUpBlockAnchors();
+    }
+
+    template <bool NotifyWaiter>
+#if defined(_MSC_VER)
+    __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((always_inline)) inline
+#else
+    inline
+#endif
+    bool sendTokenFast(ProducerToken& token, T&& value)
+    {
+        uint64_t tail = m_tail.load(std::memory_order_relaxed);
+        uint32_t backoffStep = 0;
+        for (;;) {
+            if ((tail & kClosedBit) != 0 || tail == kPositionMask) {
+                return false;
+            }
+            const uint64_t position = tail;
+            const uint64_t blockBase =
+                position & ~(kSlotsPerBlock - 1);
+            Block* block = token.m_block;
+            if (block == nullptr || token.m_blockBase != blockBase ||
+                block->base.load(std::memory_order_acquire) != blockBase ||
+                block->state.load(std::memory_order_acquire) !=
+                    BlockState::kActive) {
+                block = tailBlockFor(token.m_block, token.m_blockBase, position);
+                if (block == nullptr) {
+                    const uint64_t latest =
+                        m_tail.load(std::memory_order_relaxed);
+                    if (latest != tail) {
+                        tail = latest;
+                        detail::unboundedChannelBackoff(backoffStep);
+                        continue;
+                    }
+                    return false;
+                }
+            }
+            Slot& slot = block->slots[static_cast<size_t>(
+                position & (kSlotsPerBlock - 1))];
+            if (slot.sequence.load(std::memory_order_acquire) != position) {
+                tail = m_tail.load(std::memory_order_relaxed);
+                detail::unboundedChannelBackoff(backoffStep);
+                continue;
+            }
+            if (!m_tail.compare_exchange_weak(tail,
+                                              position + 1,
+                                              std::memory_order_relaxed,
+                                              std::memory_order_relaxed)) {
+                detail::unboundedChannelBackoff(backoffStep);
+                continue;
+            }
+            std::construct_at(slot.value(), std::move(value));
+            slot.sequence.store(position + 1, std::memory_order_release);
+            if constexpr (NotifyWaiter) {
+                releaseSendPublication();
+            }
+            if ((position & (kSlotsPerBlock - 1)) == 0) {
+                prepareNextBlockAfterReservation(*block, blockBase);
+            }
+            return true;
+        }
+    }
+
+#if defined(_MSC_VER)
+    __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((always_inline)) inline
+#else
+    inline
+#endif
+    std::optional<T> tryRecvTokenFast(ConsumerToken& token)
+    {
+        uint64_t position = m_head.load(std::memory_order_relaxed);
+        uint32_t backoffStep = 0;
+        for (;;) {
+            const uint64_t blockBase =
+                position & ~(kSlotsPerBlock - 1);
+            Block* block = token.m_block;
+            if (block == nullptr || token.m_blockBase != blockBase ||
+                block->base.load(std::memory_order_acquire) != blockBase ||
+                block->state.load(std::memory_order_acquire) !=
+                    BlockState::kActive) {
+                block = headBlockFor(token.m_block, token.m_blockBase, position);
+                if (block == nullptr) {
+                    return std::nullopt;
+                }
+            }
+            Slot& slot = block->slots[static_cast<size_t>(
+                position & (kSlotsPerBlock - 1))];
+            const uint64_t sequence =
+                slot.sequence.load(std::memory_order_acquire);
+            if (sequence == position + 1) {
+                if (!m_head.compare_exchange_weak(position,
+                                                   position + 1,
+                                                   std::memory_order_relaxed,
+                                                   std::memory_order_relaxed)) {
+                    detail::unboundedChannelBackoff(backoffStep);
+                    continue;
+                }
+                if ((position & (kSlotsPerBlock - 1)) ==
+                    kSlotsPerBlock - 1) {
+                    catchUpBlockAnchors();
+                }
+                T value = std::move(*slot.value());
+                std::destroy_at(slot.value());
+                slot.sequence.store(position + kSlotsPerBlock,
+                                    std::memory_order_release);
+                return value;
+            }
+            if (sequence < position + 1) {
+                return std::nullopt;
+            }
+            position = m_head.load(std::memory_order_relaxed);
+            detail::unboundedChannelBackoff(backoffStep);
+        }
+    }
+
+#if defined(_MSC_VER)
+    __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((always_inline)) inline
+#else
+    inline
+#endif
     bool sendImpl(ProducerToken* token, T&& value)
     {
-        ProducerEpochNode* producer =
-            token != nullptr ? token->m_epochNode : defaultProducerEpoch();
-        if (producer == nullptr || !acquireSendPermit(*producer)) {
+        DefaultProducerCacheEntry* entry =
+            token == nullptr ? defaultProducerEntry() : nullptr;
+        if (token == nullptr && entry == nullptr) {
             return false;
         }
+        Block*& cachedBlock = token != nullptr ? token->m_block : entry->block;
+        uint64_t& cachedBase =
+            token != nullptr ? token->m_blockBase : entry->blockBase;
 
-        const bool enqueued =
-            m_queue.enqueue(producer->queueToken, std::move(value));
-        if (!enqueued) {
-            releaseSendPermit(*producer);
-            return false;
+        uint64_t tail = m_tail.load(std::memory_order_relaxed);
+        Block* block = nullptr;
+        uint64_t position = 0;
+        uint64_t blockBase = 0;
+        for (;;) {
+            if ((tail & kClosedBit) != 0) {
+                return false;
+            }
+            position = tail;
+            if (position == kPositionMask) {
+                return false;
+            }
+            blockBase = position & ~(kSlotsPerBlock - 1);
+            block = cachedBlock;
+            if (block == nullptr || cachedBase != blockBase ||
+                block->base.load(std::memory_order_acquire) != blockBase ||
+                block->state.load(std::memory_order_acquire) !=
+                    BlockState::kActive) {
+                block = tailBlockFor(cachedBlock, cachedBase, position);
+                if (block == nullptr) {
+                    const uint64_t latest =
+                        m_tail.load(std::memory_order_relaxed);
+                    if (latest != tail) {
+                        tail = latest;
+                        detail::unboundedChannelCpuPause();
+                        continue;
+                    }
+                    return false;
+                }
+            }
+            if (m_tail.compare_exchange_weak(tail,
+                                             position + 1,
+                                             std::memory_order_relaxed,
+                                             std::memory_order_relaxed)) {
+                break;
+            }
+            detail::unboundedChannelCpuPause();
         }
-        releaseSendPermit(*producer);
+        Slot& slot = block->slots[static_cast<size_t>(
+            position & (kSlotsPerBlock - 1))];
+        std::construct_at(slot.value(), std::move(value));
+        slot.sequence.store(position + 1, std::memory_order_release);
+        releaseSendPublication();
+        if ((position & (kSlotsPerBlock - 1)) == 0) {
+            prepareNextBlockAfterReservation(*block, blockBase);
+        }
         return true;
     }
 
@@ -798,32 +1291,77 @@ private:
         if (count == 0) {
             return true;
         }
-        ProducerEpochNode* producer =
-            token != nullptr ? token->m_epochNode : defaultProducerEpoch();
-        if (producer == nullptr || !acquireSendPermit(*producer)) {
+        Block* block = nullptr;
+        uint64_t position = 0;
+        if (!reserveRange(token, count, block, position)) {
             return false;
         }
 
-        const bool enqueued =
-            m_queue.enqueue_bulk(producer->queueToken, first, count);
-        if (!enqueued) {
-            releaseSendPermit(*producer);
-            return false;
+        for (size_t index = 0; index < count; ++index, ++first, ++position) {
+            const uint64_t expectedBase =
+                position & ~(kSlotsPerBlock - 1);
+            if (block->base.load(std::memory_order_acquire) != expectedBase) {
+                block = block->next.load(std::memory_order_acquire);
+            }
+            T value = *first;
+            Slot& slot = block->slots[static_cast<size_t>(
+                position & (kSlotsPerBlock - 1))];
+            std::construct_at(slot.value(), std::move(value));
+            slot.sequence.store(position + 1, std::memory_order_release);
         }
-        releaseSendPermit(*producer);
+        releaseSendPublication();
         return true;
     }
 
+#if defined(_MSC_VER)
+    __forceinline
+#elif defined(__GNUC__) || defined(__clang__)
+    __attribute__((always_inline)) inline
+#else
+    inline
+#endif
     std::optional<T> tryRecvImpl(ConsumerToken* token)
     {
-        T value;
-        const bool dequeued = token != nullptr
-            ? m_queue.try_dequeue(token->m_token, value)
-            : m_queue.try_dequeue(value);
-        if (!dequeued) {
-            return std::nullopt;
+        Block* uncached = nullptr;
+        uint64_t uncachedBase = kInvalidBlockBase;
+        Block*& cachedBlock = token != nullptr ? token->m_block : uncached;
+        uint64_t& cachedBase =
+            token != nullptr ? token->m_blockBase : uncachedBase;
+        uint64_t position = m_head.load(std::memory_order_relaxed);
+        for (;;) {
+            Block* block = headBlockFor(cachedBlock, cachedBase, position);
+            if (block == nullptr) {
+                return std::nullopt;
+            }
+            Slot& slot = block->slots[static_cast<size_t>(
+                position & (kSlotsPerBlock - 1))];
+            const uint64_t expected = position + 1;
+            const uint64_t sequence =
+                slot.sequence.load(std::memory_order_acquire);
+            if (sequence == expected) {
+                if (!m_head.compare_exchange_weak(position,
+                                                   position + 1,
+                                                   std::memory_order_relaxed,
+                                                   std::memory_order_relaxed)) {
+                    detail::unboundedChannelCpuPause();
+                    continue;
+                }
+                if ((position & (kSlotsPerBlock - 1)) ==
+                    kSlotsPerBlock - 1) {
+                    catchUpBlockAnchors();
+                }
+                T value = std::move(*slot.value());
+                std::destroy_at(slot.value());
+                slot.sequence.store(position + kSlotsPerBlock,
+                                    std::memory_order_release);
+                return value;
+            }
+            if (sequence < expected) {
+                return std::nullopt;
+            }
+            position = m_head.load(std::memory_order_relaxed);
+            detail::unboundedChannelCpuPause();
         }
-        return value;
     }
 
     std::optional<std::vector<T>> tryRecvBatchImpl(ConsumerToken* token, size_t count)
@@ -833,9 +1371,15 @@ private:
         }
         std::vector<T> values;
         values.resize(count);
-        const size_t received = token != nullptr
-            ? m_queue.try_dequeue_bulk(token->m_token, values.data(), count)
-            : m_queue.try_dequeue_bulk(values.data(), count);
+        size_t received = 0;
+        while (received < count) {
+            auto value = tryRecvImpl(token);
+            if (!value.has_value()) {
+                break;
+            }
+            values[received] = std::move(*value);
+            ++received;
+        }
         if (received == 0) {
             return std::nullopt;
         }
@@ -974,7 +1518,11 @@ private:
         }
 
         T value;
-        bool dequeued = m_queue.try_dequeue(value);
+        auto received = tryRecvImpl(nullptr);
+        bool dequeued = received.has_value();
+        if (dequeued) {
+            value = std::move(*received);
+        }
         ClosedRecvProbe closedProbe = ClosedRecvProbe::kOpen;
         if (!dequeued) {
             closedProbe = probeRecvAfterEmpty(value);
@@ -1124,11 +1672,19 @@ private:
     friend class UnboundedRecvBatchAwaitable<T>;
     friend struct UnboundedChannelTestAccess;
 
-    alignas(kCacheLine) std::atomic<ProducerEpochNode*> m_producerEpochHead{nullptr};
-    alignas(kCacheLine) std::atomic<bool> m_closed{false};
-    alignas(kCacheLine) std::atomic<uint8_t> m_recvPumpState{0};
-    alignas(kCacheLine) std::atomic<uint8_t> m_recvWaiterPathUsed{0};
-    DataQueue m_queue;
+    alignas(::galay::utils::kCacheLineSize) std::atomic<uint64_t> m_tail{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<uint64_t> m_head{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<Block*> m_tailBlock{nullptr};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<Block*> m_headBlock{nullptr};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<uint8_t> m_recvPumpState{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<uint8_t> m_recvWaiterPathUsed{0};
+    std::atomic_flag m_blockPoolLock = ATOMIC_FLAG_INIT;
+    Block* m_retiredBlocks = nullptr;
+    Block* m_allBlocks = nullptr;
     WaiterQueue m_recvWaiters;
     const uint64_t m_generation;
 };

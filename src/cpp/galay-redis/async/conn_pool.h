@@ -16,6 +16,7 @@
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/waker.h"
+#include "../../galay-utils/common/defn.hpp"
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include <array>
 #include <memory>
@@ -503,7 +504,7 @@ namespace galay::redis
         static_assert((kIdleShardCount & (kIdleShardCount - 1)) == 0,
                       "Redis pool idle shard count must be a power of two");
 
-        struct alignas(64) IdleShard
+        struct alignas(::galay::utils::kCacheLineSize) IdleShard
         {
             moodycamel::ConcurrentQueue<std::shared_ptr<PooledConnection>> available; ///< 分片空闲连接队列
         };
@@ -603,7 +604,7 @@ namespace galay::redis
         static_assert((kIdleShardCount & (kIdleShardCount - 1)) == 0,
                       "Rediss pool idle shard count must be a power of two");
 
-        struct alignas(64) IdleShard
+        struct alignas(::galay::utils::kCacheLineSize) IdleShard
         {
             moodycamel::ConcurrentQueue<std::shared_ptr<PooledRedissConnection>> available; ///< 分片空闲连接队列
         };

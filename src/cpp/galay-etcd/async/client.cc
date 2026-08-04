@@ -2,6 +2,7 @@
 
 #include <galay/cpp/galay-etcd/base/etcd_internal.h>
 #include <galay/cpp/galay-etcd/base/etcd_log.h>
+#include <galay/cpp/galay-utils/common/defn.hpp>
 
 #include <galay/cpp/galay-http/protoc/http_error.h>
 
@@ -556,9 +557,12 @@ struct AsyncEtcdClientPoolState
         borrowed_count.fetch_sub(1, std::memory_order_acq_rel);
     }
 
-    alignas(64) moodycamel::ConcurrentQueue<AsyncEtcdClient*> idle_clients;
-    alignas(64) std::atomic<size_t> borrowed_count{0};
-    alignas(64) std::atomic<bool> queue_failed{false};
+    alignas(::galay::utils::kCacheLineSize)
+        moodycamel::ConcurrentQueue<AsyncEtcdClient*> idle_clients;
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<size_t> borrowed_count{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<bool> queue_failed{false};
     std::optional<EtcdError> init_error;
     std::vector<std::unique_ptr<AsyncEtcdClient>> clients;
     galay::kernel::IOScheduler* scheduler = nullptr;

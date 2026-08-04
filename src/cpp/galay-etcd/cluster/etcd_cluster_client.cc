@@ -1,4 +1,5 @@
 #include "etcd_cluster_client.h"
+#include "../../galay-utils/common/defn.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -338,9 +339,12 @@ struct EtcdClientPoolState
         borrowed_count.fetch_sub(1, std::memory_order_acq_rel);
     }
 
-    alignas(64) moodycamel::ConcurrentQueue<EtcdClient*> idle_clients;
-    alignas(64) std::atomic<size_t> borrowed_count{0};
-    alignas(64) std::atomic<bool> queue_failed{false};
+    alignas(::galay::utils::kCacheLineSize)
+        moodycamel::ConcurrentQueue<EtcdClient*> idle_clients;
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<size_t> borrowed_count{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<bool> queue_failed{false};
     std::optional<EtcdError> init_error;
     std::vector<std::unique_ptr<EtcdClient>> clients;
 };

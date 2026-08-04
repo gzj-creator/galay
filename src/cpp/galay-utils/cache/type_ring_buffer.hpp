@@ -12,6 +12,8 @@
 #ifndef GALAY_UTILS_CACHE_TYPE_RING_BUFFER_HPP
 #define GALAY_UTILS_CACHE_TYPE_RING_BUFFER_HPP
 
+#include "../common/defn.hpp"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -31,68 +33,66 @@ namespace galay::utils
 {
 
 /**
- * @brief 约束 SpscRingBuffer 可存储的元素类型。
+ * @brief 约束 TypeRingBuffer 可存储的元素类型。
  * @details 发送、接收和销毁均位于无异常数据面，因此移动构造与析构必须保证
  * 不抛出异常；写入调用方对象的接收接口另行约束不抛移动赋值。
  */
 template <typename T>
-concept SpscRingBufferValue = std::is_object_v<T> &&
+concept TypeRingBufferValue = std::is_object_v<T> &&
     std::same_as<T, std::remove_cv_t<T>> &&
     std::is_nothrow_move_constructible_v<T> &&
     std::is_nothrow_destructible_v<T>;
 
-/** @brief 约束 SpscRingBuffer 使用无锁无符号整数游标。 */
+/** @brief 约束 TypeRingBuffer 使用无锁无符号整数游标。 */
 template <typename Cursor>
-concept SpscRingBufferCursor = std::unsigned_integral<Cursor> &&
+concept TypeRingBufferCursor = std::unsigned_integral<Cursor> &&
     (!std::same_as<std::remove_cv_t<Cursor>, bool>) &&
     std::atomic<Cursor>::is_always_lock_free;
 
 namespace detail {
 
-template <SpscRingBufferCursor Cursor>
-inline constexpr size_t kSpscRingBufferMaximumCapacity = size_t{1} <<
-    ((std::numeric_limits<Cursor>::digits < std::numeric_limits<size_t>::digits
-          ? std::numeric_limits<Cursor>::digits
-          : std::numeric_limits<size_t>::digits) -
-     1U);
+template <TypeRingBufferCursor Cursor>
+inline constexpr size_t kTypeRingBufferMaximumCapacity = size_t{1} <<
+    (std::min(std::numeric_limits<Cursor>::digits,
+              std::numeric_limits<size_t>::digits) - 1U);
 
 template <size_t Capacity, typename Cursor>
-concept ValidSpscRingBufferCapacity = SpscRingBufferCursor<Cursor> &&
+concept ValidTypeRingBufferCapacity = TypeRingBufferCursor<Cursor> &&
     (Capacity == std::dynamic_extent ||
      (Capacity >= 2 && std::has_single_bit(Capacity) &&
-      Capacity <= kSpscRingBufferMaximumCapacity<Cursor>));
+      Capacity <= kTypeRingBufferMaximumCapacity<Cursor>));
 
 } // namespace detail
 
-/** @brief SpscRingBuffer 构造结果。 */
-enum class SpscRingBufferError : uint8_t {
+/** @brief TypeRingBuffer 构造结果。 */
+enum class TypeRingBufferError : uint8_t {
     kNone,             ///< 构造成功，可以进入数据面。
     kCapacityTooLarge, ///< 规范化容量超出游标可无歧义表达的上限。
     kAllocationFailed, ///< 槽位存储分配失败。
 };
 
 /**
- * @brief 获取 SpscRingBufferError 的静态错误字符串。
+ * @brief 获取 TypeRingBufferError 的静态错误字符串。
  * @param error 错误枚举。
  * @return 覆盖所有公开枚举值的非空字符串。
  */
 [[nodiscard]] inline const char*
-spscRingBufferErrorString(SpscRingBufferError error) noexcept
+typeRingBufferErrorString(TypeRingBufferError error) noexcept
 {
     switch (error) {
-    case SpscRingBufferError::kNone:
+    case TypeRingBufferError::kNone:
         return "none";
-    case SpscRingBufferError::kCapacityTooLarge:
+    case TypeRingBufferError::kCapacityTooLarge:
         return "capacity too large";
-    case SpscRingBufferError::kAllocationFailed:
+    case TypeRingBufferError::kAllocationFailed:
         return "allocation failed";
     }
-    return "unknown spsc ring buffer error";
+    return "unknown type ring buffer error";
 }
 
 /**
  * @brief 支持运行时或编译期容量的 typed SPSC ring 数据面。
- * @tparam T 元素类型，必须满足 SpscRingBufferValue。
+ * @tparam T 元素类型，必须满足 TypeRingBufferValue。
  * @tparam Capacity std::dynamic_extent 表示运行时容量；否则表示由对象成员持有的
  *         编译期容量，必须是不小于 2 的安全 2 次幂。
  * @tparam Cursor 单调无符号游标类型；默认 size_t，窄类型可用于回绕测试。
@@ -107,11 +107,11 @@ spscRingBufferErrorString(SpscRingBufferError error) noexcept
  * @note 对象具有唯一并发身份，不可复制或移动；析构前必须停止两侧访问。
  * @note 构造不抛异常；使用数据面 API 前必须确认 error() == kNone。
  */
-template <SpscRingBufferValue T,
+template <TypeRingBufferValue T,
           size_t Capacity = std::dynamic_extent,
-          SpscRingBufferCursor Cursor = size_t>
-    requires detail::ValidSpscRingBufferCapacity<Capacity, Cursor>
-class SpscRingBuffer
+          TypeRingBufferCursor Cursor = size_t>
+    requires detail::ValidTypeRingBufferCapacity<Capacity, Cursor>
+class TypeRingBuffer
 {
 private:
     static constexpr bool kUsesStaticCapacity =
@@ -125,18 +125,18 @@ public:
      * error() 返回；成功后 capacity() 返回实际容量。
      * @note 仅运行时容量 specialization 提供该构造函数。
      */
-    explicit SpscRingBuffer(size_t capacity) noexcept
+    explicit TypeRingBuffer(size_t capacity) noexcept
         requires (!kUsesStaticCapacity)
     {
         const size_t normalized = normalizeCapacity(capacity);
         if (normalized == 0) {
-            m_error = SpscRingBufferError::kCapacityTooLarge;
+            m_error = TypeRingBufferError::kCapacityTooLarge;
             return;
         }
 
         Slot* const slots = new (std::nothrow) Slot[normalized];
         if (slots == nullptr) {
-            m_error = SpscRingBufferError::kAllocationFailed;
+            m_error = TypeRingBufferError::kAllocationFailed;
             return;
         }
         m_slots.reset(slots);
@@ -148,7 +148,7 @@ public:
      * @details 该构造不分配内存，也不清零尚未开始 T 生命周期的槽位；容量由
      *          Capacity 唯一确定。
      */
-    SpscRingBuffer() noexcept
+    TypeRingBuffer() noexcept
         requires kUsesStaticCapacity
     {
         initializeLocalStorage(m_slots.data(), Capacity);
@@ -158,7 +158,7 @@ public:
      * @brief 销毁尚未消费的元素并释放槽位。
      * @pre 不得再有生产者或消费者并发访问本对象。
      */
-    ~SpscRingBuffer() noexcept
+    ~TypeRingBuffer() noexcept
     {
         if constexpr (!kUsesStaticCapacity) {
             if (m_slots == nullptr) {
@@ -177,16 +177,16 @@ public:
     }
 
     /** @brief 禁止复制构造；ring 具有唯一并发身份。 */
-    SpscRingBuffer(const SpscRingBuffer&) = delete;
+    TypeRingBuffer(const TypeRingBuffer&) = delete;
 
     /** @brief 禁止复制赋值；ring 具有唯一并发身份。 */
-    SpscRingBuffer& operator=(const SpscRingBuffer&) = delete;
+    TypeRingBuffer& operator=(const TypeRingBuffer&) = delete;
 
     /** @brief 禁止移动构造，避免运行中的调用方持有失效地址。 */
-    SpscRingBuffer(SpscRingBuffer&&) = delete;
+    TypeRingBuffer(TypeRingBuffer&&) = delete;
 
     /** @brief 禁止移动赋值，避免运行中的调用方持有失效地址。 */
-    SpscRingBuffer& operator=(SpscRingBuffer&&) = delete;
+    TypeRingBuffer& operator=(TypeRingBuffer&&) = delete;
 
     /**
      * @brief 返回构造状态。
@@ -194,7 +194,7 @@ public:
      * @note 构造完成后状态不再变化，可由任意线程读取。
      * @note 编译期容量 specialization 始终返回 kNone。
      */
-    [[nodiscard]] SpscRingBufferError error() const noexcept
+    [[nodiscard]] TypeRingBufferError error() const noexcept
     {
         return m_error;
     }
@@ -302,15 +302,15 @@ public:
         const Cursor tail = m_tail.value.load(std::memory_order_acquire);
         consumer.cachedPeer = tail;
         const size_t count = std::min(output.size(), cursorDistance(tail, head));
+        if (count == 0) {
+            return 0;
+        }
         for (size_t offset = 0; offset < count; ++offset) {
             const size_t index =
                 (static_cast<size_t>(head) + offset) & consumer.mask;
             Slot& slot = consumer.slots[index];
             output[offset] = std::move(*slot.value());
             std::destroy_at(slot.value());
-        }
-        if (count == 0) {
-            return 0;
         }
 
         const Cursor next = static_cast<Cursor>(head + static_cast<Cursor>(count));
@@ -320,16 +320,10 @@ public:
     }
 
 private:
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-    static constexpr size_t kCacheLine = 128;
+#if defined(GALAY_ARCH_X64)
+    static constexpr size_t kPublishedCursorAlignment = 2 * kCacheLineSize;
 #else
-    static constexpr size_t kCacheLine = 64;
-#endif
-#if defined(__x86_64__) || defined(_M_X64) || defined(__aarch64__) || \
-    defined(__ARM_ARCH_ISA_A64)
-    static constexpr size_t kPublishedCursorAlignment = 128;
-#else
-    static constexpr size_t kPublishedCursorAlignment = kCacheLine;
+    static constexpr size_t kPublishedCursorAlignment = kCacheLineSize;
 #endif
 
     struct Slot
@@ -349,10 +343,8 @@ private:
 
     static constexpr size_t kMaximumArrayCapacity = std::bit_floor(
         std::numeric_limits<size_t>::max() / sizeof(Slot));
-    static constexpr size_t kMaximumCapacity =
-        detail::kSpscRingBufferMaximumCapacity<Cursor> < kMaximumArrayCapacity
-        ? detail::kSpscRingBufferMaximumCapacity<Cursor>
-        : kMaximumArrayCapacity;
+    static constexpr size_t kMaximumCapacity = std::min(
+        detail::kTypeRingBufferMaximumCapacity<Cursor>, kMaximumArrayCapacity);
 
     /** @brief 共享发布游标隔离空间预取的相邻缓存行。 */
     struct alignas(kPublishedCursorAlignment) PublishedCursor
@@ -361,7 +353,8 @@ private:
     };
 
     /** @brief 单侧独占的本地游标和对端发布游标缓存。 */
-    struct alignas(kCacheLine) LocalCursor
+    template <size_t Alignment>
+    struct alignas(Alignment) CursorState
     {
         Slot* slots = nullptr;
         size_t capacity = 0;
@@ -370,19 +363,14 @@ private:
         Cursor cachedPeer = 0;
     };
 
+    using LocalCursor = CursorState<kCacheLineSize>;
+
     /**
      * @brief 独占端点持有的线程本地游标，不与另一端共享缓存线。
-     * @details Endpoint 常被 std::thread 的 heap closure 持有；128-byte 对齐
-     *          同时隔离 Intel 空间预取的相邻缓存线。
+     * @details Endpoint 常被 std::thread 的 heap closure 持有；x64 使用两条
+     *          缓存行的对齐距离，其他架构使用公共缓存行大小。
      */
-    struct alignas(kPublishedCursorAlignment) EndpointCursor
-    {
-        Slot* slots = nullptr;
-        size_t capacity = 0;
-        size_t mask = 0;
-        Cursor position = 0;
-        Cursor cachedPeer = 0;
-    };
+    using EndpointCursor = CursorState<kPublishedCursorAlignment>;
 
     template <typename State>
     [[nodiscard]] static bool trySendOne(State& producer,
@@ -491,9 +479,9 @@ public:
         }
 
     private:
-        friend class SpscRingBuffer;
+        friend class TypeRingBuffer;
 
-        explicit Producer(SpscRingBuffer* ring) noexcept
+        explicit Producer(TypeRingBuffer* ring) noexcept
             : m_ring(ring),
               m_local{ring->m_producerLocal.slots,
                       ring->m_producerLocal.capacity,
@@ -503,7 +491,7 @@ public:
         {
         }
 
-        SpscRingBuffer* m_ring = nullptr;
+        TypeRingBuffer* m_ring = nullptr;
         EndpointCursor m_local;
     };
 
@@ -547,9 +535,9 @@ public:
         }
 
     private:
-        friend class SpscRingBuffer;
+        friend class TypeRingBuffer;
 
-        explicit Consumer(SpscRingBuffer* ring) noexcept
+        explicit Consumer(TypeRingBuffer* ring) noexcept
             : m_ring(ring),
               m_local{ring->m_consumerLocal.slots,
                       ring->m_consumerLocal.capacity,
@@ -559,7 +547,7 @@ public:
         {
         }
 
-        SpscRingBuffer* m_ring = nullptr;
+        TypeRingBuffer* m_ring = nullptr;
         EndpointCursor m_local;
     };
 
@@ -606,12 +594,8 @@ private:
 
     void initializeLocalStorage(Slot* slots, size_t capacity) noexcept
     {
-        m_producerLocal.slots = slots;
-        m_producerLocal.capacity = capacity;
-        m_producerLocal.mask = capacity - 1;
-        m_consumerLocal.slots = slots;
-        m_consumerLocal.capacity = capacity;
-        m_consumerLocal.mask = capacity - 1;
+        m_producerLocal = {slots, capacity, capacity - 1};
+        m_consumerLocal = {slots, capacity, capacity - 1};
     }
 
     [[nodiscard]] static size_t cursorDistance(Cursor newer, Cursor older) noexcept
@@ -625,34 +609,34 @@ private:
     LocalCursor m_producerLocal;
     LocalCursor m_consumerLocal;
     SlotStorage m_slots;
-    SpscRingBufferError m_error = SpscRingBufferError::kNone;
+    TypeRingBufferError m_error = TypeRingBufferError::kNone;
 };
 
 /**
  * @brief 运行时容量、构造时分配槽位的 typed SPSC ring。
- * @tparam T 元素类型，必须满足 SpscRingBufferValue。
+ * @tparam T 元素类型，必须满足 TypeRingBufferValue。
  * @tparam Cursor 单调无符号游标类型；默认 size_t。
  */
-template <SpscRingBufferValue T,
-          SpscRingBufferCursor Cursor = size_t>
-using DynamicSpscRingBuffer =
-    SpscRingBuffer<T, std::dynamic_extent, Cursor>;
+template <TypeRingBufferValue T,
+          TypeRingBufferCursor Cursor = size_t>
+using DynamicTypeRingBuffer =
+    TypeRingBuffer<T, std::dynamic_extent, Cursor>;
 
 /**
  * @brief 编译期容量、成员内持有槽位的 typed SPSC ring。
- * @tparam T 元素类型，必须满足 SpscRingBufferValue。
+ * @tparam T 元素类型，必须满足 TypeRingBufferValue。
  * @tparam Capacity 容量，必须是不小于 2 且处于 Cursor 安全半区间的 2 次幂。
  * @tparam Cursor 单调无符号游标类型；默认 size_t。
  * @note 该类型只能默认构造，构造和稳定数据面均不分配内存。
  * @note 槽位直接属于 ring 对象；大 Capacity 或大 T 会显著增大对象，不应放入
  *       小线程栈或 coroutine frame，应由具有足够存储空间的长生命周期对象持有。
  */
-template <SpscRingBufferValue T,
+template <TypeRingBufferValue T,
           size_t Capacity,
-          SpscRingBufferCursor Cursor = size_t>
+          TypeRingBufferCursor Cursor = size_t>
     requires (Capacity != std::dynamic_extent &&
-              detail::ValidSpscRingBufferCapacity<Capacity, Cursor>)
-using StaticSpscRingBuffer = SpscRingBuffer<T, Capacity, Cursor>;
+              detail::ValidTypeRingBufferCapacity<Capacity, Cursor>)
+using StaticTypeRingBuffer = TypeRingBuffer<T, Capacity, Cursor>;
 
 } // namespace galay::utils
 

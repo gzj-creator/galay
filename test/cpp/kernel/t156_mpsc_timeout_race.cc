@@ -635,6 +635,124 @@ bool runFirstActivationWaiterRace()
     return passed;
 }
 
+bool runActivatedTokenStreamWaiterRace()
+{
+#if defined(__has_feature)
+#if __has_feature(thread_sanitizer)
+    constexpr size_t kIterations = 300;
+#else
+    constexpr size_t kIterations = 30'000;
+#endif
+#else
+    constexpr size_t kIterations = 30'000;
+#endif
+
+    using Channel = galay::mpsc::UnboundedChannel<int>;
+    std::barrier startRound(2);
+    std::barrier finishRound(2);
+    std::atomic<Channel*> currentChannel{nullptr};
+    std::atomic<Channel::ProducerToken*> currentToken{nullptr};
+    std::atomic<bool> sendSucceeded{false};
+
+    std::thread producer([&]() {
+        for (size_t iteration = 0; iteration < kIterations; ++iteration) {
+            startRound.arrive_and_wait();
+            Channel* channel = currentChannel.load(std::memory_order_acquire);
+            Channel::ProducerToken* token =
+                currentToken.load(std::memory_order_acquire);
+            if ((iteration & 2U) == 0) {
+                std::this_thread::yield();
+            }
+            int value = 73;
+            sendSucceeded.store(
+                channel != nullptr && token != nullptr &&
+                    channel->send(*token, std::move(value)),
+                std::memory_order_release);
+            finishRound.arrive_and_wait();
+        }
+    });
+
+    bool passed = true;
+    for (size_t iteration = 0; iteration < kIterations; ++iteration) {
+        Channel channel(64, 0);
+        auto token = channel.makeProducerToken();
+        int primingValue = 17;
+        const bool primed = token.valid() &&
+            channel.send(token, std::move(primingValue));
+        auto primedValue = channel.tryRecv();
+        const bool activatedAndDrained = primed && primedValue.has_value() &&
+            *primedValue == 17 && channel.empty();
+
+        QueuedRaceScheduler scheduler;
+        ReceiveState singleState;
+        BatchToState batchState;
+        std::vector<int> destination;
+        destination.reserve(4);
+        Task<void> task;
+        const size_t receiveKind = iteration % 3U;
+        if (receiveKind == 0) {
+            task = receiveWithTimeout(&channel, &singleState);
+        } else if (receiveKind == 1) {
+            task = receiveBatch(&channel, &batchState);
+        } else {
+            task = receiveBatchTo(&channel, &destination, &batchState);
+        }
+        TaskRef keeper = detail::TaskAccess::taskRef(task);
+        TaskState* taskState = keeper.state();
+        TaskRef scheduled = detail::TaskAccess::detachTask(std::move(task));
+
+        sendSucceeded.store(false, std::memory_order_relaxed);
+        currentChannel.store(&channel, std::memory_order_release);
+        currentToken.store(&token, std::memory_order_release);
+        startRound.arrive_and_wait();
+        if ((iteration & 2U) != 0) {
+            std::this_thread::yield();
+        }
+        const bool started = scheduler.scheduleImmediately(std::move(scheduled));
+        finishRound.arrive_and_wait();
+
+        bool resumed = receiveKind == 0
+            ? singleState.completed.load(std::memory_order_acquire)
+            : batchState.completed.load(std::memory_order_acquire);
+        if (!resumed && scheduler.hasSingleReadyTask()) {
+            resumed = scheduler.runOne();
+        }
+        const bool completed = receiveKind == 0
+            ? singleState.completed.load(std::memory_order_acquire) &&
+                singleState.resumeCount.load(std::memory_order_acquire) == 1 &&
+                singleState.receivedValue.load(std::memory_order_acquire) &&
+                !singleState.receivedTimeout.load(std::memory_order_acquire)
+            : batchState.completed.load(std::memory_order_acquire) &&
+                batchState.resumeCount.load(std::memory_order_acquire) == 1 &&
+                batchState.receivedValue.load(std::memory_order_acquire) &&
+                !batchState.receivedClosed.load(std::memory_order_acquire) &&
+                !batchState.receivedTimeout.load(std::memory_order_acquire);
+
+        if (!resumed || !completed) {
+            passed = false;
+            const bool closed = channel.close();
+            if (closed && scheduler.hasSingleReadyTask()) {
+                const bool ranRecovery = scheduler.runOne();
+                if (!ranRecovery) {
+                    passed = false;
+                }
+            }
+        }
+        if (!activatedAndDrained || taskState == nullptr || !started ||
+            !sendSucceeded.load(std::memory_order_acquire) || !completed ||
+            taskState->m_refs.load(std::memory_order_acquire) != 1 ||
+            !channel.empty()) {
+            passed = false;
+        }
+        scheduler.releaseRetainedState();
+        currentToken.store(nullptr, std::memory_order_release);
+        currentChannel.store(nullptr, std::memory_order_release);
+    }
+
+    producer.join();
+    return passed;
+}
+
 }  // namespace
 
 int main()
@@ -685,6 +803,10 @@ int main()
     }
     if (!runFirstActivationWaiterRace()) {
         std::cerr << "[T156] first stream activation lost a waiter wake\n";
+        return 1;
+    }
+    if (!runActivatedTokenStreamWaiterRace()) {
+        std::cerr << "[T156] activated token stream lost a waiter wake\n";
         return 1;
     }
 

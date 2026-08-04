@@ -16,6 +16,7 @@
 #include "../../common/error.h"
 #include "../../core/waker.h"
 #include "../../core/timeout.hpp"
+#include "../../../galay-utils/common/defn.hpp"
 #include "../../../galay-utils/cache/type_ring_buffer.hpp"
 #include <coroutine>
 
@@ -54,23 +55,24 @@ using kernel::kTimeout;
 
 /** @brief 约束 Ring 可保存且能在无异常热路径中移动的元素类型。 */
 template <typename T>
-concept RingValue = ::galay::utils::SpscRingBufferValue<T>;
+concept RingValue = ::galay::utils::TypeRingBufferValue<T>;
 
 /** @brief 约束 Ring 使用无锁无符号整数游标。 */
 template <typename Cursor>
-concept RingCursor = ::galay::utils::SpscRingBufferCursor<Cursor>;
+concept RingCursor = ::galay::utils::TypeRingBufferCursor<Cursor>;
 
 /** @brief Ring 构造状态。 */
-using RingError = ::galay::utils::SpscRingBufferError;
+using RingError = ::galay::utils::TypeRingBufferError;
 
 /**
  * @brief 获取 RingError 的静态错误字符串。
+ *
  * @param error 错误枚举。
  * @return 覆盖所有公开枚举值的非空字符串。
  */
 [[nodiscard]] inline const char* ringErrorString(RingError error) noexcept
 {
-    return ::galay::utils::spscRingBufferErrorString(error);
+    return ::galay::utils::typeRingBufferErrorString(error);
 }
 
 /**
@@ -80,7 +82,7 @@ using RingError = ::galay::utils::SpscRingBufferError;
  * @note 只能有一个逻辑生产者和一个逻辑消费者；析构前必须停止两侧访问。
  */
 template <RingValue T, RingCursor Cursor = size_t>
-using Ring = ::galay::utils::DynamicSpscRingBuffer<T, Cursor>;
+using Ring = ::galay::utils::DynamicTypeRingBuffer<T, Cursor>;
 
 /**
  * @brief 编译期容量、成员内持有槽位的无 waiter 1P1C ring。
@@ -91,7 +93,7 @@ using Ring = ::galay::utils::DynamicSpscRingBuffer<T, Cursor>;
  * @note 槽位直接属于对象；大 Capacity 或大 T 不应放入小线程栈或 coroutine frame。
  */
 template <RingValue T, size_t Capacity, RingCursor Cursor = size_t>
-using StaticRing = ::galay::utils::StaticSpscRingBuffer<T, Capacity, Cursor>;
+using StaticRing = ::galay::utils::StaticTypeRingBuffer<T, Capacity, Cursor>;
 
 /**
  * @brief 约束 BoundedChannel 可存储的元素类型。
@@ -106,6 +108,7 @@ namespace detail {
 
 /**
  * @brief 执行一次平台相关的短时 CPU 自旋提示。
+ *
  * @note 该函数不阻塞线程，也不主动把执行权交给操作系统调度器。
  */
 inline void boundedChannelCpuPause() noexcept
@@ -185,6 +188,7 @@ struct BoundedChannelWaiter
 
     /**
      * @brief 为一个新 generation 初始化尚未发布的固定 waiter 槽。
+     *
      * @param waiter_waker 等待操作完成时使用的唤醒器，所有权移入 waiter。
      * @param timeout_timer 可选事务式超时裁决器，等待体生命周期内保持不变。
      * @param send_value 发送操作的 awaiter-owned 值；接收操作传 nullptr。
@@ -224,8 +228,10 @@ struct BoundedChannelWaiter
 
     /**
      * @brief 在 await_suspend 的最后一步发布 waiter 可被异步唤醒。
+     *
      * @return 成功发布 kArmed 时返回 true；arming 期间已有完成请求时返回 false，
      *         调用方必须由当前栈直接进入 await_resume。
+     *
      * @note 成功返回后对端可立即恢复并销毁协程帧，因此调用方不得再访问 awaiter、
      *       channel 或 waiter。
      */
@@ -268,6 +274,7 @@ class BoundedSendAwaitable
 public:
     /**
      * @brief 创建异步发送等待体。
+     *
      * @param channel 目标通道的非拥有指针，等待体完成前必须保持有效。
      * @param value 待发送值，所有权移入等待体。
      */
@@ -276,15 +283,18 @@ public:
 
     /**
      * @brief 尝试在不挂起协程的情况下完成发送。
+     *
      * @return 已发送或通道已关闭时返回 true；需要注册发送等待者时返回 false。
      */
     bool await_ready() noexcept;
 
     /**
      * @brief 注册发送等待者，并在注册后重新检查发送或关闭状态。
+     *
      * @tparam Promise 调用方协程 promise 类型。
      * @param handle 当前调用方的协程句柄。
      * @return 需要等待接收方释放容量时返回 true；已同步完成或失败时返回 false。
+     *
      * @note 该函数只挂起协程，不阻塞调度器线程。
      */
     template <typename Promise>
@@ -292,6 +302,7 @@ public:
 
     /**
      * @brief 获取异步发送结果。
+     *
      * @return 成功返回空 expected；关闭、超时、构造 OOM/容量非法或等待队列失败
      *         分别返回 IOError(kClosed)、IOError(kTimeout)、IOError(kOutOfMemory)、
      *         IOError(kParamInvalid) 或 IOError(kNotReady)。
@@ -300,6 +311,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的发送等待者。
+     *
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void markTimeout() noexcept;
@@ -334,6 +346,7 @@ class BoundedRecvAwaitable
 public:
     /**
      * @brief 创建异步单条接收等待体。
+     *
      * @param channel 目标通道的非拥有指针，等待体完成前必须保持有效。
      */
     explicit BoundedRecvAwaitable(BoundedChannel<T, Capacity>* channel)
@@ -341,15 +354,19 @@ public:
 
     /**
      * @brief 尝试在不挂起协程的情况下接收一条消息。
+     *
      * @return 已取得消息或通道已关闭时返回 true；需要注册接收等待者时返回 false。
      */
     bool await_ready() noexcept;
 
     /**
      * @brief 注册接收等待者，并在注册后重新检查数据或关闭状态。
+     *
      * @tparam Promise 调用方协程 promise 类型。
      * @param handle 当前调用方的协程句柄。
-     * @return 需要等待生产者提供消息时返回 true；已同步完成或失败时返回 false。
+     * @return 需要等待生产者提供消息时返回 true；已同步完成或失败时
+     *         返回 false。
+     *
      * @note 该函数只挂起协程，不阻塞调度器线程。
      */
     template <typename Promise>
@@ -357,6 +374,7 @@ public:
 
     /**
      * @brief 获取异步单条接收结果。
+     *
      * @return 成功返回收到的消息；关闭、超时、构造 OOM/容量非法或等待队列失败
      *         返回对应 IOError。
      */
@@ -364,6 +382,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的接收等待者。
+     *
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void markTimeout() noexcept;
@@ -399,6 +418,7 @@ class BoundedRecvBatchAwaitable
 public:
     /**
      * @brief 创建异步批量接收等待体。
+     *
      * @param channel 目标通道的非拥有指针，等待体完成前必须保持有效。
      * @param count 单次最多接收的消息数；0 表示立即返回空批次。
      */
@@ -408,15 +428,18 @@ public:
 
     /**
      * @brief 尝试在不挂起协程的情况下取得一批消息。
+     *
      * @return 已取得批次或通道已关闭时返回 true；需要注册接收等待者时返回 false。
      */
     bool await_ready();
 
     /**
      * @brief 注册批量接收等待者，并在注册后重新检查数据或关闭状态。
+     *
      * @tparam Promise 调用方协程 promise 类型。
      * @param handle 当前调用方的协程句柄。
      * @return 需要等待至少一条消息时返回 true；已同步完成或失败时返回 false。
+     *
      * @note 该函数只挂起协程，不阻塞调度器线程。
      */
     template <typename Promise>
@@ -424,6 +447,7 @@ public:
 
     /**
      * @brief 获取异步批量接收结果。
+     *
      * @return 成功返回最多 count 条消息；关闭、超时、构造 OOM/容量非法或等待队列
      *         失败返回对应 IOError。
      */
@@ -431,6 +455,7 @@ public:
 
     /**
      * @brief 由超时设施尝试取消尚未被对端认领的批量接收等待者。
+     *
      * @note 已进入值搬运阶段的 waiter 不会被超时路径抢占。
      */
     void markTimeout() noexcept;
@@ -475,17 +500,32 @@ public:
     BoundedRecvBatchToAwaitable& operator=(
         BoundedRecvBatchToAwaitable&&) noexcept = default;
 
-    /** @brief 尝试立即填充 output；空 span 立即成功。 */
+    /**
+     * @brief 尝试立即填充 output。
+     *
+     * @return 已取得消息或 output 为空时返回 true；需要等待消息时返回 false。
+     */
     bool await_ready() noexcept;
 
-    /** @brief 空通道时注册唯一 consumer waiter，不阻塞调度器线程。 */
+    /**
+     * @brief 空通道时注册唯一 consumer waiter。
+     *
+     * @tparam Promise 调用方协程 promise 类型。
+     * @param handle 当前调用方的协程句柄。
+     * @return 需要等待生产者提供消息时返回 true；已同步完成或失败时
+     *         返回 false。
+     *
+     * @note 该函数只挂起协程，不阻塞调度器线程。
+     */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
 
     /**
      * @brief 返回实际搬运数量。
+     *
      * @return 成功返回 [0, output.size()]；关闭、超时、构造 OOM/容量非法或同侧
      *         waiter 已占用返回对应 IOError。
+     *
      * @note timeout、关闭或注册失败返回前不会修改 output。
      */
     std::expected<size_t, IOError> await_resume() noexcept;
@@ -552,9 +592,12 @@ public:
 
     /**
      * @brief 构造有界通道。
+     *
      * @param capacity 期望容量；小于等于 2 时取 2，其余向上取整为 2 的幂；
      *                 超出游标安全半区间或槽位数组字节上限时构造失败。
+     *
      * @details 使用 new(std::nothrow) 分配槽位；失败原因通过 error() 返回。
+     *
      * @note 仅动态容量 specialization 提供该构造函数。
      */
     explicit BoundedChannel(size_t capacity) noexcept
@@ -577,7 +620,9 @@ public:
 
     /**
      * @brief 构造成员内持有槽位的编译期容量通道。
+     *
      * @details 不分配槽位内存；容量由 Capacity 唯一确定。
+     *
      * @note 仅编译期容量 specialization 提供该构造函数。
      */
     BoundedChannel() noexcept
@@ -587,7 +632,9 @@ public:
 
     /**
      * @brief 销毁 ring 中尚未消费的已发布消息并释放通道资源。
+     *
      * @pre 不得再有并发调用方或挂起在该通道上的 awaitable。
+     *
      * @note 析构过程不负责关闭通道或等待其他线程退出。
      */
     ~BoundedChannel() noexcept
@@ -609,22 +656,24 @@ public:
         }
     }
 
-    /** @brief 禁止复制构造；通道具有唯一身份。 */
+    /// @brief 禁止复制构造；通道具有唯一身份。
     BoundedChannel(const BoundedChannel&) = delete;
 
-    /** @brief 禁止复制赋值；通道具有唯一身份。 */
+    /// @brief 禁止复制赋值；通道具有唯一身份。
     BoundedChannel& operator=(const BoundedChannel&) = delete;
 
-    /** @brief 禁止移动构造，避免使已注册 waiter 持有失效地址。 */
+    /// @brief 禁止移动构造，避免使已注册 waiter 持有失效地址。
     BoundedChannel(BoundedChannel&&) = delete;
 
-    /** @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。 */
+    /// @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。
     BoundedChannel& operator=(BoundedChannel&&) = delete;
 
     /**
      * @brief 尝试立即发送一条消息。
+     *
      * @param value 待发送消息；只有发送成功时才会被移动。
      * @return true 表示发送成功；false 表示通道已关闭或当前已满。
+     *
      * @note 该路径不使用 cursor CAS；失败只表示关闭或当前容量已满。
      */
     bool trySend(T&& value)
@@ -647,8 +696,10 @@ public:
 
     /**
      * @brief 复制并尝试立即发送一条消息。
+     *
      * @param value 待复制消息。
      * @return true 表示发送成功；false 表示通道已关闭或当前已满。
+     *
      * @note 仅为不抛复制构造类型提供；先创建本地副本，再复用移动发送路径。
      */
     bool trySend(const T& value) requires std::is_nothrow_copy_constructible_v<T>
@@ -659,15 +710,19 @@ public:
 
     /**
      * @brief 异步发送一条消息。
+     *
      * @param value 待发送消息；会移动进等待体。
      * @return 可 co_await 的等待体；关闭返回 IOError(kClosed, 0)，超时返回 IOError(kTimeout, 0)。
+     *
      * @note 满时挂起协程而不阻塞调度器线程；通道必须在等待期间保持有效。
      */
     BoundedSendAwaitable<T, Capacity> send(T&& value);
 
     /**
      * @brief 尝试立即接收一条消息。
+     *
      * @return 有消息时返回消息；为空时返回 std::nullopt。关闭不影响排空残留消息。
+     *
      * @note 该路径不使用 cursor CAS；空结果只表示当前没有已发布消息。
      */
     std::optional<T> tryRecv()
@@ -689,15 +744,19 @@ public:
 
     /**
      * @brief 异步接收一条消息。
+     *
      * @return 可 co_await 的等待体；关闭且已排空时返回 IOError(kClosed, 0)，超时返回 IOError(kTimeout, 0)。
+     *
      * @note 空时挂起协程而不阻塞调度器线程；通道必须在等待期间保持有效。
      */
     BoundedRecvAwaitable<T, Capacity> recv();
 
     /**
      * @brief 异步批量接收消息。
+     *
      * @param count 单次最多接收的消息数。
      * @return 可 co_await 的等待体；至少收到一条后尽量补齐至 count 条。
+     *
      * @note count 为 0 时立即返回空批次；返回 vector 的默认 allocator OOM 不经
      *       IOError。要求显式可恢复、无分配时使用 recvBatchTo(std::span<T>)。
      */
@@ -705,8 +764,10 @@ public:
 
     /**
      * @brief 异步把消息移动到调用方已构造缓冲区。
+     *
      * @param output 接收目标；空 span 立即成功返回 0。
      * @return 数据搬运和无 timeout waiter 注册路径不分配内存的等待体。
+     *
      * @note output 必须活到 await 完成，等待期间不得由其他线程或协程访问。
      */
     [[nodiscard]] BoundedRecvBatchToAwaitable<T, Capacity> recvBatchTo(
@@ -715,8 +776,10 @@ public:
 
     /**
      * @brief 尝试把消息移动到调用方已构造缓冲区。
+     *
      * @param output 接收目标；空 span 不消费消息并返回 0。
      * @return 实际搬运数量，范围为 [0, output.size()]。
+     *
      * @note 仅唯一 consumer 可调用；路径不分配，整批结束后只推进一次发送 waiter。
      */
     [[nodiscard]] size_t tryRecvBatch(std::span<T> output) noexcept
@@ -747,8 +810,10 @@ public:
 
     /**
      * @brief 尝试批量接收消息。
+     *
      * @param count 单次最多接收的消息数；0 返回空 vector。
      * @return 收到至少一条消息时返回消息批次；否则返回 std::nullopt。
+     *
      * @note 返回 vector 的 convenience 路径可能分配，默认 allocator OOM 不经
      *       返回值传播；要求显式可恢复、无分配时使用 tryRecvBatch(std::span<T>)。
      */
@@ -781,7 +846,9 @@ public:
 
     /**
      * @brief 关闭通道并唤醒所有等待者。
+     *
      * @details 关闭状态通过原子变量发布，可与发送、接收及其他 close() 调用并发执行。
+     *
      * @note 操作幂等；关闭后发送失败，接收仍会先排空 ring 中的残留消息。
      */
     void close() noexcept
@@ -800,7 +867,9 @@ public:
 
     /**
      * @brief 查询通道是否已关闭。
+     *
      * @return true 表示已关闭。
+     *
      * @note 返回调用时刻的原子快照，可与其他通道操作并发调用。
      */
     bool isClosed() const noexcept
@@ -810,6 +879,7 @@ public:
 
     /**
      * @brief 返回构造状态。
+     *
      * @return kNone 表示槽位可用；动态分配失败或容量越界返回对应 RingError。
      */
     [[nodiscard]] RingError error() const noexcept
@@ -819,7 +889,9 @@ public:
 
     /**
      * @brief 返回实际生效容量。
+     *
      * @return 取整后的 2 的幂容量。
+     *
      * @note 容量在构造后不再变化，可由任意线程读取。
      */
     size_t capacity() const noexcept
@@ -833,6 +905,7 @@ public:
 
     /**
      * @brief 返回 ring 中的近似消息数。
+     *
      * @return 仅供诊断，不可用作同步条件。
      */
     size_t size() const noexcept
@@ -846,6 +919,7 @@ public:
 
     /**
      * @brief 近似检查 ring 是否为空。
+     *
      * @return 仅供诊断，不可用作同步条件。
      */
     bool empty() const noexcept
@@ -855,6 +929,7 @@ public:
 
     /**
      * @brief 近似检查 ring 是否已满。
+     *
      * @return 仅供诊断，不可用作同步条件。
      */
     bool full() const noexcept
@@ -863,13 +938,8 @@ public:
     }
 
 private:
-    // Apple silicon 的一致性粒度是 128B，x86 是 64B。head/tail 分行可避免
+    // AArch64 的隔离粒度是 128B，其他架构是 64B。head/tail 分行可避免
     // 诊断读取及 waiter helping 让两侧本地 cursor 发生伪共享。
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-    static constexpr size_t kCacheLine = 128;
-#else
-    static constexpr size_t kCacheLine = 64;
-#endif
     enum class SlotState : uint8_t {
         kEmpty,
         kPublishing,
@@ -890,6 +960,7 @@ private:
 
         /**
          * @brief 获取尚未开始 T 生命周期的原始存储地址。
+         *
          * @return 仅供 construct_at 使用的对齐地址。
          */
         T* storageAddress() noexcept
@@ -897,7 +968,11 @@ private:
             return reinterpret_cast<T*>(storage);
         }
 
-        /** @brief 获取已完成构造的 T 对象地址。 */
+        /**
+         * @brief 获取已完成构造的 T 对象地址。
+         *
+         * @return 已开始生命周期的 T 对象地址。
+         */
         T* value() noexcept
         {
             return std::launder(reinterpret_cast<T*>(storage));
@@ -996,13 +1071,19 @@ private:
             reset();
         }
 
-        /** @brief 取得当前固定 waiter 槽的非拥有指针。 */
+        /**
+         * @brief 取得当前固定 waiter 槽的非拥有指针。
+         *
+         * @return 当前 waiter 指针；lease 为空时返回 nullptr。
+         */
         [[nodiscard]] Waiter* get() const noexcept
         {
             return m_waiter;
         }
 
-        /** @brief 释放当前推进 pin。 */
+        /**
+         * @brief 释放当前推进 pin。
+         */
         void reset() noexcept
         {
             if (m_waiter == nullptr) {
@@ -1079,7 +1160,10 @@ private:
 
     /**
      * @brief 在 await_suspend 完成 arming 后唤醒 waiter 关联的协程。
+     *
      * @param waiter 已完成状态发布的等待体。
+     * @param pendingWake 延迟到最后一次 channel 访问之后执行的唤醒槽。
+     *
      * @note arming 窗口内只登记 pending wake；实际恢复请求全局至多提交一次。
      */
     void prepareWaiterWake(Waiter& waiter, PendingWake& pendingWake) noexcept
@@ -1115,9 +1199,11 @@ private:
 
     /**
      * @brief 尝试认领 waiter；队列 helper 会先登记一次重试请求。
+     *
      * @param waiter 已从对应等待队列取得或由注册方直接推进的等待体。
      * @param requestRetry true 表示调用方已从队列移除该 waiter，必须先通知当前 owner。
      * @return 成功完成 kWaiting -> kFulfilling 转换时返回 true。
+     *
      * @note retry 必须先于 CAS 发布：若 owner 未观察到 generation 变化，随后 CAS 必然能在
      *       owner 发布 kWaiting 后认领 waiter，因此不能把该顺序改回“CAS 失败后再登记”。
      */
@@ -1138,7 +1224,14 @@ private:
             std::memory_order_acquire);
     }
 
-    /** @brief 保证 waiter 在指定队列中至多保留一个可发现入口。 */
+    /**
+     * @brief 保证 waiter 在指定队列中至多保留一个可发现入口。
+     *
+     * @param waiters 目标单 waiter 队列。
+     * @param waiter 待发布的固定 waiter 槽。
+     * @return waiter 已在队列中或本次发布成功时返回 true；队列被其他
+     *         waiter 占用时返回 false。
+     */
     bool enqueueWaiter(WaiterQueue& waiters, Waiter* waiter) noexcept
     {
         if (waiter == nullptr) {
@@ -1166,7 +1259,14 @@ private:
         return false;
     }
 
-    /** @brief 从指定队列移除一个有效入口，并把队列 pin 转交给推进 lease。 */
+    /**
+     * @brief 从指定队列移除一个有效入口，并把队列 pin 转交给推进 lease。
+     *
+     * @param waiters 目标单 waiter 队列。
+     * @param lease 接收推进 pin 的 lease。
+     * @return 成功取得有效 waiter 时返回 true；队列为空或入口已失效时
+     *         返回 false。
+     */
     bool tryDequeueWaiter(WaiterQueue& waiters, WaiterLease& lease) noexcept
     {
         lease.reset();
@@ -1187,7 +1287,12 @@ private:
         return true;
     }
 
-    /** @brief 终态 owner 尝试摘除 waiter 并释放队列 pin。 */
+    /**
+     * @brief 终态 owner 尝试摘除 waiter 并释放队列 pin。
+     *
+     * @param waiters waiter 所属的单 waiter 队列。
+     * @param waiter 进入终态的固定 waiter 槽。
+     */
     void removeQueuedWaiter(WaiterQueue& waiters, Waiter* waiter) noexcept
     {
         if (waiter == nullptr) {
@@ -1206,7 +1311,11 @@ private:
         }
     }
 
-    /** @brief 析构前清空无并发访问的 waiter slot，并释放队列 pin。 */
+    /**
+     * @brief 析构前清空无并发访问的 waiter slot，并释放队列 pin。
+     *
+     * @param waiters 待清空的单 waiter 队列。
+     */
     void clearWaiterQueue(WaiterQueue& waiters) noexcept
     {
         Waiter* const queuedWaiter =
@@ -1222,7 +1331,12 @@ private:
 
     /**
      * @brief 在 await_resume 中安全回收一个 terminal waiter generation。
+     *
+     * @param waiters waiter 所属的单 waiter 队列。
+     * @param waiter 待回收的固定 waiter 槽。
+     * @param waiterGeneration 当前 awaitable 注册时获得的 generation。
      * @return generation 匹配且固定槽已重新发布为 kIdle 时返回 true。
+     *
      * @note terminal state 会阻止新认领；摘队列后等待的只是已持 pin 推进方的
      *       有限收尾窗口。所有完成方必须在实际 wake 前释放 lease。
      */
@@ -1291,7 +1405,11 @@ private:
             slotAt(position & ringMask()).ready.load(std::memory_order_seq_cst);
     }
 
-    /** @brief close 冷路径扫描是否存在已声明但尚未完成构造的发送。 */
+    /**
+     * @brief close 冷路径扫描是否存在已声明但尚未完成构造的发送。
+     *
+     * @return 存在 kPublishing 槽位时返回 true。
+     */
     bool hasPublishingSlot() const noexcept
     {
         if (!isValid()) {
@@ -1306,7 +1424,11 @@ private:
         return false;
     }
 
-    /** @brief 仅当关闭且当前 head 不再处于发布窗口时允许接收者观察 closed。 */
+    /**
+     * @brief 判断接收侧是否可以观察到通道关闭。
+     *
+     * @return 通道已关闭且当前 head 不处于发布窗口时返回 true。
+     */
     bool isReceiveClosed() const noexcept
     {
         if (!m_closed.load(std::memory_order_acquire)) {
@@ -1320,7 +1442,11 @@ private:
             SlotState::kEmpty;
     }
 
-    /** @brief 检查当前 consumer head 是否已发布，供批量路径在分配前探测。 */
+    /**
+     * @brief 检查当前 consumer head 是否已发布，供批量路径在分配前探测。
+     *
+     * @return 当前 head 槽位为 kReady 时返回 true。
+     */
     bool hasReadySlot() const noexcept
     {
         if (!isValid()) {
@@ -1822,6 +1948,9 @@ retry_timeout_operation:
 
     /**
      * @brief 尝试推进并唤醒一个等待中的接收者。
+     *
+     * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     *
      * @note 跳过已取消或被其他路径认领的 waiter；处理一个有效 waiter 后立即返回。
      */
     void wakeOneConsumerIfAny(PendingWakes& pendingWakes) noexcept
@@ -1839,6 +1968,9 @@ retry_timeout_operation:
 
     /**
      * @brief 在消费者释放容量后尝试推进一个等待中的发送者。
+     *
+     * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     *
      * @note 跳过已取消或被其他路径认领的 waiter；处理一个有效 waiter 后立即返回。
      */
     void drainOneSendWaiter(PendingWakes& pendingWakes) noexcept
@@ -1854,7 +1986,11 @@ retry_timeout_operation:
         }
     }
 
-    /** @brief 关闭时通过接收完成权裁决依次结束所有可认领接收 waiter。 */
+    /**
+     * @brief 关闭时通过接收完成权裁决依次结束所有可认领接收 waiter。
+     *
+     * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     */
     void wakeAllRecvWaiters(PendingWakes& pendingWakes) noexcept
     {
         WaiterLease lease;
@@ -1867,7 +2003,11 @@ retry_timeout_operation:
         }
     }
 
-    /** @brief 关闭时通过发送完成权裁决依次结束所有可认领发送 waiter。 */
+    /**
+     * @brief 关闭时通过发送完成权裁决依次结束所有可认领发送 waiter。
+     *
+     * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     */
     void wakeAllSendWaiters(PendingWakes& pendingWakes) noexcept
     {
         WaiterLease lease;
@@ -1880,7 +2020,11 @@ retry_timeout_operation:
         }
     }
 
-    /** @brief 发布窗口结束后完成 close 延迟的两侧 waiter 收尾。 */
+    /**
+     * @brief 发布窗口结束后完成 close 延迟的两侧 waiter 收尾。
+     *
+     * @param pendingWakes 收集需要在最后一次 channel 访问后执行的唤醒。
+     */
     void finishCloseAfterPublication(PendingWakes& pendingWakes) noexcept
     {
         wakeAllRecvWaiters(pendingWakes);
@@ -1898,19 +2042,21 @@ retry_timeout_operation:
 
     // producer 只写 tail，consumer 只写 head。waiter helping 可能让同一逻辑侧
     // 迁移到另一物理线程，因此 cursor 保持 atomic，但数据面不执行 cursor CAS。
-    alignas(kCacheLine) std::atomic<size_t> m_tail{0};
-    alignas(kCacheLine) std::atomic<size_t> m_head{0};
-    alignas(kCacheLine) std::atomic<bool> m_closed{false};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<size_t> m_tail{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<size_t> m_head{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<bool> m_closed{false};
     // Once an async waiter path has been used, keep the waiter-aware path enabled.
     // Before that point, synchronous trySend/tryRecv avoid polling empty waiter queues.
-    alignas(kCacheLine) std::atomic<bool> m_recvWaiterPathUsed{false};
-    alignas(kCacheLine) std::atomic<bool> m_sendWaiterPathUsed{false};
-    alignas(kCacheLine) SlotStorage m_slots;
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<bool> m_recvWaiterPathUsed{false};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<bool> m_sendWaiterPathUsed{false};
+    alignas(::galay::utils::kCacheLineSize) SlotStorage m_slots;
     size_t m_capacity = 0;
     size_t m_mask = 0;
     RingError m_error = RingError::kNone;
-    alignas(kCacheLine) Waiter m_recvWaiterSlot;
-    alignas(kCacheLine) Waiter m_sendWaiterSlot;
+    alignas(::galay::utils::kCacheLineSize) Waiter m_recvWaiterSlot;
+    alignas(::galay::utils::kCacheLineSize) Waiter m_sendWaiterSlot;
     WaiterQueue m_recvWaiters;
     WaiterQueue m_sendWaiters;
 };

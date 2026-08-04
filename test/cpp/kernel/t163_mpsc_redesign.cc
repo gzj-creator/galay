@@ -123,6 +123,17 @@ struct BlockingMove
     }
 };
 
+bool waitForFlag(const std::atomic<bool>& flag) noexcept
+{
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!flag.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < deadline) {
+        std::this_thread::yield();
+    }
+    return flag.load(std::memory_order_acquire);
+}
+
 bool testCloseDrainsPublishedValues()
 {
     galay::mpsc::UnboundedChannel<uint64_t> channel;
@@ -273,6 +284,77 @@ bool testCloseWaitsForInFlightSends()
         closeReturned.load(std::memory_order_acquire) &&
         !channel.tryRecv().has_value() && channel.isClosedAndDrained() &&
         !lateToken.valid();
+}
+
+bool testBatchPublicationRemainsAtomicAcrossClose()
+{
+    using Channel = galay::mpsc::UnboundedChannel<BlockingMove>;
+    Channel channel;
+    auto token = channel.makeProducerToken();
+    if (!token.valid()) {
+        return false;
+    }
+
+    MoveGate gate;
+    std::vector<BlockingMove> values;
+    values.reserve(3);
+    values.emplace_back(101, nullptr, false);
+    values.emplace_back(102, &gate, true);
+    values.emplace_back(103, nullptr, false);
+
+    std::atomic<bool> sendSucceeded{false};
+    std::thread producer([&]() {
+        sendSucceeded.store(
+            channel.sendBatch(token, std::move(values)),
+            std::memory_order_release);
+    });
+
+    if (!waitForFlag(gate.entered)) {
+        gate.release.store(true, std::memory_order_release);
+        gate.release.notify_all();
+        producer.join();
+        const bool closed = channel.close();
+        if (!closed) {
+            return false;
+        }
+        return false;
+    }
+
+    std::atomic<bool> closeReturned{false};
+    std::atomic<bool> closeSucceeded{false};
+    std::thread closer([&]() {
+        closeSucceeded.store(channel.close(), std::memory_order_release);
+        closeReturned.store(true, std::memory_order_release);
+    });
+
+    const auto closingDeadline =
+        std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (!channel.isClosed() &&
+           std::chrono::steady_clock::now() < closingDeadline) {
+        std::this_thread::yield();
+    }
+    const bool closeStarted = channel.isClosed();
+    auto hiddenValue = channel.tryRecv();
+    const bool batchStayedHidden = !hiddenValue.has_value() && channel.empty();
+    const bool closeWaitedForWholeBatch =
+        !closeReturned.load(std::memory_order_acquire);
+
+    gate.release.store(true, std::memory_order_release);
+    gate.release.notify_all();
+    producer.join();
+    closer.join();
+
+    auto first = channel.tryRecv();
+    auto second = channel.tryRecv();
+    auto third = channel.tryRecv();
+    auto extra = channel.tryRecv();
+    return closeStarted && batchStayedHidden && closeWaitedForWholeBatch &&
+        sendSucceeded.load(std::memory_order_acquire) &&
+        closeSucceeded.load(std::memory_order_acquire) &&
+        closeReturned.load(std::memory_order_acquire) && first.has_value() &&
+        first->value == 101 && second.has_value() && second->value == 102 &&
+        third.has_value() && third->value == 103 && !extra.has_value() &&
+        channel.isClosedAndDrained();
 }
 
 bool testSendStartingAfterCloseBeginsFails()
@@ -542,6 +624,8 @@ int main()
     check(testClosedReceiveCompletesWithoutSuspending(),
           "closed receive completes without suspending");
     check(testCloseWaitsForInFlightSends(), "close waits for in-flight sends");
+    check(testBatchPublicationRemainsAtomicAcrossClose(),
+          "batch publication remains atomic across close");
     check(testSendStartingAfterCloseBeginsFails(),
           "send starting after close begins fails");
     check(testConcurrentCloseLoserReturnsImmediately(),

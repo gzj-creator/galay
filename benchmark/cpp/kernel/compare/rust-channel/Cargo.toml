@@ -7,3 +7,5 @@ publish = false
 [dependencies]
 crossbeam-channel = "=0.5.16"
 crossbeam-queue = "=0.3.13"
+rtrb = "=0.3.4"
+unbounded-spsc = "=0.3.0"

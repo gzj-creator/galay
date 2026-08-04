@@ -19,11 +19,11 @@
 
 namespace {
 
-using galay::utils::SpscRingBuffer;
-using galay::utils::SpscRingBufferCursor;
-using galay::utils::SpscRingBufferError;
-using galay::utils::SpscRingBufferValue;
-using galay::utils::StaticSpscRingBuffer;
+using galay::utils::TypeRingBuffer;
+using galay::utils::TypeRingBufferError;
+using galay::utils::StaticTypeRingBuffer;
+using galay::utils::TypeRingBufferCursor;
+using galay::utils::TypeRingBufferValue;
 using namespace std::chrono_literals;
 
 struct ThrowingMove
@@ -36,16 +36,22 @@ struct ThrowingMove
     }
 };
 
-static_assert(SpscRingBufferValue<std::unique_ptr<int>>);
-static_assert(!SpscRingBufferValue<ThrowingMove>);
-static_assert(!SpscRingBufferValue<int&>);
-static_assert(!SpscRingBufferValue<const int>);
-static_assert(SpscRingBufferCursor<uint8_t>);
-static_assert(!SpscRingBufferCursor<bool>);
+static_assert(TypeRingBufferValue<std::unique_ptr<int>>);
+static_assert(!TypeRingBufferValue<ThrowingMove>);
+static_assert(!TypeRingBufferValue<int&>);
+static_assert(!TypeRingBufferValue<const int>);
+static_assert(TypeRingBufferCursor<uint8_t>);
+static_assert(!TypeRingBufferCursor<bool>);
+#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64) || \
+    defined(_M_ARM64) || defined(_M_ARM64EC)
+static_assert(galay::utils::kCacheLineSize == 128);
+#else
+static_assert(galay::utils::kCacheLineSize == 64);
+#endif
 
 template <size_t Capacity, typename Cursor = size_t>
 concept SupportsStaticCapacity = requires {
-    typename SpscRingBuffer<int, Capacity, Cursor>;
+    typename TypeRingBuffer<int, Capacity, Cursor>;
 };
 
 static_assert(SupportsStaticCapacity<2>);
@@ -53,15 +59,15 @@ static_assert(!SupportsStaticCapacity<1>);
 static_assert(!SupportsStaticCapacity<3>);
 static_assert(SupportsStaticCapacity<128, uint8_t>);
 static_assert(!SupportsStaticCapacity<256, uint8_t>);
-static_assert(std::same_as<StaticSpscRingBuffer<int, 4, uint8_t>,
-                           SpscRingBuffer<int, 4, uint8_t>>);
-static_assert(std::is_default_constructible_v<StaticSpscRingBuffer<int, 4>>);
-static_assert(!std::is_constructible_v<StaticSpscRingBuffer<int, 4>, size_t>);
-static_assert(std::is_constructible_v<SpscRingBuffer<int>, size_t>);
-static_assert(!std::is_default_constructible_v<SpscRingBuffer<int>>);
-static_assert(sizeof(StaticSpscRingBuffer<uint64_t, 64>) >
-              sizeof(StaticSpscRingBuffer<uint64_t, 2>));
-using IntRing = SpscRingBuffer<int>;
+static_assert(std::same_as<StaticTypeRingBuffer<int, 4, uint8_t>,
+                           TypeRingBuffer<int, 4, uint8_t>>);
+static_assert(std::is_default_constructible_v<StaticTypeRingBuffer<int, 4>>);
+static_assert(!std::is_constructible_v<StaticTypeRingBuffer<int, 4>, size_t>);
+static_assert(std::is_constructible_v<TypeRingBuffer<int>, size_t>);
+static_assert(!std::is_default_constructible_v<TypeRingBuffer<int>>);
+static_assert(sizeof(StaticTypeRingBuffer<uint64_t, 64>) >
+              sizeof(StaticTypeRingBuffer<uint64_t, 2>));
+using IntRing = TypeRingBuffer<int>;
 static_assert(std::is_move_constructible_v<typename IntRing::Producer>);
 static_assert(std::is_nothrow_move_assignable_v<typename IntRing::Producer>);
 static_assert(!std::is_copy_constructible_v<typename IntRing::Producer>);
@@ -71,24 +77,24 @@ static_assert(!std::is_copy_constructible_v<typename IntRing::Consumer>);
 
 bool testErrorsAndCapacity()
 {
-    SpscRingBuffer<int> rounded(3);
-    SpscRingBuffer<int, std::dynamic_extent, uint8_t> tooLarge(129);
-    return rounded.error() == SpscRingBufferError::kNone &&
+    TypeRingBuffer<int> rounded(3);
+    TypeRingBuffer<int, std::dynamic_extent, uint8_t> tooLarge(129);
+    return rounded.error() == TypeRingBufferError::kNone &&
         rounded.capacity() == 4 &&
-        tooLarge.error() == SpscRingBufferError::kCapacityTooLarge &&
+        tooLarge.error() == TypeRingBufferError::kCapacityTooLarge &&
         tooLarge.capacity() == 0 &&
-        std::string_view(galay::utils::spscRingBufferErrorString(
-            SpscRingBufferError::kNone)) == "none" &&
-        std::string_view(galay::utils::spscRingBufferErrorString(
-            SpscRingBufferError::kCapacityTooLarge)) == "capacity too large" &&
-        std::string_view(galay::utils::spscRingBufferErrorString(
-            SpscRingBufferError::kAllocationFailed)) == "allocation failed";
+        std::string_view(galay::utils::typeRingBufferErrorString(
+            TypeRingBufferError::kNone)) == "none" &&
+        std::string_view(galay::utils::typeRingBufferErrorString(
+            TypeRingBufferError::kCapacityTooLarge)) == "capacity too large" &&
+        std::string_view(galay::utils::typeRingBufferErrorString(
+            TypeRingBufferError::kAllocationFailed)) == "allocation failed";
 }
 
 bool testFullCapacityMoveOnlyAndBatch()
 {
-    SpscRingBuffer<std::unique_ptr<int>> ring(4);
-    if (ring.error() != SpscRingBufferError::kNone) {
+    TypeRingBuffer<std::unique_ptr<int>> ring(4);
+    if (ring.error() != TypeRingBufferError::kNone) {
         return false;
     }
     for (int value = 0; value < 4; ++value) {
@@ -110,7 +116,7 @@ bool testFullCapacityMoveOnlyAndBatch()
         }
     }
 
-    SpscRingBuffer<int> batchRing(8);
+    TypeRingBuffer<int> batchRing(8);
     std::array<int, 6> input{10, 11, 12, 13, 14, 15};
     std::array<int, 4> first{};
     std::array<int, 4> second{};
@@ -126,7 +132,7 @@ bool testFullCapacityMoveOnlyAndBatch()
 
 bool testNarrowCursorWraparound()
 {
-    SpscRingBuffer<uint16_t, std::dynamic_extent, uint8_t> ring(4);
+    TypeRingBuffer<uint16_t, std::dynamic_extent, uint8_t> ring(4);
     for (uint16_t sequence = 0; sequence < 320; ++sequence) {
         uint16_t value = sequence;
         if (!ring.trySend(std::move(value))) {
@@ -142,8 +148,8 @@ bool testNarrowCursorWraparound()
 
 bool testStaticCapacityStorageAndFifo()
 {
-    StaticSpscRingBuffer<std::unique_ptr<int>, 4> ring;
-    if (ring.error() != SpscRingBufferError::kNone || ring.capacity() != 4) {
+    StaticTypeRingBuffer<std::unique_ptr<int>, 4> ring;
+    if (ring.error() != TypeRingBufferError::kNone || ring.capacity() != 4) {
         return false;
     }
     for (int value = 0; value < 4; ++value) {
@@ -164,7 +170,7 @@ bool testStaticCapacityStorageAndFifo()
         }
     }
 
-    StaticSpscRingBuffer<int, 8> batchRing;
+    StaticTypeRingBuffer<int, 8> batchRing;
     std::array<int, 6> input{10, 11, 12, 13, 14, 15};
     std::array<int, 6> output{};
     return batchRing.trySendBatch(std::span<int>(input)) == input.size() &&
@@ -174,7 +180,7 @@ bool testStaticCapacityStorageAndFifo()
 
 bool testStaticNarrowCursorWraparound()
 {
-    StaticSpscRingBuffer<uint16_t, 4, uint8_t> ring;
+    StaticTypeRingBuffer<uint16_t, 4, uint8_t> ring;
     for (uint16_t sequence = 0; sequence < 320; ++sequence) {
         uint16_t value = sequence;
         uint16_t output = 0;
@@ -189,8 +195,8 @@ bool testStaticNarrowCursorWraparound()
 bool testCrossThreadFifo()
 {
     constexpr uint32_t kMessages = 250'000;
-    SpscRingBuffer<uint32_t> ring(256);
-    if (ring.error() != SpscRingBufferError::kNone) {
+    TypeRingBuffer<uint32_t> ring(256);
+    if (ring.error() != TypeRingBufferError::kNone) {
         return false;
     }
     auto endpoints = ring.split();

@@ -19,6 +19,7 @@
 #define GALAY_KERNEL_THREAD_SAFE_TIMER_MANAGER_HPP
 
 #include "timer.hpp"
+#include "../../galay-utils/common/defn.hpp"
 #include <concurrentqueue/moodycamel/concurrentqueue.h>
 #include <cstddef>
 #include <cstdint>
@@ -459,8 +460,8 @@ private:
 
 private:
     // 计数器（原子操作，用于监控）
-    alignas(64) std::atomic<size_t> m_wheelSize;
-    alignas(64) std::atomic<size_t> m_pendingSize;
+    alignas(::galay::utils::kCacheLineSize) std::atomic<size_t> m_wheelSize;
+    alignas(::galay::utils::kCacheLineSize) std::atomic<size_t> m_pendingSize;
 
     uint64_t m_tickDuration;
     uint64_t m_currentTick;

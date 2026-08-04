@@ -39,9 +39,17 @@ namespace galay::mpmc {
 
 struct UnboundedChannelTestAccess {
     template <UnboundedValue T>
-    static consteval size_t producerEpochAlignment()
+    static consteval size_t blockAlignment()
     {
-        return alignof(typename UnboundedChannel<T>::ProducerEpochNode);
+        return alignof(typename UnboundedChannel<T>::Block);
+    }
+
+    template <UnboundedValue T>
+    static bool tailUsesWordStorage(const UnboundedChannel<T>& channel)
+    {
+        return std::is_same_v<
+            std::remove_cvref_t<decltype(channel.m_tail)>,
+            std::atomic<uint64_t>>;
     }
 
     template <UnboundedValue T>
@@ -61,11 +69,12 @@ struct UnboundedChannelTestAccess {
     }
 
     template <UnboundedValue T>
-    static bool closedUsesByteStorage(const UnboundedChannel<T>& channel)
+    static bool tokenBlockBaseMatches(
+        const typename UnboundedChannel<T>::ProducerToken& token)
     {
-        return std::is_same_v<
-            std::remove_cvref_t<decltype(channel.m_closed)>,
-            std::atomic<bool>>;
+        return token.m_block != nullptr &&
+            token.m_block->base.load(std::memory_order_acquire) ==
+                token.m_blockBase;
     }
 
     template <UnboundedValue T>
@@ -78,39 +87,6 @@ struct UnboundedChannelTestAccess {
     static bool waiterPathUsedAfterPublish(UnboundedChannel<T>& channel)
     {
         return channel.waiterPathUsedAfterPublish();
-    }
-
-    template <UnboundedValue T>
-    static uint64_t defaultProducerActiveState(UnboundedChannel<T>& channel)
-    {
-        auto* producer = channel.defaultProducerEpoch();
-        return producer != nullptr
-            ? producer->active.load(std::memory_order_seq_cst)
-            : UINT64_MAX;
-    }
-
-    template <UnboundedValue T>
-    static uint64_t tokenActiveState(
-        const typename UnboundedChannel<T>::ProducerToken& token)
-    {
-        return token.m_epochNode->active.load(std::memory_order_seq_cst);
-    }
-
-    template <UnboundedValue T>
-    static bool acquireSendPermit(
-        UnboundedChannel<T>& channel,
-        typename UnboundedChannel<T>::ProducerToken& token) noexcept
-    {
-        return token.validFor(channel) &&
-            channel.acquireSendPermit(*token.m_epochNode);
-    }
-
-    template <UnboundedValue T>
-    static void releaseSendPermit(
-        UnboundedChannel<T>& channel,
-        typename UnboundedChannel<T>::ProducerToken& token) noexcept
-    {
-        channel.releaseSendPermit(*token.m_epochNode);
     }
 
     template <UnboundedValue T>
@@ -148,9 +124,9 @@ struct UnboundedChannelTestAccess {
 } // namespace galay::mpmc
 
 #if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-static_assert(galay::mpmc::UnboundedChannelTestAccess::producerEpochAlignment<int>() == 128);
+static_assert(galay::mpmc::UnboundedChannelTestAccess::blockAlignment<int>() == 128);
 #else
-static_assert(galay::mpmc::UnboundedChannelTestAccess::producerEpochAlignment<int>() == 64);
+static_assert(galay::mpmc::UnboundedChannelTestAccess::blockAlignment<int>() == 64);
 #endif
 
 namespace {
@@ -528,41 +504,21 @@ bool checkMpmcUnboundedWaiterHandshake()
     if (!producerToken.valid()) {
         return false;
     }
-    const uint64_t defaultBefore =
-        galay::mpmc::UnboundedChannelTestAccess::defaultProducerActiveState(
-            publicationChannel);
-    const uint64_t tokenBefore =
-        galay::mpmc::UnboundedChannelTestAccess::tokenActiveState<int>(producerToken);
+    const bool tokenBaseBefore =
+        galay::mpmc::UnboundedChannelTestAccess::tokenBlockBaseMatches<int>(
+            producerToken);
     const bool defaultPublished = publicationChannel.send(1);
     const bool tokenPublished = publicationChannel.send(producerToken, 2);
-    const uint64_t defaultAfter =
-        galay::mpmc::UnboundedChannelTestAccess::defaultProducerActiveState(
-            publicationChannel);
-    const uint64_t tokenAfter =
-        galay::mpmc::UnboundedChannelTestAccess::tokenActiveState<int>(producerToken);
-    auto heldProducerToken = publicationChannel.makeProducerToken();
-    if (!heldProducerToken.valid()) {
-        return false;
-    }
-    const bool permitHeld = galay::mpmc::UnboundedChannelTestAccess::acquireSendPermit(
-        publicationChannel, heldProducerToken);
-    const uint64_t activeState =
-        galay::mpmc::UnboundedChannelTestAccess::tokenActiveState<int>(
-            heldProducerToken);
-    if (permitHeld) {
-        galay::mpmc::UnboundedChannelTestAccess::releaseSendPermit(
-            publicationChannel, heldProducerToken);
-    }
-    const uint64_t idleState =
-        galay::mpmc::UnboundedChannelTestAccess::tokenActiveState<int>(
-            heldProducerToken);
+    const bool tokenBaseAfter =
+        galay::mpmc::UnboundedChannelTestAccess::tokenBlockBaseMatches<int>(
+            producerToken);
     galay::mpmc::UnboundedChannel<int> handshakeChannel;
     const bool byteFlag =
         galay::mpmc::UnboundedChannelTestAccess::flagUsesByteStorage(handshakeChannel);
     const bool bytePump =
         galay::mpmc::UnboundedChannelTestAccess::pumpUsesByteStorage(handshakeChannel);
-    const bool byteClosed =
-        galay::mpmc::UnboundedChannelTestAccess::closedUsesByteStorage(
+    const bool wordTail =
+        galay::mpmc::UnboundedChannelTestAccess::tailUsesWordStorage(
             handshakeChannel);
     const bool producerBeforeRegistration =
         galay::mpmc::UnboundedChannelTestAccess::waiterPathUsedAfterPublish(
@@ -585,10 +541,8 @@ bool checkMpmcUnboundedWaiterHandshake()
     const size_t queuedCopies =
         galay::mpmc::UnboundedChannelTestAccess::drainWaiters(pumpChannel);
 
-    return defaultBefore == 0 && tokenBefore == 0 && defaultPublished &&
-        tokenPublished && defaultAfter == 0 && tokenAfter == 0 && permitHeld &&
-        activeState == 1 && idleState == 0 &&
-        byteFlag && bytePump && byteClosed &&
+    return tokenBaseBefore && defaultPublished && tokenPublished &&
+        tokenBaseAfter && byteFlag && bytePump && wordTail &&
         !producerBeforeRegistration && producerAfterRegistration && enqueued &&
         pumpIdle &&
         waiter->state.load(std::memory_order_acquire) ==

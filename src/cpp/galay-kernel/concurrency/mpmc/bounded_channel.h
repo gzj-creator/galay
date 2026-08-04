@@ -14,6 +14,7 @@
 #include "../../common/error.h"
 #include "../../core/waker.h"
 #include "../../core/timeout.hpp"
+#include "../../../galay-utils/common/defn.hpp"
 #include <coroutine>
 
 #if defined(_MSC_VER)
@@ -628,13 +629,8 @@ public:
     }
 
 private:
-    // Apple silicon 的一致性粒度是 128B，x86 是 64B。取 64 会让 m_head/m_tail
+    // AArch64 的隔离粒度是 128B，其他架构是 64B。取 64 会让 m_head/m_tail
     // 落在同一条 128B 行上，生产者与消费者的热索引持续互相无效化。
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-    static constexpr size_t kCacheLine = 128;
-#else
-    static constexpr size_t kCacheLine = 64;
-#endif
     static constexpr uint64_t kTailClosedBit = uint64_t{1} << 63U;
     static constexpr uint64_t kTailPositionMask = kTailClosedBit - 1U;
     static constexpr uint64_t kMaxRingCapacity = uint64_t{1} << 62U;
@@ -1245,13 +1241,15 @@ private:
     friend class BoundedRecvBatchAwaitable;
     friend struct BoundedChannelTestAccess;
 
-    alignas(kCacheLine) std::atomic<uint64_t> m_tail{0};
-    alignas(kCacheLine) std::atomic<uint64_t> m_head{0};
-    alignas(kCacheLine) std::atomic<uint8_t> m_pumpState{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<uint64_t> m_tail{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<uint64_t> m_head{0};
+    alignas(::galay::utils::kCacheLineSize) std::atomic<uint8_t> m_pumpState{0};
     // Once an async waiter path has been used, keep the waiter-aware path enabled.
     // Before that point, synchronous trySend/tryRecv avoid polling empty waiter queues.
-    alignas(kCacheLine) std::atomic<bool> m_recvWaiterPathUsed{false};
-    alignas(kCacheLine) std::atomic<bool> m_sendWaiterPathUsed{false};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<bool> m_recvWaiterPathUsed{false};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<bool> m_sendWaiterPathUsed{false};
     const size_t m_capacity;
     const size_t m_mask;
     std::vector<Slot> m_slots;

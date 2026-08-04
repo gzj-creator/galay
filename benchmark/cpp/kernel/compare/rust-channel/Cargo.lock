@@ -3,6 +3,12 @@
 version = 4
 
 [[package]]
+name = "bounded-spsc-queue"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4c9c650d1935bc66dec0e80beb9353b6c86fb9bcd0a4c0c7f5a70d9770e5194"
+
+[[package]]
 name = "crossbeam-channel"
 version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -32,4 +38,21 @@ version = "0.1.0"
 dependencies = [
  "crossbeam-channel",
  "crossbeam-queue",
+ "rtrb",
+ "unbounded-spsc",
+]
+
+[[package]]
+name = "rtrb"
+version = "0.3.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ade083ccbb4bf536df69d1f6432cc23deb7acccff86b183f3923a6fd56a1153"
+
+[[package]]
+name = "unbounded-spsc"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25893b0a9bd99728ea266346e1301e1d2e619fa16177894f8fba4f7c8ba3261c"
+dependencies = [
+ "bounded-spsc-queue",
 ]

@@ -18,6 +18,7 @@
 #include "../../core/timeout.hpp"
 #include "../../core/wait_registration.h"
 #include "../../core/waker.h"
+#include "../../../galay-utils/common/defn.hpp"
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -80,11 +81,6 @@ template <UnboundedQueueValue T>
 class UnboundedQueue
 {
 private:
-#if defined(__APPLE__) && (defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64))
-    static constexpr size_t kCacheLine = 128;
-#else
-    static constexpr size_t kCacheLine = 64;
-#endif
     static constexpr size_t kBlockTargetBytes = 4096;
 
     struct Slot
@@ -124,19 +120,19 @@ private:
     static_assert(std::atomic<Block*>::is_always_lock_free,
                   "UnboundedQueue requires lock-free pointer atomics");
 
-    struct alignas(kCacheLine) ProducerPublished
+    struct alignas(::galay::utils::kCacheLineSize) ProducerPublished
     {
         std::atomic<size_t> value{0};
     };
 
-    struct alignas(kCacheLine) ProducerLocal
+    struct alignas(::galay::utils::kCacheLineSize) ProducerLocal
     {
         Block* block = nullptr;
         size_t index = 0;
         size_t position = 0;
     };
 
-    struct alignas(kCacheLine) ConsumerLocal
+    struct alignas(::galay::utils::kCacheLineSize) ConsumerLocal
     {
         Block* block = nullptr;
         size_t index = 0;
@@ -147,6 +143,7 @@ private:
 public:
     /**
      * @brief 构造一个无 waiter 的分块 SPSC 数据面。
+     *
      * @note 首块分配失败时 valid() 返回 false，所有发送操作返回 false。
      */
     UnboundedQueue() noexcept
@@ -157,6 +154,11 @@ public:
         m_valid = first != nullptr;
     }
 
+    /**
+     * @brief 销毁所有未消费消息和已分配分块。
+     *
+     * @pre 析构前必须停止生产者和消费者访问。
+     */
     ~UnboundedQueue() noexcept
     {
         if (m_consumer.block != nullptr) {
@@ -168,18 +170,35 @@ public:
         destroyChain(recycled);
     }
 
+    /// @brief 禁止复制构造；队列具有唯一身份。
     UnboundedQueue(const UnboundedQueue&) = delete;
+
+    /// @brief 禁止复制赋值；队列具有唯一身份。
     UnboundedQueue& operator=(const UnboundedQueue&) = delete;
+
+    /// @brief 禁止移动构造，避免生产者或消费者持有失效状态。
     UnboundedQueue(UnboundedQueue&&) = delete;
+
+    /// @brief 禁止移动赋值，避免生产者或消费者持有失效状态。
     UnboundedQueue& operator=(UnboundedQueue&&) = delete;
 
-    /** @brief 返回首块是否成功分配；该状态在构造后不再变化。 */
+    /**
+     * @brief 返回首块是否成功分配。
+     *
+     * @return 首块可用时返回 true；构造分配失败时返回 false。
+     *
+     * @note 该状态在构造后不再变化。
+     */
     [[nodiscard]] bool valid() const noexcept
     {
         return m_valid;
     }
 
-    /** @brief 返回每个分块的消息容量。 */
+    /**
+     * @brief 返回每个分块的消息容量。
+     *
+     * @return 单个分块可保存的消息数量。
+     */
     [[nodiscard]] static constexpr size_t blockCapacity() noexcept
     {
         return kBlockCapacity;
@@ -187,7 +206,10 @@ public:
 
     /**
      * @brief 尝试发送一条消息。
+     *
+     * @param value 待发送值；仅在分块容量准备成功后移动。
      * @return 发布成功返回 true；内存不足返回 false，value 保持未移动。
+     *
      * @pre 只有一个 producer 调用流。
      */
     [[nodiscard]] bool send(T&& value) noexcept
@@ -212,7 +234,11 @@ public:
 
     /**
      * @brief 移动发送一批消息，并在最后一次性发布游标。
+     *
      * @param values 待发送值；成功后全部移动，预分配失败时保持不变。
+     * @return 全批发布成功或 values 为空时返回 true；预分配失败时返回 false。
+     *
+     * @pre 只有一个 producer 调用流。
      */
     [[nodiscard]] bool sendBatch(std::span<T> values) noexcept
     {
@@ -238,7 +264,9 @@ public:
 
     /**
      * @brief 尝试接收一条消息。
+     *
      * @return 当前无已发布消息时返回空值。
+     *
      * @pre 只有一个 consumer 调用流。
      */
     [[nodiscard]] std::optional<T> tryRecv() noexcept
@@ -266,8 +294,10 @@ public:
 
     /**
      * @brief 尝试把一条消息移动到调用方拥有的已构造对象。
+     *
      * @param output 接收目标，仅成功时被移动赋值。
      * @return 成功接收返回 true；当前为空返回 false。
+     *
      * @pre 只有一个 consumer 调用流。
      */
     [[nodiscard]] bool tryRecv(T& output) noexcept
@@ -296,7 +326,10 @@ public:
 
     /**
      * @brief 将消息移动到调用方拥有的已构造缓冲区。
+     *
+     * @param output 接收目标；空 span 不消费消息并返回 0。
      * @return 实际接收条数；0 表示当前为空或 output 为空。
+     *
      * @note T 必须可不抛移动赋值；该接口不会分配 vector。
      */
     [[nodiscard]] size_t tryRecvBatch(std::span<T> output) noexcept
@@ -332,6 +365,9 @@ public:
 
     /**
      * @brief 返回发布与消费游标之差的消费者侧快照。
+     *
+     * @return 当前已发布但尚未消费的消息数量。
+     *
      * @pre 只能由唯一逻辑消费者调用，或在两侧都停止后调用。
      */
     [[nodiscard]] size_t size() const noexcept
@@ -340,7 +376,13 @@ public:
         return published - m_consumer.position;
     }
 
-    /** @brief 在消费者侧检查当前是否为空。 */
+    /**
+     * @brief 在消费者侧检查当前是否为空。
+     *
+     * @return 当前没有待消费消息时返回 true。
+     *
+     * @pre 只能由唯一逻辑消费者调用，或在两侧都停止后调用。
+     */
     [[nodiscard]] bool empty() const noexcept
     {
         return size() == 0;
@@ -445,7 +487,8 @@ private:
     }
 
     ProducerPublished m_published;
-    alignas(kCacheLine) std::atomic<Block*> m_recycled{nullptr};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<Block*> m_recycled{nullptr};
     ProducerLocal m_producer;
     ConsumerLocal m_consumer;
     bool m_valid = false;
@@ -490,20 +533,52 @@ class UnboundedChannel;
 template <UnboundedValue T>
 class UnboundedRecvBatchToAwaitable;
 
-/** @brief 单条接收等待体；首块分配失败时同步返回 IOError(kOutOfMemory)。 */
+/**
+ * @brief 单条接收等待体。
+ *
+ * @details 空队列时挂起协程，不阻塞调度器线程。
+ *
+ * @note 首块分配失败时同步返回 IOError(kOutOfMemory)。
+ */
 template <UnboundedValue T>
 class UnboundedRecvAwaitable : public TimeoutSupport<UnboundedRecvAwaitable<T>>
 {
 public:
-    /** @brief 绑定目标通道；等待完成前通道必须保持有效。 */
+    /**
+     * @brief 创建异步单条接收等待体。
+     *
+     * @param channel 目标通道的非拥有指针，等待完成前必须保持有效。
+     */
     explicit UnboundedRecvAwaitable(UnboundedChannel<T>* channel) noexcept
         : m_channel(channel) {}
 
+    /**
+     * @brief 尝试在不挂起协程的情况下接收一条消息。
+     *
+     * @return 已取得消息或通道构造失败时返回 true；需要等待消息时
+     *         返回 false。
+     */
     bool await_ready() noexcept;
 
+    /**
+     * @brief 注册唯一 consumer waiter，并在注册后重新检查数据状态。
+     *
+     * @tparam Promise 调用方协程 promise 类型。
+     * @param handle 当前调用方的协程句柄。
+     * @return 需要等待生产者提供消息时返回 true；已同步完成或失败时
+     *         返回 false。
+     *
+     * @note 该函数只挂起协程，不阻塞调度器线程。
+     */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
 
+    /**
+     * @brief 获取异步单条接收结果。
+     *
+     * @return 成功返回收到的消息；构造失败、超时或 waiter 注册/回收失败时
+     *         返回对应 IOError。
+     */
     std::expected<T, IOError> await_resume() noexcept;
 
 private:
@@ -535,18 +610,41 @@ class UnboundedRecvBatchAwaitable : public TimeoutSupport<UnboundedRecvBatchAwai
 {
 public:
     /**
-     * @brief 绑定目标通道。
-     * @param channel 目标通道；等待完成前必须保持有效。
+     * @brief 创建异步批量接收等待体。
+     *
+     * @param channel 目标通道的非拥有指针，等待完成前必须保持有效。
      * @param maxCount 单次最多接收的消息数。
      */
     UnboundedRecvBatchAwaitable(UnboundedChannel<T>* channel, size_t maxCount) noexcept
         : m_channel(channel), m_maxCount(maxCount) {}
 
+    /**
+     * @brief 尝试在不挂起协程的情况下接收一批消息。
+     *
+     * @return 已取得批次或通道构造失败时返回 true；需要等待消息时
+     *         返回 false。
+     */
     bool await_ready();
 
+    /**
+     * @brief 注册唯一 consumer waiter，并在注册后重新检查数据状态。
+     *
+     * @tparam Promise 调用方协程 promise 类型。
+     * @param handle 当前调用方的协程句柄。
+     * @return 需要等待至少一条消息时返回 true；已同步完成或失败时
+     *         返回 false。
+     *
+     * @note 该函数只挂起协程，不阻塞调度器线程。
+     */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle);
 
+    /**
+     * @brief 获取异步批量接收结果。
+     *
+     * @return 成功返回最多 maxCount 条消息；构造失败、超时或 waiter
+     *         注册/回收失败时返回对应 IOError。
+     */
     std::expected<std::vector<T>, IOError> await_resume();
 
 private:
@@ -587,16 +685,33 @@ public:
     UnboundedRecvBatchToAwaitable& operator=(
         UnboundedRecvBatchToAwaitable&&) noexcept = default;
 
-    /** @brief 尝试立即填充 output；空 span 立即成功。 */
+    /**
+     * @brief 尝试立即填充 output。
+     *
+     * @return 已取得消息、output 为空或通道构造失败时返回 true；需要等待
+     *         消息时返回 false。
+     */
     bool await_ready() noexcept;
 
-    /** @brief 空队列时注册唯一 consumer waiter，不阻塞调度器线程。 */
+    /**
+     * @brief 空队列时注册唯一 consumer waiter。
+     *
+     * @tparam Promise 调用方协程 promise 类型。
+     * @param handle 当前调用方的协程句柄。
+     * @return 需要等待生产者提供消息时返回 true；已同步完成或失败时
+     *         返回 false。
+     *
+     * @note 该函数只挂起协程，不阻塞调度器线程。
+     */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) noexcept;
 
     /**
      * @brief 返回实际搬运数量。
-     * @return 成功返回 [0, output.size()]；timeout 获胜返回 IOError(kTimeout, 0)。
+     *
+     * @return 成功返回 [0, output.size()]；构造失败、超时或 waiter
+     *         注册/回收失败时返回对应 IOError。
+     *
      * @note timeout 返回前不会消费消息，也不会修改 output。
      */
     std::expected<size_t, IOError> await_resume() noexcept;
@@ -636,18 +751,41 @@ class UnboundedRecvBatchedAwaitable : public TimeoutSupport<UnboundedRecvBatched
 {
 public:
     /**
-     * @brief 绑定目标通道。
-     * @param channel 目标通道；等待完成前必须保持有效。
+     * @brief 创建达到阈值后接收当前全部消息的等待体。
+     *
+     * @param channel 目标通道的非拥有指针，等待完成前必须保持有效。
      * @param limit 正常唤醒前至少需要累积的消息数。
      */
     UnboundedRecvBatchedAwaitable(UnboundedChannel<T>* channel, size_t limit) noexcept
         : m_channel(channel), m_limit(limit) {}
 
+    /**
+     * @brief 检查当前消息数是否已经达到唤醒阈值。
+     *
+     * @return 已取得批次或通道构造失败时返回 true；需要继续等待时
+     *         返回 false。
+     */
     bool await_ready();
 
+    /**
+     * @brief 注册阈值 consumer waiter，并在注册后重新检查消息数量。
+     *
+     * @tparam Promise 调用方协程 promise 类型。
+     * @param handle 当前调用方的协程句柄。
+     * @return 需要等待消息数量达到 limit 时返回 true；已同步完成或失败时
+     *         返回 false。
+     *
+     * @note 该函数只挂起协程，不阻塞调度器线程。
+     */
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle);
 
+    /**
+     * @brief 获取达到阈值后的批量接收结果。
+     *
+     * @return 成功返回当前全部消息；构造失败、超时或 waiter 注册/回收
+     *         失败时返回对应 IOError。
+     */
     std::expected<std::vector<T>, IOError> await_resume();
 
 private:
@@ -692,7 +830,9 @@ public:
 
     /**
      * @brief 构造 SPSC 通道并预分配首个分块。
+     *
      * @param wakeMode waiter 的兼容唤醒模式。
+     *
      * @note 首块分配失败时 valid() 返回 false，send()/sendBatch() 返回 false。
      */
     explicit UnboundedChannel(WakeMode wakeMode = WakeMode::Inline) noexcept
@@ -704,7 +844,11 @@ public:
         m_valid = first != nullptr;
     }
 
-    /** @brief 销毁所有未消费消息和已分配分块。 */
+    /**
+     * @brief 销毁所有未消费消息和已分配分块。
+     *
+     * @pre 不得再有并发调用方或挂起在该通道上的 awaitable。
+     */
     ~UnboundedChannel() noexcept
     {
         while (tryRecv().has_value()) {
@@ -712,12 +856,25 @@ public:
         destroyBlockChain(m_consumer.block);
     }
 
+    /// @brief 禁止复制构造；通道具有唯一身份。
     UnboundedChannel(const UnboundedChannel&) = delete;
+
+    /// @brief 禁止复制赋值；通道具有唯一身份。
     UnboundedChannel& operator=(const UnboundedChannel&) = delete;
+
+    /// @brief 禁止移动构造，避免使已注册 waiter 持有失效地址。
     UnboundedChannel(UnboundedChannel&&) = delete;
+
+    /// @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。
     UnboundedChannel& operator=(UnboundedChannel&&) = delete;
 
-    /** @brief 返回首块是否成功分配；该状态在构造后不再变化。 */
+    /**
+     * @brief 返回首块是否成功分配。
+     *
+     * @return 首块可用时返回 true；构造分配失败时返回 false。
+     *
+     * @note 该状态在构造后不再变化。
+     */
     [[nodiscard]] bool valid() const noexcept
     {
         return m_valid;
@@ -725,9 +882,11 @@ public:
 
     /**
      * @brief 发送一条消息。
+     *
      * @param value 待发送值；仅在分块容量准备成功后移动。
      * @param immediately 是否忽略攒批阈值并立即唤醒 waiter。
      * @return 成功发布返回 true；首块或后续分块分配失败返回 false，value 保持未移动。
+     *
      * @note 线程安全边界为单个 producer 调用流。
      */
     bool send(T&& value, bool immediately = false)
@@ -763,7 +922,15 @@ public:
         return true;
     }
 
-    /** @brief 复制并发送一条消息；仅为不抛复制构造类型提供。 */
+    /**
+     * @brief 复制并发送一条消息。
+     *
+     * @param value 待复制消息。
+     * @param immediately 是否忽略攒批阈值并立即唤醒 waiter。
+     * @return 成功发布返回 true；分块分配失败返回 false。
+     *
+     * @note 仅为不抛复制构造类型提供。
+     */
     bool send(const T& value, bool immediately = false)
         requires std::is_nothrow_copy_constructible_v<T>
     {
@@ -773,7 +940,11 @@ public:
 
     /**
      * @brief 复制并原子发布一批消息。
+     *
+     * @param values 待复制的消息批次。
+     * @param immediately 是否忽略攒批阈值并立即唤醒 waiter。
      * @return 全批发布返回 true；预分配失败返回 false，通道保持不变。
+     *
      * @note 仅为不抛复制构造类型提供，避免部分构造后无法显式回滚。
      */
     bool sendBatch(const std::vector<T>& values, bool immediately = false)
@@ -814,6 +985,9 @@ public:
 
     /**
      * @brief 移动并原子发布一批消息。
+     *
+     * @param values 待移动的消息批次。
+     * @param immediately 是否忽略攒批阈值并立即唤醒 waiter。
      * @return 全批发布返回 true；预分配失败返回 false，values 保持未移动。
      */
     bool sendBatch(std::vector<T>&& values, bool immediately = false)
@@ -850,7 +1024,11 @@ public:
         return true;
     }
 
-    /** @brief 返回单条异步接收等待体。 */
+    /**
+     * @brief 返回单条异步接收等待体。
+     *
+     * @return 与当前通道绑定的可等待对象；空队列时挂起协程。
+     */
     UnboundedRecvAwaitable<T> recv() noexcept
     {
         return UnboundedRecvAwaitable<T>(this);
@@ -858,6 +1036,10 @@ public:
 
     /**
      * @brief 返回最多接收 maxCount 条消息并拥有独立 vector 的异步等待体。
+     *
+     * @param maxCount 单次最多接收的消息数。
+     * @return 与当前通道绑定的批量接收等待体。
+     *
      * @note 接收路径可能分配，默认 allocator OOM 不经 IOError；要求显式可恢复、
      *       无分配时使用 recvBatchTo(std::span<T>)。
      */
@@ -868,8 +1050,10 @@ public:
 
     /**
      * @brief 返回把消息移动到调用方已构造缓冲区的异步等待体。
+     *
      * @param output 接收目标；空 span 立即成功返回 0。
      * @return 数据搬运与 waiter 注册路径不分配内存的等待体。
+     *
      * @note output 必须活到 await 完成，等待期间不得由其他线程或协程访问。
      */
     [[nodiscard]] UnboundedRecvBatchToAwaitable<T> recvBatchTo(
@@ -881,6 +1065,10 @@ public:
 
     /**
      * @brief 返回达到 limit 后接收当前全部消息并拥有独立 vector 的异步等待体。
+     *
+     * @param limit 正常唤醒前至少需要累积的消息数。
+     * @return 与当前通道绑定的攒批接收等待体。
+     *
      * @note 接收路径可能分配；本接口保留 convenience 语义，默认 allocator OOM
      *       不经 IOError。
      */
@@ -891,7 +1079,9 @@ public:
 
     /**
      * @brief 尝试接收一条消息。
+     *
      * @return 成功返回消息；当前为空返回 std::nullopt。
+     *
      * @note 线程安全边界为单个 consumer 调用流。
      */
     std::optional<T> tryRecv()
@@ -932,8 +1122,10 @@ public:
 
     /**
      * @brief 尝试将消息移动到调用方已构造缓冲区。
+     *
      * @param output 接收目标；空 span 不消费消息并返回 0。
      * @return 实际搬运数量，范围为 [0, output.size()]。
+     *
      * @note 仅唯一 consumer 可调用；路径不分配，并在整批完成后只发布一次 consumed。
      */
     [[nodiscard]] size_t tryRecvBatch(std::span<T> output) noexcept
@@ -988,8 +1180,10 @@ public:
 
     /**
      * @brief 尝试批量接收消息并返回独立 vector。
+     *
      * @param maxCount 单次最多接收数量；0 返回空批次。
      * @return 当前有消息时返回批次；为空时返回 std::nullopt。
+     *
      * @note 接收路径可能分配，默认 allocator OOM 不经返回值传播；要求显式可恢复、
      *       无分配时使用 tryRecvBatch(std::span<T>)。
      */
@@ -1043,7 +1237,13 @@ public:
         return values;
     }
 
-    /** @brief 返回当前待消费消息数的原子快照。 */
+    /**
+     * @brief 返回当前待消费消息数的原子快照。
+     *
+     * @return 已发布数量与已消费数量之差。
+     *
+     * @note 该结果仅供诊断，不可用作同步条件。
+     */
     size_t size() const noexcept
     {
         const size_t published = m_producer.published.load(std::memory_order_acquire);
@@ -1051,18 +1251,19 @@ public:
         return published - consumed;
     }
 
-    /** @brief 检查当前是否为空。 */
+    /**
+     * @brief 检查当前是否为空。
+     *
+     * @return size() 的当前快照为 0 时返回 true。
+     *
+     * @note 该结果仅供诊断，不可用作同步条件。
+     */
     bool empty() const noexcept
     {
         return size() == 0;
     }
 
 private:
-#if defined(__aarch64__) || defined(__ARM_ARCH_ISA_A64)
-    static constexpr size_t kCacheLine = 128;
-#else
-    static constexpr size_t kCacheLine = 64;
-#endif
     static constexpr size_t kBlockTargetBytes = 4096;
 
     struct Slot
@@ -1097,7 +1298,7 @@ private:
         std::atomic<Block*> next{nullptr};
     };
 
-    struct alignas(kCacheLine) ProducerState
+    struct alignas(::galay::utils::kCacheLineSize) ProducerState
     {
         std::atomic<size_t> published{0};
         Block* block = nullptr;
@@ -1105,7 +1306,7 @@ private:
         size_t publishedValue = 0;
     };
 
-    struct alignas(kCacheLine) ConsumerState
+    struct alignas(::galay::utils::kCacheLineSize) ConsumerState
     {
         std::atomic<size_t> consumed{0};
         Block* block = nullptr;
@@ -1132,7 +1333,7 @@ private:
         kUnavailable, ///< waiter 槽已占用或注册状态无效，返回 kNotReady。
     };
 
-    struct alignas(kCacheLine) WaitState
+    struct alignas(::galay::utils::kCacheLineSize) WaitState
     {
         WaitRegistration registration;
         TimeoutTimer::ptr timer;
