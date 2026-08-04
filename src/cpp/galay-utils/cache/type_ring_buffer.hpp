@@ -21,6 +21,7 @@
 #include <concepts>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <limits>
 #include <memory>
 #include <new>
@@ -34,8 +35,8 @@ namespace galay::utils
 
 /**
  * @brief 约束 TypeRingBuffer 可存储的元素类型。
- * @details 发送、接收和销毁均位于无异常数据面，因此移动构造与析构必须保证
- * 不抛出异常；写入调用方对象的接收接口另行约束不抛移动赋值。
+ * @details 写入、读取和销毁均位于无异常数据面，因此移动构造与析构必须保证
+ * 不抛出异常；写入调用方对象的读取接口另行约束不抛移动赋值。
  */
 template <typename T>
 concept TypeRingBufferValue = std::is_object_v<T> &&
@@ -98,8 +99,8 @@ typeRingBufferErrorString(TypeRingBufferError error) noexcept
  * @tparam Cursor 单调无符号游标类型；默认 size_t，窄类型可用于回绕测试。
  *
  * @details
- * - 只能有一个逻辑生产者调用 trySend() 或 trySendBatch()。
- * - 只能有一个逻辑消费者调用接收接口，多个接收接口不得并发。
+ * - 只能有一个逻辑生产者调用 tryWrite() 或 tryWriteBatch()。
+ * - 只能有一个逻辑消费者调用读取接口，多个读取接口不得并发。
  * - producer 构造槽位后 release 发布 tail，consumer acquire 后读取。
  * - consumer 搬出并销毁槽位后 release 发布 head，producer acquire 后复用。
  * - 两侧本地游标和对端缓存均由所属一侧独占，不需要原子 RMW。
@@ -215,72 +216,45 @@ public:
      * @pre error() == kNone，且只能由唯一逻辑生产者调用。
      * @note 该函数不阻塞；常规成功路径仅执行一次 tail release store。
      */
-    [[nodiscard]] bool trySend(T&& value) noexcept
+    [[nodiscard]] bool tryWrite(T&& value) noexcept
     {
-        return trySendOne(m_producerLocal, m_head, m_tail, std::move(value));
+        return tryWriteOne(m_producerLocal, m_head, m_tail, std::move(value));
     }
 
     /**
      * @brief 尽量把输入前缀批量发布到 ring。
-     * @param values 待发送的调用方存储；仅成功发布的前缀会被移动。
+     * @param values 待写入的调用方存储；仅成功发布的前缀会被移动。
      * @return 实际发布数量，范围为 [0, values.size()]。
      * @pre error() == kNone，且只能由唯一逻辑生产者调用。
      * @note 整批构造完成后只执行一次 tail release store。
      */
-    [[nodiscard]] size_t trySendBatch(std::span<T> values) noexcept
+    [[nodiscard]] size_t tryWriteBatch(std::span<T> values) noexcept
     {
-        if (values.empty()) {
-            return 0;
-        }
-
-        LocalCursor& producer = m_producerLocal;
-        const Cursor tail = producer.position;
-        size_t used = cursorDistance(tail, producer.cachedPeer);
-        if (used >= producer.capacity ||
-            values.size() > producer.capacity - used) {
-            producer.cachedPeer =
-                m_head.value.load(std::memory_order_acquire);
-            used = cursorDistance(tail, producer.cachedPeer);
-            if (used >= producer.capacity) {
-                return 0;
-            }
-        }
-
-        const size_t count = std::min(values.size(), producer.capacity - used);
-        for (size_t offset = 0; offset < count; ++offset) {
-            const size_t index =
-                (static_cast<size_t>(tail) + offset) & producer.mask;
-            [[maybe_unused]] T* const stored = std::construct_at(
-                producer.slots[index].storageAddress(),
-                std::move(values[offset]));
-        }
-        const Cursor next = static_cast<Cursor>(tail + static_cast<Cursor>(count));
-        producer.position = next;
-        m_tail.value.store(next, std::memory_order_release);
-        return count;
+        return tryWriteBatchImpl(
+            m_producerLocal, m_head, m_tail, values);
     }
 
     /**
-     * @brief 尝试接收一条消息。
+     * @brief 尝试读取一条消息。
      * @return 当前有消息时返回其所有权；为空时返回 std::nullopt。
      * @pre error() == kNone，且只能由唯一逻辑消费者调用。
      * @note 该函数不阻塞；常规成功路径仅执行一次 head release store。
      */
-    [[nodiscard]] std::optional<T> tryRecv() noexcept
+    [[nodiscard]] std::optional<T> tryRead() noexcept
     {
-        return tryRecvOne(m_consumerLocal, m_head, m_tail);
+        return tryReadOne(m_consumerLocal, m_head, m_tail);
     }
 
     /**
      * @brief 尝试把一条消息移动到调用方拥有的已构造对象。
-     * @param output 接收目标，仅成功时被移动赋值。
-     * @return 成功接收返回 true；当前为空返回 false。
+     * @param output 读取目标，仅成功时被移动赋值。
+     * @return 成功读取返回 true；当前为空返回 false。
      * @pre error() == kNone，且只能由唯一逻辑消费者调用。
      */
-    [[nodiscard]] bool tryRecv(T& output) noexcept
+    [[nodiscard]] bool tryRead(T& output) noexcept
         requires std::is_nothrow_move_assignable_v<T>
     {
-        return tryRecvOne(m_consumerLocal, m_head, m_tail, output);
+        return tryReadOne(m_consumerLocal, m_head, m_tail, output);
     }
 
     /**
@@ -290,33 +264,11 @@ public:
      * @pre error() == kNone，且只能由唯一逻辑消费者调用。
      * @note 批次保持 FIFO，并在整批搬运和销毁后只执行一次 head release store。
      */
-    [[nodiscard]] size_t tryRecvBatch(std::span<T> output) noexcept
+    [[nodiscard]] size_t tryReadBatch(std::span<T> output) noexcept
         requires std::is_nothrow_move_assignable_v<T>
     {
-        if (output.empty()) {
-            return 0;
-        }
-
-        LocalCursor& consumer = m_consumerLocal;
-        const Cursor head = consumer.position;
-        const Cursor tail = m_tail.value.load(std::memory_order_acquire);
-        consumer.cachedPeer = tail;
-        const size_t count = std::min(output.size(), cursorDistance(tail, head));
-        if (count == 0) {
-            return 0;
-        }
-        for (size_t offset = 0; offset < count; ++offset) {
-            const size_t index =
-                (static_cast<size_t>(head) + offset) & consumer.mask;
-            Slot& slot = consumer.slots[index];
-            output[offset] = std::move(*slot.value());
-            std::destroy_at(slot.value());
-        }
-
-        const Cursor next = static_cast<Cursor>(head + static_cast<Cursor>(count));
-        consumer.position = next;
-        m_head.value.store(next, std::memory_order_release);
-        return count;
+        return tryReadBatchImpl(
+            m_consumerLocal, m_head, m_tail, output);
     }
 
 private:
@@ -340,6 +292,8 @@ private:
             return std::launder(reinterpret_cast<T*>(storage));
         }
     };
+
+    static_assert(sizeof(Slot) == sizeof(T));
 
     static constexpr size_t kMaximumArrayCapacity = std::bit_floor(
         std::numeric_limits<size_t>::max() / sizeof(Slot));
@@ -373,7 +327,7 @@ private:
     using EndpointCursor = CursorState<kPublishedCursorAlignment>;
 
     template <typename State>
-    [[nodiscard]] static bool trySendOne(State& producer,
+    [[nodiscard]] static bool tryWriteOne(State& producer,
                                          PublishedCursor& head,
                                          PublishedCursor& tail,
                                          T&& value) noexcept
@@ -397,7 +351,7 @@ private:
     }
 
     template <typename State>
-    [[nodiscard]] static std::optional<T> tryRecvOne(
+    [[nodiscard]] static std::optional<T> tryReadOne(
         State& consumer,
         PublishedCursor& head,
         PublishedCursor& tail) noexcept
@@ -421,7 +375,7 @@ private:
     }
 
     template <typename State>
-    [[nodiscard]] static bool tryRecvOne(State& consumer,
+    [[nodiscard]] static bool tryReadOne(State& consumer,
                                          PublishedCursor& head,
                                          PublishedCursor& tail,
                                          T& output) noexcept
@@ -445,10 +399,120 @@ private:
         return true;
     }
 
+    template <typename State>
+    [[nodiscard]] static size_t tryWriteBatchImpl(
+        State& producer,
+        PublishedCursor& head,
+        PublishedCursor& tail,
+        std::span<T> values) noexcept
+    {
+        if (values.empty()) {
+            return 0;
+        }
+
+        const Cursor position = producer.position;
+        size_t used = cursorDistance(position, producer.cachedPeer);
+        if (used >= producer.capacity ||
+            values.size() > producer.capacity - used) {
+            producer.cachedPeer = head.value.load(std::memory_order_acquire);
+            used = cursorDistance(position, producer.cachedPeer);
+            if (used >= producer.capacity) {
+                return 0;
+            }
+        }
+
+        const size_t count = std::min(values.size(), producer.capacity - used);
+        if constexpr (std::is_trivially_copyable_v<T>) {
+            const size_t firstIndex =
+                static_cast<size_t>(position) & producer.mask;
+            const size_t firstCount =
+                std::min(count, producer.capacity - firstIndex);
+            std::memcpy(producer.slots[firstIndex].storageAddress(),
+                        values.data(),
+                        firstCount * sizeof(T));
+            const size_t secondCount = count - firstCount;
+            if (secondCount != 0) {
+                std::memcpy(producer.slots[0].storageAddress(),
+                            values.data() + firstCount,
+                            secondCount * sizeof(T));
+            }
+        } else {
+            for (size_t offset = 0; offset < count; ++offset) {
+                const size_t index =
+                    (static_cast<size_t>(position) + offset) & producer.mask;
+                [[maybe_unused]] T* const stored = std::construct_at(
+                    producer.slots[index].storageAddress(),
+                    std::move(values[offset]));
+            }
+        }
+
+        const Cursor next =
+            static_cast<Cursor>(position + static_cast<Cursor>(count));
+        producer.position = next;
+        tail.value.store(next, std::memory_order_release);
+        return count;
+    }
+
+    template <typename State>
+    [[nodiscard]] static size_t tryReadBatchImpl(
+        State& consumer,
+        PublishedCursor& head,
+        PublishedCursor& tail,
+        std::span<T> output) noexcept
+        requires std::is_nothrow_move_assignable_v<T>
+    {
+        if (output.empty()) {
+            return 0;
+        }
+
+        const Cursor position = consumer.position;
+        Cursor published = consumer.cachedPeer;
+        size_t available = cursorDistance(published, position);
+        if (available < output.size()) {
+            published = tail.value.load(std::memory_order_acquire);
+            consumer.cachedPeer = published;
+            available = cursorDistance(published, position);
+        }
+        const size_t count = std::min(output.size(), available);
+        if (count == 0) {
+            return 0;
+        }
+
+        if constexpr (std::is_trivially_copyable_v<T>) {
+            const size_t firstIndex =
+                static_cast<size_t>(position) & consumer.mask;
+            const size_t firstCount =
+                std::min(count, consumer.capacity - firstIndex);
+            std::memcpy(output.data(),
+                        consumer.slots[firstIndex].value(),
+                        firstCount * sizeof(T));
+            const size_t secondCount = count - firstCount;
+            if (secondCount != 0) {
+                std::memcpy(output.data() + firstCount,
+                            consumer.slots[0].value(),
+                            secondCount * sizeof(T));
+            }
+        } else {
+            for (size_t offset = 0; offset < count; ++offset) {
+                const size_t index =
+                    (static_cast<size_t>(position) + offset) & consumer.mask;
+                Slot& slot = consumer.slots[index];
+                output[offset] = std::move(*slot.value());
+                std::destroy_at(slot.value());
+            }
+        }
+
+        const Cursor next =
+            static_cast<Cursor>(position + static_cast<Cursor>(count));
+        consumer.position = next;
+        head.value.store(next, std::memory_order_release);
+        return count;
+    }
+
 public:
     /**
      * @brief 借用 ring 的唯一 producer 端点。
-     * @note 端点不可复制；存活期间 ring 必须保持有效，且不得再调用 ring 的发送接口。
+     * @note 端点不可复制；存活期间 ring 必须保持有效，且不得再调用 ring 的写入接口。
      * @note 移动后源端点失效，不得继续调用。
      */
     class Producer
@@ -472,10 +536,17 @@ public:
         }
 
         /** @brief 尝试发布一条消息；满时返回 false 且 value 保持未移动。 */
-        [[nodiscard]] bool trySend(T&& value) noexcept
+        [[nodiscard]] bool tryWrite(T&& value) noexcept
         {
-            return trySendOne(
+            return tryWriteOne(
                 m_local, m_ring->m_head, m_ring->m_tail, std::move(value));
+        }
+
+        /** @brief 尽量批量发布输入前缀；整批仅执行一次 tail release store。 */
+        [[nodiscard]] size_t tryWriteBatch(std::span<T> values) noexcept
+        {
+            return tryWriteBatchImpl(
+                m_local, m_ring->m_head, m_ring->m_tail, values);
         }
 
     private:
@@ -497,7 +568,7 @@ public:
 
     /**
      * @brief 借用 ring 的唯一 consumer 端点。
-     * @note 端点不可复制；存活期间 ring 必须保持有效，且不得再调用 ring 的接收接口。
+     * @note 端点不可复制；存活期间 ring 必须保持有效，且不得再调用 ring 的读取接口。
      * @note 移动后源端点失效，不得继续调用。
      */
     class Consumer
@@ -520,17 +591,25 @@ public:
             return *this;
         }
 
-        /** @brief 尝试接收一条消息；空时返回 std::nullopt。 */
-        [[nodiscard]] std::optional<T> tryRecv() noexcept
+        /** @brief 尝试读取一条消息；空时返回 std::nullopt。 */
+        [[nodiscard]] std::optional<T> tryRead() noexcept
         {
-            return tryRecvOne(m_local, m_ring->m_head, m_ring->m_tail);
+            return tryReadOne(m_local, m_ring->m_head, m_ring->m_tail);
         }
 
         /** @brief 尝试把一条消息移动到调用方对象；空时返回 false。 */
-        [[nodiscard]] bool tryRecv(T& output) noexcept
+        [[nodiscard]] bool tryRead(T& output) noexcept
             requires std::is_nothrow_move_assignable_v<T>
         {
-            return tryRecvOne(
+            return tryReadOne(
+                m_local, m_ring->m_head, m_ring->m_tail, output);
+        }
+
+        /** @brief 尽量批量搬运到调用方存储；整批仅执行一次 head release store。 */
+        [[nodiscard]] size_t tryReadBatch(std::span<T> output) noexcept
+            requires std::is_nothrow_move_assignable_v<T>
+        {
+            return tryReadBatchImpl(
                 m_local, m_ring->m_head, m_ring->m_tail, output);
         }
 

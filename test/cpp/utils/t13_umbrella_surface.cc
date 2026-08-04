@@ -29,11 +29,11 @@ int main()
     galay::utils::TypeRingBuffer<int> ring(2);
     int value = 7;
     if (ring.error() != galay::utils::TypeRingBufferError::kNone ||
-        !ring.trySend(std::move(value))) {
+        !ring.tryWrite(std::move(value))) {
         std::cerr << "[t13] TypeRingBuffer should be visible through galay_utils.hpp\n";
         return 1;
     }
-    auto received = ring.tryRecv();
+    auto received = ring.tryRead();
     if (!received.has_value() || *received != 7) {
         std::cerr << "[t13] TypeRingBuffer umbrella surface should preserve values\n";
         return 1;

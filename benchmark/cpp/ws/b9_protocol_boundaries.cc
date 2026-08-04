@@ -164,7 +164,8 @@ int main()
         fragmented_state.resetForNextMessage();
         fragmented_opcode = WsOpcode::Close;
         const size_t written =
-            fragmented_ring.write(fragmented_frame.data(), fragmented_frame.size());
+            fragmented_ring.tryWriteBatch(
+                fragmented_frame.data(), fragmented_frame.size());
         if (written != fragmented_frame.size()) {
             return false;
         }

@@ -83,7 +83,7 @@ void benchWriteThroughput(size_t chunkSize) {
 
     while (totalWritten < TOTAL_DATA_SIZE ||
            steady_clock::now() - start < MIN_WRITE_SAMPLE_DURATION) {
-        size_t written = buffer.write(data.data(), chunkSize);
+        size_t written = buffer.tryWriteBatch(data.data(), chunkSize);
         benchmarkBarrier(&buffer);
         totalWritten += written;
         if (written != chunkSize) {
@@ -118,7 +118,7 @@ void benchReadWriteThroughput(size_t chunkSize) {
 
     while (totalProcessed < TOTAL_DATA_SIZE) {
         // 写入
-        size_t written = buffer.write(writeData.data(), chunkSize);
+        size_t written = buffer.tryWriteBatch(writeData.data(), chunkSize);
         benchmarkBarrier(&buffer);
 
         // 通过 iovec 读取
@@ -170,7 +170,7 @@ void benchWrapAroundPerformance() {
 
     while (totalWritten < targetData ||
            steady_clock::now() - start < MIN_WRAP_SAMPLE_DURATION) {
-        size_t written = mmap_buffer.write(data.data(), data.size());
+        size_t written = mmap_buffer.tryWriteBatch(data.data(), data.size());
         benchmarkBarrier(&mmap_buffer);
         totalWritten += written;
         if (mmap_buffer.getReadIovecs(iovecs) > 1) {
@@ -202,7 +202,8 @@ void benchWrapAroundPerformance() {
     start = steady_clock::now();
     while (totalWritten < targetData ||
            steady_clock::now() - start < MIN_WRAP_SAMPLE_DURATION) {
-        const size_t written = vector_buffer.write(data.data(), data.size());
+        const size_t written =
+            vector_buffer.tryWriteBatch(data.data(), data.size());
         benchmarkBarrier(&vector_buffer);
         totalWritten += written;
         if (vector_buffer.getReadIovecs(iovecs) == 2) {
@@ -230,7 +231,7 @@ void benchIovecPerformance() {
 
     // 先写入一些数据
     std::vector<char> data(1024, 'D');
-    const size_t prepared = buffer.write(data.data(), data.size());
+    const size_t prepared = buffer.tryWriteBatch(data.data(), data.size());
     if (prepared != data.size()) {
         g_benchmark_valid.store(false, std::memory_order_relaxed);
         return;
@@ -364,7 +365,8 @@ void benchNetworkSendSimulation() {
     while (totalSent < targetData) {
         // 应用层写入数据
         while (buffer.writable() >= appData.size()) {
-            const size_t written = buffer.write(appData.data(), appData.size());
+            const size_t written =
+                buffer.tryWriteBatch(appData.data(), appData.size());
             if (written != appData.size()) {
                 g_benchmark_valid.store(false, std::memory_order_relaxed);
                 break;

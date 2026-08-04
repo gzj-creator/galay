@@ -36,11 +36,11 @@ std::string encodeMaskedFrame(galay::websocket::WsOpcode opcode, std::string pay
 galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
     galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring(capacity);
     std::string head(prefix, 'x');
-    if (ring.write(head.data(), head.size()) != head.size()) {
+    if (ring.tryWriteBatch(head.data(), head.size()) != head.size()) {
         throw std::runtime_error("failed to seed ring prefix");
     }
     ring.consume(prefix - 10);
-    if (ring.write(encoded.data(), encoded.size()) != encoded.size()) {
+    if (ring.tryWriteBatch(encoded.data(), encoded.size()) != encoded.size()) {
         throw std::runtime_error("failed to wrap encoded frame into ring");
     }
     ring.consume(10);
@@ -86,7 +86,7 @@ int main() {
         const auto text2 = encodeMaskedFrame(WsOpcode::Text, "loop-two");
         const auto close = encodeMaskedFrame(WsOpcode::Close, "");
         const std::string encoded = text1 + text2 + close;
-        if (ring.write(encoded.data(), encoded.size()) != encoded.size()) {
+        if (ring.tryWriteBatch(encoded.data(), encoded.size()) != encoded.size()) {
             std::cerr << "[T67] failed to seed loop ring buffer\n";
             return 1;
         }

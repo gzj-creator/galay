@@ -55,11 +55,11 @@ std::string flattenIovecs(const struct iovec* iovecs, size_t count) {
 RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> makeWrappedFrameBuffer(std::string_view encoded, size_t capacity = 64, size_t prefix = 40) {
     RingBuffer ring(capacity);
     std::string head(prefix, 'x');
-    if (ring.write(head.data(), head.size()) != head.size()) {
+    if (ring.tryWriteBatch(head.data(), head.size()) != head.size()) {
         throw std::runtime_error("failed to seed ring prefix");
     }
     ring.consume(prefix - 10);
-    if (ring.write(encoded.data(), encoded.size()) != encoded.size()) {
+    if (ring.tryWriteBatch(encoded.data(), encoded.size()) != encoded.size()) {
         throw std::runtime_error("failed to wrap encoded frame into ring");
     }
     ring.consume(10);

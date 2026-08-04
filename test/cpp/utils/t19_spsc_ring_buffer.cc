@@ -8,9 +8,11 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <concepts>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -68,6 +70,97 @@ static_assert(!std::is_default_constructible_v<TypeRingBuffer<int>>);
 static_assert(sizeof(StaticTypeRingBuffer<uint64_t, 64>) >
               sizeof(StaticTypeRingBuffer<uint64_t, 2>));
 using IntRing = TypeRingBuffer<int>;
+
+template <typename Ring>
+concept UnifiedTypedRingApi = requires(
+    Ring& ring, int value, std::span<int> values) {
+    { ring.tryWrite(std::move(value)) } -> std::same_as<bool>;
+    { ring.tryRead() } -> std::same_as<std::optional<int>>;
+    { ring.tryRead(value) } -> std::same_as<bool>;
+    { ring.tryWriteBatch(values) } -> std::same_as<size_t>;
+    { ring.tryReadBatch(values) } -> std::same_as<size_t>;
+};
+
+template <typename Ring>
+concept HasLegacyTrySend = requires(Ring& ring, int value) {
+    ring.trySend(std::move(value));
+};
+
+template <typename Ring>
+concept HasLegacyTryRecvValue = requires(Ring& ring) {
+    ring.tryRecv();
+};
+
+template <typename Ring>
+concept HasLegacyTryRecvTo = requires(Ring& ring, int value) {
+    ring.tryRecv(value);
+};
+
+template <typename Ring>
+concept HasLegacyTrySendBatch = requires(Ring& ring, std::span<int> values) {
+    ring.trySendBatch(values);
+};
+
+template <typename Ring>
+concept HasLegacyTryRecvBatch = requires(Ring& ring, std::span<int> values) {
+    ring.tryRecvBatch(values);
+};
+
+template <typename Producer>
+concept UnifiedProducerApi = requires(
+    Producer& producer, int value, std::span<int> values) {
+    { producer.tryWrite(std::move(value)) } -> std::same_as<bool>;
+    { producer.tryWriteBatch(values) } -> std::same_as<size_t>;
+};
+
+template <typename Consumer>
+concept UnifiedConsumerApi = requires(
+    Consumer& consumer, int value, std::span<int> values) {
+    { consumer.tryRead() } -> std::same_as<std::optional<int>>;
+    { consumer.tryRead(value) } -> std::same_as<bool>;
+    { consumer.tryReadBatch(values) } -> std::same_as<size_t>;
+};
+
+template <typename Producer>
+concept HasLegacyProducerTrySend = requires(Producer& producer, int value) {
+    producer.trySend(std::move(value));
+};
+
+template <typename Producer>
+concept HasLegacyProducerTrySendBatch = requires(
+    Producer& producer, std::span<int> values) {
+    producer.trySendBatch(values);
+};
+
+template <typename Consumer>
+concept HasLegacyConsumerTryRecvValue = requires(Consumer& consumer) {
+    consumer.tryRecv();
+};
+
+template <typename Consumer>
+concept HasLegacyConsumerTryRecvTo = requires(Consumer& consumer, int value) {
+    consumer.tryRecv(value);
+};
+
+template <typename Consumer>
+concept HasLegacyConsumerTryRecvBatch = requires(
+    Consumer& consumer, std::span<int> values) {
+    consumer.tryRecvBatch(values);
+};
+
+static_assert(UnifiedTypedRingApi<IntRing>);
+static_assert(!HasLegacyTrySend<IntRing>);
+static_assert(!HasLegacyTryRecvValue<IntRing>);
+static_assert(!HasLegacyTryRecvTo<IntRing>);
+static_assert(!HasLegacyTrySendBatch<IntRing>);
+static_assert(!HasLegacyTryRecvBatch<IntRing>);
+static_assert(UnifiedProducerApi<typename IntRing::Producer>);
+static_assert(UnifiedConsumerApi<typename IntRing::Consumer>);
+static_assert(!HasLegacyProducerTrySend<typename IntRing::Producer>);
+static_assert(!HasLegacyProducerTrySendBatch<typename IntRing::Producer>);
+static_assert(!HasLegacyConsumerTryRecvValue<typename IntRing::Consumer>);
+static_assert(!HasLegacyConsumerTryRecvTo<typename IntRing::Consumer>);
+static_assert(!HasLegacyConsumerTryRecvBatch<typename IntRing::Consumer>);
 static_assert(std::is_move_constructible_v<typename IntRing::Producer>);
 static_assert(std::is_nothrow_move_assignable_v<typename IntRing::Producer>);
 static_assert(!std::is_copy_constructible_v<typename IntRing::Producer>);
@@ -99,18 +192,18 @@ bool testFullCapacityMoveOnlyAndBatch()
     }
     for (int value = 0; value < 4; ++value) {
         auto item = std::make_unique<int>(value);
-        if (!ring.trySend(std::move(item)) || item != nullptr) {
+        if (!ring.tryWrite(std::move(item)) || item != nullptr) {
             return false;
         }
     }
     auto rejected = std::make_unique<int>(99);
-    if (ring.trySend(std::move(rejected)) || rejected == nullptr ||
+    if (ring.tryWrite(std::move(rejected)) || rejected == nullptr ||
         *rejected != 99) {
         return false;
     }
 
     for (int expected = 0; expected < 4; ++expected) {
-        auto item = ring.tryRecv();
+        auto item = ring.tryRead();
         if (!item.has_value() || *item == nullptr || **item != expected) {
             return false;
         }
@@ -120,10 +213,10 @@ bool testFullCapacityMoveOnlyAndBatch()
     std::array<int, 6> input{10, 11, 12, 13, 14, 15};
     std::array<int, 4> first{};
     std::array<int, 4> second{};
-    if (batchRing.trySendBatch(std::span<int>(input)) != input.size() ||
-        batchRing.tryRecvBatch(std::span<int>(first)) != first.size() ||
-        batchRing.tryRecvBatch(std::span<int>(second)) != 2 ||
-        batchRing.tryRecvBatch(std::span<int>(second)) != 0) {
+    if (batchRing.tryWriteBatch(std::span<int>(input)) != input.size() ||
+        batchRing.tryReadBatch(std::span<int>(first)) != first.size() ||
+        batchRing.tryReadBatch(std::span<int>(second)) != 2 ||
+        batchRing.tryReadBatch(std::span<int>(second)) != 0) {
         return false;
     }
     return first == std::array<int, 4>{10, 11, 12, 13} &&
@@ -135,15 +228,15 @@ bool testNarrowCursorWraparound()
     TypeRingBuffer<uint16_t, std::dynamic_extent, uint8_t> ring(4);
     for (uint16_t sequence = 0; sequence < 320; ++sequence) {
         uint16_t value = sequence;
-        if (!ring.trySend(std::move(value))) {
+        if (!ring.tryWrite(std::move(value))) {
             return false;
         }
         uint16_t output = 0;
-        if (!ring.tryRecv(output) || output != sequence) {
+        if (!ring.tryRead(output) || output != sequence) {
             return false;
         }
     }
-    return !ring.tryRecv().has_value();
+    return !ring.tryRead().has_value();
 }
 
 bool testStaticCapacityStorageAndFifo()
@@ -154,17 +247,17 @@ bool testStaticCapacityStorageAndFifo()
     }
     for (int value = 0; value < 4; ++value) {
         auto item = std::make_unique<int>(value);
-        if (!ring.trySend(std::move(item)) || item != nullptr) {
+        if (!ring.tryWrite(std::move(item)) || item != nullptr) {
             return false;
         }
     }
     auto rejected = std::make_unique<int>(99);
-    if (ring.trySend(std::move(rejected)) || rejected == nullptr ||
+    if (ring.tryWrite(std::move(rejected)) || rejected == nullptr ||
         *rejected != 99) {
         return false;
     }
     for (int expected = 0; expected < 4; ++expected) {
-        auto item = ring.tryRecv();
+        auto item = ring.tryRead();
         if (!item.has_value() || *item == nullptr || **item != expected) {
             return false;
         }
@@ -173,8 +266,8 @@ bool testStaticCapacityStorageAndFifo()
     StaticTypeRingBuffer<int, 8> batchRing;
     std::array<int, 6> input{10, 11, 12, 13, 14, 15};
     std::array<int, 6> output{};
-    return batchRing.trySendBatch(std::span<int>(input)) == input.size() &&
-        batchRing.tryRecvBatch(std::span<int>(output)) == output.size() &&
+    return batchRing.tryWriteBatch(std::span<int>(input)) == input.size() &&
+        batchRing.tryReadBatch(std::span<int>(output)) == output.size() &&
         input == output;
 }
 
@@ -184,12 +277,12 @@ bool testStaticNarrowCursorWraparound()
     for (uint16_t sequence = 0; sequence < 320; ++sequence) {
         uint16_t value = sequence;
         uint16_t output = 0;
-        if (!ring.trySend(std::move(value)) || !ring.tryRecv(output) ||
+        if (!ring.tryWrite(std::move(value)) || !ring.tryRead(output) ||
             output != sequence) {
             return false;
         }
     }
-    return !ring.tryRecv().has_value();
+    return !ring.tryRead().has_value();
 }
 
 bool testCrossThreadFifo()
@@ -207,7 +300,7 @@ bool testCrossThreadFifo()
         const auto deadline = std::chrono::steady_clock::now() + 5s;
         for (uint32_t sequence = 0; sequence < kMessages; ++sequence) {
             uint32_t value = sequence;
-            while (!endpoint.trySend(std::move(value))) {
+            while (!endpoint.tryWrite(std::move(value))) {
                 if (failed.load(std::memory_order_acquire) ||
                     std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -224,7 +317,7 @@ bool testCrossThreadFifo()
         uint32_t expected = 0;
         while (expected < kMessages) {
             uint32_t value = 0;
-            if (!endpoint.tryRecv(value)) {
+            if (!endpoint.tryRead(value)) {
                 if (failed.load(std::memory_order_acquire) ||
                     std::chrono::steady_clock::now() >= deadline) {
                     failed.store(true, std::memory_order_release);
@@ -240,7 +333,7 @@ bool testCrossThreadFifo()
             ++expected;
         }
         uint32_t extra = 0;
-        if (endpoint.tryRecv(extra)) {
+        if (endpoint.tryRead(extra)) {
             failed.store(true, std::memory_order_release);
         }
     });

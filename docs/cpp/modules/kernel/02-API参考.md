@@ -278,7 +278,7 @@
 - `Buffer` 是 owning 动态缓冲区；`resize(...)` 最终调用 `reallocBytes(...)`，缩容时可能截断已有 `length()`
 - `Buffer::clear()` 会把已有容量区间清零，但保留已分配容量，适合重复复用
 - `RingBuffer` 由 `galay-utils/cache/ring_buffer.hpp` 提供，`galay-kernel` 只在 `common/buffer.h` 中保留 `galay::kernel::RingBuffer` using 入口
-- `RingBuffer` 是固定容量、不会自动扩容的环形缓冲；写满后 `write(...)` / `produce(...)` 只会推进可容纳的那部分字节
+- `RingBuffer` 是固定容量、不会自动扩容的环形缓冲；写满后 `tryWriteBatch(...)` / `produce(...)` 只会推进可容纳的那部分字节
 - `getWriteIovecs(...)` / `getReadIovecs(...)` 最多返回两段连续内存，专门服务 `readv` / `writev`
 - `consume(...)` 在把可读数据完全耗尽后，会把读写指针都重置到 `0`
 

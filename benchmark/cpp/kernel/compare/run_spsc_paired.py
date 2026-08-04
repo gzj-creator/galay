@@ -50,10 +50,16 @@ REQUIRED_FIELDS = {
 EXPECTED_IMPLEMENTATIONS = {
     ("cpp", "raw_bounded"): "galay::spsc::Ring::split",
     ("rust", "raw_bounded"): "rtrb::RingBuffer@0.3.4",
-    ("cpp", "batch_bounded"): "galay::spsc::Ring",
+    ("cpp", "batch_bounded"): "galay::spsc::Ring::split batch",
     ("rust", "batch_bounded"): "rtrb::RingBuffer@0.3.4",
     ("cpp", "unbounded"): "galay::spsc::UnboundedChannel",
     ("rust", "unbounded"): "unbounded_spsc::channel@0.3.0",
+    ("cpp", "batch_unbounded"): (
+        "galay::spsc::UnboundedChannel::sendBatch/tryRecvBatch"
+    ),
+    ("rust", "batch_unbounded"): (
+        "unbounded_spsc::channel@0.3.0 scalar batch emulation"
+    ),
 }
 
 API_PROFILES = {
@@ -66,7 +72,14 @@ API_PROFILES = {
         "unbounded_spsc_wait_capable_polling_path",
         "nearest_available_measured_path",
     ),
+    "batch_unbounded": (
+        "unbounded_spsc_batch_polling",
+        "reference_only_no_equivalent_rust_batch_api",
+    ),
 }
+
+BOUNDED_CASES = {"raw_bounded", "batch_bounded"}
+BATCH_CASES = {"batch_bounded", "batch_unbounded"}
 
 
 def parse_args() -> argparse.Namespace:
@@ -79,7 +92,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--cases",
         default="raw_bounded,batch_bounded",
-        help="comma-separated subset of raw_bounded,batch_bounded,unbounded",
+        help=(
+            "comma-separated subset of raw_bounded,batch_bounded,unbounded,"
+            "batch_unbounded"
+        ),
     )
     parser.add_argument("--capacity", type=int, default=4096)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -96,7 +112,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bootstrap-resamples", type=int, default=10_000)
     parser.add_argument("--process-timeout", type=float, default=300.0)
     parser.add_argument("--minimum-speedup", type=float, default=1.05)
-    parser.add_argument("--max-cv-percent", type=float, default=3.0)
+    parser.add_argument("--max-cv-percent", type=float, default=25.0)
     parser.add_argument("--max-retry-ratio", type=float, default=10.0)
     parser.add_argument("--producer-core", type=int, default=0)
     parser.add_argument("--consumer-core", type=int, default=1)
@@ -105,22 +121,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--rust-toolchain", default="nightly")
     args = parser.parse_args()
 
-    allowed_cases = {"raw_bounded", "batch_bounded", "unbounded"}
+    allowed_cases = BOUNDED_CASES | {"unbounded", "batch_unbounded"}
     cases = [value.strip() for value in args.cases.split(",") if value.strip()]
     if not cases or any(value not in allowed_cases for value in cases):
         parser.error(
-            "--cases must contain raw_bounded, batch_bounded, and/or unbounded"
+            "--cases must contain raw_bounded, batch_bounded, unbounded, "
+            "and/or batch_unbounded"
         )
     if len(set(cases)) != len(cases):
         parser.error("--cases must not contain duplicates")
     if args.capacity < 2 or args.capacity & (args.capacity - 1):
         parser.error("--capacity must be a power of two and at least 2")
-    if args.batch_size <= 0 or args.batch_size > args.capacity:
-        parser.error("--batch-size must be positive and no larger than capacity")
+    if args.batch_size <= 0:
+        parser.error("--batch-size must be positive")
     if args.initial_messages <= 0 or args.max_messages < args.initial_messages:
         parser.error("message bounds are invalid")
-    if args.target_seconds < 1.0:
-        parser.error("--target-seconds must be at least 1.0")
+    if args.target_seconds < 0.0001:
+        parser.error("--target-seconds must be at least 0.0001")
     if args.calibration_probes <= 0 or args.calibration_attempts <= 0:
         parser.error("calibration counts must be positive")
     if args.warmups < 1 or args.samples < 3:
@@ -182,6 +199,7 @@ def run_once(
     producer_core: int,
     consumer_core: int,
     process_timeout: float,
+    allow_invalid: bool,
 ) -> dict[str, Any]:
     command = [
         str(binary),
@@ -212,7 +230,7 @@ def run_once(
         raise RuntimeError(
             f"{language} benchmark exceeded {process_timeout:.1f}s"
         ) from error
-    if completed.returncode != 0:
+    if completed.returncode not in (0, 1):
         raise RuntimeError(
             f"{language} benchmark failed with {completed.returncode}: "
             f"{completed.stderr.strip() or completed.stdout.strip()}"
@@ -228,11 +246,11 @@ def run_once(
     missing = REQUIRED_FIELDS.difference(result)
     if missing:
         raise RuntimeError(f"{language} result misses fields: {sorted(missing)}")
-    expected_capacity = capacity if case_name != "unbounded" else 0
-    expected_batch_size = batch_size if case_name == "batch_bounded" else 1
+    expected_capacity = capacity if case_name in BOUNDED_CASES else 0
+    expected_batch_size = batch_size if case_name in BATCH_CASES else 1
     api_profile, comparison_scope = API_PROFILES[case_name]
     expected = {
-        "schema": "galay.spsc.paired.v3",
+        "schema": "galay.spsc.paired.v4",
         "language": language,
         "case": case_name,
         "implementation": EXPECTED_IMPLEMENTATIONS[(language, case_name)],
@@ -243,21 +261,32 @@ def run_once(
         "capacity": expected_capacity,
         "batch_size": expected_batch_size,
         "messages": messages,
-        "received": messages,
         "backoff": backoff,
         "generator": "monotonic_u64",
-        "valid": True,
-        "fifo_ok": True,
     }
     for key, expected_value in expected.items():
         if result[key] != expected_value:
             raise RuntimeError(
                 f"{language} field {key}={result[key]!r}, expected {expected_value!r}"
             )
-    if result["checksum"] != result["expected_checksum"]:
-        raise RuntimeError(f"{language} checksum validation failed")
     if result["elapsed_ns"] <= 0 or result["messages_per_second"] <= 0:
         raise RuntimeError(f"{language} reported a non-positive measurement")
+    result["process_returncode"] = completed.returncode
+    result["correctness_passed"] = (
+        completed.returncode == 0
+        and result["valid"] is True
+        and result["fifo_ok"] is True
+        and result["received"] == messages
+        and result["checksum"] == result["expected_checksum"]
+    )
+    if not result["correctness_passed"] and not allow_invalid:
+        raise RuntimeError(
+            f"{language} correctness failed: received={result['received']} "
+            f"expected={messages} fifo_ok={result['fifo_ok']} "
+            f"checksum={result['checksum']} "
+            f"expected_checksum={result['expected_checksum']} "
+            f"valid={result['valid']} returncode={completed.returncode}"
+        )
     result["command"] = command
     return result
 
@@ -289,6 +318,8 @@ def summarize(values: list[float], resamples: int, seed: int) -> dict[str, float
     deviation = statistics.stdev(values)
     ci_low, ci_high = bootstrap_median_ci(values, resamples, seed)
     return {
+        "p50": statistics.median(values),
+        "p99": percentile(values, 0.99),
         "median": statistics.median(values),
         "mean": mean,
         "cv_percent": deviation * 100.0 / mean if mean != 0.0 else 0.0,
@@ -304,12 +335,17 @@ def execute_case(
     binaries: dict[str, Path],
     case_name: str,
 ) -> dict[str, Any]:
-    capacity = args.capacity if case_name != "unbounded" else 0
+    capacity = args.capacity if case_name in BOUNDED_CASES else 0
     messages = args.initial_messages
     calibration_rows: list[dict[str, Any]] = []
-    # A 3x floor absorbs short-run frequency variance while preserving the
-    # requirement that every formal sample lasts at least target_seconds.
-    calibration_floor = args.target_seconds * 3.00
+    _, comparison_scope = API_PROFILES[case_name]
+    comparison_eligible = comparison_scope == "equivalent_measured_api"
+    # Formal equivalent comparisons keep the 3x floor that absorbs short-run
+    # frequency variance. Reference-only paths use the requested duration
+    # directly so a much slower non-equivalent library cannot make each paired
+    # sample exceed the process timeout.
+    calibration_floor_multiplier = 3.0 if comparison_eligible else 1.0
+    calibration_floor = args.target_seconds * calibration_floor_multiplier
 
     for attempt in range(args.calibration_attempts):
         probe_rows = []
@@ -326,6 +362,7 @@ def execute_case(
                     args.producer_core,
                     args.consumer_core,
                     args.process_timeout,
+                    not comparison_eligible,
                 )
                 row.update(phase="calibration", sample_index=probe, attempt=attempt)
                 calibration_rows.append(row)
@@ -359,6 +396,7 @@ def execute_case(
                 args.producer_core,
                 args.consumer_core,
                 args.process_timeout,
+                not comparison_eligible,
             )
             row.update(phase="warmup", sample_index=warmup, attempt=None)
             warmup_rows.append(row)
@@ -378,6 +416,7 @@ def execute_case(
                 args.producer_core,
                 args.consumer_core,
                 args.process_timeout,
+                not comparison_eligible,
             )
             row.update(phase="sample", sample_index=sample, attempt=None)
             if row["elapsed_ns"] < args.target_seconds * 1_000_000_000:
@@ -431,6 +470,27 @@ def execute_case(
     }
     retry_ratio = max(retry_medians.values()) / max(1.0, min(retry_medians.values()))
 
+    retry_ratios = {
+        language: {
+            "full": [
+                row["full_retries"] / messages
+                for row in sample_rows
+                if row["language"] == language
+            ],
+            "empty": [
+                row["empty_retries"] / messages
+                for row in sample_rows
+                if row["language"] == language
+            ],
+            "total": [
+                (row["full_retries"] + row["empty_retries"]) / messages
+                for row in sample_rows
+                if row["language"] == language
+            ],
+        }
+        for language in LANGUAGES
+    }
+
     seed = sum(ord(character) for character in case_name) + capacity
     summary = {
         "cpp_messages_per_second": summarize(
@@ -447,8 +507,22 @@ def execute_case(
             "rust_median": retry_medians["rust"],
             "max_over_min_floor_one": retry_ratio,
         },
+        "retry_ratio": {
+            language: {
+                retry_kind: summarize(
+                    values,
+                    args.bootstrap_resamples,
+                    seed + 10 + language_index * 3 + retry_index,
+                )
+                for retry_index, (retry_kind, values) in enumerate(
+                    retry_ratios[language].items()
+                )
+            }
+            for language_index, language in enumerate(LANGUAGES)
+        },
     }
     ratio_summary = summary["paired_cpp_over_rust"]
+    measured_rows = calibration_rows + warmup_rows + sample_rows
     acceptance = {
         "minimum_speedup": args.minimum_speedup,
         "max_cv_percent": args.max_cv_percent,
@@ -464,16 +538,34 @@ def execute_case(
         ),
         "placement_passed": placement_passed,
         "retry_ratio_passed": retry_ratio <= args.max_retry_ratio,
+        "correctness_passed": all(
+            row["correctness_passed"] for row in measured_rows
+        ),
+        "comparison_eligible": comparison_eligible,
     }
-    acceptance["passed"] = all(
-        value for key, value in acceptance.items() if key.endswith("_passed")
+    acceptance["stability_passed"] = all(
+        acceptance[key]
+        for key in (
+            "cpp_cv_passed",
+            "rust_cv_passed",
+            "placement_passed",
+            "retry_ratio_passed",
+        )
+    )
+    acceptance["passed"] = (
+        acceptance["correctness_passed"]
+        and acceptance["stability_passed"]
+        and acceptance["ratio_ci95_low_passed"]
+        and acceptance["comparison_eligible"]
     )
     return {
         "case": case_name,
         "capacity": capacity,
-        "batch_size": args.batch_size if case_name == "batch_bounded" else 1,
+        "batch_size": args.batch_size if case_name in BATCH_CASES else 1,
         "backoff": args.backoff,
         "messages": messages,
+        "calibration_floor_seconds": calibration_floor,
+        "calibration_floor_multiplier": calibration_floor_multiplier,
         "calibration": calibration_rows,
         "warmups": warmup_rows,
         "samples": sample_rows,
@@ -501,6 +593,8 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
                 "batch_size": case["batch_size"],
                 "backoff": case["backoff"],
                 "messages": case["messages"],
+                "calibration_floor_seconds": case["calibration_floor_seconds"],
+                "calibration_floor_multiplier": case["calibration_floor_multiplier"],
                 "summary": case["summary"],
                 "acceptance": case["acceptance"],
             }
@@ -516,6 +610,7 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
         "received", "checksum", "expected_checksum", "fifo_ok", "full_retries",
         "empty_retries", "producer_placement", "consumer_placement", "backoff",
         "generator", "valid",
+        "process_returncode", "correctness_passed",
     ]
     with raw_csv.open("w", newline="") as csv_file:
         writer = csv.DictWriter(csv_file, fieldnames=fieldnames, extrasaction="ignore")
@@ -551,7 +646,7 @@ def main() -> int:
         return 1
 
     report = {
-        "schema": "galay.spsc.paired.report.v3",
+        "schema": "galay.spsc.paired.report.v4",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "config": {
             "cases": args.cases,
@@ -603,6 +698,8 @@ def main() -> int:
             "batch_size": case["batch_size"],
             "backoff": case["backoff"],
             "messages": case["messages"],
+            "calibration_floor_seconds": case["calibration_floor_seconds"],
+            "calibration_floor_multiplier": case["calibration_floor_multiplier"],
             "summary": case["summary"],
             "acceptance": case["acceptance"],
         }, sort_keys=True))

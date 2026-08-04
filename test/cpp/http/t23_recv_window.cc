@@ -13,7 +13,7 @@ using namespace galay::websocket;
 namespace {
 
 bool writeAll(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes) {
-    return ring.write(bytes.data(), bytes.size()) == bytes.size();
+    return ring.tryWriteBatch(bytes.data(), bytes.size()) == bytes.size();
 }
 
 bool check(bool condition, const char* message) {

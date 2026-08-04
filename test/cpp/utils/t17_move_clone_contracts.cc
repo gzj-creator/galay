@@ -192,26 +192,26 @@ void test_trie_bytes_and_ring_buffer_clone() {
     assert(bytesCopy.toStringView() == "view");
 
     RingBuffer<RingBufferBackendStrategy::Vector, std::dynamic_extent> buffer(5);
-    assert(buffer.write("abcde", 5) == 5);
+    assert(buffer.tryWriteBatch("abcde", 5) == 5);
     char skipped[3]{};
-    assert(buffer.read(skipped, sizeof(skipped)) == 3);
+    assert(buffer.tryReadBatch(skipped, sizeof(skipped)) == 3);
     assert(std::string_view(skipped, sizeof(skipped)) == "abc");
-    assert(buffer.write("fg", 2) == 2);
+    assert(buffer.tryWriteBatch("fg", 2) == 2);
 
     auto bufferCopy = buffer.clone();
     buffer.consume(2);
-    assert(buffer.write("hi", 2) == 2);
+    assert(buffer.tryWriteBatch("hi", 2) == 2);
 
     char copied[4]{};
-    assert(bufferCopy.read(copied, sizeof(copied)) == 4);
+    assert(bufferCopy.tryReadBatch(copied, sizeof(copied)) == 4);
     assert(std::string_view(copied, sizeof(copied)) == "defg");
 
     RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> defaultBuffer(8);
-    assert(defaultBuffer.write("abcd", 4) == 4);
+    assert(defaultBuffer.tryWriteBatch("abcd", 4) == 4);
     auto defaultCopy = defaultBuffer.clone();
     defaultBuffer.clear();
     char defaultCopied[4]{};
-    assert(defaultCopy.read(defaultCopied, sizeof(defaultCopied)) == 4);
+    assert(defaultCopy.tryReadBatch(defaultCopied, sizeof(defaultCopied)) == 4);
     assert(std::string_view(defaultCopied, sizeof(defaultCopied)) == "abcd");
 }
 

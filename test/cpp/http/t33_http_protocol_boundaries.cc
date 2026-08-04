@@ -92,7 +92,8 @@ void testReaderRejectsOversizedIncompleteHeader()
         "Host: example.com\r\n"
         "X-Oversized: " + std::string(80, 'a');
 
-    check(ring_buffer.write(raw.data(), raw.size()) == raw.size(), "failed to seed ring buffer");
+    check(ring_buffer.tryWriteBatch(raw.data(), raw.size()) == raw.size(),
+          "failed to seed ring buffer");
     state.onBytesReceived(raw.size());
 
     check(state.parseFromRingBuffer(), "oversized incomplete header should complete with an error");
@@ -194,7 +195,8 @@ void testSessionRejectsOversizedResponseBody()
         "\r\n"
         "12345";
 
-    check(session.getRingBuffer().write(raw.data(), raw.size()) == raw.size(),
+    check(session.getRingBuffer().tryWriteBatch(raw.data(), raw.size()) ==
+              raw.size(),
           "failed to seed oversized response body");
     state.onBytesReceived(raw.size());
 

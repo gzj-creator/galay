@@ -56,9 +56,10 @@ void benchWrappedIovec(std::size_t capacity, std::size_t iterations) {
     std::vector<std::byte> prefix(actualCapacity - 64, std::byte{'a'});
     std::vector<std::byte> wrapped(256, std::byte{'b'});
 
-    const auto prefixWritten = buffer.write(prefix.data(), prefix.size());
+    const auto prefixWritten = buffer.tryWriteBatch(prefix.data(), prefix.size());
     buffer.consume(actualCapacity - 128);
-    const auto wrappedWritten = buffer.write(wrapped.data(), wrapped.size());
+    const auto wrappedWritten =
+        buffer.tryWriteBatch(wrapped.data(), wrapped.size());
     if (prefixWritten != prefix.size() || wrappedWritten != wrapped.size()) {
         std::cerr << "failed to prepare wrapped iovec benchmark\n";
         return;
@@ -94,7 +95,8 @@ int main() {
     {
         galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(capacity);
         auto result = measure("write+consume", iterations, chunk, [&](std::size_t i) {
-            const auto written = buffer.write(writeData.data(), writeData.size());
+            const auto written =
+                buffer.tryWriteBatch(writeData.data(), writeData.size());
             buffer.consume(written);
             return written + i % 17;
         });
@@ -104,8 +106,10 @@ int main() {
     {
         galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(capacity);
         auto result = measure("write+read", iterations, chunk, [&](std::size_t i) {
-            const auto written = buffer.write(writeData.data(), writeData.size());
-            const auto read = buffer.read(readData.data(), readData.size());
+            const auto written =
+                buffer.tryWriteBatch(writeData.data(), writeData.size());
+            const auto read =
+                buffer.tryReadBatch(readData.data(), readData.size());
             return written + read + i % 17;
         });
         printResult(result);
@@ -114,7 +118,7 @@ int main() {
     {
         galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> buffer(4096);
         auto result = measure("wrap-around", iterations, 256, [&](std::size_t i) {
-            const auto written = buffer.write(writeData.data(), 256);
+            const auto written = buffer.tryWriteBatch(writeData.data(), 256);
             buffer.consume(128);
             if (buffer.full()) {
                 buffer.consume(buffer.readable() / 2);

@@ -65,7 +65,7 @@ void test_basic_operations() {
 
     // 写入数据
     const char* data = "Hello World";
-    size_t written = buf.write(data, strlen(data));
+    size_t written = buf.tryWriteBatch(data, strlen(data));
     assert(written == 11);
     assert(buf.readable() == 11);
     assert(buf.writable() == 89);
@@ -88,7 +88,7 @@ void test_wrap_around() {
     VectorRingBuffer buf(20);
 
     // 写入15字节
-    buf.write("123456789012345", 15);
+    assert(buf.tryWriteBatch("123456789012345", 15) == 15);
     assert(buf.readable() == 15);
 
     // 消费10字节，readIndex=10, writeIndex=15, size=5
@@ -98,7 +98,7 @@ void test_wrap_around() {
     // 再写入10字节，会环绕
     // writeIndex: 15 -> 20 -> 0 -> 5
     // 数据布局: [10,15)="12345", [15,20)="ABCDE", [0,5)="FGHIJ"
-    buf.write("ABCDEFGHIJ", 10);
+    assert(buf.tryWriteBatch("ABCDEFGHIJ", 10) == 10);
     assert(buf.readable() == 15);
 
     // 验证 getReadIovecs 返回两段
@@ -129,7 +129,7 @@ void test_get_write_iovecs() {
     assert(iovecs1[0].iov_len == 20);
 
     // 写入10字节
-    buf.write("0123456789", 10);
+    assert(buf.tryWriteBatch("0123456789", 10) == 10);
 
     // 应该返回一段 [10, 20)
     std::array<struct iovec, 2> iovecs2{};
@@ -161,7 +161,7 @@ void test_get_read_iovecs() {
     assert(iovecs1Count == 0);
 
     // 写入数据（连续）
-    buf.write("Hello", 5);
+    assert(buf.tryWriteBatch("Hello", 5) == 5);
     std::array<struct iovec, 2> iovecs2{};
     const size_t iovecs2Count = buf.getReadIovecs(iovecs2);
     assert(iovecs2Count == 1);
@@ -169,9 +169,9 @@ void test_get_read_iovecs() {
 
     // 制造环绕情况
     buf.consume(5);
-    buf.write("12345678901234567890", 20); // 写满
+    assert(buf.tryWriteBatch("12345678901234567890", 20) == 20); // 写满
     buf.consume(15); // 消费15字节
-    buf.write("ABCDE", 5); // 环绕写入
+    assert(buf.tryWriteBatch("ABCDE", 5) == 5); // 环绕写入
 
     std::array<struct iovec, 2> iovecs3{};
     const size_t iovecs3Count = buf.getReadIovecs(iovecs3);
@@ -188,7 +188,7 @@ void test_full_and_empty() {
     assert(buf.empty());
     assert(!buf.full());
 
-    buf.write("1234567890", 10);
+    assert(buf.tryWriteBatch("1234567890", 10) == 10);
     assert(!buf.empty());
     assert(buf.full());
     assert(buf.writable() == 0);
@@ -209,7 +209,7 @@ void test_move_semantics() {
     LogInfo("=== Test: Move Semantics ===");
 
     VectorRingBuffer buf1(100);
-    buf1.write("Test Data", 9);
+    assert(buf1.tryWriteBatch("Test Data", 9) == 9);
 
     // 移动构造
     VectorRingBuffer buf2(std::move(buf1));
@@ -313,7 +313,14 @@ Task<void> ringBufferServer([[maybe_unused]] IOScheduler* scheduler) {
     // 使用 RingBuffer + writev 发送响应
     DefaultRingBuffer sendBuffer(1024);
     std::string response = "Response: " + received + " [echoed]";
-    sendBuffer.write(response.data(), response.size());
+    const size_t prepared =
+        sendBuffer.tryWriteBatch(response.data(), response.size());
+    if (prepared != response.size()) {
+        LogError("[Server] Response does not fit RingBuffer");
+        co_await client.close();
+        co_await listener.close();
+        co_return;
+    }
 
     LogInfo("[Server] Sending {} bytes via writev", sendBuffer.readable());
 
@@ -361,7 +368,12 @@ Task<void> ringBufferClient([[maybe_unused]] IOScheduler* scheduler) {
     // 使用 RingBuffer 准备发送数据
     DefaultRingBuffer sendBuffer(1024);
     const char* msg = "Hello from RingBuffer client!";
-    sendBuffer.write(msg, strlen(msg));
+    const size_t prepared = sendBuffer.tryWriteBatch(msg, strlen(msg));
+    if (prepared != strlen(msg)) {
+        LogError("[Client] Request does not fit RingBuffer");
+        co_await client.close();
+        co_return;
+    }
     std::array<struct iovec, 2> sendReadIovecs{};
     std::array<struct iovec, 2> recvWriteIovecs{};
 

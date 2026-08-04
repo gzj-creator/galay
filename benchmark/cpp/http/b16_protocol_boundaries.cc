@@ -39,7 +39,8 @@ bool sessionRejectsOversizedResponse(std::string& raw)
     galay::http::detail::HttpSessionState<galay::async::AsyncTcpSocket> state(
         session, std::string("GET / HTTP/1.1\r\n\r\n"));
 
-    require(session.getRingBuffer().write(raw.data(), raw.size()) == raw.size(),
+    require(session.getRingBuffer().tryWriteBatch(raw.data(), raw.size()) ==
+                raw.size(),
             "failed to seed oversized response fixture");
     state.onBytesReceived(raw.size());
     if (!state.parseFromRingBuffer()) {

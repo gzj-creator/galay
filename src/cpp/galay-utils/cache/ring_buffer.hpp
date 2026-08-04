@@ -417,7 +417,7 @@ public:
      * @param length 请求写入字节数
      * @return 实际写入字节数
      */
-    size_t write(const void* data, size_t length) {
+    [[nodiscard]] size_t tryWriteBatch(const void* data, size_t length) {
         if (data == nullptr || length == 0 || full()) {
             return 0;
         }
@@ -443,8 +443,8 @@ public:
      * @param bytes 字节视图
      * @return 实际写入字节数
      */
-    size_t write(std::string_view bytes) {
-        return write(bytes.data(), bytes.size());
+    [[nodiscard]] size_t tryWriteBatch(std::string_view bytes) {
+        return tryWriteBatch(bytes.data(), bytes.size());
     }
 
     /**
@@ -453,7 +453,7 @@ public:
      * @param length 请求读取字节数
      * @return 实际读取字节数
      */
-    size_t read(void* data, size_t length) {
+    [[nodiscard]] size_t tryReadBatch(void* data, size_t length) {
         if (data == nullptr || length == 0 || empty()) {
             return 0;
         }
@@ -712,7 +712,7 @@ public:
         m_size = 0;
     }
 
-    size_t write(const void* data, size_t length) {
+    [[nodiscard]] size_t tryWriteBatch(const void* data, size_t length) {
         if (data == nullptr || length == 0 || full()) {
             return 0;
         }
@@ -723,11 +723,11 @@ public:
         return written;
     }
 
-    size_t write(std::string_view bytes) {
-        return write(bytes.data(), bytes.size());
+    [[nodiscard]] size_t tryWriteBatch(std::string_view bytes) {
+        return tryWriteBatch(bytes.data(), bytes.size());
     }
 
-    size_t read(void* data, size_t length) {
+    [[nodiscard]] size_t tryReadBatch(void* data, size_t length) {
         if (data == nullptr || length == 0 || empty()) {
             return 0;
         }
@@ -842,7 +842,7 @@ public:
     /**
      * @brief 显式复制当前可读内容到新的独立环形缓冲区
      * @return 容量一致、可读字节序列一致的缓冲区副本
-     * @note 复制不保留内部读写索引形状，只保证后续 read() 的字节序列一致。
+     * @note 复制不保留内部读写索引形状，只保证后续 tryReadBatch() 的字节序列一致。
      */
     [[nodiscard]] RingBuffer clone() const {
         RingBuffer copy = [&]() {
@@ -855,7 +855,8 @@ public:
         std::array<std::span<const std::byte>, 2> spans{};
         const size_t span_count = readSpans(spans);
         for (size_t index = 0; index < span_count; ++index) {
-            const size_t written = copy.write(spans[index].data(), spans[index].size());
+            const size_t written =
+                copy.tryWriteBatch(spans[index].data(), spans[index].size());
             if (written != spans[index].size()) {
                 copy.clear();
                 return copy;
@@ -1003,10 +1004,19 @@ public:
      * @param length 请求写入字节数
      * @return 实际写入字节数
      */
-    size_t write(const void* data, size_t length) {
+    [[nodiscard]] size_t tryWriteBatch(const void* data, size_t length) {
         return detail::visitRingBufferImpl(m_impl, [data, length](auto& impl) {
-            return impl.write(data, length);
+            return impl.tryWriteBatch(data, length);
         });
+    }
+
+    /**
+     * @brief 尽量写入输入字节前缀。
+     * @param bytes 调用方拥有且在调用期间有效的只读字节区间。
+     * @return 实际写入字节数，范围为 [0, bytes.size()]。
+     */
+    [[nodiscard]] size_t tryWriteBatch(std::span<const std::byte> bytes) {
+        return tryWriteBatch(bytes.data(), bytes.size());
     }
 
     /**
@@ -1014,8 +1024,8 @@ public:
      * @param bytes 字节视图
      * @return 实际写入字节数
      */
-    size_t write(std::string_view bytes) {
-        return write(bytes.data(), bytes.size());
+    [[nodiscard]] size_t tryWriteBatch(std::string_view bytes) {
+        return tryWriteBatch(bytes.data(), bytes.size());
     }
 
     /**
@@ -1024,10 +1034,19 @@ public:
      * @param length 请求读取字节数
      * @return 实际读取字节数
      */
-    size_t read(void* data, size_t length) {
+    [[nodiscard]] size_t tryReadBatch(void* data, size_t length) {
         return detail::visitRingBufferImpl(m_impl, [data, length](auto& impl) {
-            return impl.read(data, length);
+            return impl.tryReadBatch(data, length);
         });
+    }
+
+    /**
+     * @brief 尽量读取当前可用字节到调用方存储。
+     * @param output 调用方拥有且在调用期间有效的可写字节区间。
+     * @return 实际读取字节数，范围为 [0, output.size()]。
+     */
+    [[nodiscard]] size_t tryReadBatch(std::span<std::byte> output) {
+        return tryReadBatch(output.data(), output.size());
     }
 
 private:

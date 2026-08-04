@@ -13,6 +13,7 @@
 #include <iostream>
 #include <cassert>
 #include <cstring>
+#include <string_view>
 #include <vector>
 #include <galay/cpp/galay-http/common/iovec_utils.h>
 #include <galay/cpp/galay-http/protoc/http_request.h>
@@ -43,6 +44,14 @@ static int g_failed = 0;
         g_passed++; \
     } while(0)
 
+#define TEST_WRITE_ALL(buffer, bytes) \
+    do { \
+        const auto& input_storage = (bytes); \
+        const std::string_view input(input_storage); \
+        TEST_ASSERT((buffer).tryWriteBatch(input) == input.size(), \
+                    "RingBuffer input should fit"); \
+    } while(0)
+
 static std::vector<struct iovec> readIovecs(const RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& buffer)
 {
     auto borrowed = borrowReadIovecs(buffer);
@@ -66,7 +75,7 @@ void test_request_complete_in_one_shot()
                       "\r\n"
                       "hello";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -94,7 +103,7 @@ void test_request_header_partial()
     // 第一部分：不完整的header
     std::string part1 = "GET /api/test HTTP/1.1\r\n"
                         "Host: example";
-    buffer.write(part1);
+    TEST_WRITE_ALL(buffer, part1);
 
     auto iovecs1 = readIovecs(buffer);
     auto [err1, consumed1] = request.fromIOVec(iovecs1);
@@ -109,7 +118,7 @@ void test_request_header_partial()
     std::string part2 = ".com\r\n"
                         "Content-Length: 0\r\n"
                         "\r\n";
-    buffer.write(part2);
+    TEST_WRITE_ALL(buffer, part2);
 
     auto iovecs2 = readIovecs(buffer);
     auto [err2, consumed2] = request.fromIOVec(iovecs2);
@@ -137,7 +146,7 @@ void test_request_body_partial()
                         "Content-Length: 20\r\n"
                         "\r\n"
                         "12345";  // 只有5字节，需要20字节
-    buffer.write(part1);
+    TEST_WRITE_ALL(buffer, part1);
 
     auto iovecs1 = readIovecs(buffer);
     auto [err1, consumed1] = request.fromIOVec(iovecs1);
@@ -150,7 +159,7 @@ void test_request_body_partial()
 
     // 继续写入body
     std::string part2 = "67890abcde";  // 再10字节
-    buffer.write(part2);
+    TEST_WRITE_ALL(buffer, part2);
 
     auto iovecs2 = readIovecs(buffer);
     auto [err2, consumed2] = request.fromIOVec(iovecs2);
@@ -163,7 +172,7 @@ void test_request_body_partial()
 
     // 写入剩余body
     std::string part3 = "fghij";  // 最后5字节
-    buffer.write(part3);
+    TEST_WRITE_ALL(buffer, part3);
 
     auto iovecs3 = readIovecs(buffer);
     auto [err3, consumed3] = request.fromIOVec(iovecs3);
@@ -196,9 +205,9 @@ void test_request_multiple_complete()
                        "\r\n"
                        "test";
 
-    buffer.write(req1);
-    buffer.write(req2);
-    buffer.write(req3);
+    TEST_WRITE_ALL(buffer, req1);
+    TEST_WRITE_ALL(buffer, req2);
+    TEST_WRITE_ALL(buffer, req3);
 
     // 解析第一个请求
     HttpRequest request1;
@@ -251,8 +260,8 @@ void test_request_complete_and_partial()
     std::string partial_req = "POST /partial HTTP/1.1\r\n"
                               "Host: local";  // 不完整
 
-    buffer.write(complete_req);
-    buffer.write(partial_req);
+    TEST_WRITE_ALL(buffer, complete_req);
+    TEST_WRITE_ALL(buffer, partial_req);
 
     // 解析第一个完整请求
     HttpRequest request1;
@@ -280,7 +289,7 @@ void test_request_complete_and_partial()
     std::string rest = "host\r\n"
                        "Content-Length: 0\r\n"
                        "\r\n";
-    buffer.write(rest);
+    TEST_WRITE_ALL(buffer, rest);
 
     auto iovecs3 = readIovecs(buffer);
     auto [err3, consumed3] = request2.fromIOVec(iovecs3);
@@ -306,7 +315,7 @@ void test_request_no_body()
                       "Connection: keep-alive\r\n"
                       "\r\n";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -330,7 +339,7 @@ void test_request_with_query_params()
                       "Host: localhost\r\n"
                       "\r\n";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -355,7 +364,7 @@ void test_request_reset()
     std::string req1 = "GET /first HTTP/1.1\r\n"
                        "Host: localhost\r\n"
                        "\r\n";
-    buffer.write(req1);
+    TEST_WRITE_ALL(buffer, req1);
 
     auto iovecs1 = readIovecs(buffer);
     auto [err1, consumed1] = request.fromIOVec(iovecs1);
@@ -373,7 +382,7 @@ void test_request_reset()
                        "Content-Length: 3\r\n"
                        "\r\n"
                        "abc";
-    buffer.write(req2);
+    TEST_WRITE_ALL(buffer, req2);
 
     auto iovecs2 = readIovecs(buffer);
     auto [err2, consumed2] = request.fromIOVec(iovecs2);
@@ -401,7 +410,7 @@ void test_response_complete_in_one_shot()
                       "\r\n"
                       "Hello, World!";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = response.fromIOVec(iovecs);
@@ -425,7 +434,7 @@ void test_response_header_partial()
     // 第一部分
     std::string part1 = "HTTP/1.1 404 Not Found\r\n"
                         "Content-Type: text/";
-    buffer.write(part1);
+    TEST_WRITE_ALL(buffer, part1);
 
     auto iovecs1 = readIovecs(buffer);
     auto [err1, consumed1] = response.fromIOVec(iovecs1);
@@ -441,7 +450,7 @@ void test_response_header_partial()
                         "Content-Length: 9\r\n"
                         "\r\n"
                         "Not Found";
-    buffer.write(part2);
+    TEST_WRITE_ALL(buffer, part2);
 
     auto iovecs2 = readIovecs(buffer);
     auto [err2, consumed2] = response.fromIOVec(iovecs2);
@@ -464,7 +473,7 @@ void test_response_body_partial()
                         "Content-Length: 100\r\n"
                         "\r\n"
                         "0123456789";  // 只有10字节
-    buffer.write(part1);
+    TEST_WRITE_ALL(buffer, part1);
 
     auto iovecs1 = readIovecs(buffer);
     auto [err1, consumed1] = response.fromIOVec(iovecs1);
@@ -477,7 +486,7 @@ void test_response_body_partial()
 
     // 写入更多数据
     std::string part2(90, 'x');  // 剩余90字节
-    buffer.write(part2);
+    TEST_WRITE_ALL(buffer, part2);
 
     auto iovecs2 = readIovecs(buffer);
     auto [err2, consumed2] = response.fromIOVec(iovecs2);
@@ -509,9 +518,9 @@ void test_response_multiple_complete()
     std::string resp3 = "HTTP/1.1 204 No Content\r\n"
                         "\r\n";
 
-    buffer.write(resp1);
-    buffer.write(resp2);
-    buffer.write(resp3);
+    TEST_WRITE_ALL(buffer, resp1);
+    TEST_WRITE_ALL(buffer, resp2);
+    TEST_WRITE_ALL(buffer, resp3);
 
     // 解析第一个响应
     HttpResponse response1;
@@ -559,7 +568,7 @@ void test_response_no_status_text()
                       "Content-Length: 0\r\n"
                       "\r\n";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = response.fromIOVec(iovecs);
@@ -585,7 +594,7 @@ void test_request_bad_format()
                       "Host: localhost\r\n"
                       "\r\n";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -606,7 +615,7 @@ void test_response_invalid_status_code()
     std::string raw = "HTTP/1.1 abc OK\r\n"
                       "\r\n";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = response.fromIOVec(iovecs);
@@ -628,7 +637,7 @@ void test_request_unsupported_version()
                       "Host: localhost\r\n"
                       "\r\n";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -649,14 +658,14 @@ void test_ringbuffer_wrap_around()
 
     // 先写入一些数据并消费，让写指针前进
     std::string filler(100, 'x');
-    buffer.write(filler);
+    TEST_WRITE_ALL(buffer, filler);
     buffer.consume(100);
 
     // 现在写入会环绕
     std::string req = "GET /wrap HTTP/1.1\r\n"
                       "Host: localhost\r\n"
                       "\r\n";
-    buffer.write(req);
+    TEST_WRITE_ALL(buffer, req);
 
     HttpRequest request;
     auto iovecs = readIovecs(buffer);
@@ -681,7 +690,7 @@ void test_ringbuffer_header_split_across_wrap()
 
     // 填充buffer让写指针接近末尾
     std::string filler(110, 'x');
-    buffer.write(filler);
+    TEST_WRITE_ALL(buffer, filler);
     buffer.consume(110);
 
     // 写入请求，header会跨越环绕边界
@@ -689,7 +698,7 @@ void test_ringbuffer_header_split_across_wrap()
                       "Host: localhost\r\n"
                       "User-Agent: TestAgent\r\n"
                       "\r\n";
-    buffer.write(req);
+    TEST_WRITE_ALL(buffer, req);
 
     HttpRequest request;
     auto iovecs = readIovecs(buffer);
@@ -712,7 +721,7 @@ void test_ringbuffer_body_split_across_wrap()
 
     // 填充buffer
     std::string filler(200, 'x');
-    buffer.write(filler);
+    TEST_WRITE_ALL(buffer, filler);
     buffer.consume(200);
 
     // 写入请求，body会跨越环绕边界
@@ -722,8 +731,8 @@ void test_ringbuffer_body_split_across_wrap()
                         "\r\n";
     std::string body(50, 'B');
 
-    buffer.write(header);
-    buffer.write(body);
+    TEST_WRITE_ALL(buffer, header);
+    TEST_WRITE_ALL(buffer, body);
 
     HttpRequest request;
     auto iovecs = readIovecs(buffer);
@@ -751,7 +760,7 @@ void test_header_exactly_at_boundary()
                       "Host: localhost\r\n"
                       "\r\n";
 
-    buffer.write(req);
+    TEST_WRITE_ALL(buffer, req);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -775,7 +784,7 @@ void test_body_exactly_content_length()
                       "Content-Length: " + std::to_string(body.size()) + "\r\n"
                       "\r\n" + body;
 
-    buffer.write(req);
+    TEST_WRITE_ALL(buffer, req);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -802,7 +811,7 @@ void test_incremental_single_byte()
 
     // 一次写入一个字节
     for (size_t i = 0; i < req.size(); ++i) {
-        buffer.write(std::string(1, req[i]));
+        TEST_WRITE_ALL(buffer, std::string(1, req[i]));
 
         auto iovecs = readIovecs(buffer);
         auto [err, consumed] = request.fromIOVec(iovecs);
@@ -834,7 +843,7 @@ void test_large_body()
                       "Content-Length: " + std::to_string(body.size()) + "\r\n"
                       "\r\n" + body;
 
-    buffer.write(req);
+    TEST_WRITE_ALL(buffer, req);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -858,7 +867,7 @@ void test_empty_header_value()
                       "X-Empty: \r\n"
                       "\r\n";
 
-    buffer.write(req);
+    TEST_WRITE_ALL(buffer, req);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -888,9 +897,9 @@ void test_multiple_requests_with_partial_last()
                                "\r\n"
                                "partial";  // 只有部分body
 
-    buffer.write(req1);
-    buffer.write(req2);
-    buffer.write(req3_partial);
+    TEST_WRITE_ALL(buffer, req1);
+    TEST_WRITE_ALL(buffer, req2);
+    TEST_WRITE_ALL(buffer, req3_partial);
 
     // 解析第一个
     HttpRequest request1;
@@ -918,7 +927,7 @@ void test_multiple_requests_with_partial_last()
 
     // 补充剩余数据
     std::string remaining(93, 'X');
-    buffer.write(remaining);
+    TEST_WRITE_ALL(buffer, remaining);
 
     auto iovecs4 = readIovecs(buffer);
     auto [err4, consumed4] = request3.fromIOVec(iovecs4);
@@ -939,7 +948,7 @@ void test_zero_content_length()
                       "Content-Length: 0\r\n"
                       "\r\n";
 
-    buffer.write(req);
+    TEST_WRITE_ALL(buffer, req);
 
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
@@ -961,7 +970,7 @@ void test_header_split_in_middle_of_crlf()
     // 第一部分：在\r处断开
     std::string part1 = "GET /crlf HTTP/1.1\r\n"
                         "Host: localhost\r";
-    buffer.write(part1);
+    TEST_WRITE_ALL(buffer, part1);
 
     auto iovecs1 = readIovecs(buffer);
     auto [err1, consumed1] = request.fromIOVec(iovecs1);
@@ -972,7 +981,7 @@ void test_header_split_in_middle_of_crlf()
     // 第二部分：补充\n和剩余
     std::string part2 = "\n"
                         "\r\n";
-    buffer.write(part2);
+    TEST_WRITE_ALL(buffer, part2);
 
     auto iovecs2 = readIovecs(buffer);
     auto [err2, consumed2] = request.fromIOVec(iovecs2);
@@ -992,28 +1001,28 @@ void test_body_split_multiple_times()
                         "Host: localhost\r\n"
                         "Content-Length: 30\r\n"
                         "\r\n";
-    buffer.write(header);
+    TEST_WRITE_ALL(buffer, header);
 
     // 分多次写入body
-    buffer.write("12345");  // 5字节
+    TEST_WRITE_ALL(buffer, "12345");  // 5字节
     auto iovecs1 = readIovecs(buffer);
     auto [err1, consumed1] = request.fromIOVec(iovecs1);
     TEST_ASSERT(!request.isComplete(), "Should not be complete");
     buffer.consume(consumed1);  // 消费已解析的数据
 
-    buffer.write("67890");  // 再5字节
+    TEST_WRITE_ALL(buffer, "67890");  // 再5字节
     auto iovecs2 = readIovecs(buffer);
     auto [err2, consumed2] = request.fromIOVec(iovecs2);
     TEST_ASSERT(!request.isComplete(), "Should not be complete");
     buffer.consume(consumed2);  // 消费已解析的数据
 
-    buffer.write("abcdefghij");  // 再10字节
+    TEST_WRITE_ALL(buffer, "abcdefghij");  // 再10字节
     auto iovecs3 = readIovecs(buffer);
     auto [err3, consumed3] = request.fromIOVec(iovecs3);
     TEST_ASSERT(!request.isComplete(), "Should not be complete");
     buffer.consume(consumed3);  // 消费已解析的数据
 
-    buffer.write("klmnopqrst");  // 最后10字节
+    TEST_WRITE_ALL(buffer, "klmnopqrst");  // 最后10字节
     auto iovecs4 = readIovecs(buffer);
     auto [err4, consumed4] = request.fromIOVec(iovecs4);
     TEST_ASSERT(request.isComplete(), "Should be complete");
@@ -1036,7 +1045,7 @@ void test_request_lowercase_content_length()
                       "content-length: " + std::to_string(body.size()) + "\r\n"
                       "\r\n" + body;
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = request.fromIOVec(iovecs);
 
@@ -1062,7 +1071,7 @@ void test_response_chunked_case_insensitive()
                       "5\r\nhello\r\n"
                       "0\r\n\r\n";
 
-    buffer.write(raw);
+    TEST_WRITE_ALL(buffer, raw);
     auto iovecs = readIovecs(buffer);
     auto [err, consumed] = response.fromIOVec(iovecs);
 
@@ -1115,7 +1124,7 @@ void test_header_case_config_switch()
         std::string raw = "GET /cfg HTTP/1.1\r\n"
                           "hOsT: example.com\r\n"
                           "\r\n";
-        buffer.write(raw);
+        TEST_WRITE_ALL(buffer, raw);
         auto [err, consumed] = request.fromIOVec(readIovecs(buffer));
 
         TEST_ASSERT(err == kNoError, "Parse should succeed");

@@ -135,8 +135,8 @@ int main()
             failures,
             compact,
             "galay::spsc::UnboundedChannel<uint64_t> channel",
-            1,
-            "C++ unbounded case must use the waiter-capable SPSC channel");
+            2,
+            "C++ scalar and batch unbounded cases must use the waiter-capable SPSC channel");
         requireCount(
             failures,
             compact,
@@ -147,12 +147,12 @@ int main()
             failures,
             compact,
             "auto endpoints = channel.split()",
-            1,
-            "C++ bounded case must move split SPSC endpoints to the workers");
+            2,
+            "C++ scalar and batch bounded cases must move split SPSC endpoints to the workers");
         requireCount(
             failures,
             compact,
-            "galay.spsc.paired.v3",
+            "galay.spsc.paired.v4",
             1,
             "C++ result must use the audited paired schema");
         requireCount(
@@ -164,15 +164,57 @@ int main()
         requireCount(
             failures,
             compact,
-            "trySendBatch(",
+            "tryWriteBatch(",
             1,
-            "C++ batch case must use the ring batch send API");
+            "C++ bounded batch case must use the ring batch write API");
+        requireCount(
+            failures,
+            compact,
+            "channel.sendBatch(",
+            1,
+            "C++ unbounded batch case must use the channel batch send API");
+        requireCount(
+            failures,
+            compact,
+            "tryReadBatch(",
+            1,
+            "C++ bounded batch case must use the ring batch read API");
         requireCount(
             failures,
             compact,
             "tryRecvBatch(",
             1,
-            "C++ batch case must use the ring batch receive API");
+            "C++ unbounded batch case must use the channel batch receive API");
+        requireAtLeast(
+            failures,
+            compact,
+            "CaseKind::kBatchUnbounded",
+            5,
+            "C++ benchmark must parse, execute, and report batch_unbounded");
+        requireAtLeast(
+            failures,
+            compact,
+            "value == consumerResult.received",
+            1,
+            "C++ scalar consumers must validate FIFO order");
+        requireCount(
+            failures,
+            compact,
+            "orderMismatch |= values[offset] ^ (firstExpected + static_cast<uint64_t>(offset))",
+            1,
+            "C++ batch consumers must validate FIFO order from a fixed batch base");
+        requireCount(
+            failures,
+            compact,
+            "measurement.received == config->messages",
+            1,
+            "C++ result validity must validate the exact message count");
+        requireCount(
+            failures,
+            compact,
+            "measurement.checksum == measurement.expectedChecksum",
+            1,
+            "C++ result validity must validate checksum");
         requireAtLeast(
             failures,
             compact,
@@ -193,7 +235,7 @@ int main()
             failures,
             compact,
             "while result.received < messages",
-            2,
+            3,
             "Rust consumers must drain until the expected message count");
         requireCount(
             failures,
@@ -204,6 +246,24 @@ int main()
         requireAtLeast(
             failures,
             compact,
+            "producer_finished",
+            4,
+            "Rust unbounded final drain must observe producer completion");
+        requireAtLeast(
+            failures,
+            compact,
+            "consumer_done",
+            4,
+            "Rust unbounded sender endpoint must outlive the final drain");
+        requireAtLeast(
+            failures,
+            compact,
+            "stalled_since",
+            4,
+            "Rust unbounded final drain must terminate bounded stalls as invalid");
+        requireAtLeast(
+            failures,
+            compact,
             "RingBuffer::<u64>::new(config.capacity)",
             2,
             "Rust bounded case must use the dedicated rtrb SPSC ring");
@@ -211,8 +271,8 @@ int main()
             failures,
             compact,
             "unbounded_spsc::channel::<u64>()",
-            1,
-            "Rust unbounded case must use the dedicated unbounded SPSC channel");
+            2,
+            "Rust scalar and batch unbounded cases must use the dedicated unbounded SPSC channel");
         requireCount(
             failures,
             compact,
@@ -222,7 +282,7 @@ int main()
         requireCount(
             failures,
             compact,
-            "galay.spsc.paired.v3",
+            "galay.spsc.paired.v4",
             1,
             "Rust result must use the audited paired schema");
         requireCount(
@@ -234,15 +294,45 @@ int main()
         requireCount(
             failures,
             compact,
-            "write_chunk_uninit(",
+            "push_partial_slice(",
             1,
-            "Rust batch case must use the rtrb batch write API");
+            "Rust batch case must copy from the caller-owned batch buffer");
         requireCount(
             failures,
             compact,
-            "read_chunk(",
+            "pop_partial_slice(",
             1,
-            "Rust batch case must use the rtrb batch read API");
+            "Rust batch case must copy into the caller-owned batch buffer");
+        requireAtLeast(
+            failures,
+            compact,
+            "CaseKind::BatchUnbounded",
+            2,
+            "Rust benchmark must parse, execute, and report batch_unbounded");
+        requireAtLeast(
+            failures,
+            compact,
+            "value == result.received",
+            2,
+            "Rust scalar consumers must validate FIFO order");
+        requireCount(
+            failures,
+            compact,
+            "order_mismatch |= value ^ (first_expected + offset as u64)",
+            2,
+            "Rust batch consumers must validate FIFO order from a fixed batch base");
+        requireCount(
+            failures,
+            compact,
+            "measurement.received == config.messages",
+            1,
+            "Rust result validity must validate the exact message count");
+        requireCount(
+            failures,
+            compact,
+            "measurement.checksum == measurement.expected_checksum",
+            1,
+            "Rust result validity must validate checksum");
         requireCount(
             failures,
             compact,
@@ -262,21 +352,45 @@ int main()
         requireCount(
             failures,
             compact,
-            "galay.spsc.paired.v3",
+            "galay.spsc.paired.v4",
             1,
-            "runner must reject pre-v3 benchmark output");
+            "runner must reject pre-v4 benchmark output");
         requireCount(
             failures,
             compact,
-            "galay.spsc.paired.report.v3",
+            "galay.spsc.paired.report.v4",
             1,
-            "runner report must use the v3 schema");
+            "runner report must use the v4 schema");
         requireAtLeast(
             failures,
             compact,
             "batch_bounded",
             5,
             "runner must register and validate the batch case");
+        requireAtLeast(
+            failures,
+            compact,
+            "batch_unbounded",
+            5,
+            "runner must register and validate the unbounded batch case");
+        requireAtLeast(
+            failures,
+            compact,
+            "comparison_eligible",
+            2,
+            "runner must keep reference-only cases out of formal wins");
+        requireAtLeast(
+            failures,
+            compact,
+            "p99",
+            1,
+            "runner must report QPS p99");
+        requireAtLeast(
+            failures,
+            compact,
+            "retry_ratio",
+            2,
+            "runner must report and gate retry ratios");
         requireAtLeast(
             failures,
             compact,
@@ -295,6 +409,12 @@ int main()
             "default=\"raw_bounded,batch_bounded\"",
             1,
             "runner default scope must contain only bounded SPSC cases");
+        requireCount(
+            failures,
+            compact,
+            "--max-cv-percent\", type=float, default=25.0",
+            1,
+            "runner default CV gate must match the audited 25 percent threshold");
     }
 
     if (!failures.empty()) {

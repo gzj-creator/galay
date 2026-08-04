@@ -88,12 +88,14 @@ std::vector<char> makeHuffmanData(std::size_t items) {
 bool prepareRing(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent>& buffer,
                  std::string_view prefix,
                  std::string_view suffix) {
-    const std::size_t prefix_written = buffer.write(prefix.data(), prefix.size());
+    const std::size_t prefix_written =
+        buffer.tryWriteBatch(prefix.data(), prefix.size());
     if (prefix_written != prefix.size()) {
         return false;
     }
     buffer.consume(prefix.size() / 2);
-    const std::size_t suffix_written = buffer.write(suffix.data(), suffix.size());
+    const std::size_t suffix_written =
+        buffer.tryWriteBatch(suffix.data(), suffix.size());
     return suffix_written == suffix.size();
 }
 
@@ -211,7 +213,8 @@ int main(int argc, char** argv) {
 
     printResult(measure("RingBuffer construct+write", iterations, [&](std::size_t) {
         galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Vector, std::dynamic_extent> constructed(ringCapacity);
-        const std::size_t written = constructed.write(prefix.data(), prefix.size());
+        const std::size_t written =
+            constructed.tryWriteBatch(prefix.data(), prefix.size());
         return written + constructed.capacity();
     }));
 

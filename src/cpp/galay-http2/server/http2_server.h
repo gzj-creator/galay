@@ -825,8 +825,13 @@ private:
 
                 // HTTP 头后面可能已带部分 Connection Preface，写入 RingBuffer
                 if (header_data.size() > header_end + 4) {
-                    rb.write(header_data.data() + header_end + 4,
-                             header_data.size() - header_end - 4);
+                    const size_t remaining = header_data.size() - header_end - 4;
+                    const size_t written = rb.tryWriteBatch(
+                        header_data.data() + header_end + 4, remaining);
+                    if (written != remaining) {
+                        HTTP_LOG_ERROR("[upgrade] [buffer-full]", "h2c preface");
+                        co_return;
+                    }
                 }
 
                 co_await readAtLeast(conn, kHttp2ConnectionPrefaceLength);
@@ -856,7 +861,12 @@ private:
             // 回退到 HTTP/1.1 链路时，需要把已经读出的首个请求头（和可能携带的 body）
             // 回灌到 RingBuffer，交给标准 HttpReader 继续解析。
             if (!header_data.empty() && !m_http1_fallback) {
-                rb.write(header_data.data(), header_data.size());
+                const size_t written =
+                    rb.tryWriteBatch(header_data.data(), header_data.size());
+                if (written != header_data.size()) {
+                    HTTP_LOG_ERROR("[protocol] [buffer-full]", "http1 fallback");
+                    co_return;
+                }
             }
             protocol = DetectedProtocol::Http1;
             co_return;

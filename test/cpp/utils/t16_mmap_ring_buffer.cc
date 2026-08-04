@@ -59,7 +59,7 @@ void test_public_constructor_zero_capacity_falls_back() {
     require(buffer.capacity() >= galay::utils::RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>::kDefaultCapacity,
             "zero-capacity constructor must fall back to a usable default capacity");
     constexpr std::string_view data = "x";
-    require(buffer.write(data) == data.size(),
+    require(buffer.tryWriteBatch(data) == data.size(),
             "zero-capacity constructor fallback buffer must accept writes");
 }
 
@@ -70,7 +70,7 @@ void test_threshold_buffer_uses_single_iovec_across_wrap() {
             "mmap ring capacity must cover requested capacity");
 
     std::vector<char> prefix(capacity - 64, 'A');
-    require(buffer.write(prefix.data(), prefix.size()) == prefix.size(),
+    require(buffer.tryWriteBatch(prefix.data(), prefix.size()) == prefix.size(),
             "initial write must fill prefix");
     buffer.consume(capacity - 128);
     require(buffer.readable() == 64, "setup must leave tail bytes readable");
@@ -82,7 +82,7 @@ void test_threshold_buffer_uses_single_iovec_across_wrap() {
             "single write iovec must cover all writable bytes");
 
     std::vector<char> wrapped(256, 'B');
-    require(buffer.write(wrapped.data(), wrapped.size()) == wrapped.size(),
+    require(buffer.tryWriteBatch(wrapped.data(), wrapped.size()) == wrapped.size(),
             "wrapped write must complete");
 
     std::array<struct iovec, 2> read_iovecs{};

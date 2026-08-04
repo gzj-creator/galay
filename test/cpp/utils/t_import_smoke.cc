@@ -33,14 +33,14 @@ int main() {
     assert(bytes.toStringView() == "mod");
 
     RingBuffer ring(4);
-    assert(ring.write("xy", 2) == 2);
+    assert(ring.tryWriteBatch("xy", 2) == 2);
     assert(ring.readable() == 2);
 
     TypeRingBuffer<int> spscRing(2);
     int spscValue = 9;
     assert(spscRing.error() == TypeRingBufferError::kNone);
-    assert(spscRing.trySend(std::move(spscValue)));
-    auto spscReceived = spscRing.tryRecv();
+    assert(spscRing.tryWrite(std::move(spscValue)));
+    auto spscReceived = spscRing.tryRead();
     assert(spscReceived.has_value() && *spscReceived == 9);
 
     ObjectPool<std::string> pool(1);

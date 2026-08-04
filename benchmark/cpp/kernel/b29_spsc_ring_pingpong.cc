@@ -1,6 +1,6 @@
 /**
  * @file b29_spsc_ring_pingpong.cc
- * @brief 隔离测量 SPSC ring 单线程 send/receive 往返成本。
+ * @brief 隔离测量 SPSC ring 单线程 write/read 往返成本。
  */
 
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
@@ -36,12 +36,12 @@ template <typename Producer, typename Consumer>
     RoundResult result;
     for (uint64_t sequence = 0; sequence < iterations; ++sequence) {
         uint64_t pending = sequence;
-        if (!producer.trySend(std::move(pending))) {
+        if (!producer.tryWrite(std::move(pending))) {
             result.valid = false;
             break;
         }
         uint64_t value = 0;
-        if (!consumer.tryRecv(value)) {
+        if (!consumer.tryRead(value)) {
             result.valid = false;
             break;
         }

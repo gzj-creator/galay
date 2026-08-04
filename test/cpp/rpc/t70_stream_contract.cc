@@ -32,7 +32,8 @@ int expect_control_frame_body_rejected(RpcMessageType type, const char* name)
     auto wire = concat(std::move(invalid_frame), next_frame);
 
     RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent> ring_buffer(128);
-    if (auto rc = expect(ring_buffer.write(wire.data(), wire.size()) == wire.size(),
+    if (auto rc = expect(
+            ring_buffer.tryWriteBatch(wire.data(), wire.size()) == wire.size(),
                          "failed to seed stream ring buffer")) {
         return rc;
     }

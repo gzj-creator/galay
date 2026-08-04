@@ -14,12 +14,15 @@
 ### Changed
 
 - **模板化 RingBuffer 容量并重命名 typed SPSC 实现**：`RingBuffer` 增加编译期容量参数，固定容量默认值为 4096，动态容量必须显式使用 `std::dynamic_extent`；新增容量 concept 和 Mmap 固定容量校验。typed SPSC 实现重命名为 `type_ring_buffer.hpp`，并移除冗余容量状态。
+- **优化 bounded SPSC 批处理数据面**：`Ring::split()` producer/consumer 独占本地 cursor，缓存对端 cursor，并将索引发布与回收收敛为每批一次；trivial 类型的环绕批处理使用两段 `memcpy`，减少逐元素原子访问和复制开销。
+- **统一底层 Ring 读写接口**：byte `RingBuffer`、`TypeRingBuffer<T>` 及 split endpoint 统一采用 `tryWrite` / `tryRead` 与 `tryWriteBatch` / `tryReadBatch` 命名，移除旧 `write` / `read`、`trySend` / `tryRecv` 接口；Channel 层继续保留 `send` / `recv` 语义。
 
 ### Added
 
 - **新增全量验证回归覆盖**：补充 io_uring `connect(EISCONN)`、benchmark 测量合同与 `CompletionLatch` 生命周期测试，并扩展 Mongo replica set 单 seed 发现、读偏好、部分 seed 故障和 setName 不匹配集成场景。
 - **新增 SPSC 专用数据面与异步通道**：`galay-utils` 提供运行时容量 `SpscRingBuffer<T>` 与成员内持槽位的 `StaticSpscRingBuffer<T, N>`；`galay-kernel` 在两个公开头中提供 `Ring` / `StaticRing`、约 4 KiB 分块复用的 `UnboundedQueue`，以及支持 move-only、批量收发、调用方缓冲区与 timeout 的 `BoundedChannel<T, N>` / `UnboundedChannel<T>`。`BoundedChannel` 另提供 close/drain；动态 ring 与无界分块的构造或扩容失败通过显式错误或布尔结果返回。
 - **补齐 SPSC 正确性与跨语言性能验证**：新增 ring 核心、无界跨块复用、窄游标回绕、异步 timeout 竞争、非法容量/OOM、安装消费和最终 drain 回归测试；新增严格 1P1C paired runner，以相同 `uint64_t` 序列、容量、yield 退避、FIFO/数量/checksum 门禁和 ABBA 配对样本对照 Rust Crossbeam，并输出 bootstrap 95% 置信区间、CV、原始样本与二进制哈希。
+- **扩展 SPSC paired 批处理对照**：C++ 与 Rust 同步新增 `batch_unbounded` 参考 case，schema 升级到 v4，并统一输出 QPS p50/p99、CV、bootstrap 95% CI、retry ratio 及正确性、稳定性和公平性门禁；默认 CV 阈值调整为 25%。
 - **新增高性能有界 MPMC 异步通道**：`galay::mpmc::BoundedChannel<T>` 基于固定容量 Vyukov ring 提供线程安全的 `trySend()` / `tryRecv()`、协程 `send()` / `recv()` / `recvBatch()`、超时、关闭唤醒和 move-only 元素支持；关闭位与 reservation cursor 共用同一 `tail` 原子，保证 close 前已取得的 reservation 完成发布并排空后才返回 `kClosed`。Apple AArch64 竞争退避使用 `isb` CPU hint，CAS miss 在当前调用内保持用户态重试。
 - **新增 MPMC 无界异步通道**：`galay::mpmc::UnboundedChannel<T>` 提供显式 producer/consumer token、默认线程本地 producer 缓存、单条与批量收发、异步接收、超时及 close/drain；producer 通过 0/1 SC active publication 与 close 建立全序，接收方仅在全部 producer 静止且二次 dequeue 仍为空时返回 `kClosed`。
 - **补齐 MPMC 正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、timeout 竞争、move-only、producer publication 线性化及无界队列两波跨 block 复用测试；新增独立进程 paired runner，严格统一 2P2C / 4P4C、8 字节单调 payload、yield backoff、完整 checksum/drain，每组至少采集 15 对交替样本并输出 bootstrap 95% CI，在 macOS 仅接受 `perf-class-only` 线程放置。Rust 对照仅保留 Crossbeam `ArrayQueue` 与 `crossbeam-channel`，旧的单消费者结果不再参与 MPMC 结论。

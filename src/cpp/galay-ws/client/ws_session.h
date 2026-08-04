@@ -150,7 +150,8 @@ public:
             }
 
             auto& session = *m_upgrader->m_session;
-            if (session.m_ring_buffer.write(m_recv_buffer.data(), recv_bytes) != recv_bytes) {
+            if (session.m_ring_buffer.tryWriteBatch(
+                    m_recv_buffer.data(), recv_bytes) != recv_bytes) {
                 ops.complete(std::unexpected(WsError(kWsProtocolError, "Upgrade response too large")));
             }
         }
@@ -439,7 +440,8 @@ public:
 
         void onBytesReceived(size_t recv_bytes) {
             auto& session = *m_upgrader->m_session;
-            if (session.m_ring_buffer.write(m_recv_buffer.data(), recv_bytes) != recv_bytes) {
+            if (session.m_ring_buffer.tryWriteBatch(
+                    m_recv_buffer.data(), recv_bytes) != recv_bytes) {
                 setProtocolError("Upgrade response too large");
             }
         }

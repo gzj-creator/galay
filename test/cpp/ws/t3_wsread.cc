@@ -26,7 +26,7 @@ std::string encodeMaskedFrame(WsOpcode opcode, std::string payload, bool fin = t
 }
 
 void writeAll(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring, std::string_view bytes) {
-    const size_t written = ring.write(bytes.data(), bytes.size());
+    const size_t written = ring.tryWriteBatch(bytes.data(), bytes.size());
     if (written != bytes.size()) {
         throw std::runtime_error("ring buffer write truncated");
     }

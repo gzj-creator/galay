@@ -18,12 +18,13 @@ int main()
     const size_t default_capacity = default_buffer.capacity();
 
     std::vector<char> prefix(default_capacity - 2, 'x');
-    if (default_buffer.write(prefix.data(), prefix.size()) != prefix.size()) {
+    if (default_buffer.tryWriteBatch(prefix.data(), prefix.size()) !=
+        prefix.size()) {
         std::cerr << "failed to prepare default mmap prefix\n";
         return 1;
     }
     default_buffer.consume(default_capacity - 4);
-    if (default_buffer.write("abcdef", 6) != 6) {
+    if (default_buffer.tryWriteBatch("abcdef", 6) != 6) {
         std::cerr << "failed to prepare default mmap wrapped payload\n";
         return 1;
     }
