@@ -35,7 +35,7 @@ slot->sequence.store(position + 1, std::memory_order_release);
 - 消费者的 `sequence.load(acquire)` 已经提供必要的同步
 - 不需要 `SeqCst` 的全局顺序保证
 
-**预期收益:** 单生产者 +15-20% 吞吐
+**预期收益:** 2P1C +15-20% 吞吐
 
 #### 优化点 2: 优化等待者计数检查
 
