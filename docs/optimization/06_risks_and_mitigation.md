@@ -87,7 +87,7 @@ bool send_sync(T&& value) {
 # 测试矩阵
 test_matrix = {
     'channels': ['bounded', 'unbounded'],
-    'producers': [1, 2, 4, 8, 16],
+    'producers': [2, 4, 8, 16],
     'capacity': [64, 256, 1024, 4096],
     'message_size': [8, 64, 256, 1024],
     'contention': ['low', 'medium', 'high']
