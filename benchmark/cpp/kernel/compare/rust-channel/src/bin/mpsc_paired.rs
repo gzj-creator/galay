@@ -10,6 +10,23 @@ enum CaseKind {
     Unbounded,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ConsumeMode {
+    Single,
+    Batch,
+}
+
+impl ConsumeMode {
+    fn name(self) -> &'static str {
+        match self {
+            Self::Single => "single",
+            Self::Batch => "batch",
+        }
+    }
+}
+
+const BATCH_LIMIT: usize = 4096;
+
 impl CaseKind {
     fn name(self) -> &'static str {
         match self {
@@ -26,6 +43,7 @@ struct Config {
     producer_core: usize,
     consumer_core: usize,
     kind: CaseKind,
+    consume_mode: ConsumeMode,
 }
 
 struct ProducerResult {
@@ -175,6 +193,7 @@ fn parse_arguments() -> Result<Config, String> {
         producer_core: 0,
         consumer_core: 2,
         kind: CaseKind::Bounded,
+        consume_mode: ConsumeMode::Single,
     };
     for pair in arguments.chunks_exact(2) {
         match pair[0].as_str() {
@@ -183,6 +202,13 @@ fn parse_arguments() -> Result<Config, String> {
                     "bounded" => CaseKind::Bounded,
                     "unbounded" => CaseKind::Unbounded,
                     _ => return Err("invalid case".to_owned()),
+                };
+            }
+            "--consume-mode" => {
+                config.consume_mode = match pair[1].as_str() {
+                    "single" => ConsumeMode::Single,
+                    "batch" => ConsumeMode::Batch,
+                    _ => return Err("invalid consume mode".to_owned()),
                 };
             }
             "--messages" => {
@@ -269,6 +295,26 @@ fn expected_checksum(config: &Config) -> u64 {
 
 fn encode_value(producer: usize, sequence: u64) -> u64 {
     ((producer as u64) << 32) | sequence
+}
+
+fn record_value(
+    value: u64,
+    producer_count: usize,
+    expected: &mut [u64],
+    result: &mut ConsumerResult,
+    state: &StartState,
+) -> bool {
+    let producer = (value >> 32) as usize;
+    let sequence = value & 0xffff_ffff;
+    if producer >= producer_count || sequence != expected[producer] {
+        result.fifo_ok = false;
+        state.failed.store(true, Ordering::Release);
+        return false;
+    }
+    expected[producer] += 1;
+    result.checksum = result.checksum.wrapping_add(value);
+    result.received += 1;
+    true
 }
 
 fn spawn_worker<T, F>(
@@ -392,6 +438,7 @@ fn run_bounded(config: &Config) -> Result<Measurement, String> {
     let consumer_state = Arc::clone(&state);
     let worker_state = Arc::clone(&state);
     let messages = config.messages;
+    let consume_mode = config.consume_mode;
     let expected_counts = (0..producer_count)
         .map(|producer| producer_messages(config, producer))
         .collect::<Vec<_>>();
@@ -403,33 +450,82 @@ fn run_bounded(config: &Config) -> Result<Measurement, String> {
             fifo_ok: true,
         };
         let mut expected = vec![0_u64; producer_count];
+        let mut batch = if consume_mode == ConsumeMode::Batch {
+            Vec::with_capacity(BATCH_LIMIT)
+        } else {
+            Vec::new()
+        };
         let mut all_producers_done = false;
         while result.received < messages && !consumer_state.failed.load(Ordering::Acquire) {
-            match receiver.try_recv() {
-                Ok(value) => {
-                    let producer = (value >> 32) as usize;
-                    let sequence = value & 0xffff_ffff;
-                    if producer >= producer_count || sequence != expected[producer] {
-                        result.fifo_ok = false;
-                        consumer_state.failed.store(true, Ordering::Release);
+            match consume_mode {
+                ConsumeMode::Single => match receiver.try_recv() {
+                    Ok(value) => {
+                        if !record_value(
+                            value,
+                            producer_count,
+                            &mut expected,
+                            &mut result,
+                            &consumer_state,
+                        ) {
+                            break;
+                        }
+                    }
+                    Err(crossbeam_channel::TryRecvError::Empty) => {
+                        result.empty_retries = result.empty_retries.wrapping_add(1);
+                        if all_producers_done {
+                            break;
+                        }
+                        all_producers_done =
+                            consumer_state.producers_done.load(Ordering::Acquire) == producer_count;
+                        if !all_producers_done {
+                            thread::yield_now();
+                        }
+                    }
+                    Err(crossbeam_channel::TryRecvError::Disconnected) => break,
+                },
+                ConsumeMode::Batch => {
+                    batch.clear();
+                    let mut disconnected = false;
+                    while batch.len() < BATCH_LIMIT {
+                        match receiver.try_recv() {
+                            Ok(value) => batch.push(value),
+                            Err(crossbeam_channel::TryRecvError::Empty) => break,
+                            Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                                disconnected = true;
+                                break;
+                            }
+                        }
+                    }
+                    if batch.is_empty() {
+                        if disconnected {
+                            break;
+                        }
+                        result.empty_retries = result.empty_retries.wrapping_add(1);
+                        if all_producers_done {
+                            break;
+                        }
+                        all_producers_done =
+                            consumer_state.producers_done.load(Ordering::Acquire) == producer_count;
+                        if !all_producers_done {
+                            thread::yield_now();
+                        }
+                        continue;
+                    }
+                    for value in batch.drain(..) {
+                        if !record_value(
+                            value,
+                            producer_count,
+                            &mut expected,
+                            &mut result,
+                            &consumer_state,
+                        ) {
+                            break;
+                        }
+                    }
+                    if !result.fifo_ok {
                         break;
                     }
-                    expected[producer] += 1;
-                    result.checksum = result.checksum.wrapping_add(value);
-                    result.received += 1;
                 }
-                Err(crossbeam_channel::TryRecvError::Empty) => {
-                    result.empty_retries = result.empty_retries.wrapping_add(1);
-                    if all_producers_done {
-                        break;
-                    }
-                    all_producers_done =
-                        consumer_state.producers_done.load(Ordering::Acquire) == producer_count;
-                    if !all_producers_done {
-                        thread::yield_now();
-                    }
-                }
-                Err(crossbeam_channel::TryRecvError::Disconnected) => break,
             }
         }
         for producer in 0..producer_count {
@@ -492,6 +588,7 @@ fn run_unbounded(config: &Config) -> Result<Measurement, String> {
     let consumer_state = Arc::clone(&state);
     let worker_state = Arc::clone(&state);
     let messages = config.messages;
+    let consume_mode = config.consume_mode;
     let expected_counts = (0..producer_count)
         .map(|producer| producer_messages(config, producer))
         .collect::<Vec<_>>();
@@ -503,33 +600,82 @@ fn run_unbounded(config: &Config) -> Result<Measurement, String> {
             fifo_ok: true,
         };
         let mut expected = vec![0_u64; producer_count];
+        let mut batch = if consume_mode == ConsumeMode::Batch {
+            Vec::with_capacity(BATCH_LIMIT)
+        } else {
+            Vec::new()
+        };
         let mut all_producers_done = false;
         while result.received < messages && !consumer_state.failed.load(Ordering::Acquire) {
-            match receiver.try_recv() {
-                Ok(value) => {
-                    let producer = (value >> 32) as usize;
-                    let sequence = value & 0xffff_ffff;
-                    if producer >= producer_count || sequence != expected[producer] {
-                        result.fifo_ok = false;
-                        consumer_state.failed.store(true, Ordering::Release);
+            match consume_mode {
+                ConsumeMode::Single => match receiver.try_recv() {
+                    Ok(value) => {
+                        if !record_value(
+                            value,
+                            producer_count,
+                            &mut expected,
+                            &mut result,
+                            &consumer_state,
+                        ) {
+                            break;
+                        }
+                    }
+                    Err(crossbeam_channel::TryRecvError::Empty) => {
+                        result.empty_retries = result.empty_retries.wrapping_add(1);
+                        if all_producers_done {
+                            break;
+                        }
+                        all_producers_done =
+                            consumer_state.producers_done.load(Ordering::Acquire) == producer_count;
+                        if !all_producers_done {
+                            thread::yield_now();
+                        }
+                    }
+                    Err(crossbeam_channel::TryRecvError::Disconnected) => break,
+                },
+                ConsumeMode::Batch => {
+                    batch.clear();
+                    let mut disconnected = false;
+                    while batch.len() < BATCH_LIMIT {
+                        match receiver.try_recv() {
+                            Ok(value) => batch.push(value),
+                            Err(crossbeam_channel::TryRecvError::Empty) => break,
+                            Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                                disconnected = true;
+                                break;
+                            }
+                        }
+                    }
+                    if batch.is_empty() {
+                        if disconnected {
+                            break;
+                        }
+                        result.empty_retries = result.empty_retries.wrapping_add(1);
+                        if all_producers_done {
+                            break;
+                        }
+                        all_producers_done =
+                            consumer_state.producers_done.load(Ordering::Acquire) == producer_count;
+                        if !all_producers_done {
+                            thread::yield_now();
+                        }
+                        continue;
+                    }
+                    for value in batch.drain(..) {
+                        if !record_value(
+                            value,
+                            producer_count,
+                            &mut expected,
+                            &mut result,
+                            &consumer_state,
+                        ) {
+                            break;
+                        }
+                    }
+                    if !result.fifo_ok {
                         break;
                     }
-                    expected[producer] += 1;
-                    result.checksum = result.checksum.wrapping_add(value);
-                    result.received += 1;
                 }
-                Err(crossbeam_channel::TryRecvError::Empty) => {
-                    result.empty_retries = result.empty_retries.wrapping_add(1);
-                    if all_producers_done {
-                        break;
-                    }
-                    all_producers_done =
-                        consumer_state.producers_done.load(Ordering::Acquire) == producer_count;
-                    if !all_producers_done {
-                        thread::yield_now();
-                    }
-                }
-                Err(crossbeam_channel::TryRecvError::Disconnected) => break,
             }
         }
         for producer in 0..producer_count {
@@ -563,8 +709,14 @@ fn run() -> Result<bool, String> {
         0
     };
     println!(
-        "{{\"schema\":\"galay.mpsc.paired.v1\",\"language\":\"rust\",\"case\":\"{}\",\"topology\":\"{}p1c\",\"ordering\":\"producer_fifo\",\"payload_bytes\":8,\"capacity\":{},\"messages\":{},\"elapsed_ns\":{},\"messages_per_second\":{},\"received\":{},\"checksum\":{},\"expected_checksum\":{},\"fifo_ok\":{},\"full_retries\":{},\"empty_retries\":{},\"producer_placement\":\"{}\",\"consumer_placement\":\"{}\",\"backoff\":\"yield\",\"generator\":\"per_producer_monotonic_u64\",\"valid\":{}}}",
+        "{{\"schema\":\"galay.mpsc.paired.v1\",\"language\":\"rust\",\"case\":\"{}\",\"consume_mode\":\"{}\",\"batch_limit\":{},\"topology\":\"{}p1c\",\"ordering\":\"producer_fifo\",\"payload_bytes\":8,\"capacity\":{},\"messages\":{},\"elapsed_ns\":{},\"messages_per_second\":{},\"received\":{},\"checksum\":{},\"expected_checksum\":{},\"fifo_ok\":{},\"full_retries\":{},\"empty_retries\":{},\"producer_placement\":\"{}\",\"consumer_placement\":\"{}\",\"backoff\":\"yield\",\"generator\":\"per_producer_monotonic_u64\",\"valid\":{}}}",
         config.kind.name(),
+        config.consume_mode.name(),
+        if config.consume_mode == ConsumeMode::Batch {
+            BATCH_LIMIT
+        } else {
+            1
+        },
         config.producers,
         reported_capacity,
         config.messages,

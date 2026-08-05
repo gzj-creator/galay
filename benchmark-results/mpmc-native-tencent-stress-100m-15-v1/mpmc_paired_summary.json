@@ -1,0 +1,57 @@
+{
+  "schema": "galay.mpmc.paired.summary.v2",
+  "messages": 100000000,
+  "samples": 15,
+  "cases": {
+    "unbounded": {
+      "capacity": 0,
+      "topologies": {
+        "2p2c": {
+          "cpp_median_messages_per_second": 37583100.0,
+          "rust_median_messages_per_second": 22231279.660539813,
+          "paired_cpp_over_rust_median": 1.76651617245642,
+          "paired_cpp_over_rust_ci95": [
+            1.520038571361384,
+            2.392404291880684
+          ],
+          "cpp_pair_wins": 15
+        },
+        "4p4c": {
+          "cpp_median_messages_per_second": 22016500.0,
+          "rust_median_messages_per_second": 20589871.956999376,
+          "paired_cpp_over_rust_median": 1.181641916800512,
+          "paired_cpp_over_rust_ci95": [
+            1.01090958449789,
+            1.34534552368392
+          ],
+          "cpp_pair_wins": 12
+        }
+      }
+    },
+    "bounded": {
+      "capacity": 4096,
+      "topologies": {
+        "2p2c": {
+          "cpp_median_messages_per_second": 43245800.0,
+          "rust_median_messages_per_second": 36875245.36834362,
+          "paired_cpp_over_rust_median": 1.1585743138418398,
+          "paired_cpp_over_rust_ci95": [
+            1.09736761393599,
+            1.201535871484046
+          ],
+          "cpp_pair_wins": 14
+        },
+        "4p4c": {
+          "cpp_median_messages_per_second": 25924800.0,
+          "rust_median_messages_per_second": 22192974.111504216,
+          "paired_cpp_over_rust_median": 1.164644639580048,
+          "paired_cpp_over_rust_ci95": [
+            1.101700018986,
+            1.4010011153386
+          ],
+          "cpp_pair_wins": 15
+        }
+      }
+    }
+  }
+}

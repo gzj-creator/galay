@@ -13,6 +13,9 @@
 
 ### Changed
 
+- **扩展 MPSC paired 基准的消费模式**：C++ 与 Rust 对照程序统一支持 `single` / `batch` 消费模式，runner 增加消费模式参数、结果字段和批量上限校验，便于区分单条轮询与批量排空的吞吐口径。
+- **补齐 bounded MPSC 无分配批量排空接口**：`BoundedChannel<T>` 新增 `drainTo()`，复用调用方 vector 的 spare capacity，整批推进 head 并统一探测发送 waiter；同步补充 FIFO、容量边界、并发 close 和 waiter 唤醒回归测试。
+- **修复 MPMC 无界通道 token 换块瞬时失败**：token 缓存块失效时同时校验 tail position 与 tail block anchor，避免消费者回收旧块导致的短暂竞态被误报为发送失败。
 - **校正并发通道基准口径与对照标识**：MPSC 吞吐、prefetch 和 C++/Rust paired runner 统一从 2P1C 起测，移除会退化为 SPSC 的 1P1C 默认场景；精简旧 MPSC 综合基准，只保留多生产者吞吐、正确性与压力覆盖，并在 MPMC Rust 输出中记录固定的 Crossbeam 实现版本。
 - **模板化 RingBuffer 容量并重命名 typed SPSC 实现**：`RingBuffer` 增加编译期容量参数，固定容量默认值为 4096，动态容量必须显式使用 `std::dynamic_extent`；新增容量 concept 和 Mmap 固定容量校验。typed SPSC 实现重命名为 `type_ring_buffer.hpp`，并移除冗余容量状态。
 - **优化 bounded SPSC 批处理数据面**：`Ring::split()` producer/consumer 独占本地 cursor，缓存对端 cursor，并将索引发布与回收收敛为每批一次；trivial 类型的环绕批处理使用两段 `memcpy`，减少逐元素原子访问和复制开销。

@@ -1126,11 +1126,14 @@ private:
                 block->base.load(std::memory_order_acquire) != blockBase ||
                 block->state.load(std::memory_order_acquire) !=
                     BlockState::kActive) {
+                Block* const anchor =
+                    m_tailBlock.load(std::memory_order_acquire);
                 block = tailBlockFor(token.m_block, token.m_blockBase, position);
                 if (block == nullptr) {
                     const uint64_t latest =
                         m_tail.load(std::memory_order_relaxed);
-                    if (latest != tail) {
+                    if (latest != tail ||
+                        m_tailBlock.load(std::memory_order_acquire) != anchor) {
                         tail = latest;
                         detail::unboundedChannelBackoff(backoffStep);
                         continue;

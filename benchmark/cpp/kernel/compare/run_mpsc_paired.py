@@ -26,6 +26,8 @@ REQUIRED_FIELDS = {
     "schema",
     "language",
     "case",
+    "consume_mode",
+    "batch_limit",
     "topology",
     "ordering",
     "payload_bytes",
@@ -70,6 +72,11 @@ def parse_args() -> argparse.Namespace:
         help="comma-separated subset of bounded,unbounded",
     )
     parser.add_argument(
+        "--consume-modes",
+        default="single,batch",
+        help="comma-separated subset of single,batch",
+    )
+    parser.add_argument(
         "--producers",
         type=comma_separated_ints,
         default=comma_separated_ints("2,4,8"),
@@ -102,6 +109,16 @@ def parse_args() -> argparse.Namespace:
         parser.error("--cases must contain bounded and/or unbounded")
     if len(set(cases)) != len(cases):
         parser.error("--cases must not contain duplicates")
+    allowed_consume_modes = {"single", "batch"}
+    consume_modes = [
+        value.strip() for value in args.consume_modes.split(",") if value.strip()
+    ]
+    if not consume_modes or any(
+        value not in allowed_consume_modes for value in consume_modes
+    ):
+        parser.error("--consume-modes must contain single and/or batch")
+    if len(set(consume_modes)) != len(consume_modes):
+        parser.error("--consume-modes must not contain duplicates")
     if any(value < 2 or value > 32 for value in args.producers):
         parser.error("--producers values must be between 2 and 32")
     if len(set(args.producers)) != len(args.producers):
@@ -142,6 +159,7 @@ def parse_args() -> argparse.Namespace:
         parser.error("consumer core must not overlap any requested producer range")
 
     args.cases = cases
+    args.consume_modes = consume_modes
     return args
 
 
@@ -167,6 +185,7 @@ def run_once(
     binary: Path,
     language: str,
     case_name: str,
+    consume_mode: str,
     capacity: int,
     messages: int,
     producers: int,
@@ -178,6 +197,8 @@ def run_once(
         str(binary),
         "--case",
         case_name,
+        "--consume-mode",
+        consume_mode,
         "--capacity",
         str(capacity),
         "--messages",
@@ -199,7 +220,7 @@ def run_once(
         )
     except subprocess.TimeoutExpired as error:
         raise RuntimeError(
-            f"{language} {case_name} {producers}p1c benchmark exceeded "
+            f"{language} {case_name}/{consume_mode} {producers}p1c benchmark exceeded "
             f"the per-run timeout of {process_timeout:.1f}s"
         ) from error
     if completed.returncode != 0:
@@ -225,6 +246,8 @@ def run_once(
         "schema": "galay.mpsc.paired.v1",
         "language": language,
         "case": case_name,
+        "consume_mode": consume_mode,
+        "batch_limit": 4096 if consume_mode == "batch" else 1,
         "topology": f"{producers}p1c",
         "ordering": "producer_fifo",
         "payload_bytes": 8,
@@ -245,6 +268,7 @@ def run_once(
         raise RuntimeError(f"{language} validity fields must be JSON booleans")
     integer_fields = (
         "payload_bytes",
+        "batch_limit",
         "capacity",
         "messages",
         "elapsed_ns",
@@ -295,6 +319,7 @@ def language_order(index: int) -> tuple[str, str]:
 def run_pair(
     binaries: dict[str, Path],
     case_name: str,
+    consume_mode: str,
     capacity: int,
     messages: int,
     producers: int,
@@ -308,6 +333,7 @@ def run_pair(
             binaries[language],
             language,
             case_name,
+            consume_mode,
             capacity,
             messages,
             producers,
@@ -326,7 +352,7 @@ def run_pair(
     }
     if placements["cpp"] != placements["rust"]:
         raise RuntimeError(
-            f"{case_name} {producers}p1c pair {order_index} used different "
+            f"{case_name}/{consume_mode} {producers}p1c pair {order_index} used different "
             "C++/Rust placement"
         )
     return rows
@@ -382,6 +408,7 @@ def execute_scenario(
     args: argparse.Namespace,
     binaries: dict[str, Path],
     case_name: str,
+    consume_mode: str,
     producers: int,
 ) -> dict[str, Any]:
     capacity = args.capacity if case_name == "bounded" else 0
@@ -396,6 +423,7 @@ def execute_scenario(
             rows = run_pair(
                 binaries,
                 case_name,
+                consume_mode,
                 capacity,
                 messages,
                 producers,
@@ -418,17 +446,20 @@ def execute_scenario(
         messages = next_messages
         if messages > args.max_messages:
             raise RuntimeError(
-                f"{case_name} {producers}p1c calibration requires more than "
+                f"{case_name}/{consume_mode} {producers}p1c calibration requires more than "
                 f"{args.max_messages} messages"
             )
     else:
-        raise RuntimeError(f"{case_name} {producers}p1c failed to calibrate in time")
+        raise RuntimeError(
+            f"{case_name}/{consume_mode} {producers}p1c failed to calibrate in time"
+        )
 
     warmup_rows: list[dict[str, Any]] = []
     for warmup in range(args.warmups):
         rows = run_pair(
             binaries,
             case_name,
+            consume_mode,
             capacity,
             messages,
             producers,
@@ -446,6 +477,7 @@ def execute_scenario(
         rows = run_pair(
             binaries,
             case_name,
+            consume_mode,
             capacity,
             messages,
             producers,
@@ -458,7 +490,8 @@ def execute_scenario(
             row.update(phase="sample", sample_index=sample, attempt=None)
             if row["elapsed_ns"] < args.target_seconds * 1_000_000_000:
                 raise RuntimeError(
-                    f"{case_name} {producers}p1c {row['language']} sample {sample} "
+                    f"{case_name}/{consume_mode} {producers}p1c "
+                    f"{row['language']} sample {sample} "
                     f"lasted less than {args.target_seconds:.6f}s"
                 )
         sample_rows.extend(rows)
@@ -487,6 +520,7 @@ def execute_scenario(
 
     seed = (
         sum(ord(character) for character in case_name)
+        + sum(ord(character) for character in consume_mode) * 97
         + capacity
         + producers * 100_003
     )
@@ -533,6 +567,7 @@ def execute_scenario(
     )
     return {
         "case": case_name,
+        "consume_mode": consume_mode,
         "topology": f"{producers}p1c",
         "producers": producers,
         "capacity": capacity,
@@ -560,6 +595,7 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
         "scenarios": [
             {
                 "case": scenario["case"],
+                "consume_mode": scenario["consume_mode"],
                 "topology": scenario["topology"],
                 "producers": scenario["producers"],
                 "capacity": scenario["capacity"],
@@ -578,6 +614,8 @@ def write_outputs(report: dict[str, Any], output_dir: Path) -> None:
         "sample_index",
         "language",
         "case",
+        "consume_mode",
+        "batch_limit",
         "topology",
         "ordering",
         "capacity",
@@ -629,6 +667,7 @@ def main() -> int:
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "config": {
                 "cases": args.cases,
+                "consume_modes": args.consume_modes,
                 "producers": args.producers,
                 "topologies": [f"{producers}p1c" for producers in args.producers],
                 "capacity": args.capacity,
@@ -667,10 +706,13 @@ def main() -> int:
         }
 
         for case_name in args.cases:
-            for producers in args.producers:
-                report["scenarios"].append(
-                    execute_scenario(args, binaries, case_name, producers)
-                )
+            for consume_mode in args.consume_modes:
+                for producers in args.producers:
+                    report["scenarios"].append(
+                        execute_scenario(
+                            args, binaries, case_name, consume_mode, producers
+                        )
+                    )
         write_outputs(report, args.output_dir)
     except (OSError, RuntimeError) as error:
         print(f"paired benchmark failed: {error}", file=sys.stderr)
@@ -681,6 +723,7 @@ def main() -> int:
             json.dumps(
                 {
                     "case": scenario["case"],
+                    "consume_mode": scenario["consume_mode"],
                     "topology": scenario["topology"],
                     "capacity": scenario["capacity"],
                     "messages": scenario["messages"],

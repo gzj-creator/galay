@@ -1,0 +1,178 @@
+{
+  "config": {
+    "backoff": "yield",
+    "bootstrap_resamples": 10000,
+    "calibration_attempts": 5,
+    "calibration_probes": 3,
+    "capacity": 4096,
+    "cases": [
+      "bounded",
+      "unbounded"
+    ],
+    "consumer_core": 2,
+    "generator": "per_producer_monotonic_u64",
+    "initial_messages": 1000000,
+    "max_cv_percent": 3.0,
+    "max_messages": 2000000000,
+    "minimum_speedup": 1.0,
+    "ordering": "producer_fifo",
+    "payload_bytes": 8,
+    "process_timeout": 300.0,
+    "producer_core": 0,
+    "producers": [
+      2
+    ],
+    "samples": 16,
+    "target_seconds": 1.0,
+    "topologies": [
+      "2p1c"
+    ],
+    "warmups": 1
+  },
+  "environment": {
+    "binaries": {
+      "cpp": {
+        "path": "/tmp/galay-mpsc-20260805-v1/build-mpsc/benchmark/cpp/kernel/benchmark_kernel_compare_mpsc_paired",
+        "sha256": "99a0a5d16ee986ea4f95b9850699810c59de5177bf322755de5621ab4c86c3b1"
+      },
+      "rust": {
+        "path": "/tmp/galay-mpsc-20260805-v1/build-rust/release/mpsc_paired",
+        "sha256": "b489181d3909483e6e4dd484e680c014c17eb195d9210e4032f9e3857e4c2abb"
+      }
+    },
+    "logical_cpu_count": 4,
+    "machine": "x86_64",
+    "platform": "Linux-6.8.0-101-generic-x86_64-with-glibc2.39",
+    "python": "3.12.3"
+  },
+  "generated_at": "2026-08-04T18:26:03.921696+00:00",
+  "scenarios": [
+    {
+      "acceptance": {
+        "cpp_cv_passed": false,
+        "max_cv_percent": 3.0,
+        "minimum_speedup": 1.0,
+        "paired_ratio_abba_block_ci95_low": 1.1340836352705463,
+        "paired_ratio_ci_passed": true,
+        "passed": false,
+        "rust_cv_passed": false
+      },
+      "capacity": 4096,
+      "case": "bounded",
+      "messages": 62453884,
+      "producers": 2,
+      "summary": {
+        "cpp_messages_per_second": {
+          "cv_percent": 14.17185600822642,
+          "maximum": 46896397.9198367,
+          "mean": 34161027.091598704,
+          "median": 34303459.48539089,
+          "median_ci95_high": 35983230.55401643,
+          "median_ci95_low": 31848039.23465444,
+          "minimum": 24965593.83484296
+        },
+        "paired_cpp_over_rust": {
+          "abba_block_median_ci95_high": 1.2404895393233097,
+          "abba_block_median_ci95_low": 1.1340836352705463,
+          "cv_percent": 11.630746491787228,
+          "maximum": 1.3828224411785517,
+          "mean": 1.192895610227601,
+          "median": 1.209582230880323,
+          "median_ci95_high": 1.288385584721057,
+          "median_ci95_low": 1.1317800411620433,
+          "minimum": 0.8843092013031593
+        },
+        "run_order_diagnostics": {
+          "cpp_first": {
+            "maximum": 1.3828224411785517,
+            "mean": 1.1910331601516846,
+            "median": 1.2147457799343906,
+            "minimum": 0.8843092013031593,
+            "samples": 8
+          },
+          "rust_first": {
+            "maximum": 1.347965334042787,
+            "mean": 1.194758060303517,
+            "median": 1.209582230880323,
+            "minimum": 1.0037575370534357,
+            "samples": 8
+          }
+        },
+        "rust_messages_per_second": {
+          "cv_percent": 12.247086820092013,
+          "maximum": 39412326.45056761,
+          "mean": 28747969.977629796,
+          "median": 28369855.215981647,
+          "median_ci95_high": 28841888.400229055,
+          "median_ci95_low": 27534455.20955781,
+          "minimum": 24150754.97390216
+        }
+      },
+      "topology": "2p1c"
+    },
+    {
+      "acceptance": {
+        "cpp_cv_passed": false,
+        "max_cv_percent": 3.0,
+        "minimum_speedup": 1.0,
+        "paired_ratio_abba_block_ci95_low": 0.7950162451456823,
+        "paired_ratio_ci_passed": false,
+        "passed": false,
+        "rust_cv_passed": false
+      },
+      "capacity": 0,
+      "case": "unbounded",
+      "messages": 29855999,
+      "producers": 2,
+      "summary": {
+        "cpp_messages_per_second": {
+          "cv_percent": 5.195437429371103,
+          "maximum": 13780075.322329938,
+          "mean": 12597801.93958061,
+          "median": 12401544.308845297,
+          "median_ci95_high": 13041299.478699414,
+          "median_ci95_low": 12223397.095683087,
+          "minimum": 11587942.101857586
+        },
+        "paired_cpp_over_rust": {
+          "abba_block_median_ci95_high": 0.8882698278413401,
+          "abba_block_median_ci95_low": 0.7950162451456823,
+          "cv_percent": 10.740656096640851,
+          "maximum": 0.9824404001152822,
+          "mean": 0.8331741233151149,
+          "median": 0.8332062278242515,
+          "median_ci95_high": 0.8882698278413401,
+          "median_ci95_low": 0.7950162451456823,
+          "minimum": 0.6770237172397918
+        },
+        "run_order_diagnostics": {
+          "cpp_first": {
+            "maximum": 0.9204590517222415,
+            "mean": 0.7791229549162975,
+            "median": 0.7749363383165226,
+            "minimum": 0.6770237172397918,
+            "samples": 8
+          },
+          "rust_first": {
+            "maximum": 0.9824404001152822,
+            "mean": 0.8872252917139322,
+            "median": 0.8764458048664181,
+            "minimum": 0.7950162451456823,
+            "samples": 8
+          }
+        },
+        "rust_messages_per_second": {
+          "cv_percent": 8.780691924811007,
+          "maximum": 18297167.694624312,
+          "mean": 15237145.656969087,
+          "median": 15253641.302276462,
+          "median_ci95_high": 15596903.698353069,
+          "median_ci95_low": 14326100.476223025,
+          "minimum": 13553127.727491293
+        }
+      },
+      "topology": "2p1c"
+    }
+  ],
+  "schema": "galay.mpsc.paired.report.v1"
+}

@@ -24,6 +24,7 @@
 #include <emmintrin.h>
 #endif
 
+#include <algorithm>
 #include <atomic>
 #include <bit>
 #include <concepts>
@@ -428,6 +429,7 @@ private:
  * - 唯一消费者直接推进 head，不执行消费者间 CAS 或竞争退避。
  * - send() / recv() / recvBatch() 满或空时只挂起协程，不阻塞底层线程。
  * - 多生产者之间不保证全局顺序；每个生产者自身发送的消息保持 FIFO。
+ * - 高频吞吐路径应使用 drainTo() 批量排空；低频或延迟敏感路径可使用 tryRecv()。
  *
  * @note 调用方必须保证同一时刻只有一个消费者执行接收操作。生产者可以代替挂起的
  *       接收协程完成一次 ring 消费；waiter 状态 CAS 保证该逻辑消费者只由一个线程推进。
@@ -547,6 +549,43 @@ public:
             return value;
         }
         return std::nullopt;
+    }
+
+    /**
+     * @brief 把消息追加到调用方预留的 vector，且绝不扩容。
+     * @param destination 目标 vector；只使用现有 spare capacity。
+     * @param maxCount 本次最多排空的消息数。
+     * @return 实际追加数量；容量不足或当前为空时返回 0。
+     * @note 仅唯一消费者可调用；稳态路径不分配内存，并且整批只做一次
+     *       head 提交与一次 send-waiter 探测。
+     */
+    [[nodiscard]] size_t drainTo(
+        std::vector<T>& destination, size_t maxCount) noexcept
+    {
+        const size_t spare = destination.capacity() - destination.size();
+        const size_t limit = std::min(maxCount, spare);
+        size_t position = m_head.load(std::memory_order_relaxed);
+        size_t drained = 0;
+        while (drained < limit) {
+            Slot& slot = m_slots[position & m_mask];
+            if (slot.sequence.load(std::memory_order_acquire) != position + 1) {
+                break;
+            }
+            destination.push_back(std::move(*slot.value()));
+            std::destroy_at(slot.value());
+            slot.sequence.store(position + m_capacity,
+                                std::memory_order_seq_cst);
+            ++position;
+            ++drained;
+        }
+        if (drained == 0) {
+            return 0;
+        }
+        m_head.store(position, std::memory_order_release);
+        if (m_sendWaiterCount.load(std::memory_order_seq_cst) != 0) {
+            requestPump(kSendWork);
+        }
+        return drained;
     }
 
     /**

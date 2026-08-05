@@ -27,16 +27,20 @@
 namespace {
 
 enum class CaseKind : uint8_t { kBounded, kUnbounded };
+enum class ConsumeMode : uint8_t { kSingle, kBatch };
 enum class SendResult : uint8_t { kSent, kRetry, kFailed };
 enum class ArgumentError : uint8_t {
     kMissingValue,
     kUnknownOption,
     kInvalidCase,
+    kInvalidConsumeMode,
     kInvalidNumber,
     kInvalidCapacity,
     kInvalidTopology,
     kInvalidMessageRange,
 };
+
+constexpr size_t kBatchLimit = 4096;
 
 struct Config
 {
@@ -46,6 +50,7 @@ struct Config
     size_t producerCore = 0;
     size_t consumerCore = 2;
     CaseKind kind = CaseKind::kBounded;
+    ConsumeMode consumeMode = ConsumeMode::kSingle;
 };
 
 struct Measurement
@@ -79,6 +84,7 @@ const char* argumentErrorName(ArgumentError error) noexcept
     case ArgumentError::kMissingValue: return "missing option value";
     case ArgumentError::kUnknownOption: return "unknown option";
     case ArgumentError::kInvalidCase: return "invalid case";
+    case ArgumentError::kInvalidConsumeMode: return "invalid consume mode";
     case ArgumentError::kInvalidNumber: return "invalid unsigned integer";
     case ArgumentError::kInvalidCapacity:
         return "bounded capacity must be a power of two and at least 2";
@@ -93,6 +99,11 @@ const char* argumentErrorName(ArgumentError error) noexcept
 const char* caseName(CaseKind kind) noexcept
 {
     return kind == CaseKind::kBounded ? "bounded" : "unbounded";
+}
+
+const char* consumeModeName(ConsumeMode mode) noexcept
+{
+    return mode == ConsumeMode::kSingle ? "single" : "batch";
 }
 
 template <typename UInt>
@@ -123,6 +134,14 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
                 config.kind = CaseKind::kUnbounded;
             } else {
                 return std::unexpected(ArgumentError::kInvalidCase);
+            }
+        } else if (option == "--consume-mode") {
+            if (value == "single") {
+                config.consumeMode = ConsumeMode::kSingle;
+            } else if (value == "batch") {
+                config.consumeMode = ConsumeMode::kBatch;
+            } else {
+                return std::unexpected(ArgumentError::kInvalidConsumeMode);
             }
         } else if (option == "--messages") {
             auto parsed = parseUnsigned<uint64_t>(value);
@@ -208,8 +227,14 @@ uint64_t encodeValue(size_t producer, uint64_t sequence) noexcept
     return (static_cast<uint64_t>(producer) << 32U) | sequence;
 }
 
-template <typename Send, typename Receive>
-Measurement runMpsc(const Config& config, Send&& send, Receive&& receive)
+template <ConsumeMode Mode,
+          typename Send,
+          typename ReceiveSingle,
+          typename DrainBatch>
+Measurement runMpsc(const Config& config,
+                    Send&& send,
+                    ReceiveSingle&& receiveSingle,
+                    DrainBatch&& drainBatch)
 {
     StartState state;
     std::vector<uint64_t> fullRetries(config.producers, 0);
@@ -271,33 +296,64 @@ Measurement runMpsc(const Config& config, Send&& send, Receive&& receive)
             std::this_thread::yield();
         }
         std::vector<uint64_t> expected(config.producers, 0);
-        bool allProducersDone = false;
-        while (received < config.messages &&
-               !state.failed.load(std::memory_order_acquire)) {
-            auto value = receive();
-            if (!value.has_value()) {
-                ++emptyRetries;
-                if (allProducersDone) {
-                    break;
-                }
-                allProducersDone =
-                    state.producersDone.load(std::memory_order_acquire) ==
-                    config.producers;
-                if (!allProducersDone) {
-                    std::this_thread::yield();
-                }
-                continue;
-            }
-            const size_t producer = static_cast<size_t>(*value >> 32U);
-            const uint64_t sequence = *value & 0xffff'ffffULL;
+        std::vector<uint64_t> batch;
+        if constexpr (Mode == ConsumeMode::kBatch) {
+            batch.reserve(kBatchLimit);
+        }
+        const auto consumeValue = [&](uint64_t value) {
+            const size_t producer = static_cast<size_t>(value >> 32U);
+            const uint64_t sequence = value & 0xffff'ffffULL;
             if (producer >= config.producers || sequence != expected[producer]) {
                 fifoOk = false;
                 state.failed.store(true, std::memory_order_release);
-                break;
+                return false;
             }
             ++expected[producer];
-            checksum += *value;
+            checksum += value;
             ++received;
+            return true;
+        };
+        bool allProducersDone = false;
+        while (received < config.messages &&
+               !state.failed.load(std::memory_order_acquire)) {
+            bool receivedAny = false;
+            if constexpr (Mode == ConsumeMode::kSingle) {
+                auto value = receiveSingle();
+                if (value.has_value()) {
+                    receivedAny = consumeValue(*value);
+                }
+            } else {
+                batch.clear();
+                const size_t drained = drainBatch(batch);
+                if (drained != batch.size()) {
+                    fifoOk = false;
+                    state.failed.store(true, std::memory_order_release);
+                    break;
+                }
+                receivedAny = drained != 0;
+                for (const uint64_t value : batch) {
+                    if (!consumeValue(value)) {
+                        break;
+                    }
+                }
+            }
+            if (!fifoOk) {
+                break;
+            }
+            if (receivedAny) {
+                continue;
+            }
+
+            ++emptyRetries;
+            if (allProducersDone) {
+                break;
+            }
+            allProducersDone =
+                state.producersDone.load(std::memory_order_acquire) ==
+                config.producers;
+            if (!allProducersDone) {
+                std::this_thread::yield();
+            }
         }
         for (size_t producer = 0; producer < config.producers; ++producer) {
             fifoOk = fifoOk && expected[producer] == producerMessages(config, producer);
@@ -338,13 +394,19 @@ Measurement runMpsc(const Config& config, Send&& send, Receive&& receive)
 Measurement runBounded(const Config& config)
 {
     galay::mpsc::BoundedChannel<uint64_t> channel(config.capacity);
-    return runMpsc(
-        config,
-        [&channel](size_t, uint64_t& value) {
-            return channel.trySend(std::move(value))
-                ? SendResult::kSent : SendResult::kRetry;
-        },
-        [&channel]() { return channel.tryRecv(); });
+    const auto send = [&channel](size_t, uint64_t& value) {
+        return channel.trySend(std::move(value))
+            ? SendResult::kSent : SendResult::kRetry;
+    };
+    const auto receiveSingle = [&channel]() { return channel.tryRecv(); };
+    const auto drainBatch = [&channel](std::vector<uint64_t>& destination) {
+        return channel.drainTo(destination, kBatchLimit);
+    };
+    return config.consumeMode == ConsumeMode::kSingle
+        ? runMpsc<ConsumeMode::kSingle>(
+              config, send, receiveSingle, drainBatch)
+        : runMpsc<ConsumeMode::kBatch>(
+              config, send, receiveSingle, drainBatch);
 }
 
 Measurement runUnbounded(const Config& config)
@@ -358,13 +420,19 @@ Measurement runUnbounded(const Config& config)
         if (!token.valid()) return {};
         tokens.push_back(std::move(token));
     }
-    return runMpsc(
-        config,
-        [&channel, &tokens](size_t producer, uint64_t& value) {
-            return channel.send(tokens[producer], std::move(value))
-                ? SendResult::kSent : SendResult::kFailed;
-        },
-        [&channel]() { return channel.tryRecv(); });
+    const auto send = [&channel, &tokens](size_t producer, uint64_t& value) {
+        return channel.send(tokens[producer], std::move(value))
+            ? SendResult::kSent : SendResult::kFailed;
+    };
+    const auto receiveSingle = [&channel]() { return channel.tryRecv(); };
+    const auto drainBatch = [&channel](std::vector<uint64_t>& destination) {
+        return channel.drainTo(destination, kBatchLimit);
+    };
+    return config.consumeMode == ConsumeMode::kSingle
+        ? runMpsc<ConsumeMode::kSingle>(
+              config, send, receiveSingle, drainBatch)
+        : runMpsc<ConsumeMode::kBatch>(
+              config, send, receiveSingle, drainBatch);
 }
 
 } // namespace
@@ -389,6 +457,10 @@ int main(int argc, char** argv)
               << "{\"schema\":\"galay.mpsc.paired.v1\""
               << ",\"language\":\"cpp\""
               << ",\"case\":\"" << caseName(config->kind) << "\""
+              << ",\"consume_mode\":\""
+              << consumeModeName(config->consumeMode) << "\""
+              << ",\"batch_limit\":"
+              << (config->consumeMode == ConsumeMode::kBatch ? kBatchLimit : 1)
               << ",\"topology\":\"" << config->producers << "p1c\""
               << ",\"ordering\":\"producer_fifo\""
               << ",\"payload_bytes\":8"
