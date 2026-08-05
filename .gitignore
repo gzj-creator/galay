@@ -14,6 +14,18 @@ Thumbs.db
 .tmp/
 .code-review-graph/
 .worktree/
+__pycache__/
+
+# Local task handoff artifacts
+/IMPLEMENTATION_SUMMARY.md
+/PROJECT_COMPLETE.md
+/READY_TO_PUSH.md
+/TESTING_GUIDE.md
+/VERIFICATION_COMPLETE.md
+/quick_deploy_tencent.sh
+
+# Local benchmark reports
+/docs/cpp/cross_platform_network_benchmark_2026-07-13.md
 
 # CMake build output
 build/
@@ -64,6 +76,7 @@ target/
 # Local planning docs
 docs/plans/
 docs/cpp/modules/*/plans
+docs/optimization/
 
 # agent
 .claude/

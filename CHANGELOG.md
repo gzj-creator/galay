@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Chore
+
+- **清理本地性能产物的版本跟踪**：移除 `docs/optimization/` 与跨平台网络基准报告的 Git 跟踪，保留本地文件；忽略根目录任务报告、临时部署脚本及 Python 缓存，避免它们再次进入提交。
+
 ### Changed
 
 - **扩展 MPSC paired 基准的消费模式**：C++ 与 Rust 对照程序统一支持 `single` / `batch` 消费模式，runner 增加消费模式参数、结果字段和批量上限校验，便于区分单条轮询与批量排空的吞吐口径。
