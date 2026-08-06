@@ -165,14 +165,14 @@ bool drainPeerUntilWriteCompletes(SharedState* state,
                                   std::chrono::milliseconds timeout = 1000ms,
                                   std::chrono::milliseconds step = 2ms) {
     const auto deadline = std::chrono::steady_clock::now() + timeout;
-    char drained = 0;
+    std::array<char, 4096> drained{};
     while (std::chrono::steady_clock::now() < deadline) {
         if (state->write_done.load(std::memory_order_acquire)) {
             return true;
         }
 
-        const ssize_t read_n = ::recv(fd, &drained, 1, 0);
-        if (read_n == 1) {
+        const ssize_t read_n = ::recv(fd, drained.data(), drained.size(), 0);
+        if (read_n > 0) {
             continue;
         }
         if (read_n < 0 && errno == EINTR) {

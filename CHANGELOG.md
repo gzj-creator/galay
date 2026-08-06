@@ -65,6 +65,8 @@
 
 ### Fixed
 
+- **消除 GCC 14 原子 shared_ptr 与 HMAC 静态诊断，并稳定网络回归测试**：HTTP/2 静态文件缓存、RPC endpoint 快照和取消回调链迁移到 `std::atomic<std::shared_ptr<T>>` 成员 API；HMAC-SHA256 改为分段哈希，避免按输入长度拼接临时缓冲区触发 `stringop-overflow`；C TCP connect timeout 固定使用 RFC 5737 文档地址，sequence duplex split 测试改为批量 drain peer buffer，避免低效逐字节读取导致的间歇超时。
+
 - **修复跨后端与协议正确性问题**：io_uring connect 将 `EISCONN` 视为已连接，benchmark `CompletionLatch` 在报告完成前等待最后 arrival 退出同步对象，C UDP bridge 收敛 timeout/cancel 与 IO completion 竞争；同步 Mongo 支持 replica set 发现和读偏好选择，异步 Mongo 对未支持拓扑显式报错；MySQL `caching_sha2_password` 改用协议要求的 RSA OAEP-SHA1，MurmurHash3 改用 `memcpy` 消除未对齐读取 UB。
 - **修复全量测试中的返回值、并发与资源边界**：UDP benchmark、RingBuffer/readv 测试、timer 并发测试和 channel namespace 测试显式处理关键调度、socket option、计时器与 token 结果；测试 stdout 写入串行化，避免并行日志数据竞争。
 - **修复 SPSC 跨块与异步完成竞态**：修复无界队列跨块越界和回收链 double-free、有界 timeout 最终检查竞态、过期 timer 立即通知误唤醒，以及 benchmark 在 producer 完成后单次空读便退出造成的潜在伪失败；consumer 现在按预期数量完成最终 drain。

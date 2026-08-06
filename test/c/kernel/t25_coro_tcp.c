@@ -1199,12 +1199,9 @@ static int run_connect_timeout_closes_socket(galay_kernel_runtime_t* runtime)
     ConnectTimeoutCloseState state = {0};
     state.peer.type = C_IPTypeIPV4;
     state.peer.port = 9;
-    const unsigned pid = (unsigned)getpid();
     if (snprintf(state.peer.address,
                  sizeof(state.peer.address),
-                 "169.254.%u.%u",
-                 ((pid / 251U) % 254U) + 1U,
-                 (pid % 254U) + 1U) <= 0) {
+                 "192.0.2.1") <= 0) {
         return 524;
     }
     state.endpoint_after_timeout = C_TcpSocketSuccess;

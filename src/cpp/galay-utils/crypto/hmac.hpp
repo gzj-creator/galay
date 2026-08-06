@@ -15,10 +15,11 @@
 #include <cstring>
 #include <cstdint>
 #include <array>
-#include <vector>
 
 namespace galay::utils
 {
+    class HMAC;
+
     /**
      * @brief SHA-256 哈希算法实现
      * @details 提供 SHA-256 哈希计算，返回原始字节数组或十六进制字符串。
@@ -50,6 +51,8 @@ namespace galay::utils
         static std::string hashHex(const std::string& data);
 
     private:
+        friend class HMAC;
+
         static constexpr uint32_t K[64] = {
             0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
             0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
@@ -70,6 +73,10 @@ namespace galay::utils
         static inline uint32_t gamma1(uint32_t x) { return rotr(x, 17) ^ rotr(x, 19) ^ (x >> 10); }
 
         static void transform(uint32_t state[8], const uint8_t block[64]);
+        static std::array<uint8_t, 32> hashSegments(const uint8_t* first,
+                                                    size_t first_length,
+                                                    const uint8_t* second,
+                                                    size_t second_length);
     };
 
     /**
@@ -166,31 +173,70 @@ namespace galay::utils
 
     inline std::array<uint8_t, 32> SHA256::hash(const uint8_t* data, size_t length)
     {
+        return hashSegments(data, length, nullptr, 0);
+    }
+
+    inline std::array<uint8_t, 32> SHA256::hashSegments(const uint8_t* first,
+                                                         size_t first_length,
+                                                         const uint8_t* second,
+                                                         size_t second_length)
+    {
         uint32_t state[8] = {
             0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
             0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
         };
 
-        size_t totalBits = length * 8;
-        size_t paddedLength = ((length + 8) / 64 + 1) * 64;
+        std::array<uint8_t, 64> block{};
+        size_t buffered = 0;
 
-        std::vector<uint8_t> padded(paddedLength, 0);
-        std::memcpy(padded.data(), data, length);
+        const auto append = [&](const uint8_t* data, size_t length) {
+            if (buffered != 0) {
+                const size_t available = 64 - buffered;
+                const size_t copied = length < available ? length : available;
+                if (copied != 0) {
+                    std::memcpy(block.data() + buffered, data, copied);
+                    buffered += copied;
+                    data += copied;
+                    length -= copied;
+                }
+                if (buffered == 64) {
+                    transform(state, block.data());
+                    buffered = 0;
+                }
+            }
 
-        // Append '1' bit
-        padded[length] = 0x80;
+            while (length >= 64) {
+                transform(state, data);
+                data += 64;
+                length -= 64;
+            }
 
-        // Append length in bits as 64-bit big-endian
+            if (length != 0) {
+                std::memcpy(block.data(), data, length);
+                buffered = length;
+            }
+        };
+
+        append(first, first_length);
+        append(second, second_length);
+
+        block[buffered++] = 0x80;
+        if (buffered > 56) {
+            std::memset(block.data() + buffered, 0, 64 - buffered);
+            transform(state, block.data());
+            block.fill(0);
+        } else {
+            std::memset(block.data() + buffered, 0, 56 - buffered);
+        }
+
+        const uint64_t total_bits =
+            (static_cast<uint64_t>(first_length) << 3) +
+            (static_cast<uint64_t>(second_length) << 3);
         for (int i = 0; i < 8; ++i)
         {
-            padded[paddedLength - 1 - i] = (totalBits >> (i * 8)) & 0xFF;
+            block[63 - i] = static_cast<uint8_t>((total_bits >> (i * 8)) & 0xFF);
         }
-
-        // Process blocks
-        for (size_t i = 0; i < paddedLength; i += 64)
-        {
-            transform(state, &padded[i]);
-        }
+        transform(state, block.data());
 
         // Produce final hash
         std::array<uint8_t, 32> result;
@@ -254,18 +300,8 @@ namespace galay::utils
             opad[i] = keyBlock[i] ^ 0x5c;
         }
 
-        // Inner hash: H(K XOR ipad, text)
-        std::vector<uint8_t> innerData(blockSize + dataLen);
-        std::memcpy(innerData.data(), ipad, blockSize);
-        std::memcpy(innerData.data() + blockSize, data, dataLen);
-        auto innerHash = SHA256::hash(innerData.data(), innerData.size());
-
-        // Outer hash: H(K XOR opad, innerHash)
-        std::vector<uint8_t> outerData(blockSize + 32);
-        std::memcpy(outerData.data(), opad, blockSize);
-        std::memcpy(outerData.data() + blockSize, innerHash.data(), 32);
-
-        return SHA256::hash(outerData.data(), outerData.size());
+        const auto inner_hash = SHA256::hashSegments(ipad, blockSize, data, dataLen);
+        return SHA256::hashSegments(opad, blockSize, inner_hash.data(), inner_hash.size());
     }
 
     inline std::array<uint8_t, 32> HMAC::hmacSha256(const std::string& key, const std::string& data)
