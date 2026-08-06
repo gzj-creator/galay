@@ -413,7 +413,6 @@ private:
         alignas(::galay::utils::kCacheLineSize)
             std::atomic<Block*> next{nullptr};
         std::array<Slot, kBlockCapacity> slots;
-        std::array<std::atomic<uint8_t>, kBlockCapacity> ready{};
     };
 
     enum class ProducerGate : uint8_t {
@@ -1297,9 +1296,6 @@ private:
                     next,
                     std::memory_order_acq_rel,
                     std::memory_order_acquire)) {
-                for (std::atomic<uint8_t>& flag : block->ready) {
-                    flag.store(0, std::memory_order_relaxed);
-                }
                 block->next.store(nullptr, std::memory_order_relaxed);
                 return block;
             }
@@ -1431,8 +1427,6 @@ private:
     }
 
     [[nodiscard]] TaskState* publishStream(ProducerStream& stream,
-                                           Block* batchStartBlock,
-                                           size_t batchStartIndex,
                                            size_t count) noexcept
     {
         ProducerCursor& producer = stream.producer;
@@ -1441,26 +1435,11 @@ private:
             activateReadyStream(stream);
             producer.activated = true;
         }
-        Block* readyBlock = batchStartBlock;
-        size_t readyIndex = batchStartIndex + 1;
-        for (size_t offset = 1; offset < count; ++offset) {
-            if (readyIndex == kBlockCapacity) {
-                readyBlock = readyBlock->next.load(std::memory_order_relaxed);
-                readyIndex = 0;
-            }
-            readyBlock->ready[readyIndex].store(
-                1, std::memory_order_relaxed);
-            ++readyIndex;
-        }
-        // 单消费者只有观察到批首 release 后才会进入本批；它同步此前的全部
-        // 构造和后续 slot 标记，因此批次不会暴露可见前缀。
-        batchStartBlock->ready[batchStartIndex].store(
-            1, std::memory_order_release);
-        // ready membership 和批次提交必须先于诊断计数；waiter 扫描可据此确认
-        // 已经存在可消费数据，而同步接收只读取块内 ready flag。
+        // 累计 tail 是整批的唯一发布点；consumer 的 acquire 同步本批
+        // 全部元素构造和 block 链接，不会观察到部分批次。
         stream.shared.published.store(producer.localPublished,
                                       std::memory_order_release);
-        // 消息数据和 ready membership 都先于 SC 通知状态可见，使 waiter arming
+        // 消息数据和 stream membership 都先于 SC 通知状态可见，使 waiter arming
         // 能区分仍在构造的发送与已经可消费的数据。
         stream.control.gate.store(
             ProducerGate::kPublished,
@@ -1509,14 +1488,11 @@ private:
             return false;
         }
         ProducerCursor& producer = stream.producer;
-        Block* const batchStartBlock = producer.block;
-        const size_t batchStartIndex = producer.index;
         [[maybe_unused]] T* const stored = std::construct_at(
             producer.block->slots[producer.index].constructionAddress(),
             std::move(value));
         ++producer.index;
-        TaskState* waiterState = publishStream(
-            stream, batchStartBlock, batchStartIndex, 1);
+        TaskState* waiterState = publishStream(stream, 1);
         // finishSend() 是本 sender 对 channel/stream 的最后一次访问。只有先
         // 释放 gate，内联恢复的 receiver 才能安全重入 close()。
         finishSend(stream);
@@ -1537,8 +1513,6 @@ private:
             return false;
         }
         ProducerCursor& producer = stream.producer;
-        Block* const batchStartBlock = producer.block;
-        const size_t batchStartIndex = producer.index;
         BatchConstructionGuard guard(producer);
         for (const T& value : values) {
             if (producer.index == kBlockCapacity) {
@@ -1551,8 +1525,7 @@ private:
             guard.recordConstructed();
         }
         guard.commit();
-        TaskState* waiterState = publishStream(
-            stream, batchStartBlock, batchStartIndex, values.size());
+        TaskState* waiterState = publishStream(stream, values.size());
         // waiter 已完全摘出，释放 gate 后的调度不再访问 channel/stream。
         finishSend(stream);
         if (waiterState != nullptr) {
@@ -1572,8 +1545,6 @@ private:
             return false;
         }
         ProducerCursor& producer = stream.producer;
-        Block* const batchStartBlock = producer.block;
-        const size_t batchStartIndex = producer.index;
         BatchConstructionGuard guard(producer);
         for (T& value : values) {
             if (producer.index == kBlockCapacity) {
@@ -1587,8 +1558,7 @@ private:
             guard.recordConstructed();
         }
         guard.commit();
-        TaskState* waiterState = publishStream(
-            stream, batchStartBlock, batchStartIndex, values.size());
+        TaskState* waiterState = publishStream(stream, values.size());
         // waiter 已完全摘出，释放 gate 后的调度不再访问 channel/stream。
         finishSend(stream);
         if (waiterState != nullptr) {
@@ -1600,6 +1570,16 @@ private:
     static std::optional<T> tryPopStream(ProducerStream& stream) noexcept
     {
         ConsumerCursor& consumer = stream.consumer;
+        if (consumer.localConsumed == consumer.observedPublished) {
+            consumer.observedPublished =
+                stream.shared.published.load(std::memory_order_acquire);
+            if (consumer.localConsumed == consumer.observedPublished) {
+                consumer.consumed.store(consumer.localConsumed,
+                                        std::memory_order_relaxed);
+                return std::nullopt;
+            }
+        }
+
         if (consumer.index == kBlockCapacity) {
             Block* next = consumer.block->next.load(std::memory_order_acquire);
             if (next == nullptr) {
@@ -1612,11 +1592,6 @@ private:
         }
 
         Block& block = *consumer.block;
-        if (block.ready[consumer.index].load(std::memory_order_acquire) == 0) {
-            consumer.consumed.store(consumer.localConsumed,
-                                    std::memory_order_relaxed);
-            return std::nullopt;
-        }
         Slot& slot = block.slots[consumer.index];
         T value = std::move(*slot.value());
         std::destroy_at(slot.value());

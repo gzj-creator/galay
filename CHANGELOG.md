@@ -17,6 +17,7 @@
 
 ### Changed
 
+- **优化 MPSC producer 独占数据面**：无界通道移除逐 slot `ready` 原子，改由 producer 通过累计 `published` tail 原子发布单条或整批消息，consumer 缓存已观察位置并按固定配额轮询 stream；bounded 通道新增固定 producer 数构造、独占 `ProducerToken` 和分片 SPSC ring，直接发送在该模式下显式返回 `kNotReady`；paired benchmark 与回归测试统一验证每 producer FIFO、checksum、关闭排空和固定容量口径。
 - **扩展 MPSC paired 基准的消费模式**：C++ 与 Rust 对照程序统一支持 `single` / `batch` 消费模式，runner 增加消费模式参数、结果字段和批量上限校验，便于区分单条轮询与批量排空的吞吐口径。
 - **补齐 bounded MPSC 无分配批量排空接口**：`BoundedChannel<T>` 新增 `drainTo()`，复用调用方 vector 的 spare capacity，整批推进 head 并统一探测发送 waiter；同步补充 FIFO、容量边界、并发 close 和 waiter 唤醒回归测试。
 - **修复 MPMC 无界通道 token 换块瞬时失败**：token 缓存块失效时同时校验 tail position 与 tail block anchor，避免消费者回收旧块导致的短暂竞态被误报为发送失败。
@@ -31,6 +32,7 @@
 
 ### Added
 
+- **新增 bounded MPSC per-producer ring 模式**：`BoundedChannel(capacity, producerCount)` 将总容量静态分配到 producer 独占的 SPSC ring，通过 move-only `ProducerToken` 和 token 版 `trySend()` 消除发送热路径的共享 tail CAS；唯一 consumer 按固定配额公平轮询各 ring，旧单参数共享 ring 构造和 API 保持兼容，并补齐无效 topology、容量边界、关闭排空、异步发送拒绝与并发 FIFO 回归覆盖。
 - **新增全量验证回归覆盖**：补充 io_uring `connect(EISCONN)`、benchmark 测量合同与 `CompletionLatch` 生命周期测试，并扩展 Mongo replica set 单 seed 发现、读偏好、部分 seed 故障和 setName 不匹配集成场景。
 - **新增 SPSC 专用数据面与异步通道**：`galay-utils` 提供运行时容量 `SpscRingBuffer<T>` 与成员内持槽位的 `StaticSpscRingBuffer<T, N>`；`galay-kernel` 在两个公开头中提供 `Ring` / `StaticRing`、约 4 KiB 分块复用的 `UnboundedQueue`，以及支持 move-only、批量收发、调用方缓冲区与 timeout 的 `BoundedChannel<T, N>` / `UnboundedChannel<T>`。`BoundedChannel` 另提供 close/drain；动态 ring 与无界分块的构造或扩容失败通过显式错误或布尔结果返回。
 - **补齐 SPSC 正确性与跨语言性能验证**：新增 ring 核心、无界跨块复用、窄游标回绕、异步 timeout 竞争、非法容量/OOM、安装消费和最终 drain 回归测试；新增严格 1P1C paired runner，以相同 `uint64_t` 序列、容量、yield 退避、FIFO/数量/checksum 门禁和 ABBA 配对样本对照 Rust Crossbeam，并输出 bootstrap 95% 置信区间、CV、原始样本与二进制哈希。

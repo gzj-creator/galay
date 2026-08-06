@@ -204,7 +204,7 @@ int main() {
             mpsc,
             "inline bool UnboundedRecvAwaitable<T>::await_suspend",
             "mpsc::UnboundedRecvAwaitable::await_suspend",
-            "tryReceiveNow()");
+            "hasPublishedValueForWaiter()");
         checkMpscAwaitSuspend(
             failures,
             mpsc_path,

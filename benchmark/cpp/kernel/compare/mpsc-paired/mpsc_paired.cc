@@ -176,6 +176,10 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
         (config.capacity < 2 || (config.capacity & (config.capacity - 1)) != 0)) {
         return std::unexpected(ArgumentError::kInvalidCapacity);
     }
+    if (config.kind == CaseKind::kBounded &&
+        config.producers > config.capacity) {
+        return std::unexpected(ArgumentError::kInvalidTopology);
+    }
     if (config.producerCore >
         std::numeric_limits<size_t>::max() - config.producers) {
         return std::unexpected(ArgumentError::kInvalidTopology);
@@ -393,9 +397,17 @@ Measurement runMpsc(const Config& config,
 
 Measurement runBounded(const Config& config)
 {
-    galay::mpsc::BoundedChannel<uint64_t> channel(config.capacity);
-    const auto send = [&channel](size_t, uint64_t& value) {
-        return channel.trySend(std::move(value))
+    using Channel = galay::mpsc::BoundedChannel<uint64_t>;
+    Channel channel(config.capacity, config.producers);
+    std::vector<Channel::ProducerToken> tokens;
+    tokens.reserve(config.producers);
+    for (size_t producer = 0; producer < config.producers; ++producer) {
+        auto token = channel.makeProducerToken();
+        if (!token.valid()) return {};
+        tokens.push_back(std::move(token));
+    }
+    const auto send = [&channel, &tokens](size_t producer, uint64_t& value) {
+        return channel.trySend(tokens[producer], std::move(value))
             ? SendResult::kSent : SendResult::kRetry;
     };
     const auto receiveSingle = [&channel]() { return channel.tryRecv(); };

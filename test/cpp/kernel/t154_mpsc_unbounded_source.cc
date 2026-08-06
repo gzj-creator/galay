@@ -137,11 +137,15 @@ int main()
                         content,
                         "constructionAddress",
                         "raw storage construction must not call std::launder before lifetime begins");
-        requireContains(
+        requireNotContains(
             failures,
             content,
             "std::array<std::atomic<uint8_t>, kBlockCapacity> ready{}",
-            "each block must carry zero-initialized ready flags parallel to its slots");
+            "blocks must not carry per-slot ready atomics");
+        requireContains(failures,
+                        content,
+                        "uint64_t observedPublished = 0;",
+                        "consumer must cache each stream's cumulative published tail");
         const std::string slot = extractFunction(content, "struct Slot");
         if (slot.empty()) {
             failures.push_back("failed to locate MPSC slot storage");
@@ -149,7 +153,7 @@ int main()
             requireNotContains(failures,
                                slot,
                                "std::atomic",
-                               "ready publication must not increase the slot stride");
+                               "tail publication must not increase the slot stride");
         }
         requireContains(
             failures,
@@ -313,22 +317,15 @@ int main()
         if (takeRecycledBlock.empty()) {
             failures.push_back("failed to locate MPSC recycled block acquisition");
         } else {
+            requireNotContains(failures,
+                               takeRecycledBlock,
+                               "ready",
+                               "recycled blocks must not retain per-slot ready atomics");
             requireContains(
                 failures,
                 takeRecycledBlock,
-                "for (std::atomic<uint8_t>& flag : block->ready)",
-                "producer must reset every ready flag on a recycled block");
-            requireContains(
-                failures,
-                takeRecycledBlock,
-                "flag.store(0, std::memory_order_relaxed)",
-                "recycled ready flags must be reset with producer-owned relaxed stores");
-            requireOrdered(
-                failures,
-                takeRecycledBlock,
-                "flag.store(0, std::memory_order_relaxed)",
                 "block->next.store(nullptr, std::memory_order_relaxed)",
-                "recycled flags must be reset before the block is relinked");
+                "recycled blocks must clear their old chain link");
         }
 
         const std::string publishStream = extractFunction(
@@ -337,18 +334,11 @@ int main()
         if (publishStream.empty()) {
             failures.push_back("failed to locate MPSC stream publication");
         } else {
-            requireContains(
+            requireNotContains(
                 failures,
                 publishStream,
-                "readyBlock->ready[readyIndex].store(\n"
-                "                1, std::memory_order_relaxed)",
-                "batch publication must mark every slot after the first with relaxed stores");
-            requireContains(
-                failures,
-                publishStream,
-                "batchStartBlock->ready[batchStartIndex].store(\n"
-                "            1, std::memory_order_release)",
-                "batch first ready flag must be the release linearization point");
+                "ready[",
+                "stream publication must not touch per-slot ready atomics");
             requireContains(
                 failures,
                 publishStream,
@@ -372,20 +362,8 @@ int main()
                 failures,
                 publishStream,
                 "activateReadyStream(stream)",
-                "readyBlock->ready[readyIndex].store",
-                "first ready stream membership must precede ready publication");
-            requireOrdered(
-                failures,
-                publishStream,
-                "readyBlock->ready[readyIndex].store",
-                "batchStartBlock->ready[batchStartIndex].store",
-                "later batch slots must be marked before the first slot commit");
-            requireOrdered(
-                failures,
-                publishStream,
-                "batchStartBlock->ready[batchStartIndex].store",
                 "published.store(producer.localPublished",
-                "batch ready commit must precede diagnostic publication");
+                "ready stream membership must precede cumulative tail publication");
             requireOrdered(
                 failures,
                 publishStream,
@@ -408,16 +386,7 @@ int main()
         } else {
             requireContains(failures,
                             singleSend,
-                            "Block* const batchStartBlock = producer.block;",
-                            "single send must capture its normalized batch start block");
-            requireContains(failures,
-                            singleSend,
-                            "const size_t batchStartIndex = producer.index;",
-                            "single send must capture its normalized batch start index");
-            requireContains(failures,
-                            singleSend,
-                            "publishStream(\n"
-                            "            stream, batchStartBlock, batchStartIndex, 1);",
+                            "publishStream(stream, 1);",
                             "empty single-send wake path must use a nullable raw waiter state");
             requireNotContains(failures,
                                singleSend,
@@ -429,8 +398,7 @@ int main()
                             "empty single-send wake path must bypass the out-of-line waker");
             requireOrdered(failures,
                            singleSend,
-                           "publishStream(\n"
-                           "            stream, batchStartBlock, batchStartIndex, 1)",
+                           "publishStream(stream, 1)",
                            "finishSend(stream);",
                            "single send must publish before releasing its producer gate");
             requireOrdered(failures,
@@ -446,14 +414,6 @@ int main()
         if (copyBatchSend.empty()) {
             failures.push_back("failed to locate MPSC copy batch send");
         } else {
-            requireContains(failures,
-                            copyBatchSend,
-                            "Block* const batchStartBlock = producer.block;",
-                            "copy batch send must capture its normalized first block");
-            requireContains(failures,
-                            copyBatchSend,
-                            "const size_t batchStartIndex = producer.index;",
-                            "copy batch send must capture its normalized first index");
             requireNotContains(failures,
                                copyBatchSend,
                                "TaskRef waiterTask",
@@ -464,7 +424,7 @@ int main()
                             "empty copy-batch wake path must bypass the out-of-line waker");
             requireOrdered(failures,
                            copyBatchSend,
-                           "stream, batchStartBlock, batchStartIndex, values.size())",
+                           "publishStream(stream, values.size())",
                            "finishSend(stream);",
                            "copy batch send must publish before releasing its producer gate");
             requireOrdered(failures,
@@ -480,14 +440,6 @@ int main()
         if (moveBatchSend.empty()) {
             failures.push_back("failed to locate MPSC move batch send");
         } else {
-            requireContains(failures,
-                            moveBatchSend,
-                            "Block* const batchStartBlock = producer.block;",
-                            "move batch send must capture its normalized first block");
-            requireContains(failures,
-                            moveBatchSend,
-                            "const size_t batchStartIndex = producer.index;",
-                            "move batch send must capture its normalized first index");
             requireNotContains(failures,
                                moveBatchSend,
                                "TaskRef waiterTask",
@@ -509,7 +461,7 @@ int main()
             }
             requireOrdered(failures,
                            moveBatchSend,
-                           "stream, batchStartBlock, batchStartIndex, values.size())",
+                           "publishStream(stream, values.size())",
                            "finishSend(stream);",
                            "move batch send must publish before releasing its producer gate");
             requireOrdered(failures,
@@ -525,27 +477,22 @@ int main()
         if (popStream.empty()) {
             failures.push_back("failed to locate MPSC stream consumer hot path");
         } else {
-            requireNotContains(
-                failures,
-                popStream,
-                "shared.published",
-                "consumer hot path must not read the diagnostic publication counter");
             requireContains(
                 failures,
                 popStream,
-                "block.ready[consumer.index].load(std::memory_order_acquire)",
-                "consumer must acquire the current slot ready flag");
+                "stream.shared.published.load(std::memory_order_acquire)",
+                "consumer must acquire a fresh cumulative producer tail");
             requireNotContains(
                 failures,
                 popStream,
-                ".ready[consumer.index].store",
-                "consumer must not clear producer-owned ready flags");
+                "ready[",
+                "consumer hot path must not access per-slot ready atomics");
             requireOrdered(
                 failures,
                 popStream,
+                "consumer.localConsumed == consumer.observedPublished",
                 "if (consumer.index == kBlockCapacity)",
-                "block.ready[consumer.index].load(std::memory_order_acquire)",
-                "consumer must normalize a block-end cursor before reading readiness");
+                "consumer must prove data availability before advancing blocks");
         }
 
         const std::string close = extractFunction(content, "bool close() noexcept");

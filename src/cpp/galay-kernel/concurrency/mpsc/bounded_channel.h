@@ -4,9 +4,10 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 通道使用预分配的环形队列作为数据通路。多个生产者通过 tail CAS
- * 认领 slot，唯一消费者直接推进 head；满或空时，异步操作只挂起协程，
- * 不阻塞调度器线程。
+ * @details 默认数据通路是共享 ring，多个生产者通过 tail CAS 认领 slot。
+ * 已知 producer 数时可构造分片模式：每个 ProducerToken 独占一条 SPSC ring，
+ * 唯一消费者按固定配额轮询，生产热路不再有共享 tail CAS。共享模式的异步
+ * send 以及两种模式的异步 recv 只挂起协程，不阻塞调度器线程。
  */
 
 #ifndef GALAY_CONCURRENCY_MPSC_BOUNDED_CHANNEL_H
@@ -293,6 +294,7 @@ private:
     TimeoutTimer::ptr m_timeoutTimer;
     bool m_sent = false;
     bool m_timedOut = false;
+    bool m_notReady = false;
 };
 
 /**
@@ -425,23 +427,122 @@ private:
  *
  * @details
  * - 容量会向上取整为不小于 2 的 2 的幂，超出安全上限时钳制到该上限。
- * - 多个生产者通过 tail CAS 并发认领 slot；每个 slot 的 sequence 发布消息并控制复用。
+ * - 单参数构造使用共享 ring，多个生产者通过 tail CAS 并发认领 slot。
+ * - 双参数构造按 producer 数分配 SPSC ring，显式 token 发送不访问共享 tail。
  * - 唯一消费者直接推进 head，不执行消费者间 CAS 或竞争退避。
- * - send() / recv() / recvBatch() 满或空时只挂起协程，不阻塞底层线程。
+ * - 共享 ring 的 send() 以及两种模式的 recv()/recvBatch() 只挂起协程，
+ *   不阻塞底层线程。
  * - 多生产者之间不保证全局顺序；每个生产者自身发送的消息保持 FIFO。
  * - 高频吞吐路径应使用 drainTo() 批量排空；低频或延迟敏感路径可使用 tryRecv()。
  *
  * @note 调用方必须保证同一时刻只有一个消费者执行接收操作。生产者可以代替挂起的
  *       接收协程完成一次 ring 消费；waiter 状态 CAS 保证该逻辑消费者只由一个线程推进。
  * @note 通道是身份对象，不可复制或移动。通道必须存活到所有挂起操作完成或超时。
- * @note trySend(T&&) 只有在成功抢到 slot 后才移动参数；失败时参数保持未移动。
+ * @note trySend() 只有在成功取得 slot 后才移动参数；失败时参数保持未移动。
  */
 template <BoundedValue T>
 class BoundedChannel
 {
+private:
+    static constexpr size_t kConsumerQuota = 64;
+
+    struct ProducerSlot
+    {
+        alignas(T) std::byte storage[sizeof(T)];
+
+        T* rawStorage() noexcept
+        {
+            return reinterpret_cast<T*>(storage);
+        }
+
+        T* value() noexcept
+        {
+            return std::launder(rawStorage());
+        }
+    };
+
+    /** @brief 一个 producer 独占写入、唯一 consumer 读取的 ring。 */
+    struct ProducerRing
+    {
+        explicit ProducerRing(size_t ringCapacity)
+            : capacity(ringCapacity)
+            , mask(std::has_single_bit(ringCapacity)
+                  ? ringCapacity - 1
+                  : 0)
+            , slots(ringCapacity)
+        {
+        }
+
+        size_t slotIndex(size_t position) const noexcept
+        {
+            return mask != 0 ? position & mask : position % capacity;
+        }
+
+        const size_t capacity;
+        const size_t mask;
+        std::vector<ProducerSlot> slots;
+
+        alignas(::galay::utils::kCacheLineSize) size_t producerTail = 0;
+        size_t cachedReleased = 0;
+        std::atomic<size_t> published{0};
+
+        alignas(::galay::utils::kCacheLineSize) size_t consumerHead = 0;
+        size_t cachedPublished = 0;
+        std::atomic<size_t> released{0};
+    };
+
 public:
     static_assert(BoundedValue<T>,
                   "BoundedChannel requires a nothrow-move-constructible T");
+
+    /**
+     * @brief 显式 producer 独占句柄。
+     * @details 句柄直接绑定一条 SPSC ring，发送热路不读写共享 tail。
+     * @note 只能由一个 producer 串行使用；channel 必须比 token 的发送调用活得更久。
+     */
+    class ProducerToken
+    {
+    public:
+        ProducerToken(const ProducerToken&) = delete;
+        ProducerToken& operator=(const ProducerToken&) = delete;
+
+        ProducerToken(ProducerToken&& other) noexcept
+            : m_channel(std::exchange(other.m_channel, nullptr))
+            , m_ring(std::exchange(other.m_ring, nullptr))
+        {
+        }
+
+        ProducerToken& operator=(ProducerToken&& other) noexcept
+        {
+            if (this != &other) {
+                std::swap(m_channel, other.m_channel);
+                std::swap(m_ring, other.m_ring);
+            }
+            return *this;
+        }
+
+        [[nodiscard]] bool valid() const noexcept
+        {
+            return m_channel != nullptr && m_ring != nullptr;
+        }
+
+    private:
+        friend class BoundedChannel;
+
+        ProducerToken() noexcept = default;
+        ProducerToken(BoundedChannel* channel, ProducerRing* ring) noexcept
+            : m_channel(channel), m_ring(ring)
+        {
+        }
+
+        [[nodiscard]] bool validFor(const BoundedChannel* channel) const noexcept
+        {
+            return m_channel == channel && m_ring != nullptr;
+        }
+
+        BoundedChannel* m_channel = nullptr;
+        ProducerRing* m_ring = nullptr;
+    };
 
     /**
      * @brief 构造有界 MPSC 通道。
@@ -449,12 +550,41 @@ public:
      * @note 构造完成后可由多个生产者和唯一消费者并发访问。
      */
     explicit BoundedChannel(size_t capacity)
-        : m_capacity(normalizeCapacity(capacity))
+        : m_perProducerMode(false)
+        , m_capacity(normalizeCapacity(capacity))
         , m_mask(m_capacity - 1)
         , m_slots(m_capacity)
     {
         for (size_t i = 0; i < m_capacity; ++i) {
             m_slots[i].sequence.store(i, std::memory_order_relaxed);
+        }
+    }
+
+    /**
+     * @brief 构造固定 producer 数的分片有界通道。
+     * @param capacity 所有 producer ring 共享的总容量。
+     * @param producerCount producer 数；必须在 [1, capacity()] 内，越界时
+     *        构造出的通道处于关闭状态。
+     * @details 总容量在 producer ring 之间精确分片，每个 token 独占一片。
+     *          该模式只支持显式 token 发送；直接 trySend()/send()
+     *          不能确定 producer 归属，因此返回失败/kNotReady。
+     * @note 调用 close() 前必须先停止并 join 所有 token producer。
+     */
+    BoundedChannel(size_t capacity, size_t producerCount)
+        : m_perProducerMode(true)
+        , m_capacity(normalizeCapacity(capacity))
+        , m_mask(m_capacity - 1)
+    {
+        if (producerCount == 0 || producerCount > m_capacity) {
+            m_producerRingsClosed.store(true, std::memory_order_relaxed);
+            return;
+        }
+        m_producerRings.reserve(producerCount);
+        const size_t baseCapacity = m_capacity / producerCount;
+        const size_t remainder = m_capacity % producerCount;
+        for (size_t producer = 0; producer < producerCount; ++producer) {
+            m_producerRings.push_back(std::make_unique<ProducerRing>(
+                baseCapacity + (producer < remainder ? 1 : 0)));
         }
     }
 
@@ -465,6 +595,19 @@ public:
      */
     ~BoundedChannel() noexcept
     {
+        if (usesProducerRings()) {
+            for (const auto& ring : m_producerRings) {
+                size_t position = ring->consumerHead;
+                const size_t published =
+                    ring->published.load(std::memory_order_relaxed);
+                while (position != published) {
+                    std::destroy_at(
+                        ring->slots[ring->slotIndex(position)].value());
+                    ++position;
+                }
+            }
+            return;
+        }
         const size_t head = m_head.load(std::memory_order_relaxed);
         const size_t tail =
             m_tail.load(std::memory_order_relaxed) & kTailPositionMask;
@@ -490,6 +633,55 @@ public:
 
     /** @brief 禁止移动赋值，避免使已注册 waiter 持有失效地址。 */
     BoundedChannel& operator=(BoundedChannel&&) = delete;
+
+    /**
+     * @brief 为分片模式取得一个 producer 独占 token。
+     * @return 成功时 valid()==true；非分片模式、通道已关闭或 token 用尽时
+     *         返回无效 token。
+     */
+    [[nodiscard]] ProducerToken makeProducerToken() noexcept
+    {
+        if (!usesProducerRings() || isClosed()) {
+            return ProducerToken();
+        }
+        const size_t index =
+            m_nextProducer.fetch_add(1, std::memory_order_relaxed);
+        if (index >= m_producerRings.size()) {
+            return ProducerToken();
+        }
+        return ProducerToken(this, m_producerRings[index].get());
+    }
+
+    /**
+     * @brief 通过独占 producer ring 尝试发送一条消息。
+     * @return 发送成功返回 true；token 无效、已关闭或该 producer 分片已满返回 false。
+     * @note 失败不移动 value。
+     */
+    [[nodiscard]] bool trySend(ProducerToken& token, T&& value) noexcept
+    {
+        if (!token.validFor(this)) {
+            return false;
+        }
+        const auto result = producerRingEnqueueResult(*token.m_ring,
+                                                      std::move(value));
+        if (result != RingEnqueueResult::kSent) {
+            return false;
+        }
+        if (m_recvWaiterCount.load(std::memory_order_seq_cst) != 0) {
+            requestPump(kRecvWork);
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool trySend(ProducerToken& token, const T& value)
+        requires std::copy_constructible<T>
+    {
+        if (!token.validFor(this)) {
+            return false;
+        }
+        T copy = value;
+        return trySend(token, std::move(copy));
+    }
 
     /**
      * @brief 尝试立即发送一条消息。
@@ -564,6 +756,16 @@ public:
     {
         const size_t spare = destination.capacity() - destination.size();
         const size_t limit = std::min(maxCount, spare);
+        if (usesProducerRings()) {
+            size_t drained = 0;
+            while (drained < limit &&
+                   producerRingDequeueTo([&destination](T&& value) {
+                       destination.push_back(std::move(value));
+                   })) {
+                ++drained;
+            }
+            return drained;
+        }
         size_t position = m_head.load(std::memory_order_relaxed);
         size_t drained = 0;
         while (drained < limit) {
@@ -617,6 +819,17 @@ public:
 
         std::vector<T> values;
         values.reserve(count);
+        if (usesProducerRings()) {
+            while (values.size() < count &&
+                   producerRingDequeueTo([&values](T&& value) {
+                       values.push_back(std::move(value));
+                   })) {
+            }
+            if (values.empty()) {
+                return std::nullopt;
+            }
+            return values;
+        }
         size_t position = m_head.load(std::memory_order_relaxed);
         while (values.size() < count) {
             Slot& slot = m_slots[position & m_mask];
@@ -645,9 +858,19 @@ public:
      * @brief 关闭通道并唤醒所有等待者。
      * @details 关闭状态通过原子变量发布，可与发送、接收及其他 close() 调用并发执行。
      * @note 操作幂等；关闭后发送失败，接收仍会先排空 ring 中的残留消息。
+     * @note 分片 token 模式下，必须先停止并 join 所有 producer；
+     *       旧的共享 ring 模式仍支持与发送并发。
      */
     void close() noexcept
     {
+        if (usesProducerRings()) {
+            if (m_producerRingsClosed.exchange(
+                    true, std::memory_order_seq_cst)) {
+                return;
+            }
+            requestPump(static_cast<uint8_t>(kRecvWork | kSendWork));
+            return;
+        }
         const size_t previous =
             m_tail.fetch_or(kTailClosedBit, std::memory_order_acq_rel);
         if ((previous & kTailClosedBit) != 0) {
@@ -662,6 +885,9 @@ public:
      */
     bool isClosed() const noexcept
     {
+        if (usesProducerRings()) {
+            return m_producerRingsClosed.load(std::memory_order_acquire);
+        }
         return (m_tail.load(std::memory_order_acquire) & kTailClosedBit) != 0;
     }
 
@@ -680,6 +906,21 @@ public:
      */
     size_t size() const noexcept
     {
+        if (usesProducerRings()) {
+            size_t count = 0;
+            for (const auto& ring : m_producerRings) {
+                const size_t released =
+                    ring->released.load(std::memory_order_acquire);
+                const size_t published =
+                    ring->published.load(std::memory_order_acquire);
+                const size_t pending = published - released;
+                if (pending >= m_capacity - count) {
+                    return m_capacity;
+                }
+                count += pending;
+            }
+            return count;
+        }
         const size_t tail =
             m_tail.load(std::memory_order_relaxed) & kTailPositionMask;
         const size_t head = m_head.load(std::memory_order_relaxed);
@@ -851,6 +1092,7 @@ private:
         kFull,
         kClosed,
         kClosedAndNotify,
+        kUnsupported,
     };
 
     static void appendDeferredWake(WaiterPtr& wakeHead,
@@ -925,6 +1167,13 @@ private:
 
     void synchronizeRecvWaiterPath() noexcept
     {
+        if (usesProducerRings()) {
+            for (const auto& ring : m_producerRings) {
+                [[maybe_unused]] const size_t published =
+                    ring->published.load(std::memory_order_seq_cst);
+            }
+            return;
+        }
         const size_t position = m_head.load(std::memory_order_relaxed);
         [[maybe_unused]] const size_t published =
             m_slots[position & m_mask].sequence.load(std::memory_order_seq_cst);
@@ -932,6 +1181,9 @@ private:
 
     void synchronizeSendWaiterPath() noexcept
     {
+        if (usesProducerRings()) {
+            return;
+        }
         const size_t tail = m_tail.load(std::memory_order_relaxed);
         const size_t position = tail & kTailPositionMask;
         [[maybe_unused]] const size_t released =
@@ -950,8 +1202,40 @@ private:
         return std::bit_ceil(capacity);
     }
 
+    [[nodiscard]] bool usesProducerRings() const noexcept
+    {
+        return m_perProducerMode;
+    }
+
+    RingEnqueueResult producerRingEnqueueResult(ProducerRing& ring,
+                                                T&& value) noexcept
+    {
+        if (m_producerRingsClosed.load(std::memory_order_acquire)) {
+            return RingEnqueueResult::kClosed;
+        }
+
+        const size_t position = ring.producerTail;
+        if (position - ring.cachedReleased >= ring.capacity) {
+            ring.cachedReleased =
+                ring.released.load(std::memory_order_acquire);
+            if (position - ring.cachedReleased >= ring.capacity) {
+                return RingEnqueueResult::kFull;
+            }
+        }
+
+        ProducerSlot& slot = ring.slots[ring.slotIndex(position)];
+        [[maybe_unused]] T* const stored =
+            std::construct_at(slot.rawStorage(), std::move(value));
+        ring.producerTail = position + 1;
+        ring.published.store(position + 1, std::memory_order_release);
+        return RingEnqueueResult::kSent;
+    }
+
     RingEnqueueResult ringEnqueueResult(T&& value) noexcept
     {
+        if (usesProducerRings()) {
+            return RingEnqueueResult::kUnsupported;
+        }
         size_t tail = m_tail.load(std::memory_order_relaxed);
         Slot* slot = nullptr;
         size_t position = 0;
@@ -1026,6 +1310,21 @@ private:
 
     bool isClosedAndDrained() const noexcept
     {
+        if (usesProducerRings()) {
+            if (!m_producerRingsClosed.load(std::memory_order_acquire)) {
+                return false;
+            }
+            for (const auto& ring : m_producerRings) {
+                const size_t released =
+                    ring->released.load(std::memory_order_acquire);
+                const size_t published =
+                    ring->published.load(std::memory_order_acquire);
+                if (released != published) {
+                    return false;
+                }
+            }
+            return true;
+        }
         const size_t tail = m_tail.load(std::memory_order_acquire);
         if ((tail & kTailClosedBit) == 0) {
             return false;
@@ -1037,6 +1336,9 @@ private:
     template <typename Consume>
     bool ringDequeueTo(Consume&& consume) noexcept
     {
+        if (usesProducerRings()) {
+            return producerRingDequeueTo(std::forward<Consume>(consume));
+        }
         const size_t position = m_head.load(std::memory_order_relaxed);
         Slot& slot = m_slots[position & m_mask];
         const size_t sequence = slot.sequence.load(std::memory_order_acquire);
@@ -1049,6 +1351,46 @@ private:
         slot.sequence.store(position + m_capacity, std::memory_order_seq_cst);
         m_head.store(position + 1, std::memory_order_release);
         return true;
+    }
+
+    template <typename Consume>
+    bool producerRingDequeueTo(Consume&& consume) noexcept
+    {
+        const size_t producerCount = m_producerRings.size();
+        for (size_t scanned = 0; scanned < producerCount; ++scanned) {
+            ProducerRing& ring =
+                *m_producerRings[m_consumerRingIndex];
+
+            const size_t position = ring.consumerHead;
+            if (position == ring.cachedPublished) {
+                ring.cachedPublished =
+                    ring.published.load(std::memory_order_acquire);
+                if (position == ring.cachedPublished) {
+                    m_consumerRingIndex =
+                        m_consumerRingIndex + 1 == producerCount
+                        ? 0
+                        : m_consumerRingIndex + 1;
+                    m_consumerQuotaUsed = 0;
+                    continue;
+                }
+            }
+
+            ProducerSlot& slot = ring.slots[ring.slotIndex(position)];
+            consume(std::move(*slot.value()));
+            std::destroy_at(slot.value());
+            ring.consumerHead = position + 1;
+            ring.released.store(position + 1, std::memory_order_release);
+            ++m_consumerQuotaUsed;
+            if (m_consumerQuotaUsed == kConsumerQuota) {
+                m_consumerRingIndex =
+                    m_consumerRingIndex + 1 == producerCount
+                    ? 0
+                    : m_consumerRingIndex + 1;
+                m_consumerQuotaUsed = 0;
+            }
+            return true;
+        }
+        return false;
     }
 
     bounded_detail::WaiterProgress tryCompleteSendWaiter(
@@ -1151,6 +1493,19 @@ private:
                 timeoutTimer->commitOperation();
             waiter->state.store(
                 committed ? bounded_detail::WaiterState::kClosed
+                          : bounded_detail::WaiterState::kCancelled,
+                std::memory_order_release);
+            if (committed) {
+                appendDeferredWake(wakeHead, wakeTail, waiter, false);
+            }
+            return bounded_detail::WaiterProgress::kCompleted;
+        }
+        if (result == RingEnqueueResult::kUnsupported) {
+            waiter->value.reset();
+            const bool committed = !timeoutOperationStarted ||
+                timeoutTimer->commitOperation();
+            waiter->state.store(
+                committed ? bounded_detail::WaiterState::kFailed
                           : bounded_detail::WaiterState::kCancelled,
                 std::memory_order_release);
             if (committed) {
@@ -1443,9 +1798,17 @@ private:
         std::atomic<size_t> m_recvWaiterCount{0};
     alignas(::galay::utils::kCacheLineSize)
         std::atomic<size_t> m_sendWaiterCount{0};
+    const bool m_perProducerMode;
     const size_t m_capacity;
     const size_t m_mask;
     std::vector<Slot> m_slots;
+    std::vector<std::unique_ptr<ProducerRing>> m_producerRings;
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<size_t> m_nextProducer{0};
+    alignas(::galay::utils::kCacheLineSize)
+        std::atomic<bool> m_producerRingsClosed{false};
+    size_t m_consumerRingIndex = 0;
+    size_t m_consumerQuotaUsed = 0;
     WaiterQueue m_recvWaiters;
     WaiterQueue m_sendWaiters;
 };
@@ -1471,6 +1834,10 @@ inline BoundedRecvBatchAwaitable<T> BoundedChannel<T>::recvBatch(size_t count)
 template <BoundedValue T>
 inline bool BoundedSendAwaitable<T>::await_ready() noexcept
 {
+    if (m_channel->usesProducerRings()) {
+        m_notReady = !m_channel->isClosed();
+        return true;
+    }
     if (m_channel->trySend(std::move(m_value))) {
         m_sent = true;
         return true;
@@ -1484,6 +1851,10 @@ inline bool BoundedSendAwaitable<T>::await_suspend(
     std::coroutine_handle<Promise> handle) noexcept
 {
     auto* channel = m_channel;
+    if (channel->usesProducerRings()) {
+        m_notReady = !channel->isClosed();
+        return false;
+    }
     if (channel->trySend(std::move(m_value))) {
         m_sent = true;
         return false;
@@ -1537,6 +1908,9 @@ inline std::expected<void, IOError> BoundedSendAwaitable<T>::await_resume() noex
     }
     if (m_timedOut) {
         return std::unexpected(IOError(kTimeout, 0));
+    }
+    if (m_notReady) {
+        return std::unexpected(IOError(kNotReady, 0));
     }
     if (m_channel->isClosed()) {
         return std::unexpected(IOError(kClosed, 0));

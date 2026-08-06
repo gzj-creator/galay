@@ -5,10 +5,13 @@
 
 #include <galay/cpp/galay-kernel/concurrency/mpsc/bounded_channel.h>
 
+#include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <thread>
 #include <utility>
 
 namespace galay::mpsc {
@@ -169,6 +172,130 @@ bool runStorageLifetimeAccess()
         received->value == 17;
 }
 
+bool runPerProducerRings()
+{
+    using Channel = galay::mpsc::BoundedChannel<TrackedValue>;
+    Channel zeroProducers(8, 0);
+    Channel tooManyProducers(2, 3);
+    if (!zeroProducers.isClosed() || !tooManyProducers.isClosed() ||
+        zeroProducers.makeProducerToken().valid() ||
+        tooManyProducers.makeProducerToken().valid()) {
+        return false;
+    }
+
+    Channel channel(8, 2);
+    auto first = channel.makeProducerToken();
+    auto second = channel.makeProducerToken();
+    auto extra = channel.makeProducerToken();
+    if (!first.valid() || !second.valid() || extra.valid() ||
+        channel.capacity() != 8) {
+        return false;
+    }
+
+    for (int value = 0; value < 4; ++value) {
+        TrackedValue firstValue(value);
+        TrackedValue secondValue(100 + value);
+        if (!channel.trySend(first, std::move(firstValue)) ||
+            !channel.trySend(second, std::move(secondValue))) {
+            return false;
+        }
+    }
+    TrackedValue fullValue(9);
+    TrackedValue directValue(10);
+    if (channel.trySend(first, std::move(fullValue)) || fullValue.value != 9 ||
+        channel.trySend(std::move(directValue)) || directValue.value != 10 ||
+        channel.size() != 8 || !channel.full()) {
+        return false;
+    }
+    TrackedValue asyncValue(12);
+    auto unsupported = channel.send(std::move(asyncValue));
+    if (!unsupported.await_ready()) {
+        return false;
+    }
+    auto unsupportedResult = unsupported.await_resume();
+    if (unsupportedResult.has_value() ||
+        !galay::kernel::IOError::contains(unsupportedResult.error().code(),
+                                         galay::kernel::kNotReady)) {
+        return false;
+    }
+
+    channel.close();
+    TrackedValue closedValue(11);
+    if (channel.trySend(second, std::move(closedValue)) ||
+        closedValue.value != 11) {
+        return false;
+    }
+
+    std::array<int, 2> expected{0, 100};
+    for (size_t received = 0; received < 8; ++received) {
+        auto value = channel.tryRecv();
+        if (!value.has_value()) {
+            return false;
+        }
+        const size_t producer = value->value >= 100 ? 1 : 0;
+        if (value->value != expected[producer]++) {
+            return false;
+        }
+    }
+    return channel.empty() && !channel.tryRecv().has_value();
+}
+
+bool runConcurrentPerProducerRings()
+{
+    using Channel = galay::mpsc::BoundedChannel<uint64_t>;
+    constexpr size_t kProducerCount = 2;
+    constexpr uint64_t kMessagesPerProducer = 20'000;
+    Channel channel(1024, kProducerCount);
+    std::array<Channel::ProducerToken, kProducerCount> tokens{
+        channel.makeProducerToken(), channel.makeProducerToken()};
+    if (!tokens[0].valid() || !tokens[1].valid()) {
+        return false;
+    }
+
+    std::atomic<bool> start{false};
+    std::array<std::thread, kProducerCount> producers;
+    for (size_t producer = 0; producer < kProducerCount; ++producer) {
+        producers[producer] = std::thread([&, producer]() {
+            start.wait(false, std::memory_order_acquire);
+            for (uint64_t sequence = 0;
+                 sequence < kMessagesPerProducer;
+                 ++sequence) {
+                uint64_t value =
+                    (static_cast<uint64_t>(producer) << 32U) | sequence;
+                while (!channel.trySend(tokens[producer], std::move(value))) {
+                    std::this_thread::yield();
+                }
+            }
+        });
+    }
+    start.store(true, std::memory_order_release);
+    start.notify_all();
+
+    std::array<uint64_t, kProducerCount> expected{};
+    uint64_t received = 0;
+    bool fifoOk = true;
+    while (received < kProducerCount * kMessagesPerProducer) {
+        auto value = channel.tryRecv();
+        if (!value.has_value()) {
+            std::this_thread::yield();
+            continue;
+        }
+        const size_t producer = static_cast<size_t>(*value >> 32U);
+        const uint64_t sequence = *value & 0xffff'ffffULL;
+        if (producer >= kProducerCount) {
+            fifoOk = false;
+        } else if (sequence != expected[producer]++) {
+            fifoOk = false;
+        }
+        ++received;
+    }
+    for (std::thread& producer : producers) {
+        producer.join();
+    }
+    channel.close();
+    return fifoOk && channel.empty();
+}
+
 bool runActiveWaiterAccounting()
 {
     galay::mpsc::BoundedChannel<int> recvChannel(2);
@@ -256,6 +383,14 @@ int main()
     }
     if (!runStorageLifetimeAccess()) {
         std::cerr << "[T163] MPSC bounded slot lifetime access failed\n";
+        return 1;
+    }
+    if (!runPerProducerRings()) {
+        std::cerr << "[T163] MPSC bounded per-producer ring failed\n";
+        return 1;
+    }
+    if (!runConcurrentPerProducerRings()) {
+        std::cerr << "[T163] MPSC bounded concurrent per-producer ring failed\n";
         return 1;
     }
     if (!runActiveWaiterAccounting()) {
