@@ -26,6 +26,7 @@ __pycache__/
 
 # Local benchmark reports
 /docs/cpp/cross_platform_network_benchmark_2026-07-13.md
+/benchmark-results/
 
 # CMake build output
 build/
