@@ -149,3 +149,21 @@
 - **CLI 边界测试与压力覆盖**：`utils.app_cli_config` 新增版本短名、帮助标签和空参数 Usage 断言；新增 `benchmark_utils_app_cli_dispatch_pressure`，10 万次压力下空参数帮助约 57 万次/秒、版本短选项约 187 万次/秒。
 - **RingBuffer 测试对齐显式错误传播**：零容量边界改为检查 `RingBuffer::create(0)` 返回 `RingBufferError::kInvalidCapacity`，移除旧 `try/catch`；默认后端 iovec 断言允许 mmap 创建失败后合法降级为 vector，并校验全部片段总长度。
 - **验证结果**：`utils.app_cli_config` 通过，`utils.buffer_queue_ring` 连续运行 10 次通过，CLI 压力基准通过，`git diff --check` 通过。当前受限 macOS 环境的 utils 全量测试仍有 3 项既有环境/专项假设失败：进程优先级设置权限，以及两个 mmap 专项用例在 mmap 创建失败并降级 vector 后仍要求单 iovec；均不由本次改动引入。
+
+## v4.5.0 - 2026-08-07
+
+- **版本级别**：次版本（minor，用户指定保持 v4）
+- **Git 提交消息**：`feat: 发布 v4.5.0 并重构高性能并发通道体系`
+- **Git tag**：`v4.5.0`
+
+### 变更摘要
+
+本次为 `v4.4.1` 之后的次版本发布，自 v4.4.1 以来累计 27 个提交，主线是重构 galay-kernel 高性能并发通道体系，新增并优化 MPMC、MPSC 与 SPSC 有界/无界通道，并补齐 C ABI、协程超时、关闭排空和跨语言性能验证。仓库此前已记录 `v4.4.2` 版本元数据与发布说明，但未创建对应远端 tag；本次 `v4.5.0` 覆盖 `v4.4.1..HEAD` 的全部累计变更。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.5.0`。
+
+- **MPMC 通道体系**：新增基于固定容量 Vyukov ring 的有界通道和可回收分段结构的无界通道，提供同步、协程、批量、超时与 close/drain 语义；退役 block 逆序扫描、token 局部缓存和 waiter 冷路径进一步降低稳态开销。
+- **MPSC 专用通道**：新增有界/无界 MPSC 实现，支持 producer token、无分配批量排空和每 producer 独占 SPSC ring 模式；修复换块、waiter/close 与失败发送边界，回退尚未成熟的统一工厂 API。
+- **SPSC 数据面**：新增运行时与编译期容量 ring、分块复用无界队列及有界/无界异步通道；通过 endpoint split、本地 cursor、对端 cursor 缓存与 Linux 非对称内存屏障优化批处理和稳态轮询热路径。
+- **C ABI 与公开边界**：新增 `BoundedChannel` C ABI，完整提供创建/销毁、单条/批量收发、C coroutine 超时等待、关闭与状态查询，公开错误码均对应 `*_get_error()` 字符串。
+- **异步 I/O 与调度边界**：C/C++ 异步 I/O 文件和公开类型统一为 `async_*` / `Async*`，异步同步原语归入 async 模块；waker 恢复改用 owner scheduler 无分配入口，并修复 HTTP/2 晚到事件导致的生命周期问题。
+- **测试与性能证据**：补齐 MPMC/MPSC/SPSC 对照 Rust Crossbeam 的 paired runner、bootstrap 95% 置信区间、FIFO/checksum/drain 门禁和原始样本；新增部署与腾讯 Linux/NUMA/性能分析脚本，并停止跟踪本机性能产物。
+- **累计修复**：修复 io_uring connect、HTTP/2 registration 稳定性、channel timeout 完成竞争、SPSC 跨块回收、MPSC waiter/close、Mongo topology、MySQL RSA OAEP 与 GCC 14 诊断等问题，并系统处理测试、benchmark 和清理路径中的非 `void` 返回值。

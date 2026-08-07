@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.5.0] - 2026-08-07
+
 ### Chore
 
 - **清理本地性能产物的版本跟踪**：移除 `docs/optimization/` 与跨平台网络基准报告的 Git 跟踪，保留本地文件；忽略根目录任务报告、临时部署脚本及 Python 缓存，避免它们再次进入提交。
@@ -19,6 +21,7 @@
 
 ### Changed
 
+- **构建版本号升级至 4.5.0**：同步更新 `CMakeLists.txt` 与 `MODULE.bazel`，对齐 CMake 包版本与 Bazel 模块版本。
 - **优化并发队列热路径与退役块扫描**：`spsc::BoundedChannel` 在 Linux 支持 process-wide membarrier 时，以首次 waiter 注册的冷路径重屏障换取 `kReady` / `kEmpty` 的 release 发布，并在不支持的平台保留原 `seq_cst` 路径；`mpmc::UnboundedChannel` 改为逆序检查退役 block，从忙碌尾部更早结束扫描，降低回收拒绝路径的尾延迟。
 - **优化 MPSC producer 独占数据面**：无界通道移除逐 slot `ready` 原子，改由 producer 通过累计 `published` tail 原子发布单条或整批消息，consumer 缓存已观察位置并按固定配额轮询 stream；bounded 通道新增固定 producer 数构造、独占 `ProducerToken` 和分片 SPSC ring，直接发送在该模式下显式返回 `kNotReady`；paired benchmark 与回归测试统一验证每 producer FIFO、checksum、关闭排空和固定容量口径。
 - **扩展 MPSC paired 基准的消费模式**：C++ 与 Rust 对照程序统一支持 `single` / `batch` 消费模式，runner 增加消费模式参数、结果字段和批量上限校验，便于区分单条轮询与批量排空的吞吐口径。
