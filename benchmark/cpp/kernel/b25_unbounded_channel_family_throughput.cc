@@ -1,6 +1,6 @@
 /**
  * @file b25_unbounded_channel_family_throughput.cc
- * @brief 压测 unbounded MPMC 完整路径、raw 数据面与 moodycamel 基线吞吐。
+ * @brief 压测 unbounded MPMC 完整路径、退役 block 扫描延迟与基线吞吐。
  */
 
 #include <galay/cpp/galay-kernel/concurrency/mpmc/unbounded_channel.h>
@@ -18,6 +18,17 @@
 #include <thread>
 #include <utility>
 #include <vector>
+
+namespace {
+
+struct BlockScanMeasurement
+{
+    std::vector<int64_t> forwardNs;
+    std::vector<int64_t> reverseNs;
+    bool valid = false;
+};
+
+} // namespace
 
 namespace galay::mpmc {
 
@@ -51,6 +62,65 @@ struct UnboundedChannelTestAccess
     {
         return UnboundedChannel<T>::kSlotsPerBlock;
     }
+
+    template <UnboundedValue T>
+    static BlockScanMeasurement measurePartiallyFreeBlock(
+        size_t sampleCount,
+        size_t scansPerSample)
+    {
+        using Channel = UnboundedChannel<T>;
+        Channel channel;
+        typename Channel::Block block;
+        block.base.store(0, std::memory_order_relaxed);
+        for (uint64_t offset = 0; offset < Channel::kSlotsPerBlock; ++offset) {
+            const uint64_t sequence = offset +
+                (offset + 1 < Channel::kSlotsPerBlock
+                     ? Channel::kSlotsPerBlock
+                     : 0);
+            block.slots[static_cast<size_t>(offset)].sequence.store(
+                sequence, std::memory_order_relaxed);
+        }
+
+        BlockScanMeasurement measurement;
+        measurement.forwardNs.reserve(sampleCount);
+        measurement.reverseNs.reserve(sampleCount);
+        bool valid = sampleCount != 0 && scansPerSample != 0;
+        for (size_t sample = 0; sample < sampleCount; ++sample) {
+            const auto forwardBegin = std::chrono::steady_clock::now();
+            for (size_t scan = 0; scan < scansPerSample; ++scan) {
+                const uint64_t base = block.base.load(std::memory_order_acquire);
+                bool free = true;
+                for (uint64_t offset = 0;
+                     offset < Channel::kSlotsPerBlock;
+                     ++offset) {
+                    if (block.slots[static_cast<size_t>(offset)].sequence.load(
+                            std::memory_order_acquire) !=
+                        base + offset + Channel::kSlotsPerBlock) {
+                        free = false;
+                        break;
+                    }
+                }
+                valid = valid && !free;
+            }
+            const auto forwardElapsed = std::chrono::steady_clock::now() -
+                forwardBegin;
+
+            const auto reverseBegin = std::chrono::steady_clock::now();
+            for (size_t scan = 0; scan < scansPerSample; ++scan) {
+                valid = valid && !channel.blockSlotsAreFree(block);
+            }
+            const auto reverseElapsed = std::chrono::steady_clock::now() -
+                reverseBegin;
+            measurement.forwardNs.push_back(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    forwardElapsed).count());
+            measurement.reverseNs.push_back(
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    reverseElapsed).count());
+        }
+        measurement.valid = valid;
+        return measurement;
+    }
 };
 
 } // namespace galay::mpmc
@@ -60,6 +130,8 @@ namespace {
 constexpr int64_t kMessages = 5'000'000;
 constexpr int kWarmupSamples = 1;
 constexpr int kSamples = 7;
+constexpr size_t kBlockScanSamples = 2'000;
+constexpr size_t kBlockScansPerSample = 256;
 constexpr int64_t kExpectedSum = (kMessages - 1) * kMessages / 2;
 using DefaultQueueTraits = moodycamel::ConcurrentQueueDefaultTraits;
 constexpr size_t kMoodyInitialPoolElements = 1024;
@@ -581,11 +653,61 @@ bool runComparison(const char* topology, int producerCount, int consumerCount)
     return ok;
 }
 
+bool runBlockScanLatency()
+{
+    const auto placement = galay::benchmark::pinCurrentThread(0);
+    BlockScanMeasurement measurement =
+        galay::mpmc::UnboundedChannelTestAccess::measurePartiallyFreeBlock<int64_t>(
+            kBlockScanSamples, kBlockScansPerSample);
+    if (!measurement.valid ||
+        measurement.forwardNs.size() != kBlockScanSamples ||
+        measurement.reverseNs.size() != kBlockScanSamples) {
+        std::cout << "mpmc_retired_block_scan invalid_measurement\n";
+        return false;
+    }
+    std::sort(measurement.forwardNs.begin(), measurement.forwardNs.end());
+    std::sort(measurement.reverseNs.begin(), measurement.reverseNs.end());
+    const auto percentile = [](const std::vector<int64_t>& samples,
+                               double fraction) {
+        const size_t index = static_cast<size_t>(
+            fraction * static_cast<double>(samples.size() - 1));
+        return samples[index];
+    };
+    const int64_t forwardP99 = percentile(measurement.forwardNs, 0.99);
+    const int64_t forwardP999 = percentile(measurement.forwardNs, 0.999);
+    const int64_t reverseP99 = percentile(measurement.reverseNs, 0.99);
+    const int64_t reverseP999 = percentile(measurement.reverseNs, 0.999);
+    if (reverseP99 <= 0 || reverseP999 <= 0) {
+        std::cout << "mpmc_retired_block_scan invalid_duration\n";
+        return false;
+    }
+    const double scansPerSample = static_cast<double>(kBlockScansPerSample);
+    std::cout << "mpmc_retired_block_scan"
+              << " scenario=free_prefix_busy_tail"
+              << " measurement_scope=normalized_batch_scan"
+              << " slots="
+              << galay::mpmc::UnboundedChannelTestAccess::blockSize<int64_t>()
+              << " samples=" << kBlockScanSamples
+              << " scans_per_sample=" << kBlockScansPerSample
+              << " forward_p99_ns_per_scan=" << forwardP99 / scansPerSample
+              << " reverse_p99_ns_per_scan=" << reverseP99 / scansPerSample
+              << " forward_p999_ns_per_scan=" << forwardP999 / scansPerSample
+              << " reverse_p999_ns_per_scan=" << reverseP999 / scansPerSample
+              << " p99_speedup="
+              << static_cast<double>(forwardP99) / static_cast<double>(reverseP99)
+              << " p999_speedup="
+              << static_cast<double>(forwardP999) / static_cast<double>(reverseP999)
+              << " placement="
+              << galay::benchmark::threadPlacementName(placement) << '\n';
+    return reverseP99 < forwardP99 && reverseP999 < forwardP999;
+}
+
 } // namespace
 
 int main()
 {
-    bool ok = runComparison("2p2c", 2, 2);
+    bool ok = runBlockScanLatency();
+    ok = runComparison("2p2c", 2, 2) && ok;
     ok = runComparison("4p4c", 4, 4) && ok;
     return ok ? 0 : 1;
 }

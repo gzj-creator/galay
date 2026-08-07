@@ -16,6 +16,7 @@
 #include "../../common/error.h"
 #include "../../core/waker.h"
 #include "../../core/timeout.hpp"
+#include "../detail/asymmetric_memory_barrier.h"
 #include "../../../galay-utils/common/defn.hpp"
 #include "../../../galay-utils/cache/type_ring_buffer.hpp"
 #include <coroutine>
@@ -329,6 +330,7 @@ private:
     TimeoutTimer::ptr m_timeoutTimer;
     BoundedChannelWaiter<T>* m_waiter = nullptr;
     uint64_t m_waiterGeneration = 0;
+    uint32_t m_registrationSystemError = 0;
     bool m_sent = false;
     bool m_timedOut = false;
     bool m_registrationFailed = false;
@@ -400,6 +402,7 @@ private:
     TimeoutTimer::ptr m_timeoutTimer;
     BoundedChannelWaiter<T>* m_waiter = nullptr;
     uint64_t m_waiterGeneration = 0;
+    uint32_t m_registrationSystemError = 0;
     bool m_timedOut = false;
     bool m_registrationFailed = false;
 };
@@ -475,6 +478,7 @@ private:
     TimeoutTimer::ptr m_timeoutTimer;
     BoundedChannelWaiter<T>* m_waiter = nullptr;
     uint64_t m_waiterGeneration = 0;
+    uint32_t m_registrationSystemError = 0;
     bool m_timedOut = false;
     bool m_registrationFailed = false;
     bool m_batchReady = false;
@@ -552,6 +556,7 @@ private:
     BoundedChannelWaiter<T>* m_waiter = nullptr;
     uint64_t m_waiterGeneration = 0;
     size_t m_readyCount = 0;
+    uint32_t m_registrationSystemError = 0;
     bool m_ready = false;
     bool m_timedOut = false;
     bool m_registrationFailed = false;
@@ -1389,7 +1394,8 @@ private:
             return;
         }
         const size_t position = m_head.load(std::memory_order_relaxed);
-        // 不可弱化：与发布方的 SC ready.store -> waiterPath.load 组成 Dekker 握手。
+        // fallback 路径与 SC ready.store 组成 Dekker 握手；native 路径在首次
+        // waiter 发布后先执行 process-wide barrier，再用该 load 复核 slot。
         [[maybe_unused]] const SlotState published =
             slotAt(position & ringMask()).ready.load(std::memory_order_seq_cst);
     }
@@ -1400,9 +1406,22 @@ private:
             return;
         }
         const size_t position = m_tail.load(std::memory_order_relaxed);
-        // 不可弱化：与消费方的 SC ready.store -> waiterPath.load 组成 Dekker 握手。
+        // fallback 路径与 SC ready.store 组成 Dekker 握手；native 路径在首次
+        // waiter 发布后先执行 process-wide barrier，再用该 load 复核 slot。
         [[maybe_unused]] const SlotState released =
             slotAt(position & ringMask()).ready.load(std::memory_order_seq_cst);
+    }
+
+    std::optional<uint32_t> firstWaiterBarrierError(bool firstUse) noexcept
+    {
+        if (!firstUse || !m_useAsymmetricBarrier) {
+            return std::nullopt;
+        }
+        auto barrier = kernel::detail::asymmetricHeavyBarrier();
+        if (barrier) {
+            return std::nullopt;
+        }
+        return static_cast<uint32_t>(barrier.error().systemError);
     }
 
     /**
@@ -1508,8 +1527,14 @@ private:
 
         [[maybe_unused]] T* const stored =
             std::construct_at(slot.storageAddress(), std::move(value));
-        // SPSC 不需要 generation；SC ready 发布同时参与 waiter 的 Dekker 握手。
-        slot.ready.store(SlotState::kReady, std::memory_order_seq_cst);
+        // close 仍由 kPublishing 的 SC 发布仲裁；waiter 首次启用时
+        // 的 process-wide barrier 允许稳定数据发布使用 release。
+        if (m_useAsymmetricBarrier) {
+            slot.ready.store(SlotState::kReady, std::memory_order_release);
+            kernel::detail::asymmetricLightBarrier();
+        } else {
+            slot.ready.store(SlotState::kReady, std::memory_order_seq_cst);
+        }
         m_tail.store(position + 1, std::memory_order_relaxed);
         return RingEnqueueResult::kPublished;
     }
@@ -1536,8 +1561,12 @@ private:
 
         consume(std::move(*slot.value()));
         std::destroy_at(slot.value());
-        // SPSC 不需要 generation；SC ready 释放同时参与 waiter 的 Dekker 握手。
-        slot.ready.store(SlotState::kEmpty, std::memory_order_seq_cst);
+        if (m_useAsymmetricBarrier) {
+            slot.ready.store(SlotState::kEmpty, std::memory_order_release);
+            kernel::detail::asymmetricLightBarrier();
+        } else {
+            slot.ready.store(SlotState::kEmpty, std::memory_order_seq_cst);
+        }
         m_head.store(position + 1, std::memory_order_relaxed);
         return true;
     }
@@ -2054,6 +2083,8 @@ retry_timeout_operation:
     alignas(::galay::utils::kCacheLineSize) SlotStorage m_slots;
     size_t m_capacity = 0;
     size_t m_mask = 0;
+    bool m_useAsymmetricBarrier =
+        kernel::detail::asymmetricMemoryBarrierSupport().has_value();
     RingError m_error = RingError::kNone;
     alignas(::galay::utils::kCacheLineSize) Waiter m_recvWaiterSlot;
     alignas(::galay::utils::kCacheLineSize) Waiter m_sendWaiterSlot;
@@ -2151,7 +2182,19 @@ inline bool BoundedSendAwaitable<T, Capacity>::await_suspend(
         return false;
     }
     m_waiter = waiter;
-    channel->m_sendWaiterPathUsed.store(true, std::memory_order_seq_cst);
+    const bool waiterPathWasUsed =
+        channel->m_sendWaiterPathUsed.exchange(
+            true, std::memory_order_seq_cst);
+    if (auto barrierError =
+            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+        barrierError.has_value()) {
+        m_registrationSystemError = *barrierError;
+        channel->m_sendWaiterPathUsed.store(false,
+                                            std::memory_order_seq_cst);
+        waiter->state.store(BoundedWaiterState::kFailed,
+                            std::memory_order_release);
+        return false;
+    }
     if (!channel->enqueueWaiter(channel->m_sendWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
         return false;
@@ -2194,7 +2237,8 @@ BoundedSendAwaitable<T, Capacity>::await_resume() noexcept
             return std::unexpected(IOError(kClosed, 0));
         }
         if (state == BoundedWaiterState::kFailed) {
-            return std::unexpected(IOError(kNotReady, 0));
+            return std::unexpected(
+                IOError(kNotReady, m_registrationSystemError));
         }
     }
     if (m_timedOut) {
@@ -2264,7 +2308,19 @@ inline bool BoundedRecvAwaitable<T, Capacity>::await_suspend(
         return false;
     }
     m_waiter = waiter;
-    channel->m_recvWaiterPathUsed.store(true, std::memory_order_seq_cst);
+    const bool waiterPathWasUsed =
+        channel->m_recvWaiterPathUsed.exchange(
+            true, std::memory_order_seq_cst);
+    if (auto barrierError =
+            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+        barrierError.has_value()) {
+        m_registrationSystemError = *barrierError;
+        channel->m_recvWaiterPathUsed.store(false,
+                                            std::memory_order_seq_cst);
+        waiter->state.store(BoundedWaiterState::kFailed,
+                            std::memory_order_release);
+        return false;
+    }
     if (!channel->enqueueWaiter(channel->m_recvWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
         return false;
@@ -2304,7 +2360,8 @@ BoundedRecvAwaitable<T, Capacity>::await_resume() noexcept
             return std::unexpected(IOError(kClosed, 0));
         }
         if (state == BoundedWaiterState::kFailed) {
-            return std::unexpected(IOError(kNotReady, 0));
+            return std::unexpected(
+                IOError(kNotReady, m_registrationSystemError));
         }
         if (state == BoundedWaiterState::kFulfilled) {
             return std::unexpected(IOError(kClosed, 0));
@@ -2394,7 +2451,19 @@ inline bool BoundedRecvBatchToAwaitable<T, Capacity>::await_suspend(
         return false;
     }
     m_waiter = waiter;
-    channel->m_recvWaiterPathUsed.store(true, std::memory_order_seq_cst);
+    const bool waiterPathWasUsed =
+        channel->m_recvWaiterPathUsed.exchange(
+            true, std::memory_order_seq_cst);
+    if (auto barrierError =
+            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+        barrierError.has_value()) {
+        m_registrationSystemError = *barrierError;
+        channel->m_recvWaiterPathUsed.store(false,
+                                            std::memory_order_seq_cst);
+        waiter->state.store(BoundedWaiterState::kFailed,
+                            std::memory_order_release);
+        return false;
+    }
     if (!channel->enqueueWaiter(channel->m_recvWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed,
                             std::memory_order_release);
@@ -2449,7 +2518,8 @@ BoundedRecvBatchToAwaitable<T, Capacity>::await_resume() noexcept
             return std::unexpected(IOError(kClosed, 0));
         }
         if (state == BoundedWaiterState::kFailed) {
-            return std::unexpected(IOError(kNotReady, 0));
+            return std::unexpected(
+                IOError(kNotReady, m_registrationSystemError));
         }
     }
     if (m_timedOut) {
@@ -2549,7 +2619,19 @@ inline bool BoundedRecvBatchAwaitable<T, Capacity>::await_suspend(
         return false;
     }
     m_waiter = waiter;
-    channel->m_recvWaiterPathUsed.store(true, std::memory_order_seq_cst);
+    const bool waiterPathWasUsed =
+        channel->m_recvWaiterPathUsed.exchange(
+            true, std::memory_order_seq_cst);
+    if (auto barrierError =
+            channel->firstWaiterBarrierError(!waiterPathWasUsed);
+        barrierError.has_value()) {
+        m_registrationSystemError = *barrierError;
+        channel->m_recvWaiterPathUsed.store(false,
+                                            std::memory_order_seq_cst);
+        waiter->state.store(BoundedWaiterState::kFailed,
+                            std::memory_order_release);
+        return false;
+    }
     if (!channel->enqueueWaiter(channel->m_recvWaiters, waiter)) {
         waiter->state.store(BoundedWaiterState::kFailed, std::memory_order_release);
         return false;
@@ -2592,7 +2674,8 @@ BoundedRecvBatchAwaitable<T, Capacity>::await_resume()
             return std::unexpected(IOError(kClosed, 0));
         }
         if (state == BoundedWaiterState::kFailed) {
-            return std::unexpected(IOError(kNotReady, 0));
+            return std::unexpected(
+                IOError(kNotReady, m_registrationSystemError));
         }
     }
     if (m_timedOut) {

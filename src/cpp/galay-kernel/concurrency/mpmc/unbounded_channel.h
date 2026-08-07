@@ -703,7 +703,9 @@ private:
     bool blockSlotsAreFree(const Block& block) const noexcept
     {
         const uint64_t base = block.base.load(std::memory_order_acquire);
-        for (uint64_t offset = 0; offset < kSlotsPerBlock; ++offset) {
+        // 新退役 block 的高位 slot 更可能仍由晚认领的 consumer 处理。
+        for (uint64_t end = kSlotsPerBlock; end != 0; --end) {
+            const uint64_t offset = end - 1;
             if (block.slots[static_cast<size_t>(offset)].sequence.load(
                     std::memory_order_acquire) !=
                 base + offset + kSlotsPerBlock) {

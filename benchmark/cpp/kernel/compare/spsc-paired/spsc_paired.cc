@@ -1,6 +1,6 @@
 /**
  * @file spsc_paired.cc
- * @brief 与 Rust 使用同一协议测量 scalar/batch bounded 及 unbounded SPSC 吞吐。
+ * @brief 测量 SPSC ring/channel 的 scalar/batch bounded 及 unbounded 吞吐。
  */
 
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
@@ -32,6 +32,7 @@ namespace {
 
 enum class CaseKind : uint8_t {
     kRawBounded,
+    kChannelBounded,
     kBatchBounded,
     kUnbounded,
     kBatchUnbounded,
@@ -132,6 +133,8 @@ const char* caseName(CaseKind kind) noexcept
     switch (kind) {
     case CaseKind::kRawBounded:
         return "raw_bounded";
+    case CaseKind::kChannelBounded:
+        return "channel_bounded";
     case CaseKind::kBatchBounded:
         return "batch_bounded";
     case CaseKind::kUnbounded:
@@ -147,6 +150,8 @@ const char* implementationName(CaseKind kind) noexcept
     switch (kind) {
     case CaseKind::kRawBounded:
         return "galay::spsc::Ring::split";
+    case CaseKind::kChannelBounded:
+        return "galay::spsc::BoundedChannel";
     case CaseKind::kBatchBounded:
         return "galay::spsc::Ring::split batch";
     case CaseKind::kUnbounded:
@@ -162,6 +167,8 @@ const char* apiProfile(CaseKind kind) noexcept
     switch (kind) {
     case CaseKind::kRawBounded:
         return "bounded_spsc_polling_split";
+    case CaseKind::kChannelBounded:
+        return "bounded_spsc_wait_capable_polling_path";
     case CaseKind::kBatchBounded:
         return "bounded_spsc_batch_polling_split";
     case CaseKind::kUnbounded:
@@ -178,6 +185,8 @@ const char* comparisonScope(CaseKind kind) noexcept
     case CaseKind::kRawBounded:
     case CaseKind::kBatchBounded:
         return "equivalent_measured_api";
+    case CaseKind::kChannelBounded:
+        return "internal_regression_guard";
     case CaseKind::kUnbounded:
         return "nearest_available_measured_path";
     case CaseKind::kBatchUnbounded:
@@ -259,7 +268,9 @@ private:
 
 bool isBounded(CaseKind kind) noexcept
 {
-    return kind == CaseKind::kRawBounded || kind == CaseKind::kBatchBounded;
+    return kind == CaseKind::kRawBounded ||
+        kind == CaseKind::kChannelBounded ||
+        kind == CaseKind::kBatchBounded;
 }
 
 bool isBatch(CaseKind kind) noexcept
@@ -290,6 +301,8 @@ std::expected<Config, ArgumentError> parseArguments(int argc, char** argv) noexc
         if (option == "--case") {
             if (value == "raw_bounded") {
                 config.kind = CaseKind::kRawBounded;
+            } else if (value == "channel_bounded") {
+                config.kind = CaseKind::kChannelBounded;
             } else if (value == "batch_bounded") {
                 config.kind = CaseKind::kBatchBounded;
             } else if (value == "unbounded") {
@@ -472,6 +485,27 @@ Measurement runBounded(const Config& config)
         },
         [consumer = std::move(endpoints.consumer)](uint64_t& value) mutable {
             return consumer.tryRead(value);
+        });
+}
+
+Measurement runChannelBounded(const Config& config)
+{
+    galay::spsc::BoundedChannel<uint64_t> channel(config.capacity);
+    if (channel.error() != galay::spsc::RingError::kNone) {
+        return {};
+    }
+    return runPair(
+        config,
+        [&channel](uint64_t& value) {
+            return channel.trySend(std::move(value));
+        },
+        [&channel](uint64_t& value) {
+            auto received = channel.tryRecv();
+            if (!received.has_value()) {
+                return false;
+            }
+            value = std::move(*received);
+            return true;
         });
 }
 
@@ -692,6 +726,8 @@ int main(int argc, char** argv)
         switch (config->kind) {
         case CaseKind::kRawBounded:
             return runBounded(*config);
+        case CaseKind::kChannelBounded:
+            return runChannelBounded(*config);
         case CaseKind::kBatchBounded:
             return runBatchBounded(*config);
         case CaseKind::kUnbounded:

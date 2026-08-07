@@ -146,6 +146,12 @@ int main()
         requireCount(
             failures,
             compact,
+            "galay::spsc::BoundedChannel<uint64_t> channel",
+            1,
+            "C++ paired benchmark must cover the waiter-capable bounded channel");
+        requireCount(
+            failures,
+            compact,
             "auto endpoints = channel.split()",
             2,
             "C++ scalar and batch bounded cases must move split SPSC endpoints to the workers");

@@ -13,6 +13,7 @@ Galay 与 Rust 专用 SPSC 实现的所测数据路径吞吐分别是多少。�
 | case | Galay | Rust | `comparison_scope` |
 |---|---|---|---|
 | `raw_bounded` | `galay::spsc::Ring<uint64_t>::split()` | `rtrb::RingBuffer<u64>` `0.3.4` | `equivalent_measured_api` |
+| `channel_bounded` | `galay::spsc::BoundedChannel<uint64_t>` polling path | N/A | `internal_regression_guard` |
 | `batch_bounded` | `Ring::split()` endpoint `tryWriteBatch` / `tryReadBatch` | `push_partial_slice` / `pop_partial_slice` | `equivalent_measured_api` |
 | `unbounded` | `galay::spsc::UnboundedChannel<uint64_t>` | `unbounded_spsc::channel<u64>()` `0.3.0` | `nearest_available_measured_path` |
 | `batch_unbounded` | `UnboundedChannel::sendBatch` / `tryRecvBatch` | 预分配 batch buffer 后逐条 `send` / `try_recv` | `reference_only_no_equivalent_rust_batch_api` |
