@@ -1,6 +1,8 @@
 #include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 
+#include "socket_test_support.h"
+
 static int expect_runtime_status(C_RuntimeResultCode actual, C_RuntimeResultCode expected)
 {
     return actual == expected ? 0 : 1;
@@ -18,6 +20,15 @@ static int expect_io_code(C_IOResult actual, C_IOResultCode expected)
 
 int main(void)
 {
+    const galay_test_socket_capability_t socket_capability =
+        galay_test_socket_capability(SOCK_STREAM);
+    if (socket_capability == GALAY_TEST_SOCKET_PERMISSION_DENIED) {
+        return 125;
+    }
+    if (socket_capability == GALAY_TEST_SOCKET_PROBE_FAILED) {
+        return 126;
+    }
+
     C_RuntimeConfig config = galay_kernel_runtime_config_default();
     galay_kernel_runtime_t runtime = {0};
     galay_kernel_tcp_socket_t tcp = {0};

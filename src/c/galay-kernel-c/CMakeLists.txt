@@ -7,6 +7,7 @@ file(GLOB galay_c_kernel_sources CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/core-c/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/async-c/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/concurrency-c/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/concurrency-c/*/*.cc"
     "${CMAKE_CURRENT_SOURCE_DIR}/coro-c/*.cc"
 )
 

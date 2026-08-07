@@ -6,7 +6,7 @@
 - 当前 C 文档按 C++ 文档的模块路径和编号口径组织，落点为 `docs/c/modules/kernel`
 - 当前已验证环境：macOS / AppleClang 17 / Release 构建 / kqueue
 - 当前已落地页面：`docs/c/modules/kernel/05-性能测试.md`
-- 当前验证范围：C Kernel runtime、C coroutine wait/sleep、TCP/UDP socket、AsyncFile、AsyncAio、AsyncFileWatcher、AsyncMutex、AsyncWaiter、BoundedChannel、MpscChannel、UnsafeChannel 的 C ABI wrapper、测试和 benchmark smoke
+- 当前验证范围：C Kernel runtime、C coroutine wait/sleep、TCP/UDP socket、AsyncFile、AsyncAio、AsyncFileWatcher、AsyncMutex、AsyncWaiter，以及 MPMC/MPSC/SPSC 的 bounded/unbounded channel C ABI、测试和 benchmark smoke
 
 ## 两层规则
 
@@ -25,9 +25,9 @@
 7. `src/c/galay-kernel-c/async-c/async_file_watcher_c.h`
 8. `src/c/galay-kernel-c/async-c/async_mutex_c.h`
 9. `src/c/galay-kernel-c/async-c/async_waiter_c.h`
-10. `src/c/galay-kernel-c/concurrency-c/bounded_channel_c.h`
-11. `src/c/galay-kernel-c/concurrency-c/mpsc_channel_c.h`
-12. `src/c/galay-kernel-c/concurrency-c/unsafe_channel_c.h`
+10. `src/c/galay-kernel-c/concurrency-c/{mpmc,mpsc,spsc}/{bounded,unbounded}_channel_c.h`
+11. `test/c/kernel/t30_channel_families.c`
+12. `benchmark/c/kernel/b28_mpmc_bounded_channel_throughput.c` 至 `b33_spsc_unbounded_channel_throughput.c`
 13. `examples/c/kernel/`
 14. `test/c/kernel/`
 15. `benchmark/c/kernel/`
@@ -43,7 +43,7 @@
 - 想看 C coroutine sleep：`src/c/galay-kernel-c/coro-c/coro_wait_c.h`、`test/c/kernel/t26_coro_sleep.c`、`examples/c/kernel/e13_coro_sleep.c`、`benchmark/c/kernel/b24_coro_sleep_latency.c`
 - 想看文件 IO C ABI：`src/c/galay-kernel-c/async-c/async_file_c.h`、`src/c/galay-kernel-c/async-c/async_aio_c.h`、`test/c/kernel/t11_async_file_io.c`、`test/c/kernel/t12_aio_file_batch.c`、`examples/c/kernel/e5_aio_file_batch.c`、`benchmark/c/kernel/b7_aio_file_batch.c`
 - 想看文件监控 C ABI：`src/c/galay-kernel-c/async-c/async_file_watcher_c.h`、`test/c/kernel/t13_file_watcher_events.c`
-- 想看 concurrency C ABI：`src/c/galay-kernel-c/concurrency-c/`、`test/c/kernel/t14_async_mutex.c` 到 `test/c/kernel/t17_unsafe_channel.c`，以及 `test/c/kernel/t29_bounded_channel.c`
+- 想看 concurrency C ABI：`src/c/galay-kernel-c/concurrency-c/{mpmc,mpsc,spsc}/`、`test/c/kernel/t30_channel_families.c`；无界 MPMC/MPSC 的每线程高吞吐发送应使用 producer token，MPMC 接收也应使用 consumer token。
 
 ## 按关键词进入
 
@@ -63,6 +63,4 @@
 - `galay_kernel_file_watcher_watch`：`src/c/galay-kernel-c/async-c/async_file_watcher_c.h`、`test/c/kernel/t13_file_watcher_events.c`
 - `galay_kernel_async_mutex_lock`：`src/c/galay-kernel-c/async-c/async_mutex_c.h`、`test/c/kernel/t14_async_mutex.c`
 - `galay_kernel_async_waiter_wait`：`src/c/galay-kernel-c/async-c/async_waiter_c.h`、`test/c/kernel/t15_async_waiter.c`
-- `galay_kernel_bounded_channel_send` / `galay_kernel_bounded_channel_recv`：`src/c/galay-kernel-c/concurrency-c/bounded_channel_c.h`、`test/c/kernel/t29_bounded_channel.c`、`benchmark/c/kernel/b27_bounded_channel_throughput.c`
-- `galay_kernel_mpsc_channel_recv`：`src/c/galay-kernel-c/concurrency-c/mpsc_channel_c.h`、`test/c/kernel/t16_mpsc_channel.c`
-- `galay_kernel_unsafe_channel_recv`：`src/c/galay-kernel-c/concurrency-c/unsafe_channel_c.h`、`test/c/kernel/t17_unsafe_channel.c`
+- `galay_kernel_{mpmc,mpsc,spsc}_{bounded,unbounded}_channel_*`：`src/c/galay-kernel-c/concurrency-c/{mpmc,mpsc,spsc}/`、`test/c/kernel/t30_channel_families.c`、`benchmark/c/kernel/b28_mpmc_bounded_channel_throughput.c` 至 `b33_spsc_unbounded_channel_throughput.c`

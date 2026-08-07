@@ -59,7 +59,8 @@ const char* galay_kernel_tcp_socket_get_error(C_TcpSocketResultCode code);
  * @param c_socket 输出 socket 句柄；成功时写入内部 AsyncTcpSocket 指针。
  * @param type IP 地址族，必须是 C_IPTypeIPV4 或 C_IPTypeIPV6。
  * @return 成功返回 C_TcpSocketSuccess；参数非法返回 C_TcpSocketParameterInvalid；
- * 底层创建或内存分配失败返回 C_TcpSocketMemoryAllocFailed。
+ * 底层创建失败返回 C_TcpSocketIOFailed；内存分配失败返回
+ * C_TcpSocketMemoryAllocFailed。
  *
  * @note 成功后调用方拥有 c_socket->socket，必须调用
  * galay_kernel_tcp_socket_destroy 释放。该函数同步执行，不要求在 C coroutine 内调用。

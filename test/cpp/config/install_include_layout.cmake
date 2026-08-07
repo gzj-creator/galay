@@ -23,6 +23,12 @@ foreach(required_source_path
         "src/cpp/galay-kernel/common/error.h"
         "src/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "src/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
+        "src/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel_c.h"
+        "src/c/galay-kernel-c/concurrency-c/mpmc/unbounded_channel_c.h"
+        "src/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel_c.h"
+        "src/c/galay-kernel-c/concurrency-c/mpsc/unbounded_channel_c.h"
+        "src/c/galay-kernel-c/concurrency-c/spsc/bounded_channel_c.h"
+        "src/c/galay-kernel-c/concurrency-c/spsc/unbounded_channel_c.h"
         "src/cpp/galay-utils/cache/ring_buffer.hpp"
         "src/cpp/galay-utils/cache/type_ring_buffer.hpp"
         "src/cpp/galay-http/client/http_client.h"
@@ -108,6 +114,32 @@ foreach(required_header
         message(FATAL_ERROR "Missing installed header: ${required_header}")
     endif()
 endforeach()
+
+file(READ "${GALAY_BINARY_DIR}/CMakeCache.txt" galay_cache_content)
+if(galay_cache_content MATCHES "GALAY_BUILD_C_API:BOOL=ON")
+    foreach(required_c_header
+            IN ITEMS
+            "include/galay/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/mpmc/unbounded_channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/mpsc/unbounded_channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/spsc/bounded_channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/spsc/unbounded_channel_c.h")
+        if(NOT EXISTS "${prefix_dir}/${required_c_header}")
+            message(FATAL_ERROR "Missing installed C API header: ${required_c_header}")
+        endif()
+    endforeach()
+    foreach(legacy_c_header
+            IN ITEMS
+            "include/galay/c/galay-kernel-c/concurrency-c/channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/bounded_channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/mpsc_channel_c.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/unsafe_channel_c.h")
+        if(EXISTS "${prefix_dir}/${legacy_c_header}")
+            message(FATAL_ERROR "Legacy C API header must not be installed: ${legacy_c_header}")
+        endif()
+    endforeach()
+endif()
 
 foreach(required_module_header
         IN ITEMS
@@ -198,7 +230,7 @@ file(WRITE "${consumer_source_dir}/main.cc"
 
 file(WRITE "${consumer_source_dir}/CMakeLists.txt" [=[
 cmake_minimum_required(VERSION 3.20)
-project(galay_install_include_layout_consumer LANGUAGES CXX)
+project(galay_install_include_layout_consumer LANGUAGES C CXX)
 
 find_package(galay CONFIG REQUIRED)
 
@@ -207,6 +239,20 @@ target_compile_features(consumer PRIVATE cxx_std_23)
 set_target_properties(consumer PROPERTIES NO_SYSTEM_FROM_IMPORTED ON)
 target_link_libraries(consumer PRIVATE galay::kernel)
 ]=])
+
+if(galay_cache_content MATCHES "GALAY_BUILD_C_API:BOOL=ON")
+    file(WRITE "${consumer_source_dir}/c_main.c"
+        "#include <galay/c/galay-kernel-c/kernel_c.h>\n"
+        "int main(void) {\n"
+        "  return galay_kernel_channel_get_error(C_ChannelClosed) == 0;\n"
+        "}\n")
+    file(APPEND "${consumer_source_dir}/CMakeLists.txt" [=[
+
+add_executable(c_consumer c_main.c)
+set_target_properties(c_consumer PROPERTIES NO_SYSTEM_FROM_IMPORTED ON)
+target_link_libraries(c_consumer PRIVATE galay::c-kernel)
+]=])
+endif()
 
 set(configure_command
     "${CMAKE_COMMAND}"

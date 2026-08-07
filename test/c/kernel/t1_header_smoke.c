@@ -10,9 +10,12 @@ int main(void)
     galay_kernel_file_watcher_t file_watcher = {0};
     galay_kernel_async_mutex_t async_mutex = {0};
     galay_kernel_async_waiter_t async_waiter = {0};
-    galay_kernel_bounded_channel_t bounded_channel = {0};
-    galay_kernel_mpsc_channel_t mpsc_channel = {0};
-    galay_kernel_unsafe_channel_t unsafe_channel = {0};
+    galay_kernel_mpmc_bounded_channel_t mpmc_bounded_channel = {0};
+    galay_kernel_mpmc_unbounded_channel_t mpmc_unbounded_channel = {0};
+    galay_kernel_mpsc_bounded_channel_t mpsc_bounded_channel = {0};
+    galay_kernel_mpsc_unbounded_channel_t mpsc_unbounded_channel = {0};
+    galay_kernel_spsc_bounded_channel_t spsc_bounded_channel = {0};
+    galay_kernel_spsc_unbounded_channel_t spsc_unbounded_channel = {0};
     galay_coro_task_t coro_task = {0};
     C_CoroWaitRequest wait_request = {0};
     C_CoroWaitEventToken wait_token = {0};
@@ -42,13 +45,9 @@ int main(void)
     C_FileWatchEvent file_watch_event = C_FileWatchEventModify;
     C_AsyncMutexResultCode async_mutex_code = C_AsyncMutexSuccess;
     C_AsyncWaiterResultCode async_waiter_code = C_AsyncWaiterSuccess;
-    C_BoundedChannelResultCode bounded_code = C_BoundedChannelSuccess;
-    C_BoundedChannelMessage bounded_message = {0};
-    C_MpscChannelResultCode mpsc_code = C_MpscChannelSuccess;
-    C_MpscChannelMessage mpsc_message = {0};
-    C_UnsafeChannelResultCode unsafe_code = C_UnsafeChannelSuccess;
-    C_UnsafeChannelMessage unsafe_message = {0};
-    C_UnsafeChannelWakeMode unsafe_wake_mode = C_UnsafeChannelWakeModeDeferred;
+    C_ChannelResultCode channel_code = C_ChannelSuccess;
+    C_ChannelMessage channel_message = {0};
+    C_SpscUnboundedChannelWakeMode wake_mode = C_SpscUnboundedChannelWakeDeferred;
 
     return runtime.runtime == 0 &&
             tcp.socket == 0 &&
@@ -58,9 +57,12 @@ int main(void)
             file_watcher.watcher == 0 &&
             async_mutex.mutex == 0 &&
             async_waiter.waiter == 0 &&
-            bounded_channel.channel == 0 &&
-            mpsc_channel.channel == 0 &&
-            unsafe_channel.channel == 0 &&
+            mpmc_bounded_channel.channel == 0 &&
+            mpmc_unbounded_channel.channel == 0 &&
+            mpsc_bounded_channel.channel == 0 &&
+            mpsc_unbounded_channel.channel == 0 &&
+            spsc_bounded_channel.channel == 0 &&
+            spsc_unbounded_channel.channel == 0 &&
             coro_task.task == 0 &&
             wait_request.request == 0 &&
             wait_token.token == 0 &&
@@ -85,13 +87,9 @@ int main(void)
             file_watch_event == C_FileWatchEventModify &&
             async_mutex_code == C_AsyncMutexSuccess &&
             async_waiter_code == C_AsyncWaiterSuccess &&
-            bounded_code == C_BoundedChannelSuccess &&
-            bounded_message.data == 0 &&
-            mpsc_code == C_MpscChannelSuccess &&
-            mpsc_message.data == 0 &&
-            unsafe_code == C_UnsafeChannelSuccess &&
-            unsafe_message.data == 0 &&
-            unsafe_wake_mode == C_UnsafeChannelWakeModeDeferred
+            channel_code == C_ChannelSuccess &&
+            channel_message.data == 0 &&
+            wake_mode == C_SpscUnboundedChannelWakeDeferred
         ? 0
         : 1;
 }

@@ -42,6 +42,41 @@ if(NOT EXISTS "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/kernel_c.h")
     message(FATAL_ERROR "Missing kernel C ABI umbrella header: src/c/galay-kernel-c/kernel_c.h")
 endif()
 
+foreach(topology IN ITEMS mpmc mpsc spsc)
+    foreach(capacity IN ITEMS bounded unbounded)
+        set(channel_base
+            "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/concurrency-c/${topology}/${capacity}_channel_c")
+        if(NOT EXISTS "${channel_base}.h")
+            message(FATAL_ERROR
+                "Missing canonical ${topology} ${capacity} C ABI header: ${channel_base}.h")
+        endif()
+        if(NOT EXISTS "${channel_base}.cc")
+            message(FATAL_ERROR
+                "Missing canonical ${topology} ${capacity} C ABI source: ${channel_base}.cc")
+        endif()
+    endforeach()
+endforeach()
+
+foreach(legacy_channel_file IN ITEMS
+        channel_c.h
+        channel_c.cc
+        bounded_channel_c.h
+        bounded_channel_c.cc
+        mpsc_channel_c.h
+        mpsc_channel_c.cc
+        unsafe_channel_c.h
+        unsafe_channel_c.cc)
+    if(EXISTS "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/concurrency-c/${legacy_channel_file}")
+        message(FATAL_ERROR "Legacy flat C channel API must be removed: ${legacy_channel_file}")
+    endif()
+endforeach()
+
+file(READ "${GALAY_SOURCE_DIR}/cmake/option.cmake" option_cmake_content)
+if(NOT option_cmake_content MATCHES
+        "option\\(GALAY_BUILD_C_API[ \t]+\"Build C ABI wrapper targets\"[ \t]+ON\\)")
+    message(FATAL_ERROR "GALAY_BUILD_C_API must be enabled by default.")
+endif()
+
 if(EXISTS "${GALAY_SOURCE_DIR}/.wroktree")
     message(FATAL_ERROR "Typo local worktree directory remains: .wroktree")
 endif()

@@ -10,6 +10,14 @@ function(galay_add_c_kernel_test target_name source_file)
 endfunction()
 
 file(GLOB GALAY_C_KERNEL_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")
+set(GALAY_C_KERNEL_SOCKET_TESTS
+    t3_config_and_socket_handles
+    t5_socket_lifetime_boundary
+    t10_udp_socket_callbacks
+    t18_tcp_timeout_callbacks
+    t19_udp_timeout_callbacks
+    t25_coro_tcp
+)
 galay_filter_unsupported_c_coro_sources(GALAY_C_KERNEL_TEST_SOURCES)
 foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)
     get_filename_component(source_name "${test_source}" NAME_WE)
@@ -30,6 +38,9 @@ foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)
     endif()
     add_test(NAME "c.kernel.${scenario_name}" COMMAND ${target_name})
     set_tests_properties("c.kernel.${scenario_name}" PROPERTIES LABELS "c;kernel;unit")
+    if(source_name IN_LIST GALAY_C_KERNEL_SOCKET_TESTS)
+        set_tests_properties("c.kernel.${scenario_name}" PROPERTIES SKIP_RETURN_CODE 125)
+    endif()
     if(source_name STREQUAL "t23_coro_task" OR
        source_name STREQUAL "t24_coro_result_wait" OR
        source_name STREQUAL "t25_coro_tcp")

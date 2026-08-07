@@ -1,4 +1,4 @@
-#include <galay/c/galay-kernel-c/concurrency-c/bounded_channel_c.h>
+#include <galay/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel_c.h>
 
 #include <pthread.h>
 #include <sched.h>
@@ -19,7 +19,7 @@ enum {
 };
 
 typedef struct SharedState {
-    galay_kernel_bounded_channel_t* channel;
+    galay_kernel_mpmc_bounded_channel_t* channel;
     uintptr_t* payloads;
     int64_t start_us;
     int producer_count;
@@ -90,15 +90,15 @@ static void* producer_main(void* arg)
     uint32_t failed_attempts = 0;
     for (size_t i = 0; i < producer->count; ++i) {
         uintptr_t* payload = &shared->payloads[producer->offset + i];
-        C_BoundedChannelMessage message = {payload, sizeof(*payload), 0};
+        C_ChannelMessage message = {payload, sizeof(*payload), 0};
         for (;;) {
-            C_BoundedChannelResultCode result =
-                galay_kernel_bounded_channel_try_send(shared->channel, &message);
-            if (result == C_BoundedChannelSuccess) {
+            C_ChannelResultCode result =
+                galay_kernel_mpmc_bounded_channel_try_send(shared->channel, &message);
+            if (result == C_ChannelSuccess) {
                 ++sent;
                 break;
             }
-            if (result != C_BoundedChannelFull ||
+            if (result != C_ChannelFull ||
                 atomic_load(&shared->failed) ||
                 ((++failed_attempts & 1023U) == 0U && timed_out(shared))) {
                 atomic_store(&shared->failed, 1);
@@ -127,15 +127,15 @@ static void* consumer_main(void* arg)
 
     uint32_t failed_attempts = 0;
     for (;;) {
-        C_BoundedChannelMessage message = {0};
-        C_BoundedChannelResultCode result =
-            galay_kernel_bounded_channel_try_recv(shared->channel, &message);
-        if (result == C_BoundedChannelSuccess) {
+        C_ChannelMessage message = {0};
+        C_ChannelResultCode result =
+            galay_kernel_mpmc_bounded_channel_try_recv(shared->channel, &message);
+        if (result == C_ChannelSuccess) {
             ++received;
             sum += (uint64_t)*(uintptr_t*)message.data;
             continue;
         }
-        if (result != C_BoundedChannelEmpty ||
+        if (result != C_ChannelEmpty ||
             atomic_load(&shared->failed) ||
             ((++failed_attempts & 1023U) == 0U && timed_out(shared))) {
             atomic_store(&shared->failed, 1);
@@ -172,7 +172,7 @@ static int wait_until_ready(SharedState* shared, int expected_threads)
 
 static RunResult run_sample(int producer_count, int consumer_count)
 {
-    galay_kernel_bounded_channel_t channel = {0};
+    galay_kernel_mpmc_bounded_channel_t channel = {0};
     pthread_t producers[MAX_PRODUCER_COUNT];
     pthread_t consumers[MAX_CONSUMER_COUNT];
     ProducerArgs producer_args[MAX_PRODUCER_COUNT] = {{0}};
@@ -190,8 +190,8 @@ static RunResult run_sample(int producer_count, int consumer_count)
     atomic_init(&shared.failed, 0);
     atomic_init(&shared.start, false);
 
-    if (galay_kernel_bounded_channel_create(&channel, CHANNEL_CAPACITY) !=
-        C_BoundedChannelSuccess) {
+    if (galay_kernel_mpmc_bounded_channel_create(&channel, CHANNEL_CAPACITY) !=
+        C_ChannelSuccess) {
         return run;
     }
 
@@ -256,15 +256,15 @@ static RunResult run_sample(int producer_count, int consumer_count)
         run.received == MESSAGES_PER_SAMPLE &&
         run.sum == expected_sum &&
         run.elapsed_us > 0 &&
-        galay_kernel_bounded_channel_empty(&channel);
+        galay_kernel_mpmc_bounded_channel_empty(&channel);
     if (run.valid) {
         run.messages_per_second =
             (double)run.received * 1000000.0 / (double)run.elapsed_us;
     }
 
-    C_BoundedChannelResultCode destroyed =
-        galay_kernel_bounded_channel_destroy(&channel);
-    if (destroyed != C_BoundedChannelSuccess) {
+    C_ChannelResultCode destroyed =
+        galay_kernel_mpmc_bounded_channel_destroy(&channel);
+    if (destroyed != C_ChannelSuccess) {
         run.valid = false;
     }
     return run;

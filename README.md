@@ -8,7 +8,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 - **全链路异步**：网络/文件 IO、TLS、协议解析、客户端连接池均基于协程，可 `co_await` 组合。
 - **多协议支持**：HTTP/1.1、HTTP/2、WebSocket、TLS，以及 Redis / MySQL / MongoDB / etcd / RPC / MCP 等客户端。
 - **可观测性**：内置 `tracing` 链路追踪模块（span、sampler、OTLP 导出、日志关联）。
-- **模块化构建**：C++ 模块位于 `src/cpp/galay-*`，C ABI 模块位于 `src/c/galay-*-c`，按需启用；同时支持 CMake 与 Bazel。
+- **模块化构建**：C++ 模块位于 `src/cpp/galay-*`，C ABI 模块位于 `src/c/galay-*-c`，默认启用，可通过 `-DGALAY_BUILD_C_API=OFF` 关闭；同时支持 CMake 与 Bazel。
 - **C++23 Modules**（可选）：在受支持的编译器上可启用 `galay_*` 模块目标。
 
 ## 模块

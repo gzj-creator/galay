@@ -336,7 +336,7 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_create(
     c_socket->socket = nullptr;
     auto result = galay::async::AsyncTcpSocket::create(from_c_ip_type_to_cpp_ip_type(type));
     if (!result) {
-        return C_TcpSocketMemoryAllocFailed;
+        return from_cpp_io_error(result.error());
     }
 
     auto* socket = new (std::nothrow) galay::async::AsyncTcpSocket(std::move(*result));

@@ -22,6 +22,7 @@
 ### Changed
 
 - **构建版本号升级至 4.5.0**：同步更新 `CMakeLists.txt` 与 `MODULE.bazel`，对齐 CMake 包版本与 Bazel 模块版本。
+- **重构 C Channel ABI 与构建入口**：C API 默认启用；公开头按 `mpmc` / `mpsc` / `spsc` 与 `bounded` / `unbounded` 组织，统一 `C_ChannelMessage`、结果码和错误字符串；无界 MPMC/MPSC 增加线程专属 producer token，MPMC 同时提供 consumer token，以避免稳态路径查询共享库 TLS 缓存。
 - **优化并发队列热路径与退役块扫描**：`spsc::BoundedChannel` 在 Linux 支持 process-wide membarrier 时，以首次 waiter 注册的冷路径重屏障换取 `kReady` / `kEmpty` 的 release 发布，并在不支持的平台保留原 `seq_cst` 路径；`mpmc::UnboundedChannel` 改为逆序检查退役 block，从忙碌尾部更早结束扫描，降低回收拒绝路径的尾延迟。
 - **优化 MPSC producer 独占数据面**：无界通道移除逐 slot `ready` 原子，改由 producer 通过累计 `published` tail 原子发布单条或整批消息，consumer 缓存已观察位置并按固定配额轮询 stream；bounded 通道新增固定 producer 数构造、独占 `ProducerToken` 和分片 SPSC ring，直接发送在该模式下显式返回 `kNotReady`；paired benchmark 与回归测试统一验证每 producer FIFO、checksum、关闭排空和固定容量口径。
 - **扩展 MPSC paired 基准的消费模式**：C++ 与 Rust 对照程序统一支持 `single` / `batch` 消费模式，runner 增加消费模式参数、结果字段和批量上限校验，便于区分单条轮询与批量排空的吞吐口径。
@@ -35,6 +36,7 @@
 ### Removed
 
 - **回退未成熟的 MPSC 统一工厂 API**：删除 `channel_factory.h` 及其示例和专项测试，避免把存在已知吞吐策略线程局部 producer 生命周期问题的包装层作为稳定公开入口；调用方继续直接选择已有的具体通道类型。
+- **移除旧 C Channel 平面 API**：删除 `bounded_channel_c`、`mpsc_channel_c`、`unsafe_channel_c` 与 `channel_c` 的旧头、源、测试、示例和基准，避免拓扑语义不清的兼容入口继续被安装。
 
 ### Added
 
@@ -48,7 +50,7 @@
 - **新增 MPMC 无界异步通道**：`galay::mpmc::UnboundedChannel<T>` 提供显式 producer/consumer token、默认线程本地 producer 缓存、单条与批量收发、异步接收、超时及 close/drain；producer 通过 0/1 SC active publication 与 close 建立全序，接收方仅在全部 producer 静止且二次 dequeue 仍为空时返回 `kClosed`。
 - **补齐 MPMC 正确性与跨语言性能验证**：新增容量边界、关闭排空、异步唤醒、timeout 竞争、move-only、producer publication 线性化及无界队列两波跨 block 复用测试；新增独立进程 paired runner，严格统一 2P2C / 4P4C、8 字节单调 payload、yield backoff、完整 checksum/drain，每组至少采集 15 对交替样本并输出 bootstrap 95% CI，在 macOS 仅接受 `perf-class-only` 线程放置。Rust 对照仅保留 Crossbeam `ArrayQueue` 与 `crossbeam-channel`，旧的单消费者结果不再参与 MPMC 结论。
 - **归档并发通道原始性能证据**：新增 per-producer MPMC 本机与腾讯 Linux 的 2P2C/4P4C 对照样本，以及 SPSC v4 baseline、endpoint split、批量无界参考和最终矩阵的 CSV/JSON 结果，保留通过与未通过门禁的原始记录供后续复核。
-- **新增 `BoundedChannel` C ABI**：提供创建/销毁、同步单条与批量收发、C coroutine 超时等待、关闭和容量状态查询，完整映射公开错误码及 `*_get_error()` 字符串；新增边界/协程测试、公共头 smoke 和 1P1C/4P4C 吞吐 benchmark。
+- **新增完整 Channel family C ABI**：为 SPSC、MPSC、MPMC 分别提供有界/无界通道，支持创建/销毁、同步单条与批量收发、C coroutine 超时等待、关闭和容量状态查询；补齐 family 边界测试、安装头验证和 1P1C/4P1C/4P4C 基准。Linux 24 字节消息的 MPMC 4P4C token 路径中位吞吐为约 53.43M msg/s，较默认路径约 9.88M msg/s 提升约 5.2 倍。
 - **新增 MPSC 专用有界与无界通道**：`galay::mpsc::BoundedChannel<T>` 使用多生产者 tail CAS 与单消费者 head；`galay::mpsc::UnboundedChannel<T>` 使用每 producer 独占的分块 SPSC 流、token/TLS 流缓存和高水位复用，单消费者稳态路径不做 cursor CAS/RMW；配套 close/drain、timeout、move-only、批量收发与边界/竞态测试。
 - **新增 MPSC C++/Rust 成对性能验证入口**：提供同 workload 的 bounded/unbounded 1P1C–8P1C C++ 与 Crossbeam 程序、校准/交替采样 runner、FIFO/checksum/计数门禁、bootstrap 95% 置信区间与原始证据输出。
 
@@ -66,11 +68,12 @@
 - **优化 MPMC 数据面与基准隔离能力**：无界队列改为 4096 槽可回收分段结构，使用单调 reservation cursor、块级复用和 token 局部块缓存，发送完成后的 waiter pump 外提为 unlikely 冷函数，避免同步轮询热路径内联完整控制面。B25 与独立 paired runner 可拆分当前分段队列 raw 数据面、token/waiter 通知成本和 moodycamel 默认基线；2P2C 可超过 Crossbeam，但 4P4C 仍落后，因此不保留全面胜出结论。
 - **收紧 MPMC 元素异常契约**：Bounded 元素必须不可抛移动构造，Unbounded 元素必须不可抛默认构造、移动构造和移动赋值，复制发送仅对不可抛复制构造类型开放；避免元素操作异常使无界 producer 永久保持 active，或穿过 `noexcept` 完成路径终止进程。
 - **Waker 恢复改用 owner scheduler 无分配入口**：`TaskState` 内嵌 resume 链接，compute/epoll/kqueue/io_uring scheduler 统一通过专用 MPSC admission 回到 owner 线程；普通注入与 resume 批次公平轮转，`stop()` 先关闭接纳再由 owner 排空，成功恢复热路径不经历堆分配。
-- **统一并发通道命名空间与消费边界**：移除旧 `mpsc_channel.h` / `unsafe_channel.h` / 顶层 `bounded_channel.h`，C ABI 保留原符号但切换到 `galay::{mpmc,mpsc,spsc}` 实现；HTTP/2、RPC、module facade、示例、测试、benchmark 和文档同步迁移。
+- **统一并发通道命名空间与消费边界**：移除旧 `mpsc_channel.h` / `unsafe_channel.h` / 顶层 `bounded_channel.h`；C ABI 同步迁入 `galay::{mpmc,mpsc,spsc}` 的 topology 专属目录，HTTP/2、RPC、module facade、示例、测试、benchmark 和文档同步迁移。
 
 ### Fixed
 
 - **消除 GCC 14 原子 shared_ptr 与 HMAC 静态诊断，并稳定网络回归测试**：HTTP/2 静态文件缓存、RPC endpoint 快照和取消回调链迁移到 `std::atomic<std::shared_ptr<T>>` 成员 API；HMAC-SHA256 改为分段哈希，避免按输入长度拼接临时缓冲区触发 `stringop-overflow`；C TCP connect timeout 固定使用 RFC 5737 文档地址，sequence duplex split 测试改为批量 drain peer buffer，避免低效逐字节读取导致的间歇超时。
+- **修正 C socket 创建错误与受限环境测试语义**：TCP C API 将底层 socket 创建失败映射为 `C_TcpSocketIOFailed`；6 个依赖本地 socket 的 CTest 仅在独立探测到 `EPERM` / `EACCES` 时跳过，其他异常仍保留失败信号。
 
 - **修复跨后端与协议正确性问题**：io_uring connect 将 `EISCONN` 视为已连接，benchmark `CompletionLatch` 在报告完成前等待最后 arrival 退出同步对象，C UDP bridge 收敛 timeout/cancel 与 IO completion 竞争；同步 Mongo 支持 replica set 发现和读偏好选择，异步 Mongo 对未支持拓扑显式报错；MySQL `caching_sha2_password` 改用协议要求的 RSA OAEP-SHA1，MurmurHash3 改用 `memcpy` 消除未对齐读取 UB。
 - **修复全量测试中的返回值、并发与资源边界**：UDP benchmark、RingBuffer/readv 测试、timer 并发测试和 channel namespace 测试显式处理关键调度、socket option、计时器与 token 结果；测试 stdout 写入串行化，避免并行日志数据竞争。

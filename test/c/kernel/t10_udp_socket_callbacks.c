@@ -2,6 +2,8 @@
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
+#include "socket_test_support.h"
+
 #include <stdatomic.h>
 #include <stdint.h>
 #include <string.h>
@@ -185,6 +187,14 @@ int main(void)
                     C_IOResultInvalid) ||
         expect_code(galay_kernel_udp_socket_close(0, 0), C_IOResultInvalid)) {
         return 1;
+    }
+    const galay_test_socket_capability_t socket_capability =
+        galay_test_socket_capability(SOCK_DGRAM);
+    if (socket_capability == GALAY_TEST_SOCKET_PERMISSION_DENIED) {
+        return 125;
+    }
+    if (socket_capability == GALAY_TEST_SOCKET_PROBE_FAILED) {
+        return 126;
     }
 
     C_RuntimeConfig config = galay_kernel_runtime_config_default();

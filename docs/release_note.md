@@ -153,17 +153,17 @@
 ## v4.5.0 - 2026-08-07
 
 - **版本级别**：次版本（minor，用户指定保持 v4）
-- **Git 提交消息**：`feat: 发布 v4.5.0 并重构高性能并发通道体系`
+- **Git 提交消息**：`feat: 重构 C API 并补齐 Channel family`
 - **Git tag**：`v4.5.0`
 
 ### 变更摘要
 
-本次为 `v4.4.1` 之后的次版本发布，自 v4.4.1 以来累计 27 个提交，主线是重构 galay-kernel 高性能并发通道体系，新增并优化 MPMC、MPSC 与 SPSC 有界/无界通道，并补齐 C ABI、协程超时、关闭排空和跨语言性能验证。仓库此前已记录 `v4.4.2` 版本元数据与发布说明，但未创建对应远端 tag；本次 `v4.5.0` 覆盖 `v4.4.1..HEAD` 的全部累计变更。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.5.0`。
+本次为 `v4.4.1` 之后的次版本发布，自 v4.4.1 以来累计 28 个提交，主线是重构 galay-kernel 高性能并发通道体系，新增并优化 MPMC、MPSC 与 SPSC 有界/无界通道，并补齐 C ABI、协程超时、关闭排空和跨语言性能验证。仓库此前已记录 `v4.4.2` 版本元数据与发布说明，但未创建对应远端 tag；本次 `v4.5.0` 覆盖 `v4.4.1..HEAD` 的全部累计变更。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.5.0`。
 
 - **MPMC 通道体系**：新增基于固定容量 Vyukov ring 的有界通道和可回收分段结构的无界通道，提供同步、协程、批量、超时与 close/drain 语义；退役 block 逆序扫描、token 局部缓存和 waiter 冷路径进一步降低稳态开销。
 - **MPSC 专用通道**：新增有界/无界 MPSC 实现，支持 producer token、无分配批量排空和每 producer 独占 SPSC ring 模式；修复换块、waiter/close 与失败发送边界，回退尚未成熟的统一工厂 API。
 - **SPSC 数据面**：新增运行时与编译期容量 ring、分块复用无界队列及有界/无界异步通道；通过 endpoint split、本地 cursor、对端 cursor 缓存与 Linux 非对称内存屏障优化批处理和稳态轮询热路径。
-- **C ABI 与公开边界**：新增 `BoundedChannel` C ABI，完整提供创建/销毁、单条/批量收发、C coroutine 超时等待、关闭与状态查询，公开错误码均对应 `*_get_error()` 字符串。
+- **C Channel family ABI 与公开边界**：C API 默认启用，移除旧平面 `bounded` / `mpsc` / `unsafe` channel 入口；按 `mpmc` / `mpsc` / `spsc` 拓扑和有界/无界类型提供完整 ABI，统一错误码、单条/批量收发、C coroutine 超时、关闭、容量状态与安装头验证。无界 MPMC/MPSC 提供线程专属 producer token，MPMC 另提供 consumer token；Linux 24 字节消息 MPMC 4P4C token 路径中位吞吐约 53.43M msg/s，较默认路径约 9.88M msg/s 提升约 5.2 倍。
 - **异步 I/O 与调度边界**：C/C++ 异步 I/O 文件和公开类型统一为 `async_*` / `Async*`，异步同步原语归入 async 模块；waker 恢复改用 owner scheduler 无分配入口，并修复 HTTP/2 晚到事件导致的生命周期问题。
 - **测试与性能证据**：补齐 MPMC/MPSC/SPSC 对照 Rust Crossbeam 的 paired runner、bootstrap 95% 置信区间、FIFO/checksum/drain 门禁和原始样本；新增部署与腾讯 Linux/NUMA/性能分析脚本，并停止跟踪本机性能产物。
-- **累计修复**：修复 io_uring connect、HTTP/2 registration 稳定性、channel timeout 完成竞争、SPSC 跨块回收、MPSC waiter/close、Mongo topology、MySQL RSA OAEP 与 GCC 14 诊断等问题，并系统处理测试、benchmark 和清理路径中的非 `void` 返回值。
+- **累计修复**：修复 io_uring connect、HTTP/2 registration 稳定性、channel timeout 完成竞争、SPSC 跨块回收、MPSC waiter/close、Mongo topology、MySQL RSA OAEP 与 GCC 14 诊断等问题，并系统处理测试、benchmark 和清理路径中的非 `void` 返回值；TCP C API 的 socket 创建失败改为返回 I/O 错误，socket 权限受限时仅跳过依赖本地 socket 的 CTest。

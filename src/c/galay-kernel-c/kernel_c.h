@@ -22,8 +22,11 @@
 #include "async-c/async_udp_c.h"
 #include "async-c/async_mutex_c.h"
 #include "async-c/async_waiter_c.h"
-#include "concurrency-c/bounded_channel_c.h"
-#include "concurrency-c/mpsc_channel_c.h"
-#include "concurrency-c/unsafe_channel_c.h"
+#include "concurrency-c/mpmc/bounded_channel_c.h"
+#include "concurrency-c/mpmc/unbounded_channel_c.h"
+#include "concurrency-c/mpsc/bounded_channel_c.h"
+#include "concurrency-c/mpsc/unbounded_channel_c.h"
+#include "concurrency-c/spsc/bounded_channel_c.h"
+#include "concurrency-c/spsc/unbounded_channel_c.h"
 
 #endif /* GALAY_C_KERNEL_KERNEL_C_H */

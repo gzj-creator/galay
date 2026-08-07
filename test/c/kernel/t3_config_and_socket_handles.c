@@ -2,6 +2,8 @@
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
+#include "socket_test_support.h"
+
 #include <arpa/inet.h>
 #include <poll.h>
 #include <stdint.h>
@@ -175,6 +177,22 @@ static int test_connect_direct(galay_kernel_runtime_t* runtime)
 
 int main(void)
 {
+    const galay_test_socket_capability_t socket_capability =
+        galay_test_socket_capability(SOCK_STREAM);
+    if (socket_capability == GALAY_TEST_SOCKET_PERMISSION_DENIED) {
+        galay_kernel_tcp_socket_t unavailable_socket = {0};
+        if (expect_socket_status(
+                galay_kernel_tcp_socket_create(&unavailable_socket, C_IPTypeIPV4),
+                C_TcpSocketIOFailed) ||
+            unavailable_socket.socket != NULL) {
+            return 127;
+        }
+        return 125;
+    }
+    if (socket_capability == GALAY_TEST_SOCKET_PROBE_FAILED) {
+        return 126;
+    }
+
     C_RuntimeConfig config = galay_kernel_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
