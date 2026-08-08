@@ -233,7 +233,8 @@ private:
  * @tparam UseWritev 是否使用 writev
  * @param socket Socket 引用
  * @param writer 写入器引用
- * @return 可 co_await 的异步操作对象
+ * @return 可 co_await 的异步操作；co_await 结果为
+ *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
  */
 template<typename SocketType, bool UseWritev>
 auto buildSendAwaitable(SocketType& socket, HttpWriterImpl<SocketType>& writer) {
@@ -288,14 +289,16 @@ public:
     /**
      * @brief 异步发送 HTTP 响应
      * @param response HTTP 响应对象
-     * @return 可 co_await 的异步操作，成功返回 true，失败返回 HttpError
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
+     * @note 启动新发送时会复制响应体到 writer，不转移 response 的响应体
      */
     auto sendResponse(HttpResponse& response) {
         if (m_remaining_bytes == 0) {
             logResponseStatus(response.header().code());
 
             if constexpr (is_tcp_socket_v<SocketType>) {
-                m_body_buffer = response.getBodyStr();
+                m_body_buffer = response.bodyStr();
 
                 if (!response.header().isChunked()) {
                     ensureContentLength(response.header().headerPairs(), m_body_buffer.size());
@@ -319,9 +322,37 @@ public:
     }
 
     /**
+     * @brief 异步发送 HTTP 响应（右值重载）
+     * @param response HTTP 响应对象；启动新的 TCP 发送时会转移其响应体
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
+     * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 response 引用
+     */
+    auto sendResponse(HttpResponse&& response) {
+        if constexpr (is_tcp_socket_v<SocketType>) {
+            if (m_remaining_bytes == 0) {
+                logResponseStatus(response.header().code());
+                m_body_buffer = response.getBodyStr();
+
+                if (!response.header().isChunked()) {
+                    ensureContentLength(response.header().headerPairs(), m_body_buffer.size());
+                }
+
+                m_buffer = response.header().toString();
+                prepareTcpSendLayout();
+            }
+
+            return withConfiguredTimeout(makeWritevAwaitable());
+        } else {
+            return sendResponse(response);
+        }
+    }
+
+    /**
      * @brief 异步发送 HTTP 请求
      * @param request HTTP 请求对象
-     * @return 可 co_await 的异步操作
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
     auto sendRequest(HttpRequest& request) {
         if (m_remaining_bytes == 0) {
@@ -350,11 +381,39 @@ public:
     }
 
     /**
+     * @brief 异步发送 HTTP 请求（右值重载）
+     * @param request HTTP 请求对象；启动新的 TCP 发送时会转移其请求体
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
+     * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 request 引用
+     */
+    auto sendRequest(HttpRequest&& request) {
+        if constexpr (is_tcp_socket_v<SocketType>) {
+            if (m_remaining_bytes == 0) {
+                m_body_buffer = request.getBodyStr();
+
+                if (!request.header().isChunked()) {
+                    ensureContentLength(request.header().headerPairs(), m_body_buffer.size());
+                }
+
+                m_buffer = request.header().toString();
+                prepareTcpSendLayout();
+            }
+
+            return withConfiguredTimeout(makeWritevAwaitable());
+        } else {
+            return sendRequest(request);
+        }
+    }
+
+    /**
      * @brief 异步发送 HTTP 响应头
      * @param header HTTP 响应头
-     * @return 可 co_await 的异步操作
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
+     * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 header 引用
      */
-    auto sendHeader(HttpResponseHeader&& header) {
+    auto sendHeader(HttpResponseHeader& header) {
         if (m_remaining_bytes == 0) {
             logResponseStatus(header.code());
             m_buffer = header.toString();
@@ -365,11 +424,23 @@ public:
     }
 
     /**
+     * @brief 异步发送 HTTP 响应头（右值重载）
+     * @param header HTTP 响应头
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
+     */
+    auto sendHeader(HttpResponseHeader&& header) {
+        return sendHeader(header);
+    }
+
+    /**
      * @brief 异步发送 HTTP 请求头
      * @param header HTTP 请求头
-     * @return 可 co_await 的异步操作
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
+     * @note 启动新发送时，待发送数据会在返回异步操作前保存到 writer，不持有 header 引用
      */
-    auto sendHeader(HttpRequestHeader&& header) {
+    auto sendHeader(HttpRequestHeader& header) {
         if (m_remaining_bytes == 0) {
             m_buffer = header.toString();
             m_remaining_bytes = m_buffer.size();
@@ -379,9 +450,20 @@ public:
     }
 
     /**
+     * @brief 异步发送 HTTP 请求头（右值重载）
+     * @param header HTTP 请求头
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
+     */
+    auto sendHeader(HttpRequestHeader&& header) {
+        return sendHeader(header);
+    }
+
+    /**
      * @brief 异步发送原始数据（移动语义）
      * @param data 待发送数据
-     * @return 可 co_await 的异步操作
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
     auto send(std::string&& data) {
         if (m_remaining_bytes == 0) {
@@ -397,7 +479,8 @@ public:
      * @brief 异步发送原始数据（指针+长度）
      * @param buffer 数据指针
      * @param length 数据长度
-     * @return 可 co_await 的异步操作
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
     auto send(const char* buffer, size_t length) {
         if (m_remaining_bytes == 0) {
@@ -412,7 +495,8 @@ public:
     /**
      * @brief 发送外部持有的连续字节视图
      * @param data 待发送的连续只读字节视图
-     * @return 发送等待体
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      * @note 调用方必须保证 data 对应的底层存储在 await 完成前保持有效
      * @note 该接口适用于静态响应或连接级缓存响应，避免重复复制到 writer 内部缓冲区
      */
@@ -433,7 +517,8 @@ public:
      * @brief 异步发送 chunked 编码数据块
      * @param data 数据内容
      * @param is_last 是否为最后一个 chunk
-     * @return 可 co_await 的异步操作
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
     auto sendChunk(const std::string& data, bool is_last = false) {
         if (m_remaining_bytes == 0) {

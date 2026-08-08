@@ -167,3 +167,18 @@
 - **异步 I/O 与调度边界**：C/C++ 异步 I/O 文件和公开类型统一为 `async_*` / `Async*`，异步同步原语归入 async 模块；waker 恢复改用 owner scheduler 无分配入口，并修复 HTTP/2 晚到事件导致的生命周期问题。
 - **测试与性能证据**：补齐 MPMC/MPSC/SPSC 对照 Rust Crossbeam 的 paired runner、bootstrap 95% 置信区间、FIFO/checksum/drain 门禁和原始样本；新增部署与腾讯 Linux/NUMA/性能分析脚本，并停止跟踪本机性能产物。
 - **累计修复**：修复 io_uring connect、HTTP/2 registration 稳定性、channel timeout 完成竞争、SPSC 跨块回收、MPSC waiter/close、Mongo topology、MySQL RSA OAEP 与 GCC 14 诊断等问题，并系统处理测试、benchmark 和清理路径中的非 `void` 返回值；TCP C API 的 socket 创建失败改为返回 I/O 错误，socket 权限受限时仅跳过依赖本地 socket 的 CTest。
+
+## v4.5.1 - 2026-08-08
+
+- **版本级别**：小版本（trivial，用户指定）
+- **Git 提交消息**：`feat: 扩展 HttpWriter 移动发送与左值 Header 接口`
+- **Git tag**：`v4.5.1`
+
+### 变更摘要
+
+本次为 `v4.5.0` 之后的小版本发布，累计收束工程准则文档与 `HttpWriter` 参数类别扩展。主线是让 TCP 请求/响应发送根据左值或右值显式选择保留或转移 body 所有权，并让请求头和响应头同时支持左值/右值调用；异步操作返回前已将待发数据保存到 writer，不持有传入对象引用。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.5.1`。
+
+- **显式的 body 所有权语义**：左值响应路径复制 body 到 writer 并保留原响应内容；新增的 TCP 右值请求/响应重载将 body 转移到 writer 自有存储，减少不必要拷贝并避免异步生命周期悬空。
+- **左值/右值 header 调用对称**：`HttpResponseHeader` 与 `HttpRequestHeader` 新增左值入口，右值重载复用同一序列化路径；公开读写 API 注释统一明确 `co_await` 结果为 `std::expected<bool, HttpError>`。
+- **测试与压测覆盖**：新增 writer overload 边界测试，覆盖编译期返回类型、左值 body 保留、右值 body 转移及 header 序列化；HTTPS 布局用例与 HTTP writer 压测同步扩展参数类别场景。
+- **工程准则收敛**：同步精简 `AGENTS.md` 与 `CLAUDE.md`，强化最小端到端交付、模块边界、成熟依赖复用、显式错误传播与返回值处理约束。

@@ -11,6 +11,18 @@
 
 ## [Unreleased]
 
+## [v4.5.1] - 2026-08-08
+
+### Added
+
+- **扩展 `HttpWriter` 参数类别与所有权接口**：为 HTTP 请求和响应新增右值发送重载，TCP 路径在启动发送前将 body 转移到 writer 自有存储；响应头和请求头同时支持左值与右值调用，并在返回异步操作前保存序列化结果。
+- **补齐 writer 边界回归与布局压测**：新增参数类别、`std::expected<bool, HttpError>` 返回类型、左值响应 body 保留、右值请求 body 转移和 header 序列化覆盖；HTTPS 用例扩展右值请求与左值 header 编译检查，HTTP writer 压测增加左值/右值布局场景。
+
+### Changed
+
+- **明确 HTTP 异步读写结果与生命周期契约**：公开 Doxygen 统一说明 `co_await` 结果为 `std::expected<bool, HttpError>`；左值响应发送保留调用方 body，右值调用显式转移所有权。
+- **构建版本号升级至 4.5.1**：同步更新 `CMakeLists.txt` 与 `MODULE.bazel`，对齐 CMake 包版本与 Bazel 模块版本。
+
 ### Docs
 
 - **精简并统一工程准则**：同步收敛 `AGENTS.md` 与 `CLAUDE.md`，明确最小端到端交付、模块边界、依赖复用、长期架构决策及不保留向后兼容的要求，同时保留 TDD、显式错误传播和返回值处理约束。

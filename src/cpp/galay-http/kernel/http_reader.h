@@ -376,7 +376,7 @@ struct HttpRequestReadState {
 
     /**
      * @brief 获取读取结果
-     * @return 成功返回 true，失败返回 HttpError
+     * @return std::expected<bool, HttpError>；成功值为 true，失败时 error() 为 HttpError
      */
     ResultType takeResult() {
         if (m_http_error.has_value()) {
@@ -566,7 +566,7 @@ struct HttpResponseReadState {
 
     /**
      * @brief 获取读取结果
-     * @return 成功返回 true，失败返回 HttpError
+     * @return std::expected<bool, HttpError>；成功值为 true，失败时 error() 为 HttpError
      */
     ResultType takeResult() {
         if (m_http_error.has_value()) {
@@ -713,7 +713,8 @@ struct HttpChunkReadState {
 
     /**
      * @brief 获取读取结果
-     * @return 最后一个 chunk 返回 true，失败返回 HttpError
+     * @return std::expected<bool, HttpError>；成功值表示是否为最后一个 chunk，
+     *         失败时 error() 为 HttpError
      */
     ResultType takeResult() {
         if (m_http_error.has_value()) {
@@ -738,7 +739,8 @@ struct HttpChunkReadState {
  * @tparam StateT 读取状态类型
  * @param socket Socket 引用
  * @param state 共享的读取状态
- * @return 可 co_await 的异步操作对象
+ * @return 可 co_await 的异步操作；co_await 结果为 StateT::ResultType，当前读取状态均为
+ *         std::expected<bool, HttpError>
  */
 template<typename SocketType, typename StateT>
 auto buildReadOperation(SocketType& socket, std::shared_ptr<StateT> state) {
@@ -867,7 +869,8 @@ public:
     /**
      * @brief 异步读取一个完整的 HTTP 请求
      * @param request 待填充的 HTTP 请求对象
-     * @return 可 co_await 的异步操作，成功返回 true，失败返回 HttpError
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
     ReadOperation<detail::HttpRequestReadState> getRequest(HttpRequest& request) {
         auto state = getReusableRequestReadState(request);
@@ -878,7 +881,8 @@ public:
     /**
      * @brief 异步读取一个完整的 HTTP 响应
      * @param response 待填充的 HTTP 响应对象
-     * @return 可 co_await 的异步操作，成功返回 true，失败返回 HttpError
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值为 true，失败时 error() 为 HttpError
      */
     ReadOperation<detail::HttpResponseReadState> getResponse(HttpResponse& response) {
         return ReadOperation<detail::HttpResponseReadState>(
@@ -889,7 +893,9 @@ public:
     /**
      * @brief 异步读取一个 HTTP chunked 编码的 chunk
      * @param chunk_data 用于存储 chunk 数据的字符串
-     * @return 可 co_await 的异步操作，最后一个 chunk 返回 true，失败返回 HttpError
+     * @return 可 co_await 的异步操作；co_await 结果为
+     *         std::expected<bool, HttpError>，成功值表示该 chunk 是否为最后一个，
+     *         失败时 error() 为 HttpError
      */
     ReadOperation<detail::HttpChunkReadState> getChunk(std::string& chunk_data) {
         return ReadOperation<detail::HttpChunkReadState>(

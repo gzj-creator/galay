@@ -10,6 +10,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <utility>
 
 #define private public
 #include <galay/cpp/galay-http/kernel/http_writer.h>
@@ -90,6 +91,58 @@ int main(int argc, char** argv)
             const size_t remaining = writer.getRemainingBytes();
             writer.updateRemaining(remaining);
             return remaining + (i & 1U);
+        })) {
+        return 1;
+    }
+
+    // These cases measure synchronous layout preparation without starting socket sends.
+    HttpResponse lvalue_response;
+    lvalue_response.setBodyStr(std::string(body));
+    if (!runBench("BM_HttpWriterLvalueResponseLayout", iterations, [&](size_t i) {
+            (void) writer.sendResponse(lvalue_response);
+            const size_t count = writer.getIovecsCount();
+            const size_t remaining = writer.getRemainingBytes();
+            writer.updateRemainingWritev(remaining);
+            return count + remaining + lvalue_response.bodyStr().size() + (i & 1U);
+        })) {
+        return 1;
+    }
+
+    if (!runBench("BM_HttpWriterRvalueResponseLayout", iterations, [&](size_t i) {
+            HttpResponse response;
+            response.setBodyStr(std::string(body));
+            (void) writer.sendResponse(std::move(response));
+            const size_t count = writer.getIovecsCount();
+            const size_t remaining = writer.getRemainingBytes();
+            writer.updateRemainingWritev(remaining);
+            return count + remaining + (i & 1U);
+        })) {
+        return 1;
+    }
+
+    if (!runBench("BM_HttpWriterRvalueRequestLayout", iterations, [&](size_t i) {
+            HttpRequest request;
+            request.setBodyStr(std::string(body));
+            (void) writer.sendRequest(std::move(request));
+            const size_t count = writer.getIovecsCount();
+            const size_t remaining = writer.getRemainingBytes();
+            writer.updateRemainingWritev(remaining);
+            return count + remaining + (i & 1U);
+        })) {
+        return 1;
+    }
+
+    HttpResponseHeader response_header;
+    HttpRequestHeader request_header;
+    if (!runBench("BM_HttpWriterLvalueHeaderLayout", iterations, [&](size_t i) {
+            (void) writer.sendHeader(response_header);
+            const size_t response_size = writer.getRemainingBytes();
+            writer.updateRemaining(response_size);
+
+            (void) writer.sendHeader(request_header);
+            const size_t request_size = writer.getRemainingBytes();
+            writer.updateRemaining(request_size);
+            return response_size + request_size + (i & 1U);
         })) {
         return 1;
     }

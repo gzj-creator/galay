@@ -2,6 +2,7 @@
 #include <iostream>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include <sstream>
@@ -20,6 +21,12 @@ int main() {
 
     galay::ssl::SslSocket socket(nullptr);
     HttpWriterImpl<galay::ssl::SslSocket> writer(HttpWriterSetting(), socket);
+    static_assert(requires(HttpWriterImpl<galay::ssl::SslSocket>& ssl_writer,
+                           HttpResponseHeader& response_header,
+                           HttpRequestHeader& request_header) {
+        ssl_writer.sendHeader(response_header);
+        ssl_writer.sendHeader(request_header);
+    });
 
     auto response = Http1_1ResponseBuilder()
         .status(HttpStatusCode::OK_200)
@@ -71,7 +78,8 @@ int main() {
     const auto expected_request = request.toString();
 
     const auto ssl_hits_before_request = writer.m_fast_path_counters.ssl_coalesced_layout_hits;
-    (void) writer.sendRequest(request);
+    // Only the prepared SSL layout is inspected; no socket send is started.
+    (void) writer.sendRequest(std::move(request));
     if (std::string(writer.bufferData(), writer.getRemainingBytes()) != expected_request) {
         std::cerr << "[T64] ssl request send layout mismatch\n";
         return 1;
