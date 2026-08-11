@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(galay VERSION 4.5.1 LANGUAGES C CXX)
+project(galay VERSION 4.6.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -59,6 +59,9 @@ endif()
 if(GALAY_BUILD_MYSQL)
     add_subdirectory(src/cpp/galay-mysql)
 endif()
+if(GALAY_BUILD_POSTGRES)
+    add_subdirectory(src/cpp/galay-postgres)
+endif()
 if(GALAY_BUILD_MONGO)
     add_subdirectory(src/cpp/galay-mongo)
 endif()
@@ -78,13 +81,13 @@ endif()
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
     galay-utils galay-kernel galay-ssl galay-http galay-ws galay-http2
-    galay-redis galay-rpc galay-mysql galay-mongo galay-etcd galay-mcp
+    galay-redis galay-rpc galay-mysql galay-postgres galay-mongo galay-etcd galay-mcp
     galay-tracing
     galay-tracing-spdlog galay-tracing-kernel
     galay-c-common
     galay-c-bridge
     galay-c-utils galay-c-kernel galay-c-ssl galay-c-http galay-c-ws
-    galay-c-http2 galay-c-redis galay-c-rpc galay-c-mysql
+    galay-c-http2 galay-c-redis galay-c-rpc galay-c-mysql galay-c-postgres
     galay-c-mongo galay-c-etcd galay-c-mcp galay-c-tracing
 )
     if(TARGET ${_galay_target})
@@ -97,6 +100,9 @@ if(GALAY_KERNEL_CPP23_MODULES_EFFECTIVE)
 endif()
 if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
     list(REMOVE_ITEM GALAY_INSTALL_TARGETS galay-rpc)
+endif()
+if(GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE)
+    list(REMOVE_ITEM GALAY_INSTALL_TARGETS galay-postgres)
 endif()
 
 if(GALAY_INSTALL_TARGETS)
@@ -126,6 +132,17 @@ if(TARGET galay-rpc AND GALAY_RPC_CPP23_MODULES_EFFECTIVE)
         LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
         FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-rpc/module
+        CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
+    )
+endif()
+
+if(TARGET galay-postgres AND GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE)
+    install(TARGETS galay-postgres
+        EXPORT galayTargets
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-postgres/module
         CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
     )
 endif()
@@ -166,7 +183,7 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
-if(GALAY_KERNEL_CPP23_MODULES_EFFECTIVE OR GALAY_RPC_CPP23_MODULES_EFFECTIVE)
+if(GALAY_KERNEL_CPP23_MODULES_EFFECTIVE OR GALAY_RPC_CPP23_MODULES_EFFECTIVE OR GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE)
     install(EXPORT galayTargets
         NAMESPACE galay::
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay

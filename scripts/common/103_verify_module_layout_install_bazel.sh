@@ -18,6 +18,7 @@ required_dirs=(
   "src/cpp/galay-rpc/protoc"
   "src/cpp/galay-redis/protoc"
   "src/cpp/galay-mysql/protoc"
+  "src/cpp/galay-postgres/protoc"
   "src/cpp/galay-mongo/protoc"
 )
 for dir in "${required_dirs[@]}"; do
@@ -40,6 +41,8 @@ active_scan_paths=(
   test/kernel
   test/mongo
   test/mysql
+  test/cpp/postgres
+  test/c/postgres
   test/redis
   test/rpc
   test/ssl
@@ -52,7 +55,7 @@ active_scan_paths=(
   cmake
 )
 
-if rg -n 'http/protocol|http2/protocol|ws/protocol|rpc/protocol|redis/protocol|mysql/protocol|mongo/protocol|src/(utils|kernel|http|http2|ws|rpc|redis|mysql|mongo)(/|\b)|<(utils|kernel|http|http2|ws|rpc|redis|mysql|mongo)/' \
+if rg -n 'http/protocol|http2/protocol|ws/protocol|rpc/protocol|redis/protocol|mysql/protocol|postgres/protocol|mongo/protocol|src/(utils|kernel|http|http2|ws|rpc|redis|mysql|postgres|mongo)(/|\b)|<(utils|kernel|http|http2|ws|rpc|redis|mysql|postgres|mongo)/' \
   "${active_scan_paths[@]}" 2>/dev/null; then
   echo "stale protocol layout references remain" >&2
   exit 1
@@ -70,14 +73,16 @@ cmake -S "${root}" -B "${build}" \
   -DGALAY_BUILD_REDIS=ON \
   -DGALAY_BUILD_RPC=ON \
   -DGALAY_BUILD_MYSQL=OFF \
+  -DGALAY_BUILD_POSTGRES=ON \
   -DGALAY_BUILD_MONGO=OFF \
   -DGALAY_BUILD_ETCD=OFF \
   -DGALAY_BUILD_MCP=OFF \
   -DGALAY_BUILD_TRACING=OFF \
+  -DGALAY_BUILD_C_API=OFF \
   -DBUILD_TESTING=OFF \
   -DCMAKE_INSTALL_PREFIX="${prefix}"
 
-cmake --build "${build}" --target galay-utils galay-kernel galay-http galay-ws galay-http2 galay-redis galay-rpc -j "${jobs}"
+cmake --build "${build}" --target galay-utils galay-kernel galay-http galay-ws galay-http2 galay-redis galay-postgres galay-rpc -j "${jobs}"
 cmake --install "${build}"
 
 test -f "${prefix}/lib/cmake/galay/galayConfig.cmake"
@@ -91,6 +96,7 @@ test -f "${prefix}/include/galay/cpp/galay-http/protoc/http_request.h"
 test -f "${prefix}/include/galay/cpp/galay-ws/protoc/ws_frame.h"
 test -f "${prefix}/include/galay/cpp/galay-rpc/protoc/rpc_message.h"
 test -f "${prefix}/include/galay/cpp/galay-redis/protoc/redis_protocol.h"
+test -f "${prefix}/include/galay/cpp/galay-postgres/protoc/postgres_protocol.h"
 
 mkdir -p "${consumer}"
 cat > "${consumer}/CMakeLists.txt" <<'EOF'
@@ -102,7 +108,7 @@ find_package(galay CONFIG REQUIRED)
 add_executable(galay_consumer main.cc)
 set_target_properties(galay_consumer PROPERTIES NO_SYSTEM_FROM_IMPORTED ON)
 target_include_directories(galay_consumer BEFORE PRIVATE "${CMAKE_PREFIX_PATH}/include")
-target_link_libraries(galay_consumer PRIVATE galay::kernel galay::http galay::redis)
+target_link_libraries(galay_consumer PRIVATE galay::kernel galay::http galay::redis galay::postgres)
 EOF
 
 cat > "${consumer}/main.cc" <<'EOF'
@@ -110,13 +116,18 @@ cat > "${consumer}/main.cc" <<'EOF'
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-redis/base/redis_config.h>
 #include <galay/cpp/galay-redis/protoc/redis_protocol.h>
+#include <galay/cpp/galay-postgres/base/postgres_config.h>
+#include <galay/cpp/galay-postgres/protoc/postgres_protocol.h>
 
 int main()
 {
     galay::redis::RedisSessionConfig cfg;
     cfg.host = "127.0.0.1";
+    galay::postgres::PostgresConfig postgres_cfg =
+        galay::postgres::PostgresConfig::defaultConfig();
+    const auto query = galay::postgres::protocol::PostgresEncoder{}.encodeQuery("SELECT 1");
     galay::http::HttpRequest request;
-    return cfg.host.empty() ? 1 : 0;
+    return cfg.host.empty() || postgres_cfg.host.empty() || query.empty() ? 1 : 0;
 }
 EOF
 

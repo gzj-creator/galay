@@ -182,3 +182,19 @@
 - **左值/右值 header 调用对称**：`HttpResponseHeader` 与 `HttpRequestHeader` 新增左值入口，右值重载复用同一序列化路径；公开读写 API 注释统一明确 `co_await` 结果为 `std::expected<bool, HttpError>`。
 - **测试与压测覆盖**：新增 writer overload 边界测试，覆盖编译期返回类型、左值 body 保留、右值 body 转移及 header 序列化；HTTPS 布局用例与 HTTP writer 压测同步扩展参数类别场景。
 - **工程准则收敛**：同步精简 `AGENTS.md` 与 `CLAUDE.md`，强化最小端到端交付、模块边界、成熟依赖复用、显式错误传播与返回值处理约束。
+
+## v4.6.0 - 2026-08-11
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`feat: 新增 PostgreSQL C++/C 客户端模块并完善测试压测体系`
+- **Git tag**：`v4.6.0`
+
+### 变更摘要
+
+本次为 `v4.5.1` 之后的次版本发版，主线是新增 PostgreSQL wire protocol v3 C++/C 客户端模块，并完成真实 PostgreSQL 实例、安装消费、模块 facade、高并发对照和协议边界验证。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.6.0`。
+
+- **PostgreSQL C++ 客户端**：提供同步/异步连接、SCRAM-SHA-256、MD5/明文认证、simple/extended query、prepared statement、事务、pipeline、连接池和 move-only RAII lease；协议编码、解析、错误传播与连接复用均有边界覆盖。
+- **PostgreSQL C ABI**：提供配置、连接、查询、prepared、事务、pipeline、结果集和连接池接口，明确 C ABI 协议边界、错误恢复与资源所有权；新增 TCP_NODELAY C API，并在 PostgreSQL 异步连接中生效。
+- **工程交付入口**：新增 CMake/Bazel targets、安装导出、C++23 module facade、C/C++ 示例、CTest 与 benchmark，并补齐快速开始、架构、API、使用、性能、高级主题和常见问题文档。
+- **真实实例与高并发验证**：使用 PostgreSQL 16 SCRAM 实例验证同步/异步 query、prepared、事务、pipeline、连接池、lease、错误后复用及 C ABI；Galay/libpq 采用相同 SQL、连接数、查询量和成功判定进行公平对照，96 clients 两端均 `9600/9600` 成功，性能明细见 `docs/cpp/modules/postgres/08-性能测试报告-2026-08-10.md`。
+- **构建与环境验证**：全量 CMake 构建、PostgreSQL CTest、无 PostgreSQL skip 行为、安装 consumer smoke、GCC 14.2 module facade 编译、风格审计和 `git diff --check` 已通过；Bazel 与 CMake module file set 受当前环境未安装 Ninja/Bazel 影响，已明确记录。

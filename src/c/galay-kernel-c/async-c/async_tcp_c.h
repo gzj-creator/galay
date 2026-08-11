@@ -70,6 +70,19 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_create(
     C_IPType type);
 
 /**
+ * @brief Enable TCP_NODELAY on a created TCP socket.
+ *
+ * @param c_socket Socket returned by `galay_kernel_tcp_socket_create`.
+ * @return Success returns C_TcpSocketSuccess; an empty handle returns
+ * C_TcpSocketParameterInvalid; setsockopt failure returns C_TcpSocketIOFailed.
+ *
+ * @note This synchronous option call does not require a C coroutine. Call it
+ * before connect when low request/response latency is preferred.
+ */
+C_TcpSocketResultCode galay_kernel_tcp_socket_enable_tcp_no_delay(
+    galay_kernel_tcp_socket_t* c_socket);
+
+/**
  * @brief 销毁 TCP socket 句柄。
  *
  * @param c_socket 由 create 或 accept 初始化的 socket 句柄。

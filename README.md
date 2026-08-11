@@ -6,7 +6,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 
 - **C++23 协程运行时**：统一调度器、reactor（io_uring / epoll / kqueue）、task、channel、定时器。
 - **全链路异步**：网络/文件 IO、TLS、协议解析、客户端连接池均基于协程，可 `co_await` 组合。
-- **多协议支持**：HTTP/1.1、HTTP/2、WebSocket、TLS，以及 Redis / MySQL / MongoDB / etcd / RPC / MCP 等客户端。
+- **多协议支持**：HTTP/1.1、HTTP/2、WebSocket、TLS，以及 Redis / MySQL / PostgreSQL / MongoDB / etcd / RPC / MCP 等客户端。
 - **可观测性**：内置 `tracing` 链路追踪模块（span、sampler、OTLP 导出、日志关联）。
 - **模块化构建**：C++ 模块位于 `src/cpp/galay-*`，C ABI 模块位于 `src/c/galay-*-c`，默认启用，可通过 `-DGALAY_BUILD_C_API=OFF` 关闭；同时支持 CMake 与 Bazel。
 - **C++23 Modules**（可选）：在受支持的编译器上可启用 `galay_*` 模块目标。
@@ -24,6 +24,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 | `galay-redis` | Redis 客户端：异步、连接池、集群拓扑、TLS、pipeline/pubsub |
 | `galay-rpc` | RPC 框架：一元/流式调用、服务发现 |
 | `galay-mysql` | MySQL 客户端：异步、协议、认证、连接池、prepared、pipeline |
+| `galay-postgres` | PostgreSQL wire protocol v3 客户端：同步/异步、SCRAM/MD5、prepared、事务、连接池、pipeline |
 | `galay-mongo` | MongoDB 客户端：BSON、协议、pipeline、command、CRUD |
 | `galay-etcd` | etcd 客户端：kv、lease、watch、sync/async |
 | `galay-mcp` | MCP（Model Context Protocol）：server/client，stdio / http 传输 |
@@ -53,6 +54,7 @@ cmake -B build \
   -DGALAY_BUILD_BENCHMARKS=OFF \
   -DGALAY_BUILD_EXAMPLES=OFF \
   -DBUILD_TESTING=OFF \
+  -DGALAY_BUILD_POSTGRES=OFF \
   -DGALAY_BUILD_MONGO=OFF
 ```
 

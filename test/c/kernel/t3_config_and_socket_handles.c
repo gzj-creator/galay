@@ -221,6 +221,14 @@ int main(void)
                              C_TcpSocketParameterInvalid)) {
         return 5;
     }
+    if (expect_socket_status(galay_kernel_tcp_socket_enable_tcp_no_delay(NULL),
+                             C_TcpSocketParameterInvalid)) {
+        return 23;
+    }
+    if (expect_socket_status(galay_kernel_tcp_socket_enable_tcp_no_delay(&tcp),
+                             C_TcpSocketSuccess)) {
+        return 24;
+    }
     if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
         return 6;
     }

@@ -348,6 +348,18 @@ C_TcpSocketResultCode galay_kernel_tcp_socket_create(
     return C_TcpSocketSuccess;
 }
 
+C_TcpSocketResultCode galay_kernel_tcp_socket_enable_tcp_no_delay(
+    galay_kernel_tcp_socket_t* c_socket)
+{
+    if (c_socket == nullptr || c_socket->socket == nullptr) {
+        return C_TcpSocketParameterInvalid;
+    }
+
+    auto* socket = static_cast<galay::async::AsyncTcpSocket*>(c_socket->socket);
+    const auto enabled = socket->option().handleTcpNoDelay();
+    return enabled ? C_TcpSocketSuccess : from_cpp_io_error(enabled.error());
+}
+
 C_TcpSocketResultCode galay_kernel_tcp_socket_destroy(galay_kernel_tcp_socket_t* c_socket)
 {
     if (c_socket == nullptr) {

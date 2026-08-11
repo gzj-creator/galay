@@ -11,6 +11,28 @@
 
 ## [Unreleased]
 
+## [v4.6.0] - 2026-08-11
+
+### Added
+
+- **新增 PostgreSQL 客户端模块**：加入自研 wire protocol v3 的 C++ 同步/异步客户端，覆盖 SCRAM-SHA-256、MD5/明文认证、simple/extended query、prepared statement、事务、pipeline、连接池和显式错误传播；同时提供 C ABI、C++23 module facade、示例、测试、性能基准与 CMake/Bazel 安装入口。
+
+- **新增 PostgreSQL 真实实例验证与高并发基准**：覆盖同步/异步查询、prepared、事务、pipeline、连接池、lease、错误后复用和 C ABI 协议边界，并提供 Galay/libpq 公平口径对照及 DataRow 解析基准。
+
+### Changed
+
+- **扩展构建与安装矩阵**：在 CMake presets、CMake 安装导出、Bazel、模块布局校验和 consumer smoke 中注册 PostgreSQL C++/C targets。
+- **新增 TCP_NODELAY C API**：为 C TCP socket 提供显式开关，并在 PostgreSQL 异步连接路径中启用低延迟选项。
+- **构建版本号升级至 4.6.0**：同步更新 CMake 包版本与 Bazel module 版本。
+
+### Fixed
+
+- **强化 PostgreSQL 协议错误边界与连接复用**：修复 extended query 编码错误掩盖、异步协议错误关闭、并发 connect/close 状态污染、ErrorResponse drain 和缺少 RowDescription 等问题。
+
+### Docs
+
+- **补齐 PostgreSQL 模块文档与构建说明**：新增 C/C++ 快速开始、架构、API、使用、示例、性能、高级主题和常见问题文档，并在模块列表、构建开关与布局校验脚本中注册 PostgreSQL。
+
 ## [v4.5.1] - 2026-08-08
 
 ### Added
