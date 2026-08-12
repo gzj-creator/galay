@@ -150,12 +150,18 @@ void testAuthenticationAndErrorParsing()
 {
     PostgresParser parser;
 
+    std::string unknown_auth;
+    writeInt32(unknown_auth, 999);
+    auto auth = parser.parseAuthenticationRequest(unknown_auth.data(), unknown_auth.size());
+    require(!auth && auth.error() == ParseError::InvalidType,
+            "unknown authentication request kinds must fail");
+
     std::string sasl;
     writeInt32(sasl, static_cast<uint32_t>(AuthRequestKind::Sasl));
     appendCString(sasl, "SCRAM-SHA-256");
     appendCString(sasl, "SCRAM-SHA-256-PLUS");
     sasl.push_back('\0');
-    auto auth = parser.parseAuthenticationRequest(sasl.data(), sasl.size());
+    auth = parser.parseAuthenticationRequest(sasl.data(), sasl.size());
     require(auth && auth->kind == AuthRequestKind::Sasl, "SASL auth kind mismatch");
     require(auth->mechanisms.size() == 2 && auth->mechanisms[0] == "SCRAM-SHA-256",
             "SASL mechanism list mismatch");
@@ -194,6 +200,19 @@ void testAuthenticationAndErrorParsing()
     fields = parser.parseErrorResponse(error.data(), error.size());
     require(!fields && fields.error() == ParseError::Incomplete,
             "ErrorResponse requires its final zero byte");
+
+    std::string duplicate_error;
+    duplicate_error.push_back('M'); appendCString(duplicate_error, "first");
+    duplicate_error.push_back('M'); appendCString(duplicate_error, "second");
+    duplicate_error.push_back('\0');
+    fields = parser.parseErrorResponse(duplicate_error.data(), duplicate_error.size());
+    require(!fields && fields.error() == ParseError::InvalidFormat,
+            "duplicate ErrorResponse fields must fail");
+
+    const std::string trailing_error("Mmessage\0\0x", 11);
+    fields = parser.parseErrorResponse(trailing_error.data(), trailing_error.size());
+    require(!fields && fields.error() == ParseError::InvalidFormat,
+            "ErrorResponse bytes after the final terminator must fail");
 }
 
 void testRowsAndMetadataParsing()
@@ -222,6 +241,18 @@ void testRowsAndMetadataParsing()
         require(!partial, "truncated RowDescription unexpectedly parsed");
     }
 
+    std::string invalid_description = description;
+    invalid_description.back() = '\2';
+    columns = parser.parseRowDescription(invalid_description.data(), invalid_description.size());
+    require(!columns && columns.error() == ParseError::InvalidFormat,
+            "RowDescription must reject unknown format codes");
+
+    invalid_description = description;
+    invalid_description.push_back('\0');
+    columns = parser.parseRowDescription(invalid_description.data(), invalid_description.size());
+    require(!columns && columns.error() == ParseError::InvalidLength,
+            "RowDescription trailing bytes must fail");
+
     std::string data_row;
     writeInt16(data_row, 3);
     writeInt32(data_row, 5); data_row.append("alpha");
@@ -241,6 +272,11 @@ void testRowsAndMetadataParsing()
     data_row[6] = 'A';
     require((*row_view)[0]->front() == 'A', "DataRow view must remain borrowed");
     require(row->getString(0) == "alpha", "owned DataRow must not borrow packet storage");
+
+    for (size_t length = 0; length < data_row.size(); ++length) {
+        auto partial = parser.parseDataRowView(data_row.data(), length);
+        require(!partial, "truncated DataRow unexpectedly parsed");
+    }
 
     std::string invalid_length;
     writeInt16(invalid_length, 1);
@@ -279,6 +315,21 @@ void testCompletionAndSessionMetadata()
     require(parameter && parameter->name == "server_version" && parameter->value == "16.4",
             "ParameterStatus parse mismatch");
 
+    const std::string empty_status("\0value\0", 7);
+    parameter = parser.parseParameterStatus(empty_status.data(), empty_status.size());
+    require(!parameter && parameter.error() == ParseError::InvalidFormat,
+            "ParameterStatus must reject an empty name");
+
+    const std::string truncated_status("name\0value", 10);
+    parameter = parser.parseParameterStatus(truncated_status.data(), truncated_status.size());
+    require(!parameter && parameter.error() == ParseError::Incomplete,
+            "ParameterStatus must reject an unterminated value");
+
+    const std::string trailing_status("name\0value\0x", 12);
+    parameter = parser.parseParameterStatus(trailing_status.data(), trailing_status.size());
+    require(!parameter && parameter.error() == ParseError::InvalidFormat,
+            "ParameterStatus trailing bytes must fail");
+
     std::string key_data;
     writeInt32(key_data, 0x10203040);
     writeInt32(key_data, 0xa0b0c0d0);
@@ -286,6 +337,13 @@ void testCompletionAndSessionMetadata()
     require(backend && backend->process_id == 0x10203040 &&
                 backend->secret_key == 0xa0b0c0d0,
             "BackendKeyData parse mismatch");
+    backend = parser.parseBackendKeyData(key_data.data(), key_data.size() - 1);
+    require(!backend && backend.error() == ParseError::Incomplete,
+            "truncated BackendKeyData must be incomplete");
+    key_data.push_back('\0');
+    backend = parser.parseBackendKeyData(key_data.data(), key_data.size());
+    require(!backend && backend.error() == ParseError::InvalidLength,
+            "BackendKeyData trailing bytes must fail");
 }
 
 void testExtendedQueryCodec()
@@ -424,6 +482,23 @@ void testExtendedQueryWireVectorsAndBoundaries()
     require(encoder.encodeExecute("", static_cast<uint32_t>(std::numeric_limits<int32_t>::max()) + 1U)
                 .empty(),
             "Execute must reject row limits above INT32_MAX");
+
+    std::vector<uint32_t> maximum_parameter_oids(
+        static_cast<size_t>(std::numeric_limits<int16_t>::max()),
+        static_cast<uint32_t>(PostgresOid::TEXT));
+    require(!encoder.encodeParse("max_params", "SELECT 1", maximum_parameter_oids).empty(),
+            "Parse must accept INT16_MAX parameter OIDs");
+    maximum_parameter_oids.push_back(static_cast<uint32_t>(PostgresOid::TEXT));
+    require(encoder.encodeParse("too_many", "SELECT 1", maximum_parameter_oids).empty(),
+            "Parse must reject more than INT16_MAX parameter OIDs");
+
+    std::vector<std::optional<std::string_view>> maximum_parameters(
+        static_cast<size_t>(std::numeric_limits<int16_t>::max()), std::nullopt);
+    require(!encoder.encodeBind("", "stmt", maximum_parameters).empty(),
+            "Bind must accept INT16_MAX parameters");
+    maximum_parameters.push_back(std::nullopt);
+    require(encoder.encodeBind("", "stmt", maximum_parameters).empty(),
+            "Bind must reject more than INT16_MAX parameters");
 
     std::string malformed_parameter_description;
     writeInt16(malformed_parameter_description, 2);

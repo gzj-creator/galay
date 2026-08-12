@@ -7,6 +7,7 @@
 #include <array>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <vector>
 
 struct galay_utils_bytes_t {
@@ -163,7 +164,11 @@ galay_status_t galay_utils_base64_encode(const void* data, size_t len, char* out
     if (actual == nullptr || (data == nullptr && len != 0) || out == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    const size_t required = ((len + 2) / 3) * 4;
+    const size_t groups = len / 3 + (len % 3 != 0 ? 1 : 0);
+    if (groups > std::numeric_limits<size_t>::max() / 4) {
+        return GALAY_OUT_OF_MEMORY;
+    }
+    const size_t required = groups * 4;
     *actual = required;
     if (out_len < required) {
         return GALAY_OUT_OF_MEMORY;
@@ -210,15 +215,26 @@ galay_status_t galay_utils_base64_decode(const char* data, size_t len, void* out
     size_t pos = 0;
     for (size_t i = 0; i < len; i += 4) {
         int vals[4] = {0, 0, 0, 0};
+        const bool last_group = i + 4 == len;
         for (size_t j = 0; j < 4; ++j) {
             const unsigned char ch = static_cast<unsigned char>(data[i + j]);
             if (ch == '=') {
+                if (!last_group || j < 2 || (j == 2 && data[i + 3] != '=')) {
+                    return GALAY_INVALID_ARGUMENT;
+                }
                 vals[j] = 0;
             } else if (map[ch] >= 0) {
                 vals[j] = map[ch];
             } else {
                 return GALAY_INVALID_ARGUMENT;
             }
+        }
+        if (last_group && data[i + 2] == '=' && (vals[1] & 0x0F) != 0) {
+            return GALAY_INVALID_ARGUMENT;
+        }
+        if (last_group && data[i + 3] == '=' && data[i + 2] != '=' &&
+            (vals[2] & 0x03) != 0) {
+            return GALAY_INVALID_ARGUMENT;
         }
         const uint32_t n = (static_cast<uint32_t>(vals[0]) << 18U) |
             (static_cast<uint32_t>(vals[1]) << 12U) |

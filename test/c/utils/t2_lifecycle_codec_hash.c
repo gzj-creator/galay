@@ -22,6 +22,11 @@ static void test_bytes_lifecycle(void)
 
     assert(galay_utils_bytes_create(input, sizeof(input), 0) == GALAY_UTILS_INVALID_ARGUMENT);
     assert(galay_utils_bytes_create(0, 1, &bytes) == GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_bytes_create(0, 0, &bytes) == GALAY_UTILS_OK);
+    assert(bytes != 0);
+    assert(galay_utils_bytes_size(bytes) == 0);
+    assert(galay_utils_bytes_data(bytes) == 0);
+    galay_utils_bytes_destroy(&bytes);
 }
 
 static void test_ring_buffer_lifecycle(void)
@@ -54,6 +59,19 @@ static void test_ring_buffer_lifecycle(void)
 
     assert(galay_utils_ring_buffer_create(0, &ring) == GALAY_UTILS_INVALID_ARGUMENT);
     assert(galay_utils_ring_buffer_write(0, input, sizeof(input), &actual) == GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_ring_buffer_create(4, &ring) == GALAY_UTILS_OK);
+    assert(galay_utils_ring_buffer_write(ring, input, 0, &actual) == GALAY_UTILS_OK);
+    assert(actual == 0);
+    assert(galay_utils_ring_buffer_write(ring, input, 3, &actual) == GALAY_UTILS_OK);
+    assert(galay_utils_ring_buffer_read(ring, output, 2, &actual) == GALAY_UTILS_OK);
+    assert(actual == 2 && output[0] == 'w' && output[1] == 'x');
+    assert(galay_utils_ring_buffer_write(ring, input + 3, 1, &actual) == GALAY_UTILS_OK);
+    assert(galay_utils_ring_buffer_read(ring, output, 2, &actual) == GALAY_UTILS_OK);
+    assert(actual == 2 && output[0] == 'y' && output[1] == 'z');
+    assert(galay_utils_ring_buffer_read(ring, 0, 0, &actual) == GALAY_UTILS_OK);
+    assert(galay_utils_ring_buffer_write(ring, input, 1, 0) == GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_ring_buffer_read(ring, output, 1, 0) == GALAY_UTILS_INVALID_ARGUMENT);
+    galay_utils_ring_buffer_destroy(&ring);
 }
 
 static void test_base64_codec_boundaries(void)
@@ -69,6 +87,8 @@ static void test_base64_codec_boundaries(void)
 
     assert(galay_utils_base64_encode(input, sizeof(input), encoded, 4, &actual) == GALAY_UTILS_BUFFER_TOO_SMALL);
     assert(actual == 8);
+    assert(galay_utils_base64_encode(input, SIZE_MAX, encoded, sizeof(encoded), &actual) ==
+           GALAY_OUT_OF_MEMORY);
     assert(galay_utils_base64_encode(0, 1, encoded, sizeof(encoded), &actual) == GALAY_UTILS_INVALID_ARGUMENT);
 
     assert(galay_utils_base64_decode(encoded, actual, decoded, sizeof(decoded), &actual) == GALAY_UTILS_OK);
@@ -78,6 +98,24 @@ static void test_base64_codec_boundaries(void)
     assert(galay_utils_base64_decode(encoded, 8, decoded, 4, &actual) == GALAY_UTILS_BUFFER_TOO_SMALL);
     assert(actual == 5);
     assert(galay_utils_base64_decode("!!!", 3, decoded, sizeof(decoded), &actual) == GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_base64_decode("====", 4, decoded, sizeof(decoded), &actual) ==
+           GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_base64_decode("A===", 4, decoded, sizeof(decoded), &actual) ==
+           GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_base64_decode("AA=A", 4, decoded, sizeof(decoded), &actual) ==
+           GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_base64_encode(0, 0, encoded, sizeof(encoded), &actual) == GALAY_UTILS_OK);
+    assert(actual == 0);
+    assert(galay_utils_base64_decode("", 0, decoded, sizeof(decoded), &actual) == GALAY_UTILS_OK);
+    assert(actual == 0);
+    assert(galay_utils_base64_encode(input, sizeof(input), 0, sizeof(encoded), &actual) ==
+           GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_base64_encode(input, sizeof(input), encoded, sizeof(encoded), 0) ==
+           GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_base64_decode(encoded, 8, 0, sizeof(decoded), &actual) ==
+           GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_base64_decode(encoded, 8, decoded, sizeof(decoded), 0) ==
+           GALAY_UTILS_INVALID_ARGUMENT);
 }
 
 static void test_hash_wrappers(void)
@@ -105,6 +143,10 @@ static void test_hash_wrappers(void)
     assert(galay_utils_md5(input, sizeof(input), md5, 15) == GALAY_UTILS_BUFFER_TOO_SMALL);
     assert(galay_utils_sha1(0, 1, sha1, sizeof(sha1)) == GALAY_UTILS_INVALID_ARGUMENT);
     assert(galay_utils_murmur3_32(input, sizeof(input), 0, 0) == GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_md5(0, 0, md5, sizeof(md5)) == GALAY_UTILS_OK);
+    assert(galay_utils_sha1(0, 0, sha1, sizeof(sha1)) == GALAY_UTILS_OK);
+    assert(galay_utils_md5(input, sizeof(input), 0, sizeof(md5)) == GALAY_UTILS_INVALID_ARGUMENT);
+    assert(galay_utils_sha1(input, sizeof(input), sha1, 19) == GALAY_UTILS_BUFFER_TOO_SMALL);
 }
 
 int main(void)

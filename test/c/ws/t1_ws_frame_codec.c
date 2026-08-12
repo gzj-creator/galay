@@ -161,6 +161,69 @@ static int test_truncated_frame_reports_incomplete(void)
     return 0;
 }
 
+static int test_codec_argument_and_capacity_boundaries(void)
+{
+    static const uint8_t payload[] = {'x'};
+    static const uint8_t mask_key[4] = {1, 2, 3, 4};
+    uint8_t encoded[8] = {0};
+    uint8_t decoded[1] = {0};
+    galay_ws_frame_t frame = {0};
+    galay_ws_error_t ws_error = GALAY_WS_ERROR_NONE;
+    size_t written = 99;
+    size_t consumed = 99;
+    size_t encoded_size = 0;
+
+    EXPECT_EQ_U64(galay_ws_encoded_size(0, GALAY_FALSE, NULL), GALAY_INVALID_ARGUMENT);
+    EXPECT_EQ_U64(galay_ws_apply_mask(NULL, 1, mask_key), GALAY_INVALID_ARGUMENT);
+    EXPECT_EQ_U64(galay_ws_apply_mask(NULL, 0, mask_key), GALAY_OK);
+    EXPECT_EQ_U64(galay_ws_apply_mask(encoded, 0, NULL), GALAY_INVALID_ARGUMENT);
+    EXPECT_EQ_U64(galay_ws_encode_frame(GALAY_WS_OPCODE_TEXT,
+                                        payload,
+                                        sizeof(payload),
+                                        GALAY_TRUE,
+                                        NULL,
+                                        encoded,
+                                        2,
+                                        &written),
+                  GALAY_OUT_OF_MEMORY);
+    EXPECT_EQ_U64(written, 0);
+    EXPECT_EQ_U64(galay_ws_encode_frame(GALAY_WS_OPCODE_TEXT,
+                                        payload,
+                                        sizeof(payload),
+                                        GALAY_TRUE,
+                                        mask_key,
+                                        encoded,
+                                        sizeof(encoded),
+                                        &written),
+                  GALAY_OK);
+    EXPECT_EQ_U64(galay_ws_decode_frame(encoded,
+                                        written,
+                                        GALAY_TRUE,
+                                        &frame,
+                                        decoded,
+                                        0,
+                                        &consumed,
+                                        &ws_error),
+                  GALAY_PROTOCOL_ERROR);
+    EXPECT_EQ_U64(ws_error, GALAY_WS_ERROR_INCOMPLETE);
+    EXPECT_EQ_U64(consumed, 0);
+    EXPECT_EQ_U64(galay_ws_decode_frame(encoded,
+                                        written,
+                                        GALAY_TRUE,
+                                        &frame,
+                                        decoded,
+                                        sizeof(decoded),
+                                        &consumed,
+                                        &ws_error),
+                  GALAY_OK);
+    EXPECT_EQ_U64(consumed, written);
+    EXPECT_EQ_U64(galay_ws_encoded_size(125, GALAY_FALSE, &encoded_size), GALAY_OK);
+    EXPECT_EQ_U64(encoded_size, 127);
+    EXPECT_EQ_U64(galay_ws_encoded_size(126, GALAY_FALSE, &encoded_size), GALAY_OK);
+    EXPECT_EQ_U64(encoded_size, 130);
+    return 0;
+}
+
 static int test_mask_round_trip(void)
 {
     const uint8_t mask_key[4] = {0x12, 0x34, 0x56, 0x78};
@@ -212,7 +275,7 @@ int main(void)
     if (test_payload_boundaries() != 0) return 1;
     if (test_invalid_opcode_rejected() != 0) return 1;
     if (test_truncated_frame_reports_incomplete() != 0) return 1;
+    if (test_codec_argument_and_capacity_boundaries() != 0) return 1;
     if (test_mask_round_trip() != 0) return 1;
     return 0;
 }
-

@@ -1,5 +1,7 @@
 #include <galay/cpp/galay-postgres/async/client.h>
+#include <galay/cpp/galay-postgres/protoc/builder.h>
 
+#include <array>
 #include <concepts>
 #include <optional>
 #include <span>
@@ -80,5 +82,41 @@ int main()
 {
     AsyncPostgresClient<> client(nullptr);
     auto invalid_query = client.query({});
-    return invalid_query.isInvalid() ? 0 : 1;
+    if (!invalid_query.isInvalid()) {
+        return 1;
+    }
+
+    auto invalid_host = client.connect("", 5432, "user", "password");
+    if (!invalid_host.isInvalid()) {
+        return 2;
+    }
+    auto invalid_port = client.connect("127.0.0.1", 0, "user", "password");
+    if (!invalid_port.isInvalid()) {
+        return 3;
+    }
+    auto invalid_user = client.connect("127.0.0.1", 5432, "", "password");
+    if (!invalid_user.isInvalid()) {
+        return 4;
+    }
+    auto invalid_address = client.connect("not-an-ip-address", 5432, "user", "password");
+    if (!invalid_address.isInvalid()) {
+        return 5;
+    }
+
+    std::array<protocol::PostgresCommandView, 1> invalid_commands{
+        protocol::PostgresCommandView{"", protocol::PostgresCommandKind::Query}};
+    auto invalid_batch = client.batch(invalid_commands);
+    if (!invalid_batch.isInvalid()) {
+        return 6;
+    }
+
+    protocol::PostgresCommandBuilder builder;
+    builder.appendParse("stmt", "SELECT 1");
+    auto missing_boundary = client.batch(builder.commands());
+    if (!missing_boundary.isInvalid()) {
+        return 7;
+    }
+
+    auto empty_pipeline = client.pipeline({});
+    return empty_pipeline.isInvalid() ? 8 : 0;
 }

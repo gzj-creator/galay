@@ -11,6 +11,20 @@
 
 ## [Unreleased]
 
+## [v4.7.0] - 2026-08-12
+
+### Changed
+
+- **统一 C 测试文件命名规范**：将 `test/c` 下未遵循 `tN_` 前缀的测试文件按模块编号重命名，并同步调整 CMake 场景识别与测试注册。
+
+### Added
+
+- **补齐 PostgreSQL 与 C 模块边界回归**：新增 PostgreSQL 协议、连接池、客户端 surface 及 C ABI 边界覆盖，同时扩展 utils、WebSocket、SSL 的非法参数、截断、溢出和生命周期测试。
+
+### Fixed
+
+- **修复 C Base64 边界处理**：拒绝非法 padding 和非零 pad bits，并避免编码长度计算的 `size_t` 溢出。
+
 ## [v4.7.0-beta] - 2026-08-12
 
 ### Added
