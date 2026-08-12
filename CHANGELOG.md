@@ -4,20 +4,26 @@
 
 ## 如何维护
 
-- **版本规则**：遵循 `major.minor.patch`。大改动（架构/目录重组/核心接口变更）升 `major`；新增功能升 `minor`；修复 bug、文档、配置、chore 等小修补升 `patch`。
+- **版本规则**：稳定版本遵循 `major.minor.patch`，预发布版本在其后追加 `-alpha`、`-beta` 或 `-rc.N` 后缀。大改动（架构/目录重组/核心接口变更）升 `major`；新增功能升 `minor`；修复 bug、文档、配置、chore 等小修补升 `patch`。
 - **更新时机**：每次提交前都必须更新本文件。未发版的变更写入 `## [Unreleased]` 节；发版时把 `Unreleased` 收束为新的版本节，并在最上方补一个空的 `## [Unreleased]`。
-- **标题格式**：`## [vX.Y.Z] - YYYY-MM-DD`。
+- **标题格式**：`## [vX.Y.Z] - YYYY-MM-DD`；预发布可使用 `## [vX.Y.Z-beta] - YYYY-MM-DD`。
 - **内容粒度**：按 `Added` / `Changed` / `Removed` / `Fixed` / `Docs` / `Chore` 等小节归纳，只记录最重要的变更，不逐行抄写 diff。
 
 ## [Unreleased]
 
+## [v4.7.0-beta] - 2026-08-12
+
 ### Added
 
-- **新增 PostgreSQL C 查询压测与复用查询接口**：新增真实 PostgreSQL simple query 压测入口 benchmark_c_postgres_query_pressure，支持 clients、queries、warmup、IO schedulers、timeout 和 SQL 配置，并输出 QPS 与 p50/p95/p99；C ABI 新增可复用 result-set 创建/重置和 galay_postgres_client_query_into_async，降低循环查询场景的重复分配。
+- **新增 PostgreSQL C 查询压测与复用查询接口**：新增真实 PostgreSQL simple query 压测入口 `benchmark_c_postgres_query_pressure`，支持 clients、queries、warmup、IO schedulers、timeout 和 SQL 配置，并输出 QPS 与 p50/p95/p99；C ABI 新增可复用 result-set 创建/重置和 `galay_postgres_client_query_into_async`，降低循环查询场景的重复分配。
 
 ### Changed
 
 - **强化 PostgreSQL C client 协程 I/O 与生命周期契约**：复用客户端收发缓冲和 wait request，补齐 per-client 串行操作保护、错误后协议状态清理、result view 失效语义、pool lease 借用约束及公开头注释；同步补充 C/C++ PostgreSQL 性能文档和 C surface/loopback 覆盖。
+
+### Docs
+
+- **补充 PostgreSQL C 性能与 API 说明**：新增 C benchmark 构建入口、性能复现文档及 `postgres.h` 公开接口注释。
 
 ## [v4.6.0] - 2026-08-11
 

@@ -198,3 +198,18 @@
 - **工程交付入口**：新增 CMake/Bazel targets、安装导出、C++23 module facade、C/C++ 示例、CTest 与 benchmark，并补齐快速开始、架构、API、使用、性能、高级主题和常见问题文档。
 - **真实实例与高并发验证**：使用 PostgreSQL 16 SCRAM 实例验证同步/异步 query、prepared、事务、pipeline、连接池、lease、错误后复用及 C ABI；Galay/libpq 采用相同 SQL、连接数、查询量和成功判定进行公平对照，96 clients 两端均 `9600/9600` 成功，性能明细见 `docs/cpp/modules/postgres/08-性能测试报告-2026-08-10.md`。
 - **构建与环境验证**：全量 CMake 构建、PostgreSQL CTest、无 PostgreSQL skip 行为、安装 consumer smoke、GCC 14.2 module facade 编译、风格审计和 `git diff --check` 已通过；Bazel 与 CMake module file set 受当前环境未安装 Ninja/Bazel 影响，已明确记录。
+
+## v4.7.0-beta - 2026-08-12
+
+- **版本级别**：次版本预发布（minor beta）
+- **Git 提交消息**：`feat: 发布 PostgreSQL C 客户端 v4.7.0-beta 预发布版`
+- **Git tag**：`v4.7.0-beta`
+
+### 变更摘要
+
+本次为 `v4.6.0` 之后的 PostgreSQL C 客户端 beta 预发布，收束查询压测、结果集复用、协程 I/O 生命周期强化及 `postgres.h` 注释补全。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.7.0`；预发布标识通过 Git tag `v4.7.0-beta` 表达。
+
+- **查询压测入口**：新增真实 PostgreSQL simple query C benchmark，支持并发 client、查询量、预热、IO scheduler、timeout 和 SQL 配置，并报告成功率、QPS 与 p50/p95/p99 延迟。
+- **结果集复用 API**：新增 result-set 创建/重置及 `galay_postgres_client_query_into_async`，保留字段、行和值容量，减少循环查询中的重复分配。
+- **协程 I/O 与生命周期**：复用 PostgreSQL 客户端收发缓冲和 wait request，补齐 per-client 串行操作保护、错误后的协议状态清理、result view 失效和 pool lease 借用约束。
+- **文档与验证**：补全 `postgres.h` 公开 API 注释，新增 C/C++ 性能文档，并通过 Release 构建、C surface/loopback、真实 PostgreSQL 集成测试和 C benchmark（`40000/40000`，约 `8072.88 QPS`）。
