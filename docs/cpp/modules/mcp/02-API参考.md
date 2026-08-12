@@ -18,6 +18,9 @@
 - `galay-mcp/client/client.h`
 - `galay-mcp/server/stdio_server.h`
 - `galay-mcp/server/http_server.h`
+- `galay-mcp/v1/protocol.h`, `galay-mcp/v1/client.h`, `galay-mcp/v1/stdio_server.h`, `galay-mcp/v1/http_server.h`
+- `galay-mcp/v2/protocol.h`, `galay-mcp/v2/client.h`, `galay-mcp/v2/stdio_server.h`, `galay-mcp/v2/http_server.h`
+- `galay-mcp/v2/http_headers.h`
 - `galay-mcp/module/module_prelude.hpp`
 - `galay-mcp/module/galay_mcp.cppm`
 
@@ -50,6 +53,26 @@ target_link_libraries(your-target PRIVATE galay::mcp)
 `galay::mcp` 通过公共链接依赖同样继承这一 C++23 要求。
 
 ## 2. JSON、协议常量与基础结构
+
+### 协议版本边界
+
+根命名空间中的现有 `McpClient`、`McpStdioServer`、`McpHttpServer` 保持
+2024-11-05 行为。等价的旧代入口也可从 `galay::mcp::v1` 使用。
+
+2026-07-28 实现位于 `galay::mcp::v2`，不再执行 `initialize`/
+`notifications/initialized`，不保存 MCP session，也不提供 `ping`。每个请求的
+`params._meta` 都必须包含 `io.modelcontextprotocol/protocolVersion` 与
+`io.modelcontextprotocol/clientCapabilities`；服务端提供 `server/discover`。
+
+v2 的成功结果带 `resultType`；`tools/list`、`resources/list`、
+`prompts/list`、`server/discover` 和 `resources/read` 还带 `ttlMs` 与
+`cacheScope`。HTTP v2 客户端会发送 `Accept: application/json, text/event-stream`、
+`MCP-Protocol-Version`、`Mcp-Method`，命名请求还会发送 `Mcp-Name`。header/body
+不一致返回 HTTP 400 与 `-32020`。工具 schema 中的 `x-mcp-header` 会在 HTTP
+`tools/call` 中镜像为 `Mcp-Param-*`，非法 annotation 会从 HTTP 客户端的工具列表中
+过滤。当前实现不声明 `subscriptions/listen`，因为它需要真实的长生命周期 SSE 订阅流；
+`resources/templates/list`、`completion/complete` 等未注册的 v2 方法会显式返回
+`-32601`。
 
 来源：`galay-mcp/common/mcp_json.h`、`galay-mcp/common/mcp_base.h`
 

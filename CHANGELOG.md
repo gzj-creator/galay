@@ -11,6 +11,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增 MCP `2026-07-28` 无状态 v2 协议实现，提供 `galay::mcp::v2` 的 stdio/Streamable HTTP client/server、`server/discover`、结果缓存字段、HTTP 标准 header 校验及 `x-mcp-header` 参数镜像能力。
+- 新增显式 `galay::mcp::v1` 旧协议入口，并补充 v2 协议、stdio、HTTP 边界测试和吞吐 benchmark。
+
+### Changed
+
+- 保留原根命名空间 MCP `2024-11-05` API 行为，更新 CMake、C++ module 导出及 MCP 文档以同时支持 v1/v2。
+
 ## [v4.7.0] - 2026-08-12
 
 ### Changed

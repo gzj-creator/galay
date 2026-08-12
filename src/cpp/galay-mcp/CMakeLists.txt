@@ -4,6 +4,7 @@ file(GLOB_RECURSE GALAY_MCP_SOURCES CONFIGURE_DEPENDS
     "common/*.cc"
     "client/*.cc"
     "server/*.cc"
+    "v2/*.cc"
 )
 
 add_library(galay-mcp ${GALAY_MCP_SOURCES})
