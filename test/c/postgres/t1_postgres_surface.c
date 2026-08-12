@@ -226,6 +226,12 @@ static int test_extended_and_lifecycle(void)
     const char* name = NULL;
     galay_bool_t connected = GALAY_TRUE;
     galay_postgres_result_set_t* result = NULL;
+    galay_postgres_result_set_t* reusable_result = NULL;
+
+    REQUIRE_STATUS(galay_postgres_result_set_create(NULL), GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_postgres_result_set_create(&reusable_result), GALAY_OK);
+    REQUIRE_STATUS(galay_postgres_result_set_reset(reusable_result), GALAY_OK);
+    REQUIRE_STATUS(galay_postgres_result_set_reset(NULL), GALAY_INVALID_ARGUMENT);
 
     REQUIRE_STATUS(galay_postgres_stmt_create("s1", &stmt), GALAY_OK);
     REQUIRE_STATUS(galay_postgres_stmt_name(stmt, &name), GALAY_OK);
@@ -252,7 +258,10 @@ static int test_extended_and_lifecycle(void)
     REQUIRE_TRUE(galay_postgres_client_connect_async(NULL, config, 1).code == C_IOResultInvalid);
     REQUIRE_TRUE(galay_postgres_client_query_async(client, "SELECT 1", 1, &result).code ==
                  C_IOResultInvalid);
+    REQUIRE_TRUE(galay_postgres_client_query_into_async(
+                     client, "SELECT 1", 1, reusable_result).code == C_IOResultInvalid);
     REQUIRE_TRUE(galay_postgres_client_close_async(NULL, 1).code == C_IOResultInvalid);
+    galay_postgres_result_set_destroy(reusable_result);
     galay_postgres_config_destroy(config);
     galay_postgres_client_close(client);
     galay_postgres_client_destroy(client);

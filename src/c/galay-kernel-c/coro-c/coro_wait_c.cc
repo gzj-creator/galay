@@ -6,6 +6,7 @@
 
 #include <chrono>
 #include <cstdint>
+#include <atomic>
 #include <limits>
 #include <memory>
 #include <mutex>
@@ -32,6 +33,10 @@ struct WaitRequestState {
     uint64_t generation = 0;
     WaitState state = WaitState::Idle;
     bool completed_waiter_pending = false;
+    std::atomic_bool fast_wait_active{false};
+    std::atomic_bool fast_wait_completed{false};
+    std::atomic<galay::kernel::coro_c::C_CoroTaskInternal*> fast_waiter{nullptr};
+    C_IOResult fast_wait_result{C_IOResultInvalid, 0, 0, 0, nullptr};
 };
 
 using WaitRequestPtr = std::shared_ptr<WaitRequestState>;
@@ -223,6 +228,7 @@ C_IOResult request_destroy_impl(C_CoroWaitRequest* request)
         if ((*state_holder)->state == WaitState::Pending ||
             (*state_holder)->state == WaitState::Waiting ||
             (*state_holder)->state == WaitState::Completing ||
+            (*state_holder)->fast_wait_active.load(std::memory_order_acquire) ||
             ((*state_holder)->state == WaitState::Completed &&
              (*state_holder)->completed_waiter_pending)) {
             return make_result(C_IOResultInvalid);
@@ -272,6 +278,118 @@ C_IOResult request_prepare_impl(C_CoroWaitRequest* request,
     }
     if (timer_to_cancel) {
         timer_to_cancel->cancel();
+    }
+    return make_result(C_IOResultOk);
+}
+
+C_IOResult prepare_fast_wait_user_data_impl(C_CoroWaitRequest* request, void** out_user_data)
+{
+    auto* state_holder = holder(request);
+    if (state_holder == nullptr || !*state_holder || out_user_data == nullptr ||
+        *out_user_data != nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    auto& state = **state_holder;
+    bool expected = false;
+    if (!state.fast_wait_active.compare_exchange_strong(expected, true,
+                                                        std::memory_order_acq_rel,
+                                                        std::memory_order_acquire)) {
+        return make_result(C_IOResultInvalid);
+    }
+    state.fast_wait_result = make_result(C_IOResultInvalid);
+    state.fast_waiter.store(nullptr, std::memory_order_relaxed);
+    state.fast_wait_completed.store(false, std::memory_order_release);
+    *out_user_data = state_holder;
+    return make_result(C_IOResultOk);
+}
+
+C_IOResult wait_fast_impl(C_CoroWaitRequest* request, int64_t timeout_ms)
+{
+    auto* state_holder = holder(request);
+    if (state_holder == nullptr || !*state_holder || timeout_ms >= 0) {
+        return make_result(C_IOResultInvalid);
+    }
+    auto& state = **state_holder;
+    if (!state.fast_wait_active.load(std::memory_order_acquire) &&
+        !state.fast_wait_completed.load(std::memory_order_acquire)) {
+        return make_result(C_IOResultInvalid);
+    }
+    auto* current = galay::kernel::coro_c::currentTask();
+    if (current == nullptr || !galay::kernel::coro_c::prepareCurrentTaskWait()) {
+        return make_result(C_IOResultInvalid);
+    }
+    galay::kernel::coro_c::retainTask(current);
+
+    if (!state.fast_wait_completed.load(std::memory_order_acquire)) {
+        auto* expected = static_cast<galay::kernel::coro_c::C_CoroTaskInternal*>(nullptr);
+        if (!state.fast_waiter.compare_exchange_strong(expected, current,
+                                                       std::memory_order_acq_rel,
+                                                       std::memory_order_acquire)) {
+            if (!state.fast_wait_completed.load(std::memory_order_acquire)) {
+                galay::kernel::coro_c::releaseTask(current);
+                (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+                return make_result(C_IOResultInvalid);
+            }
+        }
+    }
+
+    if (state.fast_wait_completed.load(std::memory_order_acquire)) {
+        auto* claimed = state.fast_waiter.exchange(nullptr, std::memory_order_acq_rel);
+        if (claimed == current) {
+            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+            galay::kernel::coro_c::releaseTask(current);
+            return state.fast_wait_result;
+        }
+        if (claimed != nullptr) {
+            galay::kernel::coro_c::releaseTask(current);
+            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+            return make_result(C_IOResultInvalid);
+        }
+        if (galay::kernel::coro_c::rollbackCurrentTaskWait()) {
+            galay::kernel::coro_c::releaseTask(current);
+            return state.fast_wait_result;
+        }
+    }
+
+    C_IOResult parked = galay::kernel::coro_c::parkPreparedCurrentTaskWait();
+    if (parked.code != C_IOResultOk) {
+        if (state.fast_waiter.exchange(nullptr, std::memory_order_acq_rel) == current) {
+            galay::kernel::coro_c::releaseTask(current);
+        }
+        (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+        return parked;
+    }
+    if (!state.fast_wait_completed.load(std::memory_order_acquire)) {
+        return make_result(C_IOResultError);
+    }
+    return state.fast_wait_result;
+}
+
+C_IOResult complete_fast_wait_user_data_impl(void* user_data, C_IOResult result)
+{
+    auto* state_holder = static_cast<WaitRequestPtr*>(user_data);
+    if (state_holder == nullptr || !*state_holder ||
+        !(*state_holder)->fast_wait_active.load(std::memory_order_acquire)) {
+        return make_result(C_IOResultInvalid);
+    }
+    auto& state = **state_holder;
+    state.fast_wait_result = result;
+    state.fast_wait_completed.store(true, std::memory_order_release);
+    auto* waiter = state.fast_waiter.exchange(nullptr, std::memory_order_acq_rel);
+    if (waiter == nullptr) {
+        return make_result(C_IOResultOk);
+    }
+    const bool resumed = galay::kernel::coro_c::resumeTaskFromWait(waiter);
+    galay::kernel::coro_c::releaseTask(waiter);
+    return make_result(resumed ? C_IOResultOk : C_IOResultError);
+}
+
+C_IOResult release_fast_wait_user_data_impl(void* user_data)
+{
+    auto* state_holder = static_cast<WaitRequestPtr*>(user_data);
+    if (state_holder == nullptr || !*state_holder ||
+        !(*state_holder)->fast_wait_active.exchange(false, std::memory_order_acq_rel)) {
+        return make_result(C_IOResultInvalid);
     }
     return make_result(C_IOResultOk);
 }
@@ -534,6 +652,32 @@ C_IOResult sleep_impl(int64_t timeout_ms)
 }
 
 } // namespace
+
+namespace galay::kernel::coro_c
+{
+
+C_IOResult prepareFastWaitUserData(C_CoroWaitRequest* request,
+                                   void** out_user_data) noexcept
+{
+    return prepare_fast_wait_user_data_impl(request, out_user_data);
+}
+
+C_IOResult waitFastRequest(C_CoroWaitRequest* request, int64_t timeout_ms) noexcept
+{
+    return wait_fast_impl(request, timeout_ms);
+}
+
+C_IOResult completeFastWaitUserData(void* user_data, C_IOResult result) noexcept
+{
+    return complete_fast_wait_user_data_impl(user_data, result);
+}
+
+C_IOResult releaseFastWaitUserData(void* user_data) noexcept
+{
+    return release_fast_wait_user_data_impl(user_data);
+}
+
+} // namespace galay::kernel::coro_c
 
 extern "C" {
 

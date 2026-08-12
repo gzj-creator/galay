@@ -12,7 +12,6 @@
 #include <expected>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <new>
 #include <span>
 #include <string>
@@ -65,9 +64,8 @@ enum class CoroTcpCompletionPhase : uint8_t {
 };
 
 struct CoroTcpCompletionState {
-    std::mutex user_data_mutex;
     GalayCoreCoroWaitOps wait_ops{};
-    void* user_data = nullptr;
+    std::atomic<void*> user_data{nullptr};
     std::atomic<CoroTcpCompletionPhase> phase{CoroTcpCompletionPhase::Pending};
 };
 
@@ -246,7 +244,7 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
         : m_wait_ops(wait_ops)
         , m_scheduler(scheduler)
     {
-        m_state.user_data = user_data;
+        m_state.user_data.store(user_data, std::memory_order_relaxed);
         m_state.wait_ops = wait_ops;
         m_wake_state.header.hooks = &kWakeHooks;
         m_wake_state.operation = this;
@@ -329,8 +327,7 @@ struct CoroTcpOperationBase: public CoroTcpOperationInterface {
     Scheduler* scheduler() const noexcept { return m_scheduler; }
     bool hasPendingToken() noexcept
     {
-        std::lock_guard<std::mutex> lock(m_state.user_data_mutex);
-        return m_state.user_data != nullptr;
+        return m_state.user_data.load(std::memory_order_acquire) != nullptr;
     }
 
     C_IOResult wait(int64_t timeout_ms) noexcept
@@ -407,23 +404,20 @@ private:
         if (state == nullptr) {
             return make_result(C_IOResultInvalid);
         }
-        std::lock_guard<std::mutex> lock(state->user_data_mutex);
-        if (state->user_data == nullptr) {
+        void* user_data = state->user_data.load(std::memory_order_acquire);
+        if (user_data == nullptr) {
             return make_result(C_IOResultInvalid);
         }
-        return state->wait_ops.complete_user_data(state->user_data, result);
+        return state->wait_ops.complete_user_data(user_data, result);
     }
 
     C_IOResult completeAndReleaseUserData(C_IOResult result) noexcept
     {
         void* user_data = nullptr;
         C_IOResult completed = make_result(C_IOResultInvalid);
-        {
-            std::lock_guard<std::mutex> lock(m_state.user_data_mutex);
-            user_data = std::exchange(m_state.user_data, nullptr);
-            if (user_data != nullptr) {
-                completed = m_wait_ops.complete_user_data(user_data, result);
-            }
+        user_data = m_state.user_data.exchange(nullptr, std::memory_order_acq_rel);
+        if (user_data != nullptr) {
+            completed = m_wait_ops.complete_user_data(user_data, result);
         }
         if (user_data != nullptr) {
             C_IOResult released = m_wait_ops.release_user_data(user_data);
@@ -435,10 +429,7 @@ private:
     void releaseUserDataOnly() noexcept
     {
         void* user_data = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(m_state.user_data_mutex);
-            user_data = std::exchange(m_state.user_data, nullptr);
-        }
+        user_data = m_state.user_data.exchange(nullptr, std::memory_order_acq_rel);
         if (user_data != nullptr) {
             m_last_cleanup_result = m_wait_ops.release_user_data(user_data);
         }

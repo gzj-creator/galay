@@ -48,8 +48,8 @@ typedef struct galay_postgres_client_t galay_postgres_client_t;
  * @brief Owning result-set handle.
  * @details Stores RowDescription metadata, DataRow values, command tag and the
  * ReadyForQuery transaction status.
- * @note Field and value views borrow storage until result-set destroy. Items
- * borrowed from a pipeline result must not be destroyed separately.
+ * @note Field and value views borrow storage until reset, query reuse, or
+ * destroy. Items borrowed from a pipeline result must not be destroyed separately.
  */
 typedef struct galay_postgres_result_set_t galay_postgres_result_set_t;
 
@@ -157,7 +157,12 @@ void galay_postgres_config_destroy(galay_postgres_config_t* config);
 galay_status_t galay_postgres_config_host(const galay_postgres_config_t* config,
                                           const char** host);
 
-/** Get the configured TCP port; returns `GALAY_INVALID_ARGUMENT` for NULL arguments. */
+/**
+ * @brief Get the configured TCP port.
+ * @param config Configuration handle.
+ * @param port Receives the non-zero TCP port.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT` for a NULL argument.
+ */
 galay_status_t galay_postgres_config_port(const galay_postgres_config_t* config,
                                           uint16_t* port);
 
@@ -197,11 +202,21 @@ galay_status_t galay_postgres_config_database(const galay_postgres_config_t* con
 galay_status_t galay_postgres_config_application_name(const galay_postgres_config_t* config,
                                                       const char** application_name);
 
-/** Get the fallback connect timeout in milliseconds. */
+/**
+ * @brief Get the fallback connect timeout.
+ * @param config Configuration handle.
+ * @param timeout_ms Receives the positive timeout in milliseconds.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT` for a NULL argument.
+ */
 galay_status_t galay_postgres_config_connect_timeout_ms(const galay_postgres_config_t* config,
                                                         uint32_t* timeout_ms);
 
-/** Get whether TCP_NODELAY is requested for newly created connections. */
+/**
+ * @brief Get whether TCP_NODELAY is requested for new connections.
+ * @param config Configuration handle.
+ * @param enabled Receives `GALAY_TRUE` when the option is enabled.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT` for a NULL argument.
+ */
 galay_status_t galay_postgres_config_tcp_no_delay(const galay_postgres_config_t* config,
                                                   galay_bool_t* enabled);
 
@@ -214,31 +229,56 @@ galay_status_t galay_postgres_config_tcp_no_delay(const galay_postgres_config_t*
 galay_status_t galay_postgres_config_set_host(galay_postgres_config_t* config,
                                               const char* host);
 
-/** Set a non-zero TCP port. */
+/**
+ * @brief Set a non-zero TCP port.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT` for a NULL config or zero port.
+ */
 galay_status_t galay_postgres_config_set_port(galay_postgres_config_t* config,
                                               uint16_t port);
 
-/** Set a non-empty username, copying the supplied string. */
+/**
+ * @brief Set a non-empty username, copying the supplied string.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_config_set_username(galay_postgres_config_t* config,
                                                   const char* username);
 
-/** Set the password, copying the supplied string; an empty password is allowed. */
+/**
+ * @brief Set the password, copying the supplied string.
+ * @details An empty password is allowed and is copied as an empty string.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_config_set_password(galay_postgres_config_t* config,
                                                   const char* password);
 
-/** Set the startup database, copying the supplied string; empty omits the parameter. */
+/**
+ * @brief Set the startup database, copying the supplied string.
+ * @details An empty database omits the startup parameter.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_config_set_database(galay_postgres_config_t* config,
                                                   const char* database);
 
-/** Set the startup application name; empty omits the parameter. */
+/**
+ * @brief Set the startup application name, copying the supplied string.
+ * @details An empty name omits the startup parameter.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_config_set_application_name(galay_postgres_config_t* config,
                                                           const char* application_name);
 
-/** Set the positive fallback connect timeout in milliseconds. */
+/**
+ * @brief Set the positive fallback connect timeout in milliseconds.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT` for zero or a NULL config.
+ */
 galay_status_t galay_postgres_config_set_connect_timeout_ms(galay_postgres_config_t* config,
                                                             uint32_t timeout_ms);
 
-/** Set the TCP_NODELAY request; enabled must be a valid `galay_bool_t`. */
+/**
+ * @brief Set the TCP_NODELAY request for newly created sockets.
+ * @param enabled Must be `GALAY_FALSE` or `GALAY_TRUE`.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_config_set_tcp_no_delay(galay_postgres_config_t* config,
                                                       galay_bool_t enabled);
 
@@ -299,24 +339,49 @@ galay_status_t galay_postgres_extract_message(const unsigned char* data,
 galay_status_t galay_postgres_encode_startup_message(const galay_postgres_config_t* config,
                                                      galay_postgres_buffer_t** out);
 
-/** Encode a SASLInitialResponse PasswordMessage and return an owning buffer. */
+/**
+ * @brief Encode a SASLInitialResponse PasswordMessage.
+ * @param mechanism Non-empty SASL mechanism name, copied during the call.
+ * @param client_first NUL-terminated client-first-message bytes.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_sasl_initial_response(const char* mechanism,
                                                            const char* client_first,
                                                            galay_postgres_buffer_t** out);
 
-/** Encode a SASLResponse PasswordMessage and return an owning buffer. */
+/**
+ * @brief Encode a SASLResponse PasswordMessage.
+ * @param client_final NUL-terminated client-final-message bytes.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_sasl_response(const char* client_final,
                                                    galay_postgres_buffer_t** out);
 
-/** Encode a NUL-terminated cleartext or MD5 PasswordMessage. */
+/**
+ * @brief Encode a NUL-terminated cleartext or MD5 PasswordMessage.
+ * @param password Password bytes copied into the message.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_password_message(const char* password,
                                                       galay_postgres_buffer_t** out);
 
-/** Encode a simple Query message; SQL is copied and must not be NULL. */
+/**
+ * @brief Encode a simple Query message.
+ * @param sql NUL-terminated SQL copied into the message; must not be NULL.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_query(const char* sql,
                                            galay_postgres_buffer_t** out);
 
-/** Encode a Terminate message and return its owning buffer. */
+/**
+ * @brief Encode a Terminate message.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_terminate(galay_postgres_buffer_t** out);
 
 /**
@@ -349,35 +414,76 @@ galay_status_t galay_postgres_encode_bind(const char* portal_name,
                                           size_t bind_count,
                                           galay_postgres_buffer_t** out);
 
-/** Encode Describe for a named or unnamed statement. */
+/**
+ * @brief Encode Describe for a named or unnamed statement.
+ * @param statement_name Empty selects the unnamed statement; the name is copied.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_describe_statement(const char* statement_name,
                                                         galay_postgres_buffer_t** out);
 
-/** Encode Describe for a named or unnamed portal. */
+/**
+ * @brief Encode Describe for a named or unnamed portal.
+ * @param portal_name Empty selects the unnamed portal; the name is copied.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_describe_portal(const char* portal_name,
                                                      galay_postgres_buffer_t** out);
 
 /**
  * @brief Encode Execute for a portal.
+ * @param portal_name Empty selects the unnamed portal; the name is copied.
  * @param max_rows Zero requests all rows; positive values request a bounded portal run.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return Explicit argument, allocation, or protocol-size status.
  * @note A bounded execution may end in PortalSuspended and require another Execute.
  */
 galay_status_t galay_postgres_encode_execute(const char* portal_name,
                                              uint32_t max_rows,
                                              galay_postgres_buffer_t** out);
 
-/** Encode Sync, which makes the server emit ReadyForQuery. */
+/**
+ * @brief Encode Sync, which makes the server emit ReadyForQuery.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_sync(galay_postgres_buffer_t** out);
 
-/** Encode Close for a named or unnamed prepared statement. */
+/**
+ * @brief Encode Close for a named or unnamed prepared statement.
+ * @param statement_name Empty selects the unnamed statement; the name is copied.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_close_statement(const char* statement_name,
                                                      galay_postgres_buffer_t** out);
 
-/** Encode Close for a named or unnamed portal. */
+/**
+ * @brief Encode Close for a named or unnamed portal.
+ * @param portal_name Empty selects the unnamed portal; the name is copied.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_encode_close_portal(const char* portal_name,
                                                   galay_postgres_buffer_t** out);
 
 /* Result-set decode and views ------------------------------------------- */
+/**
+ * @brief Create an empty result set for repeated query reuse.
+ * @param out Receives ownership; destroy with `galay_postgres_result_set_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
+galay_status_t galay_postgres_result_set_create(galay_postgres_result_set_t** out);
+
+/**
+ * @brief Reset logical contents while retaining decoded storage capacity.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ * @note Invalidates every field and value view borrowed from this result set.
+ */
+galay_status_t galay_postgres_result_set_reset(galay_postgres_result_set_t* result);
+
 /**
  * @brief Decode a complete response sequence ending in ReadyForQuery.
  * @param data Contiguous typed messages borrowed only during the call.
@@ -397,11 +503,21 @@ galay_status_t galay_postgres_result_set_decode(const unsigned char* data,
  */
 void galay_postgres_result_set_destroy(galay_postgres_result_set_t* result);
 
-/** Get the RowDescription field count. */
+/**
+ * @brief Get the RowDescription field count.
+ * @param result Result-set handle.
+ * @param count Receives the number of result columns.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_result_set_field_count(const galay_postgres_result_set_t* result,
                                                      size_t* count);
 
-/** Get the decoded DataRow count. */
+/**
+ * @brief Get the decoded DataRow count.
+ * @param result Result-set handle.
+ * @param count Receives the number of rows.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_result_set_row_count(const galay_postgres_result_set_t* result,
                                                    size_t* count);
 
@@ -414,7 +530,13 @@ galay_status_t galay_postgres_result_set_field(const galay_postgres_result_set_t
                                                size_t index,
                                                galay_postgres_field_view_t* field);
 
-/** Find the first field with an exact, case-sensitive name. */
+/**
+ * @brief Find the first field with an exact, case-sensitive name.
+ * @param result Result-set handle.
+ * @param name NUL-terminated field name borrowed during the call.
+ * @param index Receives the zero-based column index.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_NOT_FOUND`.
+ */
 galay_status_t galay_postgres_result_set_find_field(const galay_postgres_result_set_t* result,
                                                     const char* name,
                                                     size_t* index);
@@ -429,67 +551,124 @@ galay_status_t galay_postgres_result_set_value(const galay_postgres_result_set_t
                                                size_t column,
                                                galay_postgres_value_view_t* value);
 
-/** Borrow the NUL-terminated CommandComplete tag until result-set destroy. */
+/**
+ * @brief Borrow the NUL-terminated CommandComplete tag.
+ * @param result Result-set handle.
+ * @param tag Receives a pointer valid until reset, reuse, or destroy.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_result_set_command_tag(const galay_postgres_result_set_t* result,
                                                      const char** tag);
 
-/** Get the trailing row count parsed from the CommandComplete tag, or zero. */
+/**
+ * @brief Get the trailing row count parsed from the CommandComplete tag.
+ * @param affected_rows Receives the parsed count, or zero when no count is present.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_result_set_affected_rows(const galay_postgres_result_set_t* result,
                                                        uint64_t* affected_rows);
 
-/** Get ReadyForQuery status: `I` idle, `T` transaction, or `E` failed transaction. */
+/**
+ * @brief Get the ReadyForQuery transaction status.
+ * @param status Receives `I` for idle, `T` for transaction, or `E` for failed transaction.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_result_set_transaction_status(
     const galay_postgres_result_set_t* result, char* status);
 
 /* Prepared metadata and command pipeline -------------------------------- */
 /**
  * @brief Create local prepared-statement metadata with a non-empty name.
+ * @param name Statement name copied into the metadata.
  * @param out Receives ownership; destroy with `galay_postgres_stmt_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
  * @note This pure local helper does not send Parse to a server.
  */
 galay_status_t galay_postgres_stmt_create(const char* name,
                                           galay_postgres_stmt_t** out);
 
-/** Destroy local statement metadata; no server Close message is sent. */
+/**
+ * @brief Destroy local statement metadata; no server Close message is sent.
+ * @param stmt May be NULL; all borrowed names and fields become invalid.
+ */
 void galay_postgres_stmt_destroy(galay_postgres_stmt_t* stmt);
 
-/** Borrow the statement name until statement destroy. */
+/**
+ * @brief Borrow the statement name.
+ * @param name Receives a NUL-terminated pointer valid until statement destroy.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_stmt_name(const galay_postgres_stmt_t* stmt,
                                         const char** name);
 
-/** Get the server-reported ParameterDescription count. */
+/**
+ * @brief Get the server-reported ParameterDescription count.
+ * @param count Receives the number of parameters.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_stmt_param_count(const galay_postgres_stmt_t* stmt,
                                                size_t* count);
 
-/** Get the server-reported result-column count. */
+/**
+ * @brief Get the server-reported result-column count.
+ * @param count Receives the number of result columns.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_stmt_column_count(const galay_postgres_stmt_t* stmt,
                                                 size_t* count);
 
-/** Borrow prepared result-column metadata; out-of-range returns `GALAY_NOT_FOUND`. */
+/**
+ * @brief Borrow prepared result-column metadata.
+ * @param index Zero-based result-column index.
+ * @param field Receives metadata whose name is valid until statement destroy.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_NOT_FOUND`.
+ */
 galay_status_t galay_postgres_stmt_field(const galay_postgres_stmt_t* stmt,
                                          size_t index,
                                          galay_postgres_field_view_t* field);
 
-/** Create an empty owning command pipeline. */
+/**
+ * @brief Create an empty owning command pipeline.
+ * @param out Receives ownership; destroy with `galay_postgres_pipeline_destroy`.
+ * @return `GALAY_OK`, `GALAY_INVALID_ARGUMENT`, or `GALAY_OUT_OF_MEMORY`.
+ */
 galay_status_t galay_postgres_pipeline_create(galay_postgres_pipeline_t** out);
 
-/** Destroy a pipeline and its copied command bytes; result objects are independent. */
+/**
+ * @brief Destroy a pipeline and its copied command bytes.
+ * @param pipeline May be NULL; previously produced result objects are independent.
+ */
 void galay_postgres_pipeline_destroy(galay_postgres_pipeline_t* pipeline);
 
-/** Append a copied simple Query message, which expects one ReadyForQuery. */
+/**
+ * @brief Append a copied simple Query message, which expects one ReadyForQuery.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ * @note Not safe to call while the same pipeline is being built or executed.
+ */
 galay_status_t galay_postgres_pipeline_append_query(galay_postgres_pipeline_t* pipeline,
                                                     const char* sql);
 
-/** Append a copied Parse message; append Sync to delimit its response. */
+/**
+ * @brief Append a copied Parse message.
+ * @param statement_name Named or unnamed statement name copied into the command.
+ * @param sql SQL copied into the command.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ * @note Append Sync to delimit the Parse response.
+ */
 galay_status_t galay_postgres_pipeline_append_parse(galay_postgres_pipeline_t* pipeline,
                                                     const char* statement_name,
                                                     const char* sql);
 
-/** Append Sync and one expected ReadyForQuery boundary. */
+/**
+ * @brief Append Sync and one expected ReadyForQuery boundary.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_pipeline_append_sync(galay_postgres_pipeline_t* pipeline);
 
 /**
  * @brief Concatenate pipeline messages into an owning wire buffer.
+ * @param pipeline Non-empty pipeline borrowed during the call.
+ * @param out Receives buffer ownership; destroy with `galay_postgres_buffer_destroy`.
  * @param expected_ready Receives the number of ReadyForQuery boundaries.
  * @return Empty pipelines and NULL arguments return `GALAY_INVALID_ARGUMENT`.
  */
@@ -519,7 +698,12 @@ void galay_postgres_client_destroy(galay_postgres_client_t* client);
  */
 void galay_postgres_client_close(galay_postgres_client_t* client);
 
-/** Get whether startup and authentication reached ReadyForQuery. */
+/**
+ * @brief Get whether startup and authentication reached ReadyForQuery.
+ * @param connected Receives `GALAY_TRUE` for an authenticated connection.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ * @note Do not call concurrently with another operation on the client.
+ */
 galay_status_t galay_postgres_client_is_connected(const galay_postgres_client_t* client,
                                                   galay_bool_t* connected);
 
@@ -567,18 +751,48 @@ C_IOResult galay_postgres_client_query_result_async(galay_postgres_client_t* cli
                                                     int64_t timeout_ms,
                                                     galay_postgres_result_set_t** result);
 
-/** Send `BEGIN`; the returned result owns its ReadyForQuery transaction status. */
+/**
+ * @brief Execute a simple Query into caller-owned reusable result storage.
+ * @param client Authenticated client.
+ * @param sql SQL copied into the outgoing message.
+ * @param timeout_ms Milliseconds per socket operation; negative disables timeout.
+ * @param result Result created by `galay_postgres_result_set_create`; reset automatically.
+ * @return Same explicit I/O and protocol errors as `galay_postgres_client_query_async`.
+ * @note Retains field, row and value capacity between calls. All previously borrowed views
+ * are invalidated when the call starts; do not use the same result concurrently.
+ */
+C_IOResult galay_postgres_client_query_into_async(galay_postgres_client_t* client,
+                                                  const char* sql,
+                                                  int64_t timeout_ms,
+                                                  galay_postgres_result_set_t* result);
+
+/**
+ * @brief Send `BEGIN` and decode its complete result sequence.
+ * @param timeout_ms Milliseconds per socket operation; negative disables timeout.
+ * @param result Receives result-set ownership on success and NULL on failure.
+ * @return Same explicit I/O and protocol errors as `galay_postgres_client_query_async`.
+ */
 C_IOResult galay_postgres_client_begin_transaction_async(
     galay_postgres_client_t* client,
     int64_t timeout_ms,
     galay_postgres_result_set_t** result);
 
-/** Send `COMMIT` and return an owning decoded result set. */
+/**
+ * @brief Send `COMMIT` and return an owning decoded result set.
+ * @param timeout_ms Milliseconds per socket operation; negative disables timeout.
+ * @param result Receives result-set ownership on success and NULL on failure.
+ * @return Same explicit I/O and protocol errors as `galay_postgres_client_query_async`.
+ */
 C_IOResult galay_postgres_client_commit_async(galay_postgres_client_t* client,
                                               int64_t timeout_ms,
                                               galay_postgres_result_set_t** result);
 
-/** Send `ROLLBACK` and return an owning decoded result set. */
+/**
+ * @brief Send `ROLLBACK` and return an owning decoded result set.
+ * @param timeout_ms Milliseconds per socket operation; negative disables timeout.
+ * @param result Receives result-set ownership on success and NULL on failure.
+ * @return Same explicit I/O and protocol errors as `galay_postgres_client_query_async`.
+ */
 C_IOResult galay_postgres_client_rollback_async(galay_postgres_client_t* client,
                                                 int64_t timeout_ms,
                                                 galay_postgres_result_set_t** result);
@@ -630,10 +844,17 @@ C_IOResult galay_postgres_client_pipeline_async(galay_postgres_client_t* client,
                                                 int64_t timeout_ms,
                                                 galay_postgres_pipeline_result_t** result);
 
-/** Destroy a pipeline result and every result set it owns. */
+/**
+ * @brief Destroy a pipeline result and every result set it owns.
+ * @param result May be NULL; every item borrowed from it becomes invalid.
+ */
 void galay_postgres_pipeline_result_destroy(galay_postgres_pipeline_result_t* result);
 
-/** Get the number of owned result sets in a pipeline result. */
+/**
+ * @brief Get the number of owned result sets in a pipeline result.
+ * @param count Receives the number of result sets.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
+ */
 galay_status_t galay_postgres_pipeline_result_count(
     const galay_postgres_pipeline_result_t* result, size_t* count);
 
@@ -649,7 +870,7 @@ galay_status_t galay_postgres_pipeline_result_at(
 
 /**
  * @brief Gracefully send Terminate, close, and destroy the client socket.
- * @param timeout_ms Milliseconds for send and close operations.
+ * @param timeout_ms Milliseconds for send and close operations; negative disables timeout.
  * @return Cleanup is attempted on every path; failures are returned explicitly.
  * @note Suspends the current C coroutine and leaves the client disconnected.
  */
@@ -688,6 +909,9 @@ C_IOResult galay_postgres_pool_acquire_async(galay_postgres_pool_t* pool,
 
 /**
  * @brief Borrow the client held by a lease.
+ * @param lease Active lease handle.
+ * @param client Receives a borrowed client pointer.
+ * @return `GALAY_OK` or `GALAY_INVALID_ARGUMENT`.
  * @note The pointer expires at release and must not be destroyed by the caller.
  */
 galay_status_t galay_postgres_pool_lease_client(galay_postgres_pool_lease_t* lease,

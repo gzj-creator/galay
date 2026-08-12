@@ -1,6 +1,7 @@
 #include "async_tcp_c.h"
 
 #include "../../../cpp/galay-kernel/async/async_tcp.h"
+#include "../../../cpp/galay-kernel/core/io_handlers.hpp"
 #include "../coro-c/coro_task_internal.hpp"
 #include "../coro-c/coro_wait_c.h"
 #include <galay/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.h>
@@ -13,9 +14,23 @@
 #include <limits>
 #include <netinet/in.h>
 #include <new>
+#include <optional>
 #include <string>
 #include <sys/socket.h>
 #include <utility>
+
+namespace galay::kernel::coro_c
+{
+
+[[nodiscard]] C_IOResult prepareFastWaitUserData(C_CoroWaitRequest* request,
+                                                 void** out_user_data) noexcept;
+[[nodiscard]] C_IOResult waitFastRequest(C_CoroWaitRequest* request,
+                                          int64_t timeout_ms) noexcept;
+[[nodiscard]] C_IOResult completeFastWaitUserData(void* user_data,
+                                                  C_IOResult result) noexcept;
+[[nodiscard]] C_IOResult releaseFastWaitUserData(void* user_data) noexcept;
+
+} // namespace galay::kernel::coro_c
 
 namespace
 {
@@ -199,6 +214,60 @@ galay::async::AsyncTcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
     return reinterpret_cast<galay::async::AsyncTcpSocket*>(socket);
 }
 
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+bool can_try_immediate_io(galay::async::AsyncTcpSocket* socket,
+                          GalayCoreIOScheduler* scheduler_handle)
+{
+    if (socket == nullptr || scheduler_handle == nullptr) {
+        return false;
+    }
+    auto* controller = socket->controller();
+    auto* scheduler = reinterpret_cast<galay::kernel::Scheduler*>(scheduler_handle);
+    const auto* owner = controller->m_owner_scheduler.load(std::memory_order_acquire);
+    return controller->m_awaitable[galay::kernel::IOController::READ] == nullptr &&
+        controller->m_awaitable[galay::kernel::IOController::WRITE] == nullptr &&
+        controller->m_sequence_owner[galay::kernel::IOController::READ] == nullptr &&
+        controller->m_sequence_owner[galay::kernel::IOController::WRITE] == nullptr &&
+        (owner == nullptr || owner == scheduler);
+}
+
+std::optional<C_IOResult> try_immediate_recv(galay::async::AsyncTcpSocket* socket,
+                                             char* buffer,
+                                             size_t length)
+{
+    auto received = galay::kernel::io::handleRecv(socket->handle(), buffer, length);
+    if (!received && galay::kernel::IOError::contains(
+                         received.error().code(), galay::kernel::kNotReady)) {
+        return std::nullopt;
+    }
+    if (!received) {
+        return make_result(C_IOResultError,
+                           static_cast<int>(received.error().code() >> 32U));
+    }
+    C_IOResult result = make_result(*received == 0 ? C_IOResultEof : C_IOResultOk);
+    result.bytes = *received;
+    return result;
+}
+
+std::optional<C_IOResult> try_immediate_send(galay::async::AsyncTcpSocket* socket,
+                                             const char* buffer,
+                                             size_t length)
+{
+    auto sent = galay::kernel::io::handleSend(socket->handle(), buffer, length);
+    if (!sent && galay::kernel::IOError::contains(
+                     sent.error().code(), galay::kernel::kNotReady)) {
+        return std::nullopt;
+    }
+    if (!sent) {
+        return make_result(C_IOResultError,
+                           static_cast<int>(sent.error().code() >> 32U));
+    }
+    C_IOResult result = make_result(C_IOResultOk);
+    result.bytes = *sent;
+    return result;
+}
+#endif
+
 struct WaitRequestScope {
     C_CoroWaitRequest request{nullptr};
     void* user_data = nullptr;
@@ -229,11 +298,20 @@ C_IOResult close_wait_scope(WaitRequestScope& scope)
 
 GalayCoreCoroIOResult wait_request(void* ctx, int64_t timeout_ms)
 {
-    auto* scope = static_cast<WaitRequestScope*>(ctx);
-    if (scope == nullptr) {
+    auto* request = static_cast<C_CoroWaitRequest*>(ctx);
+    if (request == nullptr) {
         return to_core_result(make_result(C_IOResultInvalid));
     }
-    return to_core_result(galay_coro_wait(&scope->request, timeout_ms));
+    return to_core_result(galay_coro_wait(request, timeout_ms));
+}
+
+GalayCoreCoroIOResult wait_fast_request(void* ctx, int64_t timeout_ms)
+{
+    auto* request = static_cast<C_CoroWaitRequest*>(ctx);
+    if (request == nullptr) {
+        return to_core_result(make_result(C_IOResultInvalid));
+    }
+    return to_core_result(galay::kernel::coro_c::waitFastRequest(request, timeout_ms));
 }
 
 GalayCoreCoroIOResult complete_user_data(void* user_data,
@@ -246,6 +324,19 @@ GalayCoreCoroIOResult complete_user_data(void* user_data,
 GalayCoreCoroIOResult release_user_data(void* user_data)
 {
     return to_core_result(galay_coro_wait_event_user_data_release(user_data));
+}
+
+GalayCoreCoroIOResult complete_fast_user_data(void* user_data,
+                                              GalayCoreCoroIOResult result)
+{
+    return to_core_result(galay::kernel::coro_c::completeFastWaitUserData(
+        user_data, from_core_result(result)));
+}
+
+GalayCoreCoroIOResult release_fast_user_data(void* user_data)
+{
+    return to_core_result(
+        galay::kernel::coro_c::releaseFastWaitUserData(user_data));
 }
 
 C_IOResult prepare_wait_user_data(WaitRequestScope& scope)
@@ -280,13 +371,23 @@ C_IOResult prepare_wait_user_data(WaitRequestScope& scope)
     return detached;
 }
 
-GalayCoreCoroWaitOps make_wait_ops(WaitRequestScope& scope)
+GalayCoreCoroWaitOps make_wait_ops(C_CoroWaitRequest* request)
 {
     return GalayCoreCoroWaitOps{
         wait_request,
         complete_user_data,
         release_user_data,
-        &scope,
+        request,
+    };
+}
+
+GalayCoreCoroWaitOps make_reusable_wait_ops(C_CoroWaitRequest* request)
+{
+    return GalayCoreCoroWaitOps{
+        wait_fast_request,
+        complete_fast_user_data,
+        release_fast_user_data,
+        request,
     };
 }
 
@@ -299,12 +400,144 @@ C_IOResult submit_with_wait(Submit&& submit)
         return prepared;
     }
 
-    GalayCoreCoroWaitOps wait_ops = make_wait_ops(scope);
+    GalayCoreCoroWaitOps wait_ops = make_wait_ops(&scope.request);
     C_IOResult result = from_core_result(std::forward<Submit>(submit)(scope.user_data, &wait_ops));
     return merge_cleanup_result(result, close_wait_scope(scope));
 }
 
+template <typename Submit>
+C_IOResult submit_with_reusable_wait(
+    C_CoroWaitRequest& request,
+    int64_t timeout_ms,
+    Submit&& submit)
+{
+    if (request.request == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+
+    if (timeout_ms >= 0) {
+        return submit_with_wait(std::forward<Submit>(submit));
+    }
+    void* user_data = nullptr;
+    C_IOResult acquired = galay::kernel::coro_c::prepareFastWaitUserData(&request, &user_data);
+    if (acquired.code != C_IOResultOk) {
+        return acquired;
+    }
+
+    GalayCoreCoroWaitOps wait_ops = make_reusable_wait_ops(&request);
+    return from_core_result(std::forward<Submit>(submit)(user_data, &wait_ops));
+}
+
+C_IOResult tcp_socket_recv_impl(
+    galay_kernel_tcp_socket_t* socket,
+    char* buffer,
+    size_t length,
+    int64_t timeout_ms,
+    C_CoroWaitRequest* wait_request)
+{
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
+    if (socket == nullptr || socket->socket == nullptr ||
+        buffer == nullptr || length == 0 || scheduler == nullptr ||
+        !timeout_fits_chrono(timeout_ms)) {
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+    auto* cpp_socket = to_cpp_socket(to_core_socket(socket->socket));
+    if (can_try_immediate_io(cpp_socket, scheduler)) {
+        if (auto immediate = try_immediate_recv(cpp_socket, buffer, length)) {
+            return *immediate;
+        }
+    }
+#endif
+
+    auto submit = [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
+        return galay_core_coro_tcp_recv(to_core_socket(socket->socket),
+                                        scheduler,
+                                        buffer,
+                                        length,
+                                        timeout_ms,
+                                        user_data,
+                                        wait_ops);
+    };
+    return wait_request != nullptr
+        ? submit_with_reusable_wait(*wait_request, timeout_ms, submit)
+        : submit_with_wait(submit);
+}
+
+C_IOResult tcp_socket_send_impl(
+    galay_kernel_tcp_socket_t* socket,
+    const char* buffer,
+    size_t length,
+    int64_t timeout_ms,
+    C_CoroWaitRequest* wait_request)
+{
+    GalayCoreIOScheduler* scheduler = current_io_scheduler();
+    if (socket == nullptr || socket->socket == nullptr ||
+        buffer == nullptr || length == 0 || scheduler == nullptr ||
+        !timeout_fits_chrono(timeout_ms)) {
+        return make_result(C_IOResultInvalid);
+    }
+    if (timeout_ms == 0) {
+        return make_result(C_IOResultTimeout);
+    }
+
+#if defined(USE_EPOLL) || defined(USE_KQUEUE)
+    auto* cpp_socket = to_cpp_socket(to_core_socket(socket->socket));
+    if (can_try_immediate_io(cpp_socket, scheduler)) {
+        if (auto immediate = try_immediate_send(cpp_socket, buffer, length)) {
+            return *immediate;
+        }
+    }
+#endif
+
+    auto submit = [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
+        return galay_core_coro_tcp_send(to_core_socket(socket->socket),
+                                        scheduler,
+                                        buffer,
+                                        length,
+                                        timeout_ms,
+                                        user_data,
+                                        wait_ops);
+    };
+    return wait_request != nullptr
+        ? submit_with_reusable_wait(*wait_request, timeout_ms, submit)
+        : submit_with_wait(submit);
+}
+
 } // namespace
+
+namespace galay::kernel::c_api::detail
+{
+
+C_IOResult tcpSocketRecv(galay_kernel_tcp_socket_t* socket,
+                         char* buffer,
+                         size_t length,
+                         int64_t timeout_ms,
+                         C_CoroWaitRequest* wait_request) noexcept
+{
+    if (wait_request == nullptr || wait_request->request == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    return tcp_socket_recv_impl(socket, buffer, length, timeout_ms, wait_request);
+}
+
+C_IOResult tcpSocketSend(galay_kernel_tcp_socket_t* socket,
+                         const char* buffer,
+                         size_t length,
+                         int64_t timeout_ms,
+                         C_CoroWaitRequest* wait_request) noexcept
+{
+    if (wait_request == nullptr || wait_request->request == nullptr) {
+        return make_result(C_IOResultInvalid);
+    }
+    return tcp_socket_send_impl(socket, buffer, length, timeout_ms, wait_request);
+}
+
+} // namespace galay::kernel::c_api::detail
 
 extern "C" {
 
@@ -499,26 +732,7 @@ C_IOResult galay_kernel_tcp_socket_recv(
     size_t length,
     int64_t timeout_ms)
 {
-    GalayCoreIOScheduler* scheduler = current_io_scheduler();
-    if (socket == nullptr || socket->socket == nullptr ||
-        buffer == nullptr || length == 0 ||
-        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
-        return make_result(C_IOResultInvalid);
-    }
-    if (timeout_ms == 0) {
-        return make_result(C_IOResultTimeout);
-    }
-
-    return submit_with_wait(
-        [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_recv(to_core_socket(socket->socket),
-                                            scheduler,
-                                            buffer,
-                                            length,
-                                            timeout_ms,
-                                            user_data,
-                                            wait_ops);
-        });
+    return tcp_socket_recv_impl(socket, buffer, length, timeout_ms, nullptr);
 }
 
 C_IOResult galay_kernel_tcp_socket_send(
@@ -527,26 +741,7 @@ C_IOResult galay_kernel_tcp_socket_send(
     size_t length,
     int64_t timeout_ms)
 {
-    GalayCoreIOScheduler* scheduler = current_io_scheduler();
-    if (socket == nullptr || socket->socket == nullptr ||
-        buffer == nullptr || length == 0 ||
-        scheduler == nullptr || !timeout_fits_chrono(timeout_ms)) {
-        return make_result(C_IOResultInvalid);
-    }
-    if (timeout_ms == 0) {
-        return make_result(C_IOResultTimeout);
-    }
-
-    return submit_with_wait(
-        [&](void* user_data, const GalayCoreCoroWaitOps* wait_ops) {
-            return galay_core_coro_tcp_send(to_core_socket(socket->socket),
-                                            scheduler,
-                                            buffer,
-                                            length,
-                                            timeout_ms,
-                                            user_data,
-                                            wait_ops);
-        });
+    return tcp_socket_send_impl(socket, buffer, length, timeout_ms, nullptr);
 }
 
 C_IOResult galay_kernel_tcp_socket_readv(

@@ -223,6 +223,7 @@ static void postgres_client_entry(void* arg)
     galay_postgres_pool_lease_t* lease = NULL;
     galay_postgres_client_t* client = NULL;
     galay_postgres_result_set_t* result = NULL;
+    galay_postgres_result_set_t* reusable_result = NULL;
 
     if (galay_postgres_config_create(&config) != GALAY_OK ||
         galay_postgres_config_set_host(config, state->peer.address) != GALAY_OK ||
@@ -230,6 +231,7 @@ static void postgres_client_entry(void* arg)
         galay_postgres_config_set_username(config, "tester") != GALAY_OK ||
         galay_postgres_config_set_password(config, "secret") != GALAY_OK ||
         galay_postgres_config_set_database(config, "app") != GALAY_OK ||
+        galay_postgres_result_set_create(&reusable_result) != GALAY_OK ||
         galay_postgres_pool_create(config, 1, &pool) != GALAY_OK) {
         state->client_result = (C_IOResult){C_IOResultError, 0, 0, 1, NULL};
         goto cleanup;
@@ -238,25 +240,26 @@ static void postgres_client_entry(void* arg)
     if (state->client_result.code != C_IOResultOk ||
         galay_postgres_pool_lease_client(lease, &client) != GALAY_OK || client == NULL) goto cleanup;
 
-    state->client_result = galay_postgres_client_query_async(client, "SELECT 1", 2000, &result);
-    if (state->client_result.code != C_IOResultOk || !result_equals(result, "1")) goto cleanup;
-    galay_postgres_result_set_destroy(result);
-    result = NULL;
+    state->client_result = galay_postgres_client_query_into_async(
+        client, "SELECT 1", 2000, reusable_result);
+    if (state->client_result.code != C_IOResultOk ||
+        !result_equals(reusable_result, "1")) goto cleanup;
 
     state->client_result = galay_postgres_client_query_async(client, "BAD SQL", 2000, &result);
     if (state->client_result.code != C_IOResultError ||
         state->client_result.value != GALAY_PROTOCOL_ERROR || result != NULL) goto cleanup;
     state->error_drained = 1;
 
-    state->client_result = galay_postgres_client_query_async(client, "SELECT 2", 2000, &result);
-    if (state->client_result.code != C_IOResultOk || !result_equals(result, "2")) goto cleanup;
+    state->client_result = galay_postgres_client_query_into_async(
+        client, "SELECT 2", 2000, reusable_result);
+    if (state->client_result.code != C_IOResultOk ||
+        !result_equals(reusable_result, "2")) goto cleanup;
     state->result_values_ok = 1;
-    galay_postgres_result_set_destroy(result);
-    result = NULL;
     state->client_result = galay_postgres_client_close_async(client, 2000);
 
 cleanup:
     galay_postgres_result_set_destroy(result);
+    galay_postgres_result_set_destroy(reusable_result);
     if (lease != NULL) {
         const galay_status_t released = galay_postgres_pool_lease_release(lease);
         if (released != GALAY_OK && state->client_result.code == C_IOResultOk) {

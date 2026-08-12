@@ -11,6 +11,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- **新增 PostgreSQL C 查询压测与复用查询接口**：新增真实 PostgreSQL simple query 压测入口 benchmark_c_postgres_query_pressure，支持 clients、queries、warmup、IO schedulers、timeout 和 SQL 配置，并输出 QPS 与 p50/p95/p99；C ABI 新增可复用 result-set 创建/重置和 galay_postgres_client_query_into_async，降低循环查询场景的重复分配。
+
+### Changed
+
+- **强化 PostgreSQL C client 协程 I/O 与生命周期契约**：复用客户端收发缓冲和 wait request，补齐 per-client 串行操作保护、错误后协议状态清理、result view 失效语义、pool lease 借用约束及公开头注释；同步补充 C/C++ PostgreSQL 性能文档和 C surface/loopback 覆盖。
+
 ## [v4.6.0] - 2026-08-11
 
 ### Added

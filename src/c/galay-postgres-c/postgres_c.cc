@@ -1,6 +1,7 @@
 #include <galay/c/galay-postgres-c/postgres_c.h>
 #include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
 #include <galay/c/galay-kernel-c/common-c/host.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_wait_c.h>
 
 #include <chrono>
 
@@ -12,6 +13,7 @@
 
 #include <array>
 #include <algorithm>
+#include <atomic>
 #include <charconv>
 #include <cstring>
 #include <limits>
@@ -22,6 +24,22 @@
 #include <utility>
 #include <vector>
 
+namespace galay::kernel::c_api::detail
+{
+
+[[nodiscard]] C_IOResult tcpSocketRecv(galay_kernel_tcp_socket_t* socket,
+                                       char* buffer,
+                                       size_t length,
+                                       int64_t timeout_ms,
+                                       C_CoroWaitRequest* wait_request) noexcept;
+[[nodiscard]] C_IOResult tcpSocketSend(galay_kernel_tcp_socket_t* socket,
+                                       const char* buffer,
+                                       size_t length,
+                                       int64_t timeout_ms,
+                                       C_CoroWaitRequest* wait_request) noexcept;
+
+} // namespace galay::kernel::c_api::detail
+
 namespace
 {
 
@@ -29,6 +47,7 @@ constexpr size_t kHeaderSize = 5;
 constexpr size_t kLengthSize = 4;
 constexpr size_t kMaxStartupLength = 10000;
 constexpr size_t kMaxMessageLength = 64U * 1024U * 1024U;
+constexpr size_t kReceiveChunkSize = 8U * 1024U;
 
 struct Field {
     std::string name;
@@ -45,6 +64,8 @@ struct ResultSet {
     std::vector<std::vector<std::optional<std::string>>> rows;
     std::string command_tag;
     uint64_t affected_rows = 0;
+    size_t field_count = 0;
+    size_t row_count = 0;
     char transaction_status = 'I';
 };
 
@@ -189,8 +210,13 @@ struct galay_postgres_pipeline_result_t {
 };
 
 struct galay_postgres_client_t {
-    galay_kernel_tcp_socket_t socket{};
     std::string receive_buffer;
+    std::string query_buffer;
+    C_CoroWaitRequest wait_request{nullptr};
+    galay_kernel_tcp_socket_t socket{};
+    size_t receive_size = 0;
+    size_t receive_offset = 0;
+    std::atomic_flag operation_active = ATOMIC_FLAG_INIT;
     bool connected = false;
 };
 
@@ -208,6 +234,55 @@ struct galay_postgres_pool_lease_t {
 
 namespace
 {
+
+bool beginClientOperation(galay_postgres_client_t* client)
+{
+    return client != nullptr &&
+        !client->operation_active.test_and_set(std::memory_order_acquire);
+}
+
+void finishClientOperation(galay_postgres_client_t* client)
+{
+    client->operation_active.clear(std::memory_order_release);
+}
+
+C_IOResult initializeClientWaitState(galay_postgres_client_t* client)
+{
+    if (client->wait_request.request != nullptr) {
+        return ioResult(C_IOResultOk);
+    }
+    return galay_coro_wait_request_create(&client->wait_request);
+}
+
+C_IOResult destroyClientWaitState(galay_postgres_client_t* client)
+{
+    if (client->wait_request.request == nullptr) {
+        return ioResult(C_IOResultOk);
+    }
+    return galay_coro_wait_request_destroy(&client->wait_request);
+}
+
+void clearClientProtocolState(galay_postgres_client_t* client)
+{
+    client->receive_buffer.clear();
+    client->query_buffer.clear();
+    client->receive_size = 0;
+    client->receive_offset = 0;
+    client->connected = false;
+}
+
+C_IOResult closeClientStorage(galay_postgres_client_t* client)
+{
+    bool cleanup_failed = false;
+    if (client->socket.socket != nullptr) {
+        cleanup_failed =
+            galay_kernel_tcp_socket_destroy(&client->socket) != C_TcpSocketSuccess;
+    }
+    clearClientProtocolState(client);
+    C_IOResult wait_destroyed = destroyClientWaitState(client);
+    return cleanup_failed || wait_destroyed.code != C_IOResultOk
+        ? statusResult(GALAY_IO_ERROR) : ioResult(C_IOResultOk);
+}
 
 galay_status_t validateConfig(const galay_postgres_config_t* config)
 {
@@ -238,19 +313,35 @@ void fieldToView(const Field& source, galay_postgres_field_view_t* field)
     field->format = source.format;
 }
 
+void resetResultSet(ResultSet* result)
+{
+    result->command_tag.clear();
+    result->affected_rows = 0;
+    result->field_count = 0;
+    result->row_count = 0;
+    result->transaction_status = 'I';
+}
+
 galay_status_t parseRowDescription(const unsigned char* data,
                                    size_t data_len,
-                                   std::vector<Field>* fields)
+                                   std::vector<Field>* fields,
+                                   size_t* reusable_count = nullptr)
 {
     if (data_len < 2) return GALAY_PROTOCOL_ERROR;
     const int16_t signed_count = readI16(data);
     if (signed_count < 0) return GALAY_PROTOCOL_ERROR;
     const size_t count = static_cast<size_t>(signed_count);
     if (count > (data_len - 2) / 19U) return GALAY_PROTOCOL_ERROR;
-    fields->reserve(count);
+    if (reusable_count != nullptr) {
+        *reusable_count = 0;
+        if (fields->size() < count) fields->resize(count);
+    } else {
+        fields->clear();
+        fields->resize(count);
+    }
     size_t position = 2;
     for (size_t index = 0; index < count; ++index) {
-        Field field;
+        Field& field = (*fields)[index];
         if (!readCString(data, data_len, &position, &field.name) || data_len - position < 18U) {
             return GALAY_PROTOCOL_ERROR;
         }
@@ -261,9 +352,10 @@ galay_status_t parseRowDescription(const unsigned char* data,
         field.type_modifier = readI32(data + position); position += 4;
         field.format = readI16(data + position); position += 2;
         if (field.format != 0 && field.format != 1) return GALAY_PROTOCOL_ERROR;
-        fields->push_back(std::move(field));
     }
-    return position == data_len ? GALAY_OK : GALAY_PROTOCOL_ERROR;
+    if (position != data_len) return GALAY_PROTOCOL_ERROR;
+    if (reusable_count != nullptr) *reusable_count = count;
+    return GALAY_OK;
 }
 
 galay_status_t parseDataRow(const unsigned char* data,
@@ -275,20 +367,22 @@ galay_status_t parseDataRow(const unsigned char* data,
     if (signed_count < 0) return GALAY_PROTOCOL_ERROR;
     const size_t count = static_cast<size_t>(signed_count);
     if (count > (data_len - 2) / 4U) return GALAY_PROTOCOL_ERROR;
-    row->reserve(count);
+    row->resize(count);
     size_t position = 2;
     for (size_t index = 0; index < count; ++index) {
         if (data_len - position < 4U) return GALAY_PROTOCOL_ERROR;
         const int32_t length = readI32(data + position);
         position += 4;
         if (length == -1) {
-            row->emplace_back(std::nullopt);
+            (*row)[index].reset();
         } else {
             if (length < 0 || static_cast<size_t>(length) > data_len - position) {
                 return GALAY_PROTOCOL_ERROR;
             }
-            row->emplace_back(std::string(reinterpret_cast<const char*>(data + position),
-                                          static_cast<size_t>(length)));
+            auto& value = (*row)[index];
+            if (!value) value.emplace();
+            value->assign(reinterpret_cast<const char*>(data + position),
+                          static_cast<size_t>(length));
             position += static_cast<size_t>(length);
         }
     }
@@ -319,78 +413,104 @@ bool validTransactionStatus(unsigned char status)
     return status == 'I' || status == 'T' || status == 'E';
 }
 
-galay_status_t parseResult(const unsigned char* data, size_t data_len, ResultSet* result)
-{
-    size_t offset = 0;
+struct ResultParseState {
     bool ready = false;
     bool server_error = false;
     bool has_row_description = false;
+};
+
+galay_status_t parseResultMessage(const galay_postgres_message_view_t& message,
+                                  ResultSet* result,
+                                  ResultParseState* state)
+{
+    if (result == nullptr || state == nullptr || state->ready) {
+        return GALAY_PROTOCOL_ERROR;
+    }
+    switch (message.type) {
+    case 'T': {
+        const galay_status_t status =
+            parseRowDescription(message.payload, message.payload_len,
+                                &result->fields, &result->field_count);
+        if (status != GALAY_OK) return status;
+        state->has_row_description = true;
+        return GALAY_OK;
+    }
+    case 'D': {
+        if (!state->has_row_description) return GALAY_PROTOCOL_ERROR;
+        if (result->row_count == result->rows.size()) {
+            result->rows.emplace_back();
+        }
+        auto& row = result->rows[result->row_count];
+        const galay_status_t status = parseDataRow(message.payload, message.payload_len, &row);
+        if (status != GALAY_OK || row.size() != result->field_count) {
+            return GALAY_PROTOCOL_ERROR;
+        }
+        ++result->row_count;
+        return GALAY_OK;
+    }
+    case 'C':
+        return parseCommandComplete(message.payload, message.payload_len, result);
+    case 'Z':
+        if (message.payload_len != 1 || !validTransactionStatus(message.payload[0])) {
+            return GALAY_PROTOCOL_ERROR;
+        }
+        result->transaction_status = static_cast<char>(message.payload[0]);
+        state->ready = true;
+        return GALAY_OK;
+    case 'E':
+        state->server_error = true;
+        return GALAY_OK;
+    case 'I':
+    case 'N':
+        return GALAY_OK;
+    case '1':
+    case '2':
+    case '3':
+    case 'n':
+    case 's':
+        return message.payload_len == 0 ? GALAY_OK : GALAY_PROTOCOL_ERROR;
+    case 't':
+        return GALAY_OK;
+    default:
+        return GALAY_PROTOCOL_ERROR;
+    }
+}
+
+galay_status_t parseResult(const unsigned char* data, size_t data_len, ResultSet* result)
+{
+    size_t offset = 0;
+    ResultParseState state;
     while (offset < data_len) {
         galay_postgres_message_view_t message{};
         const galay_status_t extracted =
             galay_postgres_extract_message(data + offset, data_len - offset, &message);
         if (extracted != GALAY_OK) return extracted;
         offset += message.consumed;
-        switch (message.type) {
-        case 'T': {
-            const galay_status_t status =
-                parseRowDescription(message.payload, message.payload_len, &result->fields);
-            if (status != GALAY_OK) return status;
-            has_row_description = true;
-            break;
-        }
-        case 'D': {
-            if (!has_row_description) return GALAY_PROTOCOL_ERROR;
-            std::vector<std::optional<std::string>> row;
-            const galay_status_t status = parseDataRow(message.payload, message.payload_len, &row);
-            if (status != GALAY_OK || row.size() != result->fields.size()) {
-                return GALAY_PROTOCOL_ERROR;
-            }
-            result->rows.push_back(std::move(row));
-            break;
-        }
-        case 'C': {
-            const galay_status_t status = parseCommandComplete(message.payload, message.payload_len, result);
-            if (status != GALAY_OK) return status;
-            break;
-        }
-        case 'Z':
-            if (message.payload_len != 1 || !validTransactionStatus(message.payload[0])) {
-                return GALAY_PROTOCOL_ERROR;
-            }
-            result->transaction_status = static_cast<char>(message.payload[0]);
-            ready = true;
-            break;
-        case 'E':
-            server_error = true;
-            break;
-        case 'I':
-        case 'N':
-            break;
-        case '1':
-        case '2':
-        case '3':
-        case 'n':
-        case 's':
-            if (message.payload_len != 0) return GALAY_PROTOCOL_ERROR;
-            break;
-        case 't':
-            break;
-        default:
-            return GALAY_PROTOCOL_ERROR;
-        }
-        if (ready && offset != data_len) return GALAY_PROTOCOL_ERROR;
+        const galay_status_t status = parseResultMessage(message, result, &state);
+        if (status != GALAY_OK) return status;
+        if (state.ready && offset != data_len) return GALAY_PROTOCOL_ERROR;
     }
-    if (!ready || server_error) return GALAY_PROTOCOL_ERROR;
-    return GALAY_OK;
+    return state.ready && !state.server_error ? GALAY_OK : GALAY_PROTOCOL_ERROR;
+}
+
+bool encodeQueryInto(std::string_view sql, std::string* out)
+{
+    constexpr size_t maximum_payload =
+        static_cast<size_t>(std::numeric_limits<int32_t>::max()) - kLengthSize;
+    if (out == nullptr || hasNull(sql) || sql.size() >= maximum_payload) return false;
+    out->clear();
+    out->reserve(1U + kLengthSize + sql.size() + 1U);
+    out->push_back('Q');
+    writeU32(*out, static_cast<uint32_t>(kLengthSize + sql.size() + 1U));
+    out->append(sql.data(), sql.size());
+    out->push_back('\0');
+    return true;
 }
 
 std::string encodeQuery(std::string_view sql)
 {
-    if (hasNull(sql)) return {};
-    std::string payload(sql);
-    payload.push_back('\0');
-    return wrapMessage('Q', payload);
+    std::string out;
+    return encodeQueryInto(sql, &out) ? out : std::string{};
 }
 
 std::string encodeParse(std::string_view statement,
@@ -428,14 +548,15 @@ bool copyHost(const galay_postgres_config_t& config, C_Host* host)
     return true;
 }
 
-C_IOResult socketWriteAll(galay_kernel_tcp_socket_t* socket,
+C_IOResult socketWriteAll(galay_postgres_client_t* client,
                           std::string_view data,
                           int64_t timeout_ms)
 {
     size_t sent = 0;
     while (sent < data.size()) {
-        C_IOResult result = galay_kernel_tcp_socket_send(socket, data.data() + sent,
-                                                         data.size() - sent, timeout_ms);
+        C_IOResult result = galay::kernel::c_api::detail::tcpSocketSend(
+            &client->socket, data.data() + sent, data.size() - sent,
+            timeout_ms, &client->wait_request);
         if (result.code != C_IOResultOk) return result;
         if (result.bytes == 0) return ioResult(C_IOResultEof, GALAY_EOF);
         sent += result.bytes;
@@ -445,37 +566,68 @@ C_IOResult socketWriteAll(galay_kernel_tcp_socket_t* socket,
     return result;
 }
 
-C_IOResult socketReadMessage(galay_kernel_tcp_socket_t* socket,
-                             std::string* message,
+C_IOResult socketReadMessage(galay_postgres_client_t* client,
+                             std::string_view* message,
                              int64_t timeout_ms)
 {
-    message->clear();
-    message->resize(kHeaderSize);
-    size_t received = 0;
-    while (received < kHeaderSize) {
-        C_IOResult result = galay_kernel_tcp_socket_recv(socket, message->data() + received,
-                                                         kHeaderSize - received, timeout_ms);
+    if (client == nullptr || message == nullptr) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    *message = {};
+
+    for (;;) {
+        const size_t available = client->receive_size - client->receive_offset;
+        if (available >= kHeaderSize) {
+            const auto* data = reinterpret_cast<const unsigned char*>(
+                client->receive_buffer.data() + client->receive_offset);
+            galay_postgres_message_header_t header{};
+            const galay_status_t parsed =
+                galay_postgres_parse_message_header(data, available, &header);
+            if (parsed != GALAY_OK) return statusResult(parsed);
+            const size_t total = 1U + static_cast<size_t>(header.length);
+            if (total > kMaxMessageLength) return statusResult(GALAY_PROTOCOL_ERROR);
+            if (available >= total) {
+                *message = std::string_view(
+                    client->receive_buffer.data() + client->receive_offset, total);
+                client->receive_offset += total;
+                C_IOResult result = ioResult(C_IOResultOk);
+                result.bytes = total;
+                return result;
+            }
+        }
+
+        if (client->receive_offset != 0) {
+            const size_t remaining = client->receive_size - client->receive_offset;
+            std::memmove(client->receive_buffer.data(),
+                         client->receive_buffer.data() + client->receive_offset,
+                         remaining);
+            client->receive_size = remaining;
+            client->receive_offset = 0;
+        }
+        if (client->receive_size == client->receive_buffer.size()) {
+            if (client->receive_buffer.size() >= kMaxMessageLength) {
+                return statusResult(GALAY_PROTOCOL_ERROR);
+            }
+            const size_t current_capacity = client->receive_buffer.size();
+            const size_t growth = std::max(current_capacity, kReceiveChunkSize);
+            const size_t next_capacity = current_capacity > kMaxMessageLength - growth
+                ? kMaxMessageLength : current_capacity + growth;
+            client->receive_buffer.resize(next_capacity);
+        }
+        if (client->receive_size >= kMaxMessageLength) {
+            return statusResult(GALAY_PROTOCOL_ERROR);
+        }
+        const size_t read_size = client->receive_buffer.size() - client->receive_size;
+        C_IOResult result = galay::kernel::c_api::detail::tcpSocketRecv(
+            &client->socket,
+            client->receive_buffer.data() + client->receive_size,
+            read_size,
+            timeout_ms,
+            &client->wait_request);
         if (result.code != C_IOResultOk) return result;
         if (result.bytes == 0) return ioResult(C_IOResultEof, GALAY_EOF);
-        received += result.bytes;
+        client->receive_size += result.bytes;
     }
-    galay_postgres_message_header_t header{};
-    const galay_status_t parsed = galay_postgres_parse_message_header(
-        reinterpret_cast<const unsigned char*>(message->data()), message->size(), &header);
-    if (parsed != GALAY_OK) return statusResult(parsed);
-    const size_t total = 1U + static_cast<size_t>(header.length);
-    if (total > kMaxMessageLength) return statusResult(GALAY_PROTOCOL_ERROR);
-    message->resize(total);
-    while (received < total) {
-        C_IOResult result = galay_kernel_tcp_socket_recv(socket, message->data() + received,
-                                                         total - received, timeout_ms);
-        if (result.code != C_IOResultOk) return result;
-        if (result.bytes == 0) return ioResult(C_IOResultEof, GALAY_EOF);
-        received += result.bytes;
-    }
-    C_IOResult result = ioResult(C_IOResultOk);
-    result.bytes = total;
-    return result;
 }
 
 struct ScramState {
@@ -642,7 +794,7 @@ C_IOResult connectAndAuthenticate(galay_postgres_client_t* client,
         return destroyed == C_TcpSocketSuccess ? statusResult(encoded)
                                                : statusResult(GALAY_IO_ERROR);
     }
-    C_IOResult sent = socketWriteAll(&client->socket, startup->data, effective_timeout);
+    C_IOResult sent = socketWriteAll(client, startup->data, effective_timeout);
     galay_postgres_buffer_destroy(startup);
     if (sent.code != C_IOResultOk) {
         const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
@@ -655,12 +807,13 @@ C_IOResult connectAndAuthenticate(galay_postgres_client_t* client,
     bool scram_started = false;
     bool scram_verified = false;
     for (;;) {
-        C_IOResult read = socketReadMessage(&client->socket, &client->receive_buffer, effective_timeout);
+        std::string_view encoded_message;
+        C_IOResult read = socketReadMessage(client, &encoded_message, effective_timeout);
         if (read.code != C_IOResultOk) return read;
         galay_postgres_message_view_t message{};
         const galay_status_t extracted = galay_postgres_extract_message(
-            reinterpret_cast<const unsigned char*>(client->receive_buffer.data()),
-            client->receive_buffer.size(), &message);
+            reinterpret_cast<const unsigned char*>(encoded_message.data()),
+            encoded_message.size(), &message);
         if (extracted != GALAY_OK) return statusResult(extracted);
         if (message.type == 'R') {
             uint32_t kind = 0;
@@ -694,7 +847,7 @@ C_IOResult connectAndAuthenticate(galay_postgres_client_t* client,
                 const galay_status_t response_status = galay_postgres_encode_sasl_initial_response(
                     "SCRAM-SHA-256", client_first.c_str(), &response);
                 if (response_status != GALAY_OK) return statusResult(response_status);
-                sent = socketWriteAll(&client->socket, response->data, effective_timeout);
+                sent = socketWriteAll(client, response->data, effective_timeout);
                 galay_postgres_buffer_destroy(response);
                 if (sent.code != C_IOResultOk) return sent;
                 scram_started = true;
@@ -711,7 +864,7 @@ C_IOResult connectAndAuthenticate(galay_postgres_client_t* client,
                 const galay_status_t response_status =
                     galay_postgres_encode_sasl_response(client_final.c_str(), &response);
                 if (response_status != GALAY_OK) return statusResult(response_status);
-                sent = socketWriteAll(&client->socket, response->data, effective_timeout);
+                sent = socketWriteAll(client, response->data, effective_timeout);
                 galay_postgres_buffer_destroy(response);
                 if (sent.code != C_IOResultOk) return sent;
             } else if (kind == 12) {
@@ -727,7 +880,7 @@ C_IOResult connectAndAuthenticate(galay_postgres_client_t* client,
                 const galay_status_t response_status =
                     galay_postgres_encode_password_message(password.c_str(), &response);
                 if (response_status != GALAY_OK) return statusResult(response_status);
-                sent = socketWriteAll(&client->socket, response->data, effective_timeout);
+                sent = socketWriteAll(client, response->data, effective_timeout);
                 galay_postgres_buffer_destroy(response);
                 if (sent.code != C_IOResultOk) return sent;
             } else if (kind == 3) {
@@ -735,7 +888,7 @@ C_IOResult connectAndAuthenticate(galay_postgres_client_t* client,
                 const galay_status_t response_status =
                     galay_postgres_encode_password_message(config->password.c_str(), &response);
                 if (response_status != GALAY_OK) return statusResult(response_status);
-                sent = socketWriteAll(&client->socket, response->data, effective_timeout);
+                sent = socketWriteAll(client, response->data, effective_timeout);
                 galay_postgres_buffer_destroy(response);
                 if (sent.code != C_IOResultOk) return sent;
             } else {
@@ -757,40 +910,61 @@ C_IOResult connectAndAuthenticate(galay_postgres_client_t* client,
     }
 }
 
+C_IOResult queryResultInto(galay_postgres_client_t* client,
+                           const char* sql,
+                           int64_t timeout_ms,
+    galay_postgres_result_set_t* result)
+{
+    resetResultSet(&result->value);
+    if (!encodeQueryInto(sql, &client->query_buffer)) {
+        return statusResult(GALAY_INVALID_ARGUMENT);
+    }
+    C_IOResult sent = socketWriteAll(client, client->query_buffer, timeout_ms);
+    if (sent.code != C_IOResultOk) return sent;
+
+    ResultParseState state;
+    size_t response_bytes = 0;
+    while (!state.ready) {
+        std::string_view encoded_message;
+        C_IOResult read = socketReadMessage(client, &encoded_message, timeout_ms);
+        if (read.code != C_IOResultOk) {
+            resetResultSet(&result->value);
+            return read;
+        }
+        response_bytes += read.bytes;
+        galay_postgres_message_view_t message{};
+        galay_status_t status = galay_postgres_extract_message(
+            reinterpret_cast<const unsigned char*>(encoded_message.data()),
+            encoded_message.size(), &message);
+        if (status == GALAY_OK) status = parseResultMessage(message, &result->value, &state);
+        if (status != GALAY_OK) {
+            resetResultSet(&result->value);
+            return statusResult(status);
+        }
+    }
+    if (state.server_error) {
+        resetResultSet(&result->value);
+        return statusResult(GALAY_PROTOCOL_ERROR);
+    }
+    C_IOResult io = ioResult(C_IOResultOk);
+    io.bytes = response_bytes;
+    io.ptr = result;
+    return io;
+}
+
 C_IOResult queryResult(galay_postgres_client_t* client,
                       const char* sql,
                       int64_t timeout_ms,
                       galay_postgres_result_set_t** result)
 {
-    galay_postgres_buffer_t* query = nullptr;
-    const galay_status_t encoded = galay_postgres_encode_query(sql, &query);
-    if (encoded != GALAY_OK) return statusResult(encoded);
-    C_IOResult sent = socketWriteAll(&client->socket, query->data, timeout_ms);
-    galay_postgres_buffer_destroy(query);
-    if (sent.code != C_IOResultOk) return sent;
-
-    std::string response;
-    bool ready = false;
-    do {
-        C_IOResult read = socketReadMessage(&client->socket, &client->receive_buffer, timeout_ms);
-        if (read.code != C_IOResultOk) return read;
-        galay_postgres_message_view_t message{};
-        const galay_status_t extracted = galay_postgres_extract_message(
-            reinterpret_cast<const unsigned char*>(client->receive_buffer.data()),
-            client->receive_buffer.size(), &message);
-        if (extracted != GALAY_OK) return statusResult(extracted);
-        response.append(client->receive_buffer);
-        ready = message.type == 'Z';
-    } while (!ready);
-
-    galay_postgres_result_set_t* decoded = nullptr;
-    const galay_status_t status = galay_postgres_result_set_decode(
-        reinterpret_cast<const unsigned char*>(response.data()), response.size(), &decoded);
-    if (status != GALAY_OK) return statusResult(status);
+    auto* decoded = new (std::nothrow) galay_postgres_result_set_t();
+    if (decoded == nullptr) return statusResult(GALAY_OUT_OF_MEMORY);
+    C_IOResult io = queryResultInto(client, sql, timeout_ms, decoded);
+    if (io.code != C_IOResultOk) {
+        delete decoded;
+        return io;
+    }
     *result = decoded;
-    C_IOResult io = ioResult(C_IOResultOk);
-    io.bytes = response.size();
-    io.ptr = decoded;
     return io;
 }
 
@@ -819,13 +993,14 @@ C_IOResult readPreparedMetadata(galay_postgres_client_t* client,
     bool server_error = false;
     size_t bytes = 0;
     while (!ready) {
-        C_IOResult read = socketReadMessage(&client->socket, &client->receive_buffer, timeout_ms);
+        std::string_view encoded_message;
+        C_IOResult read = socketReadMessage(client, &encoded_message, timeout_ms);
         if (read.code != C_IOResultOk) return read;
         bytes += read.bytes;
         galay_postgres_message_view_t message{};
         const galay_status_t extracted = galay_postgres_extract_message(
-            reinterpret_cast<const unsigned char*>(client->receive_buffer.data()),
-            client->receive_buffer.size(), &message);
+            reinterpret_cast<const unsigned char*>(encoded_message.data()),
+            encoded_message.size(), &message);
         if (extracted != GALAY_OK) return statusResult(extracted);
         switch (message.type) {
         case '1':
@@ -878,15 +1053,16 @@ C_IOResult readPipelineResults(galay_postgres_client_t* client,
     size_t total_bytes = 0;
     galay_status_t first_error = GALAY_OK;
     for (size_t ready_count = 0; ready_count < expected_ready;) {
-        C_IOResult read = socketReadMessage(&client->socket, &client->receive_buffer, timeout_ms);
+        std::string_view encoded_message;
+        C_IOResult read = socketReadMessage(client, &encoded_message, timeout_ms);
         if (read.code != C_IOResultOk) return read;
         total_bytes += read.bytes;
         galay_postgres_message_view_t message{};
         const galay_status_t extracted = galay_postgres_extract_message(
-            reinterpret_cast<const unsigned char*>(client->receive_buffer.data()),
-            client->receive_buffer.size(), &message);
+            reinterpret_cast<const unsigned char*>(encoded_message.data()),
+            encoded_message.size(), &message);
         if (extracted != GALAY_OK) return statusResult(extracted);
-        response.append(client->receive_buffer);
+        response.append(encoded_message);
         if (message.type != 'Z') continue;
 
         galay_postgres_result_set_t decoded;
@@ -1238,13 +1414,27 @@ galay_status_t galay_postgres_result_set_decode(const unsigned char* data,
     return GALAY_OK;
 }
 
+galay_status_t galay_postgres_result_set_create(galay_postgres_result_set_t** out)
+{
+    if (out == nullptr) return GALAY_INVALID_ARGUMENT;
+    *out = new (std::nothrow) galay_postgres_result_set_t();
+    return *out == nullptr ? GALAY_OUT_OF_MEMORY : GALAY_OK;
+}
+
+galay_status_t galay_postgres_result_set_reset(galay_postgres_result_set_t* result)
+{
+    if (result == nullptr) return GALAY_INVALID_ARGUMENT;
+    resetResultSet(&result->value);
+    return GALAY_OK;
+}
+
 void galay_postgres_result_set_destroy(galay_postgres_result_set_t* result) { delete result; }
 
 galay_status_t galay_postgres_result_set_field_count(const galay_postgres_result_set_t* result,
                                                      size_t* count)
 {
     if (result == nullptr || count == nullptr) return GALAY_INVALID_ARGUMENT;
-    *count = result->value.fields.size();
+    *count = result->value.field_count;
     return GALAY_OK;
 }
 
@@ -1252,7 +1442,7 @@ galay_status_t galay_postgres_result_set_row_count(const galay_postgres_result_s
                                                    size_t* count)
 {
     if (result == nullptr || count == nullptr) return GALAY_INVALID_ARGUMENT;
-    *count = result->value.rows.size();
+    *count = result->value.row_count;
     return GALAY_OK;
 }
 
@@ -1261,7 +1451,7 @@ galay_status_t galay_postgres_result_set_field(const galay_postgres_result_set_t
                                                galay_postgres_field_view_t* field)
 {
     if (result == nullptr || field == nullptr) return GALAY_INVALID_ARGUMENT;
-    if (index >= result->value.fields.size()) return GALAY_NOT_FOUND;
+    if (index >= result->value.field_count) return GALAY_NOT_FOUND;
     fieldToView(result->value.fields[index], field);
     return GALAY_OK;
 }
@@ -1271,7 +1461,7 @@ galay_status_t galay_postgres_result_set_find_field(const galay_postgres_result_
                                                     size_t* index)
 {
     if (result == nullptr || name == nullptr || index == nullptr) return GALAY_INVALID_ARGUMENT;
-    for (size_t position = 0; position < result->value.fields.size(); ++position) {
+    for (size_t position = 0; position < result->value.field_count; ++position) {
         if (result->value.fields[position].name == name) {
             *index = position;
             return GALAY_OK;
@@ -1286,7 +1476,7 @@ galay_status_t galay_postgres_result_set_value(const galay_postgres_result_set_t
                                                galay_postgres_value_view_t* value)
 {
     if (result == nullptr || value == nullptr) return GALAY_INVALID_ARGUMENT;
-    if (row >= result->value.rows.size() || column >= result->value.fields.size() ||
+    if (row >= result->value.row_count || column >= result->value.field_count ||
         column >= result->value.rows[row].size()) return GALAY_NOT_FOUND;
     const auto& source = result->value.rows[row][column];
     value->is_null = source ? GALAY_FALSE : GALAY_TRUE;
@@ -1428,19 +1618,17 @@ galay_status_t galay_postgres_client_create(galay_postgres_client_t** out)
 
 void galay_postgres_client_destroy(galay_postgres_client_t* client)
 {
-    galay_postgres_client_close(client);
+    if (!beginClientOperation(client)) return;
+    (void)closeClientStorage(client);
+    finishClientOperation(client);
     delete client;
 }
 
 void galay_postgres_client_close(galay_postgres_client_t* client)
 {
-    if (client == nullptr) return;
-    if (client->socket.socket != nullptr) {
-        const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
-        if (destroyed != C_TcpSocketSuccess) client->connected = false;
-    }
-    client->receive_buffer.clear();
-    client->connected = false;
+    if (!beginClientOperation(client)) return;
+    (void)closeClientStorage(client);
+    finishClientOperation(client);
 }
 
 galay_status_t galay_postgres_client_is_connected(const galay_postgres_client_t* client,
@@ -1468,6 +1656,14 @@ C_IOResult galay_postgres_client_connect_async(galay_postgres_client_t* client,
         client->socket.socket != nullptr) {
         return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
     }
+    if (!beginClientOperation(client)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    C_IOResult wait_initialized = initializeClientWaitState(client);
+    if (wait_initialized.code != C_IOResultOk) {
+        finishClientOperation(client);
+        return wait_initialized;
+    }
     C_IOResult result = connectAndAuthenticate(client, config, timeout_ms);
     if (result.code != C_IOResultOk) {
         bool cleanup_failed = false;
@@ -1475,10 +1671,12 @@ C_IOResult galay_postgres_client_connect_async(galay_postgres_client_t* client,
             const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
             cleanup_failed = destroyed != C_TcpSocketSuccess;
         }
-        client->connected = false;
-        client->receive_buffer.clear();
-        if (cleanup_failed) return statusResult(GALAY_IO_ERROR);
+        clearClientProtocolState(client);
+        C_IOResult wait_destroyed = destroyClientWaitState(client);
+        cleanup_failed = cleanup_failed || wait_destroyed.code != C_IOResultOk;
+        if (cleanup_failed) result = statusResult(GALAY_IO_ERROR);
     }
+    finishClientOperation(client);
     return result;
 }
 
@@ -1492,7 +1690,12 @@ C_IOResult galay_postgres_client_query_async(galay_postgres_client_t* client,
         client->socket.socket == nullptr) {
         return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
     }
-    return queryResult(client, sql, timeout_ms, result);
+    if (!beginClientOperation(client)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    C_IOResult io = queryResult(client, sql, timeout_ms, result);
+    finishClientOperation(client);
+    return io;
 }
 
 C_IOResult galay_postgres_client_query_result_async(galay_postgres_client_t* client,
@@ -1501,6 +1704,23 @@ C_IOResult galay_postgres_client_query_result_async(galay_postgres_client_t* cli
                                                     galay_postgres_result_set_t** result)
 {
     return galay_postgres_client_query_async(client, sql, timeout_ms, result);
+}
+
+C_IOResult galay_postgres_client_query_into_async(galay_postgres_client_t* client,
+                                                  const char* sql,
+                                                  int64_t timeout_ms,
+                                                  galay_postgres_result_set_t* result)
+{
+    if (client == nullptr || sql == nullptr || result == nullptr || !client->connected ||
+        client->socket.socket == nullptr) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    if (!beginClientOperation(client)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    C_IOResult io = queryResultInto(client, sql, timeout_ms, result);
+    finishClientOperation(client);
+    return io;
 }
 
 C_IOResult galay_postgres_client_begin_transaction_async(
@@ -1525,18 +1745,12 @@ C_IOResult galay_postgres_client_rollback_async(galay_postgres_client_t* client,
     return galay_postgres_client_query_async(client, "ROLLBACK", timeout_ms, result);
 }
 
-C_IOResult galay_postgres_client_stmt_prepare_async(galay_postgres_client_t* client,
-                                                    const char* statement_name,
-                                                    const char* sql,
-                                                    int64_t timeout_ms,
-                                                    galay_postgres_stmt_t** stmt)
+static C_IOResult prepareStatement(galay_postgres_client_t* client,
+                                   const char* statement_name,
+                                   const char* sql,
+                                   int64_t timeout_ms,
+                                   galay_postgres_stmt_t** stmt)
 {
-    if (stmt != nullptr) *stmt = nullptr;
-    if (client == nullptr || statement_name == nullptr || statement_name[0] == '\0' ||
-        sql == nullptr || stmt == nullptr || !client->connected ||
-        client->socket.socket == nullptr) {
-        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
-    }
     galay_postgres_buffer_t* parse = nullptr;
     galay_postgres_buffer_t* describe = nullptr;
     galay_postgres_buffer_t* sync = nullptr;
@@ -1559,7 +1773,7 @@ C_IOResult galay_postgres_client_stmt_prepare_async(galay_postgres_client_t* cli
     galay_postgres_buffer_destroy(parse);
     galay_postgres_buffer_destroy(describe);
     galay_postgres_buffer_destroy(sync);
-    C_IOResult sent = socketWriteAll(&client->socket, command, timeout_ms);
+    C_IOResult sent = socketWriteAll(client, command, timeout_ms);
     if (sent.code != C_IOResultOk) return sent;
 
     auto* prepared = new (std::nothrow) galay_postgres_stmt_t();
@@ -1575,7 +1789,7 @@ C_IOResult galay_postgres_client_stmt_prepare_async(galay_postgres_client_t* cli
     return read;
 }
 
-C_IOResult galay_postgres_client_stmt_execute_async(
+static C_IOResult executeStatement(
     galay_postgres_client_t* client,
     const galay_postgres_stmt_t* stmt,
     const galay_postgres_stmt_bind_t* binds,
@@ -1583,12 +1797,6 @@ C_IOResult galay_postgres_client_stmt_execute_async(
     int64_t timeout_ms,
     galay_postgres_result_set_t** result)
 {
-    if (result != nullptr) *result = nullptr;
-    if (client == nullptr || stmt == nullptr || result == nullptr || !client->connected ||
-        client->socket.socket == nullptr || bind_count != stmt->parameter_types.size() ||
-        (bind_count != 0 && binds == nullptr)) {
-        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
-    }
     galay_postgres_buffer_t* bind = nullptr;
     galay_postgres_buffer_t* describe = nullptr;
     galay_postgres_buffer_t* execute = nullptr;
@@ -1616,20 +1824,21 @@ C_IOResult galay_postgres_client_stmt_execute_async(
     galay_postgres_buffer_destroy(describe);
     galay_postgres_buffer_destroy(execute);
     galay_postgres_buffer_destroy(sync);
-    C_IOResult sent = socketWriteAll(&client->socket, command, timeout_ms);
+    C_IOResult sent = socketWriteAll(client, command, timeout_ms);
     if (sent.code != C_IOResultOk) return sent;
 
     std::string response;
     bool ready = false;
     do {
-        C_IOResult read = socketReadMessage(&client->socket, &client->receive_buffer, timeout_ms);
+        std::string_view encoded_message;
+        C_IOResult read = socketReadMessage(client, &encoded_message, timeout_ms);
         if (read.code != C_IOResultOk) return read;
         galay_postgres_message_view_t message{};
         status = galay_postgres_extract_message(
-            reinterpret_cast<const unsigned char*>(client->receive_buffer.data()),
-            client->receive_buffer.size(), &message);
+            reinterpret_cast<const unsigned char*>(encoded_message.data()),
+            encoded_message.size(), &message);
         if (status != GALAY_OK) return statusResult(status);
-        response.append(client->receive_buffer);
+        response.append(encoded_message);
         ready = message.type == 'Z';
     } while (!ready);
     auto* decoded = new (std::nothrow) galay_postgres_result_set_t();
@@ -1647,16 +1856,11 @@ C_IOResult galay_postgres_client_stmt_execute_async(
     return io;
 }
 
-C_IOResult galay_postgres_client_pipeline_async(galay_postgres_client_t* client,
-                                                const galay_postgres_pipeline_t* pipeline,
-                                                int64_t timeout_ms,
-                                                galay_postgres_pipeline_result_t** result)
+static C_IOResult executePipeline(galay_postgres_client_t* client,
+                                  const galay_postgres_pipeline_t* pipeline,
+                                  int64_t timeout_ms,
+                                  galay_postgres_pipeline_result_t** result)
 {
-    if (result != nullptr) *result = nullptr;
-    if (client == nullptr || pipeline == nullptr || pipeline->commands.empty() ||
-        result == nullptr || !client->connected || client->socket.socket == nullptr) {
-        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
-    }
     std::string command;
     size_t expected_ready = 0;
     for (const auto& item : pipeline->commands) {
@@ -1664,7 +1868,7 @@ C_IOResult galay_postgres_client_pipeline_async(galay_postgres_client_t* client,
         if (item.ready) ++expected_ready;
     }
     if (expected_ready == 0) return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
-    C_IOResult sent = socketWriteAll(&client->socket, command, timeout_ms);
+    C_IOResult sent = socketWriteAll(client, command, timeout_ms);
     if (sent.code != C_IOResultOk) return sent;
     auto* pipeline_result = new (std::nothrow) galay_postgres_pipeline_result_t();
     if (pipeline_result == nullptr) return statusResult(GALAY_OUT_OF_MEMORY);
@@ -1677,6 +1881,66 @@ C_IOResult galay_postgres_client_pipeline_async(galay_postgres_client_t* client,
     *result = pipeline_result;
     read.ptr = pipeline_result;
     return read;
+}
+
+C_IOResult galay_postgres_client_stmt_prepare_async(galay_postgres_client_t* client,
+                                                    const char* statement_name,
+                                                    const char* sql,
+                                                    int64_t timeout_ms,
+                                                    galay_postgres_stmt_t** stmt)
+{
+    if (stmt != nullptr) *stmt = nullptr;
+    if (client == nullptr || statement_name == nullptr || statement_name[0] == '\0' ||
+        sql == nullptr || stmt == nullptr || !client->connected ||
+        client->socket.socket == nullptr) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    if (!beginClientOperation(client)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    C_IOResult result = prepareStatement(client, statement_name, sql, timeout_ms, stmt);
+    finishClientOperation(client);
+    return result;
+}
+
+C_IOResult galay_postgres_client_stmt_execute_async(
+    galay_postgres_client_t* client,
+    const galay_postgres_stmt_t* stmt,
+    const galay_postgres_stmt_bind_t* binds,
+    size_t bind_count,
+    int64_t timeout_ms,
+    galay_postgres_result_set_t** result)
+{
+    if (result != nullptr) *result = nullptr;
+    if (client == nullptr || stmt == nullptr || result == nullptr || !client->connected ||
+        client->socket.socket == nullptr || bind_count != stmt->parameter_types.size() ||
+        (bind_count != 0 && binds == nullptr)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    if (!beginClientOperation(client)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    C_IOResult io = executeStatement(client, stmt, binds, bind_count, timeout_ms, result);
+    finishClientOperation(client);
+    return io;
+}
+
+C_IOResult galay_postgres_client_pipeline_async(galay_postgres_client_t* client,
+                                                const galay_postgres_pipeline_t* pipeline,
+                                                int64_t timeout_ms,
+                                                galay_postgres_pipeline_result_t** result)
+{
+    if (result != nullptr) *result = nullptr;
+    if (client == nullptr || pipeline == nullptr || pipeline->commands.empty() ||
+        result == nullptr || !client->connected || client->socket.socket == nullptr) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    if (!beginClientOperation(client)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
+    }
+    C_IOResult io = executePipeline(client, pipeline, timeout_ms, result);
+    finishClientOperation(client);
+    return io;
 }
 
 void galay_postgres_pipeline_result_destroy(galay_postgres_pipeline_result_t* result)
@@ -1703,30 +1967,41 @@ galay_status_t galay_postgres_pipeline_result_at(
     return GALAY_OK;
 }
 
+static C_IOResult closeClientAsync(galay_postgres_client_t* client, int64_t timeout_ms)
+{
+    galay_postgres_buffer_t* terminate = nullptr;
+    const galay_status_t encoded = galay_postgres_encode_terminate(&terminate);
+    if (encoded != GALAY_OK) {
+        const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
+        clearClientProtocolState(client);
+        C_IOResult wait_destroyed = destroyClientWaitState(client);
+        return destroyed == C_TcpSocketSuccess && wait_destroyed.code == C_IOResultOk
+            ? statusResult(encoded) : statusResult(GALAY_IO_ERROR);
+    }
+    C_IOResult sent = socketWriteAll(client, terminate->data, timeout_ms);
+    galay_postgres_buffer_destroy(terminate);
+    C_IOResult closed = galay_kernel_tcp_socket_close(&client->socket, timeout_ms);
+    const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
+    clearClientProtocolState(client);
+    C_IOResult wait_destroyed = destroyClientWaitState(client);
+    if (sent.code != C_IOResultOk) return sent;
+    if (closed.code != C_IOResultOk) return closed;
+    if (destroyed != C_TcpSocketSuccess) return statusResult(GALAY_IO_ERROR);
+    if (wait_destroyed.code != C_IOResultOk) return wait_destroyed;
+    return ioResult(C_IOResultOk);
+}
+
 C_IOResult galay_postgres_client_close_async(galay_postgres_client_t* client, int64_t timeout_ms)
 {
     if (client == nullptr || client->socket.socket == nullptr) {
         return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
     }
-    galay_postgres_buffer_t* terminate = nullptr;
-    const galay_status_t encoded = galay_postgres_encode_terminate(&terminate);
-    if (encoded != GALAY_OK) {
-        const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
-        client->connected = false;
-        client->receive_buffer.clear();
-        return destroyed == C_TcpSocketSuccess ? statusResult(encoded)
-                                               : statusResult(GALAY_IO_ERROR);
+    if (!beginClientOperation(client)) {
+        return ioResult(C_IOResultInvalid, GALAY_INVALID_ARGUMENT);
     }
-    C_IOResult sent = socketWriteAll(&client->socket, terminate->data, timeout_ms);
-    galay_postgres_buffer_destroy(terminate);
-    C_IOResult closed = galay_kernel_tcp_socket_close(&client->socket, timeout_ms);
-    const C_TcpSocketResultCode destroyed = galay_kernel_tcp_socket_destroy(&client->socket);
-    client->connected = false;
-    client->receive_buffer.clear();
-    if (sent.code != C_IOResultOk) return sent;
-    if (closed.code != C_IOResultOk) return closed;
-    if (destroyed != C_TcpSocketSuccess) return statusResult(GALAY_IO_ERROR);
-    return ioResult(C_IOResultOk);
+    C_IOResult result = closeClientAsync(client, timeout_ms);
+    finishClientOperation(client);
+    return result;
 }
 
 galay_status_t galay_postgres_pool_create(const galay_postgres_config_t* config,
