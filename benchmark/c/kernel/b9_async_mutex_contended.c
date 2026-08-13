@@ -2,6 +2,8 @@
 #include <galay/c/galay-kernel-c/core-c/runtime_c.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
 
+#include <errno.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,8 +37,23 @@ static void lock_entry(void* ctx)
     }
 }
 
-int main(void)
+int main(int argc, char** argv)
 {
+    int iterations = ASYNC_MUTEX_ITERATIONS;
+    if (argc == 2) {
+        char* end = 0;
+        errno = 0;
+        long parsed = strtol(argv[1], &end, 10);
+        if (errno != 0 || end == argv[1] || *end != '\0' || parsed <= 0 || parsed > INT_MAX) {
+            fprintf(stderr, "usage: %s [positive-iterations]\n", argv[0]);
+            return 1;
+        }
+        iterations = (int)parsed;
+    } else if (argc > 2) {
+        fprintf(stderr, "usage: %s [positive-iterations]\n", argv[0]);
+        return 1;
+    }
+
     C_RuntimeConfig config = galay_kernel_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
@@ -53,15 +70,15 @@ int main(void)
         return 1;
     }
 
-    tasks = (galay_coro_task_t*)calloc((size_t)ASYNC_MUTEX_ITERATIONS, sizeof(galay_coro_task_t));
-    states = (LockState*)calloc((size_t)ASYNC_MUTEX_ITERATIONS, sizeof(LockState));
+    tasks = (galay_coro_task_t*)calloc((size_t)iterations, sizeof(galay_coro_task_t));
+    states = (LockState*)calloc((size_t)iterations, sizeof(LockState));
     if (tasks == 0 || states == 0) {
         exit_code = 2;
         goto cleanup;
     }
 
     const int64_t start = now_us();
-    for (int i = 0; i < ASYNC_MUTEX_ITERATIONS; ++i) {
+    for (int i = 0; i < iterations; ++i) {
         states[i].mutex = &mutex;
         states[i].unlock_result = C_AsyncMutexIOFailed;
         if (galay_coro_spawn(&runtime, lock_entry, &states[i], 0, &tasks[i]).code != C_IOResultOk) {
@@ -69,7 +86,7 @@ int main(void)
             goto cleanup;
         }
     }
-    for (int i = 0; i < ASYNC_MUTEX_ITERATIONS; ++i) {
+    for (int i = 0; i < iterations; ++i) {
         if (galay_coro_join(&tasks[i], 8000).code != C_IOResultOk ||
             states[i].lock_result.code != C_IOResultOk ||
             states[i].unlock_result != C_AsyncMutexSuccess) {
@@ -81,9 +98,9 @@ int main(void)
 
     {
         const double seconds = elapsed > 0 ? (double)elapsed / 1000000.0 : 0.0;
-        const double ops_per_sec = seconds > 0.0 ? (double)ASYNC_MUTEX_ITERATIONS / seconds : 0.0;
+        const double ops_per_sec = seconds > 0.0 ? (double)iterations / seconds : 0.0;
         if (printf("async_mutex_contended iterations=%d elapsed_ms=%.3f ops_per_sec=%.2f\n",
-                   ASYNC_MUTEX_ITERATIONS,
+                   iterations,
                    (double)elapsed / 1000.0,
                    ops_per_sec) < 0) {
             exit_code = 5;
@@ -93,7 +110,7 @@ int main(void)
 
 cleanup:
     if (tasks != 0) {
-        for (int i = 0; i < ASYNC_MUTEX_ITERATIONS; ++i) {
+        for (int i = 0; i < iterations; ++i) {
             if (tasks[i].task != 0 &&
                 galay_coro_destroy(&tasks[i]).code != C_IOResultOk &&
                 exit_code == 0) {

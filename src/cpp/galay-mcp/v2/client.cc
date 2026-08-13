@@ -9,6 +9,20 @@ namespace galay::mcp::v2 {
 
 namespace {
 
+struct StdioRequestLease {
+    std::atomic_flag* flag = nullptr;
+
+    explicit StdioRequestLease(std::atomic_flag* value) noexcept : flag(value) {}
+
+    ~StdioRequestLease()
+    {
+        if (flag != nullptr) flag->clear(std::memory_order_release);
+    }
+
+    StdioRequestLease(const StdioRequestLease&) = delete;
+    StdioRequestLease& operator=(const StdioRequestLease&) = delete;
+};
+
 std::expected<std::string, McpError> requiredString(const JsonObject& object, const char* key)
 {
     std::string value;
@@ -92,6 +106,126 @@ std::expected<JsonString, McpError> parseRpcResult(std::string_view body,
     return result;
 }
 
+std::expected<SubscriptionFilter, McpError> parseAcknowledged(
+    std::string_view message, const RequestId& requestId)
+{
+    auto document = JsonDocument::parse(message);
+    if (!document) return std::unexpected(document.error());
+    JsonObject object;
+    if (!JsonHelper::getObject(document->root(), object)) {
+        return std::unexpected(McpError::invalidResponse("SSE message is not an object"));
+    }
+    std::string method;
+    if (!JsonHelper::getString(object, "method", method) ||
+        method != NotificationMethods::SUBSCRIPTIONS_ACKNOWLEDGED) {
+        return std::unexpected(McpError::invalidResponse("subscription acknowledgement is not first"));
+    }
+    JsonElement paramsElement;
+    JsonObject params;
+    if (!JsonHelper::getElement(object, "params", paramsElement) ||
+        !JsonHelper::getObject(paramsElement, params)) {
+        return std::unexpected(McpError::invalidResponse("acknowledgement missing params"));
+    }
+    JsonElement metaElement;
+    JsonObject meta;
+    RequestId id;
+    if (!JsonHelper::getElement(params, "_meta", metaElement) ||
+        !JsonHelper::getObject(metaElement, meta) ||
+        !JsonHelper::getElement(meta, "io.modelcontextprotocol/subscriptionId", metaElement)) {
+        return std::unexpected(McpError::invalidResponse("acknowledgement missing subscription id"));
+    }
+    if (metaElement.is_int64()) id = metaElement.get_int64().value();
+    else if (metaElement.is_string()) id = std::string(metaElement.get_string().value());
+    else return std::unexpected(McpError::invalidResponse("invalid subscription id"));
+    if (id != requestId) {
+        return std::unexpected(McpError::invalidResponse("mismatched subscription id"));
+    }
+    JsonElement filterElement;
+    if (!JsonHelper::getElement(params, "notifications", filterElement)) {
+        return std::unexpected(McpError::invalidResponse("acknowledgement missing notifications"));
+    }
+    return SubscriptionFilter::fromJson(filterElement);
+}
+
+std::expected<bool, McpError> validateSubscriptionMessage(
+    std::string_view message, const RequestId& requestId)
+{
+    auto document = JsonDocument::parse(message);
+    if (!document) return std::unexpected(document.error());
+    JsonObject object;
+    if (!JsonHelper::getObject(document->root(), object)) {
+        return std::unexpected(McpError::invalidResponse("SSE message is not an object"));
+    }
+    std::string method;
+    if (JsonHelper::getString(object, "method", method)) {
+        if (method == NotificationMethods::SUBSCRIPTIONS_ACKNOWLEDGED) {
+            return std::unexpected(McpError::invalidResponse("duplicate subscription acknowledgement"));
+        }
+        if (method != NotificationMethods::TOOLS_LIST_CHANGED &&
+            method != NotificationMethods::RESOURCES_LIST_CHANGED &&
+            method != NotificationMethods::RESOURCES_UPDATED &&
+            method != NotificationMethods::PROMPTS_LIST_CHANGED) {
+            return std::unexpected(McpError::invalidResponse("unknown subscription notification"));
+        }
+        JsonElement paramsElement;
+        JsonObject params;
+        JsonElement metaElement;
+        JsonObject meta;
+        JsonElement subscriptionElement;
+        if (!JsonHelper::getElement(object, "params", paramsElement) ||
+            !JsonHelper::getObject(paramsElement, params) ||
+            !JsonHelper::getElement(params, "_meta", metaElement) ||
+            !JsonHelper::getObject(metaElement, meta) ||
+            !JsonHelper::getElement(meta,
+                                    "io.modelcontextprotocol/subscriptionId",
+                                    subscriptionElement)) {
+            return std::unexpected(McpError::invalidResponse(
+                "subscription notification missing subscription id"));
+        }
+        RequestId notificationId;
+        if (subscriptionElement.is_int64()) {
+            notificationId = subscriptionElement.get_int64().value();
+        } else if (subscriptionElement.is_string()) {
+            notificationId = std::string(subscriptionElement.get_string().value());
+        } else {
+            return std::unexpected(McpError::invalidResponse(
+                "invalid subscription notification id"));
+        }
+        if (notificationId != requestId) {
+            return std::unexpected(McpError::invalidResponse(
+                "mismatched subscription notification id"));
+        }
+        return true;
+    }
+    auto parsed = parseResponse(message);
+    if (!parsed || !parsed->response.hasResult || parsed->response.id != requestId) {
+        return std::unexpected(McpError::invalidResponse("invalid subscription completion"));
+    }
+    JsonObject result;
+    if (!JsonHelper::getObject(parsed->response.result, result)) {
+        return std::unexpected(McpError::invalidResponse("invalid subscription result"));
+    }
+    std::string resultType;
+    if (!JsonHelper::getString(result, "resultType", resultType) || resultType != "complete") {
+        return std::unexpected(McpError::invalidResponse("unexpected subscription result"));
+    }
+    return false;
+}
+
+bool hasSseContentType(http::HttpResponseHeader& header)
+{
+    auto value = header.headerPairs().getValue("Content-Type");
+    if (value.empty()) value = header.headerPairs().getValue("content-type");
+    constexpr std::string_view expected = "text/event-stream";
+    if (value.size() < expected.size()) return false;
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        const char actual = value[i];
+        if (actual != expected[i] && actual != expected[i] - ('a' - 'A')) return false;
+    }
+    return value.size() == expected.size() || value[expected.size()] == ';' ||
+           value[expected.size()] == ' ' || value[expected.size()] == '\t';
+}
+
 } // namespace
 
 McpStdioClient::McpStdioClient(std::istream& input,
@@ -136,7 +270,10 @@ std::expected<std::string, McpError> McpStdioClient::read()
 std::expected<JsonString, McpError> McpStdioClient::request(std::string_view method,
                                                             std::string fields)
 {
-    std::lock_guard lock(m_mutex);
+    if (m_requestActive.test_and_set(std::memory_order_acquire)) {
+        return std::unexpected(McpError::overload("stdio client request already active"));
+    }
+    StdioRequestLease lease{&m_requestActive};
     const RequestId id = nextId();
     auto params = makeRequestParams(meta(), fields);
     if (!params) return std::unexpected(params.error());
@@ -298,11 +435,9 @@ kernel::Task<void> McpHttpClient::request(std::string method,
             if (JsonHelper::getString(fieldsObject, "name", toolName) &&
                 JsonHelper::getElement(fieldsObject, "arguments", arguments)) {
                 std::optional<Tool> tool;
-                {
-                    std::lock_guard lock(m_toolDefinitionsMutex);
-                    auto it = m_toolDefinitions.find(toolName);
-                    if (it != m_toolDefinitions.end()) tool = it->second;
-                }
+                const auto definitions = m_toolDefinitions.load(std::memory_order_acquire);
+                auto it = definitions->find(toolName);
+                if (it != definitions->end()) tool = it->second;
                 if (tool) {
                     auto annotations = toolHeaderAnnotations(*tool);
                     if (!annotations) {
@@ -368,11 +503,11 @@ kernel::Task<void> McpHttpClient::listTools(std::expected<std::vector<Tool>, Mcp
         if (!annotations) continue;
         valid.push_back(std::move(tool));
     }
-    {
-        std::lock_guard lock(m_toolDefinitionsMutex);
-        m_toolDefinitions.clear();
-        for (const auto& tool : valid) m_toolDefinitions.insert_or_assign(tool.name, tool);
-    }
+    auto definitions = std::make_shared<McpHttpClient::ToolDefinitions>();
+    definitions->reserve(valid.size());
+    for (const auto& tool : valid) definitions->insert_or_assign(tool.name, tool);
+    std::shared_ptr<const McpHttpClient::ToolDefinitions> published = std::move(definitions);
+    m_toolDefinitions.store(std::move(published), std::memory_order_release);
     result = std::move(valid);
 }
 
@@ -417,6 +552,141 @@ kernel::Task<void> McpHttpClient::getPrompt(std::string name, JsonString argumen
     JsonWriter fields;
     fields.startObject(); fields.key("name"); fields.string(name); fields.key("arguments"); fields.raw(arguments.empty() ? "{}" : arguments); fields.endObject();
     co_await request(Methods::PROMPTS_GET, fields.takeString(), result);
+}
+
+kernel::Task<void> McpHttpClient::listen(
+    SubscriptionFilter filter,
+    SubscriptionCallback callback,
+    std::expected<SubscriptionFilter, McpError>& result)
+{
+    if (!callback) {
+        result = std::unexpected(McpError::invalidParams("subscription callback is empty"));
+        co_return;
+    }
+
+    http::HttpClient listenClient(http::HttpClientBuilder().build());
+    auto connected = co_await listenClient.connect(m_url);
+    if (!connected) {
+        result = std::unexpected(McpError::connectionError(
+            std::string(connected.error().message())));
+        co_return;
+    }
+    auto session = listenClient.getSession(64 * 1024);
+    if (!session) {
+        result = std::unexpected(McpError::connectionError(session.error().message()));
+        co_return;
+    }
+
+    const RequestId requestId = nextId();
+    auto params = makeRequestParams(meta(), [&filter] {
+        JsonWriter fields;
+        fields.startObject();
+        fields.key("notifications");
+        fields.raw(filter.toJson());
+        fields.endObject();
+        return fields.takeString();
+    }());
+    if (!params) {
+        result = std::unexpected(params.error());
+        co_return;
+    }
+    JsonRpcRequest request;
+    request.id = requestId;
+    request.method = Methods::SUBSCRIPTIONS_LISTEN;
+    request.params = std::move(params.value());
+
+    std::string requestBody = request.toJson();
+    http::HttpRequest httpRequest;
+    http::HttpRequestHeader httpHeader;
+    httpHeader.method() = http::HttpMethod::POST;
+    httpHeader.uri() = listenClient.url().path;
+    httpHeader.version() = http::HttpVersion::HttpVersion_1_1;
+    httpHeader.headerPairs().addHeaderPair("Host", listenClient.url().host + ":" +
+                                           std::to_string(listenClient.url().port));
+    httpHeader.headerPairs().addHeaderPair("Accept", "application/json, text/event-stream");
+    httpHeader.headerPairs().addHeaderPair("Content-Type", "application/json");
+    httpHeader.headerPairs().addHeaderPair("Connection", "close");
+    httpHeader.headerPairs().addHeaderPair("MCP-Protocol-Version", MCP_VERSION);
+    httpHeader.headerPairs().addHeaderPair("Mcp-Method", Methods::SUBSCRIPTIONS_LISTEN);
+    httpHeader.headerPairs().addHeaderPair("Content-Length", std::to_string(requestBody.size()));
+    httpRequest.setHeader(std::move(httpHeader));
+    httpRequest.setBodyStr(std::move(requestBody));
+
+    auto writer = session.value()->getWriter();
+    auto sent = co_await writer.sendRequest(httpRequest);
+    if (!sent || !sent.value()) {
+        result = std::unexpected(McpError::connectionError(
+            sent ? "failed to send subscription request" : sent.error().message()));
+        co_return;
+    }
+    http::HttpResponseHeader responseHeader;
+    auto headerResult = co_await session.value()->getResponseHeader(responseHeader);
+    if (!headerResult || !headerResult.value() ||
+        responseHeader.code() != http::HttpStatusCode::OK_200 ||
+        !hasSseContentType(responseHeader)) {
+        result = std::unexpected(McpError::invalidResponse("invalid subscription SSE response"));
+        co_return;
+    }
+
+    http::ChunkParser chunkParser;
+    std::string chunk;
+    std::string sseBuffer;
+    bool acknowledged = false;
+    bool completed = false;
+    while (!completed) {
+        chunk.clear();
+        auto chunkResult = co_await session.value()->getNextChunk(chunk, chunkParser);
+        if (!chunkResult) {
+            result = std::unexpected(McpError::connectionClosed(chunkResult.error().message()));
+            co_return;
+        }
+        sseBuffer += chunk;
+        for (;;) {
+            std::size_t delimiter = sseBuffer.find("\n\n");
+            std::size_t delimiterSize = 2;
+            const std::size_t crlf = sseBuffer.find("\r\n\r\n");
+            if (crlf != std::string::npos && (delimiter == std::string::npos || crlf < delimiter)) {
+                delimiter = crlf;
+                delimiterSize = 4;
+            }
+            if (delimiter == std::string::npos) break;
+            const std::string event = sseBuffer.substr(0, delimiter + delimiterSize);
+            sseBuffer.erase(0, delimiter + delimiterSize);
+            auto parsedEvent = parseSseEvent(event);
+            if (!parsedEvent) {
+                result = std::unexpected(parsedEvent.error());
+                co_return;
+            }
+            if (!parsedEvent->has_value()) continue;
+            const auto message = std::move(parsedEvent->value());
+            if (!acknowledged) {
+                auto accepted = parseAcknowledged(message, requestId);
+                if (!accepted) {
+                    result = std::unexpected(accepted.error());
+                    co_return;
+                }
+                result = std::move(accepted.value());
+                acknowledged = true;
+                continue;
+            }
+            auto messageState = validateSubscriptionMessage(message, requestId);
+            if (!messageState) {
+                result = std::unexpected(messageState.error());
+                co_return;
+            }
+            completed = !messageState.value();
+            if (!completed && !callback(std::string(message))) {
+                auto closed = co_await listenClient.close();
+                if (!closed) {
+                    result = std::unexpected(McpError::connectionError(
+                        std::string(closed.error().message())));
+                }
+                co_return;
+            }
+            if (completed) break;
+        }
+    }
+    co_return;
 }
 
 } // namespace galay::mcp::v2

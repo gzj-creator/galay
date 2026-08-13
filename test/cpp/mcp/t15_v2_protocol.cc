@@ -179,6 +179,75 @@ int main()
         return 1;
     }
 
+    v2::SubscriptionFilter filter;
+    filter.toolsListChanged = true;
+    filter.promptsListChanged = true;
+    filter.resourcesListChanged = true;
+    filter.resourceSubscriptions = {"mem://hello", "mem://config"};
+    auto filterDocument = JsonDocument::parse(filter.toJson());
+    auto parsedFilter = filterDocument
+        ? v2::SubscriptionFilter::fromJson(filterDocument->root())
+        : std::expected<v2::SubscriptionFilter, McpError>(
+              std::unexpected(filterDocument.error()));
+    if (!require(parsedFilter.has_value() && parsedFilter->toolsListChanged &&
+                     parsedFilter->promptsListChanged &&
+                     parsedFilter->resourcesListChanged &&
+                     parsedFilter->resourceSubscriptions.size() == 2,
+                 "subscription filter did not round trip")) {
+        return 1;
+    }
+    auto malformedFilter = JsonDocument::parse(
+        R"({"toolsListChanged":"yes","resourceSubscriptions":[7]})");
+    if (!require(malformedFilter.has_value() &&
+                     !v2::SubscriptionFilter::fromJson(malformedFilter->root()).has_value(),
+                 "malformed subscription filter was accepted")) {
+        return 1;
+    }
+    const auto acknowledged = v2::makeSubscriptionAcknowledgedNotification(
+        std::string("listen-1"), filter);
+    if (!require(acknowledged.find(
+                     "\"method\":\"notifications/subscriptions/acknowledged\"") !=
+                     std::string::npos &&
+                     acknowledged.find(
+                         "\"io.modelcontextprotocol/subscriptionId\":\"listen-1\"") !=
+                     std::string::npos &&
+                     acknowledged.find("\"toolsListChanged\":true") != std::string::npos,
+                 "subscription acknowledgement is missing its filter or id")) {
+        return 1;
+    }
+    const auto resourceUpdated = v2::makeSubscriptionNotification(
+        v2::NotificationMethods::RESOURCES_UPDATED,
+        int64_t{7},
+        std::optional<std::string_view>("mem://hello"));
+    if (!require(resourceUpdated.find("\"uri\":\"mem://hello\"") !=
+                         std::string::npos &&
+                     resourceUpdated.find(
+                         "\"io.modelcontextprotocol/subscriptionId\":7") !=
+                         std::string::npos,
+                 "resource update notification is missing its uri or subscription id")) {
+        return 1;
+    }
+    const auto listenComplete = v2::makeSubscriptionCompleteResponse(
+        std::string("listen-1"));
+    if (!require(listenComplete.find("\"resultType\":\"complete\"") !=
+                         std::string::npos &&
+                     listenComplete.find(
+                         "\"io.modelcontextprotocol/subscriptionId\":\"listen-1\"") !=
+                         std::string::npos,
+                 "subscription completion response is missing its id")) {
+        return 1;
+    }
+    const auto sseEvent = v2::encodeSseEvent(acknowledged);
+    const auto parsedSse = v2::parseSseEvent(sseEvent);
+    const auto parsedComment = v2::parseSseEvent(": keep-alive\n\n");
+    if (!require(sseEvent.starts_with("data: ") && sseEvent.ends_with("\n\n") &&
+                     parsedSse.has_value() && parsedSse->has_value() &&
+                     parsedSse->value() == acknowledged && parsedComment.has_value() &&
+                     !parsedComment->has_value(),
+                 "SSE event codec did not preserve the JSON-RPC message")) {
+        return 1;
+    }
+
     v2::ListResult list;
     list.field = "tools";
     list.items = {R"({"name":"echo","inputSchema":{"type":"object"}})"};

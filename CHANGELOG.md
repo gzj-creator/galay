@@ -15,10 +15,13 @@
 
 - 新增 MCP `2026-07-28` 无状态 v2 协议实现，提供 `galay::mcp::v2` 的 stdio/Streamable HTTP client/server、`server/discover`、结果缓存字段、HTTP 标准 header 校验及 `x-mcp-header` 参数镜像能力。
 - 新增显式 `galay::mcp::v1` 旧协议入口，并补充 v2 协议、stdio、HTTP 边界测试和吞吐 benchmark。
+- **新增 MCP v2 `subscriptions/listen` 长生命周期 SSE 订阅流**：HTTP server 端通过 `notifyToolsListChanged` / `notifyResourcesListChanged` / `notifyPromptsListChanged` / `notifyResourceUpdated` 按订阅快照向显式 opt-in 的订阅连接广播通知，事件经有界通道投递；客户端新增 `listen()` 使用独立 SSE 连接接收事件并支持回调取消；协议层新增 `SubscriptionFilter`、SSE event 编解码与订阅确认/结束消息；HTTP 层新增只读响应头与增量 chunk 读取接口支撑流式消费。
+- **新增订阅流回归与压测覆盖**：新增 `t18_v2_http_client_listen`（订阅生命周期与独立请求并发）、`t19_v2_stdio_client_concurrency`（stdio 客户端并发请求保护）与 `b8_v2_subscription_broadcast_pressure`（真实 SSE 订阅广播压测），并扩展 `t15_v2_protocol` / `t17_v2_http_server` 的订阅过滤、取消与 URI 精确匹配覆盖。
 
 ### Changed
 
-- 保留原根命名空间 MCP `2024-11-05` API 行为，更新 CMake、C++ module 导出及 MCP 文档以同时支持 v1/v2。
+- **保留原根命名空间 MCP `2024-11-05` API 行为**：更新 CMake、C++ module 导出及 MCP 文档以同时支持 v1/v2。
+- **C coroutine bridge 全面无锁化**：7 个 `coro-c` bridge 移除 `std::mutex` 保护，user data 槽位改用原子 `exchange`，避免阻塞协程调度线程；`t22_coro_source_boundaries` 增加无阻塞锁源码约束，`b9_async_mutex_contended` 支持自定义迭代次数参数，并在工程准则中新增"协程与并发阻塞操作"约定。
 
 ## [v4.7.0] - 2026-08-12
 

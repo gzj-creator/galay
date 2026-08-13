@@ -7,9 +7,6 @@
 #include <atomic>
 #include <chrono>
 #include <limits>
-#include <mutex>
-#include <utility>
-
 namespace
 {
 
@@ -150,8 +147,7 @@ struct CoroAsyncWaiterOperation {
 
     bool hasPendingToken() noexcept
     {
-        std::lock_guard<std::mutex> lock(m_user_data_mutex);
-        return m_user_data != nullptr;
+        return m_user_data.load(std::memory_order_acquire) != nullptr;
     }
 
     C_IOResult finishWithoutWait(C_IOResult result) noexcept
@@ -183,12 +179,9 @@ private:
         auto complete_user_data = m_wait_ops.complete_user_data;
         auto release_user_data = m_wait_ops.release_user_data;
         C_IOResult completed = make_result(C_IOResultInvalid);
-        {
-            std::lock_guard<std::mutex> lock(m_user_data_mutex);
-            user_data = std::exchange(m_user_data, nullptr);
-            if (user_data != nullptr && complete_user_data != nullptr) {
-                completed = complete_user_data(user_data, result);
-            }
+        user_data = m_user_data.exchange(nullptr, std::memory_order_acq_rel);
+        if (user_data != nullptr && complete_user_data != nullptr) {
+            completed = complete_user_data(user_data, result);
         }
         if (user_data != nullptr && release_user_data != nullptr) {
             C_IOResult released = release_user_data(user_data);
@@ -222,11 +215,10 @@ private:
         .release = wake_release,
     };
 
-    std::mutex m_user_data_mutex;
     CoroAsyncWaiterWakeState m_wake_state{};
     GalayCoreCoroWaitOps m_wait_ops{};
     Scheduler* m_scheduler = nullptr;
-    void* m_user_data = nullptr;
+    std::atomic<void*> m_user_data{nullptr};
     std::atomic<CompletionPhase> m_phase{CompletionPhase::Pending};
 };
 

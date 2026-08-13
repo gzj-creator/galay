@@ -9,9 +9,7 @@
 #include <chrono>
 #include <cstring>
 #include <limits>
-#include <mutex>
 #include <string>
-#include <utility>
 
 namespace
 {
@@ -53,9 +51,8 @@ enum class CoroUdpCompletionPhase : uint8_t {
 };
 
 struct CoroUdpCompletionState {
-    std::mutex user_data_mutex;
     GalayCoreCoroWaitOps wait_ops{};
-    void* user_data = nullptr;
+    std::atomic<void*> user_data{nullptr};
     std::atomic<CoroUdpCompletionPhase> phase{CoroUdpCompletionPhase::Pending};
 };
 
@@ -269,8 +266,7 @@ struct CoroUdpOperationBase: public CoroUdpOperationInterface {
 
     bool hasPendingToken() noexcept
     {
-        std::lock_guard<std::mutex> lock(m_state.user_data_mutex);
-        return m_state.user_data != nullptr;
+        return m_state.user_data.load(std::memory_order_acquire) != nullptr;
     }
 
     C_IOResult wait(int64_t timeout_ms) noexcept
@@ -320,26 +316,26 @@ private:
 
     C_IOResult completeUserDataNoRelease(C_IOResult result) noexcept
     {
-        std::lock_guard<std::mutex> lock(m_state.user_data_mutex);
-        if (m_state.user_data == nullptr) {
+        void* user_data = m_state.user_data.load(std::memory_order_acquire);
+        if (user_data == nullptr) {
             return make_result(C_IOResultInvalid);
         }
-        return m_state.wait_ops.complete_user_data(m_state.user_data, result);
+        auto complete_user_data = m_state.wait_ops.complete_user_data;
+        return complete_user_data(user_data, result);
     }
 
     C_IOResult completeAndReleaseUserData(C_IOResult result) noexcept
     {
         void* user_data = nullptr;
+        auto complete_user_data = m_wait_ops.complete_user_data;
+        auto release_user_data = m_wait_ops.release_user_data;
         C_IOResult completed = make_result(C_IOResultInvalid);
-        {
-            std::lock_guard<std::mutex> lock(m_state.user_data_mutex);
-            user_data = std::exchange(m_state.user_data, nullptr);
-            if (user_data != nullptr) {
-                completed = m_wait_ops.complete_user_data(user_data, result);
-            }
+        user_data = m_state.user_data.exchange(nullptr, std::memory_order_acq_rel);
+        if (user_data != nullptr) {
+            completed = complete_user_data(user_data, result);
         }
         if (user_data != nullptr) {
-            C_IOResult released = m_wait_ops.release_user_data(user_data);
+            C_IOResult released = release_user_data(user_data);
             completed = merge_cleanup_result(completed, released);
         }
         return completed;
@@ -348,12 +344,10 @@ private:
     void releaseUserDataOnly() noexcept
     {
         void* user_data = nullptr;
-        {
-            std::lock_guard<std::mutex> lock(m_state.user_data_mutex);
-            user_data = std::exchange(m_state.user_data, nullptr);
-        }
+        auto release_user_data = m_wait_ops.release_user_data;
+        user_data = m_state.user_data.exchange(nullptr, std::memory_order_acq_rel);
         if (user_data != nullptr) {
-            m_last_cleanup_result = m_wait_ops.release_user_data(user_data);
+            m_last_cleanup_result = release_user_data(user_data);
         }
     }
 

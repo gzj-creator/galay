@@ -215,6 +215,8 @@ ChunkParser::parse(const std::vector<iovec>& iovecs,
                    size_t max_body_size)
 {
     size_t consumed = 0;
+    m_last_consumed = 0;
+    m_last_produced_chunk = false;
 
     for (const auto& iov : iovecs) {
         const char* data = static_cast<const char*>(iov.iov_base);
@@ -307,6 +309,7 @@ ChunkParser::parse(const std::vector<iovec>& iovecs,
 
                 m_current_chunk_size = 0;
                 m_current_chunk_read = 0;
+                m_last_produced_chunk = true;
                 m_phase = Phase::kSizeLine;
                 continue;
             }
@@ -343,6 +346,7 @@ ChunkParser::parse(const std::vector<iovec>& iovecs,
         }
     }
 
+    m_last_consumed = consumed;
     return std::pair<bool, size_t>{m_phase == Phase::kDone, consumed};
 }
 
@@ -354,6 +358,8 @@ ChunkParser ChunkParser::clone() const
     copy.m_current_chunk_read = m_current_chunk_read;
     copy.m_phase = m_phase;
     copy.m_pending_cr = m_pending_cr;
+    copy.m_last_consumed = m_last_consumed;
+    copy.m_last_produced_chunk = m_last_produced_chunk;
     return copy;
 }
 
@@ -364,6 +370,8 @@ void ChunkParser::reset()
     m_current_chunk_size = 0;
     m_current_chunk_read = 0;
     m_pending_cr = false;
+    m_last_consumed = 0;
+    m_last_produced_chunk = false;
 }
 
 std::string Chunk::toChunk(const std::string& data, bool is_last)

@@ -35,6 +35,16 @@ inline constexpr const char* SUBSCRIPTIONS_LISTEN = "subscriptions/listen";
 inline constexpr const char* CANCELLED = "notifications/cancelled";
 }
 
+namespace NotificationMethods {
+inline constexpr const char* SUBSCRIPTIONS_ACKNOWLEDGED =
+    "notifications/subscriptions/acknowledged";
+inline constexpr const char* TOOLS_LIST_CHANGED = "notifications/tools/list_changed";
+inline constexpr const char* RESOURCES_LIST_CHANGED =
+    "notifications/resources/list_changed";
+inline constexpr const char* RESOURCES_UPDATED = "notifications/resources/updated";
+inline constexpr const char* PROMPTS_LIST_CHANGED = "notifications/prompts/list_changed";
+}
+
 namespace ErrorCodes {
 inline constexpr int PARSE_ERROR = -32700;
 inline constexpr int INVALID_REQUEST = -32600;
@@ -273,6 +283,18 @@ struct ParsedResponse {
     ParsedResponse& operator=(const ParsedResponse&) = delete;
 };
 
+/** @brief `subscriptions/listen` 中显式选择的通知集合。 */
+struct SubscriptionFilter {
+    std::vector<std::string> resourceSubscriptions;
+    bool toolsListChanged = false;
+    bool resourcesListChanged = false;
+    bool promptsListChanged = false;
+
+    JsonString toJson() const;
+    static std::expected<SubscriptionFilter, McpError> fromJson(
+        const JsonElement& element);
+};
+
 /** @brief 构建只包含必需 `_meta` 的请求参数对象。 */
 JsonString makeRequestParams(const RequestMeta& meta);
 
@@ -297,6 +319,30 @@ JsonString makeUnsupportedProtocolVersionResponse(
     const RequestId& id,
     std::string_view requested,
     const std::vector<std::string>& supported);
+
+/** @brief 构建 listen 流的首条确认通知。 */
+JsonString makeSubscriptionAcknowledgedNotification(
+    const RequestId& id,
+    const SubscriptionFilter& accepted);
+
+/** @brief 构建带 subscriptionId 的列表或资源变更通知。 */
+JsonString makeSubscriptionNotification(
+    std::string_view method,
+    const RequestId& id,
+    std::optional<std::string_view> uri = std::nullopt);
+
+/** @brief 构建服务端主动结束 listen 流时的最终响应。 */
+JsonString makeSubscriptionCompleteResponse(const RequestId& id);
+
+/** @brief 把一条 JSON-RPC 消息编码为 SSE data event。 */
+JsonString encodeSseEvent(std::string_view message);
+
+/**
+ * @brief 解析一个完整 SSE event。
+ * @return data event 返回 JSON 字符串，comment/空 event 返回 nullopt。
+ */
+std::expected<std::optional<JsonString>, McpError> parseSseEvent(
+    std::string_view event);
 
 } // namespace galay::mcp::v2
 

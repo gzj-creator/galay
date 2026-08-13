@@ -70,7 +70,8 @@ v2 的成功结果带 `resultType`；`tools/list`、`resources/list`、
 `MCP-Protocol-Version`、`Mcp-Method`，命名请求还会发送 `Mcp-Name`。header/body
 不一致返回 HTTP 400 与 `-32020`。工具 schema 中的 `x-mcp-header` 会在 HTTP
 `tools/call` 中镜像为 `Mcp-Param-*`，非法 annotation 会从 HTTP 客户端的工具列表中
-过滤。当前实现不声明 `subscriptions/listen`，因为它需要真实的长生命周期 SSE 订阅流；
+过滤。v2 HTTP 实现支持 `subscriptions/listen` 长生命周期 SSE 订阅流；服务端只接受
+客户端显式 opt-in 且当前注册能力支持的通知，客户端使用独立连接接收事件，关闭该连接即取消订阅；
 `resources/templates/list`、`completion/complete` 等未注册的 v2 方法会显式返回
 `-32601`。
 

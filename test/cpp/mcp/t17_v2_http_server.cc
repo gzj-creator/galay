@@ -103,6 +103,36 @@ std::string body(std::string_view response)
     return offset == std::string_view::npos ? std::string{} : std::string(response.substr(offset + 4));
 }
 
+std::string recvUntil(int fd, std::string_view marker)
+{
+    std::string response;
+    char buffer[4096];
+    while (response.find(marker) == std::string::npos) {
+        const auto n = ::recv(fd, buffer, sizeof(buffer), 0);
+        if (n <= 0) break;
+        response.append(buffer, static_cast<std::size_t>(n));
+    }
+    return response;
+}
+
+int openListen(uint16_t portValue, std::string_view bodyValue)
+{
+    const int fd = connectTo(portValue);
+    if (fd < 0) return -1;
+    std::string request =
+        "POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\n"
+        "Content-Type: application/json\r\n"
+        "Accept: application/json, text/event-stream\r\n"
+        "MCP-Protocol-Version: 2026-07-28\r\n"
+        "Mcp-Method: subscriptions/listen\r\n"
+        "Connection: close\r\nContent-Length: ";
+    request += std::to_string(bodyValue.size());
+    request += "\r\n\r\n";
+    request.append(bodyValue.data(), bodyValue.size());
+    sendAll(fd, request);
+    return fd;
+}
+
 std::string makeBody(std::string_view method, std::string_view fields)
 {
     galay::mcp::v2::RequestMeta meta;
@@ -131,6 +161,13 @@ int main()
                        result = std::string("hello");
                        co_return;
                    });
+    server.addResource("mem://hello", "hello", "Hello", "text/plain",
+                       [](const std::string&,
+                          std::expected<std::string, galay::mcp::McpError>& result)
+                           -> galay::kernel::Task<void> {
+                           result = std::string("hello");
+                           co_return;
+                       });
     std::thread serverThread([&server] { server.start(); });
 
     const int probe = connectTo(selectedPort);
@@ -226,8 +263,73 @@ int main()
         server.stop(); serverThread.join(); return 1;
     }
 
+    const auto listen = makeBody(
+        galay::mcp::v2::Methods::SUBSCRIPTIONS_LISTEN,
+        R"({"notifications":{"toolsListChanged":true,"promptsListChanged":true,"resourcesListChanged":true,"resourceSubscriptions":["mem://hello"]}})");
+    const int listenFd = openListen(selectedPort, listen);
+    if (!require(listenFd >= 0, "failed to open subscriptions/listen stream")) {
+        server.stop(); serverThread.join(); return 1;
+    }
+    const auto acknowledged = recvUntil(
+        listenFd, "notifications/subscriptions/acknowledged");
+    if (!require(acknowledged.find("200 OK") != std::string::npos &&
+                     acknowledged.find("content-type: text/event-stream") !=
+                         std::string::npos &&
+                     acknowledged.find("transfer-encoding: chunked") !=
+                         std::string::npos &&
+                     acknowledged.find("x-accel-buffering: no") !=
+                         std::string::npos &&
+                     acknowledged.find("\"toolsListChanged\":true") !=
+                         std::string::npos &&
+                     acknowledged.find("promptsListChanged") ==
+                         std::string::npos,
+                 "listen stream did not acknowledge only supported filters")) {
+        ::close(listenFd);
+        server.stop(); serverThread.join(); return 1;
+    }
+    if (!require(server.notifyToolsListChanged() == 1 &&
+                     server.notifyPromptsListChanged() == 0 &&
+                     server.notifyResourcesListChanged() == 1 &&
+                     server.notifyResourceUpdated("mem://other") == 0 &&
+                     server.notifyResourceUpdated("mem://hello/child") == 0 &&
+                     server.notifyResourceUpdated("mem://hello") == 1,
+                 "subscription filtering or delivery count is incorrect")) {
+        ::close(listenFd);
+        server.stop(); serverThread.join(); return 1;
+    }
+    const auto changed = recvUntil(listenFd, "notifications/tools/list_changed");
+    if (!require(changed.find(
+                     "\"io.modelcontextprotocol/subscriptionId\":1") !=
+                     std::string::npos,
+                 "listen stream notification is missing its subscription id")) {
+        ::close(listenFd);
+        server.stop(); serverThread.join(); return 1;
+    }
+    ::close(listenFd);
+
+    const int shutdownListenFd = openListen(selectedPort, listen);
+    if (!require(shutdownListenFd >= 0 &&
+                     recvUntil(shutdownListenFd,
+                               "notifications/subscriptions/acknowledged")
+                         .find("notifications/subscriptions/acknowledged") !=
+                         std::string::npos,
+                 "second listen stream was not acknowledged")) {
+        if (shutdownListenFd >= 0) ::close(shutdownListenFd);
+        server.stop(); serverThread.join(); return 1;
+    }
+
     server.stop();
+    const auto gracefulClose = recvUntil(shutdownListenFd, "0\r\n\r\n");
+    ::close(shutdownListenFd);
     serverThread.join();
+    if (!require(gracefulClose.find("\"resultType\":\"complete\"") !=
+                         std::string::npos &&
+                     gracefulClose.find(
+                         "\"io.modelcontextprotocol/subscriptionId\":1") !=
+                         std::string::npos,
+                 "server shutdown did not close the listen stream gracefully")) {
+        return 1;
+    }
     std::cout << "T17-V2HttpServer PASS\n";
     return 0;
 }

@@ -403,6 +403,56 @@ static int require_c_bridge_module_layout(void)
     return failed;
 }
 
+static int require_c_bridge_without_blocking_mutex(void)
+{
+    const char* bridge_files[] = {
+        "c_coro_aio_file_bridge.cc",
+        "c_coro_async_file_bridge.cc",
+        "c_coro_async_mutex_bridge.cc",
+        "c_coro_async_waiter_bridge.cc",
+        "c_coro_file_watcher_bridge.cc",
+        "c_coro_tcp_bridge.cc",
+        "c_coro_udp_bridge.cc",
+    };
+    const char* forbidden[] = {
+        "#include <mutex>",
+        "std::mutex",
+        "std::lock_guard",
+        "std::unique_lock",
+        "std::scoped_lock",
+    };
+    int failed = 0;
+    for (size_t i = 0; i < sizeof(bridge_files) / sizeof(bridge_files[0]); ++i) {
+        char relative_path[kMaxPath];
+        char full_path[kMaxPath];
+        if (!join_path(relative_path,
+                       sizeof(relative_path),
+                       "src/c/galay-bridge-c/coro-c",
+                       bridge_files[i]) ||
+            !join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+            failed = 1;
+            continue;
+        }
+        char* data = NULL;
+        size_t len = 0;
+        if (!read_file(full_path, &data, &len)) {
+            failed = 1;
+            continue;
+        }
+        for (size_t j = 0; j < sizeof(forbidden) / sizeof(forbidden[0]); ++j) {
+            if (contains_text(data, len, forbidden[j])) {
+                fprintf(stderr,
+                        "[T22] %s must not use blocking mutex token %s in a coroutine bridge\n",
+                        relative_path,
+                        forbidden[j]);
+                failed = 1;
+            }
+        }
+        free(data);
+    }
+    return failed;
+}
+
 static int require_iouring_result_flag_lifecycle(void)
 {
     const char* bridge_relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
@@ -570,6 +620,7 @@ int main(void)
 {
     int failed = require_direct_tcp_c_api_uses_core_bridge();
     failed |= require_c_bridge_module_layout();
+    failed |= require_c_bridge_without_blocking_mutex();
     failed |= require_iouring_result_flag_lifecycle();
     failed |= require_direct_tcp_timeout_arbitration();
     failed |= require_explicit_linux_aarch64_coro_context_boundary();

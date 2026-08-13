@@ -1238,6 +1238,82 @@ std::expected<ParsedResponse, McpError> parseResponse(std::string_view body)
     return parsed;
 }
 
+JsonString SubscriptionFilter::toJson() const
+{
+    JsonWriter writer;
+    writer.startObject();
+    if (toolsListChanged) {
+        writer.key("toolsListChanged");
+        writer.boolean(true);
+    }
+    if (promptsListChanged) {
+        writer.key("promptsListChanged");
+        writer.boolean(true);
+    }
+    if (resourcesListChanged) {
+        writer.key("resourcesListChanged");
+        writer.boolean(true);
+    }
+    if (!resourceSubscriptions.empty()) {
+        writer.key("resourceSubscriptions");
+        writer.startArray();
+        for (const auto& uri : resourceSubscriptions) {
+            writer.string(uri);
+        }
+        writer.endArray();
+    }
+    writer.endObject();
+    return writer.takeString();
+}
+
+std::expected<SubscriptionFilter, McpError> SubscriptionFilter::fromJson(
+    const JsonElement& element)
+{
+    auto objectResult = requireObject(element, "notifications");
+    if (!objectResult) {
+        return std::unexpected(objectResult.error());
+    }
+    const JsonObject object = objectResult.value();
+    SubscriptionFilter filter;
+    auto readFlag = [&object](const char* key, bool& destination)
+        -> std::expected<void, McpError> {
+        JsonElement value;
+        if (!JsonHelper::getElement(object, key, value)) {
+            return {};
+        }
+        if (!value.is_bool()) {
+            return std::unexpected(McpError::invalidParams(
+                std::string(key) + " must be a boolean"));
+        }
+        destination = value.get_bool().value();
+        return {};
+    };
+    auto tools = readFlag("toolsListChanged", filter.toolsListChanged);
+    auto prompts = readFlag("promptsListChanged", filter.promptsListChanged);
+    auto resources = readFlag("resourcesListChanged", filter.resourcesListChanged);
+    if (!tools) return std::unexpected(tools.error());
+    if (!prompts) return std::unexpected(prompts.error());
+    if (!resources) return std::unexpected(resources.error());
+
+    JsonElement subscriptionsElement;
+    if (JsonHelper::getElement(object, "resourceSubscriptions", subscriptionsElement)) {
+        JsonArray subscriptions;
+        if (!JsonHelper::getArray(subscriptionsElement, subscriptions)) {
+            return std::unexpected(McpError::invalidParams(
+                "resourceSubscriptions must be an array"));
+        }
+        for (auto item : subscriptions) {
+            std::string uri;
+            if (!JsonHelper::getStringValue(item, uri)) {
+                return std::unexpected(McpError::invalidParams(
+                    "resourceSubscriptions must contain strings"));
+            }
+            filter.resourceSubscriptions.push_back(std::move(uri));
+        }
+    }
+    return filter;
+}
+
 JsonString makeResultResponse(const RequestId& id, std::string_view resultJson)
 {
     JsonWriter writer;
@@ -1301,6 +1377,122 @@ JsonString makeUnsupportedProtocolVersionResponse(
                              ErrorCodes::UNSUPPORTED_PROTOCOL_VERSION,
                              "Unsupported protocol version",
                              dataJson);
+}
+
+JsonString makeSubscriptionAcknowledgedNotification(
+    const RequestId& id,
+    const SubscriptionFilter& accepted)
+{
+    JsonWriter writer;
+    writer.startObject();
+    writer.key("jsonrpc");
+    writer.string(JSONRPC_VERSION);
+    writer.key("method");
+    writer.string(NotificationMethods::SUBSCRIPTIONS_ACKNOWLEDGED);
+    writer.key("params");
+    writer.startObject();
+    writer.key("_meta");
+    writer.startObject();
+    writer.key("io.modelcontextprotocol/subscriptionId");
+    writeRequestId(writer, id);
+    writer.endObject();
+    writer.key("notifications");
+    writer.raw(accepted.toJson());
+    writer.endObject();
+    writer.endObject();
+    return writer.takeString();
+}
+
+JsonString makeSubscriptionNotification(std::string_view method,
+                                        const RequestId& id,
+                                        std::optional<std::string_view> uri)
+{
+    JsonWriter writer;
+    writer.startObject();
+    writer.key("jsonrpc");
+    writer.string(JSONRPC_VERSION);
+    writer.key("method");
+    writer.string(std::string(method));
+    writer.key("params");
+    writer.startObject();
+    writer.key("_meta");
+    writer.startObject();
+    writer.key("io.modelcontextprotocol/subscriptionId");
+    writeRequestId(writer, id);
+    writer.endObject();
+    if (uri) {
+        writer.key("uri");
+        writer.string(std::string(*uri));
+    }
+    writer.endObject();
+    writer.endObject();
+    return writer.takeString();
+}
+
+JsonString makeSubscriptionCompleteResponse(const RequestId& id)
+{
+    JsonWriter result;
+    result.startObject();
+    result.key("resultType");
+    result.string("complete");
+    result.key("_meta");
+    result.startObject();
+    result.key("io.modelcontextprotocol/subscriptionId");
+    writeRequestId(result, id);
+    result.endObject();
+    result.endObject();
+    return makeResultResponse(id, result.takeString());
+}
+
+JsonString encodeSseEvent(std::string_view message)
+{
+    JsonString event;
+    event.reserve(message.size() + 8);
+    std::size_t offset = 0;
+    while (offset <= message.size()) {
+        const std::size_t newline = message.find('\n', offset);
+        event += "data: ";
+        if (newline == std::string_view::npos) {
+            event.append(message.substr(offset));
+            event += "\n\n";
+            break;
+        }
+        event.append(message.substr(offset, newline - offset));
+        event.push_back('\n');
+        offset = newline + 1;
+    }
+    return event;
+}
+
+std::expected<std::optional<JsonString>, McpError> parseSseEvent(
+    std::string_view event)
+{
+    JsonString data;
+    bool hasData = false;
+    std::size_t offset = 0;
+    while (offset < event.size()) {
+        std::size_t newline = event.find('\n', offset);
+        if (newline == std::string_view::npos) newline = event.size();
+        std::string_view line = event.substr(offset, newline - offset);
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+        offset = newline == event.size() ? event.size() : newline + 1;
+        if (line.empty() || line.front() == ':') continue;
+        const std::size_t colon = line.find(':');
+        const std::string_view field = line.substr(0, colon);
+        std::string_view value = colon == std::string_view::npos
+            ? std::string_view{} : line.substr(colon + 1);
+        if (!value.empty() && value.front() == ' ') value.remove_prefix(1);
+        if (field != "data") continue;
+        if (hasData) data.push_back('\n');
+        data.append(value);
+        hasData = true;
+    }
+    if (!hasData) return std::optional<JsonString>{};
+    if (!JsonDocument::parse(data)) {
+        return std::unexpected(McpError::invalidResponse(
+            "SSE data is not a JSON message"));
+    }
+    return std::optional<JsonString>{std::move(data)};
 }
 
 } // namespace galay::mcp::v2

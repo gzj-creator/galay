@@ -585,6 +585,92 @@ struct HttpResponseReadState {
 };
 
 /**
+ * @brief HTTP 响应头读取状态。
+ * @details 只消费响应头，已同批收到的 body 字节留在 RingBuffer 中，
+ *          便于 SSE、协议升级等长连接消费者继续增量读取。
+ */
+struct HttpResponseHeaderReadState {
+    using ResultType = std::expected<bool, HttpError>;
+
+    HttpResponseHeaderReadState(
+        RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
+        const HttpReaderSetting& setting,
+        HttpResponseHeader& header)
+        : m_ring_buffer(&ring_buffer), m_setting(&setting), m_header(&header) {}
+
+    bool parseFromRingBuffer() {
+        auto read_iovecs = borrowReadIovecs(*m_ring_buffer);
+        if (read_iovecs.empty()) return false;
+        if (IoVecWindow::buildWindow(read_iovecs, m_parse_iovecs) == 0) return false;
+
+        auto [error_code, consumed] = m_header->fromIOVec(m_parse_iovecs);
+        if (consumed > 0) m_ring_buffer->consume(static_cast<size_t>(consumed));
+        if (error_code == kIncomplete || error_code == kHeaderInComplete) {
+            if (m_total_received >= m_setting->getMaxHeaderSize()) {
+                m_http_error = HttpError(kHeaderTooLarge);
+                return true;
+            }
+            return false;
+        }
+        if (error_code != kNoError) {
+            m_http_error = HttpError(error_code);
+            return true;
+        }
+        return m_header->isHeaderComplete();
+    }
+
+    bool prepareRecvWindow() {
+        m_write_iovecs = borrowWriteIovecs(*m_ring_buffer);
+        if (m_write_iovecs.empty()) {
+            m_http_error = HttpError(kHeaderTooLarge);
+            return false;
+        }
+        return true;
+    }
+
+    bool prepareRecvWindow(char*& buffer, size_t& length) {
+        if (!prepareRecvWindow() ||
+            !IoVecWindow::bindFirstNonEmpty(m_write_iovecs, buffer, length)) {
+            buffer = nullptr;
+            length = 0;
+            m_http_error = HttpError(kHeaderTooLarge);
+            return false;
+        }
+        return true;
+    }
+
+    const struct iovec* recvIovecsData() const { return m_write_iovecs.data(); }
+    size_t recvIovecsCount() const { return m_write_iovecs.size(); }
+    void setRecvError(const IOError& error) {
+        m_http_error = IOError::contains(error.code(), kTimeout)
+            ? HttpError(kRecvTimeOut, error.message())
+            : HttpError(kRecvError, error.message());
+    }
+#ifdef GALAY_SSL_FEATURE_ENABLED
+    void setSslRecvError(const galay::ssl::SslError& error) {
+        m_http_error = HttpError(error);
+    }
+#endif
+    void onPeerClosed() { m_http_error = HttpError(kConnectionClose); }
+    void onBytesReceived(size_t bytes) {
+        m_ring_buffer->produce(bytes);
+        m_total_received += bytes;
+    }
+    ResultType takeResult() {
+        if (m_http_error) return std::unexpected(std::move(*m_http_error));
+        return true;
+    }
+
+    RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>* m_ring_buffer;
+    const HttpReaderSetting* m_setting;
+    HttpResponseHeader* m_header;
+    size_t m_total_received = 0;
+    std::vector<iovec> m_parse_iovecs;
+    BorrowedIovecs<2> m_write_iovecs;
+    std::optional<HttpError> m_http_error;
+};
+
+/**
  * @brief HTTP Chunked 传输编码读取状态
  * @details 管理 HTTP chunked 编码数据的读取与解析
  */
@@ -599,10 +685,14 @@ struct HttpChunkReadState {
      */
     HttpChunkReadState(RingBuffer<galay::utils::RingBufferBackendStrategy::Mmap, std::dynamic_extent>& ring_buffer,
                        const HttpReaderSetting& setting,
-                       std::string& chunk_data)
+                       std::string& chunk_data,
+                       ChunkParser* parser = nullptr,
+                       bool emitAvailable = false)
         : m_ring_buffer(&ring_buffer)
         , m_setting(&setting)
-        , m_chunk_data(&chunk_data) {}
+        , m_chunk_data(&chunk_data)
+        , m_parser(parser)
+        , m_emit_available(emitAvailable) {}
 
     /**
      * @brief 从 RingBuffer 中尝试解析 chunked 数据
@@ -618,7 +708,8 @@ struct HttpChunkReadState {
             return false;
         }
 
-        auto result = m_chunk_parser.parse(
+        ChunkParser& parser = m_parser != nullptr ? *m_parser : m_chunk_parser;
+        auto result = parser.parse(
             m_parse_iovecs,
             *m_chunk_data,
             m_setting->getMaxBodySize());
@@ -637,7 +728,7 @@ struct HttpChunkReadState {
             return true;
         }
         m_is_last = is_last;
-        return is_last;
+        return m_emit_available ? (is_last || !m_chunk_data->empty()) : is_last;
     }
 
     bool checkBodyLimitExceeded() {
@@ -727,6 +818,8 @@ struct HttpChunkReadState {
     const HttpReaderSetting* m_setting;                 ///< 读取器配置指针
     std::string* m_chunk_data;                          ///< chunk 数据输出
     ChunkParser m_chunk_parser;                         ///< chunked body 增量解析状态
+    ChunkParser* m_parser = nullptr;                    ///< 外部持有的增量解析器
+    bool m_emit_available = false;                      ///< 产生 payload 时立即返回
     std::vector<iovec> m_parse_iovecs;                  ///< 解析用 iovec 缓冲
     BorrowedIovecs<2> m_write_iovecs;                   ///< 接收窗口 iovec
     std::optional<HttpError> m_http_error;              ///< HTTP 解析错误
@@ -891,6 +984,19 @@ public:
     }
 
     /**
+     * @brief 异步读取一个 HTTP 响应头，不消费后续 body 字节。
+     * @param header 待填充的响应头。
+     * @return 响应头完成时返回 true，连接、超时或解析失败通过 HttpError 返回。
+     */
+    ReadOperation<detail::HttpResponseHeaderReadState> getResponseHeader(
+        HttpResponseHeader& header) {
+        return ReadOperation<detail::HttpResponseHeaderReadState>(
+            *this,
+            std::make_shared<detail::HttpResponseHeaderReadState>(
+                *m_ring_buffer, m_setting, header));
+    }
+
+    /**
      * @brief 异步读取一个 HTTP chunked 编码的 chunk
      * @param chunk_data 用于存储 chunk 数据的字符串
      * @return 可 co_await 的异步操作；co_await 结果为
@@ -901,6 +1007,15 @@ public:
         return ReadOperation<detail::HttpChunkReadState>(
             *this,
             std::make_shared<detail::HttpChunkReadState>(*m_ring_buffer, m_setting, chunk_data));
+    }
+
+    /** @brief 增量读取下一个已完整的 chunk，不等待末尾 0 chunk。 */
+    ReadOperation<detail::HttpChunkReadState> getNextChunk(
+        std::string& chunk_data, ChunkParser& parser) {
+        return ReadOperation<detail::HttpChunkReadState>(
+            *this,
+            std::make_shared<detail::HttpChunkReadState>(
+                *m_ring_buffer, m_setting, chunk_data, &parser, true));
     }
 
 private:

@@ -130,6 +130,9 @@ public:
           std::string& chunk_data,
           size_t max_body_size = 0);
 
+    size_t lastConsumed() const noexcept { return m_last_consumed; }
+    bool lastProducedChunk() const noexcept { return m_last_produced_chunk; }
+
     /**
      * @brief 重置解析状态，用于新的 chunked body
      */
@@ -153,6 +156,8 @@ private:
     size_t m_current_chunk_read = 0;        ///< 当前 chunk 已读取 payload 长度
     Phase m_phase = Phase::kSizeLine;       ///< 当前解析阶段
     bool m_pending_cr = false;              ///< 是否刚读取到 '\r'
+    size_t m_last_consumed = 0;
+    bool m_last_produced_chunk = false;
 };
 
 } // namespace galay::http

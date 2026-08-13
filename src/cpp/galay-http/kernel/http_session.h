@@ -613,6 +613,11 @@ public:
         return m_reader.getResponse(response);
     }
 
+    /** @brief 只读取响应头，将同批到达的 body 字节留给后续增量读取。 */
+    auto getResponseHeader(HttpResponseHeader& header) {
+        return m_reader.getResponseHeader(header);
+    }
+
     /**
      * @brief 发送 chunked 编码数据块
      * @param data 数据内容
@@ -621,6 +626,11 @@ public:
      */
     auto sendChunk(const std::string& data, bool is_last = false) {
         return m_writer.sendChunk(data, is_last);
+    }
+
+    /** @brief 增量读取下一个已完整 HTTP chunk。 */
+    auto getNextChunk(std::string& chunk_data, ChunkParser& parser) {
+        return m_reader.getNextChunk(chunk_data, parser);
     }
 
 private:

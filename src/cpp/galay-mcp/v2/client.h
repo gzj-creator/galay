@@ -14,9 +14,9 @@
 #include <expected>
 #include <istream>
 #include <memory>
-#include <mutex>
 #include <ostream>
 #include <unordered_map>
+#include <functional>
 
 namespace galay::mcp::v2 {
 
@@ -26,6 +26,12 @@ struct ClientConfig {
     JsonString clientCapabilities{"{}"};
 };
 
+/**
+ * @brief Synchronous, ordered MCP stdio client.
+ * @details The input/output streams form one request/response wire. Calls
+ *          from different threads are not queued or serialized by blocking;
+ *          a concurrent call returns `McpErrorCode::Overload` immediately.
+ */
 class McpStdioClient {
 public:
     McpStdioClient(std::istream& input, std::ostream& output, ClientConfig config = {});
@@ -50,11 +56,12 @@ private:
     std::ostream* m_output;
     ClientConfig m_config;
     std::atomic<std::int64_t> m_nextId{0};
-    std::mutex m_mutex;
+    std::atomic_flag m_requestActive{};
 };
 
 class McpHttpClient {
 public:
+    using SubscriptionCallback = std::function<bool(std::string)>;
     using ConnectAwaitable = decltype(std::declval<http::HttpClient&>().connect(
         std::declval<const std::string&>()));
     using CloseAwaitable = decltype(std::declval<http::HttpClient&>().close());
@@ -73,6 +80,15 @@ public:
     kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
     kernel::Task<void> getPrompt(std::string name, JsonString arguments,
                                  std::expected<JsonString, McpError>& result);
+    /**
+     * @brief 打开独立的长生命 SSE 订阅流。
+     * @param filter 客户端显式 opt-in 的通知过滤器。
+     * @param callback 收到每条 JSON 通知时调用，返回 false 表示立即取消。
+     * @param result 成功返回服务器确认后接受的过滤器；服务器主动 complete 或连接取消后任务结束。
+     */
+    kernel::Task<void> listen(SubscriptionFilter filter,
+                               SubscriptionCallback callback,
+                               std::expected<SubscriptionFilter, McpError>& result);
 
 private:
     kernel::Task<void> request(std::string method, std::string fields,
@@ -86,8 +102,9 @@ private:
     ClientConfig m_config;
     std::atomic<std::int64_t> m_nextId{0};
     std::atomic<bool> m_connected{false};
-    std::unordered_map<std::string, Tool> m_toolDefinitions;
-    std::mutex m_toolDefinitionsMutex;
+    using ToolDefinitions = std::unordered_map<std::string, Tool>;
+    std::atomic<std::shared_ptr<const ToolDefinitions>> m_toolDefinitions{
+        std::make_shared<const ToolDefinitions>()};
 };
 
 } // namespace galay::mcp::v2
