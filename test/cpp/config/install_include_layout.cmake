@@ -32,7 +32,7 @@ foreach(required_source_path
         "src/cpp/galay-utils/cache/ring_buffer.hpp"
         "src/cpp/galay-utils/cache/type_ring_buffer.hpp"
         "src/cpp/galay-http/client/http_client.h"
-        "src/cpp/galay-mcp/server/stdio_server.h")
+        "src/cpp/galay-mcp/v1/server/stdio_server.h")
     if(NOT EXISTS "${GALAY_SOURCE_DIR}/${required_source_path}")
         message(FATAL_ERROR "Missing renamed source path: ${required_source_path}")
     endif()
@@ -152,7 +152,7 @@ foreach(required_module_header
         "include/galay/cpp/galay-mysql/sync/mysql_client.h"
         "include/galay/cpp/galay-mongo/sync/mongo_client.h"
         "include/galay/cpp/galay-etcd/sync/etcd_client.h"
-        "include/galay/cpp/galay-mcp/server/stdio_server.h"
+        "include/galay/cpp/galay-mcp/v1/server/stdio_server.h"
         "include/galay/cpp/galay-tracing/kernel/span.h")
     if(NOT EXISTS "${prefix_dir}/${required_module_header}")
         message(FATAL_ERROR "Missing installed module header: ${required_module_header}")

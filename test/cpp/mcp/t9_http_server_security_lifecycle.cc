@@ -3,7 +3,7 @@
  * @brief 覆盖 HTTP MCP per-connection 初始化、传输限制和 stop 生命周期。
  */
 
-#include <galay/cpp/galay-mcp/server/http_server.h>
+#include <galay/cpp/galay-mcp/v1/server/http_server.h>
 #include <galay/cpp/galay-mcp/common/mcp_policy.h>
 
 #include <arpa/inet.h>

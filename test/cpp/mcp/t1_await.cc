@@ -2,7 +2,7 @@
  * @brief 锁定 McpClient 的 HTTP awaitable surface 与底层 HttpClient 保持一致。
  */
 
-#include <galay/cpp/galay-mcp/client/client.h>
+#include <galay/cpp/galay-mcp/v1/client/client.h>
 #include <galay/cpp/galay-http/client/http_client.h>
 
 #include <concepts>

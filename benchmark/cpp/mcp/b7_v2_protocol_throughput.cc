@@ -3,7 +3,7 @@
  * @brief MCP 2026-07-28 request/response encode and parse throughput.
  */
 
-#include <galay/cpp/galay-mcp/v2/protocol.h>
+#include <galay/cpp/galay-mcp/v2/common/protocol.h>
 
 #include <charconv>
 #include <chrono>

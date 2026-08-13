@@ -6,8 +6,8 @@
 #ifndef GALAY_MCP_V2_PROTOCOL_H
 #define GALAY_MCP_V2_PROTOCOL_H
 
-#include "../common/mcp_error.h"
-#include "../common/mcp_json.h"
+#include "../../common/mcp_error.h"
+#include "../../common/mcp_json.h"
 
 #include <cstdint>
 #include <expected>

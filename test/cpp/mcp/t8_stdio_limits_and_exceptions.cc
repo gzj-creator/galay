@@ -3,7 +3,7 @@
  * @brief 覆盖 stdio line/response 限制以及 handler 异常不向客户端泄露。
  */
 
-#include <galay/cpp/galay-mcp/server/stdio_server.h>
+#include <galay/cpp/galay-mcp/v1/server/stdio_server.h>
 #include <galay/cpp/galay-mcp/common/mcp_policy.h>
 
 #include <iostream>

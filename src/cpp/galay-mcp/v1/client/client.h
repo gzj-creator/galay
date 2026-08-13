@@ -1,10 +1,10 @@
 #ifndef GALAY_MCP_CLIENT_CLIENT_H
 #define GALAY_MCP_CLIENT_CLIENT_H
 
-#include "../../galay-http/client/http_client.h"
-#include "../common/mcp_base.h"
-#include "../common/mcp_error.h"
-#include "../../galay-kernel/common/error.h"
+#include "../../../galay-http/client/http_client.h"
+#include "../../common/mcp_base.h"
+#include "../../common/mcp_error.h"
+#include "../../../galay-kernel/common/error.h"
 
 #include <expected>
 #include <iostream>

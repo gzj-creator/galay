@@ -6,9 +6,9 @@
 #ifndef GALAY_MCP_V2_CLIENT_H
 #define GALAY_MCP_V2_CLIENT_H
 
-#include "protocol.h"
-#include "../common/mcp_error.h"
-#include "../../galay-http/client/http_client.h"
+#include "../common/protocol.h"
+#include "../../common/mcp_error.h"
+#include "../../../galay-http/client/http_client.h"
 
 #include <atomic>
 #include <expected>

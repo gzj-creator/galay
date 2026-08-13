@@ -3,7 +3,7 @@
  * @brief v2 stdio client non-blocking concurrent request boundary.
  */
 
-#include <galay/cpp/galay-mcp/v2/client.h>
+#include <galay/cpp/galay-mcp/v2/client/client.h>
 
 #include <atomic>
 #include <chrono>

@@ -4,7 +4,7 @@
  * @details Use multiple connections and concurrent requests to measure throughput and latency.
  */
 
-#include <galay/cpp/galay-mcp/client/client.h>
+#include <galay/cpp/galay-mcp/v1/client/client.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>

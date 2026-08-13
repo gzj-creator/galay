@@ -6,11 +6,11 @@
 #ifndef GALAY_MCP_V2_HTTP_SERVER_H
 #define GALAY_MCP_V2_HTTP_SERVER_H
 
-#include "protocol.h"
-#include "../common/mcp_policy.h"
-#include "../../galay-http/server/http_server.h"
-#include "../../galay-http/server/http_router.h"
-#include "../../galay-kernel/concurrency/mpmc/bounded_channel.h"
+#include "../common/protocol.h"
+#include "../../common/mcp_policy.h"
+#include "../../../galay-http/server/http_server.h"
+#include "../../../galay-http/server/http_router.h"
+#include "../../../galay-kernel/concurrency/mpmc/bounded_channel.h"
 
 #include <atomic>
 #include <functional>

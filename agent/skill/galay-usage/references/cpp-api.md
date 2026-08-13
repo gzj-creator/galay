@@ -444,7 +444,7 @@ int main() {
   - JSON/错误：`JsonDocument::Parse(...)`、`JsonWriter`、`JsonHelper`；`enum class McpErrorCode`、`McpError`（工厂 `invalidParams/toolNotFound/notInitialized/...`）；协议常量 `MCP_VERSION="2024-11-05"`
 - **最小示例**:
 ```cpp
-#include <galay/cpp/galay-mcp/server/http_server.h>
+#include <galay/cpp/galay-mcp/v1/server/http_server.h>
 #include <galay/cpp/galay-mcp/common/schema_builder.h>
 using namespace galay::mcp;
 

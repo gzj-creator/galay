@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-mcp/server/stdio_server.h>
+#include <galay/cpp/galay-mcp/v1/server/stdio_server.h>
 #include <galay/cpp/galay-mcp/common/mcp_log.h>
 #include <galay/cpp/galay-mcp/common/protocol_utils.h>
 #include <sstream>

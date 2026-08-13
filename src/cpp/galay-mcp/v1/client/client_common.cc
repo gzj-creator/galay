@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-mcp/client/client_common.h>
+#include <galay/cpp/galay-mcp/v1/client/client_common.h>
 
 namespace galay::mcp::detail {
 

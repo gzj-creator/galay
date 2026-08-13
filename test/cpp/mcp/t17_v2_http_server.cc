@@ -3,7 +3,7 @@
  * @brief MCP 2026-07-28 Streamable HTTP header contract.
  */
 
-#include <galay/cpp/galay-mcp/v2/http_server.h>
+#include <galay/cpp/galay-mcp/v2/server/http_server.h>
 
 #include <arpa/inet.h>
 #include <chrono>

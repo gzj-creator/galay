@@ -6,9 +6,9 @@
 #include <string>
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
-#include <galay/cpp/galay-mcp/client/client.h>
-#include <galay/cpp/galay-mcp/client/http_transport.h>
-#include <galay/cpp/galay-mcp/server/http_server.h>
+#include <galay/cpp/galay-mcp/v1/client/client.h>
+#include <galay/cpp/galay-mcp/v1/client/http_transport.h>
+#include <galay/cpp/galay-mcp/v1/server/http_server.h>
 
 #ifndef GALAY_PROJECT_SOURCE_DIR
 #define GALAY_PROJECT_SOURCE_DIR "."
@@ -81,9 +81,9 @@ void test_http_server_config_surface()
 void test_passthrough_source_boundaries()
 {
     const std::filesystem::path source_root = GALAY_PROJECT_SOURCE_DIR;
-    const auto client_source = readFile(source_root / "src/cpp/galay-mcp/client/client.cc");
-    const auto transport_source = readFile(source_root / "src/cpp/galay-mcp/client/http_transport.cc");
-    const auto server_source = readFile(source_root / "src/cpp/galay-mcp/server/http_server.cc");
+    const auto client_source = readFile(source_root / "src/cpp/galay-mcp/v1/client/client.cc");
+    const auto transport_source = readFile(source_root / "src/cpp/galay-mcp/v1/client/http_transport.cc");
+    const auto server_source = readFile(source_root / "src/cpp/galay-mcp/v1/server/http_server.cc");
 
     require(contains(client_source, "HttpClientTransport>(runtime, std::move(config))"),
             "McpClient should pass the full HTTP client config into HttpClientTransport");

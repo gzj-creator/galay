@@ -1,5 +1,5 @@
-#include <galay/cpp/galay-mcp/v2/http_server.h>
-#include <galay/cpp/galay-mcp/v2/http_headers.h>
+#include <galay/cpp/galay-mcp/v2/server/http_server.h>
+#include <galay/cpp/galay-mcp/v2/common/http_headers.h>
 
 #include <charconv>
 #include <chrono>

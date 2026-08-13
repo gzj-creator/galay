@@ -3,7 +3,7 @@
  * @brief MCP 2026-07-28 无初始化 stdio 服务端端到端边界。
  */
 
-#include <galay/cpp/galay-mcp/v2/stdio_server.h>
+#include <galay/cpp/galay-mcp/v2/server/stdio_server.h>
 
 #include <iostream>
 #include <sstream>

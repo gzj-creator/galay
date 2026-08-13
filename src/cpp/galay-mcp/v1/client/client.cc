@@ -1,6 +1,6 @@
-#include <galay/cpp/galay-mcp/client/client.h>
-#include <galay/cpp/galay-mcp/client/http_transport.h>
-#include <galay/cpp/galay-mcp/client/stdio_transport.h>
+#include <galay/cpp/galay-mcp/v1/client/client.h>
+#include <galay/cpp/galay-mcp/v1/client/http_transport.h>
+#include <galay/cpp/galay-mcp/v1/client/stdio_transport.h>
 
 namespace galay::mcp {
 

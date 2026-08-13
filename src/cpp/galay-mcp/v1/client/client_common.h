@@ -1,7 +1,7 @@
 #ifndef GALAY_MCP_CLIENT_CLIENT_COMMON_H
 #define GALAY_MCP_CLIENT_CLIENT_COMMON_H
 
-#include "../common/mcp_base.h"
+#include "../../common/mcp_base.h"
 
 #include <expected>
 #include <string_view>

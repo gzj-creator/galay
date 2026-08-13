@@ -3,8 +3,8 @@
 本页按当前**公开安装头文件**与**模块导出**整理 API。若与其他 Markdown 页面冲突，请按以下顺序判断真相来源：
 
 1. `galay-mcp/common/*.h`
-2. `galay-mcp/client/*.h`
-3. `galay-mcp/server/*.h`
+2. `galay-mcp/v1/client/*.h`
+3. `galay-mcp/v1/server/*.h`
 4. `galay-mcp/module/galay_mcp.cppm`
 
 当前对外头文件包括：
@@ -15,12 +15,12 @@
 - `galay-mcp/common/schema_builder.h`
 - `galay-mcp/common/json_parser.h`
 - `galay-mcp/common/protocol_utils.h`
-- `galay-mcp/client/client.h`
-- `galay-mcp/server/stdio_server.h`
-- `galay-mcp/server/http_server.h`
-- `galay-mcp/v1/protocol.h`, `galay-mcp/v1/client.h`, `galay-mcp/v1/stdio_server.h`, `galay-mcp/v1/http_server.h`
-- `galay-mcp/v2/protocol.h`, `galay-mcp/v2/client.h`, `galay-mcp/v2/stdio_server.h`, `galay-mcp/v2/http_server.h`
-- `galay-mcp/v2/http_headers.h`
+- `galay-mcp/v1/client/client.h`
+- `galay-mcp/v1/server/stdio_server.h`
+- `galay-mcp/v1/server/http_server.h`
+- `galay-mcp/v2/common/protocol.h`, `galay-mcp/v2/common/http_headers.h`
+- `galay-mcp/v2/client/client.h`
+- `galay-mcp/v2/server/stdio_server.h`, `galay-mcp/v2/server/http_server.h`
 - `galay-mcp/module/module_prelude.hpp`
 - `galay-mcp/module/galay_mcp.cppm`
 
@@ -57,7 +57,7 @@ target_link_libraries(your-target PRIVATE galay::mcp)
 ### 协议版本边界
 
 根命名空间中的现有 `McpClient`、`McpStdioServer`、`McpHttpServer` 保持
-2024-11-05 行为。等价的旧代入口也可从 `galay::mcp::v1` 使用。
+2024-11-05 行为。
 
 2026-07-28 实现位于 `galay::mcp::v2`，不再执行 `initialize`/
 `notifications/initialized`，不保存 MCP session，也不提供 `ping`。每个请求的
@@ -425,7 +425,7 @@ JsonString buildListResultFromMap(const MapType& map, const char* key, Extractor
 
 ## 7. `McpStdioServer`
 
-来源：`galay-mcp/server/stdio_server.h`
+来源：`galay-mcp/v1/server/stdio_server.h`
 
 ```cpp
 class McpStdioServer {
@@ -487,7 +487,7 @@ public:
 
 ## 8. `McpClient` stdio 模式
 
-来源：`galay-mcp/client/client.h`
+来源：`galay-mcp/v1/client/client.h`
 
 ```cpp
 class McpClient {
@@ -551,7 +551,7 @@ public:
 
 ## 9. `McpHttpServer`
 
-来源：`galay-mcp/server/http_server.h`
+来源：`galay-mcp/v1/server/http_server.h`
 
 ```cpp
 class McpHttpServer {
@@ -616,7 +616,7 @@ public:
 
 ## 10. `McpClient` HTTP 模式
 
-来源：`galay-mcp/client/client.h`
+来源：`galay-mcp/v1/client/client.h`
 
 ```cpp
 class McpClient {

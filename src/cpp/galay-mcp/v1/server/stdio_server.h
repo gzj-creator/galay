@@ -11,10 +11,10 @@
 #ifndef GALAY_MCP_SERVER_MCPSTDIOSERVER_H
 #define GALAY_MCP_SERVER_MCPSTDIOSERVER_H
 
-#include "../common/mcp_base.h"
-#include "../common/mcp_error.h"
-#include "../common/json_parser.h"
-#include "../common/mcp_policy.h"
+#include "../../common/mcp_base.h"
+#include "../../common/mcp_error.h"
+#include "../../common/json_parser.h"
+#include "../../common/mcp_policy.h"
 #include <functional>
 #include <unordered_map>
 #include <memory>

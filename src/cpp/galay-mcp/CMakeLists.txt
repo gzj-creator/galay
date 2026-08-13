@@ -2,9 +2,11 @@ galay_ensure_simdjson()
 
 file(GLOB_RECURSE GALAY_MCP_SOURCES CONFIGURE_DEPENDS
     "common/*.cc"
-    "client/*.cc"
-    "server/*.cc"
-    "v2/*.cc"
+    "v1/client/*.cc"
+    "v1/server/*.cc"
+    "v2/common/*.cc"
+    "v2/client/*.cc"
+    "v2/server/*.cc"
 )
 
 add_library(galay-mcp ${GALAY_MCP_SOURCES})

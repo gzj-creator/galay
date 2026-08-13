@@ -5,8 +5,8 @@
 
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
-#include <galay/cpp/galay-mcp/v2/client.h>
-#include <galay/cpp/galay-mcp/v2/http_server.h>
+#include <galay/cpp/galay-mcp/v2/client/client.h>
+#include <galay/cpp/galay-mcp/v2/server/http_server.h>
 
 #include <arpa/inet.h>
 #include <atomic>

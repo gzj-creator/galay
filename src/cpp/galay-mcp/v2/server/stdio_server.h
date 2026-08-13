@@ -6,8 +6,8 @@
 #ifndef GALAY_MCP_V2_STDIO_SERVER_H
 #define GALAY_MCP_V2_STDIO_SERVER_H
 
-#include "protocol.h"
-#include "../common/mcp_policy.h"
+#include "../common/protocol.h"
+#include "../../common/mcp_policy.h"
 
 #include <atomic>
 #include <functional>

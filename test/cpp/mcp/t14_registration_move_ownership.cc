@@ -3,8 +3,8 @@
  * @brief 锁定 stdio/http 注册路径按 move 接收 handler，避免注册阶段复制 callable。
  */
 
-#include <galay/cpp/galay-mcp/server/http_server.h>
-#include <galay/cpp/galay-mcp/server/stdio_server.h>
+#include <galay/cpp/galay-mcp/v1/server/http_server.h>
+#include <galay/cpp/galay-mcp/v1/server/stdio_server.h>
 
 #include <atomic>
 #include <expected>

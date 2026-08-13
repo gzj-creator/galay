@@ -1,7 +1,7 @@
-#include <galay/cpp/galay-mcp/v2/client.h>
+#include <galay/cpp/galay-mcp/v2/client/client.h>
 
 #include <galay/cpp/galay-http/builder/http_builder.h>
-#include <galay/cpp/galay-mcp/v2/http_headers.h>
+#include <galay/cpp/galay-mcp/v2/common/http_headers.h>
 
 #include <map>
 

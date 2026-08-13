@@ -4,7 +4,7 @@
  * @details 测试MCP服务器在高并发场景下的性能表现
  */
 
-#include <galay/cpp/galay-mcp/client/client.h>
+#include <galay/cpp/galay-mcp/v1/client/client.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>

@@ -21,6 +21,7 @@
 ### Changed
 
 - **保留原根命名空间 MCP `2024-11-05` API 行为**：更新 CMake、C++ module 导出及 MCP 文档以同时支持 v1/v2。
+- **MCP 目录按协议版本归类**：将仅 v1 使用的 `client/`、`server/` 实现移入 `v1/client/`、`v1/server/`，删除 v1 散列的 `client.h`、`http_server.h`、`protocol.h`、`stdio_server.h` reexport 头；v2 参考 v1 结构拆分为 `v2/client/`、`v2/server/`，`protocol.h`、`http_headers.h` 归入 `v2/common/`；同步更新 CMake 源文件收集、C++ module 导出、测试、压测、示例与文档引用。
 - **C coroutine bridge 全面无锁化**：7 个 `coro-c` bridge 移除 `std::mutex` 保护，user data 槽位改用原子 `exchange`，避免阻塞协程调度线程；`t22_coro_source_boundaries` 增加无阻塞锁源码约束，`b9_async_mutex_contended` 支持自定义迭代次数参数，并在工程准则中新增"协程与并发阻塞操作"约定。
 
 ## [v4.7.0] - 2026-08-12

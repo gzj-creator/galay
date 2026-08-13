@@ -3,8 +3,8 @@
  * @brief 锁定 MCP 2026-07-28 的无会话元数据、发现与结果边界。
  */
 
-#include <galay/cpp/galay-mcp/v2/protocol.h>
-#include <galay/cpp/galay-mcp/v2/http_headers.h>
+#include <galay/cpp/galay-mcp/v2/common/protocol.h>
+#include <galay/cpp/galay-mcp/v2/common/http_headers.h>
 
 #include <iostream>
 #include <string>
