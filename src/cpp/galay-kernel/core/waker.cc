@@ -43,6 +43,26 @@ ResumeToken ResumeToken::fromCCoroutine(void* state) noexcept
     return token;
 }
 
+ResumeToken ResumeToken::fromNonOwningCCoroutine(void* state) noexcept
+{
+    ResumeToken token;
+    if (state == nullptr) {
+        return token;
+    }
+    const uintptr_t encoded = encode(Kind::NonOwningCCoroutine, state);
+    if (encoded == 0) {
+        return token;
+    }
+    auto* header = static_cast<ResumeTokenHeader*>(state);
+    if (header->hooks == nullptr ||
+        header->hooks->owner_scheduler == nullptr ||
+        header->hooks->request_resume == nullptr) {
+        return token;
+    }
+    token.m_encoded = encoded;
+    return token;
+}
+
 ResumeToken::ResumeToken(const ResumeToken& other) noexcept
 {
     copyFrom(other);
@@ -116,6 +136,11 @@ void ResumeToken::copyFrom(const ResumeToken& other) noexcept
         return;
     }
 
+    if (other.kind() == Kind::NonOwningCCoroutine && other.state() != nullptr) {
+        m_encoded = other.m_encoded;
+        return;
+    }
+
     if (other.kind() == Kind::CCoroutine && other.state() != nullptr) {
         auto* header = static_cast<ResumeTokenHeader*>(other.state());
         if (header->hooks != nullptr &&
@@ -157,7 +182,8 @@ ResumeToken::Kind ResumeToken::kind() const noexcept
 
 const ResumeTokenHooks* ResumeToken::coroHooks() const noexcept
 {
-    if (kind() != Kind::CCoroutine || state() == nullptr) {
+    if ((kind() != Kind::CCoroutine && kind() != Kind::NonOwningCCoroutine) ||
+        state() == nullptr) {
         return nullptr;
     }
     return static_cast<ResumeTokenHeader*>(state())->hooks;

@@ -92,7 +92,7 @@ public:
 
     bool schedule(TaskRef task) noexcept override;        ///< 从任意线程注入任务；成功时必要时会唤醒事件循环
     bool scheduleResume(TaskRef task) noexcept override;  ///< 仅运行期无分配接纳 Waker 恢复并保持 owner 线程亲和
-    bool scheduleReadyEntry(detail::ReadyEntry& entry);   ///< 从任意线程注入语言中立 ready entry
+    bool scheduleReadyEntry(detail::ReadyEntry& entry) noexcept override;   ///< 从任意线程注入语言中立 ready entry
     bool scheduleDeferred(TaskRef task) noexcept override;    ///< 以延后语义注入任务；当前仍使用同一注入队列
     bool scheduleImmediately(TaskRef task) noexcept override; ///< 在调度器线程内立刻恢复任务；跨线程调用会失败
 

@@ -24,6 +24,7 @@ typedef struct C_CoroWaitRequest {
  * @details I/O adapter 可在 prepare 后获取 token，并将 token 指针存入操作对象。
  * 对于原始 epoll/kqueue/io_uring user_data，应通过
  * galay_coro_wait_event_token_detach_user_data 分离 token 并保存返回指针。
+ * token 内嵌在 request 状态中（同一 request 同时至多一个 token），不额外分配；
  * token 会保留 request 状态直到 release，因此晚到的 backend completion 不会解引用
  * 已销毁的 C request 句柄。每个 token 必须且只能 release 一次。
  */
@@ -60,8 +61,8 @@ C_IOResult galay_coro_wait_request_prepare(C_CoroWaitRequest* request,
  * @param request 已准备好的 request 句柄。
  * @param generation prepare 返回的 generation。
  * @param out_token 空输出 token；使用后通过 galay_coro_wait_event_token_release 释放。
- * @return 成功返回 C_IOResultOk；generation 过期、request 未激活、句柄无效或
- * 输出 token 非空返回 C_IOResultInvalid；分配失败返回 C_IOResultError。
+ * @return 成功返回 C_IOResultOk；generation 过期、request 未激活、已有未释放的
+ * token、句柄无效或输出 token 非空返回 C_IOResultInvalid。
  */
 C_IOResult galay_coro_wait_request_event_token_acquire(C_CoroWaitRequest* request,
                                                        uint64_t generation,

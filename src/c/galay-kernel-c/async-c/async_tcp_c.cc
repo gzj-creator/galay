@@ -218,17 +218,8 @@ galay::async::AsyncTcpSocket* to_cpp_socket(GalayCoreTcpSocket* socket)
 bool can_try_immediate_io(galay::async::AsyncTcpSocket* socket,
                           GalayCoreIOScheduler* scheduler_handle)
 {
-    if (socket == nullptr || scheduler_handle == nullptr) {
-        return false;
-    }
-    auto* controller = socket->controller();
-    auto* scheduler = reinterpret_cast<galay::kernel::Scheduler*>(scheduler_handle);
-    const auto* owner = controller->m_owner_scheduler.load(std::memory_order_acquire);
-    return controller->m_awaitable[galay::kernel::IOController::READ] == nullptr &&
-        controller->m_awaitable[galay::kernel::IOController::WRITE] == nullptr &&
-        controller->m_sequence_owner[galay::kernel::IOController::READ] == nullptr &&
-        controller->m_sequence_owner[galay::kernel::IOController::WRITE] == nullptr &&
-        (owner == nullptr || owner == scheduler);
+    return galay_core_coro_tcp_can_try_immediate_io(
+               reinterpret_cast<GalayCoreTcpSocket*>(socket), scheduler_handle) != 0;
 }
 
 std::optional<C_IOResult> try_immediate_recv(galay::async::AsyncTcpSocket* socket,

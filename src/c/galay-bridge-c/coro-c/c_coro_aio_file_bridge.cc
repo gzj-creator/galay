@@ -142,7 +142,7 @@ struct CoroAioCommitOperation {
     galay::kernel::Waker makeWaker() noexcept
     {
         return galay::kernel::Waker(
-            galay::kernel::detail::ResumeToken::fromCCoroutine(&m_wake_state));
+            galay::kernel::detail::ResumeToken::fromNonOwningCCoroutine(&m_wake_state));
     }
 
     C_IOResult submitAndWait(int64_t timeout_ms)

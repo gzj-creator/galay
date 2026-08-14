@@ -18,6 +18,31 @@ static void yielding_entry(void* arg)
     state->sequence[(*state->cursor)++] = state->second;
 }
 
+static void noop_entry(void* arg)
+{
+    (void)arg;
+}
+
+typedef struct CancelReadyState {
+    galay_kernel_runtime_t* runtime;
+    galay_coro_task_t child;
+    C_IOResult spawn_result;
+    C_IOResult cancel_result;
+} CancelReadyState;
+
+static void cancel_ready_entry(void* arg)
+{
+    CancelReadyState* state = (CancelReadyState*)arg;
+    state->spawn_result = galay_coro_spawn(state->runtime,
+                                            noop_entry,
+                                            0,
+                                            0,
+                                            &state->child);
+    if (state->spawn_result.code == C_IOResultOk) {
+        state->cancel_result = galay_coro_cancel(&state->child);
+    }
+}
+
 typedef struct CurrentState {
     int observed;
     int join_inside_invalid;
@@ -124,18 +149,27 @@ int main(void)
         return 27;
     }
 
-    galay_coro_task_t cancel_task = {0};
-    if (expect_code(galay_coro_spawn(&runtime, yielding_entry, &first, &options, &cancel_task),
-                    C_IOResultOk)) {
+    CancelReadyState cancel_state = {.runtime = &runtime};
+    galay_coro_task_t cancel_parent_task = {0};
+    if (expect_code(galay_coro_spawn(&runtime,
+                                     cancel_ready_entry,
+                                     &cancel_state,
+                                     &options,
+                                     &cancel_parent_task),
+                    C_IOResultOk) ||
+        expect_code(galay_coro_join(&cancel_parent_task, 1000), C_IOResultOk) ||
+        expect_code(cancel_state.spawn_result, C_IOResultOk)) {
         return 20;
     }
-    if (expect_code(galay_coro_cancel(&cancel_task), C_IOResultCancelled)) {
+    if (expect_code(cancel_state.cancel_result, C_IOResultCancelled)) {
         return 21;
     }
-    if (expect_code(galay_coro_join(&cancel_task, 0), C_IOResultCancelled)) {
+    if (expect_code(galay_coro_join(&cancel_state.child, 0), C_IOResultCancelled)) {
         return 22;
     }
-    if (expect_code(galay_coro_destroy(&cancel_task), C_IOResultOk) || cancel_task.task != 0) {
+    if (expect_code(galay_coro_destroy(&cancel_state.child), C_IOResultOk) ||
+        cancel_state.child.task != 0 ||
+        expect_code(galay_coro_destroy(&cancel_parent_task), C_IOResultOk)) {
         return 23;
     }
 
@@ -185,7 +219,8 @@ int main(void)
         return 29;
     }
     if (task1.task != 0 || task2.task != 0 || current_task.task != 0 ||
-        current_state.current.task != 0 || cancel_task.task != 0 ||
+        current_state.current.task != 0 || cancel_state.child.task != 0 ||
+        cancel_parent_task.task != 0 ||
         after_cancel_task.task != 0 || after_cancel_state.current.task != 0) {
         return 18;
     }

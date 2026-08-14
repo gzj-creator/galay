@@ -204,7 +204,7 @@ bool IOUringScheduler::scheduleResume(TaskRef task) noexcept
     return true;
 }
 
-bool IOUringScheduler::scheduleReadyEntry(detail::ReadyEntry& entry)
+bool IOUringScheduler::scheduleReadyEntry(detail::ReadyEntry& entry) noexcept
 {
     if (!entry.isValid() || detail::readyEntryScheduler(entry) != this) {
         return false;

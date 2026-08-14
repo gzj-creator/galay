@@ -532,9 +532,9 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
 
     const uint32_t t = static_cast<uint32_t>(controller->m_type);
     const auto complete_one_shot = [this, controller](auto* awaitable,
-                                                      IOEventType event_type) {
+                                                      IOEventType event_type) -> bool {
         if (awaitable == nullptr || !awaitable->handleComplete(controller->m_handle)) {
-            return;
+            return false;
         }
 
         Waker waker = awaitable->m_waker;
@@ -542,17 +542,28 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
         syncEvents(controller);
         (void)flushPendingChanges();
         waker.wakeUp();
+        // A C coroutine may resume inline and destroy controller before this
+        // dispatch returns.  No code below may dereference the old pointer.
+        return true;
     };
 
     if (ev.events & EPOLLIN) {
         if (t & ACCEPT) {
-            complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT);
+            if (complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT)) {
+                return;
+            }
         } else if (t & RECV) {
-            complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV);
+            if (complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV)) {
+                return;
+            }
         } else if (t & READV) {
-            complete_one_shot(controller->getAwaitable<ReadvAwaitable>(), READV);
+            if (complete_one_shot(controller->getAwaitable<ReadvAwaitable>(), READV)) {
+                return;
+            }
         } else if (t & RECVFROM) {
-            complete_one_shot(controller->getAwaitable<RecvFromAwaitable>(), RECVFROM);
+            if (complete_one_shot(controller->getAwaitable<RecvFromAwaitable>(), RECVFROM)) {
+                return;
+            }
         } else if (t & FILEREAD) {
             auto* aio_awaitable =
                 static_cast<galay::async::AioCommitAwaitable*>(controller->m_awaitable[IOController::READ]);
@@ -606,6 +617,7 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
                 syncEvents(controller);
                 (void)flushPendingChanges();
                 waker.wakeUp();
+                return;
             }
         } else if (t & FILEWATCH) {
             auto* awaitable = controller->getAwaitable<FileWatchAwaitable>();
@@ -667,6 +679,7 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
                 syncEvents(controller);
                 (void)flushPendingChanges();
                 waker.wakeUp();
+                return;
             }
         }
     }
@@ -674,17 +687,29 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
     const uint32_t after_read_type = static_cast<uint32_t>(controller->m_type);
     if (ev.events & EPOLLOUT) {
         if (after_read_type & CONNECT) {
-            complete_one_shot(controller->getAwaitable<ConnectAwaitable>(), CONNECT);
+            if (complete_one_shot(controller->getAwaitable<ConnectAwaitable>(), CONNECT)) {
+                return;
+            }
         } else if (after_read_type & SEND) {
-            complete_one_shot(controller->getAwaitable<SendAwaitable>(), SEND);
+            if (complete_one_shot(controller->getAwaitable<SendAwaitable>(), SEND)) {
+                return;
+            }
         } else if (after_read_type & WRITEV) {
-            complete_one_shot(controller->getAwaitable<WritevAwaitable>(), WRITEV);
+            if (complete_one_shot(controller->getAwaitable<WritevAwaitable>(), WRITEV)) {
+                return;
+            }
         } else if (after_read_type & SENDTO) {
-            complete_one_shot(controller->getAwaitable<SendToAwaitable>(), SENDTO);
+            if (complete_one_shot(controller->getAwaitable<SendToAwaitable>(), SENDTO)) {
+                return;
+            }
         } else if (after_read_type & FILEWRITE) {
-            complete_one_shot(controller->getAwaitable<FileWriteAwaitable>(), FILEWRITE);
+            if (complete_one_shot(controller->getAwaitable<FileWriteAwaitable>(), FILEWRITE)) {
+                return;
+            }
         } else if (after_read_type & SENDFILE) {
-            complete_one_shot(controller->getAwaitable<SendFileAwaitable>(), SENDFILE);
+            if (complete_one_shot(controller->getAwaitable<SendFileAwaitable>(), SENDFILE)) {
+                return;
+            }
         }
     }
 

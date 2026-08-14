@@ -13,16 +13,6 @@
 
 #include <cstddef>
 
-#if defined(USE_KQUEUE)
-#include "kqueue_scheduler.h"
-#endif
-#if defined(USE_EPOLL)
-#include "epoll_scheduler.h"
-#endif
-#if defined(USE_IOURING)
-#include "uring_scheduler.h"
-#endif
-
 #if defined(__linux__)
 #include <pthread.h>
 #include <sched.h>
@@ -62,22 +52,7 @@ bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noex
     if (scheduler == nullptr || !entry.isValid()) {
         return false;
     }
-#if defined(USE_KQUEUE)
-    if (auto* kqueue = dynamic_cast<KqueueScheduler*>(scheduler)) {
-        return kqueue->scheduleReadyEntry(entry);
-    }
-#endif
-#if defined(USE_EPOLL)
-    if (auto* epoll = dynamic_cast<EpollScheduler*>(scheduler)) {
-        return epoll->scheduleReadyEntry(entry);
-    }
-#endif
-#if defined(USE_IOURING)
-    if (auto* uring = dynamic_cast<IOUringScheduler*>(scheduler)) {
-        return uring->scheduleReadyEntry(entry);
-    }
-#endif
-    return false;
+    return scheduler->scheduleReadyEntry(entry);
 }
 
 } // namespace detail

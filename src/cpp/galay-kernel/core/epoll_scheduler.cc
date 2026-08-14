@@ -203,7 +203,7 @@ bool EpollScheduler::scheduleResume(TaskRef task) noexcept
     return true;
 }
 
-bool EpollScheduler::scheduleReadyEntry(detail::ReadyEntry& entry)
+bool EpollScheduler::scheduleReadyEntry(detail::ReadyEntry& entry) noexcept
 {
     if (!entry.isValid() || detail::readyEntryScheduler(entry) != this) {
         return false;

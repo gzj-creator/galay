@@ -1,5 +1,22 @@
 # Release Note
 
+## v4.8.0 - 2026-08-14
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`refactor: 收敛 C 协程桥接层为共享完成状态机并全面无锁化`
+- **Git tag**：`v4.8.0`
+
+### 变更摘要
+
+本次为 `v4.7.0` 之后的次版本发版，自 v4.7.0 以来累计 4 个提交，主线为 C 协程直连桥接层的共享状态机收敛与全面无锁化，并累计纳入 MCP v2 协议与订阅流能力。
+
+- **C 协程直连桥接层收敛为共享 CRTP 完成状态机**：新增 `c_coro_operation_base.h`，将 tcp/udp/async-file/file-watcher 四个 bridge 各自复制的完成状态机收敛为一份 `CoroOperationBase` CRTP 基类——phase 与 finished 合并进单个原子字节，完成路径从多次 RMW 降为一次 CAS，`buildResult`/`commit`/`rollback` 改走 CRTP 静态分发消除虚调用，并新增非持有型 C 恢复 token `ResumeToken::fromNonOwningCCoroutine` 与 `perform_registered_io`/`perform_coro_close` 公共注册-等待-清理入口；桥接代码净删约 2000 行。
+- **C 协程任务与等待请求全面无锁化**：`coro_task_c.cc` 移除 `std::mutex`/`condition_variable`，join/cancel 改用原子状态自旋等待，新增 `Cancelling` 中间态与 scheduler 线程上的立即恢复路径 `resumeTaskFromWaitImmediately`；`coro_wait_c.cc` 等待请求状态机改为原子推进，event token 内嵌进 request（不再逐次堆分配），completion 失败时回滚恢复可重试，并支持 `complete_fast_wait` 的立即恢复。
+- **调度器 ready entry 投递去 RTTI**：`scheduleReadyEntry` 上移为 `Scheduler` 虚接口，删去 `scheduler.cc` 中按后端 `dynamic_cast` 分发；epoll/kqueue/io_uring 三后端改为 `override` 实现。
+- **修复 epoll reactor 内联恢复后的悬垂访问**：`complete_one_shot` 返回是否已内联恢复，C 协程可能在 wakeUp 中就地恢复并销毁 controller，分发路径据此提前返回不再解引用旧指针；`async_tcp_c` 的立即 I/O 探测改为复用新导出的 `galay_core_coro_tcp_can_try_immediate_io`。
+- **回归覆盖扩展**：`t22_coro_source_boundaries` 在源码扫描中加入 `std::mutex`/`condition_variable` 等阻塞同步 token 禁令并指向共享基类；`t23_coro_task` 新增 ready 态任务 cancel 场景覆盖。
+- **累计：MCP v2 协议与订阅流**：新增 MCP `2026-07-28` 无状态 v2 协议实现与显式 `galay::mcp::v1` 入口，MCP 目录按协议版本归类；新增 v2 `subscriptions/listen` 长生命周期 SSE 订阅流（server 端按订阅快照广播 `notify*ListChanged`/`notifyResourceUpdated`，客户端 `listen()` 独立 SSE 连接接收并支持回调取消），并补充订阅过滤、取消、URI 精确匹配回归与真实 SSE 广播压测；同时保留原根命名空间 `2024-11-05` API 行为。
+
 ## v4.7.0 - 2026-08-12
 
 - **版本级别**：修订版本（patch）

@@ -145,6 +145,19 @@ typedef struct GalayCoreCoroWaitOps {
 } GalayCoreCoroWaitOps;
 
 /**
+ * @brief 判断该 socket 是否可尝试立即（不挂起协程）执行 recv/send。
+ *
+ * @param socket 内部 AsyncTcpSocket 指针，必须非 NULL。
+ * @param scheduler 内部 IOScheduler 指针，必须属于当前 C coroutine。
+ * @return 非 0 表示 controller 读写槽位均空闲且 owner 匹配当前 scheduler，
+ * 可先尝试非阻塞立即 I/O；0 表示不可，应走完整注册-等待路径。
+ *
+ * @note 该函数仅用于直接 C API 的立即 I/O 优化探测，不修改任何状态。
+ */
+int galay_core_coro_tcp_can_try_immediate_io(GalayCoreTcpSocket* socket,
+                                             GalayCoreIOScheduler* scheduler);
+
+/**
  * @brief 提交 TCP accept awaitable 并等待完成。
  *
  * @param listener_socket 内部 AsyncTcpSocket 指针，必须非 NULL 且处于监听状态。

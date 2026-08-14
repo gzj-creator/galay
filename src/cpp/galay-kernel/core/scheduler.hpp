@@ -117,6 +117,17 @@ public:
     virtual bool scheduleImmediately(TaskRef task) noexcept = 0;
 
     /**
+     * @brief 将语言中立 ready entry 投递到该调度器。
+     * @details C stackful coroutine 使用该入口，避免热路径通过 RTTI 识别具体
+     *          IOScheduler 后端；非 IO 调度器默认拒绝该入口。
+     */
+    virtual bool scheduleReadyEntry(detail::ReadyEntry& entry) noexcept
+    {
+        (void)entry;
+        return false;
+    }
+
+    /**
      * @brief 添加定时器到内部时间轮
      * @param timer 待注册的定时器对象
      * @return true 定时器已被调度器接管；false 注册失败

@@ -53,6 +53,12 @@ public:
     ResumeToken() noexcept = default;
     explicit ResumeToken(TaskRef task) noexcept;
     static ResumeToken fromCCoroutine(void* state) noexcept;
+    /**
+     * @brief 构造由调用栈拥有状态的单次 C 恢复 token。
+     * @note request_resume 可立即恢复并销毁 state；请求返回后 token 不再解引用 state。
+     *       仅用于 reactor 在一次 wakeUp 调用期间持有的 direct C coroutine operation。
+     */
+    static ResumeToken fromNonOwningCCoroutine(void* state) noexcept;
 
     ResumeToken(const ResumeToken& other) noexcept;
     ResumeToken(ResumeToken&& other) noexcept;
@@ -70,6 +76,7 @@ private:
         Empty,
         CppTask,
         CCoroutine,
+        NonOwningCCoroutine,
     };
     static constexpr uintptr_t kKindMask = 0x3U;
 

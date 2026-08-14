@@ -112,7 +112,7 @@ struct CoroAsyncWaiterOperation {
     galay::kernel::Waker makeWaker() noexcept
     {
         return galay::kernel::Waker(
-            galay::kernel::detail::ResumeToken::fromCCoroutine(&m_wake_state));
+            galay::kernel::detail::ResumeToken::fromNonOwningCCoroutine(&m_wake_state));
     }
 
     bool completeFromWake() noexcept

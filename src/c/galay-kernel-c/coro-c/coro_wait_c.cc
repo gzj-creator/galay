@@ -4,13 +4,13 @@
 #include "../../../cpp/galay-kernel/common/timer.hpp"
 #include "../../../cpp/galay-kernel/core/timer_scheduler.h"
 
+#include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <atomic>
 #include <limits>
 #include <memory>
-#include <mutex>
 #include <new>
+#include <thread>
 #include <utility>
 
 namespace
@@ -18,6 +18,7 @@ namespace
 
 enum class WaitState : uint8_t {
     Idle,
+    Preparing,
     Pending,
     Waiting,
     Completing,
@@ -25,30 +26,55 @@ enum class WaitState : uint8_t {
     Destroyed,
 };
 
+struct WaitRequestState;
+using WaitRequestPtr = std::shared_ptr<WaitRequestState>;
+
+/**
+ * @brief backend 持有的事件 token。
+ * @details token 仍内嵌在 request 中；owner shared_ptr 在 token 存活期间形成
+ *          短暂自引用，因而晚到的 backend completion 不会解引用已销毁的 request
+ *          句柄。completion 线程只读取原子 raw pointer，避免标准库原子智能指针
+ *          操作在 libstdc++ 中使用的隐藏锁。
+ */
+struct WaitEventTokenState {
+    std::atomic<WaitRequestState*> request{nullptr};
+    WaitRequestPtr owner{};
+    std::atomic<uint64_t> generation{0};
+    std::atomic_bool in_use{false};
+};
+
 struct WaitRequestState {
-    std::mutex mutex;
-    galay::kernel::Timer::ptr timer;
+    // request 状态只通过 CAS 推进，完成路径不获取阻塞锁。
+    std::atomic<WaitState> state{WaitState::Idle};
+    std::atomic<uint64_t> generation{0};
     C_IOResult result{C_IOResultInvalid, 0, 0, 0, nullptr};
-    galay::kernel::coro_c::C_CoroTaskInternal* waiter = nullptr;
-    uint64_t generation = 0;
-    WaitState state = WaitState::Idle;
-    bool completed_waiter_pending = false;
+    std::atomic<galay::kernel::coro_c::C_CoroTaskInternal*> waiter{nullptr};
+    std::atomic_bool waiter_pending{false};
+
+    // timer 只由 owner coroutine 创建、消费和取消；completion 线程不访问该字段。
+    galay::kernel::Timer::ptr timer;
+
     std::atomic_bool fast_wait_active{false};
     std::atomic_bool fast_wait_completed{false};
     std::atomic<galay::kernel::coro_c::C_CoroTaskInternal*> fast_waiter{nullptr};
     C_IOResult fast_wait_result{C_IOResultInvalid, 0, 0, 0, nullptr};
-};
-
-using WaitRequestPtr = std::shared_ptr<WaitRequestState>;
-
-struct WaitEventTokenState {
-    WaitRequestPtr request;
-    uint64_t generation = 0;
+    WaitEventTokenState token_slot;
 };
 
 C_IOResult make_result(C_IOResultCode code, int sys_errno = 0)
 {
     return C_IOResult{code, sys_errno, 0, 0, nullptr};
+}
+
+inline void wait_state_relax() noexcept
+{
+#if defined(__x86_64__) || defined(__i386__)
+    __asm__ __volatile__("pause" ::: "memory");
+#elif defined(__aarch64__) || defined(__arm__)
+    __asm__ __volatile__("yield" ::: "memory");
+#else
+    std::this_thread::yield();
+#endif
 }
 
 C_IOResult merge_cleanup_result(C_IOResult primary, C_IOResult cleanup)
@@ -67,11 +93,6 @@ WaitRequestPtr get_state(C_CoroWaitRequest* request)
 {
     auto* state_holder = holder(request);
     return state_holder != nullptr ? *state_holder : WaitRequestPtr{};
-}
-
-WaitEventTokenState* event_token(C_CoroWaitEventToken* token)
-{
-    return token != nullptr ? static_cast<WaitEventTokenState*>(token->token) : nullptr;
 }
 
 WaitEventTokenState* user_data_token(void* user_data)
@@ -97,102 +118,147 @@ bool timeout_fits_chrono(int64_t timeout_ms)
     return timeout_ms <= max_supported_milliseconds;
 }
 
-C_IOResult complete_state(const WaitRequestPtr& state,
-                          uint64_t generation,
-                          C_IOResult result,
-                          bool invalidate_generation)
+void cancel_timer(WaitRequestState& state) noexcept
 {
-    if (!state) {
+    auto timer = std::move(state.timer);
+    if (timer) {
+        timer->cancel();
+    }
+}
+
+void release_waiter_reference(WaitRequestState& state,
+                              galay::kernel::coro_c::C_CoroTaskInternal* current) noexcept
+{
+    auto* claimed = state.waiter.exchange(nullptr, std::memory_order_acq_rel);
+    if (claimed == current) {
+        galay::kernel::coro_c::releaseTask(current);
+    }
+    state.waiter_pending.store(false, std::memory_order_release);
+}
+
+/**
+ * @brief Consume a completed request from the owner coroutine.
+ * @details result is read before the Completed->Idle CAS so a new generation cannot
+ *          overwrite the plain result object before it is copied.
+ */
+C_IOResult take_completed_result(const WaitRequestPtr& state,
+                                 galay::kernel::coro_c::C_CoroTaskInternal* current)
+{
+    if (!state || state->state.load(std::memory_order_acquire) != WaitState::Completed) {
         return make_result(C_IOResultInvalid);
     }
 
-    galay::kernel::coro_c::C_CoroTaskInternal* waiter = nullptr;
-    galay::kernel::Timer::ptr timer_to_cancel;
-    C_IOResult old_result{C_IOResultInvalid, 0, 0, 0, nullptr};
-    uint64_t old_generation = 0;
-    uint64_t committed_generation = 0;
-    {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        if (state->state == WaitState::Destroyed ||
-            state->generation != generation ||
-            (state->state != WaitState::Pending && state->state != WaitState::Waiting)) {
-            return make_result(C_IOResultInvalid);
-        }
-
-        old_generation = state->generation;
-        old_result = state->result;
-        if (invalidate_generation) {
-            ++state->generation;
-        }
-        committed_generation = state->generation;
-        state->result = result;
-        state->state = state->state == WaitState::Waiting
-            ? WaitState::Completing
-            : WaitState::Completed;
-        waiter = state->waiter;
-        state->completed_waiter_pending = waiter != nullptr;
-        if (waiter == nullptr && state->timer) {
-            timer_to_cancel = std::move(state->timer);
-        }
+    C_IOResult result = state->result;
+    cancel_timer(*state);
+    release_waiter_reference(*state, current);
+    WaitState expected = WaitState::Completed;
+    if (!state->state.compare_exchange_strong(expected,
+                                              WaitState::Idle,
+                                              std::memory_order_acq_rel,
+                                              std::memory_order_acquire)) {
+        return make_result(C_IOResultInvalid);
     }
-
-    bool resumed_waiter = true;
-    if (waiter != nullptr) {
-        resumed_waiter = galay::kernel::coro_c::resumeTaskFromWait(waiter);
-    }
-    if (waiter != nullptr && !resumed_waiter) {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        if (state->state == WaitState::Completing && state->waiter == waiter) {
-            state->generation = old_generation;
-            state->result = old_result;
-            state->state = WaitState::Waiting;
-            state->completed_waiter_pending = false;
-            return make_result(C_IOResultError);
-        }
-    }
-    if (waiter != nullptr) {
-        {
-            std::lock_guard<std::mutex> lock(state->mutex);
-            const bool same_completion =
-                state->generation == committed_generation &&
-                (state->state == WaitState::Completing ||
-                 (state->state == WaitState::Completed &&
-                  state->completed_waiter_pending));
-            if (same_completion && state->state == WaitState::Completing) {
-                state->state = WaitState::Completed;
-            }
-            if (same_completion && state->waiter == waiter) {
-                state->waiter = nullptr;
-            }
-            if (same_completion && state->timer) {
-                timer_to_cancel = std::move(state->timer);
-            }
-        }
-        galay::kernel::coro_c::releaseTask(waiter);
-    }
-    if (timer_to_cancel) {
-        timer_to_cancel->cancel();
-    }
-    return make_result(result.code == C_IOResultCancelled ? C_IOResultCancelled : C_IOResultOk);
+    // A completion can win before parkPreparedCurrentTaskWait. In that case the
+    // ready queue entry is intentionally left as a no-op and this task resumes here.
+    (void)galay::kernel::coro_c::activatePreparedCurrentTaskWait();
+    return result;
 }
 
-galay::kernel::Timer::ptr create_wait_timer(int64_t timeout_ms,
-                                            const WaitRequestPtr& state,
-                                            uint64_t generation,
-                                            C_IOResult result)
+// Forward declaration used by timer callbacks without exposing the internal state type.
+C_IOResult complete_state(WaitRequestState* state,
+                          uint64_t generation,
+                          C_IOResult result,
+                          bool invalidate_generation);
+
+galay::kernel::Timer::ptr create_wait_timer_impl(int64_t timeout_ms,
+                                                 const WaitRequestPtr& state,
+                                                 uint64_t generation,
+                                                 C_IOResult result)
 {
     std::weak_ptr<WaitRequestState> weak_state(state);
     auto timer = std::unique_ptr<galay::kernel::CBTimer>(new (std::nothrow) galay::kernel::CBTimer(
         std::chrono::milliseconds(timeout_ms),
         [weak_state, generation, result]() {
             if (auto locked = weak_state.lock()) {
-                (void)complete_state(locked, generation, result, true);
+                (void)complete_state(locked.get(), generation, result, true);
             }
         }));
     if (!timer) {
         return {};
     }
     return galay::kernel::Timer::ptr(std::move(timer));
+}
+
+C_IOResult complete_state(WaitRequestState* state,
+                          uint64_t generation,
+                          C_IOResult result,
+                          bool invalidate_generation)
+{
+    if (!state || state->generation.load(std::memory_order_acquire) != generation) {
+        return make_result(C_IOResultInvalid);
+    }
+
+    WaitState phase = state->state.load(std::memory_order_acquire);
+    for (;;) {
+        if (phase != WaitState::Pending && phase != WaitState::Waiting) {
+            return make_result(C_IOResultInvalid);
+        }
+        if (state->generation.load(std::memory_order_acquire) != generation) {
+            return make_result(C_IOResultInvalid);
+        }
+
+        WaitState expected = phase;
+        if (!state->state.compare_exchange_weak(expected,
+                                                WaitState::Completing,
+                                                std::memory_order_acq_rel,
+                                                std::memory_order_acquire)) {
+            phase = expected;
+            continue;
+        }
+
+        const C_IOResult old_result = state->result;
+        state->result = result;
+        if (invalidate_generation) {
+            state->generation.fetch_add(1, std::memory_order_acq_rel);
+        }
+
+        auto* waiter = state->waiter.exchange(nullptr, std::memory_order_acq_rel);
+        const bool direct_resume = waiter != nullptr &&
+            galay::kernel::coro_c::canResumeTaskFromWaitImmediately(waiter);
+        if (direct_resume || waiter == nullptr) {
+            state->state.store(WaitState::Completed, std::memory_order_release);
+        }
+
+        bool resumed_waiter = true;
+        if (waiter != nullptr) {
+            resumed_waiter = direct_resume
+                ? galay::kernel::coro_c::resumeTaskFromWaitImmediately(waiter)
+                : galay::kernel::coro_c::resumeTaskFromWait(waiter);
+            if (resumed_waiter && !direct_resume) {
+                state->state.store(WaitState::Completed, std::memory_order_release);
+            }
+        }
+
+        if (!resumed_waiter) {
+            // Queue admission failure is a recoverable completion error. Restore the
+            // request so a caller can retry while the parked task remains Waiting.
+            state->result = old_result;
+            if (invalidate_generation) {
+                state->generation.store(generation, std::memory_order_release);
+            }
+            state->waiter.store(waiter, std::memory_order_release);
+            state->waiter_pending.store(waiter != nullptr, std::memory_order_release);
+            state->state.store(phase, std::memory_order_release);
+            return make_result(C_IOResultError);
+        }
+
+        if (waiter != nullptr) {
+            galay::kernel::coro_c::releaseTask(waiter);
+        }
+        return make_result(result.code == C_IOResultCancelled
+                               ? C_IOResultCancelled
+                               : C_IOResultOk);
+    }
 }
 
 C_IOResult request_create_impl(C_CoroWaitRequest* out_request)
@@ -221,27 +287,22 @@ C_IOResult request_destroy_impl(C_CoroWaitRequest* request)
     if (state_holder == nullptr || !*state_holder) {
         return make_result(C_IOResultInvalid);
     }
-
-    galay::kernel::Timer::ptr timer_to_cancel;
-    {
-        std::lock_guard<std::mutex> lock((*state_holder)->mutex);
-        if ((*state_holder)->state == WaitState::Pending ||
-            (*state_holder)->state == WaitState::Waiting ||
-            (*state_holder)->state == WaitState::Completing ||
-            (*state_holder)->fast_wait_active.load(std::memory_order_acquire) ||
-            ((*state_holder)->state == WaitState::Completed &&
-             (*state_holder)->completed_waiter_pending)) {
-            return make_result(C_IOResultInvalid);
-        }
-        if ((*state_holder)->timer) {
-            timer_to_cancel = std::move((*state_holder)->timer);
-        }
-        (*state_holder)->state = WaitState::Destroyed;
+    auto& state = **state_holder;
+    if (state.waiter_pending.load(std::memory_order_acquire) ||
+        state.fast_wait_active.load(std::memory_order_acquire)) {
+        return make_result(C_IOResultInvalid);
     }
-
-    if (timer_to_cancel) {
-        timer_to_cancel->cancel();
+    WaitState expected = state.state.load(std::memory_order_acquire);
+    if (expected != WaitState::Idle && expected != WaitState::Completed) {
+        return make_result(C_IOResultInvalid);
     }
+    if (!state.state.compare_exchange_strong(expected,
+                                             WaitState::Destroyed,
+                                             std::memory_order_acq_rel,
+                                             std::memory_order_acquire)) {
+        return make_result(C_IOResultInvalid);
+    }
+    cancel_timer(state);
     delete state_holder;
     request->request = nullptr;
     return make_result(C_IOResultOk);
@@ -251,34 +312,27 @@ C_IOResult request_prepare_impl(C_CoroWaitRequest* request,
                                 uint64_t* out_generation)
 {
     auto state = get_state(request);
-    if (!state || out_generation == nullptr) {
+    if (!state || out_generation == nullptr ||
+        state->token_slot.in_use.load(std::memory_order_acquire)) {
         return make_result(C_IOResultInvalid);
     }
 
-    galay::kernel::Timer::ptr timer_to_cancel;
-    {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        if (state->state == WaitState::Pending ||
-            state->state == WaitState::Waiting ||
-            state->state == WaitState::Completing ||
-            state->state == WaitState::Completed ||
-            state->state == WaitState::Destroyed) {
-            return make_result(C_IOResultInvalid);
-        }
+    WaitState expected = WaitState::Idle;
+    if (!state->state.compare_exchange_strong(expected,
+                                              WaitState::Preparing,
+                                              std::memory_order_acq_rel,
+                                              std::memory_order_acquire)) {
+        return make_result(C_IOResultInvalid);
+    }
 
-        if (state->timer) {
-            timer_to_cancel = std::move(state->timer);
-        }
-        ++state->generation;
-        state->state = WaitState::Pending;
-        state->result = make_result(C_IOResultInvalid);
-        state->waiter = nullptr;
-        state->completed_waiter_pending = false;
-        *out_generation = state->generation;
-    }
-    if (timer_to_cancel) {
-        timer_to_cancel->cancel();
-    }
+    const uint64_t generation =
+        state->generation.fetch_add(1, std::memory_order_acq_rel) + 1;
+    state->result = make_result(C_IOResultInvalid);
+    state->waiter.store(nullptr, std::memory_order_relaxed);
+    state->waiter_pending.store(false, std::memory_order_relaxed);
+    cancel_timer(*state);
+    *out_generation = generation;
+    state->state.store(WaitState::Pending, std::memory_order_release);
     return make_result(C_IOResultOk);
 }
 
@@ -291,7 +345,8 @@ C_IOResult prepare_fast_wait_user_data_impl(C_CoroWaitRequest* request, void** o
     }
     auto& state = **state_holder;
     bool expected = false;
-    if (!state.fast_wait_active.compare_exchange_strong(expected, true,
+    if (!state.fast_wait_active.compare_exchange_strong(expected,
+                                                        true,
                                                         std::memory_order_acq_rel,
                                                         std::memory_order_acquire)) {
         return make_result(C_IOResultInvalid);
@@ -322,9 +377,10 @@ C_IOResult wait_fast_impl(C_CoroWaitRequest* request, int64_t timeout_ms)
 
     if (!state.fast_wait_completed.load(std::memory_order_acquire)) {
         auto* expected = static_cast<galay::kernel::coro_c::C_CoroTaskInternal*>(nullptr);
-        if (!state.fast_waiter.compare_exchange_strong(expected, current,
-                                                       std::memory_order_acq_rel,
-                                                       std::memory_order_acquire)) {
+        if (!state.fast_waiter.compare_exchange_strong(expected,
+                                                        current,
+                                                        std::memory_order_acq_rel,
+                                                        std::memory_order_acquire)) {
             if (!state.fast_wait_completed.load(std::memory_order_acquire)) {
                 galay::kernel::coro_c::releaseTask(current);
                 (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
@@ -345,7 +401,7 @@ C_IOResult wait_fast_impl(C_CoroWaitRequest* request, int64_t timeout_ms)
             (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
             return make_result(C_IOResultInvalid);
         }
-        if (galay::kernel::coro_c::rollbackCurrentTaskWait()) {
+        if (galay::kernel::coro_c::activatePreparedCurrentTaskWait()) {
             galay::kernel::coro_c::releaseTask(current);
             return state.fast_wait_result;
         }
@@ -379,7 +435,10 @@ C_IOResult complete_fast_wait_user_data_impl(void* user_data, C_IOResult result)
     if (waiter == nullptr) {
         return make_result(C_IOResultOk);
     }
-    const bool resumed = galay::kernel::coro_c::resumeTaskFromWait(waiter);
+    bool resumed = galay::kernel::coro_c::resumeTaskFromWaitImmediately(waiter);
+    if (!resumed) {
+        resumed = galay::kernel::coro_c::resumeTaskFromWait(waiter);
+    }
     galay::kernel::coro_c::releaseTask(waiter);
     return make_result(resumed ? C_IOResultOk : C_IOResultError);
 }
@@ -394,6 +453,18 @@ C_IOResult release_fast_wait_user_data_impl(void* user_data)
     return make_result(C_IOResultOk);
 }
 
+WaitEventTokenState* token_slot_of(C_CoroWaitEventToken* token)
+{
+    return token != nullptr ? static_cast<WaitEventTokenState*>(token->token) : nullptr;
+}
+
+WaitRequestState* token_request(WaitEventTokenState* slot)
+{
+    return slot != nullptr
+        ? slot->request.load(std::memory_order_acquire)
+        : nullptr;
+}
+
 C_IOResult event_token_acquire_impl(C_CoroWaitRequest* request,
                                     uint64_t generation,
                                     C_CoroWaitEventToken* out_token)
@@ -402,42 +473,54 @@ C_IOResult event_token_acquire_impl(C_CoroWaitRequest* request,
     if (!state || out_token == nullptr || out_token->token != nullptr) {
         return make_result(C_IOResultInvalid);
     }
-
-    {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        if (state->state == WaitState::Destroyed ||
-            state->generation != generation ||
-            (state->state != WaitState::Pending && state->state != WaitState::Waiting)) {
-            return make_result(C_IOResultInvalid);
-        }
+    auto& slot = state->token_slot;
+    if (slot.in_use.load(std::memory_order_acquire) ||
+        state->generation.load(std::memory_order_acquire) != generation) {
+        return make_result(C_IOResultInvalid);
     }
-
-    auto* token = new (std::nothrow) WaitEventTokenState{state, generation};
-    if (token == nullptr) {
-        return make_result(C_IOResultError);
+    const WaitState phase = state->state.load(std::memory_order_acquire);
+    if (phase != WaitState::Pending && phase != WaitState::Waiting) {
+        return make_result(C_IOResultInvalid);
     }
-    out_token->token = token;
+    slot.owner = state;
+    slot.request.store(state.get(), std::memory_order_release);
+    slot.generation.store(generation, std::memory_order_release);
+    slot.in_use.store(true, std::memory_order_release);
+    out_token->token = &slot;
     return make_result(C_IOResultOk);
 }
 
-C_IOResult wait_impl(C_CoroWaitRequest* request, int64_t timeout_ms)
+C_IOResult wait_impl(C_CoroWaitRequest* request,
+                     int64_t timeout_ms,
+                     C_IOResult timeout_result = make_result(C_IOResultTimeout))
 {
     auto state = get_state(request);
     auto* current = galay::kernel::coro_c::currentTask();
     if (!state || current == nullptr || !timeout_fits_chrono(timeout_ms)) {
         return make_result(C_IOResultInvalid);
     }
-    uint64_t timer_generation = 0;
-    if (timeout_ms > 0) {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        timer_generation = state->generation;
+
+    const uint64_t timer_generation = state->generation.load(std::memory_order_acquire);
+    if (timeout_ms == 0) {
+        (void)complete_state(state.get(), timer_generation, timeout_result, true);
+        if (state->state.load(std::memory_order_acquire) == WaitState::Completed) {
+            return take_completed_result(state, nullptr);
+        }
+        return make_result(C_IOResultInvalid);
     }
+    if (state->state.load(std::memory_order_acquire) == WaitState::Completed) {
+        return take_completed_result(state, current);
+    }
+    if (state->state.load(std::memory_order_acquire) != WaitState::Pending) {
+        return make_result(C_IOResultInvalid);
+    }
+
     galay::kernel::Timer::ptr pending_timer;
     if (timeout_ms > 0) {
-        pending_timer = create_wait_timer(timeout_ms,
-                                          state,
-                                          timer_generation,
-                                          make_result(C_IOResultTimeout));
+        pending_timer = create_wait_timer_impl(timeout_ms,
+                                               state,
+                                               timer_generation,
+                                               timeout_result);
         if (!pending_timer) {
             return make_result(C_IOResultError);
         }
@@ -446,160 +529,167 @@ C_IOResult wait_impl(C_CoroWaitRequest* request, int64_t timeout_ms)
         return make_result(C_IOResultInvalid);
     }
 
-    {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        if (state->state == WaitState::Destroyed) {
-            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
-            return make_result(C_IOResultInvalid);
-        }
-        if (state->state == WaitState::Completed) {
-            C_IOResult result = state->result;
-            state->state = WaitState::Idle;
-            state->completed_waiter_pending = false;
-            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
-            return result;
-        }
-        if (state->state != WaitState::Pending) {
-            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
-            return make_result(C_IOResultInvalid);
-        }
-        if (timeout_ms == 0) {
-            ++state->generation;
-            state->state = WaitState::Idle;
-            state->result = make_result(C_IOResultTimeout);
-            state->completed_waiter_pending = false;
-            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
-            return state->result;
-        }
+    if (state->state.load(std::memory_order_acquire) == WaitState::Completed) {
+        return take_completed_result(state, current);
+    }
+    if (state->state.load(std::memory_order_acquire) != WaitState::Pending) {
+        (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+        return make_result(C_IOResultInvalid);
+    }
 
-        state->state = WaitState::Waiting;
-        state->waiter = current;
-        galay::kernel::coro_c::retainTask(current);
-        if (pending_timer) {
-            if (!galay::kernel::TimerScheduler::getInstance()->addTimer(pending_timer)) {
-                state->waiter = nullptr;
-                state->state = WaitState::Pending;
-                galay::kernel::coro_c::releaseTask(current);
-                (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
-                return make_result(C_IOResultError);
+    galay::kernel::coro_c::retainTask(current);
+    state->waiter.store(current, std::memory_order_release);
+    state->waiter_pending.store(true, std::memory_order_release);
+    WaitState expected = WaitState::Pending;
+    if (!state->state.compare_exchange_strong(expected,
+                                              WaitState::Waiting,
+                                              std::memory_order_acq_rel,
+                                              std::memory_order_acquire)) {
+        while (expected == WaitState::Completing) {
+            expected = state->state.load(std::memory_order_acquire);
+            wait_state_relax();
+        }
+        if (state->state.load(std::memory_order_acquire) == WaitState::Completed) {
+            return take_completed_result(state, current);
+        }
+        release_waiter_reference(*state, current);
+        (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+        return make_result(C_IOResultInvalid);
+    }
+
+    if (pending_timer) {
+        state->timer = std::move(pending_timer);
+        if (!galay::kernel::TimerScheduler::getInstance()->addTimer(state->timer)) {
+            cancel_timer(*state);
+            (void)complete_state(state.get(),
+                                 timer_generation,
+                                 make_result(C_IOResultError),
+                                 true);
+            while (state->state.load(std::memory_order_acquire) == WaitState::Completing) {
+                wait_state_relax();
             }
-            state->timer = std::move(pending_timer);
+            if (state->state.load(std::memory_order_acquire) == WaitState::Completed) {
+                return take_completed_result(state, current);
+            }
+            release_waiter_reference(*state, current);
+            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+            return make_result(C_IOResultError);
         }
     }
 
     C_IOResult parked = galay::kernel::coro_c::parkPreparedCurrentTaskWait();
     if (parked.code != C_IOResultOk) {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        if (state->waiter == current) {
-            state->waiter = nullptr;
-            state->state = WaitState::Pending;
-            galay::kernel::coro_c::releaseTask(current);
+        WaitState waiting = WaitState::Waiting;
+        if (state->state.compare_exchange_strong(waiting,
+                                                 WaitState::Pending,
+                                                 std::memory_order_acq_rel,
+                                                 std::memory_order_acquire)) {
+            cancel_timer(*state);
+            release_waiter_reference(*state, current);
+            (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
+            return parked;
         }
-        (void)galay::kernel::coro_c::rollbackCurrentTaskWait();
-        return parked;
+        while (state->state.load(std::memory_order_acquire) == WaitState::Completing) {
+            wait_state_relax();
+        }
     }
 
-    galay::kernel::Timer::ptr timer_to_cancel;
-    C_IOResult result;
-    {
-        std::lock_guard<std::mutex> lock(state->mutex);
-        result = state->result;
-        state->state = WaitState::Idle;
-        state->completed_waiter_pending = false;
-        if (state->waiter == current) {
-            state->waiter = nullptr;
-        }
-        if (state->timer) {
-            timer_to_cancel = std::move(state->timer);
-        }
+    while (state->state.load(std::memory_order_acquire) == WaitState::Completing) {
+        wait_state_relax();
     }
-    if (timer_to_cancel) {
-        timer_to_cancel->cancel();
+    if (state->state.load(std::memory_order_acquire) != WaitState::Completed) {
+        return make_result(C_IOResultError);
     }
-    return result;
+    return take_completed_result(state, current);
 }
 
 C_IOResult event_token_release_impl(C_CoroWaitEventToken* token)
 {
-    auto* token_state = event_token(token);
-    if (token_state == nullptr) {
+    auto* slot = token_slot_of(token);
+    if (slot == nullptr || !slot->in_use.exchange(false, std::memory_order_acq_rel)) {
         return make_result(C_IOResultInvalid);
     }
     token->token = nullptr;
-    delete token_state;
+    slot->request.store(nullptr, std::memory_order_release);
+    WaitRequestPtr owner = std::move(slot->owner);
+    owner.reset();
     return make_result(C_IOResultOk);
 }
 
 C_IOResult event_token_detach_user_data_impl(C_CoroWaitEventToken* token,
                                              void** out_user_data)
 {
-    auto* token_state = event_token(token);
-    if (token_state == nullptr || out_user_data == nullptr || *out_user_data != nullptr) {
+    auto* slot = token_slot_of(token);
+    if (slot == nullptr || out_user_data == nullptr || *out_user_data != nullptr ||
+        !slot->in_use.load(std::memory_order_acquire)) {
         return make_result(C_IOResultInvalid);
     }
     token->token = nullptr;
-    *out_user_data = token_state;
+    *out_user_data = slot;
     return make_result(C_IOResultOk);
 }
 
-C_IOResult event_token_complete_impl(C_CoroWaitEventToken* token,
-                                     C_IOResult result)
+C_IOResult event_token_complete_impl(C_CoroWaitEventToken* token, C_IOResult result)
 {
-    auto* token_state = event_token(token);
-    if (token_state == nullptr) {
+    auto* slot = token_slot_of(token);
+    auto state = token_request(slot);
+    if (slot == nullptr || !slot->in_use.load(std::memory_order_acquire) || !state) {
         return make_result(C_IOResultInvalid);
     }
-    return complete_state(token_state->request, token_state->generation, result, false);
+    return complete_state(state, slot->generation.load(std::memory_order_acquire), result, false);
 }
 
 C_IOResult event_token_cancel_impl(C_CoroWaitEventToken* token)
 {
-    auto* token_state = event_token(token);
-    if (token_state == nullptr) {
+    auto* slot = token_slot_of(token);
+    auto state = token_request(slot);
+    if (slot == nullptr || !slot->in_use.load(std::memory_order_acquire) || !state) {
         return make_result(C_IOResultInvalid);
     }
-    return complete_state(token_state->request,
-                          token_state->generation,
+    return complete_state(state,
+                          slot->generation.load(std::memory_order_acquire),
                           make_result(C_IOResultCancelled),
                           true);
 }
 
-C_IOResult event_user_data_complete_impl(void* user_data,
-                                         C_IOResult result)
+C_IOResult event_user_data_complete_impl(void* user_data, C_IOResult result)
 {
-    auto* token_state = user_data_token(user_data);
-    if (token_state == nullptr) {
+    auto* slot = user_data_token(user_data);
+    auto state = token_request(slot);
+    if (slot == nullptr || !slot->in_use.load(std::memory_order_acquire) || !state) {
         return make_result(C_IOResultInvalid);
     }
-    return complete_state(token_state->request, token_state->generation, result, false);
+    return complete_state(state, slot->generation.load(std::memory_order_acquire), result, false);
 }
 
 C_IOResult event_user_data_cancel_impl(void* user_data)
 {
-    auto* token_state = user_data_token(user_data);
-    if (token_state == nullptr) {
+    auto* slot = user_data_token(user_data);
+    auto state = token_request(slot);
+    if (slot == nullptr || !slot->in_use.load(std::memory_order_acquire) || !state) {
         return make_result(C_IOResultInvalid);
     }
-    return complete_state(token_state->request,
-                          token_state->generation,
+    return complete_state(state,
+                          slot->generation.load(std::memory_order_acquire),
                           make_result(C_IOResultCancelled),
                           true);
 }
 
 C_IOResult event_user_data_release_impl(void* user_data)
 {
-    auto* token_state = user_data_token(user_data);
-    if (token_state == nullptr) {
+    auto* slot = user_data_token(user_data);
+    if (slot == nullptr || !slot->in_use.exchange(false, std::memory_order_acq_rel)) {
         return make_result(C_IOResultInvalid);
     }
-    delete token_state;
+    slot->request.store(nullptr, std::memory_order_release);
+    WaitRequestPtr owner = std::move(slot->owner);
+    owner.reset();
     return make_result(C_IOResultOk);
 }
 
 C_IOResult sleep_impl(int64_t timeout_ms)
 {
-    if (timeout_ms < 0 ||
-        !timeout_fits_chrono(timeout_ms) ||
+    if (timeout_ms < 0 || !timeout_fits_chrono(timeout_ms) ||
         galay::kernel::coro_c::currentTask() == nullptr) {
         return make_result(C_IOResultInvalid);
     }
@@ -612,41 +702,15 @@ C_IOResult sleep_impl(int64_t timeout_ms)
     if (created.code != C_IOResultOk) {
         return created;
     }
-
     uint64_t generation = 0;
     C_IOResult prepared = request_prepare_impl(&request, &generation);
     if (prepared.code != C_IOResultOk) {
         C_IOResult destroyed = request_destroy_impl(&request);
         return merge_cleanup_result(prepared, destroyed);
     }
-
-    auto state = get_state(&request);
-    if (!state) {
-        C_IOResult destroyed = request_destroy_impl(&request);
-        return merge_cleanup_result(make_result(C_IOResultInvalid), destroyed);
-    }
-
-    auto timer = create_wait_timer(timeout_ms, state, generation, make_result(C_IOResultOk));
-    if (!timer) {
-        C_IOResult completed = complete_state(state,
-                                              generation,
-                                              make_result(C_IOResultCancelled),
-                                              true);
-        C_IOResult destroyed = request_destroy_impl(&request);
-        C_IOResult result = merge_cleanup_result(make_result(C_IOResultError), completed);
-        return merge_cleanup_result(result, destroyed);
-    }
-    if (!galay::kernel::TimerScheduler::getInstance()->addTimer(timer)) {
-        C_IOResult completed = complete_state(state,
-                                              generation,
-                                              make_result(C_IOResultCancelled),
-                                              true);
-        C_IOResult destroyed = request_destroy_impl(&request);
-        C_IOResult result = merge_cleanup_result(make_result(C_IOResultError), completed);
-        return merge_cleanup_result(result, destroyed);
-    }
-
-    C_IOResult waited = wait_impl(&request, -1);
+    C_IOResult waited = wait_impl(&request,
+                                  timeout_ms,
+                                  make_result(C_IOResultOk));
     C_IOResult destroyed = request_destroy_impl(&request);
     return merge_cleanup_result(waited, destroyed);
 }
@@ -720,14 +784,17 @@ C_IOResult galay_coro_wait_request_complete(C_CoroWaitRequest* request,
                                             C_IOResult result)
 {
     auto state = get_state(request);
-    return complete_state(state, generation, result, false);
+    return complete_state(state.get(), generation, result, false);
 }
 
 C_IOResult galay_coro_wait_request_cancel(C_CoroWaitRequest* request,
                                           uint64_t generation)
 {
     auto state = get_state(request);
-    return complete_state(state, generation, make_result(C_IOResultCancelled), true);
+    return complete_state(state.get(),
+                          generation,
+                          make_result(C_IOResultCancelled),
+                          true);
 }
 
 C_IOResult galay_coro_wait_event_token_complete(C_CoroWaitEventToken* token,

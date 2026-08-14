@@ -196,7 +196,7 @@ bool KqueueScheduler::scheduleResume(TaskRef task) noexcept
     return true;
 }
 
-bool KqueueScheduler::scheduleReadyEntry(detail::ReadyEntry& entry)
+bool KqueueScheduler::scheduleReadyEntry(detail::ReadyEntry& entry) noexcept
 {
     if (!entry.isValid() || detail::readyEntryScheduler(entry) != this) {
         return false;

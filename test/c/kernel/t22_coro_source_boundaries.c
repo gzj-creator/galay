@@ -189,6 +189,23 @@ static int scan_coro_file(const char* full_path, const char* relative_path)
                 relative_path);
         failed = 1;
     }
+    const char* forbidden_mutex_tokens[] = {
+        "#include <mutex>",
+        "std::mutex",
+        "std::lock_guard",
+        "std::unique_lock",
+        "std::scoped_lock",
+        "std::condition_variable",
+    };
+    for (size_t i = 0; i < sizeof(forbidden_mutex_tokens) / sizeof(forbidden_mutex_tokens[0]); ++i) {
+        if (contains_text(data, len, forbidden_mutex_tokens[i])) {
+            fprintf(stderr,
+                    "[T22] %s must not use blocking synchronization token %s\n",
+                    relative_path,
+                    forbidden_mutex_tokens[i]);
+            failed = 1;
+        }
+    }
 
     free(data);
     return failed;
@@ -355,6 +372,7 @@ static int require_direct_tcp_c_api_uses_core_bridge(void)
 static int require_c_bridge_module_layout(void)
 {
     const char* bridge_files[] = {
+        "c_coro_aio_file_bridge.cc",
         "c_coro_async_file_bridge.cc",
         "c_coro_async_file_bridge.h",
         "c_coro_async_mutex_bridge.cc",
@@ -363,6 +381,7 @@ static int require_c_bridge_module_layout(void)
         "c_coro_async_waiter_bridge.h",
         "c_coro_file_watcher_bridge.cc",
         "c_coro_file_watcher_bridge.h",
+        "c_coro_operation_base.h",
         "c_coro_tcp_bridge.cc",
         "c_coro_tcp_bridge.h",
         "c_coro_udp_bridge.cc",
@@ -501,49 +520,58 @@ static int require_iouring_result_flag_lifecycle(void)
 
 static int require_direct_tcp_timeout_arbitration(void)
 {
-    const char* relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
-    char full_path[kMaxPath];
-    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
+    const char* bridge_relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
+    const char* base_relative_path = "src/c/galay-bridge-c/coro-c/c_coro_operation_base.h";
+    char bridge_full_path[kMaxPath];
+    char base_full_path[kMaxPath];
+    if (!join_path(bridge_full_path, sizeof(bridge_full_path), GALAY_SOURCE_DIR, bridge_relative_path) ||
+        !join_path(base_full_path, sizeof(base_full_path), GALAY_SOURCE_DIR, base_relative_path)) {
         return 1;
     }
 
-    char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
+    char* bridge_data = NULL;
+    size_t bridge_len = 0;
+    if (!read_file(bridge_full_path, &bridge_data, &bridge_len)) {
         return 1;
     }
 
     int failed = 0;
-    if (contains_text(data, len, "try {") ||
-        contains_text(data, len, "catch (") ||
-        contains_text(data, len, "catch (...)")) {
+    if (contains_text(bridge_data, bridge_len, "try {") ||
+        contains_text(bridge_data, bridge_len, "catch (") ||
+        contains_text(bridge_data, bridge_len, "catch (...)")) {
         fprintf(stderr,
                 "[T22] direct TCP core bridge must propagate errors through result values, not try/catch\n");
         failed = 1;
     }
-    if (contains_text(data, len, "std::make_shared")) {
+    if (contains_text(bridge_data, bridge_len, "std::make_shared")) {
         fprintf(stderr,
                 "[T22] direct TCP core bridge must use nothrow allocation and return ENOMEM instead of std::make_shared\n");
         failed = 1;
     }
-    if (!contains_text(data,
-                       len,
-                       "expected == CoroTcpCompletionPhase::TimedOut ||\n"
-                       "                expected == CoroTcpCompletionPhase::Cancelled) {\n"
+    free(bridge_data);
+
+    char* base_data = NULL;
+    size_t base_len = 0;
+    if (!read_file(base_full_path, &base_data, &base_len)) {
+        return failed != 0;
+    }
+    if (!contains_text(base_data,
+                       base_len,
+                       "expected == CoroPhaseTimedOut || expected == CoroPhaseCancelled) {\n"
                        "                return false;\n"
                        "            }")) {
         fprintf(stderr,
                 "[T22] direct TCP guarded completion must reject CQE delivery after timeout/cancel\n");
         failed = 1;
     }
-    if (!contains_text(data, len, "C_IOResult result = operation.wait(timeout_ms);") ||
-        !contains_text(data, len, "operation.markWaitTimeout();")) {
+    if (!contains_text(base_data, base_len, "C_IOResult result = operation.wait(timeout_ms);") ||
+        !contains_text(base_data, base_len, "operation.markWaitTimeout();")) {
         fprintf(stderr,
                 "[T22] direct TCP must propagate timeout through the C wait result and mark the operation timed out\n");
         failed = 1;
     }
+    free(base_data);
 
-    free(data);
     return failed;
 }
 

@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.8.0] - 2026-08-14
+
 ### Added
 
 - 新增 MCP `2026-07-28` 无状态 v2 协议实现，提供 `galay::mcp::v2` 的 stdio/Streamable HTTP client/server、`server/discover`、结果缓存字段、HTTP 标准 header 校验及 `x-mcp-header` 参数镜像能力。
@@ -23,6 +25,14 @@
 - **保留原根命名空间 MCP `2024-11-05` API 行为**：更新 CMake、C++ module 导出及 MCP 文档以同时支持 v1/v2。
 - **MCP 目录按协议版本归类**：将仅 v1 使用的 `client/`、`server/` 实现移入 `v1/client/`、`v1/server/`，删除 v1 散列的 `client.h`、`http_server.h`、`protocol.h`、`stdio_server.h` reexport 头；v2 参考 v1 结构拆分为 `v2/client/`、`v2/server/`，`protocol.h`、`http_headers.h` 归入 `v2/common/`；同步更新 CMake 源文件收集、C++ module 导出、测试、压测、示例与文档引用。
 - **C coroutine bridge 全面无锁化**：7 个 `coro-c` bridge 移除 `std::mutex` 保护，user data 槽位改用原子 `exchange`，避免阻塞协程调度线程；`t22_coro_source_boundaries` 增加无阻塞锁源码约束，`b9_async_mutex_contended` 支持自定义迭代次数参数，并在工程准则中新增"协程与并发阻塞操作"约定。
+- **C 协程直连桥接层收敛为共享 CRTP 完成状态机**：新增 `c_coro_operation_base.h`，将 tcp/udp/async-file/file-watcher 四个 bridge 各自复制的完成状态机收敛为一份 `CoroOperationBase` CRTP 基类——phase 与 finished 合并进单个原子字节，完成路径从多次 RMW 降为一次 CAS，`buildResult`/`commit`/`rollback` 改走 CRTP 静态分发消除虚调用，并新增非持有型 C 恢复 token `ResumeToken::fromNonOwningCCoroutine` 与 `perform_registered_io`/`perform_coro_close` 公共注册-等待-清理入口；桥接代码净删约 2000 行。
+- **调度器 ready entry 投递去 RTTI**：`scheduleReadyEntry` 上移为 `Scheduler` 虚接口，删去 `scheduler.cc` 中按后端 `dynamic_cast` 分发；epoll/kqueue/io_uring 三后端改为 `override` 实现。
+- **C 协程任务与等待请求全面无锁化**：`coro_task_c.cc` 移除 `std::mutex`/`condition_variable`，join/cancel 改用原子状态自旋等待，新增 `Cancelling` 中间态与 scheduler 线程上的立即恢复路径 `resumeTaskFromWaitImmediately`；`coro_wait_c.cc` 等待请求状态机改为原子推进，event token 内嵌进 request（不再逐次堆分配），completion 失败时回滚恢复可重试，并支持 `complete_fast_wait` 的立即恢复。
+- **修复 epoll reactor 内联恢复后的悬垂访问**：`complete_one_shot` 返回是否已内联恢复，C 协程可能在 wakeUp 中就地恢复并销毁 controller，分发路径据此提前返回不再解引用旧指针；`async_tcp_c` 的立即 I/O 探测改为复用新导出的 `galay_core_coro_tcp_can_try_immediate_io`。
+
+### Docs
+
+- **边界约束与回归扩展**：`t22_coro_source_boundaries` 在源码扫描中加入 `std::mutex`/`condition_variable` 等阻塞同步 token 禁令并指向共享基类；`t23_coro_task` 新增 ready 态任务 cancel 场景覆盖。
 
 ## [v4.7.0] - 2026-08-12
 
