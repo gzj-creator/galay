@@ -26,7 +26,7 @@
 #ifndef GALAY_KERNEL_TIMER_SCHEDULER_H
 #define GALAY_KERNEL_TIMER_SCHEDULER_H
 
-#include "../common/safetimer_mgr.hpp"
+#include "../common/timer_manager_mt.hpp"
 #include <thread>
 #include <atomic>
 

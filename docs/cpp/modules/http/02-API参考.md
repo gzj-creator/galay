@@ -75,8 +75,8 @@
   - `galay-http/protoc/galay-http2/http2_hpack.h`
   - `galay-http/kernel/galay-http2/http2_conn.h`
   - `galay-http/kernel/galay-http2/h2_core.h`
-  - `galay-http/kernel/galay-http2/frame_disp.h`
-  - `galay-http/kernel/galay-http2/out_sched.h`
+  - `galay-http/kernel/galay-http2/frame_dispacher.h`
+  - `galay-http/kernel/galay-http2/out_scheduler.h`
   - `galay-http/kernel/galay-http2/http2_stream.h`
   - `galay-http/kernel/galay-http2/stream_manager.h`
 - 工具与模块：

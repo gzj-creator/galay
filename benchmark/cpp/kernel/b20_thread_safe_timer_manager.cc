@@ -7,7 +7,7 @@
  * - expired timer: push 后一次 tick 批量触发已过期定时器并清空 manager。
  */
 
-#include <galay/cpp/galay-kernel/common/safetimer_mgr.hpp>
+#include <galay/cpp/galay-kernel/common/timer_manager_mt.hpp>
 
 #include <atomic>
 #include <chrono>

@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- HTTP/2 kernel 文件重命名：`frame_disp.{h,cc}` 更名为 `frame_dispacher.{h,cc}`、`out_sched.{h,cc}` 更名为 `out_scheduler.{h,cc}`；`galay-kernel/common/safetimer_mgr.hpp` 更名为 `timer_manager_mt.hpp`，同步更新 `h2_core.h`、`timer_scheduler.h`、测试、压测与文档中的 include 与路径引用。
+
 ## [v4.8.0] - 2026-08-14
 
 ### Added
@@ -289,7 +293,7 @@
 - **HTTP/1 与 HTTP/2 静态文件链路异步化**：HTTP MEMORY 静态文件读取改为 blocking executor + `AsyncWaiter` 挂起等待，HTTP server root task 显式绑定 runtime；HTTP/2 静态文件 cache 提升为 server 级共享缓存，cache miss 通过 blocking worker 读取并回投 frame，避免事件循环同步读文件。
 - **Redis pool 与 RPC 取消通知热路径优化**：Redis async pool 收敛 acquire/release 并发状态、等待队列与计数器更新，减少跨线程竞争；RPC pending cancel 从每 call watcher/扫描改为 cancellation token callback 直接通知 pending waiter，降低取消路径资源放大。
 - **HTTP route / writer 与 utils 热路径分配优化**：HTTP 路由匹配改用 `string_view` 段扫描和小型连续 route params，兼容 `routeParams()` 懒加载 map；HTTP writer TCP layout 复用固定 iovec cursor，SSL 合并路径复用成员 buffer；LRU 热 key 访问改为惰性刷新过期节点，ConsistentHash 原子快照读写改用更弱但足够的 acquire/release/relaxed 内存序。
-- **SSL 引擎 BIO 接口改为 std::expected 显式错误传播**：`SslEngine::feedEncryptedInput` / `extractEncryptedOutput` 由返回 `int`（-1 表示错误）改为 `std::expected<size_t, SslError>`，新增 `SslErrorCode::kBufferTooLarge` 表达缓冲区超过 `INT_MAX` 的失败原因，并经 `SslError::fromOpenSSL` 保留 OpenSSL 错误链；C 包装 `ssl_c.cc` 与 C++ awaitable 同步消费新的 expected 返回，移除原先的哨兵 `int` 错误判断（遵循错误必须经返回值显式传播的约定）。
+- **SSL 引擎 BIO 接口改为 std::expected 显式错误传播**：`SslEngine::feedEncryptedInput` / `extractEncryptedOutput` 由返回 `int`（-1 表示错误）改为 `std::expected<size_t, SslError>`，新增 `SslErrorCode::kBufferTooLarge` 表达缓冲区超过 `INT_MAX` 的失败原因，并经 `SslError::fromOpenSSL` 保留 OpenSSL 错误链；C 包装 `ssl.cc` 与 C++ awaitable 同步消费新的 expected 返回，移除原先的哨兵 `int` 错误判断（遵循错误必须经返回值显式传播的约定）。
 - **SSL 状态机错误映射收敛为 `mapSslError` 约定并加编译期约束**：`SslStateMachineAwaitable` 新增 `ssl_error_expected` / `ssl_error_mappable_expected` 类型 trait 与 `HasSslErrorMapper` concept，通过 `static_assert` 强制 `result_type` 必须是可直接承载 `SslError`、或经 `mapSslError` 映射的 `std::expected`；新增 `makeUnexpected()` 集中错误构造，移除原先命中不可表达错误时的 `std::abort()` 兜底，统一返回 `kUnknown`。HTTP / HTTP2 / Redis / WS 各 SSL 状态机补齐 `mapSslError(SslError)` 映射入口。
 - **RESP double 解析改 `strtod` 去异常**：`redis_protocol.cc` 的 double 帧解析由 `std::stod`（throw）改为 `std::strtod` + errno / 长度 / 溢出校验（限制文本长度上限），超范围或格式非法时显式返回 `ParseError::InvalidFormat`，移除协议解析路径上的异常控制流。
 - **mvcc / Transaction 禁用拷贝与移动**：`VersionedValue` 显式 default move、delete copy；`Mvcc` / `Transaction` 因持有 `shared_mutex` / 引用而禁用拷贝与移动，消除隐式误拷贝风险，延续对象所有权契约收敛。
@@ -430,7 +434,7 @@
 - MCP 自有 JSON 文档、写入器、解析辅助函数及相关调用点统一改为小写开头驼峰命名，保留类型名、构造函数、协议字段和 JSON-RPC 方法字符串不变。
 - RPC 的 etcd adapter 改为由 `GALAY_RPC_ENABLE_ETCD` 控制并编译进 `galay::rpc`，不再导出单独的 `galay::rpc-etcd` 目标。
 - C++23 module 示例、测试与文档统一改为链接 `galay::<module>` canonical target，module file set 直接挂载在 `galay-<module>` 上，不再使用独立 `galay-<module>-modules` facade target。
-- **统一 utils C ABI 状态码到 `galay_status_t`**：`galay_utils_status_t` 改为 `galay_status_t` 别名，`GALAY_UTILS_*` 宏映射到 `GALAY_*`；utils 全部导出函数签名统一返回 `galay_status_t` 并标注 `GALAY_C_API`，`utils_c.h` 改用 `GALAY_C_BEGIN_DECLS`；`test/c/utils/header_smoke.c` 增加 `_Static_assert` 锁定新签名，`galay-c-utils` 显式链接 `galay::c-common`。
+- **统一 utils C ABI 状态码到 `galay_status_t`**：`galay_utils_status_t` 改为 `galay_status_t` 别名，`GALAY_UTILS_*` 宏映射到 `GALAY_*`；utils 全部导出函数签名统一返回 `galay_status_t` 并标注 `GALAY_C_API`，`utils.h` 改用 `GALAY_C_BEGIN_DECLS`；`test/c/utils/header_smoke.c` 增加 `_Static_assert` 锁定新签名，`galay-c-utils` 显式链接 `galay::c-common`。
 - kernel C API 实现按 runtime、TCP socket 拆分到 `core-c` 与 `async-c`，并将 runtime / TCP socket C 句柄调整为 FFI 可见的 `void*` 载荷结构。
 - kernel common 负载均衡头文件从 `async_strategy.hpp` 更名为 `balancer.hpp`，同步更新 RPC discovery include，避免旧文件名残留。
 

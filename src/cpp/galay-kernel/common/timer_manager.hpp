@@ -10,7 +10,7 @@
  * 默认 tick 粒度为 50 毫秒，覆盖范围约 6.8 年。
  * tick 时长可在构造时配置。
  *
- * @note 多线程场景请使用 ThreadSafeTimerManager（safetimer_mgr.hpp）。
+ * @note 多线程场景请使用 ThreadSafeTimerManager（timer_manager_mt.hpp）。
  */
 
 #ifndef GALAY_KERNEL_TIMERMANAGER_HPP
@@ -46,7 +46,7 @@ namespace galay::kernel
      * 默认 tick 粒度为 50 毫秒，覆盖约 6.8 年。
      * tick 时长可在构造时配置。
      *
-     * @note 多线程场景请使用 ThreadSafeTimerManager（safetimer_mgr.hpp）。
+     * @note 多线程场景请使用 ThreadSafeTimerManager（timer_manager_mt.hpp）。
      */
     class TimingWheelTimerManager
     {

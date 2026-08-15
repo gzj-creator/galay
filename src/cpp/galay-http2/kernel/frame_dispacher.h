@@ -1,5 +1,5 @@
 /**
- * @file frame_disp.h
+ * @file frame_dispacher.h
  * @brief HTTP/2 帧分发器，处理帧调度动作
  * @author galay-http
  * @version 1.0.0

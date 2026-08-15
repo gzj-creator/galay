@@ -11,8 +11,8 @@
 #ifndef GALAY_HTTP2_CONNECTION_CORE_H
 #define GALAY_HTTP2_CONNECTION_CORE_H
 
-#include "frame_disp.h"
-#include "out_sched.h"
+#include "frame_dispacher.h"
+#include "out_scheduler.h"
 #include "../../galay-kernel/core/task.h"
 #include <atomic>
 #include <chrono>

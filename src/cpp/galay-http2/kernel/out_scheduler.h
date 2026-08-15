@@ -1,5 +1,5 @@
 /**
- * @file out_sched.h
+ * @file out_scheduler.h
  * @brief HTTP/2 出站调度器，管理发送队列和流量控制
  * @author galay-http
  * @version 1.0.0

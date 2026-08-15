@@ -1,5 +1,5 @@
 /**
- * @file safetimer_mgr.hpp
+ * @file timer_manager_mt.hpp
  * @brief 线程安全的多层时间轮定时器管理器
  * @author galay-kernel
  * @version 1.0.0
