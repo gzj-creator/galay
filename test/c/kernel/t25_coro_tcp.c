@@ -9,12 +9,16 @@
 #include <sys/socket.h>
 
 typedef struct TcpEchoState {
+    galay_c_runtime_t* runtime;
     galay_c_tcp_socket_t* listener;
     galay_c_tcp_socket_t accepted;
     galay_c_tcp_socket_t client;
     C_Host endpoint;
     C_IOResult server_result;
+    C_IOResult relay_result;
     C_IOResult client_result;
+    galay_c_coro_task_t padding_task;
+    galay_c_coro_task_t relay_task;
     char server_buffer[32];
     char client_buffer[32];
 } TcpEchoState;
@@ -51,6 +55,26 @@ static C_IOResult recv_all(galay_c_tcp_socket_t* socket,
     return (C_IOResult){C_IOResultOk, 0, received, 0, NULL};
 }
 
+static void padding_entry(void* arg)
+{
+    (void)arg;
+}
+
+static void relay_entry(void* arg)
+{
+    TcpEchoState* const state = arg;
+    state->relay_result =
+        recv_all(&state->accepted, state->server_buffer, strlen("native-ping"));
+    if (state->relay_result.code == C_IOResultOk) {
+        state->relay_result =
+            send_all(&state->accepted, "native-pong", strlen("native-pong"));
+    }
+    const C_IOResult closed = galay_c_tcp_socket_close(&state->accepted);
+    if (state->relay_result.code == C_IOResultOk && closed.code != C_IOResultOk) {
+        state->relay_result = closed;
+    }
+}
+
 static void server_entry(void* arg)
 {
     TcpEchoState* const state = arg;
@@ -59,15 +83,17 @@ static void server_entry(void* arg)
     if (state->server_result.code != C_IOResultOk) {
         return;
     }
-    state->server_result =
-        recv_all(&state->accepted, state->server_buffer, strlen("native-ping"));
-    if (state->server_result.code == C_IOResultOk) {
-        state->server_result =
-            send_all(&state->accepted, "native-pong", strlen("native-pong"));
+    /* Advance round-robin selection so the relay owns the other scheduler. */
+    state->server_result = galay_c_coro_spawn(
+        state->runtime, padding_entry, state, NULL, &state->padding_task);
+    if (state->server_result.code != C_IOResultOk) {
+        (void)galay_c_tcp_socket_close(&state->accepted);
+        return;
     }
-    const C_IOResult closed = galay_c_tcp_socket_close(&state->accepted);
-    if (state->server_result.code == C_IOResultOk && closed.code != C_IOResultOk) {
-        state->server_result = closed;
+    state->server_result = galay_c_coro_spawn(
+        state->runtime, relay_entry, state, NULL, &state->relay_task);
+    if (state->server_result.code != C_IOResultOk) {
+        (void)galay_c_tcp_socket_close(&state->accepted);
     }
 }
 
@@ -119,17 +145,19 @@ int main(void)
     }
 
     C_RuntimeConfig config = galay_c_runtime_config_default();
-    config.io_scheduler_count = 1;
+    config.io_scheduler_count = 2;
     config.compute_scheduler_count = 0;
     galay_c_runtime_t runtime = {0};
     galay_c_tcp_socket_t listener = {.fd = -1};
     galay_c_coro_task_t server_task = {0};
     galay_c_coro_task_t client_task = {0};
     TcpEchoState state = {
+        .runtime = &runtime,
         .listener = &listener,
         .accepted = {.fd = -1},
         .client = {.fd = -1},
         .server_result = {C_IOResultInvalid, 0, 0, 0, NULL},
+        .relay_result = {C_IOResultInvalid, 0, 0, 0, NULL},
         .client_result = {C_IOResultInvalid, 0, 0, 0, NULL},
     };
     const C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
@@ -153,9 +181,12 @@ int main(void)
         galay_c_coro_spawn(&runtime, client_entry, &state, NULL, &client_task).code !=
             C_IOResultOk ||
         galay_c_coro_join(&server_task, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&state.padding_task, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&state.relay_task, 3000).code != C_IOResultOk ||
         galay_c_coro_join(&client_task, 3000).code != C_IOResultOk) {
         result = 4;
     } else if (state.server_result.code != C_IOResultOk ||
+               state.relay_result.code != C_IOResultOk ||
                state.client_result.code != C_IOResultOk ||
                memcmp(state.server_buffer, "native-ping", strlen("native-ping")) != 0 ||
                memcmp(state.client_buffer, "native-pong", strlen("native-pong")) != 0) {
@@ -170,6 +201,14 @@ cleanup:
     if (client_task.task != NULL && galay_c_coro_destroy(&client_task).code != C_IOResultOk &&
         result == 0) {
         result = 7;
+    }
+    if (state.padding_task.task != NULL &&
+        galay_c_coro_destroy(&state.padding_task).code != C_IOResultOk && result == 0) {
+        result = 13;
+    }
+    if (state.relay_task.task != NULL &&
+        galay_c_coro_destroy(&state.relay_task).code != C_IOResultOk && result == 0) {
+        result = 14;
     }
     if (state.accepted.fd >= 0 && galay_c_tcp_socket_close(&state.accepted).code !=
             C_IOResultOk &&

@@ -326,8 +326,7 @@ C_IOResult galay_c_tcp_socket_accept(galay_c_tcp_socket_t* listener,
             return make_result(C_IOResultError, errno);
         }
     }
-    C_IOResult initialized = initialize_accepted(out_client, client_fd, listener->type,
-                                                 listener->scheduler);
+    C_IOResult initialized = initialize_accepted(out_client, client_fd, listener->type, NULL);
     if (initialized.code != C_IOResultOk) {
         return initialized;
     }

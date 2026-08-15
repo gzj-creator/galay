@@ -54,8 +54,13 @@ int main()
         root / "benchmark/cpp/kernel/b6_udp_socket_throughput.cc");
     const auto ring_source = readAll(
         root / "benchmark/cpp/kernel/b10_ring_buffer_throughput.cc");
+    const auto tcp_client_source = readAll(
+        root / "benchmark/cpp/kernel/b3_tcp_client_throughput.cc");
+    const auto libuv_server_source = readAll(
+        root / "benchmark/c/kernel/b26_libuv_echo_server.c");
 
-    if (scheduler_source.empty() || udp_source.empty() || ring_source.empty()) {
+    if (scheduler_source.empty() || udp_source.empty() || ring_source.empty() ||
+        tcp_client_source.empty() || libuv_server_source.empty()) {
         std::cerr << "[T170] failed to read benchmark sources\n";
         return 1;
     }
@@ -102,6 +107,19 @@ int main()
     ok = requireContains(ring_source,
                          "amortized ns/pair",
                          "RingBuffer benchmark must not present pipelined throughput as isolated latency") && ok;
+
+    ok = requireContains(tcp_client_source,
+                         "--io-schedulers",
+                         "TCP client benchmark must expose IO scheduler count for symmetric comparisons") && ok;
+    ok = requireContains(tcp_client_source,
+                         "static_cast<std::size_t>(i) % schedulers.size()",
+                         "TCP client benchmark must distribute connections across all IO schedulers") && ok;
+    ok = requireContains(libuv_server_source,
+                         "SO_REUSEPORT",
+                         "libuv TCP baseline must support one listener per event-loop thread") && ok;
+    ok = requireContains(libuv_server_source,
+                         "uv_thread_create",
+                         "libuv TCP baseline must run the requested event loops on separate threads") && ok;
 
     if (!ok) {
         return 1;

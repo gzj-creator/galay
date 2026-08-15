@@ -16,9 +16,11 @@ extern "C" {
 
 /**
  * @brief 原生 C TCP socket。
- * @details socket 可在普通线程创建、bind 和 listen；第一次 connect/accept/recv/send
- *          必须发生在 C coroutine 中，并把 socket 固定到当前 scheduler。固定后不得跨
- *          scheduler 使用。close 可由拥有者在无并发操作时调用。
+ * @details socket 可在普通线程创建、bind 和 listen；listener 的第一次 accept，以及
+ *          client socket 的第一次 connect/recv/send 必须发生在 C coroutine 中，并把
+ *          socket 固定到当前 scheduler。accept 输出的 client 尚未绑定，可交给其 session
+ *          coroutine 的第一次 recv/send 绑定。固定后不得跨 scheduler 使用。close 可由
+ *          拥有者在无并发操作时调用。
  */
 typedef struct galay_c_tcp_socket {
     galay_c_io_controller_t controller;

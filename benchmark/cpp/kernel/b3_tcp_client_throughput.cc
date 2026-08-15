@@ -11,6 +11,7 @@
 #include <cstring>
 #include <iostream>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <thread>
 #include <unordered_map>
@@ -79,6 +80,7 @@ struct BenchConfig {
     int messageSize = 256;
     int duration = 10;  // seconds
     int connectTimeoutMs = 0;
+    int ioSchedulers = 1;
     bool connectOnly = false;
 };
 
@@ -360,6 +362,7 @@ void printUsage(const char* program) {
               << "  -c <connections> Number of concurrent connections (default: 100)\n"
               << "  -s <size>        Message size in bytes (default: 256)\n"
               << "  -d <duration>    Test duration in seconds (default: 10)\n"
+              << "  --io-schedulers <count> Number of client IO schedulers (default: 1)\n"
               << "  --connect-only   Connect and close only, skip request/response loop\n"
               << "  --connect-timeout-ms <ms> Connect timeout in milliseconds (default: 0, disabled)\n"
               << std::endl;
@@ -382,6 +385,8 @@ int main(int argc, char* argv[]) {
             config.messageSize = std::atoi(argv[++i]);
         } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
             config.duration = std::atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--io-schedulers") == 0 && i + 1 < argc) {
+            config.ioSchedulers = std::atoi(argv[++i]);
         } else if (strcmp(argv[i], "--connect-only") == 0) {
             config.connectOnly = true;
         } else if (strcmp(argv[i], "--connect-timeout-ms") == 0 && i + 1 < argc) {
@@ -391,12 +396,18 @@ int main(int argc, char* argv[]) {
             return 0;
         }
     }
+    if (config.connections <= 0 || config.messageSize <= 0 || config.duration <= 0 ||
+        config.ioSchedulers <= 0) {
+        printUsage(argv[0]);
+        return 1;
+    }
 
     std::cout << "=== Benchmark Client ===" << std::endl;
     std::cout << "Target: " << config.host << ":" << config.port << std::endl;
     std::cout << "Connections: " << config.connections << std::endl;
     std::cout << "Message Size: " << config.messageSize << " bytes" << std::endl;
     std::cout << "Duration: " << config.duration << " seconds" << std::endl;
+    std::cout << "IO Schedulers: " << config.ioSchedulers << std::endl;
     std::cout << "Connect Timeout: " << config.connectTimeoutMs << " ms" << std::endl;
     std::cout << "Mode: " << (config.connectOnly ? "connect-only" : "echo") << std::endl;
     std::cout << "Meta: backend=" << benchmarkBackend()
@@ -409,19 +420,32 @@ int main(int argc, char* argv[]) {
 
 #if defined(USE_KQUEUE)
     std::cout << "Using KqueueScheduler (macOS)" << std::endl;
-    KqueueScheduler scheduler;
+    using IOSchedulerType = KqueueScheduler;
 #elif defined(USE_IOURING)
     std::cout << "Using IOUringScheduler (Linux io_uring)" << std::endl;
-    IOUringScheduler scheduler;
+    using IOSchedulerType = IOUringScheduler;
 #elif defined(USE_EPOLL)
     std::cout << "Using EpollScheduler (Linux epoll)" << std::endl;
-    EpollScheduler scheduler;
+    using IOSchedulerType = EpollScheduler;
 #else
     LogWarn("No supported IO backend available");
     return 1;
 #endif
 
-    scheduler.start();
+    std::vector<std::unique_ptr<IOSchedulerType>> schedulers;
+    schedulers.reserve(static_cast<std::size_t>(config.ioSchedulers));
+    for (int i = 0; i < config.ioSchedulers; ++i) {
+        auto scheduler = std::make_unique<IOSchedulerType>();
+        const auto started = scheduler->start();
+        if (!started) {
+            LogError("Failed to start client IO scheduler {}: {}", i, started.error().message());
+            for (auto& running : schedulers) {
+                running->stop();
+            }
+            return 1;
+        }
+        schedulers.push_back(std::move(scheduler));
+    }
     galay::benchmark::CompletionLatch connected_latch(static_cast<std::size_t>(config.connections));
     g_connected_latch = &connected_latch;
 
@@ -431,7 +455,13 @@ int main(int argc, char* argv[]) {
     // 启动所有客户端连接
     std::cout << "Starting " << config.connections << " connections..." << std::endl;
     for (int i = 0; i < config.connections; i++) {
-        scheduleTask(scheduler, benchClient(config, i));
+        auto& scheduler = *schedulers[static_cast<std::size_t>(i) % schedulers.size()];
+        if (!scheduleTask(scheduler, benchClient(config, i))) {
+            g_connect_attempts.fetch_add(1, std::memory_order_relaxed);
+            g_connect_failed.fetch_add(1, std::memory_order_relaxed);
+            g_error_count.fetch_add(1, std::memory_order_relaxed);
+            connected_latch.arrive();
+        }
     }
 
     // 等待统计线程结束
@@ -441,7 +471,9 @@ int main(int argc, char* argv[]) {
     // 等待一下让所有协程完成
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    scheduler.stop();
+    for (auto& scheduler : schedulers) {
+        scheduler->stop();
+    }
 
     // 打印最终结果
     const uint64_t requests = g_total_requests.load(std::memory_order_relaxed);
