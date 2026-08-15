@@ -243,3 +243,19 @@
 - **结果集复用 API**：新增 result-set 创建/重置及 `galay_postgres_client_query_into_async`，保留字段、行和值容量，减少循环查询中的重复分配。
 - **协程 I/O 与生命周期**：复用 PostgreSQL 客户端收发缓冲和 wait request，补齐 per-client 串行操作保护、错误后的协议状态清理、result view 失效和 pool lease 借用约束。
 - **文档与验证**：补全 `postgres.h` 公开 API 注释，新增 C/C++ 性能文档，并通过 Release 构建、C surface/loopback、真实 PostgreSQL 集成测试和 C benchmark（`40000/40000`，约 `8072.88 QPS`）。
+
+## v4.8.1 - 2026-08-16
+
+- **版本级别**：修订版本（patch）
+- **Git 提交消息**：`chore: 发布 v4.8.1 并收束 C API 与运行时变更`
+- **Git tag**：`v4.8.1`
+
+### 变更摘要
+
+本次为 `v4.8.0` 之后的修订版本，累计收束 4 个提交，主线是原生 C11 C ABI/runtime 迁移、HTTP/2 内部命名整理、多调度器 benchmark 对照，以及 C API 协议边界修复。版本按修订级别递增至 `v4.8.1`，未改变主版本与次版本号。
+
+- **原生 C ABI 与 runtime**：C API 运行时、协程、网络 I/O、文件 I/O、watcher 和 bounded channel 迁移到原生 C11 实现，移除旧 bridge 与无界 wrapper ABI，补齐构建、安装、示例、测试和 benchmark 接线。
+- **HTTP/2 与定时器整理**：完成 HTTP/2 kernel dispatcher/scheduler 与 kernel timer manager 的文件和 include 重命名，保持跨模块引用、测试、示例和文档一致。
+- **多调度器性能对照**：C++ TCP client 支持按连接轮询多个 I/O scheduler；libuv baseline 支持多线程 event loop 与 `SO_REUSEPORT`，并补充双进程 TCP/UDP 回环和 benchmark 测量合同。
+- **C API 协议边界修复**：HTTP/2 C API 移除 nghttp2，改用仓库内置 HPACK 编解码器；补齐 HPACK 静态索引、Huffman、动态表、长字段和溢出处理，收紧 HTTP/HTTP2/MCP/WS 的输入校验、握手随机性、JSON/URL/header 边界及窗口更新失败回滚。
+- **验证结果**：C 测试与 benchmark 已完成回归；PostgreSQL 真实实例测试和 benchmark 仅因当前环境缺少外部实例而跳过/阻塞。

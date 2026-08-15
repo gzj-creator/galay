@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.8.1] - 2026-08-16
+
 ### Added
 
 - **原生 C11 kernel runtime 与 bounded channel family**：C API 直接提供 runtime、stackful coroutine、reactor、TCP/UDP、文件 I/O、watcher、mutex/waiter 以及 MPMC/MPSC/SPSC bounded channel；核心 data path 不再经 `galay-c-bridge` 转发。
