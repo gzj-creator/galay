@@ -1,6 +1,6 @@
-#include <galay/c/galay-http-c/http_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-http-c/http.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -116,7 +116,7 @@ static void server_entry(void* arg)
             result = galay_http_session_send_bytes(session, first, sizeof(first) - 1, 2000);
         }
         if (result.code == C_IOResultOk) {
-            C_IOResult yielded = galay_coro_yield();
+            C_IOResult yielded = galay_c_coro_yield();
             if (yielded.code != C_IOResultOk) {
                 result = yielded;
             }
@@ -201,20 +201,20 @@ static void client_entry(void* arg)
     galay_http_request_destroy(request);
 }
 
-static int cleanup(galay_kernel_runtime_t* runtime,
-                   galay_coro_task_t* server_task,
-                   galay_coro_task_t* client_task,
+static int cleanup(galay_c_runtime_t* runtime,
+                   galay_c_coro_task_t* server_task,
+                   galay_c_coro_task_t* client_task,
                    ScenarioState* state,
                    int exit_code)
 {
     if (server_task->task != NULL) {
-        C_IOResult destroy_result = galay_coro_destroy(server_task);
+        C_IOResult destroy_result = galay_c_coro_destroy(server_task);
         if (destroy_result.code != C_IOResultOk && exit_code == 0) {
             exit_code = 80;
         }
     }
     if (client_task->task != NULL) {
-        C_IOResult destroy_result = galay_coro_destroy(client_task);
+        C_IOResult destroy_result = galay_c_coro_destroy(client_task);
         if (destroy_result.code != C_IOResultOk && exit_code == 0) {
             exit_code = 81;
         }
@@ -244,10 +244,10 @@ static int cleanup(galay_kernel_runtime_t* runtime,
         state->server = NULL;
     }
     if (runtime->runtime != NULL) {
-        if (galay_kernel_runtime_stop(runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 86;
         }
-        if (galay_kernel_runtime_destroy(runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 87;
         }
     }
@@ -256,20 +256,20 @@ static int cleanup(galay_kernel_runtime_t* runtime,
 
 static int run_scenario(ScenarioKind kind)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     ScenarioState state = {0};
     state.kind = kind;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
         return 1;
     }
-    if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         return cleanup(&runtime, &server_task, &client_task, &state, 2);
     }
     if (expect_status(galay_http_server_create(&state.server), GALAY_OK) ||
@@ -283,16 +283,16 @@ static int run_scenario(ScenarioKind kind)
         return cleanup(&runtime, &server_task, &client_task, &state, 4);
     }
 
-    if (expect_io(galay_coro_spawn(&runtime, server_entry, &state, NULL, &server_task),
+    if (expect_io(galay_c_coro_spawn(&runtime, server_entry, &state, NULL, &server_task),
                   C_IOResultOk)) {
         return cleanup(&runtime, &server_task, &client_task, &state, 5);
     }
-    if (expect_io(galay_coro_spawn(&runtime, client_entry, &state, NULL, &client_task),
+    if (expect_io(galay_c_coro_spawn(&runtime, client_entry, &state, NULL, &client_task),
                   C_IOResultOk)) {
         return cleanup(&runtime, &server_task, &client_task, &state, 6);
     }
-    if (expect_io(galay_coro_join(&client_task, 3000), C_IOResultOk) ||
-        expect_io(galay_coro_join(&server_task, 3000), C_IOResultOk)) {
+    if (expect_io(galay_c_coro_join(&client_task, 3000), C_IOResultOk) ||
+        expect_io(galay_c_coro_join(&server_task, 3000), C_IOResultOk)) {
         return cleanup(&runtime, &server_task, &client_task, &state, 7);
     }
     if (state.client_checked != 1) {

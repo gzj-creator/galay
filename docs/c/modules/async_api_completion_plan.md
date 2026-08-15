@@ -1,281 +1,73 @@
-# C Async API Completion Plan
+# C Async API 交付状态
 
-## 背景
+## 当前结论
 
-当前仓库的 C 层实际构建目标主要是 `galay-c-kernel`。`test/c/CMakeLists.txt`
-已经为 `galay::c-http`、`galay::c-ws`、`galay::c-http2`、`galay::c-redis`、
-`galay::c-rpc`、`galay::c-mysql`、`galay::c-mongo`、`galay::c-etcd`、
-`galay::c-mcp`、`galay::c-tracing` 预留了测试入口，但当前 `build/direct-coro-c`
-只暴露 `galay-c-kernel` 目标。
+本文档原是补齐 C async API 的实施计划。截至 2026-08-15，计划中的模块
+target、公开头文件、示例、测试和 benchmark 已进入当前构建图，因此这里只记录
+现行契约和仍然存在的功能边界，不再把已完成的 phase 写成待办。
 
-因此，“C async 接口都封装完了吗”的当前结论是：kernel 的 direct C coroutine
-async wrapper 已经覆盖较多；其它库还没有完整接入可构建的 C target，更没有完成
-async client/server C ABI。
+- kernel runtime、stackful coroutine、reactor、TCP/UDP、文件 I/O、同步原语和
+  bounded channel 为原生 C 实现。旧 `galay-c-bridge` 已删除。
+- 每个公开模块都位于 `src/c/galay-<module>-c/`，对应 CMake alias 为
+  `galay::c-<module>`。
+- 公开头文件和实现文件不使用 `_c` 文件名后缀；kernel 标识符使用
+  `galay_c_*` 前缀。
+- 原生 C MPMC/MPSC/SPSC 只提供 bounded channel；unbounded wrapper 和 token API
+  不再属于 C ABI。
 
-## 硬性规则
+## C Async ABI 契约
 
-- C 头文件必须保持纯 C ABI，不暴露 C++ 类型、模板、异常或 namespace。
-- C++ 生产代码禁止新增 `try` / `catch` / `throw`。
-- C++ 可恢复错误通过 `std::expected` 或现有 typed error 返回；C API 通过结果结构体、
-  明确错误码或状态字段返回。
-- 每个公开 C 错误码枚举必须提供错误字符串函数。
-- 所有非 `void` 返回值必须处理。
-- 不新增返回 `Task` / `Task<T>` 的 helper；async C ABI 通过现有 kernel C coroutine
-  bridge 或模块自己的 direct coroutine 边界实现。
-- 禁止过分拆分 helper；关键错误传播、生命周期和资源释放逻辑保留在调用点附近。
+- 公开头文件只暴露 C struct、枚举、opaque handle 和结果类型，不暴露 C++
+  类型、模板、namespace、异常或 `Task<T>`。
+- 异步 I/O 必须在 `galay_c_coro_spawn` 创建的 C 协程内调用，通过原生
+  runtime 挂起和恢复，不在 scheduler 线程中做阻塞 I/O、阻塞锁或 sleep。
+- 同步和生命周期 API 返回 `galay_status_t` 或模块错误枚举；协程 I/O
+  返回 `C_IOResult`。每个公开错误枚举必须有覆盖全部枚举值的
+  `*_get_error(...)`。
+- create/acquire 必须有对应 destroy/release。借用 buffer、view、reply、row、
+  frame 或 span 必须在公开头文件中说明失效时机。
+- 所有非 `void` 返回值，包括 close、cleanup、rollback 和 stop，都必须
+  检查、向上传播或合并为可观测失败。
 
-## C async ABI 约定
+## 模块与验收证据
 
-每个模块的 C async surface 以 `src/c/galay-<module>-c/` 为唯一 ABI 边界。公开头文件只暴露
-opaque handle、C struct、枚举错误码、结果结构和 `galay_coro_task_t` 可等待对象；不得把 C++
-类型、模板、namespace、异常或 `Task<T>` helper 暴露到 C 调用方。所有 create/acquire API
-必须有对应 destroy/release API；返回的 buffer、reply、row、frame、span/export result 等资源
-必须在头文件 Doxygen 中说明所有权，并提供明确 free 路径。
+| 模块 | 当前 surface | 主要验收入口 |
+| --- | --- | --- |
+| kernel | runtime/coroutine/reactor、TCP/UDP/file/AIO/watcher、mutex/waiter、bounded channel | `test/c/kernel/`、`benchmark/c/kernel/` |
+| http | request/response/header helper，async client/server/session | `test/c/http/t3_async_client_server_loopback.c`、`t4_streaming_and_timeout.c` |
+| http2 | frame/HPACK/settings/flow control，h2c client/server | `test/c/http2/t3_h2c_loopback.c` |
+| ws | frame codec，async upgrade/frame I/O/close | `test/c/ws/t2_async_upgrade_loopback.c`、`t3_frame_io_and_close.c` |
+| redis | standalone/auth/select/pipeline，pool lease，cluster route | `test/c/redis/t4_async_client_loopback.c` 至 `t8_cluster_route_loopback.c` |
+| mysql | auth/result decode，query/stmt/transaction/pipeline/pool | `test/c/mysql/t3_async_client_loopback.c` 至 `t6_stmt_transaction_pool.c` |
+| postgres | auth/query/result/stmt/transaction/pipeline/pool | `test/c/postgres/`、`docs/c/modules/postgres/05-性能测试.md` |
+| mongo | BSON/URI/command builder，OP_MSG async client | `test/c/mongo/t2_bson_uri_client_surface.c` 至 `t5_op_msg_loopback.c` |
+| etcd | sync/async KV，watch/lease/pipeline/cluster policy | `test/c/etcd/t2_sync_kv_surface.c` 至 `t5_cluster_policy_stats.c` |
+| mcp | JSON-RPC helper，stdio/HTTP client，server handler | `test/c/mcp/t3_stdio_client_loopback.c` 至 `t5_server_handlers.c` |
+| rpc | envelope/unary/streaming，pool/deadline/cancellation | `test/c/rpc/` |
+| ssl | context，TLS handshake/send/recv/shutdown，ALPN/session | `test/c/ssl/` |
+| tracing | context/span/provider/exporter/sampler/logger | `test/c/tracing/` |
+| utils | bytes/ring buffer/Base64/digest | `test/c/utils/` |
 
-错误传播必须是返回值驱动：公共 C API 用 `galay_status_t`、模块错误枚举或结果结构表达失败，
-每个新增公开错误枚举必须提供覆盖全部枚举值的 `*_get_error(...)` 字符串函数。跨 C/C++ 边界时，
-底层 errno、typed error 或协议错误要立即转换成公开错误码或结果结构；生产实现不得新增
-`try`/`catch`/`throw` 兜底。所有非 `void` 返回值，包括 close、free、cleanup、rollback 路径，
-都必须检查并传播、合并或记录为调用方可观测状态。
+模块 README 是功能和所有权边界的事实来源。表中“已有 surface”不等于与
+对应 C++ SDK 完全对等；例如 MySQL 多结果集/LOCAL INFILE、PostgreSQL TLS/COPY/
+LISTEN/NOTIFY、长稳外部服务矩阵仍按各模块 README 的 Deferred 边界处理。
 
-异步 API 必须通过 direct C coroutine runtime 悬挂和恢复，不能在 coroutine path 中隐藏阻塞
-I/O、阻塞锁、sleep 或 busy wait。测试使用本地 loopback/mock transport，不依赖真实外部服务；
-benchmark 只做吞吐、延迟或压力 smoke，不替代 correctness test。每个模块交付时必须同步更新
-`test/c/<module>`、`examples/c/<module>`、`benchmark/c/<module>` 和
-`docs/c/modules/<module>/README.md`，并写清 handle 生命周期、buffer 生命周期、线程/协程安全、
-取消/close 语义和错误码映射。
-
-## 总体架构
-
-1. 每个 C 模块单独放在 `src/c/galay-<module>-c/`。
-2. 每个模块提供一个真实 CMake target，例如 `galay-c-http` 和 alias `galay::c-http`。
-3. 公共状态码继续复用 `galay_status_t`；模块特有错误补充模块枚举和 `*_get_error(...)`。
-4. async API 以 `galay_coro_task_t` / C runtime 为执行边界，避免通过 spawn C++ task 旁路。
-5. 同步/protocol helper 与 async client/server 分层：先保证协议 surface，再补网络 async。
-
-## 模块状态检查清单
-
-| 模块 | 当前状态 | 本轮 worker 验收点 |
-|---|---|---|
-| kernel | direct C coroutine 基础较完整，AsyncAio commit/sleep/timer/socket option residual 待补 | AsyncAio suspending bridge、`galay_coro_sleep`、kernel example/benchmark/docs 更新 |
-| http | 协议 helper 已有，async runtime 缺失 | C client/server/session/stream loopback、route callback、timeout/error 覆盖 |
-| ws | frame helper 已有，async runtime 缺失 | upgrade loopback、text/binary/ping/pong/close、fragment/mask 错误覆盖 |
-| http2 | frame/settings/ping/HPACK helper 已有，async runtime 缺失 | h2c client/server/stream、flow control、RST/GOAWAY/settings ack 覆盖 |
-| redis | standalone connect/command/auth/select/pipeline 已有，RESP/pool/topology 待补 | RESP reply accessor、pool lease、cluster route loopback |
-| mysql | 最小 connect/query/close 已有，auth/result/pool 待补 | result set/field/row、auth exchange、stmt/transaction/pool 覆盖 |
-| mongo | helper/stub surface 为主，真实 BSON/OP_MSG/async client 待补 | BSON compatibility、OP_MSG loopback、hello/command/CRUD helper |
-| etcd | config/KV surface 存在但 connect/KV 多为 unsupported | async connect/KV/lease/watch/pipeline/cluster policy |
-| mcp | JSON-RPC helper 已有，client/server runtime 待补 | stdio/http client loopback、server handler registration |
-| rpc | envelope codec helper 已有，runtime 待补 | unary/streaming loopback、deadline/cancel/pool/heartbeat |
-| ssl | context/config helper 已有，async socket 待补 | TLS loopback、handshake/send/recv/shutdown、ALPN/session/cipher controls |
-| tracing | trace/span/provider 部分 stub，真实生命周期/export 待补 | span lifecycle、context inject/extract、sampler/exporter/logger |
-
-## Phase 1: C target 与公共 ABI 基线
-
-### 目标
-
-补齐非 kernel C target 的真实构建入口，让现有 `test/c/*` surface 测试能够进入构建图。
-
-### 模块
-
-- `galay-c-common`
-- `galay-c-utils`
-- `galay-c-ssl`
-- `galay-c-http`
-- `galay-c-ws`
-- `galay-c-http2`
-- `galay-c-redis`
-- `galay-c-rpc`
-- `galay-c-mysql`
-- `galay-c-mongo`
-- `galay-c-etcd`
-- `galay-c-mcp`
-- `galay-c-tracing`
-
-### 交付
-
-- 每个模块至少有：
-  - `CMakeLists.txt`
-  - public C header
-  - `.cc` wrapper implementation
-  - `*_get_error(...)`
-  - header smoke test
-- 顶层 `src/c/CMakeLists.txt` 逐模块 `add_subdirectory(...)`。
-- `ctest -L c` 能看到非 kernel C tests。
-
-### 验证
+## 验证
 
 ```bash
-rtk cmake --build build/direct-coro-c --target galay-c-http galay-c-redis galay-c-mysql -j2
-rtk ctest --test-dir build/direct-coro-c -L c --output-on-failure
+cmake --preset developer-full
+cmake --build build/developer-full -j2
+ctest --test-dir build/developer-full -L c --output-on-failure
 ```
 
-## Phase 2: HTTP / HTTP2 / WS C async API
-
-### HTTP
-
-实现：
-- request/response/header/body builder C ABI。
-- async client:
-  - create/destroy
-  - connect/close
-  - send request
-  - receive response
-  - timeout 配置
-- async server:
-  - create/destroy
-  - bind/listen/stop
-  - route callback registration
-  - request/response callback bridge
-
-### HTTP2
-
-实现：
-- settings/frame/hpack 已有测试对应 surface 的真实 target。
-- async h2/h2c client:
-  - connect/close
-  - send headers/data
-  - recv headers/data
-  - stream reset/goaway observation
-- async h2/h2c server:
-  - bind/listen/stop
-  - stream callback
-  - settings 配置与错误传播
-
-### WS
-
-实现：
-- URL/config/frame helper C ABI。
-- async client:
-  - connect/close
-  - send text/binary/ping/pong/close
-  - recv frame
-- async server:
-  - upgrade callback
-  - frame callback
-  - close/error callback
-
-### 验证
-
-- C surface tests 覆盖 invalid argument、timeout、closed socket、oversized frame/header。
-- loopback integration tests 使用 kernel C runtime 和 direct C coroutine。
-- 不允许依赖 C++ exception fallback。
-
-## Phase 3: Redis / MySQL / Mongo C async API
-
-### Redis
-
-实现：
-- RESP command/reply helper。
-- async standalone client:
-  - connect/auth/select/close
-  - command pipeline
-  - recv reply
-- async topology/cluster 最小只读 discovery 后续再扩展。
-
-当前进度：
-- 已补齐 standalone direct C coroutine 最小闭环：`connect`、单条 `command_async`、
-  `close`，并通过本地 mock Redis loopback test、example 和 smoke benchmark 验证。
-- 已补齐 `AUTH`、`SELECT`、pipeline 独立 API 和批量 reply 保留/释放路径，并通过本地 mock
-  Redis loopback test、example 和 smoke benchmark 验证。
-- 待补齐：topology/cluster discovery。
-
-### MySQL
-
-实现：
-- config/auth/packet helper。
-- async client:
-  - connect handshake
-  - query
-  - read result/error packet
-  - close
-
-当前进度：
-- 已补齐 direct C coroutine 最小闭环：TCP connect 后读取 server handshake packet、
-  发送 COM_QUERY、读取一个 result/error packet、close，并通过本地 mock MySQL packet
-  loopback test、example 和 smoke benchmark 验证。
-- 待补齐：完整 MySQL auth exchange、真实 result set/column/row 解码、错误包细分。
-
-### Mongo
-
-实现：
-- URI/BSON/protocol helper。
-- async client:
-  - connect/hello
-  - command
-  - read reply
-  - close
-
-### 验证
-
-- 本地 mock server loopback tests，不依赖外部数据库服务。
-- protocol malformed/boundary tests 保留在 C 层。
-- 每个 close/cleanup 返回值都必须处理。
-
-## Phase 4: Etcd / MCP / RPC C async API
-
-### Etcd
-
-实现：
-- config/endpoint/key-value helper。
-- async client:
-  - connect/close
-  - get/put/delete/watch
-  - lease 基础操作
-
-### MCP
-
-实现：
-- JSON-RPC message/schema helper。
-- async stdio/http transport client:
-  - initialize
-  - list tools/resources
-  - call tool
-  - close
-
-### RPC
-
-实现：
-- endpoint/config/metadata/message helper。
-- async client:
-  - connect/call/stream/close
-- async server:
-  - bind/listen/register service/stop
-
-### 验证
-
-- Etcd/MCP 使用 fake transport 或 loopback mock，避免依赖外部服务。
-- RPC 使用本地 C server/client E2E。
-
-## Phase 5: Tracing / SSL C API 补齐
-
-### SSL
-
-实现：
-- context/config/error C ABI。
-- async SSL socket wrapper，复用 kernel C tcp wrapper。
-
-### Tracing
-
-实现：
-- tracer/span/context/log sink C ABI。
-- async exporter 仅在底层 C++ 已提供非阻塞路径时暴露；否则保持同步 surface。
-
-## 提交节奏
-
-每个 phase 独立提交，不把所有模块塞进一个大 commit。
-
-推荐顺序：
-1. `feat: 补齐 C 模块 target 基线`
-2. `feat: 补齐 HTTP HTTP2 WS C async API`
-3. `feat: 补齐 Redis MySQL Mongo C async API`
-4. `feat: 补齐 Etcd MCP RPC C async API`
-5. `feat: 补齐 SSL Tracing C API`
-
-每次提交前必须：
+窄化 kernel C 验证：
 
 ```bash
-rtk rg -n "try\\s*\\{|catch\\s*\\(|throw\\b|#include <exception>|\\(void\\)|static_cast<void>" src/c src/cpp test/c || true
-rtk cmake --build build/direct-coro-c -j2
-rtk ctest --test-dir build/direct-coro-c -L c --output-on-failure
+cmake --build build/developer-full \
+  --target test_c_kernel_native_bounded_channels \
+           benchmark_c_kernel_mpmc_bounded_channel_throughput -j2
+ctest --test-dir build/developer-full -R '^c\.kernel\.' --output-on-failure
 ```
+
+性能的现行 workload、Release 构建和结果有效性门槛见
+[`kernel/05-性能测试.md`](./kernel/05-性能测试.md)。

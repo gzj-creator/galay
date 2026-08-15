@@ -1,7 +1,7 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-postgres-c/postgres_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-postgres-c/postgres.h>
 
 #include <stdint.h>
 #include <string.h>
@@ -12,9 +12,9 @@
     } while (0)
 
 typedef struct PostgresLoopbackState {
-    galay_kernel_tcp_socket_t* listener;
+    galay_c_tcp_socket_t* listener;
     C_Host peer;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t accepted;
     C_IOResult accept_result;
     C_IOResult server_result;
     C_IOResult client_result;
@@ -39,21 +39,21 @@ static void write_u32(unsigned char* data, uint32_t value)
     data[3] = (unsigned char)(value & 0xffu);
 }
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0 ? 0 : 1;
 }
 
-static int recv_exact(galay_kernel_tcp_socket_t* socket, unsigned char* data, size_t data_len)
+static int recv_exact(galay_c_tcp_socket_t* socket, unsigned char* data, size_t data_len)
 {
     size_t received = 0;
     while (received < data_len) {
-        C_IOResult result = galay_kernel_tcp_socket_recv(
+        C_IOResult result = galay_c_tcp_socket_recv(
             socket, (char*)data + received, data_len - received, 2000);
         if (result.code != C_IOResultOk || result.bytes == 0) return 1;
         received += result.bytes;
@@ -61,13 +61,13 @@ static int recv_exact(galay_kernel_tcp_socket_t* socket, unsigned char* data, si
     return 0;
 }
 
-static int send_exact(galay_kernel_tcp_socket_t* socket,
+static int send_exact(galay_c_tcp_socket_t* socket,
                       const unsigned char* data,
                       size_t data_len)
 {
     size_t sent = 0;
     while (sent < data_len) {
-        C_IOResult result = galay_kernel_tcp_socket_send(
+        C_IOResult result = galay_c_tcp_socket_send(
             socket, (const char*)data + sent, data_len - sent, 2000);
         if (result.code != C_IOResultOk || result.bytes == 0) return 1;
         sent += result.bytes;
@@ -75,7 +75,7 @@ static int send_exact(galay_kernel_tcp_socket_t* socket,
     return 0;
 }
 
-static int recv_frontend(galay_kernel_tcp_socket_t* socket,
+static int recv_frontend(galay_c_tcp_socket_t* socket,
                          unsigned char* data,
                          size_t capacity,
                          size_t* data_len)
@@ -88,7 +88,7 @@ static int recv_frontend(galay_kernel_tcp_socket_t* socket,
     return 0;
 }
 
-static int send_backend(galay_kernel_tcp_socket_t* socket,
+static int send_backend(galay_c_tcp_socket_t* socket,
                         unsigned char type,
                         const unsigned char* payload,
                         size_t payload_len)
@@ -100,7 +100,7 @@ static int send_backend(galay_kernel_tcp_socket_t* socket,
     return payload_len == 0 || send_exact(socket, payload, payload_len) == 0 ? 0 : 2;
 }
 
-static int recv_startup(galay_kernel_tcp_socket_t* socket)
+static int recv_startup(galay_c_tcp_socket_t* socket)
 {
     static const unsigned char expected_user[] = {'u', 's', 'e', 'r', 0x00,
                                                    't', 'e', 's', 't', 'e', 'r', 0x00};
@@ -116,7 +116,7 @@ static int recv_startup(galay_kernel_tcp_socket_t* socket)
     return 0;
 }
 
-static int expect_frontend(galay_kernel_tcp_socket_t* socket,
+static int expect_frontend(galay_c_tcp_socket_t* socket,
                            unsigned char expected_type,
                            const char* expected_payload)
 {
@@ -130,13 +130,13 @@ static int expect_frontend(galay_kernel_tcp_socket_t* socket,
         (expected_len == 0 || memcmp(message + 5, expected_payload, expected_len) == 0);
 }
 
-static int send_ready(galay_kernel_tcp_socket_t* socket)
+static int send_ready(galay_c_tcp_socket_t* socket)
 {
     static const unsigned char ready[] = {'I'};
     return send_backend(socket, 'Z', ready, sizeof(ready));
 }
 
-static int send_query_result(galay_kernel_tcp_socket_t* socket, unsigned char value)
+static int send_query_result(galay_c_tcp_socket_t* socket, unsigned char value)
 {
     static const unsigned char description[] = {
         0x00, 0x01, 'v', 'a', 'l', 'u', 'e', 0x00,
@@ -152,7 +152,7 @@ static int send_query_result(galay_kernel_tcp_socket_t* socket, unsigned char va
         send_ready(socket) == 0 ? 0 : 1;
 }
 
-static int send_query_error(galay_kernel_tcp_socket_t* socket)
+static int send_query_error(galay_c_tcp_socket_t* socket)
 {
     static const unsigned char error[] = {
         'S', 'E', 'R', 'R', 'O', 'R', 0x00,
@@ -177,7 +177,7 @@ static void postgres_server_entry(void* arg)
     size_t password_len = 0;
 
     state->accept_result =
-        galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 2000);
+        galay_c_tcp_socket_accept(state->listener, &state->accepted, NULL, 2000);
     if (state->accept_result.code != C_IOResultOk) return;
     state->startup_ok = recv_startup(&state->accepted);
     if (!state->startup_ok || send_backend(&state->accepted, 'R', cleartext, sizeof(cleartext)) != 0 ||
@@ -204,7 +204,7 @@ static void postgres_server_entry(void* arg)
         return;
     }
     state->commands_checked = 4;
-    state->server_result = galay_kernel_tcp_socket_close(&state->accepted, 2000);
+    state->server_result = galay_c_tcp_socket_close(&state->accepted);
 }
 
 static int result_equals(galay_postgres_result_set_t* result, const char* expected)
@@ -272,38 +272,38 @@ cleanup:
 
 int main(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
     PostgresLoopbackState state = {0};
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
     int result = 0;
 
-    REQUIRE_TRUE(galay_kernel_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
-    REQUIRE_TRUE(galay_kernel_runtime_start(&runtime) == C_RuntimeSuccess, 2);
+    REQUIRE_TRUE(galay_c_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
+    REQUIRE_TRUE(galay_c_runtime_start(&runtime) == C_RuntimeSuccess, 2);
     REQUIRE_TRUE(create_listener(&listener, &local) == 0, 3);
     state.listener = &listener;
     state.peer = local;
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, postgres_server_entry, &state, NULL, &server).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, postgres_server_entry, &state, NULL, &server).code ==
                      C_IOResultOk, 4);
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, postgres_client_entry, &state, NULL, &client).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, postgres_client_entry, &state, NULL, &client).code ==
                      C_IOResultOk, 5);
-    REQUIRE_TRUE(galay_coro_join(&server, 5000).code == C_IOResultOk, 6);
-    REQUIRE_TRUE(galay_coro_join(&client, 5000).code == C_IOResultOk, 7);
+    REQUIRE_TRUE(galay_c_coro_join(&server, 5000).code == C_IOResultOk, 6);
+    REQUIRE_TRUE(galay_c_coro_join(&client, 5000).code == C_IOResultOk, 7);
 
     if (state.accept_result.code != C_IOResultOk || state.server_result.code != C_IOResultOk ||
         state.client_result.code != C_IOResultOk || !state.startup_ok || !state.auth_ok ||
         state.commands_checked != 4 || !state.error_drained || !state.result_values_ok) result = 8;
-    if (server.task != NULL && galay_coro_destroy(&server).code != C_IOResultOk && result == 0) result = 9;
-    if (client.task != NULL && galay_coro_destroy(&client).code != C_IOResultOk && result == 0) result = 10;
-    if (state.accepted.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&state.accepted) != C_TcpSocketSuccess && result == 0) result = 11;
-    if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && result == 0) result = 12;
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) result = 13;
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) result = 14;
+    if (server.task != NULL && galay_c_coro_destroy(&server).code != C_IOResultOk && result == 0) result = 9;
+    if (client.task != NULL && galay_c_coro_destroy(&client).code != C_IOResultOk && result == 0) result = 10;
+    if (state.accepted.fd >= 0 &&
+        galay_c_tcp_socket_close(&state.accepted).code != C_IOResultOk && result == 0) result = 11;
+    if (galay_c_tcp_socket_close(&listener).code != C_IOResultOk && result == 0) result = 12;
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) result = 13;
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) result = 14;
     return result;
 }

@@ -20,6 +20,15 @@
  */
 #define GALAY_C_API 1
 
+/* Concurrent implementation fields are opaque to C++ consumers of the C ABI. */
+#ifdef __cplusplus
+#define GALAY_C_ATOMIC(type) type
+#define GALAY_C_ALIGNAS(value) alignas(value)
+#else
+#define GALAY_C_ATOMIC(type) _Atomic(type)
+#define GALAY_C_ALIGNAS(value) _Alignas(value)
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

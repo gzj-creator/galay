@@ -1,15 +1,15 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-mysql-c/mysql_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-mysql-c/mysql.h>
 
 #include <stdio.h>
 #include <string.h>
 
 typedef struct MysqlAsyncQueryExample {
-    galay_kernel_tcp_socket_t* listener;
+    galay_c_tcp_socket_t* listener;
     C_Host peer;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t accepted;
     C_IOResult server_result;
     C_IOResult client_result;
     uint8_t result_sequence;
@@ -22,24 +22,24 @@ static C_IOResult example_error(void)
     return (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
 }
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0
         ? 0
         : 1;
 }
 
-static int recv_exact(galay_kernel_tcp_socket_t* socket, char* buffer, size_t length)
+static int recv_exact(galay_c_tcp_socket_t* socket, char* buffer, size_t length)
 {
     size_t received = 0;
     while (received < length) {
         C_IOResult result =
-            galay_kernel_tcp_socket_recv(socket, buffer + received, length - received, 1000);
+            galay_c_tcp_socket_recv(socket, buffer + received, length - received, 1000);
         if (result.code != C_IOResultOk || result.bytes == 0) {
             return 1;
         }
@@ -60,12 +60,12 @@ static void server_entry(void* arg)
     MysqlAsyncQueryExample* example = (MysqlAsyncQueryExample*)arg;
 
     C_IOResult accepted =
-        galay_kernel_tcp_socket_accept(example->listener, &example->accepted, NULL, 1000);
+        galay_c_tcp_socket_accept(example->listener, &example->accepted, NULL, 1000);
     if (accepted.code != C_IOResultOk) {
         example->server_result = accepted;
         return;
     }
-    C_IOResult sent = galay_kernel_tcp_socket_send(&example->accepted,
+    C_IOResult sent = galay_c_tcp_socket_send(&example->accepted,
                                                    (const char*)handshake_packet,
                                                    sizeof(handshake_packet),
                                                    1000);
@@ -78,7 +78,7 @@ static void server_entry(void* arg)
         example->server_result = example_error();
         return;
     }
-    sent = galay_kernel_tcp_socket_send(&example->accepted,
+    sent = galay_c_tcp_socket_send(&example->accepted,
                                         (const char*)ok_packet,
                                         sizeof(ok_packet),
                                         1000);
@@ -86,7 +86,7 @@ static void server_entry(void* arg)
         example->server_result = sent;
         return;
     }
-    example->server_result = galay_kernel_tcp_socket_close(&example->accepted, 1000);
+    example->server_result = galay_c_tcp_socket_close(&example->accepted);
 }
 
 static void client_entry(void* arg)
@@ -143,20 +143,20 @@ cleanup:
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
     MysqlAsyncQueryExample example = {0};
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, &local) != 0) {
         exit_code = 1;
         goto cleanup;
@@ -164,10 +164,10 @@ int main(void)
     example.listener = &listener;
     example.peer = local;
 
-    if (galay_coro_spawn(&runtime, server_entry, &example, NULL, &server).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &example, NULL, &client).code != C_IOResultOk ||
-        galay_coro_join(&server, 2000).code != C_IOResultOk ||
-        galay_coro_join(&client, 2000).code != C_IOResultOk) {
+    if (galay_c_coro_spawn(&runtime, server_entry, &example, NULL, &server).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &example, NULL, &client).code != C_IOResultOk ||
+        galay_c_coro_join(&server, 2000).code != C_IOResultOk ||
+        galay_c_coro_join(&client, 2000).code != C_IOResultOk) {
         exit_code = 2;
         goto cleanup;
     }
@@ -186,29 +186,29 @@ int main(void)
     }
 
 cleanup:
-    if (server.task != NULL && galay_coro_destroy(&server).code != C_IOResultOk &&
+    if (server.task != NULL && galay_c_coro_destroy(&server).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 5;
     }
-    if (client.task != NULL && galay_coro_destroy(&client).code != C_IOResultOk &&
+    if (client.task != NULL && galay_c_coro_destroy(&client).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 6;
     }
-    if (example.accepted.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&example.accepted) != C_TcpSocketSuccess &&
+    if (example.accepted.fd >= 0 &&
+        galay_c_tcp_socket_close(&example.accepted).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 7;
     }
-    if (listener.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess &&
+    if (listener.fd >= 0 &&
+        galay_c_tcp_socket_close(&listener).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 8;
     }
     if (runtime.runtime != NULL) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 9;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 10;
         }
     }

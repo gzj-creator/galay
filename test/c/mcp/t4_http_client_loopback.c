@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-mcp-c/mcp_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-mcp-c/mcp.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -95,13 +95,13 @@ static void http_auth_client_entry(void* arg)
 
 static int run_http_loopback(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     galay_mcp_server_t* server = NULL;
     galay_mcp_client_config_t* config = NULL;
     galay_mcp_client_t* client = NULL;
@@ -113,8 +113,8 @@ static int run_http_loopback(void)
     size_t data_len = 0;
     int result = 0;
 
-    REQUIRE_TRUE(galay_kernel_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
-    REQUIRE_TRUE(galay_kernel_runtime_start(&runtime) == C_RuntimeSuccess, 2);
+    REQUIRE_TRUE(galay_c_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
+    REQUIRE_TRUE(galay_c_runtime_start(&runtime) == C_RuntimeSuccess, 2);
     REQUIRE_TRUE(galay_mcp_http_server_create("127.0.0.1", 0, &server) == GALAY_OK, 3);
     REQUIRE_TRUE(galay_mcp_server_set_info(server, "c-http-loopback", "1.0.0") == GALAY_OK, 4);
     REQUIRE_TRUE(galay_mcp_server_add_tool(server,
@@ -134,14 +134,14 @@ static int run_http_loopback(void)
 
     state.server = server;
     state.client = client;
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, http_server_entry, &state, NULL, &server_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, http_server_entry, &state, NULL, &server_task).code ==
                      C_IOResultOk,
                  11);
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, http_client_entry, &state, NULL, &client_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, http_client_entry, &state, NULL, &client_task).code ==
                      C_IOResultOk,
                  12);
-    REQUIRE_TRUE(galay_coro_join(&client_task, 3000).code == C_IOResultOk, 13);
-    REQUIRE_TRUE(galay_coro_join(&server_task, 3000).code == C_IOResultOk, 14);
+    REQUIRE_TRUE(galay_c_coro_join(&client_task, 3000).code == C_IOResultOk, 13);
+    REQUIRE_TRUE(galay_c_coro_join(&server_task, 3000).code == C_IOResultOk, 14);
 
     if (state.connect_result.code != C_IOResultOk ||
         state.initialize_result.code != C_IOResultOk ||
@@ -161,10 +161,10 @@ static int run_http_loopback(void)
         result = 15;
     }
 
-    if (server_task.task != NULL && galay_coro_destroy(&server_task).code != C_IOResultOk && result == 0) {
+    if (server_task.task != NULL && galay_c_coro_destroy(&server_task).code != C_IOResultOk && result == 0) {
         result = 16;
     }
-    if (client_task.task != NULL && galay_coro_destroy(&client_task).code != C_IOResultOk && result == 0) {
+    if (client_task.task != NULL && galay_c_coro_destroy(&client_task).code != C_IOResultOk && result == 0) {
         result = 17;
     }
     if (galay_mcp_http_server_stop(server).code != C_IOResultOk && result == 0) {
@@ -175,10 +175,10 @@ static int run_http_loopback(void)
     galay_mcp_client_destroy(client);
     galay_mcp_client_config_destroy(config);
     galay_mcp_server_destroy(server);
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 19;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 20;
     }
     return result;
@@ -186,13 +186,13 @@ static int run_http_loopback(void)
 
 static int run_http_auth_failure(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     galay_mcp_server_t* server = NULL;
     galay_mcp_client_config_t* config = NULL;
     galay_mcp_client_t* client = NULL;
@@ -202,8 +202,8 @@ static int run_http_auth_failure(void)
     char url[128];
     int result = 0;
 
-    REQUIRE_TRUE(galay_kernel_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 21);
-    REQUIRE_TRUE(galay_kernel_runtime_start(&runtime) == C_RuntimeSuccess, 22);
+    REQUIRE_TRUE(galay_c_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 21);
+    REQUIRE_TRUE(galay_c_runtime_start(&runtime) == C_RuntimeSuccess, 22);
     REQUIRE_TRUE(galay_mcp_http_server_create("127.0.0.1", 0, &server) == GALAY_OK, 23);
     REQUIRE_TRUE(galay_mcp_http_server_require_bearer_token(server, "secret") == GALAY_OK, 24);
     REQUIRE_TRUE(galay_mcp_http_server_start(server) == GALAY_OK, 25);
@@ -216,14 +216,14 @@ static int run_http_auth_failure(void)
 
     state.server = server;
     state.client = client;
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, http_auth_server_entry, &state, NULL, &server_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, http_auth_server_entry, &state, NULL, &server_task).code ==
                      C_IOResultOk,
                  31);
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, http_auth_client_entry, &state, NULL, &client_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, http_auth_client_entry, &state, NULL, &client_task).code ==
                      C_IOResultOk,
                  32);
-    REQUIRE_TRUE(galay_coro_join(&client_task, 3000).code == C_IOResultOk, 33);
-    REQUIRE_TRUE(galay_coro_join(&server_task, 3000).code == C_IOResultOk, 34);
+    REQUIRE_TRUE(galay_c_coro_join(&client_task, 3000).code == C_IOResultOk, 33);
+    REQUIRE_TRUE(galay_c_coro_join(&server_task, 3000).code == C_IOResultOk, 34);
 
     if (state.serve_result.code != C_IOResultOk ||
         state.connect_result.code != C_IOResultOk ||
@@ -231,10 +231,10 @@ static int run_http_auth_failure(void)
         result = 35;
     }
 
-    if (server_task.task != NULL && galay_coro_destroy(&server_task).code != C_IOResultOk && result == 0) {
+    if (server_task.task != NULL && galay_c_coro_destroy(&server_task).code != C_IOResultOk && result == 0) {
         result = 36;
     }
-    if (client_task.task != NULL && galay_coro_destroy(&client_task).code != C_IOResultOk && result == 0) {
+    if (client_task.task != NULL && galay_c_coro_destroy(&client_task).code != C_IOResultOk && result == 0) {
         result = 37;
     }
     if (galay_mcp_http_server_stop(server).code != C_IOResultOk && result == 0) {
@@ -243,10 +243,10 @@ static int run_http_auth_failure(void)
     galay_mcp_client_destroy(client);
     galay_mcp_client_config_destroy(config);
     galay_mcp_server_destroy(server);
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 39;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 40;
     }
     return result;

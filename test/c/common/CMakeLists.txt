@@ -14,6 +14,7 @@ function(galay_add_c_common_test source_file)
         target_compile_definitions(${target_name} PRIVATE GALAY_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     endif()
     add_test(NAME "c.common.${scenario_name}" COMMAND ${target_name})
+    set_tests_properties("c.common.${scenario_name}" PROPERTIES LABELS "c;common;unit")
 endfunction()
 
 file(GLOB GALAY_C_COMMON_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")

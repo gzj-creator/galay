@@ -19,7 +19,7 @@
 
 ## Runtime And Errors
 
-Network operations must be called from a Galay C coroutine because they suspend through `galay_kernel_tcp_socket_*`; they do not require an external Etcd service in tests or examples because local HTTP loopbacks are used.
+Network operations must be called from a Galay C coroutine because they suspend through `galay_c_tcp_socket_*`; they do not require an external Etcd service in tests or examples because local HTTP loopbacks are used.
 
 Unsupported or failed operations return a `galay_status_t` and, when provided, set `galay_etcd_error_code_t`. Cancellation returns `GALAY_IO_ERROR` with `GALAY_ETCD_ERROR_CANCELLED`; using a closed client returns `GALAY_INVALID_ARGUMENT` with `GALAY_ETCD_ERROR_NOT_CONNECTED`.
 

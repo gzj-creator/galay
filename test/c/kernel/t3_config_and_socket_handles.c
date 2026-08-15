@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include "socket_test_support.h"
 
@@ -13,14 +13,14 @@
 #include <unistd.h>
 
 typedef struct ConnectState {
-    galay_kernel_tcp_socket_t* client;
+    galay_c_tcp_socket_t* client;
     C_Host server;
     C_IOResult result;
 } ConnectState;
 
-static int expect_socket_status(C_TcpSocketResultCode actual, C_TcpSocketResultCode expected)
+static int expect_socket_status(C_IOResult actual, C_IOResultCode expected)
 {
-    return actual == expected ? 0 : 1;
+    return actual.code == expected ? 0 : 1;
 }
 
 static int expect_io_code(C_IOResult actual, C_IOResultCode expected)
@@ -100,19 +100,19 @@ static int accept_posix_client(int server_fd)
 static void connect_entry(void* arg)
 {
     ConnectState* state = (ConnectState*)arg;
-    state->result = galay_kernel_tcp_socket_connect(state->client, &state->server, 1000);
+    state->result = galay_c_tcp_socket_connect(state->client, &state->server, 1000);
 }
 
-static int cleanup_connect(galay_coro_task_t* task,
-                           galay_kernel_tcp_socket_t* client,
+static int cleanup_connect(galay_c_coro_task_t* task,
+                           galay_c_tcp_socket_t* client,
                            int accepted_fd,
                            int server_fd,
                            int exit_code)
 {
     if (task->task != NULL) {
-        C_IOResult joined = galay_coro_join(task, 0);
+        C_IOResult joined = galay_c_coro_join(task, 0);
         if ((joined.code == C_IOResultOk || joined.code == C_IOResultCancelled) &&
-            galay_coro_destroy(task).code != C_IOResultOk &&
+            galay_c_coro_destroy(task).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 40;
         }
@@ -120,8 +120,8 @@ static int cleanup_connect(galay_coro_task_t* task,
     if (accepted_fd >= 0 && close_fd(accepted_fd) != 0 && exit_code == 0) {
         exit_code = 41;
     }
-    if (client->socket != NULL &&
-        expect_socket_status(galay_kernel_tcp_socket_destroy(client), C_TcpSocketSuccess) &&
+    if (client->fd >= 0 &&
+        expect_socket_status(galay_c_tcp_socket_close(client), C_IOResultOk) &&
         exit_code == 0) {
         exit_code = 42;
     }
@@ -131,7 +131,7 @@ static int cleanup_connect(galay_coro_task_t* task,
     return exit_code;
 }
 
-static int test_connect_direct(galay_kernel_runtime_t* runtime)
+static int test_connect_direct(galay_c_runtime_t* runtime)
 {
     C_Host server = {0};
     int server_fd = make_loopback_listener(&server);
@@ -140,18 +140,18 @@ static int test_connect_direct(galay_kernel_runtime_t* runtime)
         return 30;
     }
 
-    galay_kernel_tcp_socket_t client = {0};
-    if (expect_socket_status(galay_kernel_tcp_socket_create(&client, C_IPTypeIPV4),
-                             C_TcpSocketSuccess)) {
-        return cleanup_connect(&(galay_coro_task_t){0}, &client, accepted_fd, server_fd, 31);
+    galay_c_tcp_socket_t client = {.fd = -1};
+    if (expect_socket_status(galay_c_tcp_socket_create(&client, C_IPTypeIPV4),
+                             C_IOResultOk)) {
+        return cleanup_connect(&(galay_c_coro_task_t){0}, &client, accepted_fd, server_fd, 31);
     }
 
     ConnectState state;
     state.client = &client;
     state.server = server;
     state.result = (C_IOResult){C_IOResultInvalid, 0, 0, 0, NULL};
-    galay_coro_task_t task = {0};
-    if (expect_io_code(galay_coro_spawn(runtime, connect_entry, &state, NULL, &task),
+    galay_c_coro_task_t task = {0};
+    if (expect_io_code(galay_c_coro_spawn(runtime, connect_entry, &state, NULL, &task),
                        C_IOResultOk)) {
         return cleanup_connect(&task, &client, accepted_fd, server_fd, 32);
     }
@@ -160,13 +160,13 @@ static int test_connect_direct(galay_kernel_runtime_t* runtime)
     if (accepted_fd < 0) {
         return cleanup_connect(&task, &client, accepted_fd, server_fd, 33);
     }
-    if (expect_io_code(galay_coro_join(&task, 2000), C_IOResultOk)) {
+    if (expect_io_code(galay_c_coro_join(&task, 2000), C_IOResultOk)) {
         return cleanup_connect(&task, &client, accepted_fd, server_fd, 34);
     }
     if (expect_io_code(state.result, C_IOResultOk)) {
         return cleanup_connect(&task, &client, accepted_fd, server_fd, 35);
     }
-    if (expect_io_code(galay_coro_destroy(&task), C_IOResultOk)) {
+    if (expect_io_code(galay_c_coro_destroy(&task), C_IOResultOk)) {
         task.task = NULL;
         return cleanup_connect(&task, &client, accepted_fd, server_fd, 36);
     }
@@ -180,11 +180,11 @@ int main(void)
     const galay_test_socket_capability_t socket_capability =
         galay_test_socket_capability(SOCK_STREAM);
     if (socket_capability == GALAY_TEST_SOCKET_PERMISSION_DENIED) {
-        galay_kernel_tcp_socket_t unavailable_socket = {0};
+        galay_c_tcp_socket_t unavailable_socket = {.fd = -1};
         if (expect_socket_status(
-                galay_kernel_tcp_socket_create(&unavailable_socket, C_IPTypeIPV4),
-                C_TcpSocketIOFailed) ||
-            unavailable_socket.socket != NULL) {
+                galay_c_tcp_socket_create(&unavailable_socket, C_IPTypeIPV4),
+                C_IOResultError) ||
+            unavailable_socket.fd != -1) {
             return 127;
         }
         return 125;
@@ -193,104 +193,104 @@ int main(void)
         return 126;
     }
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t tcp = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t tcp = {.fd = -1};
     C_Host invalid_host = {C_IPTypeIPV4, "not-an-ip", 0};
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
         return 1;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_create(&tcp, C_IPTypeIPV4),
-                             C_TcpSocketSuccess)) {
+    if (expect_socket_status(galay_c_tcp_socket_create(&tcp, C_IPTypeIPV4),
+                             C_IOResultOk)) {
         return 2;
     }
-    if (tcp.socket == NULL) {
+    if (tcp.fd < 0) {
         return 3;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_create(&tcp, (C_IPType)99),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_create(&tcp, (C_IPType)99),
+                             C_IOResultInvalid)) {
         return 4;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_create(NULL, C_IPTypeIPV4),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_create(NULL, C_IPTypeIPV4),
+                             C_IOResultInvalid)) {
         return 5;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_enable_tcp_no_delay(NULL),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_set_no_delay(NULL, 1),
+                             C_IOResultInvalid)) {
         return 23;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_enable_tcp_no_delay(&tcp),
-                             C_TcpSocketSuccess)) {
+    if (expect_socket_status(galay_c_tcp_socket_set_no_delay(&tcp, 1),
+                             C_IOResultOk)) {
         return 24;
     }
-    if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         return 6;
     }
-    if (expect_io_code(galay_kernel_tcp_socket_connect(NULL, &bind_host, 0),
+    if (expect_io_code(galay_c_tcp_socket_connect(NULL, &bind_host, 0),
                        C_IOResultInvalid)) {
         return 7;
     }
-    if (expect_io_code(galay_kernel_tcp_socket_connect(&tcp, NULL, 0),
+    if (expect_io_code(galay_c_tcp_socket_connect(&tcp, NULL, 0),
                        C_IOResultInvalid)) {
         return 8;
     }
-    if (expect_io_code(galay_kernel_tcp_socket_connect(&tcp, &invalid_host, 0),
+    if (expect_io_code(galay_c_tcp_socket_connect(&tcp, &invalid_host, 0),
                        C_IOResultInvalid)) {
         return 9;
     }
-    if (expect_io_code(galay_kernel_tcp_socket_connect(&tcp, &bind_host, 0),
+    if (expect_io_code(galay_c_tcp_socket_connect(&tcp, &bind_host, 0),
                        C_IOResultInvalid)) {
         return 10;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_bind(NULL, &bind_host),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_bind(NULL, &bind_host),
+                             C_IOResultInvalid)) {
         return 12;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_bind(&tcp, NULL),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_bind(&tcp, NULL),
+                             C_IOResultInvalid)) {
         return 13;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_bind(&tcp, &invalid_host),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_bind(&tcp, &invalid_host),
+                             C_IOResultInvalid)) {
         return 14;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_listen(NULL, 16),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_listen(NULL, 16),
+                             C_IOResultInvalid)) {
         return 15;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_bind(&tcp, &bind_host),
-                             C_TcpSocketSuccess)) {
+    if (expect_socket_status(galay_c_tcp_socket_bind(&tcp, &bind_host),
+                             C_IOResultOk)) {
         return 16;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_listen(&tcp, 16),
-                             C_TcpSocketSuccess)) {
+    if (expect_socket_status(galay_c_tcp_socket_listen(&tcp, 16),
+                             C_IOResultOk)) {
         return 17;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_local_endpoint(NULL, &local),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_local_endpoint(NULL, &local),
+                             C_IOResultInvalid)) {
         return 18;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_local_endpoint(&tcp, NULL),
-                             C_TcpSocketParameterInvalid)) {
+    if (expect_socket_status(galay_c_tcp_socket_local_endpoint(&tcp, NULL),
+                             C_IOResultInvalid)) {
         return 19;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_local_endpoint(&tcp, &local),
-                             C_TcpSocketSuccess)) {
+    if (expect_socket_status(galay_c_tcp_socket_local_endpoint(&tcp, &local),
+                             C_IOResultOk)) {
         return 20;
     }
     if (local.type != C_IPTypeIPV4 || local.address[0] == '\0' || local.port == 0) {
         return 21;
     }
-    if (expect_socket_status(galay_kernel_tcp_socket_destroy(&tcp), C_TcpSocketSuccess)) {
+    if (expect_socket_status(galay_c_tcp_socket_close(&tcp), C_IOResultOk)) {
         return 22;
     }
-    tcp.socket = NULL;
+    tcp.fd = -1;
 
     int connect_result = test_connect_direct(&runtime);
     if (connect_result != 0) {
@@ -299,10 +299,10 @@ int main(void)
     if (sleep_briefly() != 0) {
         return 25;
     }
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess) {
         return 23;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess) {
         return 24;
     }
 

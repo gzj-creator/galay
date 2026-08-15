@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-rpc-c/rpc_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-rpc-c/rpc.h>
 
 #include <string.h>
 
@@ -87,17 +87,17 @@ static void streaming_client_entry(void* arg)
 
 static int run_streaming_loopback(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
+    galay_c_runtime_t runtime = {0};
     galay_rpc_server_t* server = NULL;
     galay_rpc_service_t* service = NULL;
     C_Host local = {0};
     StreamingLoopbackState state;
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     int result = 0;
     memset(&state, 0, sizeof(state));
 
@@ -106,8 +106,8 @@ static int run_streaming_loopback(void)
     server_config.port = 0;
     server_config.backlog = 16;
 
-    REQUIRE_TRUE(galay_kernel_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
-    REQUIRE_TRUE(galay_kernel_runtime_start(&runtime) == C_RuntimeSuccess, 2);
+    REQUIRE_TRUE(galay_c_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
+    REQUIRE_TRUE(galay_c_runtime_start(&runtime) == C_RuntimeSuccess, 2);
     REQUIRE_TRUE(galay_rpc_server_create(&server_config, &server) == GALAY_OK && server != NULL, 3);
     REQUIRE_TRUE(galay_rpc_service_create("StreamService", strlen("StreamService"), &service) ==
                      GALAY_OK && service != NULL,
@@ -125,14 +125,14 @@ static int run_streaming_loopback(void)
     state.server = server;
     state.peer = local;
 
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, streaming_server_entry, &state, NULL, &server_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, streaming_server_entry, &state, NULL, &server_task).code ==
                      C_IOResultOk,
                  9);
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, streaming_client_entry, &state, NULL, &client_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, streaming_client_entry, &state, NULL, &client_task).code ==
                      C_IOResultOk,
                  10);
-    REQUIRE_TRUE(galay_coro_join(&server_task, 3000).code == C_IOResultOk, 11);
-    REQUIRE_TRUE(galay_coro_join(&client_task, 3000).code == C_IOResultOk, 12);
+    REQUIRE_TRUE(galay_c_coro_join(&server_task, 3000).code == C_IOResultOk, 11);
+    REQUIRE_TRUE(galay_c_coro_join(&client_task, 3000).code == C_IOResultOk, 12);
 
     if (state.server_result.code != C_IOResultOk ||
         state.connect_result.code != C_IOResultOk ||
@@ -158,21 +158,21 @@ static int run_streaming_loopback(void)
     galay_rpc_response_buffer_destroy(&state.first);
     galay_rpc_response_buffer_destroy(&state.second);
     if (server_task.task != NULL &&
-        galay_coro_destroy(&server_task).code != C_IOResultOk &&
+        galay_c_coro_destroy(&server_task).code != C_IOResultOk &&
         result == 0) {
         result = 14;
     }
     if (client_task.task != NULL &&
-        galay_coro_destroy(&client_task).code != C_IOResultOk &&
+        galay_c_coro_destroy(&client_task).code != C_IOResultOk &&
         result == 0) {
         result = 15;
     }
     galay_rpc_server_destroy(server);
     galay_rpc_service_destroy(service);
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 16;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 17;
     }
     return result;

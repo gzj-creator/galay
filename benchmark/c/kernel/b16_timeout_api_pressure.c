@@ -1,9 +1,9 @@
-#include <galay/c/galay-kernel-c/async-c/async_file_c.h>
-#include <galay/c/galay-kernel-c/async-c/async_file_watcher_c.h>
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/async-c/async_udp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/async_file.h>
+#include <galay/c/galay-kernel-c/async-c/file_watcher.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/async-c/udp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <errno.h>
 #include <stdint.h>
@@ -14,26 +14,26 @@
 #include <unistd.h>
 
 typedef struct TcpAcceptState {
-    galay_kernel_tcp_socket_t* listener;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t* listener;
+    galay_c_tcp_socket_t accepted;
     C_IOResult result;
 } TcpAcceptState;
 
 typedef struct UdpRecvState {
-    galay_kernel_udp_socket_t* socket;
+    galay_c_udp_socket_t* socket;
     C_IOResult result;
     C_Host from;
     char buffer[8];
 } UdpRecvState;
 
 typedef struct WatchState {
-    galay_kernel_file_watcher_t* watcher;
-    galay_kernel_file_watcher_watch_result_t watch_result;
+    galay_c_file_watcher_t* watcher;
+    galay_c_file_event_t event;
     C_IOResult result;
 } WatchState;
 
 typedef struct AsyncFileState {
-    galay_kernel_async_file_t* file;
+    galay_c_async_file_t* file;
     const char* payload;
     size_t payload_size;
     char* read_buffer;
@@ -44,13 +44,13 @@ typedef struct AsyncFileState {
 static void tcp_accept_entry(void* arg)
 {
     TcpAcceptState* state = (TcpAcceptState*)arg;
-    state->result = galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 0);
+    state->result = galay_c_tcp_socket_accept(state->listener, &state->accepted, NULL, 0);
 }
 
 static void udp_recv_entry(void* arg)
 {
     UdpRecvState* state = (UdpRecvState*)arg;
-    state->result = galay_kernel_udp_socket_recvfrom(
+    state->result = galay_c_udp_socket_recvfrom(
         state->socket,
         state->buffer,
         sizeof(state->buffer),
@@ -61,49 +61,41 @@ static void udp_recv_entry(void* arg)
 static void watch_entry(void* arg)
 {
     WatchState* state = (WatchState*)arg;
-    state->result = galay_kernel_file_watcher_watch(state->watcher, &state->watch_result, 1);
+    state->result = galay_c_file_watcher_wait(state->watcher, &state->event, 1);
 }
 
 static void async_write_entry(void* arg)
 {
     AsyncFileState* state = (AsyncFileState*)arg;
-    state->result = galay_kernel_async_file_write(
+    state->result = galay_c_async_file_write(
         state->file,
         state->payload,
         state->payload_size,
-        0,
         1000);
 }
 
 static void async_read_entry(void* arg)
 {
     AsyncFileState* state = (AsyncFileState*)arg;
-    state->result = galay_kernel_async_file_read(
+    state->result = galay_c_async_file_read(
         state->file,
         state->read_buffer,
         state->read_buffer_size,
-        0,
         1000);
 }
 
-static void async_close_entry(void* arg)
-{
-    AsyncFileState* state = (AsyncFileState*)arg;
-    state->result = galay_kernel_async_file_close(state->file, 1000);
-}
-
-static int run_task(galay_kernel_runtime_t* runtime,
-                    galay_coro_entry_fn entry,
+static int run_task(galay_c_runtime_t* runtime,
+                    galay_c_coro_entry_fn entry,
                     void* state,
                     int64_t join_timeout_ms)
 {
-    galay_coro_task_t task = {0};
-    C_IOResult spawn_result = galay_coro_spawn(runtime, entry, state, NULL, &task);
+    galay_c_coro_task_t task = {0};
+    C_IOResult spawn_result = galay_c_coro_spawn(runtime, entry, state, NULL, &task);
     if (spawn_result.code != C_IOResultOk) {
         return 1;
     }
-    C_IOResult join_result = galay_coro_join(&task, join_timeout_ms);
-    C_IOResult destroy_result = galay_coro_destroy(&task);
+    C_IOResult join_result = galay_c_coro_join(&task, join_timeout_ms);
+    C_IOResult destroy_result = galay_c_coro_destroy(&task);
     return join_result.code == C_IOResultOk && destroy_result.code == C_IOResultOk ? 0 : 1;
 }
 
@@ -163,15 +155,15 @@ int main(int argc, char** argv)
 {
     const int iterations = parse_iterations(argc, argv);
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
-    galay_kernel_udp_socket_t udp = {0};
-    galay_kernel_file_watcher_t watcher = {0};
-    galay_kernel_async_file_t async_file = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {.fd = -1};
+    galay_c_udp_socket_t udp = {.fd = -1};
+    galay_c_file_watcher_t watcher = {.fd = -1};
+    galay_c_async_file_t async_file = {.fd = -1};
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host tcp_local = {0};
     C_Host udp_local = {0};
@@ -190,16 +182,16 @@ int main(int argc, char** argv)
     const char payload[] = "timeout pressure";
     const size_t payload_size = sizeof(payload) - 1;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_tcp_socket_create(&listener, C_IPTypeIPV4) != C_TcpSocketSuccess ||
-        galay_kernel_tcp_socket_bind(&listener, &bind_host) != C_TcpSocketSuccess ||
-        galay_kernel_tcp_socket_listen(&listener, 64) != C_TcpSocketSuccess ||
-        galay_kernel_tcp_socket_local_endpoint(&listener, &tcp_local) != C_TcpSocketSuccess ||
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
+        galay_c_tcp_socket_create(&listener, C_IPTypeIPV4).code != C_IOResultOk ||
+        galay_c_tcp_socket_bind(&listener, &bind_host).code != C_IOResultOk ||
+        galay_c_tcp_socket_listen(&listener, 64).code != C_IOResultOk ||
+        galay_c_tcp_socket_local_endpoint(&listener, &tcp_local).code != C_IOResultOk ||
         tcp_local.port == 0 ||
-        galay_kernel_udp_socket_create(&udp, C_IPTypeIPV4) != C_UdpSocketSuccess ||
-        galay_kernel_udp_socket_bind(&udp, &bind_host) != C_UdpSocketSuccess ||
-        galay_kernel_udp_socket_local_endpoint(&udp, &udp_local) != C_UdpSocketSuccess ||
+        galay_c_udp_socket_create(&udp, C_IPTypeIPV4).code != C_IOResultOk ||
+        galay_c_udp_socket_bind(&udp, &bind_host).code != C_IOResultOk ||
+        galay_c_udp_socket_local_endpoint(&udp, &udp_local).code != C_IOResultOk ||
         udp_local.port == 0) {
         failures = 1;
         exit_code = 1;
@@ -214,12 +206,19 @@ int main(int argc, char** argv)
             goto cleanup;
         }
         watch_fd = -1;
-        const C_FileWatcherResultCode watcher_created = galay_kernel_file_watcher_create(&watcher);
-        if (watcher_created == C_FileWatcherSuccess &&
-            galay_kernel_file_watcher_add_watch(&watcher, watch_path, C_FileWatchEventModify, &watch_descriptor) ==
-                C_FileWatcherSuccess) {
+        const C_IOResult watcher_created = galay_c_file_watcher_create(&watcher);
+        if (watcher_created.code == C_IOResultOk) {
+            const C_IOResult added =
+                galay_c_file_watcher_add_watch(&watcher, watch_path, GALAY_C_WATCH_MODIFY);
+            if (added.code != C_IOResultOk) {
+                failures = 1;
+                exit_code = 3;
+                goto cleanup;
+            }
+            watch_descriptor = (int)added.value;
             watcher_supported = 1;
-        } else if (watcher_created != C_FileWatcherOperationUnsupported) {
+        } else if (watcher_created.code != C_IOResultError ||
+                   watcher_created.sys_errno != ENOSYS) {
             failures = 1;
             exit_code = 3;
             goto cleanup;
@@ -232,8 +231,12 @@ int main(int argc, char** argv)
         goto cleanup;
     }
 
-    const C_AsyncFileResultCode async_created = galay_kernel_async_file_create(&async_file);
-    if (async_created == C_AsyncFileSuccess) {
+    const C_IOResult async_opened = galay_c_async_file_open(
+        &async_file,
+        async_path,
+        GALAY_C_FILE_RDWR | GALAY_C_FILE_CREATE | GALAY_C_FILE_TRUNC,
+        0600);
+    if (async_opened.code == C_IOResultOk) {
         AsyncFileState write_state = {
             .file = &async_file,
             .payload = payload,
@@ -242,18 +245,16 @@ int main(int argc, char** argv)
             .read_buffer_size = 0,
             .result = {C_IOResultInvalid, 0, 0, 0, NULL},
         };
-        if (galay_kernel_async_file_open(&async_file, async_path, C_AsyncFileOpenModeReadWrite, 0600) !=
-                C_AsyncFileSuccess ||
-            run_task(&runtime, async_write_entry, &write_state, 3000) != 0 ||
+        if (run_task(&runtime, async_write_entry, &write_state, 3000) != 0 ||
             write_state.result.code != C_IOResultOk ||
             write_state.result.bytes != payload_size ||
-            galay_kernel_async_file_sync(&async_file) != C_AsyncFileSuccess) {
+            fsync(async_file.fd) != 0) {
             failures = 1;
             exit_code = 5;
             goto cleanup;
         }
         async_supported = 1;
-    } else if (async_created != C_AsyncFileOperationUnsupported) {
+    } else if (async_opened.code != C_IOResultError || async_opened.sys_errno != ENOSYS) {
         failures = 1;
         exit_code = 6;
         goto cleanup;
@@ -268,9 +269,9 @@ int main(int argc, char** argv)
         };
         if (run_task(&runtime, tcp_accept_entry, &tcp_state, 2000) != 0 ||
             tcp_state.result.code != C_IOResultTimeout ||
-            tcp_state.accepted.socket != NULL) {
-            if (tcp_state.accepted.socket != NULL &&
-                galay_kernel_tcp_socket_destroy(&tcp_state.accepted) != C_TcpSocketSuccess &&
+            tcp_state.accepted.fd >= 0) {
+            if (tcp_state.accepted.fd >= 0 &&
+                galay_c_tcp_socket_close(&tcp_state.accepted).code != C_IOResultOk &&
                 exit_code == 0) {
                 exit_code = 7;
             }
@@ -298,12 +299,11 @@ int main(int argc, char** argv)
         if (watcher_supported) {
             WatchState watch_state = {
                 .watcher = &watcher,
-                .watch_result = {0},
+                .event = {0},
                 .result = {C_IOResultInvalid, 0, 0, 0, NULL},
             };
             if (run_task(&runtime, watch_entry, &watch_state, 2000) != 0 ||
-                watch_state.result.code != C_IOResultTimeout ||
-                watch_state.watch_result.code != C_FileWatcherTimeout) {
+                watch_state.result.code != C_IOResultTimeout) {
                 ++failures;
                 if (exit_code == 0) {
                     exit_code = 9;
@@ -323,7 +323,8 @@ int main(int argc, char** argv)
                 .read_buffer_size = sizeof(read_buffer),
                 .result = {C_IOResultInvalid, 0, 0, 0, NULL},
             };
-            if (run_task(&runtime, async_read_entry, &read_state, 3000) != 0 ||
+            if (galay_c_async_file_seek(&async_file, 0, SEEK_SET).code != C_IOResultOk ||
+                run_task(&runtime, async_read_entry, &read_state, 3000) != 0 ||
                 read_state.result.code != C_IOResultOk ||
                 read_state.result.bytes != payload_size ||
                 memcmp(read_buffer, payload, payload_size) != 0) {
@@ -352,56 +353,38 @@ int main(int argc, char** argv)
     }
 
 cleanup:
-    if (async_file.file != NULL) {
-        AsyncFileState close_state = {
-            .file = &async_file,
-            .payload = NULL,
-            .payload_size = 0,
-            .read_buffer = NULL,
-            .read_buffer_size = 0,
-            .result = {C_IOResultInvalid, 0, 0, 0, NULL},
-        };
-        if (runtime.runtime != NULL &&
-            run_task(&runtime, async_close_entry, &close_state, 3000) != 0 &&
-            exit_code == 0) {
-            exit_code = 12;
-        }
-        if (runtime.runtime != NULL &&
-            close_state.result.code != C_IOResultOk &&
-            exit_code == 0) {
-            exit_code = 13;
-        }
-        if (galay_kernel_async_file_destroy(&async_file) != C_AsyncFileSuccess && exit_code == 0) {
-            exit_code = 14;
-        }
+    if (async_file.fd >= 0 &&
+        galay_c_async_file_close(&async_file).code != C_IOResultOk &&
+        exit_code == 0) {
+        exit_code = 14;
     }
-    if (watcher.watcher != NULL) {
+    if (watcher.fd >= 0) {
         if (watch_descriptor >= 0 &&
-            galay_kernel_file_watcher_remove_watch(&watcher, watch_descriptor) != C_FileWatcherSuccess &&
+            galay_c_file_watcher_remove_watch(&watcher, watch_descriptor).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 15;
         }
-        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess && exit_code == 0) {
+        if (galay_c_file_watcher_close(&watcher).code != C_IOResultOk && exit_code == 0) {
             exit_code = 16;
         }
     }
-    if (udp.socket != NULL &&
-        galay_kernel_udp_socket_destroy(&udp) != C_UdpSocketSuccess &&
+    if (udp.fd >= 0 &&
+        galay_c_udp_socket_close(&udp).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 17;
     }
-    if (listener.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess &&
+    if (listener.fd >= 0 &&
+        galay_c_tcp_socket_close(&listener).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 18;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 19;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 20;
     }

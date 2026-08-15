@@ -40,7 +40,7 @@ slices owned by the parsed handle.
 ## Thread And Coroutine Notes
 
 - Stdio loopback calls are immediate and do not require a running C coroutine.
-- HTTP client requests and `galay_mcp_http_server_serve_once` call kernel TCP coroutine APIs and must run inside a task created with `galay_coro_spawn`.
+- HTTP client requests and `galay_mcp_http_server_serve_once` call kernel TCP coroutine APIs and must run inside a task created with `galay_c_coro_spawn`.
 - `galay_mcp_http_server_start`, endpoint lookup, and stop/destroy are synchronous lifecycle operations.
 - Dynamic handler registration is intended before serving requests; concurrent mutation of registrations while serving is not supported.
 

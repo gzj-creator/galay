@@ -1,28 +1,28 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-redis-c/redis_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-redis-c/redis.h>
 
 #include <stdio.h>
 #include <string.h>
 
 typedef struct RedisAsyncPingExample {
-    galay_kernel_tcp_socket_t* listener;
+    galay_c_tcp_socket_t* listener;
     C_Host peer;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t accepted;
     C_IOResult server_result;
     C_IOResult client_result;
     char request[64];
     char response[16];
 } RedisAsyncPingExample;
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0
         ? 0
         : 1;
@@ -35,12 +35,12 @@ static void server_entry(void* arg)
     RedisAsyncPingExample* example = (RedisAsyncPingExample*)arg;
 
     C_IOResult accepted =
-        galay_kernel_tcp_socket_accept(example->listener, &example->accepted, NULL, 1000);
+        galay_c_tcp_socket_accept(example->listener, &example->accepted, NULL, 1000);
     if (accepted.code != C_IOResultOk) {
         example->server_result = accepted;
         return;
     }
-    C_IOResult received = galay_kernel_tcp_socket_recv(
+    C_IOResult received = galay_c_tcp_socket_recv(
         &example->accepted, example->request, sizeof(expected) - 1, 1000);
     if (received.code != C_IOResultOk ||
         received.bytes != sizeof(expected) - 1 ||
@@ -51,9 +51,9 @@ static void server_entry(void* arg)
         return;
     }
     C_IOResult sent =
-        galay_kernel_tcp_socket_send(&example->accepted, response, sizeof(response) - 1, 1000);
+        galay_c_tcp_socket_send(&example->accepted, response, sizeof(response) - 1, 1000);
     example->server_result = sent;
-    C_IOResult closed = galay_kernel_tcp_socket_close(&example->accepted, 1000);
+    C_IOResult closed = galay_c_tcp_socket_close(&example->accepted);
     if (example->server_result.code == C_IOResultOk && closed.code != C_IOResultOk) {
         example->server_result = closed;
     }
@@ -106,20 +106,20 @@ static void client_entry(void* arg)
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
     RedisAsyncPingExample example = {0};
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, &local) != 0) {
         exit_code = 1;
         goto cleanup;
@@ -127,10 +127,10 @@ int main(void)
     example.listener = &listener;
     example.peer = local;
 
-    if (galay_coro_spawn(&runtime, server_entry, &example, NULL, &server).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &example, NULL, &client).code != C_IOResultOk ||
-        galay_coro_join(&server, 2000).code != C_IOResultOk ||
-        galay_coro_join(&client, 2000).code != C_IOResultOk) {
+    if (galay_c_coro_spawn(&runtime, server_entry, &example, NULL, &server).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &example, NULL, &client).code != C_IOResultOk ||
+        galay_c_coro_join(&server, 2000).code != C_IOResultOk ||
+        galay_c_coro_join(&client, 2000).code != C_IOResultOk) {
         exit_code = 2;
         goto cleanup;
     }
@@ -147,29 +147,29 @@ int main(void)
     }
 
 cleanup:
-    if (server.task != NULL && galay_coro_destroy(&server).code != C_IOResultOk &&
+    if (server.task != NULL && galay_c_coro_destroy(&server).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 5;
     }
-    if (client.task != NULL && galay_coro_destroy(&client).code != C_IOResultOk &&
+    if (client.task != NULL && galay_c_coro_destroy(&client).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 6;
     }
-    if (example.accepted.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&example.accepted) != C_TcpSocketSuccess &&
+    if (example.accepted.fd >= 0 &&
+        galay_c_tcp_socket_close(&example.accepted).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 7;
     }
-    if (listener.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess &&
+    if (listener.fd >= 0 &&
+        galay_c_tcp_socket_close(&listener).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 8;
     }
     if (runtime.runtime != NULL) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 9;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 10;
         }
     }

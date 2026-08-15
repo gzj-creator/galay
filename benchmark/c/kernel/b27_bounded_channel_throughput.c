@@ -1,8 +1,9 @@
-#include <galay/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel_c.h>
+#include <galay/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel.h>
 
 #include <pthread.h>
 #include <sched.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +20,7 @@ enum {
 };
 
 typedef struct SharedState {
-    galay_kernel_mpmc_bounded_channel_t* channel;
+    galay_c_mpmc_bounded_channel_t* channel;
     uintptr_t* payloads;
     int64_t start_us;
     int producer_count;
@@ -90,15 +91,15 @@ static void* producer_main(void* arg)
     uint32_t failed_attempts = 0;
     for (size_t i = 0; i < producer->count; ++i) {
         uintptr_t* payload = &shared->payloads[producer->offset + i];
-        C_ChannelMessage message = {payload, sizeof(*payload), 0};
+        galay_c_channel_message_t message = {payload, sizeof(*payload), 0};
         for (;;) {
-            C_ChannelResultCode result =
-                galay_kernel_mpmc_bounded_channel_try_send(shared->channel, &message);
-            if (result == C_ChannelSuccess) {
+            C_IOResult result =
+                galay_c_mpmc_bounded_channel_try_send(shared->channel, &message);
+            if (result.code == C_IOResultOk) {
                 ++sent;
                 break;
             }
-            if (result != C_ChannelFull ||
+            if (result.code != C_IOResultInvalid ||
                 atomic_load(&shared->failed) ||
                 ((++failed_attempts & 1023U) == 0U && timed_out(shared))) {
                 atomic_store(&shared->failed, 1);
@@ -127,15 +128,15 @@ static void* consumer_main(void* arg)
 
     uint32_t failed_attempts = 0;
     for (;;) {
-        C_ChannelMessage message = {0};
-        C_ChannelResultCode result =
-            galay_kernel_mpmc_bounded_channel_try_recv(shared->channel, &message);
-        if (result == C_ChannelSuccess) {
+        galay_c_channel_message_t message = {0};
+        C_IOResult result =
+            galay_c_mpmc_bounded_channel_try_recv(shared->channel, &message);
+        if (result.code == C_IOResultOk) {
             ++received;
             sum += (uint64_t)*(uintptr_t*)message.data;
             continue;
         }
-        if (result != C_ChannelEmpty ||
+        if (result.code != C_IOResultInvalid ||
             atomic_load(&shared->failed) ||
             ((++failed_attempts & 1023U) == 0U && timed_out(shared))) {
             atomic_store(&shared->failed, 1);
@@ -172,7 +173,7 @@ static int wait_until_ready(SharedState* shared, int expected_threads)
 
 static RunResult run_sample(int producer_count, int consumer_count)
 {
-    galay_kernel_mpmc_bounded_channel_t channel = {0};
+    galay_c_mpmc_bounded_channel_t channel = {0};
     pthread_t producers[MAX_PRODUCER_COUNT];
     pthread_t consumers[MAX_CONSUMER_COUNT];
     ProducerArgs producer_args[MAX_PRODUCER_COUNT] = {{0}};
@@ -190,8 +191,8 @@ static RunResult run_sample(int producer_count, int consumer_count)
     atomic_init(&shared.failed, 0);
     atomic_init(&shared.start, false);
 
-    if (galay_kernel_mpmc_bounded_channel_create(&channel, CHANNEL_CAPACITY) !=
-        C_ChannelSuccess) {
+    if (galay_c_mpmc_bounded_channel_create(&channel, CHANNEL_CAPACITY).code !=
+        C_IOResultOk) {
         return run;
     }
 
@@ -256,15 +257,14 @@ static RunResult run_sample(int producer_count, int consumer_count)
         run.received == MESSAGES_PER_SAMPLE &&
         run.sum == expected_sum &&
         run.elapsed_us > 0 &&
-        galay_kernel_mpmc_bounded_channel_empty(&channel);
+        galay_c_mpmc_bounded_channel_is_empty(&channel);
     if (run.valid) {
         run.messages_per_second =
             (double)run.received * 1000000.0 / (double)run.elapsed_us;
     }
 
-    C_ChannelResultCode destroyed =
-        galay_kernel_mpmc_bounded_channel_destroy(&channel);
-    if (destroyed != C_ChannelSuccess) {
+    C_IOResult destroyed = galay_c_mpmc_bounded_channel_destroy(&channel);
+    if (destroyed.code != C_IOResultOk) {
         run.valid = false;
     }
     return run;

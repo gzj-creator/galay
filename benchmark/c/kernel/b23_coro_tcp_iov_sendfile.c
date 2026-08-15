@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <arpa/inet.h>
 #include <fcntl.h>
@@ -18,8 +18,8 @@ enum {
 };
 
 typedef struct IovSendfileServer {
-    galay_kernel_tcp_socket_t* listener;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t* listener;
+    galay_c_tcp_socket_t accepted;
     int file_fd;
     int iterations;
     uint64_t errors;
@@ -37,13 +37,13 @@ static int64_t now_ns(void)
     return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
 }
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0
         ? 0
         : 1;
@@ -102,7 +102,7 @@ static void server_entry(void* arg)
 {
     IovSendfileServer* server = (IovSendfileServer*)arg;
     C_IOResult accepted =
-        galay_kernel_tcp_socket_accept(server->listener, &server->accepted, NULL, 5000);
+        galay_c_tcp_socket_accept(server->listener, &server->accepted, NULL, 5000);
     if (accepted.code != C_IOResultOk) {
         ++server->errors;
         return;
@@ -115,7 +115,7 @@ static void server_entry(void* arg)
         read_iov[1].base = server->read_b;
         read_iov[1].len = 4;
         C_IOResult read_result =
-            galay_kernel_tcp_socket_readv(&server->accepted, read_iov, 2, 1000);
+            galay_c_tcp_socket_readv(&server->accepted, read_iov, 2, 1000);
         if (read_result.code != C_IOResultOk || read_result.bytes != 7) {
             ++server->errors;
             break;
@@ -129,14 +129,14 @@ static void server_entry(void* arg)
         write_iov[1].base = (void*)write_b;
         write_iov[1].len = sizeof(write_b) - 1;
         C_IOResult write_result =
-            galay_kernel_tcp_socket_writev(&server->accepted, write_iov, 2, 1000);
+            galay_c_tcp_socket_writev(&server->accepted, write_iov, 2, 1000);
         if (write_result.code != C_IOResultOk || write_result.bytes != 9) {
             ++server->errors;
             break;
         }
 
         C_IOResult sendfile_result =
-            galay_kernel_tcp_socket_sendfile(&server->accepted, server->file_fd, 6, 9, 1000);
+            galay_c_tcp_socket_sendfile(&server->accepted, server->file_fd, 6, 9, 1000);
         if (sendfile_result.code != C_IOResultOk || sendfile_result.bytes != 9) {
             ++server->errors;
             break;
@@ -144,7 +144,7 @@ static void server_entry(void* arg)
         ++server->completed;
     }
 
-    C_IOResult closed = galay_kernel_tcp_socket_close(&server->accepted, 1000);
+    C_IOResult closed = galay_c_tcp_socket_close(&server->accepted);
     if (closed.code != C_IOResultOk) {
         ++server->errors;
     }
@@ -191,18 +191,18 @@ int main(int argc, char** argv)
         return 3;
     }
 
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
-    galay_coro_task_t server_task = {0};
+    galay_c_coro_task_t server_task = {0};
     int client_fd = -1;
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, &local) != 0) {
         exit_code = 4;
         goto cleanup;
@@ -212,7 +212,7 @@ int main(int argc, char** argv)
     server.listener = &listener;
     server.file_fd = file_fd;
     server.iterations = iterations;
-    if (galay_coro_spawn(&runtime, server_entry, &server, 0, &server_task).code != C_IOResultOk) {
+    if (galay_c_coro_spawn(&runtime, server_entry, &server, 0, &server_task).code != C_IOResultOk) {
         exit_code = 5;
         goto cleanup;
     }
@@ -228,7 +228,7 @@ int main(int argc, char** argv)
         exit_code = 7;
     }
     const int64_t elapsed = now_ns() - start;
-    if (galay_coro_join(&server_task, 10000).code != C_IOResultOk && exit_code == 0) {
+    if (galay_c_coro_join(&server_task, 10000).code != C_IOResultOk && exit_code == 0) {
         exit_code = 8;
     }
     if ((server.errors != 0 || server.completed != (uint64_t)iterations) && exit_code == 0) {
@@ -254,20 +254,20 @@ cleanup:
         }
     }
     if (server_task.task != 0) {
-        if (galay_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
+        if (galay_c_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
             exit_code = 11;
         }
     }
-    if (listener.socket != 0) {
-        if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess &&
+    if (listener.fd >= 0) {
+        if (galay_c_tcp_socket_close(&listener).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 12;
         }
     }
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
         exit_code = 13;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
         exit_code = 14;
     }
     if (close(file_fd) != 0 && exit_code == 0) {

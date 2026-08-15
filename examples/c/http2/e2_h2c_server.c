@@ -1,6 +1,6 @@
-#include <galay/c/galay-http2-c/http2_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-http2-c/http2.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -129,26 +129,26 @@ cleanup:
 
 int main(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     ServerExampleState state = {0};
     int exit_code = 0;
 
     galay_http2_config_t server_config = galay_http2_config_default();
     server_config.host = "127.0.0.1";
 
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_http2_server_create(&server_config, &state.server) != GALAY_OK ||
         galay_http2_server_listen(state.server, &state.port).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, server_entry, &state, 0, &server_task).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &state, 0, &client_task).code != C_IOResultOk ||
-        galay_coro_join(&server_task, 3000).code != C_IOResultOk ||
-        galay_coro_join(&client_task, 3000).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, server_entry, &state, 0, &server_task).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &state, 0, &client_task).code != C_IOResultOk ||
+        galay_c_coro_join(&server_task, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&client_task, 3000).code != C_IOResultOk ||
         state.server_result.code != C_IOResultOk ||
         state.client_result.code != C_IOResultOk) {
         exit_code = 1;
@@ -159,11 +159,11 @@ int main(void)
         exit_code = 2;
     }
 
-    if (server_task.task != 0 && galay_coro_destroy(&server_task).code != C_IOResultOk &&
+    if (server_task.task != 0 && galay_c_coro_destroy(&server_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 3;
     }
-    if (client_task.task != 0 && galay_coro_destroy(&client_task).code != C_IOResultOk &&
+    if (client_task.task != 0 && galay_c_coro_destroy(&client_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 4;
     }
@@ -174,10 +174,10 @@ int main(void)
         galay_http2_server_destroy(state.server);
     }
     if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 6;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 7;
         }
     }

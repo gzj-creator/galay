@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-postgres-c/postgres_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-postgres-c/postgres.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -189,11 +189,11 @@ int main(void)
     port = strtoul(port_text, &end, 10);
     if (end == port_text || *end != '\0' || port == 0 || port > 65535) return 125;
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t task = {0};
     PostgresIntegrationState state = {
         .host = host,
         .user = user,
@@ -202,10 +202,10 @@ int main(void)
         .port = (uint16_t)port,
     };
     int result = 0;
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) return 1;
-    if (galay_coro_spawn(&runtime, integration_client_entry, &state, NULL, &task).code !=
-        C_IOResultOk || galay_coro_join(&task, 15000).code != C_IOResultOk) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess) return 1;
+    if (galay_c_coro_spawn(&runtime, integration_client_entry, &state, NULL, &task).code !=
+        C_IOResultOk || galay_c_coro_join(&task, 15000).code != C_IOResultOk) {
         result = 2;
     } else if (state.result.code != C_IOResultOk || !state.values_ok ||
                !state.transaction_ok || !state.prepared_ok || !state.pipeline_ok ||
@@ -214,8 +214,8 @@ int main(void)
                 (int)state.result.code, (long long)state.result.value, state.result.sys_errno);
         result = 3;
     }
-    if (task.task != NULL && galay_coro_destroy(&task).code != C_IOResultOk && result == 0) result = 4;
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) result = 5;
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) result = 6;
+    if (task.task != NULL && galay_c_coro_destroy(&task).code != C_IOResultOk && result == 0) result = 4;
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) result = 5;
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) result = 6;
     return result;
 }

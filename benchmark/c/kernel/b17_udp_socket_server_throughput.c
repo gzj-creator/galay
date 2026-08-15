@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_udp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/udp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <arpa/inet.h>
 #include <limits.h>
@@ -22,9 +22,9 @@ enum {
 };
 
 typedef struct ServerState {
-    galay_kernel_runtime_t runtime;
-    galay_kernel_udp_socket_t socket;
-    galay_coro_task_t task;
+    galay_c_runtime_t runtime;
+    galay_c_udp_socket_t socket;
+    galay_c_coro_task_t task;
     atomic_int running;
     atomic_ullong total_received;
     atomic_ullong total_sent;
@@ -59,7 +59,7 @@ static void server_entry(void* arg)
     ServerState* server = (ServerState*)arg;
     while (atomic_load(&server->running)) {
         C_Host peer = {0};
-        C_IOResult received = galay_kernel_udp_socket_recvfrom(
+        C_IOResult received = galay_c_udp_socket_recvfrom(
             &server->socket,
             server->buffer,
             sizeof(server->buffer),
@@ -77,7 +77,7 @@ static void server_entry(void* arg)
         add_counter(&server->total_received, 1);
         add_counter(&server->total_recv_bytes, (unsigned long long)received.bytes);
 
-        C_IOResult sent = galay_kernel_udp_socket_sendto(
+        C_IOResult sent = galay_c_udp_socket_sendto(
             &server->socket,
             server->buffer,
             received.bytes,
@@ -91,7 +91,7 @@ static void server_entry(void* arg)
         add_counter(&server->total_send_bytes, (unsigned long long)sent.bytes);
     }
 
-    C_IOResult closed = galay_kernel_udp_socket_close(&server->socket, 1000);
+    C_IOResult closed = galay_c_udp_socket_close(&server->socket);
     if (closed.code != C_IOResultOk) {
         add_counter(&server->total_errors, 1);
     }
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = io_schedulers;
     config.compute_scheduler_count = 0;
 
@@ -207,15 +207,15 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (galay_kernel_runtime_create(&config, &server.runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&server.runtime) != C_RuntimeSuccess ||
-        galay_kernel_udp_socket_create(&server.socket, C_IPTypeIPV4) != C_UdpSocketSuccess ||
-        galay_kernel_udp_socket_bind(&server.socket, &bind_host) != C_UdpSocketSuccess) {
+    if (galay_c_runtime_create(&config, &server.runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&server.runtime) != C_RuntimeSuccess ||
+        galay_c_udp_socket_create(&server.socket, C_IPTypeIPV4).code != C_IOResultOk ||
+        galay_c_udp_socket_bind(&server.socket, &bind_host).code != C_IOResultOk) {
         exit_code = 1;
         goto cleanup;
     }
 
-    C_IOResult spawn_result = galay_coro_spawn(&server.runtime, server_entry, &server, NULL, &server.task);
+    C_IOResult spawn_result = galay_c_coro_spawn(&server.runtime, server_entry, &server, NULL, &server.task);
     if (spawn_result.code != C_IOResultOk) {
         exit_code = 2;
         goto cleanup;
@@ -235,8 +235,8 @@ int main(int argc, char** argv)
     if (wake_receiver(server.port) != 0 && exit_code == 0) {
         exit_code = 3;
     }
-    C_IOResult join_result = galay_coro_join(&server.task, 3000);
-    C_IOResult destroy_result = galay_coro_destroy(&server.task);
+    C_IOResult join_result = galay_c_coro_join(&server.task, 3000);
+    C_IOResult destroy_result = galay_c_coro_destroy(&server.task);
     if ((join_result.code != C_IOResultOk || destroy_result.code != C_IOResultOk) && exit_code == 0) {
         exit_code = 4;
     }
@@ -257,26 +257,26 @@ cleanup:
         if (wake_receiver(server.port) != 0 && exit_code == 0) {
             exit_code = 7;
         }
-        if (galay_coro_join(&server.task, 3000).code == C_IOResultOk) {
-            if (galay_coro_destroy(&server.task).code != C_IOResultOk && exit_code == 0) {
+        if (galay_c_coro_join(&server.task, 3000).code == C_IOResultOk) {
+            if (galay_c_coro_destroy(&server.task).code != C_IOResultOk && exit_code == 0) {
                 exit_code = 8;
             }
         } else if (exit_code == 0) {
             exit_code = 9;
         }
     }
-    if (server.socket.socket != NULL &&
-        galay_kernel_udp_socket_destroy(&server.socket) != C_UdpSocketSuccess &&
+    if (server.socket.fd >= 0 &&
+        galay_c_udp_socket_close(&server.socket).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 10;
     }
     if (server.runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&server.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&server.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 11;
     }
     if (server.runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&server.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&server.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 12;
     }

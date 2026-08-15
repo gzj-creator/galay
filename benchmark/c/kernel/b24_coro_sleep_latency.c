@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_wait_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_sleep.h>
 
 #include <errno.h>
 #include <stdint.h>
@@ -37,7 +37,7 @@ static void sleep_bench_entry(void* ctx)
     }
 
     for (int i = 0; i < CORO_SLEEP_ITERATIONS; ++i) {
-        state->result = galay_coro_sleep(CORO_SLEEP_MS);
+        state->result = galay_c_coro_sleep(CORO_SLEEP_MS);
         if (state->result.code != C_IOResultOk) {
             return;
         }
@@ -54,12 +54,12 @@ static void sleep_bench_entry(void* ctx)
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t task = {0};
     SleepBenchState state = {
         {C_IOResultError, 0, 0, 0, 0},
         0,
@@ -67,15 +67,15 @@ int main(void)
     };
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
         return 1;
     }
-    if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         exit_code = 2;
         goto cleanup;
     }
 
-    C_IOResult spawned = galay_coro_spawn(&runtime, sleep_bench_entry, &state, 0, &task);
+    C_IOResult spawned = galay_c_coro_spawn(&runtime, sleep_bench_entry, &state, 0, &task);
     if (spawned.code == C_IOResultError && spawned.sys_errno == ENOTSUP) {
         if (printf("coro_sleep_latency unsupported C coroutine context\n") < 0) {
             exit_code = 3;
@@ -86,11 +86,11 @@ int main(void)
         exit_code = 4;
         goto cleanup;
     }
-    if (galay_coro_join(&task, 10000).code != C_IOResultOk) {
+    if (galay_c_coro_join(&task, 10000).code != C_IOResultOk) {
         exit_code = 5;
         goto cleanup;
     }
-    if (galay_coro_destroy(&task).code != C_IOResultOk) {
+    if (galay_c_coro_destroy(&task).code != C_IOResultOk) {
         exit_code = 6;
         goto cleanup;
     }
@@ -115,16 +115,16 @@ int main(void)
 
 cleanup:
     if (task.task != 0) {
-        C_IOResult destroyed = galay_coro_destroy(&task);
+        C_IOResult destroyed = galay_c_coro_destroy(&task);
         if (destroyed.code != C_IOResultOk && exit_code == 0) {
             exit_code = 9;
         }
     }
     if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 10;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 11;
         }
     }

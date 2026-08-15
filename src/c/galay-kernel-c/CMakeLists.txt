@@ -1,14 +1,15 @@
 enable_language(ASM)
+find_package(Threads REQUIRED)
 
 set(GALAY_C_CORO_CONTEXT_SUPPORTED OFF CACHE INTERNAL "C coroutine context switch support")
 set(GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON "" CACHE INTERNAL "C coroutine context unsupported reason")
 
 file(GLOB galay_c_kernel_sources CONFIGURE_DEPENDS
-    "${CMAKE_CURRENT_SOURCE_DIR}/core-c/*.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/async-c/*.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/concurrency-c/*.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/concurrency-c/*/*.cc"
-    "${CMAKE_CURRENT_SOURCE_DIR}/coro-c/*.cc"
+    "${CMAKE_CURRENT_SOURCE_DIR}/core-c/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/async-c/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/concurrency-c/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/concurrency-c/*/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/coro-c/*.c"
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Darwin" AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(arm64|aarch64)$")
@@ -45,7 +46,7 @@ function(galay_filter_unsupported_c_coro_sources source_list)
     set(filtered_sources)
     foreach(source_file IN LISTS ${source_list})
         file(READ "${source_file}" source_text)
-        string(FIND "${source_text}" "galay_coro_spawn" spawn_position)
+        string(FIND "${source_text}" "galay_c_coro_spawn" spawn_position)
         if(spawn_position EQUAL -1)
             list(APPEND filtered_sources "${source_file}")
         else()
@@ -59,7 +60,7 @@ endfunction()
 add_library(galay-c-kernel ${galay_c_kernel_sources})
 add_library(galay::c-kernel ALIAS galay-c-kernel)
 
-target_compile_features(galay-c-kernel PUBLIC cxx_std_23)
+target_compile_features(galay-c-kernel PUBLIC c_std_11)
 
 target_include_directories(galay-c-kernel
     PUBLIC
@@ -69,8 +70,16 @@ target_include_directories(galay-c-kernel
 
 target_link_libraries(galay-c-kernel
     PUBLIC
-        galay::c-bridge
-        galay::kernel
+        galay::c-common
+    PRIVATE
+        Threads::Threads
 )
+
+if(GALAY_DISABLE_IOURING)
+    target_compile_definitions(galay-c-kernel PRIVATE GALAY_DISABLE_IOURING=1)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_library(GALAY_C_LIBURING_LIBRARY NAMES uring REQUIRED)
+    target_link_libraries(galay-c-kernel PRIVATE "${GALAY_C_LIBURING_LIBRARY}")
+endif()
 
 set_target_properties(galay-c-kernel PROPERTIES EXPORT_NAME c-kernel)

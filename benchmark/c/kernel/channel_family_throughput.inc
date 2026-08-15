@@ -1,20 +1,13 @@
 #include <pthread.h>
 #include <sched.h>
 #include <stdatomic.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
 #if defined(__linux__)
 #include <unistd.h>
-#endif
-
-#ifndef CHANNEL_USE_PRODUCER_TOKEN
-#define CHANNEL_USE_PRODUCER_TOKEN 0
-#endif
-
-#ifndef CHANNEL_USE_CONSUMER_TOKEN
-#define CHANNEL_USE_CONSUMER_TOKEN 0
 #endif
 
 enum {
@@ -42,9 +35,6 @@ typedef struct ProducerArgs {
     size_t offset;
     size_t count;
     size_t sent;
-#if CHANNEL_USE_PRODUCER_TOKEN
-    CHANNEL_PRODUCER_TOKEN_TYPE token;
-#endif
 } ProducerArgs;
 
 typedef struct ConsumerArgs {
@@ -52,9 +42,6 @@ typedef struct ConsumerArgs {
     size_t core_index;
     size_t received;
     uint64_t sum;
-#if CHANNEL_USE_CONSUMER_TOKEN
-    CHANNEL_CONSUMER_TOKEN_TYPE token;
-#endif
 } ConsumerArgs;
 
 typedef struct RunResult {
@@ -119,34 +106,21 @@ static void* producer_main(void* arg)
         atomic_store(&shared->failed, 1);
         return 0;
     }
-#if CHANNEL_USE_PRODUCER_TOKEN
-    if (CHANNEL_PRODUCER_TOKEN_CREATE(shared->channel, &producer->token) !=
-        C_ChannelSuccess) {
-        atomic_store(&shared->failed, 1);
-        return 0;
-    }
-#endif
     if (!wait_for_start(shared)) {
         return 0;
     }
 
     for (size_t index = 0; index < producer->count; ++index) {
         uintptr_t* payload = &shared->payloads[producer->offset + index];
-        C_ChannelMessage message = {payload, sizeof(*payload), 0};
+        galay_c_channel_message_t message = {payload, sizeof(*payload), 0};
         uint32_t retries = 0;
         for (;;) {
-            const C_ChannelResultCode result =
-#if CHANNEL_USE_PRODUCER_TOKEN
-                CHANNEL_TRY_SEND_WITH_PRODUCER_TOKEN(
-                    shared->channel, &producer->token, &message);
-#else
-                CHANNEL_TRY_SEND(shared->channel, &message);
-#endif
-            if (result == C_ChannelSuccess) {
+            const C_IOResult result = CHANNEL_TRY_SEND(shared->channel, &message);
+            if (result.code == C_IOResultOk) {
                 ++sent;
                 break;
             }
-            if (result != CHANNEL_RETRYABLE_SEND_RESULT ||
+            if (result.code != C_IOResultInvalid ||
                 atomic_load(&shared->failed) ||
                 ((++retries & 1023U) == 0U && timed_out(shared))) {
                 atomic_store(&shared->failed, 1);
@@ -172,27 +146,14 @@ static void* consumer_main(void* arg)
         atomic_store(&shared->failed, 1);
         return 0;
     }
-#if CHANNEL_USE_CONSUMER_TOKEN
-    if (CHANNEL_CONSUMER_TOKEN_CREATE(shared->channel, &consumer->token) !=
-        C_ChannelSuccess) {
-        atomic_store(&shared->failed, 1);
-        return 0;
-    }
-#endif
     if (!wait_for_start(shared)) {
         return 0;
     }
 
     for (;;) {
-        C_ChannelMessage message = {0};
-        const C_ChannelResultCode result =
-#if CHANNEL_USE_CONSUMER_TOKEN
-            CHANNEL_TRY_RECV_WITH_CONSUMER_TOKEN(
-                shared->channel, &consumer->token, &message);
-#else
-            CHANNEL_TRY_RECV(shared->channel, &message);
-#endif
-        if (result == C_ChannelSuccess) {
+        galay_c_channel_message_t message = {0};
+        const C_IOResult result = CHANNEL_TRY_RECV(shared->channel, &message);
+        if (result.code == C_IOResultOk) {
             if (message.data == 0 || message.size != sizeof(uintptr_t)) {
                 atomic_store(&shared->failed, 1);
                 break;
@@ -201,7 +162,7 @@ static void* consumer_main(void* arg)
             sum += *(uintptr_t*)message.data;
             continue;
         }
-        if (CHANNEL_HAS_CLOSE && result == C_ChannelClosed) {
+        if (CHANNEL_HAS_CLOSE && result.code == C_IOResultClosed) {
             break;
         }
         if (!CHANNEL_HAS_CLOSE &&
@@ -209,7 +170,7 @@ static void* consumer_main(void* arg)
             received == MESSAGES_PER_SAMPLE) {
             break;
         }
-        if (result != C_ChannelEmpty || atomic_load(&shared->failed) ||
+        if (result.code != C_IOResultInvalid || atomic_load(&shared->failed) ||
             timed_out(shared)) {
             atomic_store(&shared->failed, 1);
             break;
@@ -258,7 +219,7 @@ static RunResult run_sample(void)
     atomic_init(&shared.failed, 0);
     atomic_init(&shared.start, false);
 
-    if (CHANNEL_CREATE(&channel) != C_ChannelSuccess) {
+    if (CHANNEL_CREATE(&channel).code != C_IOResultOk) {
         return run;
     }
 
@@ -303,16 +264,10 @@ static RunResult run_sample(void)
         if (pthread_join(producers[index], 0) != 0) {
             atomic_store(&shared.failed, 1);
         }
-#if CHANNEL_USE_PRODUCER_TOKEN
-        if (CHANNEL_PRODUCER_TOKEN_DESTROY(&producer_args[index].token) !=
-            C_ChannelSuccess) {
-            atomic_store(&shared.failed, 1);
-        }
-#endif
     }
     atomic_store(&shared.producers_finished, true);
 #if CHANNEL_HAS_CLOSE
-    if (CHANNEL_CLOSE(&channel) != C_ChannelSuccess) {
+    if (CHANNEL_CLOSE(&channel).code != C_IOResultOk) {
         atomic_store(&shared.failed, 1);
     }
 #endif
@@ -320,12 +275,6 @@ static RunResult run_sample(void)
         if (pthread_join(consumers[index], 0) != 0) {
             atomic_store(&shared.failed, 1);
         }
-#if CHANNEL_USE_CONSUMER_TOKEN
-        if (CHANNEL_CONSUMER_TOKEN_DESTROY(&consumer_args[index].token) !=
-            C_ChannelSuccess) {
-            atomic_store(&shared.failed, 1);
-        }
-#endif
     }
 
     const int64_t finished_us = now_us();
@@ -353,7 +302,7 @@ static RunResult run_sample(void)
             (double)run.received * 1000000.0 / (double)run.elapsed_us;
     }
 
-    if (CHANNEL_DESTROY(&channel) != C_ChannelSuccess) {
+    if (CHANNEL_DESTROY(&channel).code != C_IOResultOk) {
         run.valid = 0;
     }
     return run;

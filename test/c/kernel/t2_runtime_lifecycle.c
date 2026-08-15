@@ -1,4 +1,4 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
 
 static int expect_status(C_RuntimeResultCode actual, C_RuntimeResultCode expected)
 {
@@ -7,45 +7,45 @@ static int expect_status(C_RuntimeResultCode actual, C_RuntimeResultCode expecte
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 1;
 
-    galay_kernel_runtime_t runtime = {0};
-    if (expect_status(galay_kernel_runtime_create(&config, &runtime), C_RuntimeSuccess)) {
+    galay_c_runtime_t runtime = {0};
+    if (expect_status(galay_c_runtime_create(&config, &runtime), C_RuntimeSuccess)) {
         return 1;
     }
-    if (runtime.runtime == 0 || galay_kernel_runtime_is_running(&runtime)) {
+    if (runtime.runtime == 0 || galay_c_runtime_is_running(&runtime)) {
         return 2;
     }
-    if (expect_status(galay_kernel_runtime_stop(&runtime), C_RuntimeSuccess)) {
+    if (expect_status(galay_c_runtime_stop(&runtime), C_RuntimeSuccess)) {
         return 3;
     }
-    if (expect_status(galay_kernel_runtime_start(&runtime), C_RuntimeSuccess)) {
+    if (expect_status(galay_c_runtime_start(&runtime), C_RuntimeSuccess)) {
         return 4;
     }
-    if (!galay_kernel_runtime_is_running(&runtime)) {
+    if (!galay_c_runtime_is_running(&runtime)) {
         return 5;
     }
-    if (expect_status(galay_kernel_runtime_stop(&runtime), C_RuntimeSuccess)) {
+    if (expect_status(galay_c_runtime_stop(&runtime), C_RuntimeSuccess)) {
         return 7;
     }
-    if (galay_kernel_runtime_is_running(&runtime)) {
+    if (galay_c_runtime_is_running(&runtime)) {
         return 8;
     }
-    if (expect_status(galay_kernel_runtime_start(0), C_RuntimeParameterInvalid)) {
+    if (expect_status(galay_c_runtime_start(0), C_RuntimeParameterInvalid)) {
         return 9;
     }
-    if (expect_status(galay_kernel_runtime_stop(0), C_RuntimeParameterInvalid)) {
+    if (expect_status(galay_c_runtime_stop(0), C_RuntimeParameterInvalid)) {
         return 10;
     }
-    if (expect_status(galay_kernel_runtime_destroy(&runtime), C_RuntimeSuccess)) {
+    if (expect_status(galay_c_runtime_destroy(&runtime), C_RuntimeSuccess)) {
         return 11;
     }
     if (runtime.runtime != 0) {
         return 12;
     }
-    if (expect_status(galay_kernel_runtime_destroy(0), C_RuntimeParameterInvalid)) {
+    if (expect_status(galay_c_runtime_destroy(0), C_RuntimeParameterInvalid)) {
         return 14;
     }
     return 0;

@@ -5,13 +5,13 @@
 当前 C WebSocket 层提供一个真实但最小的 direct C coroutine runtime 子集：
 
 - `galay_ws_client_t`：在 C coroutine 内 TCP connect，并完成 HTTP WebSocket upgrade。
-- `galay_ws_session_t`：接管已 accept 的 `galay_kernel_tcp_socket_t`，执行 server upgrade。
+- `galay_ws_session_t`：接管已 accept 的 `galay_c_tcp_socket_t`，执行 server upgrade。
 - `galay_ws_connection_t`：发送/接收单个 frame，支持 text、binary、ping、pong、close。
 - `galay_ws_received_frame_t`：保存接收 frame 的 opcode、FIN、mask 状态和 payload。
 - codec helper：保留 `galay_ws_encoded_size`、`galay_ws_apply_mask`、
   `galay_ws_encode_frame`、`galay_ws_decode_frame`。
 
-所有会挂起的网络 API 返回 `C_IOResult`，需要在 `galay_coro_spawn` 创建的 C coroutine 内调用。
+所有会挂起的网络 API 返回 `C_IOResult`，需要在 `galay_c_coro_spawn` 创建的 C coroutine 内调用。
 协议和参数错误通过 `C_IOResult.code`、`C_IOResult.value` 或 `galay_status_t` 显式返回，不使用 C++ 异常。
 
 ## 生命周期

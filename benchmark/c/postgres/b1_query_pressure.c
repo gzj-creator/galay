@@ -1,8 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-postgres-c/postgres_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-postgres-c/postgres.h>
 
 #include <errno.h>
 #include <inttypes.h>
@@ -149,7 +149,7 @@ static int wait_for_launch(PostgresBenchWorker* worker)
 {
     PostgresBenchState* state = worker->state;
     while (atomic_load_explicit(&state->launch, memory_order_acquire) == 0) {
-        C_IOResult yielded = galay_coro_yield();
+        C_IOResult yielded = galay_c_coro_yield();
         if (yielded.code != C_IOResultOk) {
             remember_error(worker, "launch-yield", yielded);
             atomic_store_explicit(&state->fatal, 1, memory_order_release);
@@ -163,7 +163,7 @@ static int wait_for_start(PostgresBenchWorker* worker)
 {
     PostgresBenchState* state = worker->state;
     while (atomic_load_explicit(&state->started, memory_order_acquire) == 0) {
-        C_IOResult yielded = galay_coro_yield();
+        C_IOResult yielded = galay_c_coro_yield();
         if (yielded.code != C_IOResultOk) {
             remember_error(worker, "start-yield", yielded);
             atomic_store_explicit(&state->fatal, 1, memory_order_release);
@@ -471,7 +471,7 @@ int main(int argc, char** argv)
     }
 
     PostgresBenchWorker* workers = calloc(config.clients, sizeof(*workers));
-    galay_coro_task_t* tasks = calloc(config.clients, sizeof(*tasks));
+    galay_c_coro_task_t* tasks = calloc(config.clients, sizeof(*tasks));
     if (workers == NULL || tasks == NULL) {
         free(tasks);
         free(workers);
@@ -490,19 +490,19 @@ int main(int argc, char** argv)
         }
     }
 
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = config.io_schedulers;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
+    galay_c_runtime_t runtime = {0};
     int exit_code = 0;
     size_t spawned = 0;
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         exit_code = 5;
         goto cleanup;
     }
     for (; spawned < config.clients; ++spawned) {
-        if (galay_coro_spawn(&runtime, postgres_worker_entry, &workers[spawned], NULL,
+        if (galay_c_coro_spawn(&runtime, postgres_worker_entry, &workers[spawned], NULL,
                              &tasks[spawned]).code != C_IOResultOk) {
             break;
         }
@@ -513,7 +513,7 @@ int main(int argc, char** argv)
     }
     atomic_store_explicit(&state.launch, 1, memory_order_release);
     for (size_t index = 0; index < spawned; ++index) {
-        C_IOResult joined = galay_coro_join(&tasks[index], -1);
+        C_IOResult joined = galay_c_coro_join(&tasks[index], -1);
         if (joined.code != C_IOResultOk && exit_code == 0) exit_code = 6;
     }
     if (spawned != config.clients ||
@@ -573,7 +573,7 @@ int main(int argc, char** argv)
         if (workers[index].first_error_stage != NULL) {
             if (fprintf(stderr, "worker[%zu] stage=%s code=%s value=%" PRId64 "\n",
                         index, workers[index].first_error_stage,
-                        galay_coro_ioresult_string(workers[index].first_error.code),
+                        galay_c_coro_ioresult_string(workers[index].first_error.code),
                         workers[index].first_error.value) < 0 && exit_code == 0) {
                 exit_code = 12;
             }
@@ -583,16 +583,16 @@ int main(int argc, char** argv)
 cleanup:
     atomic_store_explicit(&state.launch, 1, memory_order_release);
     for (size_t index = 0; index < spawned; ++index) {
-        if (tasks[index].task != NULL && galay_coro_destroy(&tasks[index]).code != C_IOResultOk &&
+        if (tasks[index].task != NULL && galay_c_coro_destroy(&tasks[index]).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 9;
         }
     }
     if (runtime.runtime != NULL) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 10;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 11;
         }
     }

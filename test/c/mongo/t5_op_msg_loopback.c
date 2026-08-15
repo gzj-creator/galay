@@ -1,16 +1,16 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-mongo-c/mongo_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-mongo-c/mongo.h>
 
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
 
 typedef struct MongoLoopbackCase {
-    galay_kernel_tcp_socket_t* listener;
+    galay_c_tcp_socket_t* listener;
     C_Host peer;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t accepted;
     C_IOResult server_result;
     C_IOResult client_result;
 } MongoLoopbackCase;
@@ -38,13 +38,13 @@ static C_IOResult make_result(C_IOResultCode code)
     return result;
 }
 
-static C_IOResult read_exact(galay_kernel_tcp_socket_t* socket,
+static C_IOResult read_exact(galay_c_tcp_socket_t* socket,
                              uint8_t* data,
                              size_t data_len)
 {
     size_t received = 0;
     while (received < data_len) {
-        C_IOResult result = galay_kernel_tcp_socket_recv(socket,
+        C_IOResult result = galay_c_tcp_socket_recv(socket,
                                                          (char*)data + received,
                                                          data_len - received,
                                                          1000);
@@ -61,13 +61,13 @@ static C_IOResult read_exact(galay_kernel_tcp_socket_t* socket,
     return result;
 }
 
-static C_IOResult write_exact(galay_kernel_tcp_socket_t* socket,
+static C_IOResult write_exact(galay_c_tcp_socket_t* socket,
                               const uint8_t* data,
                               size_t data_len)
 {
     size_t sent = 0;
     while (sent < data_len) {
-        C_IOResult result = galay_kernel_tcp_socket_send(socket,
+        C_IOResult result = galay_c_tcp_socket_send(socket,
                                                          (const char*)data + sent,
                                                          data_len - sent,
                                                          1000);
@@ -84,7 +84,7 @@ static C_IOResult write_exact(galay_kernel_tcp_socket_t* socket,
     return result;
 }
 
-static C_IOResult read_request(galay_kernel_tcp_socket_t* socket,
+static C_IOResult read_request(galay_c_tcp_socket_t* socket,
                                galay_mongo_document_t** command,
                                int32_t* request_id)
 {
@@ -114,7 +114,7 @@ static C_IOResult read_request(galay_kernel_tcp_socket_t* socket,
     return decoded == GALAY_OK ? make_result(C_IOResultOk) : make_result(C_IOResultError);
 }
 
-static C_IOResult send_ok_reply(galay_kernel_tcp_socket_t* socket, int32_t response_to)
+static C_IOResult send_ok_reply(galay_c_tcp_socket_t* socket, int32_t response_to)
 {
     galay_mongo_document_t* reply = NULL;
     const uint8_t* bson = NULL;
@@ -142,13 +142,14 @@ static C_IOResult send_ok_reply(galay_kernel_tcp_socket_t* socket, int32_t respo
     return sent;
 }
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    listener->fd = -1;
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0 ? 0 : 1;
 }
 
@@ -160,7 +161,7 @@ static void server_entry(void* arg)
     int32_t one = 0;
 
     C_IOResult accepted =
-        galay_kernel_tcp_socket_accept(test->listener, &test->accepted, NULL, 1000);
+        galay_c_tcp_socket_accept(test->listener, &test->accepted, NULL, 1000);
     if (accepted.code != C_IOResultOk) {
         test->server_result = accepted;
         return;
@@ -246,20 +247,22 @@ cleanup:
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
     MongoLoopbackCase test = {0};
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    listener.fd = -1;
+    test.accepted.fd = -1;
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, &local) != 0) {
         exit_code = 1;
         goto cleanup;
@@ -267,10 +270,10 @@ int main(void)
     test.listener = &listener;
     test.peer = local;
 
-    if (galay_coro_spawn(&runtime, server_entry, &test, NULL, &server).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &test, NULL, &client).code != C_IOResultOk ||
-        galay_coro_join(&server, 3000).code != C_IOResultOk ||
-        galay_coro_join(&client, 3000).code != C_IOResultOk) {
+    if (galay_c_coro_spawn(&runtime, server_entry, &test, NULL, &server).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &test, NULL, &client).code != C_IOResultOk ||
+        galay_c_coro_join(&server, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&client, 3000).code != C_IOResultOk) {
         exit_code = 2;
         goto cleanup;
     }
@@ -279,29 +282,27 @@ int main(void)
     }
 
 cleanup:
-    if (server.task != NULL && galay_coro_destroy(&server).code != C_IOResultOk &&
+    if (server.task != NULL && galay_c_coro_destroy(&server).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 4;
     }
-    if (client.task != NULL && galay_coro_destroy(&client).code != C_IOResultOk &&
+    if (client.task != NULL && galay_c_coro_destroy(&client).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 5;
     }
-    if (test.accepted.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&test.accepted) != C_TcpSocketSuccess &&
-        exit_code == 0) {
-        exit_code = 6;
+    if (test.accepted.fd >= 0) {
+        C_IOResult closed = galay_c_tcp_socket_close(&test.accepted);
+        if (closed.code != C_IOResultOk && exit_code == 0) exit_code = 6;
     }
-    if (listener.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess &&
-        exit_code == 0) {
-        exit_code = 7;
+    if (listener.fd >= 0) {
+        C_IOResult closed = galay_c_tcp_socket_close(&listener);
+        if (closed.code != C_IOResultOk && exit_code == 0) exit_code = 7;
     }
     if (runtime.runtime != NULL) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 8;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 9;
         }
     }

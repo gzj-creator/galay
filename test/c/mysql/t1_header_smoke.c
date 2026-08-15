@@ -1,4 +1,4 @@
-#include <galay/c/galay-mysql-c/mysql_c.h>
+#include <galay/c/galay-mysql-c/mysql.h>
 
 int main(void)
 {

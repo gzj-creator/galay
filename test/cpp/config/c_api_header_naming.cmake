@@ -24,50 +24,64 @@ foreach(module IN LISTS public_c_modules)
     if(NOT IS_DIRECTORY "${module_dir}")
         message(FATAL_ERROR "Missing C ABI module directory: ${module_dir}")
     endif()
-    if(EXISTS "${module_dir}/${module}.h")
-        message(FATAL_ERROR "C ABI public header must be renamed to ${module}_c.h: ${module_dir}/${module}.h")
+    if(NOT EXISTS "${module_dir}/${module}.h")
+        message(FATAL_ERROR "Missing canonical C ABI public header: ${module_dir}/${module}.h")
     endif()
-    if(NOT EXISTS "${module_dir}/${module}_c.h")
-        message(FATAL_ERROR "Missing canonical C ABI public header: ${module_dir}/${module}_c.h")
+    file(READ "${module_dir}/${module}.h" module_header_content)
+    if(module_header_content MATCHES "#ifndef[ \t]+[A-Z0-9_]+_C_H[\r\n]")
+        message(FATAL_ERROR
+            "C ABI include guard must match the suffix-free header name: ${module_dir}/${module}.h")
     endif()
-    if(EXISTS "${module_dir}/${module}.cc")
-        message(FATAL_ERROR "C ABI implementation source must be renamed to ${module}_c.cc: ${module_dir}/${module}.cc")
-    endif()
-    if(NOT EXISTS "${module_dir}/${module}_c.cc")
-        message(FATAL_ERROR "Missing canonical C ABI implementation source: ${module_dir}/${module}_c.cc")
+    if(NOT EXISTS "${module_dir}/${module}.c" AND
+       NOT EXISTS "${module_dir}/${module}.cc")
+        message(FATAL_ERROR
+            "Missing canonical C ABI implementation source: ${module_dir}/${module}.c or .cc")
     endif()
 endforeach()
 
-if(NOT EXISTS "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/kernel_c.h")
-    message(FATAL_ERROR "Missing kernel C ABI umbrella header: src/c/galay-kernel-c/kernel_c.h")
+if(NOT EXISTS "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/kernel.h")
+    message(FATAL_ERROR "Missing kernel C ABI umbrella header: src/c/galay-kernel-c/kernel.h")
 endif()
 
 foreach(topology IN ITEMS mpmc mpsc spsc)
-    foreach(capacity IN ITEMS bounded unbounded)
-        set(channel_base
-            "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/concurrency-c/${topology}/${capacity}_channel_c")
-        if(NOT EXISTS "${channel_base}.h")
-            message(FATAL_ERROR
-                "Missing canonical ${topology} ${capacity} C ABI header: ${channel_base}.h")
-        endif()
-        if(NOT EXISTS "${channel_base}.cc")
-            message(FATAL_ERROR
-                "Missing canonical ${topology} ${capacity} C ABI source: ${channel_base}.cc")
-        endif()
-    endforeach()
+    set(channel_header
+        "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/concurrency-c/${topology}/bounded_channel.h")
+    if(NOT EXISTS "${channel_header}")
+        message(FATAL_ERROR
+            "Missing canonical ${topology} bounded C ABI header: ${channel_header}")
+    endif()
 endforeach()
 
-foreach(legacy_channel_file IN ITEMS
-        channel_c.h
-        channel_c.cc
-        bounded_channel_c.h
-        bounded_channel_c.cc
-        mpsc_channel_c.h
-        mpsc_channel_c.cc
-        unsafe_channel_c.h
-        unsafe_channel_c.cc)
-    if(EXISTS "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/concurrency-c/${legacy_channel_file}")
-        message(FATAL_ERROR "Legacy flat C channel API must be removed: ${legacy_channel_file}")
+file(GLOB_RECURSE legacy_c_suffix_files
+    "${GALAY_SOURCE_DIR}/src/c/*_c.c"
+    "${GALAY_SOURCE_DIR}/src/c/*_c.cc"
+    "${GALAY_SOURCE_DIR}/src/c/*_c.h")
+if(legacy_c_suffix_files)
+    message(FATAL_ERROR
+        "C ABI source/header filenames must not retain the _c suffix: ${legacy_c_suffix_files}")
+endif()
+
+file(GLOB_RECURSE kernel_c_sources
+    LIST_DIRECTORIES false
+    "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/*.c"
+    "${GALAY_SOURCE_DIR}/src/c/galay-kernel-c/*.h")
+foreach(kernel_c_source IN LISTS kernel_c_sources)
+    file(READ "${kernel_c_source}" kernel_c_content)
+    if(kernel_c_content MATCHES "(^|[^A-Za-z0-9_])galay_kernel_")
+        message(FATAL_ERROR
+            "Kernel C ABI identifiers must use the galay_c_ prefix: ${kernel_c_source}")
+    endif()
+    if(kernel_c_content MATCHES "(^|[^A-Za-z0-9_])galay_coro_")
+        message(FATAL_ERROR
+            "Kernel coroutine C ABI identifiers must use the galay_c_coro_ prefix: ${kernel_c_source}")
+    endif()
+    if(kernel_c_content MATCHES "#ifndef[ \t]+GALAY_KERNEL_")
+        message(FATAL_ERROR
+            "Kernel C ABI include guards must use the GALAY_C_KERNEL_ prefix: ${kernel_c_source}")
+    endif()
+    if(kernel_c_content MATCHES "@file[ \t]+[A-Za-z0-9_]+_(c|native)\\.h")
+        message(FATAL_ERROR
+            "C ABI @file name must match the suffix-free header: ${kernel_c_source}")
     endif()
 endforeach()
 

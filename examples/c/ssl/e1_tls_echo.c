@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-ssl-c/ssl_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-ssl-c/ssl.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -83,29 +83,29 @@ int main(void)
         return 1;
     }
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+    galay_c_runtime_t runtime = {0};
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         return 2;
     }
 
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
-    if (galay_coro_spawn(&runtime, server_entry, &state, NULL, &server).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &state, NULL, &client).code != C_IOResultOk ||
-        galay_coro_join(&server, 3000).code != C_IOResultOk ||
-        galay_coro_join(&client, 3000).code != C_IOResultOk) {
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
+    if (galay_c_coro_spawn(&runtime, server_entry, &state, NULL, &server).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &state, NULL, &client).code != C_IOResultOk ||
+        galay_c_coro_join(&server, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&client, 3000).code != C_IOResultOk) {
         return 3;
     }
 
     int result = state.failed ? 4 : 0;
-    if (galay_coro_destroy(&server).code != C_IOResultOk ||
-        galay_coro_destroy(&client).code != C_IOResultOk ||
-        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_coro_destroy(&server).code != C_IOResultOk ||
+        galay_c_coro_destroy(&client).code != C_IOResultOk ||
+        galay_c_runtime_stop(&runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess) {
         result = result == 0 ? 5 : result;
     }
     galay_ssl_socket_destroy(state.accepted);

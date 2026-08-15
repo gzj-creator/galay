@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <arpa/inet.h>
 #include <stdatomic.h>
@@ -20,8 +20,8 @@ enum {
 };
 
 typedef struct DirectServer {
-    galay_kernel_tcp_socket_t* listener;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t* listener;
+    galay_c_tcp_socket_t accepted;
     char* buffer;
     size_t payload_bytes;
     atomic_int* stop;
@@ -92,11 +92,11 @@ static int recv_all_fd(int fd, char* data, size_t length)
     return 0;
 }
 
-static int send_all_coro(galay_kernel_tcp_socket_t* socket, const char* data, size_t length)
+static int send_all_coro(galay_c_tcp_socket_t* socket, const char* data, size_t length)
 {
     size_t sent = 0;
     while (sent < length) {
-        C_IOResult result = galay_kernel_tcp_socket_send(socket, data + sent, length - sent, 1000);
+        C_IOResult result = galay_c_tcp_socket_send(socket, data + sent, length - sent, 1000);
         if (result.code != C_IOResultOk || result.bytes == 0) {
             return 1;
         }
@@ -105,11 +105,11 @@ static int send_all_coro(galay_kernel_tcp_socket_t* socket, const char* data, si
     return 0;
 }
 
-static int recv_all_coro(galay_kernel_tcp_socket_t* socket, char* data, size_t length)
+static int recv_all_coro(galay_c_tcp_socket_t* socket, char* data, size_t length)
 {
     size_t received = 0;
     while (received < length) {
-        C_IOResult result = galay_kernel_tcp_socket_recv(socket, data + received, length - received, 1000);
+        C_IOResult result = galay_c_tcp_socket_recv(socket, data + received, length - received, 1000);
         if (result.code == C_IOResultEof && received == 0) {
             return 2;
         }
@@ -124,7 +124,7 @@ static int recv_all_coro(galay_kernel_tcp_socket_t* socket, char* data, size_t l
 static void direct_server_entry(void* arg)
 {
     DirectServer* server = (DirectServer*)arg;
-    C_IOResult accepted = galay_kernel_tcp_socket_accept(server->listener, &server->accepted, NULL, 5000);
+    C_IOResult accepted = galay_c_tcp_socket_accept(server->listener, &server->accepted, NULL, 5000);
     if (accepted.code != C_IOResultOk) {
         ++server->errors;
         atomic_store(&server->ready, 1);
@@ -147,19 +147,19 @@ static void direct_server_entry(void* arg)
         }
     }
 
-    C_IOResult closed = galay_kernel_tcp_socket_close(&server->accepted, 1000);
+    C_IOResult closed = galay_c_tcp_socket_close(&server->accepted);
     if (closed.code != C_IOResultOk) {
         ++server->errors;
     }
 }
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0
         ? 0
         : 1;
@@ -228,13 +228,13 @@ int main(int argc, char** argv)
     }
     fill_payload(payload, config.payload_bytes);
 
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = config.io_schedulers;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
-    galay_coro_task_t server_task = {0};
+    galay_c_coro_task_t server_task = {0};
     int client_fd = -1;
     int exit_code = 0;
     atomic_int stop;
@@ -249,14 +249,14 @@ int main(int argc, char** argv)
         .errors = 0,
     };
 
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, &local) != 0) {
         exit_code = 3;
         goto cleanup;
     }
 
-    if (galay_coro_spawn(&runtime, direct_server_entry, &server, 0, &server_task).code != C_IOResultOk) {
+    if (galay_c_coro_spawn(&runtime, direct_server_entry, &server, 0, &server_task).code != C_IOResultOk) {
         exit_code = 4;
         goto cleanup;
     }
@@ -292,10 +292,10 @@ int main(int argc, char** argv)
         ++errors;
     }
     client_fd = -1;
-    if (galay_coro_join(&server_task, 3000).code != C_IOResultOk) {
+    if (galay_c_coro_join(&server_task, 3000).code != C_IOResultOk) {
         ++errors;
     }
-    if (galay_coro_destroy(&server_task).code != C_IOResultOk) {
+    if (galay_c_coro_destroy(&server_task).code != C_IOResultOk) {
         ++errors;
     }
 
@@ -333,26 +333,26 @@ cleanup:
         }
     }
     if (server_task.task != 0) {
-        if (galay_coro_join(&server_task, 3000).code == C_IOResultOk) {
-            if (galay_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
+        if (galay_c_coro_join(&server_task, 3000).code == C_IOResultOk) {
+            if (galay_c_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
                 exit_code = 8;
             }
         }
     }
-    if (server.accepted.socket != 0) {
-        if (galay_kernel_tcp_socket_destroy(&server.accepted) != C_TcpSocketSuccess &&
+    if (server.accepted.fd >= 0) {
+        if (galay_c_tcp_socket_close(&server.accepted).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 9;
         }
     }
-    if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && exit_code == 0) {
+    if (galay_c_tcp_socket_close(&listener).code != C_IOResultOk && exit_code == 0) {
         exit_code = 10;
     }
     if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 11;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 12;
         }
     }

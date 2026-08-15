@@ -9,7 +9,7 @@
   `galay_http_headers_find`, and `galay_http_headers_remove` manage standalone
   header lists.
 - Request/response ownership: create/recv functions allocate request or response objects; callers release them with `galay_http_request_destroy` or `galay_http_response_destroy`.
-- Direct coroutine I/O: connect, accept, send, recv, close, and `serve_one` must run inside a `galay_coro_spawn` C coroutine on a running kernel runtime.
+- Direct coroutine I/O: connect, accept, send, recv, close, and `serve_one` must run inside a `galay_c_coro_spawn` C coroutine on a running kernel runtime.
 - Route callbacks: `galay_http_server_add_route` registers exact method/path handlers. `serve_one` accepts one connection, reads one request, invokes the handler, sends one response, and closes the session.
 - Streaming smoke surface: `galay_http_session_send_bytes` and `galay_http_session_recv_bytes` expose raw session bytes for split-response, timeout, malformed, and closed-peer tests.
 

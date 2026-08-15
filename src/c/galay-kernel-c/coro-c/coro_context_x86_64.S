@@ -12,16 +12,16 @@
 .text
 .p2align 4
 
-.globl galay_coro_context_switch
-.type galay_coro_context_switch, @function
-galay_coro_context_switch:
+.globl galay_c_coro_context_switch
+.type galay_c_coro_context_switch, @function
+galay_c_coro_context_switch:
     movq %rbx, CTX_RBX(%rdi)
     movq %rbp, CTX_RBP(%rdi)
     movq %r12, CTX_R12(%rdi)
     movq %r13, CTX_R13(%rdi)
     movq %r14, CTX_R14(%rdi)
     movq %r15, CTX_R15(%rdi)
-    leaq .Lgalay_coro_context_resume(%rip), %rax
+    leaq .Lgalay_c_coro_context_resume(%rip), %rax
     movq %rax, CTX_RIP(%rdi)
     movq %rsp, CTX_RSP(%rdi)
 
@@ -35,18 +35,18 @@ galay_coro_context_switch:
     movq CTX_RIP(%rsi), %rax
     jmp *%rax
 
-.Lgalay_coro_context_resume:
+.Lgalay_c_coro_context_resume:
     ret
-.size galay_coro_context_switch, .-galay_coro_context_switch
+.size galay_c_coro_context_switch, .-galay_c_coro_context_switch
 
-.globl galay_coro_context_entry
-.type galay_coro_context_entry, @function
-galay_coro_context_entry:
+.globl galay_c_coro_context_entry
+.type galay_c_coro_context_entry, @function
+galay_c_coro_context_entry:
     movq %r12, %rdi
-    call galay_coro_context_trampoline
-.Lgalay_coro_context_entry_spin:
-    jmp .Lgalay_coro_context_entry_spin
-.size galay_coro_context_entry, .-galay_coro_context_entry
+    call galay_c_coro_context_trampoline
+.Lgalay_c_coro_context_entry_spin:
+    jmp .Lgalay_c_coro_context_entry_spin
+.size galay_c_coro_context_entry, .-galay_c_coro_context_entry
 
 .section .note.GNU-stack,"",@progbits
 

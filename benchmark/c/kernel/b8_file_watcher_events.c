@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_file_watcher_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/file_watcher.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <errno.h>
 #include <fcntl.h>
@@ -16,15 +16,15 @@ enum {
 };
 
 typedef struct WatchState {
-    galay_kernel_file_watcher_t* watcher;
-    galay_kernel_file_watcher_watch_result_t watch_result;
+    galay_c_file_watcher_t* watcher;
+    galay_c_file_event_t event;
     C_IOResult result;
 } WatchState;
 
 static void watch_entry(void* arg)
 {
     WatchState* state = (WatchState*)arg;
-    state->result = galay_kernel_file_watcher_watch(state->watcher, &state->watch_result, 2000);
+    state->result = galay_c_file_watcher_wait(state->watcher, &state->event, 2000);
 }
 
 static int64_t now_us(void)
@@ -51,11 +51,11 @@ static int append_to_file(const char* path)
     return failed;
 }
 
-static int wait_task_or_trigger(const char* path, galay_coro_task_t* task)
+static int wait_task_or_trigger(const char* path, galay_c_coro_task_t* task)
 {
     struct timespec pause = {0, 1000000};
     for (int i = 0; i < 2000; ++i) {
-        C_IOResult poll = galay_coro_join(task, 0);
+        C_IOResult poll = galay_c_coro_join(task, 0);
         if (poll.code == C_IOResultOk) {
             return 0;
         }
@@ -99,12 +99,12 @@ int main(int argc, char** argv)
 {
     const int iterations = parse_iterations(argc, argv);
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_file_watcher_t watcher = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_file_watcher_t watcher = {.fd = -1};
     char template_path[] = "/tmp/galay-c-file-watch-bench-XXXXXX";
     int fd = mkstemp(template_path);
     int wd = -1;
@@ -119,30 +119,35 @@ int main(int argc, char** argv)
     }
     fd = -1;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_file_watcher_create(&watcher) != C_FileWatcherSuccess ||
-        galay_kernel_file_watcher_add_watch(&watcher, template_path,
-            (C_FileWatchEvent)(C_FileWatchEventModify | C_FileWatchEventCloseWrite), &wd) != C_FileWatcherSuccess) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
+        galay_c_file_watcher_create(&watcher).code != C_IOResultOk) {
         exit_code = 3;
         goto cleanup;
     }
+    const C_IOResult added =
+        galay_c_file_watcher_add_watch(&watcher, template_path, GALAY_C_WATCH_MODIFY);
+    if (added.code != C_IOResultOk) {
+        exit_code = 3;
+        goto cleanup;
+    }
+    wd = (int)added.value;
 
     const int64_t start = now_us();
     for (int i = 0; i < iterations; ++i) {
         WatchState state = {
             .watcher = &watcher,
-            .watch_result = {0},
+            .event = {0},
             .result = {C_IOResultInvalid, 0, 0, 0, NULL},
         };
-        galay_coro_task_t task = {0};
-        C_IOResult spawn_result = galay_coro_spawn(&runtime, watch_entry, &state, NULL, &task);
+        galay_c_coro_task_t task = {0};
+        C_IOResult spawn_result = galay_c_coro_spawn(&runtime, watch_entry, &state, NULL, &task);
         if (spawn_result.code != C_IOResultOk ||
             wait_task_or_trigger(template_path, &task) != 0 ||
             state.result.code != C_IOResultOk ||
-            state.watch_result.code != C_FileWatcherSuccess) {
+            (state.event.mask & GALAY_C_WATCH_MODIFY) == 0) {
             if (task.task != NULL &&
-                galay_coro_destroy(&task).code != C_IOResultOk &&
+                galay_c_coro_destroy(&task).code != C_IOResultOk &&
                 exit_code == 0) {
                 exit_code = 4;
             }
@@ -151,7 +156,7 @@ int main(int argc, char** argv)
             }
             goto cleanup_with_elapsed;
         }
-        C_IOResult destroy_result = galay_coro_destroy(&task);
+        C_IOResult destroy_result = galay_c_coro_destroy(&task);
         if (destroy_result.code != C_IOResultOk) {
             exit_code = 6;
             goto cleanup_with_elapsed;
@@ -175,23 +180,23 @@ cleanup_with_elapsed:
     }
 
 cleanup:
-    if (watcher.watcher != NULL) {
+    if (watcher.fd >= 0) {
         if (wd >= 0 &&
-            galay_kernel_file_watcher_remove_watch(&watcher, wd) != C_FileWatcherSuccess &&
+            galay_c_file_watcher_remove_watch(&watcher, wd).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 8;
         }
-        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess && exit_code == 0) {
+        if (galay_c_file_watcher_close(&watcher).code != C_IOResultOk && exit_code == 0) {
             exit_code = 9;
         }
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 10;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 11;
     }

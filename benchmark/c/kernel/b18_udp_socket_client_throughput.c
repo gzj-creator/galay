@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_udp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/udp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -34,8 +34,8 @@ typedef struct ClientState ClientState;
 
 typedef struct ClientSession {
     ClientState* state;
-    galay_kernel_udp_socket_t socket;
-    galay_coro_task_t task;
+    galay_c_udp_socket_t socket;
+    galay_c_coro_task_t task;
     char* message;
     char* recv_buffer;
     int sent_messages;
@@ -48,7 +48,7 @@ typedef struct ClientSession {
 } ClientSession;
 
 struct ClientState {
-    galay_kernel_runtime_t runtime;
+    galay_c_runtime_t runtime;
     ClientConfig config;
     C_Host server_host;
     atomic_int stop;
@@ -74,7 +74,7 @@ static void session_entry(void* arg)
 {
     ClientSession* session = (ClientSession*)arg;
     while (!should_stop_session(session)) {
-        C_IOResult sent = galay_kernel_udp_socket_sendto(
+        C_IOResult sent = galay_c_udp_socket_sendto(
             &session->socket,
             session->message,
             session->state->config.message_bytes,
@@ -91,7 +91,7 @@ static void session_entry(void* arg)
         session->bytes_sent += sent.bytes;
 
         C_Host from = {0};
-        C_IOResult received = galay_kernel_udp_socket_recvfrom(
+        C_IOResult received = galay_c_udp_socket_recvfrom(
             &session->socket,
             session->recv_buffer,
             session->state->config.message_bytes,
@@ -113,7 +113,7 @@ static void session_entry(void* arg)
         session->bytes_received += received.bytes;
     }
 
-    C_IOResult closed = galay_kernel_udp_socket_close(&session->socket, 1000);
+    C_IOResult closed = galay_c_udp_socket_close(&session->socket);
     if (closed.code != C_IOResultOk) {
         ++session->errors;
     }
@@ -203,13 +203,13 @@ int main(int argc, char** argv)
     }
     state.server_host.port = state.config.port;
 
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = state.config.io_schedulers;
     runtime_config.compute_scheduler_count = 0;
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&runtime_config, &state.runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&state.runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_create(&runtime_config, &state.runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&state.runtime) != C_RuntimeSuccess) {
         return 2;
     }
 
@@ -229,8 +229,8 @@ int main(int argc, char** argv)
         sessions[i].message = (char*)malloc(state.config.message_bytes);
         sessions[i].recv_buffer = (char*)malloc(state.config.message_bytes);
         if (sessions[i].message == NULL || sessions[i].recv_buffer == NULL ||
-            galay_kernel_udp_socket_create(&sessions[i].socket, C_IPTypeIPV4) != C_UdpSocketSuccess ||
-            galay_kernel_udp_socket_bind(&sessions[i].socket, &bind_host) != C_UdpSocketSuccess) {
+            galay_c_udp_socket_create(&sessions[i].socket, C_IPTypeIPV4).code != C_IOResultOk ||
+            galay_c_udp_socket_bind(&sessions[i].socket, &bind_host).code != C_IOResultOk) {
             ++sessions[i].errors;
             atomic_store(&sessions[i].done, 1);
             int previous_done_count = atomic_fetch_add(&state.done_count, 1);
@@ -260,7 +260,7 @@ int main(int argc, char** argv)
     const int64_t start_us = now_us();
     for (int i = 0; i < state.config.clients; ++i) {
         if (!atomic_load(&sessions[i].done)) {
-            C_IOResult spawn_result = galay_coro_spawn(
+            C_IOResult spawn_result = galay_c_coro_spawn(
                 &state.runtime,
                 session_entry,
                 &sessions[i],
@@ -306,8 +306,8 @@ int main(int argc, char** argv)
             }
         }
         if (sessions[i].task.task != NULL) {
-            C_IOResult join_result = galay_coro_join(&sessions[i].task, 3000);
-            C_IOResult destroy_result = galay_coro_destroy(&sessions[i].task);
+            C_IOResult join_result = galay_c_coro_join(&sessions[i].task, 3000);
+            C_IOResult destroy_result = galay_c_coro_destroy(&sessions[i].task);
             if ((join_result.code != C_IOResultOk || destroy_result.code != C_IOResultOk) && exit_code == 0) {
                 exit_code = 8;
             }
@@ -323,8 +323,8 @@ int main(int argc, char** argv)
         total_bytes_sent += sessions[i].bytes_sent;
         total_bytes_received += sessions[i].bytes_received;
         total_errors += sessions[i].errors;
-        if (sessions[i].socket.socket != NULL &&
-            galay_kernel_udp_socket_destroy(&sessions[i].socket) != C_UdpSocketSuccess &&
+        if (sessions[i].socket.fd >= 0 &&
+            galay_c_udp_socket_close(&sessions[i].socket).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 9;
         }
@@ -364,15 +364,15 @@ int main(int argc, char** argv)
 cleanup_sessions:
     for (int i = 0; i < state.config.clients; ++i) {
         if (sessions[i].task.task != NULL) {
-            if (galay_coro_join(&sessions[i].task, 0).code == C_IOResultOk) {
-                if (galay_coro_destroy(&sessions[i].task).code != C_IOResultOk && exit_code == 0) {
+            if (galay_c_coro_join(&sessions[i].task, 0).code == C_IOResultOk) {
+                if (galay_c_coro_destroy(&sessions[i].task).code != C_IOResultOk && exit_code == 0) {
                     exit_code = 12;
                 }
                 sessions[i].task.task = NULL;
             }
         }
-        if (sessions[i].socket.socket != NULL &&
-            galay_kernel_udp_socket_destroy(&sessions[i].socket) != C_UdpSocketSuccess &&
+        if (sessions[i].socket.fd >= 0 &&
+            galay_c_udp_socket_close(&sessions[i].socket).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 13;
         }
@@ -385,12 +385,12 @@ cleanup_sessions:
 
 cleanup_runtime:
     if (state.runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&state.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&state.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 14;
     }
     if (state.runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&state.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&state.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 15;
     }

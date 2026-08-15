@@ -10,7 +10,7 @@
 
 ## Coroutine I/O
 
-`galay_ssl_socket_accept`, `connect`, `handshake`, `recv`, `send`, `shutdown`, and `close` return `C_IOResult` and must be called from a C coroutine spawned with `galay_coro_spawn`. These functions drive TLS through the existing C TCP coroutine ABI and do not expose C++ coroutine types.
+`galay_ssl_socket_accept`, `connect`, `handshake`, `recv`, `send`, `shutdown`, and `close` return `C_IOResult` and must be called from a C coroutine spawned with `galay_c_coro_spawn`. These functions drive TLS through the existing C TCP coroutine ABI and do not expose C++ coroutine types.
 
 `recv` writes plaintext into caller-owned memory and reports bytes read in `C_IOResult.bytes`. `send` borrows the caller buffer for the duration of the call and reports plaintext bytes accepted in `C_IOResult.bytes`.
 

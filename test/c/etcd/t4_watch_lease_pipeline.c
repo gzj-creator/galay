@@ -1,7 +1,7 @@
-#include <galay/c/galay-etcd-c/etcd_c.h>
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-etcd-c/etcd.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +15,9 @@
     } while (0)
 
 typedef struct EtcdLeasePipelineState {
-    galay_kernel_tcp_socket_t* listener;
+    galay_c_tcp_socket_t* listener;
     C_Host peer;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t accepted;
     C_IOResult accept_result;
     C_IOResult recv_results[6];
     C_IOResult send_results[6];
@@ -33,13 +33,13 @@ typedef struct EtcdLeasePipelineState {
     char request[1024];
 } EtcdLeasePipelineState;
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0
         ? 0
         : 1;
@@ -60,7 +60,7 @@ static int contains_bytes(const char* text, size_t text_len, const char* needle)
     return 0;
 }
 
-static C_IOResult send_json(galay_kernel_tcp_socket_t* socket, const char* body)
+static C_IOResult send_json(galay_c_tcp_socket_t* socket, const char* body)
 {
     char response[512];
     int len = snprintf(response,
@@ -72,7 +72,7 @@ static C_IOResult send_json(galay_kernel_tcp_socket_t* socket, const char* body)
     if (len <= 0 || (size_t)len >= sizeof(response)) {
         return (C_IOResult){C_IOResultError, 0, 0, 0, NULL};
     }
-    return galay_kernel_tcp_socket_send(socket, response, (size_t)len, 1000);
+    return galay_c_tcp_socket_send(socket, response, (size_t)len, 1000);
 }
 
 static void lease_pipeline_server_entry(void* arg)
@@ -97,14 +97,14 @@ static void lease_pipeline_server_entry(void* arg)
     size_t i = 0;
 
     state->accept_result =
-        galay_kernel_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
+        galay_c_tcp_socket_accept(state->listener, &state->accepted, NULL, 1000);
     if (state->accept_result.code != C_IOResultOk) {
         return;
     }
     for (i = 0; i < 6; ++i) {
         memset(state->request, 0, sizeof(state->request));
         state->recv_results[i] =
-            galay_kernel_tcp_socket_recv(&state->accepted,
+            galay_c_tcp_socket_recv(&state->accepted,
                                          state->request,
                                          sizeof(state->request) - 1,
                                          1000);
@@ -181,33 +181,33 @@ cleanup:
 
 static int run_lease_pipeline_loopback(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
     EtcdLeasePipelineState state = {0};
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
     int result = 0;
     size_t i = 0;
 
-    REQUIRE_TRUE(galay_kernel_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
-    REQUIRE_TRUE(galay_kernel_runtime_start(&runtime) == C_RuntimeSuccess, 2);
+    REQUIRE_TRUE(galay_c_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 1);
+    REQUIRE_TRUE(galay_c_runtime_start(&runtime) == C_RuntimeSuccess, 2);
     REQUIRE_TRUE(create_listener(&listener, &local) == 0, 3);
     state.listener = &listener;
     state.peer = local;
 
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, lease_pipeline_server_entry, &state, NULL, &server).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, lease_pipeline_server_entry, &state, NULL, &server).code ==
                      C_IOResultOk,
                  4);
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, lease_pipeline_client_entry, &state, NULL, &client).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, lease_pipeline_client_entry, &state, NULL, &client).code ==
                      C_IOResultOk,
                  5);
-    REQUIRE_TRUE(galay_coro_join(&client, 3000).code == C_IOResultOk, 6);
-    REQUIRE_TRUE(galay_coro_join(&server, 3000).code == C_IOResultOk, 7);
+    REQUIRE_TRUE(galay_c_coro_join(&client, 3000).code == C_IOResultOk, 6);
+    REQUIRE_TRUE(galay_c_coro_join(&server, 3000).code == C_IOResultOk, 7);
 
     for (i = 0; i < 6; ++i) {
         if (state.recv_results[i].code != C_IOResultOk ||
@@ -228,24 +228,24 @@ static int run_lease_pipeline_loopback(void)
         result = 9;
     }
 
-    if (server.task != NULL && galay_coro_destroy(&server).code != C_IOResultOk && result == 0) {
+    if (server.task != NULL && galay_c_coro_destroy(&server).code != C_IOResultOk && result == 0) {
         result = 10;
     }
-    if (client.task != NULL && galay_coro_destroy(&client).code != C_IOResultOk && result == 0) {
+    if (client.task != NULL && galay_c_coro_destroy(&client).code != C_IOResultOk && result == 0) {
         result = 11;
     }
-    if (state.accepted.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&state.accepted) != C_TcpSocketSuccess &&
+    if (state.accepted.fd >= 0 &&
+        galay_c_tcp_socket_close(&state.accepted).code != C_IOResultOk &&
         result == 0) {
         result = 12;
     }
-    if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && result == 0) {
+    if (galay_c_tcp_socket_close(&listener).code != C_IOResultOk && result == 0) {
         result = 13;
     }
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 14;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 15;
     }
     return result;

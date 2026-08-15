@@ -1,6 +1,6 @@
 # HTTP/2 C API
 
-`galay/c/galay-http2-c/http2_c.h` exposes a C ABI for HTTP/2 helper and h2c runtime use.
+`galay/c/galay-http2-c/http2.h` exposes a C ABI for HTTP/2 helper and h2c runtime use.
 
 ## Scope
 
@@ -17,7 +17,7 @@
 
 ## Coroutine Contract
 
-The following APIs may suspend and must be called inside a `galay_coro_spawn` C coroutine:
+The following APIs may suspend and must be called inside a `galay_c_coro_spawn` C coroutine:
 
 - `galay_http2_client_connect`
 - `galay_http2_client_open_stream`

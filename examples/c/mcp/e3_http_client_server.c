@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-mcp-c/mcp_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-mcp-c/mcp.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -54,10 +54,10 @@ static void client_entry(void* arg)
 
 int main(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     galay_mcp_server_t* server = NULL;
     galay_mcp_client_config_t* config = NULL;
     galay_mcp_client_t* client = NULL;
@@ -70,8 +70,8 @@ int main(void)
 
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_mcp_http_server_create("127.0.0.1", 0, &server) != GALAY_OK ||
         galay_mcp_server_add_tool(server,
                                   "example",
@@ -97,10 +97,10 @@ int main(void)
 
     state.server = server;
     state.client = client;
-    if (galay_coro_spawn(&runtime, server_entry, &state, NULL, &server_task).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &state, NULL, &client_task).code != C_IOResultOk ||
-        galay_coro_join(&client_task, 3000).code != C_IOResultOk ||
-        galay_coro_join(&server_task, 3000).code != C_IOResultOk ||
+    if (galay_c_coro_spawn(&runtime, server_entry, &state, NULL, &server_task).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &state, NULL, &client_task).code != C_IOResultOk ||
+        galay_c_coro_join(&client_task, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&server_task, 3000).code != C_IOResultOk ||
         state.client_result.code != C_IOResultOk ||
         calls != 1) {
         exit_code = 1;
@@ -108,10 +108,10 @@ int main(void)
 
 cleanup:
     galay_mcp_message_destroy(state.call_result);
-    if (server_task.task != NULL && galay_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
+    if (server_task.task != NULL && galay_c_coro_destroy(&server_task).code != C_IOResultOk && exit_code == 0) {
         exit_code = 1;
     }
-    if (client_task.task != NULL && galay_coro_destroy(&client_task).code != C_IOResultOk && exit_code == 0) {
+    if (client_task.task != NULL && galay_c_coro_destroy(&client_task).code != C_IOResultOk && exit_code == 0) {
         exit_code = 1;
     }
     if (server != NULL && galay_mcp_http_server_stop(server).code != C_IOResultOk && exit_code == 0) {
@@ -120,10 +120,10 @@ cleanup:
     galay_mcp_client_destroy(client);
     galay_mcp_client_config_destroy(config);
     galay_mcp_server_destroy(server);
-    if (runtime.runtime != NULL && galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+    if (runtime.runtime != NULL && galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
         exit_code = 1;
     }
-    if (runtime.runtime != NULL && galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+    if (runtime.runtime != NULL && galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
         exit_code = 1;
     }
     return exit_code;

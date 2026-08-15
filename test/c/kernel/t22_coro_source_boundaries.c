@@ -14,92 +14,19 @@ enum { kMaxPath = 4096 };
 static int join_path(char* out, size_t out_size, const char* left, const char* right)
 {
     const int written = snprintf(out, out_size, "%s/%s", left, right);
-    if (written <= 0 || (size_t)written >= out_size) {
-        fprintf(stderr, "[T22] path too long: %s/%s\n", left, right);
-        return 0;
-    }
-    return 1;
+    return written > 0 && (size_t)written < out_size;
 }
 
-static int read_file(const char* path, char** out_data, size_t* out_len)
+static int is_directory(const char* path)
 {
-    FILE* file = fopen(path, "rb");
-    if (file == NULL) {
-        fprintf(stderr, "[T22] failed to open %s: %s\n", path, strerror(errno));
-        return 0;
-    }
-
-    if (fseek(file, 0, SEEK_END) != 0) {
-        fprintf(stderr, "[T22] failed to seek %s\n", path);
-        fclose(file);
-        return 0;
-    }
-
-    const long size = ftell(file);
-    if (size < 0) {
-        fprintf(stderr, "[T22] failed to size %s\n", path);
-        fclose(file);
-        return 0;
-    }
-
-    if (fseek(file, 0, SEEK_SET) != 0) {
-        fprintf(stderr, "[T22] failed to rewind %s\n", path);
-        fclose(file);
-        return 0;
-    }
-
-    char* data = (char*)malloc((size_t)size + 1);
-    if (data == NULL) {
-        fprintf(stderr, "[T22] failed to allocate %ld bytes for %s\n", size, path);
-        fclose(file);
-        return 0;
-    }
-
-    const size_t wanted = (size_t)size;
-    const size_t actual = fread(data, 1, wanted, file);
-    fclose(file);
-    if (actual != wanted) {
-        fprintf(stderr, "[T22] failed to read %s\n", path);
-        free(data);
-        return 0;
-    }
-
-    data[wanted] = '\0';
-    *out_data = data;
-    *out_len = wanted;
-    return 1;
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISDIR(st.st_mode);
 }
 
-static int contains_text(const char* text, size_t text_len, const char* needle)
+static int is_regular_file(const char* path)
 {
-    const size_t needle_len = strlen(needle);
-    if (needle_len == 0 || text_len < needle_len) {
-        return 0;
-    }
-
-    for (size_t i = 0; i + needle_len <= text_len; ++i) {
-        if (memcmp(text + i, needle, needle_len) == 0) {
-            return 1;
-        }
-    }
-    return 0;
-}
-
-static size_t count_text(const char* text, size_t text_len, const char* needle)
-{
-    const size_t needle_len = strlen(needle);
-    if (needle_len == 0 || text_len < needle_len) {
-        return 0;
-    }
-
-    size_t count = 0;
-    for (size_t i = 0; i + needle_len <= text_len; ++i) {
-        if (memcmp(text + i, needle, needle_len) == 0) {
-            ++count;
-            i += needle_len - 1;
-        }
-    }
-    return count;
+    struct stat st;
+    return stat(path, &st) == 0 && S_ISREG(st.st_mode);
 }
 
 static int has_suffix(const char* path, const char* suffix)
@@ -109,171 +36,146 @@ static int has_suffix(const char* path, const char* suffix)
     return path_len >= suffix_len && strcmp(path + path_len - suffix_len, suffix) == 0;
 }
 
-static int is_source_file(const char* path)
+static int is_checked_file(const char* path)
 {
-    return has_suffix(path, ".c") ||
-           has_suffix(path, ".cc") ||
-           has_suffix(path, ".cpp") ||
-           has_suffix(path, ".cxx") ||
-           has_suffix(path, ".h") ||
-           has_suffix(path, ".hh") ||
-           has_suffix(path, ".hpp") ||
-           has_suffix(path, ".hxx") ||
-           has_suffix(path, ".inl");
+    return has_suffix(path, ".c") || has_suffix(path, ".cc") ||
+           has_suffix(path, ".cpp") || has_suffix(path, ".cxx") ||
+           has_suffix(path, ".h") || has_suffix(path, ".hh") ||
+           has_suffix(path, ".hpp") || has_suffix(path, "CMakeLists.txt");
 }
 
-static const char* basename_ptr(const char* path)
+static int read_file(const char* path, char** out_data, size_t* out_size)
 {
-    const char* slash = strrchr(path, '/');
-    return slash == NULL ? path : slash + 1;
-}
-
-static int is_coro_boundary_path(const char* relative_path)
-{
-    return strstr(relative_path, "/coro-c/") != NULL ||
-           strstr(basename_ptr(relative_path), "coro") != NULL;
-}
-
-static int is_direct_c_async_boundary_path(const char* relative_path)
-{
-    return strstr(relative_path, "src/c/galay-kernel-c/async-c/") == relative_path ||
-           strstr(relative_path, "src/c/galay-kernel-c/concurrency-c/") == relative_path;
-}
-
-static int is_directory(const char* path)
-{
-    struct stat st;
-    if (stat(path, &st) != 0) {
+    FILE* file = fopen(path, "rb");
+    if (file == NULL) {
         return 0;
     }
-    return S_ISDIR(st.st_mode);
-}
-
-static int is_regular_file(const char* path)
-{
-    struct stat st;
-    if (stat(path, &st) != 0) {
+    if (fseek(file, 0, SEEK_END) != 0) {
+        fclose(file);
         return 0;
     }
-    return S_ISREG(st.st_mode);
+    const long size = ftell(file);
+    if (size < 0 || fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file);
+        return 0;
+    }
+    char* data = malloc((size_t)size + 1U);
+    if (data == NULL) {
+        fclose(file);
+        return 0;
+    }
+    const size_t actual = fread(data, 1, (size_t)size, file);
+    fclose(file);
+    if (actual != (size_t)size) {
+        free(data);
+        return 0;
+    }
+    data[size] = '\0';
+    *out_data = data;
+    *out_size = (size_t)size;
+    return 1;
 }
 
-static int scan_coro_file(const char* full_path, const char* relative_path)
+static int contains_text(const char* data, size_t size, const char* needle)
+{
+    const size_t needle_size = strlen(needle);
+    if (needle_size == 0 || size < needle_size) {
+        return 0;
+    }
+    for (size_t index = 0; index + needle_size <= size; ++index) {
+        if (memcmp(data + index, needle, needle_size) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int check_source_file(const char* full_path, const char* relative_path)
 {
     char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
+    size_t size = 0;
+    if (!read_file(full_path, &data, &size)) {
+        fprintf(stderr, "[T22] cannot read %s: %s\n", relative_path, strerror(errno));
         return 1;
     }
 
-    int failed = 0;
-    if (contains_text(data, len, "runtime->spawn(")) {
-        fprintf(stderr, "[T22] %s must not bridge C coroutines through runtime->spawn(\n", relative_path);
-        failed = 1;
-    }
-    if (contains_text(data, len, "Task<void> c_api_")) {
-        fprintf(stderr, "[T22] %s must not implement C coroutine APIs as Task<void> c_api_ wrappers\n", relative_path);
-        failed = 1;
-    }
-    if (contains_text(data, len, "try {") ||
-        contains_text(data, len, "catch (") ||
-        contains_text(data, len, "catch (...)")) {
-        fprintf(stderr,
-                "[T22] %s must propagate C coroutine errors through result values, not try/catch\n",
-                relative_path);
-        failed = 1;
-    }
-    if (contains_text(data, len, "std::make_shared")) {
-        fprintf(stderr,
-                "[T22] %s must use explicit nothrow allocation and C_IOResult errors, not std::make_shared\n",
-                relative_path);
-        failed = 1;
-    }
-    const char* forbidden_mutex_tokens[] = {
-        "#include <mutex>",
-        "std::mutex",
-        "std::lock_guard",
-        "std::unique_lock",
-        "std::scoped_lock",
-        "std::condition_variable",
+    static const char* const forbidden_source_tokens[] = {
+        "namespace ",
+        "namespace\n",
+        "galay::",
+        "src/cpp/",
+        "galay/cpp/",
+        "extern \"C++\"",
     };
-    for (size_t i = 0; i < sizeof(forbidden_mutex_tokens) / sizeof(forbidden_mutex_tokens[0]); ++i) {
-        if (contains_text(data, len, forbidden_mutex_tokens[i])) {
-            fprintf(stderr,
-                    "[T22] %s must not use blocking synchronization token %s\n",
-                    relative_path,
-                    forbidden_mutex_tokens[i]);
-            failed = 1;
+    static const char* const forbidden_cpp_targets[] = {
+        "galay::utils",
+        "galay::kernel",
+        "galay::ssl",
+        "galay::http",
+        "galay::ws",
+        "galay::http2",
+        "galay::redis",
+        "galay::etcd",
+        "galay::mysql",
+        "galay::postgres",
+        "galay::mongo",
+        "galay::rpc",
+        "galay::mcp",
+        "galay::tracing",
+    };
+
+    int failed = 0;
+    if (!has_suffix(relative_path, "CMakeLists.txt")) {
+        for (size_t index = 0;
+             index < sizeof(forbidden_source_tokens) / sizeof(forbidden_source_tokens[0]);
+             ++index) {
+            if (contains_text(data, size, forbidden_source_tokens[index])) {
+                fprintf(stderr, "[T22] C module contains C++ dependency token %s: %s\n",
+                        forbidden_source_tokens[index], relative_path);
+                failed = 1;
+            }
         }
     }
-
+    if (has_suffix(relative_path, "CMakeLists.txt")) {
+        for (size_t index = 0;
+             index < sizeof(forbidden_cpp_targets) / sizeof(forbidden_cpp_targets[0]);
+             ++index) {
+            if (contains_text(data, size, forbidden_cpp_targets[index])) {
+                fprintf(stderr, "[T22] C target depends on C++ target %s: %s\n",
+                        forbidden_cpp_targets[index], relative_path);
+                failed = 1;
+            }
+        }
+    }
     free(data);
     return failed;
 }
 
-static int scan_direct_c_async_file(const char* full_path, const char* relative_path)
-{
-    char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
-        return 1;
-    }
-
-    int failed = 0;
-    const char* forbidden[] = {
-        "runtime->spawn(",
-        "cpp_runtime->spawn(",
-        "Task<void> c_api_",
-        "_callback_t",
-        "RuntimeSpawnFailed",
-        "RuntimeNotRunning",
-        "try {",
-        "catch (",
-        "catch (...)",
-    };
-    for (size_t i = 0; i < sizeof(forbidden) / sizeof(forbidden[0]); ++i) {
-        if (contains_text(data, len, forbidden[i])) {
-            fprintf(stderr,
-                    "[T22] %s must not expose legacy callback/spawn bridge token %s\n",
-                    relative_path,
-                    forbidden[i]);
-            failed = 1;
-        }
-    }
-
-    free(data);
-    return failed;
-}
-
-static int scan_tree(const char* relative_dir, int* scanned_files, int direct_async_scan)
+static int scan_tree(const char* relative_dir, int* scanned_files)
 {
     char full_dir[kMaxPath];
     if (!join_path(full_dir, sizeof(full_dir), GALAY_SOURCE_DIR, relative_dir)) {
         return 1;
     }
-
-    DIR* dir = opendir(full_dir);
-    if (dir == NULL) {
-        fprintf(stderr, "[T22] failed to open directory %s: %s\n", relative_dir, strerror(errno));
+    DIR* directory = opendir(full_dir);
+    if (directory == NULL) {
+        fprintf(stderr, "[T22] cannot open %s: %s\n", relative_dir, strerror(errno));
         return 1;
     }
 
     int failed = 0;
     for (;;) {
         errno = 0;
-        struct dirent* entry = readdir(dir);
+        const struct dirent* entry = readdir(directory);
         if (entry == NULL) {
             if (errno != 0) {
-                fprintf(stderr, "[T22] failed to read directory %s: %s\n", relative_dir, strerror(errno));
                 failed = 1;
             }
             break;
         }
-
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
         }
-
         char child_relative[kMaxPath];
         char child_full[kMaxPath];
         if (!join_path(child_relative, sizeof(child_relative), relative_dir, entry->d_name) ||
@@ -281,396 +183,24 @@ static int scan_tree(const char* relative_dir, int* scanned_files, int direct_as
             failed = 1;
             continue;
         }
-
         if (is_directory(child_full)) {
-            failed |= scan_tree(child_relative, scanned_files, direct_async_scan);
-            continue;
-        }
-
-        if (!is_regular_file(child_full) || !is_source_file(child_relative)) {
-            continue;
-        }
-
-        if (direct_async_scan) {
-            if (!is_direct_c_async_boundary_path(child_relative)) {
-                continue;
-            }
+            failed |= scan_tree(child_relative, scanned_files);
+        } else if (is_regular_file(child_full) && is_checked_file(child_relative)) {
             ++(*scanned_files);
-            failed |= scan_direct_c_async_file(child_full, child_relative);
-            continue;
-        }
-
-        if (!is_coro_boundary_path(child_relative)) {
-            continue;
-        }
-
-        ++(*scanned_files);
-        failed |= scan_coro_file(child_full, child_relative);
-    }
-
-    closedir(dir);
-    return failed;
-}
-
-static int require_direct_tcp_c_api_uses_core_bridge(void)
-{
-    const char* relative_path = "src/c/galay-kernel-c/async-c/async_tcp_c.cc";
-    char full_path[kMaxPath];
-    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
-        return 1;
-    }
-
-    char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
-        return 1;
-    }
-
-    int failed = 0;
-    const char* required[] = {
-        "galay_core_coro_tcp_accept",
-        "galay_core_coro_tcp_connect",
-        "galay_core_coro_tcp_recv",
-        "galay_core_coro_tcp_send",
-        "galay_core_coro_tcp_close",
-    };
-    for (size_t i = 0; i < sizeof(required) / sizeof(required[0]); ++i) {
-        if (!contains_text(data, len, required[i])) {
-            fprintf(stderr, "[T22] direct TCP C API must call core bridge %s\n", required[i]);
-            failed = 1;
+            failed |= check_source_file(child_full, child_relative);
         }
     }
-
-    const char* forbidden[] = {
-        "AcceptAwaitable",
-        "ConnectAwaitable",
-        "RecvAwaitable",
-        "SendAwaitable",
-        "IOController",
-        "galay::kernel::IOScheduler",
-        "registerIOSchedulerEvent",
-        "registerIOSchedulerClose",
-        "m_awaitable",
-        "m_sequence_owner",
-        "m_owner_scheduler",
-        "m_accept_result_assigned",
-        "m_recv_result_assigned",
-    };
-    for (size_t i = 0; i < sizeof(forbidden) / sizeof(forbidden[0]); ++i) {
-        if (contains_text(data, len, forbidden[i])) {
-            fprintf(stderr,
-                    "[T22] direct TCP C API must not directly depend on C++ private symbol %s; use the core C bridge instead\n",
-                    forbidden[i]);
-            failed = 1;
-        }
-    }
-
-    free(data);
-    return failed;
-}
-
-static int require_c_bridge_module_layout(void)
-{
-    const char* bridge_files[] = {
-        "c_coro_aio_file_bridge.cc",
-        "c_coro_async_file_bridge.cc",
-        "c_coro_async_file_bridge.h",
-        "c_coro_async_mutex_bridge.cc",
-        "c_coro_async_mutex_bridge.h",
-        "c_coro_async_waiter_bridge.cc",
-        "c_coro_async_waiter_bridge.h",
-        "c_coro_file_watcher_bridge.cc",
-        "c_coro_file_watcher_bridge.h",
-        "c_coro_operation_base.h",
-        "c_coro_tcp_bridge.cc",
-        "c_coro_tcp_bridge.h",
-        "c_coro_udp_bridge.cc",
-        "c_coro_udp_bridge.h",
-    };
-
-    int failed = 0;
-    for (size_t i = 0; i < sizeof(bridge_files) / sizeof(bridge_files[0]); ++i) {
-        char new_path[kMaxPath];
-        char old_path[kMaxPath];
-        char new_relative[kMaxPath];
-        char old_relative[kMaxPath];
-
-        if (!join_path(new_relative,
-                       sizeof(new_relative),
-                       "src/c/galay-bridge-c/coro-c",
-                       bridge_files[i]) ||
-            !join_path(old_relative,
-                       sizeof(old_relative),
-                       "src/cpp/galay-kernel/core",
-                       bridge_files[i]) ||
-            !join_path(new_path, sizeof(new_path), GALAY_SOURCE_DIR, new_relative) ||
-            !join_path(old_path, sizeof(old_path), GALAY_SOURCE_DIR, old_relative)) {
-            failed = 1;
-            continue;
-        }
-
-        if (!is_regular_file(new_path)) {
-            fprintf(stderr, "[T22] C/C++ bridge file must live in bridge module: %s\n", new_relative);
-            failed = 1;
-        }
-        if (is_regular_file(old_path)) {
-            fprintf(stderr, "[T22] C/C++ bridge file must not remain in C++ kernel core: %s\n", old_relative);
-            failed = 1;
-        }
-    }
-
-    return failed;
-}
-
-static int require_c_bridge_without_blocking_mutex(void)
-{
-    const char* bridge_files[] = {
-        "c_coro_aio_file_bridge.cc",
-        "c_coro_async_file_bridge.cc",
-        "c_coro_async_mutex_bridge.cc",
-        "c_coro_async_waiter_bridge.cc",
-        "c_coro_file_watcher_bridge.cc",
-        "c_coro_tcp_bridge.cc",
-        "c_coro_udp_bridge.cc",
-    };
-    const char* forbidden[] = {
-        "#include <mutex>",
-        "std::mutex",
-        "std::lock_guard",
-        "std::unique_lock",
-        "std::scoped_lock",
-    };
-    int failed = 0;
-    for (size_t i = 0; i < sizeof(bridge_files) / sizeof(bridge_files[0]); ++i) {
-        char relative_path[kMaxPath];
-        char full_path[kMaxPath];
-        if (!join_path(relative_path,
-                       sizeof(relative_path),
-                       "src/c/galay-bridge-c/coro-c",
-                       bridge_files[i]) ||
-            !join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
-            failed = 1;
-            continue;
-        }
-        char* data = NULL;
-        size_t len = 0;
-        if (!read_file(full_path, &data, &len)) {
-            failed = 1;
-            continue;
-        }
-        for (size_t j = 0; j < sizeof(forbidden) / sizeof(forbidden[0]); ++j) {
-            if (contains_text(data, len, forbidden[j])) {
-                fprintf(stderr,
-                        "[T22] %s must not use blocking mutex token %s in a coroutine bridge\n",
-                        relative_path,
-                        forbidden[j]);
-                failed = 1;
-            }
-        }
-        free(data);
-    }
-    return failed;
-}
-
-static int require_iouring_result_flag_lifecycle(void)
-{
-    const char* bridge_relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
-    const char* scheduler_relative_path = "src/cpp/galay-kernel/core/io_scheduler.hpp";
-    char bridge_full_path[kMaxPath];
-    char scheduler_full_path[kMaxPath];
-    if (!join_path(bridge_full_path, sizeof(bridge_full_path), GALAY_SOURCE_DIR, bridge_relative_path) ||
-        !join_path(scheduler_full_path, sizeof(scheduler_full_path), GALAY_SOURCE_DIR, scheduler_relative_path)) {
-        return 1;
-    }
-
-    char* bridge_data = NULL;
-    size_t bridge_len = 0;
-    if (!read_file(bridge_full_path, &bridge_data, &bridge_len)) {
-        return 1;
-    }
-
-    int failed = 0;
-    if (contains_text(bridge_data, bridge_len, "m_controller->m_accept_result_assigned = false;") ||
-        contains_text(bridge_data, bridge_len, "m_controller->m_recv_result_assigned = false;")) {
-        fprintf(stderr,
-                "[T22] direct TCP bridge must not reset io_uring result-assigned flags while the old awaitable still owns the slot\n");
-        failed = 1;
-    }
-    free(bridge_data);
-
-    char* scheduler_data = NULL;
-    size_t scheduler_len = 0;
-    if (!read_file(scheduler_full_path, &scheduler_data, &scheduler_len)) {
-        return 1;
-    }
-
-    if (count_text(scheduler_data, scheduler_len, "m_accept_result_assigned = false;") < 2) {
-        fprintf(stderr,
-                "[T22] io_uring accept result-assigned flag must reset at fill/remove awaitable lifecycle boundaries\n");
-        failed = 1;
-    }
-    if (count_text(scheduler_data, scheduler_len, "m_recv_result_assigned = false;") < 2) {
-        fprintf(stderr,
-                "[T22] io_uring recv result-assigned flag must reset at fill/remove awaitable lifecycle boundaries\n");
-        failed = 1;
-    }
-    free(scheduler_data);
-    return failed;
-}
-
-static int require_direct_tcp_timeout_arbitration(void)
-{
-    const char* bridge_relative_path = "src/c/galay-bridge-c/coro-c/c_coro_tcp_bridge.cc";
-    const char* base_relative_path = "src/c/galay-bridge-c/coro-c/c_coro_operation_base.h";
-    char bridge_full_path[kMaxPath];
-    char base_full_path[kMaxPath];
-    if (!join_path(bridge_full_path, sizeof(bridge_full_path), GALAY_SOURCE_DIR, bridge_relative_path) ||
-        !join_path(base_full_path, sizeof(base_full_path), GALAY_SOURCE_DIR, base_relative_path)) {
-        return 1;
-    }
-
-    char* bridge_data = NULL;
-    size_t bridge_len = 0;
-    if (!read_file(bridge_full_path, &bridge_data, &bridge_len)) {
-        return 1;
-    }
-
-    int failed = 0;
-    if (contains_text(bridge_data, bridge_len, "try {") ||
-        contains_text(bridge_data, bridge_len, "catch (") ||
-        contains_text(bridge_data, bridge_len, "catch (...)")) {
-        fprintf(stderr,
-                "[T22] direct TCP core bridge must propagate errors through result values, not try/catch\n");
-        failed = 1;
-    }
-    if (contains_text(bridge_data, bridge_len, "std::make_shared")) {
-        fprintf(stderr,
-                "[T22] direct TCP core bridge must use nothrow allocation and return ENOMEM instead of std::make_shared\n");
-        failed = 1;
-    }
-    free(bridge_data);
-
-    char* base_data = NULL;
-    size_t base_len = 0;
-    if (!read_file(base_full_path, &base_data, &base_len)) {
-        return failed != 0;
-    }
-    if (!contains_text(base_data,
-                       base_len,
-                       "expected == CoroPhaseTimedOut || expected == CoroPhaseCancelled) {\n"
-                       "                return false;\n"
-                       "            }")) {
-        fprintf(stderr,
-                "[T22] direct TCP guarded completion must reject CQE delivery after timeout/cancel\n");
-        failed = 1;
-    }
-    if (!contains_text(base_data, base_len, "C_IOResult result = operation.wait(timeout_ms);") ||
-        !contains_text(base_data, base_len, "operation.markWaitTimeout();")) {
-        fprintf(stderr,
-                "[T22] direct TCP must propagate timeout through the C wait result and mark the operation timed out\n");
-        failed = 1;
-    }
-    free(base_data);
-
-    return failed;
-}
-
-static int require_explicit_linux_aarch64_coro_context_boundary(void)
-{
-    const char* relative_path = "src/c/galay-kernel-c/CMakeLists.txt";
-    char full_path[kMaxPath];
-    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
-        return 1;
-    }
-
-    char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
-        return 1;
-    }
-
-    int failed = 0;
-    if (!contains_text(data, len, "Linux/aarch64 stackful C coroutine context switch is not implemented")) {
-        fprintf(stderr,
-                "[T22] Linux/aarch64 C coroutine context support must be explicitly diagnosed at configure time\n");
-        failed = 1;
-    }
-    if (!contains_text(data, len, "GALAY_C_CORO_CONTEXT_UNSUPPORTED_REASON")) {
-        fprintf(stderr,
-                "[T22] unsupported C coroutine context platforms must expose a skip reason for tests/examples/benchmarks\n");
-        failed = 1;
-    }
-
-    free(data);
-    return failed;
-}
-
-static int require_iouring_accept_uses_direct_completion_arbitration(void)
-{
-    const char* relative_path = "src/cpp/galay-kernel/core/uring_reactor.cc";
-    char full_path[kMaxPath];
-    if (!join_path(full_path, sizeof(full_path), GALAY_SOURCE_DIR, relative_path)) {
-        return 1;
-    }
-
-    char* data = NULL;
-    size_t len = 0;
-    if (!read_file(full_path, &data, &len)) {
-        return 1;
-    }
-
-    int failed = 0;
-    if (!contains_text(data, len, "awaitable->handleComplete(cqe, controller->m_handle)")) {
-        fprintf(stderr,
-                "[T22] io_uring accept completion must pass through awaitable arbitration before handing off an accepted fd\n");
-        failed = 1;
-    }
-    if (!contains_text(data,
-                       len,
-                       "if (awaitable->handleComplete(cqe, controller->m_handle)) {\n"
-                       "                controller->enqueueAcceptedHandle(*result);\n"
-                       "                if (controller->tryConsumeAcceptedHandle(awaitable->m_host, awaitable->m_result))")) {
-        fprintf(stderr,
-                "[T22] io_uring accept completion must still use controller accept delivery so C++ awaitables keep peer host semantics\n");
-        failed = 1;
-    }
-    if (!contains_text(data, len, "closeUndeliveredAcceptedHandle")) {
-        fprintf(stderr,
-                "[T22] io_uring accept completion must close an accepted fd when a timed-out/cancelled direct waiter rejects delivery\n");
-        failed = 1;
-    }
-
-    free(data);
+    closedir(directory);
     return failed;
 }
 
 int main(void)
 {
-    int failed = require_direct_tcp_c_api_uses_core_bridge();
-    failed |= require_c_bridge_module_layout();
-    failed |= require_c_bridge_without_blocking_mutex();
-    failed |= require_iouring_result_flag_lifecycle();
-    failed |= require_direct_tcp_timeout_arbitration();
-    failed |= require_explicit_linux_aarch64_coro_context_boundary();
-    failed |= require_iouring_accept_uses_direct_completion_arbitration();
-
     int scanned_files = 0;
-    failed |= scan_tree("src/c/galay-kernel-c", &scanned_files, 0);
-
-    int scanned_direct_async_files = 0;
-    failed |= scan_tree("src/c/galay-kernel-c", &scanned_direct_async_files, 1);
-
-    if (failed) {
+    const int failed = scan_tree("src/c", &scanned_files);
+    if (scanned_files == 0) {
+        fprintf(stderr, "[T22] did not scan C module sources\n");
         return 1;
     }
-
-    if (scanned_files == 0 || scanned_direct_async_files == 0) {
-        printf("T22-CoroSourceBoundaries SKIP; no future C coroutine source files found under src/c/galay-kernel-c, so bridge boundary checks are not active yet\n");
-        return 0;
-    }
-
-    printf("T22-CoroSourceBoundaries PASS; checked %d C coroutine source file(s) and %d direct C async source/header file(s)\n",
-           scanned_files,
-           scanned_direct_async_files);
-    return 0;
+    return failed ? 1 : 0;
 }

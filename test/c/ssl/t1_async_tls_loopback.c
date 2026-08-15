@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-ssl-c/ssl_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-ssl-c/ssl.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -174,19 +174,19 @@ static void client_entry(void* arg)
     state->client_close_result = galay_ssl_socket_close(state->client, 1000);
 }
 
-static int run_loopback(galay_kernel_runtime_t* runtime)
+static int run_loopback(galay_c_runtime_t* runtime)
 {
     TlsLoopbackState state = {0};
     if (load_contexts(&state) != 0 || create_listener(&state) != 0) {
         return 10;
     }
 
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
-    if (galay_coro_spawn(runtime, server_entry, &state, NULL, &server).code != C_IOResultOk ||
-        galay_coro_spawn(runtime, client_entry, &state, NULL, &client).code != C_IOResultOk ||
-        galay_coro_join(&server, 3000).code != C_IOResultOk ||
-        galay_coro_join(&client, 3000).code != C_IOResultOk) {
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
+    if (galay_c_coro_spawn(runtime, server_entry, &state, NULL, &server).code != C_IOResultOk ||
+        galay_c_coro_spawn(runtime, client_entry, &state, NULL, &client).code != C_IOResultOk ||
+        galay_c_coro_join(&server, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&client, 3000).code != C_IOResultOk) {
         return 11;
     }
 
@@ -212,8 +212,8 @@ static int run_loopback(galay_kernel_runtime_t* runtime)
         memcmp(state.server_buffer, "tls-ping-request", strlen("tls-ping-request")) != 0 ||
         memcmp(state.client_buffer, "tls-pong-response", strlen("tls-pong-response")) != 0;
 
-    if (galay_coro_destroy(&server).code != C_IOResultOk ||
-        galay_coro_destroy(&client).code != C_IOResultOk) {
+    if (galay_c_coro_destroy(&server).code != C_IOResultOk ||
+        galay_c_coro_destroy(&client).code != C_IOResultOk) {
         return 12;
     }
     galay_ssl_socket_destroy(state.accepted);
@@ -226,23 +226,23 @@ static int run_loopback(galay_kernel_runtime_t* runtime)
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
+    galay_c_runtime_t runtime = {0};
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess) {
         return 1;
     }
-    if (galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess) {
             return 3;
         }
         return 2;
     }
     const int result = run_loopback(&runtime);
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess) {
         return result == 0 ? 4 : result;
     }
     return result;

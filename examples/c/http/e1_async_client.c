@@ -1,6 +1,6 @@
-#include <galay/c/galay-http-c/http_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-http-c/http.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -89,17 +89,17 @@ static void client_entry(void* arg)
     galay_http_request_destroy(request);
 }
 
-static int cleanup(galay_kernel_runtime_t* runtime,
-                   galay_coro_task_t* server_task,
-                   galay_coro_task_t* client_task,
+static int cleanup(galay_c_runtime_t* runtime,
+                   galay_c_coro_task_t* server_task,
+                   galay_c_coro_task_t* client_task,
                    ExampleState* state,
                    int exit_code)
 {
-    if (server_task->task != NULL && galay_coro_destroy(server_task).code != C_IOResultOk &&
+    if (server_task->task != NULL && galay_c_coro_destroy(server_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 10;
     }
-    if (client_task->task != NULL && galay_coro_destroy(client_task).code != C_IOResultOk &&
+    if (client_task->task != NULL && galay_c_coro_destroy(client_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 11;
     }
@@ -122,10 +122,10 @@ static int cleanup(galay_kernel_runtime_t* runtime,
         }
     }
     if (runtime->runtime != NULL) {
-        if (galay_kernel_runtime_stop(runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 16;
         }
-        if (galay_kernel_runtime_destroy(runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 17;
         }
     }
@@ -134,17 +134,17 @@ static int cleanup(galay_kernel_runtime_t* runtime,
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     ExampleState state = {0};
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_http_server_create(&state.server) != GALAY_OK ||
         galay_http_client_create(&state.client) != GALAY_OK ||
         assign_loopback(&state.endpoint) != 0 ||
@@ -155,10 +155,10 @@ int main(void)
                                     route_handler, &state) != GALAY_OK) {
         return cleanup(&runtime, &server_task, &client_task, &state, 1);
     }
-    if (galay_coro_spawn(&runtime, server_entry, &state, NULL, &server_task).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &state, NULL, &client_task).code != C_IOResultOk ||
-        galay_coro_join(&server_task, 3000).code != C_IOResultOk ||
-        galay_coro_join(&client_task, 3000).code != C_IOResultOk ||
+    if (galay_c_coro_spawn(&runtime, server_entry, &state, NULL, &server_task).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &state, NULL, &client_task).code != C_IOResultOk ||
+        galay_c_coro_join(&server_task, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&client_task, 3000).code != C_IOResultOk ||
         state.server_result.code != C_IOResultOk ||
         state.client_result.code != C_IOResultOk) {
         return cleanup(&runtime, &server_task, &client_task, &state, 2);

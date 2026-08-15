@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_mutex_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/async_mutex.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -14,7 +14,7 @@ enum {
 };
 
 typedef struct LockState {
-    galay_kernel_async_mutex_t* mutex;
+    galay_c_async_mutex_t* mutex;
     C_IOResult lock_result;
     C_AsyncMutexResultCode unlock_result;
 } LockState;
@@ -31,9 +31,9 @@ static int64_t now_us(void)
 static void lock_entry(void* ctx)
 {
     LockState* state = (LockState*)ctx;
-    state->lock_result = galay_kernel_async_mutex_lock(state->mutex, 5000);
+    state->lock_result = galay_c_async_mutex_lock(state->mutex, 5000);
     if (state->lock_result.code == C_IOResultOk) {
-        state->unlock_result = galay_kernel_async_mutex_unlock(state->mutex);
+        state->unlock_result = galay_c_async_mutex_unlock(state->mutex);
     }
 }
 
@@ -54,23 +54,23 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_async_mutex_t mutex = {0};
-    galay_coro_task_t* tasks = 0;
+    galay_c_runtime_t runtime = {0};
+    galay_c_async_mutex_t mutex = {0};
+    galay_c_coro_task_t* tasks = 0;
     LockState* states = 0;
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_async_mutex_create(&mutex) != C_AsyncMutexSuccess) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
+        galay_c_async_mutex_create(&mutex) != C_AsyncMutexSuccess) {
         return 1;
     }
 
-    tasks = (galay_coro_task_t*)calloc((size_t)iterations, sizeof(galay_coro_task_t));
+    tasks = (galay_c_coro_task_t*)calloc((size_t)iterations, sizeof(galay_c_coro_task_t));
     states = (LockState*)calloc((size_t)iterations, sizeof(LockState));
     if (tasks == 0 || states == 0) {
         exit_code = 2;
@@ -80,14 +80,14 @@ int main(int argc, char** argv)
     const int64_t start = now_us();
     for (int i = 0; i < iterations; ++i) {
         states[i].mutex = &mutex;
-        states[i].unlock_result = C_AsyncMutexIOFailed;
-        if (galay_coro_spawn(&runtime, lock_entry, &states[i], 0, &tasks[i]).code != C_IOResultOk) {
+        states[i].unlock_result = C_AsyncMutexOperationInvalid;
+        if (galay_c_coro_spawn(&runtime, lock_entry, &states[i], 0, &tasks[i]).code != C_IOResultOk) {
             exit_code = 3;
             goto cleanup;
         }
     }
     for (int i = 0; i < iterations; ++i) {
-        if (galay_coro_join(&tasks[i], 8000).code != C_IOResultOk ||
+        if (galay_c_coro_join(&tasks[i], 8000).code != C_IOResultOk ||
             states[i].lock_result.code != C_IOResultOk ||
             states[i].unlock_result != C_AsyncMutexSuccess) {
             exit_code = 4;
@@ -112,22 +112,22 @@ cleanup:
     if (tasks != 0) {
         for (int i = 0; i < iterations; ++i) {
             if (tasks[i].task != 0 &&
-                galay_coro_destroy(&tasks[i]).code != C_IOResultOk &&
+                galay_c_coro_destroy(&tasks[i]).code != C_IOResultOk &&
                 exit_code == 0) {
                 exit_code = 6;
             }
         }
     }
     if (mutex.mutex != 0) {
-        if (galay_kernel_async_mutex_destroy(&mutex) != C_AsyncMutexSuccess && exit_code == 0) {
+        if (galay_c_async_mutex_destroy(&mutex) != C_AsyncMutexSuccess && exit_code == 0) {
             exit_code = 7;
         }
     }
     if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 8;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 9;
         }
     }

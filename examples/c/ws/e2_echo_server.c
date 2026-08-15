@@ -1,22 +1,22 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-ws-c/ws_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-ws-c/ws.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 
 typedef struct EchoServerState {
-    galay_kernel_tcp_socket_t* listener;
+    galay_c_tcp_socket_t* listener;
     int exit_code;
 } EchoServerState;
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, uint16_t port)
+static int create_listener(galay_c_tcp_socket_t* listener, uint16_t port)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", port};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk
         ? 0
         : 1;
 }
@@ -24,13 +24,13 @@ static int create_listener(galay_kernel_tcp_socket_t* listener, uint16_t port)
 static void echo_server_entry(void* arg)
 {
     EchoServerState* state = (EchoServerState*)arg;
-    galay_kernel_tcp_socket_t accepted = {0};
+    galay_c_tcp_socket_t accepted = {0};
     galay_ws_session_t* session = NULL;
     galay_ws_connection_t* connection = NULL;
     galay_ws_received_frame_t* frame = NULL;
 
     C_IOResult accepted_result =
-        galay_kernel_tcp_socket_accept(state->listener, &accepted, NULL, -1);
+        galay_c_tcp_socket_accept(state->listener, &accepted, NULL, -1);
     if (accepted_result.code != C_IOResultOk) {
         state->exit_code = 2;
         return;
@@ -75,8 +75,8 @@ static void echo_server_entry(void* arg)
 cleanup:
     galay_ws_received_frame_destroy(frame);
     galay_ws_session_destroy(session);
-    if (accepted.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&accepted) != C_TcpSocketSuccess &&
+    if (accepted.fd >= 0 &&
+        galay_c_tcp_socket_close(&accepted).code != C_IOResultOk &&
         state->exit_code == 0) {
         state->exit_code = 8;
     }
@@ -85,37 +85,37 @@ cleanup:
 int main(int argc, char** argv)
 {
     const uint16_t port = argc > 1 ? (uint16_t)atoi(argv[1]) : 9001;
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
-    galay_coro_task_t task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
+    galay_c_coro_task_t task = {0};
     EchoServerState state = {.listener = &listener, .exit_code = 1};
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, port) != 0 ||
         printf("listening on ws://127.0.0.1:%u/\n", (unsigned)port) < 0 ||
-        galay_coro_spawn(&runtime, echo_server_entry, &state, NULL, &task).code != C_IOResultOk ||
-        galay_coro_join(&task, -1).code != C_IOResultOk) {
+        galay_c_coro_spawn(&runtime, echo_server_entry, &state, NULL, &task).code != C_IOResultOk ||
+        galay_c_coro_join(&task, -1).code != C_IOResultOk) {
         state.exit_code = 9;
     }
-    if (task.task != NULL && galay_coro_destroy(&task).code != C_IOResultOk && state.exit_code == 0) {
+    if (task.task != NULL && galay_c_coro_destroy(&task).code != C_IOResultOk && state.exit_code == 0) {
         state.exit_code = 10;
     }
-    if (listener.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess &&
+    if (listener.fd >= 0 &&
+        galay_c_tcp_socket_close(&listener).code != C_IOResultOk &&
         state.exit_code == 0) {
         state.exit_code = 11;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&runtime) != C_RuntimeSuccess &&
         state.exit_code == 0) {
         state.exit_code = 12;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess &&
         state.exit_code == 0) {
         state.exit_code = 13;
     }

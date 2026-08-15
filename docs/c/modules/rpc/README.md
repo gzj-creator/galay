@@ -22,7 +22,7 @@ RPC envelope codec. Default initializers are `galay_rpc_client_config_default`,
 
 ## Coroutine Semantics
 
-`galay_rpc_client_connect`, `galay_rpc_client_call`, stream read/write, heartbeat, close, and `galay_rpc_server_serve_one` must run inside a `galay_coro_spawn` C coroutine. They suspend through the kernel C TCP ABI and return `C_IOResult`; they do not expose C++ `Task` types.
+`galay_rpc_client_connect`, `galay_rpc_client_call`, stream read/write, heartbeat, close, and `galay_rpc_server_serve_one` must run inside a `galay_c_coro_spawn` C coroutine. They suspend through the kernel C TCP ABI and return `C_IOResult`; they do not expose C++ `Task` types.
 
 ## Errors
 

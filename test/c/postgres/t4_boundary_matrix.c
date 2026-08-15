@@ -1,4 +1,4 @@
-#include <galay/c/galay-postgres-c/postgres_c.h>
+#include <galay/c/galay-postgres-c/postgres.h>
 
 #include <limits.h>
 #include <stdint.h>

@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_file_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/async_file.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,8 +11,8 @@ enum {
 };
 
 typedef struct CopyState {
-    galay_kernel_async_file_t* source;
-    galay_kernel_async_file_t* dest;
+    galay_c_async_file_t* source;
+    galay_c_async_file_t* dest;
     C_IOResult read_result;
     C_IOResult write_result;
     C_IOResult close_source_result;
@@ -24,10 +24,9 @@ typedef struct CopyState {
 static void copy_entry(void* ctx)
 {
     CopyState* state = (CopyState*)ctx;
-    size_t offset = 0;
     for (;;) {
         state->read_result =
-            galay_kernel_async_file_read(state->source, state->buffer, sizeof(state->buffer), (int64_t)offset, 2000);
+            galay_c_async_file_read(state->source, state->buffer, sizeof(state->buffer), 2000);
         if (state->read_result.code == C_IOResultEof ||
             (state->read_result.code == C_IOResultOk && state->read_result.bytes == 0)) {
             state->read_result.code = C_IOResultOk;
@@ -37,20 +36,18 @@ static void copy_entry(void* ctx)
             return;
         }
         state->write_result =
-            galay_kernel_async_file_write(state->dest,
-                                          state->buffer,
-                                          state->read_result.bytes,
-                                          (int64_t)offset,
-                                          2000);
+            galay_c_async_file_write(state->dest,
+                                     state->buffer,
+                                     state->read_result.bytes,
+                                     2000);
         if (state->write_result.code != C_IOResultOk ||
             state->write_result.bytes != state->read_result.bytes) {
             return;
         }
-        offset += state->read_result.bytes;
-        state->copied = offset;
+        state->copied += state->read_result.bytes;
     }
-    state->close_source_result = galay_kernel_async_file_close(state->source, 2000);
-    state->close_dest_result = galay_kernel_async_file_close(state->dest, 2000);
+    state->close_source_result = galay_c_async_file_close(state->source);
+    state->close_dest_result = galay_c_async_file_close(state->dest);
 }
 
 static int make_demo_source(char* path, size_t length)
@@ -81,32 +78,27 @@ static int make_demo_source(char* path, size_t length)
 
 static int copy_file(const char* source_path, const char* dest_path)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_async_file_t source = {0};
-    galay_kernel_async_file_t dest = {0};
-    galay_coro_task_t task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_async_file_t source = {.fd = -1};
+    galay_c_async_file_t dest = {.fd = -1};
+    galay_c_coro_task_t task = {0};
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         return 1;
     }
 
-    C_AsyncFileResultCode created = galay_kernel_async_file_create(&source);
-    if (created == C_AsyncFileOperationUnsupported) {
-        if (printf("async_file_copy unsupported: %s\n", galay_kernel_async_file_get_error(created)) < 0) {
-            exit_code = 2;
-        }
-        goto cleanup;
-    }
-    if (created != C_AsyncFileSuccess ||
-        galay_kernel_async_file_create(&dest) != C_AsyncFileSuccess ||
-        galay_kernel_async_file_open(&source, source_path, C_AsyncFileOpenModeRead, 0600) != C_AsyncFileSuccess ||
-        galay_kernel_async_file_open(&dest, dest_path, C_AsyncFileOpenModeTruncate, 0600) != C_AsyncFileSuccess) {
+    if (galay_c_async_file_open(&source, source_path, GALAY_C_FILE_READ, 0).code !=
+            C_IOResultOk ||
+        galay_c_async_file_open(&dest, dest_path,
+                                GALAY_C_FILE_WRITE | GALAY_C_FILE_CREATE |
+                                    GALAY_C_FILE_TRUNC,
+                                0600).code != C_IOResultOk) {
         exit_code = 3;
         goto cleanup;
     }
@@ -114,8 +106,8 @@ static int copy_file(const char* source_path, const char* dest_path)
     CopyState state = {0};
     state.source = &source;
     state.dest = &dest;
-    if (galay_coro_spawn(&runtime, copy_entry, &state, 0, &task).code != C_IOResultOk ||
-        galay_coro_join(&task, 5000).code != C_IOResultOk) {
+    if (galay_c_coro_spawn(&runtime, copy_entry, &state, 0, &task).code != C_IOResultOk ||
+        galay_c_coro_join(&task, 5000).code != C_IOResultOk) {
         exit_code = 4;
         goto cleanup;
     }
@@ -134,25 +126,25 @@ static int copy_file(const char* source_path, const char* dest_path)
 
 cleanup:
     if (task.task != 0) {
-        if (galay_coro_destroy(&task).code != C_IOResultOk && exit_code == 0) {
+        if (galay_c_coro_destroy(&task).code != C_IOResultOk && exit_code == 0) {
             exit_code = 7;
         }
     }
-    if (source.file != 0) {
-        if (galay_kernel_async_file_destroy(&source) != C_AsyncFileSuccess && exit_code == 0) {
+    if (source.fd >= 0) {
+        if (galay_c_async_file_close(&source).code != C_IOResultOk && exit_code == 0) {
             exit_code = 8;
         }
     }
-    if (dest.file != 0) {
-        if (galay_kernel_async_file_destroy(&dest) != C_AsyncFileSuccess && exit_code == 0) {
+    if (dest.fd >= 0) {
+        if (galay_c_async_file_close(&dest).code != C_IOResultOk && exit_code == 0) {
             exit_code = 9;
         }
     }
     if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 10;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 11;
         }
     }

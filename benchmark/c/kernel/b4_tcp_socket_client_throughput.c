@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdatomic.h>
 #include <stdint.h>
@@ -31,8 +31,8 @@ typedef struct ClientState ClientState;
 
 typedef struct ClientSession {
     ClientState* state;
-    galay_kernel_tcp_socket_t socket;
-    galay_coro_task_t task;
+    galay_c_tcp_socket_t socket;
+    galay_c_coro_task_t task;
     char* request;
     char* response;
     uint64_t requests;
@@ -42,7 +42,7 @@ typedef struct ClientSession {
 } ClientSession;
 
 struct ClientState {
-    galay_kernel_runtime_t runtime;
+    galay_c_runtime_t runtime;
     ClientConfig config;
     atomic_int stop;
     atomic_int done_count;
@@ -57,11 +57,11 @@ static int64_t now_us(void)
     return (int64_t)tv.tv_sec * 1000000 + (int64_t)tv.tv_usec;
 }
 
-static int send_all(galay_kernel_tcp_socket_t* socket, const char* buffer, size_t length)
+static int send_all(galay_c_tcp_socket_t* socket, const char* buffer, size_t length)
 {
     size_t sent = 0;
     while (sent < length) {
-        C_IOResult result = galay_kernel_tcp_socket_send(socket, buffer + sent, length - sent, 1000);
+        C_IOResult result = galay_c_tcp_socket_send(socket, buffer + sent, length - sent, 1000);
         if (result.code != C_IOResultOk || result.bytes == 0) {
             return 1;
         }
@@ -70,11 +70,11 @@ static int send_all(galay_kernel_tcp_socket_t* socket, const char* buffer, size_
     return 0;
 }
 
-static int recv_all(galay_kernel_tcp_socket_t* socket, char* buffer, size_t length)
+static int recv_all(galay_c_tcp_socket_t* socket, char* buffer, size_t length)
 {
     size_t received = 0;
     while (received < length) {
-        C_IOResult result = galay_kernel_tcp_socket_recv(socket, buffer + received, length - received, 1000);
+        C_IOResult result = galay_c_tcp_socket_recv(socket, buffer + received, length - received, 1000);
         if (result.code != C_IOResultOk || result.bytes == 0) {
             return 1;
         }
@@ -93,12 +93,12 @@ static void session_entry(void* arg)
         goto done;
     }
 
-    if (galay_kernel_tcp_socket_create(&session->socket, C_IPTypeIPV4) != C_TcpSocketSuccess) {
+    if (galay_c_tcp_socket_create(&session->socket, C_IPTypeIPV4).code != C_IOResultOk) {
         ++session->errors;
         goto done;
     }
 
-    C_IOResult connected = galay_kernel_tcp_socket_connect(&session->socket, &host, 3000);
+    C_IOResult connected = galay_c_tcp_socket_connect(&session->socket, &host, 3000);
     if (connected.code != C_IOResultOk) {
         ++session->errors;
         goto done;
@@ -116,7 +116,7 @@ static void session_entry(void* arg)
     }
 
     {
-        C_IOResult closed = galay_kernel_tcp_socket_close(&session->socket, 1000);
+        C_IOResult closed = galay_c_tcp_socket_close(&session->socket);
         if (closed.code != C_IOResultOk && closed.code != C_IOResultEof) {
             ++session->errors;
         }
@@ -194,13 +194,13 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = state.config.io_schedulers;
     runtime_config.compute_scheduler_count = 0;
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&runtime_config, &state.runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&state.runtime) != C_RuntimeSuccess) {
+    if (galay_c_runtime_create(&runtime_config, &state.runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&state.runtime) != C_RuntimeSuccess) {
         return 2;
     }
 
@@ -233,7 +233,7 @@ int main(int argc, char** argv)
     const int64_t start_us = now_us();
     for (int i = 0; i < state.config.connections; ++i) {
         if (!atomic_load(&sessions[i].done)) {
-            C_IOResult spawn_result = galay_coro_spawn(
+            C_IOResult spawn_result = galay_c_coro_spawn(
                 &state.runtime,
                 session_entry,
                 &sessions[i],
@@ -275,8 +275,8 @@ int main(int argc, char** argv)
             }
         }
         if (sessions[i].task.task != NULL) {
-            C_IOResult join_result = galay_coro_join(&sessions[i].task, 3000);
-            C_IOResult destroy_result = galay_coro_destroy(&sessions[i].task);
+            C_IOResult join_result = galay_c_coro_join(&sessions[i].task, 3000);
+            C_IOResult destroy_result = galay_c_coro_destroy(&sessions[i].task);
             if ((join_result.code != C_IOResultOk || destroy_result.code != C_IOResultOk) && exit_code == 0) {
                 exit_code = 7;
             }
@@ -287,12 +287,12 @@ int main(int argc, char** argv)
         total_requests += sessions[i].requests;
         total_bytes += sessions[i].bytes;
         total_errors += sessions[i].errors;
-        if (sessions[i].socket.socket != NULL &&
-            galay_kernel_tcp_socket_destroy(&sessions[i].socket) != C_TcpSocketSuccess &&
+        if (sessions[i].socket.fd >= 0 &&
+            galay_c_tcp_socket_close(&sessions[i].socket).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 8;
         }
-        sessions[i].socket.socket = NULL;
+        sessions[i].socket.fd = -1;
         free(sessions[i].request);
         free(sessions[i].response);
         sessions[i].request = NULL;
@@ -331,14 +331,14 @@ int main(int argc, char** argv)
 
     for (int i = 0; i < state.config.connections; ++i) {
         if (sessions[i].task.task != NULL) {
-            if (galay_coro_join(&sessions[i].task, 0).code == C_IOResultOk) {
-                if (galay_coro_destroy(&sessions[i].task).code != C_IOResultOk && exit_code == 0) {
+            if (galay_c_coro_join(&sessions[i].task, 0).code == C_IOResultOk) {
+                if (galay_c_coro_destroy(&sessions[i].task).code != C_IOResultOk && exit_code == 0) {
                     exit_code = 11;
                 }
             }
         }
-        if (sessions[i].socket.socket != NULL &&
-            galay_kernel_tcp_socket_destroy(&sessions[i].socket) != C_TcpSocketSuccess &&
+        if (sessions[i].socket.fd >= 0 &&
+            galay_c_tcp_socket_close(&sessions[i].socket).code != C_IOResultOk &&
             exit_code == 0) {
             exit_code = 12;
         }
@@ -349,12 +349,12 @@ int main(int argc, char** argv)
 
 cleanup_runtime:
     if (state.runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&state.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&state.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 13;
     }
     if (state.runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&state.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&state.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 14;
     }

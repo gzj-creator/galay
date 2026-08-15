@@ -124,12 +124,12 @@ int main()
     const auto project_root = projectRoot();
     const auto root = cppRoot();
     const std::vector<std::filesystem::path> source_paths = {
-        project_root / "src" / "c" / "galay-kernel-c" / "core-c" / "runtime_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_tcp_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_udp_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_file_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_aio_c.cc",
-        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_file_watcher_c.cc",
+        project_root / "src" / "c" / "galay-kernel-c" / "core-c" / "runtime.c",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "tcp_socket.c",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "udp_socket.c",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "async_file.c",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "aio_file.c",
+        project_root / "src" / "c" / "galay-kernel-c" / "async-c" / "file_watcher.c",
         root / "galay-kernel" / "async" / "async_tcp.h",
         root / "galay-kernel" / "async" / "async_tcp.cc",
         root / "galay-kernel" / "async" / "async_udp.h",

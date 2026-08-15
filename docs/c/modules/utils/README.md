@@ -4,12 +4,12 @@
 
 - 源码位置：`src/c/galay-utils-c`
 - CMake target：`galay-c-utils`，alias 为 `galay::c-utils`
-- 依赖：`galay::c-common` 与 `galay::utils`
+- 依赖：公开依赖 `galay::c-common`；摘要实现私有依赖 OpenSSL Crypto，不依赖 `galay::utils`
 - 主要职责：提供 utils 模块的 C ABI，包括字节数组、单线程环形缓冲区和常用编码/摘要函数。
 
 ## 公开头文件
 
-- `src/c/galay-utils-c/utils_c.h`
+- `src/c/galay-utils-c/utils.h`
 
 ## 核心 API
 
@@ -26,4 +26,3 @@
 - 环形缓冲区不提供内部同步；多个线程并发访问时调用方必须自行串行化。
 - read/write 不做部分成功：容量不足或可读数据不足时返回错误，`actual` 保持 0。
 - Base64 API 不追加字符串终止符；需要 C 字符串时调用方需额外预留并自行写入 `\0`。
-

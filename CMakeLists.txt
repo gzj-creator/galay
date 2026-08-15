@@ -85,7 +85,6 @@ foreach(_galay_target IN ITEMS
     galay-tracing
     galay-tracing-spdlog galay-tracing-kernel
     galay-c-common
-    galay-c-bridge
     galay-c-utils galay-c-kernel galay-c-ssl galay-c-http galay-c-ws
     galay-c-http2 galay-c-redis galay-c-rpc galay-c-mysql galay-c-postgres
     galay-c-mongo galay-c-etcd galay-c-mcp galay-c-tracing

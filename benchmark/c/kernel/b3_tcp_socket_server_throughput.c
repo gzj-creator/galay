@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <arpa/inet.h>
 #include <limits.h>
@@ -26,16 +26,16 @@ typedef struct ServerState ServerState;
 
 typedef struct ServerSession {
     ServerState* server;
-    galay_kernel_tcp_socket_t socket;
-    galay_coro_task_t task;
+    galay_c_tcp_socket_t socket;
+    galay_c_coro_task_t task;
     char buffer[TCP_SERVER_BUFFER_BYTES];
     atomic_int active;
 } ServerSession;
 
 struct ServerState {
-    galay_kernel_runtime_t runtime;
-    galay_kernel_tcp_socket_t listener;
-    galay_coro_task_t accept_task;
+    galay_c_runtime_t runtime;
+    galay_c_tcp_socket_t listener;
+    galay_c_coro_task_t accept_task;
     atomic_int running;
     atomic_ullong total_connections;
     atomic_ullong total_requests;
@@ -73,11 +73,11 @@ static void signal_handler(int signum)
     }
 }
 
-static int send_all(galay_kernel_tcp_socket_t* socket, const char* buffer, size_t length)
+static int send_all(galay_c_tcp_socket_t* socket, const char* buffer, size_t length)
 {
     size_t sent = 0;
     while (sent < length) {
-        C_IOResult result = galay_kernel_tcp_socket_send(socket, buffer + sent, length - sent, 1000);
+        C_IOResult result = galay_c_tcp_socket_send(socket, buffer + sent, length - sent, 1000);
         if (result.code != C_IOResultOk || result.bytes == 0) {
             return 1;
         }
@@ -91,7 +91,7 @@ static void session_entry(void* arg)
     ServerSession* session = (ServerSession*)arg;
     ServerState* server = session->server;
     while (atomic_load(&server->running)) {
-        C_IOResult received = galay_kernel_tcp_socket_recv(
+        C_IOResult received = galay_c_tcp_socket_recv(
             &session->socket,
             session->buffer,
             sizeof(session->buffer),
@@ -116,11 +116,11 @@ static void session_entry(void* arg)
         add_counter(&server->total_bytes, (unsigned long long)received.bytes);
     }
 
-    C_IOResult closed = galay_kernel_tcp_socket_close(&session->socket, 1000);
+    C_IOResult closed = galay_c_tcp_socket_close(&session->socket);
     if (closed.code != C_IOResultOk && closed.code != C_IOResultEof) {
         add_counter(&server->total_errors, 1);
     }
-    if (galay_kernel_tcp_socket_destroy(&session->socket) != C_TcpSocketSuccess) {
+    if (galay_c_tcp_socket_close(&session->socket).code != C_IOResultOk) {
         add_counter(&server->total_errors, 1);
     }
     atomic_store(&session->active, 0);
@@ -142,12 +142,12 @@ static void accept_entry(void* arg)
 {
     ServerState* server = (ServerState*)arg;
     while (atomic_load(&server->running)) {
-        galay_kernel_tcp_socket_t accepted = {0};
-        C_IOResult result = galay_kernel_tcp_socket_accept(&server->listener, &accepted, NULL, 1000);
+        galay_c_tcp_socket_t accepted = {0};
+        C_IOResult result = galay_c_tcp_socket_accept(&server->listener, &accepted, NULL, 1000);
         if (result.code == C_IOResultTimeout) {
             continue;
         }
-        if (result.code != C_IOResultOk || accepted.socket == NULL) {
+        if (result.code != C_IOResultOk || accepted.fd < 0) {
             if (atomic_load(&server->running)) {
                 add_counter(&server->total_errors, 1);
             }
@@ -157,7 +157,7 @@ static void accept_entry(void* arg)
         ServerSession* session = acquire_session(server);
         if (session == NULL) {
             add_counter(&server->total_errors, 1);
-            if (galay_kernel_tcp_socket_destroy(&accepted) != C_TcpSocketSuccess) {
+            if (galay_c_tcp_socket_close(&accepted).code != C_IOResultOk) {
                 add_counter(&server->total_errors, 1);
             }
             continue;
@@ -167,10 +167,10 @@ static void accept_entry(void* arg)
         session->task.task = NULL;
         add_counter(&server->total_connections, 1);
         add_counter(&server->active_sessions, 1);
-        C_IOResult spawned = galay_coro_spawn(&server->runtime, session_entry, session, NULL, &session->task);
+        C_IOResult spawned = galay_c_coro_spawn(&server->runtime, session_entry, session, NULL, &session->task);
         if (spawned.code != C_IOResultOk) {
             add_counter(&server->total_errors, 1);
-            if (galay_kernel_tcp_socket_destroy(&session->socket) != C_TcpSocketSuccess) {
+            if (galay_c_tcp_socket_close(&session->socket).code != C_IOResultOk) {
                 add_counter(&server->total_errors, 1);
             }
             atomic_store(&session->active, 0);
@@ -268,7 +268,7 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = io_schedulers;
     config.compute_scheduler_count = 0;
 
@@ -284,16 +284,16 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    if (galay_kernel_runtime_create(&config, &server.runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&server.runtime) != C_RuntimeSuccess ||
-        galay_kernel_tcp_socket_create(&server.listener, C_IPTypeIPV4) != C_TcpSocketSuccess ||
-        galay_kernel_tcp_socket_bind(&server.listener, &bind_host) != C_TcpSocketSuccess ||
-        galay_kernel_tcp_socket_listen(&server.listener, 1024) != C_TcpSocketSuccess) {
+    if (galay_c_runtime_create(&config, &server.runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&server.runtime) != C_RuntimeSuccess ||
+        galay_c_tcp_socket_create(&server.listener, C_IPTypeIPV4).code != C_IOResultOk ||
+        galay_c_tcp_socket_bind(&server.listener, &bind_host).code != C_IOResultOk ||
+        galay_c_tcp_socket_listen(&server.listener, 1024).code != C_IOResultOk) {
         exit_code = 2;
         goto cleanup;
     }
 
-    C_IOResult accept_spawned = galay_coro_spawn(&server.runtime, accept_entry, &server, NULL, &server.accept_task);
+    C_IOResult accept_spawned = galay_c_coro_spawn(&server.runtime, accept_entry, &server, NULL, &server.accept_task);
     if (accept_spawned.code != C_IOResultOk) {
         exit_code = 3;
         goto cleanup;
@@ -312,16 +312,16 @@ int main(int argc, char** argv)
     if (wake_listener(server.port) != 0 && exit_code == 0) {
         exit_code = 4;
     }
-    C_IOResult accept_join = galay_coro_join(&server.accept_task, 3000);
-    C_IOResult accept_destroy = galay_coro_destroy(&server.accept_task);
+    C_IOResult accept_join = galay_c_coro_join(&server.accept_task, 3000);
+    C_IOResult accept_destroy = galay_c_coro_destroy(&server.accept_task);
     if ((accept_join.code != C_IOResultOk || accept_destroy.code != C_IOResultOk) && exit_code == 0) {
         exit_code = 5;
     }
 
     for (int i = 0; i < TCP_SERVER_MAX_SESSIONS; ++i) {
         if (server.sessions[i].task.task != NULL) {
-            C_IOResult joined = galay_coro_join(&server.sessions[i].task, 3000);
-            C_IOResult destroyed = galay_coro_destroy(&server.sessions[i].task);
+            C_IOResult joined = galay_c_coro_join(&server.sessions[i].task, 3000);
+            C_IOResult destroyed = galay_c_coro_destroy(&server.sessions[i].task);
             if ((joined.code != C_IOResultOk || destroyed.code != C_IOResultOk) && exit_code == 0) {
                 exit_code = 6;
             }
@@ -344,26 +344,26 @@ cleanup:
         if (wake_listener(server.port) != 0 && exit_code == 0) {
             exit_code = 9;
         }
-        if (galay_coro_join(&server.accept_task, 3000).code == C_IOResultOk) {
-            if (galay_coro_destroy(&server.accept_task).code != C_IOResultOk && exit_code == 0) {
+        if (galay_c_coro_join(&server.accept_task, 3000).code == C_IOResultOk) {
+            if (galay_c_coro_destroy(&server.accept_task).code != C_IOResultOk && exit_code == 0) {
                 exit_code = 10;
             }
         } else if (exit_code == 0) {
             exit_code = 11;
         }
     }
-    if (server.listener.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&server.listener) != C_TcpSocketSuccess &&
+    if (server.listener.fd >= 0 &&
+        galay_c_tcp_socket_close(&server.listener).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 12;
     }
     if (server.runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&server.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&server.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 13;
     }
     if (server.runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&server.runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&server.runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 14;
     }

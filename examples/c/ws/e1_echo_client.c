@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-ws-c/ws_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-ws-c/ws.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,28 +83,28 @@ int main(int argc, char** argv)
         .path = argc > 3 ? argv[3] : "/",
         .exit_code = 1,
     };
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t task = {0};
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_coro_spawn(&runtime, echo_client_entry, &state, NULL, &task).code != C_IOResultOk ||
-        galay_coro_join(&task, 10000).code != C_IOResultOk) {
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
+        galay_c_coro_spawn(&runtime, echo_client_entry, &state, NULL, &task).code != C_IOResultOk ||
+        galay_c_coro_join(&task, 10000).code != C_IOResultOk) {
         state.exit_code = 10;
     }
-    if (task.task != NULL && galay_coro_destroy(&task).code != C_IOResultOk && state.exit_code == 0) {
+    if (task.task != NULL && galay_c_coro_destroy(&task).code != C_IOResultOk && state.exit_code == 0) {
         state.exit_code = 11;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&runtime) != C_RuntimeSuccess &&
         state.exit_code == 0) {
         state.exit_code = 12;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess &&
         state.exit_code == 0) {
         state.exit_code = 13;
     }

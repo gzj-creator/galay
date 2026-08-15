@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/async-c/async_udp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/udp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -8,7 +8,7 @@
 #include <time.h>
 
 typedef struct TimeoutState {
-    galay_kernel_udp_socket_t* socket;
+    galay_c_udp_socket_t* socket;
     C_IOResult result;
     C_Host from;
     char buffer[1];
@@ -17,7 +17,7 @@ typedef struct TimeoutState {
 static void recv_timeout_entry(void* arg)
 {
     TimeoutState* state = (TimeoutState*)arg;
-    state->result = galay_kernel_udp_socket_recvfrom(
+    state->result = galay_c_udp_socket_recvfrom(
         state->socket,
         state->buffer,
         sizeof(state->buffer),
@@ -50,23 +50,23 @@ int main(int argc, char** argv)
 {
     const int iterations = parse_iterations(argc, argv);
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_udp_socket_t socket = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_udp_socket_t socket = {0};
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     C_Host local = {0};
     int completed = 0;
     int failures = 0;
     int exit_code = 0;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_udp_socket_create(&socket, C_IPTypeIPV4) != C_UdpSocketSuccess ||
-        galay_kernel_udp_socket_bind(&socket, &bind_host) != C_UdpSocketSuccess ||
-        galay_kernel_udp_socket_local_endpoint(&socket, &local) != C_UdpSocketSuccess ||
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
+        galay_c_udp_socket_create(&socket, C_IPTypeIPV4).code != C_IOResultOk ||
+        galay_c_udp_socket_bind(&socket, &bind_host).code != C_IOResultOk ||
+        galay_c_udp_socket_local_endpoint(&socket, &local).code != C_IOResultOk ||
         local.port == 0) {
         failures = 1;
         exit_code = 1;
@@ -81,15 +81,15 @@ int main(int argc, char** argv)
             .from = {0},
             .buffer = {0},
         };
-        galay_coro_task_t task = {0};
-        C_IOResult spawn_result = galay_coro_spawn(&runtime, recv_timeout_entry, &state, NULL, &task);
+        galay_c_coro_task_t task = {0};
+        C_IOResult spawn_result = galay_c_coro_spawn(&runtime, recv_timeout_entry, &state, NULL, &task);
         if (spawn_result.code != C_IOResultOk) {
             ++failures;
             exit_code = 2;
             break;
         }
-        C_IOResult join_result = galay_coro_join(&task, 2000);
-        C_IOResult destroy_result = galay_coro_destroy(&task);
+        C_IOResult join_result = galay_c_coro_join(&task, 2000);
+        C_IOResult destroy_result = galay_c_coro_destroy(&task);
         if (join_result.code != C_IOResultOk ||
             destroy_result.code != C_IOResultOk ||
             state.result.code != C_IOResultTimeout) {
@@ -111,18 +111,18 @@ int main(int argc, char** argv)
     }
 
 cleanup:
-    if (socket.socket != NULL &&
-        galay_kernel_udp_socket_destroy(&socket) != C_UdpSocketSuccess &&
+    if (socket.fd >= 0 &&
+        galay_c_udp_socket_close(&socket).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 5;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_stop(&runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 6;
     }
     if (runtime.runtime != NULL &&
-        galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess &&
+        galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess &&
         exit_code == 0) {
         exit_code = 7;
     }

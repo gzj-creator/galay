@@ -1,4 +1,4 @@
-#include <galay/c/galay-kernel-c/kernel_c.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_result.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -26,6 +26,7 @@ int main(void)
         C_IOResultCancelled,
         C_IOResultInvalid,
         C_IOResultError,
+        C_IOResultClosed,
         (C_IOResultCode)1000,
     };
     volatile uintptr_t checksum = 0;
@@ -35,12 +36,12 @@ int main(void)
         return 1;
     }
     for (int i = 0; i < kIterations; ++i) {
-        const C_IOResultCode code = codes[i % 7];
-        const char* text = galay_coro_ioresult_string(code);
+        const C_IOResultCode code = codes[i % 8];
+        const char* text = galay_c_coro_ioresult_string(code);
         if (text == 0) {
             return 2;
         }
-        checksum += (uintptr_t)text[0] + (uintptr_t)galay_coro_ioresult_to_status(code);
+        checksum += (uintptr_t)text[0] + (uintptr_t)galay_c_coro_ioresult_to_status(code);
     }
     const int64_t elapsed = now_ns() - start;
     if (elapsed <= 0) {

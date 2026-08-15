@@ -1,35 +1,33 @@
-#include <galay/c/galay-kernel-c/async-c/async_file_watcher_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/async-c/file_watcher.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
+#include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
 
 typedef struct WatchState {
-    galay_kernel_file_watcher_t* watcher;
+    galay_c_file_watcher_t* watcher;
     C_IOResult result;
-    galay_kernel_file_watcher_watch_result_t watch_result;
+    galay_c_file_event_t event;
 } WatchState;
 
-static void watch_entry(void* ctx)
+static void watch_entry(void* arg)
 {
-    WatchState* state = (WatchState*)ctx;
-    state->result =
-        galay_kernel_file_watcher_watch(state->watcher, &state->watch_result, 2000);
+    WatchState* const state = arg;
+    state->result = galay_c_file_watcher_wait(state->watcher, &state->event, 2000);
 }
 
 static int append_to_file(const char* path)
 {
-    int fd = open(path, O_WRONLY | O_APPEND);
+    const int fd = open(path, O_WRONLY | O_APPEND);
     if (fd < 0) {
         return 1;
     }
-
-    const char payload[] = "demo";
-    int failed = write(fd, payload, sizeof(payload) - 1) != (ssize_t)(sizeof(payload) - 1);
-    if (close(fd) != 0 && failed == 0) {
+    int failed = write(fd, "demo", 4) != 4;
+    if (close(fd) != 0) {
         failed = 1;
     }
     return failed;
@@ -37,81 +35,71 @@ static int append_to_file(const char* path)
 
 int main(void)
 {
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
-    config.io_scheduler_count = 1;
-    config.compute_scheduler_count = 0;
-
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_file_watcher_t watcher = {0};
-    galay_coro_task_t task = {0};
-    WatchState state = {&watcher, {0}, {0}};
-    char template_path[] = "/tmp/galay-c-file-watch-example-XXXXXX";
-    char watched_path[512] = {0};
-    int fd = mkstemp(template_path);
-    int wd = -1;
-    int exit_code = 0;
-
-    if (fd < 0) {
+    char path[] = "/tmp/galay-c-file-watch-example-XXXXXX";
+    const int temp_fd = mkstemp(path);
+    if (temp_fd < 0 || close(temp_fd) != 0) {
         return 1;
     }
-    if (close(fd) != 0) {
-        exit_code = 2;
+
+    C_RuntimeConfig config = galay_c_runtime_config_default();
+    config.io_scheduler_count = 1;
+    config.compute_scheduler_count = 0;
+    galay_c_runtime_t runtime = {0};
+    galay_c_file_watcher_t watcher = {.fd = -1};
+    galay_c_coro_task_t task = {0};
+    WatchState state = {.watcher = &watcher};
+    int watch_descriptor = -1;
+    int result = 0;
+
+    if (galay_c_file_watcher_create(&watcher).code != C_IOResultOk) {
+        result = 2;
         goto cleanup;
     }
-
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
-        galay_kernel_file_watcher_create(&watcher) != C_FileWatcherSuccess ||
-        galay_kernel_file_watcher_add_watch(&watcher, template_path,
-            (C_FileWatchEvent)(C_FileWatchEventModify | C_FileWatchEventCloseWrite), &wd) != C_FileWatcherSuccess ||
-        galay_kernel_file_watcher_get_path(&watcher, wd, watched_path, sizeof(watched_path)) != C_FileWatcherSuccess ||
-        galay_coro_spawn(&runtime, watch_entry, &state, 0, &task).code != C_IOResultOk) {
-        exit_code = 3;
+    const C_IOResult added =
+        galay_c_file_watcher_add_watch(&watcher, path, GALAY_C_WATCH_MODIFY);
+    if (added.code != C_IOResultOk) {
+        result = 3;
         goto cleanup;
     }
-
-    if (append_to_file(template_path) != 0 ||
-        galay_coro_join(&task, 3000).code != C_IOResultOk ||
-        state.result.code != C_IOResultOk ||
-        state.watch_result.code != C_FileWatcherSuccess) {
-        exit_code = 4;
+    watch_descriptor = (int)added.value;
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
+        galay_c_coro_spawn(&runtime, watch_entry, &state, NULL, &task).code !=
+            C_IOResultOk ||
+        append_to_file(path) != 0 ||
+        galay_c_coro_join(&task, 3000).code != C_IOResultOk ||
+        state.result.code != C_IOResultOk) {
+        result = 4;
         goto cleanup;
     }
-
     if (printf("file_watcher path=%s events=0x%x is_dir=%d\n",
-               watched_path,
-               (unsigned int)state.watch_result.events,
-               state.watch_result.is_dir ? 1 : 0) < 0) {
-        exit_code = 5;
-        goto cleanup;
+               path, (unsigned int)state.event.mask, state.event.is_dir) < 0) {
+        result = 5;
     }
 
 cleanup:
-    if (task.task != 0) {
-        if (galay_coro_destroy(&task).code != C_IOResultOk && exit_code == 0) {
-            exit_code = 6;
+    if (task.task != NULL && galay_c_coro_destroy(&task).code != C_IOResultOk && result == 0) {
+        result = 6;
+    }
+    if (watch_descriptor >= 0 && watcher.fd >= 0 &&
+        galay_c_file_watcher_remove_watch(&watcher, watch_descriptor).code != C_IOResultOk &&
+        result == 0) {
+        result = 7;
+    }
+    if (watcher.fd >= 0 && galay_c_file_watcher_close(&watcher).code != C_IOResultOk &&
+        result == 0) {
+        result = 8;
+    }
+    if (runtime.runtime != NULL) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
+            result = 9;
+        }
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
+            result = 10;
         }
     }
-    if (watcher.watcher != 0) {
-        if (wd >= 0 &&
-            galay_kernel_file_watcher_remove_watch(&watcher, wd) != C_FileWatcherSuccess &&
-            exit_code == 0) {
-            exit_code = 7;
-        }
-        if (galay_kernel_file_watcher_destroy(&watcher) != C_FileWatcherSuccess && exit_code == 0) {
-            exit_code = 8;
-        }
+    if (unlink(path) != 0 && errno != ENOENT && result == 0) {
+        result = 11;
     }
-    if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
-            exit_code = 9;
-        }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
-            exit_code = 10;
-        }
-    }
-    if (unlink(template_path) != 0 && exit_code == 0) {
-        exit_code = 11;
-    }
-    return exit_code;
+    return result;
 }

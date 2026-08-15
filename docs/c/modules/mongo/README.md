@@ -25,7 +25,7 @@ The helpers include `$db` in the command document and can be passed to `galay_mo
 
 ## Async Client
 
-The async client uses the Galay C coroutine TCP socket ABI. Call these functions only inside a `galay_coro_spawn` entry:
+The async client uses the Galay C coroutine TCP socket ABI. Call these functions only inside a `galay_c_coro_spawn` entry:
 
 - `galay_mongo_client_connect_async`
 - `galay_mongo_client_hello_async`

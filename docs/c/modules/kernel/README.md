@@ -1,66 +1,51 @@
-# kernel 文档
+# kernel C 文档
 
 ## 当前基线
 
-- 真相优先级：公开头文件 > 实现 > `examples/c` > `test/c` > `benchmark/c` > Markdown
-- 当前 C 文档按 C++ 文档的模块路径和编号口径组织，落点为 `docs/c/modules/kernel`
-- 当前已验证环境：macOS / AppleClang 17 / Release 构建 / kqueue
-- 当前已落地页面：`docs/c/modules/kernel/05-性能测试.md`
-- 当前验证范围：C Kernel runtime、C coroutine wait/sleep、TCP/UDP socket、AsyncFile、AsyncAio、AsyncFileWatcher、AsyncMutex、AsyncWaiter，以及 MPMC/MPSC/SPSC 的 bounded/unbounded channel C ABI、测试和 benchmark smoke
-
-## 两层规则
-
-- 先回答：优先在 `docs/c/modules/kernel/05-性能测试.md` 内给出当前可复现的 benchmark 数据、命令和口径
-- 再定位：需要确认 API、示例或测试边界时，回到对应源码、测试和 benchmark 文件
-- Markdown 只记录已经落地并验证过的 C API 资产，不提前补未完成页面；新增 wrapper 的最新事实以源码、测试、示例和 benchmark 为准
+- 公开头文件、实现、示例、测试和 benchmark 依次作为事实来源。
+- kernel runtime、stackful coroutine、reactor、TCP/UDP、文件 I/O 和文件监控均为原生 C 实现，不依赖 C++ bridge。
+- runtime 公开句柄类型为 `galay_c_runtime_t`；runtime 函数统一使用 `galay_c_runtime_*` 前缀。
+- MPMC/MPSC/SPSC 当前提供原生 bounded channel；已删除旧 bridge 和 unbounded C wrapper。
 
 ## 建议阅读顺序
 
-1. `docs/c/modules/kernel/05-性能测试.md`
-2. `src/c/galay-kernel-c/async-c/async_tcp_c.h`
-3. `src/c/galay-kernel-c/async-c/async_udp_c.h`
-4. `src/c/galay-kernel-c/async-c/async_file_c.h`
-5. `src/c/galay-kernel-c/async-c/async_aio_c.h`
-6. `src/c/galay-kernel-c/coro-c/coro_wait_c.h`
-7. `src/c/galay-kernel-c/async-c/async_file_watcher_c.h`
-8. `src/c/galay-kernel-c/async-c/async_mutex_c.h`
-9. `src/c/galay-kernel-c/async-c/async_waiter_c.h`
-10. `src/c/galay-kernel-c/concurrency-c/{mpmc,mpsc,spsc}/{bounded,unbounded}_channel_c.h`
-11. `test/c/kernel/t30_channel_families.c`
-12. `benchmark/c/kernel/b28_mpmc_bounded_channel_throughput.c` 至 `b33_spsc_unbounded_channel_throughput.c`
-13. `examples/c/kernel/`
-14. `test/c/kernel/`
-15. `benchmark/c/kernel/`
+1. `src/c/galay-kernel-c/kernel.h` umbrella header
+2. `src/c/galay-kernel-c/core-c/runtime.h`
+3. `src/c/galay-kernel-c/coro-c/coro_task.h`
+4. `src/c/galay-kernel-c/coro-c/coro_wait.h`
+5. `src/c/galay-kernel-c/coro-c/coro_sleep.h`
+6. `src/c/galay-kernel-c/async-c/tcp_socket.h`
+7. `src/c/galay-kernel-c/async-c/udp_socket.h`
+8. `src/c/galay-kernel-c/async-c/async_file.h`
+9. `src/c/galay-kernel-c/async-c/aio_file.h`
+10. `src/c/galay-kernel-c/async-c/file_watcher.h`
+11. `src/c/galay-kernel-c/async-c/async_mutex.h`
+12. `src/c/galay-kernel-c/async-c/async_waiter.h`
+13. `src/c/galay-kernel-c/concurrency-c/{mpmc,mpsc,spsc}/bounded_channel.h`
+14. `examples/c/kernel/`
+15. `test/c/kernel/`
+16. `benchmark/c/kernel/`
 
 ## 按任务进入
 
-- 想看当前压测数据：`docs/c/modules/kernel/05-性能测试.md`
-- 想复现 benchmark：`docs/c/modules/kernel/05-性能测试.md` 的“推荐复现命令”
-- 想照着 C API 写 echo：`examples/c/kernel/e2_tcp_socket_echo.c`
-- 想确认 `accept` / `recv` / `send` / `close` direct coroutine 返回值：`test/c/kernel/t6_tcp_async_callbacks.c`
-- 想确认 close 集成路径：`test/c/kernel/t7_tcp_close_integration.c`
-- 想看 UDP C ABI：`src/c/galay-kernel-c/async-c/async_udp_c.h`、`examples/c/kernel/e3_udp_socket_echo.c`、`test/c/kernel/t10_udp_socket_callbacks.c`
-- 想看 C coroutine sleep：`src/c/galay-kernel-c/coro-c/coro_wait_c.h`、`test/c/kernel/t26_coro_sleep.c`、`examples/c/kernel/e13_coro_sleep.c`、`benchmark/c/kernel/b24_coro_sleep_latency.c`
-- 想看文件 IO C ABI：`src/c/galay-kernel-c/async-c/async_file_c.h`、`src/c/galay-kernel-c/async-c/async_aio_c.h`、`test/c/kernel/t11_async_file_io.c`、`test/c/kernel/t12_aio_file_batch.c`、`examples/c/kernel/e5_aio_file_batch.c`、`benchmark/c/kernel/b7_aio_file_batch.c`
-- 想看文件监控 C ABI：`src/c/galay-kernel-c/async-c/async_file_watcher_c.h`、`test/c/kernel/t13_file_watcher_events.c`
-- 想看 concurrency C ABI：`src/c/galay-kernel-c/concurrency-c/{mpmc,mpsc,spsc}/`、`test/c/kernel/t30_channel_families.c`；无界 MPMC/MPSC 的每线程高吞吐发送应使用 producer token，MPMC 接收也应使用 consumer token。
+- TCP echo：`examples/c/kernel/e2_tcp_socket_echo.c`、`test/c/kernel/t25_coro_tcp.c`
+- UDP I/O：`examples/c/kernel/e3_udp_socket_echo.c`、`test/c/kernel/t10_udp_socket_callbacks.c`
+- coroutine sleep：`examples/c/kernel/e13_coro_sleep.c`、`test/c/kernel/t26_coro_sleep.c`
+- 文件 I/O：`test/c/kernel/t11_async_file_io.c`、`test/c/kernel/t12_aio_file_batch.c`
+- 文件监控：`examples/c/kernel/e6_file_watcher.c`、`test/c/kernel/t13_file_watcher_events.c`
+- timeout：`test/c/kernel/t18_tcp_timeout_callbacks.c` 至 `t21_file_watcher_timeout_callbacks.c`
+- bounded channel：`test/c/kernel/t31_native_bounded_channels.c`、`benchmark/c/kernel/b28_mpmc_bounded_channel_throughput.c`、`b30_mpsc_bounded_channel_throughput.c`、`b32_spsc_bounded_channel_throughput.c`
+- 性能复现：`docs/c/modules/kernel/05-性能测试.md`
 
-## 按关键词进入
+## 关键入口
 
-- `galay_kernel_tcp_socket_accept`：`src/c/galay-kernel-c/async-c/async_tcp_c.h`、`test/c/kernel/t6_tcp_async_callbacks.c`
-- `galay_kernel_tcp_socket_recv`：`src/c/galay-kernel-c/async-c/async_tcp_c.h`、`examples/c/kernel/e2_tcp_socket_echo.c`
-- `galay_kernel_tcp_socket_send`：`src/c/galay-kernel-c/async-c/async_tcp_c.h`、`examples/c/kernel/e2_tcp_socket_echo.c`
-- `galay_kernel_tcp_socket_readv` / `galay_kernel_tcp_socket_writev`：`src/c/galay-kernel-c/async-c/async_tcp_c.h`
-- `galay_kernel_tcp_socket_sendfile`：`src/c/galay-kernel-c/async-c/async_tcp_c.h`
-- `galay_kernel_tcp_socket_close`：`src/c/galay-kernel-c/async-c/async_tcp_c.h`、`test/c/kernel/t7_tcp_close_integration.c`
-- `benchmark_c_kernel_tcp_socket_lifecycle`：`benchmark/c/kernel/b2_tcp_socket_lifecycle.c`、`docs/c/modules/kernel/05-性能测试.md`
-- `benchmark_c_kernel_tcp_socket_server_throughput`：`benchmark/c/kernel/b3_tcp_socket_server_throughput.c`、`docs/c/modules/kernel/05-性能测试.md`
-- `benchmark_c_kernel_tcp_socket_client_throughput`：`benchmark/c/kernel/b4_tcp_socket_client_throughput.c`、`docs/c/modules/kernel/05-性能测试.md`
-- `galay_kernel_udp_socket_recvfrom` / `galay_kernel_udp_socket_sendto`：`src/c/galay-kernel-c/async-c/async_udp_c.h`、`test/c/kernel/t10_udp_socket_callbacks.c`
-- `galay_kernel_async_file_read` / `galay_kernel_async_file_write`：`src/c/galay-kernel-c/async-c/async_file_c.h`、`test/c/kernel/t11_async_file_io.c`
-- `galay_kernel_aio_file_commit`：`src/c/galay-kernel-c/async-c/async_aio_c.h`、`src/c/galay-bridge-c/coro-c/c_coro_aio_file_bridge.h`、`test/c/kernel/t12_aio_file_batch.c`、`examples/c/kernel/e5_aio_file_batch.c`、`benchmark/c/kernel/b7_aio_file_batch.c`
-- `galay_coro_sleep`：`src/c/galay-kernel-c/coro-c/coro_wait_c.h`、`test/c/kernel/t26_coro_sleep.c`、`examples/c/kernel/e13_coro_sleep.c`、`benchmark/c/kernel/b24_coro_sleep_latency.c`
-- `galay_kernel_file_watcher_watch`：`src/c/galay-kernel-c/async-c/async_file_watcher_c.h`、`test/c/kernel/t13_file_watcher_events.c`
-- `galay_kernel_async_mutex_lock`：`src/c/galay-kernel-c/async-c/async_mutex_c.h`、`test/c/kernel/t14_async_mutex.c`
-- `galay_kernel_async_waiter_wait`：`src/c/galay-kernel-c/async-c/async_waiter_c.h`、`test/c/kernel/t15_async_waiter.c`
-- `galay_kernel_{mpmc,mpsc,spsc}_{bounded,unbounded}_channel_*`：`src/c/galay-kernel-c/concurrency-c/{mpmc,mpsc,spsc}/`、`test/c/kernel/t30_channel_families.c`、`benchmark/c/kernel/b28_mpmc_bounded_channel_throughput.c` 至 `b33_spsc_unbounded_channel_throughput.c`
+- TCP：`galay_c_tcp_socket_create/bind/listen/accept/connect/recv/send/readv/writev/sendfile/close`
+- UDP：`galay_c_udp_socket_create/bind/recvfrom/sendto/close`
+- Async file：`galay_c_async_file_open/read/write/seek/tell/close`
+- AIO file：`galay_c_aio_file_open/read/write/fsync/seek/close`
+- File watcher：`galay_c_file_watcher_create/add_watch/remove_watch/wait/close`
+- Coroutine：`galay_c_coro_spawn/yield/join/cancel/destroy`、`galay_c_coro_sleep`
+- Runtime：`galay_c_runtime_create/start/stop/is_running/destroy`
+- Bounded channel：`galay_c_{mpmc,mpsc,spsc}_bounded_channel_create/try_send/try_recv/send/recv/close/destroy`
+
+所有非 `void` 返回值都必须检查或显式向上传播。I/O API 返回 `C_IOResult`，调用方先检查 `code`，再读取 `sys_errno`、`bytes`、`value` 或 `ptr`。Channel 的 `C_IOResultClosed` 表示关闭后不再接受新消息，或已关闭队列在 drain 完成后无数据可读。

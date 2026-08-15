@@ -38,11 +38,12 @@
 `GALAY_UNSUPPORTED`，再映射到 `C_IOResultError`。`caching_sha2_password` RSA full auth
 依赖构建时启用 SSL/RSA 支持；未启用时该路径显式返回 unsupported。
 
-C++ wrapper 实现没有新增 `try`、`catch` 或 `throw`。
+实现以 C ABI 显式转换协议错误、OpenSSL 错误和 kernel I/O 结果，不依赖
+`galay::mysql`，也不会让 C++ 异常穿过 ABI。
 
 ## Async 语义
 
-socket API 通过 kernel C TCP coroutine bridge 执行。调用方必须在 Galay C runtime
+socket API 直接通过 kernel C TCP coroutine API 执行。调用方必须在 Galay C runtime
 coroutine 内调用 async 函数。`timeout_ms < 0` 的 connect 使用 config timeout；
 其他 socket I/O 超时直接传给 kernel TCP API。
 

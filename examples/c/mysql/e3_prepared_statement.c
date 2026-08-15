@@ -1,7 +1,7 @@
-#include <galay/c/galay-kernel-c/async-c/async_tcp_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-mysql-c/mysql_c.h>
+#include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-mysql-c/mysql.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -15,9 +15,9 @@ enum {
 };
 
 typedef struct ExampleState {
-    galay_kernel_tcp_socket_t* listener;
+    galay_c_tcp_socket_t* listener;
     C_Host peer;
-    galay_kernel_tcp_socket_t accepted;
+    galay_c_tcp_socket_t accepted;
     C_IOResult server_result;
     C_IOResult client_result;
     uint32_t statement_id;
@@ -44,13 +44,13 @@ static void put_u32(unsigned char* out, size_t* pos, uint32_t value)
     out[(*pos)++] = (unsigned char)((value >> 24u) & 0xffu);
 }
 
-static int create_listener(galay_kernel_tcp_socket_t* listener, C_Host* local)
+static int create_listener(galay_c_tcp_socket_t* listener, C_Host* local)
 {
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
-    return galay_kernel_tcp_socket_create(listener, C_IPTypeIPV4) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_bind(listener, &bind_host) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_listen(listener, 16) == C_TcpSocketSuccess &&
-        galay_kernel_tcp_socket_local_endpoint(listener, local) == C_TcpSocketSuccess &&
+    return galay_c_tcp_socket_create(listener, C_IPTypeIPV4).code == C_IOResultOk &&
+        galay_c_tcp_socket_bind(listener, &bind_host).code == C_IOResultOk &&
+        galay_c_tcp_socket_listen(listener, 16).code == C_IOResultOk &&
+        galay_c_tcp_socket_local_endpoint(listener, local).code == C_IOResultOk &&
         local->port != 0
         ? 0
         : 1;
@@ -94,11 +94,11 @@ static size_t build_handshake(unsigned char* out)
     return pos;
 }
 
-static int recv_exact(galay_kernel_tcp_socket_t* socket, unsigned char* buffer, size_t length)
+static int recv_exact(galay_c_tcp_socket_t* socket, unsigned char* buffer, size_t length)
 {
     size_t received = 0;
     while (received < length) {
-        C_IOResult result = galay_kernel_tcp_socket_recv(socket,
+        C_IOResult result = galay_c_tcp_socket_recv(socket,
                                                          (char*)buffer + received,
                                                          length - received,
                                                          1000);
@@ -110,7 +110,7 @@ static int recv_exact(galay_kernel_tcp_socket_t* socket, unsigned char* buffer, 
     return 0;
 }
 
-static int recv_packet(galay_kernel_tcp_socket_t* socket, unsigned char* buffer, size_t* packet_len)
+static int recv_packet(galay_c_tcp_socket_t* socket, unsigned char* buffer, size_t* packet_len)
 {
     uint32_t payload_len = 0;
     if (recv_exact(socket, buffer, 4) != 0) {
@@ -128,19 +128,19 @@ static int recv_packet(galay_kernel_tcp_socket_t* socket, unsigned char* buffer,
     return 0;
 }
 
-static int send_ok(galay_kernel_tcp_socket_t* socket)
+static int send_ok(galay_c_tcp_socket_t* socket)
 {
     static const unsigned char ok_packet[] = {
         0x07, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00
     };
-    C_IOResult result = galay_kernel_tcp_socket_send(socket,
+    C_IOResult result = galay_c_tcp_socket_send(socket,
                                                      (const char*)ok_packet,
                                                      sizeof(ok_packet),
                                                      1000);
     return result.code == C_IOResultOk ? 0 : 1;
 }
 
-static int send_prepare_ok(galay_kernel_tcp_socket_t* socket)
+static int send_prepare_ok(galay_c_tcp_socket_t* socket)
 {
     unsigned char packet[16];
     size_t pos = 0;
@@ -152,11 +152,11 @@ static int send_prepare_ok(galay_kernel_tcp_socket_t* socket)
     put_u16(packet, &pos, 0);
     packet[pos++] = 0;
     put_u16(packet, &pos, 0);
-    C_IOResult result = galay_kernel_tcp_socket_send(socket, (const char*)packet, pos, 1000);
+    C_IOResult result = galay_c_tcp_socket_send(socket, (const char*)packet, pos, 1000);
     return result.code == C_IOResultOk ? 0 : 1;
 }
 
-static int expect_command(galay_kernel_tcp_socket_t* socket, uint8_t command, const char* sql)
+static int expect_command(galay_c_tcp_socket_t* socket, uint8_t command, const char* sql)
 {
     unsigned char packet[128];
     size_t packet_len = sizeof(packet);
@@ -171,7 +171,7 @@ static int expect_command(galay_kernel_tcp_socket_t* socket, uint8_t command, co
     return 0;
 }
 
-static int expect_execute(galay_kernel_tcp_socket_t* socket)
+static int expect_execute(galay_c_tcp_socket_t* socket)
 {
     unsigned char packet[64];
     size_t packet_len = sizeof(packet);
@@ -192,14 +192,14 @@ static void server_entry(void* arg)
     size_t auth_packet_len = sizeof(auth_packet);
     const size_t handshake_len = build_handshake(handshake);
 
-    state->server_result = galay_kernel_tcp_socket_accept(state->listener,
+    state->server_result = galay_c_tcp_socket_accept(state->listener,
                                                           &state->accepted,
                                                           NULL,
                                                           1000);
     if (state->server_result.code != C_IOResultOk) {
         return;
     }
-    state->server_result = galay_kernel_tcp_socket_send(&state->accepted,
+    state->server_result = galay_c_tcp_socket_send(&state->accepted,
                                                         (const char*)handshake,
                                                         handshake_len,
                                                         1000);
@@ -215,7 +215,7 @@ static void server_entry(void* arg)
         state->server_result = (C_IOResult){C_IOResultError, 0, 0, 1, NULL};
         return;
     }
-    state->server_result = galay_kernel_tcp_socket_close(&state->accepted, 1000);
+    state->server_result = galay_c_tcp_socket_close(&state->accepted);
 }
 
 static void client_entry(void* arg)
@@ -265,51 +265,51 @@ cleanup:
 
 int main(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
-    galay_kernel_runtime_t runtime = {0};
-    galay_kernel_tcp_socket_t listener = {0};
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
+    galay_c_runtime_t runtime = {0};
+    galay_c_tcp_socket_t listener = {0};
     C_Host local = {0};
     ExampleState state = {0};
-    galay_coro_task_t server = {0};
-    galay_coro_task_t client = {0};
+    galay_c_coro_task_t server = {0};
+    galay_c_coro_task_t client = {0};
     int result = 0;
 
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, &local) != 0) {
         return 1;
     }
     state.listener = &listener;
     state.peer = local;
-    if (galay_coro_spawn(&runtime, server_entry, &state, NULL, &server).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &state, NULL, &client).code != C_IOResultOk ||
-        galay_coro_join(&server, 3000).code != C_IOResultOk ||
-        galay_coro_join(&client, 3000).code != C_IOResultOk ||
+    if (galay_c_coro_spawn(&runtime, server_entry, &state, NULL, &server).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &state, NULL, &client).code != C_IOResultOk ||
+        galay_c_coro_join(&server, 3000).code != C_IOResultOk ||
+        galay_c_coro_join(&client, 3000).code != C_IOResultOk ||
         state.server_result.code != C_IOResultOk ||
         state.client_result.code != C_IOResultOk ||
         state.statement_id != 314) {
         result = 2;
     }
-    if (server.task != NULL && galay_coro_destroy(&server).code != C_IOResultOk && result == 0) {
+    if (server.task != NULL && galay_c_coro_destroy(&server).code != C_IOResultOk && result == 0) {
         result = 3;
     }
-    if (client.task != NULL && galay_coro_destroy(&client).code != C_IOResultOk && result == 0) {
+    if (client.task != NULL && galay_c_coro_destroy(&client).code != C_IOResultOk && result == 0) {
         result = 4;
     }
-    if (state.accepted.socket != NULL &&
-        galay_kernel_tcp_socket_destroy(&state.accepted) != C_TcpSocketSuccess &&
+    if (state.accepted.fd >= 0 &&
+        galay_c_tcp_socket_close(&state.accepted).code != C_IOResultOk &&
         result == 0) {
         result = 5;
     }
-    if (galay_kernel_tcp_socket_destroy(&listener) != C_TcpSocketSuccess && result == 0) {
+    if (galay_c_tcp_socket_close(&listener).code != C_IOResultOk && result == 0) {
         result = 6;
     }
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 7;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 8;
     }
     if (result == 0 && printf("prepared statement_id=%u\n", state.statement_id) < 0) {

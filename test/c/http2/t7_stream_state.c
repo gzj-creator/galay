@@ -1,6 +1,6 @@
-#include <galay/c/galay-http2-c/http2_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-http2-c/http2.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdint.h>
 #include <string.h>
@@ -143,19 +143,19 @@ static int settings_ack_with_payload_is_rejected(void)
 
 int main(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     StreamStateTestState state = {0};
     int result = 0;
 
     REQUIRE_TRUE(settings_ack_with_payload_is_rejected() == 0, 1);
-    REQUIRE_TRUE(galay_kernel_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 2);
-    REQUIRE_TRUE(galay_kernel_runtime_start(&runtime) == C_RuntimeSuccess, 3);
+    REQUIRE_TRUE(galay_c_runtime_create(&runtime_config, &runtime) == C_RuntimeSuccess, 2);
+    REQUIRE_TRUE(galay_c_runtime_start(&runtime) == C_RuntimeSuccess, 3);
 
     galay_http2_config_t server_config = galay_http2_config_default();
     server_config.host = "127.0.0.1";
@@ -163,14 +163,14 @@ int main(void)
     REQUIRE_TRUE(galay_http2_server_create(&server_config, &state.server) == GALAY_OK, 4);
     REQUIRE_TRUE(galay_http2_server_listen(state.server, &state.port).code == C_IOResultOk, 5);
 
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, state_server_entry, &state, 0, &server_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, state_server_entry, &state, 0, &server_task).code ==
                      C_IOResultOk,
                  6);
-    REQUIRE_TRUE(galay_coro_spawn(&runtime, state_client_entry, &state, 0, &client_task).code ==
+    REQUIRE_TRUE(galay_c_coro_spawn(&runtime, state_client_entry, &state, 0, &client_task).code ==
                      C_IOResultOk,
                  7);
-    REQUIRE_TRUE(galay_coro_join(&server_task, 3000).code == C_IOResultOk, 8);
-    REQUIRE_TRUE(galay_coro_join(&client_task, 3000).code == C_IOResultOk, 9);
+    REQUIRE_TRUE(galay_c_coro_join(&server_task, 3000).code == C_IOResultOk, 8);
+    REQUIRE_TRUE(galay_c_coro_join(&client_task, 3000).code == C_IOResultOk, 9);
 
     if (state.server_accept_result.code != C_IOResultOk ||
         state.server_stream_result.code != C_IOResultOk ||
@@ -214,18 +214,18 @@ int main(void)
         }
         galay_http2_server_destroy(state.server);
     }
-    if (server_task.task != 0 && galay_coro_destroy(&server_task).code != C_IOResultOk &&
+    if (server_task.task != 0 && galay_c_coro_destroy(&server_task).code != C_IOResultOk &&
         result == 0) {
         result = 15;
     }
-    if (client_task.task != 0 && galay_coro_destroy(&client_task).code != C_IOResultOk &&
+    if (client_task.task != 0 && galay_c_coro_destroy(&client_task).code != C_IOResultOk &&
         result == 0) {
         result = 16;
     }
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 17;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && result == 0) {
         result = 18;
     }
     return result;

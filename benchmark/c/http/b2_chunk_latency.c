@@ -1,6 +1,6 @@
-#include <galay/c/galay-http-c/http_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-http-c/http.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -69,7 +69,7 @@ static void server_entry(void* arg)
             io = galay_http_session_send_bytes(session, first, sizeof(first) - 1, 2000);
         }
         if (io.code == C_IOResultOk) {
-            C_IOResult yielded = galay_coro_yield();
+            C_IOResult yielded = galay_c_coro_yield();
             if (yielded.code != C_IOResultOk) {
                 io = yielded;
             }
@@ -149,17 +149,17 @@ static void client_entry(void* arg)
     bench->client_ok = bench->elapsed_ns >= 0 ? 1 : 0;
 }
 
-static int cleanup(galay_kernel_runtime_t* runtime,
-                   galay_coro_task_t* server_task,
-                   galay_coro_task_t* client_task,
+static int cleanup(galay_c_runtime_t* runtime,
+                   galay_c_coro_task_t* server_task,
+                   galay_c_coro_task_t* client_task,
                    ChunkBench* bench,
                    int exit_code)
 {
-    if (server_task->task != NULL && galay_coro_destroy(server_task).code != C_IOResultOk &&
+    if (server_task->task != NULL && galay_c_coro_destroy(server_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 10;
     }
-    if (client_task->task != NULL && galay_coro_destroy(client_task).code != C_IOResultOk &&
+    if (client_task->task != NULL && galay_c_coro_destroy(client_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 11;
     }
@@ -173,10 +173,10 @@ static int cleanup(galay_kernel_runtime_t* runtime,
         }
     }
     if (runtime->runtime != NULL) {
-        if (galay_kernel_runtime_stop(runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 14;
         }
-        if (galay_kernel_runtime_destroy(runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 15;
         }
     }
@@ -193,17 +193,17 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     ChunkBench bench = {0};
     bench.iterations = iterations;
 
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_http_server_create(&bench.server) != GALAY_OK ||
         assign_loopback(&bench.endpoint) != 0 ||
         galay_http_server_bind(bench.server, &bench.endpoint) != GALAY_OK ||
@@ -211,10 +211,10 @@ int main(int argc, char** argv)
         galay_http_server_local_endpoint(bench.server, &bench.endpoint) != GALAY_OK) {
         return cleanup(&runtime, &server_task, &client_task, &bench, 3);
     }
-    if (galay_coro_spawn(&runtime, server_entry, &bench, NULL, &server_task).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, client_entry, &bench, NULL, &client_task).code != C_IOResultOk ||
-        galay_coro_join(&client_task, 30000).code != C_IOResultOk ||
-        galay_coro_join(&server_task, 30000).code != C_IOResultOk ||
+    if (galay_c_coro_spawn(&runtime, server_entry, &bench, NULL, &server_task).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, client_entry, &bench, NULL, &client_task).code != C_IOResultOk ||
+        galay_c_coro_join(&client_task, 30000).code != C_IOResultOk ||
+        galay_c_coro_join(&server_task, 30000).code != C_IOResultOk ||
         bench.server_ok != 1 ||
         bench.client_ok != 1) {
         return cleanup(&runtime, &server_task, &client_task, &bench, 4);

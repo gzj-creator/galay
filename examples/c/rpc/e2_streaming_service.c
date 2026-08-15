@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-rpc-c/rpc_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-rpc-c/rpc.h>
 
 #include <stdio.h>
 #include <string.h>
@@ -82,16 +82,16 @@ static void client_entry(void* arg)
 
 int main(void)
 {
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
+    galay_c_runtime_t runtime = {0};
     galay_rpc_server_t* server = NULL;
     galay_rpc_service_t* service = NULL;
     StreamExample example;
     memset(&example, 0, sizeof(example));
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     C_Host local = {0};
     int exit_code = 0;
 
@@ -99,8 +99,8 @@ int main(void)
     server_config.host = "127.0.0.1";
     server_config.port = 0;
 
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_rpc_server_create(&server_config, &server) != GALAY_OK ||
         galay_rpc_service_create("StreamService", strlen("StreamService"), &service) != GALAY_OK ||
         galay_rpc_service_register_streaming(service,
@@ -116,12 +116,12 @@ int main(void)
     } else {
         example.server = server;
         example.peer = local;
-        if (galay_coro_spawn(&runtime, server_entry, &example, NULL, &server_task).code !=
+        if (galay_c_coro_spawn(&runtime, server_entry, &example, NULL, &server_task).code !=
                 C_IOResultOk ||
-            galay_coro_spawn(&runtime, client_entry, &example, NULL, &client_task).code !=
+            galay_c_coro_spawn(&runtime, client_entry, &example, NULL, &client_task).code !=
                 C_IOResultOk ||
-            galay_coro_join(&server_task, 3000).code != C_IOResultOk ||
-            galay_coro_join(&client_task, 3000).code != C_IOResultOk ||
+            galay_c_coro_join(&server_task, 3000).code != C_IOResultOk ||
+            galay_c_coro_join(&client_task, 3000).code != C_IOResultOk ||
             example.server_result.code != C_IOResultOk ||
             example.client_result.code != C_IOResultOk ||
             example.response.error_code != GALAY_RPC_ERROR_OK) {
@@ -134,20 +134,20 @@ int main(void)
                (const char*)example.response.payload);
     }
     galay_rpc_response_buffer_destroy(&example.response);
-    if (server_task.task != NULL && galay_coro_destroy(&server_task).code != C_IOResultOk &&
+    if (server_task.task != NULL && galay_c_coro_destroy(&server_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 3;
     }
-    if (client_task.task != NULL && galay_coro_destroy(&client_task).code != C_IOResultOk &&
+    if (client_task.task != NULL && galay_c_coro_destroy(&client_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 4;
     }
     galay_rpc_server_destroy(server);
     galay_rpc_service_destroy(service);
-    if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+    if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
         exit_code = 5;
     }
-    if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+    if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
         exit_code = 6;
     }
     return exit_code;

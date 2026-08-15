@@ -1,6 +1,6 @@
-#include <galay/c/galay-http2-c/http2_c.h>
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-http2-c/http2.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -146,12 +146,12 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t server_task = {0};
-    galay_coro_task_t client_task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t server_task = {0};
+    galay_c_coro_task_t client_task = {0};
     PressureBench bench = {.streams = streams};
     int exit_code = 0;
 
@@ -160,14 +160,14 @@ int main(int argc, char** argv)
     server_config.max_concurrent_streams = (uint32_t)(streams + 8);
 
     const int64_t start_ns = now_ns();
-    if (galay_kernel_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess ||
+    if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_http2_server_create(&server_config, &bench.server) != GALAY_OK ||
         galay_http2_server_listen(bench.server, &bench.port).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, pressure_server_entry, &bench, 0, &server_task).code != C_IOResultOk ||
-        galay_coro_spawn(&runtime, pressure_client_entry, &bench, 0, &client_task).code != C_IOResultOk ||
-        galay_coro_join(&server_task, 10000).code != C_IOResultOk ||
-        galay_coro_join(&client_task, 10000).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, pressure_server_entry, &bench, 0, &server_task).code != C_IOResultOk ||
+        galay_c_coro_spawn(&runtime, pressure_client_entry, &bench, 0, &client_task).code != C_IOResultOk ||
+        galay_c_coro_join(&server_task, 10000).code != C_IOResultOk ||
+        galay_c_coro_join(&client_task, 10000).code != C_IOResultOk ||
         bench.server_result.code != C_IOResultOk ||
         bench.client_result.code != C_IOResultOk ||
         bench.resets_observed != streams) {
@@ -184,11 +184,11 @@ int main(int argc, char** argv)
         exit_code = 3;
     }
 
-    if (server_task.task != 0 && galay_coro_destroy(&server_task).code != C_IOResultOk &&
+    if (server_task.task != 0 && galay_c_coro_destroy(&server_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 4;
     }
-    if (client_task.task != 0 && galay_coro_destroy(&client_task).code != C_IOResultOk &&
+    if (client_task.task != 0 && galay_c_coro_destroy(&client_task).code != C_IOResultOk &&
         exit_code == 0) {
         exit_code = 5;
     }
@@ -199,10 +199,10 @@ int main(int argc, char** argv)
         galay_http2_server_destroy(bench.server);
     }
     if (runtime.runtime != 0) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 7;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 8;
         }
     }

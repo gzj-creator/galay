@@ -1,5 +1,5 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
 #include <stdint.h>
 #include <stdio.h>
@@ -65,7 +65,7 @@ static void bench_entry(void* arg)
     BenchState* state = (BenchState*)arg;
     for (int i = 0; i < state->iterations; ++i) {
         int64_t start = now_ns();
-        C_IOResult yielded = galay_coro_yield();
+        C_IOResult yielded = galay_c_coro_yield();
         int64_t end = now_ns();
         if (yielded.code != C_IOResultOk) {
             ++(*state->errors);
@@ -82,13 +82,13 @@ int main(void)
         return 1;
     }
 
-    C_RuntimeConfig config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
     config.compute_scheduler_count = 0;
 
-    galay_kernel_runtime_t runtime = {0};
-    if (galay_kernel_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
-        galay_kernel_runtime_start(&runtime) != C_RuntimeSuccess) {
+    galay_c_runtime_t runtime = {0};
+    if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
+        galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         free(latencies);
         return 2;
     }
@@ -101,32 +101,32 @@ int main(void)
         .cursor = &cursor,
         .errors = &errors,
     };
-    C_CoroOptions options = galay_coro_options_default();
-    galay_coro_task_t tasks[kTaskCount] = {{0}, {0}};
+    C_CoroOptions options = galay_c_coro_options_default();
+    galay_c_coro_task_t tasks[kTaskCount] = {{0}, {0}};
 
     for (int i = 0; i < kTaskCount; ++i) {
-        if (galay_coro_spawn(&runtime, bench_entry, &state, &options, &tasks[i]).code != C_IOResultOk) {
+        if (galay_c_coro_spawn(&runtime, bench_entry, &state, &options, &tasks[i]).code != C_IOResultOk) {
             free(latencies);
-            (void)galay_kernel_runtime_destroy(&runtime);
+            (void)galay_c_runtime_destroy(&runtime);
             return 3;
         }
     }
 
     int64_t elapsed_start = now_ns();
     for (int i = 0; i < kTaskCount; ++i) {
-        if (galay_coro_join(&tasks[i], 5000).code != C_IOResultOk) {
+        if (galay_c_coro_join(&tasks[i], 5000).code != C_IOResultOk) {
             free(latencies);
-            (void)galay_kernel_runtime_destroy(&runtime);
+            (void)galay_c_runtime_destroy(&runtime);
             return 4;
         }
     }
     int64_t elapsed_end = now_ns();
 
     for (int i = 0; i < kTaskCount; ++i) {
-        (void)galay_coro_destroy(&tasks[i]);
+        (void)galay_c_coro_destroy(&tasks[i]);
     }
-    (void)galay_kernel_runtime_stop(&runtime);
-    (void)galay_kernel_runtime_destroy(&runtime);
+    (void)galay_c_runtime_stop(&runtime);
+    (void)galay_c_runtime_destroy(&runtime);
 
     if (cursor != total_samples) {
         free(latencies);

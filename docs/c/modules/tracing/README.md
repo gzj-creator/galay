@@ -1,10 +1,11 @@
 # Tracing C API
 
-`galay-tracing-c` wraps the C++ tracing data model behind opaque C handles.
+`galay-tracing-c` implements the tracing data model behind opaque C handles. It uses
+private C++ storage internally but does not depend on the `galay::tracing` target.
 
 ## Handles And Ownership
 
-- `galay_tracing_trace_context_t` owns a C++ `TraceContext`; destroy it with `galay_tracing_trace_context_destroy`.
+- `galay_tracing_trace_context_t` owns a private trace context; destroy it with `galay_tracing_trace_context_destroy`.
 - `galay_tracing_provider_t` owns optional processor/export state; destroy it with `galay_tracing_provider_destroy`.
 - `galay_tracing_tracer_t`, `galay_tracing_span_t`, `galay_tracing_sampler_t`, and `galay_tracing_logger_t` are owned handles with matching destroy functions.
 - Spans borrow their provider. Keep the provider alive until spans and tracers created from it are destroyed.
@@ -16,7 +17,7 @@ Trace/span ID helpers are value-style APIs: `galay_tracing_trace_id_generate`,
 
 ## Span Surface
 
-The C span API supports string, signed integer, unsigned integer, double, and bool attributes; status; events; and links. `galay_tracing_span_end` ends the real C++ `Span` and submits it to the provider processor when one is configured.
+The C span API supports string, signed integer, unsigned integer, double, and bool attributes; status; events; and links. `galay_tracing_span_end` ends the span and submits it to the provider exporter when one is configured.
 
 `galay_tracing_provider_set_file_exporter` installs a synchronous local JSONL exporter. `force_flush` and `shutdown` call the configured processor directly.
 
@@ -26,9 +27,9 @@ The C span API supports string, signed integer, unsigned integer, double, and bo
 
 ## Sampler And Logger
 
-Samplers wrap the C++ `AlwaysOnSampler`, `AlwaysOffSampler`, and `TraceIdRatioSampler`.
+Samplers provide always-on, always-off, and trace-ID-ratio decisions through owned C handles.
 
-`galay_tracing_logger_create_file` creates a C++ `Logger` with a synchronous local file sink. This path may block on local file I/O and is intended for tests, examples, and simple embedding rather than hot asynchronous scheduler paths.
+`galay_tracing_logger_create_file` creates a synchronous local file logger. This path may block on local file I/O and is intended for tests, examples, and simple embedding rather than hot asynchronous scheduler paths.
 
 ## Errors
 

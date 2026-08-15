@@ -1,6 +1,6 @@
-#include <galay/c/galay-kernel-c/core-c/runtime_c.h>
-#include <galay/c/galay-kernel-c/coro-c/coro_task_c.h>
-#include <galay/c/galay-postgres-c/postgres_c.h>
+#include <galay/c/galay-kernel-c/core-c/runtime.h>
+#include <galay/c/galay-kernel-c/coro-c/coro_task.h>
+#include <galay/c/galay-postgres-c/postgres.h>
 
 #include <errno.h>
 #include <stdint.h>
@@ -131,35 +131,35 @@ int main(void)
         .database = environment_or("GALAY_POSTGRES_DB", "postgres"),
         .port = postgres_port(),
     };
-    C_RuntimeConfig runtime_config = galay_kernel_runtime_config_default();
+    C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
     runtime_config.compute_scheduler_count = 0;
-    galay_kernel_runtime_t runtime = {0};
-    galay_coro_task_t task = {0};
+    galay_c_runtime_t runtime = {0};
+    galay_c_coro_task_t task = {0};
     int exit_code = 0;
 
-    C_RuntimeResultCode runtime_status = galay_kernel_runtime_create(&runtime_config, &runtime);
+    C_RuntimeResultCode runtime_status = galay_c_runtime_create(&runtime_config, &runtime);
     if (runtime_status == C_RuntimeSuccess) {
-        runtime_status = galay_kernel_runtime_start(&runtime);
+        runtime_status = galay_c_runtime_start(&runtime);
     }
     if (runtime_status != C_RuntimeSuccess) {
         fprintf(stderr, "runtime setup failed: %s\n",
-                galay_kernel_runtime_get_error(runtime_status));
+                galay_c_runtime_get_error(runtime_status));
         exit_code = 1;
         goto cleanup;
     }
 
-    C_IOResult spawned = galay_coro_spawn(&runtime, query_entry, &example, NULL, &task);
+    C_IOResult spawned = galay_c_coro_spawn(&runtime, query_entry, &example, NULL, &task);
     if (spawned.code != C_IOResultOk) {
         fprintf(stderr, "query task spawn failed: %s\n",
-                galay_coro_ioresult_get_error(spawned.code));
+                galay_c_coro_ioresult_get_error(spawned.code));
         exit_code = 2;
         goto cleanup;
     }
-    C_IOResult joined = galay_coro_join(&task, 15000);
+    C_IOResult joined = galay_c_coro_join(&task, 15000);
     if (joined.code != C_IOResultOk) {
         fprintf(stderr, "query task join failed: %s\n",
-                galay_coro_ioresult_get_error(joined.code));
+                galay_c_coro_ioresult_get_error(joined.code));
         exit_code = 3;
         goto cleanup;
     }
@@ -168,7 +168,7 @@ int main(void)
         strcmp(example.value, "1") != 0 || example.optional_is_null != GALAY_TRUE) {
         fprintf(stderr,
                 "query failed: io=%s status=%d fields=%zu rows=%zu tx=%c\n",
-                galay_coro_ioresult_get_error(example.result.code),
+                galay_c_coro_ioresult_get_error(example.result.code),
                 example.result.sys_errno,
                 example.field_count,
                 example.row_count,
@@ -184,16 +184,16 @@ int main(void)
 
 cleanup:
     if (task.task != NULL) {
-        C_IOResult destroyed = galay_coro_destroy(&task);
+        C_IOResult destroyed = galay_c_coro_destroy(&task);
         if (destroyed.code != C_IOResultOk && exit_code == 0) {
             exit_code = 6;
         }
     }
     if (runtime.runtime != NULL) {
-        if (galay_kernel_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_stop(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 7;
         }
-        if (galay_kernel_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
+        if (galay_c_runtime_destroy(&runtime) != C_RuntimeSuccess && exit_code == 0) {
             exit_code = 8;
         }
     }

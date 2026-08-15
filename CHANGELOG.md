@@ -11,9 +11,19 @@
 
 ## [Unreleased]
 
+### Added
+
+- **原生 C11 kernel runtime 与 bounded channel family**：C API 直接提供 runtime、stackful coroutine、reactor、TCP/UDP、文件 I/O、watcher、mutex/waiter 以及 MPMC/MPSC/SPSC bounded channel；核心 data path 不再经 `galay-c-bridge` 转发。
+
 ### Changed
 
+- **收敛 C ABI 文件、标识符与构建边界**：公开头和实现移除 `_c` 文件名后缀，kernel 统一采用 `galay_c_*` 标识符；CMake 改为构建原生 C11 kernel/common target，并同步迁移 HTTP、HTTP2、WS、Redis、MySQL、PostgreSQL、Mongo、etcd、MCP、RPC、SSL、tracing 和 utils 的 C API 调用点。
+- **同步更新 C API 交付与性能证据**：示例、测试、benchmark、安装布局校验、使用指南和模块 README 对齐新 ABI；kernel 性能文档新增 Release 下 channel、协程、文件、timeout、UDP loopback 与 UDP 双进程压力基线，并明确双进程 TCP 和混合 timeout 的失败门禁。
 - HTTP/2 kernel 文件重命名：`frame_disp.{h,cc}` 更名为 `frame_dispacher.{h,cc}`、`out_sched.{h,cc}` 更名为 `out_scheduler.{h,cc}`；`galay-kernel/common/safetimer_mgr.hpp` 更名为 `timer_manager_mt.hpp`，同步更新 `h2_core.h`、`timer_scheduler.h`、测试、压测与文档中的 include 与路径引用。
+
+### Removed
+
+- **移除旧 C bridge 与无界 wrapper ABI**：删除 `galay-c-bridge`、旧 `_c` 源/头、unbounded C channel wrapper、token API 以及依赖它们的过时测试和 benchmark，避免保留兼容层。
 
 ## [v4.8.0] - 2026-08-14
 

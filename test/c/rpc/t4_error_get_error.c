@@ -1,4 +1,4 @@
-#include <galay/c/galay-rpc-c/rpc_c.h>
+#include <galay/c/galay-rpc-c/rpc.h>
 
 #include <string.h>
 

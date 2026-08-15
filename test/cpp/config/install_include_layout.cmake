@@ -23,12 +23,10 @@ foreach(required_source_path
         "src/cpp/galay-kernel/common/error.h"
         "src/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "src/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
-        "src/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel_c.h"
-        "src/c/galay-kernel-c/concurrency-c/mpmc/unbounded_channel_c.h"
-        "src/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel_c.h"
-        "src/c/galay-kernel-c/concurrency-c/mpsc/unbounded_channel_c.h"
-        "src/c/galay-kernel-c/concurrency-c/spsc/bounded_channel_c.h"
-        "src/c/galay-kernel-c/concurrency-c/spsc/unbounded_channel_c.h"
+        "src/c/galay-kernel-c/kernel.h"
+        "src/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel.h"
+        "src/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel.h"
+        "src/c/galay-kernel-c/concurrency-c/spsc/bounded_channel.h"
         "src/cpp/galay-utils/cache/ring_buffer.hpp"
         "src/cpp/galay-utils/cache/type_ring_buffer.hpp"
         "src/cpp/galay-http/client/http_client.h"
@@ -119,12 +117,10 @@ file(READ "${GALAY_BINARY_DIR}/CMakeCache.txt" galay_cache_content)
 if(galay_cache_content MATCHES "GALAY_BUILD_C_API:BOOL=ON")
     foreach(required_c_header
             IN ITEMS
-            "include/galay/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/mpmc/unbounded_channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/mpsc/unbounded_channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/spsc/bounded_channel_c.h"
-            "include/galay/c/galay-kernel-c/concurrency-c/spsc/unbounded_channel_c.h")
+            "include/galay/c/galay-kernel-c/kernel.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel.h"
+            "include/galay/c/galay-kernel-c/concurrency-c/spsc/bounded_channel.h")
         if(NOT EXISTS "${prefix_dir}/${required_c_header}")
             message(FATAL_ERROR "Missing installed C API header: ${required_c_header}")
         endif()
@@ -242,9 +238,10 @@ target_link_libraries(consumer PRIVATE galay::kernel)
 
 if(galay_cache_content MATCHES "GALAY_BUILD_C_API:BOOL=ON")
     file(WRITE "${consumer_source_dir}/c_main.c"
-        "#include <galay/c/galay-kernel-c/kernel_c.h>\n"
+        "#include <galay/c/galay-kernel-c/kernel.h>\n"
         "int main(void) {\n"
-        "  return galay_kernel_channel_get_error(C_ChannelClosed) == 0;\n"
+        "  C_RuntimeConfig config = galay_c_runtime_config_default();\n"
+        "  return config.io_scheduler_count == C_RUNTIME_SCHEDULER_COUNT_AUTO ? 0 : 1;\n"
         "}\n")
     file(APPEND "${consumer_source_dir}/CMakeLists.txt" [=[
 
