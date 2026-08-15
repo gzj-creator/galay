@@ -264,7 +264,7 @@ int main(int argc, char** argv)
     for (int i = 0; i < iterations; ++i) {
         TcpAcceptState tcp_state = {
             .listener = &listener,
-            .accepted = {0},
+            .accepted = {.fd = -1},
             .result = {C_IOResultInvalid, 0, 0, 0, NULL},
         };
         if (run_task(&runtime, tcp_accept_entry, &tcp_state, 2000) != 0 ||

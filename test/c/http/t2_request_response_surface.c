@@ -125,6 +125,39 @@ static int test_response_builder_serializes_empty_body(void)
     return 0;
 }
 
+static int test_serialization_inputs_rejected(void)
+{
+    galay_http_headers_t* headers = NULL;
+    galay_http_request_t* request = NULL;
+
+    REQUIRE_STATUS(galay_http_headers_create(&headers), GALAY_OK);
+    REQUIRE_STATUS(galay_http_headers_add(headers, "bad name", "value"),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_http_headers_add(headers, "X-\x80-Test", "value"),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_http_headers_add(headers, "X-Test", "ok\r\nInjected: true"),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_http_headers_add(headers, "X-Test", "ok"), GALAY_OK);
+
+    REQUIRE_STATUS(galay_http_request_create(&request), GALAY_OK);
+    REQUIRE_STATUS(galay_http_request_set_method_path(request,
+                                                       GALAY_HTTP_METHOD_GET,
+                                                       "/safe path"),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_http_request_set_method_path(request,
+                                                       GALAY_HTTP_METHOD_GET,
+                                                       "/safe\r\nInjected: true"),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_http_request_set_method_path(request,
+                                                       GALAY_HTTP_METHOD_GET,
+                                                       "/safe"),
+                   GALAY_OK);
+
+    galay_http_request_destroy(request);
+    galay_http_headers_destroy(headers);
+    return 0;
+}
+
 int main(void)
 {
     if (test_header_add_find_remove() != 0) {
@@ -140,6 +173,9 @@ int main(void)
         return 1;
     }
     if (test_response_builder_serializes_empty_body() != 0) {
+        return 1;
+    }
+    if (test_serialization_inputs_rejected() != 0) {
         return 1;
     }
     return 0;

@@ -115,8 +115,13 @@ int main(void)
         "src/c/galay-mongo-c/mongo.cc",
         "src/c/galay-tracing-c/tracing.cc",
         "src/c/galay-http2-c/http2.cc",
+        "src/c/galay-http-c/http.cc",
+        "src/c/galay-ws-c/ws.cc",
+        "src/c/galay-mcp-c/mcp.cc",
         "src/c/galay-redis-c/redis.cc",
         "src/c/galay-etcd-c/etcd.cc",
+        "src/c/galay-rpc-c/rpc.cc",
+        "src/c/galay-postgres-c/postgres.cc",
         "src/cpp/galay-utils/encoding/base64.hpp",
     };
 

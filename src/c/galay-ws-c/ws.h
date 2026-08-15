@@ -75,7 +75,8 @@ typedef struct galay_ws_session_t galay_ws_session_t;
 
 /**
  * @brief WebSocket connection opaque handle。
- * @details connection 拥有底层 TCP socket、收包缓冲、mask 计数和分片状态。
+ * @details connection 拥有底层 TCP socket、收包缓冲和分片状态；client 发送帧时为每帧
+ * 生成独立的随机 mask key。
  * @note send/recv/close API 必须在 `galay_c_coro_spawn` 创建的 C coroutine 内调用；
  * 同一 connection 不应被多个线程或 coroutine 并发操作。
  */

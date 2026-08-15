@@ -145,10 +145,48 @@ static int test_boundaries_are_rejected(void)
     return 0;
 }
 
+static int test_structured_json_fields(void)
+{
+    galay_mcp_parsed_request_t* parsed = NULL;
+    const char* method = NULL;
+    size_t method_len = 0;
+    int64_t id = 0;
+    const char spaced[] =
+        "{ \"jsonrpc\" : \"2.0\", \"id\" : 7, \"method\" : \"outer\", \"params\" : {} }";
+    const char nested[] =
+        "{\"jsonrpc\":\"2.0\",\"id\":8,\"params\":{\"method\":\"nested\"},\"method\":\"outer\"}";
+    const char invalid_id[] = "{\"jsonrpc\":\"2.0\",\"id\":9x,\"method\":\"ping\"}";
+
+    REQUIRE_STATUS(galay_mcp_parse_request(spaced, sizeof(spaced) - 1, &parsed), GALAY_OK);
+    REQUIRE_STATUS(galay_mcp_request_id(parsed, &id), GALAY_OK);
+    REQUIRE_TRUE(id == 7);
+    REQUIRE_STATUS(galay_mcp_request_method(parsed, &method, &method_len), GALAY_OK);
+    REQUIRE_TRUE(method_len == strlen("outer"));
+    REQUIRE_TRUE(strncmp(method, "outer", method_len) == 0);
+    galay_mcp_parsed_request_destroy(parsed);
+    parsed = NULL;
+
+    REQUIRE_STATUS(galay_mcp_parse_request(nested, sizeof(nested) - 1, &parsed), GALAY_OK);
+    REQUIRE_STATUS(galay_mcp_request_id(parsed, &id), GALAY_OK);
+    REQUIRE_TRUE(id == 8);
+    REQUIRE_STATUS(galay_mcp_request_method(parsed, &method, &method_len), GALAY_OK);
+    REQUIRE_TRUE(method_len == strlen("outer"));
+    REQUIRE_TRUE(strncmp(method, "outer", method_len) == 0);
+    galay_mcp_parsed_request_destroy(parsed);
+    parsed = NULL;
+
+    REQUIRE_STATUS(galay_mcp_parse_request(invalid_id, sizeof(invalid_id) - 1, &parsed),
+                   GALAY_PROTOCOL_ERROR);
+    REQUIRE_TRUE(parsed == NULL);
+    return 0;
+}
+
 static int test_mode_configs(void)
 {
     galay_mcp_client_config_t* stdio_config = NULL;
     galay_mcp_client_config_t* http_config = NULL;
+    galay_mcp_client_config_t* invalid_url_config = NULL;
+    galay_mcp_client_t* client = NULL;
     const char* url = NULL;
     size_t url_len = 0;
 
@@ -160,8 +198,15 @@ static int test_mode_configs(void)
     REQUIRE_STATUS(galay_mcp_http_config_url(http_config, &url, &url_len), GALAY_OK);
     REQUIRE_TRUE(url_len == strlen("https://example.test/mcp"));
     REQUIRE_TRUE(strncmp(url, "https://example.test/mcp", url_len) == 0);
+    REQUIRE_STATUS(galay_mcp_http_config_set_bearer_token(http_config, "token\r\nInjected: true"),
+                   GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_mcp_client_create(http_config, &client), GALAY_INVALID_ARGUMENT);
+    REQUIRE_STATUS(galay_mcp_http_config_create("http://127.0.0.1:80/\r\nInjected",
+                                                &invalid_url_config), GALAY_OK);
+    REQUIRE_STATUS(galay_mcp_client_create(invalid_url_config, &client), GALAY_INVALID_ARGUMENT);
     REQUIRE_STATUS(galay_mcp_http_config_create("", &http_config), GALAY_INVALID_ARGUMENT);
 
+    galay_mcp_client_config_destroy(invalid_url_config);
     galay_mcp_client_config_destroy(http_config);
     galay_mcp_client_config_destroy(stdio_config);
     return 0;
@@ -179,6 +224,9 @@ int main(void)
         return 1;
     }
     if (test_boundaries_are_rejected() != 0) {
+        return 1;
+    }
+    if (test_structured_json_fields() != 0) {
         return 1;
     }
     if (test_mode_configs() != 0) {

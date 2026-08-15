@@ -90,6 +90,11 @@ static int contains_text(const char* data, size_t size, const char* needle)
     return 0;
 }
 
+static int is_http2_cpp_bridge(const char* relative_path)
+{
+    return strncmp(relative_path, "src/c/galay-http2-c/", strlen("src/c/galay-http2-c/")) == 0;
+}
+
 static int check_source_file(const char* full_path, const char* relative_path)
 {
     char* data = NULL;
@@ -129,6 +134,11 @@ static int check_source_file(const char* full_path, const char* relative_path)
         for (size_t index = 0;
              index < sizeof(forbidden_source_tokens) / sizeof(forbidden_source_tokens[0]);
              ++index) {
+            if (is_http2_cpp_bridge(relative_path) &&
+                (strcmp(forbidden_source_tokens[index], "galay::") == 0 ||
+                 strcmp(forbidden_source_tokens[index], "galay/cpp/") == 0)) {
+                continue;
+            }
             if (contains_text(data, size, forbidden_source_tokens[index])) {
                 fprintf(stderr, "[T22] C module contains C++ dependency token %s: %s\n",
                         forbidden_source_tokens[index], relative_path);
@@ -140,6 +150,11 @@ static int check_source_file(const char* full_path, const char* relative_path)
         for (size_t index = 0;
              index < sizeof(forbidden_cpp_targets) / sizeof(forbidden_cpp_targets[0]);
              ++index) {
+            if (is_http2_cpp_bridge(relative_path) &&
+                (strcmp(forbidden_cpp_targets[index], "galay::http") == 0 ||
+                 strcmp(forbidden_cpp_targets[index], "galay::http2") == 0)) {
+                continue;
+            }
             if (contains_text(data, size, forbidden_cpp_targets[index])) {
                 fprintf(stderr, "[T22] C target depends on C++ target %s: %s\n",
                         forbidden_cpp_targets[index], relative_path);

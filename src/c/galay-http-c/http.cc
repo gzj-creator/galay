@@ -93,6 +93,47 @@ std::string lower_copy(std::string_view text)
     return out;
 }
 
+bool valid_header_name(std::string_view name)
+{
+    if (name.empty()) {
+        return false;
+    }
+    for (const unsigned char ch : name) {
+        const bool token = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+            (ch >= '0' && ch <= '9') ||
+            ch == '!' || ch == '#' || ch == '$' || ch == '%' || ch == '&' ||
+            ch == '\'' || ch == '*' || ch == '+' || ch == '-' || ch == '.' ||
+            ch == '^' || ch == '_' || ch == '`' || ch == '|' || ch == '~';
+        if (!token) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_header_value(std::string_view value)
+{
+    for (const unsigned char ch : value) {
+        if (ch == '\r' || ch == '\n' || ch == 0 || (ch < 0x20 && ch != '\t') || ch == 0x7f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_request_path(std::string_view path)
+{
+    if (path.empty()) {
+        return false;
+    }
+    for (const unsigned char ch : path) {
+        if (ch <= 0x20 || ch == 0x7f) {
+            return false;
+        }
+    }
+    return true;
+}
+
 std::string trim_header_value(std::string_view text)
 {
     size_t begin = 0;
@@ -198,7 +239,7 @@ galay_status_t add_header_value(galay_http_headers_t& headers,
                                 std::string_view name,
                                 std::string_view value)
 {
-    if (name.empty()) {
+    if (!valid_header_name(name) || !valid_header_value(value)) {
         return GALAY_INVALID_ARGUMENT;
     }
     const std::string key = lower_copy(name);
@@ -297,7 +338,7 @@ ParseResult parse_request_internal(galay_http_request_t& request,
     const std::string_view path = request_line.substr(first_space + 1,
                                                       second_space - first_space - 1);
     const std::string_view version = request_line.substr(second_space + 1);
-    if (path.empty() || (version != "HTTP/1.1" && version != "HTTP/1.0")) {
+    if (!valid_request_path(path) || (version != "HTTP/1.1" && version != "HTTP/1.0")) {
         return ParseResult{0, ParseState::kError};
     }
 
@@ -391,7 +432,7 @@ galay_status_t serialize_headers(const galay_http_headers_t& headers,
         if (entry.name == "content-length") {
             continue;
         }
-        if (entry.name.empty()) {
+        if (!valid_header_name(entry.name) || !valid_header_value(entry.value)) {
             return GALAY_PROTOCOL_ERROR;
         }
         serialized += entry.name;
@@ -633,7 +674,8 @@ galay_status_t galay_http_request_set_method_path(galay_http_request_t* request,
                                                   galay_http_method_t method,
                                                   const char* path)
 {
-    if (request == nullptr || method_name(method) == nullptr || path == nullptr || path[0] == '\0') {
+    if (request == nullptr || method_name(method) == nullptr || path == nullptr ||
+        !valid_request_path(path)) {
         return GALAY_INVALID_ARGUMENT;
     }
     request->method = method;

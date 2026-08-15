@@ -18,6 +18,7 @@
 
 ### Changed
 
+- **HTTP/2 C API 改用仓库内置 HPACK 协议模块**：移除 nghttp2 依赖，复用 `galay::http2::HpackEncoder` / `HpackDecoder`，并让 CMake 在启用 HTTP/2 C API 时明确依赖 C++ HTTP/2 模块。
 - **收敛 C ABI 文件、标识符与构建边界**：公开头和实现移除 `_c` 文件名后缀，kernel 统一采用 `galay_c_*` 标识符；CMake 改为构建原生 C11 kernel/common target，并同步迁移 HTTP、HTTP2、WS、Redis、MySQL、PostgreSQL、Mongo、etcd、MCP、RPC、SSL、tracing 和 utils 的 C API 调用点。
 - **同步更新 C API 交付与性能证据**：示例、测试、benchmark、安装布局校验、使用指南和模块 README 对齐新 ABI；kernel 性能文档新增 Release 下 channel、协程、文件、timeout、UDP loopback 与 UDP 双进程压力基线，并明确双进程 TCP 和混合 timeout 的失败门禁。
 - **扩展 benchmark 测量合同**：新增多调度器 TCP 客户端分配和 libuv 多 loop 实现的源码约束检查，并同步更新 C TCP 双进程 echo 的复现命令与无错误基线。
@@ -29,6 +30,7 @@
 
 ### Fixed
 
+- **修复 C API 协议边界与输入校验**：补齐 HPACK 静态索引、Huffman、动态表、长字段及整数溢出处理；收紧 HTTP/HTTP2/MCP header、路径、JSON、URL 和认证字段校验；WebSocket 改用随机握手 nonce 和 frame mask；修复 HTTP/2 WINDOW_UPDATE 失败回滚与 timeout benchmark accepted fd 初始化。
 - **修复 C TCP accepted socket 的 scheduler 亲和交接**：`accept` 不再把新连接错误固定到 listener scheduler，改由 session coroutine 的首次 `recv/send` 绑定；新增双 I/O scheduler C coroutine 回归覆盖，避免跨 scheduler 首次 I/O 返回 `C_IOResultInvalid`。
 
 ## [v4.8.0] - 2026-08-14

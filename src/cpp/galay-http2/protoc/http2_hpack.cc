@@ -1,6 +1,7 @@
 #include "http2_hpack.h"
 #include <algorithm>
 #include <cstring>
+#include <limits>
 
 namespace galay::http2
 {
@@ -5252,17 +5253,19 @@ std::expected<uint32_t, Http2ErrorCode> HpackDecoder::decodeInteger(const uint8_
         return value;
     }
     
-    uint32_t m = 0;
+    uint32_t shift = 0;
     while (data < end) {
         uint8_t b = *data++;
-        value += (b & 0x7F) << m;
-        m += 7;
-        
+        const uint32_t payload = b & 0x7F;
+        if (shift >= 32 || payload > (std::numeric_limits<uint32_t>::max() - value) >> shift) {
+            return std::unexpected(Http2ErrorCode::CompressionError);
+        }
+        value += payload << shift;
         if ((b & 0x80) == 0) {
             return value;
         }
-        
-        if (m > 28) {
+        shift += 7;
+        if (shift >= 32) {
             return std::unexpected(Http2ErrorCode::CompressionError);
         }
     }
@@ -5282,8 +5285,8 @@ std::expected<std::string, Http2ErrorCode> HpackDecoder::decodeString(const uint
         return std::unexpected(length_result.error());
     }
     
-    uint32_t length = *length_result;
-    if (data + length > end) {
+    const uint32_t length = *length_result;
+    if (length > static_cast<size_t>(end - data)) {
         return std::unexpected(Http2ErrorCode::CompressionError);
     }
     
@@ -5332,6 +5335,13 @@ void HpackDecoder::setMaxHeaderListSize(size_t size)
 
 std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decode(const uint8_t* data, size_t length)
 {
+    if (data == nullptr && length != 0) {
+        return std::unexpected(Http2ErrorCode::CompressionError);
+    }
+    static const uint8_t empty_block = 0;
+    if (data == nullptr) {
+        data = &empty_block;
+    }
     std::vector<Http2HeaderField> headers;
     // 每个 header block 通常包含多个小字段，预留容量减少 push_back 扩容开销。
     headers.reserve(std::min<size_t>(length / 16 + 4, 64));
@@ -5352,10 +5362,11 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
             if (!field) {
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
-            header_list_size += field->size();
-            if (header_list_size > m_max_header_list_size) {
+            if (field->size() > m_max_header_list_size ||
+                header_list_size > m_max_header_list_size - field->size()) {
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
+            header_list_size += field->size();
             
             headers.push_back(*field);
         }
@@ -5387,10 +5398,11 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
             }
             
             Http2HeaderField field{std::move(name), std::move(*value_result)};
-            header_list_size += field.size();
-            if (header_list_size > m_max_header_list_size) {
+            if (field.size() > m_max_header_list_size ||
+                header_list_size > m_max_header_list_size - field.size()) {
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
+            header_list_size += field.size();
             m_dynamic_table.add(field);
             headers.push_back(std::move(field));
         }
@@ -5438,10 +5450,11 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
             }
 
             Http2HeaderField field{std::move(name), std::move(*value_result)};
-            header_list_size += field.size();
-            if (header_list_size > m_max_header_list_size) {
+            if (field.size() > m_max_header_list_size ||
+                header_list_size > m_max_header_list_size - field.size()) {
                 return std::unexpected(Http2ErrorCode::CompressionError);
             }
+            header_list_size += field.size();
             headers.push_back(std::move(field));
             // 不添加到动态表
         }
@@ -5453,15 +5466,23 @@ std::expected<std::vector<Http2HeaderField>, Http2ErrorCode> HpackDecoder::decod
 std::expected<HpackDecoder::RequestTarget, Http2ErrorCode>
 HpackDecoder::decodeRequestTarget(const uint8_t* data, size_t length)
 {
+    if (data == nullptr && length != 0) {
+        return std::unexpected(Http2ErrorCode::CompressionError);
+    }
+    static const uint8_t empty_block = 0;
+    if (data == nullptr) {
+        data = &empty_block;
+    }
     RequestTarget target;
     const uint8_t* end = data + length;
     size_t header_list_size = 0;
 
     auto record_field = [&](const Http2HeaderField& field) -> std::expected<void, Http2ErrorCode> {
-        header_list_size += field.size();
-        if (header_list_size > m_max_header_list_size) {
+        if (field.size() > m_max_header_list_size ||
+            header_list_size > m_max_header_list_size - field.size()) {
             return std::unexpected(Http2ErrorCode::CompressionError);
         }
+        header_list_size += field.size();
         if (field.name == ":method") {
             target.method = field.value;
         } else if (field.name == ":path") {

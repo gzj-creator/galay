@@ -52,6 +52,7 @@ typedef enum galay_http2_frame_type_t {
  * @details `galay_http2_settings_value_validate` 会按 RFC 边界校验这些值。
  */
 typedef enum galay_http2_settings_id_t {
+    GALAY_HTTP2_SETTINGS_HEADER_TABLE_SIZE = 1,     ///< HPACK dynamic table size in bytes.
     GALAY_HTTP2_SETTINGS_ENABLE_PUSH = 2,          ///< 值必须为 0 或 1。
     GALAY_HTTP2_SETTINGS_INITIAL_WINDOW_SIZE = 4,  ///< 值不能超过 2^31 - 1。
     GALAY_HTTP2_SETTINGS_MAX_FRAME_SIZE = 5        ///< 值范围为 16384 到 16777215。
@@ -258,10 +259,11 @@ void galay_http2_headers_destroy(galay_http2_headers_t* headers);
  * @brief 向 headers 集合追加一个 name/value。
  * @details `name` 和 `value` 会被复制进 headers；调用返回后原始字符串可释放。
  * @param headers headers handle。
- * @param name header name，不能为空字符串。
- * @param value header value，可为空字符串但不能为 NULL。
+ * @param name header name，必须是小写 HTTP token；伪头部可使用开头的 `:`。
+ * @param value header value，可为空字符串但不能为 NULL，不能包含 CR/LF 或控制字符。
  * @return 成功返回 `GALAY_OK`；参数无效返回 `GALAY_INVALID_ARGUMENT`。
- * @note HPACK/header 编码阶段要求 name/value 长度均不超过当前 C ABI 支持的 255 字节。
+ * @note HPACK 使用 RFC 7541 的可变长度整数编码；name/value 不受单字节 255 限制，
+ * 但发送时仍受对端 SETTINGS_MAX_FRAME_SIZE 和调用方输出 buffer 容量约束。
  */
 galay_status_t galay_http2_headers_add(galay_http2_headers_t* headers, const char* name,
                                        const char* value);

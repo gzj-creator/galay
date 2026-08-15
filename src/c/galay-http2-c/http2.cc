@@ -1,12 +1,15 @@
 #include <galay/c/galay-http2-c/http2.h>
 
 #include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
+#include <galay/cpp/galay-http2/protoc/http2_hpack.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cstdint>
 #include <deque>
 #include <new>
 #include <string>
+#include <string_view>
 #include <vector>
 
 struct galay_http2_frame_t {
@@ -30,6 +33,8 @@ constexpr uint8_t kFlagAck = 0x1;
 constexpr uint8_t kFlagEndHeaders = 0x4;
 constexpr uint32_t kDefaultInitialWindow = 65535;
 constexpr uint32_t kDefaultMaxFrameSize = 16384;
+constexpr size_t kDefaultHpackTableSize = 4096;
+constexpr size_t kMaxHpackTableSize = 65536;
 constexpr uint32_t kMaxWindow = 0x7FFFFFFFu;
 constexpr char kClientPreface[] = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n";
 constexpr size_t kClientPrefaceLength = sizeof(kClientPreface) - 1;
@@ -61,6 +66,8 @@ struct galay_http2_conn_t {
     int32_t conn_send_window = static_cast<int32_t>(kDefaultInitialWindow);
     int32_t conn_recv_window = static_cast<int32_t>(kDefaultInitialWindow);
     uint32_t max_concurrent_streams = 100;
+    galay::http2::HpackEncoder hpack_encoder;
+    galay::http2::HpackDecoder hpack_decoder;
     std::vector<galay_http2_stream_t*> streams;
 };
 
@@ -89,10 +96,45 @@ struct galay_http2_server_t {
     bool listening = false;
 };
 
-
 C_IOResult result(C_IOResultCode code, galay_http2_error_code_t error, size_t bytes = 0)
 {
     return C_IOResult{code, 0, bytes, static_cast<int64_t>(error), nullptr};
+}
+
+bool valid_http2_header_name(std::string_view name)
+{
+    if (name.empty()) {
+        return false;
+    }
+    size_t pos = 0;
+    if (name.front() == ':') {
+        pos = 1;
+        if (pos == name.size()) {
+            return false;
+        }
+    }
+    for (; pos < name.size(); ++pos) {
+        const unsigned char ch = static_cast<unsigned char>(name[pos]);
+        const bool ascii_lower = ch >= 'a' && ch <= 'z';
+        const bool ascii_digit = ch >= '0' && ch <= '9';
+        if (!ascii_lower && !ascii_digit &&
+            ch != '!' && ch != '#' && ch != '$' && ch != '%' && ch != '&' &&
+            ch != '\'' && ch != '*' && ch != '+' && ch != '-' && ch != '.' &&
+            ch != '^' && ch != '_' && ch != '`' && ch != '|' && ch != '~') {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_http2_header_value(std::string_view value)
+{
+    for (const unsigned char ch : value) {
+        if (ch == '\r' || ch == '\n' || ch == 0 || (ch < 0x20 && ch != '\t') || ch == 0x7f) {
+            return false;
+        }
+    }
+    return true;
 }
 
 C_IOResult map_io_result(C_IOResult io)
@@ -185,7 +227,8 @@ void append_setting(std::vector<uint8_t>& out, galay_http2_settings_id_t id, uin
 std::vector<uint8_t> make_settings_payload(const galay_http2_config_t& config)
 {
     std::vector<uint8_t> payload;
-    payload.reserve(12);
+    payload.reserve(18);
+    append_setting(payload, GALAY_HTTP2_SETTINGS_HEADER_TABLE_SIZE, kDefaultHpackTableSize);
     append_setting(payload, GALAY_HTTP2_SETTINGS_INITIAL_WINDOW_SIZE, config.initial_window_size);
     append_setting(payload, GALAY_HTTP2_SETTINGS_MAX_FRAME_SIZE, config.max_frame_size);
     return payload;
@@ -417,35 +460,29 @@ C_IOResult read_frame(galay_http2_conn_t* conn, RawFrame& frame, int64_t timeout
     return result(C_IOResultOk, GALAY_HTTP2_ERROR_NONE, GALAY_HTTP2_FRAME_HEADER_LENGTH + len);
 }
 
-galay_status_t encode_headers_payload(const galay_http2_headers_t* headers, std::vector<uint8_t>& out)
+galay_status_t encode_headers_payload(const galay_http2_headers_t* headers,
+                                      galay::http2::HpackEncoder& encoder,
+                                      std::vector<uint8_t>& out)
 {
     if (headers == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
-    out.clear();
-    size_t need = 0;
+    std::vector<galay::http2::Http2HeaderField> fields;
+    fields.reserve(headers->entries.size());
     for (const auto& entry : headers->entries) {
-        if (entry.name.empty() || entry.name.size() > 255 || entry.value.size() > 255) {
+        if (!valid_http2_header_name(entry.name) || !valid_http2_header_value(entry.value)) {
             return GALAY_INVALID_ARGUMENT;
         }
-        need += 3 + entry.name.size() + entry.value.size();
+        fields.push_back({entry.name, entry.value});
     }
-    out.reserve(need);
-    for (const auto& entry : headers->entries) {
-        out.push_back(0x40);
-        out.push_back(static_cast<uint8_t>(entry.name.size()));
-        for (char ch : entry.name) {
-            out.push_back(static_cast<uint8_t>(ch));
-        }
-        out.push_back(static_cast<uint8_t>(entry.value.size()));
-        for (char ch : entry.value) {
-            out.push_back(static_cast<uint8_t>(ch));
-        }
-    }
+    const std::string encoded = encoder.encode(fields);
+    out.assign(encoded.begin(), encoded.end());
     return GALAY_OK;
 }
 
-galay_status_t decode_headers_payload(const std::vector<uint8_t>& payload, galay_http2_headers_t** out)
+galay_status_t decode_headers_payload(const std::vector<uint8_t>& payload,
+                                      galay::http2::HpackDecoder& decoder,
+                                      galay_http2_headers_t** out)
 {
     if (out == nullptr) {
         return GALAY_INVALID_ARGUMENT;
@@ -456,43 +493,20 @@ galay_status_t decode_headers_payload(const std::vector<uint8_t>& payload, galay
         return GALAY_OUT_OF_MEMORY;
     }
 
-    size_t pos = 0;
-    while (pos < payload.size()) {
-        if (payload[pos] != 0x40) {
+    static const uint8_t empty_block = 0;
+    const uint8_t* data = payload.empty() ? &empty_block : payload.data();
+    auto decoded = decoder.decode(data, payload.size());
+    if (!decoded) {
+        delete headers;
+        return GALAY_PROTOCOL_ERROR;
+    }
+    headers->entries.reserve(decoded->size());
+    for (auto& field : *decoded) {
+        if (!valid_http2_header_name(field.name) || !valid_http2_header_value(field.value)) {
             delete headers;
             return GALAY_PROTOCOL_ERROR;
         }
-        ++pos;
-        if (pos >= payload.size()) {
-            delete headers;
-            return GALAY_PROTOCOL_ERROR;
-        }
-        const size_t name_len = payload[pos];
-        ++pos;
-        if (pos + name_len >= payload.size()) {
-            delete headers;
-            return GALAY_PROTOCOL_ERROR;
-        }
-        std::string name;
-        name.reserve(name_len);
-        for (size_t i = 0; i < name_len; ++i) {
-            name.push_back(static_cast<char>(payload[pos + i]));
-        }
-        pos += name_len;
-
-        const size_t value_len = payload[pos];
-        ++pos;
-        if (pos + value_len > payload.size()) {
-            delete headers;
-            return GALAY_PROTOCOL_ERROR;
-        }
-        std::string value;
-        value.reserve(value_len);
-        for (size_t i = 0; i < value_len; ++i) {
-            value.push_back(static_cast<char>(payload[pos + i]));
-        }
-        pos += value_len;
-        headers->entries.push_back({std::move(name), std::move(value)});
+        headers->entries.push_back({std::move(field.name), std::move(field.value)});
     }
 
     *out = headers;
@@ -524,7 +538,9 @@ C_IOResult apply_peer_settings(galay_http2_conn_t* conn, const RawFrame& frame)
         if (status != GALAY_OK) {
             return result(C_IOResultError, GALAY_HTTP2_ERROR_PROTOCOL);
         }
-        if (id == GALAY_HTTP2_SETTINGS_INITIAL_WINDOW_SIZE) {
+        if (id == GALAY_HTTP2_SETTINGS_HEADER_TABLE_SIZE) {
+            conn->hpack_encoder.setMaxTableSize(value);
+        } else if (id == GALAY_HTTP2_SETTINGS_INITIAL_WINDOW_SIZE) {
             const int32_t old_window = static_cast<int32_t>(conn->peer_initial_window);
             conn->peer_initial_window = value;
             const int32_t delta = static_cast<int32_t>(value) - old_window;
@@ -605,7 +621,7 @@ C_IOResult process_frame(galay_http2_conn_t* conn, RawFrame&& frame, int64_t tim
     case GALAY_HTTP2_FRAME_HEADERS:
         {
             galay_http2_headers_t* headers = nullptr;
-            galay_status_t decoded = decode_headers_payload(frame.payload, &headers);
+            galay_status_t decoded = decode_headers_payload(frame.payload, conn->hpack_decoder, &headers);
             if (decoded != GALAY_OK) {
                 return result(C_IOResultError, GALAY_HTTP2_ERROR_PROTOCOL);
             }
@@ -811,6 +827,9 @@ galay_status_t galay_http2_stream_id_validate(uint32_t stream_id, galay_bool_t a
 
 galay_status_t galay_http2_settings_value_validate(galay_http2_settings_id_t id, uint32_t value)
 {
+    if (id == GALAY_HTTP2_SETTINGS_HEADER_TABLE_SIZE) {
+        return value <= kMaxHpackTableSize ? GALAY_OK : GALAY_PROTOCOL_ERROR;
+    }
     if (id == GALAY_HTTP2_SETTINGS_ENABLE_PUSH && value > 1) {
         return GALAY_PROTOCOL_ERROR;
     }
@@ -950,7 +969,8 @@ void galay_http2_headers_destroy(galay_http2_headers_t* headers)
 galay_status_t galay_http2_headers_add(galay_http2_headers_t* headers, const char* name,
                                        const char* value)
 {
-    if (headers == nullptr || name == nullptr || value == nullptr || name[0] == '\0') {
+    if (headers == nullptr || name == nullptr || value == nullptr ||
+        !valid_http2_header_name(name) || !valid_http2_header_value(value)) {
         return GALAY_INVALID_ARGUMENT;
     }
     headers->entries.push_back({name, value});
@@ -979,8 +999,9 @@ galay_status_t galay_http2_hpack_encode(const galay_http2_headers_t* headers, ui
     if (headers == nullptr || out_len == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
+    galay::http2::HpackEncoder encoder;
     std::vector<uint8_t> payload;
-    galay_status_t encoded = encode_headers_payload(headers, payload);
+    galay_status_t encoded = encode_headers_payload(headers, encoder, payload);
     if (encoded != GALAY_OK) {
         return encoded;
     }
@@ -998,12 +1019,15 @@ galay_status_t galay_http2_hpack_encode(const galay_http2_headers_t* headers, ui
 galay_status_t galay_http2_hpack_decode(const uint8_t* data, size_t data_len,
                                         galay_http2_headers_t** out)
 {
-    if (data == nullptr || out == nullptr) {
+    if (out == nullptr || (data == nullptr && data_len != 0)) {
         return GALAY_INVALID_ARGUMENT;
     }
     std::vector<uint8_t> payload;
-    payload.assign(data, data + data_len);
-    return decode_headers_payload(payload, out);
+    if (data_len != 0) {
+        payload.assign(data, data + data_len);
+    }
+    galay::http2::HpackDecoder decoder;
+    return decode_headers_payload(payload, decoder, out);
 }
 
 galay_http2_config_t galay_http2_config_default(void)
@@ -1125,8 +1149,9 @@ C_IOResult galay_http2_client_open_stream(galay_http2_client_t* client,
         return result(C_IOResultError, GALAY_HTTP2_ERROR_INTERNAL);
     }
 
+    auto encoder = conn->hpack_encoder.clone();
     std::vector<uint8_t> payload;
-    galay_status_t encoded = encode_headers_payload(headers, payload);
+    galay_status_t encoded = encode_headers_payload(headers, encoder, payload);
     if (encoded != GALAY_OK) {
         forget_stream(stream);
         delete stream;
@@ -1139,6 +1164,7 @@ C_IOResult galay_http2_client_open_stream(galay_http2_client_t* client,
         delete stream;
         return sent;
     }
+    conn->hpack_encoder = std::move(encoder);
     if (out_stream != nullptr) {
         *out_stream = stream;
     }
@@ -1369,22 +1395,30 @@ C_IOResult galay_http2_conn_send_window_update(galay_http2_conn_t* conn,
     if (conn == nullptr || increment == 0 || increment > kMaxWindow) {
         return result(C_IOResultInvalid, GALAY_HTTP2_ERROR_INTERNAL);
     }
+    if (stream != nullptr && stream->conn != conn) {
+        return result(C_IOResultInvalid, GALAY_HTTP2_ERROR_INTERNAL);
+    }
     if (static_cast<int64_t>(conn->conn_recv_window) + increment > kMaxWindow) {
         return result(C_IOResultError, GALAY_HTTP2_ERROR_FLOW_CONTROL);
     }
-    conn->conn_recv_window += static_cast<int32_t>(increment);
     uint32_t stream_id = 0;
     if (stream != nullptr) {
-        if (stream->conn != conn ||
-            static_cast<int64_t>(stream->recv_window) + increment > kMaxWindow) {
+        if (static_cast<int64_t>(stream->recv_window) + increment > kMaxWindow) {
             return result(C_IOResultError, GALAY_HTTP2_ERROR_FLOW_CONTROL);
         }
-        stream->recv_window += static_cast<int32_t>(increment);
         stream_id = stream->id;
     }
     std::vector<uint8_t> payload;
     append_u32(payload, increment);
-    return send_frame(conn, GALAY_HTTP2_FRAME_WINDOW_UPDATE, 0, stream_id, payload, timeout_ms);
+    C_IOResult sent = send_frame(conn, GALAY_HTTP2_FRAME_WINDOW_UPDATE, 0, stream_id, payload, timeout_ms);
+    if (sent.code != C_IOResultOk) {
+        return sent;
+    }
+    conn->conn_recv_window += static_cast<int32_t>(increment);
+    if (stream != nullptr) {
+        stream->recv_window += static_cast<int32_t>(increment);
+    }
+    return result(C_IOResultOk, GALAY_HTTP2_ERROR_NONE, sent.bytes);
 }
 
 galay_status_t galay_http2_stream_destroy(galay_http2_stream_t* stream)
@@ -1443,8 +1477,9 @@ C_IOResult galay_http2_stream_write_headers(galay_http2_stream_t* stream,
     if (!can_send_on_stream(stream)) {
         return result(C_IOResultError, GALAY_HTTP2_ERROR_STREAM_CLOSED);
     }
+    auto encoder = stream->conn->hpack_encoder.clone();
     std::vector<uint8_t> payload;
-    galay_status_t encoded = encode_headers_payload(headers, payload);
+    galay_status_t encoded = encode_headers_payload(headers, encoder, payload);
     if (encoded != GALAY_OK) {
         return result(C_IOResultError, GALAY_HTTP2_ERROR_PROTOCOL);
     }
@@ -1453,6 +1488,9 @@ C_IOResult galay_http2_stream_write_headers(galay_http2_stream_t* stream,
         send_frame(stream->conn, GALAY_HTTP2_FRAME_HEADERS, flags, stream->id, payload, timeout_ms);
     if (sent.code == C_IOResultOk && end_stream == GALAY_TRUE) {
         mark_local_end(stream);
+    }
+    if (sent.code == C_IOResultOk) {
+        stream->conn->hpack_encoder = std::move(encoder);
     }
     return sent.code == C_IOResultOk ? result(C_IOResultOk, GALAY_HTTP2_ERROR_NONE) : sent;
 }

@@ -1,11 +1,14 @@
 #include <galay/c/galay-mcp-c/mcp.h>
 #include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
 
+#include <charconv>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <new>
 #include <string>
+#include <string_view>
 #include <vector>
 
 
@@ -27,8 +30,8 @@ bool valid_method(const char* method)
     if (method == nullptr || method[0] == '\0') {
         return false;
     }
-    for (const char* p = method; *p != '\0'; ++p) {
-        if (*p == ' ') {
+    for (const unsigned char* p = reinterpret_cast<const unsigned char*>(method); *p != '\0'; ++p) {
+        if (*p <= 0x20 || *p == 0x7f || *p == '"' || *p == '\\') {
             return false;
         }
     }
@@ -37,32 +40,11 @@ bool valid_method(const char* method)
 
 void skip_ws(const std::string& data, size_t* pos)
 {
-    while (*pos < data.size() && std::isspace(static_cast<unsigned char>(data[*pos])) != 0) {
+    while (*pos < data.size() &&
+           (data[*pos] == ' ' || data[*pos] == '\t' || data[*pos] == '\r' ||
+            data[*pos] == '\n')) {
         ++(*pos);
     }
-}
-
-bool field_value_start(const std::string& data, const char* key, size_t* value_start)
-{
-    if (key == nullptr || value_start == nullptr) {
-        return false;
-    }
-    const std::string marker = std::string("\"") + key + "\"";
-    const size_t key_pos = data.find(marker);
-    if (key_pos == std::string::npos) {
-        return false;
-    }
-    size_t colon = data.find(':', key_pos + marker.size());
-    if (colon == std::string::npos) {
-        return false;
-    }
-    ++colon;
-    skip_ws(data, &colon);
-    if (colon >= data.size()) {
-        return false;
-    }
-    *value_start = colon;
-    return true;
 }
 
 bool parse_string_at(const std::string& data, size_t start, std::string* out, size_t* end_pos)
@@ -70,17 +52,87 @@ bool parse_string_at(const std::string& data, size_t start, std::string* out, si
     if (out == nullptr || start >= data.size() || data[start] != '"') {
         return false;
     }
+    const auto hex_value = [](unsigned char ch) -> int {
+        if (ch >= '0' && ch <= '9') return ch - '0';
+        if (ch >= 'a' && ch <= 'f') return ch - 'a' + 10;
+        if (ch >= 'A' && ch <= 'F') return ch - 'A' + 10;
+        return -1;
+    };
+    const auto append_utf8 = [](std::string& value, uint32_t codepoint) {
+        if (codepoint <= 0x7f) {
+            value.push_back(static_cast<char>(codepoint));
+        } else if (codepoint <= 0x7ff) {
+            value.push_back(static_cast<char>(0xc0 | (codepoint >> 6)));
+            value.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+        } else if (codepoint <= 0xffff) {
+            value.push_back(static_cast<char>(0xe0 | (codepoint >> 12)));
+            value.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+            value.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+        } else {
+            value.push_back(static_cast<char>(0xf0 | (codepoint >> 18)));
+            value.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3f)));
+            value.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3f)));
+            value.push_back(static_cast<char>(0x80 | (codepoint & 0x3f)));
+        }
+    };
     std::string value;
-    bool escaped = false;
     for (size_t pos = start + 1; pos < data.size(); ++pos) {
-        const char ch = data[pos];
-        if (escaped) {
-            value.push_back(ch);
-            escaped = false;
-            continue;
+        const unsigned char ch = static_cast<unsigned char>(data[pos]);
+        if (ch < 0x20) {
+            return false;
         }
         if (ch == '\\') {
-            escaped = true;
+            if (++pos >= data.size()) {
+                return false;
+            }
+            switch (data[pos]) {
+            case '"': value.push_back('"'); break;
+            case '\\': value.push_back('\\'); break;
+            case '/': value.push_back('/'); break;
+            case 'b': value.push_back('\b'); break;
+            case 'f': value.push_back('\f'); break;
+            case 'n': value.push_back('\n'); break;
+            case 'r': value.push_back('\r'); break;
+            case 't': value.push_back('\t'); break;
+            case 'u': {
+                if (pos + 4 >= data.size()) {
+                    return false;
+                }
+                uint32_t codepoint = 0;
+                for (size_t digit = 1; digit <= 4; ++digit) {
+                    const int hex = hex_value(static_cast<unsigned char>(data[pos + digit]));
+                    if (hex < 0) {
+                        return false;
+                    }
+                    codepoint = (codepoint << 4) | static_cast<uint32_t>(hex);
+                }
+                pos += 4;
+                if (codepoint >= 0xd800 && codepoint <= 0xdbff) {
+                    if (pos + 6 >= data.size() || data[pos + 1] != '\\' || data[pos + 2] != 'u') {
+                        return false;
+                    }
+                    uint32_t low = 0;
+                    for (size_t digit = 3; digit <= 6; ++digit) {
+                        const int hex = hex_value(static_cast<unsigned char>(data[pos + digit]));
+                        if (hex < 0) {
+                            return false;
+                        }
+                        low = (low << 4) | static_cast<uint32_t>(hex);
+                    }
+                    if (low < 0xdc00 || low > 0xdfff) {
+                        return false;
+                    }
+                    codepoint = 0x10000 + ((codepoint - 0xd800) << 10) + (low - 0xdc00);
+                    pos += 6;
+                } else if (codepoint >= 0xdc00 && codepoint <= 0xdfff) {
+                    return false;
+                }
+                append_utf8(value, codepoint);
+                break;
+            }
+            default:
+                return false;
+            }
             continue;
         }
         if (ch == '"') {
@@ -95,10 +147,261 @@ bool parse_string_at(const std::string& data, size_t start, std::string* out, si
     return false;
 }
 
+bool scan_json_string(const std::string& data, size_t start, size_t* end_pos)
+{
+    if (end_pos == nullptr || start >= data.size() || data[start] != '"') {
+        return false;
+    }
+    for (size_t pos = start + 1; pos < data.size(); ++pos) {
+        const unsigned char ch = static_cast<unsigned char>(data[pos]);
+        if (ch == '"') {
+            *end_pos = pos + 1;
+            return true;
+        }
+        if (ch < 0x20) {
+            return false;
+        }
+        if (ch != '\\') {
+            continue;
+        }
+        if (++pos >= data.size()) {
+            return false;
+        }
+        const char escaped = data[pos];
+        if (escaped == 'u') {
+            if (pos + 4 >= data.size()) {
+                return false;
+            }
+            for (size_t digit = 1; digit <= 4; ++digit) {
+                const unsigned char value = static_cast<unsigned char>(data[pos + digit]);
+                if (!std::isxdigit(value)) {
+                    return false;
+                }
+            }
+            pos += 4;
+        } else if (escaped != '"' && escaped != '\\' && escaped != '/' &&
+                   escaped != 'b' && escaped != 'f' && escaped != 'n' &&
+                   escaped != 'r' && escaped != 't') {
+            return false;
+        }
+    }
+    return false;
+}
+
+bool scan_json_value(const std::string& data, size_t start, size_t* end_pos);
+
+bool scan_json_object(const std::string& data, size_t start, size_t* end_pos)
+{
+    size_t pos = start + 1;
+    skip_ws(data, &pos);
+    if (pos < data.size() && data[pos] == '}') {
+        *end_pos = pos + 1;
+        return true;
+    }
+    while (pos < data.size()) {
+        size_t key_end = 0;
+        if (!scan_json_string(data, pos, &key_end)) {
+            return false;
+        }
+        pos = key_end;
+        skip_ws(data, &pos);
+        if (pos >= data.size() || data[pos] != ':') {
+            return false;
+        }
+        ++pos;
+        skip_ws(data, &pos);
+        if (!scan_json_value(data, pos, &pos)) {
+            return false;
+        }
+        skip_ws(data, &pos);
+        if (pos < data.size() && data[pos] == '}') {
+            *end_pos = pos + 1;
+            return true;
+        }
+        if (pos >= data.size() || data[pos] != ',') {
+            return false;
+        }
+        ++pos;
+        skip_ws(data, &pos);
+    }
+    return false;
+}
+
+bool scan_json_array(const std::string& data, size_t start, size_t* end_pos)
+{
+    size_t pos = start + 1;
+    skip_ws(data, &pos);
+    if (pos < data.size() && data[pos] == ']') {
+        *end_pos = pos + 1;
+        return true;
+    }
+    while (pos < data.size()) {
+        if (!scan_json_value(data, pos, &pos)) {
+            return false;
+        }
+        skip_ws(data, &pos);
+        if (pos < data.size() && data[pos] == ']') {
+            *end_pos = pos + 1;
+            return true;
+        }
+        if (pos >= data.size() || data[pos] != ',') {
+            return false;
+        }
+        ++pos;
+        skip_ws(data, &pos);
+    }
+    return false;
+}
+
+bool scan_json_number(const std::string& data, size_t start, size_t* end_pos)
+{
+    size_t pos = start;
+    if (pos < data.size() && data[pos] == '-') {
+        ++pos;
+    }
+    if (pos >= data.size()) {
+        return false;
+    }
+    if (data[pos] == '0') {
+        ++pos;
+    } else {
+        if (data[pos] < '1' || data[pos] > '9') {
+            return false;
+        }
+        while (pos < data.size() && data[pos] >= '0' && data[pos] <= '9') {
+            ++pos;
+        }
+    }
+    if (pos < data.size() && data[pos] == '.') {
+        ++pos;
+        const size_t fraction_start = pos;
+        while (pos < data.size() && data[pos] >= '0' && data[pos] <= '9') {
+            ++pos;
+        }
+        if (pos == fraction_start) {
+            return false;
+        }
+    }
+    if (pos < data.size() && (data[pos] == 'e' || data[pos] == 'E')) {
+        ++pos;
+        if (pos < data.size() && (data[pos] == '+' || data[pos] == '-')) {
+            ++pos;
+        }
+        const size_t exponent_start = pos;
+        while (pos < data.size() && data[pos] >= '0' && data[pos] <= '9') {
+            ++pos;
+        }
+        if (pos == exponent_start) {
+            return false;
+        }
+    }
+    *end_pos = pos;
+    return true;
+}
+
+bool scan_json_value(const std::string& data, size_t start, size_t* end_pos)
+{
+    if (end_pos == nullptr || start >= data.size()) {
+        return false;
+    }
+    switch (data[start]) {
+    case '"':
+        return scan_json_string(data, start, end_pos);
+    case '{':
+        return scan_json_object(data, start, end_pos);
+    case '[':
+        return scan_json_array(data, start, end_pos);
+    case 't':
+        if (data.compare(start, 4, "true") == 0) {
+            *end_pos = start + 4;
+            return true;
+        }
+        return false;
+    case 'f':
+        if (data.compare(start, 5, "false") == 0) {
+            *end_pos = start + 5;
+            return true;
+        }
+        return false;
+    case 'n':
+        if (data.compare(start, 4, "null") == 0) {
+            *end_pos = start + 4;
+            return true;
+        }
+        return false;
+    default:
+        return scan_json_number(data, start, end_pos);
+    }
+}
+
+bool find_top_level_json_field(const std::string& data, const char* key,
+                               size_t* value_start, size_t* value_end)
+{
+    if (key == nullptr || value_start == nullptr || value_end == nullptr) {
+        return false;
+    }
+    size_t pos = 0;
+    skip_ws(data, &pos);
+    if (pos >= data.size() || data[pos] != '{') {
+        return false;
+    }
+    ++pos;
+    skip_ws(data, &pos);
+    if (pos < data.size() && data[pos] == '}') {
+        ++pos;
+        skip_ws(data, &pos);
+        return pos == data.size();
+    }
+    bool found = false;
+    while (pos < data.size()) {
+        const size_t key_start = pos;
+        size_t key_end = 0;
+        if (!scan_json_string(data, key_start, &key_end)) {
+            return false;
+        }
+        std::string parsed_key;
+        if (!parse_string_at(data, key_start, &parsed_key, nullptr)) {
+            return false;
+        }
+        pos = key_end;
+        skip_ws(data, &pos);
+        if (pos >= data.size() || data[pos] != ':') {
+            return false;
+        }
+        ++pos;
+        skip_ws(data, &pos);
+        const size_t current_start = pos;
+        size_t current_end = 0;
+        if (!scan_json_value(data, current_start, &current_end)) {
+            return false;
+        }
+        if (!found && parsed_key == key) {
+            *value_start = current_start;
+            *value_end = current_end;
+            found = true;
+        }
+        pos = current_end;
+        skip_ws(data, &pos);
+        if (pos < data.size() && data[pos] == '}') {
+            ++pos;
+            skip_ws(data, &pos);
+            return found && pos == data.size();
+        }
+        if (pos >= data.size() || data[pos] != ',') {
+            return false;
+        }
+        ++pos;
+        skip_ws(data, &pos);
+    }
+    return false;
+}
+
 bool find_string_field(const std::string& data, const char* key, std::string* out)
 {
     size_t start = 0;
-    return field_value_start(data, key, &start) && parse_string_at(data, start, out, nullptr);
+    size_t end = 0;
+    return find_top_level_json_field(data, key, &start, &end) &&
+        start < end && parse_string_at(data, start, out, nullptr);
 }
 
 bool find_int_field(const std::string& data, const char* key, int64_t* out)
@@ -107,12 +410,13 @@ bool find_int_field(const std::string& data, const char* key, int64_t* out)
         return false;
     }
     size_t start = 0;
-    if (!field_value_start(data, key, &start)) {
+    size_t end = 0;
+    if (!find_top_level_json_field(data, key, &start, &end)) {
         return false;
     }
-    char* end = nullptr;
-    const long long value = std::strtoll(data.c_str() + start, &end, 10);
-    if (end == data.c_str() + start) {
+    int64_t value = 0;
+    const auto parsed = std::from_chars(data.data() + start, data.data() + end, value, 10);
+    if (parsed.ec != std::errc{} || parsed.ptr != data.data() + end) {
         return false;
     }
     *out = value;
@@ -121,61 +425,7 @@ bool find_int_field(const std::string& data, const char* key, int64_t* out)
 
 bool find_json_value_end(const std::string& data, size_t start, size_t* end)
 {
-    if (end == nullptr || start >= data.size()) {
-        return false;
-    }
-    const char open = data[start];
-    if (open == '"' ) {
-        std::string ignored;
-        return parse_string_at(data, start, &ignored, end);
-    }
-    if (open == '{' || open == '[') {
-        const char close = open == '{' ? '}' : ']';
-        int depth = 0;
-        bool in_string = false;
-        bool escaped = false;
-        for (size_t pos = start; pos < data.size(); ++pos) {
-            const char ch = data[pos];
-            if (in_string) {
-                if (escaped) {
-                    escaped = false;
-                } else if (ch == '\\') {
-                    escaped = true;
-                } else if (ch == '"') {
-                    in_string = false;
-                }
-                continue;
-            }
-            if (ch == '"') {
-                in_string = true;
-                continue;
-            }
-            if (ch == open) {
-                ++depth;
-                continue;
-            }
-            if (ch == close) {
-                --depth;
-                if (depth == 0) {
-                    *end = pos + 1;
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-    size_t pos = start;
-    while (pos < data.size() && data[pos] != ',' && data[pos] != '}' && data[pos] != ']') {
-        ++pos;
-    }
-    while (pos > start && std::isspace(static_cast<unsigned char>(data[pos - 1])) != 0) {
-        --pos;
-    }
-    if (pos == start) {
-        return false;
-    }
-    *end = pos;
-    return true;
+    return scan_json_value(data, start, end);
 }
 
 bool find_json_field(const std::string& data, const char* key, std::string* out)
@@ -185,23 +435,69 @@ bool find_json_field(const std::string& data, const char* key, std::string* out)
     }
     size_t start = 0;
     size_t end = 0;
-    if (!field_value_start(data, key, &start) || !find_json_value_end(data, start, &end)) {
+    if (!find_top_level_json_field(data, key, &start, &end)) {
         return false;
     }
     *out = data.substr(start, end - start);
     return true;
 }
 
+bool valid_http_host(std::string_view host)
+{
+    if (host.empty()) {
+        return false;
+    }
+    for (const unsigned char ch : host) {
+        if (ch <= 0x20 || ch == 0x7f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_http_path(std::string_view path)
+{
+    if (path.empty() || path.front() != '/') {
+        return false;
+    }
+    for (const unsigned char ch : path) {
+        if (ch <= 0x20 || ch == 0x7f) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool valid_bearer_token(std::string_view token)
+{
+    if (token.empty()) {
+        return false;
+    }
+    for (const unsigned char ch : token) {
+        if (ch <= 0x20 || ch == 0x7f) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void append_json_string(std::string* out, const std::string& value)
 {
+    static constexpr char hex[] = "0123456789abcdef";
     out->push_back('"');
-    for (const char ch : value) {
+    for (const unsigned char ch : value) {
         switch (ch) {
         case '"':
             *out += "\\\"";
             break;
         case '\\':
             *out += "\\\\";
+            break;
+        case '\b':
+            *out += "\\b";
+            break;
+        case '\f':
+            *out += "\\f";
             break;
         case '\n':
             *out += "\\n";
@@ -213,7 +509,13 @@ void append_json_string(std::string* out, const std::string& value)
             *out += "\\t";
             break;
         default:
-            out->push_back(ch);
+            if (ch < 0x20) {
+                out->append("\\u00");
+                out->push_back(hex[ch >> 4]);
+                out->push_back(hex[ch & 0x0f]);
+            } else {
+                out->push_back(static_cast<char>(ch));
+            }
             break;
         }
     }
@@ -253,7 +555,7 @@ std::string make_error_response(int64_t id, int code, const std::string& message
 
 bool copy_host_to_c_host(const std::string& host, uint16_t port, C_Host* out)
 {
-    if (out == nullptr || host.empty() || host.size() >= sizeof(out->address) || port == 0) {
+    if (out == nullptr || !valid_http_host(host) || host.size() >= sizeof(out->address) || port == 0) {
         return false;
     }
     out->type = host.find(':') == std::string::npos ? C_IPTypeIPV4 : C_IPTypeIPV6;
@@ -280,13 +582,18 @@ bool parse_http_url(const std::string& url, std::string* host, uint16_t* port, s
     const std::string port_text = url.substr(colon + 1, authority_end - colon - 1);
     char* end = nullptr;
     const long parsed_port = std::strtol(port_text.c_str(), &end, 10);
-    if (parsed_host.empty() || end == port_text.c_str() || *end != '\0' ||
+    if (!valid_http_host(parsed_host) || end == port_text.c_str() || *end != '\0' ||
         parsed_port <= 0 || parsed_port > 65535) {
+        return false;
+    }
+    const std::string parsed_path = path_start == std::string::npos ? std::string("/") :
+        url.substr(path_start);
+    if (!valid_http_path(parsed_path)) {
         return false;
     }
     *host = parsed_host;
     *port = static_cast<uint16_t>(parsed_port);
-    *path = path_start == std::string::npos ? std::string("/") : url.substr(path_start);
+    *path = parsed_path;
     return true;
 }
 
@@ -874,8 +1181,8 @@ galay_status_t galay_mcp_build_request(galay_mcp_message_t* message, int64_t id,
     if (message == nullptr || !valid_method(method)) {
         return GALAY_INVALID_ARGUMENT;
     }
-    message->data = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(id) + ",\"method\":\"" +
-        method + "\"";
+    message->data = "{\"jsonrpc\":\"2.0\",\"id\":" + std::to_string(id) + ",\"method\":" +
+        json_string(method);
     if (params != nullptr) {
         message->data += ",\"params\":" + std::string(params);
     }
@@ -888,7 +1195,7 @@ galay_status_t galay_mcp_build_notification(galay_mcp_message_t* message, const 
     if (message == nullptr || !valid_method(method)) {
         return GALAY_INVALID_ARGUMENT;
     }
-    message->data = "{\"jsonrpc\":\"2.0\",\"method\":\"" + std::string(method) + "\"";
+    message->data = "{\"jsonrpc\":\"2.0\",\"method\":" + json_string(method);
     if (params != nullptr) {
         message->data += ",\"params\":" + std::string(params);
     }
@@ -919,7 +1226,8 @@ galay_status_t galay_mcp_parse_request(const char* data, size_t data_len, galay_
         return GALAY_INVALID_ARGUMENT;
     }
     std::string text(data, data_len);
-    if (text.find("\"jsonrpc\":\"2.0\"") == std::string::npos) {
+    std::string jsonrpc;
+    if (!find_string_field(text, "jsonrpc", &jsonrpc) || jsonrpc != "2.0") {
         return GALAY_PROTOCOL_ERROR;
     }
     auto* parsed = new (std::nothrow) galay_mcp_parsed_request_t();
@@ -930,7 +1238,17 @@ galay_status_t galay_mcp_parse_request(const char* data, size_t data_len, galay_
         delete parsed;
         return GALAY_PROTOCOL_ERROR;
     }
-    parsed->notification = !find_int_field(text, "id", &parsed->id);
+    size_t id_start = 0;
+    size_t id_end = 0;
+    if (find_top_level_json_field(text, "id", &id_start, &id_end)) {
+        if (!find_int_field(text, "id", &parsed->id)) {
+            delete parsed;
+            return GALAY_PROTOCOL_ERROR;
+        }
+        parsed->notification = false;
+    } else {
+        parsed->notification = true;
+    }
     std::string params;
     if (find_json_field(text, "params", &params)) {
         parsed->params = params;
@@ -987,9 +1305,14 @@ galay_status_t galay_mcp_parse_response(const char* data, size_t data_len, galay
         return GALAY_INVALID_ARGUMENT;
     }
     std::string text(data, data_len);
-    if (text.find("\"jsonrpc\":\"2.0\"") == std::string::npos ||
-        text.find("\"method\"") != std::string::npos ||
-        text.find("\"error\"") != std::string::npos) {
+    std::string jsonrpc;
+    size_t method_start = 0;
+    size_t method_end = 0;
+    size_t error_start = 0;
+    size_t error_end = 0;
+    if (!find_string_field(text, "jsonrpc", &jsonrpc) || jsonrpc != "2.0" ||
+        find_top_level_json_field(text, "method", &method_start, &method_end) ||
+        find_top_level_json_field(text, "error", &error_start, &error_end)) {
         return GALAY_PROTOCOL_ERROR;
     }
     auto* parsed = new (std::nothrow) galay_mcp_parsed_response_t();
@@ -1069,7 +1392,7 @@ galay_status_t galay_mcp_http_config_set_bearer_token(galay_mcp_client_config_t*
                                                       const char* bearer_token)
 {
     if (config == nullptr || config->mode != GALAY_MCP_MODE_HTTP ||
-        bearer_token == nullptr || bearer_token[0] == '\0') {
+        bearer_token == nullptr || !valid_bearer_token(bearer_token)) {
         return GALAY_INVALID_ARGUMENT;
     }
     config->bearer_token = bearer_token;
@@ -1285,7 +1608,7 @@ galay_status_t galay_mcp_http_server_create(const char* host, uint16_t port, gal
     if (out != nullptr) {
         *out = nullptr;
     }
-    if (host == nullptr || host[0] == '\0' || out == nullptr) {
+    if (host == nullptr || !valid_http_host(host) || out == nullptr) {
         return GALAY_INVALID_ARGUMENT;
     }
     auto* server = new (std::nothrow) galay_mcp_server_t();
@@ -1326,7 +1649,7 @@ galay_status_t galay_mcp_http_server_require_bearer_token(galay_mcp_server_t* se
                                                           const char* bearer_token)
 {
     if (server == nullptr || server->mode != GALAY_MCP_MODE_HTTP ||
-        bearer_token == nullptr || bearer_token[0] == '\0') {
+        bearer_token == nullptr || !valid_bearer_token(bearer_token)) {
         return GALAY_INVALID_ARGUMENT;
     }
     server->bearer_token = bearer_token;

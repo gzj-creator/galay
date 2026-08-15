@@ -2,6 +2,8 @@
 
 #include <galay/c/galay-utils-c/utils.h>
 
+#include <openssl/rand.h>
+
 #include <algorithm>
 #include <cctype>
 #include <cstring>
@@ -13,7 +15,6 @@
 
 constexpr size_t kWsMaxHttpHeaderBytes = 64 * 1024;
 constexpr size_t kWsMaxFrameBufferBytes = 1024 * 1024;
-constexpr const char* kClientWebSocketKey = "dGhlIHNhbXBsZSBub25jZQ==";
 
 C_IOResult make_io_result(C_IOResultCode code, int64_t value = 0)
 {
@@ -221,7 +222,7 @@ C_IOResult read_http_headers(galay_c_tcp_socket_t* socket,
     return io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED);
 }
 
-bool validate_upgrade_response(const std::string& response)
+bool validate_upgrade_response(const std::string& response, std::string_view client_key)
 {
     const bool status_ok = response.compare(0, 12, "HTTP/1.1 101") == 0 ||
         response.compare(0, 12, "HTTP/1.0 101") == 0;
@@ -229,8 +230,8 @@ bool validate_upgrade_response(const std::string& response)
         return false;
     }
     const std::string accept = find_header_value(response, "Sec-WebSocket-Accept");
-    const std::string expected = websocket_accept_key(kClientWebSocketKey);
-    return accept == expected;
+    const std::string expected = websocket_accept_key(client_key);
+    return !expected.empty() && accept == expected;
 }
 
 bool validate_upgrade_request(const std::string& request, std::string* key)
@@ -242,24 +243,50 @@ bool validate_upgrade_request(const std::string& request, std::string* key)
     const std::string connection = find_header_value(request, "Connection");
     const std::string version = find_header_value(request, "Sec-WebSocket-Version");
     *key = find_header_value(request, "Sec-WebSocket-Key");
+    uint8_t nonce[16]{};
+    size_t nonce_size = 0;
+    const bool valid_key = !key->empty() &&
+        galay_utils_base64_decode(key->data(), key->size(), nonce, sizeof(nonce), &nonce_size) ==
+            GALAY_OK &&
+        nonce_size == sizeof(nonce);
     return equals_ascii_ci(upgrade, "websocket") &&
         contains_ascii_ci(connection, "upgrade") &&
         version == "13" &&
-        !key->empty();
+        valid_key;
 }
 
-std::string make_upgrade_request(const std::string& host, uint16_t port, const std::string& path)
+bool make_upgrade_request(const std::string& host, uint16_t port, const std::string& path,
+                          std::string* client_key, std::string* request)
 {
-    std::string request = "GET ";
-    request += path.empty() ? "/" : path;
-    request += " HTTP/1.1\r\nHost: ";
-    request += host;
-    request += ":";
-    request += std::to_string(port);
-    request += "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ";
-    request += kClientWebSocketKey;
-    request += "\r\nSec-WebSocket-Version: 13\r\n\r\n";
-    return request;
+    if (client_key == nullptr || request == nullptr || host.empty() || port == 0 ||
+        path.find_first_of("\r\n \t") != std::string::npos ||
+        host.find_first_of("\r\n") != std::string::npos) {
+        return false;
+    }
+    uint8_t nonce[16]{};
+    if (RAND_bytes(nonce, sizeof(nonce)) != 1) {
+        return false;
+    }
+    char encoded[24]{};
+    size_t encoded_size = 0;
+    if (galay_utils_base64_encode(nonce, sizeof(nonce), encoded, sizeof(encoded), &encoded_size) !=
+            GALAY_OK ||
+        encoded_size != sizeof(encoded)) {
+        return false;
+    }
+    client_key->assign(encoded, encoded_size);
+    request->clear();
+    request->reserve(256 + path.size() + host.size());
+    request->append("GET ");
+    request->append(path.empty() ? "/" : path);
+    request->append(" HTTP/1.1\r\nHost: ");
+    request->append(host);
+    request->append(":");
+    request->append(std::to_string(port));
+    request->append("\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ");
+    request->append(*client_key);
+    request->append("\r\nSec-WebSocket-Version: 13\r\n\r\n");
+    return true;
 }
 
 std::string make_upgrade_response(const std::string& key)
@@ -295,7 +322,6 @@ struct galay_ws_received_frame_t {
 struct galay_ws_connection_t {
     galay_c_tcp_socket_t socket{};
     std::vector<uint8_t> recv_buffer;
-    uint32_t mask_counter = 1;
     galay_ws_opcode_t fragmented_opcode = GALAY_WS_OPCODE_CONTINUATION;
     galay_ws_error_t last_error = GALAY_WS_ERROR_NONE;
     bool is_server = false;
@@ -600,7 +626,12 @@ C_IOResult galay_ws_client_connect(galay_ws_client_t* client,
         return close_after_result(&socket, connected);
     }
 
-    const std::string request = make_upgrade_request(client->host, client->port, client->path);
+    std::string client_key;
+    std::string request;
+    if (!make_upgrade_request(client->host, client->port, client->path, &client_key, &request)) {
+        return close_after_result(
+            &socket, io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED));
+    }
     C_IOResult sent = write_string(&socket, request, effective_timeout);
     if (sent.code != C_IOResultOk) {
         return close_after_result(&socket, sent);
@@ -612,7 +643,7 @@ C_IOResult galay_ws_client_connect(galay_ws_client_t* client,
     if (read.code != C_IOResultOk) {
         return close_after_result(&socket, read);
     }
-    if (!validate_upgrade_response(response)) {
+    if (!validate_upgrade_response(response, client_key)) {
         return close_after_result(&socket,
                                   io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED));
     }
@@ -730,11 +761,9 @@ C_IOResult galay_ws_connection_send_frame(galay_ws_connection_t* connection,
     uint8_t mask_key[4] = {0, 0, 0, 0};
     const uint8_t* mask = nullptr;
     if (!connection->is_server) {
-        const uint32_t next = connection->mask_counter++;
-        mask_key[0] = static_cast<uint8_t>((next >> 24U) & 0xFFU);
-        mask_key[1] = static_cast<uint8_t>((next >> 16U) & 0xFFU);
-        mask_key[2] = static_cast<uint8_t>((next >> 8U) & 0xFFU);
-        mask_key[3] = static_cast<uint8_t>(next & 0xFFU);
+        if (RAND_bytes(mask_key, sizeof(mask_key)) != 1) {
+            return io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED);
+        }
         mask = mask_key;
     }
 
