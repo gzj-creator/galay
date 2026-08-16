@@ -11,13 +11,15 @@
 
 ## [Unreleased]
 
+## [v4.9.0] - 2026-08-17
+
 ### Added
 
 - **C TCP socket 补齐 `SO_REUSEPORT` 配置接口**：新增 `galay_c_tcp_socket_set_reuse_port` 及双 listener 同端口回归测试；C TCP 多线程压测服务端改为每个 I/O scheduler 独立 listener/accept 协程，使内核可在监听线程间分发连接。
 
 ### Changed
 
-- **对齐构建安装版本**：将 CMake 项目版本与 Bazel module 版本统一更新为 `4.8.1`，使安装包元数据与当前 Git 发布版本一致。
+- **对齐构建安装版本**：将 CMake 项目版本与 Bazel module 版本统一更新为 `4.9.0`，使安装包元数据与当前 Git 发布版本一致。
 - **C kernel ready queue 节点缓存池真正复用**：`push` 侧消费 `pop` 回收的节点（原缓存池只写不读），消除每次唤醒一次 `calloc`/`free`。
 - **C kernel reactor 对齐 ET 持久注册**：注册事件统一 `EPOLLET`，掩码未变化时跳过 `epoll_ctl`，配合唤醒后乐观重试。
 - **C++ 调度器本地环 owner-only 快速路径**：关闭 work-stealing 后 `pop_back` 不再发 seq_cst 仲裁栅栏、`steal_front` 直接拒绝，`setStealingEnabled` 同步传播到 ring；ready entry 唤醒延迟约降 6%。

@@ -259,3 +259,18 @@
 - **多调度器性能对照**：C++ TCP client 支持按连接轮询多个 I/O scheduler；libuv baseline 支持多线程 event loop 与 `SO_REUSEPORT`，并补充双进程 TCP/UDP 回环和 benchmark 测量合同。
 - **C API 协议边界修复**：HTTP/2 C API 移除 nghttp2，改用仓库内置 HPACK 编解码器；补齐 HPACK 静态索引、Huffman、动态表、长字段和溢出处理，收紧 HTTP/HTTP2/MCP/WS 的输入校验、握手随机性、JSON/URL/header 边界及窗口更新失败回滚。
 - **验证结果**：C 测试与 benchmark 已完成回归；PostgreSQL 真实实例测试和 benchmark 仅因当前环境缺少外部实例而跳过/阻塞。
+
+## v4.9.0 - 2026-08-17
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`chore: 发布 v4.9.0 并收束调度与多线程监听优化`
+- **Git tag**：`v4.9.0`
+
+### 变更摘要
+
+本次为 `v4.8.1` 之后的次版本发版，主线是降低 C/C++ kernel 调度与 epoll reactor 热路径开销，修复合并读写事件的双向分发缺口，并为 C TCP socket 增加 `SO_REUSEPORT` 能力和每 I/O scheduler 独立 listener 的多线程服务端模式。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.9.0`。
+
+- **C kernel 调度与 reactor 优化**：ready queue 恢复节点开始真正消费缓存池，避免每次唤醒的 `calloc`/`free`；epoll 改用 ET 持久注册并跳过未变化的 `epoll_ctl`，跨线程入队通过 eventfd 立即唤醒 reactor。
+- **C++ epoll 与本地调度环优化**：关闭 work-stealing 时启用 owner-only 本地 ring 快速路径，精简 FILEREAD/FILEWATCH 的 Waker 拷贝；合并的 `EPOLLIN|EPOLLOUT` 事件会在 controller 有效时继续分发另一方向，覆盖普通 WRITE 与只读 sequence 共存场景。
+- **C 多线程 TCP 监听**：新增 `galay_c_tcp_socket_set_reuse_port`，并将 C TCP 压测服务端改为每个 I/O scheduler 各自持有 `SO_REUSEPORT` listener 和 accept 协程，使连接由内核分发到监听线程。
+- **测试与性能验证**：C++ kernel `178/178`、C kernel `23/23` 测试通过，Release/epoll 构建成功；四线程 TCP 对照中三端均完成 `128/128` 连接且 `errors=0`，中位 QPS 为 C `27,967`、C++ `29,959`、libuv `30,812`。
