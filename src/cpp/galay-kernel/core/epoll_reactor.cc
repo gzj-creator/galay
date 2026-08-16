@@ -697,30 +697,27 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
     const uint32_t after_read_type = static_cast<uint32_t>(controller->m_type);
     if (ev.events & EPOLLOUT) {
         if (after_read_type & CONNECT) {
-            if (complete_one_shot(controller->getAwaitable<ConnectAwaitable>(), CONNECT)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<ConnectAwaitable>(), CONNECT);
         } else if (after_read_type & SEND) {
-            if (complete_one_shot(controller->getAwaitable<SendAwaitable>(), SEND)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<SendAwaitable>(), SEND);
         } else if (after_read_type & WRITEV) {
-            if (complete_one_shot(controller->getAwaitable<WritevAwaitable>(), WRITEV)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<WritevAwaitable>(), WRITEV);
         } else if (after_read_type & SENDTO) {
-            if (complete_one_shot(controller->getAwaitable<SendToAwaitable>(), SENDTO)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<SendToAwaitable>(), SENDTO);
         } else if (after_read_type & FILEWRITE) {
-            if (complete_one_shot(controller->getAwaitable<FileWriteAwaitable>(), FILEWRITE)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<FileWriteAwaitable>(), FILEWRITE);
         } else if (after_read_type & SENDFILE) {
-            if (complete_one_shot(controller->getAwaitable<SendFileAwaitable>(), SENDFILE)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<SendFileAwaitable>(), SENDFILE);
         }
+    }
+
+    // 普通写和 read-only sequence 可以分别占用同一 controller 的两个域。
+    // 写侧完成后仍需消费本次合并事件的 EPOLLIN，但先防御性地确认
+    // completion 没有通过内联恢复使 controller 失效。
+    if (entry->controller != controller ||
+        controller->m_handle == GHandle::invalid() ||
+        controller->m_type == IOEventType::INVALID) {
+        return;
     }
 
     if (static_cast<uint32_t>(controller->m_type) & SEQUENCE) {

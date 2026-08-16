@@ -701,7 +701,7 @@ struct IOSchedulerWorkerState {
 
     void setStealingEnabled(bool enabled) noexcept {
         stealing_enabled = enabled;
-        // local_ring.setStealingEnabled(enabled);  // DIAG: fast path off
+        local_ring.setStealingEnabled(enabled);
     }
 
     std::mt19937 random_seed{std::random_device{}()};  ///< 用于 victim 选择的随机器

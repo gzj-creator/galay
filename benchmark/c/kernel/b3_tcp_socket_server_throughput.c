@@ -2,9 +2,7 @@
 #include <galay/c/galay-kernel-c/core-c/runtime.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_task.h>
 
-#include <arpa/inet.h>
 #include <limits.h>
-#include <netinet/in.h>
 #include <pthread.h>
 #include <signal.h>
 #include <stdatomic.h>
@@ -12,7 +10,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/socket.h>
 #include <unistd.h>
 
 enum {
@@ -32,16 +29,22 @@ typedef struct ServerSession {
     atomic_int active;
 } ServerSession;
 
+typedef struct ServerListener {
+    ServerState* server;
+    galay_c_tcp_socket_t socket;
+    galay_c_coro_task_t accept_task;
+} ServerListener;
+
 struct ServerState {
     galay_c_runtime_t runtime;
-    galay_c_tcp_socket_t listener;
-    galay_c_coro_task_t accept_task;
+    ServerListener* listeners;
     atomic_int running;
     atomic_ullong total_connections;
     atomic_ullong total_requests;
     atomic_ullong total_bytes;
     atomic_ullong total_errors;
     atomic_ullong active_sessions;
+    size_t listener_count;
     uint16_t port;
     ServerSession sessions[TCP_SERVER_MAX_SESSIONS];
 };
@@ -71,6 +74,29 @@ static void signal_handler(int signum)
             atomic_store(&g_server->running, 0);
         }
     }
+}
+
+static int create_listeners(ServerState* server, const C_Host* bind_host)
+{
+    server->listeners = (ServerListener*)calloc(server->listener_count,
+                                                sizeof(*server->listeners));
+    if (server->listeners == NULL) {
+        return 1;
+    }
+    for (size_t i = 0; i < server->listener_count; ++i) {
+        server->listeners[i].server = server;
+        server->listeners[i].socket.fd = -1;
+    }
+    for (size_t i = 0; i < server->listener_count; ++i) {
+        ServerListener* listener = &server->listeners[i];
+        if (galay_c_tcp_socket_create(&listener->socket, C_IPTypeIPV4).code != C_IOResultOk ||
+            galay_c_tcp_socket_set_reuse_port(&listener->socket, 1).code != C_IOResultOk ||
+            galay_c_tcp_socket_bind(&listener->socket, bind_host).code != C_IOResultOk ||
+            galay_c_tcp_socket_listen(&listener->socket, 1024).code != C_IOResultOk) {
+            return 1;
+        }
+    }
+    return 0;
 }
 
 static int send_all(galay_c_tcp_socket_t* socket, const char* buffer, size_t length)
@@ -140,10 +166,11 @@ static ServerSession* acquire_session(ServerState* server)
 
 static void accept_entry(void* arg)
 {
-    ServerState* server = (ServerState*)arg;
+    ServerListener* listener = (ServerListener*)arg;
+    ServerState* server = listener->server;
     while (atomic_load(&server->running)) {
         galay_c_tcp_socket_t accepted = {0};
-        C_IOResult result = galay_c_tcp_socket_accept(&server->listener, &accepted, NULL, 1000);
+        C_IOResult result = galay_c_tcp_socket_accept(&listener->socket, &accepted, NULL, 1000);
         if (result.code == C_IOResultTimeout) {
             continue;
         }
@@ -215,27 +242,6 @@ static void* stats_thread_main(void* arg)
     return NULL;
 }
 
-static int wake_listener(uint16_t port)
-{
-    int fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd < 0) {
-        return 1;
-    }
-
-    struct sockaddr_in addr = {0};
-    addr.sin_family = AF_INET;
-    addr.sin_port = htons(port);
-    int status = 0;
-    if (inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr) != 1 ||
-        connect(fd, (const struct sockaddr*)&addr, sizeof(addr)) != 0) {
-        status = 1;
-    }
-    if (close(fd) != 0) {
-        status = 1;
-    }
-    return status;
-}
-
 int main(int argc, char** argv)
 {
     static ServerState server;
@@ -251,6 +257,7 @@ int main(int argc, char** argv)
             io_schedulers = (size_t)parsed;
         }
     }
+    server.listener_count = io_schedulers;
 
     atomic_init(&server.running, 1);
     atomic_init(&server.total_connections, 0);
@@ -278,25 +285,30 @@ int main(int argc, char** argv)
     int exit_code = 0;
 
     if (printf("C TCP benchmark server starting on port %u\n", server.port) < 0 ||
-        printf("meta: role=server io_mode=plain scenario=tcp-echo io_schedulers=%zu compute_schedulers=0 mode=coro-direct\n",
-               io_schedulers) < 0 ||
+        printf("meta: role=server io_mode=plain scenario=tcp-echo io_schedulers=%zu listeners=%zu reuse_port=1 compute_schedulers=0 mode=coro-direct\n",
+               io_schedulers,
+               server.listener_count) < 0 ||
         fflush(stdout) != 0) {
         return 1;
     }
 
     if (galay_c_runtime_create(&config, &server.runtime) != C_RuntimeSuccess ||
         galay_c_runtime_start(&server.runtime) != C_RuntimeSuccess ||
-        galay_c_tcp_socket_create(&server.listener, C_IPTypeIPV4).code != C_IOResultOk ||
-        galay_c_tcp_socket_bind(&server.listener, &bind_host).code != C_IOResultOk ||
-        galay_c_tcp_socket_listen(&server.listener, 1024).code != C_IOResultOk) {
+        create_listeners(&server, &bind_host) != 0) {
         exit_code = 2;
         goto cleanup;
     }
 
-    C_IOResult accept_spawned = galay_c_coro_spawn(&server.runtime, accept_entry, &server, NULL, &server.accept_task);
-    if (accept_spawned.code != C_IOResultOk) {
-        exit_code = 3;
-        goto cleanup;
+    /* Spawned consecutively before client traffic, so runtime round-robin gives
+       every SO_REUSEPORT listener its own scheduler thread. */
+    for (size_t i = 0; i < server.listener_count; ++i) {
+        ServerListener* listener = &server.listeners[i];
+        C_IOResult accept_spawned = galay_c_coro_spawn(
+            &server.runtime, accept_entry, listener, NULL, &listener->accept_task);
+        if (accept_spawned.code != C_IOResultOk) {
+            exit_code = 3;
+            goto cleanup;
+        }
     }
 
     if (pthread_create(&stats_thread, NULL, stats_thread_main, &server) == 0) {
@@ -309,53 +321,51 @@ int main(int argc, char** argv)
         }
     }
 
-    if (wake_listener(server.port) != 0 && exit_code == 0) {
-        exit_code = 4;
+cleanup:
+    atomic_store(&server.running, 0);
+    if (server.listeners != NULL) {
+        for (size_t i = 0; i < server.listener_count; ++i) {
+            galay_c_coro_task_t* task = &server.listeners[i].accept_task;
+            if (task->task != NULL) {
+                const C_IOResult joined = galay_c_coro_join(task, 3000);
+                if (joined.code != C_IOResultOk) {
+                    if (exit_code == 0) {
+                        exit_code = 5;
+                    }
+                    continue;
+                }
+                if (galay_c_coro_destroy(task).code != C_IOResultOk && exit_code == 0) {
+                    exit_code = 5;
+                }
+            }
+        }
     }
-    C_IOResult accept_join = galay_c_coro_join(&server.accept_task, 3000);
-    C_IOResult accept_destroy = galay_c_coro_destroy(&server.accept_task);
-    if ((accept_join.code != C_IOResultOk || accept_destroy.code != C_IOResultOk) && exit_code == 0) {
-        exit_code = 5;
-    }
-
     for (int i = 0; i < TCP_SERVER_MAX_SESSIONS; ++i) {
         if (server.sessions[i].task.task != NULL) {
-            C_IOResult joined = galay_c_coro_join(&server.sessions[i].task, 3000);
-            C_IOResult destroyed = galay_c_coro_destroy(&server.sessions[i].task);
-            if ((joined.code != C_IOResultOk || destroyed.code != C_IOResultOk) && exit_code == 0) {
+            const C_IOResult joined = galay_c_coro_join(&server.sessions[i].task, 3000);
+            if (joined.code != C_IOResultOk) {
+                if (exit_code == 0) {
+                    exit_code = 6;
+                }
+                continue;
+            }
+            if (galay_c_coro_destroy(&server.sessions[i].task).code != C_IOResultOk &&
+                exit_code == 0) {
                 exit_code = 6;
             }
         }
     }
-
-    if (stats_started) {
-        if (pthread_join(stats_thread, NULL) != 0 && exit_code == 0) {
-            exit_code = 7;
-        }
-        stats_started = 0;
-    }
-
-cleanup:
-    atomic_store(&server.running, 0);
     if (stats_started && pthread_join(stats_thread, NULL) != 0 && exit_code == 0) {
-        exit_code = 8;
+        exit_code = 7;
     }
-    if (server.accept_task.task != NULL) {
-        if (wake_listener(server.port) != 0 && exit_code == 0) {
-            exit_code = 9;
-        }
-        if (galay_c_coro_join(&server.accept_task, 3000).code == C_IOResultOk) {
-            if (galay_c_coro_destroy(&server.accept_task).code != C_IOResultOk && exit_code == 0) {
-                exit_code = 10;
+    if (server.listeners != NULL) {
+        for (size_t i = 0; i < server.listener_count; ++i) {
+            galay_c_tcp_socket_t* listener = &server.listeners[i].socket;
+            if (listener->fd >= 0 && galay_c_tcp_socket_close(listener).code != C_IOResultOk &&
+                exit_code == 0) {
+                exit_code = 12;
             }
-        } else if (exit_code == 0) {
-            exit_code = 11;
         }
-    }
-    if (server.listener.fd >= 0 &&
-        galay_c_tcp_socket_close(&server.listener).code != C_IOResultOk &&
-        exit_code == 0) {
-        exit_code = 12;
     }
     if (server.runtime.runtime != NULL &&
         galay_c_runtime_stop(&server.runtime) != C_RuntimeSuccess &&
@@ -367,6 +377,8 @@ cleanup:
         exit_code == 0) {
         exit_code = 14;
     }
+    free(server.listeners);
+    server.listeners = NULL;
 
     if (printf("tcp_socket_server_throughput connections=%llu requests=%llu throughput_mb=%.3f errors=%llu\n",
                atomic_load(&server.total_connections),

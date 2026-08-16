@@ -41,6 +41,13 @@ C_IOResult galay_c_tcp_socket_listen(galay_c_tcp_socket_t* socket, int backlog);
 /** 查询本地端点。 */
 C_IOResult galay_c_tcp_socket_local_endpoint(const galay_c_tcp_socket_t* socket, C_Host* out);
 
+/**
+ * @brief 启用或禁用 SO_REUSEPORT。
+ * @param enabled 只接受 0 或 1；必须在 bind 前调用。
+ * @return 成功返回 C_IOResultOk；平台不支持时返回 C_IOResultError/ENOTSUP。
+ */
+C_IOResult galay_c_tcp_socket_set_reuse_port(galay_c_tcp_socket_t* socket, int enabled);
+
 /** 启用或禁用 TCP_NODELAY。 */
 C_IOResult galay_c_tcp_socket_set_no_delay(galay_c_tcp_socket_t* socket, int enabled);
 

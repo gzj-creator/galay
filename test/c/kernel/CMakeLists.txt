@@ -17,6 +17,7 @@ set(GALAY_C_KERNEL_SOCKET_TESTS
     t18_tcp_timeout_callbacks
     t19_udp_timeout_callbacks
     t25_coro_tcp
+    t32_tcp_reuse_port
 )
 galay_filter_unsupported_c_coro_sources(GALAY_C_KERNEL_TEST_SOURCES)
 foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)

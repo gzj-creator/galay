@@ -74,6 +74,7 @@ std::optional<double> measureComputeResume(size_t iterations) {
 template <size_t BatchSize>
 std::optional<double> measureIOResumeDrain(size_t repetitions) {
     IOSchedulerWorkerState worker;
+    worker.setStealingEnabled(false);
     std::array<TaskRef, BatchSize> tasks;
     for (TaskRef& task : tasks) {
         task = TaskRef(new TaskState(std::coroutine_handle<>{}), false);

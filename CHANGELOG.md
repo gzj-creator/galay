@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- **C TCP socket 补齐 `SO_REUSEPORT` 配置接口**：新增 `galay_c_tcp_socket_set_reuse_port` 及双 listener 同端口回归测试；C TCP 多线程压测服务端改为每个 I/O scheduler 独立 listener/accept 协程，使内核可在监听线程间分发连接。
+
 ### Changed
 
 - **对齐构建安装版本**：将 CMake 项目版本与 Bazel module 版本统一更新为 `4.8.1`，使安装包元数据与当前 Git 发布版本一致。
@@ -21,7 +25,7 @@
 
 ### Fixed
 
-- **修复 epoll 双向并发收发死锁**：同一 fd 的 `EPOLLIN|EPOLLOUT` 被 epoll 合并进一个事件，one-shot 与 sequence 分发读侧完成后提前返回会丢弃写侧就绪位，ET 下 send 等待不再出现的可写边沿而永久挂起（t21 随机冻死）；现在读侧完成后继续分发写侧（分发前复查 controller 有效性），并为 send 增加持久 `EPOLLOUT` 注册（`armPersistentWrite`），配合注册前乐观写兜底。修复后 t21 双向并发 500MB 压测连续通过，`epoll_ctl` 由每事件一次 MOD 震荡（10317 次/30s）降为 6 次/全程。
+- **修复 epoll 合并事件的双向分发缺口**：同一 fd 的 `EPOLLIN|EPOLLOUT` 被 epoll 合并进一个事件时，one-shot 与 sequence 任一侧完成后提前返回都会丢弃另一侧就绪位；现在读写完成后均在复查 controller 有效性后继续分发另一方向，并为 send 增加持久 `EPOLLOUT` 注册（`armPersistentWrite`），配合注册前乐观写兜底。修复后 t21 双向并发 500MB 压测连续通过，`epoll_ctl` 由每事件一次 MOD 震荡（10317 次/30s）降为 6 次/全程，并新增普通 WRITE 与只读 sequence 共存回归。
 - **修复 C kernel 跨线程入队唤醒缺失**：ready queue push 后事件循环仍阻塞在 `epoll_wait` 最多一个 poll 周期（10ms）；新增 eventfd 唤醒通道，跨线程入队立即唤醒 reactor，`async_waiter` 压力测试耗时从 3m33s 降至 42s。
 - **修复 C++ 侧测试依赖过期与端口冲突**：t126 源码锁定改指新的纯 C `async_waiter.c` 竞态安全模式；t3/t4 默认端口由 8080 改为 28080，避让本机端口占用。
 

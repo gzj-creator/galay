@@ -284,6 +284,21 @@ C_IOResult galay_c_tcp_socket_local_endpoint(const galay_c_tcp_socket_t* socket,
         : make_result(C_IOResultError, EAFNOSUPPORT);
 }
 
+C_IOResult galay_c_tcp_socket_set_reuse_port(galay_c_tcp_socket_t* socket, int enabled)
+{
+    if (socket == NULL || socket->fd < 0 || (enabled != 0 && enabled != 1)) {
+        return make_result(C_IOResultInvalid, 0);
+    }
+#ifdef SO_REUSEPORT
+    return setsockopt(socket->fd, SOL_SOCKET, SO_REUSEPORT, &enabled, sizeof(enabled)) == 0
+        ? make_result(C_IOResultOk, 0)
+        : make_result(C_IOResultError, errno);
+#else
+    (void)enabled;
+    return make_result(C_IOResultError, ENOTSUP);
+#endif
+}
+
 C_IOResult galay_c_tcp_socket_set_no_delay(galay_c_tcp_socket_t* socket, int enabled)
 {
     if (socket == NULL || socket->fd < 0 || (enabled != 0 && enabled != 1)) {
