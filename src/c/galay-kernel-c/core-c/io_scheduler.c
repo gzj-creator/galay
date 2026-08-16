@@ -8,6 +8,7 @@
 
 #ifdef __linux__
 #include <sys/epoll.h>
+#include <sys/eventfd.h>
 #elif defined(__APPLE__) || defined(__FreeBSD__)
 #include <sys/event.h>
 #include <sys/time.h>
@@ -18,7 +19,7 @@
 // 简单的无锁 MPSC ready queue（多生产者单消费者）
 typedef struct ready_queue_node {
     C_CoroTaskInternal* coro;
-    struct ready_queue_node* next;
+    _Atomic(struct ready_queue_node*) next;
 } ready_queue_node_t;
 
 typedef struct ready_queue {
@@ -26,6 +27,7 @@ typedef struct ready_queue {
     ready_queue_node_t* tail;            // 消费者端（单线程）
     ready_queue_node_t* cache;           // 节点缓存池
     size_t cache_count;
+    atomic_flag cache_lock;              // cache 仅用于回收节点，短暂 try-lock
 } ready_queue_t;
 
 static const int kDefaultMaxEvents = 128;
@@ -57,6 +59,7 @@ static ready_queue_t* ready_queue_create(void)
     queue->tail = sentinel;
     queue->cache = NULL;
     queue->cache_count = 0;
+    atomic_flag_clear(&queue->cache_lock);
 
     return queue;
 }
@@ -70,7 +73,7 @@ static void ready_queue_destroy(ready_queue_t* queue)
     // 释放所有节点
     ready_queue_node_t* node = queue->tail;
     while (node) {
-        ready_queue_node_t* next = node->next;
+        ready_queue_node_t* next = atomic_load_explicit(&node->next, memory_order_relaxed);
         free(node);
         node = next;
     }
@@ -78,7 +81,7 @@ static void ready_queue_destroy(ready_queue_t* queue)
     // 释放缓存节点
     node = queue->cache;
     while (node) {
-        ready_queue_node_t* next = node->next;
+        ready_queue_node_t* next = atomic_load_explicit(&node->next, memory_order_relaxed);
         free(node);
         node = next;
     }
@@ -93,13 +96,24 @@ static int ready_queue_push(ready_queue_t* queue, C_CoroTaskInternal* coro)
         return 0;
     }
 
-    ready_queue_node_t* node = calloc(1, sizeof(ready_queue_node_t));
+    ready_queue_node_t* node = NULL;
+    if (!atomic_flag_test_and_set_explicit(&queue->cache_lock, memory_order_acquire)) {
+        node = queue->cache;
+        if (node != NULL) {
+            queue->cache = atomic_load_explicit(&node->next, memory_order_relaxed);
+            --queue->cache_count;
+        }
+        atomic_flag_clear_explicit(&queue->cache_lock, memory_order_release);
+    }
+    if (node == NULL) {
+        node = calloc(1, sizeof(ready_queue_node_t));
+    }
     if (!node) {
         return 0;
     }
 
     node->coro = coro;
-    node->next = NULL;
+    atomic_store_explicit(&node->next, NULL, memory_order_relaxed);
 
     // 原子交换 head 指针
     ready_queue_node_t* prev = atomic_exchange_explicit(&queue->head,
@@ -131,12 +145,18 @@ static size_t ready_queue_pop_batch(ready_queue_t* queue,
 
         out_coros[count++] = next->coro;
 
-        // 回收旧 tail 到缓存
-        if (queue->cache_count < kReadyQueueCacheSize) {
-            tail->next = queue->cache;
-            queue->cache = tail;
-            queue->cache_count++;
-        } else {
+        // 回收旧 tail 到生产者可复用的缓存；竞争时直接释放，避免阻塞
+        // 调度器线程。
+        if (!atomic_flag_test_and_set_explicit(&queue->cache_lock, memory_order_acquire)) {
+            if (queue->cache_count < kReadyQueueCacheSize) {
+                atomic_store_explicit(&tail->next, queue->cache, memory_order_relaxed);
+                queue->cache = tail;
+                queue->cache_count++;
+                tail = NULL;
+            }
+            atomic_flag_clear_explicit(&queue->cache_lock, memory_order_release);
+        }
+        if (tail != NULL) {
             free(tail);
         }
 
@@ -157,6 +177,7 @@ static int ready_queue_has_items(const ready_queue_t* queue)
 #ifdef __linux__
 typedef struct epoll_reactor_context {
     int epoll_fd;
+    int wake_fd;  // eventfd：跨线程入队时唤醒 epoll_wait
     struct epoll_event* events;
     int max_events;
 } epoll_reactor_context_t;
@@ -174,9 +195,28 @@ static void* reactor_create(int max_events)
         return NULL;
     }
 
+    ctx->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
+    if (ctx->wake_fd < 0) {
+        close(ctx->epoll_fd);
+        free(ctx);
+        return NULL;
+    }
+
+    // 水平触发的唤醒 fd：计数器非零时 epoll_wait 立即返回，杜绝丢失唤醒。
+    struct epoll_event wake_ev = {0};
+    wake_ev.events = EPOLLIN;
+    wake_ev.data.ptr = NULL;
+    if (epoll_ctl(ctx->epoll_fd, EPOLL_CTL_ADD, ctx->wake_fd, &wake_ev) < 0) {
+        close(ctx->wake_fd);
+        close(ctx->epoll_fd);
+        free(ctx);
+        return NULL;
+    }
+
     ctx->max_events = max_events > 0 ? max_events : kDefaultMaxEvents;
     ctx->events = calloc(ctx->max_events, sizeof(struct epoll_event));
     if (!ctx->events) {
+        close(ctx->wake_fd);
         close(ctx->epoll_fd);
         free(ctx);
         return NULL;
@@ -192,11 +232,25 @@ static void reactor_destroy(void* context)
     }
 
     epoll_reactor_context_t* ctx = context;
+    if (ctx->wake_fd >= 0) {
+        close(ctx->wake_fd);
+    }
     if (ctx->epoll_fd >= 0) {
         close(ctx->epoll_fd);
     }
     free(ctx->events);
     free(ctx);
+}
+
+// 唤醒阻塞在 epoll_wait 的事件循环；EAGAIN 说明计数器已非零，唤醒必然发生。
+static void reactor_notify(void* context)
+{
+    epoll_reactor_context_t* ctx = context;
+    if (ctx == NULL || ctx->wake_fd < 0) {
+        return;
+    }
+    const uint64_t one = 1;
+    (void)write(ctx->wake_fd, &one, sizeof(one));
 }
 
 static int reactor_register(void* context, galay_c_io_controller_t* controller, uint32_t events)
@@ -208,7 +262,7 @@ static int reactor_register(void* context, galay_c_io_controller_t* controller, 
     epoll_reactor_context_t* ctx = context;
     struct epoll_event ev = {0};
     ev.data.ptr = controller;
-    ev.events = 0;
+    ev.events = EPOLLET;
 
     if (events & GALAY_C_EVENT_READ) {
         ev.events |= EPOLLIN;
@@ -218,6 +272,9 @@ static int reactor_register(void* context, galay_c_io_controller_t* controller, 
     }
 
     uint32_t registered = atomic_load_explicit(&controller->registered_events, memory_order_acquire);
+    if (registered == events) {
+        return 0;
+    }
     int op = (registered == GALAY_C_EVENT_NONE) ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
 
     if (epoll_ctl(ctx->epoll_fd, op, controller->fd, &ev) < 0) {
@@ -260,8 +317,15 @@ static int reactor_wait(void* context,
     }
 
     // 处理就绪事件
+    int io_events = 0;
     for (int i = 0; i < n; i++) {
         galay_c_io_controller_t* controller = ctx->events[i].data.ptr;
+        if (controller == NULL) {
+            // 跨线程入队唤醒：排空 eventfd 后继续处理其余 I/O 事件。
+            uint64_t wake_value = 0;
+            while (read(ctx->wake_fd, &wake_value, sizeof(wake_value)) > 0) {}
+            continue;
+        }
         uint32_t revents = ctx->events[i].events;
 
         // 唤醒读协程
@@ -295,10 +359,11 @@ static int reactor_wait(void* context,
                 }
             }
         }
+        ++io_events;
     }
 
-    atomic_fetch_add_explicit(&scheduler->event_count, n, memory_order_relaxed);
-    return n;
+    atomic_fetch_add_explicit(&scheduler->event_count, io_events, memory_order_relaxed);
+    return io_events;
 }
 
 #elif defined(__APPLE__) || defined(__FreeBSD__)
@@ -316,6 +381,7 @@ static void* reactor_create(int max_events)
 }
 
 static void reactor_destroy(void* context) {}
+static void reactor_notify(void* context) {}
 static int reactor_register(void* context, galay_c_io_controller_t* controller, uint32_t events) { return -ENOSYS; }
 static int reactor_unregister(void* context, galay_c_io_controller_t* controller) { return -ENOSYS; }
 static int reactor_wait(void* context, galay_c_io_scheduler_t* scheduler, ready_queue_t* ready_queue, int timeout_ms) { return -ENOSYS; }
@@ -517,6 +583,12 @@ C_IOResult galay_c_io_scheduler_enqueue_ready(galay_c_io_scheduler_t* scheduler,
     ready_queue_t* queue = scheduler->ready_queue;
     if (!ready_queue_push(queue, coro)) {
         return make_result(C_IOResultError, ENOMEM);
+    }
+
+    // 跨线程入队必须唤醒 reactor；否则事件循环会在 epoll_wait 里最多空等一个
+    // poll 周期（默认 10ms）。调度器线程自身入队（yield 重排）无需唤醒。
+    if (galay_c_current_scheduler != scheduler) {
+        reactor_notify(scheduler->reactor_context);
     }
 
     return make_result(C_IOResultOk, 0);

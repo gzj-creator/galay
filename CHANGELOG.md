@@ -14,6 +14,16 @@
 ### Changed
 
 - **对齐构建安装版本**：将 CMake 项目版本与 Bazel module 版本统一更新为 `4.8.1`，使安装包元数据与当前 Git 发布版本一致。
+- **C kernel ready queue 节点缓存池真正复用**：`push` 侧消费 `pop` 回收的节点（原缓存池只写不读），消除每次唤醒一次 `calloc`/`free`。
+- **C kernel reactor 对齐 ET 持久注册**：注册事件统一 `EPOLLET`，掩码未变化时跳过 `epoll_ctl`，配合唤醒后乐观重试。
+- **C++ 调度器本地环 owner-only 快速路径**：关闭 work-stealing 后 `pop_back` 不再发 seq_cst 仲裁栅栏、`steal_front` 直接拒绝，`setStealingEnabled` 同步传播到 ring；ready entry 唤醒延迟约降 6%。
+- **精简 FILEREAD/FILEWATCH 的 Waker 拷贝**：这两个 awaitable 仅服务于 C++ 协程，`wakeUp` 不会内联销毁 controller，直接唤醒省去一次引用拷贝。
+
+### Fixed
+
+- **修复 epoll 双向并发收发死锁**：同一 fd 的 `EPOLLIN|EPOLLOUT` 被 epoll 合并进一个事件，one-shot 与 sequence 分发读侧完成后提前返回会丢弃写侧就绪位，ET 下 send 等待不再出现的可写边沿而永久挂起（t21 随机冻死）；现在读侧完成后继续分发写侧（分发前复查 controller 有效性），并为 send 增加持久 `EPOLLOUT` 注册（`armPersistentWrite`），配合注册前乐观写兜底。修复后 t21 双向并发 500MB 压测连续通过，`epoll_ctl` 由每事件一次 MOD 震荡（10317 次/30s）降为 6 次/全程。
+- **修复 C kernel 跨线程入队唤醒缺失**：ready queue push 后事件循环仍阻塞在 `epoll_wait` 最多一个 poll 周期（10ms）；新增 eventfd 唤醒通道，跨线程入队立即唤醒 reactor，`async_waiter` 压力测试耗时从 3m33s 降至 42s。
+- **修复 C++ 侧测试依赖过期与端口冲突**：t126 源码锁定改指新的纯 C `async_waiter.c` 竞态安全模式；t3/t4 默认端口由 8080 改为 28080，避让本机端口占用。
 
 ## [v4.8.1] - 2026-08-16
 

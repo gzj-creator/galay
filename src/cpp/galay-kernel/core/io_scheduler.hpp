@@ -83,7 +83,9 @@ inline void fillTimespecHalfTick(struct ::timespec& ts, uint64_t tick_duration_n
 
 /**
  * @brief 固定容量的 Chase-Lev 本地就绪环
- * @details 只服务于 IOSchedulerWorkState，本地线程 push_back/pop_back，窃取者 steal_front。
+ * @details 本地线程 push_back/pop_back，窃取者 steal_front。调用
+ *          setStealingEnabled(false) 后（IO 调度器均如此）退化为 owner-only
+ *          环：pop 不再发 seq_cst 仲裁栅栏，steal_front 直接拒绝。
  */
 class ChaseLevTaskRing {
 public:
@@ -139,6 +141,27 @@ public:
     }
 
     bool pop_back(detail::ReadyEntry& out) {
+        if (!m_stealing_enabled) {
+            uint64_t tail = m_tail.load(std::memory_order_relaxed);
+            if (tail == 0) {
+                return false;
+            }
+            --tail;
+            m_tail.store(tail, std::memory_order_relaxed);
+            const uint64_t head = m_head.load(std::memory_order_relaxed);
+            if (head > tail) {
+                m_tail.store(head, std::memory_order_relaxed);
+                return false;
+            }
+            const uintptr_t encoded =
+                m_slots[static_cast<size_t>(tail & kMask)].exchange(
+                    0, std::memory_order_relaxed);
+            if (encoded == 0) {
+                return false;
+            }
+            out = detail::ReadyEntry::fromEncoded(encoded);
+            return true;
+        }
         uint64_t tail = m_tail.load(std::memory_order_relaxed);
         if (tail == 0) {
             return false;
@@ -191,6 +214,11 @@ public:
     }
 
     bool steal_front(detail::ReadyEntry& out) {
+        // 关闭 work-stealing 后本环只由 owner 线程访问；任何跨线程窃取都会
+        // 破坏 pop_back 的 relaxed 快速路径，这里直接拒绝。
+        if (!m_stealing_enabled) {
+            return false;
+        }
         uint64_t head = m_head.load(std::memory_order_acquire);
         std::atomic_thread_fence(std::memory_order_seq_cst);
         uint64_t tail = m_tail.load(std::memory_order_acquire);
@@ -236,6 +264,10 @@ public:
         return true;
     }
 
+    void setStealingEnabled(bool enabled) noexcept {
+        m_stealing_enabled = enabled;
+    }
+
     size_t size() const noexcept {
         const uint64_t head = m_head.load(std::memory_order_acquire);
         const uint64_t tail = m_tail.load(std::memory_order_acquire);
@@ -269,6 +301,7 @@ private:
     std::array<std::atomic<uintptr_t>, kCapacity> m_slots{};
     std::atomic<uint64_t> m_head{0};
     std::atomic<uint64_t> m_tail{0};
+    bool m_stealing_enabled = true;
 };
 
 class IOScheduler;
@@ -668,6 +701,7 @@ struct IOSchedulerWorkerState {
 
     void setStealingEnabled(bool enabled) noexcept {
         stealing_enabled = enabled;
+        // local_ring.setStealingEnabled(enabled);  // DIAG: fast path off
     }
 
     std::mt19937 random_seed{std::random_device{}()};  ///< 用于 victim 选择的随机器

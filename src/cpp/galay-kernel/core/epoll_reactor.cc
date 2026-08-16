@@ -203,6 +203,17 @@ uint32_t EpollReactor::buildEvents(IOController* controller) const {
     return events;
 }
 
+int EpollReactor::armPersistentWrite(IOController* controller) {
+    if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
+        return -1;
+    }
+    if (registrationEntryForController(controller) == nullptr) {
+        return -1;
+    }
+    controller->m_persistent_events |= EPOLLOUT;
+    return applyEvents(controller, buildEvents(controller));
+}
+
 int EpollReactor::armPersistentRead(IOController* controller) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return -1;
@@ -366,7 +377,7 @@ int EpollReactor::addSend(IOController* controller) {
     if (awaitable->handleComplete(controller->m_handle)) {
         return kImmediateReady;
     }
-    return applyEvents(controller, buildEvents(controller));
+    return armPersistentWrite(controller);
 }
 
 int EpollReactor::addReadv(IOController* controller) {
@@ -549,21 +560,13 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
 
     if (ev.events & EPOLLIN) {
         if (t & ACCEPT) {
-            if (complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT);
         } else if (t & RECV) {
-            if (complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV);
         } else if (t & READV) {
-            if (complete_one_shot(controller->getAwaitable<ReadvAwaitable>(), READV)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<ReadvAwaitable>(), READV);
         } else if (t & RECVFROM) {
-            if (complete_one_shot(controller->getAwaitable<RecvFromAwaitable>(), RECVFROM)) {
-                return;
-            }
+            (void)complete_one_shot(controller->getAwaitable<RecvFromAwaitable>(), RECVFROM);
         } else if (t & FILEREAD) {
             auto* aio_awaitable =
                 static_cast<galay::async::AioCommitAwaitable*>(controller->m_awaitable[IOController::READ]);
@@ -612,11 +615,10 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
                 if (!should_wake) {
                     return;
                 }
-                Waker waker = aio_awaitable->m_waker;
                 controller->removeAwaitable(FILEREAD);
                 syncEvents(controller);
                 (void)flushPendingChanges();
-                waker.wakeUp();
+                aio_awaitable->m_waker.wakeUp();
                 return;
             }
         } else if (t & FILEWATCH) {
@@ -674,16 +676,24 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
                     return;
                 }
                 awaitable->m_result = std::move(first_result);
-                Waker waker = awaitable->m_waker;
                 controller->removeAwaitable(FILEWATCH);
                 syncEvents(controller);
                 (void)flushPendingChanges();
-                waker.wakeUp();
+                awaitable->m_waker.wakeUp();
                 return;
             }
         }
     }
 
+    // 同一 fd 的 EPOLLIN|EPOLLOUT 会被 epoll 合并进一个事件；读侧完成后
+    // 必须继续分发写侧就绪位，否则双向并发收发的 send 会丢失 EPOLLOUT
+    // 边沿而永久等待。当前 reactor 的 awaitable 均为 C++ 协程（wakeUp 只入
+    // 队不内联恢复），但仍复查 controller 有效性以防御未来的内联恢复路径。
+    if (entry->controller != controller ||
+        controller->m_handle == GHandle::invalid() ||
+        controller->m_type == IOEventType::INVALID) {
+        return;
+    }
     const uint32_t after_read_type = static_cast<uint32_t>(controller->m_type);
     if (ev.events & EPOLLOUT) {
         if (after_read_type & CONNECT) {
@@ -756,10 +766,13 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
         if ((ev.events & EPOLLIN) != 0) {
             auto* owner = controller->m_sequence_owner[IOController::READ];
             if (owner != nullptr && owner->waitsOn(IOController::READ)) {
-                if (dispatch_owner(owner)) {
-                    return;
+                // 同一 fd 的 EPOLLIN|EPOLLOUT 会被 epoll 合并进一个事件；
+                // 读侧完成后必须继续分发写侧就绪位，否则双向并发收发会
+                // 持续丢失 EPOLLOUT 边沿（sequence owner 均为 C++ 协程，
+                // wakeUp 不会内联销毁 controller，跨侧继续分发是安全的）。
+                if (!dispatch_owner(owner)) {
+                    dispatched = owner;
                 }
-                dispatched = owner;
             }
         }
         if ((ev.events & EPOLLOUT) != 0) {

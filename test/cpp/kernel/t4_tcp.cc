@@ -39,7 +39,7 @@ using namespace std::chrono_literals;
 namespace {
 
 uint16_t tcpTestPort() {
-    return galay::test::resolvePortFromEnv("GALAY_TEST_TCP_PORT", 8080);
+    return galay::test::resolvePortFromEnv("GALAY_TEST_TCP_PORT", 28080);
 }
 
 bool waitForFlag(const std::atomic<bool>& flag, std::chrono::milliseconds timeout)

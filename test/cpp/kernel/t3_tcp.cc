@@ -40,7 +40,7 @@ using namespace std::chrono_literals;
 namespace {
 
 uint16_t tcpTestPort() {
-    return galay::test::resolvePortFromEnv("GALAY_TEST_TCP_PORT", 8080);
+    return galay::test::resolvePortFromEnv("GALAY_TEST_TCP_PORT", 28080);
 }
 
 constexpr std::array<std::string_view, 3> kMessages{

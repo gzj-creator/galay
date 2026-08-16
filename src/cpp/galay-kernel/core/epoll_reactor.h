@@ -76,6 +76,7 @@ private:
 
     uint32_t buildEvents(IOController* controller) const;  ///< 根据控制器状态计算目标 epoll 事件掩码
     int armPersistentRead(IOController* controller);  ///< 为 recv/readv 保留持久 EPOLLET READ 兴趣
+    int armPersistentWrite(IOController* controller);  ///< 为 send 保留持久 EPOLLET WRITE 兴趣
     int applyEvents(IOController* controller, uint32_t events);  ///< 把计算出的 epoll 事件掩码写入本地 pending 队列
     int processSequence(IOEventType type, IOController* controller);  ///< 处理 sequence awaitable 的注册/同步逻辑
     void processEvent(struct epoll_event& ev);  ///< 消费单个 epoll 事件并唤醒对应 awaitable
