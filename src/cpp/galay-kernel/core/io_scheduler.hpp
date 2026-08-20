@@ -115,15 +115,19 @@ public:
             return false;
         }
         const size_t index = static_cast<size_t>(tail & kMask);
-        uintptr_t expected = 0;
         const uintptr_t encoded = entry.encoded();
-        if (!m_slots[index].compare_exchange_strong(expected, encoded,
-                                                     std::memory_order_release,
-                                                     std::memory_order_acquire)) {
-            return false;
+        if (!m_stealing_enabled) {
+            // owner-only 路径：无窃取者竞争，直接 store 即可
+            m_slots[index].store(encoded, std::memory_order_release);
+        } else {
+            uintptr_t expected = 0;
+            if (!m_slots[index].compare_exchange_strong(expected, encoded,
+                                                         std::memory_order_release,
+                                                         std::memory_order_acquire)) {
+                return false;
+            }
         }
         entry.clear();
-        std::atomic_thread_fence(std::memory_order_release);
         m_tail.store(tail + 1, std::memory_order_release);
         return true;
     }

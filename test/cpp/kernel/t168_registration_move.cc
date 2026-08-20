@@ -38,6 +38,69 @@ bool setNonBlocking(int fd) {
     return flags >= 0 && ::fcntl(fd, F_SETFL, flags | O_NONBLOCK) == 0;
 }
 
+#ifdef USE_EPOLL
+bool pendingRegistrationMoveCanBeCancelled() {
+    int fds[2] = {-1, -1};
+    if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0 ||
+        !setNonBlocking(fds[0]) || !setNonBlocking(fds[1])) {
+        const bool first_closed = closeFd(fds[0]);
+        const bool second_closed = closeFd(fds[1]);
+        if (!first_closed || !second_closed) {
+            std::cerr << "[T168] pending-move setup cleanup failed\n";
+        }
+        return false;
+    }
+
+    std::atomic<uint64_t> last_error{0};
+    EpollReactor reactor(8, last_error);
+    if (!reactor.start()) {
+        const bool first_closed = closeFd(fds[0]);
+        const bool second_closed = closeFd(fds[1]);
+        if (!first_closed || !second_closed) {
+            std::cerr << "[T168] pending-move start cleanup failed\n";
+        }
+        return false;
+    }
+
+    IOController source(GHandle{.fd = fds[0]});
+    char recv_buffer = 0;
+    RecvAwaitable recv_awaitable(&source, &recv_buffer, 1);
+    if (!source.fillAwaitable(RECV, &recv_awaitable) ||
+        reactor.addRecv(&source) != 0) {
+        std::cerr << "[T168] failed to queue pending recv before move\n";
+        const bool first_closed = closeFd(fds[0]);
+        const bool second_closed = closeFd(fds[1]);
+        if (!first_closed || !second_closed) {
+            std::cerr << "[T168] pending-move registration cleanup failed\n";
+        }
+        return false;
+    }
+
+    IOController moved(std::move(source));
+    moved.removeAwaitable(RECV);
+    bool passed = true;
+    if (reactor.remove(&moved) != 0 || reactor.flushPendingChanges() != 0) {
+        std::cerr << "[T168] failed to cancel moved pending registration\n";
+        passed = false;
+    } else if (moved.m_registered_events != 0) {
+        std::cerr << "[T168] pending registration survived controller move and remove\n";
+        passed = false;
+    }
+
+    if (reactor.addClose(&moved) != 0) {
+        std::cerr << "[T168] pending-move controller cleanup failed\n";
+        passed = false;
+    } else {
+        fds[0] = -1;
+    }
+    if (!closeFd(fds[0]) || !closeFd(fds[1])) {
+        std::cerr << "[T168] pending-move socket cleanup failed\n";
+        passed = false;
+    }
+    return passed;
+}
+#endif
+
 }  // namespace
 
 int main() {
@@ -45,6 +108,11 @@ int main() {
     std::cout << "T168-RegistrationMove SKIP\n";
     return 0;
 #else
+    bool passed = true;
+#ifdef USE_EPOLL
+    passed = pendingRegistrationMoveCanBeCancelled() && passed;
+#endif
+
     int fds[2] = {-1, -1};
     if (::socketpair(AF_UNIX, SOCK_STREAM, 0, fds) != 0) {
         std::cerr << "[T168] socketpair failed\n";
@@ -77,7 +145,6 @@ int main() {
         return 1;
     }
 
-    bool passed = true;
     auto source = std::make_unique<IOController>(GHandle{.fd = fds[0]});
     char recv_buffer = 0;
     RecvAwaitable recv_awaitable(source.get(), &recv_buffer, 1);

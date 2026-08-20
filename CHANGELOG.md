@@ -11,6 +11,17 @@
 
 ## [Unreleased]
 
+## [v4.9.1] - 2026-08-20
+
+### Changed
+
+- **优化 owner-only IO 就绪环投递**：work-stealing 关闭时，`push_back` 直接以 release store 发布 slot，并通过 tail 的 release store 交接可见性，移除无竞争路径上的 CAS 与额外 release fence。
+
+### Fixed
+
+- **修复 C 协程超时唤醒的生命周期竞争**：超时清除等待槽位后，先写入 wake 失败结果，再释放该等待槽位持有的任务引用，避免 ready queue 消费后访问已释放任务。
+- **补齐 epoll 待提交注册移动后的取消回归**：覆盖 IOController 在注册尚未 flush 时移动、取消并关闭的路径，确保稳定注册入口和 pending change 不会保留失效 controller。
+
 ## [v4.9.0] - 2026-08-17
 
 ### Added

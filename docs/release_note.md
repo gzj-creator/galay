@@ -274,3 +274,18 @@
 - **C++ epoll 与本地调度环优化**：关闭 work-stealing 时启用 owner-only 本地 ring 快速路径，精简 FILEREAD/FILEWATCH 的 Waker 拷贝；合并的 `EPOLLIN|EPOLLOUT` 事件会在 controller 有效时继续分发另一方向，覆盖普通 WRITE 与只读 sequence 共存场景。
 - **C 多线程 TCP 监听**：新增 `galay_c_tcp_socket_set_reuse_port`，并将 C TCP 压测服务端改为每个 I/O scheduler 各自持有 `SO_REUSEPORT` listener 和 accept 协程，使连接由内核分发到监听线程。
 - **测试与性能验证**：C++ kernel `178/178`、C kernel `23/23` 测试通过，Release/epoll 构建成功；四线程 TCP 对照中三端均完成 `128/128` 连接且 `errors=0`，中位 QPS 为 C `27,967`、C++ `29,959`、libuv `30,812`。
+
+## v4.9.1 - 2026-08-20
+
+- **版本级别**：修订版本（patch）
+- **Git 提交消息**：`fix: 修复协程超时唤醒生命周期并优化 owner-only 调度环`
+- **Git tag**：`v4.9.1`
+
+### 变更摘要
+
+本次为 `v4.9.0` 之后的修订版本，主线是修复 C 协程超时唤醒期间的任务生命周期竞争，并降低关闭 work-stealing 的 IO 调度器本地就绪环投递开销。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.9.1`。
+
+- **超时唤醒生命周期修复**：等待槽位清除后，任务在写入最终 `wait_code` 前保持其等待引用；若入队唤醒失败，先显式记录错误再释放，避免调度线程可能先消费并释放任务导致的悬垂访问。
+- **owner-only 环热路径优化**：确认 IO scheduler 已禁用 work-stealing 时，以 release store 取代无竞争的 slot CAS，并移除冗余 release fence；tail 的 release 发布继续保证 consumer 只会看到已初始化 entry。
+- **移动注册取消回归**：扩展 epoll 注册移动测试，覆盖 pending `EPOLLIN` 注册在 flush 前移动后被 remove/close 的场景，验证 pending change 被正确撤销且没有残留注册。
+- **验证结果**：C++ kernel 的 registration move、owner-only ring、ReadyEntry 和 Chase-Lev 并发测试通过；C TCP/UDP/async-file/file-watcher 超时回调测试通过。Release scheduler 压力基准测得 IO resume drain 约 `66-76 ns/task`（按批量大小变化）。

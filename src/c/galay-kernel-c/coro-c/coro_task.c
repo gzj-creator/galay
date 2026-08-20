@@ -484,11 +484,11 @@ void galay_c_coro_task_process_timeouts(galay_c_io_scheduler_t* scheduler)
             atomic_store_explicit(&task->wait_code, C_IOResultTimeout,
                                   memory_order_release);
             const C_IOResult woke = galay_c_coro_task_wake(task);
-            galay_c_coro_task_release(task);
             if (woke.code != C_IOResultOk) {
                 atomic_store_explicit(&task->wait_code, C_IOResultError,
                                       memory_order_release);
             }
+            galay_c_coro_task_release(task);
         }
     }
 }
