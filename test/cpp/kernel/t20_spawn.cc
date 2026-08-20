@@ -35,8 +35,8 @@ Task<void> spawnDetachedTasks()
     auto runtime_handle = RuntimeHandle::current();
     assert(runtime_handle.has_value());
 
-    auto handle = runtime_handle->spawn(computeTask(2, 2));
-    auto detached = runtime_handle->spawn(computeTask(3, 3));
+    auto handle = runtime_handle->spawnCpu(computeTask(2, 2));
+    auto detached = runtime_handle->spawnCpu(computeTask(3, 3));
     assert(handle.has_value());
     assert(detached.has_value());
     (void)handle;
@@ -82,25 +82,25 @@ Task<void> spawnBlockingFromHandle()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
+        .ioSchedulerCount(1)
         .computeSchedulerCount(1)
         .build();
 
-    const auto value = runtime.blockOn(rootValue());
+    const auto value = runtime.blockOnCpu(rootValue());
     assert(value.has_value());
     assert(*value == 42);
 
-    auto joined = runtime.spawn(computeTask(1, 1));
+    auto joined = runtime.spawnCpu(computeTask(1, 1));
     assert(joined.has_value());
     auto joined_value = joined->join();
     assert(joined_value.has_value());
     assert(*joined_value == 10);
 
-    auto detached = runtime.blockOn(spawnDetachedTasks());
+    auto detached = runtime.blockOnCpu(spawnDetachedTasks());
     assert(detached.has_value());
-    auto finished = runtime.blockOn(waitForFinishedTasks(3));
+    auto finished = runtime.blockOnCpu(waitForFinishedTasks(3));
     assert(finished.has_value());
-    auto blocking = runtime.blockOn(spawnBlockingFromHandle());
+    auto blocking = runtime.blockOnCpu(spawnBlockingFromHandle());
     assert(blocking.has_value());
 
     std::cout << "T20-RuntimeTaskApiDemo PASS\n";

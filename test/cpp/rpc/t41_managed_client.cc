@@ -185,7 +185,7 @@ int main()
     }
 
     TestState state;
-    auto scheduled = runtime.spawn(runManagedChecks(port, &state));
+    auto scheduled = runtime.spawnIO(runManagedChecks(port, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

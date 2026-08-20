@@ -100,7 +100,7 @@ int observeWsClientTcpNoDelay(bool tcp_no_delay)
     LoopbackListener listener;
     WsClient client = WsClientBuilder().tcpNoDelay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOn(
+    auto connect_result = runtime.blockOnIO(
         client.connect("ws://127.0.0.1:" + std::to_string(listener.port()) + "/ws"));
     require(connect_result.has_value(), "runtime should run WsClient connect task");
     require(connect_result.value().has_value(), "WsClient connect should succeed against loopback listener");
@@ -109,7 +109,7 @@ int observeWsClientTcpNoDelay(bool tcp_no_delay)
     require(socket != nullptr, "WsClient should expose connected socket");
     const int observed = readTcpNoDelay(socket->handle().fd);
 
-    auto close_result = runtime.blockOn(client.close());
+    auto close_result = runtime.blockOnIO(client.close());
     require(close_result.has_value(), "runtime should run WsClient close task");
     require(close_result.value().has_value(), "WsClient close should succeed");
     runtime.stop();
@@ -123,7 +123,7 @@ int observeWssClientTcpNoDelay(bool tcp_no_delay)
     LoopbackListener listener;
     WssClient client = WssClientBuilder().tcpNoDelay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOn(
+    auto connect_result = runtime.blockOnIO(
         client.connect("wss://127.0.0.1:" + std::to_string(listener.port()) + "/ws"));
     require(connect_result.has_value(), "runtime should run WssClient connect task");
     require(connect_result.value().has_value(), "WssClient connect should succeed against loopback listener");
@@ -132,7 +132,7 @@ int observeWssClientTcpNoDelay(bool tcp_no_delay)
     require(socket != nullptr, "WssClient should expose connected socket");
     const int observed = readTcpNoDelay(socket->handle().fd);
 
-    auto close_result = runtime.blockOn(client.close());
+    auto close_result = runtime.blockOnIO(client.close());
     require(close_result.has_value(), "runtime should run WssClient close task");
     require(close_result.value().has_value(), "WssClient close should succeed");
     runtime.stop();

@@ -376,21 +376,21 @@ bool verifyRuntimeCppCompatibility() {
         .build();
 
     std::atomic<int> spawned{0};
-    auto void_handle = runtime.spawn(markTask(&spawned));
+    auto void_handle = runtime.spawnIO(markTask(&spawned));
     if (!void_handle.has_value()) {
-        std::cerr << "[T135] spawn(Task<void>) failed\n";
+        std::cerr << "[T135] spawnIO(Task<void>) failed\n";
         return false;
     }
     auto void_join = void_handle->join();
     if (!void_join.has_value() || spawned.load(std::memory_order_acquire) != 1) {
-        std::cerr << "[T135] spawn(Task<void>) did not complete\n";
+        std::cerr << "[T135] spawnIO(Task<void>) did not complete\n";
         runtime.stop();
         return false;
     }
 
-    auto value_handle = runtime.spawn(valueTask(9));
+    auto value_handle = runtime.spawnIO(valueTask(9));
     if (!value_handle.has_value()) {
-        std::cerr << "[T135] spawn(Task<int>) failed\n";
+        std::cerr << "[T135] spawnIO(Task<int>) failed\n";
         runtime.stop();
         return false;
     }
@@ -402,7 +402,7 @@ bool verifyRuntimeCppCompatibility() {
     }
 
     std::atomic<int> parent_steps{0};
-    auto parent = runtime.blockOn(parentTask(&parent_steps));
+    auto parent = runtime.blockOnIO(parentTask(&parent_steps));
     if (!parent.has_value() || *parent != 43 ||
         parent_steps.load(std::memory_order_acquire) != 2) {
         std::cerr << "[T135] co_await Task<T> parent resume failed\n";
@@ -416,12 +416,12 @@ bool verifyRuntimeCppCompatibility() {
 
 bool verifyThenCompatibility() {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
+        .ioSchedulerCount(1)
         .computeSchedulerCount(1)
         .build();
 
     std::atomic<int> sequence{0};
-    auto result = runtime.blockOn(thenStep(&sequence, 0, 1).then(thenStep(&sequence, 1, 2)));
+    auto result = runtime.blockOnIO(thenStep(&sequence, 0, 1).then(thenStep(&sequence, 1, 2)));
     runtime.stop();
 
     if (!result.has_value() || sequence.load(std::memory_order_acquire) != 2) {

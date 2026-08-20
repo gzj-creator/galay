@@ -46,8 +46,8 @@ Task<void> spawnFromCurrentRuntime()
     LogInfo("Spawning detached tasks through RuntimeHandle::current()");
     auto runtimeHandle = RuntimeHandle::current();
     assert(runtimeHandle.has_value());
-    auto first = runtimeHandle->spawn(detachedTask(1));
-    auto second = runtimeHandle->spawn(detachedTask(2));
+    auto first = runtimeHandle->spawnCpu(detachedTask(1));
+    auto second = runtimeHandle->spawnCpu(detachedTask(2));
     assert(first.has_value());
     assert(second.has_value());
     co_return;
@@ -93,28 +93,28 @@ int main()
         .computeSchedulerCount(1)
         .build();
 
-    LogInfo("\n--- Example 1: blockOn(Task<int>) ---");
-    auto rootValue = runtime.blockOn(sumTask(1, 1000));
+    LogInfo("\n--- Example 1: blockOnCpu(Task<int>) ---");
+    auto rootValue = runtime.blockOnCpu(sumTask(1, 1000));
     assert(rootValue.has_value());
-    LogInfo("blockOn returned {}", *rootValue);
+    LogInfo("blockOnCpu returned {}", *rootValue);
 
-    LogInfo("\n--- Example 2: spawn(Task<int>) -> JoinHandle<int> ---");
-    auto handle = runtime.spawn(sumTask(2, 2000));
+    LogInfo("\n--- Example 2: spawnCpu(Task<int>) -> JoinHandle<int> ---");
+    auto handle = runtime.spawnCpu(sumTask(2, 2000));
     assert(handle.has_value());
     auto handleWait = handle->wait();
     assert(handleWait.has_value());
     auto handleValue = handle->join();
     assert(handleValue.has_value());
-    LogInfo("spawn().join() returned {}", *handleValue);
+    LogInfo("spawnCpu().join() returned {}", *handleValue);
 
-    LogInfo("\n--- Example 3: RuntimeHandle::current().spawn(...) ---");
-    auto spawnResult = runtime.blockOn(spawnFromCurrentRuntime());
+    LogInfo("\n--- Example 3: RuntimeHandle::current().spawnCpu(...) ---");
+    auto spawnResult = runtime.blockOnCpu(spawnFromCurrentRuntime());
     assert(spawnResult.has_value());
-    auto waitResult = runtime.blockOn(waitForDetachedTasks());
+    auto waitResult = runtime.blockOnCpu(waitForDetachedTasks());
     assert(waitResult.has_value());
 
     LogInfo("\n--- Example 4: RuntimeHandle::spawnBlocking(...) ---");
-    auto blockingResult = runtime.blockOn(spawnBlockingDemo());
+    auto blockingResult = runtime.blockOnCpu(spawnBlockingDemo());
     assert(blockingResult.has_value());
 
     LogInfo("\n=== Example Completed ===");

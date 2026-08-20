@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Runtime started\n";
 
-        auto join = runtime.spawn(sendEchoRequest(url, message));
+        auto join = runtime.spawnIO(sendEchoRequest(url, message));
         bool ok = false;
         if (join) {
             auto result = join->join();

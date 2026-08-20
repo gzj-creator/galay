@@ -21,11 +21,11 @@ Task<int> explodeTask()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
+        .ioSchedulerCount(1)
         .computeSchedulerCount(1)
         .build();
 
-    auto result = runtime.blockOn(explodeTask());
+    auto result = runtime.blockOnIO(explodeTask());
     assert(!result.has_value());
     assert(result.error().code() == RuntimeErrorCode::kTaskException);
 

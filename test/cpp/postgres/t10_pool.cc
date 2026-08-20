@@ -117,7 +117,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    auto result = runtime.blockOn(runPool(scheduler, std::move(*config)));
+    auto result = runtime.blockOnIO(runPool(scheduler, std::move(*config)));
     runtime.stop();
     if (!result || *result != 0) {
         std::cerr << "pool integration failed at step " << (result ? *result : -1) << '\n';

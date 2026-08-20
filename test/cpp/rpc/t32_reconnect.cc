@@ -139,8 +139,8 @@ int main()
     std::shared_ptr<RpcServer> server;
     ReconnectService service;
     TestState state;
-    auto starter = runtime.spawn(startServerLater(port, &server, &service, &state));
-    auto client = runtime.spawn(runReconnectClient(port, &state));
+    auto starter = runtime.spawnIO(startServerLater(port, &server, &service, &state));
+    auto client = runtime.spawnIO(runReconnectClient(port, &state));
     if (!starter.has_value() || !client.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule reconnect tasks\n";

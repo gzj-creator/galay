@@ -64,7 +64,7 @@ Task<void> runPoolChecks(TestState* state)
         state->done.store(true, std::memory_order_release);
         co_return;
     }
-    auto waiter_task = runtime->spawn([](RpcConnectionPool* pool_ptr,
+    auto waiter_task = runtime->spawnIO([](RpcConnectionPool* pool_ptr,
                                          RpcEndpoint waiter_endpoint,
                                          TestState* waiter_state) -> Task<void> {
         auto waited = co_await pool_ptr->acquire(waiter_endpoint);
@@ -174,7 +174,7 @@ int main()
     runtime.start();
 
     TestState state;
-    auto scheduled = runtime.spawn(runPoolChecks(&state));
+    auto scheduled = runtime.spawnIO(runPoolChecks(&state));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule pool checks\n";

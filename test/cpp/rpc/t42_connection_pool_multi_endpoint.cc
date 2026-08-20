@@ -128,7 +128,7 @@ int main()
     runtime.start();
 
     TestState state;
-    auto scheduled = runtime.spawn(runMultiEndpointChecks(&state));
+    auto scheduled = runtime.spawnIO(runMultiEndpointChecks(&state));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule multi-endpoint pool checks\n";

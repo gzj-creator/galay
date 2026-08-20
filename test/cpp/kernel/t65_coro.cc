@@ -32,7 +32,7 @@ concept HasTaskRefScheduleSurface = std::derived_from<S, Scheduler> &&
 static_assert(HasTaskRefScheduleSurface<ComputeScheduler>,
               "Public scheduler headers should expose TaskRef-native scheduling");
 static_assert(requires(Runtime runtime, Task<int> task) {
-    { runtime.blockOn(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
+    { runtime.blockOnIO(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
 }, "Runtime should expose expected-returning Task-native blockOn");
 
 int main()

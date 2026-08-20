@@ -22,11 +22,11 @@ int main()
     assert(!RuntimeHandle::tryCurrent().has_value());
 
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
+        .ioSchedulerCount(1)
         .computeSchedulerCount(1)
         .build();
 
-    auto inside_runtime = runtime.blockOn(checkCurrentHandle());
+    auto inside_runtime = runtime.blockOnIO(checkCurrentHandle());
     assert(inside_runtime.has_value());
     assert(*inside_runtime);
 

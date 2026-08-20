@@ -47,7 +47,7 @@ Task<void> rootTask()
 int main()
 {
     Runtime runtime;
-    auto result = runtime.blockOn(rootTask());
+    auto result = runtime.blockOnIO(rootTask());
     assert(result.has_value());
     return 0;
 }

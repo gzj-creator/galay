@@ -123,7 +123,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    auto result = runtime.blockOn(runPrepared(scheduler, std::move(*config)));
+    auto result = runtime.blockOnIO(runPrepared(scheduler, std::move(*config)));
     runtime.stop();
     if (!result) {
         std::cerr << "runtime blockOn failed: " << result.error().message() << '\n';

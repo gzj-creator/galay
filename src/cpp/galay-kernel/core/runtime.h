@@ -171,18 +171,25 @@ public:
      */
     void stop();
 
-    /**
-     * @brief 在 runtime 上提交一个根任务并同步等待结果。
-     * @param task 要提交的任务；所有权转移到 runtime
-     * @return 成功时返回任务结果；`Task<void>` 成功时返回 `std::expected<void, RuntimeError>{}`；
-     *         失败时返回 RuntimeError
-     *
-     * @note 若 runtime 尚未启动，会在内部自动启动
-     */
+    /** @brief 在 IO scheduler 上同步执行一个根任务并返回结果。 */
     template <typename T>
-    auto blockOn(Task<T> task) -> std::expected<T, RuntimeError>
+    auto blockOnIO(Task<T> task) -> std::expected<T, RuntimeError>
     {
-        auto scheduler = acquireDefaultScheduler();
+        return blockOnOnScheduler(std::move(task), acquireIOScheduler());
+    }
+
+    /** @brief 在 compute scheduler 上同步执行一个纯计算根任务并返回结果。 */
+    template <typename T>
+    auto blockOnCpu(Task<T> task) -> std::expected<T, RuntimeError>
+    {
+        return blockOnOnScheduler(std::move(task), acquireComputeScheduler());
+    }
+
+private:
+    template <typename T>
+    auto blockOnOnScheduler(Task<T> task, std::expected<Scheduler*, RuntimeError> scheduler)
+        -> std::expected<T, RuntimeError>
+    {
         if (!scheduler.has_value()) {
             return std::unexpected(scheduler.error());
         }
@@ -207,17 +214,34 @@ public:
         }
     }
 
+public:
     /**
-     * @brief 异步提交一个任务并返回可 `join()` 的句柄。
+     * @brief 在 IO scheduler 上异步提交一个任务。
      * @param task 要提交的任务；所有权转移到 runtime
-     * @return 成功时返回与任务结果绑定的 `JoinHandle<T>`，失败时返回 RuntimeError
-     *
-     * @note 若 runtime 尚未启动，会在内部自动启动
+     * @return 成功时返回可 `join()` 的句柄；没有 IO scheduler 或提交失败时返回 RuntimeError
      */
     template <typename T>
-    auto spawn(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
+    auto spawnIO(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
     {
-        auto scheduler = acquireDefaultScheduler();
+        return spawnOnScheduler(std::move(task), acquireIOScheduler());
+    }
+
+    /**
+     * @brief 在 compute scheduler 上异步提交一个纯计算任务。
+     * @param task 要提交的任务；任务不得依赖 IO scheduler 专属事件循环
+     * @return 成功时返回可 `join()` 的句柄；没有 compute scheduler 或提交失败时返回 RuntimeError
+     */
+    template <typename T>
+    auto spawnCpu(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
+    {
+        return spawnOnScheduler(std::move(task), acquireComputeScheduler());
+    }
+
+private:
+    template <typename T>
+    auto spawnOnScheduler(Task<T> task, std::expected<Scheduler*, RuntimeError> scheduler)
+        -> std::expected<JoinHandle<T>, RuntimeError>
+    {
         if (!scheduler.has_value()) {
             return std::unexpected(scheduler.error());
         }
@@ -233,6 +257,7 @@ public:
         return JoinHandle<T>(detail::TaskAccess::detachTask(std::move(task)));
     }
 
+public:
     /**
      * @brief 在线程池上执行一个阻塞 callable，并返回 join handle。
      * @param func 可调用对象；会被 move/copy 进阻塞线程池
@@ -289,7 +314,8 @@ private:
     void createDefaultSchedulers();  ///< 按配置或 CPU 数生成默认 scheduler 集合
     void applyAffinityConfig();  ///< 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
     std::expected<void, RuntimeError> ensureStarted();  ///< 若 Runtime 尚未启动则触发一次启动
-    std::expected<Scheduler*, RuntimeError> acquireDefaultScheduler();  ///< 为根任务选出一个默认调度器
+    std::expected<Scheduler*, RuntimeError> acquireIOScheduler();  ///< 为 IO 根任务选择一个 IO scheduler
+    std::expected<Scheduler*, RuntimeError> acquireComputeScheduler();  ///< 为 CPU 根任务选择一个 compute scheduler
     void bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler);  ///< 给根任务绑定 Runtime 与目标调度器
     bool submitTask(const TaskRef& task);  ///< 把根任务提交到其所属调度器
     static size_t getCPUCount();  ///< 返回当前机器可用 CPU 数量
@@ -336,14 +362,34 @@ public:
 
     bool isValid() const noexcept { return m_runtime != nullptr; }  ///< 当前是否绑定到有效 Runtime
 
+    /**
+     * @brief 通过当前 runtime 在 IO scheduler 上提交任务。
+     * @param task 要提交的任务；所有权转移到 runtime
+     * @return 成功时返回可 `join()` 的句柄；handle 无效、没有 IO scheduler 或提交失败时返回 RuntimeError
+     */
     template <typename T>
-    auto spawn(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
+    auto spawnIO(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
     {
         auto runtime = runtimeOrError();
         if (!runtime.has_value()) {
             return std::unexpected(runtime.error());
         }
-        return (*runtime)->spawn(std::move(task));
+        return (*runtime)->spawnIO(std::move(task));
+    }
+
+    /**
+     * @brief 通过当前 runtime 在 compute scheduler 上提交纯计算任务。
+     * @param task 要提交的任务；任务不得依赖 IO scheduler 专属事件循环
+     * @return 成功时返回可 `join()` 的句柄；handle 无效、没有 compute scheduler 或提交失败时返回 RuntimeError
+     */
+    template <typename T>
+    auto spawnCpu(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
+    {
+        auto runtime = runtimeOrError();
+        if (!runtime.has_value()) {
+            return std::unexpected(runtime.error());
+        }
+        return (*runtime)->spawnCpu(std::move(task));
     }
 
     template <typename F>

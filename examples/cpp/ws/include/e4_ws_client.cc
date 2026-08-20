@@ -206,7 +206,7 @@ int main(int argc, char* argv[]) {
         runtime.start();
 
 
-        auto join = runtime.spawn(runWebSocketClient(url));
+        auto join = runtime.spawnIO(runWebSocketClient(url));
         bool ok = false;
         if (join) {
             auto result = join->join();

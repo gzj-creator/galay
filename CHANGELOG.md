@@ -11,6 +11,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **按执行语义拆分 Runtime 根任务入口**：新增 `blockOnIO()`、`blockOnCpu()`、`spawnIO()`、`spawnCpu()` 及 `RuntimeHandle` 对应入口，分别绑定 IO scheduler 或 compute scheduler；新增边界测试与提交吞吐基准。
+
+### Removed
+
+- **移除含糊的默认任务提交入口**：删除 `Runtime::blockOn()`、`Runtime::spawn()` 与 `RuntimeHandle::spawn()`，避免 runtime 猜测任务类别；不可协程化同步 callable 继续使用独立的 `spawnBlocking()` 阻塞执行器。
+
+### Changed
+
+- **迁移仓内任务提交调用点**：网络、timer 与协议任务统一使用 IO 入口，纯计算任务使用 CPU 入口，消除 ComputeScheduler 优先的默认放置语义。
+
 ## [v4.9.1] - 2026-08-20
 
 ### Changed

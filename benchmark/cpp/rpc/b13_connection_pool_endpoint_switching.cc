@@ -85,7 +85,7 @@ int main(int argc, char** argv)
     runtime.start();
 
     Result result;
-    auto scheduled = runtime.spawn(runEndpointSwitching(operations, endpoint_count, &result));
+    auto scheduled = runtime.spawnIO(runEndpointSwitching(operations, endpoint_count, &result));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule endpoint-switching pool pressure\n";

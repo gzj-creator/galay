@@ -142,7 +142,7 @@ Task<void> runDeadlineCancelClient(uint16_t port, TestState* state)
         co_return;
     }
 
-    auto canceller = runtime->spawn(cancelSoon(&pending_cancel_source));
+    auto canceller = runtime->spawnIO(cancelSoon(&pending_cancel_source));
     if (!canceller.has_value()) {
         fail(*state, "failed to schedule canceller");
         co_await client.close();
@@ -167,7 +167,7 @@ Task<void> runDeadlineCancelClient(uint16_t port, TestState* state)
     }
 
     std::atomic<bool> close_done{false};
-    auto closer = runtime->spawn(closeSoon(&client, &close_done));
+    auto closer = runtime->spawnIO(closeSoon(&client, &close_done));
     if (!closer.has_value()) {
         fail(*state, "failed to schedule close watcher");
         co_await client.close();
@@ -245,7 +245,7 @@ int main()
     }
 
     TestState state;
-    auto root = runtime.spawn(runDeadlineCancelClient(port, &state));
+    auto root = runtime.spawnIO(runDeadlineCancelClient(port, &state));
     if (!root.has_value()) {
         runtime.stop();
         server.stop();

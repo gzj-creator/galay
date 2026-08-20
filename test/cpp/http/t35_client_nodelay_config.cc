@@ -100,7 +100,7 @@ int observeHttpClientTcpNoDelay(bool tcp_no_delay)
     LoopbackListener listener;
     HttpClient client = HttpClientBuilder().tcpNoDelay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOn(
+    auto connect_result = runtime.blockOnIO(
         client.connect("http://127.0.0.1:" + std::to_string(listener.port()) + "/"));
     require(connect_result.has_value(), "runtime should run HttpClient connect task");
     require(connect_result.value().has_value(), "HttpClient connect should succeed against loopback listener");
@@ -109,7 +109,7 @@ int observeHttpClientTcpNoDelay(bool tcp_no_delay)
     require(socket_result.has_value(), "HttpClient should expose connected socket");
     const int observed = readTcpNoDelay(socket_result->get().handle().fd);
 
-    auto close_result = runtime.blockOn(client.close());
+    auto close_result = runtime.blockOnIO(client.close());
     require(close_result.has_value(), "runtime should run HttpClient close task");
     require(close_result.value().has_value(), "HttpClient close should succeed");
     runtime.stop();
@@ -123,7 +123,7 @@ int observeHttpsClientTcpNoDelay(bool tcp_no_delay)
     LoopbackListener listener;
     HttpsClient client = HttpsClientBuilder().tcpNoDelay(tcp_no_delay).build();
 
-    auto connect_result = runtime.blockOn(
+    auto connect_result = runtime.blockOnIO(
         client.connect("https://127.0.0.1:" + std::to_string(listener.port()) + "/"));
     require(connect_result.has_value(), "runtime should run HttpsClient connect task");
     require(connect_result.value().has_value(), "HttpsClient connect should succeed against loopback listener");
@@ -132,7 +132,7 @@ int observeHttpsClientTcpNoDelay(bool tcp_no_delay)
     require(socket_result.has_value(), "HttpsClient should expose connected socket");
     const int observed = readTcpNoDelay(socket_result->get().handle().fd);
 
-    auto close_result = runtime.blockOn(client.close());
+    auto close_result = runtime.blockOnIO(client.close());
     require(close_result.has_value(), "runtime should run HttpsClient close task");
     require(close_result.value().has_value(), "HttpsClient close should succeed");
     runtime.stop();

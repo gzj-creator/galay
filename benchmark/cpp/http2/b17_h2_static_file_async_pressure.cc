@@ -239,7 +239,7 @@ int main(int argc, char** argv)
     }
 
     BenchState state;
-    auto scheduled = runtime.spawn(runClient(port, requests, file_size, &state));
+    auto scheduled = runtime.spawnIO(runClient(port, requests, file_size, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

@@ -130,7 +130,7 @@ int main(int argc, char* argv[])
 
     PoolBenchmarkState state;
     const auto started = std::chrono::steady_clock::now();
-    auto result = runtime.blockOn(runPoolBenchmark(scheduler, &state, cfg));
+    auto result = runtime.blockOnIO(runPoolBenchmark(scheduler, &state, cfg));
     const auto finished = std::chrono::steady_clock::now();
     runtime.stop();
 

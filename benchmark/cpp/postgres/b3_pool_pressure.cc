@@ -189,7 +189,7 @@ int main(int argc, char** argv)
 
     State state;
     state.samples_ns.reserve(config.clients * config.queries);
-    auto completed = runtime.blockOn(run(scheduler, &state, config));
+    auto completed = runtime.blockOnIO(run(scheduler, &state, config));
     runtime.stop();
     if (!completed || !*completed) {
         std::cerr << (completed ? "pool warmup or completion failed"

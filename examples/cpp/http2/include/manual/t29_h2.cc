@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    auto join = runtime.spawn(runClient(host, port, requests));
+    auto join = runtime.spawnIO(runClient(host, port, requests));
     if (!join) {
         std::cerr << "Failed to spawn client coroutine: " << join.error().message() << "\n";
         runtime.stop();

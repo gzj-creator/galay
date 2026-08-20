@@ -333,8 +333,10 @@
 `Runtime` 关键接口：
 
 - `explicit Runtime(const RuntimeConfig& config = RuntimeConfig{})`
-- `template <typename T> T blockOn(Task<T> task)`
-- `template <typename T> JoinHandle<T> spawn(Task<T> task)`
+- `template <typename T> std::expected<T, RuntimeError> blockOnIO(Task<T> task)`
+- `template <typename T> std::expected<T, RuntimeError> blockOnCpu(Task<T> task)`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnIO(Task<T> task)`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnCpu(Task<T> task)`
 - `template <typename F> auto spawnBlocking(F&& func) -> JoinHandle<R>`
 - `RuntimeHandle handle()`
 - `bool addIOScheduler(std::unique_ptr<IOScheduler> scheduler)`
@@ -353,7 +355,8 @@
 
 - `static RuntimeHandle current()`
 - `static std::optional<RuntimeHandle> tryCurrent()`
-- `template <typename T> JoinHandle<T> spawn(Task<T> task) const`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnIO(Task<T> task) const`
+- `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnCpu(Task<T> task) const`
 - `template <typename F> auto spawnBlocking(F&& func) const -> JoinHandle<R>`
 
 `RuntimeBuilder` 关键接口：
@@ -368,7 +371,7 @@
 
 注意：
 
-- 高层任务入口统一收口到 `blockOn(...)`、`spawn(...)`、`spawnBlocking(...)`、`RuntimeHandle`
+- 高层任务入口按执行语义区分为 `blockOnIO(...)`、`blockOnCpu(...)`、`spawnIO(...)`、`spawnCpu(...)` 与 `spawnBlocking(...)`
 - `JoinHandle<T>` 的公开结果路径只有 `wait()` / `join()`；当前没有 `result()` 一类兼容接口
 - `RuntimeHandle::current()` 在 runtime 上下文外会抛异常；更稳妥的探测入口是 `tryCurrent()`
 - `Runtime::start()` 只有在 IO / Compute 两类调度器都还为空时才会自动创建默认调度器；如果你手工只添加了其中一类，另一类不会被自动补齐
@@ -521,7 +524,7 @@ builder iovec 公开面：
 
 `Task<T>` / `JoinHandle<T>` / `TaskRef`：
 
-- `Task<T>`：公开任务返回类型；可直接 `co_await`，也可通过 `Runtime::blockOn(...)`、`Runtime::spawn(...)`、`RuntimeHandle::spawn(...)` 提交
+- `Task<T>`：公开任务返回类型；可直接 `co_await`，也可通过 `Runtime::blockOnIO(...)`、`Runtime::blockOnCpu(...)`、`Runtime::spawnIO(...)`、`Runtime::spawnCpu(...)` 及 `RuntimeHandle` 对应入口提交
 - `JoinHandle<T>::wait()`：阻塞到结果就绪，但不提取结果
 - `JoinHandle<T>::join()`：提取结果或重抛异常；结果只能消费一次
 - `Task<void>::then(...)`：用于根任务链式串接，continuation 生命周期不依赖调用点临时对象

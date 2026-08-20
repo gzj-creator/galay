@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
     try {
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
         runtime.start();
-        auto join = runtime.spawn(sendEchoRequest(url, message));
+        auto join = runtime.spawnIO(sendEchoRequest(url, message));
         bool ok = false;
         if (join) {
             auto result = join->join();

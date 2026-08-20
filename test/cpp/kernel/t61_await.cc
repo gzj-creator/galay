@@ -27,7 +27,7 @@ Task<int> parentTask()
 int main()
 {
     Runtime runtime;
-    auto result = runtime.blockOn(parentTask());
+    auto result = runtime.blockOnIO(parentTask());
     assert(result.has_value());
     assert(*result == 8);
     return 0;

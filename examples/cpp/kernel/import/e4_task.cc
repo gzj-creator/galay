@@ -45,8 +45,8 @@ Task<void> spawnFromCurrentRuntime()
 {
     auto runtimeHandle = RuntimeHandle::current();
     assert(runtimeHandle.has_value());
-    auto first = runtimeHandle->spawn(detachedTask(1));
-    auto second = runtimeHandle->spawn(detachedTask(2));
+    auto first = runtimeHandle->spawnCpu(detachedTask(1));
+    auto second = runtimeHandle->spawnCpu(detachedTask(2));
     assert(first.has_value());
     assert(second.has_value());
     co_return;
@@ -90,11 +90,11 @@ int main()
         .computeSchedulerCount(1)
         .build();
 
-    auto rootValue = runtime.blockOn(sumTask(1, 1000));
+    auto rootValue = runtime.blockOnCpu(sumTask(1, 1000));
     assert(rootValue.has_value());
-    std::cout << "blockOn returned " << *rootValue << "\n";
+    std::cout << "blockOnCpu returned " << *rootValue << "\n";
 
-    auto handle = runtime.spawn(sumTask(2, 2000));
+    auto handle = runtime.spawnCpu(sumTask(2, 2000));
     assert(handle.has_value());
     auto handleWait = handle->wait();
     assert(handleWait.has_value());
@@ -102,11 +102,11 @@ int main()
     assert(handleValue.has_value());
     std::cout << "spawn().join() returned " << *handleValue << "\n";
 
-    auto spawnResult = runtime.blockOn(spawnFromCurrentRuntime());
+    auto spawnResult = runtime.blockOnCpu(spawnFromCurrentRuntime());
     assert(spawnResult.has_value());
-    auto waitResult = runtime.blockOn(waitForDetachedTasks());
+    auto waitResult = runtime.blockOnCpu(waitForDetachedTasks());
     assert(waitResult.has_value());
-    auto blockingResult = runtime.blockOn(spawnBlockingDemo());
+    auto blockingResult = runtime.blockOnCpu(spawnBlockingDemo());
     assert(blockingResult.has_value());
 
     return 0;

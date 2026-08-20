@@ -78,7 +78,7 @@ galay::kernel::Task<void> runClientChecks(
     auto listenTask = runListener(client, std::move(filter), listenResult,
                                   callbacks, callbackOwned, listenerDone);
 
-    auto listenHandle = runtime->spawn(std::move(listenTask));
+    auto listenHandle = runtime->spawnIO(std::move(listenTask));
     if (!listenHandle) co_return;
 
     const auto firstEventDeadline = std::chrono::steady_clock::now() + 3s;
@@ -147,7 +147,7 @@ int main()
     std::atomic<bool> listenerDone{false};
     std::atomic<bool> taskDone{false};
 
-    auto handle = runtime.spawn(runClientChecks(
+    auto handle = runtime.spawnIO(runClientChecks(
         &runtime, &client, &listenResult, &callbacks, &callbackOwned,
         &discoverOk, &listenerDone, &taskDone));
     if (!handle) {
@@ -184,7 +184,7 @@ int main()
         std::cerr << '\n';
     }
     (void)handle->join();
-    (void)runtime.blockOn(client.close());
+    (void)runtime.blockOnIO(client.close());
     runtime.stop();
     server.stop();
     serverThread.join();

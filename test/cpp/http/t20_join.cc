@@ -45,8 +45,8 @@ int main() {
     runtime.start();
 
     galay::spsc::UnboundedChannel<int> channel;
-    auto receiver_join = runtime.spawn(receiver(&channel));
-    auto sender_join = runtime.spawn(sender(&channel));
+    auto receiver_join = runtime.spawnIO(receiver(&channel));
+    auto sender_join = runtime.spawnIO(sender(&channel));
     if (!receiver_join || !sender_join) {
         std::cerr << "runtime.spawn failed\n";
         runtime.stop();

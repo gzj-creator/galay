@@ -128,7 +128,7 @@ int main(int argc, char* argv[])
 
     LeaseBenchmarkState state;
     const auto started = std::chrono::steady_clock::now();
-    auto result = runtime.blockOn(runLeaseBenchmark(scheduler, &state, cfg));
+    auto result = runtime.blockOnIO(runLeaseBenchmark(scheduler, &state, cfg));
     const auto finished = std::chrono::steady_clock::now();
     runtime.stop();
 

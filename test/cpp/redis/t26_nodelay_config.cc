@@ -162,12 +162,12 @@ int observeAsyncRedisClientTcpNoDelay(bool tcp_no_delay)
         .buildConfig();
     RedisClient<> client(scheduler, config);
 
-    auto connect_result = runtime.blockOn(connectRedisClient(&client, listener.port()));
+    auto connect_result = runtime.blockOnIO(connectRedisClient(&client, listener.port()));
     require(connect_result.has_value(), "runtime should run RedisClient connect task");
     require(connect_result.value().has_value(), "RedisClient connect should succeed against loopback listener");
     const int observed = readTcpNoDelay(client.socket().handle().fd);
 
-    auto close_result = runtime.blockOn(closeRedisClient(&client));
+    auto close_result = runtime.blockOnIO(closeRedisClient(&client));
     require(close_result.has_value(), "runtime should run RedisClient close task");
     require(close_result.value().has_value(), "RedisClient close should succeed");
     runtime.stop();

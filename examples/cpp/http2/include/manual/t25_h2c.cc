@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
         runtime.start();
 
-        auto join = runtime.spawn(test_client(host, port, num_requests));
+        auto join = runtime.spawnIO(test_client(host, port, num_requests));
         if (!join) {
             std::cerr << "Failed to spawn client coroutine: " << join.error().message() << "\n";
             runtime.stop();

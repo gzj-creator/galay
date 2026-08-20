@@ -258,7 +258,7 @@ int main(int argc, char** argv)
     const size_t extra_requests = requests % concurrency;
     for (size_t i = 0; i < concurrency; ++i) {
         const size_t task_requests = base_requests + (i < extra_requests ? 1 : 0);
-        auto scheduled = runtime.spawn(runPressure(&discovery, task_requests, &states[i], &done_count));
+        auto scheduled = runtime.spawnIO(runPressure(&discovery, task_requests, &states[i], &done_count));
         if (!scheduled.has_value()) {
             runtime.stop();
             cleanup();

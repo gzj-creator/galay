@@ -144,7 +144,7 @@ int main(int argc, char* argv[]) {
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
         runtime.start();
 
-        auto join = runtime.spawn(wssClientTask(url, message_count));
+        auto join = runtime.spawnIO(wssClientTask(url, message_count));
         bool ok = false;
         if (join) {
             auto result = join->join();

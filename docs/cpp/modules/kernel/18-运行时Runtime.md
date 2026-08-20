@@ -12,7 +12,7 @@
 
 - `Runtime` 负责统一管理多个 IO / 计算调度器
 - `RuntimeBuilder` 负责调度器数量与高级绑核策略等配置
-- 高层任务入口现在包括 `Runtime::blockOn(Task<T>)`、`Runtime::spawn(Task<T>)`、`Runtime::spawnBlocking(...)`
+- 高层任务入口现在包括 `Runtime::blockOnIO(Task<T>)`、`Runtime::blockOnCpu(Task<T>)`、`Runtime::spawnIO(Task<T>)`、`Runtime::spawnCpu(Task<T>)`、`Runtime::spawnBlocking(...)`
 - `JoinHandle<T>` 的公开结果路径收口为 `join()` / `wait()`
 - runtime 上下文可通过 `Runtime::handle()`、`RuntimeHandle::current()`、`RuntimeHandle::tryCurrent()` 获取
 - `Task<void>::then(...)` 是当前保留的链式根任务接口

@@ -116,7 +116,7 @@ int main()
     }
 
     TestState state;
-    auto runtime_result = runtime.blockOn(runPoolLeaseCase(scheduler, &state, db_cfg));
+    auto runtime_result = runtime.blockOnIO(runPoolLeaseCase(scheduler, &state, db_cfg));
     runtime.stop();
 
     if (!runtime_result) {

@@ -140,7 +140,7 @@ bool runClientWithRetry(uint16_t port, const Config& config, Stats* stats)
     for (int attempt = 0; attempt < 50; ++attempt) {
         Stats attempt_stats;
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
-        auto result = runtime.blockOn(runClient(port, &config, &attempt_stats));
+        auto result = runtime.blockOnIO(runClient(port, &config, &attempt_stats));
         runtime.stop();
         if (!result.has_value()) {
             ++attempt_stats.errors;

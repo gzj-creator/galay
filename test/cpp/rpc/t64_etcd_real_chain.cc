@@ -242,7 +242,7 @@ int main()
     }
 
     TestState state;
-    auto scheduled = runtime.spawn(runManagedCall(&discovery, &state));
+    auto scheduled = runtime.spawnIO(runManagedCall(&discovery, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         cleanup();

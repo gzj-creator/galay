@@ -192,13 +192,13 @@ int observeH2cClientTcpNoDelay(bool tcp_no_delay)
     LoopbackListener listener;
     H2cClient<> client(H2cClientBuilder().tcpNoDelay(tcp_no_delay).build());
 
-    auto connect_result = runtime.blockOn(client.connect("127.0.0.1", listener.port()));
+    auto connect_result = runtime.blockOnIO(client.connect("127.0.0.1", listener.port()));
     require(connect_result.has_value(), "runtime should run H2cClient connect task");
     require(connect_result.value().has_value(), "H2cClient connect should succeed against loopback listener");
     require(client.m_socket != nullptr, "H2cClient should keep socket before upgrade");
     const int observed = readTcpNoDelay(client.m_socket->handle().fd);
 
-    auto close_result = runtime.blockOn(closeTcpSocket(client.m_socket.get()));
+    auto close_result = runtime.blockOnIO(closeTcpSocket(client.m_socket.get()));
     require(close_result.has_value(), "runtime should run H2cClient socket close task");
     require(close_result.value().has_value(), "H2cClient socket close should succeed");
     runtime.stop();
@@ -307,13 +307,13 @@ int observeH2ClientTcpNoDelay(bool tcp_no_delay)
         .tcpNoDelay(tcp_no_delay)
         .build());
 
-    auto connect_result = runtime.blockOn(client.connect("127.0.0.1", port));
+    auto connect_result = runtime.blockOnIO(client.connect("127.0.0.1", port));
     require(connect_result.has_value(), "runtime should run H2Client connect task");
     require(connect_result.value().has_value(), "H2Client connect should succeed against local h2 server");
     require(client.m_conn != nullptr, "H2Client should finalize connected transport");
     const int observed = readTcpNoDelay(client.m_conn->socket().handle().fd);
 
-    auto close_result = runtime.blockOn(client.close());
+    auto close_result = runtime.blockOnIO(client.close());
     require(close_result.has_value(), "runtime should run H2Client close task");
     require(close_result.value().has_value(), "H2Client close should succeed");
     runtime.stop();

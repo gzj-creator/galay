@@ -38,8 +38,8 @@ Task<void> verifyCurrentRuntimeHandle() {
     auto current_result = RuntimeHandle::current();
     require(current_result.has_value(), "RuntimeHandle::current should succeed inside runtime context");
 
-    auto nested = current_result->spawn(simpleTask(19));
-    require(nested.has_value(), "RuntimeHandle::spawn should succeed inside runtime context");
+    auto nested = current_result->spawnCpu(simpleTask(19));
+    require(nested.has_value(), "RuntimeHandle::spawnCpu should succeed inside runtime context");
     auto nested_value = nested->join();
     require(nested_value.has_value(), "RuntimeHandle::current nested join should succeed");
     require(*nested_value == 19, "RuntimeHandle::current should return a working handle");
@@ -107,12 +107,12 @@ concept HasRuntimeSpawnBlocking = requires(R runtime) {
 
 template <typename R>
 concept HasRuntimeBlockOnExpected = requires(R runtime, Task<int> task) {
-    { runtime.blockOn(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
+    { runtime.blockOnIO(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;
 };
 
 template <typename R>
-concept HasRuntimeSpawnExpected = requires(R runtime, Task<int> task) {
-    { runtime.spawn(std::move(task)) } -> std::same_as<std::expected<JoinHandle<int>, RuntimeError>>;
+concept HasRuntimeSpawnCpuExpected = requires(R runtime, Task<int> task) {
+    { runtime.spawnCpu(std::move(task)) } -> std::same_as<std::expected<JoinHandle<int>, RuntimeError>>;
 };
 
 template <typename ErrorT>
@@ -149,7 +149,7 @@ static_assert(HasRuntimeHandleCurrent<>);
 static_assert(HasRuntimeHandleTryCurrent<>);
 static_assert(HasRuntimeSpawnBlocking<Runtime>);
 static_assert(HasRuntimeBlockOnExpected<Runtime>);
-static_assert(HasRuntimeSpawnExpected<Runtime>);
+static_assert(HasRuntimeSpawnCpuExpected<Runtime>);
 static_assert(HasErrorMessage<RuntimeError>);
 static_assert(HasErrorMessage<detail::TaskResultError>);
 static_assert(HasErrorMessage<BlockingExecutorError>);
@@ -166,24 +166,24 @@ int main() {
     require(RuntimeHandle::current().error().code() == RuntimeErrorCode::kNoCurrentRuntime,
             "RuntimeHandle::current should report missing runtime context");
 
-    auto blockResult = runtime.blockOn(simpleTask(7));
+    auto blockResult = runtime.blockOnIO(simpleTask(7));
     require(blockResult.has_value(), "Runtime::blockOn should succeed");
     require(*blockResult == 7, "Runtime::blockOn should return task result");
 
-    auto joinHandle = runtime.spawn(simpleTask(11));
-    require(joinHandle.has_value(), "Runtime::spawn should succeed");
-    require(joinHandle->wait().has_value(), "Runtime::spawn wait should succeed");
+    auto joinHandle = runtime.spawnCpu(simpleTask(11));
+    require(joinHandle.has_value(), "Runtime::spawnCpu should succeed");
+    require(joinHandle->wait().has_value(), "Runtime::spawnCpu wait should succeed");
     auto joinedValue = joinHandle->join();
-    require(joinedValue.has_value(), "Runtime::spawn join should succeed");
-    require(*joinedValue == 11, "Runtime::spawn should return joinable handle");
+    require(joinedValue.has_value(), "Runtime::spawnCpu join should succeed");
+    require(*joinedValue == 11, "Runtime::spawnCpu should return joinable handle");
 
     auto handle = runtime.handle();
-    auto handleJoin = handle.spawn(simpleTask(13));
-    require(handleJoin.has_value(), "RuntimeHandle::spawn should succeed");
-    require(handleJoin->wait().has_value(), "RuntimeHandle::spawn wait should succeed");
+    auto handleJoin = handle.spawnCpu(simpleTask(13));
+    require(handleJoin.has_value(), "RuntimeHandle::spawnCpu should succeed");
+    require(handleJoin->wait().has_value(), "RuntimeHandle::spawnCpu wait should succeed");
     auto handleJoinValue = handleJoin->join();
-    require(handleJoinValue.has_value(), "RuntimeHandle::spawn join should succeed");
-    require(*handleJoinValue == 13, "RuntimeHandle::spawn should submit task");
+    require(handleJoinValue.has_value(), "RuntimeHandle::spawnCpu join should succeed");
+    require(*handleJoinValue == 13, "RuntimeHandle::spawnCpu should submit task");
 
     auto runtimeBlockingJoin = runtime.spawnBlocking([]() { return 17; });
     require(runtimeBlockingJoin.has_value(), "Runtime::spawnBlocking should succeed");
@@ -199,14 +199,14 @@ int main() {
     require(blockingValue.has_value(), "RuntimeHandle::spawnBlocking join should succeed");
     require(*blockingValue == 17, "RuntimeHandle::spawnBlocking should return task result");
 
-    auto handleBlock = runtime.blockOn(verifyCurrentRuntimeHandle());
+    auto handleBlock = runtime.blockOnIO(verifyCurrentRuntimeHandle());
     require(handleBlock.has_value(), "Runtime::blockOn should return expected<void> success");
 
     RuntimeHandle emptyHandle;
-    auto emptyHandleSpawn = emptyHandle.spawn(simpleTask(21));
-    require(!emptyHandleSpawn.has_value(), "empty RuntimeHandle::spawn should fail without throwing");
+    auto emptyHandleSpawn = emptyHandle.spawnCpu(simpleTask(21));
+    require(!emptyHandleSpawn.has_value(), "empty RuntimeHandle::spawnCpu should fail without throwing");
     require(emptyHandleSpawn.error().code() == RuntimeErrorCode::kInvalidHandle,
-            "empty RuntimeHandle::spawn should report invalid handle");
+            "empty RuntimeHandle::spawnCpu should report invalid handle");
     require(!emptyHandleSpawn.error().message().empty(),
             "RuntimeError::message should describe invalid handle");
     require(emptyHandleSpawn.error().message().find("RuntimeError::") == std::string::npos,
@@ -216,7 +216,7 @@ int main() {
         .ioSchedulerCount(0)
         .computeSchedulerCount(0)
         .build();
-    auto noSchedulerResult = noSchedulerRuntime.blockOn(simpleTask(23));
+    auto noSchedulerResult = noSchedulerRuntime.blockOnIO(simpleTask(23));
     require(!noSchedulerResult.has_value(), "Runtime::blockOn should fail when no scheduler is available");
     require(noSchedulerResult.error().code() == RuntimeErrorCode::kNoSchedulerAvailable,
             "Runtime::blockOn should report missing scheduler");

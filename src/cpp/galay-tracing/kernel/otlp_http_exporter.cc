@@ -479,7 +479,7 @@ public:
 
         std::lock_guard lock(m_mutex);
         ensureRuntime();
-        auto join = m_runtime->spawn(sendWithGalayHttp(std::move(request)));
+        auto join = m_runtime->spawnIO(sendWithGalayHttp(std::move(request)));
         if (!join) {
             return OtlpHttpResponse{.status_code = 0, .error = "failed to spawn OTLP HTTP transport task"};
         }

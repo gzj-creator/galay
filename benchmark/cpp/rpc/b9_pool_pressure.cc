@@ -54,7 +54,7 @@ int main(int argc, char** argv)
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
     runtime.start();
     Result result;
-    auto scheduled = runtime.spawn(runPool(requests, &result));
+    auto scheduled = runtime.spawnIO(runPool(requests, &result));
     if (!scheduled.has_value()) {
         runtime.stop();
         std::cerr << "failed to schedule pool pressure\n";

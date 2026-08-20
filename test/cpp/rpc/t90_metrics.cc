@@ -96,7 +96,7 @@ int main()
         return 1;
     }
     State state;
-    auto scheduled = runtime.spawn(run(p, &state));
+    auto scheduled = runtime.spawnIO(run(p, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

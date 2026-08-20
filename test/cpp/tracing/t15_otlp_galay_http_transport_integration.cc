@@ -42,7 +42,7 @@ void rejectsSchedulerThreadBlocking() {
         .build();
     runtime.start();
 
-    auto join = runtime.spawn(exportOnSchedulerThread());
+    auto join = runtime.spawnIO(exportOnSchedulerThread());
     assert(join.has_value());
     auto result = join->join();
     runtime.stop();

@@ -104,7 +104,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    auto result = runtime.blockOn(runClient(scheduler, std::move(*config)));
+    auto result = runtime.blockOnIO(runClient(scheduler, std::move(*config)));
     runtime.stop();
     if (!result) {
         std::cerr << "runtime blockOn failed: " << result.error().message() << '\n';

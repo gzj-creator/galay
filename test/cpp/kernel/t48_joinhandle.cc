@@ -1,6 +1,6 @@
 /**
  * @file t48_joinhandle.cc
- * @brief 用途：验证 `Runtime::spawn` 返回的 `JoinHandle` 可等待任务完成并取回结果。
+ * @brief 用途：验证 `Runtime::spawnCpu` 返回的 `JoinHandle` 可等待任务完成并取回结果。
  * 关键覆盖点：spawn 提交、JoinHandle 等待、结果读取与完成语义。
  * 通过条件：`JoinHandle` 正确返回结果且测试返回 0。
  */
@@ -39,13 +39,13 @@ Task<void> waitForDetached()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
+        .ioSchedulerCount(1)
         .computeSchedulerCount(1)
         .build();
     runtime.start();
 
     {
-        auto handle = runtime.spawn(sumTask());
+        auto handle = runtime.spawnCpu(sumTask());
         assert(handle.has_value());
         auto result = handle->join();
         assert(result.has_value());
@@ -53,11 +53,11 @@ int main()
     }
 
     {
-        auto detached = runtime.spawn(detachedTask());
+        auto detached = runtime.spawnCpu(detachedTask());
         assert(detached.has_value());
     }
 
-    auto wait_result = runtime.blockOn(waitForDetached());
+    auto wait_result = runtime.blockOnCpu(waitForDetached());
     assert(wait_result.has_value());
     runtime.stop();
 

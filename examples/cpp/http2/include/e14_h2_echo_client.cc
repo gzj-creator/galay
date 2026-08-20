@@ -113,7 +113,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    auto join = runtime.spawn(runClient(host, port));
+    auto join = runtime.spawnIO(runClient(host, port));
     if (!join) {
         runtime.stop();
         return 1;

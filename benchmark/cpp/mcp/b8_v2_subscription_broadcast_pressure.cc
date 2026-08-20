@@ -128,7 +128,7 @@ int main(int argc, char** argv)
             return true;
         },
         listenResult);
-    auto listenerHandle = runtime.spawn(std::move(listener));
+    auto listenerHandle = runtime.spawnIO(std::move(listener));
     if (!listenerHandle) {
         server.stop();
         serverThread.join();

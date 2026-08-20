@@ -138,7 +138,7 @@ int main()
         return 1;
     }
     State state;
-    auto scheduled = runtime.spawn(runClient(port, &state));
+    auto scheduled = runtime.spawnIO(runClient(port, &state));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
     try {
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
         runtime.start();
-        auto join = runtime.spawn(runHttpsClient(url));
+        auto join = runtime.spawnIO(runHttpsClient(url));
         bool ok = false;
         if (join) {
             auto result = join->join();

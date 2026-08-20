@@ -188,12 +188,12 @@ int observeRpcClientTcpNoDelay(bool tcp_no_delay)
     RpcClientConfig config = RpcClientBuilder().tcpNoDelay(tcp_no_delay).buildConfig();
     RpcClient client(config);
 
-    auto connect_result = runtime.blockOn(client.connect("127.0.0.1", listener.port()));
+    auto connect_result = runtime.blockOnIO(client.connect("127.0.0.1", listener.port()));
     require(connect_result.has_value(), "runtime should run RpcClient connect task");
     require(connect_result.value().has_value(), "RpcClient connect should succeed against loopback listener");
     const int observed = readTcpNoDelay(client.socket().handle().fd);
 
-    auto close_result = runtime.blockOn(client.close());
+    auto close_result = runtime.blockOnIO(client.close());
     require(close_result.has_value(), "runtime should run RpcClient close task");
     require(close_result.value().has_value(), "RpcClient close should succeed");
     runtime.stop();

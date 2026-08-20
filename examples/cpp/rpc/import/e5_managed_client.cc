@@ -80,7 +80,7 @@ int main()
                   << runtime_started.error().message() << "\n";
         return 1;
     }
-    auto scheduled = runtime.spawn(runClient(port));
+    auto scheduled = runtime.spawnIO(runClient(port));
     if (!scheduled.has_value()) {
         runtime.stop();
         server.stop();

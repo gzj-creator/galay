@@ -155,16 +155,22 @@ std::expected<void, RuntimeError> Runtime::ensureStarted()
     return {};
 }
 
-std::expected<Scheduler*, RuntimeError> Runtime::acquireDefaultScheduler()
+std::expected<Scheduler*, RuntimeError> Runtime::acquireIOScheduler()
 {
     auto started = ensureStarted();
     if (!started.has_value()) {
         return std::unexpected(started.error());
     }
-    if (auto* scheduler = getNextComputeScheduler()) {
-        return scheduler;
-    }
     return getNextIOScheduler();
+}
+
+std::expected<Scheduler*, RuntimeError> Runtime::acquireComputeScheduler()
+{
+    auto started = ensureStarted();
+    if (!started.has_value()) {
+        return std::unexpected(started.error());
+    }
+    return getNextComputeScheduler();
 }
 
 void Runtime::bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler)

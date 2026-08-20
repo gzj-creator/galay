@@ -98,7 +98,7 @@ int main(int argc, char* argv[]) {
     try {
         Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
         runtime.start();
-        auto join = runtime.spawn(runClient(host, port));
+        auto join = runtime.spawnIO(runClient(host, port));
         if (!join) {
             runtime.stop();
             return 1;

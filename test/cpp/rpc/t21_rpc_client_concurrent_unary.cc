@@ -105,7 +105,7 @@ Task<void> runConcurrentClient(uint16_t port, SharedState* state)
     }
 
     for (int i = 0; i < 64; ++i) {
-        auto spawned = runtime->spawn(runOneCall(&client, i, state));
+        auto spawned = runtime->spawnIO(runOneCall(&client, i, state));
         if (!spawned.has_value()) {
             state->failed.fetch_add(1, std::memory_order_relaxed);
             state->completed.fetch_add(1, std::memory_order_release);
@@ -156,7 +156,7 @@ int main()
     }
 
     SharedState state;
-    auto root = runtime.spawn(runConcurrentClient(port, &state));
+    auto root = runtime.spawnIO(runConcurrentClient(port, &state));
     if (!root.has_value()) {
         runtime.stop();
         server.stop();

@@ -31,7 +31,7 @@ int main()
     McpClient stdio_client(McpStdioClientConfig{});
     runtime.start();
     std::expected<void, galay::mcp::McpError> wrong_async_result;
-    auto join = runtime.spawn(stdio_client.ping(wrong_async_result));
+    auto join = runtime.spawnIO(stdio_client.ping(wrong_async_result));
     if (!join) {
         runtime.stop();
         std::cerr << "failed to spawn wrong-mode async task\n";

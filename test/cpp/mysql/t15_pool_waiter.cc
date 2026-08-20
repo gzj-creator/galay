@@ -132,7 +132,7 @@ int main()
 
     TestState state;
     auto done = std::make_shared<AsyncWaiter<void>>();
-    auto result = runtime.blockOn(runPoolWaiterCase(scheduler, &state, done, db_cfg));
+    auto result = runtime.blockOnIO(runPoolWaiterCase(scheduler, &state, done, db_cfg));
     runtime.stop();
 
     if (!result) {

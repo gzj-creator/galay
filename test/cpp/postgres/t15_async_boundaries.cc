@@ -463,7 +463,7 @@ int main()
         return EXIT_FAILURE;
     }
 
-    auto result = runtime.blockOn(runClient(scheduler, server.port()));
+    auto result = runtime.blockOnIO(runClient(scheduler, server.port()));
     runtime.stop();
     if (!result || *result != 0) {
         std::cerr << "async PostgreSQL boundary client failed at step "

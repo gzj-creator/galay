@@ -19,11 +19,11 @@ Task<int> answerTask()
 int main()
 {
     Runtime runtime = RuntimeBuilder()
-        .ioSchedulerCount(0)
+        .ioSchedulerCount(1)
         .computeSchedulerCount(1)
         .build();
 
-    auto value = runtime.blockOn(answerTask());
+    auto value = runtime.blockOnIO(answerTask());
     assert(value.has_value());
     assert(*value == 42);
 

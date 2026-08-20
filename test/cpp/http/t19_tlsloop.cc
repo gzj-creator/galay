@@ -158,7 +158,7 @@ int main() {
 
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
     runtime.start();
-    auto run_result = runtime.blockOn(static_cast<galay::kernel::Task<void>>(runSslOwnerLoop(manager)));
+    auto run_result = runtime.blockOnIO(static_cast<galay::kernel::Task<void>>(runSslOwnerLoop(manager)));
     runtime.stop();
     if (!run_result) {
         std::cerr << "[T54] runtime.blockOn failed: " << run_result.error().message() << "\n";

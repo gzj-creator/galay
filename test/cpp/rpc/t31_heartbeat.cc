@@ -142,7 +142,7 @@ int main()
     }
 
     TestState state;
-    auto root = runtime.spawn(runHeartbeatClient(port, &state, &route_calls));
+    auto root = runtime.spawnIO(runHeartbeatClient(port, &state, &route_calls));
     if (!root.has_value()) {
         runtime.stop();
         server.stop();

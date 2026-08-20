@@ -109,7 +109,7 @@ int main(int argc, char* argv[]) {
     Runtime rt = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
     rt.start();
 
-    auto join = rt.spawn(httpsClientExample(url));
+    auto join = rt.spawnIO(httpsClientExample(url));
     if (!join) {
         rt.stop();
         return 1;
