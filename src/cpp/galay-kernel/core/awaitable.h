@@ -3068,6 +3068,104 @@ public:
     }
 };
 
+namespace detail {
+
+/**
+ * @brief 一次 await 内完成 TCP 流的完整读/写。
+ *
+ * `recv()`/`send()` 只保证一次非阻塞系统调用的结果；协议层通常还要在
+ * 用户协程里重复挂起，重复挂起会创建 TaskState 和 continuation。这个
+ * 状态机把偏移量放进 awaitable 自身，由 SequenceAwaitable 在同一个挂起点
+ * 内继续推进，保持零额外子协程分配。
+ */
+template <bool Write>
+struct ExactStreamMachine {
+    using result_type = std::expected<size_t, IOError>;
+    static constexpr SequenceOwnerDomain kSequenceOwnerDomain =
+        Write ? SequenceOwnerDomain::Write : SequenceOwnerDomain::Read;
+
+    char* read_buffer = nullptr;
+    const char* write_buffer = nullptr;
+    size_t length = 0;
+    size_t offset = 0;
+    std::optional<IOError> error;
+
+    MachineAction<result_type> advance() {
+        if (error.has_value()) {
+            return MachineAction<result_type>::fail(*error);
+        }
+        if (offset == length) {
+            return MachineAction<result_type>::complete(offset);
+        }
+        if constexpr (Write) {
+            return MachineAction<result_type>::waitWrite(
+                write_buffer + offset, length - offset);
+        } else {
+            return MachineAction<result_type>::waitRead(
+                read_buffer + offset, length - offset);
+        }
+    }
+
+    void onRead(std::expected<size_t, IOError> result) {
+        if constexpr (Write) {
+            (void)result;
+            error = IOError(kNotReady, 0);
+            return;
+        }
+        if (!result) {
+            error = result.error();
+            return;
+        }
+        if (result.value() == 0) {
+            // EOF before the requested frame is complete is a failed exact read.
+            error = IOError(kDisconnectError, 0);
+            return;
+        }
+        offset += result.value();
+    }
+
+    void onWrite(std::expected<size_t, IOError> result) {
+        if constexpr (!Write) {
+            (void)result;
+            error = IOError(kNotReady, 0);
+            return;
+        }
+        if (!result) {
+            error = result.error();
+            return;
+        }
+        if (result.value() == 0) {
+            error = IOError(kDisconnectError, 0);
+            return;
+        }
+        offset += result.value();
+    }
+};
+
+inline auto makeExactReadAwaitable(IOController* controller,
+                                   char* buffer,
+                                   size_t length)
+{
+    using Machine = ExactStreamMachine<false>;
+    using Result = typename Machine::result_type;
+    return AwaitableBuilder<Result, 1>::fromStateMachine(
+        controller,
+        Machine{.read_buffer = buffer, .length = length}).build();
+}
+
+inline auto makeExactWriteAwaitable(IOController* controller,
+                                    const char* buffer,
+                                    size_t length)
+{
+    using Machine = ExactStreamMachine<true>;
+    using Result = typename Machine::result_type;
+    return AwaitableBuilder<Result, 1>::fromStateMachine(
+        controller,
+        Machine{.write_buffer = buffer, .length = length}).build();
+}
+
+}  // namespace detail
+
 
 } // namespace galay::kernel
 

@@ -13,6 +13,7 @@
 
 ### Added
 
+- **AsyncTcpSocket 新增 `readExact` / `writeAll` 组合流操作**：在一个 awaitable 状态机内完成多次部分读写，避免用户协程手动循环挂起和子 Task 分配；内部偏移量随状态机推进，零额外协程开销。同步新增 `t178_tcp_exact` 回归测试，验证部分读写、EOF 提前关闭与完整帧语义；TCP 公平吞吐 benchmark 迁移至新 API 并增加 drain 阶段 `shutdown()` 唤醒。
 - **按执行语义拆分 Runtime 根任务入口**：新增 `blockOnIO()`、`blockOnCpu()`、`spawnIO()`、`spawnCpu()` 及 `RuntimeHandle` 对应入口，分别绑定 IO scheduler 或 compute scheduler；新增边界测试与提交吞吐基准。
 - **新增 Boost.Asio C++ 协程 TCP/UDP 公平基线**：加入同语言 `co_spawn`/`awaitable` echo harness，与 Galay 使用相同的 100 客户端、4 worker、256 字节 payload、单请求在途 workload，并注册为 kernel 正式外部对标目标。
 - **新增正式对标证据与策略门禁**：新增 TCP/UDP 三轮交替 CSV、逐轮 raw 输出及竞品策略检查，验证固定 CPU、warmup/measurement/drain、settled counter、丢包和错误字段完整性。

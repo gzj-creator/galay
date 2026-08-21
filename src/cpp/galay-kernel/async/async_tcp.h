@@ -248,6 +248,22 @@ public:
     }
 
     /**
+     * @brief 异步读取指定长度的 TCP 流数据。
+     *
+     * 与 recv() 的单次系统调用语义不同，此操作会在同一个 awaitable
+     * 中持续处理部分读取，直到 length 字节全部到达。底层状态机复用
+     * 当前协程的挂起帧，不创建每段读取的子 Task。
+     *
+     * @param buffer 输出缓冲区；必须持续到 co_await 完成
+     * @param length 期望读取的字节数；为 0 时立即返回 0
+     * @return 成功返回 length；连接在完整帧到达前关闭或发生 I/O 错误时返回 IOError
+     */
+    auto readExact(char* buffer, size_t length) {
+        return galay::kernel::detail::makeExactReadAwaitable(
+            &m_controller, buffer, length);
+    }
+
+    /**
      * @brief 异步发送数据
      *
      * @param buffer 发送数据指针
@@ -268,6 +284,21 @@ public:
      */
     galay::kernel::SendAwaitable send(const char* buffer, size_t length) {
         return galay::kernel::SendAwaitable(&m_controller, buffer, length);
+    }
+
+    /**
+     * @brief 异步完整写出指定长度的 TCP 流数据。
+     *
+     * 该操作在一个 awaitable 状态机内处理部分 send，直到 length 字节
+     * 全部提交；不会为每次部分写入创建子 Task。
+     *
+     * @param buffer 输入缓冲区；必须持续到 co_await 完成
+     * @param length 要写出的字节数；为 0 时立即返回 0
+     * @return 成功返回 length；连接关闭或发生 I/O 错误时返回 IOError
+     */
+    auto writeAll(const char* buffer, size_t length) {
+        return galay::kernel::detail::makeExactWriteAwaitable(
+            &m_controller, buffer, length);
     }
 
     /**
