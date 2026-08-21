@@ -76,6 +76,9 @@ namespace galay::async
 class AsyncTcpSocket
 {
 public:
+    using ExactReadAwaitable = galay::kernel::StateMachineAwaitable<galay::kernel::detail::ExactStreamMachine<false>>;
+    using ExactWriteAwaitable = galay::kernel::StateMachineAwaitable<galay::kernel::detail::ExactStreamMachine<true>>;
+
     /**
      * @brief 构造函数，创建Socket
      * @param type IP协议类型（IPV4/IPV6）
@@ -258,9 +261,10 @@ public:
      * @param length 期望读取的字节数；为 0 时立即返回 0
      * @return 成功返回 length；连接在完整帧到达前关闭或发生 I/O 错误时返回 IOError
      */
-    auto readExact(char* buffer, size_t length) {
-        return galay::kernel::detail::makeExactReadAwaitable(
-            &m_controller, buffer, length);
+    ExactReadAwaitable readExact(char* buffer, size_t length) {
+        return ExactReadAwaitable(
+            &m_controller,
+            galay::kernel::detail::ExactStreamMachine<false>{.read_buffer = buffer, .length = length});
     }
 
     /**
@@ -296,9 +300,10 @@ public:
      * @param length 要写出的字节数；为 0 时立即返回 0
      * @return 成功返回 length；连接关闭或发生 I/O 错误时返回 IOError
      */
-    auto writeAll(const char* buffer, size_t length) {
-        return galay::kernel::detail::makeExactWriteAwaitable(
-            &m_controller, buffer, length);
+    ExactWriteAwaitable writeAll(const char* buffer, size_t length) {
+        return ExactWriteAwaitable(
+            &m_controller,
+            galay::kernel::detail::ExactStreamMachine<true>{.write_buffer = buffer, .length = length});
     }
 
     /**

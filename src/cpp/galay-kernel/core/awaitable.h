@@ -3142,28 +3142,6 @@ struct ExactStreamMachine {
     }
 };
 
-inline auto makeExactReadAwaitable(IOController* controller,
-                                   char* buffer,
-                                   size_t length)
-{
-    using Machine = ExactStreamMachine<false>;
-    using Result = typename Machine::result_type;
-    return AwaitableBuilder<Result, 1>::fromStateMachine(
-        controller,
-        Machine{.read_buffer = buffer, .length = length}).build();
-}
-
-inline auto makeExactWriteAwaitable(IOController* controller,
-                                    const char* buffer,
-                                    size_t length)
-{
-    using Machine = ExactStreamMachine<true>;
-    using Result = typename Machine::result_type;
-    return AwaitableBuilder<Result, 1>::fromStateMachine(
-        controller,
-        Machine{.write_buffer = buffer, .length = length}).build();
-}
-
 }  // namespace detail
 
 

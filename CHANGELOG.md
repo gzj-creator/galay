@@ -24,6 +24,7 @@
 
 ### Changed
 
+- **统一 readExact/writeAll 构造风格**：移除 `detail::makeExactReadAwaitable` / `detail::makeExactWriteAwaitable` 辅助函数，改为 `AsyncTcpSocket` 内直接构造 `StateMachineAwaitable`，与 `recv`/`send` 等方法保持一致；新增 public 类型别名 `ExactReadAwaitable` / `ExactWriteAwaitable` 简化返回类型。
 - **迁移仓内任务提交调用点**：网络、timer 与协议任务统一使用 IO 入口，纯计算任务使用 CPU 入口，消除 ComputeScheduler 优先的默认放置语义。
 - **强化 Runtime 执行器吞吐基准**：计时前启动并预热 runtime，分别采样 IO / CPU 根任务的中位数吞吐；使用完成闩锁验证 detached 根任务完成，避免逐个 `join()` 掩盖调度路径成本。
 - **统一正式外部对标口径**：Boost.Asio C++ 协程是唯一竞品基线；Crossbeam、libuv、h2load、etcdctl、libpq、libmysqlclient、hiredis 和 gRPC 等入口改为历史/内部资料或 `not_applicable`，不再进入正式排名。
