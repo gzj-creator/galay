@@ -20,6 +20,7 @@ TCP_CSV_PATH = (
     ROOT
     / "docs/cpp/modules/kernel/benchmark_data/kernel_boost_asio_coro_tcp_2026-08-21.csv"
 )
+FORMAL_RAW_DIR = ROOT / "docs/cpp/modules/kernel/benchmark_data/raw"
 KERNEL_DOC = ROOT / "docs/cpp/modules/kernel/05-性能测试.md"
 TENCENT_RUNNER = ROOT / "scripts/tencent_full_test.sh"
 
@@ -59,6 +60,16 @@ def parse_key_values(line: str) -> dict[str, str]:
 
 def close(actual: str, expected: str, tolerance: float = 0.02) -> bool:
     return abs(float(actual) - float(expected)) <= tolerance
+
+
+def resolve_formal_raw(raw_file: str, label: str) -> Path:
+    raw_path = (ROOT / raw_file).resolve()
+    require(
+        raw_path.parent == FORMAL_RAW_DIR,
+        f"{label} raw output must be checked in under {FORMAL_RAW_DIR.relative_to(ROOT)}: {raw_file}",
+    )
+    require(raw_path.is_file(), f"missing {label} raw output: {raw_file}")
+    return raw_path
 
 
 def verify_policy() -> None:
@@ -291,8 +302,7 @@ def verify_evidence() -> None:
         require(row["shutdown_errors"] == "0", "CSV contains measured shutdown errors")
         for field, expected in fixed_config.items():
             require(row[field] == expected, f"CSV uses a non-equivalent {field}")
-        raw_path = ROOT / row["raw_file"]
-        require(raw_path.is_file(), f"missing raw output: {row['raw_file']}")
+        raw_path = resolve_formal_raw(row["raw_file"], "UDP")
         raw = raw_path.read_text()
         parsed = parse_galay_raw(raw) if row["implementation"] == "galay" else parse_asio_raw(raw)
         for field in exact_fields:
@@ -368,8 +378,7 @@ def verify_tcp_evidence() -> None:
         require(row["shutdown_errors"] == "0", "TCP CSV contains shutdown errors")
         for field, expected in fixed_config.items():
             require(row[field] == expected, f"TCP CSV uses a non-equivalent {field}")
-        raw_path = ROOT / row["raw_file"]
-        require(raw_path.is_file(), f"missing TCP raw output: {row['raw_file']}")
+        raw_path = resolve_formal_raw(row["raw_file"], "TCP")
         raw = raw_path.read_text()
         parsed = parse_galay_raw(raw) if row["implementation"] == "galay" else parse_asio_raw(raw)
         for field in exact_fields:
