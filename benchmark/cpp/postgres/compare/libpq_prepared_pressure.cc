@@ -1,3 +1,4 @@
+// Historical/internal-only fixture. Not a formal competitor baseline; see docs/cpp/modules/kernel/05-性能测试.md.
 #include "config.h"
 
 #include <libpq-fe.h>

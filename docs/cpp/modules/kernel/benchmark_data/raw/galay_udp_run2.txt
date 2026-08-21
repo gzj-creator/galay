@@ -1,0 +1,29 @@
+UDP Socket Benchmark Test (Optimized)
+Configuration: {} clients, {} workers, {} bytes/message, warmup {} seconds, duration {} seconds 100 4 256 1 5
+Using EpollScheduler (Linux)
+Scheduler started
+Started {} server workers 4
+UDP Server workers started on 127.0.0.1:9090
+Starting {} clients... 100
+Benchmark warmup for {} seconds... 1
+Benchmark running for {} seconds... 5
+Scheduler stopped
+
+========== UDP Benchmark Results (Optimized) ==========
+Test Duration: {:.2f} seconds 5.00017
+Concurrent Clients: {} 100
+Ready Clients: {} 100
+Server Workers: {} 4
+Message Size: {} bytes 256
+
+Measurement window client: sent={} ({:.2f} pkt/s, {:.2f} MB/s), received={} ({:.2f} pkt/s, {:.2f} MB/s) 62400 12479.6 3.04677 58595 11718.6 2.86099
+Measurement window server: received={} ({:.2f} pkt/s, {:.2f} MB/s), sent={} ({:.2f} pkt/s, {:.2f} MB/s) 60337 12067 2.94604 60337 12067 2.94604
+Settled echo replies: sent={}, received={}, loss={:.3f}% 62401 62401 0
+Settled measured packets: client_sent={} client_received={} server_received={} server_sent={} loss={:.6f}% 62401 62401 62401 62401 0
+Errors: {} 0
+=======================================================
+
+meta implementation=galay version=current coroutine=galay::Task scenario=udp-echo backend=epoll clients=100 workers=4 payload_bytes=256 pipeline=1 warmup_s=1 duration_s=5 ready_clients=100
+measured client_sent=62400 client_received=58595 client_bytes_sent=15974400 client_bytes_received=15000320 server_received=60337 server_sent=60337 server_bytes_received=15446272 server_bytes_sent=15446272 measurement_ms=5000 client_pkt_s=12479.6 server_pkt_s=12067 client_loss_pct=6.09776 runtime_errors=0 shutdown_errors=0
+settled client_sent=62401 client_received=62401 client_bytes_sent=15974656 client_bytes_received=15974656 server_received=62401 server_sent=62401 server_bytes_received=15974656 server_bytes_sent=15974656 elapsed_ms=5351 client_loss_pct=0 settled_loss_pct=0 runtime_errors=0 shutdown_errors=0
+status=ok

@@ -12,6 +12,9 @@ function(galay_add_c_kernel_benchmark target_name source_file)
 endfunction()
 
 file(GLOB GALAY_C_KERNEL_BENCHMARK_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/b*.c")
+# libuv is a historical fixture, not a formal competitor baseline. Keep the
+# source available for archaeology without building or ranking it.
+list(FILTER GALAY_C_KERNEL_BENCHMARK_SOURCES EXCLUDE REGEX "/b26_libuv_echo_server\\.c$")
 galay_filter_unsupported_c_coro_sources(GALAY_C_KERNEL_BENCHMARK_SOURCES)
 foreach(benchmark_source IN LISTS GALAY_C_KERNEL_BENCHMARK_SOURCES)
     get_filename_component(source_name "${benchmark_source}" NAME_WE)
@@ -26,12 +29,3 @@ foreach(benchmark_source IN LISTS GALAY_C_KERNEL_BENCHMARK_SOURCES)
     string(REGEX REPLACE "^b[0-9]+_" "" scenario_name "${source_name}")
     galay_add_c_kernel_benchmark("benchmark_c_kernel_${scenario_name}" "${benchmark_source}")
 endforeach()
-
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-    pkg_check_modules(LIBUV QUIET IMPORTED_TARGET libuv)
-endif()
-if(TARGET PkgConfig::LIBUV)
-    target_link_libraries(benchmark_c_kernel_libuv_echo_server PRIVATE PkgConfig::LIBUV)
-    target_compile_definitions(benchmark_c_kernel_libuv_echo_server PRIVATE GALAY_BENCHMARK_HAS_LIBUV=1)
-endif()

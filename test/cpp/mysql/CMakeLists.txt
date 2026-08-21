@@ -29,9 +29,14 @@ function(add_mysql_test target_name source_file)
     add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${executable_name}>)
 
     set(test_labels mysql)
+    set(test_timeout 30)
     if(target_name IN_LIST GALAY_MYSQL_INTEGRATION_TESTS)
         list(APPEND test_labels integration requires-mysql)
-        set_tests_properties(${test_name} PROPERTIES SKIP_RETURN_CODE ${GALAY_MYSQL_TEST_SKIP_RETURN_CODE})
+        set_tests_properties(${test_name} PROPERTIES
+            SKIP_RETURN_CODE ${GALAY_MYSQL_TEST_SKIP_RETURN_CODE}
+            RESOURCE_LOCK galay_mysql_integration
+        )
+        set(test_timeout 60)
     else()
         list(APPEND test_labels unit)
     endif()
@@ -39,7 +44,7 @@ function(add_mysql_test target_name source_file)
     set_tests_properties(${test_name} PROPERTIES
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         LABELS "${test_labels}"
-        TIMEOUT 30
+        TIMEOUT ${test_timeout}
     )
 endfunction()
 
@@ -70,5 +75,6 @@ add_test(
 set_tests_properties(mysql.package_consumer_smoke PROPERTIES
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     LABELS "mysql;package;consumer"
+    RESOURCE_LOCK galay_build_install
     TIMEOUT 120
 )

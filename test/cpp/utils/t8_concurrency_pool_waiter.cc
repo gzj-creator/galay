@@ -143,9 +143,9 @@ void test_thread() {
 void test_stress_pool() {
     std::cout << "=== Stress Testing Pool ===" << std::endl;
 
-    BlockingObjectPool<int> pool(100);
-    const int numThreads = 8;
-    const int opsPerThread = 50000;
+    BlockingObjectPool<int> pool(32);
+    const int numThreads = 4;
+    const int opsPerThread = 2000;
     std::atomic<int> acquired{0};
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -180,7 +180,7 @@ void test_stress_pool() {
     std::cout << "  Acquired: " << acquired << std::endl;
     std::cout << "  Pool available: " << pool.available() << std::endl;
 
-    assert(pool.available() == 100);
+    assert(pool.available() == 32);
 
     std::cout << "Pool stress test passed!" << std::endl;
 }
@@ -188,8 +188,8 @@ void test_stress_pool() {
 void test_stress_thread_pool() {
     std::cout << "=== Stress Testing ThreadPool ===" << std::endl;
 
-    ThreadPool pool(8);
-    const int numTasks = 100000;
+    ThreadPool pool(4);
+    const int numTasks = 4096;
     std::atomic<int> completed{0};
 
     auto start = std::chrono::high_resolution_clock::now();

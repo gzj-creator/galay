@@ -7,8 +7,10 @@
 
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
+#include <galay/cpp/galay-kernel/core/timer_scheduler.h>
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/common/host.hpp>
+#include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
 #include <string_view>
@@ -131,7 +133,7 @@ Task<void> test_server([[maybe_unused]] IOScheduler* scheduler, int listen_fd, i
 Task<void> test_client([[maybe_unused]] IOScheduler* scheduler, const char* ip, int port, int send_count)
 {
     g_total++;
-    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    co_await galay::kernel::sleep(std::chrono::milliseconds(100));
 
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) {
@@ -163,7 +165,7 @@ Task<void> test_client([[maybe_unused]] IOScheduler* scheduler, const char* ip, 
 
     // 多次发送小数据，每次间隔一点时间，确保服务端多次收到事件
     for (int i = 0; i < send_count; ++i) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        co_await galay::kernel::sleep(std::chrono::milliseconds(50));
         std::string msg = "ping-" + std::to_string(i);
         ssize_t n = send(fd, msg.c_str(), msg.size(), 0);
         if (n > 0) {
@@ -192,7 +194,6 @@ int main()
     LogInfo("Backend: kqueue");
 #endif
 
-    const int PORT = 19999;
     const int REJECT_COUNT = 3;  // handleComplete 前3次返回 false
 
     int listen_fd = socket(AF_INET, SOCK_STREAM, 0);
@@ -209,8 +210,10 @@ int main()
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = INADDR_ANY;
-    addr.sin_port = htons(PORT);
+    addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    // Let the kernel choose a free loopback port so this test can run in
+    // parallel with other socket tests without a fixed-port collision.
+    addr.sin_port = htons(0);
 
     if (bind(listen_fd, (sockaddr*)&addr, sizeof(addr)) < 0) {
         LogError("Bind failed: {}", strerror(errno));
@@ -224,8 +227,18 @@ int main()
         return 1;
     }
 
-    LogInfo("Server listening on port {}", PORT);
+    sockaddr_in bound_addr{};
+    socklen_t bound_addr_len = sizeof(bound_addr);
+    if (getsockname(listen_fd, reinterpret_cast<sockaddr*>(&bound_addr), &bound_addr_len) < 0) {
+        LogError("getsockname failed: {}", strerror(errno));
+        close(listen_fd);
+        return 1;
+    }
+    const int port = ntohs(bound_addr.sin_port);
+    LogInfo("Server listening on loopback port {}", port);
 
+    auto* timer_scheduler = TimerScheduler::getInstance();
+    timer_scheduler->start();
     TestScheduler scheduler;
     scheduler.start();
 
@@ -233,11 +246,29 @@ int main()
     scheduleTask(scheduler, test_server(&scheduler, listen_fd, REJECT_COUNT));
 
     // 启动客户端（发送 reject_count+1 次数据，确保触发足够多的事件）
-    scheduleTask(scheduler, test_client(&scheduler, "127.0.0.1", PORT, REJECT_COUNT + 1));
+    scheduleTask(scheduler, test_client(&scheduler, "127.0.0.1", port, REJECT_COUNT + 1));
 
-    std::this_thread::sleep_for(std::chrono::seconds(3));
+    // Both coroutines report exactly one result.  Wait for completion instead
+    // of sleeping for a fixed duration, while retaining a hard upper bound if
+    // a scheduler or socket path regresses.
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (std::chrono::steady_clock::now() < deadline) {
+        const int completed = g_passed.load() + g_failed.load();
+        if (g_total.load() >= 2 && completed >= 2) {
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+
+    const int completed = g_passed.load() + g_failed.load();
+    if (g_total.load() < 2 || completed < 2) {
+        LogError("Timed out waiting for virtual handle test (started={}, completed={})",
+                 g_total.load(), completed);
+        g_failed.fetch_add(1);
+    }
 
     scheduler.stop();
+    timer_scheduler->stop();
     close(listen_fd);
 
     // 写入测试结果

@@ -1,6 +1,7 @@
+// Historical/internal-only fixture. Not a formal competitor baseline; see docs/cpp/modules/kernel/05-性能测试.md.
 /**
  * @file b26_libuv_echo_server.c
- * @brief 与 Galay TCP/UDP benchmark 使用相同 echo wire 的 libuv 服务端基线。
+ * @brief 历史/内部 libuv TCP/UDP echo fixture，不是正式竞品基线。
  *
  * 单事件循环运行，TCP 每连接仅允许一个在途写，UDP 优先使用 try_send，避免
  * benchmark 自身引入额外线程或队列。该程序只用于本机同后端竞品对照。
@@ -547,7 +548,7 @@ int main(int argc, char** argv)
 int main(void)
 {
     if (fprintf(stderr,
-                "libuv competitor unavailable: pkg-config module libuv was not found at configure time\n") < 0) {
+                "historical libuv fixture unavailable: pkg-config module libuv was not found at configure time\n") < 0) {
         return 5;
     }
     return 77;

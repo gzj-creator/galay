@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Run paired C++/Rust MPSC benchmarks with one shared workload."""
+# Historical/internal-only fixture. Not a formal competitor baseline; see docs/cpp/modules/kernel/05-性能测试.md.
+"""Run the historical/internal C++ and Rust MPSC fixture."""
 
 from __future__ import annotations
 

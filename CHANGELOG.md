@@ -14,6 +14,8 @@
 ### Added
 
 - **按执行语义拆分 Runtime 根任务入口**：新增 `blockOnIO()`、`blockOnCpu()`、`spawnIO()`、`spawnCpu()` 及 `RuntimeHandle` 对应入口，分别绑定 IO scheduler 或 compute scheduler；新增边界测试与提交吞吐基准。
+- **新增 Boost.Asio C++ 协程 TCP/UDP 公平基线**：加入同语言 `co_spawn`/`awaitable` echo harness，与 Galay 使用相同的 100 客户端、4 worker、256 字节 payload、单请求在途 workload，并注册为 kernel 正式外部对标目标。
+- **新增正式对标证据与策略门禁**：新增 TCP/UDP 三轮交替 CSV、逐轮 raw 输出及竞品策略检查，验证固定 CPU、warmup/measurement/drain、settled counter、丢包和错误字段完整性。
 
 ### Removed
 
@@ -23,6 +25,9 @@
 
 - **迁移仓内任务提交调用点**：网络、timer 与协议任务统一使用 IO 入口，纯计算任务使用 CPU 入口，消除 ComputeScheduler 优先的默认放置语义。
 - **强化 Runtime 执行器吞吐基准**：计时前启动并预热 runtime，分别采样 IO / CPU 根任务的中位数吞吐；使用完成闩锁验证 detached 根任务完成，避免逐个 `join()` 掩盖调度路径成本。
+- **统一正式外部对标口径**：Boost.Asio C++ 协程是唯一竞品基线；Crossbeam、libuv、h2load、etcdctl、libpq、libmysqlclient、hiredis 和 gRPC 等入口改为历史/内部资料或 `not_applicable`，不再进入正式排名。
+- **收紧网络压测测量合同**：TCP/UDP runner 采用双方严格交替的三轮采样、同一 CPU 亲和性、1 秒预热、5 秒测量、250 毫秒排空，并以 settled loss、运行时错误和关闭错误作为通过门禁；同步更新构建、性能文档和跨模块说明。
+- **提高 Release 验证稳定性**：为 CTest 增加默认超时、资源锁、外部 fixture 明确开关和断言启用回归；修正 loopback 测试端口/协程等待及 sendfile、iov 边界和压力测试的确定性收敛。
 
 ## [v4.9.1] - 2026-08-20
 

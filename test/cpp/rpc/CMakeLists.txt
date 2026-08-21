@@ -44,6 +44,8 @@ foreach(test_source IN LISTS GALAY_RPC_TEST_SOURCES)
             set_tests_properties(rpc.t64.etcd.real.chain PROPERTIES
                 LABELS "rpc;integration;requires-etcd"
                 SKIP_RETURN_CODE ${GALAY_RPC_TEST_SKIP_RETURN_CODE}
+                RESOURCE_LOCK galay_etcd_integration
+                TIMEOUT 150
             )
         else()
             set_tests_properties(rpc.t94.rpc.etcd.adapter.surface PROPERTIES LABELS "rpc;surface")

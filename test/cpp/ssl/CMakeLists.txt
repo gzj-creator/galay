@@ -9,7 +9,31 @@ function(add_ssl_test source_file)
     string(REGEX REPLACE "_" "." scenario_name "${target_name}")
     set(test_name "ssl.${scenario_name}")
     add_test(NAME ${test_name} COMMAND ${target_name})
-    set_tests_properties(${test_name} PROPERTIES WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
+    set_tests_properties(${test_name} PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        LABELS "ssl;unit"
+    )
+    # SSL loopback tests use fixed ports.  A per-port lock keeps CTest runs
+    # deterministic while preserving parallelism between unrelated tests.
+    set(_ssl_port_lock "")
+    if(target_name STREQUAL "t2_loopback")
+        set(_ssl_port_lock galay_loopback_port_19443)
+    elseif(target_name STREQUAL "t3_policy")
+        set(_ssl_port_lock galay_loopback_port_19444)
+    elseif(target_name STREQUAL "t5_io")
+        set(_ssl_port_lock galay_loopback_port_19445)
+    elseif(target_name STREQUAL "t6_custom")
+        set(_ssl_port_lock galay_loopback_port_19446)
+    elseif(target_name STREQUAL "t8_proto")
+        set(_ssl_port_lock galay_loopback_port_19447)
+    elseif(target_name STREQUAL "t11_fanout")
+        set(_ssl_port_lock galay_loopback_port_19448)
+    elseif(target_name STREQUAL "t12_handshake")
+        set(_ssl_port_lock galay_loopback_port_19449)
+    endif()
+    if(_ssl_port_lock)
+        set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK ${_ssl_port_lock})
+    endif()
 endfunction()
 
 foreach(test_source IN LISTS GALAY_SSL_TEST_SOURCES)

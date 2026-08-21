@@ -30,7 +30,12 @@ function(add_mongo_integration_test target_name source_file test_name)
     target_include_directories(${target_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     galay_mongo_configure_test_target(${target_name})
     add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${target_name}>)
-    set_tests_properties(${test_name} PROPERTIES LABELS "mongo;integration")
+    set_tests_properties(${test_name} PROPERTIES
+        LABELS "mongo;integration;requires-mongo"
+        RESOURCE_LOCK galay_mongo_integration
+        SKIP_REGULAR_EXPRESSION "\\[SKIP\\]"
+        TIMEOUT 60
+    )
 endfunction()
 
 file(GLOB GALAY_MONGO_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cc")

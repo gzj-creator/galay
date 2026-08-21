@@ -1,3 +1,4 @@
+// Historical/internal-only fixture. Not a formal competitor baseline; see docs/cpp/modules/kernel/05-性能测试.md.
 /**
  * @file spsc_paired.cc
  * @brief 测量 SPSC ring/channel 的 scalar/batch bounded 及 unbounded 吞吐。

@@ -47,7 +47,7 @@ function(galay_add_c_ssl_test source_file)
         )
     endif()
     add_test(NAME "c.ssl.${scenario_name}" COMMAND ${target_name})
-    set_tests_properties("c.ssl.${scenario_name}" PROPERTIES LABELS "c;ssl;integration")
+    set_tests_properties("c.ssl.${scenario_name}" PROPERTIES LABELS "c;ssl;unit")
 endfunction()
 
 file(GLOB GALAY_C_SSL_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.c")

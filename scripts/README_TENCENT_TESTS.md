@@ -1,5 +1,8 @@
 # 腾讯机器测试套件使用说明
 
+> 正式外部对标只使用 Boost.Asio C++ 协程。channel、NUMA 和策略测试属于
+> Galay 内部性能验证；Crossbeam 资料仅保留为历史归档，不参与竞品排名。
+
 本目录包含三个用于腾讯机器性能测试的完整脚本套件。
 
 ## 📋 脚本概览
@@ -49,8 +52,9 @@ sudo sysctl kernel.perf_event_paranoid=-1
 **功能:**
 - ✅ 系统信息收集 (CPU/内存/NUMA 拓扑)
 - ✅ 标准性能测试 (1P, 2P, 4P, 8P, 16P, 32P, 64P)
-- ✅ 策略对比测试 (fair/balanced/throughput)
-- ✅ Crossbeam 跨语言对比
+- ✅ 内部策略验证 (fair/balanced/throughput)
+- ✅ Boost.Asio 协程 UDP 公平对标
+- ✅ Boost.Asio 协程 TCP 公平对标
 - ✅ 自动生成汇总报告
 
 **输出文件:**
@@ -58,8 +62,11 @@ sudo sysctl kernel.perf_event_paranoid=-1
 benchmark-results/tencent-full-YYYYMMDD-HHMMSS/
 ├── system_info.txt              # 系统信息
 ├── standard_tests.jsonl         # 标准测试结果 (JSON Lines)
-├── strategy_comparison.jsonl    # 策略对比结果
-├── crossbeam_comparison.jsonl   # Crossbeam 对比结果
+├── strategy_comparison.jsonl    # 内部策略验证结果
+├── boost_asio_coro_comparison.txt      # Galay / Boost.Asio UDP 交替原始输出
+├── boost_asio_coro_tcp_comparison.txt  # Galay / Boost.Asio TCP 交替原始输出
+├── boost_asio_coro.csv                  # UDP 机器可读结果
+├── boost_asio_coro_tcp.csv              # TCP 机器可读结果
 ├── summary.txt                  # 汇总报告
 └── full_test.log                # 完整日志
 ```
@@ -162,14 +169,11 @@ firefox benchmark-results/tencent-perf-*/perf_*_flamegraph.svg
 ### 使用 Python 脚本分析
 
 ```bash
-# 分析标准测试结果
-cd benchmark/cpp/kernel/compare
-python3 run_mpsc_paired.py --analyze \
-    ../../../benchmark-results/tencent-full-*/standard_tests.jsonl
+# 查看正式 Galay / Boost.Asio UDP 交替压测原始输出
+cat benchmark-results/tencent-full-*/boost_asio_coro_comparison.txt
 
-# 策略对比分析
-python3 run_per_producer_comparison.py \
-    --input ../../../benchmark-results/tencent-full-*/strategy_comparison.jsonl
+# 查看正式 Galay / Boost.Asio TCP 交替压测原始输出
+cat benchmark-results/tencent-full-*/boost_asio_coro_tcp_comparison.txt
 ```
 
 ### 手动分析 JSONL 文件
@@ -188,13 +192,14 @@ cat standard_tests.jsonl | \
     jq -r 'select(.valid == true) | "\(.producers)P: \(.messages_per_second/1e6) M/s"'
 ```
 
-### 性能对比
+### 正式外部对标
 
 ```bash
-# Galay vs Crossbeam
-cat crossbeam_comparison.jsonl | \
-    jq -r '"\(.language) \(.producers)P: \(.messages_per_second/1e6) M/s"' | \
-    sort
+# 每个 galay 行后紧跟同轮 boost.asio 输出，避免固定顺序偏差
+rg '^(galay|boost[.]asio),|^measured |^status=' \
+  benchmark-results/tencent-full-*/boost_asio_coro_comparison.txt
+rg '^(galay|boost[.]asio),|^measured |^status=' \
+  benchmark-results/tencent-full-*/boost_asio_coro_tcp_comparison.txt
 ```
 
 ---
@@ -326,11 +331,12 @@ diff <(cat baseline/summary.txt) <(cat optimized/summary.txt)
 | 16P | 120-180 M/s | NUMA 影响显现 |
 | 32P+ | 待测试 | 高度依赖 NUMA |
 
-### 与 Crossbeam 对比
+### Boost.Asio 协程对标
 
-- **目标:** Galay 吞吐量 >= Crossbeam 的 80%
-- **优势场景:** 低延迟、公平性保证
-- **劣势场景:** 可能在极端高并发下略低
+- **唯一正式对手:** Boost.Asio `co_spawn` / `awaitable`
+- **固定口径:** loopback UDP/TCP echo、100 clients、4 workers、256B、单请求在途
+- **CPU 亲和性:** 双方默认固定到 CPU 0；可用 `BENCHMARK_CPU=N` 选择同一可用 CPU
+- **结论要求:** 至少 3 轮交替运行，报告中位数、丢包和错误，不挑单轮峰值
 
 ---
 
@@ -349,7 +355,7 @@ diff <(cat baseline/summary.txt) <(cat optimized/summary.txt)
 
 ### 并发性能
 
-- [Crossbeam Channel](https://docs.rs/crossbeam-channel/)
+- [Boost.Asio](https://www.boost.org/doc/libs/release/doc/html/boost_asio.html)
 - [Lock-Free Programming](https://preshing.com/20120612/an-introduction-to-lock-free-programming/)
 
 ---

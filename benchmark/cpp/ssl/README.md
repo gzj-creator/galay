@@ -1,5 +1,8 @@
 # galay-ssl 性能测试
 
+> 正式外部对标只采用 Boost.Asio C++ 协程。本目录当前只提供 Galay SSL/TLS
+> 内部压力基线；其他 TLS 工具或服务端不参与竞品排名。
+
 本目录包含 `galay-ssl` 的压测程序，用于评估 SSL/TLS Echo 场景的 QPS、吞吐量和错误率。
 
 ## 测试程序

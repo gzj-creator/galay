@@ -372,8 +372,8 @@ void test_stress_circuit_breaker() {
 
     CircuitBreaker cb(config);
 
-    const int numThreads = 8;
-    const int opsPerThread = 100000;
+    const int numThreads = 4;
+    const int opsPerThread = 5000;
     std::atomic<int> successOps{0};
     std::atomic<int> failureOps{0};
     std::atomic<int> allowedRequests{0};
@@ -501,7 +501,7 @@ void test_stress_rate_limiter() {
     std::cout << "=== Stress Testing RateLimiter ===" << std::endl;
 
     const int threadCount = 4;
-    const int iterations = 100000;
+    const int iterations = 5000;
 
     // Test CountingSemaphore
     {

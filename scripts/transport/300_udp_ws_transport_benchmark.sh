@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Historical/internal transport harness. It may compare arbitrary server
+# binaries for diagnosis, but it is not a formal competitor runner. The only
+# formal external baseline is benchmark_kernel_compare_boost_asio_coro_udp.
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 MODE="${1:-}"
 
@@ -29,6 +33,7 @@ usage() {
     echo "usage: $0 udp|ws"
     echo "required env: SERVER_BINARY=/path/to/server CLIENT_BINARY=/path/to/client"
     echo "optional env: DURATION=30 WARMUP=5 RUNS=3 SERVER_CPUS=0-1 CLIENT_CPUS=2-3"
+    echo "classification: historical/internal-only; not a formal competitor ranking"
 }
 
 cleanup() {
@@ -155,6 +160,7 @@ SAMPLE_FILE="$OUT_DIR/${MODE}-${STAMP}-throughput.samples"
 : >"$SAMPLE_FILE"
 
 echo "mode=$MODE duration=${DURATION}s warmup=${WARMUP}s runs=$RUNS server_cpus=$SERVER_CPUS client_cpus=$CLIENT_CPUS"
+echo "classification=historical_internal_only formal_competitor=false"
 
 if [[ "$MODE" == "udp" ]]; then
     taskset -c "$SERVER_CPUS" stdbuf -oL -eL "$SERVER_BINARY" "$PORT" >"$SERVER_LOG" 2>&1 &

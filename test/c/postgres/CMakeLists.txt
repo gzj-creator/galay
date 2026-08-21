@@ -11,17 +11,22 @@ function(galay_add_c_postgres_test source_file)
     )
     target_link_libraries(${target_name} PRIVATE galay::c-postgres)
     add_test(NAME "c.postgres.${scenario_name}" COMMAND ${target_name})
+    set(test_timeout 30)
     if(scenario_name STREQUAL "surface")
         set(test_labels "c;postgres;surface")
     elseif(scenario_name STREQUAL "real_instance")
         set(test_labels "c;postgres;integration;requires-postgres")
-        set_tests_properties("c.postgres.${scenario_name}" PROPERTIES SKIP_RETURN_CODE 125)
+        set_tests_properties("c.postgres.${scenario_name}" PROPERTIES
+            SKIP_RETURN_CODE 125
+            RESOURCE_LOCK galay_postgres_integration
+        )
+        set(test_timeout 60)
     else()
         set(test_labels "c;postgres;unit")
     endif()
     set_tests_properties("c.postgres.${scenario_name}" PROPERTIES
         LABELS "${test_labels}"
-        TIMEOUT 30
+        TIMEOUT ${test_timeout}
     )
 endfunction()
 

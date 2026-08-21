@@ -133,9 +133,11 @@ def audit_benchmarks() -> None:
 
     for path in sorted(base.rglob("*")):
         if path.is_dir() and path.name == "compare":
-            if path.relative_to(ROOT).as_posix() == "benchmark/tracing/compare":
-                continue
-            issue(path, 1, "benchmark-compare", "benchmark compare directory should be deleted unless maintained")
+            # Comparison fixtures are retained as historical/internal-only
+            # source, but formal benchmark registration is Asio-only. Their
+            # presence must not turn the style audit into a deletion request.
+            continue
+        if path.is_file() and "compare" in path.relative_to(base).parts:
             continue
         if not path.is_file() or path.suffix not in {".cc", ".cpp"}:
             continue

@@ -1,3 +1,10 @@
+if(MSVC)
+    add_compile_options(/UNDEBUG)
+else()
+    # Keep assertion-based checks active for Release test targets.
+    add_compile_options(-UNDEBUG)
+endif()
+
 if(GALAY_BUILD_C_API)
     add_subdirectory(c)
 endif()

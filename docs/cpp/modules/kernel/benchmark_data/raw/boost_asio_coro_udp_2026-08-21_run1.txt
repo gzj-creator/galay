@@ -1,0 +1,4 @@
+meta implementation=boost.asio version=1.83.0 coroutine=co_spawn/awaitable scenario=udp-echo backend=single-io-context clients=100 workers=4 payload_bytes=256 pipeline=1 warmup_s=1 duration_s=5 ready_clients=100
+measured client_sent=37328 client_received=37228 client_bytes_sent=9555968 client_bytes_received=9530368 server_received=37232 server_sent=37232 server_bytes_received=9531392 server_bytes_sent=9531392 measurement_ms=5000 client_pkt_s=7464.89 server_pkt_s=7445.69 client_loss_pct=0.267895 runtime_errors=0 shutdown_errors=0
+settled client_sent=37328 client_received=37328 client_bytes_sent=9555968 client_bytes_received=9555968 server_received=37328 server_sent=37328 server_bytes_received=9555968 server_bytes_sent=9555968 elapsed_ms=6263 client_loss_pct=0 runtime_errors=0 shutdown_errors=0
+status=ok

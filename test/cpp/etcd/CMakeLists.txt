@@ -41,6 +41,8 @@ function(galay_etcd_add_test_target source_name)
         set_tests_properties("etcd.${scenario_name}" PROPERTIES
             LABELS "etcd;integration;requires-etcd"
             SKIP_RETURN_CODE ${GALAY_ETCD_TEST_SKIP_RETURN_CODE}
+            RESOURCE_LOCK galay_etcd_integration
+            TIMEOUT 150
         )
     else()
         set_tests_properties("etcd.${scenario_name}" PROPERTIES LABELS "etcd;unit")

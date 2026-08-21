@@ -9,3 +9,9 @@ add_test(
     COMMAND python3 -B "${CMAKE_CURRENT_SOURCE_DIR}/t2_http2_h2load_compare.py"
 )
 set_tests_properties(scripts.http2_h2load_compare PROPERTIES LABELS "scripts;unit")
+
+add_test(
+    NAME scripts.benchmark_competitor_policy
+    COMMAND python3 -B "${CMAKE_CURRENT_SOURCE_DIR}/t3_benchmark_competitor_policy.py"
+)
+set_tests_properties(scripts.benchmark_competitor_policy PROPERTIES LABELS "scripts;unit")

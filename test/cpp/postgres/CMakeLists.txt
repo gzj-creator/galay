@@ -25,16 +25,21 @@ function(add_postgres_test target_name source_file)
     add_test(NAME ${test_name} COMMAND $<TARGET_FILE:${executable_name}>)
 
     set(test_labels postgres)
+    set(test_timeout 30)
     if(target_name IN_LIST GALAY_POSTGRES_INTEGRATION_TESTS)
         list(APPEND test_labels integration requires-postgres)
-        set_tests_properties(${test_name} PROPERTIES SKIP_RETURN_CODE ${GALAY_POSTGRES_TEST_SKIP_RETURN_CODE})
+        set_tests_properties(${test_name} PROPERTIES
+            SKIP_RETURN_CODE ${GALAY_POSTGRES_TEST_SKIP_RETURN_CODE}
+            RESOURCE_LOCK galay_postgres_integration
+        )
+        set(test_timeout 60)
     else()
         list(APPEND test_labels unit)
     endif()
     set_tests_properties(${test_name} PROPERTIES
         WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
         LABELS "${test_labels}"
-        TIMEOUT 30
+        TIMEOUT ${test_timeout}
     )
 endfunction()
 

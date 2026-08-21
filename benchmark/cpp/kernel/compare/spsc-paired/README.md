@@ -1,10 +1,13 @@
 # SPSC 配对压测
 
+> 历史/内部验证资料：本目录不再是正式竞品基线，不参与项目性能排名。当前正式
+> 外部对标唯一采用 Boost.Asio C++ 协程，入口见同级 `boost-asio-coro/`。
+
 该压测只回答一个问题：在同一台机器上，以严格 `1P1C` 传递 8 字节单调序列时，
 Galay 与 Rust 专用 SPSC 实现的所测数据路径吞吐分别是多少。它不是通用的 C++/Rust
 语言基准，也不把 MPMC 实现伪装成 SPSC 对照。
 
-正式胜负只使用接口等价的 `raw_bounded` 与 `batch_bounded`。`unbounded` 是最接近的
+历史报告中的胜负只使用接口等价的 `raw_bounded` 与 `batch_bounded`。`unbounded` 是最接近的
 专用 SPSC 数据路径，`batch_unbounded` 则因 Rust 依赖没有原生 batch API 而仅作为参考；
 两者都不进入“全面超过”的结论。
 
@@ -85,6 +88,9 @@ total retry ratio 的 p50/p99 与 CI。跨参数结论必须完整覆盖 batch s
 “全面超过”。
 
 ## 构建与运行
+
+以下命令仅用于读取历史 fixture；正式 CMake 已不再注册
+`benchmark_kernel_compare_spsc_paired`，因此不能作为当前对标复现入口。
 
 ```bash
 rtk cmake -S . -B build-release \

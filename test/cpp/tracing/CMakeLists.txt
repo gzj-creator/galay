@@ -20,6 +20,8 @@ function(galay_add_tracing_test source_file)
     add_test(NAME tracing.${scenario_name} COMMAND $<TARGET_FILE:${target_name}>)
     if(test_name MATCHES "_integration$")
         set_tests_properties(tracing.${scenario_name} PROPERTIES LABELS "tracing;integration")
+    else()
+        set_tests_properties(tracing.${scenario_name} PROPERTIES LABELS "tracing;unit")
     endif()
 endfunction()
 

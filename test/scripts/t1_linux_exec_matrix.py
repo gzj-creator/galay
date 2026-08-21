@@ -170,13 +170,6 @@ def main() -> int:
         matrix.single_executable_args("benchmark/c/kernel/benchmark_c_kernel_coro_tcp_iov_sendfile") == ("20",),
         "sendfile benchmark should run a short smoke workload",
     )
-    libuv_args = matrix.single_executable_args(
-        "benchmark/c/kernel/benchmark_c_kernel_libuv_echo_server"
-    )
-    check(
-        len(libuv_args) == 2 and libuv_args[0] == "tcp" and 1 <= int(libuv_args[1]) <= 65535,
-        "libuv echo server should receive a valid mode and port",
-    )
     check(
         matrix.classify_result(
             "benchmark/cpp/kernel/benchmark_kernel_mpsc_unbounded_prefetch",

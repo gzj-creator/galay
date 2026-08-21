@@ -52,6 +52,7 @@ add_test(
         -D GALAY_CXX_COMPILER=${CMAKE_CXX_COMPILER}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/build_type_option.cmake
 )
+set_tests_properties(config.build_type_option PROPERTIES TIMEOUT 60)
 
 add_test(
     NAME config.tracing_options_surface
@@ -61,4 +62,10 @@ add_test(
         -D GALAY_CMAKE_GENERATOR=${CMAKE_GENERATOR}
         -D GALAY_CXX_COMPILER=${CMAKE_CXX_COMPILER}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tracing_options_surface.cmake
+)
+
+get_property(GALAY_CONFIG_TESTS DIRECTORY PROPERTY TESTS)
+set_tests_properties(${GALAY_CONFIG_TESTS} PROPERTIES LABELS "config;unit")
+set_tests_properties(config.install_include_layout PROPERTIES
+    RESOURCE_LOCK galay_build_install
 )

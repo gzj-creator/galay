@@ -228,8 +228,6 @@ def single_executable_args(rel: str) -> tuple[str, ...]:
         return ("100",)
     if rel == "benchmark/c/kernel/benchmark_c_kernel_coro_tcp_iov_sendfile":
         return ("20",)
-    if rel == "benchmark/c/kernel/benchmark_c_kernel_libuv_echo_server":
-        return ("tcp", str(find_free_port()))
     return ()
 
 

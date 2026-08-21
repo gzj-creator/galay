@@ -1,19 +1,28 @@
 #!/bin/bash
 # Tencent 机器完整测试套件
-# 包含系统信息收集、标准性能测试、策略对比、Crossbeam 对比和结果汇总
+# 包含系统信息收集、标准性能测试、内部策略验证、Boost.Asio 协程对标和结果汇总
 
 set -euo pipefail
 
 # ==================== 配置 ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-BUILD_DIR="${PROJECT_ROOT}/build"
-RESULT_DIR="${PROJECT_ROOT}/benchmark-results/tencent-full-$(date +%Y%m%d-%H%M%S)"
+BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build}"
+RESULT_DIR="${RESULT_DIR:-${PROJECT_ROOT}/benchmark-results/tencent-full-$(date +%Y%m%d-%H%M%S)}"
 LOG_FILE="${RESULT_DIR}/full_test.log"
+
+# The first section header is logged before main() performs its checks; create
+# the caller-selected result directory up front so tee can open the log.
+mkdir -p "${RESULT_DIR}"
 
 # 测试参数
 MESSAGES=10000000
 RUNS_PER_CONFIG=5
+# Formal evidence uses three strictly alternating pairs.  Keep this separate
+# from the longer internal channel/strategy matrix above.
+FORMAL_RUNS="${FORMAL_RUNS:-3}"
+BENCHMARK_CPU="${BENCHMARK_CPU:-0}"
+RUN_INTERNAL_TESTS="${RUN_INTERNAL_TESTS:-1}"
 PRODUCER_COUNTS=(1 2 4 8 16 32 64)
 CAPACITIES=(1024 4096 16384)
 STRATEGIES=("fair" "balanced" "throughput")
@@ -183,73 +192,343 @@ run_strategy_comparison() {
     log "策略对比结果已保存到: ${result_file}"
 }
 
-# ==================== Crossbeam 对比 ====================
-run_crossbeam_comparison() {
-    log_section "4. Crossbeam 对比测试"
+# ==================== Boost.Asio 协程对标 ====================
+run_boost_asio_comparison() {
+    log_section "4. Boost.Asio 协程 UDP 公平对标"
 
-    local galay_bin="${BUILD_DIR}/benchmark/cpp/kernel/benchmark_kernel_compare_mpsc_paired"
-    local rust_dir="${PROJECT_ROOT}/benchmark/cpp/kernel/compare/rust-channel"
-    local rust_bin="${rust_dir}/target/release/mpsc_paired"
+    local galay_bin="${BUILD_DIR}/benchmark/cpp/kernel/benchmark_kernel_udp_socket_throughput"
+    local asio_bin="${BUILD_DIR}/benchmark/cpp/kernel/benchmark_kernel_compare_boost_asio_coro_udp"
+    local result_file="${RESULT_DIR}/boost_asio_coro_comparison.txt"
+    local csv_file="${RESULT_DIR}/boost_asio_coro.csv"
+    local raw_dir="${RESULT_DIR}/boost_asio_coro_raw"
+    local failed_samples=0
 
-    if ! check_binary "${galay_bin}"; then
-        log "Galay MPSC 二进制文件不存在,跳过对比测试"
+    if ! check_binary "${galay_bin}" || ! check_binary "${asio_bin}"; then
+        log "Galay/Boost.Asio UDP 对标二进制不存在,跳过对标测试"
+        return 1
+    fi
+    if ! check_command taskset; then
+        log "正式对标需要 taskset 将双方固定到同一 CPU"
+        return 1
+    fi
+    if [[ ! "${BENCHMARK_CPU}" =~ ^[0-9]+$ ]]; then
+        log "正式对标 CPU 编号无效: ${BENCHMARK_CPU}"
+        return 1
+    fi
+    if [[ ! "${FORMAL_RUNS}" =~ ^[1-9][0-9]*$ ]]; then
+        log "正式对标轮数无效: ${FORMAL_RUNS}"
         return 1
     fi
 
-    # 构建 Rust Crossbeam
-    if [ -d "${rust_dir}" ]; then
-        log "构建 Rust Crossbeam..."
-        (cd "${rust_dir}" && cargo build --release --bin mpsc_paired) >> "${LOG_FILE}" 2>&1 || {
-            log "Rust 构建失败,跳过 Crossbeam 对比"
-            return 1
-        }
-    else
-        log "Rust 目录不存在,跳过 Crossbeam 对比"
+    mkdir -p "${raw_dir}"
+    : >"${result_file}"
+    printf '%s\n' \
+        'implementation,version,backend,coroutine,scenario,clients,workers,payload_bytes,pipeline,warmup_s,duration_s,run,client_sent,client_received,server_received,server_sent,settled_client_sent,settled_client_received,settled_server_received,settled_server_sent,client_pkt_s,server_pkt_s,client_loss_pct,settled_client_loss_pct,runtime_errors,shutdown_errors,status,raw_file' \
+        >"${csv_file}"
+
+    value_for() {
+        local raw_file="$1"
+        local key="$2"
+        awk -v wanted="${key}" '
+            {
+                for (i = 1; i <= NF; ++i) {
+                    split($i, pair, "=")
+                    if (pair[1] == wanted) {
+                        print substr($i, length(wanted) + 2)
+                        exit
+                    }
+                }
+            }
+        ' "${raw_file}"
+    }
+
+    phase_value() {
+        local raw_file="$1"
+        local phase="$2"
+        local key="$3"
+        awk -v wanted_phase="${phase}" -v wanted_key="${key}" '
+            $1 == wanted_phase {
+                for (i = 1; i <= NF; ++i) {
+                    split($i, pair, "=")
+                    if (pair[1] == wanted_key) {
+                        print substr($i, length(wanted_key) + 2)
+                        exit
+                    }
+                }
+            }
+        ' "${raw_file}"
+    }
+
+    run_formal_sample() {
+        local implementation="$1"
+        local run="$2"
+        local raw_file="$3"
+        local rc=0
+        if [[ "${implementation}" == "galay" ]]; then
+            if taskset -c "${BENCHMARK_CPU}" "${galay_bin}" >"${raw_file}" 2>&1; then
+                rc=0
+            else
+                rc=$?
+            fi
+        else
+            if taskset -c "${BENCHMARK_CPU}" "${asio_bin}" \
+                --clients 100 --workers 4 --size 256 --warmup 1 --duration 5 \
+                >"${raw_file}" 2>&1; then
+                rc=0
+            else
+                rc=$?
+            fi
+        fi
+
+        local status
+        status="$(value_for "${raw_file}" status)"
+        local valid=true
+        if [[ "${rc}" -ne 0 || "${status}" != "ok" ]]; then
+            valid=false
+        fi
+
+        local version backend coroutine scenario clients workers payload pipeline warmup duration
+        local client_sent client_received server_received server_sent
+        local settled_client_sent settled_client_received settled_server_received settled_server_sent
+        local client_pkt_s server_pkt_s client_loss_pct settled_client_loss_pct runtime_errors shutdown_errors
+        version="$(value_for "${raw_file}" version)"
+        backend="$(value_for "${raw_file}" backend)"
+        coroutine="$(value_for "${raw_file}" coroutine)"
+        scenario="$(value_for "${raw_file}" scenario)"
+        clients="$(value_for "${raw_file}" clients)"
+        workers="$(value_for "${raw_file}" workers)"
+        payload="$(value_for "${raw_file}" payload_bytes)"
+        pipeline="$(value_for "${raw_file}" pipeline)"
+        warmup="$(value_for "${raw_file}" warmup_s)"
+        duration="$(value_for "${raw_file}" duration_s)"
+        client_sent="$(phase_value "${raw_file}" measured client_sent)"
+        client_received="$(phase_value "${raw_file}" measured client_received)"
+        server_received="$(phase_value "${raw_file}" measured server_received)"
+        server_sent="$(phase_value "${raw_file}" measured server_sent)"
+        settled_client_sent="$(phase_value "${raw_file}" settled client_sent)"
+        settled_client_received="$(phase_value "${raw_file}" settled client_received)"
+        settled_server_received="$(phase_value "${raw_file}" settled server_received)"
+        settled_server_sent="$(phase_value "${raw_file}" settled server_sent)"
+        client_pkt_s="$(phase_value "${raw_file}" measured client_pkt_s)"
+        server_pkt_s="$(phase_value "${raw_file}" measured server_pkt_s)"
+        client_loss_pct="$(phase_value "${raw_file}" measured client_loss_pct)"
+        settled_client_loss_pct="$(phase_value "${raw_file}" settled settled_loss_pct)"
+        if [[ -z "${settled_client_loss_pct}" ]]; then
+            settled_client_loss_pct="$(phase_value "${raw_file}" settled client_loss_pct)"
+        fi
+        runtime_errors="$(phase_value "${raw_file}" measured runtime_errors)"
+        shutdown_errors="$(phase_value "${raw_file}" measured shutdown_errors)"
+
+        printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+            "${implementation}" "${version:-unknown}" "${backend:-unknown}" "${coroutine:-unknown}" \
+            "${scenario:-udp-echo}" "${clients:-100}" "${workers:-4}" "${payload:-256}" "${pipeline:-1}" \
+            "${warmup:-1}" "${duration:-5}" "${run}" "${client_sent:-0}" "${client_received:-0}" \
+            "${server_received:-0}" "${server_sent:-0}" "${settled_client_sent:-0}" \
+            "${settled_client_received:-0}" "${settled_server_received:-0}" "${settled_server_sent:-0}" \
+            "${client_pkt_s:-0}" "${server_pkt_s:-0}" "${client_loss_pct:-0}" \
+            "${settled_client_loss_pct:-0}" "${runtime_errors:-0}" "${shutdown_errors:-0}" \
+            "${status:-missing}" "${raw_file#${PROJECT_ROOT}/}" >>"${csv_file}"
+
+        printf '%s,%s,raw_file=%s\n' "${implementation}" "${run}" "${raw_file#${PROJECT_ROOT}/}" >>"${result_file}"
+        cat "${raw_file}" >>"${result_file}"
+        if [[ "${valid}" == true ]]; then
+            return 0
+        fi
         return 1
-    fi
+    }
 
-    local result_file="${RESULT_DIR}/crossbeam_comparison.jsonl"
-
-    # 测试配置
-    local test_configs=(
-        "1:1000000:1024"
-        "2:1000000:4096"
-        "4:1000000:4096"
-        "8:1000000:4096"
-    )
-
-    for config in "${test_configs[@]}"; do
-        IFS=':' read -r producers messages capacity <<< "${config}"
-
-        log "对比测试: ${producers}P, messages=${messages}, capacity=${capacity}"
-
-        # Galay 测试
-        log "  运行 Galay..."
-        for run in $(seq 1 ${RUNS_PER_CONFIG}); do
-            "${galay_bin}" \
-                --producers "${producers}" \
-                --messages "${messages}" \
-                --capacity "${capacity}" \
-                --json >> "${result_file}" 2>> "${LOG_FILE}" || true
-        done
-
-        # Crossbeam 测试
-        log "  运行 Crossbeam..."
-        for run in $(seq 1 ${RUNS_PER_CONFIG}); do
-            "${rust_bin}" \
-                --producers "${producers}" \
-                --messages "${messages}" \
-                --capacity "${capacity}" \
-                --json >> "${result_file}" 2>> "${LOG_FILE}" || true
-        done
+    printf 'benchmark_cpu=%s\n' "${BENCHMARK_CPU}" >>"${result_file}"
+    for run in $(seq 1 "${FORMAL_RUNS}"); do
+        log "  Galay UDP run ${run}/${FORMAL_RUNS}..."
+        if ! run_formal_sample galay "${run}" \
+            "${raw_dir}/galay_udp_run${run}.txt"; then
+            failed_samples=$((failed_samples + 1))
+        fi
+        log "  Boost.Asio coroutine UDP run ${run}/${FORMAL_RUNS}..."
+        if ! run_formal_sample boost.asio "${run}" \
+            "${raw_dir}/boost_asio_coro_udp_run${run}.txt"; then
+            failed_samples=$((failed_samples + 1))
+        fi
     done
 
-    log "Crossbeam 对比结果已保存到: ${result_file}"
+    log "Boost.Asio 协程对标结果已保存到: ${result_file}"
+    log "Boost.Asio 协程对标 CSV 已保存到: ${csv_file}"
+    if [[ "${failed_samples}" -ne 0 ]]; then
+        log "正式对标失败样本数: ${failed_samples}"
+        return 1
+    fi
+}
+
+# ==================== Boost.Asio TCP 协程对标 ====================
+run_boost_asio_tcp_comparison() {
+    log_section "5. Boost.Asio 协程 TCP 公平对标"
+
+    local galay_bin="${BUILD_DIR}/benchmark/cpp/kernel/benchmark_kernel_tcp_socket_fair_throughput"
+    local asio_bin="${BUILD_DIR}/benchmark/cpp/kernel/benchmark_kernel_compare_boost_asio_coro_tcp"
+    local result_file="${RESULT_DIR}/boost_asio_coro_tcp_comparison.txt"
+    local csv_file="${RESULT_DIR}/boost_asio_coro_tcp.csv"
+    local raw_dir="${RESULT_DIR}/boost_asio_coro_tcp_raw"
+    local failed_samples=0
+
+    if ! check_binary "${galay_bin}" || ! check_binary "${asio_bin}"; then
+        log "Galay/Boost.Asio TCP 对标二进制不存在,跳过对标测试"
+        return 1
+    fi
+    if ! check_command taskset; then
+        log "正式 TCP 对标需要 taskset 将双方固定到同一 CPU"
+        return 1
+    fi
+    if [[ ! "${BENCHMARK_CPU}" =~ ^[0-9]+$ ]]; then
+        log "正式对标 CPU 编号无效: ${BENCHMARK_CPU}"
+        return 1
+    fi
+    if [[ ! "${FORMAL_RUNS}" =~ ^[1-9][0-9]*$ ]]; then
+        log "正式对标轮数无效: ${FORMAL_RUNS}"
+        return 1
+    fi
+
+    mkdir -p "${raw_dir}"
+    : >"${result_file}"
+    printf '%s\n' \
+        'implementation,version,backend,coroutine,scenario,clients,workers,payload_bytes,pipeline,warmup_s,duration_s,run,client_sent,client_received,server_received,server_sent,settled_client_sent,settled_client_received,settled_server_received,settled_server_sent,client_pkt_s,server_pkt_s,client_loss_pct,settled_client_loss_pct,runtime_errors,shutdown_errors,status,raw_file' \
+        >"${csv_file}"
+
+    value_for_tcp() {
+        local raw_file="$1"
+        local key="$2"
+        awk -v wanted="${key}" '
+            {
+                for (i = 1; i <= NF; ++i) {
+                    split($i, pair, "=")
+                    if (pair[1] == wanted) {
+                        print substr($i, length(wanted) + 2)
+                        exit
+                    }
+                }
+            }
+        ' "${raw_file}"
+    }
+
+    phase_value_tcp() {
+        local raw_file="$1"
+        local phase="$2"
+        local key="$3"
+        awk -v wanted_phase="${phase}" -v wanted_key="${key}" '
+            $1 == wanted_phase {
+                for (i = 1; i <= NF; ++i) {
+                    split($i, pair, "=")
+                    if (pair[1] == wanted_key) {
+                        print substr($i, length(wanted_key) + 2)
+                        exit
+                    }
+                }
+            }
+        ' "${raw_file}"
+    }
+
+    run_tcp_formal_sample() {
+        local implementation="$1"
+        local run="$2"
+        local raw_file="$3"
+        local rc=0
+        if [[ "${implementation}" == "galay" ]]; then
+            if taskset -c "${BENCHMARK_CPU}" "${galay_bin}" >"${raw_file}" 2>&1; then
+                rc=0
+            else
+                rc=$?
+            fi
+        else
+            if taskset -c "${BENCHMARK_CPU}" "${asio_bin}" \
+                --clients 100 --workers 4 --size 256 --warmup 1 --duration 5 \
+                >"${raw_file}" 2>&1; then
+                rc=0
+            else
+                rc=$?
+            fi
+        fi
+
+        local status
+        status="$(value_for_tcp "${raw_file}" status)"
+        local valid=true
+        if [[ "${rc}" -ne 0 || "${status}" != "ok" ]]; then
+            valid=false
+        fi
+
+        local version backend coroutine scenario clients workers payload pipeline warmup duration
+        local client_sent client_received server_received server_sent
+        local settled_client_sent settled_client_received settled_server_received settled_server_sent
+        local client_pkt_s server_pkt_s client_loss_pct settled_client_loss_pct runtime_errors shutdown_errors
+        version="$(value_for_tcp "${raw_file}" version)"
+        backend="$(value_for_tcp "${raw_file}" backend)"
+        coroutine="$(value_for_tcp "${raw_file}" coroutine)"
+        scenario="$(value_for_tcp "${raw_file}" scenario)"
+        clients="$(value_for_tcp "${raw_file}" clients)"
+        workers="$(value_for_tcp "${raw_file}" workers)"
+        payload="$(value_for_tcp "${raw_file}" payload_bytes)"
+        pipeline="$(value_for_tcp "${raw_file}" pipeline)"
+        warmup="$(value_for_tcp "${raw_file}" warmup_s)"
+        duration="$(value_for_tcp "${raw_file}" duration_s)"
+        client_sent="$(phase_value_tcp "${raw_file}" measured client_sent)"
+        client_received="$(phase_value_tcp "${raw_file}" measured client_received)"
+        server_received="$(phase_value_tcp "${raw_file}" measured server_received)"
+        server_sent="$(phase_value_tcp "${raw_file}" measured server_sent)"
+        settled_client_sent="$(phase_value_tcp "${raw_file}" settled client_sent)"
+        settled_client_received="$(phase_value_tcp "${raw_file}" settled client_received)"
+        settled_server_received="$(phase_value_tcp "${raw_file}" settled server_received)"
+        settled_server_sent="$(phase_value_tcp "${raw_file}" settled server_sent)"
+        client_pkt_s="$(phase_value_tcp "${raw_file}" measured client_pkt_s)"
+        server_pkt_s="$(phase_value_tcp "${raw_file}" measured server_pkt_s)"
+        client_loss_pct="$(phase_value_tcp "${raw_file}" measured client_loss_pct)"
+        settled_client_loss_pct="$(phase_value_tcp "${raw_file}" settled settled_loss_pct)"
+        if [[ -z "${settled_client_loss_pct}" ]]; then
+            settled_client_loss_pct="$(phase_value_tcp "${raw_file}" settled client_loss_pct)"
+        fi
+        runtime_errors="$(phase_value_tcp "${raw_file}" measured runtime_errors)"
+        shutdown_errors="$(phase_value_tcp "${raw_file}" measured shutdown_errors)"
+
+        printf '%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n' \
+            "${implementation}" "${version:-unknown}" "${backend:-unknown}" "${coroutine:-unknown}" \
+            "${scenario:-tcp-echo}" "${clients:-100}" "${workers:-4}" "${payload:-256}" "${pipeline:-1}" \
+            "${warmup:-1}" "${duration:-5}" "${run}" "${client_sent:-0}" "${client_received:-0}" \
+            "${server_received:-0}" "${server_sent:-0}" "${settled_client_sent:-0}" \
+            "${settled_client_received:-0}" "${settled_server_received:-0}" "${settled_server_sent:-0}" \
+            "${client_pkt_s:-0}" "${server_pkt_s:-0}" "${client_loss_pct:-0}" \
+            "${settled_client_loss_pct:-0}" "${runtime_errors:-0}" "${shutdown_errors:-0}" \
+            "${status:-missing}" "${raw_file#${PROJECT_ROOT}/}" >>"${csv_file}"
+
+        printf '%s,%s,raw_file=%s\n' "${implementation}" "${run}" "${raw_file#${PROJECT_ROOT}/}" >>"${result_file}"
+        cat "${raw_file}" >>"${result_file}"
+        if [[ "${valid}" == true ]]; then
+            return 0
+        fi
+        return 1
+    }
+
+    printf 'benchmark_cpu=%s\n' "${BENCHMARK_CPU}" >>"${result_file}"
+    for run in $(seq 1 "${FORMAL_RUNS}"); do
+        log "  Galay TCP run ${run}/${FORMAL_RUNS}..."
+        if ! run_tcp_formal_sample galay "${run}" \
+            "${raw_dir}/galay_tcp_run${run}.txt"; then
+            failed_samples=$((failed_samples + 1))
+        fi
+        log "  Boost.Asio coroutine TCP run ${run}/${FORMAL_RUNS}..."
+        if ! run_tcp_formal_sample boost.asio "${run}" \
+            "${raw_dir}/boost_asio_coro_tcp_run${run}.txt"; then
+            failed_samples=$((failed_samples + 1))
+        fi
+    done
+
+    log "Boost.Asio 协程 TCP 对标结果已保存到: ${result_file}"
+    log "Boost.Asio 协程 TCP 对标 CSV 已保存到: ${csv_file}"
+    if [[ "${failed_samples}" -ne 0 ]]; then
+        log "正式 TCP 对标失败样本数: ${failed_samples}"
+        return 1
+    fi
 }
 
 # ==================== 结果汇总 ====================
 generate_summary() {
-    log_section "5. 生成测试报告"
+    log_section "6. 生成测试报告"
 
     local summary_file="${RESULT_DIR}/summary.txt"
 
@@ -290,12 +569,16 @@ generate_summary() {
             echo "策略对比: ${valid_runs}/${total_runs} 次成功"
         fi
 
-        # Crossbeam 对比统计
-        if [ -f "${RESULT_DIR}/crossbeam_comparison.jsonl" ]; then
-            local total_runs=$(wc -l < "${RESULT_DIR}/crossbeam_comparison.jsonl")
-            local galay_runs=$(grep -c '"language":"cpp"' "${RESULT_DIR}/crossbeam_comparison.jsonl" || echo 0)
-            local rust_runs=$(grep -c '"language":"rust"' "${RESULT_DIR}/crossbeam_comparison.jsonl" || echo 0)
-            echo "Crossbeam 对比: Galay=${galay_runs}, Rust=${rust_runs}"
+        # Boost.Asio 协程对标统计
+        if [ -f "${RESULT_DIR}/boost_asio_coro_comparison.txt" ]; then
+            local asio_runs=$(grep -c '^boost.asio,' "${RESULT_DIR}/boost_asio_coro_comparison.txt" || echo 0)
+            local galay_runs=$(grep -c '^galay,' "${RESULT_DIR}/boost_asio_coro_comparison.txt" || echo 0)
+            echo "Boost.Asio 协程 UDP 对标: Galay=${galay_runs}, Boost.Asio=${asio_runs}"
+        fi
+        if [ -f "${RESULT_DIR}/boost_asio_coro_tcp_comparison.txt" ]; then
+            local asio_tcp_runs=$(grep -c '^boost.asio,' "${RESULT_DIR}/boost_asio_coro_tcp_comparison.txt" || echo 0)
+            local galay_tcp_runs=$(grep -c '^galay,' "${RESULT_DIR}/boost_asio_coro_tcp_comparison.txt" || echo 0)
+            echo "Boost.Asio 协程 TCP 对标: Galay=${galay_tcp_runs}, Boost.Asio=${asio_tcp_runs}"
         fi
 
         echo ""
@@ -303,7 +586,7 @@ generate_summary() {
         echo "1. 运行 NUMA 感知测试: ${SCRIPT_DIR}/tencent_numa_test.sh"
         echo "2. 运行 perf 性能分析: ${SCRIPT_DIR}/tencent_perf_analysis.sh"
         echo "3. 使用 Python 脚本分析结果:"
-        echo "   python3 benchmark/cpp/kernel/compare/run_mpsc_paired.py --analyze ${RESULT_DIR}/*.jsonl"
+        echo "   解析 benchmark/cpp/kernel/compare/boost-asio-coro 的 measured 行并按中位数汇总"
         echo ""
 
     } > "${summary_file}"
@@ -329,10 +612,22 @@ main() {
     fi
 
     # 执行测试流程
+    local formal_status=0
     collect_system_info || log "系统信息收集失败"
-    run_standard_tests || log "标准测试失败"
-    run_strategy_comparison || log "策略对比失败"
-    run_crossbeam_comparison || log "Crossbeam 对比失败"
+    if [[ "${RUN_INTERNAL_TESTS}" == "1" ]]; then
+        run_standard_tests || log "标准测试失败"
+        run_strategy_comparison || log "策略对比失败"
+    else
+        log "RUN_INTERNAL_TESTS=0: 跳过内部 channel/策略矩阵"
+    fi
+    if ! run_boost_asio_comparison; then
+        log "Boost.Asio 协程 UDP 对标失败"
+        formal_status=1
+    fi
+    if ! run_boost_asio_tcp_comparison; then
+        log "Boost.Asio 协程 TCP 对标失败"
+        formal_status=1
+    fi
     generate_summary
 
     log_section "测试完成"
@@ -341,6 +636,7 @@ main() {
 
     echo ""
     echo "完整日志: ${LOG_FILE}"
+    return "${formal_status}"
 }
 
 # 运行主流程

@@ -49,14 +49,46 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     endif()
     set(CTEST_NAME "kernel.${SCENARIO_NAME}")
     add_test(NAME ${CTEST_NAME} COMMAND $<TARGET_FILE:${TEST_NAME}>)
-    set_tests_properties(${CTEST_NAME} PROPERTIES WORKING_DIRECTORY ${CMAKE_BINARY_DIR})
-    if(TEST_NAME MATCHES "^t[234]_tcp$")
-        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_tcp_test_port)
+    set_tests_properties(${CTEST_NAME} PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        LABELS "kernel;unit"
+    )
+    if(TEST_NAME STREQUAL "t2_tcp")
+        # t2 uses the legacy 8080 endpoint; the server/client pair in t3/t4
+        # uses 28080.  Keep these locks separate so independent tests can run
+        # concurrently without allowing same-port bind races.
+        set_tests_properties(${CTEST_NAME} PROPERTIES
+            RESOURCE_LOCK "galay_kernel_tcp_port_8080;galay_loopback_port_8080"
+        )
+    elseif(TEST_NAME MATCHES "^t[34]_tcp$")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_tcp_port_28080)
     elseif(TEST_NAME MATCHES "^t[567]_udp$")
         set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_udp_test_port)
+    elseif(TEST_NAME STREQUAL "t17_iov")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_port_9090)
+    elseif(TEST_NAME STREQUAL "t18_ringio" OR TEST_NAME STREQUAL "t29_iovborrow")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_port_9091)
+    elseif(TEST_NAME STREQUAL "t21_recvsend")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_port_19876)
+    elseif(TEST_NAME STREQUAL "t25_await")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_port_20030)
+    elseif(TEST_NAME STREQUAL "t56_seqawait")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_kernel_port_20063)
+    elseif(TEST_NAME STREQUAL "t119_seqxchg")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_loopback_port_19450)
+    elseif(TEST_NAME STREQUAL "t118_accfan")
+        set_tests_properties(${CTEST_NAME} PROPERTIES RESOURCE_LOCK galay_loopback_port_19447)
     endif()
     if(TEST_NAME STREQUAL "t156_mpsc_timeout_race")
         # 该回归刻意覆盖内联唤醒重入 close；协议退化时必须有界失败而非挂住 CI。
-        set_tests_properties(${CTEST_NAME} PROPERTIES TIMEOUT 30)
+        set_tests_properties(${CTEST_NAME} PROPERTIES
+            TIMEOUT 45
+            PROCESSORS 2
+        )
+    elseif(TEST_NAME STREQUAL "t173_mpmc_unbounded_single_publish_wakeup")
+        set_tests_properties(${CTEST_NAME} PROPERTIES
+            TIMEOUT 45
+            PROCESSORS 2
+        )
     endif()
 endforeach()

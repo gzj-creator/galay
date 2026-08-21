@@ -1,0 +1,19 @@
+TCP Socket Fair Throughput Benchmark
+TCP server workers started on 127.0.0.1:{} 9091
+
+========== TCP Benchmark Results ==========
+Test Duration: {:.2f} seconds 5.00022
+Concurrent Clients: {} 100
+Ready Clients: {} 100
+Server Workers: {} 4
+Message Size: {} bytes 256
+Measurement window client: sent={} ({:.2f} pkt/s), received={} ({:.2f} pkt/s) 21539 4307.61 21440 4287.81
+Measurement window server: received={} ({:.2f} pkt/s), sent={} ({:.2f} pkt/s) 21500 4299.81 21500 4299.81
+Settled measured packets: client_sent={} client_received={} server_received={} server_sent={} loss={:.6f}% 21540 21540 21540 21540 0
+Errors: runtime={} shutdown={} 0 0
+===========================================
+
+meta implementation=galay version=current coroutine=galay::Task scenario=tcp-echo backend=epoll clients=100 workers=4 payload_bytes=256 pipeline=1 warmup_s=1 duration_s=5 ready_clients=100 server_connections=100
+measured client_sent=21539 client_received=21440 client_bytes_sent=5513984 client_bytes_received=5488640 server_received=21500 server_sent=21500 server_bytes_received=5504000 server_bytes_sent=5504000 measurement_ms=5000 client_pkt_s=4307.61 server_pkt_s=4299.81 client_loss_pct=0.459631 runtime_errors=0 shutdown_errors=0
+settled client_sent=21540 client_received=21540 client_bytes_sent=5514240 client_bytes_received=5514240 server_received=21540 server_sent=21540 server_bytes_received=5514240 server_bytes_sent=5514240 elapsed_ms=5000 client_loss_pct=0 settled_loss_pct=0 runtime_errors=0 shutdown_errors=0
+status=ok

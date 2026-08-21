@@ -26,8 +26,9 @@ cat << 'EOF'
   tencent_full_test.sh
   ├─ 系统信息收集 (CPU/内存/NUMA拓扑)
   ├─ 标准性能测试 (1P-64P, 多容量配置)
-  ├─ 策略对比 (fair/balanced/throughput)
-  ├─ Crossbeam对比 (C++ vs Rust)
+  ├─ 内部策略验证 (fair/balanced/throughput)
+  ├─ Boost.Asio 协程 UDP 公平对标 (Galay vs Boost.Asio)
+  ├─ Boost.Asio 协程 TCP 公平对标 (Galay vs Boost.Asio)
   └─ 自动生成汇总报告
 
   tencent_numa_test.sh

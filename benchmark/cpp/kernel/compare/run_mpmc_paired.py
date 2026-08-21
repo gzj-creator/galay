@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Run paired Galay C++ and Rust Crossbeam MPMC benchmarks."""
+# Historical/internal-only fixture. Not a formal competitor baseline; see docs/cpp/modules/kernel/05-性能测试.md.
+"""Run the historical/internal Galay and Rust Crossbeam MPMC fixture."""
 
 from __future__ import annotations
 

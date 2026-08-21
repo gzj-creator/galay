@@ -1,3 +1,4 @@
+// Historical/internal-only fixture. Not a formal competitor baseline; see docs/cpp/modules/kernel/05-性能测试.md.
 /**
  * @file mpsc_paired.cc
  * @brief 与 Rust Crossbeam 使用同一协议测量 bounded/unbounded MPSC。

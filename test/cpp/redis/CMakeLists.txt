@@ -50,6 +50,8 @@ function(add_redis_test source_file)
         set_tests_properties("${test_name}" PROPERTIES
             LABELS "redis;integration;requires-redis"
             SKIP_RETURN_CODE ${GALAY_REDIS_TEST_SKIP_RETURN_CODE}
+            RESOURCE_LOCK galay_redis_integration
+            TIMEOUT 210
         )
     else()
         set_tests_properties("${test_name}" PROPERTIES LABELS "redis;unit")

@@ -39,7 +39,7 @@ b1 输出包含：
 - `Request latency p50/p99`（单次请求/批次调用延迟）
 - `Alloc calls/op`、`Alloc bytes/op`（仅在 `--track-alloc` 时输出）
 
-## 控制变量建议（跨语言公平对比）
+## 控制变量建议（内部回归）
 
 1. timeout 两边要么都开、要么都关（推荐统一关闭：`--timeout-ms -1`）。  
 2. buffer size 一致（例如统一 `32768` 或统一 `65536`）。  
@@ -62,7 +62,11 @@ b1 输出包含：
   --timeout-ms -1 --buffer-size 32768 --track-alloc -q
 ```
 
-## Rust 对齐基准
+## 历史 Rust 对齐资料
+
+该入口不是正式竞品基线，也不参与当前性能排名。正式外部对标只采用
+Boost.Asio C++ 协程；Redis 当前没有同 workload 的 Asio 协程协议 harness，状态为
+`not_applicable`。
 
 Rust 同机同参对齐工具在 `benchmark/compare/rust/`：
 

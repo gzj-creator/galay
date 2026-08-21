@@ -12,6 +12,10 @@ include(cmake/dependencies.cmake)
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
+# Keep an unbounded test from stalling a normal ctest run.  Individual tests
+# with a legitimate longer budget set their own TIMEOUT property.
+set(DART_TESTING_TIMEOUT "${GALAY_CTEST_DEFAULT_TIMEOUT}" CACHE STRING
+    "Maximum time allowed before CTest kills a test" FORCE)
 include(CTest)
 
 file(MAKE_DIRECTORY ${CMAKE_BINARY_DIR}/include/galay)

@@ -39,6 +39,19 @@ foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)
     endif()
     add_test(NAME "c.kernel.${scenario_name}" COMMAND ${target_name})
     set_tests_properties("c.kernel.${scenario_name}" PROPERTIES LABELS "c;kernel;unit")
+    if(source_name STREQUAL "t15_async_waiter")
+        # This legacy race loop is intentionally long; account for its runtime
+        # and two active threads while keeping a finite CTest failure budget.
+        set_tests_properties("c.kernel.${scenario_name}" PROPERTIES
+            TIMEOUT 45
+            PROCESSORS 2
+        )
+    elseif(source_name STREQUAL "t14_async_mutex")
+        set_tests_properties("c.kernel.${scenario_name}" PROPERTIES
+            TIMEOUT 20
+            PROCESSORS 2
+        )
+    endif()
     if(source_name IN_LIST GALAY_C_KERNEL_SOCKET_TESTS)
         set_tests_properties("c.kernel.${scenario_name}" PROPERTIES SKIP_RETURN_CODE 125)
     endif()
