@@ -47,7 +47,8 @@ constexpr std::size_t kDefaultPayloadBytes = 256;
 constexpr std::chrono::seconds kDefaultWarmup{1};
 constexpr std::chrono::seconds kDefaultDuration{5};
 constexpr std::chrono::milliseconds kDrainWindow{250};
-constexpr std::chrono::milliseconds kServerReceiveTimeout{100};
+constexpr std::chrono::milliseconds kServerReceiveTimeout{10};
+constexpr std::chrono::milliseconds kClientReceiveTimeout{10};
 constexpr std::size_t kPipeline = 1;
 constexpr std::size_t kMaxPayloadBytes = 65'000;
 constexpr std::uint16_t kServerPort = 9090;
@@ -390,7 +391,7 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
             if (measured_received >= measured_sent) break;
             const ReceiveResult result = co_await receiveWithTimeout(
                 socket, asio::buffer(response.data(), state.config.payload_bytes),
-                std::chrono::milliseconds(50));
+                kClientReceiveTimeout);
             if (result.timed_out) continue;
             if (result.error) {
                 recordError(state, result.error);
@@ -428,7 +429,7 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
 
             const ReceiveResult result = co_await receiveWithTimeout(
                 socket, asio::buffer(response.data(), state.config.payload_bytes),
-                std::chrono::milliseconds(50));
+                kClientReceiveTimeout);
             // parallel_group cancels the receive when its timer wins. That
             // operation_aborted is the expected representation of a timeout,
             // not a benchmark shutdown error.

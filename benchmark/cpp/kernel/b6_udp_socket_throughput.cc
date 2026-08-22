@@ -55,9 +55,9 @@ constexpr int MESSAGE_SIZE = 256;          // 消息大小（字节）- 与TCP�
 constexpr int WARMUP_DURATION_SEC = 1;     // 正式计时前的稳定运行窗口
 constexpr int TEST_DURATION_SEC = 5;       // 测试持续时间（秒）
 constexpr int NUM_SERVER_WORKERS = 4;      // 服务器工作协程数量
-constexpr auto CLIENT_RECV_TIMEOUT = std::chrono::milliseconds(50);
+constexpr auto CLIENT_RECV_TIMEOUT = std::chrono::milliseconds(10);
 constexpr auto CLIENT_DRAIN_TIMEOUT = std::chrono::milliseconds(250);
-constexpr auto SERVER_RECV_TIMEOUT = std::chrono::milliseconds(100);
+constexpr auto SERVER_RECV_TIMEOUT = std::chrono::milliseconds(10);
 
 enum class Phase : uint8_t {
     warmup,

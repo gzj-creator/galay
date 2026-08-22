@@ -45,6 +45,7 @@ constexpr auto kWarmup = std::chrono::seconds(1);
 constexpr auto kDuration = std::chrono::seconds(5);
 constexpr auto kDrain = std::chrono::milliseconds(250);
 constexpr auto kAcceptTimeout = std::chrono::milliseconds(100);
+constexpr auto kRecvTimeout = std::chrono::milliseconds(10);
 constexpr char kWarmupMarker = 'W';
 constexpr char kMeasuredMarker = 'M';
 
@@ -79,6 +80,7 @@ std::atomic<std::uint64_t> g_server_bytes_received{0};
 std::atomic<std::uint64_t> g_server_bytes_sent{0};
 std::atomic<std::uint64_t> g_runtime_errors{0};
 std::atomic<std::uint64_t> g_shutdown_errors{0};
+std::atomic<std::uint64_t> g_recv_timeouts{0};
 std::atomic<std::uint32_t> g_client_ready{0};
 std::atomic<std::uint32_t> g_client_failed{0};
 std::atomic<std::uint32_t> g_server_ready{0};
@@ -252,8 +254,13 @@ Task<void> tcpServerConnection(AsyncTcpSocket client, std::size_t connection_id)
 
     std::array<char, kPayloadBytes> buffer{};
     while (g_phase.load(std::memory_order_acquire) != Phase::stopped) {
-        auto read_result = co_await readExact(client, buffer.data(), buffer.size());
+        auto read_result = co_await readExact(client, buffer.data(), buffer.size())
+                                      .timeout(kRecvTimeout);
         if (!read_result) {
+            if (IOError::contains(read_result.error().code(), kTimeout)) {
+                g_recv_timeouts.fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
             recordError(read_result.error().code());
             break;
         }
@@ -430,8 +437,13 @@ Task<void> tcpBenchmarkClient(int client_id)
             while (measured_received < measured_sent &&
                    g_phase.load(std::memory_order_acquire) != Phase::stopped) {
                 auto receive_result = co_await readExact(
-                    client, response.data(), response.size());
+                    client, response.data(), response.size())
+                    .timeout(kRecvTimeout);
                 if (!receive_result) {
+                    if (IOError::contains(receive_result.error().code(), kTimeout)) {
+                        g_recv_timeouts.fetch_add(1, std::memory_order_relaxed);
+                        continue;
+                    }
                     recordError(receive_result.error().code());
                     break;
                 }
@@ -457,8 +469,13 @@ Task<void> tcpBenchmarkClient(int client_id)
             addCounter(g_client_bytes_sent, payload.size());
         }
 
-        auto receive_result = co_await readExact(client, response.data(), response.size());
+        auto receive_result = co_await readExact(client, response.data(), response.size())
+                                         .timeout(kRecvTimeout);
         if (!receive_result) {
+            if (IOError::contains(receive_result.error().code(), kTimeout)) {
+                g_recv_timeouts.fetch_add(1, std::memory_order_relaxed);
+                continue;
+            }
             recordError(receive_result.error().code());
             break;
         }
@@ -519,6 +536,8 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point started,
               << " pipeline=1 warmup_s=1 duration_s=5"
               << " ready_clients=" << g_client_ready.load(std::memory_order_acquire)
               << " server_connections=" << g_server_connections_started.load(std::memory_order_acquire)
+              << " recv_timeout_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(kRecvTimeout).count()
+              << " recv_timeouts=" << g_recv_timeouts.load(std::memory_order_relaxed)
               << '\n';
     std::cout << "measured client_sent=" << measured.client_sent
               << " client_received=" << measured.client_received

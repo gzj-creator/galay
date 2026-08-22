@@ -8,7 +8,9 @@
  * flight per client, and identical warmup/measurement/drain phases.
  */
 
+#include <utility>
 #include <boost/asio.hpp>
+#include <boost/asio/experimental/parallel_group.hpp>
 
 #include <array>
 #include <atomic>
@@ -33,6 +35,7 @@ using asio::detached;
 using asio::redirect_error;
 using asio::use_awaitable;
 using asio::ip::tcp;
+namespace asio_experimental = boost::asio::experimental;
 
 namespace {
 
@@ -43,6 +46,7 @@ constexpr std::uint16_t kServerPort = 9091;
 constexpr std::chrono::seconds kDefaultWarmup{1};
 constexpr std::chrono::seconds kDefaultDuration{5};
 constexpr std::chrono::milliseconds kDrainWindow{250};
+constexpr std::chrono::milliseconds kRecvTimeout{10};
 constexpr char kWarmupMarker = 'W';
 constexpr char kMeasuredMarker = 'M';
 constexpr std::size_t kPipeline = 1;
@@ -68,6 +72,7 @@ struct Counters {
     std::atomic<std::uint64_t> server_bytes_sent{0};
     std::atomic<std::uint64_t> runtime_errors{0};
     std::atomic<std::uint64_t> shutdown_errors{0};
+    std::atomic<std::uint64_t> recv_timeouts{0};
     std::atomic<std::size_t> clients_ready{0};
     std::atomic<std::size_t> clients_failed{0};
     std::atomic<std::size_t> clients_done{0};
@@ -266,13 +271,48 @@ awaitable<bool> writeAll(tcp::socket& socket, asio::const_buffer buffer)
     co_return !error && bytes == buffer.size();
 }
 
+struct ExactReadOutcome {
+    bool ok = false;
+    bool timed_out = false;
+};
+
+// Same race shape as receiveWithTimeout in the UDP baseline: a steady_timer
+// armed per read; wait_for_one() cancels the loser and operation_aborted is
+// the timeout representation.
+awaitable<ExactReadOutcome> readExactWithTimeout(tcp::socket& socket,
+                                                 asio::mutable_buffer buffer)
+{
+    asio::steady_timer timer(co_await asio::this_coro::executor);
+    timer.expires_after(kRecvTimeout);
+    boost::system::error_code read_error;
+    boost::system::error_code timer_error;
+    const auto [order, bytes] = co_await asio_experimental::make_parallel_group(
+        [&socket, buffer, &read_error](auto token) {
+            return asio::async_read(socket, buffer,
+                                    redirect_error(token, read_error));
+        },
+        [&timer, &timer_error](auto token) {
+            return timer.async_wait(redirect_error(token, timer_error));
+        }).async_wait(asio_experimental::wait_for_one(), use_awaitable);
+
+    if (order[0] == 1 && !timer_error) {
+        co_return ExactReadOutcome{.ok = false, .timed_out = true};
+    }
+    co_return ExactReadOutcome{.ok = !read_error && bytes == buffer.size(),
+                               .timed_out = false};
+}
+
 awaitable<void> serverConnection(BenchmarkState& state, tcp::socket& socket)
 {
     std::vector<char> buffer(state.config.payload_bytes);
     while (state.phase.load(std::memory_order_acquire) != Phase::stopped) {
-        const bool read_ok = co_await readExact(
+        const ExactReadOutcome read_outcome = co_await readExactWithTimeout(
             socket, asio::buffer(buffer.data(), buffer.size()));
-        if (!read_ok) break;
+        if (read_outcome.timed_out) {
+            state.counters.recv_timeouts.fetch_add(1, std::memory_order_relaxed);
+            continue;
+        }
+        if (!read_outcome.ok) break;
 
         const bool measured_frame = buffer[0] == kMeasuredMarker;
         if (measured_frame && countTraffic(state.phase.load(std::memory_order_acquire))) {
@@ -355,9 +395,14 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
         if (phase == Phase::drain) {
             while (measured_received < measured_sent &&
                    state.phase.load(std::memory_order_acquire) != Phase::stopped) {
-                if (!co_await readExact(
-                        client_socket,
-                        asio::buffer(response.data(), response.size()))) {
+                const ExactReadOutcome outcome = co_await readExactWithTimeout(
+                    client_socket,
+                    asio::buffer(response.data(), response.size()));
+                if (outcome.timed_out) {
+                    state.counters.recv_timeouts.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
+                if (!outcome.ok) {
                     break;
                 }
                 if (response[0] == kMeasuredMarker) {
@@ -383,8 +428,13 @@ awaitable<void> client(BenchmarkState& state, std::size_t client_id)
             addCounter(state.counters.client_bytes_sent, payload.size());
         }
 
-        if (!co_await readExact(client_socket,
-                               asio::buffer(response.data(), response.size()))) {
+        const ExactReadOutcome outcome = co_await readExactWithTimeout(
+            client_socket, asio::buffer(response.data(), response.size()));
+        if (outcome.timed_out) {
+            state.counters.recv_timeouts.fetch_add(1, std::memory_order_relaxed);
+            continue;
+        }
+        if (!outcome.ok) {
             if (state.phase.load(std::memory_order_acquire) < Phase::drain) {
                 addCounter(state.counters.runtime_errors);
             }
@@ -586,6 +636,8 @@ int main(int argc, char** argv)
               << " pipeline=" << kPipeline
               << " warmup_s=" << config.warmup.count()
               << " duration_s=" << config.duration.count()
+              << " recv_timeout_ms=" << kRecvTimeout.count()
+              << " recv_timeouts=" << state.counters.recv_timeouts.load(std::memory_order_relaxed)
               << " ready_clients=" << state.counters.clients_ready.load(std::memory_order_acquire)
               << " server_connections=" << state.counters.connections_started.load(std::memory_order_acquire)
               << '\n';

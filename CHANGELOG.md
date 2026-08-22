@@ -13,6 +13,9 @@
 
 ### Added
 
+- **TCP 公平对标读路径接入 10ms 接收超时**：galay `b31` 三处 `readExact` 改用 `.timeout(10ms)` 并按超时计数重试；Boost.Asio TCP baseline 新增 `parallel_group`+`steady_timer` 竞速版 `readExactWithTimeout`，两侧策略严格对称。meta 输出新增 `recv_timeout_ms` 与 `recv_timeouts` 字段以暴露超时触发率。
+- **Awaitable Timeout 压测后优化计划 Task D**：计划文档新增 D1（削减挂起路径 per-op 定时器注册成本，目标 @100ms 形态损耗 ≤8%）与 D2（定位饱和负载下 >10ms 事件分派停顿，目标触发率 ≤1%），并明确重试型超时压测结论在 D2 收敛前不得归档为正式证据。
+
 - **惰性 TimeoutTimer 与 ready 路径零分配**：`WithTimeout` 改为在 `await_suspend` 中惰性创建 `TimeoutTimer`，`await_ready()` 为真的路径完全不分配定时器；ready 快路径吞吐约 24M ops/s，是 eager timer 创建路径的 4 倍。
 - **显式 TimeoutPolicy 模板策略**：新增 `TimeoutSupport<Derived, TimeoutPolicy>` 与 `WithTimeout<Awaitable, TimeoutPolicy>` 双模板参数，新 awaitable 可通过 `Policy::inject()` 与 `ownsIoRegistration()` 自定义超时注入行为，编译期内联无虚函数开销。
 - **ForwardingAwaitable CRTP/owning 双形式**：统一 facade 的 `await_ready`/`await_suspend`/`await_resume`/`markTimeout` 转发，已收口 RPC、MySQL、PostgreSQL、Redis 全部协议 facade，消除复制粘贴样板。
@@ -20,6 +23,8 @@
 - **TimeoutReadyPath 基准测试**：新增 `b33_timeout_ready_path.cc`，对比 ready 快路径与 eager timer 创建的固定开销。
 
 ### Changed
+
+- **UDP 公平对标收发超时统一为 10ms**：galay `b6` 客户端/服务端接收超时由 50ms/100ms 收敛为 10ms；Boost.Asio UDP baseline 服务端 `kServerReceiveTimeout` 与客户端硬编码超时同步收敛，消除双侧口径不一致。
 
 - **TimeoutTimer 完成状态机收窄为唯一 Completion 原子操作**：`timeouted()` 改为直接读取 `m_completion == kTimeoutWon`，移除冗余 `m_flag | kTimeout` 写入；所有 `seq_cst` 内存序收窄为 `acq_rel`/`acquire`。
 - **awaitableStillOwnsIORegistration 增加显式定制点**：优先检测 `ownsIoRegistration()` 方法，fallback 到 `m_controller` 指针比较，新 awaitable 可精确声明 IO 注册归属。
