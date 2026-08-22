@@ -146,6 +146,7 @@ void benchTimeoutCompletionWins()
         char buffer = 0;
         IOController controller(GHandle{.fd = -1});
         auto awaitable = makeTimedRecv(controller, &buffer);
+        awaitable.ensureTimer();
 
         if (!controller.fillAwaitable(RECV, &awaitable.m_inner)) {
             throw std::runtime_error("failed to fill recv awaitable");
@@ -177,6 +178,7 @@ void benchTimeoutWins()
         char buffer = 0;
         IOController controller(GHandle{.fd = -1});
         auto awaitable = makeTimedRecv(controller, &buffer);
+        awaitable.ensureTimer();
 
         if (!controller.fillAwaitable(RECV, &awaitable.m_inner)) {
             throw std::runtime_error("failed to fill recv awaitable");

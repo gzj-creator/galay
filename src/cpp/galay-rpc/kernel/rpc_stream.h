@@ -751,9 +751,12 @@ private:
  * @brief 流数据发送等待体
  */
 template<typename SocketType>
-class SendStreamDataAwaitable : public TimeoutSupport<SendStreamDataAwaitable<SocketType>>
+class SendStreamDataAwaitable
+    : public ForwardingAwaitable<SendStreamDataAwaitable<SocketType>>
+    , public TimeoutSupport<SendStreamDataAwaitable<SocketType>>
 {
 public:
+    friend class ForwardingAwaitable<SendStreamDataAwaitable<SocketType>>;
     using Result = detail::RpcAwaitableResult;
 
     SendStreamDataAwaitable(SocketType& socket, std::shared_ptr<detail::StreamFrameWriteState> state)
@@ -770,20 +773,13 @@ public:
     SendStreamDataAwaitable(const SendStreamDataAwaitable&) = delete;
     SendStreamDataAwaitable& operator=(const SendStreamDataAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcWritevMachine<detail::StreamFrameWriteState>>;
 
     std::shared_ptr<detail::StreamFrameWriteState> m_state;
+
+private:
     InnerAwaitable m_inner;
 };
 
@@ -791,9 +787,12 @@ private:
  * @brief 流消息接收等待体
  */
 template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-class GetStreamMessageAwaitable : public TimeoutSupport<GetStreamMessageAwaitable<SocketType, Strategy>>
+class GetStreamMessageAwaitable
+    : public ForwardingAwaitable<GetStreamMessageAwaitable<SocketType, Strategy>>
+    , public TimeoutSupport<GetStreamMessageAwaitable<SocketType, Strategy>>
 {
 public:
+    friend class ForwardingAwaitable<GetStreamMessageAwaitable<SocketType, Strategy>>;
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::StreamMessageReadState<Strategy>;
 
@@ -814,20 +813,13 @@ public:
     GetStreamMessageAwaitable(const GetStreamMessageAwaitable&) = delete;
     GetStreamMessageAwaitable& operator=(const GetStreamMessageAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
     std::shared_ptr<ReadState> m_state;
+
+private:
     InnerAwaitable m_inner;
 };
 

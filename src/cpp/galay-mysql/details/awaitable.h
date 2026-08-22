@@ -14,8 +14,11 @@ namespace galay::mysql::details
  */
 template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlConnectAwaitable
+    : public galay::kernel::ForwardingAwaitable<MysqlConnectAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<MysqlConnectAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<MysqlConnectAwaitable<Strategy>>;
     using Result = std::expected<std::optional<bool>, MysqlError>;
 
     /**
@@ -28,19 +31,6 @@ public:
     MysqlConnectAwaitable& operator=(MysqlConnectAwaitable&&) noexcept = default;
     MysqlConnectAwaitable(const MysqlConnectAwaitable&) = delete;
     MysqlConnectAwaitable& operator=(const MysqlConnectAwaitable&) = delete;
-
-    bool await_ready() { return m_inner.await_ready(); } ///< 检查是否已完成
-    /**
-     * @brief 挂起协程，等待连接完成
-     * @param handle 协程句柄
-     * @return 是否需要挂起
-     */
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); } ///< 获取连接结果
 
     /**
      * @brief 检查等待体是否无效（未正确初始化）
@@ -129,6 +119,8 @@ private:
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>; ///< 内部状态机等待体类型
 
     std::shared_ptr<SharedState> m_state; ///< 共享状态
+
+private:
     InnerAwaitable m_inner;                ///< 内部等待体
 };
 
@@ -141,9 +133,11 @@ private:
  */
 template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlQueryAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlQueryAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<MysqlQueryAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<MysqlQueryAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<MysqlQueryAwaitable<Strategy>>;
     using Result = std::expected<std::optional<MysqlResultSet>, MysqlError>; ///< 查询结果类型
 
     /**
@@ -156,15 +150,6 @@ public:
     MysqlQueryAwaitable& operator=(MysqlQueryAwaitable&&) noexcept = default;
     MysqlQueryAwaitable(const MysqlQueryAwaitable&) = delete;
     MysqlQueryAwaitable& operator=(const MysqlQueryAwaitable&) = delete;
-
-    bool await_ready() { return m_inner.await_ready(); } ///< 检查是否已完成
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) ///< 挂起协程
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); } ///< 获取查询结果
-    void markTimeout() { m_inner.markTimeout(); }             ///< 标记超时
 
     bool isInvalid() const; ///< 检查等待体是否无效
 
@@ -228,6 +213,8 @@ private:
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>; ///< 内部状态机等待体类型
 
     std::shared_ptr<SharedState> m_state; ///< 共享状态
+
+private:
     InnerAwaitable m_inner;                ///< 内部等待体
 };
 
@@ -239,9 +226,11 @@ private:
  */
 template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlPrepareAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlPrepareAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<MysqlPrepareAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<MysqlPrepareAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<MysqlPrepareAwaitable<Strategy>>;
     /**
      * @brief 预处理语句结果
      */
@@ -301,15 +290,6 @@ public:
     MysqlPrepareAwaitable& operator=(MysqlPrepareAwaitable&&) noexcept = default;
     MysqlPrepareAwaitable(const MysqlPrepareAwaitable&) = delete;
     MysqlPrepareAwaitable& operator=(const MysqlPrepareAwaitable&) = delete;
-
-    bool await_ready() { return m_inner.await_ready(); } ///< 检查是否已完成
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) ///< 挂起协程
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); } ///< 获取准备结果
-    void markTimeout() { m_inner.markTimeout(); }              ///< 标记超时
 
     bool isInvalid() const; ///< 检查等待体是否无效
 
@@ -374,6 +354,8 @@ private:
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>; ///< 内部状态机等待体类型
 
     std::shared_ptr<SharedState> m_state; ///< 共享状态
+
+private:
     InnerAwaitable m_inner;                ///< 内部等待体
 };
 
@@ -385,9 +367,11 @@ private:
  */
 template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlStmtExecuteAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlStmtExecuteAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<MysqlStmtExecuteAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<MysqlStmtExecuteAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<MysqlStmtExecuteAwaitable<Strategy>>;
     using Result = std::expected<std::optional<MysqlResultSet>, MysqlError>; ///< 执行结果类型
 
     /**
@@ -400,15 +384,6 @@ public:
     MysqlStmtExecuteAwaitable& operator=(MysqlStmtExecuteAwaitable&&) noexcept = default;
     MysqlStmtExecuteAwaitable(const MysqlStmtExecuteAwaitable&) = delete;
     MysqlStmtExecuteAwaitable& operator=(const MysqlStmtExecuteAwaitable&) = delete;
-
-    bool await_ready() { return m_inner.await_ready(); } ///< 检查是否已完成
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) ///< 挂起协程
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); } ///< 获取执行结果
-    void markTimeout() { m_inner.markTimeout(); }              ///< 标记超时
 
     bool isInvalid() const; ///< 检查等待体是否无效
 
@@ -472,6 +447,8 @@ private:
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>; ///< 内部状态机等待体类型
 
     std::shared_ptr<SharedState> m_state; ///< 共享状态
+
+private:
     InnerAwaitable m_inner;                ///< 内部等待体
 };
 
@@ -483,9 +460,11 @@ private:
  */
 template<RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class MysqlPipelineAwaitable
-    : public galay::kernel::TimeoutSupport<MysqlPipelineAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<MysqlPipelineAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<MysqlPipelineAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<MysqlPipelineAwaitable<Strategy>>;
     using Result = std::expected<std::optional<std::vector<MysqlResultSet>>, MysqlError>; ///< 流水线结果类型
 
     /**
@@ -499,15 +478,6 @@ public:
     MysqlPipelineAwaitable& operator=(MysqlPipelineAwaitable&&) noexcept = default;
     MysqlPipelineAwaitable(const MysqlPipelineAwaitable&) = delete;
     MysqlPipelineAwaitable& operator=(const MysqlPipelineAwaitable&) = delete;
-
-    bool await_ready() { return m_inner.await_ready(); } ///< 检查是否已完成
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle) ///< 挂起协程
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); } ///< 获取流水线结果
-    void markTimeout() { m_inner.markTimeout(); }              ///< 标记超时
 
     bool isInvalid() const; ///< 检查等待体是否无效
 
@@ -590,6 +560,8 @@ private:
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>; ///< 内部状态机等待体类型
 
     std::shared_ptr<SharedState> m_state; ///< 共享状态
+
+private:
     InnerAwaitable m_inner;                ///< 内部等待体
 };
 

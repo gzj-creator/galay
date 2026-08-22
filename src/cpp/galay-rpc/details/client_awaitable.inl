@@ -75,33 +75,6 @@ RecvRpcResponseChainAwaitable<SocketType, Strategy>::RecvRpcResponseChainAwaitab
 {
 }
 
-template<typename SocketType, RingBufferBackendStrategy Strategy>
-bool RecvRpcResponseChainAwaitable<SocketType, Strategy>::await_ready()
-{
-    return m_inner.await_ready();
-}
-
-template<typename SocketType, RingBufferBackendStrategy Strategy>
-template<typename Promise>
-bool RecvRpcResponseChainAwaitable<SocketType, Strategy>::await_suspend(
-    std::coroutine_handle<Promise> handle)
-{
-    return m_inner.await_suspend(handle);
-}
-
-template<typename SocketType, RingBufferBackendStrategy Strategy>
-typename RecvRpcResponseChainAwaitable<SocketType, Strategy>::Result
-RecvRpcResponseChainAwaitable<SocketType, Strategy>::await_resume()
-{
-    return m_inner.await_resume();
-}
-
-template<typename SocketType, RingBufferBackendStrategy Strategy>
-void RecvRpcResponseChainAwaitable<SocketType, Strategy>::markTimeout()
-{
-    m_inner.markTimeout();
-}
-
 } // namespace galay::rpc
 
 #endif // GALAY_RPC_DETAILS_CLIENT_AWAITABLE_INL

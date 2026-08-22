@@ -106,7 +106,7 @@ namespace galay::kernel
          */
         bool push(Timer::ptr timer)
         {
-            if (!timer) {
+            if (!timer || timer->done() || timer->cancelled()) {
                 return false;
             }
 
@@ -282,8 +282,11 @@ namespace galay::kernel
             while (it != slot.end()) {
                 auto timer = *it;
 
-                // 第1层的定时器都应该到期，直接执行
-                timer->handleTimeout();
+                // 取消/已完成的 timer 仍可能由跨线程 cancel 留在槽中；
+                // 直接丢弃，避免再次进入虚调用和超时裁决热路径。
+                if (!timer->done() && !timer->cancelled()) {
+                    timer->handleTimeout();
+                }
 
                 it = slot.erase(it);
                 --m_size;

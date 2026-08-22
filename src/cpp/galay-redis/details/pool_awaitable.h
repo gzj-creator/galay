@@ -13,6 +13,7 @@ namespace galay::redis
     {
     public:
         using Result = RedisVoidResult;
+        static constexpr bool kAlwaysReady = true;
 
         PoolInitializeAwaitable(RedisConnectionPool& pool);
         PoolInitializeAwaitable(const PoolInitializeAwaitable&) = delete;
@@ -27,7 +28,6 @@ namespace galay::redis
             return false;
         }
         Result await_resume() { return std::move(m_result); }
-        void markTimeout() {}
 
     private:
         Result m_result;
@@ -101,9 +101,12 @@ namespace galay::redis
      * @brief Rediss 连接池初始化等待体
      * @details 用于协程中等待 Rediss 连接池初始化完成
      */
-    class RedissPoolInitializeAwaitable : public galay::kernel::TimeoutSupport<RedissPoolInitializeAwaitable>
+    class RedissPoolInitializeAwaitable
+        : public galay::kernel::ForwardingAwaitable<RedissPoolInitializeAwaitable>
+        , public galay::kernel::TimeoutSupport<RedissPoolInitializeAwaitable>
     {
     public:
+        friend class galay::kernel::ForwardingAwaitable<RedissPoolInitializeAwaitable>;
         using Result = RedisVoidResult;
 
         explicit RedissPoolInitializeAwaitable(RedissConnectionPool& pool);
@@ -111,15 +114,6 @@ namespace galay::redis
         RedissPoolInitializeAwaitable& operator=(const RedissPoolInitializeAwaitable&) = delete;
         RedissPoolInitializeAwaitable(RedissPoolInitializeAwaitable&&) noexcept = default;
         RedissPoolInitializeAwaitable& operator=(RedissPoolInitializeAwaitable&&) noexcept = default;
-
-        bool await_ready() { return m_inner.await_ready(); }
-        template <typename Promise>
-        bool await_suspend(std::coroutine_handle<Promise> handle)
-        {
-            return m_inner.await_suspend(handle);
-        }
-        Result await_resume() { return m_inner.await_resume(); }
-        void markTimeout() { m_inner.markTimeout(); }
 
     private:
         struct Flow
@@ -136,6 +130,8 @@ namespace galay::redis
 
         galay::kernel::IOController m_controller{GHandle::invalid()};
         std::unique_ptr<Flow> m_flow;
+
+    private:
         InnerAwaitable m_inner;
     };
 

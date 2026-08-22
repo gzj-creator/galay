@@ -13,9 +13,11 @@ namespace galay::postgres::details
 
 template<RingBufferBackendStrategy Strategy>
 class PostgresConnectAwaitable
-    : public galay::kernel::TimeoutSupport<PostgresConnectAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<PostgresConnectAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<PostgresConnectAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<PostgresConnectAwaitable<Strategy>>;
     using Result = std::expected<std::optional<bool>, PostgresError>;
 
     PostgresConnectAwaitable(AsyncPostgresClient<Strategy>& client, PostgresConfig config);
@@ -24,14 +26,6 @@ public:
     PostgresConnectAwaitable(const PostgresConnectAwaitable&) = delete;
     PostgresConnectAwaitable& operator=(const PostgresConnectAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template<typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
     [[nodiscard]] bool isInvalid() const;
 
 private:
@@ -102,14 +96,18 @@ private:
 
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>;
     std::shared_ptr<SharedState> m_state;
+
+private:
     InnerAwaitable m_inner;
 };
 
 template<RingBufferBackendStrategy Strategy>
 class PostgresQueryAwaitable
-    : public galay::kernel::TimeoutSupport<PostgresQueryAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<PostgresQueryAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<PostgresQueryAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<PostgresQueryAwaitable<Strategy>>;
     using Result = std::expected<std::optional<PostgresResultSet>, PostgresError>;
 
     PostgresQueryAwaitable(AsyncPostgresClient<Strategy>& client, std::string_view sql);
@@ -118,14 +116,6 @@ public:
     PostgresQueryAwaitable(const PostgresQueryAwaitable&) = delete;
     PostgresQueryAwaitable& operator=(const PostgresQueryAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template<typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
     [[nodiscard]] bool isInvalid() const;
 
 private:
@@ -169,14 +159,18 @@ private:
 
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>;
     std::shared_ptr<SharedState> m_state;
+
+private:
     InnerAwaitable m_inner;
 };
 
 template<RingBufferBackendStrategy Strategy>
 class PostgresPrepareAwaitable
-    : public galay::kernel::TimeoutSupport<PostgresPrepareAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<PostgresPrepareAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<PostgresPrepareAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<PostgresPrepareAwaitable<Strategy>>;
     struct PrepareResult
     {
         PrepareResult() = default;
@@ -204,14 +198,6 @@ public:
     PostgresPrepareAwaitable(const PostgresPrepareAwaitable&) = delete;
     PostgresPrepareAwaitable& operator=(const PostgresPrepareAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template<typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
     [[nodiscard]] bool isInvalid() const;
 
 private:
@@ -258,14 +244,18 @@ private:
 
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>;
     std::shared_ptr<SharedState> m_state;
+
+private:
     InnerAwaitable m_inner;
 };
 
 template<RingBufferBackendStrategy Strategy>
 class PostgresExecuteAwaitable
-    : public galay::kernel::TimeoutSupport<PostgresExecuteAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<PostgresExecuteAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<PostgresExecuteAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<PostgresExecuteAwaitable<Strategy>>;
     using Result = std::expected<std::optional<PostgresResultSet>, PostgresError>;
 
     PostgresExecuteAwaitable(AsyncPostgresClient<Strategy>& client,
@@ -276,14 +266,6 @@ public:
     PostgresExecuteAwaitable(const PostgresExecuteAwaitable&) = delete;
     PostgresExecuteAwaitable& operator=(const PostgresExecuteAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template<typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
     [[nodiscard]] bool isInvalid() const;
 
 private:
@@ -329,14 +311,18 @@ private:
 
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>;
     std::shared_ptr<SharedState> m_state;
+
+private:
     InnerAwaitable m_inner;
 };
 
 template<RingBufferBackendStrategy Strategy>
 class PostgresPipelineAwaitable
-    : public galay::kernel::TimeoutSupport<PostgresPipelineAwaitable<Strategy>>
+    : public galay::kernel::ForwardingAwaitable<PostgresPipelineAwaitable<Strategy>>
+    , public galay::kernel::TimeoutSupport<PostgresPipelineAwaitable<Strategy>>
 {
 public:
+    friend class galay::kernel::ForwardingAwaitable<PostgresPipelineAwaitable<Strategy>>;
     using Result = std::expected<std::optional<std::vector<PostgresResultSet>>, PostgresError>;
 
     PostgresPipelineAwaitable(AsyncPostgresClient<Strategy>& client,
@@ -346,14 +332,6 @@ public:
     PostgresPipelineAwaitable(const PostgresPipelineAwaitable&) = delete;
     PostgresPipelineAwaitable& operator=(const PostgresPipelineAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template<typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
     [[nodiscard]] bool isInvalid() const;
 
 private:
@@ -401,6 +379,8 @@ private:
 
     using InnerAwaitable = galay::kernel::StateMachineAwaitable<Machine>;
     std::shared_ptr<SharedState> m_state;
+
+private:
     InnerAwaitable m_inner;
 };
 

@@ -63,6 +63,55 @@ concept AwaitableWith = Awaitable<T> && requires(T t, std::coroutine_handle<Prom
     t.await_suspend(handle);
 };
 
+/**
+ * @brief 匹配恒不挂起的等待器的概念
+ * @tparam T 要检查的类型
+ * @details 当 T 声明 `static constexpr bool kAlwaysReady = true;` 时满足。
+ *          恒不挂起的等待器不可能发生超时注入（ready 路径不触发注入），
+ *          因此即使没有注入通道也允许搭配 `.timeout()` 使用。
+ */
+template <typename T>
+concept AlwaysReadyAwaitable =
+    requires {
+        { T::kAlwaysReady } -> std::convertible_to<bool>;
+    } && bool{T::kAlwaysReady};
+
+/**
+ * @brief 显式超时结果注入定制点。
+ *
+ * `setTimeout()` is useful for awaitables whose result is kept in private
+ * state, where exposing an `m_result` member would weaken the abstraction.
+ */
+template <typename T>
+concept TimeoutSettable = requires(T& value) {
+    value.setTimeout();
+};
+
+/**
+ * @brief awaitable exposes a direct timeout marker.
+ */
+template <typename T>
+concept TimeoutMarkable = requires(T& value) {
+    value.markTimeout();
+};
+
+/**
+ * @brief 匹配可注入超时结果的等待器的概念
+ * @tparam T 要检查的类型
+ * @details 满足以下任一通道即认为可注入超时：
+ *          - 提供 `markTimeout()`（推荐定制点）；
+ *          - 提供 `setTimeout()`（私有结果存储的显式定制点）；
+ *          - 提供公共 `m_result` 成员（历史兼容，超时错误直接写入）；
+ *          - 恒不挂起（kAlwaysReady，超时注入不可达）。
+ *          不满足任何通道的类型与 `.timeout()` 组合会在编译期报错，
+ *          而不是静默返回未定义结果。
+ */
+template <typename T>
+concept TimeoutInjectable =
+    TimeoutMarkable<T> || TimeoutSettable<T> || requires(T& t) {
+        t.m_result;
+    } || AlwaysReadyAwaitable<T>;
+
 } // namespace galay::kernel::concepts
 
 #endif // GALAY_KERNEL_CONCEPTS_H

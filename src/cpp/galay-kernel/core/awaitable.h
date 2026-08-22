@@ -81,6 +81,143 @@ struct AwaitContext {
 };
 
 /**
+ * @brief 转发 facade 的 CRTP 混入
+ * @tparam Derived facade 类型
+ * @tparam InnerT 传 `void` 时复用 Derived::m_inner；传具体类型时由 mixin
+ *               内嵌拥有该 inner
+ *
+ * @details 统一实现 facade 的 await_ready / await_suspend / await_resume /
+ *          markTimeout 到 `m_inner` 的转发，消除各协议模块的复制粘贴样板。
+ *          新的自定义 facade 推荐使用两参数形式，避免暴露内部成员；已有
+ *          协议 facade 使用一参数形式收口重复转发。超时行为通过
+ *          `TimeoutSupport<Derived, Policy>` 的模板策略显式选择。
+ * @note 成员函数体在被调用时才实例化，Derived 届时已是完整类型。
+ */
+template <typename Derived, typename InnerT = void>
+class ForwardingAwaitable;
+
+/**
+ * @brief CRTP forwarding facade for a derived type that owns `m_inner`.
+ *
+ * The one-argument form keeps the inner object in the facade.  `m_inner` must
+ * be accessible to the mixin (public or explicitly befriended); private state
+ * should use the owning two-argument form below instead.
+ */
+template <typename Derived>
+class ForwardingAwaitable<Derived, void> {
+protected:
+    ForwardingAwaitable() noexcept = default;
+
+    Derived& self() noexcept { return static_cast<Derived&>(*this); }
+    const Derived& self() const noexcept { return static_cast<const Derived&>(*this); }
+
+    decltype(auto) inner() noexcept { return (self().m_inner); }
+    decltype(auto) inner() const noexcept { return (self().m_inner); }
+
+public:
+    decltype(auto) await_ready() noexcept(noexcept(inner().await_ready())) {
+        return inner().await_ready();
+    }
+
+    template <typename Promise>
+    decltype(auto) await_suspend(std::coroutine_handle<Promise> handle)
+        noexcept(noexcept(inner().await_suspend(handle))) {
+        return inner().await_suspend(handle);
+    }
+
+    decltype(auto) await_resume() noexcept(noexcept(inner().await_resume())) {
+        return inner().await_resume();
+    }
+
+    template <typename D = Derived>
+    requires requires(D& value) { value.m_inner.markTimeout(); }
+    void markTimeout() noexcept(noexcept(inner().markTimeout())) {
+        inner().markTimeout();
+    }
+
+    template <typename D = Derived>
+    requires requires(D& value) {
+        { value.m_inner.ownsIoRegistration() } -> std::convertible_to<bool>;
+    }
+    bool ownsIoRegistration() noexcept(noexcept(inner().ownsIoRegistration())) {
+        return static_cast<bool>(inner().ownsIoRegistration());
+    }
+
+    template <typename TimerT, typename D = Derived>
+    requires requires(D& value, TimerT&& timer) {
+        value.m_inner.bindTimeoutTimer(std::forward<TimerT>(timer));
+    }
+    void bindTimeoutTimer(TimerT&& timer)
+        noexcept(noexcept(inner().bindTimeoutTimer(std::forward<TimerT>(timer)))) {
+        inner().bindTimeoutTimer(std::forward<TimerT>(timer));
+    }
+};
+
+/**
+ * @brief Owning forwarding facade for a standalone inner awaitable.
+ *
+ * This form is useful for new custom awaitables: it supplies the storage and
+ * all forwarding operations, so the derived type only needs to expose its
+ * own result-specific API.
+ */
+template <typename Derived, typename InnerT>
+class ForwardingAwaitable {
+protected:
+    explicit ForwardingAwaitable(InnerT inner) noexcept(
+        std::is_nothrow_move_constructible_v<InnerT>)
+        : m_inner(std::move(inner)) {}
+
+    InnerT& inner() noexcept { return m_inner; }
+    const InnerT& inner() const noexcept { return m_inner; }
+
+public:
+    ForwardingAwaitable(const ForwardingAwaitable&) = default;
+    ForwardingAwaitable& operator=(const ForwardingAwaitable&) = default;
+    ForwardingAwaitable(ForwardingAwaitable&&) noexcept = default;
+    ForwardingAwaitable& operator=(ForwardingAwaitable&&) noexcept = default;
+
+    decltype(auto) await_ready() noexcept(noexcept(m_inner.await_ready())) {
+        return m_inner.await_ready();
+    }
+
+    template <typename Promise>
+    decltype(auto) await_suspend(std::coroutine_handle<Promise> handle)
+        noexcept(noexcept(m_inner.await_suspend(handle))) {
+        return m_inner.await_suspend(handle);
+    }
+
+    decltype(auto) await_resume() noexcept(noexcept(m_inner.await_resume())) {
+        return m_inner.await_resume();
+    }
+
+    template <typename T = InnerT>
+    requires requires(T& value) { value.markTimeout(); }
+    void markTimeout() noexcept(noexcept(m_inner.markTimeout())) {
+        m_inner.markTimeout();
+    }
+
+    template <typename T = InnerT>
+    requires requires(T& value) {
+        { value.ownsIoRegistration() } -> std::convertible_to<bool>;
+    }
+    bool ownsIoRegistration() noexcept(noexcept(m_inner.ownsIoRegistration())) {
+        return static_cast<bool>(m_inner.ownsIoRegistration());
+    }
+
+    template <typename TimerT, typename T = InnerT>
+    requires requires(T& value, TimerT&& timer) {
+        value.bindTimeoutTimer(std::forward<TimerT>(timer));
+    }
+    void bindTimeoutTimer(TimerT&& timer)
+        noexcept(noexcept(m_inner.bindTimeoutTimer(std::forward<TimerT>(timer)))) {
+        m_inner.bindTimeoutTimer(std::forward<TimerT>(timer));
+    }
+
+protected:
+    InnerT m_inner;
+};
+
+/**
  * @brief Sequence awaitable 对 IOController 读写槽位的占用范围
  */
 enum class SequenceOwnerDomain : uint8_t {
@@ -1723,6 +1860,9 @@ template <typename ResultT>
 class ReadyAwaitable : public TimeoutSupport<ReadyAwaitable<ResultT>> {
 public:
     using result_type = ResultT;  ///< await_resume() 返回值类型
+
+    /// 恒不挂起：ready 路径不会发生超时注入，`.timeout()` 无需注入通道
+    static constexpr bool kAlwaysReady = true;
 
     explicit ReadyAwaitable(ResultT ready_result)
         : m_ready_result(std::move(ready_result)) {}

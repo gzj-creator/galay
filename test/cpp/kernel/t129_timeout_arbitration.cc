@@ -28,6 +28,7 @@ void completionWinsWhenRegistrationWasRemoved()
     char buffer = 0;
     IOController controller(GHandle{.fd = -1});
     auto awaitable = makeTimedRecv(controller, &buffer);
+    awaitable.ensureTimer();
 
     assert(controller.fillAwaitable(RECV, &awaitable.m_inner));
     awaitable.m_inner.m_result = size_t{1};
@@ -45,6 +46,7 @@ void timeoutWinsWhileRegistrationIsStillActive()
     char buffer = 0;
     IOController controller(GHandle{.fd = -1});
     auto awaitable = makeTimedRecv(controller, &buffer);
+    awaitable.ensureTimer();
 
     assert(controller.fillAwaitable(RECV, &awaitable.m_inner));
 

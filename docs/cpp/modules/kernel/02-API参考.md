@@ -458,6 +458,47 @@
 - `ByteQueueView` 由 `galay-utils/cache/byte_queue_view.hpp` 提供，`galay-kernel` 不再保留本地 `queue_view.h`
 - 链式 `AwaitableBuilder` 的 `build()` 现在返回 machine-backed awaitable，并与 `fromStateMachine(...)` 共享同一套状态机驱动
 
+自定义 awaitable 的最小扩展面：
+
+```cpp
+using Result = std::expected<int, galay::kernel::IOError>;
+
+struct MyAwaitable {
+    bool await_ready() const noexcept;
+    template <typename Promise>
+    bool await_suspend(std::coroutine_handle<Promise>) noexcept;
+    Result await_resume() noexcept;
+};
+```
+
+如果需要 `.timeout(...)`，为该类型选择一个空的、静态可内联的策略，而不是依赖
+公共成员名探测：
+
+```cpp
+struct MyAwaitable;
+struct MyTimeoutPolicy {
+    static void inject(MyAwaitable& value) noexcept { value.setTimeout(); }
+    static bool ownsIoRegistration(MyAwaitable& value) noexcept {
+        return value.ownsIoRegistration();
+    }
+};
+
+struct MyAwaitable
+    : galay::kernel::TimeoutSupport<MyAwaitable, MyTimeoutPolicy> {
+    // await_ready / await_suspend / await_resume + setTimeout()
+};
+```
+
+`TimeoutSupport<Derived, Policy>` 和 `WithTimeout<Awaitable, Policy>` 都是模板静态分发；
+策略不保存状态时不会增加 awaiter 布局，也不会引入虚调用或类型擦除。现有底层 IO
+awaitable 仍可使用默认策略（`markTimeout()` / `setTimeout()`），新类型建议提供显式
+`setTimeout()`。`ForwardingAwaitable<Derived, InnerT>` 可在需要 facade 时内联转发四个
+`await_*` 方法；两参数形式由 mixin 直接拥有 `InnerT`。
+
+完整可运行的 policy 示例：`examples/cpp/kernel/include/e12_policy.cc`；状态机 IO 参考：
+`examples/cpp/kernel/include/e10_await.cc`；策略与 ready-path 边界测试：
+`test/cpp/kernel/t148_custom_awaitable.cc`。
+
 parse 语义：
 
 - `ParseStatus::kNeedMore`：builder 会自动重挂最近一个非本地 IO 步骤（包括 `recv/readv`），然后再次进入 parse；协程保持挂起

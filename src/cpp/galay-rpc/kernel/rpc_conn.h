@@ -703,9 +703,12 @@ private:
  * @tparam SocketType Socket类型
  */
 template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-class GetRpcRequestAwaitable : public TimeoutSupport<GetRpcRequestAwaitable<SocketType, Strategy>>
+class GetRpcRequestAwaitable
+    : public ForwardingAwaitable<GetRpcRequestAwaitable<SocketType, Strategy>>
+    , public TimeoutSupport<GetRpcRequestAwaitable<SocketType, Strategy>>
 {
 public:
+    friend class ForwardingAwaitable<GetRpcRequestAwaitable<SocketType, Strategy>>;
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::RpcRequestReadState<Strategy>;
 
@@ -733,20 +736,13 @@ public:
     GetRpcRequestAwaitable(const GetRpcRequestAwaitable&) = delete;
     GetRpcRequestAwaitable& operator=(const GetRpcRequestAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
     std::shared_ptr<ReadState> m_state;  ///< 读取状态
+
+private:
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -757,9 +753,12 @@ private:
  * @tparam SocketType Socket类型
  */
 template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-class GetRpcResponseAwaitable : public TimeoutSupport<GetRpcResponseAwaitable<SocketType, Strategy>>
+class GetRpcResponseAwaitable
+    : public ForwardingAwaitable<GetRpcResponseAwaitable<SocketType, Strategy>>
+    , public TimeoutSupport<GetRpcResponseAwaitable<SocketType, Strategy>>
 {
 public:
+    friend class ForwardingAwaitable<GetRpcResponseAwaitable<SocketType, Strategy>>;
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::RpcResponseReadState<Strategy>;
 
@@ -787,20 +786,13 @@ public:
     GetRpcResponseAwaitable(const GetRpcResponseAwaitable&) = delete;
     GetRpcResponseAwaitable& operator=(const GetRpcResponseAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
     std::shared_ptr<ReadState> m_state;  ///< 读取状态
+
+private:
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -811,9 +803,12 @@ private:
  * @tparam SocketType Socket类型
  */
 template<typename SocketType>
-class SendRpcRequestAwaitable : public TimeoutSupport<SendRpcRequestAwaitable<SocketType>>
+class SendRpcRequestAwaitable
+    : public ForwardingAwaitable<SendRpcRequestAwaitable<SocketType>>
+    , public TimeoutSupport<SendRpcRequestAwaitable<SocketType>>
 {
 public:
+    friend class ForwardingAwaitable<SendRpcRequestAwaitable<SocketType>>;
     using Result = detail::RpcAwaitableResult;
 
     /**
@@ -835,20 +830,13 @@ public:
     SendRpcRequestAwaitable(const SendRpcRequestAwaitable&) = delete;
     SendRpcRequestAwaitable& operator=(const SendRpcRequestAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcWritevMachine<detail::RpcRequestWriteState>>;
 
     std::shared_ptr<detail::RpcRequestWriteState> m_state;  ///< 写入状态
+
+private:
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -859,9 +847,12 @@ private:
  * @tparam SocketType Socket类型
  */
 template<typename SocketType>
-class SendRpcResponseAwaitable : public TimeoutSupport<SendRpcResponseAwaitable<SocketType>>
+class SendRpcResponseAwaitable
+    : public ForwardingAwaitable<SendRpcResponseAwaitable<SocketType>>
+    , public TimeoutSupport<SendRpcResponseAwaitable<SocketType>>
 {
 public:
+    friend class ForwardingAwaitable<SendRpcResponseAwaitable<SocketType>>;
     using Result = detail::RpcAwaitableResult;
 
     /**
@@ -883,20 +874,13 @@ public:
     SendRpcResponseAwaitable(const SendRpcResponseAwaitable&) = delete;
     SendRpcResponseAwaitable& operator=(const SendRpcResponseAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcWritevMachine<detail::RpcResponseWriteState>>;
 
     std::shared_ptr<detail::RpcResponseWriteState> m_state;  ///< 写入状态
+
+private:
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -907,9 +891,12 @@ private:
  * @tparam SocketType Socket类型
  */
 template<typename SocketType>
-class SendRawDataAwaitable : public TimeoutSupport<SendRawDataAwaitable<SocketType>>
+class SendRawDataAwaitable
+    : public ForwardingAwaitable<SendRawDataAwaitable<SocketType>>
+    , public TimeoutSupport<SendRawDataAwaitable<SocketType>>
 {
 public:
+    friend class ForwardingAwaitable<SendRawDataAwaitable<SocketType>>;
     using Result = detail::RpcAwaitableResult;
 
     /**
@@ -931,20 +918,13 @@ public:
     SendRawDataAwaitable(const SendRawDataAwaitable&) = delete;
     SendRawDataAwaitable& operator=(const SendRawDataAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcWritevMachine<detail::RpcVectorWriteState>>;
 
     std::shared_ptr<detail::RpcVectorWriteState> m_state;  ///< 写入状态
+
+private:
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -955,9 +935,12 @@ private:
  * @tparam SocketType Socket类型
  */
 template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-class GetRpcHeaderAwaitable : public TimeoutSupport<GetRpcHeaderAwaitable<SocketType, Strategy>>
+class GetRpcHeaderAwaitable
+    : public ForwardingAwaitable<GetRpcHeaderAwaitable<SocketType, Strategy>>
+    , public TimeoutSupport<GetRpcHeaderAwaitable<SocketType, Strategy>>
 {
 public:
+    friend class ForwardingAwaitable<GetRpcHeaderAwaitable<SocketType, Strategy>>;
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::RpcHeaderReadState<Strategy>;
 
@@ -981,20 +964,13 @@ public:
     GetRpcHeaderAwaitable(const GetRpcHeaderAwaitable&) = delete;
     GetRpcHeaderAwaitable& operator=(const GetRpcHeaderAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
     std::shared_ptr<ReadState> m_state;  ///< 读取状态
+
+private:
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 
@@ -1005,9 +981,12 @@ private:
  * @tparam SocketType Socket类型
  */
 template<typename SocketType, RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
-class GetRpcBodyAwaitable : public TimeoutSupport<GetRpcBodyAwaitable<SocketType, Strategy>>
+class GetRpcBodyAwaitable
+    : public ForwardingAwaitable<GetRpcBodyAwaitable<SocketType, Strategy>>
+    , public TimeoutSupport<GetRpcBodyAwaitable<SocketType, Strategy>>
 {
 public:
+    friend class ForwardingAwaitable<GetRpcBodyAwaitable<SocketType, Strategy>>;
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::RpcBodyReadState<Strategy>;
 
@@ -1032,20 +1011,13 @@ public:
     GetRpcBodyAwaitable(const GetRpcBodyAwaitable&) = delete;
     GetRpcBodyAwaitable& operator=(const GetRpcBodyAwaitable&) = delete;
 
-    bool await_ready() { return m_inner.await_ready(); }
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle)
-    {
-        return m_inner.await_suspend(handle);
-    }
-    Result await_resume() { return m_inner.await_resume(); }
-    void markTimeout() { m_inner.markTimeout(); }
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
     std::shared_ptr<ReadState> m_state;  ///< 读取状态
+
+private:
     InnerAwaitable m_inner;  ///< 内部状态机等待体
 };
 

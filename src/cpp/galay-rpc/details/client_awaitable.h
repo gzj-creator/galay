@@ -47,9 +47,11 @@ private:
 template<typename SocketType,
          RingBufferBackendStrategy Strategy = RingBufferBackendStrategy::Mmap>
 class RecvRpcResponseChainAwaitable
-    : public TimeoutSupport<RecvRpcResponseChainAwaitable<SocketType, Strategy>>
+    : public ForwardingAwaitable<RecvRpcResponseChainAwaitable<SocketType, Strategy>>
+    , public TimeoutSupport<RecvRpcResponseChainAwaitable<SocketType, Strategy>>
 {
 public:
+    friend class ForwardingAwaitable<RecvRpcResponseChainAwaitable<SocketType, Strategy>>;
     using Result = detail::RpcAwaitableResult;
     using ReadState = detail::ExpectedRpcResponseReadState<Strategy>;
 
@@ -62,19 +64,13 @@ public:
     RecvRpcResponseChainAwaitable(const RecvRpcResponseChainAwaitable&) = delete;
     RecvRpcResponseChainAwaitable& operator=(const RecvRpcResponseChainAwaitable&) = delete;
 
-    bool await_ready();
-
-    template <typename Promise>
-    bool await_suspend(std::coroutine_handle<Promise> handle);
-
-    Result await_resume();
-    void markTimeout();
-
 private:
     using InnerAwaitable =
         StateMachineAwaitable<detail::RpcRingBufferReadMachine<ReadState>>;
 
     std::shared_ptr<ReadState> m_state; ///< 读取状态
+
+private:
     InnerAwaitable m_inner;             ///< 内部状态机等待体
 };
 

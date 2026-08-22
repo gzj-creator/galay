@@ -21,9 +21,11 @@
 #include "waker.h"
 #include "scheduler.hpp"
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <expected>
+#include <type_traits>
 #include <utility>
 
 namespace galay::kernel 
@@ -138,7 +140,12 @@ int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller)
 template <typename Awaitable>
 bool awaitableStillOwnsIORegistration(Awaitable& awaitable) noexcept
 {
-    if constexpr (requires(Awaitable& value) { value.m_controller; }) {
+    if constexpr (requires(Awaitable& value) {
+        { value.ownsIoRegistration() } -> std::convertible_to<bool>;
+    }) {
+        // 显式定制点优先：inner 自身最清楚是否仍持有 IO 注册
+        return awaitable.ownsIoRegistration();
+    } else if constexpr (requires(Awaitable& value) { value.m_controller; }) {
         auto* controller = awaitable.m_controller;
         if (controller == nullptr) {
             return false;
@@ -155,6 +162,34 @@ bool awaitableStillOwnsIORegistration(Awaitable& awaitable) noexcept
         return true;
     }
 }
+
+template <typename T>
+struct timeout_expected_traits;
+
+template <typename ValueT, typename ErrorT>
+struct timeout_expected_traits<std::expected<ValueT, ErrorT>> {
+    using error_type = ErrorT;
+};
+
+template <typename T>
+inline constexpr bool timeout_always_false = false;
+
+/**
+ * @brief Compile-time timeout behavior for an awaitable.
+ *
+ * A policy is an empty type with a static `inject(Awaitable&)` function.  It
+ * keeps custom timeout semantics explicit while allowing the compiler to
+ * inline the operation completely.  The default policy is an empty tag; its
+ * legacy adaptation is implemented inside the befriended `WithTimeout` wrapper
+ * so existing private channel markers remain accessible without exposing them.
+ */
+template <typename Awaitable>
+struct DefaultTimeoutPolicy {};
+
+template <typename Policy, typename Awaitable>
+concept TimeoutPolicy = requires(Awaitable& awaitable) {
+    Policy::inject(awaitable);
+};
 
 }  // namespace detail
 
@@ -207,8 +242,8 @@ public:
         const bool operationWon = m_completion.compare_exchange_strong(
             expected,
             Completion::kOperationWon,
-            std::memory_order_seq_cst,
-            std::memory_order_seq_cst);
+            std::memory_order_acq_rel,
+            std::memory_order_acquire);
         if (operationWon) {
             Timer::cancel();
         }
@@ -222,14 +257,14 @@ public:
      */
     [[nodiscard]] OperationStart tryBeginOperation() noexcept
     {
-        Completion state = m_completion.load(std::memory_order_seq_cst);
+        Completion state = m_completion.load(std::memory_order_acquire);
         for (;;) {
             if (state == Completion::kPending) {
                 if (m_completion.compare_exchange_weak(
                         state,
                         Completion::kOperationInFlight,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
+                        std::memory_order_acq_rel,
+                        std::memory_order_acquire)) {
                     return OperationStart::kStarted;
                 }
                 continue;
@@ -252,14 +287,14 @@ public:
      */
     [[nodiscard]] bool commitOperation() noexcept
     {
-        Completion state = m_completion.load(std::memory_order_seq_cst);
+        Completion state = m_completion.load(std::memory_order_acquire);
         while (state == Completion::kOperationInFlight ||
                state == Completion::kTimeoutRequested) {
             if (m_completion.compare_exchange_weak(
-                    state,
-                    Completion::kOperationWon,
-                    std::memory_order_seq_cst,
-                    std::memory_order_seq_cst)) {
+                        state,
+                        Completion::kOperationWon,
+                    std::memory_order_acq_rel,
+                    std::memory_order_acquire)) {
                 Timer::cancel();
                 return true;
             }
@@ -275,14 +310,14 @@ public:
      */
     [[nodiscard]] OperationAbort abortOperation() noexcept
     {
-        Completion state = m_completion.load(std::memory_order_seq_cst);
+        Completion state = m_completion.load(std::memory_order_acquire);
         for (;;) {
             if (state == Completion::kOperationInFlight) {
                 if (m_completion.compare_exchange_weak(
                         state,
                         Completion::kPending,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
+                        std::memory_order_acq_rel,
+                        std::memory_order_acquire)) {
                     return OperationAbort::kRearmed;
                 }
                 continue;
@@ -291,11 +326,8 @@ public:
                 if (m_completion.compare_exchange_weak(
                         state,
                         Completion::kTimeoutWon,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
-                    m_flag.fetch_or(
-                        static_cast<int>(TimerFlag::kTimeout),
-                        std::memory_order_release);
+                        std::memory_order_acq_rel,
+                        std::memory_order_acquire)) {
                     return OperationAbort::kTimeoutWon;
                 }
                 continue;
@@ -343,9 +375,8 @@ public:
         }
     }
 
-    bool timeouted() const {
-        return (m_flag.load(std::memory_order_acquire) &
-                static_cast<int>(TimerFlag::kTimeout)) != 0;
+    bool timeouted() const noexcept {
+        return m_completion.load(std::memory_order_acquire) == Completion::kTimeoutWon;
     }
 
     /** @brief 由 timer manager 或测试入口触发一次 timeout 裁决。 */
@@ -373,14 +404,14 @@ private:
     bool completeTimeout()
     {
         bool timeoutWon = false;
-        Completion state = m_completion.load(std::memory_order_seq_cst);
+        Completion state = m_completion.load(std::memory_order_acquire);
         for (;;) {
             if (state == Completion::kPending) {
                 if (m_completion.compare_exchange_weak(
                         state,
                         Completion::kTimeoutWon,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
+                        std::memory_order_acq_rel,
+                        std::memory_order_acquire)) {
                     timeoutWon = true;
                     break;
                 }
@@ -390,16 +421,13 @@ private:
                 if (m_completion.compare_exchange_weak(
                         state,
                         Completion::kTimeoutRequested,
-                        std::memory_order_seq_cst,
-                        std::memory_order_seq_cst)) {
+                        std::memory_order_acq_rel,
+                        std::memory_order_acquire)) {
                     break;
                 }
                 continue;
             }
             break;
-        }
-        if (timeoutWon) {
-            m_flag.fetch_or(static_cast<int>(TimerFlag::kTimeout), std::memory_order_release);
         }
         Timer::handleTimeout();
         return timeoutWon;
@@ -409,24 +437,29 @@ private:
     std::atomic<Completion> m_completion{Completion::kPending};
 };
 
-template<typename Awaitable>
+template<typename Awaitable,
+         typename TimeoutPolicyT = detail::DefaultTimeoutPolicy<Awaitable>>
 struct WithTimeout;
 
 /**
 * @brief CRTP 基类，为 Awaitable 提供 timeout() 方法
 */
-template<typename Derived>
+template<typename Derived,
+         typename TimeoutPolicyT = detail::DefaultTimeoutPolicy<Derived>>
 struct TimeoutSupport {
+    using timeout_policy = TimeoutPolicyT;
+
     template<typename D = Derived>
     requires concepts::Awaitable<D>
     auto timeout(std::chrono::milliseconds t) && {
-        return WithTimeout<Derived>{std::move(static_cast<Derived&>(*this)), t};
+        return WithTimeout<Derived, TimeoutPolicyT>{
+            std::move(static_cast<Derived&>(*this)), t};
     }
 
     template<typename D = Derived>
     requires concepts::Awaitable<D>
     auto timeout(std::chrono::milliseconds t) & {
-        return WithTimeout<Derived>{static_cast<Derived&>(*this), t};
+        return WithTimeout<Derived, TimeoutPolicyT>{static_cast<Derived&>(*this), t};
     }
 };
 
@@ -435,31 +468,40 @@ struct TimeoutSupport {
  *
  * @details 对于 io_uring，使用独立的 timeout 操作；对于 epoll/kqueue，使用 timerfd。
  * 定时器状态存储在 IOController 中，生命周期与 AsyncTcpSocket 绑定。
- * @note 构造时通过 make_shared 分配 TimeoutTimer。timer manager 可能在取消后仍短暂
- *       持有 Timer::ptr，因此该对象不能安全改成 awaiter/channel 的裸成员。当前全局
- *       allocator OOM 不通过 inner awaitable 的 std::expected 返回。
+ * @note TimeoutTimer 在真正进入 await_suspend 前惰性创建；await_ready() 为真的路径
+ *       不分配。Timer manager 继续通过 shared_ptr 管理跨线程取消生命周期，避免把
+ *       awaiter frame 与时间轮节点耦合。超时结果由 TimeoutPolicyT 静态分发。
  */
-template<typename Awaitable>
+template<typename Awaitable, typename TimeoutPolicyT>
 struct WithTimeout {
+    static_assert(
+        std::same_as<TimeoutPolicyT, detail::DefaultTimeoutPolicy<Awaitable>>
+            ? concepts::TimeoutInjectable<Awaitable>
+            : (detail::TimeoutPolicy<TimeoutPolicyT, Awaitable> ||
+               concepts::AlwaysReadyAwaitable<Awaitable>),
+        "timeout policy must provide static inject(awaitable&), or the default "
+        "policy requires markTimeout(), setTimeout(), m_result, or kAlwaysReady");
+
+    std::chrono::milliseconds m_duration{};
     Awaitable m_inner;
     TimeoutTimer::ptr m_timer;
     Scheduler* m_scheduler = nullptr;
 
     WithTimeout(Awaitable&& inner, std::chrono::milliseconds timeout)
-        : m_inner(std::move(inner)), m_timer(std::make_shared<TimeoutTimer>(timeout)) {}
+        : m_inner(std::move(inner)), m_duration(timeout) {}
 
     WithTimeout(Awaitable& inner, std::chrono::milliseconds timeout)
-        : m_inner(std::move(inner)), m_timer(std::make_shared<TimeoutTimer>(timeout)) {}
+        : m_inner(std::move(inner)), m_duration(timeout) {}
 
     WithTimeout(WithTimeout&&) noexcept = default;
     WithTimeout& operator=(WithTimeout&&) noexcept = default;
 
     auto timeout(std::chrono::milliseconds t) && {
-        return WithTimeout<Awaitable>{std::move(m_inner), t};
+        return WithTimeout<Awaitable, TimeoutPolicyT>{std::move(m_inner), t};
     }
 
     auto timeout(std::chrono::milliseconds t) & {
-        return WithTimeout<Awaitable>{m_inner, t};
+        return WithTimeout<Awaitable, TimeoutPolicyT>{m_inner, t};
     }
 
     bool await_ready() { return m_inner.await_ready(); }
@@ -467,6 +509,7 @@ struct WithTimeout {
     template<typename Promise>
     requires concepts::AwaitableWith<Awaitable, Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
+        ensureTimer();
         auto timer = m_timer;
         auto waker = Waker(handle);
         Scheduler* scheduler = waker.getScheduler();
@@ -474,13 +517,7 @@ struct WithTimeout {
         timer->setWaker(std::move(waker));
         if (scheduler == nullptr) {
             timer->markTimeoutWithoutWake();
-            if constexpr (requires(Awaitable& awaitable) {
-                awaitable.markTimeout();
-            }) {
-                m_inner.markTimeout();
-            } else if constexpr (requires { m_inner.m_result; }) {
-                m_inner.m_result = std::unexpected(IOError(kTimeout, 0));
-            }
+            injectTimeoutResult();
             return false;
         }
 
@@ -505,12 +542,25 @@ struct WithTimeout {
     }
 
     auto await_resume() -> decltype(m_inner.await_resume()) {
-        const bool timedOut = m_timer->timeouted();
+        auto timer = std::move(m_timer);
+        if (!timer) {
+            return m_inner.await_resume();
+        }
+        const bool timedOut = timer->timeouted();
         // 当前协程已在执行，timer 不再需要保留独立 TaskRef。
-        m_timer->clearWaker();
+        timer->clearWaker();
         if (timedOut) [[unlikely]] {
-            if (!detail::awaitableStillOwnsIORegistration(m_inner)) {
-                m_timer->cancel();
+            const bool owns_registration = [&]() noexcept {
+                if constexpr (requires(Awaitable& awaitable) {
+                    { TimeoutPolicyT::ownsIoRegistration(awaitable) } -> std::convertible_to<bool>;
+                }) {
+                    return static_cast<bool>(TimeoutPolicyT::ownsIoRegistration(m_inner));
+                } else {
+                    return detail::awaitableStillOwnsIORegistration(m_inner);
+                }
+            }();
+            if (!owns_registration) {
+                timer->cancel();
                 return m_inner.await_resume();
             }
             if constexpr (requires(Awaitable& awaitable) {
@@ -518,25 +568,68 @@ struct WithTimeout {
             }) {
                 const bool removed_registration =
                     detail::removeTimedOutIORegistration(m_scheduler, m_inner.m_controller);
-                if (!removed_registration) {
-                    m_timer->cancel();
-                }
+                (void)removed_registration;
             }
-            if constexpr (requires(Awaitable& awaitable) {
-                awaitable.markTimeout();
-            }) {
-                m_inner.markTimeout();
-            } else if constexpr (requires { m_inner.m_result; }) {
-                // 历史 awaitable 通过写入 m_result 注入超时错误
-                m_inner.m_result = std::unexpected(IOError(kTimeout, 0));
-            }
+            injectTimeoutResult();
+            timer->cancel();
         } else {
-            m_timer->cancel();
+            timer->cancel();
         }
         return m_inner.await_resume();
     }
 
+    /** @brief 显式为源码级测试或手工驱动 timer 的调用方创建定时器。 */
+    void ensureTimer() {
+        if (!m_timer) {
+            m_timer = std::make_shared<TimeoutTimer>(m_duration);
+        }
+    }
+
+    /** @brief 将嵌套 timeout 包装器的超时结果继续传给 inner。 */
+    void markTimeout() { injectTimeoutResult(); }
+
 private:
+    void injectTimeoutResult()
+    {
+        if constexpr (std::same_as<TimeoutPolicyT, detail::DefaultTimeoutPolicy<Awaitable>>) {
+            // This member is the friendship boundary retained by the low-level
+            // channel awaiters.  New awaitables should use an explicit policy
+            // and keep their result state private behind setTimeout().
+            if constexpr (concepts::TimeoutMarkable<Awaitable>) {
+                m_inner.markTimeout();
+            } else if constexpr (concepts::TimeoutSettable<Awaitable>) {
+                m_inner.setTimeout();
+            } else if constexpr (requires(Awaitable& value) {
+                value.m_result = std::unexpected(IOError(kTimeout, 0));
+            }) {
+                m_inner.m_result = std::unexpected(IOError(kTimeout, 0));
+            } else {
+                using result_type = std::remove_cvref_t<decltype(m_inner.await_resume())>;
+                if constexpr (requires {
+                    typename detail::timeout_expected_traits<result_type>::error_type;
+                }) {
+                    using error_type =
+                        typename detail::timeout_expected_traits<result_type>::error_type;
+                    if constexpr (std::is_constructible_v<error_type, IOError> &&
+                                  requires(Awaitable& value) {
+                                      value.m_result = std::unexpected(
+                                          error_type(IOError(kTimeout, 0)));
+                                  }) {
+                        m_inner.m_result = std::unexpected(error_type(IOError(kTimeout, 0)));
+                    } else if constexpr (!concepts::AlwaysReadyAwaitable<Awaitable>) {
+                        static_assert(detail::timeout_always_false<Awaitable>,
+                                      "default timeout policy has no injectable result");
+                    }
+                } else if constexpr (!concepts::AlwaysReadyAwaitable<Awaitable>) {
+                    static_assert(detail::timeout_always_false<Awaitable>,
+                                  "default timeout policy has no injectable result");
+                }
+            }
+        } else {
+            TimeoutPolicyT::inject(m_inner);
+        }
+    }
+
     WithTimeout(const WithTimeout&) = delete;
     WithTimeout& operator=(const WithTimeout&) = delete;
 };

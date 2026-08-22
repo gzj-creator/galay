@@ -13,6 +13,22 @@
 
 ### Added
 
+- **惰性 TimeoutTimer 与 ready 路径零分配**：`WithTimeout` 改为在 `await_suspend` 中惰性创建 `TimeoutTimer`，`await_ready()` 为真的路径完全不分配定时器；ready 快路径吞吐约 24M ops/s，是 eager timer 创建路径的 4 倍。
+- **显式 TimeoutPolicy 模板策略**：新增 `TimeoutSupport<Derived, TimeoutPolicy>` 与 `WithTimeout<Awaitable, TimeoutPolicy>` 双模板参数，新 awaitable 可通过 `Policy::inject()` 与 `ownsIoRegistration()` 自定义超时注入行为，编译期内联无虚函数开销。
+- **ForwardingAwaitable CRTP/owning 双形式**：统一 facade 的 `await_ready`/`await_suspend`/`await_resume`/`markTimeout` 转发，已收口 RPC、MySQL、PostgreSQL、Redis 全部协议 facade，消除复制粘贴样板。
+- **自定义 awaitable 超时策略示例与测试**：新增 `e12_policy.cc` 示例、`t148_custom_awaitable.cc` 与 `t149_timeout_policy_surface.cc` 定向测试，验证显式策略编译期契约与 `ownsIoRegistration` 定制点。
+- **TimeoutReadyPath 基准测试**：新增 `b33_timeout_ready_path.cc`，对比 ready 快路径与 eager timer 创建的固定开销。
+
+### Changed
+
+- **TimeoutTimer 完成状态机收窄为唯一 Completion 原子操作**：`timeouted()` 改为直接读取 `m_completion == kTimeoutWon`，移除冗余 `m_flag | kTimeout` 写入；所有 `seq_cst` 内存序收窄为 `acq_rel`/`acquire`。
+- **awaitableStillOwnsIORegistration 增加显式定制点**：优先检测 `ownsIoRegistration()` 方法，fallback 到 `m_controller` 指针比较，新 awaitable 可精确声明 IO 注册归属。
+- **Channel/Sequence awaitable 超时注入统一为 `markTimeout()`**：默认 timeout policy 通过 `TimeoutMarkable` concept 检测 public `markTimeout()` 方法，无需 friend 访问。
+
+### Fixed
+
+- **修正 timeout 竞争路径的冗余状态写入**：`completeTimeout()` 不再在 `kTimeoutWon` 时额外写入 `m_flag`，避免跨缓存行伪共享。
+
 - **AsyncTcpSocket 新增 `readExact` / `writeAll` 组合流操作**：在一个 awaitable 状态机内完成多次部分读写，避免用户协程手动循环挂起和子 Task 分配；内部偏移量随状态机推进，零额外协程开销。同步新增 `t178_tcp_exact` 回归测试，验证部分读写、EOF 提前关闭与完整帧语义；TCP 公平吞吐 benchmark 迁移至新 API 并增加 drain 阶段 `shutdown()` 唤醒。
 - **按执行语义拆分 Runtime 根任务入口**：新增 `blockOnIO()`、`blockOnCpu()`、`spawnIO()`、`spawnCpu()` 及 `RuntimeHandle` 对应入口，分别绑定 IO scheduler 或 compute scheduler；新增边界测试与提交吞吐基准。
 - **新增 Boost.Asio C++ 协程 TCP/UDP 公平基线**：加入同语言 `co_spawn`/`awaitable` echo harness，与 Galay 使用相同的 100 客户端、4 worker、256 字节 payload、单请求在途 workload，并注册为 kernel 正式外部对标目标。
