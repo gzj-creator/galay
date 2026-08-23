@@ -40,6 +40,7 @@ typedef struct galay_c_io_scheduler {
     GALAY_C_ATOMIC(uint64_t) event_count;     // 处理的事件总数（统计）
     GALAY_C_ATOMIC(uint64_t) wake_count;      // 唤醒的协程总数（统计）
     GALAY_C_ATOMIC(uint64_t) reactor_epoch;   // completed reactor batches
+    GALAY_C_ATOMIC(uint32_t) reactor_inflight; // 正在读取 event.data.ptr 的 reactor 批次
     void* ready_queue;                       // 内部 ready queue 实现
     void* reactor_context;                   // 平台相关 reactor 上下文
     void* timeout_head;                      // scheduler 线程私有 deadline 链表

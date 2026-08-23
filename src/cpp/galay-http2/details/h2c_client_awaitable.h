@@ -19,7 +19,7 @@ namespace galay::http2
 template<RingBufferBackendStrategy Strategy>
 class H2cUpgradeAwaitable
     : public SequenceAwaitableBase
-    , public TimeoutSupport<H2cUpgradeAwaitable<Strategy>>
+    , public TimeoutMethods<H2cUpgradeAwaitable<Strategy>>
 {
 public:
     using ResultType = std::expected<bool, Http2Error>;
@@ -37,6 +37,9 @@ public:
 
     template <typename Promise>
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle);
+
+    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    void bindTimeoutTimer(TimeoutTimer* timer) noexcept;
 
     ResultType await_resume();
     void markTimeout();

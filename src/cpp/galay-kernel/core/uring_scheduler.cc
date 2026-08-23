@@ -269,8 +269,7 @@ void IOUringScheduler::eventLoop()
         static_cast<size_t>(m_batch_size),
         [this](TaskRef& next) { resume(next); },
         [this]() {
-            const uint64_t tick_ns = m_timer_manager.during();
-            const uint64_t wait_ns = detail::halfTickPollWaitNanoseconds(tick_ns);
+            const uint64_t wait_ns = schedulerPollTimeoutIoUringNanoseconds();
             m_reactor.poll(wait_ns, m_wake_coordinator);
         },
         []() {});

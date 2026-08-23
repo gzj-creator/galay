@@ -1,3 +1,4 @@
+#include <cctype>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -23,6 +24,28 @@ std::string readFile(const std::filesystem::path& path)
 bool contains(const std::string& text, const std::string& needle)
 {
     return text.find(needle) != std::string::npos;
+}
+
+bool hasClassDefinition(const std::string& text, const std::string& name)
+{
+    const std::string needle = "class " + name;
+    size_t search_from = 0;
+    for (;;) {
+        const auto pos = text.find(needle, search_from);
+        if (pos == std::string::npos) {
+            break;
+        }
+        size_t after_name = pos + needle.size();
+        while (after_name < text.size() &&
+               std::isspace(static_cast<unsigned char>(text[after_name]))) {
+            ++after_name;
+        }
+        if (after_name < text.size() && text[after_name] != ';') {
+            return true;
+        }
+        search_from = pos + needle.size();
+    }
+    return false;
 }
 
 std::string bodyAfter(const std::string& text, const std::string& signature)
@@ -117,14 +140,16 @@ int main()
     }
 
     for (const auto* awaitable : {
-             "class PoolInitializeAwaitable :",
-             "class PoolAcquireAwaitable :",
-             "class RedissPoolInitializeAwaitable :",
-             "class RedissPoolAcquireAwaitable :",
-         }) {
-        if (contains(pool_header, awaitable) || !contains(pool_awaitable_header, awaitable)) {
+             "PoolInitializeAwaitable",
+             "PoolAcquireAwaitable",
+             "RedissPoolInitializeAwaitable",
+             "RedissPoolAcquireAwaitable",
+    }) {
+        const std::string declaration = std::string("class ") + awaitable;
+        if (hasClassDefinition(pool_header, awaitable) ||
+            !hasClassDefinition(pool_awaitable_header, awaitable)) {
             std::cerr << "redis pool awaitable declarations must live in details/pool_awaitable.h: "
-                      << awaitable << "\n";
+                      << declaration << "\n";
             return 1;
         }
     }

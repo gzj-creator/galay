@@ -853,14 +853,21 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
         auto scheduler = m_waker.getScheduler();
         if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
             m_result = std::unexpected(IOError(kNotRunningOnIOScheduler, errno));
+            // close 在 await_suspend() 中同步提交；在 awaiter 可能销毁前
+            // 消费非拥有的超时绑定。
+            cancelBoundTimeoutTimer();
             return false;
         }
         int res = detail::registerIOSchedulerClose(scheduler, m_controller);
         if (res == 0) {
             m_result = {};
+            // addClose() 返回后 CloseAwaitable 不会挂起，因此不再有 reactor
+            // 回调负责取消该 timer。
+            cancelBoundTimeoutTimer();
             return false;
         }
         m_result = std::unexpected(IOError(kDisconnectError, detail::normalizeAwaitableErrno(res)));
+        cancelBoundTimeoutTimer();
         return false;
     }
     std::expected<void, IOError> await_resume();  ///< 返回关闭结果；失败时返回 IOError
@@ -1324,7 +1331,7 @@ concept AwaitableStateMachine =
  * @brief 组合式 sequence awaitable 的抽象基类
  * @details 负责占用 IOController 的读写域、统一挂起/恢复流程以及错误传递。
  */
-struct SequenceAwaitableBase: public AwaitableBase {
+struct SequenceAwaitableBase: public AwaitableBase, public TimeoutTimerBinding {
     /**
      * @brief sequence 队列中的单个任务条目
      */
@@ -1428,6 +1435,14 @@ struct SequenceAwaitableBase: public AwaitableBase {
     }
 
     void onCompleted() {
+        if (std::exchange(m_completed, true)) {
+            return;
+        }
+        // 完成派发时刻先裁决超时竞争，再唤醒协程；否则恢复排队延迟会让
+        // 已成功的读被滞后的 TimeoutTimer 误判为超时（见 WithTimeout）。
+        // 同步完成路径的 await_resume() 仍可能调用此方法；完成位会让该
+        // 兜底调用直接返回。
+        cancelBoundTimeoutTimer();
         releaseRegisteredDomain();
     }
 
@@ -1448,6 +1463,7 @@ struct SequenceAwaitableBase: public AwaitableBase {
     IOController* m_controller;  ///< 关联的 IO 控制器
     Waker m_waker;  ///< 恢复等待协程的唤醒器
     uint64_t m_registered = 0;  ///< 当前是否已登记到 controller
+    bool m_completed = false;  ///< 当前 sequence 是否已完成清理
     SequenceOwnerDomain m_requested_domain = SequenceOwnerDomain::ReadWrite;  ///< 期望占用的读写域
     SequenceOwnerDomain m_registered_domain = SequenceOwnerDomain::ReadWrite;  ///< 实际已登记的读写域
 };
@@ -1495,6 +1511,7 @@ inline bool suspendSequenceAwaitable(SequenceAwaitableBase& awaitable,
                                      std::coroutine_handle<Promise> handle) {
     awaitable.m_waker = Waker(handle);
     awaitable.m_registered = false;
+    awaitable.m_completed = false;
     awaitable.m_error.reset();
 #ifdef USE_IOURING
     awaitable.m_sqe_type = SEQUENCE;
@@ -1891,7 +1908,7 @@ private:
 template <AwaitableStateMachine MachineT>
 class StateMachineAwaitable
     : public SequenceAwaitableBase
-    , public TimeoutSupport<StateMachineAwaitable<MachineT>> {
+    , public TimeoutMethods<StateMachineAwaitable<MachineT>> {
 public:
     using result_type = typename MachineT::result_type;
 

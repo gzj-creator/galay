@@ -13,6 +13,7 @@
 
 #include "epoll_reactor.h"
 #include "io_scheduler.hpp"
+#include "../common/kernel_config.h"
 #include "scheduler_core.h"
 #include "wake_coordinator.h"
 
@@ -21,14 +22,6 @@
 #include <atomic>
 #include <thread>
 #include <cstdint>
-
-#ifndef GALAY_SCHEDULER_MAX_EVENTS
-#define GALAY_SCHEDULER_MAX_EVENTS 1024
-#endif
-
-#ifndef GALAY_SCHEDULER_BATCH_SIZE
-#define GALAY_SCHEDULER_BATCH_SIZE 256
-#endif
 
 namespace galay::kernel
 {

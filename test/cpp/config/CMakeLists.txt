@@ -63,6 +63,7 @@ add_test(
         -D GALAY_CXX_COMPILER=${CMAKE_CXX_COMPILER}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/tracing_options_surface.cmake
 )
+set_tests_properties(config.tracing_options_surface PROPERTIES TIMEOUT 300)
 
 get_property(GALAY_CONFIG_TESTS DIRECTORY PROPERTY TESTS)
 set_tests_properties(${GALAY_CONFIG_TESTS} PROPERTIES LABELS "config;unit")

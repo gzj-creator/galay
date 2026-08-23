@@ -549,6 +549,8 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
         }
 
         Waker waker = awaitable->m_waker;
+        // 完成派发时刻先裁决超时竞争再唤醒，防止恢复排队延迟误判超时。
+        awaitable->cancelBoundTimeoutTimer();
         controller->removeAwaitable(event_type);
         syncEvents(controller);
         (void)flushPendingChanges();
@@ -676,6 +678,9 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
                     return;
                 }
                 awaitable->m_result = std::move(first_result);
+                // FILEWATCH 有独立的完成路径；和 one-shot IO 一样，在发布唤醒
+                // 前先仲裁超时。
+                awaitable->cancelBoundTimeoutTimer();
                 controller->removeAwaitable(FILEWATCH);
                 syncEvents(controller);
                 (void)flushPendingChanges();

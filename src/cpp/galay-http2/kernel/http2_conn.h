@@ -900,7 +900,7 @@ struct Http2SslReadMachine {
 template<typename ResultT, typename InnerOperationT>
 class BufferedFastPathOperation
     : public SequenceAwaitableBase
-    , public TimeoutSupport<BufferedFastPathOperation<ResultT, InnerOperationT>>
+    , public TimeoutMethods<BufferedFastPathOperation<ResultT, InnerOperationT>>
 {
 public:
     BufferedFastPathOperation(IOController* controller, ResultT ready_result)
@@ -919,9 +919,20 @@ public:
     template<typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         if (m_ready_result.has_value()) {
+            cancelBoundTimeoutTimer();
             return false;
         }
-        return m_inner_operation.has_value() ? m_inner_operation->await_suspend(handle) : false;
+        if (!m_inner_operation.has_value()) {
+            cancelBoundTimeoutTimer();
+            return false;
+        }
+        forwardBoundTimeoutTimer(*m_inner_operation);
+        return m_inner_operation->await_suspend(handle);
+    }
+
+    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
+        SequenceAwaitableBase::bindTimeoutTimer(timer);
     }
 
     ResultT await_resume() {

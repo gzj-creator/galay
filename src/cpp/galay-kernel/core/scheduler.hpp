@@ -17,6 +17,7 @@
 
 #include "../common/timer.hpp"
 #include "../common/error.h"
+#include "../common/kernel_config.h"
 #include "task.h"
 #include <atomic>
 #include <cstdint>
@@ -33,19 +34,6 @@
  * @brief 调度器单次处理的最大事件数
  * @note 可在编译时通过 -DGALAY_SCHEDULER_MAX_EVENTS=xxx 覆盖
  */
-#ifndef GALAY_SCHEDULER_MAX_EVENTS
-#define GALAY_SCHEDULER_MAX_EVENTS 1024
-#endif
-
-/**
- * @def GALAY_SCHEDULER_BATCH_SIZE
- * @brief 协程批量处理大小
- * @note 可在编译时通过 -DGALAY_SCHEDULER_BATCH_SIZE=xxx 覆盖
- */
-#ifndef GALAY_SCHEDULER_BATCH_SIZE
-#define GALAY_SCHEDULER_BATCH_SIZE 256
-#endif
-
 namespace galay::kernel
 {
 

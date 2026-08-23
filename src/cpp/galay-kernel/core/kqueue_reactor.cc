@@ -553,6 +553,7 @@ void KqueueReactor::processEvent(struct kevent& ev) {
         if (controller->m_type == IOEventType::INVALID && armed_mask == 0) {
             retireRegistrationEntry(controller);
         }
+        awaitable->cancelBoundTimeoutTimer();
         awaitable->m_waker.wakeUp();
     };
 
@@ -607,6 +608,7 @@ void KqueueReactor::processEvent(struct kevent& ev) {
                 if (!completed) {
                     return;
                 }
+                awaitable->cancelBoundTimeoutTimer();
                 awaitable->m_waker.wakeUp();
             }
         }

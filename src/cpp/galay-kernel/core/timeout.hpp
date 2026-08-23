@@ -20,18 +20,23 @@
 #include "io_controller.hpp"
 #include "waker.h"
 #include "scheduler.hpp"
+#include "../common/kernel_config.h"
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
+#include <new>
+#include <vector>
 #include <expected>
 #include <type_traits>
+#include <thread>
 #include <utility>
 
 namespace galay::kernel 
 {
 
 class IOController;
+class TimeoutTimer;
 
 namespace detail {
 
@@ -193,10 +198,70 @@ concept TimeoutPolicy = requires(Awaitable& awaitable) {
 
 }  // namespace detail
 
+namespace detail {
+
+/**
+ * @brief TimeoutTimer 的调度线程本地回收池。
+ *
+ * acquire 返回清零后的复用对象或新建对象；属主线程释放时归还线程本地
+ * free-list，跨线程最后释放则直接析构，避免把对象发布到错误的池。
+ */
+class TimeoutTimerPool
+{
+public:
+    TimeoutTimerPool()
+    {
+        // release() 是不抛异常路径，因此一次性预留有界空闲列表，避免
+        // vector 扩容在释放过程中分配内存。
+        m_free.reserve(GALAY_KERNEL_TIMEOUT_TIMER_POOL_MAX_CACHED);
+    }
+
+    TimeoutTimer* acquire(std::chrono::milliseconds duration);
+    void release(TimeoutTimer* timer) noexcept;
+    ~TimeoutTimerPool();
+
+private:
+    std::vector<TimeoutTimer*> m_free;
+};
+
+inline TimeoutTimerPool& timeoutTimerPoolLocal() noexcept
+{
+    thread_local TimeoutTimerPool pool;
+    return pool;
+}
+
+}  // namespace detail
+
 class TimeoutTimer final: public Timer
 {
 public:
     using ptr = std::shared_ptr<TimeoutTimer>;
+
+    /**
+     * @brief 从调度线程本地对象池获取定时器，避免每操作堆分配。
+     *
+     * 正常创建与释放都发生在拥有该定时器的 IO 调度线程上；若 shared_ptr
+     * 最后在外部线程释放，则直接析构而不进入外部线程的池。
+     */
+    static ptr create(std::chrono::milliseconds duration);
+
+    /**
+     * @brief 复用前清零上一轮使用的全部状态。
+     *
+     * 只有在最后一个 shared_ptr 已释放、且时间轮不再持有该 timer 时才能
+     * 调用；此时 DeferredWaker 不会再收到完成通知，原地重建只负责释放上一轮
+     * 可能仍持有的 TaskRef 并恢复初始状态。
+     */
+    void resetForReuse(std::chrono::milliseconds duration) noexcept
+    {
+        m_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(duration).count();
+        m_expireTime = 0;
+        m_flag.store(0, std::memory_order_relaxed);
+        m_completion.store(Completion::kPending, std::memory_order_relaxed);
+        // DeferredWaker 禁止移动赋值，原地重建恢复初始 kArming 状态。
+        m_waker.~DeferredWaker();
+        new (&m_waker) detail::DeferredWaker{};
+    }
 
     /** @brief 破坏性异步操作尝试取得事务式完成权的结果。 */
     enum class OperationStart : uint8_t {
@@ -437,16 +502,124 @@ private:
     std::atomic<Completion> m_completion{Completion::kPending};
 };
 
+inline TimeoutTimer* detail::TimeoutTimerPool::acquire(std::chrono::milliseconds duration)
+{
+    if (!m_free.empty()) {
+        auto* timer = m_free.back();
+        m_free.pop_back();
+        timer->resetForReuse(duration);
+        return timer;
+    }
+    return new TimeoutTimer(duration);
+}
+
+inline void detail::TimeoutTimerPool::release(TimeoutTimer* timer) noexcept
+{
+    if (timer == nullptr) {
+        return;
+    }
+    // 无抛出 deleter 可能在协程/frame 清理期间执行，不能让 vector 扩容把
+    // 释放路径变成 terminate；空闲列表耗尽时直接销毁 timer。
+    // 同时检查 capacity 与配置上限。构造函数会预留该上限，但 capacity
+    // 检查可在不同翻译单元配置宏不一致时继续保证 noexcept 契约。
+    if (m_free.size() < GALAY_KERNEL_TIMEOUT_TIMER_POOL_MAX_CACHED &&
+        m_free.size() < m_free.capacity()) {
+        m_free.push_back(timer);
+    } else {
+        delete timer;
+    }
+}
+
+inline detail::TimeoutTimerPool::~TimeoutTimerPool()
+{
+    for (auto* timer : m_free) {
+        delete timer;
+    }
+}
+
+inline TimeoutTimer::ptr TimeoutTimer::create(std::chrono::milliseconds duration)
+{
+    struct PoolDeleter {
+        std::thread::id owner;
+
+        void operator()(TimeoutTimer* timer) const noexcept {
+            if (std::this_thread::get_id() == owner) {
+                detail::timeoutTimerPoolLocal().release(timer);
+            } else {
+                // 共享 timer 可能在其他线程晚于 scheduler frame 释放；不要
+                // 把它发布到其他线程的本地对象池。
+                delete timer;
+            }
+        }
+    };
+    return ptr(detail::timeoutTimerPoolLocal().acquire(duration),
+               PoolDeleter{std::this_thread::get_id()});
+}
+
 template<typename Awaitable,
          typename TimeoutPolicyT = detail::DefaultTimeoutPolicy<Awaitable>>
 struct WithTimeout;
 
 /**
-* @brief CRTP 基类，为 Awaitable 提供 timeout() 方法
-*/
+ * @brief 保存完成路径观察的超时定时器绑定。
+ *
+ * 普通 IO awaitable 和 sequence awaitable 共享这段完成时裁决逻辑；定时器
+ * 的实际所有权仍由 WithTimeout 持有，绑定只保存非拥有观察指针。
+ */
+struct TimeoutTimerBinding {
+    /**
+     * @brief 绑定当前挂起操作对应的超时裁决定时器。
+     *
+     * WithTimeout 在 inner.await_suspend() 前调用；完成路径必须在唤醒协程
+     * 前取消该定时器，把成功与超时的竞争裁决提前到完成派发时刻。组合
+     * awaitable 可先暂存绑定，再在自己的 await_suspend() 中转交给 inner。
+     */
+    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
+        m_bound_timeout_timer = timer;
+    }
+
+protected:
+    /**
+     * @brief 将尚未发布给完成方的绑定转交给实际 inner awaitable。
+     *
+     * 组合 awaitable 先在外层保存 timer，再在 inner.await_suspend() 前转交，
+     * 从而不要求 inner 必须在外层 bindTimeoutTimer() 调用前完成构造。
+     */
+    template <typename AwaitableT>
+    requires requires(AwaitableT& awaitable, TimeoutTimer* timer) {
+        { awaitable.bindTimeoutTimer(timer) } noexcept;
+    }
+    void forwardBoundTimeoutTimer(AwaitableT& awaitable) noexcept {
+        auto* timer = std::exchange(m_bound_timeout_timer, nullptr);
+        if (timer != nullptr) {
+            awaitable.bindTimeoutTimer(timer);
+        }
+    }
+
+public:
+    /** @brief 完成派发时刻取消竞争；幂等且不反转已发生的超时结果。 */
+    void cancelBoundTimeoutTimer() noexcept {
+        // reactor 和 await_resume() 都可能报告完成。取消前先清除非拥有观察
+        // 指针，避免后续通知解引用已由 WithTimeout wrapper 释放的 timer。
+        auto* timer = std::exchange(m_bound_timeout_timer, nullptr);
+        if (timer != nullptr) {
+            timer->cancel();
+        }
+    }
+
+private:
+    TimeoutTimer* m_bound_timeout_timer = nullptr;
+};
+
+/**
+ * @brief 仅提供 `.timeout()` API 的 CRTP mixin。
+ *
+ * 与 TimeoutSupport 的区别是它不保存完成路径状态，供已经通过其他基类
+ * 提供 TimeoutTimerBinding 的组合式 awaitable 使用。
+ */
 template<typename Derived,
          typename TimeoutPolicyT = detail::DefaultTimeoutPolicy<Derived>>
-struct TimeoutSupport {
+struct TimeoutMethods {
     using timeout_policy = TimeoutPolicyT;
 
     template<typename D = Derived>
@@ -461,6 +634,17 @@ struct TimeoutSupport {
     auto timeout(std::chrono::milliseconds t) & {
         return WithTimeout<Derived, TimeoutPolicyT>{static_cast<Derived&>(*this), t};
     }
+};
+
+/**
+* @brief CRTP 基类，为 Awaitable 提供 timeout() 方法
+*/
+template<typename Derived,
+         typename TimeoutPolicyT = detail::DefaultTimeoutPolicy<Derived>>
+struct TimeoutSupport
+    : public TimeoutTimerBinding
+    , public TimeoutMethods<Derived, TimeoutPolicyT> {
+    using timeout_policy = TimeoutPolicyT;
 };
 
 /**
@@ -521,15 +705,25 @@ struct WithTimeout {
             return false;
         }
 
-        if constexpr (requires(Awaitable& awaitable,
-                               const TimeoutTimer::ptr& sharedTimer) {
+        if constexpr (requires(Awaitable& awaitable, TimeoutTimer* rawTimer) {
+            awaitable.bindTimeoutTimer(rawTimer);
+        }) {
+            // 核心 IO awaitable 只观察共享完成 timer，不延长其生命周期；
+            // WithTimeout 仍是唯一所有者。
+            m_inner.bindTimeoutTimer(timer.get());
+        } else if constexpr (requires(Awaitable& awaitable,
+                                      const TimeoutTimer::ptr& sharedTimer) {
             awaitable.bindTimeoutTimer(sharedTimer);
         }) {
+            // channel awaitable 保留同一个共享 timer 对象，使 waiter 与超时
+            // 路径共同仲裁一个完成状态。
             m_inner.bindTimeoutTimer(timer);
         }
 
         const bool suspended = m_inner.await_suspend(handle);
         if (!suspended) {
+            // 同步完成没有 reactor 派发回调；wrapper 销毁前仍需取消 timer，
+            // CloseAwaitable 也会在此路径消费其裸绑定。
             timer->cancel();
             return false;
         }
@@ -573,6 +767,9 @@ struct WithTimeout {
             injectTimeoutResult();
             timer->cancel();
         } else {
+            // reactor 通常会在唤醒协程前取消绑定 timer。同步或自定义 awaitable
+            // 的完成路径可能不经过 reactor，因此保留第二次取消；cancel()
+            // 在这些路径之间刻意设计为幂等。
             timer->cancel();
         }
         return m_inner.await_resume();
@@ -581,7 +778,7 @@ struct WithTimeout {
     /** @brief 显式为源码级测试或手工驱动 timer 的调用方创建定时器。 */
     void ensureTimer() {
         if (!m_timer) {
-            m_timer = std::make_shared<TimeoutTimer>(m_duration);
+            m_timer = TimeoutTimer::create(m_duration);
         }
     }
 

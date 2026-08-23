@@ -13,25 +13,43 @@
 
 ### Added
 
+- **TimeoutTimer 调度线程本地对象池**：新增 `TimeoutTimerPool`，通过 `TimeoutTimer::create()` 从线程本地 free-list 获取或新建定时器，`resetForReuse()` 在复用前清零全部状态；跨线程最后释放直接析构，避免把对象发布到错误的池。新增 `t177_timeout_timer_pool` 验证池复用、跨线程析构与容量上限。
+- **内核可调参数集中定义头**：新增 `kernel_config.h`，统一存放 `GALAY_KERNEL_TIMER_WHEEL_TICK_NS`、`GALAY_KERNEL_IO_POLL_IDLE_TIMEOUT_MS`、`GALAY_SCHEDULER_MAX_EVENTS` 等全部运行时宏，移除 epoll/kqueue/io_uring scheduler 中的重复 `#ifndef` 定义。
 - **TCP 公平对标读路径接入 10ms 接收超时**：galay `b31` 三处 `readExact` 改用 `.timeout(10ms)` 并按超时计数重试；Boost.Asio TCP baseline 新增 `parallel_group`+`steady_timer` 竞速版 `readExactWithTimeout`，两侧策略严格对称。meta 输出新增 `recv_timeout_ms` 与 `recv_timeouts` 字段以暴露超时触发率。
 - **Awaitable Timeout 压测后优化计划 Task D**：计划文档新增 D1（削减挂起路径 per-op 定时器注册成本，目标 @100ms 形态损耗 ≤8%）与 D2（定位饱和负载下 >10ms 事件分派停顿，目标触发率 ≤1%），并明确重试型超时压测结论在 D2 收敛前不得归档为正式证据。
 
 - **惰性 TimeoutTimer 与 ready 路径零分配**：`WithTimeout` 改为在 `await_suspend` 中惰性创建 `TimeoutTimer`，`await_ready()` 为真的路径完全不分配定时器；ready 快路径吞吐约 24M ops/s，是 eager timer 创建路径的 4 倍。
 - **显式 TimeoutPolicy 模板策略**：新增 `TimeoutSupport<Derived, TimeoutPolicy>` 与 `WithTimeout<Awaitable, TimeoutPolicy>` 双模板参数，新 awaitable 可通过 `Policy::inject()` 与 `ownsIoRegistration()` 自定义超时注入行为，编译期内联无虚函数开销。
+- **SequenceAwaitableBase 完成去重与超时仲裁**：新增 `m_completed` 去重标志，`onCompleted()` 在发布唤醒前先 `cancelBoundTimeoutTimer()`，避免恢复排队延迟让已成功的 I/O 被滞后的 `TimeoutTimer` 误判为超时。新增 `t179_sequence_completion_once` 验证重复调用安全。
 - **ForwardingAwaitable CRTP/owning 双形式**：统一 facade 的 `await_ready`/`await_suspend`/`await_resume`/`markTimeout` 转发，已收口 RPC、MySQL、PostgreSQL、Redis 全部协议 facade，消除复制粘贴样板。
 - **自定义 awaitable 超时策略示例与测试**：新增 `e12_policy.cc` 示例、`t148_custom_awaitable.cc` 与 `t149_timeout_policy_surface.cc` 定向测试，验证显式策略编译期契约与 `ownsIoRegistration` 定制点。
 - **TimeoutReadyPath 基准测试**：新增 `b33_timeout_ready_path.cc`，对比 ready 快路径与 eager timer 创建的固定开销。
 
 ### Changed
 
+- **poll 超时计算统一收归 IOScheduler**：epoll/kqueue/io_uring 三个后端的 poll 超时由 `schedulerPollTimeoutNanoseconds()`、`schedulerPollTimeoutMilliseconds()`、`schedulerPollTimeoutIoUringNanoseconds()` 统一计算，空轮使用 idle 上限，非空轮对齐下一个 tick 边界（`nsToNextTickBoundary()`），消除散落在各后端的 `halfTickPoll*` 辅助函数。新增 `t178_scheduler_poll_timeout` 验证空轮/非空轮/上限三路径。
+- **TimeoutSupport 重命名为 TimeoutMethods**：所有继承 `TimeoutSupport` 的 awaitable 统一迁移至 `TimeoutMethods`，`SequenceAwaitableBase` 新增 `TimeoutTimerBinding` 支持超时绑定转发；HTTP2/SSL/WS facade 的 `await_suspend()` 补齐 `cancelBoundTimeoutTimer()` 与 `forwardBoundTimeoutTimer()` 调用。
+- **io_uring reactor 完成路径统一超时仲裁**：所有 IO 类型的 `wakeUp()` 调用前统一通过 `completeAndWake()` 先 `cancelBoundTimeoutTimer()`，防止超时与正常完成的竞争；sequence 的 `onCompleted()` 在 `wakeUp()` 前调用。
+- **epoll reactor 完成路径统一超时仲裁**：one-shot 与 FILEWATCH 事件在 `wakeUp()` 前先 `cancelBoundTimeoutTimer()`。
+- **C io_scheduler ready queue 重写为无锁 MPSC**：生产者改为原子 CAS 堆叠的 LIFO 节点，消费者通过 `refill_pending()` 批量翻转为 FIFO 列表；新增 `reactor_inflight` 原子计数器，`unregister()` 等待当前 reactor 批次（含所有 slot 交换与任务唤醒）完成后才允许释放 controller。
+- **C++ WS client socket 所有权提前移交**：`galay_ws_client_connect()` 在首次异步操作前就把 socket 移入 connection 对象，避免 stack socket 在 reactor 注册后被移动导致 epoll 指向已过期的 coroutine-stack controller。
 - **UDP 公平对标收发超时统一为 10ms**：galay `b6` 客户端/服务端接收超时由 50ms/100ms 收敛为 10ms；Boost.Asio UDP baseline 服务端 `kServerReceiveTimeout` 与客户端硬编码超时同步收敛，消除双侧口径不一致。
 
 - **TimeoutTimer 完成状态机收窄为唯一 Completion 原子操作**：`timeouted()` 改为直接读取 `m_completion == kTimeoutWon`，移除冗余 `m_flag | kTimeout` 写入；所有 `seq_cst` 内存序收窄为 `acq_rel`/`acquire`。
 - **awaitableStillOwnsIORegistration 增加显式定制点**：优先检测 `ownsIoRegistration()` 方法，fallback 到 `m_controller` 指针比较，新 awaitable 可精确声明 IO 注册归属。
 - **Channel/Sequence awaitable 超时注入统一为 `markTimeout()`**：默认 timeout policy 通过 `TimeoutMarkable` concept 检测 public `markTimeout()` 方法，无需 friend 访问。
 
+### Chore
+
+- **.gitignore 新增 `.tmp*/` 临时目录排除**。
+- **CTest 默认超时收紧**：`tracing_options_surface` 测试新增 300 秒超时上限。
+- **benchmark 测量合同扩展**：新增 Galay/Asio TCP benchmark 不保留临时环境变量与诊断计数器的断言，并验证接收超时值保持 10ms。
+- **Redis 连接池 awaitable 声明位置检查改为类定义匹配**：`hasClassDefinition()` 增加前向声明（`class X;`）过滤，避免误判。
+- **io_scheduler C 模块注释与字段对齐**：ready queue 字段重命名（`tail` → `pending`），注释统一为英文。
+
 ### Fixed
 
+- **修复 io_uring sequence 的 onCompleted 缺失**：sequence 完成或 addSequence 失败时不再直接调用 `wakeUp()`，改走 `onCompleted()` → `cancelBoundTimeoutTimer()` → `wakeUp()` 路径，确保超时定时器在唤醒前被正确仲裁。
 - **修正 timeout 竞争路径的冗余状态写入**：`completeTimeout()` 不再在 `kTimeoutWon` 时额外写入 `m_flag`，避免跨缓存行伪共享。
 
 - **AsyncTcpSocket 新增 `readExact` / `writeAll` 组合流操作**：在一个 awaitable 状态机内完成多次部分读写，避免用户协程手动循环挂起和子 Task 分配；内部偏移量随状态机推进，零额外协程开销。同步新增 `t178_tcp_exact` 回归测试，验证部分读写、EOF 提前关闭与完整帧语义；TCP 公平吞吐 benchmark 迁移至新 API 并增加 drain 阶段 `shutdown()` 唤醒。

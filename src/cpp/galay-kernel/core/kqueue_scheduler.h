@@ -24,14 +24,7 @@
 #include <thread>
 #include <cstdint>
 
-// Scheduler 配置宏
-#ifndef GALAY_SCHEDULER_MAX_EVENTS
-#define GALAY_SCHEDULER_MAX_EVENTS 1024
-#endif
-
-#ifndef GALAY_SCHEDULER_BATCH_SIZE
-#define GALAY_SCHEDULER_BATCH_SIZE 256
-#endif
+#include "../common/kernel_config.h"
 
 namespace galay::kernel
 {

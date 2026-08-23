@@ -42,11 +42,19 @@ decltype(auto) H2cUpgradeAwaitable<Strategy>::await_suspend(
     std::coroutine_handle<Promise> handle)
 {
     if (m_inner_operation == nullptr) {
+        cancelBoundTimeoutTimer();
         return false;
     }
+    forwardBoundTimeoutTimer(*m_inner_operation);
     m_scheduler = handle.promise().taskRefView().belongScheduler();
     m_inner_armed = true;
     return m_inner_operation->await_suspend(handle);
+}
+
+template<RingBufferBackendStrategy Strategy>
+void H2cUpgradeAwaitable<Strategy>::bindTimeoutTimer(TimeoutTimer* timer) noexcept
+{
+    SequenceAwaitableBase::bindTimeoutTimer(timer);
 }
 
 template<RingBufferBackendStrategy Strategy>

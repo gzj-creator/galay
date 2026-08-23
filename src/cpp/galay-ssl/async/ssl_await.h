@@ -649,12 +649,12 @@ private:
  * @brief SSL 状态机协程可等待对象
  * @tparam MachineT 满足 SslAwaitableStateMachine 概念的状态机类型
  * @details 将 SSL 状态机与协程调度器集成，通过 co_await 驱动多步 SSL 操作。
- * 继承 SequenceAwaitableBase 以支持 IO 序列调度，继承 TimeoutSupport 以支持超时。
+ * 继承 SequenceAwaitableBase 以支持 IO 序列调度，继承 TimeoutMethods 以支持超时。
  */
 template <SslAwaitableStateMachine MachineT>
 class SslStateMachineAwaitable
     : public SequenceAwaitableBase
-    , public TimeoutSupport<SslStateMachineAwaitable<MachineT>> {
+    , public TimeoutMethods<SslStateMachineAwaitable<MachineT>> {
 public:
     using result_type = typename MachineT::result_type;  ///< 操作结果类型
     using ErrorT = typename detail::expected_traits<std::remove_cvref_t<result_type>>::error_type;

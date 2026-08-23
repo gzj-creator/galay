@@ -193,6 +193,24 @@ namespace galay::kernel
         }
 
         /**
+         * @brief 距下一个时间轮 tick 边界的纳秒数
+         * @return 下一次 tick 处理的到期时刻与当前时刻的差值
+         *
+         * @note 所有定时器都在 tick 边界触发；以该边界作为事件循环的
+         *       poll 超时，可把定时器触发延迟限制在一个 tick 以内。时间轮
+         *       的公共接口要求由同一 owner 线程调用，此查询也不提供跨线程同步。
+         */
+        uint64_t nsToNextTickBoundary() const noexcept
+        {
+            auto now = std::chrono::steady_clock::now();
+            const uint64_t elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+                now - m_startTime).count();
+            const uint64_t next_boundary =
+                (elapsed / m_tickDuration + 1) * m_tickDuration;
+            return next_boundary > elapsed ? next_boundary - elapsed : m_tickDuration;
+        }
+
+        /**
          * @brief 获取配置的 tick 时长（纳秒）
          * @return 每 tick 的纳秒数
          */

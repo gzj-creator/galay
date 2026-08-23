@@ -458,7 +458,7 @@ private:
 template<RingBufferBackendStrategy Strategy>
 class H2ClientConnectSequence
     : public SequenceAwaitableBase
-    , public TimeoutSupport<H2ClientConnectSequence<Strategy>>
+    , public TimeoutMethods<H2ClientConnectSequence<Strategy>>
 {
 public:
     using ResultType = std::expected<bool, Http2ErrorCode>;
@@ -586,11 +586,18 @@ public:
     template<typename Promise>
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle) {
         if (m_inner_operation == nullptr) {
+            cancelBoundTimeoutTimer();
             return false;
         }
+        forwardBoundTimeoutTimer(*m_inner_operation);
         m_client->m_scheduler = handle.promise().taskRefView().belongScheduler();
         m_inner_armed = true;
         return m_inner_operation->await_suspend(handle);
+    }
+
+    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
+        SequenceAwaitableBase::bindTimeoutTimer(timer);
     }
 
     ResultType await_resume() {

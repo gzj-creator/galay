@@ -17,6 +17,7 @@
 
 #include "../common/defn.hpp"
 #include "../common/error.h"
+#include "../common/kernel_config.h"
 #include "scheduler.hpp"
 #include "io_controller.hpp"
 #include "awaitable.h"
@@ -36,50 +37,6 @@
 
 namespace galay::kernel
 {
-
-/**
- * @def GALAY_KERNEL_IO_POLL_WAIT_MAX_NS
- * @brief 与 TimerManager tick 对齐的 poll 阻塞上限（纳秒），与 io_uring 默认等待一致
- */
-#ifndef GALAY_KERNEL_IO_POLL_WAIT_MAX_NS
-#define GALAY_KERNEL_IO_POLL_WAIT_MAX_NS 10000000ULL
-#endif
-
-namespace detail {
-
-/**
- * @brief 由时间轮 tick 推导半 tick 的 poll 等待（纳秒），带下限与上限，供 kqueue/io_uring 使用
- */
-inline uint64_t halfTickPollWaitNanoseconds(uint64_t tick_duration_ns) noexcept {
-    uint64_t half = tick_duration_ns / 2;
-    constexpr uint64_t kZeroFallbackNs = 1000000ULL;
-    if (half == 0) {
-        half = kZeroFallbackNs;
-    }
-    if (half > GALAY_KERNEL_IO_POLL_WAIT_MAX_NS) {
-        half = GALAY_KERNEL_IO_POLL_WAIT_MAX_NS;
-    }
-    return half;
-}
-
-/**
- * @brief 由时间轮 tick 推导 epoll_wait 超时毫秒数（半 tick，至少 1ms）
- */
-inline int halfTickPollTimeoutMilliseconds(uint64_t tick_duration_ns) noexcept {
-    int ms = static_cast<int>(tick_duration_ns / 2000000ULL);
-    return ms < 1 ? 1 : ms;
-}
-
-/**
- * @brief 填充 kevent 使用的 timespec，与 `halfTickPollWaitNanoseconds` 语义一致
- */
-inline void fillTimespecHalfTick(struct ::timespec& ts, uint64_t tick_duration_ns) noexcept {
-    const uint64_t ns = halfTickPollWaitNanoseconds(tick_duration_ns);
-    ts.tv_sec = static_cast<::time_t>(ns / 1000000000ULL);
-    ts.tv_nsec = static_cast<long>(ns % 1000000000ULL);
-}
-
-}  // namespace detail
 
 /**
  * @brief 固定容量的 Chase-Lev 本地就绪环
@@ -1046,7 +1003,43 @@ public:
     }
 
 protected:
-    TimingWheelTimerManager m_timer_manager;
+    /**
+     * @brief kqueue 等纳秒 poll 接口的等待超时
+     *
+     * 空轮使用 idle 上限，非空轮对齐下一个 tick 边界；统一在纳秒域
+     * 应用通用毫秒上限，避免 kqueue 发生 ms->ns 往返精度损失。
+     */
+    uint64_t schedulerPollTimeoutNanoseconds() const noexcept {
+        constexpr uint64_t kNsPerMs = 1'000'000ULL;
+        const uint64_t max_ns =
+            static_cast<uint64_t>(GALAY_KERNEL_IO_POLL_TIMEOUT_MAX_MS) * kNsPerMs;
+        uint64_t ns = m_timer_manager.empty()
+            ? static_cast<uint64_t>(GALAY_KERNEL_IO_POLL_IDLE_TIMEOUT_MS) * kNsPerMs
+            : m_timer_manager.nsToNextTickBoundary();
+        return std::min(max_ns, ns);
+    }
+
+    /** @brief epoll 等毫秒接口使用纳秒边界的向上取整结果。 */
+    int schedulerPollTimeoutMilliseconds() const noexcept {
+        constexpr uint64_t kNsPerMs = 1'000'000ULL;
+        const uint64_t ns = schedulerPollTimeoutNanoseconds();
+        const uint64_t rounded_ms = (ns + kNsPerMs - 1) / kNsPerMs;
+        const uint64_t ms = std::max<uint64_t>(GALAY_KERNEL_IO_POLL_TIMEOUT_MIN_MS,
+                                               rounded_ms);
+        return static_cast<int>(std::min<uint64_t>(ms, GALAY_KERNEL_IO_POLL_TIMEOUT_MAX_MS));
+    }
+
+    /**
+     * @brief io_uring 完成等待的纳秒上限。
+     * @details io_uring 的有效等待时间还会受空闲轮 50ms 默认值影响，最终
+     *          取时间轮边界与 GALAY_KERNEL_IO_POLL_WAIT_MAX_NS 的较小值。
+     */
+    uint64_t schedulerPollTimeoutIoUringNanoseconds() const noexcept {
+        return std::min<uint64_t>(schedulerPollTimeoutNanoseconds(),
+                                  GALAY_KERNEL_IO_POLL_WAIT_MAX_NS);
+    }
+
+    TimingWheelTimerManager m_timer_manager{GALAY_KERNEL_TIMER_WHEEL_TICK_NS};
     std::span<IOScheduler* const> m_steal_domain_siblings{};
     size_t m_steal_domain_self_index = 0;
 };

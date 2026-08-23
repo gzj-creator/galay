@@ -299,6 +299,25 @@ int main()
                          "if (error == asio::error::operation_aborted) return;",
                          "expected Boost.Asio shutdown cancellation must not be an error") && ok;
 
+    ok = requireAbsent(tcp_source,
+                       "GALAY_TCP_LATENCY_HIST",
+                       "Galay TCP benchmark must not retain temporary environment instrumentation") && ok;
+    ok = requireAbsent(tcp_source,
+                       "hist ",
+                       "Galay TCP benchmark must not emit temporary latency histograms") && ok;
+    ok = requireAbsent(asio_tcp_source,
+                       "GALAY_TCP_LATENCY_HIST",
+                       "Boost.Asio TCP benchmark must not retain temporary environment instrumentation") && ok;
+    ok = requireAbsent(asio_tcp_source,
+                       "diag ",
+                       "Boost.Asio TCP benchmark must not emit temporary diagnostic counters") && ok;
+    ok = requireContains(tcp_source,
+                         "constexpr auto kRecvTimeout = std::chrono::milliseconds(10)",
+                         "Galay TCP benchmark receive timeout must retain the 10ms workload") && ok;
+    ok = requireContains(asio_tcp_source,
+                         "constexpr std::chrono::milliseconds kRecvTimeout{10}",
+                         "Boost.Asio TCP benchmark receive timeout must retain the 10ms workload") && ok;
+
     if (!ok) {
         return 1;
     }

@@ -262,7 +262,9 @@ void KqueueScheduler::eventLoop()
         [this](TaskRef& next) { resume(next); },
         [this]() {
             struct timespec timeout;
-            detail::fillTimespecHalfTick(timeout, m_timer_manager.during());
+            const uint64_t ns = schedulerPollTimeoutNanoseconds();
+            timeout.tv_sec = static_cast<::time_t>(ns / 1'000'000'000ULL);
+            timeout.tv_nsec = static_cast<long>(ns % 1'000'000'000ULL);
             m_reactor.poll(timeout, m_wake_coordinator);
         },
         [this]() { (void)m_reactor.flushPendingChanges(); });

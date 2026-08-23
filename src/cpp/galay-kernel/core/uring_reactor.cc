@@ -89,6 +89,17 @@ inline void closeUndeliveredAcceptedHandle(std::expected<GHandle, IOError>& resu
     }
 }
 
+template <typename Awaitable>
+requires requires(Awaitable& awaitable) {
+    { awaitable.cancelBoundTimeoutTimer() } noexcept;
+    { awaitable.m_waker.wakeUp() } noexcept;
+}
+inline void completeAndWake(Awaitable* awaitable) noexcept
+{
+    awaitable->cancelBoundTimeoutTimer();
+    awaitable->m_waker.wakeUp();
+}
+
 inline bool resolveSequenceSlot(IOEventType type, IOController::Index& slot) {
     if (detail::sequenceEventUsesSlot(type, IOController::READ)) {
         slot = IOController::READ;
@@ -883,6 +894,7 @@ int IOUringReactor::addSequence(IOController* controller) {
         }
         const int ret = submitSequenceSqe(slot, type, task->context, controller, owner);
         if (ret == kImmediateReady) {
+            owner->onCompleted();
             owner->m_waker.wakeUp();
             return 0;
         }
@@ -1176,13 +1188,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case CONNECT: {
         auto* awaitable = static_cast<ConnectAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addConnect(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kConnectFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1195,13 +1207,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case SEND: {
         auto* awaitable = static_cast<SendAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addSend(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1209,13 +1221,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case READV: {
         auto* awaitable = static_cast<ReadvAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addReadv(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1223,13 +1235,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case WRITEV: {
         auto* awaitable = static_cast<WritevAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addWritev(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1237,13 +1249,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case FILEREAD: {
         auto* awaitable = static_cast<FileReadAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addFileRead(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kReadFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1251,13 +1263,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case FILEWRITE: {
         auto* awaitable = static_cast<FileWriteAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addFileWrite(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kWriteFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1268,13 +1280,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
             processRecvFromCompletion(controller, awaitable, handle, cqe);
         } else {
             if (awaitable->handleComplete(cqe, controller->m_handle)) {
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             } else {
                 const int ret = addRecvFrom(controller);
                 if (ret < 0) {
                     awaitable->m_result =
                         std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
-                    awaitable->m_waker.wakeUp();
+                    completeAndWake(awaitable);
                 }
             }
         }
@@ -1283,13 +1295,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case SENDTO: {
         auto* awaitable = static_cast<SendToAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addSendTo(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1297,13 +1309,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case FILEWATCH: {
         auto* awaitable = static_cast<FileWatchAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addFileWatch(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kReadFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1311,13 +1323,13 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
     case SENDFILE: {
         auto* awaitable = static_cast<SendFileAwaitable*>(base);
         if (awaitable->handleComplete(cqe, controller->m_handle)) {
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             const int ret = addSendFile(controller);
             if (ret < 0) {
                 awaitable->m_result =
                     std::unexpected(IOError(kSendFailed, negativeRetOrErrno(ret)));
-                awaitable->m_waker.wakeUp();
+                completeAndWake(awaitable);
             }
         }
         break;
@@ -1350,12 +1362,14 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
             progress = sequence->onActiveEvent(cqe, controller->m_handle);
         }
         if (progress == SequenceProgress::kCompleted) {
+            sequence->onCompleted();
             sequence->m_waker.wakeUp();
         } else {
             const int ret = addSequence(controller);
             if (ret < 0) {
                 detail::storeBackendError(
                     m_last_error_code, kNotReady, negativeRetOrErrno(ret));
+                sequence->onCompleted();
                 sequence->m_waker.wakeUp();
             }
         }
@@ -1382,7 +1396,7 @@ void IOUringReactor::processAcceptCompletion(IOController* controller,
                 controller->enqueueAcceptedHandle(*result);
                 if (controller->tryConsumeAcceptedHandle(awaitable->m_host, awaitable->m_result)) {
                     controller->m_accept_result_assigned = true;
-                    awaitable->m_waker.wakeUp();
+                    completeAndWake(awaitable);
                 }
             } else {
                 closeUndeliveredAcceptedHandle(result);
@@ -1394,7 +1408,7 @@ void IOUringReactor::processAcceptCompletion(IOController* controller,
         if (awaitable != nullptr && !controller->m_accept_result_assigned) {
             awaitable->m_result = std::unexpected(result.error());
             controller->m_accept_result_assigned = true;
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         } else {
             detail::storeBackendError(
                 m_last_error_code,
@@ -1422,7 +1436,7 @@ void IOUringReactor::processAcceptCompletion(IOController* controller,
         awaitable->m_result =
             std::unexpected(IOError(kAcceptFailed, negativeRetOrErrno(ret)));
         controller->m_accept_result_assigned = true;
-        awaitable->m_waker.wakeUp();
+        completeAndWake(awaitable);
         return;
     }
 
@@ -1492,7 +1506,7 @@ void IOUringReactor::processRecvCompletion(IOController* controller,
 
         if (should_deliver) {
             controller->m_recv_result_assigned = true;
-            awaitable->m_waker.wakeUp();
+            completeAndWake(awaitable);
         }
     }
 
@@ -1581,7 +1595,7 @@ void IOUringReactor::processRecvFromCompletion(IOController* controller,
                                             awaitable->m_from,
                                             awaitable->m_result)) {
         controller->m_recvfrom_result_assigned = true;
-        awaitable->m_waker.wakeUp();
+        completeAndWake(awaitable);
     }
 
     if (more) {
@@ -1609,7 +1623,7 @@ void IOUringReactor::processRecvFromCompletion(IOController* controller,
         awaitable->m_result =
             std::unexpected(IOError(kRecvFailed, negativeRetOrErrno(ret)));
         controller->m_recvfrom_result_assigned = true;
-        awaitable->m_waker.wakeUp();
+        completeAndWake(awaitable);
     }
 #endif
 }

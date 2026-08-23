@@ -23,17 +23,7 @@
 #include <thread>
 #include <cstdint>
 
-#ifndef GALAY_SCHEDULER_QUEUE_DEPTH
-#define GALAY_SCHEDULER_QUEUE_DEPTH 4096
-#endif
-
-#ifndef GALAY_SCHEDULER_BATCH_SIZE
-#define GALAY_SCHEDULER_BATCH_SIZE 256
-#endif
-
-#ifndef GALAY_IOURING_WAIT_TIMEOUT_NS
-#define GALAY_IOURING_WAIT_TIMEOUT_NS GALAY_KERNEL_IO_POLL_WAIT_MAX_NS
-#endif
+#include "../common/kernel_config.h"
 
 namespace galay::kernel
 {

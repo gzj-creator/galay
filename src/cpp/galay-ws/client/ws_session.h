@@ -100,7 +100,7 @@ namespace detail {
 template<typename SocketType>
 class WsSessionUpgradeOperation<SocketType, false>
     : public SequenceAwaitableBase
-    , public galay::kernel::TimeoutSupport<WsSessionUpgradeOperation<SocketType, false>>
+    , public galay::kernel::TimeoutMethods<WsSessionUpgradeOperation<SocketType, false>>
 {
 public:
     using ResultType = std::expected<bool, WsError>;
@@ -276,8 +276,18 @@ public:
 
     template<typename Promise>
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle) {
+        if (m_inner_operation == nullptr) {
+            cancelBoundTimeoutTimer();
+            return false;
+        }
+        forwardBoundTimeoutTimer(*m_inner_operation);
         m_inner_armed = true;
         return m_inner_operation->await_suspend(handle);
+    }
+
+    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
+        SequenceAwaitableBase::bindTimeoutTimer(timer);
     }
 
     ResultType await_resume() {
@@ -364,7 +374,7 @@ private:
 template<typename SocketType>
 class WsSessionUpgradeOperation<SocketType, true>
     : public SequenceAwaitableBase
-    , public galay::kernel::TimeoutSupport<WsSessionUpgradeOperation<SocketType, true>>
+    , public galay::kernel::TimeoutMethods<WsSessionUpgradeOperation<SocketType, true>>
 {
 public:
     using ResultType = std::expected<bool, WsError>;
@@ -645,10 +655,17 @@ public:
     template<typename Promise>
     decltype(auto) await_suspend(std::coroutine_handle<Promise> handle) {
         if (m_inner_operation == nullptr) {
+            cancelBoundTimeoutTimer();
             return false;
         }
+        forwardBoundTimeoutTimer(*m_inner_operation);
         m_inner_armed = true;
         return m_inner_operation->await_suspend(handle);
+    }
+
+    /** @brief 暂存外层 timeout 绑定，并在 await_suspend() 中转交给 inner。 */
+    void bindTimeoutTimer(TimeoutTimer* timer) noexcept {
+        SequenceAwaitableBase::bindTimeoutTimer(timer);
     }
 
     ResultType await_resume() {

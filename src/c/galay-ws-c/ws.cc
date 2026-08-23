@@ -612,49 +612,63 @@ C_IOResult galay_ws_client_connect(galay_ws_client_t* client,
     if (!copy_host_to_c_host(client->host, client->port, &host)) {
         return make_io_result(C_IOResultInvalid);
     }
-    galay_c_tcp_socket_t socket{};
-    socket.fd = -1;
-    const C_IOResult created = galay_c_tcp_socket_create(&socket, host.type);
+    auto* connection = new (std::nothrow) galay_ws_connection_t();
+    if (connection == nullptr) {
+        return io_result_from_status(GALAY_OUT_OF_MEMORY);
+    }
+    connection->socket.fd = -1;
+    connection->is_server = false;
+
+    // The reactor stores the controller address in epoll_event.data.ptr. Keep
+    // the socket in its final connection owner before the first async wait;
+    // moving a registered stack socket into the connection would leave epoll
+    // pointing at an expired coroutine-stack controller.
+    const C_IOResult created = galay_c_tcp_socket_create(&connection->socket, host.type);
     if (created.code != C_IOResultOk) {
+        delete connection;
         return created;
     }
 
     const int64_t effective_timeout =
         timeout_ms < 0 && client->connect_timeout_ms > 0 ? client->connect_timeout_ms : timeout_ms;
-    C_IOResult connected = galay_c_tcp_socket_connect(&socket, &host, effective_timeout);
+    C_IOResult connected =
+        galay_c_tcp_socket_connect(&connection->socket, &host, effective_timeout);
     if (connected.code != C_IOResultOk) {
-        return close_after_result(&socket, connected);
+        const C_IOResult result = close_after_result(&connection->socket, connected);
+        delete connection;
+        return result;
     }
 
     std::string client_key;
     std::string request;
     if (!make_upgrade_request(client->host, client->port, client->path, &client_key, &request)) {
-        return close_after_result(
-            &socket, io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED));
+        const C_IOResult result = close_after_result(
+            &connection->socket, io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED));
+        delete connection;
+        return result;
     }
-    C_IOResult sent = write_string(&socket, request, effective_timeout);
+    C_IOResult sent = write_string(&connection->socket, request, effective_timeout);
     if (sent.code != C_IOResultOk) {
-        return close_after_result(&socket, sent);
+        const C_IOResult result = close_after_result(&connection->socket, sent);
+        delete connection;
+        return result;
     }
 
     std::string response;
     size_t header_end = 0;
-    C_IOResult read = read_http_headers(&socket, &response, &header_end, effective_timeout);
+    C_IOResult read =
+        read_http_headers(&connection->socket, &response, &header_end, effective_timeout);
     if (read.code != C_IOResultOk) {
-        return close_after_result(&socket, read);
+        const C_IOResult result = close_after_result(&connection->socket, read);
+        delete connection;
+        return result;
     }
     if (!validate_upgrade_response(response, client_key)) {
-        return close_after_result(&socket,
-                                  io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED));
+        const C_IOResult result = close_after_result(
+            &connection->socket, io_result_from_ws_error(GALAY_WS_ERROR_UPGRADE_FAILED));
+        delete connection;
+        return result;
     }
-
-    auto* connection = new (std::nothrow) galay_ws_connection_t();
-    if (connection == nullptr) {
-        return close_after_result(&socket, io_result_from_status(GALAY_OUT_OF_MEMORY));
-    }
-    connection->socket = socket;
-    socket.fd = -1;
-    connection->is_server = false;
     append_leftover(connection->recv_buffer, response, header_end);
     client->connection = connection;
     *out_connection = connection;

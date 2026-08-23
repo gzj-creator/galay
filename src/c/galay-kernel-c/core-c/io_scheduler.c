@@ -23,11 +23,11 @@ typedef struct ready_queue_node {
 } ready_queue_node_t;
 
 typedef struct ready_queue {
-    _Atomic(ready_queue_node_t*) head;  // 生产者端（原子）
-    ready_queue_node_t* tail;            // 消费者端（单线程）
-    ready_queue_node_t* cache;           // 节点缓存池
+    _Atomic(ready_queue_node_t*) head;   // producers push a private stack node
+    ready_queue_node_t* pending;         // consumer-owned FIFO list
+    ready_queue_node_t* cache;           // consumer/producer node cache
     size_t cache_count;
-    atomic_flag cache_lock;              // cache 仅用于回收节点，短暂 try-lock
+    atomic_flag cache_lock;              // cache only; never held across a push
 } ready_queue_t;
 
 static const int kDefaultMaxEvents = 128;
@@ -48,15 +48,8 @@ static ready_queue_t* ready_queue_create(void)
         return NULL;
     }
 
-    // 创建 sentinel 节点
-    ready_queue_node_t* sentinel = calloc(1, sizeof(ready_queue_node_t));
-    if (!sentinel) {
-        free(queue);
-        return NULL;
-    }
-
-    atomic_init(&queue->head, sentinel);
-    queue->tail = sentinel;
+    atomic_init(&queue->head, NULL);
+    queue->pending = NULL;
     queue->cache = NULL;
     queue->cache_count = 0;
     atomic_flag_clear(&queue->cache_lock);
@@ -70,15 +63,21 @@ static void ready_queue_destroy(ready_queue_t* queue)
         return;
     }
 
-    // 释放所有节点
-    ready_queue_node_t* node = queue->tail;
+    ready_queue_node_t* node = atomic_exchange_explicit(&queue->head, NULL,
+                                                         memory_order_acq_rel);
     while (node) {
         ready_queue_node_t* next = atomic_load_explicit(&node->next, memory_order_relaxed);
         free(node);
         node = next;
     }
 
-    // 释放缓存节点
+    node = queue->pending;
+    while (node) {
+        ready_queue_node_t* next = atomic_load_explicit(&node->next, memory_order_relaxed);
+        free(node);
+        node = next;
+    }
+
     node = queue->cache;
     while (node) {
         ready_queue_node_t* next = atomic_load_explicit(&node->next, memory_order_relaxed);
@@ -89,40 +88,72 @@ static void ready_queue_destroy(ready_queue_t* queue)
     free(queue);
 }
 
-// 生产者端：原子入队（线程安全）
+static ready_queue_node_t* ready_queue_acquire_node(ready_queue_t* queue)
+{
+    ready_queue_node_t* node = NULL;
+    if (atomic_flag_test_and_set_explicit(&queue->cache_lock, memory_order_acquire) == 0) {
+        if (queue->cache != NULL) {
+            node = queue->cache;
+            queue->cache = atomic_load_explicit(&node->next, memory_order_relaxed);
+            --queue->cache_count;
+        }
+        atomic_flag_clear_explicit(&queue->cache_lock, memory_order_release);
+    }
+    return node != NULL ? node : calloc(1, sizeof(ready_queue_node_t));
+}
+
+static void ready_queue_release_node(ready_queue_t* queue, ready_queue_node_t* node)
+{
+    if (queue == NULL || node == NULL) {
+        return;
+    }
+    if (atomic_flag_test_and_set_explicit(&queue->cache_lock, memory_order_acquire) == 0) {
+        if (queue->cache_count < kReadyQueueCacheSize) {
+            atomic_store_explicit(&node->next, queue->cache, memory_order_relaxed);
+            queue->cache = node;
+            ++queue->cache_count;
+            node = NULL;
+        }
+        atomic_flag_clear_explicit(&queue->cache_lock, memory_order_release);
+    }
+    free(node);
+}
+
+// Producers publish a private LIFO node. The consumer exchanges the whole
+// stack and reverses it, so producers never write through a node that the
+// consumer may be reclaiming.
 static int ready_queue_push(ready_queue_t* queue, C_CoroTaskInternal* coro)
 {
     if (!queue || !coro) {
         return 0;
     }
 
-    ready_queue_node_t* node = NULL;
-    if (!atomic_flag_test_and_set_explicit(&queue->cache_lock, memory_order_acquire)) {
-        node = queue->cache;
-        if (node != NULL) {
-            queue->cache = atomic_load_explicit(&node->next, memory_order_relaxed);
-            --queue->cache_count;
-        }
-        atomic_flag_clear_explicit(&queue->cache_lock, memory_order_release);
-    }
+    ready_queue_node_t* node = ready_queue_acquire_node(queue);
     if (node == NULL) {
-        node = calloc(1, sizeof(ready_queue_node_t));
-    }
-    if (!node) {
         return 0;
     }
-
     node->coro = coro;
-    atomic_store_explicit(&node->next, NULL, memory_order_relaxed);
-
-    // 原子交换 head 指针
-    ready_queue_node_t* prev = atomic_exchange_explicit(&queue->head,
-                                                         node,
-                                                         memory_order_acq_rel);
-    // 链接前驱节点
-    atomic_store_explicit(&prev->next, node, memory_order_release);
-
+    ready_queue_node_t* head = atomic_load_explicit(&queue->head, memory_order_relaxed);
+    do {
+        atomic_store_explicit(&node->next, head, memory_order_relaxed);
+    } while (!atomic_compare_exchange_weak_explicit(&queue->head,
+                                                     &head,
+                                                     node,
+                                                     memory_order_release,
+                                                     memory_order_relaxed));
     return 1;
+}
+
+static void ready_queue_refill_pending(ready_queue_t* queue)
+{
+    ready_queue_node_t* stack = atomic_exchange_explicit(&queue->head, NULL,
+                                                         memory_order_acquire);
+    while (stack != NULL) {
+        ready_queue_node_t* next = atomic_load_explicit(&stack->next, memory_order_relaxed);
+        atomic_store_explicit(&stack->next, queue->pending, memory_order_relaxed);
+        queue->pending = stack;
+        stack = next;
+    }
 }
 
 // 消费者端：批量出队（单线程，无竞争）
@@ -135,42 +166,27 @@ static size_t ready_queue_pop_batch(ready_queue_t* queue,
     }
 
     size_t count = 0;
-    ready_queue_node_t* tail = queue->tail;
-
     while (count < max_count) {
-        ready_queue_node_t* next = atomic_load_explicit(&tail->next, memory_order_acquire);
-        if (!next) {
-            break;
-        }
-
-        out_coros[count++] = next->coro;
-
-        // 回收旧 tail 到生产者可复用的缓存；竞争时直接释放，避免阻塞
-        // 调度器线程。
-        if (!atomic_flag_test_and_set_explicit(&queue->cache_lock, memory_order_acquire)) {
-            if (queue->cache_count < kReadyQueueCacheSize) {
-                atomic_store_explicit(&tail->next, queue->cache, memory_order_relaxed);
-                queue->cache = tail;
-                queue->cache_count++;
-                tail = NULL;
+        if (queue->pending == NULL) {
+            ready_queue_refill_pending(queue);
+            if (queue->pending == NULL) {
+                break;
             }
-            atomic_flag_clear_explicit(&queue->cache_lock, memory_order_release);
-        }
-        if (tail != NULL) {
-            free(tail);
         }
 
-        tail = next;
+        ready_queue_node_t* node = queue->pending;
+        queue->pending = atomic_load_explicit(&node->next, memory_order_relaxed);
+        out_coros[count++] = node->coro;
+        ready_queue_release_node(queue, node);
     }
-
-    queue->tail = tail;
     return count;
 }
 
 static int ready_queue_has_items(const ready_queue_t* queue)
 {
     return queue != NULL &&
-           atomic_load_explicit(&queue->tail->next, memory_order_acquire) != NULL;
+           (queue->pending != NULL ||
+            atomic_load_explicit(&queue->head, memory_order_acquire) != NULL);
 }
 
 // Reactor context
@@ -418,6 +434,7 @@ C_IOResult galay_c_io_scheduler_create(galay_c_io_scheduler_t* out_scheduler,
     atomic_init(&out_scheduler->event_count, 0);
     atomic_init(&out_scheduler->wake_count, 0);
     atomic_init(&out_scheduler->reactor_epoch, 0);
+    atomic_init(&out_scheduler->reactor_inflight, 0);
     out_scheduler->ready_queue = queue;
     out_scheduler->reactor_context = reactor_ctx;
 
@@ -476,10 +493,15 @@ C_IOResult galay_c_io_scheduler_run(galay_c_io_scheduler_t* scheduler)
         const int timeout_ms = ready_queue_has_items(queue)
             ? 0
             : galay_c_coro_task_next_timeout_ms(scheduler, 10);
+        // unregister() 使用该计数等待本批次完成。计数覆盖整个
+        // reactor_wait，而不是只覆盖 epoll_wait，确保 controller 指针在
+        // 事件处理完成前始终由调用方持有。
+        atomic_fetch_add_explicit(&scheduler->reactor_inflight, 1, memory_order_acq_rel);
         int wait_result = reactor_wait(scheduler->reactor_context,
                                        scheduler,
                                        queue,
                                        timeout_ms);
+        atomic_fetch_sub_explicit(&scheduler->reactor_inflight, 1, memory_order_release);
         atomic_fetch_add_explicit(&scheduler->reactor_epoch, 1, memory_order_release);
 
         if (wait_result < 0 && wait_result != -EINTR) {
@@ -547,19 +569,19 @@ C_IOResult galay_c_io_scheduler_unregister(galay_c_io_scheduler_t* scheduler,
         return make_result(C_IOResultInvalid, 0);
     }
 
-    int result = reactor_unregister(scheduler->reactor_context, controller);
-    if (result < 0) {
-        return make_result(C_IOResultError, -result);
-    }
-
+    const int result = reactor_unregister(scheduler->reactor_context, controller);
     if (galay_c_current_scheduler != scheduler) {
-        const uint64_t epoch = atomic_load_explicit(&scheduler->reactor_epoch,
-                                                    memory_order_acquire);
-        while (atomic_load_explicit(&scheduler->active, memory_order_acquire) &&
-               atomic_load_explicit(&scheduler->reactor_epoch,
-                                    memory_order_acquire) == epoch) {
+        // epoll_wait/kevent may already have copied controller into the current
+        // event batch when DEL returns. Wait for the complete batch, including
+        // all slot exchanges and task wakeups, before the owner can free it.
+        while (atomic_load_explicit(&scheduler->reactor_inflight,
+                                    memory_order_acquire) != 0) {
             thrd_yield();
         }
+    }
+
+    if (result < 0) {
+        return make_result(C_IOResultError, -result);
     }
 
     return make_result(C_IOResultOk, 0);

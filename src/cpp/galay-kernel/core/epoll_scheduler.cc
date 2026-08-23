@@ -268,9 +268,7 @@ void EpollScheduler::eventLoop()
         static_cast<size_t>(m_batch_size),
         [this](TaskRef& next) { resume(next); },
         [this]() {
-            const uint64_t tick_ns = m_timer_manager.during();
-            const int timeout_ms = detail::halfTickPollTimeoutMilliseconds(tick_ns);
-            m_reactor.poll(timeout_ms, m_wake_coordinator);
+            m_reactor.poll(schedulerPollTimeoutMilliseconds(), m_wake_coordinator);
         },
         [this]() { (void)m_reactor.flushPendingChanges(); });
 }

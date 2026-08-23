@@ -85,3 +85,7 @@ docs/optimization/
 
 # workspace
 .workbuddy/
+
+
+# tmp
+.tmp*/
