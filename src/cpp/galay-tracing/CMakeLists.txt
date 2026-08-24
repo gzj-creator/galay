@@ -19,7 +19,7 @@ target_include_directories(galay-tracing
 target_link_libraries(galay-tracing PUBLIC galay::kernel OpenSSL::Crypto)
 
 if(GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
-    target_compile_definitions(galay-tracing PUBLIC GALAY_TRACING_ENABLE_OTLP_HTTP=1)
+    galay_apply_cpp_module_macros(galay-tracing)
     target_link_libraries(galay-tracing PUBLIC galay::http)
 endif()
 

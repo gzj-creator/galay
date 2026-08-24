@@ -18,7 +18,7 @@ if(GALAY_RPC_ENABLE_ETCD)
     if(NOT TARGET galay::etcd)
         message(FATAL_ERROR "GALAY_RPC_ENABLE_ETCD requires the canonical target galay::etcd")
     endif()
-    target_compile_definitions(galay-rpc PUBLIC GALAY_RPC_HAS_ETCD=1)
+    galay_apply_cpp_module_macros(galay-rpc)
     target_link_libraries(galay-rpc PUBLIC galay::etcd)
 endif()
 

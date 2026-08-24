@@ -24,12 +24,22 @@ foreach(required_source_path
         "src/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "src/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
         "src/c/galay-kernel-c/kernel.h"
+        "src/c/galay-common-c/common/macro.h"
+        "src/c/galay-utils-c/macro.h"
+        "src/c/galay-kernel-c/common-c/macro.h"
+        "src/c/galay-http2-c/macro.h"
+        "src/c/galay-rpc-c/macro.h"
+        "src/c/galay-mongo-c/macro.h"
+        "src/c/galay-tracing-c/macro.h"
         "src/c/galay-kernel-c/concurrency-c/mpmc/bounded_channel.h"
         "src/c/galay-kernel-c/concurrency-c/mpsc/bounded_channel.h"
         "src/c/galay-kernel-c/concurrency-c/spsc/bounded_channel.h"
         "src/cpp/galay-utils/cache/ring_buffer.hpp"
+        "src/cpp/galay-utils/common/macro.hpp"
         "src/cpp/galay-utils/cache/type_ring_buffer.hpp"
+        "src/cpp/galay-http/common/macro.hpp"
         "src/cpp/galay-http/client/http_client.h"
+        "src/cpp/galay-ws/common/macro.hpp"
         "src/cpp/galay-mcp/v1/server/stdio_server.h")
     if(NOT EXISTS "${GALAY_SOURCE_DIR}/${required_source_path}")
         message(FATAL_ERROR "Missing renamed source path: ${required_source_path}")
@@ -85,8 +95,14 @@ if(DEFINED GALAY_INSTALL_CONFIG AND NOT "${GALAY_INSTALL_CONFIG}" STREQUAL "")
     list(APPEND install_command --config "${GALAY_INSTALL_CONFIG}")
 endif()
 
+# The workspace may contain an install manifest created by a different user.
+# Use a private staging build tree so CMake can safely write its manifest.
+set(install_stage_dir "${smoke_root}/install-stage")
+file(MAKE_DIRECTORY "${install_stage_dir}")
+file(REMOVE "${GALAY_BINARY_DIR}/install_manifest.txt")
+
 execute_process(
-    COMMAND ${install_command}
+    COMMAND "${CMAKE_COMMAND}" -E chdir "${install_stage_dir}" ${install_command}
     RESULT_VARIABLE install_result
     OUTPUT_VARIABLE install_stdout
     ERROR_VARIABLE install_stderr
@@ -210,15 +226,19 @@ file(WRITE "${consumer_source_dir}/main.cc"
     "#include <galay/cpp/galay-kernel/common/buffer.h>\n"
     "#include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>\n"
     "#include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>\n"
+    "#include <galay/cpp/galay-utils/common/macro.hpp>\n"
     "#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>\n"
     "#include <galay/cpp/galay-utils/cache/type_ring_buffer.hpp>\n"
+    "#include <galay/cpp/galay-http/common/macro.hpp>\n"
+    "#include <galay/cpp/galay-ws/common/macro.hpp>\n"
     "int main() {\n"
     "  galay::utils::TypeRingBuffer<int> utils_ring(2);\n"
     "  galay::utils::StaticTypeRingBuffer<int, 2> utils_static_ring;\n"
     "  galay::spsc::Ring<int> kernel_ring(2);\n"
     "  galay::spsc::StaticRing<int, 2> kernel_static_ring;\n"
     "  galay::spsc::UnboundedQueue<int> queue;\n"
-    "  return utils_ring.error() == galay::utils::TypeRingBufferError::kNone &&\n"
+    "  return DEFAULT_HTTP_MAX_HEADER_SIZE == 8192 &&\n"
+    "      utils_ring.error() == galay::utils::TypeRingBufferError::kNone &&\n"
     "      utils_static_ring.capacity() == 2 &&\n"
     "      kernel_ring.error() == galay::spsc::RingError::kNone &&\n"
     "      kernel_static_ring.capacity() == 2 && queue.valid() ? 0 : 1;\n"
@@ -238,10 +258,21 @@ target_link_libraries(consumer PRIVATE galay::kernel)
 
 if(galay_cache_content MATCHES "GALAY_BUILD_C_API:BOOL=ON")
     file(WRITE "${consumer_source_dir}/c_main.c"
+        "#include <galay/c/galay-common-c/common/macro.h>\n"
+        "#include <galay/c/galay-http2-c/macro.h>\n"
+        "#include <galay/c/galay-mongo-c/macro.h>\n"
+        "#include <galay/c/galay-rpc-c/macro.h>\n"
+        "#include <galay/c/galay-tracing-c/macro.h>\n"
+        "#include <galay/c/galay-utils-c/macro.h>\n"
         "#include <galay/c/galay-kernel-c/kernel.h>\n"
         "int main(void) {\n"
         "  C_RuntimeConfig config = galay_c_runtime_config_default();\n"
-        "  return config.io_scheduler_count == C_RUNTIME_SCHEDULER_COUNT_AUTO ? 0 : 1;\n"
+        "  return config.io_scheduler_count == C_RUNTIME_SCHEDULER_COUNT_AUTO &&\n"
+        "      GALAY_HTTP2_FRAME_HEADER_LENGTH == 9u &&\n"
+        "      GALAY_MONGO_MAX_KEY_LENGTH == 255u &&\n"
+        "      GALAY_RPC_HEADER_SIZE == 16u &&\n"
+        "      GALAY_TRACING_TRACE_ID_HEX_LENGTH == 32u &&\n"
+        "      GALAY_UTILS_OK == GALAY_OK ? 0 : 1;\n"
         "}\n")
     file(APPEND "${consumer_source_dir}/CMakeLists.txt" [=[
 

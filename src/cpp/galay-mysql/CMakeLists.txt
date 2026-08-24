@@ -17,7 +17,7 @@ target_link_libraries(galay-mysql
 
 if(GALAY_SSL_FEATURE_ENABLED)
     target_link_libraries(galay-mysql PUBLIC galay::ssl)
-    target_compile_definitions(galay-mysql PUBLIC GALAY_SSL_FEATURE_ENABLED)
+    galay_apply_cpp_module_macros(galay-mysql)
 endif()
 
 set_target_properties(galay-mysql PROPERTIES EXPORT_NAME mysql)

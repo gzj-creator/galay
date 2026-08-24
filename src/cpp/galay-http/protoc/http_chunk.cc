@@ -1,16 +1,14 @@
 #include "http_chunk.h"
+#include "../common/macro.hpp"
 #include <charconv>
 #include <sstream>
 #include <iomanip>
 #include <limits>
 
-// SIMD 支持检测
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#if defined(GALAY_HTTP_SIMD_X86)
     #include <immintrin.h>
-    #define GALAY_HTTP_SIMD_X86
-#elif defined(__ARM_NEON) || defined(__aarch64__)
+#elif defined(GALAY_HTTP_SIMD_NEON)
     #include <arm_neon.h>
-    #define GALAY_HTTP_SIMD_NEON
 #endif
 #include <algorithm>
 

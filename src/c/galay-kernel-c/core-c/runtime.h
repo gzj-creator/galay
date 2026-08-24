@@ -1,6 +1,8 @@
 #ifndef GALAY_C_KERNEL_CORE_RUNTIME_H
 #define GALAY_C_KERNEL_CORE_RUNTIME_H
 
+#include "../common-c/macro.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 
@@ -11,8 +13,6 @@
  * @details runtime 是驱动异步 IO 和任务调度的核心对象。C ABI 只暴露稳定的
  * void* 载荷，实际对象为 C runtime 的私有实现。
  */
-
-#define C_RUNTIME_SCHEDULER_COUNT_AUTO ((size_t)-1)
 
 #ifdef __cplusplus
 extern "C" {

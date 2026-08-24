@@ -29,13 +29,6 @@
 #include <string_view>
 #include <vector>
 
-#if IO_URING_VERSION_MAJOR > 2 || \
-    (IO_URING_VERSION_MAJOR == 2 && IO_URING_VERSION_MINOR >= 2)
-#define GALAY_HAS_IO_URING_RECVMSG_MULTISHOT 1
-#else
-#define GALAY_HAS_IO_URING_RECVMSG_MULTISHOT 0
-#endif
-
 namespace galay::kernel {
 
 namespace {
@@ -1629,7 +1622,5 @@ void IOUringReactor::processRecvFromCompletion(IOController* controller,
 }
 
 }  // namespace galay::kernel
-
-#undef GALAY_HAS_IO_URING_RECVMSG_MULTISHOT
 
 #endif  // USE_IOURING

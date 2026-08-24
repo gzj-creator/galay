@@ -14,6 +14,8 @@
 #ifndef GALAY_KERNEL_RUNTIME_H
 #define GALAY_KERNEL_RUNTIME_H
 
+#include "../common/kernel_config.h"
+
 #include "blocking_executor.h"
 #include "task.h"
 #include "compute_scheduler.h"
@@ -34,8 +36,6 @@
 
 namespace galay::kernel
 {
-
-#define GALAY_RUNTIME_SCHEDULER_COUNT_AUTO static_cast<size_t>(-1)  ///< 自动按 CPU 数量推导 scheduler 个数
 
 /**
  * @brief Runtime 的绑核配置。

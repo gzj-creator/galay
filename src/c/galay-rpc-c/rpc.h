@@ -7,6 +7,7 @@
 #ifndef GALAY_C_RPC_RPC_H
 #define GALAY_C_RPC_RPC_H
 
+#include "macro.h"
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/common-c/host.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result.h>
@@ -14,8 +15,6 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define GALAY_RPC_HEADER_SIZE 16u  ///< RPC frame 固定头长度，单位字节。
 
 /**
  * @brief RPC 调用模式。

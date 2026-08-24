@@ -31,7 +31,7 @@ target_link_libraries(galay-redis
 
 if(GALAY_SSL_FEATURE_ENABLED)
     target_link_libraries(galay-redis PUBLIC galay::ssl)
-    target_compile_definitions(galay-redis PUBLIC GALAY_SSL_FEATURE_ENABLED)
+    galay_apply_cpp_module_macros(galay-redis)
 endif()
 
 set_target_properties(galay-redis PROPERTIES EXPORT_NAME redis)

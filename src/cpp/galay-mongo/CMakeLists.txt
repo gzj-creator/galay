@@ -17,7 +17,7 @@ target_link_libraries(galay-mongo
 
 if(GALAY_SSL_FEATURE_ENABLED)
     target_link_libraries(galay-mongo PUBLIC galay::ssl)
-    target_compile_definitions(galay-mongo PUBLIC GALAY_SSL_FEATURE_ENABLED)
+    galay_apply_cpp_module_macros(galay-mongo)
 endif()
 
 set_target_properties(galay-mongo PROPERTIES EXPORT_NAME mongo)

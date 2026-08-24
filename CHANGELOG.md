@@ -38,6 +38,7 @@
 - **TimeoutTimer 完成状态机收窄为唯一 Completion 原子操作**：`timeouted()` 改为直接读取 `m_completion == kTimeoutWon`，移除冗余 `m_flag | kTimeout` 写入；所有 `seq_cst` 内存序收窄为 `acq_rel`/`acquire`。
 - **awaitableStillOwnsIORegistration 增加显式定制点**：优先检测 `ownsIoRegistration()` 方法，fallback 到 `m_controller` 指针比较，新 awaitable 可精确声明 IO 注册归属。
 - **Channel/Sequence awaitable 超时注入统一为 `markTimeout()`**：默认 timeout policy 通过 `TimeoutMarkable` concept 检测 public `markTimeout()` 方法，无需 friend 访问。
+- **统一各模块宏定义到集中头文件**：将 C/C++ 模块中分散的平台检测、编译器检测、架构检测、分支预测等宏定义提取到 `macro.h` / `macro.hpp` 文件；C 模块统一包含 `macro.h`，C++ 模块统一包含 `macro.hpp`；内核配置宏（后端选择、io_uring 能力、membarrier 检测等）集中到 `kernel_config.h`；新增 `galay_apply_cpp_module_macros` CMake 函数统一管理编译定义。
 
 ### Chore
 

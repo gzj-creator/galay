@@ -17,7 +17,7 @@ target_link_libraries(galay-http
 
 if(GALAY_SSL_FEATURE_ENABLED)
     target_link_libraries(galay-http PUBLIC galay::ssl)
-    target_compile_definitions(galay-http PUBLIC GALAY_SSL_FEATURE_ENABLED)
+    galay_apply_cpp_module_macros(galay-http)
 endif()
 
 set_target_properties(galay-http PROPERTIES EXPORT_NAME http)

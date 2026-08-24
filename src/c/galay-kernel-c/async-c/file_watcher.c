@@ -1,4 +1,5 @@
 #include "file_watcher.h"
+#include "../common-c/macro.h"
 #include "../coro-c/coro_wait.h"
 
 #include <errno.h>
@@ -8,13 +9,11 @@
 #include <string.h>
 #include <unistd.h>
 
-#ifdef __linux__
+#if defined(GALAY_HAS_INOTIFY)
 #include <sys/inotify.h>
-#define GALAY_HAS_INOTIFY 1
-#elif defined(__APPLE__) || defined(__FreeBSD__)
+#elif defined(GALAY_HAS_KQUEUE)
 #include <sys/event.h>
 #include <fcntl.h>
-#define GALAY_HAS_KQUEUE 1
 #endif
 
 static C_IOResult make_result(C_IOResultCode code, int sys_errno)

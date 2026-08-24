@@ -1,5 +1,20 @@
 include_guard(GLOBAL)
 
+function(galay_apply_cpp_module_macros target)
+    if(GALAY_SSL_FEATURE_ENABLED)
+        target_compile_definitions(${target} PUBLIC GALAY_SSL_FEATURE_ENABLED)
+    endif()
+
+    if("${target}" STREQUAL "galay-rpc" AND GALAY_RPC_ENABLE_ETCD)
+        target_compile_definitions(${target} PUBLIC GALAY_RPC_HAS_ETCD=1)
+    endif()
+
+    if("${target}" STREQUAL "galay-tracing" AND
+       GALAY_TRACING_ENABLE_GALAY_HTTP_OTLP_TRANSPORT)
+        target_compile_definitions(${target} PUBLIC GALAY_TRACING_ENABLE_OTLP_HTTP=1)
+    endif()
+endfunction()
+
 function(galay_configure_io_backend out_backend out_platform_libs)
     set(_backend "")
     set(_platform_libs "")

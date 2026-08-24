@@ -11,6 +11,8 @@
 #ifndef GALAY_UTILS_CACHE_RING_BUFFER_HPP
 #define GALAY_UTILS_CACHE_RING_BUFFER_HPP
 
+#include "../common/macro.hpp"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -29,25 +31,17 @@
 #include <variant>
 #include <vector>
 
-#if defined(__unix__) || defined(__APPLE__)
+#if GALAY_UTILS_RING_BUFFER_HAS_IOVEC
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/uio.h>
 #include <unistd.h>
-#define GALAY_UTILS_RING_BUFFER_HAS_IOVEC 1
-#define GALAY_UTILS_RING_BUFFER_HAS_MMAP 1
-#else
-#define GALAY_UTILS_RING_BUFFER_HAS_IOVEC 0
-#define GALAY_UTILS_RING_BUFFER_HAS_MMAP 0
 #endif
 
 #if defined(__linux__)
 #include <sys/syscall.h>
-#ifndef MFD_CLOEXEC
-#define MFD_CLOEXEC 0x0001U
-#endif
 #endif
 
 #if GALAY_UTILS_RING_BUFFER_HAS_MMAP && !defined(MAP_ANONYMOUS) && defined(MAP_ANON)

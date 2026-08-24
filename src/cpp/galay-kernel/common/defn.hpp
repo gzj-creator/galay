@@ -15,8 +15,8 @@
 #ifndef GALAY_KERNEL_DEFN_H
 #define GALAY_KERNEL_DEFN_H
 
+#include "kernel_config.h"
 
-// 平台检测与配置
 #include <cstdint>
 
 #if defined(__linux__)
@@ -24,14 +24,6 @@
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <unistd.h>
-
-    // Linux 后端必须由构建系统显式指定，以防止库与下游翻译单元之间的宏不匹配。
-    #if defined(USE_EPOLL) && defined(USE_IOURING)
-        #error "USE_EPOLL 和 USE_IOURING 同时定义。请只选择一个后端。"
-    #endif
-    #if !defined(USE_EPOLL) && !defined(USE_IOURING)
-        #error "未定义 Linux 后端宏。请通过 galay-kernel CMake 目标构建/链接，或显式传递 -DUSE_EPOLL/-DUSE_IOURING。"
-    #endif
 
     /**
      * @brief Linux 平台句柄包装器
@@ -53,10 +45,6 @@
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <unistd.h>
-    #ifndef USE_KQUEUE
-        #define USE_KQUEUE
-    #endif
-
     /**
      * @brief macOS/BSD 平台句柄包装器
      * @details 包装 POSIX 文件描述符。invalid() 返回 fd = -1 的哨兵值。

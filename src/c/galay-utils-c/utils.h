@@ -1,6 +1,7 @@
 #ifndef GALAY_C_UTILS_UTILS_H
 #define GALAY_C_UTILS_UTILS_H
 
+#include "macro.h"
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 
 /**
@@ -23,10 +24,6 @@ extern "C" {
  * 是 GALAY_OUT_OF_MEMORY 的别名，用于表达调用方输出缓冲区容量不足。
  */
 typedef galay_status_t galay_utils_status_t;
-
-#define GALAY_UTILS_OK GALAY_OK                              ///< 操作成功。
-#define GALAY_UTILS_INVALID_ARGUMENT GALAY_INVALID_ARGUMENT  ///< 参数非法。
-#define GALAY_UTILS_BUFFER_TOO_SMALL GALAY_OUT_OF_MEMORY     ///< 输出缓冲区容量不足。
 
 /**
  * @brief 不可变字节数组句柄。

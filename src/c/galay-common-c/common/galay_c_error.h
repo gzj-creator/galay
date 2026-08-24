@@ -1,6 +1,7 @@
 #ifndef GALAY_C_COMMON_GALAY_C_ERROR_H
 #define GALAY_C_COMMON_GALAY_C_ERROR_H
 
+#include "macro.h"
 #include "galay_c_defs.h"
 
 /**
@@ -10,16 +11,6 @@
  * @details C API 通过显式状态码或结果结构返回可恢复错误；不会通过 C++ 异常
  * 穿过 ABI 边界。错误字符串函数返回静态只读字符串，调用方不拥有其内存。
  */
-
-/**
- * @brief Galay C ABI 头文件版本号。
- *
- * @note 这些宏表示当前 C ABI 头文件声明版本；运行时库版本请通过
- * galay_c_version_major/minor/patch 查询并与宏值比较。
- */
-#define GALAY_C_VERSION_MAJOR 4u
-#define GALAY_C_VERSION_MINOR 0u
-#define GALAY_C_VERSION_PATCH 0u
 
 #ifdef __cplusplus
 extern "C" {

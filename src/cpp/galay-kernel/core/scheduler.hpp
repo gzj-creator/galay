@@ -29,11 +29,6 @@
 #include <linux/time_types.h>
 #endif
 
-/**
- * @def GALAY_SCHEDULER_MAX_EVENTS
- * @brief 调度器单次处理的最大事件数
- * @note 可在编译时通过 -DGALAY_SCHEDULER_MAX_EVENTS=xxx 覆盖
- */
 namespace galay::kernel
 {
 

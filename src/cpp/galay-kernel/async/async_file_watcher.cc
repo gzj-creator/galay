@@ -24,13 +24,6 @@
 #include <sys/inotify.h>
 #endif
 
-#ifdef USE_KQUEUE
-// O_EVTONLY 是 macOS 专用标志，仅用于事件通知，不允许读写
-#ifndef O_EVTONLY
-#define O_EVTONLY 0x8000
-#endif
-#endif
-
 namespace galay::async
 {
 

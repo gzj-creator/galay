@@ -1,4 +1,5 @@
 #include "aio_file.h"
+#include "../common-c/macro.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -6,18 +7,11 @@
 #include <string.h>
 #include <unistd.h>
 
-// 检查 io_uring 支持
-#if defined(__linux__) && !defined(GALAY_DISABLE_IOURING)
-#include <linux/version.h>
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 1, 0)
-#define GALAY_HAS_IOURING 1
+#if defined(GALAY_HAS_IOURING)
 #include <liburing.h>
 #endif
-#endif
 
-// 检查 POSIX aio 支持
-#ifdef _POSIX_ASYNCHRONOUS_IO
-#define GALAY_HAS_AIO 1
+#if defined(GALAY_HAS_AIO)
 #include <aio.h>
 #endif
 

@@ -1,6 +1,8 @@
 #ifndef GALAY_C_COMMON_GALAY_C_DEFS_H
 #define GALAY_C_COMMON_GALAY_C_DEFS_H
 
+#include "macro.h"
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -11,23 +13,6 @@
  * @details 该头文件只包含跨 C 模块共享的轻量值类型和 ABI 标记，不拥有任何
  * 运行时资源。所有定义均可在 C 和 C++ 编译单元中包含。
  */
-
-/**
- * @brief Galay C ABI 可用性标记。
- *
- * @note 该宏用于编译期判断当前头文件提供 C ABI 声明，不表达运行时版本号。
- * 运行时版本请使用 galay_c_version_major/minor/patch。
- */
-#define GALAY_C_API 1
-
-/* Concurrent implementation fields are opaque to C++ consumers of the C ABI. */
-#ifdef __cplusplus
-#define GALAY_C_ATOMIC(type) type
-#define GALAY_C_ALIGNAS(value) alignas(value)
-#else
-#define GALAY_C_ATOMIC(type) _Atomic(type)
-#define GALAY_C_ALIGNAS(value) _Alignas(value)
-#endif
 
 #ifdef __cplusplus
 extern "C" {

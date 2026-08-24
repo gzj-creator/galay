@@ -11,30 +11,14 @@
 #ifndef GALAY_HTTP_BASE_H
 #define GALAY_HTTP_BASE_H
 
+#include "../common/macro.hpp"
+
 #include <string>
 #include <unordered_map>
 #include <atomic>
 
-#define GALAY_VERSION "3.1.0"
-
 namespace galay::http
 {
-
-    #define DEFAULT_HTTP_RECV_TIME_MS                       5 * 60 * 1000   ///< 默认 HTTP 接收超时时间（5分钟）
-    #define DEFAULT_HTTP_SEND_TIME_MS                       5 * 60 * 1000   ///< 默认 HTTP 发送超时时间（5分钟）
-    #define DEFAULT_HTTP_MAX_HEADER_SIZE                    8192            ///< HTTP 头最大长度（8KB）
-    #define DEFAULT_HTTP_MAX_BODY_SIZE                      1 * 1024 * 1024 ///< HTTP body 最大长度（1MB）
-    #define DEFAULT_HTTP_MAX_URI_LEN                        1024            ///< URI 最大长度（1KB）
-    #define DEFAULT_HTTP_MAX_VERSION_SIZE                   32              ///< HTTP 版本字符串最大长度
-    #define DEFAULT_HTTP_PEER_STEP_SIZE                     1024            ///< 对端读取步长
-    #define DEFAULT_HTTP_CHUNK_BUFFER_SIZE                  2048            ///< Chunk 编码缓冲区大小
-
-    #define DEFAULT_HTTP_KEEPALIVE_TIME_MS                  (7500 * 1000)   ///< 默认 Keep-Alive 超时时间（毫秒）
-
-    #define SERVER_NAME "galay-http"                                        ///< 服务器名称
-
-    #define GALAY_SERVER SERVER_NAME "/" GALAY_VERSION                      ///< 服务器名称及版本标识
-
     inline std::atomic_int32_t gHttpMaxBodySize = DEFAULT_HTTP_MAX_BODY_SIZE;       ///< 全局 HTTP body 最大长度（线程安全）
     inline std::atomic_int32_t gHttpMaxUriSize = DEFAULT_HTTP_MAX_URI_LEN;           ///< 全局 URI 最大长度（线程安全）
     inline std::atomic_int32_t gHttpMaxVersionSize = DEFAULT_HTTP_MAX_VERSION_SIZE;  ///< 全局版本字符串最大长度（线程安全）

@@ -1,4 +1,5 @@
 #include "coro_task_internal.h"
+#include "../common-c/macro.h"
 
 #include "../core-c/io_scheduler.h"
 #include "../core-c/runtime_internal.h"
@@ -11,13 +12,6 @@
 
 #include <sys/mman.h>
 #include <unistd.h>
-
-#if (defined(__APPLE__) && defined(__aarch64__)) || \
-    (defined(__linux__) && defined(__x86_64__))
-#define GALAY_C_CORO_HAS_CONTEXT 1
-#else
-#define GALAY_C_CORO_HAS_CONTEXT 0
-#endif
 
 enum {
     GALAY_C_CORO_DEFAULT_STACK_SIZE = 64 * 1024,

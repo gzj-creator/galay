@@ -30,35 +30,12 @@
 #ifndef GALAY_C_TRACING_TRACING_H
 #define GALAY_C_TRACING_TRACING_H
 
+#include "macro.h"
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * @brief TraceId 十六进制文本长度。
- * @details 固定为 32 个小写十六进制字符，不包含 NUL 终止符。
- */
-#define GALAY_TRACING_TRACE_ID_HEX_LENGTH 32u
-
-/**
- * @brief SpanId 十六进制文本长度。
- * @details 固定为 16 个小写十六进制字符，不包含 NUL 终止符。
- */
-#define GALAY_TRACING_SPAN_ID_HEX_LENGTH 16u
-
-/**
- * @brief W3C traceparent 文本长度。
- * @details 当前 ABI 生成版本为 `00` 的 traceparent，固定 55 字节，不包含 NUL 终止符。
- */
-#define GALAY_TRACING_TRACEPARENT_LENGTH 55u
-
-/**
- * @brief 字符串属性值最大长度。
- * @details 仅约束 `GALAY_TRACING_ATTRIBUTE_STRING` 的 `value_len`，单位为字节，不包含 NUL。
- */
-#define GALAY_TRACING_MAX_ATTRIBUTE_VALUE_LENGTH 256u
 
 /**
  * @brief C ABI TraceId 原始字节表示。

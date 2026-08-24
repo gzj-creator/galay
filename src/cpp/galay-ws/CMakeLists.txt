@@ -18,7 +18,7 @@ target_link_libraries(galay-ws
 
 if(GALAY_SSL_FEATURE_ENABLED)
     target_link_libraries(galay-ws PUBLIC galay::ssl)
-    target_compile_definitions(galay-ws PUBLIC GALAY_SSL_FEATURE_ENABLED)
+    galay_apply_cpp_module_macros(galay-ws)
 endif()
 
 set_target_properties(galay-ws PROPERTIES EXPORT_NAME ws)

@@ -1,6 +1,8 @@
 #ifndef GALAY_C_KERNEL_COMMON_HOST_H
 #define GALAY_C_KERNEL_COMMON_HOST_H
 
+#include "macro.h"
+
 #include <stdint.h>
 
 /**
@@ -9,8 +11,6 @@
  *
  * @details 用于在 C API 中传递 IPv4/IPv6 地址和端口。
  */
-
-#define C_HOST_ADDRESS_MAX_LENGTH 46
 
 #ifdef __cplusplus
 extern "C" {

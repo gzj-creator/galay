@@ -10,6 +10,57 @@
 #ifndef GALAY_KERNEL_CONFIG_H
 #define GALAY_KERNEL_CONFIG_H
 
+#include <cstddef>
+
+// 后端选择是 kernel 的编译配置，所有内部头统一从本文件取得。
+#if defined(__linux__)
+#if defined(USE_EPOLL) && defined(USE_IOURING)
+#error "USE_EPOLL 和 USE_IOURING 同时定义。请只选择一个后端。"
+#endif
+#if !defined(USE_EPOLL) && !defined(USE_IOURING)
+#error "未定义 Linux 后端宏。请通过 galay-kernel CMake 目标构建/链接，或显式传递 -DUSE_EPOLL/-DUSE_IOURING。"
+#endif
+#elif defined(__APPLE__)
+#ifndef USE_KQUEUE
+#define USE_KQUEUE
+#endif
+#ifndef O_EVTONLY
+#define O_EVTONLY 0x8000
+#endif
+#endif
+
+// io_uring 能力宏必须和后端选择、liburing 版本在同一个配置入口解析。
+#if defined(USE_IOURING) && __has_include(<liburing.h>)
+#include <liburing.h>
+#ifdef BLOCK_SIZE
+#undef BLOCK_SIZE
+#endif
+#if IO_URING_VERSION_MAJOR > 2 || \
+    (IO_URING_VERSION_MAJOR == 2 && IO_URING_VERSION_MINOR >= 2)
+#define GALAY_HAS_IO_URING_RECVMSG_MULTISHOT 1
+#else
+#define GALAY_HAS_IO_URING_RECVMSG_MULTISHOT 0
+#endif
+#endif
+
+/**
+ * @def GALAY_KERNEL_HAS_LINUX_MEMBARRIER
+ * @brief 当前平台是否提供 Linux membarrier 头文件。
+ */
+#if defined(__linux__) && __has_include(<linux/membarrier.h>)
+#define GALAY_KERNEL_HAS_LINUX_MEMBARRIER 1
+#else
+#define GALAY_KERNEL_HAS_LINUX_MEMBARRIER 0
+#endif
+
+/**
+ * @def GALAY_RUNTIME_SCHEDULER_COUNT_AUTO
+ * @brief Runtime 自动按 CPU 数量推导 scheduler 数量的哨兵值。
+ */
+#ifndef GALAY_RUNTIME_SCHEDULER_COUNT_AUTO
+#define GALAY_RUNTIME_SCHEDULER_COUNT_AUTO static_cast<size_t>(-1)
+#endif
+
 /**
  * @def GALAY_KERNEL_TIMER_WHEEL_TICK_NS
  * @brief IOScheduler 时间轮默认 tick 粒度（纳秒）

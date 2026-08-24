@@ -19,18 +19,13 @@
 #ifndef GALAY_C_HTTP2_HTTP2_H
 #define GALAY_C_HTTP2_HTTP2_H
 
+#include "macro.h"
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-/**
- * @brief HTTP/2 frame header 固定长度。
- * @details 所有 HTTP/2 帧均使用 9 字节 frame header。
- */
-#define GALAY_HTTP2_FRAME_HEADER_LENGTH 9u
 
 /**
  * @brief 当前 C ABI 支持的 HTTP/2 帧类型。

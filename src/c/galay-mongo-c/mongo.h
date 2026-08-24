@@ -1,15 +1,13 @@
 #ifndef GALAY_C_MONGO_MONGO_H
 #define GALAY_C_MONGO_MONGO_H
 
+#include "macro.h"
 #include <galay/c/galay-common-c/common/galay_c_error.h>
 #include <galay/c/galay-kernel-c/coro-c/coro_result.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#define GALAY_MONGO_MAX_KEY_LENGTH 255u      ///< C ABI 接受的 BSON key 最大字节数。
-#define GALAY_MONGO_MAX_STRING_LENGTH 4096u  ///< C ABI 接受的字符串最大字节数。
 
 /**
  * @brief Mongo BSON document opaque handle。

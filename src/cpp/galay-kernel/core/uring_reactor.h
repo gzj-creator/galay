@@ -18,13 +18,6 @@
 
 #ifdef USE_IOURING
 
-#include <liburing.h>
-
-// liburing/io_uring.h 定义了 BLOCK_SIZE 宏，与 concurrentqueue 冲突
-#ifdef BLOCK_SIZE
-#undef BLOCK_SIZE
-#endif
-
 #include <atomic>
 #include <cstdint>
 #include <expected>

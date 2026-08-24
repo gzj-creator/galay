@@ -6,18 +6,17 @@
 #ifndef GALAY_KERNEL_CONCURRENCY_DETAIL_ASYMMETRIC_MEMORY_BARRIER_H
 #define GALAY_KERNEL_CONCURRENCY_DETAIL_ASYMMETRIC_MEMORY_BARRIER_H
 
+#include "../../common/kernel_config.h"
+
 #include <atomic>
 #include <cstdint>
 #include <expected>
 
-#if defined(__linux__) && __has_include(<linux/membarrier.h>)
-#define GALAY_KERNEL_HAS_LINUX_MEMBARRIER 1
+#if GALAY_KERNEL_HAS_LINUX_MEMBARRIER
 #include <cerrno>
 #include <linux/membarrier.h>
 #include <sys/syscall.h>
 #include <unistd.h>
-#else
-#define GALAY_KERNEL_HAS_LINUX_MEMBARRIER 0
 #endif
 
 namespace galay::kernel::detail
@@ -128,7 +127,5 @@ asymmetricHeavyBarrier() noexcept
 }
 
 } // namespace galay::kernel::detail
-
-#undef GALAY_KERNEL_HAS_LINUX_MEMBARRIER
 
 #endif // GALAY_KERNEL_CONCURRENCY_DETAIL_ASYMMETRIC_MEMORY_BARRIER_H
