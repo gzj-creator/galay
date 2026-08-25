@@ -167,7 +167,7 @@ public:
     /**
      * @brief 停止 runtime 及其管理的 scheduler。
      *
-     * 停止顺序为 compute -> IO -> timer；重复调用安全。
+     * 停止顺序为 blocking -> compute -> IO -> timer；重复调用安全。
      */
     void stop();
 

@@ -89,6 +89,14 @@ std::expected<void, IOError> AsyncFile::open(const std::string& path, FileOpenMo
     return {};
 }
 
+void AsyncFile::adopt(int fd) noexcept
+{
+    if (m_controller.m_handle != GHandle::invalid()) {
+        (void)galay_close(m_controller.m_handle.fd);
+    }
+    m_controller.m_handle.fd = fd;
+}
+
 /**
  * @brief 创建用于异步文件读取的 FileReadAwaitable
  * @param buffer 读取数据的目标缓冲区

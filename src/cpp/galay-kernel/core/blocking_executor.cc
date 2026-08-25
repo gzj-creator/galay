@@ -55,7 +55,15 @@ BlockingExecutor::BlockingExecutor(size_t minWorkers,
  */
 BlockingExecutor::~BlockingExecutor()
 {
+    stop();
+}
+
+void BlockingExecutor::stop() noexcept
+{
     std::unique_lock<std::mutex> lock(m_mutex);
+    if (m_stopping && m_workerCount == 0) {
+        return;
+    }
     m_stopping = true;
     m_taskCv.notify_all();
     m_shutdownCv.wait(lock, [this]() { return m_workerCount == 0; });

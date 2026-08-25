@@ -96,6 +96,10 @@ void Runtime::stop()
         return;
     }
 
+    // Drain blocking work while schedulers are still alive so completion
+    // wakers cannot be lost during shutdown.
+    m_blockingExecutor.stop();
+
     for (auto it = m_compute_schedulers.rbegin(); it != m_compute_schedulers.rend(); ++it) {
         (*it)->stop();
     }

@@ -93,6 +93,14 @@ public:
         int permissions = 0644);
 
     /**
+     * @brief Adopt an already opened descriptor.
+     * @param fd An owned descriptor; AsyncFile closes it on destruction.
+     * @note The descriptor should be opened by an async-file adapter or a
+     *       blocking executor before entering the scheduler coroutine.
+     */
+    void adopt(int fd) noexcept;
+
+    /**
      * @brief 异步读取文件
      *
      * @param buffer 读取缓冲区

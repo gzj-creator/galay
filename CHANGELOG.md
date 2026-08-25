@@ -11,8 +11,12 @@
 
 ## [Unreleased]
 
+## [v4.9.1] - 2026-08-26
+
 ### Added
 
+- **统一 HTTP 静态文件异步读取器**：新增 `StaticFileReader` / `StaticFileSession`，统一 metadata、内存读取、分块读取和 range 读取接口；io_uring 使用 `AsyncFile`，其他后端将阻塞文件操作转移到 blocking executor。新增 `t90_static_file_reader` 覆盖 metadata、完整读取、范围读取、session 复用、sendfile descriptor 和错误边界。
+- **HTTP 静态文件路径迁移覆盖**：静态文件的 MEMORY、CHUNK、单 range 与多 range 发送路径统一复用 reader，避免在 I/O scheduler 线程直接执行同步 open/read/lseek。
 - **TimeoutTimer 调度线程本地对象池**：新增 `TimeoutTimerPool`，通过 `TimeoutTimer::create()` 从线程本地 free-list 获取或新建定时器，`resetForReuse()` 在复用前清零全部状态；跨线程最后释放直接析构，避免把对象发布到错误的池。新增 `t177_timeout_timer_pool` 验证池复用、跨线程析构与容量上限。
 - **内核可调参数集中定义头**：新增 `kernel_config.h`，统一存放 `GALAY_KERNEL_TIMER_WHEEL_TICK_NS`、`GALAY_KERNEL_IO_POLL_IDLE_TIMEOUT_MS`、`GALAY_SCHEDULER_MAX_EVENTS` 等全部运行时宏，移除 epoll/kqueue/io_uring scheduler 中的重复 `#ifndef` 定义。
 - **TCP 公平对标读路径接入 10ms 接收超时**：galay `b31` 三处 `readExact` 改用 `.timeout(10ms)` 并按超时计数重试；Boost.Asio TCP baseline 新增 `parallel_group`+`steady_timer` 竞速版 `readExactWithTimeout`，两侧策略严格对称。meta 输出新增 `recv_timeout_ms` 与 `recv_timeouts` 字段以暴露超时触发率。
@@ -27,6 +31,7 @@
 
 ### Changed
 
+- **运行时阻塞任务收尾顺序**：`BlockingExecutor` 新增显式 `stop()`，Runtime 在停止 compute/IO scheduler 前先排空阻塞任务，确保异步 completion 的唤醒不会丢失；`AsyncFile::adopt()` 用于接管 blocking executor 打开的文件描述符。
 - **poll 超时计算统一收归 IOScheduler**：epoll/kqueue/io_uring 三个后端的 poll 超时由 `schedulerPollTimeoutNanoseconds()`、`schedulerPollTimeoutMilliseconds()`、`schedulerPollTimeoutIoUringNanoseconds()` 统一计算，空轮使用 idle 上限，非空轮对齐下一个 tick 边界（`nsToNextTickBoundary()`），消除散落在各后端的 `halfTickPoll*` 辅助函数。新增 `t178_scheduler_poll_timeout` 验证空轮/非空轮/上限三路径。
 - **TimeoutSupport 重命名为 TimeoutMethods**：所有继承 `TimeoutSupport` 的 awaitable 统一迁移至 `TimeoutMethods`，`SequenceAwaitableBase` 新增 `TimeoutTimerBinding` 支持超时绑定转发；HTTP2/SSL/WS facade 的 `await_suspend()` 补齐 `cancelBoundTimeoutTimer()` 与 `forwardBoundTimeoutTimer()` 调用。
 - **io_uring reactor 完成路径统一超时仲裁**：所有 IO 类型的 `wakeUp()` 调用前统一通过 `completeAndWake()` 先 `cancelBoundTimeoutTimer()`，防止超时与正常完成的竞争；sequence 的 `onCompleted()` 在 `wakeUp()` 前调用。
@@ -39,6 +44,7 @@
 - **awaitableStillOwnsIORegistration 增加显式定制点**：优先检测 `ownsIoRegistration()` 方法，fallback 到 `m_controller` 指针比较，新 awaitable 可精确声明 IO 注册归属。
 - **Channel/Sequence awaitable 超时注入统一为 `markTimeout()`**：默认 timeout policy 通过 `TimeoutMarkable` concept 检测 public `markTimeout()` 方法，无需 friend 访问。
 - **统一各模块宏定义到集中头文件**：将 C/C++ 模块中分散的平台检测、编译器检测、架构检测、分支预测等宏定义提取到 `macro.h` / `macro.hpp` 文件；C 模块统一包含 `macro.h`，C++ 模块统一包含 `macro.hpp`；内核配置宏（后端选择、io_uring 能力、membarrier 检测等）集中到 `kernel_config.h`；新增 `galay_apply_cpp_module_macros` CMake 函数统一管理编译定义。
+- **保留并收束 v4.9.0 之后的 owner-only 调度优化**：关闭 work-stealing 时就绪环入队使用 release store，移除无竞争路径上的 CAS 与冗余栅栏。
 
 ### Chore
 
@@ -50,6 +56,7 @@
 
 ### Fixed
 
+- **修复 C 协程超时唤醒与移动注册回归**：超时清除等待槽位后保持任务引用直到写入最终唤醒结果；补齐 epoll pending 注册移动后的取消与关闭覆盖。
 - **修复 io_uring sequence 的 onCompleted 缺失**：sequence 完成或 addSequence 失败时不再直接调用 `wakeUp()`，改走 `onCompleted()` → `cancelBoundTimeoutTimer()` → `wakeUp()` 路径，确保超时定时器在唤醒前被正确仲裁。
 - **修正 timeout 竞争路径的冗余状态写入**：`completeTimeout()` 不再在 `kTimeoutWon` 时额外写入 `m_flag`，避免跨缓存行伪共享。
 
@@ -74,17 +81,6 @@
 ### Fixed
 
 - **修正正式压测证据归档**：TCP/UDP CSV 改为引用已提交的逐轮 raw 输出，策略测试明确拒绝被忽略的本地结果目录，并移除六份未引用且与正式样本不一致的 UDP 中间输出。
-
-## [v4.9.1] - 2026-08-20
-
-### Changed
-
-- **优化 owner-only IO 就绪环投递**：work-stealing 关闭时，`push_back` 直接以 release store 发布 slot，并通过 tail 的 release store 交接可见性，移除无竞争路径上的 CAS 与额外 release fence。
-
-### Fixed
-
-- **修复 C 协程超时唤醒的生命周期竞争**：超时清除等待槽位后，先写入 wake 失败结果，再释放该等待槽位持有的任务引用，避免 ready queue 消费后访问已释放任务。
-- **补齐 epoll 待提交注册移动后的取消回归**：覆盖 IOController 在注册尚未 flush 时移动、取消并关闭的路径，确保稳定注册入口和 pending change 不会保留失效 controller。
 
 ## [v4.9.0] - 2026-08-17
 

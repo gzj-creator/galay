@@ -2,15 +2,13 @@
 #include <galay/cpp/galay-http/client/http_client.h>
 #include <galay/cpp/galay-http/common/http_log.h>
 #include <galay/cpp/galay-kernel/common/file_descriptor.h>
-#include <galay/cpp/galay-kernel/async/async_waiter.h>
-#include <galay/cpp/galay-kernel/core/runtime.h>
 #include "http_etag.h"
 #include "http_range.h"
+#include "static_file_reader.h"
 #include <galay/cpp/galay-http/protoc/http_response.h>
 #include <galay/cpp/galay-http/builder/http_builder.h>
 #include <algorithm>
 #include <array>
-#include <cerrno>
 #include <expected>
 #include <set>
 #include <cctype>
@@ -18,16 +16,11 @@
 #include <unordered_map>
 #include <vector>
 #include <chrono>
-#include <fstream>
 #include <filesystem>
-#include <limits>
 #include <system_error>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
-#include <fcntl.h>
-#include <unistd.h>
 
 namespace galay::http
 {
@@ -39,106 +32,6 @@ namespace {
 constexpr size_t kProxyMaxIdleConnectionsPerUpstream = 32;
 constexpr size_t kProxyRawRelayBufferSize = 16 * 1024;
 thread_local std::unordered_map<std::string, std::vector<std::unique_ptr<HttpClient>>> g_proxyClientPools;
-
-enum class StaticFileReadErrorCode : uint8_t
-{
-    kOpenFailed,
-    kReadFailed,
-    kShortRead,
-    kCloseFailed,
-};
-
-struct StaticFileReadError
-{
-    size_t expected_bytes = 0;
-    size_t actual_bytes = 0;
-    int error_number = 0;
-    int close_error_number = 0;
-    StaticFileReadErrorCode code = StaticFileReadErrorCode::kReadFailed;
-};
-
-const char* staticFileReadErrorName(StaticFileReadErrorCode code) noexcept
-{
-    switch (code) {
-        case StaticFileReadErrorCode::kOpenFailed:
-            return "open failed";
-        case StaticFileReadErrorCode::kReadFailed:
-            return "read failed";
-        case StaticFileReadErrorCode::kShortRead:
-            return "short read";
-        case StaticFileReadErrorCode::kCloseFailed:
-            return "close failed";
-    }
-    return "unknown";
-}
-
-std::expected<std::string, StaticFileReadError> readStaticFileBlocking(const std::string& filePath,
-                                                                       size_t fileSize)
-{
-    const int fd = ::open(filePath.c_str(), O_RDONLY);
-    if (fd < 0) {
-        return std::unexpected(StaticFileReadError{
-            .expected_bytes = fileSize,
-            .actual_bytes = 0,
-            .error_number = errno,
-            .close_error_number = 0,
-            .code = StaticFileReadErrorCode::kOpenFailed,
-        });
-    }
-
-    std::string content(fileSize, '\0');
-    size_t total_read = 0;
-    while (total_read < fileSize) {
-        const size_t remaining = fileSize - total_read;
-        const size_t read_size = std::min(
-            remaining,
-            static_cast<size_t>(std::numeric_limits<ssize_t>::max()));
-        const ssize_t bytes_read = ::read(fd, content.data() + total_read, read_size);
-        if (bytes_read < 0) {
-            const int read_errno = errno;
-            int close_errno = 0;
-            const int close_result = ::close(fd);
-            if (close_result != 0) {
-                close_errno = errno;
-            }
-            return std::unexpected(StaticFileReadError{
-                .expected_bytes = fileSize,
-                .actual_bytes = total_read,
-                .error_number = read_errno,
-                .close_error_number = close_errno,
-                .code = StaticFileReadErrorCode::kReadFailed,
-            });
-        }
-        if (bytes_read == 0) {
-            int close_errno = 0;
-            const int close_result = ::close(fd);
-            if (close_result != 0) {
-                close_errno = errno;
-            }
-            return std::unexpected(StaticFileReadError{
-                .expected_bytes = fileSize,
-                .actual_bytes = total_read,
-                .error_number = 0,
-                .close_error_number = close_errno,
-                .code = StaticFileReadErrorCode::kShortRead,
-            });
-        }
-        total_read += static_cast<size_t>(bytes_read);
-    }
-
-    const int close_result = ::close(fd);
-    if (close_result != 0) {
-        return std::unexpected(StaticFileReadError{
-            .expected_bytes = fileSize,
-            .actual_bytes = total_read,
-            .error_number = errno,
-            .close_error_number = 0,
-            .code = StaticFileReadErrorCode::kCloseFailed,
-        });
-    }
-
-    return content;
-}
 
 std::string toLowerAscii(std::string value) {
     std::transform(value.begin(), value.end(), value.begin(),
@@ -1107,12 +1000,8 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
         // 构建完整文件路径
         fs::path fullPath = fs::path(dirPath) / relativePath;
 
-        // 安全检查：防止路径遍历攻击
-        std::error_code canonical_file_error;
-        fs::path canonicalFile = fs::canonical(fullPath, canonical_file_error);
-        const bool fileNotFound = static_cast<bool>(canonical_file_error);
-
-        if (fileNotFound) {
+        auto inspected = co_await StaticFileReader::inspect(fullPath.string());
+        if (!inspected.has_value() || !inspected.value().has_value()) {
             if (fallbackHandler) {
                 co_await fallbackHandler(conn, std::move(req));
                 co_return;
@@ -1129,6 +1018,9 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
             }
             co_return;
         }
+
+        StaticFileMetadata metadata = std::move(inspected.value().value());
+        fs::path canonicalFile(metadata.canonical_path);
 
         // 检查文件是否在允许的目录内
         auto [dirIt, fileIt] = std::mismatch(canonicalDir.begin(), canonicalDir.end(),
@@ -1148,49 +1040,7 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
             co_return;
         }
 
-        // 检查文件是否存在且是普通文件
-        std::error_code exists_error;
-        const bool file_exists = fs::exists(canonicalFile, exists_error);
-        std::error_code regular_file_error;
-        const bool is_regular = fs::is_regular_file(canonicalFile, regular_file_error);
-        if (exists_error || regular_file_error || !file_exists || !is_regular) {
-            if (fallbackHandler) {
-                co_await fallbackHandler(conn, std::move(req));
-                co_return;
-            }
-            HTTP_LOG_WARN("[file] [missing]", "path={}", canonicalFile.string());
-            auto response = Http1_1ResponseBuilder()
-                .status(HttpStatusCode::NotFound_404)
-                .body("404 Not Found")
-                .buildMove();
-            auto writer = conn.getWriter();
-            while (true) {
-                auto send_result = co_await writer.sendResponse(response);
-                if (!send_result || send_result.value()) break;
-            }
-            co_return;
-        }
-
-        // 获取文件大小
-        std::error_code file_size_error;
-        uintmax_t rawFileSize = fs::file_size(canonicalFile, file_size_error);
-        if (file_size_error || rawFileSize > std::numeric_limits<size_t>::max()) {
-            HTTP_LOG_ERROR("[file] [stat-fail]",
-                           "path={} error={}",
-                           canonicalFile.string(),
-                           file_size_error.message());
-            auto response = Http1_1ResponseBuilder()
-                .status(HttpStatusCode::InternalServerError_500)
-                .body("500 Internal Server Error")
-                .buildMove();
-            auto writer = conn.getWriter();
-            while (true) {
-                auto send_result = co_await writer.sendResponse(response);
-                if (!send_result || send_result.value()) break;
-            }
-            co_return;
-        }
-        size_t fileSize = static_cast<size_t>(rawFileSize);
+        const size_t fileSize = metadata.file_size;
 
         // 设置 Content-Type
         std::string extension = canonicalFile.extension().string();
@@ -1202,7 +1052,13 @@ HttpRouteHandler HttpRouter::createStaticFileHandler(const std::string& routePre
                        canonicalFile.string(),
                        fileSize,
                        mimeType);
-        co_await sendFileContent(conn, req, canonicalFile.string(), fileSize, mimeType, config);
+        co_await sendFileContent(conn,
+                                 req,
+                                 canonicalFile.string(),
+                                 fileSize,
+                                 mimeType,
+                                 config,
+                                 metadata.last_modified);
         co_return;
     };
 }
@@ -1289,10 +1145,8 @@ HttpRouteHandler HttpRouter::createSingleFileHandler(const std::string& filePath
 {
     // 捕获文件路径和配置
     return [filePath, config](HttpConn& conn, HttpRequest req) -> Task<void> {
-        namespace fs = std::filesystem;
-
-        // 检查文件是否存在
-        if (!fs::exists(filePath) || !fs::is_regular_file(filePath)) {
+        auto inspected = co_await StaticFileReader::inspect(filePath);
+        if (!inspected.has_value() || !inspected.value().has_value()) {
             auto response = Http1_1ResponseBuilder()
                 .status(HttpStatusCode::NotFound_404)
                 .body("404 Not Found")
@@ -1305,17 +1159,23 @@ HttpRouteHandler HttpRouter::createSingleFileHandler(const std::string& filePath
             co_return;
         }
 
-        // 获取文件大小
-        size_t fileSize = fs::file_size(filePath);
+        StaticFileMetadata metadata = std::move(inspected.value().value());
+        const size_t fileSize = metadata.file_size;
 
         // 设置 Content-Type
-        fs::path path(filePath);
+        std::filesystem::path path(metadata.canonical_path);
         std::string extension = path.extension().string();
         std::string ext = extension.empty() ? "" : extension.substr(1);
         std::string mimeType = MimeType::convertToMimeType(ext);
 
         // 使用配置的传输方式发送文件
-        co_await sendFileContent(conn, req, filePath, fileSize, mimeType, config);
+        co_await sendFileContent(conn,
+                                 req,
+                                 metadata.canonical_path,
+                                 fileSize,
+                                 mimeType,
+                                 config,
+                                 metadata.last_modified);
         co_return;
     };
 }
@@ -1635,37 +1495,10 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                                        const std::string& filePath,
                                        size_t fileSize,
                                        const std::string& mimeType,
-                                       const StaticFileSetting& config)
+                                       const StaticFileSetting& config,
+                                       std::time_t lastModified)
 {
     // 生成稳定 ETag（mtime + size + inode/路径哈希）
-    namespace fs = std::filesystem;
-    std::time_t lastModified = 0;
-#ifdef _WIN32
-    {
-        std::error_code ec;
-        auto ftime = fs::last_write_time(filePath, ec);
-        if (!ec) {
-            auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now()
-            );
-            lastModified = std::chrono::system_clock::to_time_t(sctp);
-        }
-    }
-#else
-    struct stat st;
-    if (stat(filePath.c_str(), &st) == 0) {
-        lastModified = st.st_mtime;
-    } else {
-        std::error_code ec;
-        auto ftime = fs::last_write_time(filePath, ec);
-        if (!ec) {
-            auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
-                ftime - fs::file_time_type::clock::now() + std::chrono::system_clock::now()
-            );
-            lastModified = std::chrono::system_clock::to_time_t(sctp);
-        }
-    }
-#endif
     if (lastModified == 0) {
         // fallback: 使用当前时间，避免空值
         lastModified = std::time(nullptr);
@@ -1811,66 +1644,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
 
     switch (mode) {
         case FileTransferMode::MEMORY: {
-            // 内存模式：文件读取交给 blocking executor，当前协程只挂起等待结果。
-            auto runtime = galay::kernel::RuntimeHandle::current();
-            if (!runtime.has_value()) {
-                HTTP_LOG_ERROR("[file] [runtime-missing]", "path={}", filePath);
-                auto error_response = Http1_1ResponseBuilder()
-                    .status(HttpStatusCode::InternalServerError_500)
-                    .body("500 Internal Server Error")
-                    .buildMove();
-                auto send_result = co_await writer.send(error_response.toString());
-                if (!send_result) {
-                    HTTP_LOG_ERROR("[send] [open-error-fail]",
-                                   "error={}",
-                                   send_result.error().message());
-                }
-                co_return;
-            }
-
-            using StaticFileReadResult = std::expected<std::string, StaticFileReadError>;
-            auto read_waiter = std::make_shared<galay::kernel::AsyncWaiter<StaticFileReadResult>>();
-            auto blocking_task = runtime->spawnBlocking(
-                [filePath, fileSize, read_waiter]() mutable {
-                    StaticFileReadResult read_result = readStaticFileBlocking(filePath, fileSize);
-                    const bool notified = read_waiter->notify(std::move(read_result));
-                    if (!notified) {
-                        HTTP_LOG_WARN("[file] [async-read-notify-duplicate]", "path={}", filePath);
-                    }
-                });
-            if (!blocking_task.has_value()) {
-                HTTP_LOG_ERROR("[file] [async-read-submit-fail]",
-                               "path={} error={}",
-                               filePath,
-                               blocking_task.error().message());
-                auto error_response = Http1_1ResponseBuilder()
-                    .status(HttpStatusCode::InternalServerError_500)
-                    .body("500 Internal Server Error")
-                    .buildMove();
-                auto send_result = co_await writer.send(error_response.toString());
-                if (!send_result) {
-                    HTTP_LOG_ERROR("[send] [read-submit-error-fail]",
-                                   "error={}",
-                                   send_result.error().message());
-                }
-                co_return;
-            }
-            if (!blocking_task->isValid()) {
-                HTTP_LOG_ERROR("[file] [async-read-invalid-handle]", "path={}", filePath);
-                auto error_response = Http1_1ResponseBuilder()
-                    .status(HttpStatusCode::InternalServerError_500)
-                    .body("500 Internal Server Error")
-                    .buildMove();
-                auto send_result = co_await writer.send(error_response.toString());
-                if (!send_result) {
-                    HTTP_LOG_ERROR("[send] [read-handle-error-fail]",
-                                   "error={}",
-                                   send_result.error().message());
-                }
-                co_return;
-            }
-
-            auto awaited_read = co_await read_waiter->wait();
+            auto awaited_read = co_await StaticFileReader::readAll(filePath, fileSize);
             if (!awaited_read.has_value()) {
                 HTTP_LOG_ERROR("[file] [async-read-await-fail]",
                                "path={} error={}",
@@ -1945,34 +1719,66 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 co_return;
             }
 
-            // 使用 RAII 管理文件描述符
-            FileDescriptor fd;
-            bool openSuccess = false;
-            auto open_result = fd.open(filePath.c_str(), O_RDONLY);
-            if (open_result) {
-                openSuccess = true;
-            } else {
-                HTTP_LOG_ERROR("[file] [open-fail] [chunk]",
+            // 分块读取并发送
+            const size_t chunkSize = config.getChunkSize();
+            size_t offset = 0;
+            bool hasError = false;
+
+            auto opened = co_await StaticFileReader::open(filePath);
+            if (!opened.has_value()) {
+                HTTP_LOG_ERROR("[file] [open-await-fail] [chunk]",
                                "path={} error={}",
                                filePath,
-                               open_result.error().message());
-            }
-
-            if (!openSuccess) {
-                // 发送空 chunk 结束
+                               opened.error().message());
                 co_await writer.sendChunk("", true);
                 co_return;
             }
+            StaticFileSessionResult session_result = std::move(opened.value());
+            if (!session_result.has_value()) {
+                const auto& open_error = session_result.error();
+                HTTP_LOG_ERROR("[file] [open-fail] [chunk]",
+                               "path={} code={} errno={}",
+                               filePath,
+                               staticFileReadErrorName(open_error.code),
+                               open_error.error_number);
+                co_await writer.sendChunk("", true);
+                co_return;
+            }
+            StaticFileSession session = std::move(session_result.value());
 
-            // 分块读取并发送
-            size_t chunkSize = config.getChunkSize();
-            std::vector<char> buffer(chunkSize);
-            ssize_t bytesRead;
-            bool hasError = false;
+            while (offset < fileSize) {
+                const size_t toRead = std::min(fileSize - offset, chunkSize);
+                auto read_result = co_await session.readAt(offset, toRead);
+                if (!read_result.has_value()) {
+                    HTTP_LOG_ERROR("[file] [read-await-fail] [chunk]",
+                                   "path={} error={}",
+                                   filePath,
+                                   read_result.error().message());
+                    hasError = true;
+                    break;
+                }
+                StaticFileReadResult chunk_result = std::move(read_result.value());
+                if (!chunk_result.has_value()) {
+                    const auto& read_error = chunk_result.error();
+                    HTTP_LOG_ERROR("[file] [read-fail] [chunk]",
+                                   "path={} code={} errno={} expected={} actual={}",
+                                   filePath,
+                                   staticFileReadErrorName(read_error.code),
+                                   read_error.error_number,
+                                   read_error.expected_bytes,
+                                   read_error.actual_bytes);
+                    hasError = true;
+                    break;
+                }
 
-            while ((bytesRead = read(fd.get(), buffer.data(), chunkSize)) > 0) {
-                std::string chunk(buffer.data(), bytesRead);
-                auto result = co_await writer.sendChunk(chunk, false);
+                std::string chunk = std::move(chunk_result.value());
+                if (chunk.empty()) {
+                    HTTP_LOG_ERROR("[file] [short-read] [chunk]", "path={}", filePath);
+                    hasError = true;
+                    break;
+                }
+
+                auto result = co_await writer.sendChunk(std::move(chunk), false);
                 if (!result) {
                     HTTP_LOG_ERROR("[send] [chunk-fail]",
                                    "error={}",
@@ -1980,12 +1786,7 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                     hasError = true;
                     break;
                 }
-            }
-
-            // 检查读取错误
-            if (bytesRead < 0) {
-                HTTP_LOG_ERROR("[file] [read-fail]", "error={}", strerror(errno));
-                hasError = true;
+                offset += toRead;
             }
 
             // 发送最后一个空 chunk
@@ -1993,7 +1794,6 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 co_await writer.sendChunk("", true);
             }
 
-            // fd 会在作用域结束时自动关闭
             break;
         }
 
@@ -2011,16 +1811,24 @@ Task<void> HttpRouter::sendFileContent(HttpConn& conn,
                 co_return;
             }
 
-            // 使用 RAII 管理文件描述符
-            FileDescriptor fd;
-            auto open_result = fd.open(filePath.c_str(), O_RDONLY);
-            if (!open_result) {
-                HTTP_LOG_ERROR("[file] [open-fail] [sendfile]",
+            auto opened = co_await StaticFileReader::openForSendfile(filePath);
+            if (!opened.has_value()) {
+                HTTP_LOG_ERROR("[file] [open-await-fail] [sendfile]",
                                "path={} error={}",
                                filePath,
-                               open_result.error().message());
+                               opened.error().message());
                 co_return;
             }
+            StaticFileDescriptorResult descriptor_result = std::move(opened.value());
+            if (!descriptor_result.has_value()) {
+                HTTP_LOG_ERROR("[file] [open-fail] [sendfile]",
+                               "path={} code={} errno={}",
+                               filePath,
+                               staticFileReadErrorName(descriptor_result.error().code),
+                               descriptor_result.error().error_number);
+                co_return;
+            }
+            FileDescriptor fd = std::move(descriptor_result.value());
 
             // 使用 sendfile 零拷贝发送文件内容
             off_t offset = 0;
@@ -2105,21 +1913,29 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
         co_return;
     }
 
-    // 打开文件
-    FileDescriptor fd;
-    auto open_result = fd.open(filePath.c_str(), O_RDONLY);
-    if (!open_result) {
-        HTTP_LOG_ERROR("[file] [open-fail] [range]",
-                       "path={} error={}",
-                       filePath,
-                       open_result.error().message());
-        co_return;
-    }
-
     // 根据配置决定传输模式
     FileTransferMode mode = config.decideTransferMode(range.length);
 
     if (mode == FileTransferMode::SENDFILE) {
+        auto opened = co_await StaticFileReader::openForSendfile(filePath);
+        if (!opened.has_value()) {
+            HTTP_LOG_ERROR("[file] [open-await-fail] [range]",
+                           "path={} error={}",
+                           filePath,
+                           opened.error().message());
+            co_return;
+        }
+        StaticFileDescriptorResult descriptor_result = std::move(opened.value());
+        if (!descriptor_result.has_value()) {
+            HTTP_LOG_ERROR("[file] [open-fail] [range]",
+                           "path={} code={} errno={}",
+                           filePath,
+                           staticFileReadErrorName(descriptor_result.error().code),
+                           descriptor_result.error().error_number);
+            co_return;
+        }
+        FileDescriptor fd = std::move(descriptor_result.value());
+
         // 使用 sendfile 零拷贝发送范围内容
         off_t offset = range.start;
         size_t remaining = range.length;
@@ -2148,32 +1964,59 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
             remaining -= sent;
         }
     } else {
-        // 使用普通读取方式发送范围内容
-        // 定位到起始位置
-        if (lseek(fd.get(), range.start, SEEK_SET) == -1) {
-            HTTP_LOG_ERROR("[file] [seek-fail]", "error={}", strerror(errno));
-            co_return;
-        }
-
-        // 分块读取并发送
-        size_t chunkSize = config.getChunkSize();
-        std::vector<char> buffer(chunkSize);
+        // 使用统一 reader 读取范围内容，避免在 IO scheduler 上执行同步文件操作。
+        const size_t chunkSize = config.getChunkSize();
+        size_t offset = range.start;
         size_t remaining = range.length;
 
+        auto opened = co_await StaticFileReader::open(filePath);
+        if (!opened.has_value()) {
+            HTTP_LOG_ERROR("[file] [open-await-fail] [range]",
+                           "path={} error={}",
+                           filePath,
+                           opened.error().message());
+            co_return;
+        }
+        StaticFileSessionResult session_result = std::move(opened.value());
+        if (!session_result.has_value()) {
+            const auto& open_error = session_result.error();
+            HTTP_LOG_ERROR("[file] [open-fail] [range]",
+                           "path={} code={} errno={}",
+                           filePath,
+                           staticFileReadErrorName(open_error.code),
+                           open_error.error_number);
+            co_return;
+        }
+        StaticFileSession session = std::move(session_result.value());
+
         while (remaining > 0) {
-            size_t toRead = std::min(remaining, chunkSize);
-            ssize_t bytesRead = read(fd.get(), buffer.data(), toRead);
-
-            if (bytesRead < 0) {
-                HTTP_LOG_ERROR("[file] [read-fail]", "error={}", strerror(errno));
+            const size_t toRead = std::min(remaining, chunkSize);
+            auto read_result = co_await session.readAt(offset, toRead);
+            if (!read_result.has_value()) {
+                HTTP_LOG_ERROR("[file] [read-await-fail] [range]",
+                               "path={} error={}",
+                               filePath,
+                               read_result.error().message());
+                break;
+            }
+            StaticFileReadResult chunk_result = std::move(read_result.value());
+            if (!chunk_result.has_value()) {
+                const auto& read_error = chunk_result.error();
+                HTTP_LOG_ERROR("[file] [read-fail] [range]",
+                               "path={} code={} errno={} expected={} actual={}",
+                               filePath,
+                               staticFileReadErrorName(read_error.code),
+                               read_error.error_number,
+                               read_error.expected_bytes,
+                               read_error.actual_bytes);
                 break;
             }
 
-            if (bytesRead == 0) {
+            std::string chunk = std::move(chunk_result.value());
+            if (chunk.empty()) {
+                HTTP_LOG_ERROR("[file] [short-read] [range]", "path={}", filePath);
                 break;
             }
-
-            std::string chunk(buffer.data(), bytesRead);
             auto result = co_await writer.send(std::move(chunk));
             if (!result) {
                 HTTP_LOG_ERROR("[send] [chunk-fail]",
@@ -2182,7 +2025,8 @@ Task<void> HttpRouter::sendSingleRange(HttpConn& conn,
                 break;
             }
 
-            remaining -= bytesRead;
+            offset += toRead;
+            remaining -= toRead;
         }
     }
 
@@ -2250,16 +2094,25 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
         co_return;
     }
 
-    // 打开文件
-    FileDescriptor fd;
-    auto open_result = fd.open(filePath.c_str(), O_RDONLY);
-    if (!open_result) {
-        HTTP_LOG_ERROR("[file] [open-fail] [range-multi]",
+    auto opened = co_await StaticFileReader::open(filePath);
+    if (!opened.has_value()) {
+        HTTP_LOG_ERROR("[file] [open-await-fail] [range-multi]",
                        "path={} error={}",
                        filePath,
-                       open_result.error().message());
+                       opened.error().message());
         co_return;
     }
+    StaticFileSessionResult session_result = std::move(opened.value());
+    if (!session_result.has_value()) {
+        const auto& open_error = session_result.error();
+        HTTP_LOG_ERROR("[file] [open-fail] [range-multi]",
+                       "path={} code={} errno={}",
+                       filePath,
+                       staticFileReadErrorName(open_error.code),
+                       open_error.error_number);
+        co_return;
+    }
+    StaticFileSession session = std::move(session_result.value());
 
     // 发送每个范围
     for (const auto& range : rangeResult.ranges) {
@@ -2304,31 +2157,39 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
             co_return;
         }
 
-        // 定位到起始位置
-        if (lseek(fd.get(), range.start, SEEK_SET) == -1) {
-            HTTP_LOG_ERROR("[file] [seek-fail]", "error={}", strerror(errno));
-            co_return;
-        }
-
         // 读取并发送范围内容
-        size_t chunkSize = config.getChunkSize();
-        std::vector<char> buffer(chunkSize);
+        const size_t chunkSize = config.getChunkSize();
+        size_t offset = range.start;
         size_t remaining = range.length;
 
         while (remaining > 0) {
-            size_t toRead = std::min(remaining, chunkSize);
-            ssize_t bytesRead = read(fd.get(), buffer.data(), toRead);
-
-            if (bytesRead < 0) {
-                HTTP_LOG_ERROR("[file] [read-fail]", "error={}", strerror(errno));
+            const size_t toRead = std::min(remaining, chunkSize);
+            auto read_result = co_await session.readAt(offset, toRead);
+            if (!read_result.has_value()) {
+                HTTP_LOG_ERROR("[file] [read-await-fail] [range-multi]",
+                               "path={} error={}",
+                               filePath,
+                               read_result.error().message());
                 co_return;
             }
-
-            if (bytesRead == 0) {
+            StaticFileReadResult chunk_result = std::move(read_result.value());
+            if (!chunk_result.has_value()) {
+                const auto& read_error = chunk_result.error();
+                HTTP_LOG_ERROR("[file] [read-fail] [range-multi]",
+                               "path={} code={} errno={} expected={} actual={}",
+                               filePath,
+                               staticFileReadErrorName(read_error.code),
+                               read_error.error_number,
+                               read_error.expected_bytes,
+                               read_error.actual_bytes);
                 break;
             }
 
-            std::string chunk(buffer.data(), bytesRead);
+            std::string chunk = std::move(chunk_result.value());
+            if (chunk.empty()) {
+                HTTP_LOG_ERROR("[file] [short-read] [range-multi]", "path={}", filePath);
+                co_return;
+            }
             auto result = co_await writer.send(std::move(chunk));
             if (!result) {
                 HTTP_LOG_ERROR("[send] [chunk-fail]",
@@ -2337,7 +2198,8 @@ Task<void> HttpRouter::sendMultipleRanges(HttpConn& conn,
                 co_return;
             }
 
-            remaining -= bytesRead;
+            offset += toRead;
+            remaining -= toRead;
         }
 
         // 发送换行

@@ -22,6 +22,7 @@
 #include <functional>
 #include <unordered_map>
 #include <string>
+#include <ctime>
 #include <string_view>
 #include <memory>
 #include <vector>
@@ -361,6 +362,7 @@ private:
      * @param fileSize 文件大小
      * @param mimeType MIME类型
      * @param config 静态文件传输配置
+     * @param lastModified 文件最后修改时间；为 0 时在发送前生成回退值
      * @return 协程
      */
     static Task<void> sendFileContent(HttpConn& conn,
@@ -368,7 +370,8 @@ private:
                                       const std::string& filePath,
                                       size_t fileSize,
                                       const std::string& mimeType,
-                                      const StaticFileSetting& config);
+                                      const StaticFileSetting& config,
+                                      std::time_t lastModified = 0);
 
     /**
      * @brief 发送单个 Range 响应（206 Partial Content）

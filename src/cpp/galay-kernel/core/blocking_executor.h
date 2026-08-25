@@ -72,6 +72,14 @@ public:
     BlockingExecutor(size_t minWorkers, size_t maxWorkers, std::chrono::milliseconds keepAlive);  ///< 自定义最小/最大线程数和空闲超时时间
     ~BlockingExecutor();  ///< 停止执行器并等待工作线程全部退出
 
+    /**
+     * @brief 停止接收任务并等待现有阻塞任务排空。
+     *
+     * Runtime 在停止 IO scheduler 前调用此方法，确保阻塞任务的异步
+     * completion 能够唤醒仍在 scheduler 上等待的协程。
+     */
+    void stop() noexcept;
+
     BlockingExecutor(const BlockingExecutor&) = delete;
     BlockingExecutor& operator=(const BlockingExecutor&) = delete;
 
