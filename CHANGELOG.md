@@ -15,6 +15,7 @@
 
  - **修正 TaskPromise 协程分配失败回调**：统一 `TaskPromise<T>` 与 `TaskPromise<void>` 的标准回调名称和静态接口，失败时返回对应的无效 `Task`，并补充公开任务 API 的编译期契约检查。
  - **优化 C++ 协程帧生命周期与分配**：为 `TaskPromise<T>` / `TaskPromise<void>` 补齐普通、sized、aligned 和 sized+aligned 分配释放入口，引入按 128/256/512/1024/2048 字节分桶的线程局部有界 recycler；未提交 frame、跨线程释放、超大帧和超对齐请求均走明确的生命周期或全局 fallback 路径，并新增边界测试与压力 benchmark。
+ - **继续收敛 C++ 协程热路径**：完成态 TaskState 使用 teardown fast path，普通对齐 frame 使用 headerless sized-delete 回收，promise 内部改用 raw TaskState view，TaskState/frame TLS cache 上限降为每桶 256；移除生产库测试 hook，新增可参数化的 `b35` 百万/千万级压力 benchmark。
 
 ## [v4.9.3] - 2026-08-26
 

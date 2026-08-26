@@ -117,41 +117,22 @@ void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept;
 /**
  * @brief 释放由 allocateFrameStorage 返回的 frame 存储。
  * @param ptr 待释放地址；允许为 nullptr
- * @param size 编译器提供的 frame 大小；0 表示 unsized delete，块头元数据仍用于回收
+ * @param size 编译器提供的 frame 大小；0 表示 unsized delete。普通对齐的
+ *       unsized delete 直接释放，超对齐请求仍通过块头恢复原始基址。
  * @param alignment 与分配路径匹配的对齐
  */
 void releaseFrameStorage(void* ptr,
                          std::size_t size,
                          std::size_t alignment) noexcept;
-/**
- * @brief 设置当前线程的 frame recycler 开关。
- * @param enabled true 使用 TLS recycler；false 直接走匹配的全局分配
- * @note 仅供测试和 benchmark 做 A/B 对照；默认开启，不记录统计。
- */
-void setFrameRecyclerEnabledForTesting(bool enabled) noexcept;
-/**
- * @brief 让当前线程的 frame 分配暂时失败。
- * @note 仅用于验证标准 allocation-failure hook；默认关闭。
- */
-void setFrameAllocationFailureForTesting(bool enabled) noexcept;
-/**
- * @brief 让当前线程的 nothrow TaskState 分配暂时失败。
- * @note 仅用于验证 get_return_object() 的空状态分支；默认关闭。
- */
-void setTaskStateAllocationFailureForTesting(bool enabled) noexcept;
-/**
- * @brief 查询当前线程指定 frame 桶的缓存节点数。
- * @note 仅供边界测试和 benchmark 观测，不参与分配热路径。
- */
-std::size_t frameFreeListSizeForTesting(std::size_t size,
-                                        std::size_t alignment) noexcept;
 bool scheduleTask(const TaskRef& task) noexcept;  ///< 将任务按普通语义提交给其所属调度器
 bool scheduleTaskDeferred(const TaskRef& task) noexcept;  ///< 将任务按延后语义提交给其所属调度器
+bool scheduleTaskDeferredState(TaskState* state) noexcept;  ///< 通过裸状态提交延后任务，供 promise 热路径使用
 bool scheduleTaskImmediately(const TaskRef& task) noexcept;  ///< 在所属调度器线程上立即恢复任务
 bool requestTaskResume(const TaskRef& task) noexcept;  ///< 请求恢复已暂停任务；失败时返回 false
 bool requestTaskResumeState(TaskState* state) noexcept;  ///< 通过 owner scheduler 的无分配入口请求恢复；调用方必须持有有效引用
 std::thread::id schedulerThreadId(Scheduler* scheduler) noexcept;  ///< 查询调度器线程 ID；scheduler 为空时返回默认值
 void completeTaskState(const TaskRef& task) noexcept;  ///< 标记任务完成并触发 continuation 清理
+void completeTaskState(TaskState* state) noexcept;  ///< 通过裸状态标记任务完成，供 promise 热路径使用
 void attachTaskContinuation(const TaskRef& task, TaskRef next) noexcept;  ///< 为任务追加下一段 continuation
 bool waitTaskCompletion(const TaskRef& task);  ///< 阻塞等待任务完成；无有效任务状态时返回 false
 void storeTaskError(const TaskRef& task, TaskResultError error) noexcept;  ///< 写入任务错误
@@ -189,7 +170,7 @@ public:
     {
         const auto raw = reinterpret_cast<uintptr_t>(m_state);
         return reinterpret_cast<TaskState*>(raw & ~kBorrowedBit);
-    }  ///< 返回底层任务状态裸指针，不转移所有权；promise 的借用视图使用低位标记
+    }  ///< 返回非拥有状态指针；promise view 使用低位标记
     Scheduler* belongScheduler() const noexcept;  ///< 返回任务所属调度器；未绑定时返回 nullptr
 
 private:
@@ -246,18 +227,20 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     Scheduler* m_scheduler = nullptr;  ///< 任务所属调度器
     Runtime* m_runtime = nullptr;  ///< 任务继承到的 Runtime 上下文
     TaskState* m_resume_queue_next = nullptr;  ///< owner scheduler 专用侵入式 resume 链接
-    void (*m_destroy_result)(TaskState&) noexcept = nullptr;  ///< 销毁尚未消费的结果对象
-    std::atomic<TaskWaiter*> m_waiter{nullptr};  ///< 惰性分配的等待器，仅 join/wait 路径需要
+    // 将所有权/接纳标记放在冷结果和 continuation 字段之前；在保持 128 字节
+    // 状态大小的同时，减少热路径跨越的缓存行。
     std::atomic<uint64_t> m_refs{1};  ///< TaskRef 引用计数
-    std::optional<TaskRef> m_then;  ///< `then()` 追加的 continuation 任务
-    std::optional<TaskRef> m_next;  ///< 当前 `co_await` 恢复后要继续唤醒的父任务
-    std::optional<detail::TaskResultError> m_result_error;  ///< 任务错误
-    ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果的存储形态
     std::atomic<bool> m_done{false};  ///< 任务是否已经执行完成
     std::atomic<bool> m_queued{false};  ///< 任务是否已在调度队列中
-    std::atomic<bool> m_resume_queue_claimed{false};  ///< 已被专用 resume admission 接管，直到恢复或释放
-    std::atomic<bool> m_resume_owner_only{false};  ///< 本次由 waker/timeout 恢复的任务必须回到 owner scheduler 线程执行
+    std::atomic<bool> m_resume_queue_claimed{false};  ///< 是否已被 resume admission 接管
+    std::atomic<bool> m_resume_owner_only{false};  ///< 是否必须由 owner scheduler 线程恢复
     std::atomic<bool> m_result_consumed{false};  ///< 任务结果是否已被 join/await 消费
+    std::optional<detail::TaskResultError> m_result_error;  ///< 任务错误
+    ResultStorageKind m_result_kind = ResultStorageKind::Empty;  ///< 当前结果存储形态
+    void (*m_destroy_result)(TaskState&) noexcept = nullptr;  ///< 销毁尚未消费的结果对象
+    std::atomic<TaskWaiter*> m_waiter{nullptr};  ///< 仅在 join/wait 路径惰性分配的等待器
+    std::optional<TaskRef> m_then;  ///< `then()` 追加的 continuation 任务
+    std::optional<TaskRef> m_next;  ///< 当前 `co_await` 后要恢复的父任务
 };
 
 struct TaskWaiter
@@ -287,11 +270,16 @@ inline void setTaskRuntime(const TaskRef& task, Runtime* runtime) noexcept
     }
 }
 
-inline void inheritTaskRuntime(const TaskRef& task, Runtime* runtime) noexcept
+inline void inheritTaskRuntime(TaskState* state, Runtime* runtime) noexcept
 {
-    if (auto* state = task.state(); state && state->m_runtime == nullptr) {
+    if (state != nullptr && state->m_runtime == nullptr) {
         state->m_runtime = runtime;
     }
+}
+
+inline void inheritTaskRuntime(const TaskRef& task, Runtime* runtime) noexcept
+{
+    inheritTaskRuntime(task.state(), runtime);
 }
 
 inline void setTaskScheduler(const TaskRef& task, Scheduler* scheduler) noexcept
@@ -399,10 +387,26 @@ void initializeTaskResult(const TaskRef& task) noexcept
     }
 }
 
+template <typename T>
+void initializeTaskResult(TaskState* state) noexcept
+{
+    if (state != nullptr) {
+        state->m_destroy_result = &TaskResultStorageTraits<T>::destroy;
+    }
+}
+
 template <>
 inline void initializeTaskResult<void>(const TaskRef& task) noexcept
 {
     if (auto* state = task.state()) {
+        state->m_destroy_result = nullptr;
+    }
+}
+
+template <>
+inline void initializeTaskResult<void>(TaskState* state) noexcept
+{
+    if (state != nullptr) {
         state->m_destroy_result = nullptr;
     }
 }
@@ -418,9 +422,26 @@ bool storeTaskResult(const TaskRef& task, U&& value)
     return true;
 }
 
+template <typename T, typename U>
+bool storeTaskResult(TaskState* state, U&& value)
+{
+    if (state == nullptr) {
+        return false;
+    }
+    TaskResultStorageTraits<T>::store(*state, std::forward<U>(value));
+    return true;
+}
+
 inline void storeTaskError(const TaskRef& task, TaskResultError error) noexcept
 {
     if (auto* state = task.state()) {
+        state->m_result_error = std::move(error);
+    }
+}
+
+inline void storeTaskError(TaskState* state, TaskResultError error) noexcept
+{
+    if (state != nullptr) {
         state->m_result_error = std::move(error);
     }
 }
@@ -1413,9 +1434,10 @@ public:
         if (state == nullptr) {
             return {};
         }
-        m_task = TaskRef::borrowed(state);
-        detail::initializeTaskResult<T>(m_task);
-        detail::inheritTaskRuntime(m_task, detail::currentRuntime());
+        m_state = state;
+        m_task_view = TaskRef::borrowed(state);
+        detail::initializeTaskResult<T>(state);
+        detail::inheritTaskRuntime(state, detail::currentRuntime());
         return Task<T>(TaskRef(state, false));
     }
 
@@ -1427,7 +1449,7 @@ public:
 
         bool await_suspend(std::coroutine_handle<> handle) const noexcept
         {
-            if (!promise->m_task.isValid()) {
+            if (promise->m_state == nullptr) {
                 // TaskState allocation failed after the frame was created. The
                 // frame owns no state in this branch, so destroy it here while
                 // it is already suspended and return an invalid Task.
@@ -1444,7 +1466,7 @@ public:
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
         if (flag) {
-            detail::scheduleTaskDeferred(m_task);
+            detail::scheduleTaskDeferredState(m_state);
         }
         return {};
     }
@@ -1453,34 +1475,37 @@ public:
 
     void unhandled_exception() noexcept  ///< 捕获协程异常并写入完成态
     {
-        detail::storeTaskError(m_task, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
-        detail::completeTaskState(m_task);
+        detail::storeTaskError(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
+        detail::completeTaskState(m_state);
     }
 
     template <typename U>
     void return_value(U&& value) noexcept(std::is_nothrow_constructible_v<T, U&&>)  ///< 写入协程返回值并标记完成
     {
-        if (!detail::storeTaskResult<T>(m_task, std::forward<U>(value))) {
-            detail::storeTaskError(m_task, detail::TaskResultError(detail::TaskResultErrorCode::kInvalidState));
+        if (!detail::storeTaskResult<T>(m_state, std::forward<U>(value))) {
+            detail::storeTaskError(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kInvalidState));
         }
-        detail::completeTaskState(m_task);
+        detail::completeTaskState(m_state);
     }
 
     ~TaskPromise() noexcept
     {
-        if (auto* state = m_task.state(); state != nullptr) {
+        if (m_state != nullptr) {
             // Both the compiler and an explicit coroutine_handle::destroy()
             // can release the frame without entering TaskState::~TaskState().
             // Clear the non-owning handle view so a later state teardown never
             // attempts a second destroy.
-            state->m_handle = nullptr;
+            m_state->m_handle = nullptr;
         }
+        m_state = nullptr;
+        m_task_view.m_state = nullptr;
     }
 
-    const TaskRef& taskRefView() const noexcept { return m_task; }  ///< 返回底层任务引用视图
+    const TaskRef& taskRefView() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
 
 private:
-    TaskRef m_task;
+    TaskState* m_state = nullptr;  ///< promise 热路径使用的非拥有状态指针
+    mutable TaskRef m_task_view;  ///< 为兼容 awaiter 保留的非拥有 TaskRef view
 };
 
 /**
@@ -1553,9 +1578,10 @@ public:
         if (state == nullptr) {
             return {};
         }
-        m_task = TaskRef::borrowed(state);
-        detail::initializeTaskResult<void>(m_task);
-        detail::inheritTaskRuntime(m_task, detail::currentRuntime());
+        m_state = state;
+        m_task_view = TaskRef::borrowed(state);
+        detail::initializeTaskResult<void>(state);
+        detail::inheritTaskRuntime(state, detail::currentRuntime());
         return Task<void>(TaskRef(state, false));
     }
 
@@ -1567,7 +1593,7 @@ public:
 
         bool await_suspend(std::coroutine_handle<> handle) const noexcept
         {
-            if (!promise->m_task.isValid()) {
+            if (promise->m_state == nullptr) {
                 // See TaskPromise<T>::InitialSuspendAwaiter.
                 handle.destroy();
             }
@@ -1582,7 +1608,7 @@ public:
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
         if (flag) {
-            detail::scheduleTaskDeferred(m_task);
+            detail::scheduleTaskDeferredState(m_state);
         }
         return {};
     }
@@ -1591,27 +1617,30 @@ public:
 
     void unhandled_exception() noexcept  ///< 捕获协程异常并写入完成态
     {
-        detail::storeTaskError(m_task, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
-        detail::completeTaskState(m_task);
+        detail::storeTaskError(m_state, detail::TaskResultError(detail::TaskResultErrorCode::kTaskException));
+        detail::completeTaskState(m_state);
     }
 
     void return_void() noexcept  ///< 标记 `void` 协程成功完成
     {
-        detail::completeTaskState(m_task);
+        detail::completeTaskState(m_state);
     }
 
     ~TaskPromise() noexcept
     {
-        if (auto* state = m_task.state(); state != nullptr) {
+        if (m_state != nullptr) {
             // See TaskPromise<T>::~TaskPromise().
-            state->m_handle = nullptr;
+            m_state->m_handle = nullptr;
         }
+        m_state = nullptr;
+        m_task_view.m_state = nullptr;
     }
 
-    const TaskRef& taskRefView() const noexcept { return m_task; }  ///< 返回底层任务引用视图
+    const TaskRef& taskRefView() const noexcept { return m_task_view; }  ///< 返回非拥有 TaskRef view
 
 private:
-    TaskRef m_task;
+    TaskState* m_state = nullptr;  ///< promise 热路径使用的非拥有状态指针
+    mutable TaskRef m_task_view;  ///< 为兼容 awaiter 保留的非拥有 TaskRef view
 };
 
 } // namespace galay::kernel

@@ -1,6 +1,6 @@
 /**
  * @file t180_coroutine_frame_allocator.cc
- * @brief 协程帧分配器、Task 生命周期和跨线程释放边界测试。
+ * @brief 协程 frame 分配器、Task 生命周期和跨线程释放边界测试。
  */
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -12,6 +12,7 @@
 #include <coroutine>
 #include <cstdint>
 #include <iostream>
+#include <limits>
 #include <thread>
 #include <utility>
 
@@ -23,14 +24,12 @@ using galay::kernel::TaskRef;
 using galay::kernel::JoinHandle;
 using galay::kernel::detail::allocateFrameStorage;
 using galay::kernel::detail::destroyTaskFrame;
-using galay::kernel::detail::frameFreeListSizeForTesting;
 using galay::kernel::detail::releaseFrameStorage;
-using galay::kernel::detail::setFrameAllocationFailureForTesting;
-using galay::kernel::detail::setTaskStateAllocationFailureForTesting;
 
 namespace {
 
 constexpr std::size_t kDefaultAlignment = alignof(std::max_align_t);
+constexpr std::size_t kFrameCachePressureCount = 257;
 
 bool require(bool condition, const char* message) {
     if (!condition) {
@@ -93,6 +92,50 @@ Task<void> initiallySuspendedTask(FrameProbe probe) {
     co_await std::suspend_always{};
 }
 
+bool verifySmallAndOverflowInputs() {
+    releaseFrameStorage(nullptr, 0, 0);
+
+    void* zero = allocateFrameStorage(0, 0);
+    if (!require(zero != nullptr, "zero-sized frame allocation failed")) {
+        return false;
+    }
+    releaseFrameStorage(zero, 0, 0);
+
+    void* one = allocateFrameStorage(1, 1);
+    if (!require(one != nullptr,
+                 "one-byte frame allocation failed after unsized release")) {
+        if (one != nullptr) {
+            releaseFrameStorage(one, 1, 1);
+        }
+        return false;
+    }
+    releaseFrameStorage(one, 1, 1);
+
+    const auto max = std::numeric_limits<std::size_t>::max();
+    if (!require(allocateFrameStorage(max, kDefaultAlignment) == nullptr,
+                 "overflow-sized frame must fail without allocation")) {
+        return false;
+    }
+    if (!require(allocateFrameStorage(128, max) == nullptr,
+                 "overflow alignment must fail without allocation")) {
+        return false;
+    }
+
+    for (const std::size_t alignment : {0UL, 1UL, 2UL, 8UL, kDefaultAlignment}) {
+        void* frame = allocateFrameStorage(64, alignment);
+        if (!require(frame != nullptr, "small alignment allocation failed")) {
+            return false;
+        }
+        if (!require(reinterpret_cast<std::uintptr_t>(frame) % kDefaultAlignment == 0,
+                     "small alignment must preserve max_align_t alignment")) {
+            releaseFrameStorage(frame, 64, alignment);
+            return false;
+        }
+        releaseFrameStorage(frame, 64, alignment);
+    }
+    return true;
+}
+
 bool verifyBoundaryReuse() {
     constexpr std::array<std::pair<std::size_t, std::size_t>, 5> boundaries{{
         {127, 128},
@@ -133,7 +176,7 @@ bool verifyBoundaryReuse() {
 }
 
 bool verifyCapacityAndFallback() {
-    std::array<void*, 1025> nodes{};
+    std::array<void*, kFrameCachePressureCount> nodes{};
     for (void*& node : nodes) {
         node = allocateFrameStorage(128, kDefaultAlignment);
         if (!require(node != nullptr, "capacity test allocation failed")) {
@@ -143,23 +186,11 @@ bool verifyCapacityAndFallback() {
     for (void* node : nodes) {
         releaseFrameStorage(node, 128, kDefaultAlignment);
     }
-    if (!require(frameFreeListSizeForTesting(128, kDefaultAlignment) == 1024,
-                 "frame bucket must cap at 1024 nodes")) {
-        return false;
-    }
-
-    const auto cachedBeforeLarge =
-        frameFreeListSizeForTesting(2048, kDefaultAlignment);
     void* large = allocateFrameStorage(2049, kDefaultAlignment);
     if (!require(large != nullptr, "large frame fallback allocation failed")) {
         return false;
     }
     releaseFrameStorage(large, 2049, kDefaultAlignment);
-    if (!require(frameFreeListSizeForTesting(2048, kDefaultAlignment) ==
-                     cachedBeforeLarge,
-                 "large frames must bypass TLS buckets")) {
-        return false;
-    }
 
     constexpr std::size_t kOverAlignment = kDefaultAlignment * 2;
     void* overAligned = allocateFrameStorage(128, kOverAlignment);
@@ -173,10 +204,6 @@ bool verifyCapacityAndFallback() {
         return false;
     }
     releaseFrameStorage(overAligned, 128, kOverAlignment);
-    if (!require(frameFreeListSizeForTesting(128, kDefaultAlignment) == 1024,
-                 "over-aligned frame must not enter ordinary buckets")) {
-        return false;
-    }
     return true;
 }
 
@@ -210,6 +237,34 @@ bool verifyDeleteCombinations() {
         return false;
     }
     TaskPromise<int>::operator delete(sizedAligned, 128, alignment);
+
+    void* nothrow = TaskPromise<void>::operator new(128, std::nothrow);
+    if (!require(nothrow != nullptr, "nothrow promise allocation failed")) {
+        return false;
+    }
+    TaskPromise<void>::operator delete(nothrow);
+
+    const auto overAlignment = std::align_val_t(kDefaultAlignment * 2);
+    void* nothrowAligned =
+        TaskPromise<int>::operator new(128, overAlignment, std::nothrow);
+    if (!require(nothrowAligned != nullptr,
+                 "aligned nothrow promise allocation failed")) {
+        return false;
+    }
+    if (!require(reinterpret_cast<std::uintptr_t>(nothrowAligned) %
+                     static_cast<std::size_t>(overAlignment) ==
+                     0,
+                 "aligned nothrow promise has incorrect alignment")) {
+        TaskPromise<int>::operator delete(nothrowAligned, overAlignment);
+        return false;
+    }
+    TaskPromise<int>::operator delete(nothrowAligned, overAlignment);
+
+    void* unsized = TaskPromise<void>::operator new(128);
+    if (!require(unsized != nullptr, "unsized promise allocation failed")) {
+        return false;
+    }
+    TaskPromise<void>::operator delete(unsized);
     return true;
 }
 
@@ -223,21 +278,59 @@ bool verifyAllocationFailureContract() {
         return false;
     }
 
-    setTaskStateAllocationFailureForTesting(true);
-    auto noState = completedIntTask();
-    setTaskStateAllocationFailureForTesting(false);
-    if (!require(!noState.isValid(),
-                 "TaskState allocation failure must return an invalid Task")) {
-        return false;
+    return true;
+}
+
+bool verifyConcurrentRawFrameChurn() {
+    constexpr std::size_t kWorkers = 4;
+    constexpr std::size_t kIterations = 25'000;
+    std::atomic<std::size_t> failures{0};
+    std::atomic<std::size_t> badAlignment{0};
+    std::array<std::thread, kWorkers> workers;
+
+    for (auto& worker : workers) {
+        worker = std::thread([&]() {
+            for (std::size_t i = 0; i < kIterations; ++i) {
+                const std::size_t size =
+                    (i % 2 == 0) ? 256 : ((i % 3 == 0) ? 512 : 2048);
+                void* frame = allocateFrameStorage(size, kDefaultAlignment);
+                if (frame == nullptr) {
+                    failures.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
+                if (reinterpret_cast<std::uintptr_t>(frame) % kDefaultAlignment != 0) {
+                    badAlignment.fetch_add(1, std::memory_order_relaxed);
+                }
+                releaseFrameStorage(frame, size, kDefaultAlignment);
+            }
+        });
+    }
+    for (auto& worker : workers) {
+        worker.join();
     }
 
-    setFrameAllocationFailureForTesting(true);
-    auto noFrame = completedIntTask();
-    setFrameAllocationFailureForTesting(false);
-    if (!require(!noFrame.isValid(),
-                 "frame allocation failure must return an invalid Task")) {
-        return false;
-    }
+    return require(failures.load(std::memory_order_relaxed) == 0,
+                   "concurrent frame churn must not fail allocations") &&
+        require(badAlignment.load(std::memory_order_relaxed) == 0,
+                "concurrent frame churn returned an invalid alignment");
+}
+
+bool verifyCrossThreadRawFrameRelease() {
+    constexpr std::size_t kFrames = 1024;
+    std::array<void*, kFrames> frames{};
+    std::thread producer([&]() {
+        for (void*& frame : frames) {
+            frame = allocateFrameStorage(256, kDefaultAlignment);
+        }
+    });
+    producer.join();
+
+    std::thread consumer([&]() {
+        for (void* frame : frames) {
+            releaseFrameStorage(frame, 256, kDefaultAlignment);
+        }
+    });
+    consumer.join();
     return true;
 }
 
@@ -261,6 +354,13 @@ bool verifyBasicTaskLifetimes() {
         auto result = galay::kernel::detail::TaskAccess::takeResult(task);
         if (!require(result.has_value() && *result == 7,
                      "Task<int> result should be consumable once")) {
+            return false;
+        }
+        auto consumedAgain = galay::kernel::detail::TaskAccess::takeResult(task);
+        if (!require(!consumedAgain.has_value() &&
+                         consumedAgain.error().code() ==
+                             galay::kernel::detail::TaskResultErrorCode::kAlreadyConsumed,
+                     "Task<int> second result consumption must fail explicitly")) {
             return false;
         }
         if (!require(keeper.isValid() && keeper.state() == state,
@@ -422,10 +522,13 @@ bool verifyNestedAndExceptionTasks() {
 }  // namespace
 
 int main() {
-    if (!verifyBoundaryReuse() ||
+    if (!verifySmallAndOverflowInputs() ||
+        !verifyBoundaryReuse() ||
         !verifyCapacityAndFallback() ||
         !verifyDeleteCombinations() ||
         !verifyAllocationFailureContract() ||
+        !verifyConcurrentRawFrameChurn() ||
+        !verifyCrossThreadRawFrameRelease() ||
         !verifyBasicTaskLifetimes() ||
         !verifyUnsubmittedAndCrossThreadDestroy() ||
         !verifyExplicitDestroyGuard() ||
