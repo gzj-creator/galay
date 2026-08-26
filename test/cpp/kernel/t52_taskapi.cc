@@ -166,6 +166,25 @@ static_assert(std::same_as<
                            .get_return_object_on_allocation_failure()),
               Task<void>>);
 
+template <typename Promise>
+concept HasCoroutineFrameAllocatorSurface = requires(
+    void* ptr,
+    std::size_t size,
+    std::align_val_t alignment) {
+    { Promise::operator new(size) } -> std::same_as<void*>;
+    { Promise::operator new(size, alignment) } -> std::same_as<void*>;
+    Promise::operator delete(ptr);
+    Promise::operator delete(ptr, size);
+    Promise::operator delete(ptr, alignment);
+    Promise::operator delete(ptr, size, alignment);
+};
+
+static_assert(HasCoroutineFrameAllocatorSurface<TaskPromise<int>>);
+static_assert(HasCoroutineFrameAllocatorSurface<TaskPromise<void>>);
+static_assert(noexcept(TaskPromise<int>::operator new(std::size_t{})));
+static_assert(noexcept(TaskPromise<void>::operator new(
+    std::size_t{}, std::align_val_t{})));
+
 int main() {
     Runtime runtime;
 

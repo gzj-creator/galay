@@ -15,6 +15,8 @@
 #include "task.h"
 #include "scheduler.hpp"
 
+#include <limits>
+
 namespace galay::kernel
 {
 
@@ -31,9 +33,163 @@ thread_local TaskStateFreeNode* g_taskStateFreeList = nullptr;
 thread_local size_t g_taskStateFreeCount = 0;
 constexpr size_t kTaskStateFreeListLimit = 1024;
 
+struct TaskStateFreeListCleanup
+{
+    ~TaskStateFreeListCleanup() noexcept
+    {
+        while (g_taskStateFreeList != nullptr) {
+            auto* node = g_taskStateFreeList;
+            g_taskStateFreeList = node->next;
+            ::operator delete(node, std::align_val_t(alignof(TaskState)));
+        }
+        g_taskStateFreeCount = 0;
+    }
+};
+
+thread_local TaskStateFreeListCleanup g_taskStateFreeListCleanup;
+thread_local bool g_failTaskStateAllocationForTesting = false;
+
+constexpr std::size_t kFrameSizeClasses[] = {
+    128,
+    256,
+    512,
+    1024,
+    2048,
+};
+constexpr std::size_t kFrameSizeClassCount =
+    sizeof(kFrameSizeClasses) / sizeof(kFrameSizeClasses[0]);
+constexpr std::size_t kFrameFreeListLimit = 1024;
+constexpr std::size_t kFrameDefaultAlignment = alignof(std::max_align_t);
+
+struct FrameFreeNode
+{
+    FrameFreeNode* next = nullptr;
+};
+
+struct alignas(std::max_align_t) FrameAllocationHeader
+{
+    void* base = nullptr;
+    std::uint64_t magic = 0;
+    std::size_t alignment = 0;
+    std::size_t bucket = 0;
+};
+
+static_assert(sizeof(FrameAllocationHeader) % alignof(std::max_align_t) == 0);
+constexpr std::uint64_t kFrameAllocationMagic = 0x47414c415946524dULL;
+
+struct FrameFreeList
+{
+    FrameFreeNode* head = nullptr;
+    std::size_t count = 0;
+
+    ~FrameFreeList() noexcept
+    {
+        while (head != nullptr) {
+            auto* node = head;
+            head = node->next;
+            auto* header = reinterpret_cast<FrameAllocationHeader*>(
+                static_cast<std::byte*>(static_cast<void*>(node)) -
+                sizeof(FrameAllocationHeader));
+            ::operator delete(header->base,
+                              std::align_val_t(header->alignment));
+        }
+        count = 0;
+    }
+};
+
+thread_local FrameFreeList g_frameFreeListBuckets[kFrameSizeClassCount];
+thread_local bool g_frameRecyclerEnabled = true;
+thread_local bool g_failFrameAllocationForTesting = false;
+
+std::size_t frameSizeClassIndex(std::size_t size) noexcept
+{
+    for (std::size_t index = 0; index < kFrameSizeClassCount; ++index) {
+        if (size <= kFrameSizeClasses[index]) {
+            return index;
+        }
+    }
+    return kFrameSizeClassCount;
+}
+
+std::align_val_t frameGlobalAlignment(std::size_t alignment) noexcept
+{
+    if (alignment == 0 || alignment <= kFrameDefaultAlignment) {
+        return std::align_val_t(kFrameDefaultAlignment);
+    }
+    return std::align_val_t(alignment);
+}
+
+std::uintptr_t alignAddress(std::uintptr_t address,
+                            std::size_t alignment) noexcept
+{
+    const auto remainder = address % alignment;
+    return remainder == 0 ? address : address + alignment - remainder;
+}
+
+void* allocateFrameStorageBlock(std::size_t size,
+                                std::size_t alignment,
+                                std::size_t bucket) noexcept
+{
+    if (alignment == 0) {
+        alignment = kFrameDefaultAlignment;
+    }
+    const auto extra = alignment > kFrameDefaultAlignment
+        ? alignment - 1
+        : 0;
+    const auto max = std::numeric_limits<std::size_t>::max();
+    if (extra > max - sizeof(FrameAllocationHeader) ||
+        size > max - sizeof(FrameAllocationHeader) - extra) {
+        return nullptr;
+    }
+
+    const auto total = size + sizeof(FrameAllocationHeader) + extra;
+    auto* base = ::operator new(total,
+                                frameGlobalAlignment(alignment),
+                                std::nothrow);
+    if (base == nullptr) {
+        return nullptr;
+    }
+
+    const auto first = reinterpret_cast<std::uintptr_t>(base) +
+        sizeof(FrameAllocationHeader);
+    const auto aligned = alignAddress(first, alignment);
+    auto* header = reinterpret_cast<FrameAllocationHeader*>(
+        aligned - sizeof(FrameAllocationHeader));
+    header->base = base;
+    header->magic = kFrameAllocationMagic;
+    header->alignment = static_cast<std::size_t>(frameGlobalAlignment(alignment));
+    header->bucket = bucket;
+    return reinterpret_cast<void*>(aligned);
+}
+
+FrameAllocationHeader* frameAllocationHeader(void* ptr) noexcept
+{
+    if (ptr == nullptr) {
+        return nullptr;
+    }
+
+    auto* header = reinterpret_cast<FrameAllocationHeader*>(
+        static_cast<std::byte*>(ptr) - sizeof(FrameAllocationHeader));
+    return header->magic == kFrameAllocationMagic ? header : nullptr;
+}
+
+void releaseFrameRaw(void* ptr, std::size_t alignment) noexcept
+{
+    if (ptr == nullptr) {
+        return;
+    }
+    if (auto* header = frameAllocationHeader(ptr); header != nullptr) {
+        ::operator delete(header->base, std::align_val_t(header->alignment));
+        return;
+    }
+    ::operator delete(ptr, frameGlobalAlignment(alignment));
+}
+
 void* allocateTaskStateStorage(std::size_t size, std::align_val_t alignment)
 {
-    if (size == sizeof(TaskState) && g_taskStateFreeList != nullptr) {
+    if (size == sizeof(TaskState) &&
+        alignment == std::align_val_t(alignof(TaskState)) &&
+        g_taskStateFreeList != nullptr) {
         auto* node = g_taskStateFreeList;
         g_taskStateFreeList = node->next;
         --g_taskStateFreeCount;
@@ -48,7 +204,9 @@ void releaseTaskStateStorage(void* ptr, std::size_t size, std::align_val_t align
         return;
     }
 
-    if (size != sizeof(TaskState) || g_taskStateFreeCount >= kTaskStateFreeListLimit) {
+    if (size != sizeof(TaskState) ||
+        alignment != std::align_val_t(alignof(TaskState)) ||
+        g_taskStateFreeCount >= kTaskStateFreeListLimit) {
         ::operator delete(ptr, alignment);
         return;
     }
@@ -61,8 +219,107 @@ void releaseTaskStateStorage(void* ptr, std::size_t size, std::align_val_t align
 
 } // namespace
 
+namespace detail
+{
+
+void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept
+{
+    if (alignment == 0) {
+        alignment = kFrameDefaultAlignment;
+    }
+    if (g_failFrameAllocationForTesting) {
+        return nullptr;
+    }
+    if (g_frameRecyclerEnabled && alignment <= kFrameDefaultAlignment) {
+        const auto index = frameSizeClassIndex(size);
+        if (index < kFrameSizeClassCount) {
+            auto& bucket = g_frameFreeListBuckets[index];
+            if (bucket.head != nullptr) {
+                auto* node = bucket.head;
+                bucket.head = node->next;
+                --bucket.count;
+                return node;
+            }
+            return allocateFrameStorageBlock(kFrameSizeClasses[index],
+                                              alignment,
+                                              index);
+        }
+    }
+
+    return allocateFrameStorageBlock(size, alignment, kFrameSizeClassCount);
+}
+
+void releaseFrameStorage(void* ptr,
+                         std::size_t size,
+                         std::size_t alignment) noexcept
+{
+    if (ptr == nullptr) {
+        return;
+    }
+
+    // The header, rather than a guessed size class, is authoritative for all
+    // frame blocks returned by this allocator, including unsized delete.
+    (void)size;
+    auto* header = frameAllocationHeader(ptr);
+    if (header == nullptr) {
+        releaseFrameRaw(ptr, alignment);
+        return;
+    }
+
+    const auto index = g_frameRecyclerEnabled
+        ? header->bucket
+        : kFrameSizeClassCount;
+    if (index >= kFrameSizeClassCount) {
+        releaseFrameRaw(ptr, alignment);
+        return;
+    }
+
+    auto& bucket = g_frameFreeListBuckets[index];
+    if (bucket.count >= kFrameFreeListLimit) {
+        releaseFrameRaw(ptr, alignment);
+        return;
+    }
+
+    auto* node = static_cast<FrameFreeNode*>(ptr);
+    node->next = bucket.head;
+    bucket.head = node;
+    ++bucket.count;
+}
+
+std::size_t frameFreeListSizeForTesting(std::size_t size,
+                                        std::size_t alignment) noexcept
+{
+    if (alignment > kFrameDefaultAlignment) {
+        return 0;
+    }
+    const auto index = frameSizeClassIndex(size);
+    return index < kFrameSizeClassCount
+        ? g_frameFreeListBuckets[index].count
+        : 0;
+}
+
+void setFrameRecyclerEnabledForTesting(bool enabled) noexcept
+{
+    g_frameRecyclerEnabled = enabled;
+}
+
+void setFrameAllocationFailureForTesting(bool enabled) noexcept
+{
+    g_failFrameAllocationForTesting = enabled;
+}
+
+void setTaskStateAllocationFailureForTesting(bool enabled) noexcept
+{
+    g_failTaskStateAllocationForTesting = enabled;
+}
+
+} // namespace detail
+
 TaskState::~TaskState()
 {
+    // Completed frames are destroyed by final_suspend() == suspend_never;
+    // only an incomplete, unsubmitted frame can need this explicit cleanup.
+    (void)detail::destroyTaskFrame(this);
     if (m_destroy_result != nullptr && m_result_kind != ResultStorageKind::Empty) {
         m_destroy_result(*this);
     }
@@ -79,6 +336,40 @@ void* TaskState::operator new(std::size_t size)
 void* TaskState::operator new(std::size_t size, std::align_val_t alignment)
 {
     return allocateTaskStateStorage(size, alignment);
+}
+
+void* TaskState::operator new(std::size_t size, const std::nothrow_t&) noexcept
+{
+    if (g_failTaskStateAllocationForTesting) {
+        return nullptr;
+    }
+    if (size == sizeof(TaskState) && g_taskStateFreeList != nullptr) {
+        auto* node = g_taskStateFreeList;
+        g_taskStateFreeList = node->next;
+        --g_taskStateFreeCount;
+        return node;
+    }
+    return ::operator new(size,
+                          std::align_val_t(alignof(TaskState)),
+                          std::nothrow);
+}
+
+void* TaskState::operator new(std::size_t size,
+                              std::align_val_t alignment,
+                              const std::nothrow_t&) noexcept
+{
+    if (g_failTaskStateAllocationForTesting) {
+        return nullptr;
+    }
+    if (size == sizeof(TaskState) &&
+        alignment == std::align_val_t(alignof(TaskState)) &&
+        g_taskStateFreeList != nullptr) {
+        auto* node = g_taskStateFreeList;
+        g_taskStateFreeList = node->next;
+        --g_taskStateFreeCount;
+        return node;
+    }
+    return ::operator new(size, alignment, std::nothrow);
 }
 
 void TaskState::operator delete(void* ptr) noexcept
@@ -100,6 +391,24 @@ void TaskState::operator delete(void* ptr, std::size_t size, std::align_val_t al
 {
     releaseTaskStateStorage(ptr, size, alignment);
 }
+
+namespace detail
+{
+
+bool destroyTaskFrame(TaskState* state) noexcept
+{
+    if (state == nullptr || state->m_done.load(std::memory_order_acquire) ||
+        state->m_handle == nullptr) {
+        return false;
+    }
+
+    auto handle = state->m_handle;
+    state->m_handle = nullptr;
+    handle.destroy();
+    return true;
+}
+
+} // namespace detail
 
 namespace detail
 {
@@ -298,8 +607,20 @@ TaskRef::TaskRef(TaskState* state, bool retainRef) noexcept
     }
 }
 
+TaskRef TaskRef::borrowed(TaskState* state) noexcept
+{
+    TaskRef result;
+    if (state == nullptr) {
+        return result;
+    }
+
+    const auto raw = reinterpret_cast<uintptr_t>(state);
+    result.m_state = reinterpret_cast<TaskState*>(raw | kBorrowedBit);
+    return result;
+}
+
 TaskRef::TaskRef(const TaskRef& other) noexcept
-    : m_state(other.m_state)
+    : m_state(other.state())
 {
     retain();
 }
@@ -318,9 +639,14 @@ TaskRef::~TaskRef()
 TaskRef& TaskRef::operator=(const TaskRef& other) noexcept
 {
     if (this != &other) {
+        auto* state = other.state();
+        if (state != nullptr) {
+            // Retain before releasing the old value so assigning from a
+            // borrowed view of the same state cannot invalidate the source.
+            state->m_refs.fetch_add(1, std::memory_order_relaxed);
+        }
         release();
-        m_state = other.m_state;
-        retain();
+        m_state = state;
     }
     return *this;
 }
@@ -328,6 +654,12 @@ TaskRef& TaskRef::operator=(const TaskRef& other) noexcept
 TaskRef& TaskRef::operator=(TaskRef&& other) noexcept
 {
     if (this != &other) {
+        if (other.isBorrowed() && state() == other.state()) {
+            // A borrowed promise view carries no reference to transfer. Keep
+            // the existing owner and only invalidate the moved-from view.
+            other.m_state = nullptr;
+            return *this;
+        }
         release();
         m_state = other.m_state;
         other.m_state = nullptr;
@@ -337,13 +669,14 @@ TaskRef& TaskRef::operator=(TaskRef&& other) noexcept
 
 Scheduler* TaskRef::belongScheduler() const noexcept
 {
-    return m_state ? m_state->m_scheduler : nullptr;
+    auto* state = this->state();
+    return state ? state->m_scheduler : nullptr;
 }
 
 void TaskRef::retain() noexcept
 {
-    if (m_state) {
-        m_state->m_refs.fetch_add(1, std::memory_order_relaxed);
+    if (auto* state = this->state()) {
+        state->m_refs.fetch_add(1, std::memory_order_relaxed);
     }
 }
 
@@ -353,7 +686,12 @@ void TaskRef::release() noexcept
         return;
     }
 
-    auto* state = m_state;
+    if (isBorrowed()) {
+        m_state = nullptr;
+        return;
+    }
+
+    auto* state = this->state();
     m_state = nullptr;
     if (state->m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
         delete state;

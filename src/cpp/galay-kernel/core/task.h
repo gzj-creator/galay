@@ -105,6 +105,46 @@ private:
 
 Runtime* currentRuntime() noexcept;  ///< 读取当前线程绑定的 Runtime，上下文不存在时返回 nullptr
 Runtime* swapCurrentRuntime(Runtime* runtime) noexcept;  ///< 替换当前线程 Runtime 并返回旧值
+/**
+ * @brief 分配 C++ coroutine frame 的存储。
+ * @param size 编译器请求的 frame 字节数
+ * @param alignment 编译器请求的对齐；超出 max_align_t 时不进入 TLS 桶
+ * @return 成功返回可用于该 frame 的存储；失败返回 nullptr，不抛异常
+ * @note 小 frame 只归还当前释放线程的无锁 TLS 缓存；大 frame 或超对齐请求
+ *       使用匹配的全局对齐分配。
+ */
+void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept;
+/**
+ * @brief 释放由 allocateFrameStorage 返回的 frame 存储。
+ * @param ptr 待释放地址；允许为 nullptr
+ * @param size 编译器提供的 frame 大小；0 表示 unsized delete，块头元数据仍用于回收
+ * @param alignment 与分配路径匹配的对齐
+ */
+void releaseFrameStorage(void* ptr,
+                         std::size_t size,
+                         std::size_t alignment) noexcept;
+/**
+ * @brief 设置当前线程的 frame recycler 开关。
+ * @param enabled true 使用 TLS recycler；false 直接走匹配的全局分配
+ * @note 仅供测试和 benchmark 做 A/B 对照；默认开启，不记录统计。
+ */
+void setFrameRecyclerEnabledForTesting(bool enabled) noexcept;
+/**
+ * @brief 让当前线程的 frame 分配暂时失败。
+ * @note 仅用于验证标准 allocation-failure hook；默认关闭。
+ */
+void setFrameAllocationFailureForTesting(bool enabled) noexcept;
+/**
+ * @brief 让当前线程的 nothrow TaskState 分配暂时失败。
+ * @note 仅用于验证 get_return_object() 的空状态分支；默认关闭。
+ */
+void setTaskStateAllocationFailureForTesting(bool enabled) noexcept;
+/**
+ * @brief 查询当前线程指定 frame 桶的缓存节点数。
+ * @note 仅供边界测试和 benchmark 观测，不参与分配热路径。
+ */
+std::size_t frameFreeListSizeForTesting(std::size_t size,
+                                        std::size_t alignment) noexcept;
 bool scheduleTask(const TaskRef& task) noexcept;  ///< 将任务按普通语义提交给其所属调度器
 bool scheduleTaskDeferred(const TaskRef& task) noexcept;  ///< 将任务按延后语义提交给其所属调度器
 bool scheduleTaskImmediately(const TaskRef& task) noexcept;  ///< 在所属调度器线程上立即恢复任务
@@ -115,6 +155,7 @@ void completeTaskState(const TaskRef& task) noexcept;  ///< 标记任务完成�
 void attachTaskContinuation(const TaskRef& task, TaskRef next) noexcept;  ///< 为任务追加下一段 continuation
 bool waitTaskCompletion(const TaskRef& task);  ///< 阻塞等待任务完成；无有效任务状态时返回 false
 void storeTaskError(const TaskRef& task, TaskResultError error) noexcept;  ///< 写入任务错误
+bool destroyTaskFrame(TaskState* state) noexcept;  ///< 销毁仍处于初始挂起态的 frame，已完成 frame 不重复销毁
 struct TaskAccess;  ///< 供内核实现访问 Task 私有状态的辅助入口
 template <typename T>
 class TaskAwaiter;  ///< `co_await Task<T>` 使用的 awaiter
@@ -144,7 +185,11 @@ public:
     TaskRef& operator=(TaskRef&& other) noexcept;  ///< 移动赋值，源对象被清空
 
     bool isValid() const noexcept { return m_state != nullptr; }  ///< 是否引用到有效任务状态
-    TaskState* state() const noexcept { return m_state; }  ///< 返回底层任务状态裸指针，不转移所有权
+    TaskState* state() const noexcept
+    {
+        const auto raw = reinterpret_cast<uintptr_t>(m_state);
+        return reinterpret_cast<TaskState*>(raw & ~kBorrowedBit);
+    }  ///< 返回底层任务状态裸指针，不转移所有权；promise 的借用视图使用低位标记
     Scheduler* belongScheduler() const noexcept;  ///< 返回任务所属调度器；未绑定时返回 nullptr
 
 private:
@@ -154,9 +199,16 @@ private:
     friend class TaskPromise;
     friend struct detail::TaskRefStorageAccess;
 
+    static TaskRef borrowed(TaskState* state) noexcept;
+    bool isBorrowed() const noexcept
+    {
+        return (reinterpret_cast<uintptr_t>(m_state) & kBorrowedBit) != 0;
+    }
+
     void retain() noexcept;  ///< 增加底层状态引用计数
     void release() noexcept;  ///< 减少底层状态引用计数，必要时释放状态
 
+    static constexpr uintptr_t kBorrowedBit = 1U;
     TaskState* m_state = nullptr;
 };
 
@@ -177,6 +229,10 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
 
     static void* operator new(std::size_t size);
     static void* operator new(std::size_t size, std::align_val_t alignment);
+    static void* operator new(std::size_t size, const std::nothrow_t&) noexcept;
+    static void* operator new(std::size_t size,
+                              std::align_val_t alignment,
+                              const std::nothrow_t&) noexcept;
     static void operator delete(void* ptr) noexcept;
     static void operator delete(void* ptr, std::size_t size) noexcept;
     static void operator delete(void* ptr, std::align_val_t alignment) noexcept;
@@ -780,7 +836,11 @@ struct TaskRefStorageAccess
 {
     static TaskState* releaseState(TaskRef& task) noexcept
     {
-        TaskState* state = task.m_state;
+        if (task.isBorrowed()) {
+            task.m_state = nullptr;
+            return nullptr;
+        }
+        TaskState* state = task.state();
         task.m_state = nullptr;
         return state;
     }
@@ -1292,6 +1352,55 @@ class TaskPromise
 public:
     using ReSchedulerType = bool;  ///< `co_yield true/false` 使用的重新调度标记类型
 
+    static void* operator new(std::size_t size) noexcept
+    {
+        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+    }
+
+    static void* operator new(std::size_t size,
+                              std::align_val_t alignment) noexcept
+    {
+        return detail::allocateFrameStorage(size,
+                                            static_cast<std::size_t>(alignment));
+    }
+
+    static void operator delete(void* ptr) noexcept
+    {
+        detail::releaseFrameStorage(ptr, 0, alignof(std::max_align_t));
+    }
+
+    static void operator delete(void* ptr, std::size_t size) noexcept
+    {
+        detail::releaseFrameStorage(ptr, size, alignof(std::max_align_t));
+    }
+
+    static void operator delete(void* ptr, std::align_val_t alignment) noexcept
+    {
+        detail::releaseFrameStorage(ptr, 0, static_cast<std::size_t>(alignment));
+    }
+
+    static void operator delete(void* ptr,
+                                std::size_t size,
+                                std::align_val_t alignment) noexcept
+    {
+        detail::releaseFrameStorage(ptr,
+                                     size,
+                                     static_cast<std::size_t>(alignment));
+    }
+
+    static void* operator new(std::size_t size, const std::nothrow_t&) noexcept
+    {
+        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+    }
+
+    static void* operator new(std::size_t size,
+                              std::align_val_t alignment,
+                              const std::nothrow_t&) noexcept
+    {
+        return detail::allocateFrameStorage(size,
+                                            static_cast<std::size_t>(alignment));
+    }
+
     static Task<T> get_return_object_on_allocation_failure() noexcept
     {
         return {};
@@ -1300,13 +1409,37 @@ public:
     Task<T> get_return_object() noexcept  ///< 构造并返回与该 promise 绑定的 Task
     {
         auto handle = std::coroutine_handle<TaskPromise<T>>::from_promise(*this);
-        m_task = TaskRef(new TaskState(handle), false);
+        auto* state = new (std::nothrow) TaskState(handle);
+        if (state == nullptr) {
+            return {};
+        }
+        m_task = TaskRef::borrowed(state);
         detail::initializeTaskResult<T>(m_task);
         detail::inheritTaskRuntime(m_task, detail::currentRuntime());
-        return Task<T>(m_task);
+        return Task<T>(TaskRef(state, false));
     }
 
-    std::suspend_always initial_suspend() noexcept { return {}; }  ///< 初始总是挂起，交由调度器决定首次恢复时机
+    struct InitialSuspendAwaiter
+    {
+        TaskPromise* promise = nullptr;
+
+        bool await_ready() const noexcept { return false; }
+
+        bool await_suspend(std::coroutine_handle<> handle) const noexcept
+        {
+            if (!promise->m_task.isValid()) {
+                // TaskState allocation failed after the frame was created. The
+                // frame owns no state in this branch, so destroy it here while
+                // it is already suspended and return an invalid Task.
+                handle.destroy();
+            }
+            return true;
+        }
+
+        void await_resume() const noexcept {}
+    };
+
+    InitialSuspendAwaiter initial_suspend() noexcept { return {this}; }  ///< 初始总是挂起，失败状态在挂起点释放 frame
 
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
@@ -1333,6 +1466,17 @@ public:
         detail::completeTaskState(m_task);
     }
 
+    ~TaskPromise() noexcept
+    {
+        if (auto* state = m_task.state(); state != nullptr) {
+            // Both the compiler and an explicit coroutine_handle::destroy()
+            // can release the frame without entering TaskState::~TaskState().
+            // Clear the non-owning handle view so a later state teardown never
+            // attempts a second destroy.
+            state->m_handle = nullptr;
+        }
+    }
+
     const TaskRef& taskRefView() const noexcept { return m_task; }  ///< 返回底层任务引用视图
 
 private:
@@ -1348,6 +1492,55 @@ class TaskPromise<void>
 public:
     using ReSchedulerType = bool;  ///< `co_yield true/false` 使用的重新调度标记类型
 
+    static void* operator new(std::size_t size) noexcept
+    {
+        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+    }
+
+    static void* operator new(std::size_t size,
+                              std::align_val_t alignment) noexcept
+    {
+        return detail::allocateFrameStorage(size,
+                                            static_cast<std::size_t>(alignment));
+    }
+
+    static void operator delete(void* ptr) noexcept
+    {
+        detail::releaseFrameStorage(ptr, 0, alignof(std::max_align_t));
+    }
+
+    static void operator delete(void* ptr, std::size_t size) noexcept
+    {
+        detail::releaseFrameStorage(ptr, size, alignof(std::max_align_t));
+    }
+
+    static void operator delete(void* ptr, std::align_val_t alignment) noexcept
+    {
+        detail::releaseFrameStorage(ptr, 0, static_cast<std::size_t>(alignment));
+    }
+
+    static void operator delete(void* ptr,
+                                std::size_t size,
+                                std::align_val_t alignment) noexcept
+    {
+        detail::releaseFrameStorage(ptr,
+                                     size,
+                                     static_cast<std::size_t>(alignment));
+    }
+
+    static void* operator new(std::size_t size, const std::nothrow_t&) noexcept
+    {
+        return detail::allocateFrameStorage(size, alignof(std::max_align_t));
+    }
+
+    static void* operator new(std::size_t size,
+                              std::align_val_t alignment,
+                              const std::nothrow_t&) noexcept
+    {
+        return detail::allocateFrameStorage(size,
+                                            static_cast<std::size_t>(alignment));
+    }
+
     static Task<void> get_return_object_on_allocation_failure() noexcept
     {
         return {};
@@ -1356,13 +1549,35 @@ public:
     Task<void> get_return_object() noexcept  ///< 构造并返回与该 promise 绑定的 Task
     {
         auto handle = std::coroutine_handle<TaskPromise<void>>::from_promise(*this);
-        m_task = TaskRef(new TaskState(handle), false);
+        auto* state = new (std::nothrow) TaskState(handle);
+        if (state == nullptr) {
+            return {};
+        }
+        m_task = TaskRef::borrowed(state);
         detail::initializeTaskResult<void>(m_task);
         detail::inheritTaskRuntime(m_task, detail::currentRuntime());
-        return Task<void>(m_task);
+        return Task<void>(TaskRef(state, false));
     }
 
-    std::suspend_always initial_suspend() noexcept { return {}; }  ///< 初始总是挂起，交由调度器决定首次恢复时机
+    struct InitialSuspendAwaiter
+    {
+        TaskPromise* promise = nullptr;
+
+        bool await_ready() const noexcept { return false; }
+
+        bool await_suspend(std::coroutine_handle<> handle) const noexcept
+        {
+            if (!promise->m_task.isValid()) {
+                // See TaskPromise<T>::InitialSuspendAwaiter.
+                handle.destroy();
+            }
+            return true;
+        }
+
+        void await_resume() const noexcept {}
+    };
+
+    InitialSuspendAwaiter initial_suspend() noexcept { return {this}; }  ///< 初始总是挂起，失败状态在挂起点释放 frame
 
     std::suspend_always yield_value(ReSchedulerType flag) noexcept  ///< `co_yield true` 时把任务重新放回延后队列
     {
@@ -1383,6 +1598,14 @@ public:
     void return_void() noexcept  ///< 标记 `void` 协程成功完成
     {
         detail::completeTaskState(m_task);
+    }
+
+    ~TaskPromise() noexcept
+    {
+        if (auto* state = m_task.state(); state != nullptr) {
+            // See TaskPromise<T>::~TaskPromise().
+            state->m_handle = nullptr;
+        }
     }
 
     const TaskRef& taskRefView() const noexcept { return m_task; }  ///< 返回底层任务引用视图
