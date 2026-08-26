@@ -220,12 +220,6 @@ public:
                         error.code() == kRecvTimeOut ||
                         error.code() == kSendTimeOut ||
                         error.code() == kRequestTimeOut;
-                    if (!is_disconnect_like &&
-                        (error.code() == kRecvError || error.code() == kTcpRecvError)) {
-                        const std::string message = error.message();
-                        is_disconnect_like =
-                            message.find("Connection disconnected") != std::string::npos;
-                    }
 
                     if (is_disconnect_like) {
                         HTTP_LOG_DEBUG("[recv] [disconnect]", "code={}", static_cast<int>(error.code()));
@@ -244,7 +238,7 @@ public:
                         auto writer = conn.getWriter();
                         auto write_result = co_await writer.sendResponse(response);
                         if (!write_result) {
-                            HTTP_LOG_WARN("[send] [fail]", "code={} msg={}",
+                            HTTP_LOG_ERROR("[send] [fail]", "code={} msg={}",
                                           static_cast<int>(write_result.error().code()),
                                           write_result.error().message());
                         }
@@ -254,7 +248,7 @@ public:
                         auto writer = conn.getWriter();
                         auto write_result = co_await writer.sendResponse(response);
                         if (!write_result) {
-                            HTTP_LOG_WARN("[send] [fail]", "code={} msg={}",
+                            HTTP_LOG_ERROR("[send] [fail]", "code={} msg={}",
                                           static_cast<int>(write_result.error().code()),
                                           write_result.error().message());
                         }
@@ -283,7 +277,7 @@ public:
                     auto writer = conn.getWriter();
                     auto result = co_await writer.sendResponse(response);
                     if (!result) {
-                        HTTP_LOG_WARN("[send] [fail]", "code={} msg={}", static_cast<int>(result.error().code()), result.error().message());
+                        HTTP_LOG_ERROR("[send] [fail]", "code={} msg={}", static_cast<int>(result.error().code()), result.error().message());
                     }
 
                     if (!keep_alive) {
@@ -305,7 +299,7 @@ public:
 
             auto close_result = co_await conn.close();
             if (!close_result) {
-                HTTP_LOG_WARN("[socket] [close-fail]",
+                HTTP_LOG_ERROR("[socket] [close-fail]",
                               "context=route-connection error={}",
                               close_result.error().message());
             }
