@@ -87,7 +87,7 @@ int main()
 {
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(0)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
 
     auto rootValue = runtime.blockOnCpu(sumTask(1, 1000));

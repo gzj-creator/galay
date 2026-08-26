@@ -248,7 +248,7 @@ int main(void)
     int result = 0;
 
     runtime_config.io_scheduler_count = 1;
-    runtime_config.compute_scheduler_count = 0;
+    runtime_config.parallel_scheduler_count = 0;
     if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
         galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         create_listener(&listener, &local) != 0) {

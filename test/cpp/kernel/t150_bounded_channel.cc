@@ -4,7 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/concurrency/mpmc/bounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "result_writer.h"
 #include <atomic>
@@ -185,7 +185,7 @@ Task<void> sendUnique(galay::mpmc::BoundedChannel<std::unique_ptr<int>>* channel
     co_return;
 }
 
-bool scheduleAndWait(ComputeScheduler& scheduler, Task<void>&& task, TestState& state)
+bool scheduleAndWait(ParallelScheduler& scheduler, Task<void>&& task, TestState& state)
 {
     if (!scheduleTask(scheduler, std::move(task))) {
         return false;
@@ -227,7 +227,7 @@ bool testAsyncSendWake()
         return false;
     }
 
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -251,7 +251,7 @@ bool testAsyncSendWake()
 bool testAsyncReceiveWake()
 {
     galay::mpmc::BoundedChannel<int> channel(2);
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -301,7 +301,7 @@ bool testBatchAndMinimumCapacity()
         return false;
     }
 
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -335,7 +335,7 @@ bool testCloseAndDrain()
         return false;
     }
 
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -356,7 +356,7 @@ bool testCloseWakesPendingSend()
     if (!channel.trySend(1) || !channel.trySend(2)) {
         return false;
     }
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -375,7 +375,7 @@ bool testCloseWakesPendingSend()
 bool testCloseWakesPendingReceive()
 {
     galay::mpmc::BoundedChannel<int> channel(2);
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -394,7 +394,7 @@ bool testCloseWakesPendingReceive()
 bool testTimeout()
 {
     galay::mpmc::BoundedChannel<int> channel(2);
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -412,7 +412,7 @@ bool testSendTimeout()
     if (!channel.trySend(1) || !channel.trySend(2)) {
         return false;
     }
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -441,7 +441,7 @@ bool testMoveOnly()
         !asyncChannel.trySend(std::make_unique<int>(2))) {
         return false;
     }
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;

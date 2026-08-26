@@ -40,7 +40,7 @@ public:
     bool scheduleDeferred(TaskRef) noexcept override { return false; }
     bool scheduleImmediately(TaskRef) noexcept override { return false; }
     bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kComputeScheduler; }
+    SchedulerType type() override { return kParallelScheduler; }
 };
 
 class ResumeOnlyScheduler final : public Scheduler {
@@ -101,7 +101,7 @@ public:
     }
 
     bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kComputeScheduler; }
+    SchedulerType type() override { return kParallelScheduler; }
 
     int regularScheduleCalls() const noexcept {
         return m_regularScheduleCalls.load(std::memory_order_acquire);
@@ -271,7 +271,7 @@ bool verifyMisalignedResumeTokenIsIgnored() {
 bool verifyCppWakerStillCoalesces() {
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     auto started = runtime.start();
     if (!started.has_value()) {

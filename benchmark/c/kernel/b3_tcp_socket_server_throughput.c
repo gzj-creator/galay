@@ -277,7 +277,7 @@ int main(int argc, char** argv)
 
     C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = io_schedulers;
-    config.compute_scheduler_count = 0;
+    config.parallel_scheduler_count = 0;
 
     C_Host bind_host = {C_IPTypeIPV4, "0.0.0.0", server.port};
     pthread_t stats_thread;
@@ -285,7 +285,7 @@ int main(int argc, char** argv)
     int exit_code = 0;
 
     if (printf("C TCP benchmark server starting on port %u\n", server.port) < 0 ||
-        printf("meta: role=server io_mode=plain scenario=tcp-echo io_schedulers=%zu listeners=%zu reuse_port=1 compute_schedulers=0 mode=coro-direct\n",
+        printf("meta: role=server io_mode=plain scenario=tcp-echo io_schedulers=%zu listeners=%zu reuse_port=1 parallel_schedulers=0 mode=coro-direct\n",
                io_schedulers,
                server.listener_count) < 0 ||
         fflush(stdout) != 0) {

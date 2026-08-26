@@ -51,7 +51,7 @@ Task<void> runPool(size_t requests, Result* result)
 int main(int argc, char** argv)
 {
     const size_t requests = argc > 1 ? static_cast<size_t>(std::stoull(argv[1])) : 10000;
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
     Result result;
     auto scheduled = runtime.spawnIO(runPool(requests, &result));

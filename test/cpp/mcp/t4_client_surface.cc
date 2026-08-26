@@ -52,7 +52,7 @@ int main()
 {
     McpClient stdio_client(McpStdioClientConfig{});
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     McpClient http_client(runtime, McpHttpClientConfig{.url = "http://127.0.0.1:8080/mcp"});
 
     return stdio_client.mode() == galay::mcp::McpClientMode::Stdio &&

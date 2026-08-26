@@ -146,7 +146,7 @@ int main(void)
 
     C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 2;
-    config.compute_scheduler_count = 0;
+    config.parallel_scheduler_count = 0;
     galay_c_runtime_t runtime = {0};
     galay_c_tcp_socket_t listener = {.fd = -1};
     galay_c_coro_task_t server_task = {0};

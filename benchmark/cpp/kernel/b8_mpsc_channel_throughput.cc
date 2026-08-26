@@ -15,7 +15,7 @@
 #include "benchmark/cpp/common/benchmark_sync.h"
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include "test/cpp/common/stdout_log.h"
 
 using namespace galay::kernel;
@@ -134,7 +134,7 @@ void benchMultiProducerThroughput(int producer_count, int64_t total_messages) {
         resetCounters();
 
         galay::mpsc::UnboundedChannel<int64_t> channel;
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
 
         auto started = scheduler.start();
         if (!started) {
@@ -214,7 +214,7 @@ void benchCorrectness(int producer_count, int64_t total_messages) {
     resetCounters();
 
     galay::mpsc::UnboundedChannel<int64_t> channel;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
 
     auto started = scheduler.start();
     if (!started) {
@@ -281,7 +281,7 @@ void benchSustained(int duration_sec) {
     resetCounters();
 
     galay::mpsc::UnboundedChannel<int64_t> channel;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
 
     std::atomic<bool> running{true};
 

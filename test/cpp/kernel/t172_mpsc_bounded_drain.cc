@@ -4,7 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/concurrency/mpsc/bounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "result_writer.h"
 
@@ -170,7 +170,7 @@ bool runSendWaiterProgress()
         return false;
     }
 
-    galay::kernel::ComputeScheduler scheduler;
+    galay::kernel::ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;

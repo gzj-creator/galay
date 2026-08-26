@@ -4,7 +4,7 @@
  *
  * Validates:
  * - `Runtime::start()` declares `configureIOSchedulerStealDomains()` and calls it before launching IO scheduler threads
- * - The helper walks `m_io_schedulers`, configures steal domains, and leaves compute schedulers untouched
+ * - The helper walks `m_io_schedulers`, configures steal domains, and leaves parallel schedulers untouched
  * - `IOSchedulerWorkerState` declares the steal-domain fields and helper
  */
 
@@ -140,8 +140,8 @@ int main() {
             if (!contains(helper_section, "configureStealDomain")) {
                 failures.push_back(runtime.string() + ": helper must call configureStealDomain()");
             }
-            if (contains(helper_section, "m_compute_schedulers")) {
-                failures.push_back(runtime.string() + ": helper must avoid compute schedulers");
+            if (contains(helper_section, "m_parallel_schedulers")) {
+                failures.push_back(runtime.string() + ": helper must avoid parallel schedulers");
             }
         }
     }

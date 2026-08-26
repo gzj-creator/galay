@@ -77,7 +77,7 @@ int main(int argc, char* argv[]) {
             .host("0.0.0.0")
             .port(port)
             .ioSchedulerCount(4)
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .maxConcurrentStreams(100)
             .initialWindowSize(65535)
             .enablePush(false)

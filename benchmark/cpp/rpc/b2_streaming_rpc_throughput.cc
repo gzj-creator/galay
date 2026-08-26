@@ -285,7 +285,7 @@ int main(int argc, char* argv[]) {
     std::cout << "RPC mode: " << callModeToString(config.mode) << "\n";
     std::cout << "\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).parallelSchedulerCount(1).build();
     runtime.start();
 
     // 启动所有连接

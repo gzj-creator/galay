@@ -64,7 +64,7 @@ Task<void> startServerLater(uint16_t port,
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .buildConfig());
     auto registered = server->registerService(*service);
     if (!registered.has_value()) {
@@ -128,7 +128,7 @@ Task<void> runReconnectClient(uint16_t port, TestState* state)
 int main()
 {
     const uint16_t port = loopbackPort();
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         std::cerr << "failed to start reconnect runtime: "

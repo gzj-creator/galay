@@ -69,7 +69,7 @@ int main(void)
     int exit_code = 0;
 
     runtime_config.io_scheduler_count = 1;
-    runtime_config.compute_scheduler_count = 0;
+    runtime_config.parallel_scheduler_count = 0;
     if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
         galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_mcp_http_server_create("127.0.0.1", 0, &server) != GALAY_OK ||

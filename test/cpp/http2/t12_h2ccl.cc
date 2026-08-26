@@ -120,7 +120,7 @@ int main() {
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .streamHandler(handleStream)
         .build());
     server.start();
@@ -131,7 +131,7 @@ int main() {
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     auto runtime_start = runtime.start();
     if (!runtime_start.has_value()) {
         std::cerr << "[T43] client runtime failed to start: "

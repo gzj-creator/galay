@@ -4,7 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/core/awaitable.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 
 #include <cassert>
 #include <chrono>
@@ -69,7 +69,7 @@ void closeAwaitSuspendConsumesBinding()
 {
     auto timer = TimeoutTimer::create(1h);
     bool canceled = false;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto task = detail::TaskAccess::detachTask(
         closeAwaitableImmediateProbe(timer.get(), &canceled));
     assert(scheduler.scheduleImmediately(std::move(task)));

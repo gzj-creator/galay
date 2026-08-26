@@ -6,7 +6,7 @@
 #include <galay/cpp/galay-kernel/concurrency/mpmc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/mpsc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "benchmark/cpp/common/benchmark_sync.h"
 #include "result_writer.h"
@@ -193,7 +193,7 @@ bool runWaiterProgress()
         return false;
     }
 
-    galay::kernel::ComputeScheduler sendScheduler;
+    galay::kernel::ParallelScheduler sendScheduler;
     auto sendStarted = sendScheduler.start();
     if (!sendStarted) {
         return false;
@@ -216,7 +216,7 @@ bool runWaiterProgress()
     }
 
     Channel recvChannel(2);
-    galay::kernel::ComputeScheduler recvScheduler;
+    galay::kernel::ParallelScheduler recvScheduler;
     auto recvStarted = recvScheduler.start();
     if (!recvStarted) {
         return false;
@@ -387,7 +387,7 @@ bool runStaticSpscChannel()
     }
 
     StaticSpscChannel waitChannel;
-    galay::kernel::ComputeScheduler scheduler;
+    galay::kernel::ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;

@@ -187,7 +187,7 @@ int main(int argc, char** argv)
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(server_io_schedulers)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     BenchEtcdEchoService service;
     auto service_registered = server.registerService(service);
@@ -240,7 +240,7 @@ int main(int argc, char** argv)
 
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(client_io_schedulers)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {

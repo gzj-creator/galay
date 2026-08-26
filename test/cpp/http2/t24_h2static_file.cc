@@ -327,14 +327,14 @@ int main()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .staticFiles("/files", H2StaticFileConfig{.root = root})
         .activeConnHandler(fallbackActiveHandler)
         .build());
     server.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
     auto* scheduler = runtime.getNextIOScheduler();
     assert(scheduler != nullptr);

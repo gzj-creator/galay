@@ -44,7 +44,7 @@ struct RpcStreamServerConfig {
     int backlog = 1024;                        ///< 监听队列长度
     bool tcp_no_delay = true;                  ///< 是否为已接受连接启用 TCP_NODELAY
     size_t io_scheduler_count = 0;             ///< IO调度器数量，0表示自动
-    size_t compute_scheduler_count = 0;        ///< 计算调度器数量，0表示自动
+    size_t parallel_scheduler_count = 0;        ///< 计算调度器数量，0表示自动
     RuntimeAffinityConfig affinity;            ///< 绑核配置
     size_t ring_buffer_size = 128 * 1024;      ///< RingBuffer大小
     RpcStreamLimits stream_limits;             ///< 流帧大小限制
@@ -70,33 +70,33 @@ public:
     /// @brief 设置IO调度器数量
     RpcStreamServerBuilder& ioSchedulerCount(size_t value)                  { m_config.io_scheduler_count = value; return *this; }
     /// @brief 设置计算调度器数量
-    RpcStreamServerBuilder& computeSchedulerCount(size_t value)             { m_config.compute_scheduler_count = value; return *this; }
+    RpcStreamServerBuilder& parallelSchedulerCount(size_t value)             { m_config.parallel_scheduler_count = value; return *this; }
     /**
      * @brief 设置顺序绑核策略
      * @param io_count IO调度器绑核数
-     * @param compute_count 计算调度器绑核数
+     * @param parallel_count 计算调度器绑核数
      * @return 构建器引用
      */
-    RpcStreamServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
+    RpcStreamServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
-        m_config.affinity.seq_compute_count = compute_count;
+        m_config.affinity.seq_parallel_count = parallel_count;
         return *this;
     }
     /**
      * @brief 设置自定义绑核策略
      * @param io_cpus IO调度器绑定的CPU列表
-     * @param compute_cpus 计算调度器绑定的CPU列表
+     * @param parallel_cpus 计算调度器绑定的CPU列表
      * @return 是否设置成功（数量必须匹配调度器数量）
      */
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> compute_cpus) {
+    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
         if (io_cpus.size() != m_config.io_scheduler_count ||
-            compute_cpus.size() != m_config.compute_scheduler_count) {
+            parallel_cpus.size() != m_config.parallel_scheduler_count) {
             return false;
         }
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Custom;
         m_config.affinity.custom_io_cpus = std::move(io_cpus);
-        m_config.affinity.custom_compute_cpus = std::move(compute_cpus);
+        m_config.affinity.custom_parallel_cpus = std::move(parallel_cpus);
         return true;
     }
     /// @brief 设置环形缓冲区大小
@@ -129,7 +129,7 @@ public:
         : m_config(config)
         , m_runtime(RuntimeBuilder()
                         .ioSchedulerCount(resolveIoSchedulerCount(config.io_scheduler_count))
-                        .computeSchedulerCount(config.compute_scheduler_count)
+                        .parallelSchedulerCount(config.parallel_scheduler_count)
                         .applyAffinity(config.affinity)
                         .build()) {}
 

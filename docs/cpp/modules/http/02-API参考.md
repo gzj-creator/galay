@@ -135,12 +135,12 @@ struct HttpServerConfig {
     uint16_t port = 8080;
     int backlog = 128;
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     RuntimeAffinityConfig affinity;
 };
 ```
 
-- `io_scheduler_count` / `compute_scheduler_count` 都复用 `galay-kernel` Runtime 语义：`GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 表示自动推导，`0` 表示禁用对应 scheduler
+- `io_scheduler_count` / `parallel_scheduler_count` 都复用 `galay-kernel` Runtime 语义：`GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 表示自动推导，`0` 表示禁用对应 scheduler
 - `affinity` 直接沿用 `RuntimeAffinityConfig`；`HttpServerBuilder::sequentialAffinity(...)` 和 `customAffinity(...)` 只是往这个结构里写值
 
 ### `HttpServerBuilder`
@@ -151,9 +151,9 @@ struct HttpServerConfig {
 - `port(uint16_t)`
 - `backlog(int)`
 - `ioSchedulerCount(size_t)`
-- `computeSchedulerCount(size_t)`
-- `sequentialAffinity(size_t io_count, size_t compute_count)`
-- `customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> compute_cpus)`
+- `parallelSchedulerCount(size_t)`
+- `sequentialAffinity(size_t io_count, size_t parallel_count)`
+- `customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus)`
 - `build()`
 
 `HttpServer` 的常用生命周期方法：
@@ -210,7 +210,7 @@ struct HttpsServerConfig {
     uint16_t port = 443;
     int backlog = 128;
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     RuntimeAffinityConfig affinity;
     HttpReaderSetting reader_setting;
     HttpWriterSetting writer_setting;
@@ -519,7 +519,7 @@ struct H2cServerConfig {
     uint16_t port = 8080;
     int backlog = 128;
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     RuntimeAffinityConfig affinity;
     uint32_t max_concurrent_streams = 100;
     uint32_t initial_window_size = 65535;
@@ -548,7 +548,7 @@ struct H2cServerConfig {
 `galay-http/server/galay-http2/http2_server.h` 中的 `H2cServerBuilder` 暴露：
 
 - `host` / `port` / `backlog`
-- `ioSchedulerCount` / `computeSchedulerCount`
+- `ioSchedulerCount` / `parallelSchedulerCount`
 - `maxConcurrentStreams` / `initialWindowSize` / `maxFrameSize` / `maxHeaderListSize`
 - `enablePush`
 - `pingEnabled` / `pingInterval` / `pingTimeout`
@@ -641,7 +641,7 @@ struct H2ServerConfig {
     uint16_t port = 9443;
     int backlog = 128;
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     RuntimeAffinityConfig affinity;
     std::string cert_path;
     std::string key_path;

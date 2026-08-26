@@ -101,7 +101,7 @@ int main(int argc, char** argv)
     }
 
     galay::kernel::Runtime runtime =
-        galay::kernel::RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+        galay::kernel::RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     const auto runtimeStarted = runtime.start();
     if (!runtimeStarted) {
         server.stop();

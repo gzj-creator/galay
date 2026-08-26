@@ -186,7 +186,7 @@ void runConcurrentTest(const std::string& url, size_t numWorkers, size_t request
     std::atomic<bool> benchmarkAborted(false);
 
     // 创建Runtime
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(4).computeSchedulerCount(2).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(4).parallelSchedulerCount(2).build();
     runtime.start();
 
     // 创建客户端和协程

@@ -186,7 +186,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "RPC Client Test - Connecting to " << host << ":" << port << "\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     runtime.start();
 
     std::atomic<bool> done{false};

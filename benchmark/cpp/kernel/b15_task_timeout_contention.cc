@@ -49,7 +49,7 @@ Runtime makeRuntime()
 {
     return RuntimeBuilder()
         .ioSchedulerCount(0)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
 }
 

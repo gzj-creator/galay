@@ -58,7 +58,7 @@ void producer(galay::mpsc::UnboundedChannel<int>* channel, int producerId) {
 
 int main() {
     galay::mpsc::UnboundedChannel<int> channel;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         std::cerr << "mpsc import example failed to start scheduler\n";

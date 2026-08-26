@@ -159,7 +159,7 @@ int main()
 {
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(kSchedulerCount)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     auto started = runtime.start();
     if (!started) {

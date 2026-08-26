@@ -60,7 +60,7 @@ using HttpConnHandlerImpl = std::function<Task<void>(HttpConnImpl<SocketType>)>;
  * @details
  * - `host` / `port` / `backlog` 控制监听 socket
  * - `tcp_no_delay` 控制 accept 后的连接 socket 是否启用 TCP_NODELAY
- * - `io_scheduler_count` 与 `compute_scheduler_count` 交由 `RuntimeBuilder` 创建调度器
+ * - `io_scheduler_count` 与 `parallel_scheduler_count` 交由 `RuntimeBuilder` 创建调度器
  * - `affinity` 只描述调度器绑核策略，不会改变业务 handler 的语义
  * - `policy` 保存 route-mode 后续生产级加固所需的默认策略
  */
@@ -68,7 +68,7 @@ struct HttpServerConfig
 {
     std::string host = "0.0.0.0";              ///< 监听地址
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
     RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
     HttpServerPolicy policy;                     ///< HTTP/1.1 route-mode 生产策略
     int backlog = 128;                          ///< listen backlog 队列长度
@@ -87,34 +87,34 @@ public:
     HttpServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
     HttpServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; } ///< 设置已接受连接是否启用 TCP_NODELAY
     HttpServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
-    HttpServerBuilder& computeSchedulerCount(size_t v)  { m_config.compute_scheduler_count = v; return *this; } ///< 设置计算调度器数量
+    HttpServerBuilder& parallelSchedulerCount(size_t v)  { m_config.parallel_scheduler_count = v; return *this; } ///< 设置计算调度器数量
     HttpServerBuilder& policy(HttpServerPolicy v)        { m_config.policy = std::move(v); return *this; } ///< 设置 route-mode 生产策略
     /**
      * @brief 设置顺序 CPU 亲和性
      * @param io_count IO 调度器绑定的 CPU 核心数
-     * @param compute_count 计算调度器绑定的 CPU 核心数
+     * @param parallel_count 计算调度器绑定的 CPU 核心数
      * @return Builder 引用
      */
-    HttpServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
+    HttpServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
-        m_config.affinity.seq_compute_count = compute_count;
+        m_config.affinity.seq_parallel_count = parallel_count;
         return *this;
     }
     /**
      * @brief 设置自定义 CPU 亲和性
      * @param io_cpus IO 调度器绑定的 CPU 核心列表
-     * @param compute_cpus 计算调度器绑定的 CPU 核心列表
+     * @param parallel_cpus 计算调度器绑定的 CPU 核心列表
      * @return 成功返回 true，CPU 核心数与调度器数不匹配返回 false
      */
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> compute_cpus) {
+    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
         if (io_cpus.size() != m_config.io_scheduler_count ||
-            compute_cpus.size() != m_config.compute_scheduler_count) {
+            parallel_cpus.size() != m_config.parallel_scheduler_count) {
             return false;
         }
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Custom;
         m_config.affinity.custom_io_cpus = std::move(io_cpus);
-        m_config.affinity.custom_compute_cpus = std::move(compute_cpus);
+        m_config.affinity.custom_parallel_cpus = std::move(parallel_cpus);
         return true;
     }
     HttpServerImpl<AsyncTcpSocket> build() const; ///< 构建 HTTP 服务器实例
@@ -148,7 +148,7 @@ public:
 
     explicit HttpServerImpl(const HttpServerConfig& config = HttpServerConfig())
         : m_runtime(RuntimeBuilder().ioSchedulerCount(config.io_scheduler_count)
-                                   .computeSchedulerCount(config.compute_scheduler_count)
+                                   .parallelSchedulerCount(config.parallel_scheduler_count)
                                    .applyAffinity(config.affinity)
                                    .build())
         , m_config(config)
@@ -624,7 +624,7 @@ struct HttpsServerConfig
     HttpWriterSetting writer_setting;           ///< TLS 连接的写入器配置
     RuntimeAffinityConfig affinity;             ///< 调度器绑核策略
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< IO 调度器数量
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO; ///< 计算调度器数量
     int backlog = 128;                          ///< listen backlog 队列长度
     int verify_depth = 4;                       ///< 证书链校验深度
     uint16_t port = 443;                        ///< 监听端口
@@ -645,21 +645,21 @@ public:
     HttpsServerBuilder& backlog(int v)                   { m_config.backlog = v; return *this; } ///< 设置 listen backlog
     HttpsServerBuilder& tcpNoDelay(bool v)               { m_config.tcp_no_delay = v; return *this; } ///< 设置已接受连接是否启用 TCP_NODELAY
     HttpsServerBuilder& ioSchedulerCount(size_t v)       { m_config.io_scheduler_count = v; return *this; } ///< 设置 IO 调度器数量
-    HttpsServerBuilder& computeSchedulerCount(size_t v)  { m_config.compute_scheduler_count = v; return *this; } ///< 设置计算调度器数量
-    HttpsServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count) {
+    HttpsServerBuilder& parallelSchedulerCount(size_t v)  { m_config.parallel_scheduler_count = v; return *this; } ///< 设置计算调度器数量
+    HttpsServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count) {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = io_count;
-        m_config.affinity.seq_compute_count = compute_count;
+        m_config.affinity.seq_parallel_count = parallel_count;
         return *this;
     }
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> compute_cpus) {
+    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus) {
         if (io_cpus.size() != m_config.io_scheduler_count ||
-            compute_cpus.size() != m_config.compute_scheduler_count) {
+            parallel_cpus.size() != m_config.parallel_scheduler_count) {
             return false;
         }
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Custom;
         m_config.affinity.custom_io_cpus = std::move(io_cpus);
-        m_config.affinity.custom_compute_cpus = std::move(compute_cpus);
+        m_config.affinity.custom_parallel_cpus = std::move(parallel_cpus);
         return true;
     }
     HttpsServerBuilder& certPath(std::string v)          { m_config.cert_path = std::move(v); return *this; } ///< 设置证书路径
@@ -810,7 +810,7 @@ private:
         base_config.backlog = config.backlog;
         base_config.tcp_no_delay = config.tcp_no_delay;
         base_config.io_scheduler_count = config.io_scheduler_count;
-        base_config.compute_scheduler_count = config.compute_scheduler_count;
+        base_config.parallel_scheduler_count = config.parallel_scheduler_count;
         base_config.affinity = config.affinity;
         return base_config;
     }

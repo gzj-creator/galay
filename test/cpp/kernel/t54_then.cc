@@ -5,7 +5,7 @@
  * 通过条件：链式 continuation 成功执行且顺序符合预期，测试返回 0。
  */
 
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include <atomic>
@@ -41,7 +41,7 @@ static_assert(std::is_same_v<decltype(std::declval<Task<void>&>().then(pushStep(
 static_assert(std::is_same_v<decltype(std::declval<Task<void>>().then(pushStep(2))), Task<void>&&>);
 
 int main() {
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     scheduler.start();
 
     scheduler.schedule(detail::TaskAccess::detachTask(pushStep(1).then(pushStep(2))));

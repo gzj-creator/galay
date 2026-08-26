@@ -94,7 +94,7 @@ int main(int argc, char* argv[]) {
         .host("0.0.0.0")
         .port(port)
         .ioSchedulerCount(2)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
     auto echo_registered = server.registerService(echoService);
     if (!echo_registered.has_value()) {

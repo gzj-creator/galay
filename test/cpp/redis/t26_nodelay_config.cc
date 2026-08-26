@@ -149,7 +149,7 @@ int observeRedisSessionTcpNoDelay(bool tcp_no_delay)
 
 int observeAsyncRedisClientTcpNoDelay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     auto start_result = runtime.start();
     require(start_result.has_value(), "runtime should start for RedisClient connect probe");
     auto* scheduler = runtime.getNextIOScheduler();

@@ -7,7 +7,7 @@
  * - worker state 抽象了固定容量 ring 相关成员
  * - 承载 stealing 的入口名称或注释含 `steal` 语义
  * - Runtime::start() 包含向 IO scheduler 发送 steal-domain 配置的调用/路径
- * - ComputeScheduler 未被接入 stealing 结构
+ * - ParallelScheduler 未被接入 stealing 结构
  */
 
 #include <algorithm>

@@ -191,7 +191,7 @@ void runBenchmark(const std::string& host,
     std::cout << "========================================\n\n";
 
     auto start_time = std::chrono::steady_clock::now();
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
     runtime.start();
 
     for (int i = 0; i < concurrent_clients; i++) {

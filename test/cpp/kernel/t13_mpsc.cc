@@ -14,7 +14,7 @@
 #include <vector>
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include "test/cpp/common/mpsc_access.h"
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
@@ -549,7 +549,7 @@ void runTests() {
         LogInfo("\n--- Test 1: Basic send/recv ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -585,7 +585,7 @@ void runTests() {
         LogInfo("\n--- Test 2: Multiple send/recv ({} messages) ---", TEST2_COUNT);
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -632,7 +632,7 @@ void runTests() {
         LogInfo("\n--- Test 3: Batch send/recv ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         // 先发送数据
@@ -672,7 +672,7 @@ void runTests() {
         LogInfo("\n--- Test 4: try_recv (non-blocking) ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -711,7 +711,7 @@ void runTests() {
                 TEST5_PRODUCER_COUNT, TEST5_MSG_PER_PRODUCER);
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -758,7 +758,7 @@ void runTests() {
         LogInfo("\n--- Test 6: Empty channel wait ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -802,7 +802,7 @@ void runTests() {
         LogInfo("\n--- Test 7: size() and empty() ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         // 发送数据
@@ -852,7 +852,7 @@ void runTests() {
         LogInfo("\n--- Test 8: Batch send ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -909,7 +909,7 @@ void runTests() {
         LogInfo("\n--- Test 9: String channel ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<std::string> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -946,7 +946,7 @@ void runTests() {
         LogInfo("\n--- Test 10: High concurrency ({} messages) ---", TEST10_TOTAL);
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();
@@ -996,8 +996,8 @@ void runTests() {
         galay::mpsc::UnboundedChannel<int> channel;
 
         // 创建两个调度器
-        ComputeScheduler producerScheduler;
-        ComputeScheduler consumerScheduler;
+        ParallelScheduler producerScheduler;
+        ParallelScheduler consumerScheduler;
         std::atomic<bool> schedulingFailed{false};
 
         // 启动消费者调度器和协程
@@ -1068,11 +1068,11 @@ void runTests() {
 
         galay::mpsc::UnboundedChannel<int> channel;
 
-        std::vector<std::unique_ptr<ComputeScheduler>> producerSchedulers;
+        std::vector<std::unique_ptr<ParallelScheduler>> producerSchedulers;
         std::vector<std::thread> producerThreads;
 
         // 消费者调度器
-        ComputeScheduler consumerScheduler;
+        ParallelScheduler consumerScheduler;
         std::atomic<bool> schedulingFailed{false};
 
         // 启动消费者
@@ -1095,7 +1095,7 @@ void runTests() {
 
         // 创建多个生产者调度器
         for (int i = 0; i < TEST12_PRODUCER_COUNT; ++i) {
-            producerSchedulers.push_back(std::make_unique<ComputeScheduler>());
+            producerSchedulers.push_back(std::make_unique<ParallelScheduler>());
         }
 
         // 启动生产者
@@ -1154,7 +1154,7 @@ void runTests() {
         LogInfo("\n--- Test 13: Same-thread multi-producer single-consumer (direct resume path) ---");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         galay::mpsc::UnboundedChannel<int> channel;
 
         const auto schedulerStarted = scheduler.start();

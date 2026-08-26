@@ -41,12 +41,12 @@ public:
      * @param host 监听地址，默认"0.0.0.0"
      * @param port 监听端口，默认8080
      * @param ioSchedulers IO调度线程数，默认8
-     * @param computeSchedulers 计算调度线程数，默认0（自动）
+     * @param parallelSchedulers 计算调度线程数，默认0（自动）
      */
     McpHttpServer(const std::string& host = "0.0.0.0",
                   int port = 8080,
                   size_t ioSchedulers = 8,
-                  size_t computeSchedulers = 0,
+                  size_t parallelSchedulers = 0,
                   bool tcpNoDelay = true);
     ~McpHttpServer(); ///< 析构函数
 
@@ -287,7 +287,7 @@ private:
     std::unique_ptr<http::HttpServer> m_httpServer; ///< HTTP服务器实例
     std::unique_ptr<http::HttpRouter> m_router; ///< HTTP路由器实例
     size_t m_ioSchedulers; ///< IO调度线程数
-    size_t m_computeSchedulers; ///< 计算调度线程数
+    size_t m_parallelSchedulers; ///< 计算调度线程数
     int m_port; ///< 监听端口
     bool m_tcpNoDelay; ///< 是否为已接受 HTTP 连接启用 TCP_NODELAY
     bool m_toolsCacheDirty; ///< 工具列表缓存脏标志

@@ -142,7 +142,7 @@ int main()
         .certPath("test/cpp/http2/test.crt")
         .keyPath("test/cpp/http2/test.key")
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .staticFiles("/files", H2StaticFileConfig{.root = root})
         .activeConnHandler([](Http2ConnContext& ctx) -> Task<void> {
             while (true) {
@@ -174,7 +174,7 @@ int main()
     std::cout << "[T91] server started\n";
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
     auto* scheduler = runtime.getNextIOScheduler();
     if (!scheduler) {

@@ -108,7 +108,7 @@ int main(int argc, char* argv[]) {
                       : std::to_string(resolved_io_schedulers))
               << "\n\n";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).parallelSchedulerCount(1).build();
     runtime.start();
 
     std::cout << "Starting " << num_workers << " workers...\n";

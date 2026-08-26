@@ -23,9 +23,10 @@ using ::galay::utils::ByteQueueView;
 #include "../core/task.h"
 #include "../core/scheduler.hpp"
 #include "../core/io_scheduler.hpp"
-#include "../core/compute_scheduler.h"
+#include "../parallel/parallel_scheduler.h"
 #include "../core/runtime.h"
 #include "../core/timer_scheduler.h"
+#include "../parallel/parallel.h"
 
 #include "../concurrency/mpmc/bounded_channel.h"
 #include "../concurrency/mpmc/unbounded_channel.h"

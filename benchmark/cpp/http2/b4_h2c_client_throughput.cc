@@ -163,7 +163,7 @@ void runBenchmark(const std::string& host,
     auto start_time = std::chrono::steady_clock::now();
 
     // 创建 Runtime
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
     runtime.start();
 
     // 客户端对象统一延迟释放，避免 kqueue 队列中残留事件访问已销毁 controller。

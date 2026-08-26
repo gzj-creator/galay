@@ -320,7 +320,7 @@ int main()
     LoopbackListener async_listener;
     galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     auto start_result = runtime.start();
     if (!start_result.has_value()) {

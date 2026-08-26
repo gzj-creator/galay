@@ -66,7 +66,7 @@
 
 - `galay.kernel` / `module_prelude.hpp`：`docs/02-API参考.md`
 - `Runtime` / `RuntimeBuilder`：`docs/02-API参考.md`、`docs/18-运行时Runtime.md`
-- `ComputeScheduler` / `EpollScheduler` / `KqueueScheduler` / `IOUringScheduler`：`docs/02-API参考.md`、`docs/08-计算调度器.md`
+- `ParallelScheduler` / `EpollScheduler` / `KqueueScheduler` / `IOUringScheduler`：`docs/02-API参考.md`、`docs/08-计算调度器.md`
 - `Task` / `TaskRef` / `then` / `co_await` / `sleep`：`docs/02-API参考.md`、`docs/11-协程.md`
 - `Bytes` / `ByteMetaData` / `Buffer` / `RingBuffer`：`docs/02-API参考.md`、`docs/16-环形缓冲区.md`
 - `Host` / `IPType` / `IOError`：`docs/02-API参考.md`

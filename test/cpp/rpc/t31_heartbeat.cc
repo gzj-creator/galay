@@ -116,7 +116,7 @@ int main()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     HeartbeatService service(&route_calls);
     auto registered = server.registerService(service);
@@ -132,7 +132,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(2).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();

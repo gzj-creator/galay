@@ -5,7 +5,7 @@
 
 #include <galay/cpp/galay-kernel/concurrency/mpmc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "benchmark/cpp/common/benchmark_affinity.h"
 #include "benchmark/cpp/common/benchmark_sync.h"
@@ -266,7 +266,7 @@ double runAsyncHandoff(size_t capacity, int64_t messageCount)
 {
     galay::mpmc::BoundedChannel<int64_t> channel(capacity);
     AsyncBenchmarkState state;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started || !scheduleTask(scheduler, asyncConsumer(&channel, messageCount, &state)) ||
         !galay::benchmark::waitForFlag(state.ready, 2s)) {

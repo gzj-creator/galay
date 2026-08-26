@@ -18,7 +18,7 @@
 
 #include "blocking_executor.h"
 #include "task.h"
-#include "compute_scheduler.h"
+#include "../parallel/parallel_scheduler.h"
 #include "io_scheduler.hpp"
 #include <array>
 #include <atomic>
@@ -47,9 +47,9 @@ namespace galay::kernel
  */
 struct RuntimeAffinityConfig {
     std::vector<uint32_t> custom_io_cpus;  ///< Custom 模式下 IO scheduler 的目标 CPU 列表
-    std::vector<uint32_t> custom_compute_cpus;  ///< Custom 模式下 compute scheduler 的目标 CPU 列表
+    std::vector<uint32_t> custom_parallel_cpus;  ///< Custom 模式下 parallel scheduler 的目标 CPU 列表
     size_t seq_io_count = 0;  ///< Sequential 模式下参与分配的 IO scheduler 数
-    size_t seq_compute_count = 0;  ///< Sequential 模式下参与分配的 compute scheduler 数
+    size_t seq_parallel_count = 0;  ///< Sequential 模式下参与分配的 parallel scheduler 数
     enum class Mode { None, Sequential, Custom } mode = Mode::None;  ///< 绑核分配模式
 };
 
@@ -61,7 +61,7 @@ struct RuntimeAffinityConfig {
  */
 struct RuntimeConfig {
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;  ///< IO scheduler 数；AUTO 表示按 CPU 自动推导
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;  ///< compute scheduler 数；AUTO 表示按 CPU 自动推导
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;  ///< parallel scheduler 数；AUTO 表示按 CPU 自动推导
     RuntimeAffinityConfig affinity;  ///< Runtime 的绑核策略
 };
 
@@ -130,7 +130,7 @@ private:
 class RuntimeHandle;
 
 /**
- * @brief 运行时入口，负责管理 IO / compute scheduler 与阻塞线程池。
+ * @brief 运行时入口，负责管理 IO / parallel scheduler 与阻塞线程池。
  *
  * `Runtime` 可以显式注入 scheduler，也可以在首次提交任务时按配置自动创建默认
  * scheduler。实例本身不可拷贝；生命周期结束时会调用 `stop()` 停止其管理的调度器。
@@ -151,10 +151,10 @@ public:
     bool addIOScheduler(std::unique_ptr<IOScheduler> scheduler);
 
     /**
-     * @brief 在 runtime 启动前注册一个 compute scheduler。
+     * @brief 在 runtime 启动前注册一个 parallel scheduler。
      * @return 启动前返回 `true`；若 runtime 已运行则返回 `false`
      */
-    bool addComputeScheduler(std::unique_ptr<ComputeScheduler> scheduler);
+    bool addParallelScheduler(std::unique_ptr<ParallelScheduler> scheduler);
 
     /**
      * @brief 启动 runtime 及其管理的 scheduler。
@@ -178,11 +178,11 @@ public:
         return blockOnOnScheduler(std::move(task), acquireIOScheduler());
     }
 
-    /** @brief 在 compute scheduler 上同步执行一个纯计算根任务并返回结果。 */
+    /** @brief 在 parallel scheduler 上同步执行一个纯计算根任务并返回结果。 */
     template <typename T>
     auto blockOnCpu(Task<T> task) -> std::expected<T, RuntimeError>
     {
-        return blockOnOnScheduler(std::move(task), acquireComputeScheduler());
+        return blockOnOnScheduler(std::move(task), acquireParallelScheduler());
     }
 
 private:
@@ -227,14 +227,14 @@ public:
     }
 
     /**
-     * @brief 在 compute scheduler 上异步提交一个纯计算任务。
+     * @brief 在 parallel scheduler 上异步提交一个纯计算任务。
      * @param task 要提交的任务；任务不得依赖 IO scheduler 专属事件循环
-     * @return 成功时返回可 `join()` 的句柄；没有 compute scheduler 或提交失败时返回 RuntimeError
+     * @return 成功时返回可 `join()` 的句柄；没有 parallel scheduler 或提交失败时返回 RuntimeError
      */
     template <typename T>
     auto spawnCpu(Task<T> task) -> std::expected<JoinHandle<T>, RuntimeError>
     {
-        return spawnOnScheduler(std::move(task), acquireComputeScheduler());
+        return spawnOnScheduler(std::move(task), acquireParallelScheduler());
     }
 
 private:
@@ -303,19 +303,19 @@ public:
 
     bool isRunning() const { return m_running.load(std::memory_order_acquire); }  ///< Runtime 当前是否已启动
     size_t getIOSchedulerCount() const { return m_io_schedulers.size(); }  ///< 返回当前受管 IO scheduler 数量
-    size_t getComputeSchedulerCount() const { return m_compute_schedulers.size(); }  ///< 返回当前受管 compute scheduler 数量
+    size_t getParallelSchedulerCount() const { return m_parallel_schedulers.size(); }  ///< 返回当前受管 parallel scheduler 数量
 
     IOScheduler* getIOScheduler(size_t index);  ///< 按索引返回 IO scheduler；越界时返回 nullptr
-    ComputeScheduler* getComputeScheduler(size_t index);  ///< 按索引返回 compute scheduler；越界时返回 nullptr
+    ParallelScheduler* getParallelScheduler(size_t index);  ///< 按索引返回 parallel scheduler；越界时返回 nullptr
     IOScheduler* getNextIOScheduler();  ///< 以轮询方式返回下一个 IO scheduler；不存在时返回 nullptr
-    ComputeScheduler* getNextComputeScheduler();  ///< 以轮询方式返回下一个 compute scheduler；不存在时返回 nullptr
+    ParallelScheduler* getNextParallelScheduler();  ///< 以轮询方式返回下一个 parallel scheduler；不存在时返回 nullptr
 
 private:
     void createDefaultSchedulers();  ///< 按配置或 CPU 数生成默认 scheduler 集合
     void applyAffinityConfig();  ///< 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
     std::expected<void, RuntimeError> ensureStarted();  ///< 若 Runtime 尚未启动则触发一次启动
     std::expected<Scheduler*, RuntimeError> acquireIOScheduler();  ///< 为 IO 根任务选择一个 IO scheduler
-    std::expected<Scheduler*, RuntimeError> acquireComputeScheduler();  ///< 为 CPU 根任务选择一个 compute scheduler
+    std::expected<Scheduler*, RuntimeError> acquireParallelScheduler();  ///< 为 CPU 根任务选择一个 parallel scheduler
     void bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler);  ///< 给根任务绑定 Runtime 与目标调度器
     bool submitTask(const TaskRef& task);  ///< 把根任务提交到其所属调度器
     static size_t getCPUCount();  ///< 返回当前机器可用 CPU 数量
@@ -323,12 +323,12 @@ private:
     void configureIOSchedulerStealDomains();  ///< 为 Runtime 管理的 IO scheduler 下发 steal-domain 配置
 
     std::vector<std::unique_ptr<IOScheduler>> m_io_schedulers;  ///< Runtime 持有的 IO scheduler 集合
-    std::vector<std::unique_ptr<ComputeScheduler>> m_compute_schedulers;  ///< Runtime 持有的 compute scheduler 集合
+    std::vector<std::unique_ptr<ParallelScheduler>> m_parallel_schedulers;  ///< Runtime 持有的 parallel scheduler 集合
 
     std::vector<IOScheduler*> m_io_scheduler_sibling_view;  ///< Runtime 管理的 IO scheduler pointer view
 
     std::atomic<uint32_t> m_io_index{0};  ///< IO scheduler 轮询游标
-    std::atomic<uint32_t> m_compute_index{0};  ///< compute scheduler 轮询游标
+    std::atomic<uint32_t> m_parallel_index{0};  ///< parallel scheduler 轮询游标
 
     BlockingExecutor m_blockingExecutor;  ///< 阻塞任务线程池
     RuntimeConfig m_config;  ///< Runtime 启动和绑核配置
@@ -378,9 +378,9 @@ public:
     }
 
     /**
-     * @brief 通过当前 runtime 在 compute scheduler 上提交纯计算任务。
+     * @brief 通过当前 runtime 在 parallel scheduler 上提交纯计算任务。
      * @param task 要提交的任务；任务不得依赖 IO scheduler 专属事件循环
-     * @return 成功时返回可 `join()` 的句柄；handle 无效、没有 compute scheduler 或提交失败时返回 RuntimeError
+     * @return 成功时返回可 `join()` 的句柄；handle 无效、没有 parallel scheduler 或提交失败时返回 RuntimeError
      */
     template <typename T>
     auto spawnCpu(Task<T> task) const -> std::expected<JoinHandle<T>, RuntimeError>
@@ -428,23 +428,23 @@ public:
     }
 
     /**
-     * @brief 设置 compute scheduler 数量。
+     * @brief 设置 parallel scheduler 数量。
      * @note 传 `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 时由 runtime 按 CPU 数自动推导
      */
-    RuntimeBuilder& computeSchedulerCount(size_t n)
+    RuntimeBuilder& parallelSchedulerCount(size_t n)
     {
-        m_config.compute_scheduler_count = n;
+        m_config.parallel_scheduler_count = n;
         return *this;
     }
 
     /**
-     * @brief 对前 `ioCount` / `computeCount` 个 scheduler 依次分配 CPU 亲和性。
+     * @brief 对前 `ioCount` / `parallelCount` 个 scheduler 依次分配 CPU 亲和性。
      */
-    RuntimeBuilder& sequentialAffinity(size_t ioCount, size_t computeCount)
+    RuntimeBuilder& sequentialAffinity(size_t ioCount, size_t parallelCount)
     {
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Sequential;
         m_config.affinity.seq_io_count = ioCount;
-        m_config.affinity.seq_compute_count = computeCount;
+        m_config.affinity.seq_parallel_count = parallelCount;
         return *this;
     }
 
@@ -452,15 +452,15 @@ public:
      * @brief 为每个 scheduler 指定显式 CPU 亲和性列表。
      * @return 列表长度与当前 scheduler 配置完全匹配时返回 `true`
      */
-    bool customAffinity(std::vector<uint32_t> ioCpus, std::vector<uint32_t> computeCpus)
+    bool customAffinity(std::vector<uint32_t> ioCpus, std::vector<uint32_t> parallelCpus)
     {
         if (ioCpus.size() != m_config.io_scheduler_count ||
-            computeCpus.size() != m_config.compute_scheduler_count) {
+            parallelCpus.size() != m_config.parallel_scheduler_count) {
             return false;
         }
         m_config.affinity.mode = RuntimeAffinityConfig::Mode::Custom;
         m_config.affinity.custom_io_cpus = std::move(ioCpus);
-        m_config.affinity.custom_compute_cpus = std::move(computeCpus);
+        m_config.affinity.custom_parallel_cpus = std::move(parallelCpus);
         return true;
     }
 

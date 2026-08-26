@@ -1,6 +1,6 @@
 /**
  * @file t10_compute.cc
- * @brief 用途：验证 `ComputeScheduler` 在基础、并发和等待通知场景下的正确性。
+ * @brief 用途：验证 `ParallelScheduler` 在基础、并发和等待通知场景下的正确性。
  * 关键覆盖点：任务执行、并发提交、计算密集任务、调度器启停与等待通知恢复。
  * 通过条件：所有子测试通过并输出 PASS，总体返回码为 0。
  */
@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 #include <cmath>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
 #include <galay/cpp/galay-kernel/async/async_waiter.h>
@@ -76,7 +76,7 @@ Task<void> test_start_stop() {
 // 测试8：AsyncWaiter 基本功能
 std::atomic<int> g_test8_result{0};
 
-// 计算任务 - 在 ComputeScheduler 中执行
+// 计算任务 - 在 ParallelScheduler 中执行
 Task<void> computeTask(AsyncWaiter<int>* waiter) {
     // 模拟计算
     volatile int sum = 0;
@@ -165,14 +165,14 @@ Task<void> recordResumeProgress(std::atomic<int>* resumptions,
 }
 
 void runTests() {
-    LogInfo("=== ComputeScheduler Test Suite ===");
+    LogInfo("=== ParallelScheduler Test Suite ===");
 
     // 测试1：基本任务执行
     {
         LogInfo("[Test 1] Basic task execution...");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         scheduler.start();
         requireSchedule(scheduler, test_basic_execution());
         // 使用调度器的空闲等待
@@ -191,7 +191,7 @@ void runTests() {
         LogInfo("[Test 2] Concurrent task execution ({} tasks)...", TEST2_COUNT);
         g_total++;
 
-        ComputeScheduler scheduler1, scheduler2, scheduler3, scheduler4;
+        ParallelScheduler scheduler1, scheduler2, scheduler3, scheduler4;
         scheduler1.start();
         scheduler2.start();
         scheduler3.start();
@@ -226,7 +226,7 @@ void runTests() {
         LogInfo("[Test 3] Compute-intensive tasks ({} tasks)...", TEST3_COUNT);
         g_total++;
 
-        ComputeScheduler scheduler1, scheduler2, scheduler3, scheduler4;
+        ParallelScheduler scheduler1, scheduler2, scheduler3, scheduler4;
         scheduler1.start();
         scheduler2.start();
         scheduler3.start();
@@ -272,7 +272,7 @@ void runTests() {
         LogInfo("[Test 5] Scheduler start/stop cycles...");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
 
         // 第一次启停
         scheduler.start();
@@ -303,7 +303,7 @@ void runTests() {
         LogInfo("[Test 6] Single-threaded scheduler verification...");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
 
         // 单线程调度器，验证基本功能
         scheduler.start();
@@ -312,7 +312,7 @@ void runTests() {
         bool stopped = !scheduler.isRunning();
 
         if (running && stopped) {
-            LogInfo("[Test 6] PASSED: Single-threaded ComputeScheduler works correctly");
+            LogInfo("[Test 6] PASSED: Single-threaded ParallelScheduler works correctly");
             g_passed++;
         } else {
             LogError("[Test 6] FAILED: running={}, stopped={}", running, stopped);
@@ -324,7 +324,7 @@ void runTests() {
         LogInfo("[Test 7] isRunning state...");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
 
         bool before_start = scheduler.isRunning();
         scheduler.start();
@@ -346,18 +346,18 @@ void runTests() {
         LogInfo("[Test 8] AsyncWaiter<int> with result...");
         g_total++;
 
-        ComputeScheduler computeScheduler;
-        computeScheduler.start();
+        ParallelScheduler parallelScheduler;
+        parallelScheduler.start();
 
         AsyncWaiter<int> waiter;
-        requireSchedule(computeScheduler, computeTask(&waiter));
+        requireSchedule(parallelScheduler, computeTask(&waiter));
 
         // 等待结果（简单轮询，实际使用中应在协程内 co_await）
         while (!waiter.isReady()) {
             // 使用调度器的空闲等待
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
 
         // 预期结果: 0+1+2+...+9999 = 49995000
         if (waiter.isReady()) {
@@ -373,17 +373,17 @@ void runTests() {
         LogInfo("[Test 9] AsyncWaiter<void> without result...");
         g_total++;
 
-        ComputeScheduler computeScheduler;
-        computeScheduler.start();
+        ParallelScheduler parallelScheduler;
+        parallelScheduler.start();
 
         AsyncWaiter<void> waiter;
-        requireSchedule(computeScheduler, computeTaskVoid(&waiter));
+        requireSchedule(parallelScheduler, computeTaskVoid(&waiter));
 
         while (!waiter.isReady()) {
             // 使用调度器的空闲等待
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
 
         if (waiter.isReady() && g_test9_done) {
             LogInfo("[Test 9] PASSED: AsyncWaiter<void> notified");
@@ -398,7 +398,7 @@ void runTests() {
         LogInfo("[Test 10] Resume admission lifecycle...");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         const bool acceptedBeforeStart = scheduler.scheduleResume(
             detail::TaskAccess::detachTask(resumeLifecycleTask()));
 
@@ -439,7 +439,7 @@ void runTests() {
         LogInfo("[Test 11] Stop drains completion continuations...");
         g_total++;
 
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         std::atomic<bool> blockerStarted{false};
         std::atomic<bool> releaseBlocker{false};
         std::atomic<int> continuationSteps{0};
@@ -495,7 +495,7 @@ void runTests() {
         g_total++;
 
         constexpr int kSelfWakeIterations = 1000;
-        ComputeScheduler scheduler;
+        ParallelScheduler scheduler;
         std::atomic<bool> selfWakeStarted{false};
         std::atomic<bool> releaseSelfWake{false};
         std::atomic<bool> selfWakeDone{false};
@@ -552,7 +552,7 @@ void runTests() {
 }
 
 int main() {
-    galay::test::TestResultWriter resultWriter("test_compute_scheduler");
+    galay::test::TestResultWriter resultWriter("test_parallel_scheduler");
     runTests();
 
     // 写入测试结果

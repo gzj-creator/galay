@@ -240,7 +240,7 @@ ScenarioResult runScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket>> plugin,
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     bool registered_blacklist = server.addAcceptPlugin(std::move(plugin));
@@ -283,7 +283,7 @@ ScenarioResult runConcurrentScenario(std::unique_ptr<AcceptPlugin<AsyncTcpSocket
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(static_cast<size_t>(io_scheduler_count))
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     bool registered_blacklist = server.addAcceptPlugin(std::move(plugin));
@@ -607,7 +607,7 @@ void test_excluded_ip_bypasses_blacklist_but_continues_plugin_chain()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     bool registered_blacklist = server.addAcceptPlugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));
@@ -660,7 +660,7 @@ void test_blacklist_stops_downstream_accept_plugin_and_handler()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     bool registered_blacklist = server.addAcceptPlugin(std::make_unique<BlackList<AsyncTcpSocket>>(config));

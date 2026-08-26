@@ -97,7 +97,7 @@ int main(int argc, char** argv)
     join_timeout_ms += (int64_t)state.requests * 2;
 
     runtime_config.io_scheduler_count = 1;
-    runtime_config.compute_scheduler_count = 0;
+    runtime_config.parallel_scheduler_count = 0;
     if (galay_c_runtime_create(&runtime_config, &runtime) != C_RuntimeSuccess ||
         galay_c_runtime_start(&runtime) != C_RuntimeSuccess ||
         galay_mcp_http_server_create("127.0.0.1", 0, &server) != GALAY_OK ||

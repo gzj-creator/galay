@@ -309,7 +309,7 @@ int main()
         .host("127.0.0.1")
         .port(upstream_port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
     upstream_server.start(std::move(upstream_router));
 
@@ -322,7 +322,7 @@ int main()
         .host("127.0.0.1")
         .port(proxy_port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
     proxy_server.start(std::move(proxy_router));
 

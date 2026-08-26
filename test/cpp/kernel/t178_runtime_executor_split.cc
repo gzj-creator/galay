@@ -92,25 +92,25 @@ void requireValue(std::expected<JoinHandle<int>, RuntimeError>& result, int expe
 
 int main()
 {
-    Runtime ioRuntime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime ioRuntime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     auto ioTask = ioRuntime.spawnIO(valueTask(11));
     requireValue(ioTask, 11, "spawnIO should submit when an IO scheduler is available");
     auto ioCpuTask = ioRuntime.spawnCpu(valueTask(12));
     require(!ioCpuTask.has_value() && ioCpuTask.error().code() == RuntimeErrorCode::kNoSchedulerAvailable,
-            "spawnCpu should reject a runtime without a compute scheduler");
+            "spawnCpu should reject a runtime without a parallel scheduler");
 
-    Runtime cpuRuntime = RuntimeBuilder().ioSchedulerCount(0).computeSchedulerCount(1).build();
+    Runtime cpuRuntime = RuntimeBuilder().ioSchedulerCount(0).parallelSchedulerCount(1).build();
     auto cpuTask = cpuRuntime.spawnCpu(valueTask(21));
-    requireValue(cpuTask, 21, "spawnCpu should submit when a compute scheduler is available");
+    requireValue(cpuTask, 21, "spawnCpu should submit when a parallel scheduler is available");
     auto cpuIoTask = cpuRuntime.spawnIO(valueTask(22));
     require(!cpuIoTask.has_value() && cpuIoTask.error().code() == RuntimeErrorCode::kNoSchedulerAvailable,
             "spawnIO should reject a runtime without an IO scheduler");
 
-    Runtime mixedRuntime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(1).build();
+    Runtime mixedRuntime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     auto ioBlock = mixedRuntime.blockOnIO(valueTask(41));
     require(ioBlock.has_value() && *ioBlock == 41, "blockOnIO should use the IO scheduler");
     auto cpuBlock = mixedRuntime.blockOnCpu(valueTask(42));
-    require(cpuBlock.has_value() && *cpuBlock == 42, "blockOnCpu should use the compute scheduler");
+    require(cpuBlock.has_value() && *cpuBlock == 42, "blockOnCpu should use the parallel scheduler");
     auto handle = mixedRuntime.handle();
     auto handleIoTask = handle.spawnIO(valueTask(31));
     requireValue(handleIoTask, 31, "RuntimeHandle::spawnIO should submit to the IO executor");
@@ -126,8 +126,8 @@ int main()
     auto cpuThreadTask = mixedRuntime.spawnCpu(executionThread());
     require(cpuThreadTask.has_value(), "spawnCpu should return an execution thread");
     auto cpuThread = cpuThreadTask->join();
-    require(cpuThread.has_value() && *cpuThread == mixedRuntime.getComputeScheduler(0)->threadId(),
-            "spawnCpu should bind the task to a compute scheduler");
+    require(cpuThread.has_value() && *cpuThread == mixedRuntime.getParallelScheduler(0)->threadId(),
+            "spawnCpu should bind the task to a parallel scheduler");
 
     mixedRuntime.stop();
     cpuRuntime.stop();

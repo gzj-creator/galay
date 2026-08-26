@@ -277,7 +277,7 @@ int main(int argc, char* argv[]) {
             .certPath(cert_path)
             .keyPath(key_path)
             .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .maxConcurrentStreams(1000)
             .initialWindowSize(65535)
             .flowControlTargetWindow(1u << 20)
@@ -287,8 +287,8 @@ int main(int argc, char* argv[]) {
         server.start();
         std::cout << "Server started successfully!\n";
         std::cout << "Runtime Config: io=" << server.getRuntime().getIOSchedulerCount()
-                  << " compute=" << server.getRuntime().getComputeSchedulerCount()
-                  << " (configured io=" << io_threads << " compute=0)\n";
+                  << " parallel=" << server.getRuntime().getParallelSchedulerCount()
+                  << " (configured io=" << io_threads << " parallel=0)\n";
         std::cout << "Waiting for requests...\n\n";
 
         while (g_running) {

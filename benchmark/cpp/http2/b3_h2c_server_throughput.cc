@@ -147,7 +147,7 @@ int main(int argc, char* argv[]) {
             .host("0.0.0.0")
             .port(port)
             .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .maxConcurrentStreams(1000)
             .initialWindowSize(65535)
             .activeConnHandler(handleActiveConn)
@@ -157,8 +157,8 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Server started successfully!\n";
         std::cout << "Runtime Config: io=" << server.getRuntime().getIOSchedulerCount()
-                  << " compute=" << server.getRuntime().getComputeSchedulerCount()
-                  << " (configured io=" << io_threads << " compute=0)\n";
+                  << " parallel=" << server.getRuntime().getParallelSchedulerCount()
+                  << " (configured io=" << io_threads << " parallel=0)\n";
         std::cout << "Waiting for requests...\n\n";
 
         while (g_running) {

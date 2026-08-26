@@ -224,7 +224,7 @@ int main(int argc, char* argv[]) {
     std::cout << "默认: localhost 8080 100 10 /\n";
     std::cout << "==========================================\n";
 
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(4).computeSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().ioSchedulerCount(4).parallelSchedulerCount(0).build();
     rt.start();
 
     // 运行持续压测

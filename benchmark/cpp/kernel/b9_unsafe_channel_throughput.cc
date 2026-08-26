@@ -12,7 +12,7 @@
 #include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include "test/cpp/common/stdout_log.h"
 
 using namespace galay::kernel;
@@ -296,7 +296,7 @@ void benchUnsafeChannelThroughput(int64_t message_count) {
             resetCounters();
 
             galay::spsc::UnboundedChannel<int64_t> channel;
-            ComputeScheduler scheduler;
+            ParallelScheduler scheduler;
 
             auto started = scheduler.start();
             if (!started) {
@@ -359,7 +359,7 @@ void benchUnsafeChannelBatchThroughput(int64_t message_count) {
             resetCounters();
 
             galay::spsc::UnboundedChannel<int64_t> channel;
-            ComputeScheduler scheduler;
+            ParallelScheduler scheduler;
 
             auto started = scheduler.start();
             if (!started) {
@@ -423,7 +423,7 @@ void benchUnsafeChannelBatchedThroughput(int64_t message_count, int64_t batch_li
             resetCounters();
 
             galay::spsc::UnboundedChannel<int64_t> channel;
-            ComputeScheduler scheduler;
+            ParallelScheduler scheduler;
 
             auto started = scheduler.start();
             if (!started) {
@@ -481,7 +481,7 @@ void benchUnsafeChannelLatency(int64_t message_count) {
     resetCounters();
 
     galay::spsc::UnboundedChannel<TimestampedMessage> channel;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
 
     auto started = scheduler.start();
     if (!started) {
@@ -530,7 +530,7 @@ void benchMpscChannelThroughput(int64_t message_count) {
             resetCounters();
 
             galay::mpsc::UnboundedChannel<int64_t> channel;
-            ComputeScheduler scheduler;
+            ParallelScheduler scheduler;
 
             auto started = scheduler.start();
             if (!started) {
@@ -587,7 +587,7 @@ void benchComparison(int64_t message_count) {
     // galay::spsc::UnboundedChannel 测试
     resetCounters();
     galay::spsc::UnboundedChannel<int64_t> unsafeChannel;
-    ComputeScheduler scheduler1;
+    ParallelScheduler scheduler1;
 
     auto started1 = scheduler1.start();
     if (!started1) {
@@ -616,7 +616,7 @@ void benchComparison(int64_t message_count) {
     // galay::mpsc::UnboundedChannel 测试
     resetCounters();
     galay::mpsc::UnboundedChannel<int64_t> mpscChannel;
-    ComputeScheduler scheduler2;
+    ParallelScheduler scheduler2;
 
     auto started2 = scheduler2.start();
     if (!started2) {

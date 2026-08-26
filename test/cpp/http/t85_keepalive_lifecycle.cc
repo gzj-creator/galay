@@ -256,7 +256,7 @@ HttpServer makeServer(uint16_t port, HttpServerPolicy policy)
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .policy(std::move(policy))
         .build());
 }

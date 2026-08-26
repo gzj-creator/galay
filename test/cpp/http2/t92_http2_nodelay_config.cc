@@ -188,7 +188,7 @@ Task<std::expected<void, IOError>> closeTcpSocket(AsyncTcpSocket* socket)
 
 int observeH2cClientTcpNoDelay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     LoopbackListener listener;
     H2cClient<> client(H2cClientBuilder().tcpNoDelay(tcp_no_delay).build());
 
@@ -213,7 +213,7 @@ int observeH2cServerTcpNoDelay(bool tcp_no_delay)
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .tcpNoDelay(tcp_no_delay)
         .streamHandler([](Http2Stream::ptr) -> Task<void> {
             co_return;
@@ -248,7 +248,7 @@ int observeH2ServerTcpNoDelay(bool tcp_no_delay)
         .certPath("test/cpp/http2/test.crt")
         .keyPath("test/cpp/http2/test.key")
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .tcpNoDelay(tcp_no_delay)
         .streamHandler([](Http2Stream::ptr) -> Task<void> {
             co_return;
@@ -293,7 +293,7 @@ int observeH2ClientTcpNoDelay(bool tcp_no_delay)
         .certPath("test/cpp/http2/test.crt")
         .keyPath("test/cpp/http2/test.key")
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .activeConnHandler(idleH2ConnectionHandler)
         .build());
 
@@ -301,7 +301,7 @@ int observeH2ClientTcpNoDelay(bool tcp_no_delay)
     require(server.isRunning(), "h2 server should start for client nodelay probe");
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     H2Client<> client(H2ClientBuilder()
         .verifyPeer(false)
         .tcpNoDelay(tcp_no_delay)

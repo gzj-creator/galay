@@ -178,7 +178,7 @@ int observePlainServerTcpNoDelay(bool tcp_no_delay)
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .tcpNoDelay(tcp_no_delay)
         .build());
 
@@ -211,7 +211,7 @@ int observeHttpsServerTcpNoDelay(bool tcp_no_delay)
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .tcpNoDelay(tcp_no_delay)
         .build());
 

@@ -167,7 +167,7 @@ int main(void)
     controller_initialized = 1;
 
     config.io_scheduler_count = 1;
-    config.compute_scheduler_count = 0;
+    config.parallel_scheduler_count = 0;
     if (galay_c_runtime_create(&config, &runtime) != C_RuntimeSuccess ||
         galay_c_runtime_start(&runtime) != C_RuntimeSuccess) {
         exit_code = 4;

@@ -1,6 +1,6 @@
 /**
  * @file t11_mixed.cc
- * @brief 用途：验证 `IOScheduler` 与 `ComputeScheduler` 混合协作时的调度正确性。
+ * @brief 用途：验证 `IOScheduler` 与 `ParallelScheduler` 混合协作时的调度正确性。
  * 关键覆盖点：IO 与计算任务协同、跨调度器通知、混合场景下的恢复顺序与 owner 调度器回归。
  * 通过条件：混合调度断言全部成立，测试输出 PASS 并返回 0。
  */
@@ -9,7 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include "test/cpp/common/stdout_log.h"
@@ -41,10 +41,10 @@ void requireSchedule(SchedulerT& scheduler, Task<T>&& task)
     }
 }
 
-// ============== 测试1: IO任务提交计算任务到ComputeScheduler ==============
+// ============== 测试1: IO任务提交计算任务到ParallelScheduler ==============
 std::atomic<int> g_test1_compute_result{0};
 
-// 计算任务 - 在 ComputeScheduler 中执行
+// 计算任务 - 在 ParallelScheduler 中执行
 Task<void> computeHeavyTask(AsyncWaiter<int>* waiter) {
     // 模拟 CPU 密集型计算
     volatile int sum = 0;
@@ -56,12 +56,12 @@ Task<void> computeHeavyTask(AsyncWaiter<int>* waiter) {
 }
 
 // IO 任务 - 在 IOScheduler 中执行
-Task<void> ioTaskWithCompute(ComputeScheduler* computeScheduler) {
+Task<void> ioTaskWithCompute(ParallelScheduler* parallelScheduler) {
     // 创建等待器
     AsyncWaiter<int> waiter;
 
-    // 提交计算任务到 ComputeScheduler
-    requireSchedule(*computeScheduler, computeHeavyTask(&waiter));
+    // 提交计算任务到 ParallelScheduler
+    requireSchedule(*parallelScheduler, computeHeavyTask(&waiter));
 
     // 等待计算完成
     auto result = co_await waiter.wait();
@@ -84,9 +84,9 @@ Task<void> computeTaskForTest2(AsyncWaiter<int>* waiter, int id) {
     co_return;
 }
 
-Task<void> ioTaskMultiple(ComputeScheduler* computeScheduler, int id) {
+Task<void> ioTaskMultiple(ParallelScheduler* parallelScheduler, int id) {
     AsyncWaiter<int> waiter;
-    requireSchedule(*computeScheduler, computeTaskForTest2(&waiter, id));
+    requireSchedule(*parallelScheduler, computeTaskForTest2(&waiter, id));
 
     auto result = co_await waiter.wait();
     (void)result;
@@ -95,7 +95,7 @@ Task<void> ioTaskMultiple(ComputeScheduler* computeScheduler, int id) {
     co_return;
 }
 
-// ============== 测试3: 纯 ComputeScheduler 任务（不涉及 IO） ==============
+// ============== 测试3: 纯 ParallelScheduler 任务（不涉及 IO） ==============
 std::atomic<int> g_test3_counter{0};
 
 Task<void> pureComputeTask() {
@@ -121,11 +121,11 @@ Task<void> computeMiddleTask(AsyncWaiter<int>* waiter) {
     co_return;
 }
 
-Task<void> ioChainTask(ComputeScheduler* computeScheduler) {
+Task<void> ioChainTask(ParallelScheduler* parallelScheduler) {
     g_test4_stage.store(1, std::memory_order_relaxed);  // IO阶段1
 
     AsyncWaiter<int> waiter;
-    requireSchedule(*computeScheduler, computeMiddleTask(&waiter));
+    requireSchedule(*parallelScheduler, computeMiddleTask(&waiter));
 
     auto result = co_await waiter.wait();
 
@@ -152,9 +152,9 @@ Task<void> computeVoidTask(AsyncWaiter<void>* waiter) {
     co_return;
 }
 
-Task<void> ioVoidWaitTask(ComputeScheduler* computeScheduler) {
+Task<void> ioVoidWaitTask(ParallelScheduler* parallelScheduler) {
     AsyncWaiter<void> waiter;
-    requireSchedule(*computeScheduler, computeVoidTask(&waiter));
+    requireSchedule(*parallelScheduler, computeVoidTask(&waiter));
 
     co_await waiter.wait();
 
@@ -175,9 +175,9 @@ Task<void> computeTaskForTest6(AsyncWaiter<int>* waiter, int id) {
     co_return;
 }
 
-Task<void> ioTaskHighConcurrency(ComputeScheduler* computeScheduler, int id) {
+Task<void> ioTaskHighConcurrency(ParallelScheduler* parallelScheduler, int id) {
     AsyncWaiter<int> waiter;
-    requireSchedule(*computeScheduler, computeTaskForTest6(&waiter, id));
+    requireSchedule(*parallelScheduler, computeTaskForTest6(&waiter, id));
     auto result = co_await waiter.wait();
     (void)result;
     g_test6_completed.fetch_add(1, std::memory_order_relaxed);
@@ -196,11 +196,11 @@ Task<void> computeTaskForTest7(AsyncWaiter<int>* waiter, int value) {
     co_return;
 }
 
-Task<void> ioMultipleAwait(ComputeScheduler* computeScheduler) {
+Task<void> ioMultipleAwait(ParallelScheduler* parallelScheduler) {
     // 在同一个任务内多次 await 不同的计算任务
     for (int i = 0; i < 5; ++i) {
         AsyncWaiter<int> waiter;
-        requireSchedule(*computeScheduler, computeTaskForTest7(&waiter, i * 100));
+        requireSchedule(*parallelScheduler, computeTaskForTest7(&waiter, i * 100));
         auto result = co_await waiter.wait();
         (void)result;
         g_test7_await_count.fetch_add(1, std::memory_order_relaxed);
@@ -217,9 +217,9 @@ Task<void> computeTaskFast(AsyncWaiter<int>* waiter) {
     co_return;
 }
 
-Task<void> ioWaitAfterNotify(ComputeScheduler* computeScheduler) {
+Task<void> ioWaitAfterNotify(ParallelScheduler* parallelScheduler) {
     AsyncWaiter<int> waiter;
-    requireSchedule(*computeScheduler, computeTaskFast(&waiter));
+    requireSchedule(*parallelScheduler, computeTaskFast(&waiter));
 
     // 故意延迟一下，让 notify 先执行
     volatile int delay = 0;
@@ -244,9 +244,9 @@ Task<void> computeCheckScheduler(AsyncWaiter<void>* waiter) {
     co_return;
 }
 
-Task<void> ioCheckSchedulerReturn(ComputeScheduler* computeScheduler) {
+Task<void> ioCheckSchedulerReturn(ParallelScheduler* parallelScheduler) {
     AsyncWaiter<void> waiter;
-    requireSchedule(*computeScheduler, computeCheckScheduler(&waiter));
+    requireSchedule(*parallelScheduler, computeCheckScheduler(&waiter));
 
     co_await waiter.wait();
 
@@ -255,7 +255,7 @@ Task<void> ioCheckSchedulerReturn(ComputeScheduler* computeScheduler) {
     co_return;
 }
 
-// ============== 测试10: 多个 ComputeScheduler 实例 ==============
+// ============== 测试10: 多个 ParallelScheduler 实例 ==============
 std::atomic<int> g_test10_completed{0};
 
 Task<void> computeTaskForTest10(AsyncWaiter<int>* waiter, int schedulerId) {
@@ -267,11 +267,11 @@ Task<void> computeTaskForTest10(AsyncWaiter<int>* waiter, int schedulerId) {
     co_return;
 }
 
-Task<void> ioWithMultipleComputeSchedulers(ComputeScheduler* cs1, ComputeScheduler* cs2, [[maybe_unused]] int id) {
+Task<void> ioWithMultipleParallelSchedulers(ParallelScheduler* cs1, ParallelScheduler* cs2, [[maybe_unused]] int id) {
     AsyncWaiter<int> waiter1;
     AsyncWaiter<int> waiter2;
 
-    // 同时提交到两个不同的 ComputeScheduler
+    // 同时提交到两个不同的 ParallelScheduler
     requireSchedule(*cs1, computeTaskForTest10(&waiter1, 1));
     requireSchedule(*cs2, computeTaskForTest10(&waiter2, 2));
 
@@ -308,12 +308,12 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
-        requireSchedule(ioScheduler, ioTaskWithCompute(&computeScheduler));
+        requireSchedule(ioScheduler, ioTaskWithCompute(&parallelScheduler));
 
         // 等待完成
         auto start = std::chrono::steady_clock::now();
@@ -324,7 +324,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test1_compute_result.load() != 0) {
@@ -341,13 +341,13 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
         for (int i = 0; i < TEST2_COUNT; ++i) {
-            requireSchedule(ioScheduler, ioTaskMultiple(&computeScheduler, i));
+            requireSchedule(ioScheduler, ioTaskMultiple(&parallelScheduler, i));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -358,7 +358,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test2_completed.load() == TEST2_COUNT) {
@@ -370,16 +370,16 @@ void runTests() {
         }
     }
 
-    // 测试3: 纯 ComputeScheduler 任务
+    // 测试3: 纯 ParallelScheduler 任务
     {
-        LogInfo("[Test 3] Pure ComputeScheduler tasks (20 tasks)...");
+        LogInfo("[Test 3] Pure ParallelScheduler tasks (20 tasks)...");
         g_total++;
 
-        ComputeScheduler computeScheduler;
-        computeScheduler.start();
+        ParallelScheduler parallelScheduler;
+        parallelScheduler.start();
 
         for (int i = 0; i < 20; ++i) {
-            requireSchedule(computeScheduler, pureComputeTask());
+            requireSchedule(parallelScheduler, pureComputeTask());
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -390,7 +390,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
 
         if (g_test3_counter.load() == 20) {
             LogInfo("[Test 3] PASSED: All 20 pure compute tasks completed");
@@ -406,12 +406,12 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
-        requireSchedule(ioScheduler, ioChainTask(&computeScheduler));
+        requireSchedule(ioScheduler, ioChainTask(&parallelScheduler));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test4_done.load()) {
@@ -421,7 +421,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test4_done.load() && g_test4_stage.load() == 3) {
@@ -438,12 +438,12 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
-        requireSchedule(ioScheduler, ioVoidWaitTask(&computeScheduler));
+        requireSchedule(ioScheduler, ioVoidWaitTask(&parallelScheduler));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test5_io_resumed.load()) {
@@ -453,7 +453,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test5_compute_done.load() && g_test5_io_resumed.load()) {
@@ -471,13 +471,13 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
         for (int i = 0; i < TEST6_COUNT; ++i) {
-            requireSchedule(ioScheduler, ioTaskHighConcurrency(&computeScheduler, i));
+            requireSchedule(ioScheduler, ioTaskHighConcurrency(&parallelScheduler, i));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -488,7 +488,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test6_completed.load() == TEST6_COUNT) {
@@ -506,12 +506,12 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
-        requireSchedule(ioScheduler, ioMultipleAwait(&computeScheduler));
+        requireSchedule(ioScheduler, ioMultipleAwait(&parallelScheduler));
 
         auto start = std::chrono::steady_clock::now();
         while (g_test7_await_count.load() < 5) {
@@ -521,7 +521,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test7_await_count.load() == 5) {
@@ -538,12 +538,12 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
-        requireSchedule(ioScheduler, ioWaitAfterNotify(&computeScheduler));
+        requireSchedule(ioScheduler, ioWaitAfterNotify(&parallelScheduler));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test8_done.load()) {
@@ -553,7 +553,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test8_done.load()) {
@@ -570,12 +570,12 @@ void runTests() {
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler;
+        ParallelScheduler parallelScheduler;
 
         ioScheduler.start();
-        computeScheduler.start();
+        parallelScheduler.start();
 
-        requireSchedule(ioScheduler, ioCheckSchedulerReturn(&computeScheduler));
+        requireSchedule(ioScheduler, ioCheckSchedulerReturn(&parallelScheduler));
 
         auto start = std::chrono::steady_clock::now();
         while (!g_test9_scheduler_correct.load()) {
@@ -585,7 +585,7 @@ void runTests() {
             }
         }
 
-        computeScheduler.stop();
+        parallelScheduler.stop();
         ioScheduler.stop();
 
         if (g_test9_scheduler_correct.load()) {
@@ -596,21 +596,21 @@ void runTests() {
         }
     }
 
-    // 测试10: 多个 ComputeScheduler 实例
+    // 测试10: 多个 ParallelScheduler 实例
     {
-        LogInfo("[Test 10] Multiple ComputeScheduler instances...");
+        LogInfo("[Test 10] Multiple ParallelScheduler instances...");
         g_total++;
 
         IOSchedulerType ioScheduler;
-        ComputeScheduler computeScheduler1;
-        ComputeScheduler computeScheduler2;
+        ParallelScheduler parallelScheduler1;
+        ParallelScheduler parallelScheduler2;
 
         ioScheduler.start();
-        computeScheduler1.start();
-        computeScheduler2.start();
+        parallelScheduler1.start();
+        parallelScheduler2.start();
 
         for (int i = 0; i < 5; ++i) {
-            requireSchedule(ioScheduler, ioWithMultipleComputeSchedulers(&computeScheduler1, &computeScheduler2, i));
+            requireSchedule(ioScheduler, ioWithMultipleParallelSchedulers(&parallelScheduler1, &parallelScheduler2, i));
         }
 
         auto start = std::chrono::steady_clock::now();
@@ -621,12 +621,12 @@ void runTests() {
             }
         }
 
-        computeScheduler1.stop();
-        computeScheduler2.stop();
+        parallelScheduler1.stop();
+        parallelScheduler2.stop();
         ioScheduler.stop();
 
         if (g_test10_completed.load() == 5) {
-            LogInfo("[Test 10] PASSED: All tasks with multiple ComputeSchedulers completed");
+            LogInfo("[Test 10] PASSED: All tasks with multiple ParallelSchedulers completed");
             g_passed++;
         } else {
             LogError("[Test 10] FAILED: Only {}/5 tasks completed", g_test10_completed.load());
@@ -638,19 +638,19 @@ void runTests() {
         LogInfo("[Test 11] Tasks completion during scheduler stop...");
         g_total++;
 
-        ComputeScheduler computeScheduler;
-        computeScheduler.start();
+        ParallelScheduler parallelScheduler;
+        parallelScheduler.start();
 
         // 提交多个任务
         std::vector<AsyncWaiter<void>> waiters(10);
         for (int i = 0; i < 10; ++i) {
-            requireSchedule(computeScheduler, computeTaskForTest11(&waiters[i]));
+            requireSchedule(parallelScheduler, computeTaskForTest11(&waiters[i]));
         }
 
         // 等待一小段时间让任务开始执行（已移除 sleep_for）
 
         // 停止调度器（应该等待正在执行的任务完成）
-        computeScheduler.stop();
+        parallelScheduler.stop();
 
         // 检查完成的任务数
         int completed = g_test11_completed.load();

@@ -103,11 +103,11 @@ JsonString promptResult(std::string_view value)
 McpHttpServer::McpHttpServer(std::string host,
                              int port,
                              std::size_t ioSchedulers,
-                             std::size_t computeSchedulers,
+                             std::size_t parallelSchedulers,
                              bool tcpNoDelay)
     : m_host(std::move(host))
     , m_ioSchedulers(ioSchedulers)
-    , m_computeSchedulers(computeSchedulers)
+    , m_parallelSchedulers(parallelSchedulers)
     , m_port(port)
     , m_tcpNoDelay(tcpNoDelay)
 {
@@ -693,7 +693,7 @@ void McpHttpServer::start()
     config.port = static_cast<uint16_t>(m_port);
     config.backlog = 128;
     config.io_scheduler_count = m_ioSchedulers;
-    config.compute_scheduler_count = m_computeSchedulers;
+    config.parallel_scheduler_count = m_parallelSchedulers;
     config.tcp_no_delay = m_tcpNoDelay;
     auto httpServer = std::make_shared<http::HttpServer>(config);
     m_httpServer.store(httpServer, std::memory_order_release);

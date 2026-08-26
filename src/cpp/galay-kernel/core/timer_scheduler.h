@@ -4,7 +4,7 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 提供全局的定时轮线程，用于处理 ComputeScheduler 的定时任务。
+ * @details 提供全局的定时轮线程，用于处理 ParallelScheduler 的定时任务。
  * IOScheduler 的 IO 超时仍由各自的定时轮处理。
  *
  * 使用方式：

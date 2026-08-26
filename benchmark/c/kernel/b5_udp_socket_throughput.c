@@ -186,7 +186,7 @@ int main(int argc, char** argv)
 
     C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = bench_config.io_schedulers;
-    runtime_config.compute_scheduler_count = 0;
+    runtime_config.parallel_scheduler_count = 0;
 
     C_Host bind_host = {C_IPTypeIPV4, "127.0.0.1", 0};
     int exit_code = 0;
