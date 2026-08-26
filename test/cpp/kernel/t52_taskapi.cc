@@ -157,6 +157,14 @@ static_assert(HasTaskThenLvalue<Task<void>>);
 static_assert(HasTaskThenRvalue<Task<void>>);
 static_assert(HasTaskAwaitOperator<Task<int>>);
 static_assert(HasTaskAwaitOperator<Task<void>>);
+static_assert(std::same_as<
+              decltype(std::declval<TaskPromise<int>&>()
+                           .get_return_object_on_allocation_failure()),
+              Task<int>>);
+static_assert(std::same_as<
+              decltype(std::declval<TaskPromise<void>&>()
+                           .get_return_object_on_allocation_failure()),
+              Task<void>>);
 
 int main() {
     Runtime runtime;

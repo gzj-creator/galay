@@ -1292,7 +1292,10 @@ class TaskPromise
 public:
     using ReSchedulerType = bool;  ///< `co_yield true/false` 使用的重新调度标记类型
 
-    int get_return_object_on_alloaction_failure() noexcept { return -1; }  ///< 协程分配失败时返回错误码占位
+    static Task<T> get_return_object_on_allocation_failure() noexcept
+    {
+        return {};
+    }  ///< 协程帧分配失败时返回无效任务
 
     Task<T> get_return_object() noexcept  ///< 构造并返回与该 promise 绑定的 Task
     {
@@ -1345,7 +1348,10 @@ class TaskPromise<void>
 public:
     using ReSchedulerType = bool;  ///< `co_yield true/false` 使用的重新调度标记类型
 
-    int get_return_object_on_alloaction_failure() noexcept { return -1; }  ///< 协程分配失败时返回错误码占位
+    static Task<void> get_return_object_on_allocation_failure() noexcept
+    {
+        return {};
+    }  ///< 协程帧分配失败时返回无效任务
 
     Task<void> get_return_object() noexcept  ///< 构造并返回与该 promise 绑定的 Task
     {

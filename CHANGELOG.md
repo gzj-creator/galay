@@ -11,6 +11,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **修正 TaskPromise 协程分配失败回调**：统一 `TaskPromise<T>` 与 `TaskPromise<void>` 的标准回调名称和静态接口，失败时返回对应的无效 `Task`，并补充公开任务 API 的编译期契约检查。
+
 ## [v4.9.2] - 2026-08-26
 
 ### Fixed
