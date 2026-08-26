@@ -113,7 +113,7 @@ int main()
 
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
     runtime.start();
 

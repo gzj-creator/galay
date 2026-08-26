@@ -41,7 +41,7 @@ Task<void> sender(galay::spsc::UnboundedChannel<int>* channel) {
 }  // namespace
 
 int main() {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
 
     galay::spsc::UnboundedChannel<int> channel;

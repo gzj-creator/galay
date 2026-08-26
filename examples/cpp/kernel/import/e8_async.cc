@@ -62,11 +62,11 @@ Task<void> waitComputeResult(AsyncWaiter<int>* waiter) {
 int main() {
     constexpr int kIterations = 500;
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     runtime.start();
 
     auto* io = runtime.getNextIOScheduler();
-    auto* compute = runtime.getNextComputeScheduler();
+    auto* compute = runtime.getNextParallelScheduler();
 
     AsyncWaiter<int> waiter;
 

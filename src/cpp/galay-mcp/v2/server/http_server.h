@@ -29,7 +29,7 @@ public:
         const std::string&, const JsonElement&, std::expected<JsonString, McpError>&)>;
 
     McpHttpServer(std::string host = "127.0.0.1", int port = 8080,
-                  std::size_t ioSchedulers = 8, std::size_t computeSchedulers = 0,
+                  std::size_t ioSchedulers = 8, std::size_t parallelSchedulers = 0,
                   bool tcpNoDelay = true);
     ~McpHttpServer();
     McpHttpServer(const McpHttpServer&) = delete;
@@ -113,7 +113,7 @@ private:
     std::string m_serverName{"galay-mcp-v2-http"};
     std::string m_serverVersion{"2.0.0"};
     std::size_t m_ioSchedulers;
-    std::size_t m_computeSchedulers;
+    std::size_t m_parallelSchedulers;
     int m_port;
     bool m_tcpNoDelay;
     McpProductionPolicy m_policy;

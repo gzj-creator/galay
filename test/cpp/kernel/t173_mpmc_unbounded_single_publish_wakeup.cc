@@ -4,7 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/concurrency/mpmc/unbounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "benchmark/cpp/common/benchmark_affinity.h"
 
@@ -64,7 +64,7 @@ struct UnboundedChannelTestAccess
 
 namespace {
 
-using galay::kernel::ComputeScheduler;
+using galay::kernel::ParallelScheduler;
 using galay::kernel::Task;
 using namespace std::chrono_literals;
 
@@ -120,7 +120,7 @@ int main()
 {
     galay::mpmc::UnboundedChannel<uint64_t> channel;
     StressState state;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         std::cerr << "T173 scheduler start failed\n";

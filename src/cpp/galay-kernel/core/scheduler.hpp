@@ -9,7 +9,7 @@
  * 同时提供用于便捷 Task 提交的 scheduleTask 重载函数。
  *
  * @note 具体实现：KqueueScheduler (macOS)、EpollScheduler (Linux)、
- *       IOUringScheduler (Linux)、ComputeScheduler
+ *       IOUringScheduler (Linux)、ParallelScheduler
  */
 
 #ifndef GALAY_KERNEL_SCHEDULER_HPP
@@ -38,7 +38,7 @@ namespace galay::kernel
  */
 enum SchedulerType {
     kIOScheduler,      ///< 基于 IO 事件循环的调度器
-    kComputeScheduler  ///< 基于工作线程执行的计算调度器
+    kParallelScheduler  ///< 基于工作线程执行的计算调度器
 }; 
 
 /**

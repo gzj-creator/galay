@@ -362,7 +362,7 @@ runAsyncBenchmark(const AsyncBenchmarkArgs& args)
     }
 
     const int io_schedulers = resolvedSchedulerCount(args);
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
     runtime.start();
 
     std::vector<IOScheduler*> schedulers;

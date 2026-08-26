@@ -58,7 +58,7 @@ kernel 也提供 umbrella header：`#include <galay/c/galay-kernel-c/kernel.h>`�
 
 **Runtime**（`core-c/runtime.h`）— `C_RUNTIME_SCHEDULER_COUNT_AUTO == (size_t)-1`：
 ```c
-typedef struct C_RuntimeConfig { size_t io_scheduler_count; size_t compute_scheduler_count; } C_RuntimeConfig;
+typedef struct C_RuntimeConfig { size_t io_scheduler_count; size_t parallel_scheduler_count; } C_RuntimeConfig;
 typedef struct galay_c_runtime { void* runtime; } galay_c_runtime_t;
 
 C_RuntimeConfig     galay_c_runtime_config_default(void);

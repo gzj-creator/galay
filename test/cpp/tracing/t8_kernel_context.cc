@@ -79,7 +79,7 @@ void explicitContextReachesKernelTask() {
 
     auto runtime = galay::kernel::RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
     runtime.blockOnIO(std::move(task));
 
@@ -107,7 +107,7 @@ void explicitContextSurvivesYieldWithoutLeakingToOtherTasks() {
 
     auto runtime = galay::kernel::RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
 
     auto wrappedHandle = runtime.spawnCpu(std::move(wrapped));

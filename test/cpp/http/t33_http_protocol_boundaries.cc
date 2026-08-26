@@ -318,7 +318,7 @@ void testStaticHeadDoesNotSendBody()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
     server.start(std::move(router));
 

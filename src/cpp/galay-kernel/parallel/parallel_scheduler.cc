@@ -1,14 +1,14 @@
 /**
- * @file compute_scheduler.cc
+ * @file parallel_scheduler.cc
  * @brief 计算密集型任务调度器实现
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 实现单线程 ComputeScheduler，通过阻塞并发队列在专用工作线程上
+ * @details 实现单线程 ParallelScheduler，通过阻塞并发队列在专用工作线程上
  * 驱动 CPU 密集型协程。
  */
 
-#include "compute_scheduler.h"
+#include "parallel_scheduler.h"
 
 #include <future>
 
@@ -18,7 +18,7 @@ namespace galay::kernel
 /**
  * @brief 默认构造函数；初始化延迟到 start() 执行
  */
-ComputeScheduler::ComputeScheduler()
+ParallelScheduler::ParallelScheduler()
 {
     m_resumeQueue.close();
 }
@@ -26,7 +26,7 @@ ComputeScheduler::ComputeScheduler()
 /**
  * @brief 析构函数，确保调度器在销毁前已停止
  */
-ComputeScheduler::~ComputeScheduler()
+ParallelScheduler::~ParallelScheduler()
 {
     stop();
 }
@@ -37,7 +37,7 @@ ComputeScheduler::~ComputeScheduler()
  * @details 原子地切换到运行状态并创建工作线程，线程在进入主循环前
  * 应用已配置的 CPU 亲和性。若已在运行则不做任何操作。
  */
-std::expected<void, IOError> ComputeScheduler::start()
+std::expected<void, IOError> ParallelScheduler::start()
 {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
@@ -67,7 +67,7 @@ std::expected<void, IOError> ComputeScheduler::start()
  * @details 先关闭专用恢复接纳，再切换运行状态并等待工作线程结束。
  * 线程在退出前会排空已接纳恢复和普通任务。若已停止则保持接纳关闭。
  */
-void ComputeScheduler::stop()
+void ParallelScheduler::stop()
 {
     m_resumeQueue.close();
     bool expected = true;
@@ -87,15 +87,23 @@ void ComputeScheduler::stop()
  * @param task  待调度的任务
  * @return true 任务绑定并入队成功；false 任务无效
  */
-bool ComputeScheduler::schedule(TaskRef task) noexcept
+bool ParallelScheduler::schedule(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
     }
-    return m_queue.enqueue(ComputeTask{std::move(task)});
+    return m_queue.enqueue(ParallelTask{std::move(task)});
 }
 
-bool ComputeScheduler::scheduleResume(TaskRef task) noexcept
+bool ParallelScheduler::scheduleWork(ParallelWorkItem work) noexcept
+{
+    if (!work.valid() || !m_running.load(std::memory_order_acquire)) {
+        return false;
+    }
+    return m_workQueue.enqueue(std::move(work));
+}
+
+bool ParallelScheduler::scheduleResume(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -110,7 +118,7 @@ bool ComputeScheduler::scheduleResume(TaskRef task) noexcept
  * @return true 任务绑定并入队成功
  * @note 当前实现与 schedule() 相同，保留以作语义区分
  */
-bool ComputeScheduler::scheduleDeferred(TaskRef task) noexcept
+bool ParallelScheduler::scheduleDeferred(TaskRef task) noexcept
 {
     return schedule(std::move(task));
 }
@@ -121,7 +129,7 @@ bool ComputeScheduler::scheduleDeferred(TaskRef task) noexcept
  * @param task  待执行的任务
  * @return true 任务绑定并恢复成功；false 绑定失败
  */
-bool ComputeScheduler::scheduleImmediately(TaskRef task) noexcept
+bool ParallelScheduler::scheduleImmediately(TaskRef task) noexcept
 {
     if (!bindTask(task)) {
         return false;
@@ -136,14 +144,20 @@ bool ComputeScheduler::scheduleImmediately(TaskRef task) noexcept
  * @details 阻塞在并发队列上等待任务，通过恢复协程处理每个任务。
  * 收到停止信号后排空剩余队列任务后退出。
  */
-void ComputeScheduler::workerLoop()
+void ParallelScheduler::workerLoop()
 {
-    ComputeTask task;
+    ParallelTask task;
+    ParallelWorkItem work;
 
     while (m_running.load(std::memory_order_acquire)) {
         drainResumeQueue();
         if (m_queue.try_dequeue(task)) {
             Scheduler::resume(task.task);
+            continue;
+        }
+        if (m_workQueue.try_dequeue(work)) {
+            work.run(work.context, work.index);
+            work.reset();
             continue;
         }
         if (!m_resumeQueue.empty()) {
@@ -159,14 +173,33 @@ void ComputeScheduler::workerLoop()
 
     // 退出前处理剩余任务
     drainResumeQueue();
+    for (;;) {
+        if (m_queue.try_dequeue(task)) {
+            Scheduler::resume(task.task);
+            drainResumeQueue();
+            continue;
+        }
+        if (m_workQueue.try_dequeue(work)) {
+            work.run(work.context, work.index);
+            work.reset();
+            drainResumeQueue();
+            continue;
+        }
+        break;
+    }
     while (m_queue.try_dequeue(task)) {
         Scheduler::resume(task.task);
+        drainResumeQueue();
+    }
+    while (m_workQueue.try_dequeue(work)) {
+        work.run(work.context, work.index);
+        work.reset();
         drainResumeQueue();
     }
     drainResumeQueue();
 }
 
-void ComputeScheduler::drainResumeQueue()
+void ParallelScheduler::drainResumeQueue()
 {
     TaskState* ready = detail::TaskResumeQueue::reverse(
         m_resumeQueue.takeAll());

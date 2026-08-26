@@ -134,7 +134,7 @@ int main()
     std::this_thread::sleep_for(80ms);
 
     galay::kernel::Runtime runtime =
-        galay::kernel::RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+        galay::kernel::RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
     galay::mcp::v2::McpHttpClient client(
         runtime, "http://127.0.0.1:" + std::to_string(port) + "/mcp");

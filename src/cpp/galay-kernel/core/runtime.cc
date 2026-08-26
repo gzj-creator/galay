@@ -48,12 +48,12 @@ bool Runtime::addIOScheduler(std::unique_ptr<IOScheduler> scheduler)
     return true;
 }
 
-bool Runtime::addComputeScheduler(std::unique_ptr<ComputeScheduler> scheduler)
+bool Runtime::addParallelScheduler(std::unique_ptr<ParallelScheduler> scheduler)
 {
     if (m_running.load(std::memory_order_acquire)) {
         return false;
     }
-    m_compute_schedulers.push_back(std::move(scheduler));
+    m_parallel_schedulers.push_back(std::move(scheduler));
     return true;
 }
 
@@ -64,7 +64,7 @@ std::expected<void, RuntimeError> Runtime::start()
         return {};
     }
 
-    if (m_io_schedulers.empty() && m_compute_schedulers.empty()) {
+    if (m_io_schedulers.empty() && m_parallel_schedulers.empty()) {
         createDefaultSchedulers();
     }
 
@@ -79,7 +79,7 @@ std::expected<void, RuntimeError> Runtime::start()
             return std::unexpected(RuntimeError(RuntimeErrorCode::kSchedulerStartFailed));
         }
     }
-    for (auto& scheduler : m_compute_schedulers) {
+    for (auto& scheduler : m_parallel_schedulers) {
         auto started = scheduler->start();
         if (!started.has_value()) {
             stop();
@@ -100,7 +100,7 @@ void Runtime::stop()
     // wakers cannot be lost during shutdown.
     m_blockingExecutor.stop();
 
-    for (auto it = m_compute_schedulers.rbegin(); it != m_compute_schedulers.rend(); ++it) {
+    for (auto it = m_parallel_schedulers.rbegin(); it != m_parallel_schedulers.rend(); ++it) {
         (*it)->stop();
     }
     for (auto it = m_io_schedulers.rbegin(); it != m_io_schedulers.rend(); ++it) {
@@ -130,9 +130,9 @@ IOScheduler* Runtime::getIOScheduler(size_t index)
     return index < m_io_schedulers.size() ? m_io_schedulers[index].get() : nullptr;
 }
 
-ComputeScheduler* Runtime::getComputeScheduler(size_t index)
+ParallelScheduler* Runtime::getParallelScheduler(size_t index)
 {
-    return index < m_compute_schedulers.size() ? m_compute_schedulers[index].get() : nullptr;
+    return index < m_parallel_schedulers.size() ? m_parallel_schedulers[index].get() : nullptr;
 }
 
 IOScheduler* Runtime::getNextIOScheduler()
@@ -143,12 +143,12 @@ IOScheduler* Runtime::getNextIOScheduler()
     return m_io_schedulers[m_io_index.fetch_add(1, std::memory_order_relaxed) % m_io_schedulers.size()].get();
 }
 
-ComputeScheduler* Runtime::getNextComputeScheduler()
+ParallelScheduler* Runtime::getNextParallelScheduler()
 {
-    if (m_compute_schedulers.empty()) {
+    if (m_parallel_schedulers.empty()) {
         return nullptr;
     }
-    return m_compute_schedulers[m_compute_index.fetch_add(1, std::memory_order_relaxed) % m_compute_schedulers.size()].get();
+    return m_parallel_schedulers[m_parallel_index.fetch_add(1, std::memory_order_relaxed) % m_parallel_schedulers.size()].get();
 }
 
 std::expected<void, RuntimeError> Runtime::ensureStarted()
@@ -168,13 +168,13 @@ std::expected<Scheduler*, RuntimeError> Runtime::acquireIOScheduler()
     return getNextIOScheduler();
 }
 
-std::expected<Scheduler*, RuntimeError> Runtime::acquireComputeScheduler()
+std::expected<Scheduler*, RuntimeError> Runtime::acquireParallelScheduler()
 {
     auto started = ensureStarted();
     if (!started.has_value()) {
         return std::unexpected(started.error());
     }
-    return getNextComputeScheduler();
+    return getNextParallelScheduler();
 }
 
 void Runtime::bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler)
@@ -225,15 +225,15 @@ void Runtime::createDefaultSchedulers()
     const size_t ioCount = m_config.io_scheduler_count == GALAY_RUNTIME_SCHEDULER_COUNT_AUTO
         ? cpu * 2
         : m_config.io_scheduler_count;
-    const size_t computeCount = m_config.compute_scheduler_count == GALAY_RUNTIME_SCHEDULER_COUNT_AUTO
+    const size_t parallelCount = m_config.parallel_scheduler_count == GALAY_RUNTIME_SCHEDULER_COUNT_AUTO
         ? cpu
-        : m_config.compute_scheduler_count;
+        : m_config.parallel_scheduler_count;
 
     for (size_t i = 0; i < ioCount; ++i) {
         m_io_schedulers.push_back(std::make_unique<DefaultIOScheduler>());
     }
-    for (size_t i = 0; i < computeCount; ++i) {
-        m_compute_schedulers.push_back(std::make_unique<ComputeScheduler>());
+    for (size_t i = 0; i < parallelCount; ++i) {
+        m_parallel_schedulers.push_back(std::make_unique<ParallelScheduler>());
     }
 }
 
@@ -253,23 +253,23 @@ void Runtime::applyAffinityConfig()
             ++cpu;
         }
         cpu = 0;
-        for (size_t i = 0; i < affinity.seq_compute_count && i < m_compute_schedulers.size(); ++i) {
-            m_compute_schedulers[i]->setAffinity(cpu % cpuCount);
+        for (size_t i = 0; i < affinity.seq_parallel_count && i < m_parallel_schedulers.size(); ++i) {
+            m_parallel_schedulers[i]->setAffinity(cpu % cpuCount);
             ++cpu;
         }
         return;
     }
 
     if (affinity.custom_io_cpus.size() != m_io_schedulers.size() ||
-        affinity.custom_compute_cpus.size() != m_compute_schedulers.size()) {
+        affinity.custom_parallel_cpus.size() != m_parallel_schedulers.size()) {
         return;
     }
 
     for (size_t i = 0; i < m_io_schedulers.size(); ++i) {
         m_io_schedulers[i]->setAffinity(affinity.custom_io_cpus[i]);
     }
-    for (size_t i = 0; i < m_compute_schedulers.size(); ++i) {
-        m_compute_schedulers[i]->setAffinity(affinity.custom_compute_cpus[i]);
+    for (size_t i = 0; i < m_parallel_schedulers.size(); ++i) {
+        m_parallel_schedulers[i]->setAffinity(affinity.custom_parallel_cpus[i]);
     }
 }
 

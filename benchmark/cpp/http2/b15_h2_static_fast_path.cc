@@ -109,7 +109,7 @@ int main(int argc, char* argv[])
             .host("0.0.0.0")
             .port(port)
             .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .maxConcurrentStreams(max_streams)
             .initialWindowSize(65535)
             .staticResponse("/echo", H2StaticResponse{
@@ -132,8 +132,8 @@ int main(int argc, char* argv[])
 
         std::cout << "Server started successfully!\n";
         std::cout << "Runtime Config: io=" << server.getRuntime().getIOSchedulerCount()
-                  << " compute=" << server.getRuntime().getComputeSchedulerCount()
-                  << " (configured io=" << io_threads << " compute=0)\n";
+                  << " parallel=" << server.getRuntime().getParallelSchedulerCount()
+                  << " (configured io=" << io_threads << " parallel=0)\n";
         std::cout << "Waiting for requests...\n\n";
 
         while (g_running) {

@@ -498,7 +498,7 @@ private:
 
         auto runtime_config = galay::kernel::RuntimeBuilder()
             .ioSchedulerCount(m_config.io_scheduler_count)
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .buildConfig();
         m_runtime = std::make_unique<galay::kernel::Runtime>(runtime_config);
         m_runtime->start();

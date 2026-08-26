@@ -491,7 +491,7 @@ bool verifyNestedAndExceptionTasks() {
 
     RuntimeConfig config;
     config.io_scheduler_count = 0;
-    config.compute_scheduler_count = 1;
+    config.parallel_scheduler_count = 1;
     Runtime runtime(config);
 
     auto nested = runtime.blockOnCpu(nestedParentTask());

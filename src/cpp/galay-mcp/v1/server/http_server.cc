@@ -31,13 +31,13 @@ JsonString makeResultResponse(int64_t id, std::string_view resultJson) {
 McpHttpServer::McpHttpServer(const std::string& host,
                              int port,
                              size_t ioSchedulers,
-                             size_t computeSchedulers,
+                             size_t parallelSchedulers,
                              bool tcpNoDelay)
     : m_host(host)
     , m_serverName("galay-mcp-http-server")
     , m_serverVersion("1.0.0")
     , m_ioSchedulers(ioSchedulers)
-    , m_computeSchedulers(computeSchedulers)
+    , m_parallelSchedulers(parallelSchedulers)
     , m_port(port)
     , m_tcpNoDelay(tcpNoDelay)
     , m_toolsCacheDirty(false)
@@ -139,11 +139,11 @@ void McpHttpServer::start() {
         return;
     }
 
-    MCP_LOG_INFO("[http_server]", "starting host={} port={} io_schedulers={} compute_schedulers={}",
+    MCP_LOG_INFO("[http_server]", "starting host={} port={} io_schedulers={} parallel_schedulers={}",
                  m_host,
                  m_port,
                  m_ioSchedulers,
-                 m_computeSchedulers);
+                 m_parallelSchedulers);
     m_router = std::make_unique<http::HttpRouter>();
 
     auto* serverPtr = this;
@@ -232,7 +232,7 @@ void McpHttpServer::start() {
     config.port = static_cast<uint16_t>(m_port);
     config.backlog = 128;
     config.io_scheduler_count = m_ioSchedulers;
-    config.compute_scheduler_count = m_computeSchedulers;
+    config.parallel_scheduler_count = m_parallelSchedulers;
     config.tcp_no_delay = m_tcpNoDelay;
 
     m_httpServer = std::make_unique<http::HttpServer>(config);

@@ -702,7 +702,7 @@ void verifyCoAwaitRequestReturnsEntityTooLarge()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     g_stage = 2;
@@ -739,7 +739,7 @@ void verifyCoAwaitChunkReaderReturnsEntityTooLarge()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     g_stage = 2;
@@ -768,7 +768,7 @@ void verifyCoAwaitChunkReaderStreamsLargeChunk()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     g_stage = 2;
@@ -823,7 +823,7 @@ int main()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
     g_stage = 2;
     server.start(largeUploadConnHandler);

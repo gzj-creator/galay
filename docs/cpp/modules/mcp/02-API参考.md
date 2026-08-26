@@ -563,7 +563,7 @@ public:
     McpHttpServer(const std::string& host = "0.0.0.0",
                   int port = 8080,
                   size_t ioSchedulers = 8,
-                  size_t computeSchedulers = 0);
+                  size_t parallelSchedulers = 0);
     ~McpHttpServer();
 
     void setServerInfo(const std::string& name, const std::string& version);
@@ -587,7 +587,7 @@ public:
 
 | 入口 | 参数 | 成功结果 | 失败 / 边界 |
 | --- | --- | --- | --- |
-| `McpHttpServer(host, port, ioSchedulers, computeSchedulers)` | 监听地址、端口；默认 `0.0.0.0:8080`，HTTP runtime 默认 `io=8`、`compute=0` | 构造实例 | 实际绑定失败由底层 `galay-http` 运行时暴露 |
+| `McpHttpServer(host, port, ioSchedulers, parallelSchedulers)` | 监听地址、端口；默认 `0.0.0.0:8080`，HTTP runtime 默认 `io=8`、`parallel=0` | 构造实例 | 实际绑定失败由底层 `galay-http` 运行时暴露 |
 | `setServerInfo(name, version)` | 服务器名、版本号 | `void` | 影响响应头 `Server` 与 `initialize` 返回体 |
 | `addTool(...)` / `addResource(...)` / `addPrompt(...)` | 与 `stdio` 版本同名参数 | `void` | 当前头文件明确标注为非线程安全注册阶段；运行期不要动态添加 |
 | `start()` | 无 | `void`，阻塞当前线程并监听 `POST /mcp` | 重复调用时直接返回；内部固定回复 `application/json` 且带 `Connection: keep-alive` |

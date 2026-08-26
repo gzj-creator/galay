@@ -236,7 +236,7 @@ int main() {
         .port(8080)
         .backlog(128)
         .ioSchedulerCount(4)
-        .computeSchedulerCount(2)
+        .parallelSchedulerCount(2)
         .build());
 
     // 启动服务器

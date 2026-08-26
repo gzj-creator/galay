@@ -95,7 +95,7 @@ Task<void> sameThreadProducer(ManualWakeState* state) {
 
 bool runSameThreadDoubleWake() {
     ManualWakeState state;
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
 
     auto* scheduler = runtime.getNextIOScheduler();
@@ -161,7 +161,7 @@ Task<void> waitParent(WaitChainState* state) {
 
 bool runWaitChainResumeOnce() {
     WaitChainState state;
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
 
     auto* scheduler = runtime.getNextIOScheduler();

@@ -131,7 +131,7 @@ int main(int argc, char** argv)
 
     const std::string endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
 
     auto* scheduler = runtime.getNextIOScheduler();

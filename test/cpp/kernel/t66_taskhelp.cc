@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include <concepts>
@@ -30,8 +30,8 @@ concept HasTaskScheduleHelpers = requires(SchedulerT& scheduler) {
     { scheduleTaskImmediately(scheduler, noopTask()) } -> std::same_as<bool>;
 };
 
-static_assert(HasTaskScheduleHelpers<ComputeScheduler>,
-              "ComputeScheduler should accept Task helpers without exposing detail::TaskAccess");
+static_assert(HasTaskScheduleHelpers<ParallelScheduler>,
+              "ParallelScheduler should accept Task helpers without exposing detail::TaskAccess");
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
 static_assert(HasTaskScheduleHelpers<IOSchedulerType>,

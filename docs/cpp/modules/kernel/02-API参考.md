@@ -44,7 +44,7 @@
   - `galay-kernel/core/task.h`
   - `galay-kernel/core/scheduler.hpp`
   - `galay-kernel/core/io_scheduler.hpp`
-  - `galay-kernel/core/compute_scheduler.h`
+  - `galay-kernel/parallel/parallel_scheduler.h`
   - `galay-kernel/core/epoll_scheduler.h`
   - `galay-kernel/core/kqueue_scheduler.h`
   - `galay-kernel/core/uring_scheduler.h`
@@ -82,7 +82,7 @@
 - `galay::kernel`
   - `Runtime` / `RuntimeBuilder` / `RuntimeConfig`
   - `Task<T>` / `JoinHandle<T>` / `TaskRef`
-  - `ComputeScheduler` / `IOScheduler`
+  - `ParallelScheduler` / `IOScheduler`
   - `sleep(...)`
   - `TimerScheduler`
   - `HandleOption`
@@ -111,7 +111,7 @@
 `import galay.kernel;` 当前导出面：
 
 - 通用类型：`defn.hpp`、`error.h`、`host.hpp`、`handle_option.h`、`buffer.h`、`sleep.hpp`
-- Runtime：`task.h`、`scheduler.hpp`、`io_scheduler.hpp`、`compute_scheduler.h`、`runtime.h`、`timer_scheduler.h`
+- Runtime：`task.h`、`scheduler.hpp`、`io_scheduler.hpp`、`parallel_scheduler.h`、`runtime.h`、`timer_scheduler.h`
 - 并发：`mpmc/`、`mpsc/`、`spsc/` 下的有界与无界 channel
 - Async：`async_mutex.h`、`async_waiter.h`、`async_tcp.h`、`async_udp.h`、`async_file_watcher.h`
 - 平台裁剪：
@@ -287,7 +287,7 @@
 头文件：
 
 - `galay-kernel/core/runtime.h`
-- `galay-kernel/core/compute_scheduler.h`
+- `galay-kernel/parallel/parallel_scheduler.h`
 - `galay-kernel/core/epoll_scheduler.h`
 - `galay-kernel/core/kqueue_scheduler.h`
 - `galay-kernel/core/uring_scheduler.h`
@@ -308,7 +308,7 @@
 - `template <typename T> class Task`
 - `template <typename T> class JoinHandle`
 - `class TaskRef`
-- `class ComputeScheduler`
+- `class ParallelScheduler`
 - `class EpollScheduler`
 - `class KqueueScheduler`
 - `class IOUringScheduler`
@@ -320,14 +320,14 @@
 
 - `enum class Mode { None, Sequential, Custom } mode`
 - `size_t seq_io_count`
-- `size_t seq_compute_count`
+- `size_t seq_parallel_count`
 - `std::vector<uint32_t> custom_io_cpus`
-- `std::vector<uint32_t> custom_compute_cpus`
+- `std::vector<uint32_t> custom_parallel_cpus`
 
 `RuntimeConfig` 字段：
 
 - `size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO`
-- `size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO`
+- `size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO`
 - `RuntimeAffinityConfig affinity`
 
 `Runtime` 关键接口：
@@ -340,16 +340,16 @@
 - `template <typename F> auto spawnBlocking(F&& func) -> JoinHandle<R>`
 - `RuntimeHandle handle()`
 - `bool addIOScheduler(std::unique_ptr<IOScheduler> scheduler)`
-- `bool addComputeScheduler(std::unique_ptr<ComputeScheduler> scheduler)`
+- `bool addParallelScheduler(std::unique_ptr<ParallelScheduler> scheduler)`
 - `void start()`
 - `void stop()`
 - `bool isRunning() const`
 - `size_t getIOSchedulerCount() const`
-- `size_t getComputeSchedulerCount() const`
+- `size_t getParallelSchedulerCount() const`
 - `IOScheduler* getIOScheduler(size_t index)`
-- `ComputeScheduler* getComputeScheduler(size_t index)`
+- `ParallelScheduler* getParallelScheduler(size_t index)`
 - `IOScheduler* getNextIOScheduler()`
-- `ComputeScheduler* getNextComputeScheduler()`
+- `ParallelScheduler* getNextParallelScheduler()`
 
 `RuntimeHandle` 关键接口：
 
@@ -362,9 +362,9 @@
 `RuntimeBuilder` 关键接口：
 
 - `RuntimeBuilder& ioSchedulerCount(size_t n)`
-- `RuntimeBuilder& computeSchedulerCount(size_t n)`
-- `RuntimeBuilder& sequentialAffinity(size_t io_count, size_t compute_count)`
-- `bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> compute_cpus)`
+- `RuntimeBuilder& parallelSchedulerCount(size_t n)`
+- `RuntimeBuilder& sequentialAffinity(size_t io_count, size_t parallel_count)`
+- `bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus)`
 - `RuntimeBuilder& applyAffinity(const RuntimeAffinityConfig& aff)`
 - `Runtime build() const`
 - `RuntimeConfig buildConfig() const`
@@ -374,21 +374,21 @@
 - 高层任务入口按执行语义区分为 `blockOnIO(...)`、`blockOnCpu(...)`、`spawnIO(...)`、`spawnCpu(...)` 与 `spawnBlocking(...)`
 - `JoinHandle<T>` 的公开结果路径只有 `wait()` / `join()`；当前没有 `result()` 一类兼容接口
 - `RuntimeHandle::current()` 在 runtime 上下文外会抛异常；更稳妥的探测入口是 `tryCurrent()`
-- `Runtime::start()` 只有在 IO / Compute 两类调度器都还为空时才会自动创建默认调度器；如果你手工只添加了其中一类，另一类不会被自动补齐
+- `Runtime::start()` 只有在 IO / Parallel 两类调度器都还为空时才会自动创建默认调度器；如果你手工只添加了其中一类，另一类不会被自动补齐
 - `Runtime::start()` 会先启动全局 `TimerScheduler`，再启动 IO / 计算调度器
 - `Runtime::stop()` 会按相反顺序停止并回收
-- 文档与示例应使用 `getIOScheduler(size_t)`、`getComputeScheduler(size_t)` 或 `getNext*()`；当前没有 `getIOSchedulers()` / `getComputeSchedulers()`
-- `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 表示自动数量；默认规则是 `io=2*CPU`、`compute=CPU`；`0` 表示禁用对应默认调度器
+- 文档与示例应使用 `getIOScheduler(size_t)`、`getParallelScheduler(size_t)` 或 `getNext*()`；当前没有 `getIOSchedulers()` / `getParallelSchedulers()`
+- `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 表示自动数量；默认规则是 `io=2*CPU`、`parallel=CPU`；`0` 表示禁用对应默认调度器
 - 默认 IO 后端由平台和宏决定：macOS / FreeBSD 为 `KqueueScheduler`，Linux + `USE_IOURING` 为 `IOUringScheduler`，否则为 `EpollScheduler`
-- `addIOScheduler(...)` / `addComputeScheduler(...)` 只允许在运行前调用；运行中会返回 `false`
-- `getNextIOScheduler()` / `getNextComputeScheduler()` 采用 round-robin 轮询；对应容器为空时返回 `nullptr`
-- `RuntimeBuilder::sequentialAffinity(io_count, compute_count)` 会从 CPU 0 开始顺序绑定，超出 CPU 数量后回绕
-- `RuntimeBuilder::customAffinity(...)` 要求两个向量长度与当前配置的调度器数量严格一致，否则返回 `false` 且不修改配置；因此通常要先调用 `ioSchedulerCount(...)` / `computeSchedulerCount(...)`
+- `addIOScheduler(...)` / `addParallelScheduler(...)` 只允许在运行前调用；运行中会返回 `false`
+- `getNextIOScheduler()` / `getNextParallelScheduler()` 采用 round-robin 轮询；对应容器为空时返回 `nullptr`
+- `RuntimeBuilder::sequentialAffinity(io_count, parallel_count)` 会从 CPU 0 开始顺序绑定，超出 CPU 数量后回绕
+- `RuntimeBuilder::customAffinity(...)` 要求两个向量长度与当前配置的调度器数量严格一致，否则返回 `false` 且不修改配置；因此通常要先调用 `ioSchedulerCount(...)` / `parallelSchedulerCount(...)`
 - `Runtime::applyAffinityConfig()` 在 custom 向量和最终调度器数量不一致时会整体跳过 custom affinity 应用
 
-`ComputeScheduler` 关键接口：
+`ParallelScheduler` 关键接口：
 
-- `ComputeScheduler()`
+- `ParallelScheduler()`
 - `void start()`
 - `void stop()`
 - `bool schedule(TaskRef task)`
@@ -399,8 +399,8 @@
 
 语义说明：
 
-- `ComputeScheduler` 是单工作线程调度器，底层队列是 `moodycamel::BlockingConcurrentQueue<ComputeTask>`
-- `schedule(...)` / `scheduleDeferred(...)` 会接收 `TaskRef`；若任务尚未绑定 owner scheduler，会绑定到当前 `ComputeScheduler`
+- `ParallelScheduler` 是单工作线程调度器，底层队列是 `moodycamel::BlockingConcurrentQueue<ParallelTask>`
+- `schedule(...)` / `scheduleDeferred(...)` 会接收 `TaskRef`；若任务尚未绑定 owner scheduler，会绑定到当前 `ParallelScheduler`
 - `scheduleImmediately(...)` 会在当前线程立即恢复任务；若任务已绑定到其他调度器，则返回 `false`
 - `addTimer(...)` 只是转发到全局 `TimerScheduler::getInstance()->addTimer(...)`
 
@@ -573,7 +573,7 @@ builder iovec 公开面：
 
 内部说明：
 
-- `TaskRef`、`ComputeTask`、调度器绑定 / resume plumbing 已降级为 runtime/scheduler 内核实现细节，不再作为公开工作流 API 描述
+- `TaskRef`、`ParallelTask`、调度器绑定 / resume plumbing 已降级为 runtime/scheduler 内核实现细节，不再作为公开工作流 API 描述
 - 需要排障或读实现时，以 `galay-kernel/core/task.h`、`scheduler.hpp` 与相关测试为准，不建议业务代码直接依赖这些内部类型
 
 语义说明：
@@ -825,7 +825,7 @@ builder iovec 公开面：
 
 所有权与生命周期：
 
-- `Runtime::addIOScheduler(std::unique_ptr<IOScheduler>)` / `addComputeScheduler(std::unique_ptr<ComputeScheduler>)` 会转移调度器所有权给 `Runtime`
+- `Runtime::addIOScheduler(std::unique_ptr<IOScheduler>)` / `addParallelScheduler(std::unique_ptr<ParallelScheduler>)` 会转移调度器所有权给 `Runtime`
 - `Bytes` 的构造函数族是 owning 深拷贝；`Bytes::fromString(...)` / `fromCString(...)` 是 non-owning 视图，底层存储必须由调用方保活
 - `Buffer` 持有自己的动态缓冲；`RingBuffer` 也是 owning 固定容量缓冲，但不会自动扩容
 - `sleep(...)` 依赖全局 `TimerScheduler`；如果运行时还没启动计时器，`sleep` 对应的底层定时器注册不会成功
@@ -851,7 +851,7 @@ builder iovec 公开面：
 
 ## 专题问题优先落点
 
-- `galay.kernel` / `Runtime` / `RuntimeBuilder` / `IOScheduler` / `ComputeScheduler` / `Task` / `TimerScheduler`：
+- `galay.kernel` / `Runtime` / `RuntimeBuilder` / `IOScheduler` / `ParallelScheduler` / `Task` / `TimerScheduler`：
   - 先看本页 `模块门面 galay.kernel`、`Runtime / Scheduler / Task / Timer`
   - 再看 `docs/01-架构设计.md` 与 `docs/03-使用指南.md`
 - `Bytes` / `ByteMetaData` / `Buffer` / `RingBuffer` / `IOError` / `Host` / `IPType`：

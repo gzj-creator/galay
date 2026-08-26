@@ -85,7 +85,7 @@ int main()
         return 125;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     auto started = runtime.start();
     if (!started) {
         std::cerr << "runtime start failed: " << started.error().message() << '\n';

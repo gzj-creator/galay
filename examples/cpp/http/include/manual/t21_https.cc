@@ -99,7 +99,7 @@ int main() {
             .certPath("test/test.crt")
             .keyPath("test/test.key")
             .ioSchedulerCount(8)
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .build());
 
         std::cout << "Starting HTTPS server on port 8443..." << std::endl;

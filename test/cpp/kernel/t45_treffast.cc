@@ -1,11 +1,11 @@
 /**
  * @file t45_treffast.cc
- * @brief 用途：验证 `ComputeScheduler` 对 `TaskRef` 调度的快速路径。
+ * @brief 用途：验证 `ParallelScheduler` 对 `TaskRef` 调度的快速路径。
  * 关键覆盖点：TaskRef 直接派发、快速入队、恢复执行与完成通知。
  * 通过条件：TaskRef 快速路径命中预期并返回 0。
  */
 
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include <atomic>
@@ -17,8 +17,8 @@ using namespace galay::kernel;
 
 namespace {
 
-static_assert(std::same_as<decltype(ComputeTask{}.task), TaskRef>,
-              "ComputeTask should carry TaskRef for fast-path scheduling");
+static_assert(std::same_as<decltype(ParallelTask{}.task), TaskRef>,
+              "ParallelTask should carry TaskRef for fast-path scheduling");
 
 std::atomic<int> g_completed{0};
 
@@ -30,7 +30,7 @@ Task<void> countingTask() {
 bool verifyTaskRefFastPath() {
     g_completed.store(0, std::memory_order_relaxed);
 
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     scheduler.start();
 
     Task<void> task = countingTask();
@@ -58,6 +58,6 @@ int main() {
         return 1;
     }
 
-    std::cout << "T45-ComputeSchedulerTaskRefFastPath PASS\n";
+    std::cout << "T45-ParallelSchedulerTaskRefFastPath PASS\n";
     return 0;
 }

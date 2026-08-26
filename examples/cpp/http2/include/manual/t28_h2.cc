@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
             .certPath(cert_path)
             .keyPath(key_path)
             .ioSchedulerCount(4)
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .maxConcurrentStreams(100)
             .initialWindowSize(65535)
             .enablePush(false)

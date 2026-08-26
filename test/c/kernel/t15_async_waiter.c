@@ -31,7 +31,7 @@ static int create_started_runtime(galay_c_runtime_t* runtime)
 {
     C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
-    config.compute_scheduler_count = 0;
+    config.parallel_scheduler_count = 0;
     if (galay_c_runtime_create(&config, runtime) != C_RuntimeSuccess) {
         return 1;
     }

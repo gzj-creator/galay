@@ -55,7 +55,7 @@ Task<void> consumer(galay::spsc::UnboundedChannel<int>* channel) {
 
 int main() {
     galay::spsc::UnboundedChannel<int> channel;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         std::cerr << "unsafe-channel import example failed to start scheduler\n";

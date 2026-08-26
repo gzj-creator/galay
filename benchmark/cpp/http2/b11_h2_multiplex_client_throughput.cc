@@ -233,7 +233,7 @@ int main(int argc, char* argv[]) {
     std::cout << "IO 调度器线程: " << io_schedulers << "\n";
     std::cout << "========================================\n\n";
 
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(io_schedulers).computeSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().ioSchedulerCount(io_schedulers).parallelSchedulerCount(0).build();
     rt.start();
 
     auto t0 = std::chrono::steady_clock::now();

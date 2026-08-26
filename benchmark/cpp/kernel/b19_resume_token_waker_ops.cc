@@ -27,7 +27,7 @@ public:
     bool scheduleDeferred(TaskRef) noexcept override { return false; }
     bool scheduleImmediately(TaskRef) noexcept override { return false; }
     bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kComputeScheduler; }
+    SchedulerType type() override { return kParallelScheduler; }
 };
 
 struct FakeResumeTokenState {

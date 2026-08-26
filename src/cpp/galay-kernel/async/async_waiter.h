@@ -5,13 +5,13 @@
  * @version 1.0.0
  *
  * @details 提供跨线程的协程等待机制，支持返回结果。
- * 典型用于 ComputeScheduler 计算任务完成后通知 IO 协程。
+ * 典型用于 ParallelScheduler 计算任务完成后通知 IO 协程。
  *
  * 使用方式：
  * @code
  * // IO 任务中
  * AsyncWaiter<int> waiter;
- * scheduleTask(*computeScheduler, computeTask(&waiter));
+ * scheduleTask(*parallelScheduler, computeTask(&waiter));
  * auto result = co_await waiter.wait();  // 挂起等待
  * if (result) {
  *     // 使用 result.value()

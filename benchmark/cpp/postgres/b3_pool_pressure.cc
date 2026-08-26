@@ -174,7 +174,7 @@ int main(int argc, char** argv)
     }
     postgres_benchmark::printConfig(config);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     const auto started = runtime.start();
     if (!started) {
         std::cerr << "runtime start failed: " << started.error().message() << '\n';

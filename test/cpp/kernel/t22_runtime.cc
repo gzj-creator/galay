@@ -12,7 +12,7 @@
 #include <vector>
 #include <map>
 #include <galay/cpp/galay-kernel/core/runtime.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include "test/cpp/common/stdout_log.h"
 #include "result_writer.h"
 
@@ -48,27 +48,27 @@ void test_concurrent_get_scheduler() {
     for (int i = 0; i < SCHEDULER_COUNT; ++i) {
         auto io = std::make_unique<IOSchedulerType>();
         runtime.addIOScheduler(std::move(io));
-        auto compute = std::make_unique<ComputeScheduler>();
-        runtime.addComputeScheduler(std::move(compute));
+        auto parallel = std::make_unique<ParallelScheduler>();
+        runtime.addParallelScheduler(std::move(parallel));
     }
 
     runtime.start();
 
     // 统计每个调度器被选中的次数
     std::vector<std::atomic<int>> io_counts(SCHEDULER_COUNT);
-    std::vector<std::atomic<int>> compute_counts(SCHEDULER_COUNT);
+    std::vector<std::atomic<int>> parallel_counts(SCHEDULER_COUNT);
     for (int i = 0; i < SCHEDULER_COUNT; ++i) {
         io_counts[i].store(0);
-        compute_counts[i].store(0);
+        parallel_counts[i].store(0);
     }
 
     // 创建多个线程并发获取调度器
     std::vector<std::thread> threads;
     for (int t = 0; t < THREAD_COUNT; ++t) {
-        threads.emplace_back([&runtime, &io_counts, &compute_counts]() {
+        threads.emplace_back([&runtime, &io_counts, &parallel_counts]() {
             for (int i = 0; i < ITERATIONS; ++i) {
                 auto* io = runtime.getNextIOScheduler();
-                auto* compute = runtime.getNextComputeScheduler();
+                auto* parallel = runtime.getNextParallelScheduler();
 
                 // 找到对应的索引并计数
                 for (int j = 0; j < SCHEDULER_COUNT; ++j) {
@@ -78,8 +78,8 @@ void test_concurrent_get_scheduler() {
                     }
                 }
                 for (int j = 0; j < SCHEDULER_COUNT; ++j) {
-                    if (runtime.getComputeScheduler(j) == compute) {
-                        compute_counts[j].fetch_add(1, std::memory_order_relaxed);
+                    if (runtime.getParallelScheduler(j) == parallel) {
+                        parallel_counts[j].fetch_add(1, std::memory_order_relaxed);
                         break;
                     }
                 }
@@ -113,7 +113,7 @@ void test_concurrent_get_scheduler() {
 
     std::cout << "  计算调度器分布: ";
     for (int i = 0; i < SCHEDULER_COUNT; ++i) {
-        int count = compute_counts[i].load();
+        int count = parallel_counts[i].load();
         std::cout << count << " ";
         if (std::abs(count - expected_per_scheduler) > tolerance) {
             compute_balanced = false;
@@ -260,7 +260,7 @@ void test_empty_scheduler_list() {
     // 不添加任何调度器，也不启动
 
     auto* io = runtime.getNextIOScheduler();
-    auto* compute = runtime.getNextComputeScheduler();
+    auto* compute = runtime.getNextParallelScheduler();
 
     if (io != nullptr || compute != nullptr) {
         std::cout << "❌ 空列表应返回 nullptr" << std::endl;

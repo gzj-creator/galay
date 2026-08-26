@@ -183,7 +183,7 @@ void waitForNonBlock(int fd, const char* message)
 
 int observeRpcClientTcpNoDelay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     LoopbackListener listener;
     RpcClientConfig config = RpcClientBuilder().tcpNoDelay(tcp_no_delay).buildConfig();
     RpcClient client(config);
@@ -206,7 +206,7 @@ int observeRpcServerAcceptedTcpNoDelay(bool tcp_no_delay)
     RpcServer server(config);
     server.m_running.store(true, std::memory_order_release);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     auto start_result = runtime.start();
     require(start_result.has_value(), "runtime should start for RpcServer handleConnection probe");
     auto* scheduler = runtime.getNextIOScheduler();
@@ -232,7 +232,7 @@ int observeRpcStreamServerAcceptedTcpNoDelay(bool tcp_no_delay)
     RpcStreamServer server(config);
     server.m_running.store(true, std::memory_order_release);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     auto start_result = runtime.start();
     require(start_result.has_value(), "runtime should start for RpcStreamServer handleConnection probe");
     auto* scheduler = runtime.getNextIOScheduler();

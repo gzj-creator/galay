@@ -111,7 +111,7 @@ public:
     bool scheduleDeferred(TaskRef) noexcept override { return false; }
     bool scheduleImmediately(TaskRef) noexcept override { return false; }
     bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kComputeScheduler; }
+    SchedulerType type() override { return kParallelScheduler; }
 };
 
 struct FakeCoroState {
@@ -372,7 +372,7 @@ bool verifyPendingReadyEntriesReleaseOnWorkerDestroy() {
 bool verifyRuntimeCppCompatibility() {
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
 
     std::atomic<int> spawned{0};
@@ -417,7 +417,7 @@ bool verifyRuntimeCppCompatibility() {
 bool verifyThenCompatibility() {
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
 
     std::atomic<int> sequence{0};
@@ -434,7 +434,7 @@ bool verifyThenCompatibility() {
 bool verifyCrossThreadWakeAndCoalescing() {
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     auto started = runtime.start();
     if (!started.has_value()) {

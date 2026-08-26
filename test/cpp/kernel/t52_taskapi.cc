@@ -241,7 +241,7 @@ int main() {
 
     Runtime noSchedulerRuntime = RuntimeBuilder()
         .ioSchedulerCount(0)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     auto noSchedulerResult = noSchedulerRuntime.blockOnIO(simpleTask(23));
     require(!noSchedulerResult.has_value(), "Runtime::blockOn should fail when no scheduler is available");

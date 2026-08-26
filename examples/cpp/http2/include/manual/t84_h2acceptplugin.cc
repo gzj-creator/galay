@@ -240,7 +240,7 @@ void test_h2c_accept_plugin_blocks_before_downstream_plugin()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(2)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .streamHandler(unusedStreamHandler)
         .build());
 
@@ -296,7 +296,7 @@ void test_h2_accept_plugin_blocks_before_downstream_plugin()
         .certPath(cert_path)
         .keyPath(key_path)
         .ioSchedulerCount(2)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .streamHandler(unusedStreamHandler)
         .build());
 

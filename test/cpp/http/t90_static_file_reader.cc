@@ -42,7 +42,7 @@ int main()
 
     galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     auto started = runtime.start();
     if (!check(started.has_value(), "failed to start runtime")) {

@@ -38,7 +38,7 @@ galay::kernel::Task<galay::tracing::ExportResult> exportOnSchedulerThread() {
 void rejectsSchedulerThreadBlocking() {
     galay::kernel::Runtime runtime = galay::kernel::RuntimeBuilder()
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .build();
     runtime.start();
 

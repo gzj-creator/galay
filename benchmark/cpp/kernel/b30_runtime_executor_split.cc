@@ -115,7 +115,7 @@ bool runMode(std::string_view mode, Submit&& submit)
 
 int main()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     const auto started = runtime.start();
     if (!started.has_value()) {
         std::cerr << "runtime_executor_pressure runtime_start_failed: "

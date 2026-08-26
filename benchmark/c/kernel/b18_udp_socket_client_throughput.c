@@ -205,7 +205,7 @@ int main(int argc, char** argv)
 
     C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = state.config.io_schedulers;
-    runtime_config.compute_scheduler_count = 0;
+    runtime_config.parallel_scheduler_count = 0;
     int exit_code = 0;
 
     if (galay_c_runtime_create(&runtime_config, &state.runtime) != C_RuntimeSuccess ||
@@ -249,7 +249,7 @@ int main(int argc, char** argv)
                state.config.messages_per_client,
                state.config.message_bytes,
                state.config.duration_seconds) < 0 ||
-        printf("meta: role=client io_mode=plain scenario=udp-echo io_schedulers=%zu compute_schedulers=0 mode=coro-direct recv_timeout_ms=%d\n",
+        printf("meta: role=client io_mode=plain scenario=udp-echo io_schedulers=%zu parallel_schedulers=0 mode=coro-direct recv_timeout_ms=%d\n",
                state.config.io_schedulers,
                UDP_CLIENT_RECV_TIMEOUT_MS) < 0 ||
         fflush(stdout) != 0) {

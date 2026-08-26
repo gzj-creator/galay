@@ -239,7 +239,7 @@ public:
         return false;
     }
 
-    SchedulerType type() override { return kComputeScheduler; }
+    SchedulerType type() override { return kParallelScheduler; }
 
     int scheduleCalls() const noexcept
     {
@@ -304,7 +304,7 @@ public:
         return true;
     }
 
-    SchedulerType type() override { return kComputeScheduler; }
+    SchedulerType type() override { return kParallelScheduler; }
 
     bool hasSingleReadyTask() const noexcept { return m_ready.size() == 1; }
 

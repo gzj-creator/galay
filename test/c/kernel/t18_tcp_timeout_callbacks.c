@@ -189,7 +189,7 @@ int main(void)
 
     C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
-    config.compute_scheduler_count = 0;
+    config.parallel_scheduler_count = 0;
 
     galay_c_runtime_t runtime = {0};
     int result = 0;

@@ -2,7 +2,7 @@
 #include <expected>
 #include <utility>
 
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/core/scheduler.hpp>
 
@@ -14,7 +14,7 @@
 #include <galay/cpp/galay-kernel/core/uring_scheduler.h>
 #endif
 
-using galay::kernel::ComputeScheduler;
+using galay::kernel::ParallelScheduler;
 using galay::kernel::Runtime;
 using galay::kernel::RuntimeError;
 using galay::kernel::Scheduler;
@@ -29,7 +29,7 @@ concept HasTaskRefScheduleSurface = std::derived_from<S, Scheduler> &&
         { scheduler.scheduleImmediately(task) } -> std::same_as<bool>;
     };
 
-static_assert(HasTaskRefScheduleSurface<ComputeScheduler>,
+static_assert(HasTaskRefScheduleSurface<ParallelScheduler>,
               "Public scheduler headers should expose TaskRef-native scheduling");
 static_assert(requires(Runtime runtime, Task<int> task) {
     { runtime.blockOnIO(std::move(task)) } -> std::same_as<std::expected<int, RuntimeError>>;

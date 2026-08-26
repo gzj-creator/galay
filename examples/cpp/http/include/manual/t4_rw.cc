@@ -221,7 +221,7 @@ int main() {
     std::this_thread::sleep_for(std::chrono::seconds(1));
 
 #if defined(USE_KQUEUE) || defined(USE_EPOLL) || defined(USE_IOURING)
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     rt.start();
 
     auto* scheduler = rt.getNextIOScheduler();

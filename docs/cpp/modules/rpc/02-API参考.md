@@ -658,7 +658,7 @@ struct RpcServerConfig {
     uint16_t port = 9000;                // 监听端口
     int backlog = 128;                   // 监听队列长度
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;       // AUTO=自动，0=禁用
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;  // AUTO=自动，0=禁用
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;  // AUTO=自动，0=禁用
     RuntimeAffinityConfig affinity;      // 绑核配置
     size_t ring_buffer_size = 8192;      // RingBuffer 大小
 };
@@ -675,9 +675,9 @@ public:
     RpcServerBuilder& port(uint16_t value);
     RpcServerBuilder& backlog(int value);
     RpcServerBuilder& ioSchedulerCount(size_t value);
-    RpcServerBuilder& computeSchedulerCount(size_t value);
-    RpcServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count);
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> compute_cpus);
+    RpcServerBuilder& parallelSchedulerCount(size_t value);
+    RpcServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count);
+    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus);
     RpcServerBuilder& ringBufferSize(size_t value);
     RpcServer build() const;
     RpcServerConfig buildConfig() const;
@@ -1075,7 +1075,7 @@ struct RpcStreamServerConfig {
     uint16_t port = 9100;
     int backlog = 1024;
     size_t io_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
-    size_t compute_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
+    size_t parallel_scheduler_count = GALAY_RUNTIME_SCHEDULER_COUNT_AUTO;
     RuntimeAffinityConfig affinity;
     size_t ring_buffer_size = 128 * 1024;
 };
@@ -1086,9 +1086,9 @@ public:
     RpcStreamServerBuilder& port(uint16_t value);
     RpcStreamServerBuilder& backlog(int value);
     RpcStreamServerBuilder& ioSchedulerCount(size_t value);
-    RpcStreamServerBuilder& computeSchedulerCount(size_t value);
-    RpcStreamServerBuilder& sequentialAffinity(size_t io_count, size_t compute_count);
-    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> compute_cpus);
+    RpcStreamServerBuilder& parallelSchedulerCount(size_t value);
+    RpcStreamServerBuilder& sequentialAffinity(size_t io_count, size_t parallel_count);
+    bool customAffinity(std::vector<uint32_t> io_cpus, std::vector<uint32_t> parallel_cpus);
     RpcStreamServerBuilder& ringBufferSize(size_t value);
     RpcStreamServer build() const;
     RpcStreamServerConfig buildConfig() const;

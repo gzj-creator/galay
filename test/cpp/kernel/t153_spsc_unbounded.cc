@@ -7,7 +7,7 @@
 #include "result_writer.h"
 
 #include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include <array>
@@ -496,7 +496,7 @@ galay::kernel::Task<void> receiveBatchAcrossThread(
 bool testCrossThreadWaiterWake()
 {
     galay::spsc::UnboundedChannel<int> channel(galay::spsc::WakeMode::Deferred);
-    galay::kernel::ComputeScheduler scheduler;
+    galay::kernel::ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -524,7 +524,7 @@ bool testCrossThreadWaiterWake()
 bool testCallerOwnedBatchWaiterWake()
 {
     galay::spsc::UnboundedChannel<int> channel(galay::spsc::WakeMode::Deferred);
-    galay::kernel::ComputeScheduler scheduler;
+    galay::kernel::ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;

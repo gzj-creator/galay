@@ -14,7 +14,7 @@
 - **头文件前缀**: `<galay/cpp/galay-kernel/...>`（如 `core/runtime.h`、`core/task.h`、`async/async_tcp.h`）
 - **命名空间**: `galay::kernel`（Runtime/Task/调度器/Host/通道/mutex/sleep），`galay::async`（AsyncTcpSocket/AsyncUdpSocket/AsyncFile）
 - **核心类型与接口**:
-  - `RuntimeBuilder` — `RuntimeBuilder& ioSchedulerCount(size_t)`、`computeSchedulerCount(size_t)`、`sequentialAffinity(size_t ioCount, size_t computeCount)`、`bool customAffinity(std::vector<uint32_t> io, std::vector<uint32_t> compute)`、`Runtime build() const`
+  - `RuntimeBuilder` — `RuntimeBuilder& ioSchedulerCount(size_t)`、`parallelSchedulerCount(size_t)`、`sequentialAffinity(size_t ioCount, size_t parallelCount)`、`bool customAffinity(std::vector<uint32_t> io, std::vector<uint32_t> parallel)`、`Runtime build() const`
   - `Runtime` — `std::expected<void, RuntimeError> start()`、`void stop()`、`template<T> std::expected<T, RuntimeError> blockOnIO(Task<T>)`、`template<T> std::expected<T, RuntimeError> blockOnCpu(Task<T>)`、`template<T> std::expected<JoinHandle<T>, RuntimeError> spawnIO(Task<T>)`、`template<T> std::expected<JoinHandle<T>, RuntimeError> spawnCpu(Task<T>)`、`template<F> std::expected<JoinHandle<...>, RuntimeError> spawnBlocking(F&&)`、`RuntimeHandle handle()`、`IOScheduler* getNextIOScheduler()`
   - `RuntimeHandle` — `static std::expected<RuntimeHandle, RuntimeError> current()`、`static std::optional<RuntimeHandle> tryCurrent()`、`spawnIO(...)`、`spawnCpu(...)`、`spawnBlocking(...)`
   - `Task<T>` — 协程返回类型，只移动；`auto operator co_await()`；`bool done()`
@@ -126,7 +126,7 @@ Task<void> handleClient(SslContext* ctx, GHandle h) {
 - **头文件前缀**: `<galay/cpp/galay-http/...>`（`server/http_server.h`、`server/http_router.h`、`builder/http_builder.h`、`client/http_client.h`、`protoc/http_request.h`）
 - **命名空间**: `galay::http`（协程/Runtime 类型来自 `galay::kernel`）
 - **核心类型与接口**:
-  - `HttpServerBuilder`：`host(std::string)`、`port(uint16_t)`、`backlog(int)`、`ioSchedulerCount(size_t)`、`computeSchedulerCount(size_t)`、`policy(HttpServerPolicy)`、`HttpServer build() const`
+  - `HttpServerBuilder`：`host(std::string)`、`port(uint16_t)`、`backlog(int)`、`ioSchedulerCount(size_t)`、`parallelSchedulerCount(size_t)`、`policy(HttpServerPolicy)`、`HttpServer build() const`
   - `HttpServer`：`void start(HttpConnHandler)`（自定义连接处理）、`void start(HttpRouter&&)`（路由模式，框架驱动读取/Keep-Alive/分发）、`void stop()`、`bool isRunning()`
   - `HttpsServerBuilder` / `HttpsServer`：额外 `certPath` / `keyPath` / `caPath` / `verifyPeer(bool)` / `verifyDepth(int)`
   - `HttpRouter`：`template<HttpMethod... Methods> void addHandler(const std::string& path, HttpRouteHandler)`（如 `addHandler<HttpMethod::GET>`、`addHandler<HttpMethod::GET, HttpMethod::POST>`）、`bool delHandler(...)`、`void clear()`、`mount(...)`/`mountHardly(...)`（静态文件）、`tryFiles(...)`、`proxy(...)`
@@ -174,7 +174,7 @@ int main() {
 - **头文件前缀**: `<galay/cpp/galay-http2/...>`（`server/http2_server.h`、`client/h2c_client.h`、`client/h2_client.h`、`protoc/http2_hpack.h`）
 - **命名空间**: `galay::http2`
 - **核心类型与接口**:
-  - `H2cServerBuilder`：`host/port/backlog/ioSchedulerCount/computeSchedulerCount`、`maxConcurrentStreams(uint32_t)`、`initialWindowSize`、`maxFrameSize`、`maxHeaderListSize`、`enablePush(bool)`、`pingEnabled/pingInterval/pingTimeout`、`streamHandler(Http2ConnectionHandler)`、`staticResponse(path, H2StaticResponse)`、`staticFiles(prefix, H2StaticFileConfig)`、`H2cServer build() const`
+  - `H2cServerBuilder`：`host/port/backlog/ioSchedulerCount/parallelSchedulerCount`、`maxConcurrentStreams(uint32_t)`、`initialWindowSize`、`maxFrameSize`、`maxHeaderListSize`、`enablePush(bool)`、`pingEnabled/pingInterval/pingTimeout`、`streamHandler(Http2ConnectionHandler)`、`staticResponse(path, H2StaticResponse)`、`staticFiles(prefix, H2StaticFileConfig)`、`H2cServer build() const`
   - `H2cServer`：`void start()`、`void start(Http2ConnectionHandler)`、`void stop()`
   - `H2ServerBuilder` / `H2Server`（TLS h2）：额外 `certPath` / `keyPath` / `caPath` / `verifyPeer` / `verifyDepth`
   - `Http2ConnectionHandler = std::function<Task<void>(Http2Stream::ptr)>`
@@ -403,7 +403,7 @@ Task<void> run(IOScheduler* scheduler, std::string endpoint, std::string key, st
 - **核心类型与接口**:
   - `RpcService`（`kernel/rpc_service.h`）：`explicit RpcService(std::string_view name)`；受保护注册 `registerMethod(name, handler)`（unary 别名）、`registerUnaryMethod / registerClientStreamingMethod / registerServerStreamingMethod / registerBidiStreamingMethod(name, handler)`、`registerStreamMethod(name, RpcStreamHandler)`，均有成员函数指针模板重载。`RpcMethodHandler = std::function<Task<void>(RpcContext&)>`、`RpcStreamHandler = std::function<Task<void>(RpcStream&)>`
   - `RpcContext`：`RpcRequest& request()`、`RpcResponse& response()`、`void setError(RpcErrorCode)`、`setPayload(const char*, size_t)` / `(const std::string&)` / `(std::vector<char>&&)` / `(const RpcPayloadView&)`
-  - `RpcServer`（`kernel/rpc_server.h`）：`explicit RpcServer(const RpcServerConfig&)`、`void registerService(std::shared_ptr<RpcService>)`、`void start()`（非阻塞）、`void stop()`、`bool isRunning()`、`Runtime& runtime()`。`RpcServerBuilder`：`.host().port().backlog().ioSchedulerCount().computeSchedulerCount().ringBufferSize().build()`。`RpcServerConfig{host="0.0.0.0", port=9000, backlog=128, ring_buffer_size=8192}`
+  - `RpcServer`（`kernel/rpc_server.h`）：`explicit RpcServer(const RpcServerConfig&)`、`void registerService(std::shared_ptr<RpcService>)`、`void start()`（非阻塞）、`void stop()`、`bool isRunning()`、`Runtime& runtime()`。`RpcServerBuilder`：`.host().port().backlog().ioSchedulerCount().parallelSchedulerCount().ringBufferSize().build()`。`RpcServerConfig{host="0.0.0.0", port=9000, backlog=128, ring_buffer_size=8192}`
   - `RpcClient`（`kernel/rpc_client.h`）：`connect(const std::string& host, uint16_t port)`；unary `call(service, method, payload, len)` / `(service, method, const std::string&)`，可 `.timeout(ms)`；流式帧 `callClientStreamFrame(...)`、`callServerStreamRequest(...)`、`callBidiStreamFrame(...)`；真实流 `std::expected<RpcStream, RpcError> createStream(service, method)`；`close()`。返回 `CallResult = std::expected<std::optional<RpcResponse>, RpcError>`（`nullopt`=需继续 `co_await`）
   - `RpcManagedClient`（`kernel/rpc_managed_client.h`）：`explicit RpcManagedClientImpl(Discovery&, RpcManagedClientConfig={})`；`Task<RpcManagedCallResult> call(service, method, payload, len, options={})`；round-robin + 连接池 + 重试/熔断；`shutdown()`。`RpcStaticDiscovery::set(service, RpcEndpointList)`；`RpcEndpoint{host, port}`
   - `RpcStream`（`kernel/rpc_stream.h`）：`sendInit()`、`sendData(...)`、`sendEnd()`、`sendCancel()`、`read(StreamMessage&)`，均 `std::expected<bool, RpcError>` awaitable
@@ -436,7 +436,7 @@ int main() {
 - **CMake link**: `galay::mcp`；**头文件前缀** `<galay/cpp/galay-mcp/...>`（`server/stdio_server.h`、`server/http_server.h`、`client/client.h`、`common/schema_builder.h`、`common/mcp_json.h`、`common/mcp_error.h`）；**命名空间** `galay::mcp`
 - **核心类型与接口**:
   - `McpStdioServer`：`setServerInfo(name, version)`；`addTool(name, description, inputSchema, ToolHandler)`、`addResource(uri, name, description, mimeType, ResourceReader)`、`addPrompt(name, description, std::vector<PromptArgument>, PromptGetter)`；`void run()`（阻塞 stdin/stdout）、`stop()`、`isRunning()`。回调**同步**：`ToolHandler = std::function<std::expected<JsonString, McpError>(const JsonElement&)>`
-  - `McpHttpServer`：`McpHttpServer(host="0.0.0.0", port=8080, ioSchedulers=8, computeSchedulers=0)`；同名 `setServerInfo/addTool/addResource/addPrompt`（须在 `start()` 前注册）；`void start()`（阻塞，监听 `POST /mcp`）。回调**协程**：`ToolHandler = std::function<kernel::Task<void>(const JsonElement&, std::expected<JsonString, McpError>&)>`（结果写回引用）
+  - `McpHttpServer`：`McpHttpServer(host="0.0.0.0", port=8080, ioSchedulers=8, parallelSchedulers=0)`；同名 `setServerInfo/addTool/addResource/addPrompt`（须在 `start()` 前注册）；`void start()`（阻塞，监听 `POST /mcp`）。回调**协程**：`ToolHandler = std::function<kernel::Task<void>(const JsonElement&, std::expected<JsonString, McpError>&)>`（结果写回引用）
   - `McpClient`（构造决定模式）：
     - stdio：`explicit McpClient(McpStdioClientConfig={})`；同步 `initialize(name, version)`、`callTool(name, arguments)`、`listTools/listResources/listPrompts()`、`readResource(uri)`、`getPrompt(name, args)`、`ping()`、`disconnect()`
     - HTTP：`McpClient(kernel::Runtime&, McpHttpClientConfig{.url=url})`；`connect()`、协程 API 把结果写回引用 `initialize(name, version, result&)`、`callTool(name, args, result&)` 等

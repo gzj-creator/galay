@@ -96,7 +96,7 @@ int readTcpNoDelay(int fd)
 
 int observeWsClientTcpNoDelay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     LoopbackListener listener;
     WsClient client = WsClientBuilder().tcpNoDelay(tcp_no_delay).build();
 
@@ -119,7 +119,7 @@ int observeWsClientTcpNoDelay(bool tcp_no_delay)
 #ifdef GALAY_SSL_FEATURE_ENABLED
 int observeWssClientTcpNoDelay(bool tcp_no_delay)
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     LoopbackListener listener;
     WssClient client = WssClientBuilder().tcpNoDelay(tcp_no_delay).build();
 

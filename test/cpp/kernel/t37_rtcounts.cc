@@ -18,24 +18,24 @@ int main() {
     {
         Runtime runtime = RuntimeBuilder()
             .ioSchedulerCount(4)
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .build();
 
         runtime.start();
         assert(runtime.getIOSchedulerCount() == 4);
-        assert(runtime.getComputeSchedulerCount() == 0);
+        assert(runtime.getParallelSchedulerCount() == 0);
         runtime.stop();
     }
 
     {
         Runtime runtime = RuntimeBuilder()
             .ioSchedulerCount(4)
-            .computeSchedulerCount(GALAY_RUNTIME_SCHEDULER_COUNT_AUTO)
+            .parallelSchedulerCount(GALAY_RUNTIME_SCHEDULER_COUNT_AUTO)
             .build();
 
         runtime.start();
         assert(runtime.getIOSchedulerCount() == 4);
-        assert(runtime.getComputeSchedulerCount() >= 1);
+        assert(runtime.getParallelSchedulerCount() >= 1);
         runtime.stop();
     }
 

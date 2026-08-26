@@ -163,7 +163,7 @@ void testBindFailurePropagation(test::TestResultWriter& writer)
                            .host("127.0.0.1")
                            .port(port)
                            .ioSchedulerCount(1)
-                           .computeSchedulerCount(0)
+                           .parallelSchedulerCount(0)
                            .build();
     auto started = server.start();
     writer.writeTestCase(
@@ -174,7 +174,7 @@ void testBindFailurePropagation(test::TestResultWriter& writer)
                                         .host("127.0.0.1")
                                         .port(port)
                                         .ioSchedulerCount(1)
-                                        .computeSchedulerCount(0)
+                                        .parallelSchedulerCount(0)
                                         .build();
     auto stream_started = stream_server.start();
     writer.writeTestCase(

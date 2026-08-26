@@ -139,7 +139,7 @@ int main() {
     std::cout << std::endl;
 
     // 创建运行时
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     rt.start();
 
     auto* scheduler = rt.getNextIOScheduler();

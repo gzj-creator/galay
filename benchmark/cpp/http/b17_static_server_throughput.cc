@@ -104,7 +104,7 @@ int main(int argc, char* argv[]) {
             .host("0.0.0.0")
             .port(port)
             .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .build());
         server.start(handleStaticRequest);
 

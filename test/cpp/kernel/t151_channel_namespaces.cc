@@ -21,7 +21,7 @@
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "result_writer.h"
 
@@ -377,7 +377,7 @@ bool checkMpmcUnboundedTokenSurface()
 
 bool checkMpmcUnboundedAsyncBoundaries()
 {
-    galay::kernel::ComputeScheduler scheduler;
+    galay::kernel::ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;
@@ -432,7 +432,7 @@ bool checkMpmcUnboundedAsyncConcurrency()
     constexpr int kMessagesPerConsumer = 1'000;
     constexpr int kMessageCount = kConsumerCount * kMessagesPerConsumer;
 
-    galay::kernel::ComputeScheduler scheduler;
+    galay::kernel::ParallelScheduler scheduler;
     auto started = scheduler.start();
     if (!started) {
         return false;

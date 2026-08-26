@@ -80,7 +80,7 @@ static int copy_file(const char* source_path, const char* dest_path)
 {
     C_RuntimeConfig config = galay_c_runtime_config_default();
     config.io_scheduler_count = 1;
-    config.compute_scheduler_count = 0;
+    config.parallel_scheduler_count = 0;
 
     galay_c_runtime_t runtime = {0};
     galay_c_async_file_t source = {.fd = -1};

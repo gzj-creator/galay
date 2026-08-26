@@ -400,7 +400,7 @@ int main(int argc, char** argv)
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(2)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build();
     server.start(std::move(router));
 

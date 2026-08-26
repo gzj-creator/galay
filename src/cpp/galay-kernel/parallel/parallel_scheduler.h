@@ -1,5 +1,5 @@
 /**
- * @file compute_scheduler.h
+ * @file parallel_scheduler.h
  * @brief 计算任务调度器
  * @author galay-kernel
  * @version 1.0.0
@@ -9,19 +9,20 @@
  *
  * 使用方式：
  * @code
- * ComputeScheduler scheduler;
+ * ParallelScheduler scheduler;
  * (void)scheduler.start();
- * scheduler.schedule(myComputeTask());
+ * scheduler.schedule(myParallelTask());
  * // ...
  * scheduler.stop();
  * @endcode
  */
 
-#ifndef GALAY_KERNEL_COMPUTE_SCHEDULER_H
-#define GALAY_KERNEL_COMPUTE_SCHEDULER_H
+#ifndef GALAY_KERNEL_PARALLEL_SCHEDULER_H
+#define GALAY_KERNEL_PARALLEL_SCHEDULER_H
 
-#include "scheduler.hpp"
-#include "timer_scheduler.h"
+#include "../core/scheduler.hpp"
+#include "../core/timer_scheduler.h"
+#include <cstddef>
 #include <thread>
 #include <atomic>
 #include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
@@ -35,8 +36,83 @@ namespace galay::kernel
  * @details 封装计算协程，用于跨线程传递。
  * 协程的原调度器通过 coro.belongScheduler() 获取。
  */
-struct ComputeTask {
+struct ParallelTask {
     TaskRef task;  ///< 轻量任务引用
+};
+
+/**
+ * @brief 不创建 coroutine frame 的纯计算工作项。
+ *
+ * @details `run` 在线程池 worker 上调用。`context` 的所有权由工作项持有的
+ * `release` 回调表达；工作项被移动或销毁时恰好释放一次。该类型供并行
+ * 组合子提交同步 callable，避免为每个计算节点额外创建 `Task<void>`。
+ */
+struct ParallelWorkItem {
+    using Run = void (*)(void* context, std::size_t index) noexcept;
+    using Release = void (*)(void* context) noexcept;
+
+    constexpr ParallelWorkItem() noexcept = default;
+
+    ParallelWorkItem(void* work_context,
+                std::size_t work_index,
+                Run work_run,
+                Release work_release) noexcept
+        : context(work_context),
+          index(work_index),
+          run(work_run),
+          release(work_release)
+    {
+    }
+
+    ParallelWorkItem(const ParallelWorkItem&) = delete;
+    ParallelWorkItem& operator=(const ParallelWorkItem&) = delete;
+
+    ParallelWorkItem(ParallelWorkItem&& other) noexcept
+        : context(other.context),
+          index(other.index),
+          run(other.run),
+          release(other.release)
+    {
+        other.clear();
+    }
+
+    ParallelWorkItem& operator=(ParallelWorkItem&& other) noexcept
+    {
+        if (this != &other) {
+            reset();
+            context = other.context;
+            index = other.index;
+            run = other.run;
+            release = other.release;
+            other.clear();
+        }
+        return *this;
+    }
+
+    ~ParallelWorkItem() { reset(); }
+
+    bool valid() const noexcept { return context != nullptr && run != nullptr; }
+
+    void reset() noexcept
+    {
+        if (context != nullptr && release != nullptr) {
+            release(context);
+        }
+        clear();
+    }
+
+    void clear() noexcept
+    {
+        context = nullptr;
+        index = 0;
+        run = nullptr;
+        release = nullptr;
+    }
+
+    void* context = nullptr;
+    std::size_t index = 0;
+    Run run = nullptr;
+    Release release = nullptr;
 };
 
 /**
@@ -50,32 +126,32 @@ struct ComputeTask {
  *
  * @note 不支持 IO 操作，仅用于纯计算任务
  */
-class ComputeScheduler : public Scheduler
+class ParallelScheduler : public Scheduler
 {
 public:
     /**
      * @brief 构造函数
      */
-    ComputeScheduler();
+    ParallelScheduler();
     
 
     /**
      * @brief 析构函数
      * @note 会自动调用 stop()
      */
-    ~ComputeScheduler();
+    ~ParallelScheduler();
 
     // 禁止拷贝
-    ComputeScheduler(const ComputeScheduler&) = delete;
-    ComputeScheduler& operator=(const ComputeScheduler&) = delete;
+    ParallelScheduler(const ParallelScheduler&) = delete;
+    ParallelScheduler& operator=(const ParallelScheduler&) = delete;
 
 
     /**
      * @brief 返回调度器类型
-     * @return 固定返回 kComputeScheduler
+     * @return 固定返回 kParallelScheduler
      */
     SchedulerType type() override {
-        return kComputeScheduler;
+        return kParallelScheduler;
     }
 
     /**
@@ -98,6 +174,13 @@ public:
      * @note 任务会在线程池中的计算线程恢复执行
      */
     bool schedule(TaskRef task) noexcept override;
+
+    /**
+     * @brief 将一个不拥有 coroutine frame 的同步计算工作项入队。
+     * @return true 表示工作项已被 worker 接纳；调度器未运行或工作项无效时
+     *         返回 false。
+     */
+    bool scheduleWork(ParallelWorkItem work) noexcept;
 
     /**
      * @brief 无分配接纳已停泊任务的恢复请求。
@@ -150,11 +233,12 @@ private:
 
 private:
     std::thread m_thread;                                       ///< 工作线程
-    moodycamel::BlockingConcurrentQueue<ComputeTask> m_queue;   ///< 任务队列（阻塞）
+    moodycamel::BlockingConcurrentQueue<ParallelTask> m_queue;   ///< 任务队列（阻塞）
+    moodycamel::BlockingConcurrentQueue<ParallelWorkItem> m_workQueue; ///< 同步计算工作队列
     detail::TaskResumeQueue m_resumeQueue;                       ///< Waker 专用无分配恢复队列
     std::atomic<bool> m_running{false};                         ///< 运行状态
 };
 
 } // namespace galay::kernel
 
-#endif // GALAY_KERNEL_COMPUTE_SCHEDULER_H
+#endif // GALAY_KERNEL_PARALLEL_SCHEDULER_H

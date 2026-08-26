@@ -26,7 +26,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_count).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(io_count).parallelSchedulerCount(1).build();
     runtime.start();
 
     auto* scheduler = runtime.getNextIOScheduler();

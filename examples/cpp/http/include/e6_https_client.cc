@@ -106,7 +106,7 @@ int main(int argc, char* argv[]) {
     std::cout << "HTTPS Client Example\n";
     std::cout << "========================================\n";
 
-    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime rt = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     rt.start();
 
     auto join = rt.spawnIO(httpsClientExample(url));

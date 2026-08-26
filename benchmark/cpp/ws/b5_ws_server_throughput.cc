@@ -189,7 +189,7 @@ int main(int argc, char* argv[]) {
             .host("0.0.0.0")
             .port(port)
             .ioSchedulerCount(static_cast<size_t>(io_threads))
-            .computeSchedulerCount(0)
+            .parallelSchedulerCount(0)
             .tcpNoDelay(tcp_no_delay)
             .build());
 
@@ -198,8 +198,8 @@ int main(int argc, char* argv[]) {
 
         std::cout << "Server started successfully!\n" << std::endl;
         std::cout << "Runtime Config: io=" << server.getRuntime().getIOSchedulerCount()
-                  << " compute=" << server.getRuntime().getComputeSchedulerCount()
-                  << " (configured io=" << io_threads << " compute=0)" << std::endl;
+                  << " parallel=" << server.getRuntime().getParallelSchedulerCount()
+                  << " (configured io=" << io_threads << " parallel=0)" << std::endl;
 
         // 等待停止信号
         while (g_running) {

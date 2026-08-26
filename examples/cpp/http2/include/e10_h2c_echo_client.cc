@@ -107,7 +107,7 @@ int main(int argc, char* argv[]) {
     std::cout << "========================================\n";
 
     try {
-        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+        Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
         runtime.start();
 
         auto join = runtime.spawnIO(runClient(host, port));

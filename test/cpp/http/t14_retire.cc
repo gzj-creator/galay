@@ -111,7 +111,7 @@ int main() {
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .maxConcurrentStreams(2)
         .activeConnHandler(activeConnHandler)
         .build());
@@ -119,7 +119,7 @@ int main() {
     server.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
     auto join = runtime.spawnIO(runClient(port));
     if (!join) {

@@ -339,7 +339,7 @@ static void printUsage(const char* prog) {
     std::cout << "  --connections <n>     Number of concurrent connections (default: 8)\n";
     std::cout << "  --requests <n>        Requests per connection per test (default: 2000)\n";
     std::cout << "  --io <n>              IO scheduler count (default: 2)\n";
-    std::cout << "  --compute <n>         Compute scheduler count (default: 0)\n";
+    std::cout << "  --parallel <n>         Parallel scheduler count (default: 0)\n";
     std::cout << "  --help                Show this help message\n";
 }
 
@@ -348,7 +348,7 @@ int main(int argc, char* argv[]) {
     size_t connections = 8;
     size_t requestsPerConn = 2000;
     size_t ioSchedulers = 2;
-    size_t computeSchedulers = 0;
+    size_t parallelSchedulers = 0;
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -360,8 +360,8 @@ int main(int argc, char* argv[]) {
             requestsPerConn = std::stoul(argv[++i]);
         } else if (arg == "--io" && i + 1 < argc) {
             ioSchedulers = std::stoul(argv[++i]);
-        } else if (arg == "--compute" && i + 1 < argc) {
-            computeSchedulers = std::stoul(argv[++i]);
+        } else if (arg == "--parallel" && i + 1 < argc) {
+            parallelSchedulers = std::stoul(argv[++i]);
         } else if (arg == "--help") {
             printUsage(argv[0]);
             return 0;
@@ -375,10 +375,10 @@ int main(int argc, char* argv[]) {
     std::cout << "Connections:       " << connections << std::endl;
     std::cout << "Requests/Conn:     " << requestsPerConn << std::endl;
     std::cout << "IO Schedulers:     " << ioSchedulers << std::endl;
-    std::cout << "Compute Schedulers:" << computeSchedulers << std::endl;
+    std::cout << "Parallel Schedulers:" << parallelSchedulers << std::endl;
     std::cout << "Make sure the HTTP MCP server is running!" << std::endl;
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(ioSchedulers).computeSchedulerCount(computeSchedulers).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(ioSchedulers).parallelSchedulerCount(parallelSchedulers).build();
     runtime.start();
 
     std::vector<std::unique_ptr<McpClient>> clients;

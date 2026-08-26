@@ -61,7 +61,7 @@ public:
     bool addTimer(Timer::ptr) override { return true; }
 
     SchedulerType type() override {
-        return kComputeScheduler;
+        return kParallelScheduler;
     }
 
     bool runOne() {

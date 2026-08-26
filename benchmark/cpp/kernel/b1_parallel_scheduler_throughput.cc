@@ -1,6 +1,6 @@
 /**
  * @file b1_compute.cc
- * @brief 用途：压测 `ComputeScheduler` 在不同负载下的吞吐与延迟表现。
+ * @brief 用途：压测 `ParallelScheduler` 在不同负载下的吞吐与延迟表现。
  * 关键覆盖点：空任务、轻重计算任务、不同调度器数量以及样本中位数统计。
  * 通过条件：预热与正式统计都能完成，输出性能结果且进程无崩溃、死锁或超时。
  */
@@ -17,7 +17,7 @@
 #include <thread>
 #include <memory>
 #include "benchmark/cpp/common/benchmark_sync.h"
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include "test/cpp/common/stdout_log.h"
 
@@ -97,7 +97,7 @@ public:
     explicit SchedulerPool(int count) : m_count(count), m_next(0) {
         m_schedulers.reserve(count);
         for (int i = 0; i < count; ++i) {
-            m_schedulers.push_back(std::make_unique<ComputeScheduler>());
+            m_schedulers.push_back(std::make_unique<ParallelScheduler>());
         }
     }
 
@@ -124,7 +124,7 @@ public:
 private:
     int m_count;
     std::atomic<int> m_next;
-    std::vector<std::unique_ptr<ComputeScheduler>> m_schedulers;
+    std::vector<std::unique_ptr<ParallelScheduler>> m_schedulers;
 };
 
 ThroughputSample measureThroughputSample(
@@ -322,7 +322,7 @@ int main(int argc, char* argv[]) {
         scheduler_count = std::max(1, std::atoi(argv[1]));
     }
 
-    LogInfo("=== ComputeScheduler Benchmark ===");
+    LogInfo("=== ParallelScheduler Benchmark ===");
     LogInfo("CPU cores: {}, using {} schedulers", std::thread::hardware_concurrency(), scheduler_count);
     LogInfo("");
 

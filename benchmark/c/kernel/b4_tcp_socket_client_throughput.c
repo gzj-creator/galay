@@ -196,7 +196,7 @@ int main(int argc, char** argv)
 
     C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = state.config.io_schedulers;
-    runtime_config.compute_scheduler_count = 0;
+    runtime_config.parallel_scheduler_count = 0;
     int exit_code = 0;
 
     if (galay_c_runtime_create(&runtime_config, &state.runtime) != C_RuntimeSuccess ||
@@ -303,7 +303,7 @@ int main(int argc, char** argv)
     const double qps = seconds > 0.0 ? (double)total_requests / seconds : 0.0;
     const double throughput = seconds > 0.0 ? (double)total_bytes / seconds / 1024.0 / 1024.0 : 0.0;
 
-    if (printf("tcp_socket_client_throughput io_schedulers=%zu compute_schedulers=0 connections=%d duration_sec=%d payload_bytes=%zu elapsed_ms=%.3f requests=%llu qps=%.2f throughput_mb_per_sec=%.3f errors=%llu mode=coro-direct\n",
+    if (printf("tcp_socket_client_throughput io_schedulers=%zu parallel_schedulers=0 connections=%d duration_sec=%d payload_bytes=%zu elapsed_ms=%.3f requests=%llu qps=%.2f throughput_mb_per_sec=%.3f errors=%llu mode=coro-direct\n",
                state.config.io_schedulers,
                state.config.connections,
                state.config.duration_seconds,

@@ -31,7 +31,7 @@ struct RpcServerRuntimeConfig {
     uint16_t port = 50051;
     int backlog = 128;
     size_t io_scheduler_count = 0;
-    size_t compute_scheduler_count = 0;
+    size_t parallel_scheduler_count = 0;
 };
 
 struct RpcClientRuntimeConfig {

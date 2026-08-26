@@ -124,7 +124,7 @@ Task<void> runMultiEndpointChecks(TestState* state)
 
 int main()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();
 
     TestState state;

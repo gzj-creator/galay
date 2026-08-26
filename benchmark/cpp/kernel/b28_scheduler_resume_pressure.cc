@@ -1,9 +1,9 @@
 /**
  * @file b28_scheduler_resume_pressure.cc
- * @brief 测量 ComputeScheduler 连续恢复和 IO scheduler 批量恢复搬运成本。
+ * @brief 测量 ParallelScheduler 连续恢复和 IO scheduler 批量恢复搬运成本。
  */
 
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 #include <galay/cpp/galay-kernel/core/waker.h>
 
@@ -42,7 +42,7 @@ Task<void> runSelfWake(std::atomic<bool>* done, size_t iterations) {
 }
 
 std::optional<double> measureComputeResume(size_t iterations) {
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     const auto started = scheduler.start();
     if (!started.has_value()) {
         return std::nullopt;
@@ -128,10 +128,10 @@ int main() {
     const auto compute_warmup = measureComputeResume(kComputeWarmupIterations);
     const auto compute = measureComputeResume(kComputeIterations);
     if (!compute_warmup.has_value() || !compute.has_value()) {
-        std::cerr << "[B28] ComputeScheduler resume benchmark failed\n";
+        std::cerr << "[B28] ParallelScheduler resume benchmark failed\n";
         return 1;
     }
-    std::cout << "ComputeSchedulerResume iterations=" << kComputeIterations
+    std::cout << "ParallelSchedulerResume iterations=" << kComputeIterations
               << ", ns_per_resume="
               << std::fixed << std::setprecision(2) << *compute << '\n';
 

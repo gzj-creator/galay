@@ -38,7 +38,7 @@ typedef enum C_RuntimeResultCode {
  */
 typedef struct C_RuntimeConfig {
     size_t io_scheduler_count;      ///< IO scheduler 数量。
-    size_t compute_scheduler_count; ///< compute scheduler 数量。
+    size_t parallel_scheduler_count; ///< parallel scheduler 数量。
 } C_RuntimeConfig;
 
 /**
@@ -61,7 +61,7 @@ const char* galay_c_runtime_get_error(C_RuntimeResultCode code);
 /**
  * @brief 返回默认 runtime 配置。
  *
- * @return 默认配置；IO 与 compute scheduler 数均为自动推导。
+ * @return 默认配置；IO 与 parallel scheduler 数均为自动推导。
  */
 C_RuntimeConfig galay_c_runtime_config_default(void);
 

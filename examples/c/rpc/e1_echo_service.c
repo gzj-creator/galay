@@ -65,7 +65,7 @@ int main(void)
 {
     C_RuntimeConfig runtime_config = galay_c_runtime_config_default();
     runtime_config.io_scheduler_count = 1;
-    runtime_config.compute_scheduler_count = 0;
+    runtime_config.parallel_scheduler_count = 0;
 
     galay_c_runtime_t runtime = {0};
     galay_rpc_server_t* server = NULL;

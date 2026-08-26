@@ -329,7 +329,7 @@ int main(int argc, char* argv[]) {
 
     g_stream_latencies.reserve(config.connections * std::max<size_t>(config.duration_sec, size_t{1}) * 512);
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(resolved_io_schedulers).parallelSchedulerCount(1).build();
     runtime.start();
 
     std::cout << "Starting " << config.connections << " stream connections...\n";

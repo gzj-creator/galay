@@ -93,7 +93,7 @@ int main(int argc, char* argv[])
         .host("0.0.0.0")
         .port(port)
         .ioSchedulerCount(2)
-        .computeSchedulerCount(0)
+        .parallelSchedulerCount(0)
         .staticResponse("/healthz", H2StaticResponse{
             .status = 200,
             .content_type = "text/plain",

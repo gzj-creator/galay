@@ -6,7 +6,7 @@
  */
 
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
-#include <galay/cpp/galay-kernel/core/compute_scheduler.h>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 
 #include <atomic>
 #include <chrono>
@@ -63,7 +63,7 @@ Task<void> batchConsumer(galay::mpsc::UnboundedChannel<int64_t>* channel) {
 
 int main() {
     galay::mpsc::UnboundedChannel<int64_t> channel;
-    ComputeScheduler scheduler;
+    ParallelScheduler scheduler;
     const auto schedulerStarted = scheduler.start();
     if (!schedulerStarted.has_value()) {
         std::cerr << "[T33] failed to start consumer scheduler\n";

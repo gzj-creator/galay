@@ -32,7 +32,7 @@ Commands and results:
 
 ## Benchmark source mapping
 
-- `benchmark/cpp/kernel/CMakeLists.txt` maps `b1_compute_scheduler_throughput.cc` to `benchmark_kernel_compute_scheduler_throughput`.
+- `benchmark/cpp/kernel/CMakeLists.txt` maps `b1_parallel_scheduler_throughput.cc` to `benchmark_kernel_parallel_scheduler_throughput`.
 - `benchmark/cpp/kernel/CMakeLists.txt` maps `b8_mpsc_channel_throughput.cc` to `benchmark_kernel_mpsc_channel_throughput`.
 - `benchmark/cpp/kernel/CMakeLists.txt` maps `b14_scheduler_wakeup_latency.cc` to `benchmark_kernel_scheduler_wakeup_latency`.
 - `benchmark/cpp/kernel/CMakeLists.txt` maps `b18_ready_entry_wakeup_latency.cc` to `benchmark_kernel_ready_entry_wakeup_latency`.
@@ -68,7 +68,7 @@ rtk cmake -S .. -B ../build-kernel-bench-release \
   -DBUILD_TESTING=OFF
 
 rtk cmake --build ../build-kernel-bench-release \
-  --target benchmark_kernel_compute_scheduler_throughput \
+  --target benchmark_kernel_parallel_scheduler_throughput \
            benchmark_kernel_mpsc_channel_throughput \
            benchmark_kernel_scheduler_wakeup_latency \
            benchmark_kernel_ready_entry_wakeup_latency \
@@ -76,7 +76,7 @@ rtk cmake --build ../build-kernel-bench-release \
            benchmark_c_kernel_coro_sleep_latency \
   --parallel
 
-rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_compute_scheduler_throughput 4
+rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_parallel_scheduler_throughput 4
 rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_mpsc_channel_throughput
 rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_scheduler_wakeup_latency
 rtk ../build-kernel-bench-release/benchmark/cpp/kernel/benchmark_kernel_ready_entry_wakeup_latency

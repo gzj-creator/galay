@@ -239,7 +239,7 @@ Task<void> runRedissPoolAcquireConnected(IOScheduler* scheduler, TestState* stat
 
 int main()
 {
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     runtime.start();
 
     auto* scheduler = runtime.getNextIOScheduler();

@@ -293,7 +293,7 @@ void test_start_failure_stops_already_started_plugins()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     bool registered_first = server.addAcceptPlugin(std::make_unique<FirstPlugin>(&state));
@@ -330,7 +330,7 @@ int main()
         .host("127.0.0.1")
         .port(port)
         .ioSchedulerCount(1)
-        .computeSchedulerCount(1)
+        .parallelSchedulerCount(1)
         .build());
 
     if (server.addAcceptPlugin(nullptr)) {
