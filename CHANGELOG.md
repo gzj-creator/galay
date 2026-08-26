@@ -13,8 +13,18 @@
 
 ### Fixed
 
-- **修正 TaskPromise 协程分配失败回调**：统一 `TaskPromise<T>` 与 `TaskPromise<void>` 的标准回调名称和静态接口，失败时返回对应的无效 `Task`，并补充公开任务 API 的编译期契约检查。
-- **优化 C++ 协程帧生命周期与分配**：为 `TaskPromise<T>` / `TaskPromise<void>` 补齐普通、sized、aligned 和 sized+aligned 分配释放入口，引入按 128/256/512/1024/2048 字节分桶的线程局部有界 recycler；未提交 frame、跨线程释放、超大帧和超对齐请求均走明确的生命周期或全局 fallback 路径，并新增边界测试与压力 benchmark。
+ - **修正 TaskPromise 协程分配失败回调**：统一 `TaskPromise<T>` 与 `TaskPromise<void>` 的标准回调名称和静态接口，失败时返回对应的无效 `Task`，并补充公开任务 API 的编译期契约检查。
+ - **优化 C++ 协程帧生命周期与分配**：为 `TaskPromise<T>` / `TaskPromise<void>` 补齐普通、sized、aligned 和 sized+aligned 分配释放入口，引入按 128/256/512/1024/2048 字节分桶的线程局部有界 recycler；未提交 frame、跨线程释放、超大帧和超对齐请求均走明确的生命周期或全局 fallback 路径，并新增边界测试与压力 benchmark。
+
+## [v4.9.3] - 2026-08-26
+
+### Removed
+
+- **清理源码包中的非必要资产**：移除不应提交的本地 benchmark/test 汇总、未被仓内构建或测试引用的 HTTP/2 与 WebSocket 静态 fixture、副本测试文件，以及未被构建脚本引用的 `libwebsockets` 压缩源码包；保留 HTTP 路由和代理示例实际使用的 canonical static fixture。
+
+### Chore
+
+- **补充临时报告忽略规则**：将 `benchmark_run_results.txt` 与 `test_failure_summary.md` 加入根目录 `.gitignore`，避免本地验证输出再次进入提交。
 
 ## [v4.9.2] - 2026-08-26
 
@@ -405,7 +415,7 @@
 ### Docs
 
 - **补齐跨平台与全模块竞品性能文档**：新增 `docs/cpp/cross_platform_network_benchmark_2026-07-13.md` 跨平台 C/C++ 网络竞品对比，更新 etcd/http2/kernel/mongo/mysql/redis/rpc/ssl/tracing/ws 各模块性能测试文档，归档 UDP multishot 优化、epoll 持久读与各竞品对照的原始 CSV、图表与 raw 数据；`docs/machine_config.md` 追加 2026-07-13 全模块对比执行快照。
-- **纳入 WS 竞品依赖**：仓库新增 `thirdparty/libwebsockets-4.5.8.tar.gz`（附 SHA-256），供跨平台 WebSocket 明文 echo 竞品基准复现。
+- **记录 WS 竞品依赖**：跨平台 WebSocket 明文 echo 竞品基准使用 libwebsockets 4.5.8；源码包不再随仓库分发，复现时请从官方源码获取并校验 SHA-256 `b6ade658f4af3a823d0dc806ae5ef0623f0f4f5e2aeb895a0f77c4783840c30e`。
 
 ## [v4.1.0] - 2026-07-10
 
