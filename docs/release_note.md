@@ -290,3 +290,17 @@
 - **任务与 I/O 调度边界**：Runtime 根任务拆分为 IO/CPU 入口，AsyncTcpSocket 补齐 `readExact` / `writeAll`；惰性 timeout timer、显式 timeout policy、sequence 完成仲裁、poll 超时统一计算与 owner-only ready ring 优化同步落地。
 - **内核与跨语言基线**：C ready queue 改为无锁 MPSC 并补齐 reactor inflight 生命周期，C++/C 调度宏集中到公共头；Boost.Asio C++ TCP/UDP 公平对照、10ms 接收超时、测量合同和归档门禁同步更新。
 - **累计修复与验证**：修复 C 协程超时唤醒的任务引用竞争、epoll pending 注册移动后的取消路径及 io_uring sequence 完成超时竞争；相关 kernel、HTTP 静态 reader、源码约束与 scheduler 回归测试已通过，io_uring 目标完成编译验证。
+
+## v4.9.2 - 2026-08-26
+
+- **版本级别**：修订版本（patch）
+- **Git 提交消息**：`fix: 收敛 HTTP 路由错误处理与失败日志级别`
+- **Git tag**：`v4.9.2`
+
+### 变更摘要
+
+本次为 `v4.9.1` 之后的修订版本，收束 1 个 HTTP 路由错误处理修复提交。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）已同步更新至 `4.9.2`。
+
+- **收敛断开连接判断**：移除基于错误消息文本的断开连接猜测，HTTP 路由处理仅依据明确的 `kConnectionClose` 错误码识别连接关闭。
+- **提升失败日志可观测性**：响应发送失败与路由连接关闭失败统一记录为 `ERROR` 日志，避免关键错误被低级别日志掩盖。
+- **验证结果**：CMake 与 Bazel 版本元数据均为 `4.9.2`；HTTP 模块最小构建通过，`git diff --check` 通过。
