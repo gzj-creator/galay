@@ -1,4 +1,0 @@
-This is a plain text file for testing.
-It contains multiple lines.
-Line 3
-Line 4

@@ -97,7 +97,7 @@
 - **跨协议竞品基准体系**：benchmark 通过 pkg-config 探测并构建 libmysqlclient / hiredis 对照目标；新增 etcd/etcdctl、MySQL/libmysqlclient+mysqlslap、Redis/hiredis+官方 redis-benchmark+连接池自对照、UDP/WS 传输（libuv / libwebsockets）固定口径竞品脚本；新增跨平台 C/C++ 网络竞品对比文档，各模块性能测试文档与原始 CSV/图表/raw 数据归档。
 - **RPC 错误边界强化**：RPC 服务器注册与启动改为 `std::expected` 显式错误传播，移除注册所需的 `shared_ptr` 控制块与容器分配；`start()` 语义对齐监听就绪，新增注册表面 / 重复 / 容量耗尽 / bind 失败边界测试与注册压力 benchmark。
 - **Apple libc++ 兼容与 kqueue 清理可观测性**：`std::atomic<std::shared_ptr<T>>` 改为普通 `shared_ptr` + 原子自由函数修复 libc++ 构建兼容；kqueue 路径同步处理 `kevent` / `close` 结果并在 remove/close 时丢弃未提交变更。
-- **纳入 WS 竞品依赖**：仓库新增 `thirdparty/libwebsockets-4.5.8.tar.gz`（附 SHA-256），供跨平台 WebSocket 明文 echo 竞品基准复现。
+- **记录 WS 竞品依赖**：跨平台 WebSocket 明文 echo 竞品基准使用 libwebsockets 4.5.8；源码包不再随仓库分发，复现时请从官方源码获取并校验 SHA-256 `b6ade658f4af3a823d0dc806ae5ef0623f0f4f5e2aeb895a0f77c4783840c30e`。
 
 ## v4.2.1 - 2026-07-15
 
@@ -304,3 +304,17 @@
 - **收敛断开连接判断**：移除基于错误消息文本的断开连接猜测，HTTP 路由处理仅依据明确的 `kConnectionClose` 错误码识别连接关闭。
 - **提升失败日志可观测性**：响应发送失败与路由连接关闭失败统一记录为 `ERROR` 日志，避免关键错误被低级别日志掩盖。
 - **验证结果**：CMake 与 Bazel 版本元数据均为 `4.9.2`；HTTP 模块最小构建通过，`git diff --check` 通过。
+
+## v4.9.3 - 2026-08-26
+
+- **版本级别**：小版本（trivial）
+- **Git 提交消息**：`chore: 清理源码包中的临时报告与重复资源`
+- **Git tag**：`v4.9.3`
+
+### 变更摘要
+
+本次为 `v4.9.2` 之后的小版本清理，目标是缩小源码包并阻止本地测试汇总再次进入提交。保留 HTTP 路由测试与代理示例实际使用的 `test/cpp/http/static_files`，移除未被仓内构建或测试引用的重复 fixture 和历史竞品压缩源码包。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步更新至 `4.9.3`。
+
+- **移除本地验证输出**：删除 `benchmark_run_results.txt` 与 `test_failure_summary.md`，并在 `.gitignore` 增加精确规则。
+- **移除重复测试资产**：删除 `test/cpp/http2`、`test/cpp/ws` 下未引用的 `static_files` 副本，以及三套协议目录下未引用的 `files/test_*.bin` 大文件 fixture；HTTP/2 静态文件测试继续在运行时创建临时 fixture。
+- **移除未接入构建的竞品源码包**：删除 `thirdparty/libwebsockets-4.5.8.tar.gz`，历史 benchmark 记录改为要求从官方源码获取并校验 SHA-256。
