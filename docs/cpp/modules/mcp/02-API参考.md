@@ -481,7 +481,7 @@ public:
 
 ### 示例与测试锚点
 
-- 最小服务器示例：`examples/common/e1_stdio.inc`
+- 最小服务器示例：`examples/cpp/mcp/common/e1_stdio.h`
 - 服务端回归程序：`test/t2_stdio.cc`
 - 双向管道联调脚本：`scripts/S4-RunIntegrationTest.sh`
 
@@ -545,7 +545,7 @@ public:
 
 ### 示例与测试锚点
 
-- 最小客户端示例：`examples/common/e1_stdio.inc`
+- 最小客户端示例：`examples/cpp/mcp/common/e1_stdio.h`
 - 客户端回归程序：`test/t1_stdio.cc`
 - 原始协议 / 双向联调脚本：`scripts/S2-Run.sh`、`scripts/S4-RunIntegrationTest.sh`
 
@@ -610,7 +610,7 @@ public:
 
 ### 示例与测试锚点
 
-- 最小 HTTP 服务端示例：`examples/common/e2_http.inc`
+- 最小 HTTP 服务端示例：`examples/cpp/mcp/common/e2_http.h`
 - 服务端回归程序：`test/t4_http.cc`
 - HTTP 集成脚本：`scripts/S7-RunHttpIntegrationTest.sh`
 
@@ -678,7 +678,7 @@ public:
 
 ### 示例与测试锚点
 
-- 最小 HTTP 客户端示例：`examples/common/e2_http.inc`
+- 最小 HTTP 客户端示例：`examples/cpp/mcp/common/e2_http.h`
 - 客户端回归程序：`test/t3_http.cc`
 - HTTP 集成脚本：`scripts/S7-RunHttpIntegrationTest.sh`
 

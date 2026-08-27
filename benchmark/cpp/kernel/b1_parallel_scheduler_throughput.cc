@@ -1,5 +1,5 @@
 /**
- * @file b1_compute.cc
+ * @file b1_parallel_scheduler_throughput.cc
  * @brief 用途：压测 `ParallelScheduler` 在不同负载下的吞吐与延迟表现。
  * 关键覆盖点：空任务、轻重计算任务、不同调度器数量以及样本中位数统计。
  * 通过条件：预热与正式统计都能完成，输出性能结果且进程无崩溃、死锁或超时。

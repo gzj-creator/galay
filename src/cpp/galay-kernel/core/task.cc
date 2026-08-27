@@ -49,6 +49,14 @@ struct TaskStateFreeListCleanup
 
 thread_local TaskStateFreeListCleanup g_taskStateFreeListCleanup;
 
+// A thread-local object with a non-trivial destructor is initialized lazily by
+// the runtime.  Keep the reference in the allocation helpers so every thread
+// that uses the cache also registers its cleanup callback.
+inline void ensureTaskStateFreeListCleanup() noexcept
+{
+    (void)g_taskStateFreeListCleanup;
+}
+
 constexpr std::size_t kFrameSizeClasses[] = {
     128,
     256,
@@ -72,10 +80,13 @@ struct alignas(std::max_align_t) FrameAllocationHeader
     void* base = nullptr;
     std::uint64_t magic = 0;
     std::size_t alignment = 0;
+    std::size_t bucket = kFrameSizeClassCount;
 };
 
 static_assert(sizeof(FrameAllocationHeader) % alignof(std::max_align_t) == 0);
 constexpr std::uint64_t kFrameAllocationMagic = 0x47414c415946524dULL;
+
+FrameAllocationHeader* frameAllocationHeader(void* ptr) noexcept;
 
 struct FrameFreeList
 {
@@ -87,14 +98,21 @@ struct FrameFreeList
         while (head != nullptr) {
             auto* node = head;
             head = node->next;
-            // 普通对齐桶节点不带 header，使用普通 new/delete 分配和释放。
-            ::operator delete(node);
+            if (auto* header = frameAllocationHeader(node); header != nullptr) {
+                ::operator delete(header->base,
+                                  std::align_val_t(header->alignment));
+            } else {
+                ::operator delete(node);
+            }
         }
         count = 0;
     }
 };
 
 thread_local FrameFreeList g_frameFreeListBuckets[kFrameSizeClassCount];
+thread_local bool g_frameRecyclerEnabled = true;
+thread_local bool g_failFrameAllocationForTesting = false;
+thread_local bool g_failTaskStateAllocationForTesting = false;
 
 std::size_t frameSizeClassIndex(std::size_t size) noexcept
 {
@@ -122,7 +140,8 @@ std::uintptr_t alignAddress(std::uintptr_t address,
 }
 
 void* allocateFrameStorageBlock(std::size_t size,
-                                std::size_t alignment) noexcept
+                                std::size_t alignment,
+                                std::size_t bucket) noexcept
 {
     if (alignment == 0) {
         alignment = kFrameDefaultAlignment;
@@ -131,16 +150,6 @@ void* allocateFrameStorageBlock(std::size_t size,
     const auto max = std::numeric_limits<std::size_t>::max();
     // 在进入 sanitizer/libc 分配入口前拦截不可能的请求；部分分配器会在
     // nothrow 返回 nullptr 前直接诊断 SIZE_MAX 请求。
-    if (size > max - sizeof(FrameAllocationHeader)) {
-        return nullptr;
-    }
-
-    if (alignment <= kFrameDefaultAlignment) {
-        // 基本对齐 frame 不需要 provenance header：sized delete 可以根据编译器
-        // 提供的尺寸恢复桶，unsized delete 则直接把精确 block 交还 malloc。
-        return ::operator new(size, std::nothrow);
-    }
-
     const auto extra = alignment > kFrameDefaultAlignment
         ? alignment - 1
         : 0;
@@ -166,6 +175,7 @@ void* allocateFrameStorageBlock(std::size_t size,
     header->base = base;
     header->magic = kFrameAllocationMagic;
     header->alignment = static_cast<std::size_t>(globalAlignment);
+    header->bucket = bucket;
     return reinterpret_cast<void*>(aligned);
 }
 
@@ -186,13 +196,12 @@ void releaseFrameRaw(void* ptr, std::size_t alignment) noexcept
         return;
     }
 
-    if (alignment == 0 || alignment <= kFrameDefaultAlignment) {
-        ::operator delete(ptr);
-        return;
-    }
-
     if (auto* header = frameAllocationHeader(ptr); header != nullptr) {
         ::operator delete(header->base, std::align_val_t(header->alignment));
+        return;
+    }
+    if (alignment == 0 || alignment <= kFrameDefaultAlignment) {
+        ::operator delete(ptr);
         return;
     }
     ::operator delete(ptr, frameGlobalAlignment(alignment));
@@ -214,6 +223,7 @@ void destroyTaskFrameForStateTeardown(TaskState* state) noexcept
 
 void* allocateTaskStateStorage(std::size_t size, std::align_val_t alignment)
 {
+    ensureTaskStateFreeListCleanup();
     if (size == sizeof(TaskState) &&
         alignment == std::align_val_t(alignof(TaskState)) &&
         g_taskStateFreeList != nullptr) {
@@ -230,6 +240,8 @@ void releaseTaskStateStorage(void* ptr, std::size_t size, std::align_val_t align
     if (ptr == nullptr) {
         return;
     }
+
+    ensureTaskStateFreeListCleanup();
 
     if (size != sizeof(TaskState) ||
         alignment != std::align_val_t(alignof(TaskState)) ||
@@ -254,7 +266,10 @@ void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept
     if (alignment == 0) {
         alignment = kFrameDefaultAlignment;
     }
-    if (alignment <= kFrameDefaultAlignment) {
+    if (g_failFrameAllocationForTesting) {
+        return nullptr;
+    }
+    if (g_frameRecyclerEnabled && alignment <= kFrameDefaultAlignment) {
         const auto index = frameSizeClassIndex(size);
         if (index < kFrameSizeClassCount) {
             auto& bucket = g_frameFreeListBuckets[index];
@@ -264,15 +279,15 @@ void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept
                 --bucket.count;
                 return node;
             }
-            return allocateFrameStorageBlock(kFrameSizeClasses[index], alignment);
+            return allocateFrameStorageBlock(kFrameSizeClasses[index], alignment, index);
         }
     }
 
-    return allocateFrameStorageBlock(size, alignment);
+    return allocateFrameStorageBlock(size, alignment, kFrameSizeClassCount);
 }
 
 void releaseFrameStorage(void* ptr,
-                         std::size_t size,
+                         [[maybe_unused]] std::size_t size,
                          std::size_t alignment) noexcept
 {
     if (ptr == nullptr) {
@@ -283,37 +298,56 @@ void releaseFrameStorage(void* ptr,
         alignment = kFrameDefaultAlignment;
     }
 
-    if (alignment <= kFrameDefaultAlignment) {
-        // sized delete 提供原始 frame 尺寸，因此普通对齐 block 可以不携带
-        // provenance header 直接回收；unsized delete（size == 0）走直接释放路径。
-        const auto index = size == 0 ? kFrameSizeClassCount
-                                     : frameSizeClassIndex(size);
-        if (index >= kFrameSizeClassCount) {
-            ::operator delete(ptr);
-            return;
-        }
-
-        auto& bucket = g_frameFreeListBuckets[index];
-        if (bucket.count >= kFrameFreeListLimit) {
-            ::operator delete(ptr);
-            return;
-        }
-
-        auto* node = static_cast<FrameFreeNode*>(ptr);
-        node->next = bucket.head;
-        bucket.head = node;
-        ++bucket.count;
-        return;
-    }
-
-    // 超对齐 block 保留 provenance header，因为对齐后的用户指针可能不同于 delete
-    // 所接受的原始指针。
+    // The allocation header records the actual size class. Do not derive the
+    // bucket from the compiler-supplied delete size: a caller passing a stale
+    // or mismatched size must not place a block into a larger bucket. The size
+    // parameter remains part of the compiler delete ABI but is intentionally
+    // ignored here.
     auto* header = frameAllocationHeader(ptr);
-    if (header == nullptr) {
+    if (!g_frameRecyclerEnabled || header == nullptr ||
+        header->bucket >= kFrameSizeClassCount ||
+        alignment > kFrameDefaultAlignment) {
         releaseFrameRaw(ptr, alignment);
         return;
     }
-    releaseFrameRaw(ptr, alignment);
+
+    auto& bucket = g_frameFreeListBuckets[header->bucket];
+    if (bucket.count >= kFrameFreeListLimit) {
+        releaseFrameRaw(ptr, alignment);
+        return;
+    }
+
+    auto* node = static_cast<FrameFreeNode*>(ptr);
+    node->next = bucket.head;
+    bucket.head = node;
+    ++bucket.count;
+}
+
+std::size_t frameFreeListSizeForTesting(std::size_t size,
+                                        std::size_t alignment) noexcept
+{
+    if (alignment > kFrameDefaultAlignment) {
+        return 0;
+    }
+    const auto index = frameSizeClassIndex(size);
+    return index < kFrameSizeClassCount
+        ? g_frameFreeListBuckets[index].count
+        : 0;
+}
+
+void setFrameRecyclerEnabledForTesting(bool enabled) noexcept
+{
+    g_frameRecyclerEnabled = enabled;
+}
+
+void setFrameAllocationFailureForTesting(bool enabled) noexcept
+{
+    g_failFrameAllocationForTesting = enabled;
+}
+
+void setTaskStateAllocationFailureForTesting(bool enabled) noexcept
+{
+    g_failTaskStateAllocationForTesting = enabled;
 }
 
 } // namespace detail
@@ -343,6 +377,10 @@ void* TaskState::operator new(std::size_t size, std::align_val_t alignment)
 
 void* TaskState::operator new(std::size_t size, const std::nothrow_t&) noexcept
 {
+    ensureTaskStateFreeListCleanup();
+    if (g_failTaskStateAllocationForTesting) {
+        return nullptr;
+    }
     if (size == sizeof(TaskState) && g_taskStateFreeList != nullptr) {
         auto* node = g_taskStateFreeList;
         g_taskStateFreeList = node->next;
@@ -358,6 +396,10 @@ void* TaskState::operator new(std::size_t size,
                               std::align_val_t alignment,
                               const std::nothrow_t&) noexcept
 {
+    ensureTaskStateFreeListCleanup();
+    if (g_failTaskStateAllocationForTesting) {
+        return nullptr;
+    }
     if (size == sizeof(TaskState) &&
         alignment == std::align_val_t(alignof(TaskState)) &&
         g_taskStateFreeList != nullptr) {
@@ -485,27 +527,33 @@ bool scheduleTaskImmediately(const TaskRef& task) noexcept
 
 bool requestTaskResume(const TaskRef& task) noexcept
 {
-    return requestTaskResumeState(task.state());
+    return requestTaskResumeStateDetailed(task.state()) ==
+        TaskResumeResult::kAccepted;
 }
 
-bool requestTaskResumeState(TaskState* state) noexcept
+TaskResumeResult requestTaskResumeStateDetailed(TaskState* state) noexcept
 {
     if (!state || !state->m_handle || !state->m_scheduler ||
         state->m_done.load(std::memory_order_relaxed)) {
-        return false;
+        return TaskResumeResult::kRejected;
     }
 
     if (state->m_queued.exchange(true, std::memory_order_acq_rel)) {
-        return false;
+        return TaskResumeResult::kAlreadyQueued;
     }
     state->m_resume_owner_only.store(true, std::memory_order_release);
     if (state->m_scheduler->scheduleResume(TaskRef(state, true))) {
-        return true;
+        return TaskResumeResult::kAccepted;
     }
 
     state->m_resume_owner_only.store(false, std::memory_order_release);
     state->m_queued.store(false, std::memory_order_release);
-    return false;
+    return TaskResumeResult::kRejected;
+}
+
+bool requestTaskResumeState(TaskState* state) noexcept
+{
+    return requestTaskResumeStateDetailed(state) == TaskResumeResult::kAccepted;
 }
 
 std::thread::id schedulerThreadId(Scheduler* scheduler) noexcept

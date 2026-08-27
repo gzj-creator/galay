@@ -86,7 +86,8 @@ enum class RuntimeErrorCode : uint8_t {
     kInvalidHandle,         ///< RuntimeHandle 未绑定有效 Runtime
     kTaskException,         ///< 根任务执行或取结果阶段产生异常
     kBlockingSubmitFailed,  ///< 阻塞线程池提交 callable 失败
-    kSchedulerStartFailed   ///< scheduler 或底层 reactor 启动失败
+    kSchedulerStartFailed,  ///< scheduler 或底层 reactor 启动失败
+    kResumeFailed           ///< 根任务等待的 owner scheduler 无法恢复
 };
 
 /**
@@ -106,14 +107,15 @@ public:
     RuntimeErrorCode code() const noexcept { return m_code; }  ///< 返回 Runtime 错误类别
     std::string_view message() const noexcept
     {
-        static constexpr std::array<std::string_view, static_cast<size_t>(RuntimeErrorCode::kSchedulerStartFailed) + 1> kMessages = {{
+        static constexpr std::array<std::string_view, static_cast<size_t>(RuntimeErrorCode::kResumeFailed) + 1> kMessages = {{
             "runtime has no scheduler available for task execution",
             "runtime failed to submit the task to its scheduler",
             "current thread is not running inside a runtime context",
             "runtime handle is not bound to a runtime",
             "root task completed with an unhandled exception",
             "runtime failed to submit the blocking task",
-            "runtime failed to start a scheduler"
+            "runtime failed to start a scheduler",
+            "runtime could not resume a task on its owner scheduler"
         }};
 
         const auto index = static_cast<size_t>(m_code);

@@ -66,7 +66,8 @@ enum class TaskResultErrorCode : uint8_t {
     kTaskException,      ///< 协程执行过程中记录了异常
     kAlreadyConsumed,    ///< 任务结果已被 join/await/blockOn 消费
     kResultUnavailable,  ///< 任务完成但结果存储不可用
-    kScheduleFailed      ///< 子任务无法提交到 scheduler
+    kScheduleFailed,     ///< 子任务无法提交到 scheduler
+    kResumeFailed        ///< 等待中的父任务无法重新提交到 owner scheduler
 };
 
 /**
@@ -84,12 +85,13 @@ public:
     TaskResultErrorCode code() const noexcept { return m_code; }  ///< 返回任务结果消费错误类别
     std::string_view message() const noexcept
     {
-        static constexpr std::array<std::string_view, static_cast<size_t>(TaskResultErrorCode::kScheduleFailed) + 1> kMessages = {{
+        static constexpr std::array<std::string_view, static_cast<size_t>(TaskResultErrorCode::kResumeFailed) + 1> kMessages = {{
             "task state is invalid",
             "task completed with an unhandled exception",
             "task result has already been consumed",
             "task completed without an available result",
-            "task could not be scheduled for execution"
+            "task could not be scheduled for execution",
+            "task could not be resumed on its owner scheduler"
         }};
 
         const auto index = static_cast<size_t>(m_code);
@@ -116,18 +118,49 @@ Runtime* swapCurrentRuntime(Runtime* runtime) noexcept;  ///< 替换当前线程
 void* allocateFrameStorage(std::size_t size, std::size_t alignment) noexcept;
 /**
  * @brief 释放由 allocateFrameStorage 返回的 frame 存储。
- * @param ptr 待释放地址；允许为 nullptr
- * @param size 编译器提供的 frame 大小；0 表示 unsized delete。普通对齐的
- *       unsized delete 直接释放，超对齐请求仍通过块头恢复原始基址。
+ * @param ptr 待释放地址；允许为 nullptr，非空值必须来自
+ *        allocateFrameStorage() 且尚未释放
+ * @param size 编译器提供的 frame 大小；0 表示 unsized delete。该值不参与
+ *       recycler 桶选择，实际分配来源由 frame 的 provenance header 决定。
  * @param alignment 与分配路径匹配的对齐
+ * @pre `ptr` 非空时必须仍指向 allocateFrameStorage() 返回的原始地址；任意
+ *      外部指针都不满足该 helper 的释放契约。
  */
 void releaseFrameStorage(void* ptr,
                          std::size_t size,
                          std::size_t alignment) noexcept;
+/**
+ * @brief 设置当前线程的 frame recycler 开关。
+ * @param enabled true 使用 TLS recycler；false 直接走匹配的全局分配
+ * @note 仅供边界测试和 benchmark 做 A/B 对照；默认开启。
+ */
+void setFrameRecyclerEnabledForTesting(bool enabled) noexcept;
+/**
+ * @brief 让当前线程的 frame 分配暂时失败。
+ * @note 仅用于验证标准 allocation-failure hook；默认关闭。
+ */
+void setFrameAllocationFailureForTesting(bool enabled) noexcept;
+/**
+ * @brief 让当前线程的 nothrow TaskState 分配暂时失败。
+ * @note 仅用于验证 get_return_object() 的空状态分支；默认关闭。
+ */
+void setTaskStateAllocationFailureForTesting(bool enabled) noexcept;
+/**
+ * @brief 查询当前线程指定 frame 桶的缓存节点数。
+ * @note 仅供边界测试和 benchmark 观测，不参与分配热路径。
+ */
+std::size_t frameFreeListSizeForTesting(std::size_t size,
+                                        std::size_t alignment) noexcept;
 bool scheduleTask(const TaskRef& task) noexcept;  ///< 将任务按普通语义提交给其所属调度器
 bool scheduleTaskDeferred(const TaskRef& task) noexcept;  ///< 将任务按延后语义提交给其所属调度器
 bool scheduleTaskDeferredState(TaskState* state) noexcept;  ///< 通过裸状态提交延后任务，供 promise 热路径使用
 bool scheduleTaskImmediately(const TaskRef& task) noexcept;  ///< 在所属调度器线程上立即恢复任务
+enum class TaskResumeResult : uint8_t {
+    kAccepted,
+    kAlreadyQueued,
+    kRejected,
+};
+TaskResumeResult requestTaskResumeStateDetailed(TaskState* state) noexcept;
 bool requestTaskResume(const TaskRef& task) noexcept;  ///< 请求恢复已暂停任务；失败时返回 false
 bool requestTaskResumeState(TaskState* state) noexcept;  ///< 通过 owner scheduler 的无分配入口请求恢复；调用方必须持有有效引用
 std::thread::id schedulerThreadId(Scheduler* scheduler) noexcept;  ///< 查询调度器线程 ID；scheduler 为空时返回默认值

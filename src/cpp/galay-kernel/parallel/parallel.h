@@ -19,7 +19,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <coroutine>
-#include <deque>
 #include <expected>
 #include <functional>
 #include <limits>
@@ -29,7 +28,6 @@
 #include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace galay::kernel
 {
@@ -45,7 +43,6 @@ enum class ParallelErrorCode : std::uint8_t {
     kScheduleFailed,
     kWorkFailed,
     kTaskFailed,
-    kResumeFailed,
     kSkipped,
 };
 
@@ -96,8 +93,6 @@ public:
             return "parallel work returned an error";
         case ParallelErrorCode::kTaskFailed:
             return "parallel task returned an error";
-        case ParallelErrorCode::kResumeFailed:
-            return "parallel parent task could not be resumed";
         case ParallelErrorCode::kSkipped:
             return "parallel work was skipped after a predecessor failed";
         }
@@ -111,6 +106,91 @@ private:
 
 namespace detail
 {
+
+/**
+ * @brief Fixed-element, growable storage whose growth never throws.
+ * @details The graph only stores pointers and node IDs, so a trivially-copyable
+ *          buffer is sufficient. Capacity failures are reported by `push_back`
+ *          instead of escaping an `expected`-returning graph API.
+ */
+template <typename T>
+class NoThrowVector
+{
+    static_assert(std::is_trivially_copyable_v<T>);
+
+public:
+    NoThrowVector() noexcept = default;
+    NoThrowVector(const NoThrowVector&) = delete;
+    NoThrowVector& operator=(const NoThrowVector&) = delete;
+
+    NoThrowVector(NoThrowVector&& other) noexcept
+        : m_data(std::move(other.m_data)),
+          m_size(other.m_size),
+          m_capacity(other.m_capacity)
+    {
+        other.m_size = 0;
+        other.m_capacity = 0;
+    }
+
+    NoThrowVector& operator=(NoThrowVector&& other) noexcept
+    {
+        if (this != &other) {
+            m_data = std::move(other.m_data);
+            m_size = other.m_size;
+            m_capacity = other.m_capacity;
+            other.m_size = 0;
+            other.m_capacity = 0;
+        }
+        return *this;
+    }
+
+    bool push_back(const T& value) noexcept
+    {
+        if (m_size == m_capacity && !grow()) {
+            return false;
+        }
+        m_data[m_size++] = value;
+        return true;
+    }
+
+    std::size_t size() const noexcept { return m_size; }
+    bool empty() const noexcept { return m_size == 0; }
+
+    T& operator[](std::size_t index) noexcept { return m_data[index]; }
+    const T& operator[](std::size_t index) const noexcept { return m_data[index]; }
+
+    T* begin() noexcept { return m_data ? m_data.get() : nullptr; }
+    T* end() noexcept { return m_data ? m_data.get() + m_size : nullptr; }
+    const T* begin() const noexcept { return m_data ? m_data.get() : nullptr; }
+    const T* end() const noexcept { return m_data ? m_data.get() + m_size : nullptr; }
+
+private:
+    bool grow() noexcept
+    {
+        const auto max = std::numeric_limits<std::size_t>::max();
+        const auto next_capacity = m_capacity == 0
+            ? std::size_t{4}
+            : (m_capacity > max / 2 ? max : m_capacity * 2);
+        if (next_capacity <= m_capacity || next_capacity > max / sizeof(T)) {
+            return false;
+        }
+
+        std::unique_ptr<T[]> next(new (std::nothrow) T[next_capacity]);
+        if (!next) {
+            return false;
+        }
+        if (m_size != 0) {
+            std::copy_n(m_data.get(), m_size, next.get());
+        }
+        m_data = std::move(next);
+        m_capacity = next_capacity;
+        return true;
+    }
+
+    std::unique_ptr<T[]> m_data;
+    std::size_t m_size = 0;
+    std::size_t m_capacity = 0;
+};
 
 class ParallelState;
 class ParallelAwaitable;
@@ -271,12 +351,28 @@ public:
     static constexpr ParallelNodeId kInvalidNode = ParallelError::kNoNode;
 
     ParallelGraph() = default;
+    ~ParallelGraph() { clear(); }
     ParallelGraph(const ParallelGraph&) = delete;
     ParallelGraph& operator=(const ParallelGraph&) = delete;
-    ParallelGraph(ParallelGraph&&) noexcept = default;
-    ParallelGraph& operator=(ParallelGraph&&) noexcept = default;
+    ParallelGraph(ParallelGraph&& other) noexcept
+        : m_nodes(std::move(other.m_nodes)),
+          m_sealed(other.m_sealed)
+    {
+        other.m_sealed = false;
+    }
 
-    std::expected<ParallelNodeId, ParallelError> add(ParallelWork work)
+    ParallelGraph& operator=(ParallelGraph&& other) noexcept
+    {
+        if (this != &other) {
+            clear();
+            m_nodes = std::move(other.m_nodes);
+            m_sealed = other.m_sealed;
+            other.m_sealed = false;
+        }
+        return *this;
+    }
+
+    std::expected<ParallelNodeId, ParallelError> add(ParallelWork work) noexcept
     {
         if (m_sealed) {
             return std::unexpected(ParallelError(ParallelErrorCode::kInvalidGraph));
@@ -286,18 +382,22 @@ public:
         }
 
         const auto id = m_nodes.size();
-        m_nodes.emplace_back(std::move(work));
+        auto* node = new (std::nothrow) Node(std::move(work));
+        if (node == nullptr || !m_nodes.push_back(node)) {
+            delete node;
+            return std::unexpected(ParallelError(ParallelErrorCode::kAllocationFailed));
+        }
         return id;
     }
 
     template <typename F>
-    std::expected<ParallelNodeId, ParallelError> add(F&& function)
+    std::expected<ParallelNodeId, ParallelError> add(F&& function) noexcept
     {
         return add(makeParallelWork(std::forward<F>(function)));
     }
 
     std::expected<void, ParallelError> then(ParallelNodeId predecessor,
-                                            ParallelNodeId successor)
+                                            ParallelNodeId successor) noexcept
     {
         if (m_sealed) {
             return std::unexpected(ParallelError(ParallelErrorCode::kInvalidGraph));
@@ -306,13 +406,15 @@ public:
             return std::unexpected(ParallelError(ParallelErrorCode::kInvalidNode));
         }
 
-        auto& successors = m_nodes[predecessor].successors;
+        auto& successors = m_nodes[predecessor]->successors;
         if (std::find(successors.begin(), successors.end(), successor) != successors.end()) {
             return std::unexpected(ParallelError(ParallelErrorCode::kDuplicateDependency));
         }
 
-        successors.push_back(successor);
-        ++m_nodes[successor].predecessor_count;
+        if (!successors.push_back(successor)) {
+            return std::unexpected(ParallelError(ParallelErrorCode::kAllocationFailed));
+        }
+        ++m_nodes[successor]->predecessor_count;
         return {};
     }
 
@@ -336,10 +438,11 @@ private:
         }
 
         ParallelWork work;
-        std::vector<ParallelNodeId> successors;
+        detail::NoThrowVector<ParallelNodeId> successors;
         std::size_t predecessor_count = 0;
         std::atomic<std::size_t> pending_predecessors{0};
         std::atomic<NodeState> state{NodeState::kPending};
+        Node* validation_next = nullptr;
         ParallelError error{};
     };
 
@@ -351,34 +454,65 @@ private:
         return id < m_nodes.size();
     }
 
-    std::expected<void, ParallelError> validate() const
+    std::expected<void, ParallelError> validate() noexcept
     {
         if (m_nodes.empty()) {
             return {};
         }
 
-        std::vector<std::size_t> indegrees;
-        indegrees.reserve(m_nodes.size());
-        std::deque<ParallelNodeId> ready;
-        for (const auto& node : m_nodes) {
-            indegrees.push_back(node.predecessor_count);
-        }
-        for (ParallelNodeId id = 0; id < indegrees.size(); ++id) {
-            if (indegrees[id] == 0) {
-                ready.push_back(id);
+        // Reuse per-node scratch state instead of allocating a temporary
+        // indegree vector and ready queue. await_suspend() is noexcept, so
+        // validation must not have an allocation failure path. The queue is
+        // intrusive and uses a scratch link in each node, keeping validation
+        // linear in nodes plus edges.
+        Node* ready_head = nullptr;
+        Node* ready_tail = nullptr;
+        const auto enqueue_ready = [&ready_head, &ready_tail](Node* node) noexcept {
+            node->validation_next = nullptr;
+            if (ready_tail != nullptr) {
+                ready_tail->validation_next = node;
+            } else {
+                ready_head = node;
+            }
+            ready_tail = node;
+        };
+
+        for (auto* node : m_nodes) {
+            node->pending_predecessors.store(node->predecessor_count,
+                                             std::memory_order_relaxed);
+            node->state.store(NodeState::kPending, std::memory_order_relaxed);
+            node->validation_next = nullptr;
+            if (node->predecessor_count == 0) {
+                enqueue_ready(node);
             }
         }
 
         std::size_t visited = 0;
-        while (!ready.empty()) {
-            const auto id = ready.front();
-            ready.pop_front();
+        while (ready_head != nullptr) {
+            auto* node = ready_head;
+            ready_head = node->validation_next;
+            if (ready_head == nullptr) {
+                ready_tail = nullptr;
+            }
+            node->validation_next = nullptr;
+
+            node->state.store(NodeState::kSucceeded, std::memory_order_relaxed);
             ++visited;
-            for (const auto successor : m_nodes[id].successors) {
-                if (--indegrees[successor] == 0) {
-                    ready.push_back(successor);
+            for (const auto successor : node->successors) {
+                auto* next = m_nodes[successor];
+                if (next->pending_predecessors.fetch_sub(
+                        1, std::memory_order_relaxed) == 1) {
+                    enqueue_ready(next);
                 }
             }
+        }
+
+        // The scratch values are not part of the graph's public state. Reset
+        // them before either returning a cycle error or sealing the graph.
+        for (auto* node : m_nodes) {
+            node->state.store(NodeState::kPending, std::memory_order_relaxed);
+            node->pending_predecessors.store(0, std::memory_order_relaxed);
+            node->validation_next = nullptr;
         }
 
         if (visited != m_nodes.size()) {
@@ -387,7 +521,14 @@ private:
         return {};
     }
 
-    std::deque<Node> m_nodes;
+    void clear() noexcept
+    {
+        for (auto* node : m_nodes) {
+            delete node;
+        }
+    }
+
+    detail::NoThrowVector<Node*> m_nodes;
     bool m_sealed = false;
 };
 
@@ -408,9 +549,9 @@ public:
           m_remaining(m_graph.size())
     {
         m_graph.m_sealed = true;
-        for (auto& node : m_graph.m_nodes) {
-            node.pending_predecessors.store(node.predecessor_count,
-                                            std::memory_order_relaxed);
+        for (auto* node : m_graph.m_nodes) {
+            node->pending_predecessors.store(node->predecessor_count,
+                                             std::memory_order_relaxed);
         }
     }
 
@@ -432,7 +573,7 @@ public:
     void start() noexcept
     {
         for (ParallelNodeId id = 0; id < m_graph.m_nodes.size(); ++id) {
-            if (m_graph.m_nodes[id].predecessor_count == 0) {
+            if (m_graph.m_nodes[id]->predecessor_count == 0) {
                 submitNode(id);
             }
         }
@@ -443,23 +584,14 @@ public:
         return m_completed.load(std::memory_order_acquire);
     }
 
-    bool resumeFailed() const noexcept
-    {
-        return m_resume_failed.load(std::memory_order_acquire);
-    }
-
     std::expected<void, ParallelError> result() const noexcept
     {
-        if (resumeFailed()) {
-            return std::unexpected(ParallelError(ParallelErrorCode::kResumeFailed));
-        }
-
         const auto error_node = m_first_error_node.load(std::memory_order_acquire);
         if (error_node == ParallelError::kNoNode) {
             return {};
         }
 
-        const auto& error = m_graph.m_nodes[error_node].error;
+        const auto& error = m_graph.m_nodes[error_node]->error;
         if (error.node() != ParallelError::kNoNode) {
             return std::unexpected(error);
         }
@@ -499,7 +631,7 @@ private:
 
     void submitNode(ParallelNodeId id) noexcept
     {
-        auto& node = m_graph.m_nodes[id];
+        auto& node = *m_graph.m_nodes[id];
         auto expected = ParallelGraph::NodeState::kPending;
         if (!node.state.compare_exchange_strong(expected,
                                                 ParallelGraph::NodeState::kRunning,
@@ -526,7 +658,7 @@ private:
 
     void runNode(ParallelNodeId id) noexcept
     {
-        auto& node = m_graph.m_nodes[id];
+        auto& node = *m_graph.m_nodes[id];
         const auto error = node.work.invoke();
         if (error.hasError()) {
             terminalizeRunning(id,
@@ -543,7 +675,7 @@ private:
                             ParallelGraph::NodeState terminal_state,
                             ParallelError error) noexcept
     {
-        auto& node = m_graph.m_nodes[id];
+        auto& node = *m_graph.m_nodes[id];
         auto expected = ParallelGraph::NodeState::kRunning;
         if (!node.state.compare_exchange_strong(expected,
                                                 terminal_state,
@@ -562,7 +694,7 @@ private:
 
     void skipNode(ParallelNodeId id, ParallelError cause) noexcept
     {
-        auto& node = m_graph.m_nodes[id];
+        auto& node = *m_graph.m_nodes[id];
         auto expected = ParallelGraph::NodeState::kPending;
         if (!node.state.compare_exchange_strong(expected,
                                                 ParallelGraph::NodeState::kSkipped,
@@ -578,10 +710,10 @@ private:
 
     void finishNode(ParallelNodeId id, bool succeeded) noexcept
     {
-        auto& node = m_graph.m_nodes[id];
+        auto& node = *m_graph.m_nodes[id];
         if (succeeded) {
             for (const auto successor : node.successors) {
-                auto& next = m_graph.m_nodes[successor];
+                auto& next = *m_graph.m_nodes[successor];
                 const auto previous = next.pending_predecessors.fetch_sub(
                     1, std::memory_order_acq_rel);
                 if (previous == 1) {
@@ -597,8 +729,26 @@ private:
 
         if (m_remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             m_completed.store(true, std::memory_order_release);
-            if (!requestTaskResume(m_parent)) {
-                m_resume_failed.store(true, std::memory_order_release);
+            // The parent state is also retained by this ParallelState. Move
+            // that reference out before waking the parent so a rejected wake
+            // cannot leave a parent-frame -> ParallelState -> parent-state
+            // reference cycle behind when the owner scheduler is stopped.
+            TaskRef parent = std::move(m_parent);
+            const auto resume_result =
+                detail::requestTaskResumeStateDetailed(parent.state());
+            if (resume_result == detail::TaskResumeResult::kRejected) {
+                // The owner scheduler may have stopped before the last node
+                // completed, making an owner-only resume impossible. Publish
+                // the failure directly to the suspended parent so join/wait
+                // observes a terminal result instead of waiting forever.
+                auto* parent_state = parent.state();
+                if (parent_state != nullptr &&
+                    !parent_state->m_done.load(std::memory_order_acquire)) {
+                    storeTaskError(parent_state,
+                                   TaskResultError(
+                                       TaskResultErrorCode::kResumeFailed));
+                    completeTaskState(parent_state);
+                }
             }
         }
     }
@@ -620,7 +770,6 @@ private:
     std::atomic<std::size_t> m_remaining{0};
     std::atomic<std::size_t> m_first_error_node{ParallelError::kNoNode};
     std::atomic<bool> m_completed{false};
-    std::atomic<bool> m_resume_failed{false};
 };
 
 class ParallelAwaitable
@@ -680,7 +829,7 @@ public:
 
         if (m_graph.m_nodes.size() == 1 &&
             parent.belongScheduler()->type() == kParallelScheduler) {
-            const auto error = m_graph.m_nodes.front().work.invoke();
+            const auto error = m_graph.m_nodes[0]->work.invoke();
             if (error.hasError()) {
                 m_inline_error = ParallelError(error.code(), 0);
             }
@@ -708,9 +857,6 @@ public:
                 return std::unexpected(m_inline_error);
             }
             return {};
-        }
-        if (!m_state->completed()) {
-            return std::unexpected(ParallelError(ParallelErrorCode::kResumeFailed));
         }
         return m_state->result();
     }

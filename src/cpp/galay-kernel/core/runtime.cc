@@ -193,6 +193,9 @@ RuntimeError Runtime::mapTaskResultError(const detail::TaskResultError& error) n
     if (error.code() == detail::TaskResultErrorCode::kTaskException) {
         return RuntimeError(RuntimeErrorCode::kTaskException);
     }
+    if (error.code() == detail::TaskResultErrorCode::kResumeFailed) {
+        return RuntimeError(RuntimeErrorCode::kResumeFailed);
+    }
     return RuntimeError(RuntimeErrorCode::kSubmitFailed);
 }
 

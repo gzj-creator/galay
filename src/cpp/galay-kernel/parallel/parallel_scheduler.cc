@@ -53,9 +53,11 @@ std::expected<void, IOError> ParallelScheduler::start()
     m_thread = std::thread([this, thread_ready = std::move(thread_ready)]() mutable {
         detail::SchedulerThreadScope scheduler_thread_scope;
         m_threadId = std::this_thread::get_id();  // 设置调度器线程ID
+        m_worker_active.store(true, std::memory_order_release);
         thread_ready.set_value();
         (void)applyConfiguredAffinity();
         workerLoop();
+        m_worker_active.store(false, std::memory_order_release);
     });
     ready.wait();
     return {};
@@ -92,15 +94,37 @@ bool ParallelScheduler::schedule(TaskRef task) noexcept
     if (!bindTask(task)) {
         return false;
     }
-    return m_queue.enqueue(ParallelTask{std::move(task)});
+
+    m_submission_count.fetch_add(1, std::memory_order_acq_rel);
+    const bool owner_worker = std::this_thread::get_id() == m_threadId &&
+        m_worker_active.load(std::memory_order_acquire);
+    if (!m_running.load(std::memory_order_acquire) && !owner_worker) {
+        m_submission_count.fetch_sub(1, std::memory_order_release);
+        return false;
+    }
+
+    const bool accepted = m_queue.enqueue(ParallelTask{std::move(task)});
+    m_submission_count.fetch_sub(1, std::memory_order_release);
+    return accepted;
 }
 
 bool ParallelScheduler::scheduleWork(ParallelWorkItem work) noexcept
 {
-    if (!work.valid() || !m_running.load(std::memory_order_acquire)) {
+    if (!work.valid()) {
         return false;
     }
-    return m_workQueue.enqueue(std::move(work));
+
+    m_submission_count.fetch_add(1, std::memory_order_acq_rel);
+    const bool owner_worker = std::this_thread::get_id() == m_threadId &&
+        m_worker_active.load(std::memory_order_acquire);
+    if (!m_running.load(std::memory_order_acquire) && !owner_worker) {
+        m_submission_count.fetch_sub(1, std::memory_order_release);
+        return false;
+    }
+
+    const bool accepted = m_workQueue.enqueue(std::move(work));
+    m_submission_count.fetch_sub(1, std::memory_order_release);
+    return accepted;
 }
 
 bool ParallelScheduler::scheduleResume(TaskRef task) noexcept
@@ -171,32 +195,44 @@ void ParallelScheduler::workerLoop()
         Scheduler::resume(task.task);
     }
 
-    // 退出前处理剩余任务
-    drainResumeQueue();
+    // stop() may race with a producer between its running check and queue
+    // insertion. Wait for those producers before taking the final queue
+    // snapshot; submissions that observe the stopped state are rejected.
+    while (m_submission_count.load(std::memory_order_acquire) != 0) {
+        std::this_thread::yield();
+    }
+
+    // Drain all work generated while completing a task. In particular, an
+    // owner-only resume may submit an ordinary work item from inside its
+    // coroutine; keep that item in the same shutdown loop instead of taking a
+    // final resume-only snapshot and exiting immediately afterwards.
     for (;;) {
+        drainResumeQueue();
         if (m_queue.try_dequeue(task)) {
             Scheduler::resume(task.task);
-            drainResumeQueue();
             continue;
         }
         if (m_workQueue.try_dequeue(work)) {
             work.run(work.context, work.index);
             work.reset();
-            drainResumeQueue();
+            continue;
+        }
+        // A resumed coroutine may enqueue another owner-only resume after
+        // this drain took its snapshot. Give that follow-up resume a turn
+        // before declaring both ordinary queues quiescent.
+        if (!m_resumeQueue.empty()) {
+            continue;
+        }
+
+        // A non-owner producer that races with stop() either contributes to
+        // this count and is drained above, or observes m_running == false and
+        // rejects its submission without touching either queue.
+        if (m_submission_count.load(std::memory_order_acquire) != 0) {
+            std::this_thread::yield();
             continue;
         }
         break;
     }
-    while (m_queue.try_dequeue(task)) {
-        Scheduler::resume(task.task);
-        drainResumeQueue();
-    }
-    while (m_workQueue.try_dequeue(work)) {
-        work.run(work.context, work.index);
-        work.reset();
-        drainResumeQueue();
-    }
-    drainResumeQueue();
 }
 
 void ParallelScheduler::drainResumeQueue()

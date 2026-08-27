@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <iostream>
 #include <limits>
+#include <new>
 #include <thread>
 #include <utility>
 
@@ -24,12 +25,17 @@ using galay::kernel::TaskRef;
 using galay::kernel::JoinHandle;
 using galay::kernel::detail::allocateFrameStorage;
 using galay::kernel::detail::destroyTaskFrame;
+using galay::kernel::detail::frameFreeListSizeForTesting;
 using galay::kernel::detail::releaseFrameStorage;
+using galay::kernel::detail::setFrameAllocationFailureForTesting;
+using galay::kernel::detail::setFrameRecyclerEnabledForTesting;
+using galay::kernel::detail::setTaskStateAllocationFailureForTesting;
 
 namespace {
 
 constexpr std::size_t kDefaultAlignment = alignof(std::max_align_t);
 constexpr std::size_t kFrameCachePressureCount = 257;
+constexpr std::size_t kFrameCacheLimit = 256;
 
 bool require(bool condition, const char* message) {
     if (!condition) {
@@ -176,6 +182,22 @@ bool verifyBoundaryReuse() {
 }
 
 bool verifyCapacityAndFallback() {
+    // Empty the 128-byte bucket so the capacity assertion is independent of
+    // allocations performed by the preceding boundary checks.
+    const auto cached = frameFreeListSizeForTesting(128, kDefaultAlignment);
+    std::array<void*, kFrameCacheLimit> drained{};
+    for (std::size_t i = 0; i < cached; ++i) {
+        drained[i] = allocateFrameStorage(128, kDefaultAlignment);
+        if (!require(drained[i] != nullptr, "failed to drain frame bucket")) {
+            return false;
+        }
+    }
+    setFrameRecyclerEnabledForTesting(false);
+    for (std::size_t i = 0; i < cached; ++i) {
+        releaseFrameStorage(drained[i], 128, kDefaultAlignment);
+    }
+    setFrameRecyclerEnabledForTesting(true);
+
     std::array<void*, kFrameCachePressureCount> nodes{};
     for (void*& node : nodes) {
         node = allocateFrameStorage(128, kDefaultAlignment);
@@ -186,11 +208,40 @@ bool verifyCapacityAndFallback() {
     for (void* node : nodes) {
         releaseFrameStorage(node, 128, kDefaultAlignment);
     }
+    if (!require(frameFreeListSizeForTesting(128, kDefaultAlignment) == kFrameCacheLimit,
+                 "frame bucket must cap at 256 nodes")) {
+        return false;
+    }
+
+    // A stale compiler-provided sized-delete argument must not move a block
+    // into a larger bucket. The allocation header is the source of truth.
+    void* small = allocateFrameStorage(128, kDefaultAlignment);
+    if (!require(small != nullptr, "wrong-size provenance allocation failed")) {
+        return false;
+    }
+    releaseFrameStorage(small, 200, kDefaultAlignment);
+    void* reused = allocateFrameStorage(128, kDefaultAlignment);
+    if (!require(reused == small,
+                 "mismatched release size must preserve the original bucket")) {
+        if (reused != nullptr) {
+            releaseFrameStorage(reused, 128, kDefaultAlignment);
+        }
+        return false;
+    }
+    releaseFrameStorage(reused, 128, kDefaultAlignment);
+
+    const auto cachedBeforeLarge =
+        frameFreeListSizeForTesting(2048, kDefaultAlignment);
     void* large = allocateFrameStorage(2049, kDefaultAlignment);
     if (!require(large != nullptr, "large frame fallback allocation failed")) {
         return false;
     }
     releaseFrameStorage(large, 2049, kDefaultAlignment);
+    if (!require(frameFreeListSizeForTesting(2048, kDefaultAlignment) ==
+                     cachedBeforeLarge,
+                 "large frames must bypass TLS buckets")) {
+        return false;
+    }
 
     constexpr std::size_t kOverAlignment = kDefaultAlignment * 2;
     void* overAligned = allocateFrameStorage(128, kOverAlignment);
@@ -204,6 +255,11 @@ bool verifyCapacityAndFallback() {
         return false;
     }
     releaseFrameStorage(overAligned, 128, kOverAlignment);
+    if (!require(frameFreeListSizeForTesting(128, kDefaultAlignment) ==
+                     kFrameCacheLimit,
+                 "over-aligned frames must bypass ordinary buckets")) {
+        return false;
+    }
     return true;
 }
 
@@ -278,7 +334,60 @@ bool verifyAllocationFailureContract() {
         return false;
     }
 
+    setFrameAllocationFailureForTesting(true);
+    auto noFrame = completedIntTask();
+    setFrameAllocationFailureForTesting(false);
+    if (!require(!noFrame.isValid(),
+                 "frame allocation failure must return an invalid Task")) {
+        return false;
+    }
+
+    setTaskStateAllocationFailureForTesting(true);
+    auto noState = completedIntTask();
+    setTaskStateAllocationFailureForTesting(false);
+    if (!require(!noState.isValid(),
+                 "TaskState allocation failure must return an invalid Task")) {
+        return false;
+    }
+
+    std::atomic<int> destroyed{0};
+    setTaskStateAllocationFailureForTesting(true);
+    auto noStateFrame = initiallySuspendedTask(FrameProbe(&destroyed));
+    setTaskStateAllocationFailureForTesting(false);
+    if (!require(!noStateFrame.isValid(),
+                 "initial suspend must return an invalid Task when state allocation fails") ||
+        !require(destroyed.load(std::memory_order_acquire) == 1,
+                 "initial suspend must destroy its frame after state allocation failure")) {
+        return false;
+    }
+
     return true;
+}
+
+bool verifyConcurrentTaskStateChurn() {
+    constexpr std::size_t kWorkers = 4;
+    constexpr std::size_t kIterations = 20'000;
+    std::atomic<std::size_t> failures{0};
+    std::array<std::thread, kWorkers> workers;
+
+    for (auto& worker : workers) {
+        worker = std::thread([&]() {
+            for (std::size_t i = 0; i < kIterations; ++i) {
+                auto* state = new (std::nothrow) galay::kernel::TaskState(
+                    std::coroutine_handle<>{});
+                if (state == nullptr) {
+                    failures.fetch_add(1, std::memory_order_relaxed);
+                    continue;
+                }
+                delete state;
+            }
+        });
+    }
+    for (auto& worker : workers) {
+        worker.join();
+    }
+    return require(failures.load(std::memory_order_relaxed) == 0,
+                   "concurrent TaskState allocation must not fail");
 }
 
 bool verifyConcurrentRawFrameChurn() {
@@ -534,6 +643,7 @@ int main() {
         !verifyExplicitDestroyGuard() ||
         !verifyDirectHandleDestroyGuard() ||
         !verifyStateRetentionHandles() ||
+        !verifyConcurrentTaskStateChurn() ||
         !verifyNestedAndExceptionTasks()) {
         return 1;
     }

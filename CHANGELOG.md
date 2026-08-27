@@ -14,6 +14,7 @@
 ### Added
 
  - **新增结构化并行 DAG**：提供 `ParallelGraph` / `parallel(...)`，支持依赖边、拓扑环检测、同步 work item、失败排空与全部节点进入 terminal 后再恢复父协程；新增 `t181_parallel_dag` 边界测试和 `b35_parallel_work_item` 协程开销对照基准。
+ - **补充并行停机竞态回归覆盖**：新增 `t182_parallel_shutdown_races` 与 `b36_parallel_scheduler_shutdown_admission`，验证停机并发提交不丢已接纳工作，以及父任务恢复失败能够通过完成态观察。
 
 ### Changed
 
@@ -24,7 +25,10 @@
 
  - **修正 TaskPromise 协程分配失败回调**：统一 `TaskPromise<T>` 与 `TaskPromise<void>` 的标准回调名称和静态接口，失败时返回对应的无效 `Task`，并补充公开任务 API 的编译期契约检查。
  - **优化 C++ 协程帧生命周期与分配**：为 `TaskPromise<T>` / `TaskPromise<void>` 补齐普通、sized、aligned 和 sized+aligned 分配释放入口，引入按 128/256/512/1024/2048 字节分桶的线程局部有界 recycler；未提交 frame、跨线程释放、超大帧和超对齐请求均走明确的生命周期或全局 fallback 路径，并新增边界测试与压力 benchmark。
- - **继续收敛 C++ 协程热路径**：完成态 TaskState 使用 teardown fast path，普通对齐 frame 使用 headerless sized-delete 回收，promise 内部改用 raw TaskState view，TaskState/frame TLS cache 上限降为每桶 256；移除生产库测试 hook，新增可参数化的 `b35` 百万/千万级压力 benchmark。
+ - **继续收敛 C++ 协程热路径**：完成态 TaskState 使用 teardown fast path，普通对齐 frame 使用 provenance header 回收，promise 内部改用 raw TaskState view，TaskState/frame TLS cache 上限降为每桶 256；保留仅用于边界验证的 detail 测试 hook，并新增可参数化的 `b35` 百万/千万级压力 benchmark。
+ - **修复并行调度停机与图错误传播**：普通任务和 `ParallelWorkItem` 使用提交接纳协议排空停机竞态；owner scheduler 无法恢复 parent 时将 `kResumeFailed` 写入任务完成态并映射到 `RuntimeError`；图节点和依赖存储改为无抛增长并通过 `kAllocationFailed` 显式返回。
+ - **收敛并行恢复失败错误传播**：移除不可由正常协程生命周期到达的 `ParallelErrorCode::kResumeFailed` awaiter 防御分支，保留任务完成态与 `RuntimeError` 中真正可观察的恢复失败错误。
+ - **修复协程帧释放的尺寸来源问题**：释放时使用分配头记录的真实 bucket，避免错误 sized-delete 参数将 frame 放入过大的缓存桶；恢复 frame/TaskState 分配失败和缓存容量的边界观测覆盖。
 
 ## [v4.9.3] - 2026-08-26
 
@@ -62,7 +66,7 @@
 
 ### Changed
 
-- **运行时阻塞任务收尾顺序**：`BlockingExecutor` 新增显式 `stop()`，Runtime 在停止 parallel/IO scheduler 前先排空阻塞任务，确保异步 completion 的唤醒不会丢失；`AsyncFile::adopt()` 用于接管 blocking executor 打开的文件描述符。
+- **运行时阻塞任务收尾顺序**：`BlockingExecutor` 新增显式 `stop()`，Runtime 在停止 compute/IO scheduler 前先排空阻塞任务，确保异步 completion 的唤醒不会丢失；`AsyncFile::adopt()` 用于接管 blocking executor 打开的文件描述符。
 - **poll 超时计算统一收归 IOScheduler**：epoll/kqueue/io_uring 三个后端的 poll 超时由 `schedulerPollTimeoutNanoseconds()`、`schedulerPollTimeoutMilliseconds()`、`schedulerPollTimeoutIoUringNanoseconds()` 统一计算，空轮使用 idle 上限，非空轮对齐下一个 tick 边界（`nsToNextTickBoundary()`），消除散落在各后端的 `halfTickPoll*` 辅助函数。新增 `t178_scheduler_poll_timeout` 验证空轮/非空轮/上限三路径。
 - **TimeoutSupport 重命名为 TimeoutMethods**：所有继承 `TimeoutSupport` 的 awaitable 统一迁移至 `TimeoutMethods`，`SequenceAwaitableBase` 新增 `TimeoutTimerBinding` 支持超时绑定转发；HTTP2/SSL/WS facade 的 `await_suspend()` 补齐 `cancelBoundTimeoutTimer()` 与 `forwardBoundTimeoutTimer()` 调用。
 - **io_uring reactor 完成路径统一超时仲裁**：所有 IO 类型的 `wakeUp()` 调用前统一通过 `completeAndWake()` 先 `cancelBoundTimeoutTimer()`，防止超时与正常完成的竞争；sequence 的 `onCompleted()` 在 `wakeUp()` 前调用。
@@ -92,7 +96,7 @@
 - **修正 timeout 竞争路径的冗余状态写入**：`completeTimeout()` 不再在 `kTimeoutWon` 时额外写入 `m_flag`，避免跨缓存行伪共享。
 
 - **AsyncTcpSocket 新增 `readExact` / `writeAll` 组合流操作**：在一个 awaitable 状态机内完成多次部分读写，避免用户协程手动循环挂起和子 Task 分配；内部偏移量随状态机推进，零额外协程开销。同步新增 `t178_tcp_exact` 回归测试，验证部分读写、EOF 提前关闭与完整帧语义；TCP 公平吞吐 benchmark 迁移至新 API 并增加 drain 阶段 `shutdown()` 唤醒。
-- **按执行语义拆分 Runtime 根任务入口**：新增 `blockOnIO()`、`blockOnCpu()`、`spawnIO()`、`spawnCpu()` 及 `RuntimeHandle` 对应入口，分别绑定 IO scheduler 或 parallel scheduler；新增边界测试与提交吞吐基准。
+- **按执行语义拆分 Runtime 根任务入口**：新增 `blockOnIO()`、`blockOnCpu()`、`spawnIO()`、`spawnCpu()` 及 `RuntimeHandle` 对应入口，分别绑定 IO scheduler 或 compute scheduler；新增边界测试与提交吞吐基准。
 - **新增 Boost.Asio C++ 协程 TCP/UDP 公平基线**：加入同语言 `co_spawn`/`awaitable` echo harness，与 Galay 使用相同的 100 客户端、4 worker、256 字节 payload、单请求在途 workload，并注册为 kernel 正式外部对标目标。
 - **新增正式对标证据与策略门禁**：新增 TCP/UDP 三轮交替 CSV、逐轮 raw 输出及竞品策略检查，验证固定 CPU、warmup/measurement/drain、settled counter、丢包和错误字段完整性。
 
@@ -103,7 +107,7 @@
 ### Changed
 
 - **统一 readExact/writeAll 构造风格**：移除 `detail::makeExactReadAwaitable` / `detail::makeExactWriteAwaitable` 辅助函数，改为 `AsyncTcpSocket` 内直接构造 `StateMachineAwaitable`，与 `recv`/`send` 等方法保持一致；新增 public 类型别名 `ExactReadAwaitable` / `ExactWriteAwaitable` 简化返回类型。
-- **迁移仓内任务提交调用点**：网络、timer 与协议任务统一使用 IO 入口，纯计算任务使用 CPU 入口，消除 ParallelScheduler 优先的默认放置语义。
+- **迁移仓内任务提交调用点**：网络、timer 与协议任务统一使用 IO 入口，纯计算任务使用 CPU 入口，消除 ComputeScheduler 优先的默认放置语义。
 - **强化 Runtime 执行器吞吐基准**：计时前启动并预热 runtime，分别采样 IO / CPU 根任务的中位数吞吐；使用完成闩锁验证 detached 根任务完成，避免逐个 `join()` 掩盖调度路径成本。
 - **统一正式外部对标口径**：Boost.Asio C++ 协程是唯一竞品基线；Crossbeam、libuv、h2load、etcdctl、libpq、libmysqlclient、hiredis 和 gRPC 等入口改为历史/内部资料或 `not_applicable`，不再进入正式排名。
 - **收紧网络压测测量合同**：TCP/UDP runner 采用双方严格交替的三轮采样、同一 CPU 亲和性、1 秒预热、5 秒测量、250 毫秒排空，并以 settled loss、运行时错误和关闭错误作为通过门禁；同步更新构建、性能文档和跨模块说明。
@@ -302,7 +306,7 @@
 - **优化 `BoundedChannel` C 热路径与压测口径**：成功发送不再重复读取关闭状态，批量和协程路径复用已校验的内部收发函数；吞吐 benchmark 改为完整消息计数、Release 预热/中位数采样和线程局部统计，消除共享原子与 cache-line 伪共享造成的测量偏差。
 - **优化 MPMC 数据面与基准隔离能力**：无界队列改为 4096 槽可回收分段结构，使用单调 reservation cursor、块级复用和 token 局部块缓存，发送完成后的 waiter pump 外提为 unlikely 冷函数，避免同步轮询热路径内联完整控制面。B25 与独立 paired runner 可拆分当前分段队列 raw 数据面、token/waiter 通知成本和 moodycamel 默认基线；2P2C 可超过 Crossbeam，但 4P4C 仍落后，因此不保留全面胜出结论。
 - **收紧 MPMC 元素异常契约**：Bounded 元素必须不可抛移动构造，Unbounded 元素必须不可抛默认构造、移动构造和移动赋值，复制发送仅对不可抛复制构造类型开放；避免元素操作异常使无界 producer 永久保持 active，或穿过 `noexcept` 完成路径终止进程。
-- **Waker 恢复改用 owner scheduler 无分配入口**：`TaskState` 内嵌 resume 链接，parallel/epoll/kqueue/io_uring scheduler 统一通过专用 MPSC admission 回到 owner 线程；普通注入与 resume 批次公平轮转，`stop()` 先关闭接纳再由 owner 排空，成功恢复热路径不经历堆分配。
+- **Waker 恢复改用 owner scheduler 无分配入口**：`TaskState` 内嵌 resume 链接，compute/epoll/kqueue/io_uring scheduler 统一通过专用 MPSC admission 回到 owner 线程；普通注入与 resume 批次公平轮转，`stop()` 先关闭接纳再由 owner 排空，成功恢复热路径不经历堆分配。
 - **统一并发通道命名空间与消费边界**：移除旧 `mpsc_channel.h` / `unsafe_channel.h` / 顶层 `bounded_channel.h`；C ABI 同步迁入 `galay::{mpmc,mpsc,spsc}` 的 topology 专属目录，HTTP/2、RPC、module facade、示例、测试、benchmark 和文档同步迁移。
 
 ### Fixed
@@ -691,7 +695,7 @@
 ### Changed
 
 - **TcpSocket / UdpSocket 新增 `create(IPType)` 静态工厂**：返回 `std::expected<..., IOError>` 显式报告错误；原构造函数降级为兼容重载，失败时句柄保持 invalid；私有助手 `create` 更名为 `openHandle`，并在 IPv6 场景默认调用 `handleIPv6Only(false)` 启用 dual-stack。
-- **Scheduler / Runtime 启动边界改为 `std::expected`**：`Scheduler::start()` 与 `ParallelScheduler::start()` 返回 `std::expected<void, IOError>`；`Runtime::start` / `ensureStarted` / `acquireDefaultScheduler` 返回 `std::expected<..., RuntimeError>`，新增 `RuntimeErrorCode::kSchedulerStartFailed`，启动失败自动 `stop()` 已启动的 scheduler。
+- **Scheduler / Runtime 启动边界改为 `std::expected`**：`Scheduler::start()` 与 `ComputeScheduler::start()` 返回 `std::expected<void, IOError>`；`Runtime::start` / `ensureStarted` / `acquireDefaultScheduler` 返回 `std::expected<..., RuntimeError>`，新增 `RuntimeErrorCode::kSchedulerStartFailed`，启动失败自动 `stop()` 已启动的 scheduler。
 - **Reactor 抽象改为 `ReactorType` concept**：移除虚基类 `BackendReactor`，改为基于 `notify()` + `getHandle()` 的编译期约束，epoll/kqueue/io_uring 三后端通过 `static_assert` 锁定；`wakeReadFdForTest()` 更名为 `getHandle()`，新增 `std::expected<void, IOError> start()` 显式初始化。
 - **RPC 请求协议支持可选 metadata 扩展**：在请求体前增加向后兼容的 metadata marker 编码，旧格式请求仍按原 service/method/payload 解码；客户端真实 writev 发送路径和 direct serialization 保持一致，server interceptor 可读取真实跨网络 metadata。
 - **RPC 通道生命周期加固**：reader/writer/cancel watcher 统一纳入后台任务计数，`close()` 等待所有后台任务退出后返回；pending 计数改为原子快照，避免诊断读取与分发表更新竞争。

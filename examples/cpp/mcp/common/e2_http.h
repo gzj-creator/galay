@@ -1,3 +1,6 @@
+#ifndef GALAY_MCP_EXAMPLE_E2_HTTP_H
+#define GALAY_MCP_EXAMPLE_E2_HTTP_H
+
 using namespace galay::mcp;
 using namespace galay::kernel;
 
@@ -324,7 +327,7 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
  */
 int runHttpClient(const std::string& url) {
     // 创建Runtime
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).computeSchedulerCount(1).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     runtime.start();
 
     // 创建客户端
@@ -386,3 +389,5 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
+#endif  // GALAY_MCP_EXAMPLE_E2_HTTP_H

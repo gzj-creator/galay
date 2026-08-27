@@ -1,3 +1,6 @@
+#ifndef GALAY_MCP_EXAMPLE_E1_STDIO_H
+#define GALAY_MCP_EXAMPLE_E1_STDIO_H
+
 using namespace galay::mcp;
 
 /**
@@ -147,3 +150,5 @@ int main(int argc, char* argv[]) {
 
     return 0;
 }
+
+#endif  // GALAY_MCP_EXAMPLE_E1_STDIO_H

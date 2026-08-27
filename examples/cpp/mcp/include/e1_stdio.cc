@@ -3,4 +3,4 @@
 #include <galay/cpp/galay-mcp/common/schema_builder.h>
 #include <iostream>
 
-#include "common/e1_stdio.inc"
+#include "common/e1_stdio.h"

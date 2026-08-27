@@ -179,6 +179,7 @@ public:
      * @brief 将一个不拥有 coroutine frame 的同步计算工作项入队。
      * @return true 表示工作项已被 worker 接纳；调度器未运行或工作项无效时
      *         返回 false。
+     * @note stop() 与入队并发时，已进入接纳协议的工作项仍会在 worker 退出前排空。
      */
     bool scheduleWork(ParallelWorkItem work) noexcept;
 
@@ -237,6 +238,8 @@ private:
     moodycamel::BlockingConcurrentQueue<ParallelWorkItem> m_workQueue; ///< 同步计算工作队列
     detail::TaskResumeQueue m_resumeQueue;                       ///< Waker 专用无分配恢复队列
     std::atomic<bool> m_running{false};                         ///< 运行状态
+    std::atomic<bool> m_worker_active{false};                    ///< worker 线程仍在执行（含停机排空阶段）
+    std::atomic<std::size_t> m_submission_count{0};              ///< 正在进入普通队列的提交者数量
 };
 
 } // namespace galay::kernel
