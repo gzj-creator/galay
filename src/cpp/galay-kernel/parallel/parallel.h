@@ -1,11 +1,11 @@
 /**
  * @file parallel.h
- * @brief Structured parallel execution for synchronous CPU work.
+ * @brief 面向同步 CPU 工作的结构化并行执行。
  *
- * The first version deliberately keeps the node surface small: a graph node is
- * a non-suspending callable returning `void` or
- * `std::expected<void, ParallelError>`. Nodes are submitted as ParallelWorkItem,
- * not as Task<void>, so a graph does not allocate one coroutine frame per node.
+ * 首个版本保持节点接口精简：图节点是返回 `void` 或
+ * `std::expected<void, ParallelError>` 的不挂起可调用对象。节点以
+ * ParallelWorkItem 提交，而不是以 Task<void> 提交，因此图不会为每个节点
+ * 分配协程帧。
  */
 
 #ifndef GALAY_KERNEL_PARALLEL_H
@@ -47,10 +47,9 @@ enum class ParallelErrorCode : std::uint8_t {
 };
 
 /**
- * @brief Error returned by a parallel graph.
- * @details `node()` identifies the first node that reported a non-skipped error
- * when one is available. `kSkipped` is an internal propagation marker and is
- * not selected as the graph's first error.
+ * @brief 并行图返回的错误。
+ * @details 如果存在非跳过错误，`node()` 返回最先报告该错误的节点。
+ *          `kSkipped` 仅作为内部传播标记，不会被选为图的首个错误。
  */
 class ParallelError
 {
@@ -108,10 +107,10 @@ namespace detail
 {
 
 /**
- * @brief Fixed-element, growable storage whose growth never throws.
- * @details The graph only stores pointers and node IDs, so a trivially-copyable
- *          buffer is sufficient. Capacity failures are reported by `push_back`
- *          instead of escaping an `expected`-returning graph API.
+ * @brief 元素类型固定、可增长且增长过程不会抛异常的存储。
+ * @details 图中只存储指针和节点 ID，因此使用可平凡复制的缓冲区即可。
+ *          容量不足时由 `push_back` 报告失败，不让错误逃逸出返回
+ *          `expected` 的图 API。
  */
 template <typename T>
 class NoThrowVector
@@ -198,10 +197,10 @@ class ParallelAwaitable;
 } // namespace detail
 
 /**
- * @brief Type-erased synchronous work item used by a parallel graph.
- * @details The callable is owned by this object and is invoked at most once.
- * It must be nothrow-invocable and return `void` or
- * `std::expected<void, ParallelError>`.
+ * @brief 并行图使用的类型擦除同步工作项。
+ * @details 可调用对象由该对象持有，最多只会被调用一次。它必须支持
+ *          `noexcept` 调用，并返回 `void` 或
+ *          `std::expected<void, ParallelError>`。
  */
 class ParallelWork
 {
@@ -324,9 +323,9 @@ private:
 };
 
 /**
- * @brief Wrap a non-suspending CPU callable without creating a coroutine.
- * @note The callable must be `noexcept` and return `void` or
- * `std::expected<void, ParallelError>`.
+ * @brief 封装不挂起的 CPU 可调用对象，且不创建协程。
+ * @note 可调用对象必须是 `noexcept`，并返回 `void` 或
+ *       `std::expected<void, ParallelError>`。
  */
 template <typename F>
 ParallelWork makeParallelWork(F&& function) noexcept
@@ -337,13 +336,12 @@ ParallelWork makeParallelWork(F&& function) noexcept
 using ParallelNodeId = std::size_t;
 
 /**
- * @brief A closed-over-time DAG of synchronous CPU work.
+ * @brief 生命周期受限的同步 CPU 工作 DAG。
  *
- * Nodes are added before `parallel(std::move(graph))` is awaited. `then(a, b)`
- * adds an edge from `a` to `b`; `b` is submitted only after every predecessor
- * has completed successfully. A failed predecessor skips its pending
- * descendants. The graph result is published only after every node is
- * terminal, including rejected and skipped nodes.
+ * 必须在等待 `parallel(std::move(graph))` 之前添加节点。`then(a, b)`
+ * 为 `a` 到 `b` 添加一条边；只有所有前驱节点成功完成后才会提交 `b`。
+ * 前驱节点失败时，其仍处于 pending 状态的后代节点会被跳过。只有所有
+ * 节点都进入终态（包括 rejected 和 skipped）后，图结果才会发布。
  */
 class ParallelGraph
 {
@@ -460,11 +458,10 @@ private:
             return {};
         }
 
-        // Reuse per-node scratch state instead of allocating a temporary
-        // indegree vector and ready queue. await_suspend() is noexcept, so
-        // validation must not have an allocation failure path. The queue is
-        // intrusive and uses a scratch link in each node, keeping validation
-        // linear in nodes plus edges.
+        // 复用每个节点的临时状态，不再分配临时入度数组和就绪队列。
+        // await_suspend() 是 noexcept 的，因此验证不能存在分配失败路径。
+        // 队列使用每个节点中的临时链接实现侵入式管理，使验证复杂度保持
+        // 在线性 O(节点数 + 边数) 范围内。
         Node* ready_head = nullptr;
         Node* ready_tail = nullptr;
         const auto enqueue_ready = [&ready_head, &ready_tail](Node* node) noexcept {
@@ -507,8 +504,7 @@ private:
             }
         }
 
-        // The scratch values are not part of the graph's public state. Reset
-        // them before either returning a cycle error or sealing the graph.
+        // 临时字段不属于图的公开状态。在返回环错误或封存图之前先将其重置。
         for (auto* node : m_nodes) {
             node->state.store(NodeState::kPending, std::memory_order_relaxed);
             node->pending_predecessors.store(0, std::memory_order_relaxed);
@@ -729,18 +725,16 @@ private:
 
         if (m_remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             m_completed.store(true, std::memory_order_release);
-            // The parent state is also retained by this ParallelState. Move
-            // that reference out before waking the parent so a rejected wake
-            // cannot leave a parent-frame -> ParallelState -> parent-state
-            // reference cycle behind when the owner scheduler is stopped.
+            // ParallelState 同时持有 parent state。恢复 parent 之前先移出该引用，
+            // 避免 owner scheduler 停止时恢复被拒绝，留下
+            // parent frame -> ParallelState -> parent state 的引用环。
             TaskRef parent = std::move(m_parent);
             const auto resume_result =
                 detail::requestTaskResumeStateDetailed(parent.state());
             if (resume_result == detail::TaskResumeResult::kRejected) {
-                // The owner scheduler may have stopped before the last node
-                // completed, making an owner-only resume impossible. Publish
-                // the failure directly to the suspended parent so join/wait
-                // observes a terminal result instead of waiting forever.
+                // 最后一个节点完成前 owner scheduler 可能已经停止，导致无法进行
+                // owner-only resume。直接向挂起的 parent 发布失败，让 join/wait
+                // 观察到终态结果，而不是永久等待。
                 auto* parent_state = parent.state();
                 if (parent_state != nullptr &&
                     !parent_state->m_done.load(std::memory_order_acquire)) {
@@ -878,9 +872,9 @@ private:
 } // namespace detail
 
 /**
- * @brief Await completion of a dependency graph on Runtime parallel schedulers.
- * @details The parent coroutine is resumed exactly once, and only after all
- * graph nodes are terminal (succeeded, failed, skipped, or rejected).
+ * @brief 在 Runtime 的 parallel scheduler 上等待依赖图完成。
+ * @details parent 协程只会恢复一次，并且只有在所有图节点都进入终态
+ *          （succeeded、failed、skipped 或 rejected）后才会恢复。
  */
 inline detail::ParallelAwaitable parallel(ParallelGraph graph) noexcept
 {

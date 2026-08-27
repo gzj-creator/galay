@@ -1483,9 +1483,8 @@ public:
         bool await_suspend(std::coroutine_handle<> handle) const noexcept
         {
             if (promise->m_state == nullptr) {
-                // TaskState allocation failed after the frame was created. The
-                // frame owns no state in this branch, so destroy it here while
-                // it is already suspended and return an invalid Task.
+                // frame 创建后 TaskState 分配失败。此分支中的 frame 尚未持有状态，
+                // 因此趁它仍处于挂起状态时在此销毁，并返回无效 Task。
                 handle.destroy();
             }
             return true;
@@ -1524,10 +1523,9 @@ public:
     ~TaskPromise() noexcept
     {
         if (m_state != nullptr) {
-            // Both the compiler and an explicit coroutine_handle::destroy()
-            // can release the frame without entering TaskState::~TaskState().
-            // Clear the non-owning handle view so a later state teardown never
-            // attempts a second destroy.
+            // 编译器和显式调用 coroutine_handle::destroy() 都可能在不进入
+            // TaskState::~TaskState() 的情况下释放 frame。清除非拥有的 handle view，
+            // 避免后续状态清理再次尝试销毁 frame。
             m_state->m_handle = nullptr;
         }
         m_state = nullptr;
@@ -1627,7 +1625,7 @@ public:
         bool await_suspend(std::coroutine_handle<> handle) const noexcept
         {
             if (promise->m_state == nullptr) {
-                // See TaskPromise<T>::InitialSuspendAwaiter.
+                // 参见 TaskPromise<T>::InitialSuspendAwaiter。
                 handle.destroy();
             }
             return true;
@@ -1662,7 +1660,7 @@ public:
     ~TaskPromise() noexcept
     {
         if (m_state != nullptr) {
-            // See TaskPromise<T>::~TaskPromise().
+            // 参见 TaskPromise<T>::~TaskPromise()。
             m_state->m_handle = nullptr;
         }
         m_state = nullptr;

@@ -1,6 +1,6 @@
 /**
  * @file b36_parallel_scheduler_shutdown_admission.cc
- * @brief Measure ParallelScheduler work admission while shutdown races with producers.
+ * @brief 测量停机与生产者发生竞态时 ParallelScheduler 的工作接纳情况。
  */
 
 #include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>

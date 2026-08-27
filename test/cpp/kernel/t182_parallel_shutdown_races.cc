@@ -1,6 +1,6 @@
 /**
  * @file t182_parallel_shutdown_races.cc
- * @brief Regression coverage for parallel work admission and parent wake-up during shutdown.
+ * @brief 并行工作接纳和停机期间 parent 唤醒的回归覆盖。
  */
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -169,8 +169,8 @@ struct ScheduleOnDestroy {
 Task<void> resumeSchedulesWork(ParallelScheduler* scheduler,
                                WorkCounters* counters)
 {
-    // The destructor runs on the owner worker while it drains a queued
-    // owner-only resume. Its ordinary work submission must be drained too.
+    // 析构函数在 owner worker 排空已入队的 owner-only resume 时执行；
+    // 它提交的普通工作项也必须被排空。
     ScheduleOnDestroy guard{scheduler, counters};
     co_return;
 }
@@ -266,8 +266,8 @@ bool verifyParentResumeFailureIsObservable()
         return false;
     }
 
-    // The root runs on parallel scheduler 0 and the first graph node runs on
-    // scheduler 1. Stop the parent owner before the graph node finishes.
+    // 根任务运行在 parallel scheduler 0，首个图节点运行在 scheduler 1。
+    // 在图节点完成前停止 parent 的 owner scheduler。
     auto* parent_scheduler = runtime.getParallelScheduler(0);
     if (parent_scheduler == nullptr) {
         std::cerr << "[T182] parent scheduler missing\n";
@@ -302,8 +302,7 @@ bool verifyParentResumeFailureIsObservable()
         return false;
     }
 
-    // The synchronous root-task API should preserve the more specific error
-    // instead of collapsing an owner-resume failure into submit failure.
+    // 同步根任务 API 应保留更具体的错误，不能将 owner resume 失败折叠为提交失败。
     Runtime blocking_runtime = RuntimeBuilder()
         .ioSchedulerCount(0)
         .parallelSchedulerCount(2)

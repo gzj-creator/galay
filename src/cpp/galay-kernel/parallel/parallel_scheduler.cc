@@ -195,17 +195,15 @@ void ParallelScheduler::workerLoop()
         Scheduler::resume(task.task);
     }
 
-    // stop() may race with a producer between its running check and queue
-    // insertion. Wait for those producers before taking the final queue
-    // snapshot; submissions that observe the stopped state are rejected.
+    // stop() 可能在提交者完成运行状态检查、尚未写入队列时发生竞态。
+    // 获取最终队列快照前先等待这些提交者；观察到已停止状态的提交会被拒绝。
     while (m_submission_count.load(std::memory_order_acquire) != 0) {
         std::this_thread::yield();
     }
 
-    // Drain all work generated while completing a task. In particular, an
-    // owner-only resume may submit an ordinary work item from inside its
-    // coroutine; keep that item in the same shutdown loop instead of taking a
-    // final resume-only snapshot and exiting immediately afterwards.
+    // 排空任务完成过程中产生的所有工作。特别是 owner-only resume 可能在其
+    // 协程内部提交普通工作项；将这些工作项纳入同一停机循环，避免只获取
+    // resume 队列的最终快照后立即退出。
     for (;;) {
         drainResumeQueue();
         if (m_queue.try_dequeue(task)) {
@@ -217,16 +215,14 @@ void ParallelScheduler::workerLoop()
             work.reset();
             continue;
         }
-        // A resumed coroutine may enqueue another owner-only resume after
-        // this drain took its snapshot. Give that follow-up resume a turn
-        // before declaring both ordinary queues quiescent.
+        // 协程恢复后可能在本次排空获取快照之后再次加入 owner-only resume。
+        // 在确认普通队列静默前，先让这次后续恢复获得执行机会。
         if (!m_resumeQueue.empty()) {
             continue;
         }
 
-        // A non-owner producer that races with stop() either contributes to
-        // this count and is drained above, or observes m_running == false and
-        // rejects its submission without touching either queue.
+        // 与 stop() 发生竞态的非 owner 提交者，要么计入该计数并在上方排空，
+        // 要么观察到 m_running == false，在不接触两个普通队列的情况下拒绝提交。
         if (m_submission_count.load(std::memory_order_acquire) != 0) {
             std::this_thread::yield();
             continue;

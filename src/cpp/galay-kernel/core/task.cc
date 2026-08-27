@@ -49,9 +49,8 @@ struct TaskStateFreeListCleanup
 
 thread_local TaskStateFreeListCleanup g_taskStateFreeListCleanup;
 
-// A thread-local object with a non-trivial destructor is initialized lazily by
-// the runtime.  Keep the reference in the allocation helpers so every thread
-// that uses the cache also registers its cleanup callback.
+// 带有非平凡析构函数的 thread_local 对象由运行时延迟初始化。让分配辅助函数
+// 持有该对象的引用，确保每个使用缓存的线程都注册清理回调。
 inline void ensureTaskStateFreeListCleanup() noexcept
 {
     (void)g_taskStateFreeListCleanup;
@@ -298,11 +297,9 @@ void releaseFrameStorage(void* ptr,
         alignment = kFrameDefaultAlignment;
     }
 
-    // The allocation header records the actual size class. Do not derive the
-    // bucket from the compiler-supplied delete size: a caller passing a stale
-    // or mismatched size must not place a block into a larger bucket. The size
-    // parameter remains part of the compiler delete ABI but is intentionally
-    // ignored here.
+    // 分配头记录实际的尺寸类别。不要根据编译器提供的 delete 尺寸推导缓存桶：
+    // 调用方传入过期或不匹配的尺寸时，也不能将内存块放入更大的缓存桶。
+    // size 参数仍属于编译器 delete ABI，但在此处有意忽略。
     auto* header = frameAllocationHeader(ptr);
     if (!g_frameRecyclerEnabled || header == nullptr ||
         header->bucket >= kFrameSizeClassCount ||
@@ -354,8 +351,8 @@ void setTaskStateAllocationFailureForTesting(bool enabled) noexcept
 
 TaskState::~TaskState()
 {
-    // Completed frames are destroyed by final_suspend() == suspend_never;
-    // only an incomplete, unsubmitted frame needs this explicit cleanup.
+    // 已完成的 frame 会由 final_suspend() == suspend_never 销毁；只有未完成且
+    // 尚未提交的 frame 才需要执行这条显式清理路径。
     destroyTaskFrameForStateTeardown(this);
     if (m_destroy_result != nullptr && m_result_kind != ResultStorageKind::Empty) {
         m_destroy_result(*this);
@@ -698,8 +695,8 @@ TaskRef& TaskRef::operator=(const TaskRef& other) noexcept
     if (this != &other) {
         auto* state = other.state();
         if (state != nullptr) {
-            // Retain before releasing the old value so assigning from a
-            // borrowed view of the same state cannot invalidate the source.
+            // 先增加引用计数再释放旧值，避免从同一状态的 borrowed view 赋值时
+            // 将源对象提前失效。
             state->m_refs.fetch_add(1, std::memory_order_relaxed);
         }
         release();
@@ -712,8 +709,8 @@ TaskRef& TaskRef::operator=(TaskRef&& other) noexcept
 {
     if (this != &other) {
         if (other.isBorrowed() && state() == other.state()) {
-            // A borrowed promise view carries no reference to transfer. Keep
-            // the existing owner and only invalidate the moved-from view.
+            // borrowed promise view 不携带可转移的引用。保留现有 owner，
+            // 只让被移动对象的 view 失效。
             other.m_state = nullptr;
             return *this;
         }

@@ -1,6 +1,6 @@
 /**
  * @file t181_parallel_dag.cc
- * @brief Boundary coverage for the parallel DAG and its completion wake-up.
+ * @brief 并行 DAG 及其完成唤醒路径的边界覆盖。
  */
 
 #include <galay/cpp/galay-kernel/parallel/parallel.h>
@@ -231,8 +231,8 @@ Task<void> runLargeReverseChain(std::atomic<bool>* ok)
         }
         nodes.push_back(*node);
     }
-    // Reverse the edge direction so a repeated full scan needs one pass per
-    // node. This keeps the validation boundary covered by a non-trivial DAG.
+    // 反转边的方向，使重复的全量扫描需要为每个节点执行一次遍历。
+    // 这样可以用非平凡 DAG 覆盖验证边界。
     for (std::size_t index = 1; index < nodes.size(); ++index) {
         if (!graph.then(nodes[index], nodes[index - 1]).has_value()) {
             ok->store(false, std::memory_order_release);
@@ -263,9 +263,8 @@ int main()
 {
     assert(verifyGraphInputErrors());
 
-    // Both failures are submitted to one worker in FIFO order. This keeps the
-    // assertion about the first error deterministic while the other tests
-    // continue to exercise multi-scheduler execution.
+    // 两个失败节点按 FIFO 顺序提交到同一个 worker。这样首个错误的断言是
+    // 确定性的，同时其他测试仍继续覆盖多 scheduler 执行。
     Runtime first_error_runtime = RuntimeBuilder()
         .ioSchedulerCount(0)
         .parallelSchedulerCount(1)
@@ -344,8 +343,7 @@ int main()
         .parallelSchedulerCount(2)
         .build();
     assert(stopped_parallel.start().has_value());
-    // The root uses scheduler 0; the first graph node is selected on
-    // scheduler 1, which is stopped before submission.
+    // 根任务使用 scheduler 0；首个图节点选择 scheduler 1，并在提交前停止它。
     stopped_parallel.getParallelScheduler(1)->stop();
     std::atomic<bool> schedule_failure_observed{false};
     auto schedule_failure = stopped_parallel.spawnCpu(

@@ -96,8 +96,7 @@ void Runtime::stop()
         return;
     }
 
-    // Drain blocking work while schedulers are still alive so completion
-    // wakers cannot be lost during shutdown.
+    // 在 scheduler 仍存活时排空阻塞任务，避免停机期间丢失完成唤醒。
     m_blockingExecutor.stop();
 
     for (auto it = m_parallel_schedulers.rbegin(); it != m_parallel_schedulers.rend(); ++it) {

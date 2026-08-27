@@ -182,8 +182,7 @@ bool verifyBoundaryReuse() {
 }
 
 bool verifyCapacityAndFallback() {
-    // Empty the 128-byte bucket so the capacity assertion is independent of
-    // allocations performed by the preceding boundary checks.
+    // 先清空 128 字节缓存桶，使容量断言不受前面边界检查分配结果的影响。
     const auto cached = frameFreeListSizeForTesting(128, kDefaultAlignment);
     std::array<void*, kFrameCacheLimit> drained{};
     for (std::size_t i = 0; i < cached; ++i) {
@@ -213,8 +212,8 @@ bool verifyCapacityAndFallback() {
         return false;
     }
 
-    // A stale compiler-provided sized-delete argument must not move a block
-    // into a larger bucket. The allocation header is the source of truth.
+    // 过期的编译器 sized-delete 参数不能把内存块放入更大的缓存桶。
+    // 分配头才是判断真实来源的依据。
     void* small = allocateFrameStorage(128, kDefaultAlignment);
     if (!require(small != nullptr, "wrong-size provenance allocation failed")) {
         return false;

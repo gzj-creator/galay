@@ -30,6 +30,10 @@
  - **收敛并行恢复失败错误传播**：移除不可由正常协程生命周期到达的 `ParallelErrorCode::kResumeFailed` awaiter 防御分支，保留任务完成态与 `RuntimeError` 中真正可观察的恢复失败错误。
  - **修复协程帧释放的尺寸来源问题**：释放时使用分配头记录的真实 bucket，避免错误 sized-delete 参数将 frame 放入过大的缓存桶；恢复 frame/TaskState 分配失败和缓存容量的边界观测覆盖。
 
+### Docs
+
+ - **统一并行调度相关注释语言**：将本次并行调度、协程帧分配、停机竞态及边界测试和 benchmark 中的自然语言注释统一为中文，保留 API、类型和必要技术术语。
+
 ## [v4.9.3] - 2026-08-26
 
 ### Removed

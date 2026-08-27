@@ -1,6 +1,6 @@
 /**
  * @file b37_parallel_graph_validation.cc
- * @brief Measure no-allocation parallel graph validation on a reverse chain.
+ * @brief 测量反向链上的无分配并行图验证性能。
  */
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -48,8 +48,8 @@ int main()
 {
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(0)
-        // Keep the chain on one worker so the measurement reflects graph
-        // validation rather than alternating cross-thread queue hand-offs.
+        // 让链始终在一个 worker 上执行，使测量反映图验证本身，而不是跨线程
+        // 队列交接造成的额外开销。
         .parallelSchedulerCount(1)
         .build();
     if (!runtime.start().has_value()) {
