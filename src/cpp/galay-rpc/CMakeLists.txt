@@ -47,11 +47,6 @@ if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
         list(APPEND GALAY_RPC_MODULE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/module/galay_rpc_etcd.cppm")
     endif()
     if(GALAY_INSTALL_CPP23_MODULE_INTERFACES)
-        target_include_directories(galay-rpc
-            PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
-                $<INSTALL_INTERFACE:include>
-        )
         target_sources(galay-rpc
             PUBLIC
                 FILE_SET CXX_MODULES
@@ -78,9 +73,9 @@ if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
         )
         if(GALAY_RPC_ENABLE_ETCD)
             target_link_libraries(galay-rpc-cpp23-modules PUBLIC galay::etcd)
+            galay_apply_cpp_module_macros(galay-rpc-cpp23-modules)
             target_compile_definitions(galay-rpc-cpp23-modules PUBLIC GALAY_RPC_HAS_ETCD=1)
         endif()
-        galay_apply_cpp_module_macros(galay-rpc-cpp23-modules)
         target_sources(galay-rpc-cpp23-modules
             PUBLIC
                 FILE_SET CXX_MODULES

@@ -169,34 +169,36 @@ function(galay_install_cpp23_module_interface build_option module_dir module_fil
 endfunction()
 
 if(GALAY_INSTALL_CPP23_MODULE_INTERFACES)
+    # 只有 galay-kernel/galay-rpc/galay-postgres 会创建原生 C++23 模块文件集，
+    # 需按 EFFECTIVE 结果分流；其余模块没有原生文件集，固定安装 .cppm 接口。
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_UTILS galay-utils galay_utils.cppm "${GALAY_UTILS_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_UTILS galay-utils galay_utils.cppm OFF)
     galay_install_cpp23_module_interface(
         GALAY_BUILD_KERNEL galay-kernel galay_kernel.cppm "${GALAY_KERNEL_CPP23_MODULES_EFFECTIVE}")
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_SSL galay-ssl galay_ssl.cppm "${GALAY_SSL_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_SSL galay-ssl galay_ssl.cppm OFF)
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_HTTP galay-http galay_http.cppm "${GALAY_HTTP_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_HTTP galay-http galay_http.cppm OFF)
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_WS galay-ws galay_websocket.cppm "${GALAY_WS_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_WS galay-ws galay_websocket.cppm OFF)
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_HTTP2 galay-http2 galay_http2.cppm "${GALAY_HTTP2_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_HTTP2 galay-http2 galay_http2.cppm OFF)
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_REDIS galay-redis galay_redis.cppm "${GALAY_REDIS_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_REDIS galay-redis galay_redis.cppm OFF)
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_ETCD galay-etcd galay_etcd.cppm "${GALAY_ETCD_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_ETCD galay-etcd galay_etcd.cppm OFF)
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_MYSQL galay-mysql galay_mysql.cppm "${GALAY_MYSQL_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_MYSQL galay-mysql galay_mysql.cppm OFF)
     galay_install_cpp23_module_interface(
         GALAY_BUILD_POSTGRES galay-postgres galay_postgres.cppm "${GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE}")
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_MONGO galay-mongo galay_mongo.cppm "${GALAY_MONGO_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_MONGO galay-mongo galay_mongo.cppm OFF)
     galay_install_cpp23_module_interface(
         GALAY_BUILD_RPC galay-rpc galay_rpc.cppm "${GALAY_RPC_CPP23_MODULES_EFFECTIVE}")
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_MCP galay-mcp galay_mcp.cppm "${GALAY_MCP_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_MCP galay-mcp galay_mcp.cppm OFF)
     galay_install_cpp23_module_interface(
-        GALAY_BUILD_TRACING galay-tracing galay_tracing.cppm "${GALAY_TRACING_CPP23_MODULES_EFFECTIVE}")
+        GALAY_BUILD_TRACING galay-tracing galay_tracing.cppm OFF)
     if(GALAY_BUILD_RPC AND GALAY_RPC_ENABLE_ETCD AND NOT GALAY_RPC_CPP23_MODULES_EFFECTIVE)
         install(FILES
             ${PROJECT_SOURCE_DIR}/src/cpp/galay-rpc/module/galay_rpc_etcd.cppm

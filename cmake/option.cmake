@@ -60,12 +60,12 @@ option(GALAY_BUILD_C_API "Build C ABI wrapper targets" ON)
 
 # 当 CMake、生成器和编译器支持命名模块依赖扫描时，
 # 是否启用 CMake 原生 C++23 模块文件集；只影响模块扫描与编译。
-option(GALAY_ENABLE_CPP23_MODULES "Build enabled module C++23 facade targets when supported" ON)
+option(GALAY_ENABLE_CPP23_MODULES "Build enabled module C++23 facade targets when supported" OFF)
 
 # 是否安装供 mcpp 等外部模块工具使用的 .cppm 接口和 module_prelude.hpp；
 # 与 CMake 原生模块扫描和编译相互独立。
 option(GALAY_INSTALL_CPP23_MODULE_INTERFACES
-    "Install C++23 module interfaces for external module-aware build tools" OFF)
+    "Install C++23 module interfaces for external module-aware build tools" ON)
 
 # 是否将非纯头文件模块构建为共享库；关闭时构建静态库。
 option(GALAY_BUILD_SHARED_LIBS "Build non-header modules as shared libraries" ON)

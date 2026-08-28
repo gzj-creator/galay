@@ -318,3 +318,18 @@
 - **移除本地验证输出**：删除 `benchmark_run_results.txt` 与 `test_failure_summary.md`，并在 `.gitignore` 增加精确规则。
 - **移除重复测试资产**：删除 `test/cpp/http2`、`test/cpp/ws` 下未引用的 `static_files` 副本，以及三套协议目录下未引用的 `files/test_*.bin` 大文件 fixture；HTTP/2 静态文件测试继续在运行时创建临时 fixture。
 - **移除未接入构建的竞品源码包**：删除 `thirdparty/libwebsockets-4.5.8.tar.gz`，历史 benchmark 记录改为要求从官方源码获取并校验 SHA-256。
+
+## v4.9.4 - 2026-08-28
+
+- **版本级别**：修订版本（patch，小版本）
+- **Git 提交消息**：`fix: 修正 C++23 模块默认构建与安装配置`
+- **Git tag**：`v4.9.4`
+
+### 变更摘要
+
+本次为 `v4.9.3` 之后的修订版本，收束并行 DAG 与调度器重命名、协程帧分配回收优化、停机竞态错误传播、注释统一及 C++23 模块构建调整。版本按修复与构建配置优化升 patch 至 `v4.9.4`。
+
+- **并行执行能力**：新增结构化 `ParallelGraph` DAG、依赖与拓扑校验、同步 `ParallelWorkItem` 队列，并将 `ComputeScheduler` 统一重命名为 `ParallelScheduler`；停机接纳协议和恢复失败状态传播补齐边界覆盖。
+- **协程帧生命周期**：完善 TaskPromise 的分配失败回调、普通/sized/aligned delete 入口、分桶 recycler 与 teardown fast path，修正真实 bucket 回收并补充压力 benchmark。
+- **C++23 模块交付**：默认关闭原生模块扫描并开启 `.cppm` 接口安装，仅保留 kernel、postgres、rpc 的原生模块文件集；RPC 在接口不安装时使用独立 OBJECT 目标维持模块依赖，etcd 模块宏应用路径同步修正。
+- **验证与文档**：并行调度、协程帧、模块安装布局及相关源码约束测试与 benchmark 接线同步更新，注释统一为中文并保留必要技术术语。

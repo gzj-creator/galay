@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.9.4] - 2026-08-28
+
 ### Added
 
  - **新增结构化并行 DAG**：提供 `ParallelGraph` / `parallel(...)`，支持依赖边、拓扑环检测、同步 work item、失败排空与全部节点进入 terminal 后再恢复父协程；新增 `t181_parallel_dag` 边界测试和 `b35_parallel_work_item` 协程开销对照基准。
@@ -20,7 +22,7 @@
 
  - **统一并行调度器命名与归属**：`ComputeScheduler` 迁移至 `galay-kernel/parallel/parallel_scheduler.{h,cc}` 并重命名为 `ParallelScheduler`，Runtime、C/C++ 配置字段、Builder、亲和性字段、模块入口、示例、测试、benchmark 和文档同步改为 `parallel` 命名；旧头文件、旧类型和旧配置字段不再保留。
  - **补充非协程计算工作队列**：`ParallelScheduler` 新增 `ParallelWorkItem` 入队路径，普通同步 `noexcept` work 不再为每个节点创建 `Task<void>` coroutine frame。
- - **重构 C++23 模块安装与构建逻辑**：引入 `galay_install_native_cpp23_module_target` 和 `galay_install_cpp23_module_interface` 函数，新增 `GALAY_INSTALL_CPP23_MODULE_INTERFACES` 选项控制模块接口安装；在不安装接口的情况下通过独立 OBJECT 库保持模块依赖可见，同步更新构建选项注释与安装布局测试。
+ - **收敛 C++23 模块构建与安装分流**：默认关闭原生模块扫描并开启 `.cppm` 接口安装；仅 kernel、postgres、rpc 使用原生模块文件集，其余模块固定安装接口；RPC 在不安装接口时通过独立 OBJECT 目标保持模块依赖可见，并补齐 etcd 模块宏应用。
 
 ### Fixed
 
