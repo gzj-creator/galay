@@ -20,6 +20,7 @@
 
  - **统一并行调度器命名与归属**：`ComputeScheduler` 迁移至 `galay-kernel/parallel/parallel_scheduler.{h,cc}` 并重命名为 `ParallelScheduler`，Runtime、C/C++ 配置字段、Builder、亲和性字段、模块入口、示例、测试、benchmark 和文档同步改为 `parallel` 命名；旧头文件、旧类型和旧配置字段不再保留。
  - **补充非协程计算工作队列**：`ParallelScheduler` 新增 `ParallelWorkItem` 入队路径，普通同步 `noexcept` work 不再为每个节点创建 `Task<void>` coroutine frame。
+ - **重构 C++23 模块安装与构建逻辑**：引入 `galay_install_native_cpp23_module_target` 和 `galay_install_cpp23_module_interface` 函数，新增 `GALAY_INSTALL_CPP23_MODULE_INTERFACES` 选项控制模块接口安装；在不安装接口的情况下通过独立 OBJECT 库保持模块依赖可见，同步更新构建选项注释与安装布局测试。
 
 ### Fixed
 

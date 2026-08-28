@@ -117,42 +117,98 @@ if(GALAY_INSTALL_TARGETS)
     )
 endif()
 
+# Keep the native module target installation in one place.  Build-only module
+# targets are not exported when interface installation is disabled, so this
+# branch needs no FILE_SET argument.
+function(galay_install_native_cpp23_module_target target module_dir)
+    if(GALAY_INSTALL_CPP23_MODULE_INTERFACES)
+        install(TARGETS ${target}
+            EXPORT galayTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+            FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/${module_dir}/module
+            CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
+        )
+        install(FILES ${PROJECT_SOURCE_DIR}/src/cpp/${module_dir}/module/module_prelude.hpp
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/${module_dir}/module
+        )
+    else()
+        install(TARGETS ${target}
+            EXPORT galayTargets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+            RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        )
+    endif()
+endfunction()
+
 if(TARGET galay-kernel AND GALAY_KERNEL_CPP23_MODULES_EFFECTIVE)
-    install(TARGETS galay-kernel
-        EXPORT galayTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-kernel/module
-        CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
-    )
+    galay_install_native_cpp23_module_target(galay-kernel galay-kernel)
 endif()
 
 if(TARGET galay-rpc AND GALAY_RPC_CPP23_MODULES_EFFECTIVE)
-    install(TARGETS galay-rpc
-        EXPORT galayTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-rpc/module
-        CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
-    )
+    galay_install_native_cpp23_module_target(galay-rpc galay-rpc)
 endif()
 
 if(TARGET galay-postgres AND GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE)
-    install(TARGETS galay-postgres
-        EXPORT galayTargets
-        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-        FILE_SET CXX_MODULES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-postgres/module
-        CXX_MODULES_BMI DESTINATION ${CMAKE_INSTALL_LIBDIR}/galay/cpp/modules
-    )
+    galay_install_native_cpp23_module_target(galay-postgres galay-postgres)
+endif()
+
+# A CMake generator may be unable to build C++ module file sets while mcpp can
+# still consume the source interfaces directly.  Keep interface installation
+# independent from the native CMake module dependency-scanning capability.
+function(galay_install_cpp23_module_interface build_option module_dir module_file effective)
+    if("${${build_option}}" AND NOT "${effective}")
+        install(FILES
+            ${PROJECT_SOURCE_DIR}/src/cpp/${module_dir}/module/${module_file}
+            ${PROJECT_SOURCE_DIR}/src/cpp/${module_dir}/module/module_prelude.hpp
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/${module_dir}/module
+        )
+    endif()
+endfunction()
+
+if(GALAY_INSTALL_CPP23_MODULE_INTERFACES)
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_UTILS galay-utils galay_utils.cppm "${GALAY_UTILS_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_KERNEL galay-kernel galay_kernel.cppm "${GALAY_KERNEL_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_SSL galay-ssl galay_ssl.cppm "${GALAY_SSL_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_HTTP galay-http galay_http.cppm "${GALAY_HTTP_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_WS galay-ws galay_websocket.cppm "${GALAY_WS_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_HTTP2 galay-http2 galay_http2.cppm "${GALAY_HTTP2_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_REDIS galay-redis galay_redis.cppm "${GALAY_REDIS_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_ETCD galay-etcd galay_etcd.cppm "${GALAY_ETCD_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_MYSQL galay-mysql galay_mysql.cppm "${GALAY_MYSQL_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_POSTGRES galay-postgres galay_postgres.cppm "${GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_MONGO galay-mongo galay_mongo.cppm "${GALAY_MONGO_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_RPC galay-rpc galay_rpc.cppm "${GALAY_RPC_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_MCP galay-mcp galay_mcp.cppm "${GALAY_MCP_CPP23_MODULES_EFFECTIVE}")
+    galay_install_cpp23_module_interface(
+        GALAY_BUILD_TRACING galay-tracing galay_tracing.cppm "${GALAY_TRACING_CPP23_MODULES_EFFECTIVE}")
+    if(GALAY_BUILD_RPC AND GALAY_RPC_ENABLE_ETCD AND NOT GALAY_RPC_CPP23_MODULES_EFFECTIVE)
+        install(FILES
+            ${PROJECT_SOURCE_DIR}/src/cpp/galay-rpc/module/galay_rpc_etcd.cppm
+            DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp/galay-rpc/module
+        )
+    endif()
 endif()
 
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/cpp/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp
     FILES_MATCHING
+        PATTERN "module" EXCLUDE
         PATTERN "*.h"
         PATTERN "*.hpp"
         PATTERN "*.inl"
@@ -186,7 +242,10 @@ write_basic_package_version_file(
     COMPATIBILITY SameMajorVersion
 )
 
-if(GALAY_KERNEL_CPP23_MODULES_EFFECTIVE OR GALAY_RPC_CPP23_MODULES_EFFECTIVE OR GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE)
+if(GALAY_INSTALL_CPP23_MODULE_INTERFACES AND
+   (GALAY_KERNEL_CPP23_MODULES_EFFECTIVE OR
+    GALAY_RPC_CPP23_MODULES_EFFECTIVE OR
+    GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE))
     install(EXPORT galayTargets
         NAMESPACE galay::
         DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/galay

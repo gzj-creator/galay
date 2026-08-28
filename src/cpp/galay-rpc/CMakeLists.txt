@@ -46,18 +46,52 @@ if(GALAY_RPC_CPP23_MODULES_EFFECTIVE)
     if(GALAY_RPC_ENABLE_ETCD)
         list(APPEND GALAY_RPC_MODULE_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/module/galay_rpc_etcd.cppm")
     endif()
-    target_include_directories(galay-rpc
-        PUBLIC
-            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
-            $<INSTALL_INTERFACE:include>
-    )
-    target_sources(galay-rpc
-        PUBLIC
-            FILE_SET CXX_MODULES
-            BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/module
-            FILES ${GALAY_RPC_MODULE_SOURCES}
-    )
-    set_target_properties(galay-rpc PROPERTIES CXX_SCAN_FOR_MODULES ON)
+    if(GALAY_INSTALL_CPP23_MODULE_INTERFACES)
+        target_include_directories(galay-rpc
+            PUBLIC
+                $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+                $<INSTALL_INTERFACE:include>
+        )
+        target_sources(galay-rpc
+            PUBLIC
+                FILE_SET CXX_MODULES
+                BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/module
+                FILES ${GALAY_RPC_MODULE_SOURCES}
+        )
+        set_target_properties(galay-rpc PROPERTIES CXX_SCAN_FOR_MODULES ON)
+    else()
+        # Keep the module dependency visible to in-tree consumers without
+        # exporting a file set whose source interface is not installed.
+        add_library(galay-rpc-cpp23-modules OBJECT)
+        set_target_properties(galay-rpc-cpp23-modules PROPERTIES
+            POSITION_INDEPENDENT_CODE ${GALAY_BUILD_SHARED_LIBS}
+        )
+        target_compile_features(galay-rpc-cpp23-modules PUBLIC cxx_std_23)
+        target_include_directories(galay-rpc-cpp23-modules
+            PUBLIC
+                $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+        )
+        target_link_libraries(galay-rpc-cpp23-modules
+            PUBLIC
+                galay::kernel
+                galay::utils
+        )
+        if(GALAY_RPC_ENABLE_ETCD)
+            target_link_libraries(galay-rpc-cpp23-modules PUBLIC galay::etcd)
+            target_compile_definitions(galay-rpc-cpp23-modules PUBLIC GALAY_RPC_HAS_ETCD=1)
+        endif()
+        galay_apply_cpp_module_macros(galay-rpc-cpp23-modules)
+        target_sources(galay-rpc-cpp23-modules
+            PUBLIC
+                FILE_SET CXX_MODULES
+                BASE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/module
+                FILES ${GALAY_RPC_MODULE_SOURCES}
+        )
+        set_target_properties(galay-rpc-cpp23-modules PROPERTIES CXX_SCAN_FOR_MODULES ON)
+        target_link_libraries(galay-rpc PUBLIC
+            "$<BUILD_INTERFACE:galay-rpc-cpp23-modules>"
+        )
+    endif()
 endif()
 
 set(GALAY_RPC_CPP23_MODULES_EFFECTIVE "${GALAY_RPC_CPP23_MODULES_EFFECTIVE}" PARENT_SCOPE)

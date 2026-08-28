@@ -10,6 +10,7 @@ set(GALAY_HTTP_EXTERNAL_FIXTURE_TESTS
     t10_http_client
     t11_timeout
 )
+# 是否启用需要本机 127.0.0.1:8080 外部服务的 HTTP 测试。
 option(GALAY_HTTP_ENABLE_EXTERNAL_FIXTURE_TESTS
     "Enable HTTP tests requiring an external server on 127.0.0.1:8080"
     OFF

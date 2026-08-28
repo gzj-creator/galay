@@ -189,7 +189,7 @@ foreach(forbidden_header
 endforeach()
 
 file(READ "${prefix_dir}/lib/cmake/galay/galayTargets.cmake" installed_targets_content)
-if(installed_targets_content MATCHES "include/galay/cpp")
+if(installed_targets_content MATCHES "INTERFACE_INCLUDE_DIRECTORIES[^\n]*include/galay/cpp")
     message(FATAL_ERROR "Installed CMake targets must expose only the aggregate include root, not include/galay/cpp.")
 endif()
 
@@ -213,10 +213,68 @@ endif()
 
 file(GLOB_RECURSE installed_cppm_files
     "${prefix_dir}/include/galay/cpp/*.cppm")
-if(installed_cppm_files)
-    message(FATAL_ERROR
-        "Installed .cppm files must be provided only by concrete CXX_MODULES targets, "
-        "not by the generic header install: ${installed_cppm_files}")
+file(GLOB installed_module_dirs
+    "${prefix_dir}/include/galay/cpp/galay-*/module")
+if(galay_cache_content MATCHES "GALAY_INSTALL_CPP23_MODULE_INTERFACES:BOOL=OFF")
+    if(installed_module_dirs)
+        message(FATAL_ERROR
+            "C++ module directories must not be installed when "
+            "GALAY_INSTALL_CPP23_MODULE_INTERFACES=OFF: ${installed_module_dirs}")
+    endif()
+    if(installed_cppm_files)
+        message(FATAL_ERROR
+            "Installed .cppm files must not be present when "
+            "GALAY_INSTALL_CPP23_MODULE_INTERFACES=OFF: ${installed_cppm_files}")
+    endif()
+elseif(installed_cppm_files)
+    foreach(installed_cppm_file IN LISTS installed_cppm_files)
+        if(NOT installed_cppm_file MATCHES "/module/[^/]+\\.cppm$")
+            message(FATAL_ERROR
+                "Installed .cppm files must live in a module directory: ${installed_cppm_file}")
+        endif()
+    endforeach()
+endif()
+
+if(galay_cache_content MATCHES "GALAY_INSTALL_CPP23_MODULE_INTERFACES:BOOL=ON")
+    set(expected_module_interfaces
+        "GALAY_BUILD_UTILS:galay-utils/module/galay_utils.cppm"
+        "GALAY_BUILD_KERNEL:galay-kernel/module/galay_kernel.cppm"
+        "GALAY_BUILD_SSL:galay-ssl/module/galay_ssl.cppm"
+        "GALAY_BUILD_HTTP:galay-http/module/galay_http.cppm"
+        "GALAY_BUILD_WS:galay-ws/module/galay_websocket.cppm"
+        "GALAY_BUILD_HTTP2:galay-http2/module/galay_http2.cppm"
+        "GALAY_BUILD_REDIS:galay-redis/module/galay_redis.cppm"
+        "GALAY_BUILD_ETCD:galay-etcd/module/galay_etcd.cppm"
+        "GALAY_BUILD_MYSQL:galay-mysql/module/galay_mysql.cppm"
+        "GALAY_BUILD_POSTGRES:galay-postgres/module/galay_postgres.cppm"
+        "GALAY_BUILD_MONGO:galay-mongo/module/galay_mongo.cppm"
+        "GALAY_BUILD_RPC:galay-rpc/module/galay_rpc.cppm"
+        "GALAY_BUILD_MCP:galay-mcp/module/galay_mcp.cppm"
+        "GALAY_BUILD_TRACING:galay-tracing/module/galay_tracing.cppm")
+    if(galay_cache_content MATCHES "GALAY_RPC_ENABLE_ETCD:BOOL=ON")
+        list(APPEND expected_module_interfaces
+            "GALAY_BUILD_RPC:galay-rpc/module/galay_rpc_etcd.cppm")
+    endif()
+
+    foreach(expected_module_interface IN LISTS expected_module_interfaces)
+        string(REPLACE ":" ";" expected_module_parts "${expected_module_interface}")
+        list(GET expected_module_parts 0 module_build_option)
+        list(GET expected_module_parts 1 module_interface)
+        if(galay_cache_content MATCHES "${module_build_option}:BOOL=ON")
+            set(installed_module_interface "${prefix_dir}/include/galay/cpp/${module_interface}")
+            if(NOT EXISTS "${installed_module_interface}")
+                message(FATAL_ERROR
+                    "Missing installed C++ module interface: ${installed_module_interface}")
+            endif()
+            get_filename_component(module_directory "${module_interface}" DIRECTORY)
+            set(installed_module_prelude
+                "${prefix_dir}/include/galay/cpp/${module_directory}/module_prelude.hpp")
+            if(NOT EXISTS "${installed_module_prelude}")
+                message(FATAL_ERROR
+                    "Missing installed C++ module prelude: ${installed_module_prelude}")
+            endif()
+        endif()
+    endforeach()
 endif()
 
 file(WRITE "${consumer_source_dir}/main.cc"
