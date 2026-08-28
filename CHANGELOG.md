@@ -23,6 +23,7 @@
  - **统一并行调度器命名与归属**：`ComputeScheduler` 迁移至 `galay-kernel/parallel/parallel_scheduler.{h,cc}` 并重命名为 `ParallelScheduler`，Runtime、C/C++ 配置字段、Builder、亲和性字段、模块入口、示例、测试、benchmark 和文档同步改为 `parallel` 命名；旧头文件、旧类型和旧配置字段不再保留。
  - **补充非协程计算工作队列**：`ParallelScheduler` 新增 `ParallelWorkItem` 入队路径，普通同步 `noexcept` work 不再为每个节点创建 `Task<void>` coroutine frame。
  - **收敛 C++23 模块构建与安装分流**：默认关闭原生模块扫描并开启 `.cppm` 接口安装；仅 kernel、postgres、rpc 使用原生模块文件集，其余模块固定安装接口；RPC 在不安装接口时通过独立 OBJECT 目标保持模块依赖可见，并补齐 etcd 模块宏应用。
+ - **同步发布版本元数据并统一 C++23 模块开关**：CMake 与 Bazel 版本更新至 `4.9.4`，移除重复的 `ENABLE_CPP23_MODULES` 别名及相关旧文档引用，统一使用 `GALAY_ENABLE_CPP23_MODULES`。
 
 ### Fixed
 

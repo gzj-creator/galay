@@ -7,7 +7,7 @@
 - `galay-kernel`
 - `galay::kernel`
   - C++23 module file set 直接挂载在该 canonical target 上
-  - 仅在 `ENABLE_CPP23_MODULES=ON`
+  - 仅在 `GALAY_ENABLE_CPP23_MODULES=ON`
   - 且 `GALAY_KERNEL_CPP23_MODULES_EFFECTIVE=TRUE`
   - 安装后仍通过 `galay::kernel` 消费
 
@@ -16,7 +16,7 @@
 - `BUILD_TESTING`（CTest 标准选项；默认 `OFF`）
 - `BUILD_BENCHMARKS`
 - `BUILD_EXAMPLES`
-- `ENABLE_CPP23_MODULES`
+- `GALAY_ENABLE_CPP23_MODULES`
 - `BUILD_SHARED_LIBS`
 - `DISABLE_IOURING`
 
@@ -104,7 +104,7 @@
 
 模块生效条件：
 
-- `ENABLE_CPP23_MODULES=ON`
+- `GALAY_ENABLE_CPP23_MODULES=ON`
 - `GALAY_KERNEL_CPP23_MODULES_EFFECTIVE=TRUE`
 - 当前 AppleClang / 不支持模块的生成器下，源码文件会保留，但不会生成可消费的 import target
 

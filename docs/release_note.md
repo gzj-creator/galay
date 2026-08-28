@@ -322,7 +322,7 @@
 ## v4.9.4 - 2026-08-28
 
 - **版本级别**：修订版本（patch，小版本）
-- **Git 提交消息**：`fix: 修正 C++23 模块默认构建与安装配置`
+- **Git 提交消息**：`fix: 对齐 v4.9.4 版本元数据与模块开关`
 - **Git tag**：`v4.9.4`
 
 ### 变更摘要
@@ -332,4 +332,5 @@
 - **并行执行能力**：新增结构化 `ParallelGraph` DAG、依赖与拓扑校验、同步 `ParallelWorkItem` 队列，并将 `ComputeScheduler` 统一重命名为 `ParallelScheduler`；停机接纳协议和恢复失败状态传播补齐边界覆盖。
 - **协程帧生命周期**：完善 TaskPromise 的分配失败回调、普通/sized/aligned delete 入口、分桶 recycler 与 teardown fast path，修正真实 bucket 回收并补充压力 benchmark。
 - **C++23 模块交付**：默认关闭原生模块扫描并开启 `.cppm` 接口安装，仅保留 kernel、postgres、rpc 的原生模块文件集；RPC 在接口不安装时使用独立 OBJECT 目标维持模块依赖，etcd 模块宏应用路径同步修正。
+- **版本元数据与开关统一**：CMake `project()` 与 Bazel `module()` 版本均对齐至 `4.9.4`；移除无独立功能的 `ENABLE_CPP23_MODULES` cache 别名及旧文档引用，统一使用 `GALAY_ENABLE_CPP23_MODULES`。
 - **验证与文档**：并行调度、协程帧、模块安装布局及相关源码约束测试与 benchmark 接线同步更新，注释统一为中文并保留必要技术术语。
