@@ -37,6 +37,11 @@ foreach(required_source_path
         "src/cpp/galay-utils/cache/ring_buffer.hpp"
         "src/cpp/galay-utils/common/macro.hpp"
         "src/cpp/galay-utils/cache/type_ring_buffer.hpp"
+        "thirdparty/concurrentqueue/moodycamel/concurrentqueue.h"
+        "thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h"
+        "thirdparty/concurrentqueue/moodycamel/lightweightsemaphore.h"
+        "thirdparty/concurrentqueue/LICENSE.md"
+        "thirdparty/concurrentqueue/README.md"
         "src/cpp/galay-http/common/macro.hpp"
         "src/cpp/galay-http/client/http_client.h"
         "src/cpp/galay-ws/common/macro.hpp"
@@ -123,7 +128,12 @@ foreach(required_header
         "include/galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h"
         "include/galay/cpp/galay-kernel/concurrency/spsc/unbounded_channel.h"
         "include/galay/cpp/galay-utils/cache/ring_buffer.hpp"
-        "include/galay/cpp/galay-utils/cache/type_ring_buffer.hpp")
+        "include/galay/cpp/galay-utils/cache/type_ring_buffer.hpp"
+        "include/galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h"
+        "include/galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h"
+        "include/galay/thirdparty/concurrentqueue/moodycamel/lightweightsemaphore.h"
+        "include/galay/thirdparty/concurrentqueue/LICENSE.md"
+        "include/galay/thirdparty/concurrentqueue/README.md")
     if(NOT EXISTS "${prefix_dir}/${required_header}")
         message(FATAL_ERROR "Missing installed header: ${required_header}")
     endif()
@@ -287,6 +297,7 @@ file(WRITE "${consumer_source_dir}/main.cc"
     "#include <galay/cpp/galay-utils/common/macro.hpp>\n"
     "#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>\n"
     "#include <galay/cpp/galay-utils/cache/type_ring_buffer.hpp>\n"
+    "#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>\n"
     "#include <galay/cpp/galay-http/common/macro.hpp>\n"
     "#include <galay/cpp/galay-ws/common/macro.hpp>\n"
     "int main() {\n"
@@ -295,11 +306,15 @@ file(WRITE "${consumer_source_dir}/main.cc"
     "  galay::spsc::Ring<int> kernel_ring(2);\n"
     "  galay::spsc::StaticRing<int, 2> kernel_static_ring;\n"
     "  galay::spsc::UnboundedQueue<int> queue;\n"
+    "  moodycamel::ConcurrentQueue<int> vendor_queue;\n"
+    "  int vendor_value = 0;\n"
+    "  vendor_queue.enqueue(42);\n"
     "  return DEFAULT_HTTP_MAX_HEADER_SIZE == 8192 &&\n"
     "      utils_ring.error() == galay::utils::TypeRingBufferError::kNone &&\n"
     "      utils_static_ring.capacity() == 2 &&\n"
     "      kernel_ring.error() == galay::spsc::RingError::kNone &&\n"
-    "      kernel_static_ring.capacity() == 2 && queue.valid() ? 0 : 1;\n"
+    "      kernel_static_ring.capacity() == 2 && queue.valid() &&\n"
+    "      vendor_queue.try_dequeue(vendor_value) && vendor_value == 42 ? 0 : 1;\n"
     "}\n")
 
 file(WRITE "${consumer_source_dir}/CMakeLists.txt" [=[

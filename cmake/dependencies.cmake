@@ -1,5 +1,15 @@
 include_guard(GLOBAL)
 
+# Resolve the repository-owned third-party tree once so the project never
+# falls back to a different concurrentqueue installation on the host.
+get_filename_component(GALAY_PROJECT_SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+set(GALAY_CONCURRENTQUEUE_SOURCE_DIR
+    "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/concurrentqueue"
+    CACHE PATH "Galay's vendored concurrentqueue source directory" FORCE)
+set(GALAY_CONCURRENTQUEUE_INCLUDE_DIR
+    "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty"
+    CACHE PATH "Include root for Galay's vendored third-party headers" FORCE)
+
 function(galay_apply_cpp_module_macros target)
     if(GALAY_SSL_FEATURE_ENABLED)
         target_compile_definitions(${target} PUBLIC GALAY_SSL_FEATURE_ENABLED)
@@ -75,64 +85,21 @@ function(galay_ensure_concurrentqueue)
         return()
     endif()
 
-    find_package(concurrentqueue CONFIG QUIET)
-    if(TARGET concurrentqueue::concurrentqueue)
-        return()
-    endif()
-
-    set(_galay_concurrentqueue_hints
-        "${GALAY_CONCURRENTQUEUE_INCLUDE_DIR}"
-        "${GALAY_UTILS_CONCURRENTQUEUE_INCLUDE_DIR}"
-        "${GALAY_KERNEL_CONCURRENTQUEUE_INCLUDE_DIR}"
-        "${MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR}"
-        "$ENV{CONCURRENTQUEUE_ROOT}/include"
-        "$ENV{MOODYCAMEL_CONCURRENTQUEUE_ROOT}/include"
-        /opt/homebrew/include
-        /usr/local/include
-        /usr/include
-    )
-
-    find_path(GALAY_CONCURRENTQUEUE_INCLUDE_DIR
-        NAMES concurrentqueue/moodycamel/concurrentqueue.h
-        HINTS ${_galay_concurrentqueue_hints}
-        DOC "Include prefix containing concurrentqueue/moodycamel/concurrentqueue.h"
-    )
-
-    if(NOT GALAY_CONCURRENTQUEUE_INCLUDE_DIR)
-        find_path(MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR
-            NAMES concurrentqueue.h
-            HINTS ${_galay_concurrentqueue_hints}
-            PATH_SUFFIXES concurrentqueue/moodycamel moodycamel
-            DOC "Directory containing moodycamel concurrentqueue headers"
-        )
-        if(MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR)
-            get_filename_component(_galay_moodycamel_parent "${MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR}" DIRECTORY)
-            get_filename_component(_galay_moodycamel_root "${_galay_moodycamel_parent}" DIRECTORY)
-            if(EXISTS "${_galay_moodycamel_root}/concurrentqueue/moodycamel/concurrentqueue.h")
-                set(GALAY_CONCURRENTQUEUE_INCLUDE_DIR "${_galay_moodycamel_root}" CACHE PATH
-                    "Include prefix containing concurrentqueue/moodycamel/concurrentqueue.h" FORCE)
-            endif()
-        endif()
-    endif()
-
-    if(NOT GALAY_CONCURRENTQUEUE_INCLUDE_DIR)
+    set(_galay_concurrentqueue_header
+        "${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/moodycamel/concurrentqueue.h")
+    if(NOT EXISTS "${_galay_concurrentqueue_header}")
         message(FATAL_ERROR
-            "concurrentqueue headers not found. Set GALAY_CONCURRENTQUEUE_INCLUDE_DIR "
-            "to the include prefix containing concurrentqueue/moodycamel/concurrentqueue.h")
+            "Galay's vendored concurrentqueue headers are missing: "
+            "${_galay_concurrentqueue_header}")
     endif()
 
-    set(_galay_concurrentqueue_include_dirs "${GALAY_CONCURRENTQUEUE_INCLUDE_DIR}")
-    if(EXISTS "${GALAY_CONCURRENTQUEUE_INCLUDE_DIR}/concurrentqueue/moodycamel/concurrentqueue.h")
-        list(APPEND _galay_concurrentqueue_include_dirs
-            "${GALAY_CONCURRENTQUEUE_INCLUDE_DIR}/concurrentqueue/moodycamel")
-        set(MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR
-            "${GALAY_CONCURRENTQUEUE_INCLUDE_DIR}/concurrentqueue/moodycamel"
-            CACHE PATH "Directory containing moodycamel concurrentqueue headers" FORCE)
-    endif()
+    set(MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR
+        "${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/moodycamel"
+        CACHE PATH "Directory containing Galay's vendored concurrentqueue headers" FORCE)
 
     add_library(concurrentqueue::concurrentqueue INTERFACE IMPORTED GLOBAL)
     set_target_properties(concurrentqueue::concurrentqueue PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES "${_galay_concurrentqueue_include_dirs}"
+        INTERFACE_INCLUDE_DIRECTORIES "${GALAY_CONCURRENTQUEUE_INCLUDE_DIR}"
     )
 
     set(MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR "${MOODYCAMEL_CONCURRENTQUEUE_INCLUDE_DIR}" PARENT_SCOPE)

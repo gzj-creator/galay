@@ -23,7 +23,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <utility>
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
 namespace galay::etcd
 {

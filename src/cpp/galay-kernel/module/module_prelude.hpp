@@ -2,6 +2,13 @@
 // Auto prelude for transitional C++23 module builds on Clang/GCC/MSVC.
 // Keep third-party/system/dependency headers in global module fragment.
 
+// GCC's x86 intrinsic headers include <mm_malloc.h> from <emmintrin.h>.
+// Pre-include it here so its TU-local helpers stay in the global module
+// fragment instead of being seen inside galay.kernel's exported headers.
+#if __has_include(<mm_malloc.h>)
+#include <mm_malloc.h>
+#endif
+
 #if __has_include(<algorithm>)
 #include <algorithm>
 #endif
@@ -26,11 +33,11 @@
 #if __has_include(<concepts>)
 #include <concepts>
 #endif
-#if __has_include(<concurrentqueue/moodycamel/blockingconcurrentqueue.h>)
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+#if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>)
+#include <galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 #endif
-#if __has_include(<concurrentqueue/moodycamel/concurrentqueue.h>)
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>)
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #endif
 #if __has_include(<coroutine>)
 #include <coroutine>

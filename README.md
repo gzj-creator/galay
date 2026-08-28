@@ -36,6 +36,11 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 - CMake ≥ 3.20
 - OpenSSL（`galay-ssl`、`galay-http2`、`galay-redis` 等 TLS 相关模块需要）
 
+Galay 自带所需的 `concurrentqueue` 头文件。该副本位于
+[`thirdparty/concurrentqueue`](thirdparty/concurrentqueue)，并在安装时放到
+`include/galay/thirdparty/concurrentqueue`；构建和消费 Galay 不需要另外安装
+或查找原始 `concurrentqueue` 包。
+
 ## 快速开始
 
 ```bash
@@ -73,6 +78,7 @@ galay/
 ├── examples/        # 各模块使用示例
 ├── test/            # 单元 / 集成测试（GoogleTest + CTest）
 ├── benchmark/       # 性能基准测试
+├── thirdparty/      # 随 Galay 分发的第三方源码与许可证
 ├── docs/cpp/modules/# C++ 模块文档
 ├── docs/c/modules/  # C ABI 模块文档
 ├── cmake/           # CMake 选项、依赖与包配置

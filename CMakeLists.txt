@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(galay VERSION 4.9.4 LANGUAGES C CXX)
+project(galay VERSION 4.9.5 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -26,6 +26,13 @@ file(CREATE_LINK
     SYMBOLIC
     COPY_ON_ERROR
 )
+file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/include/galay/thirdparty)
+file(CREATE_LINK
+    ${GALAY_PROJECT_SOURCE_ROOT}/thirdparty
+    ${CMAKE_BINARY_DIR}/include/galay/thirdparty
+    SYMBOLIC
+    COPY_ON_ERROR
+)
 if(GALAY_BUILD_C_API)
     file(REMOVE_RECURSE ${CMAKE_BINARY_DIR}/include/galay/c)
     file(CREATE_LINK
@@ -39,6 +46,7 @@ endif()
 if(GALAY_BUILD_UTILS)
     add_subdirectory(src/cpp/galay-utils)
 endif()
+
 if(GALAY_BUILD_KERNEL)
     add_subdirectory(src/cpp/galay-kernel)
 endif()
@@ -214,6 +222,18 @@ install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/cpp/
         PATTERN "*.h"
         PATTERN "*.hpp"
         PATTERN "*.inl"
+)
+install(DIRECTORY ${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/concurrentqueue
+    FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+        PATTERN "*.inl"
+)
+install(FILES
+    ${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/LICENSE.md
+    ${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/README.md
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/concurrentqueue
 )
 if(GALAY_BUILD_C_API)
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/c/

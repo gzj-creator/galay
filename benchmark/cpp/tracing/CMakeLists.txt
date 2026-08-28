@@ -31,7 +31,7 @@ foreach(benchmark_source IN LISTS GALAY_TRACING_BENCHMARK_SOURCES)
 
     if(benchmark_name STREQUAL "b8_moodycamel_batch_queue")
         add_executable(${target_name} ${benchmark_source})
-        target_include_directories(${target_name} SYSTEM PRIVATE "${GALAY_CONCURRENTQUEUE_INCLUDE_DIR}")
+        target_include_directories(${target_name} SYSTEM PRIVATE "${CMAKE_BINARY_DIR}/include")
         set_target_properties(${target_name} PROPERTIES CXX_STANDARD 23 CXX_STANDARD_REQUIRED ON)
     else()
         galay_add_tracing_benchmark(${target_name} ${benchmark_source})

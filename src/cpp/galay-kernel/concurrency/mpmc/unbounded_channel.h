@@ -25,7 +25,7 @@
 #include <atomic>
 #include <array>
 #include <concepts>
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #include <coroutine>
 #include <cstddef>
 #include <cstdint>

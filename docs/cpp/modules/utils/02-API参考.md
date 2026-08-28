@@ -342,7 +342,7 @@
 依赖边界：
 
 - 该头文件仅依赖标准库
-- 不再提供异步限流器，不再依赖 `galay-kernel`；`concurrentqueue/moodycamel` 仅用于线程池任务队列
+- 不再提供异步限流器，不再依赖 `galay-kernel`；`galay/thirdparty/concurrentqueue/moodycamel` 仅用于线程池任务队列
 - 限流器内部使用原子状态与 CAS，不使用内部互斥锁；需要 coroutine awaitable 时由上层运行时适配
 
 ### `CircuitBreaker`

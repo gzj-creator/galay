@@ -334,3 +334,17 @@
 - **C++23 模块交付**：默认关闭原生模块扫描并开启 `.cppm` 接口安装，仅保留 kernel、postgres、rpc 的原生模块文件集；RPC 在接口不安装时使用独立 OBJECT 目标维持模块依赖，etcd 模块宏应用路径同步修正。
 - **版本元数据与开关统一**：CMake `project()` 与 Bazel `module()` 版本均对齐至 `4.9.4`；移除无独立功能的 `ENABLE_CPP23_MODULES` cache 别名及旧文档引用，统一使用 `GALAY_ENABLE_CPP23_MODULES`。
 - **验证与文档**：并行调度、协程帧、模块安装布局及相关源码约束测试与 benchmark 接线同步更新，注释统一为中文并保留必要技术术语。
+
+## v4.9.5 - 2026-08-29
+
+- **版本级别**：修订版本（patch）
+- **Git 提交消息**：`chore: 内置 concurrentqueue 并同步构建版本`
+- **Git tag**：`v4.9.5`
+
+### 变更摘要
+
+本次为 `v4.9.4` 之后的修订版本，主线是将 moodycamel concurrentqueue 纳入 Galay 源码包并统一第三方头文件安装与引用路径，同时修复 GCC C++23 模块预包含边界。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.9.5`。
+
+- **内置 concurrentqueue 依赖**：随源码分发 concurrentqueue 头文件、许可证与说明，安装到 `include/galay/thirdparty/concurrentqueue`，构建和消费 Galay 不再依赖主机上的 concurrentqueue 包。
+- **统一引用与安装验证**：C++ 源码、模块 prelude、tracing benchmark 及安装布局测试统一使用 `galay/thirdparty/concurrentqueue` 路径，并验证第三方头文件、许可证和实际队列操作可被安装后的 consumer 使用。
+- **GCC 模块兼容修复**：模块 prelude 预包含 `mm_malloc.h`，避免 x86 intrinsic 辅助定义进入 `galay.kernel` 导出模块作用域。

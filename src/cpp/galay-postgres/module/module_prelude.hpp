@@ -35,4 +35,4 @@
 #include <galay/cpp/galay-kernel/core/waker.h>
 #include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
 
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>

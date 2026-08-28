@@ -17,7 +17,7 @@
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/waker.h"
 #include "../../galay-utils/common/defn.hpp"
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #include <array>
 #include <memory>
 #include <vector>

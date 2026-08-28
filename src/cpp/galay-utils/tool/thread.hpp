@@ -2,7 +2,7 @@
 #define GALAY_UTILS_THREAD_HPP
 
 #include "../common/defn.hpp"
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 #include <chrono>
 #include <thread>
 #include <vector>

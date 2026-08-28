@@ -12,7 +12,7 @@
 
 #include <galay/cpp/galay-tracing/common/tracing_log.h>
 
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
 #include <algorithm>
 #include <atomic>

@@ -33,7 +33,7 @@
 #include <span>
 #include <utility>
 #include <vector>
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
 namespace galay::kernel
 {

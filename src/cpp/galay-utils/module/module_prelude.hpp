@@ -10,6 +10,13 @@
 
 #pragma once
 
+#if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>)
+#include <galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+#endif
+#if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>)
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
+#endif
+
 #if __has_include(<algorithm>)
 #include <algorithm>
 #endif
@@ -102,6 +109,9 @@
 #endif
 #if __has_include(<limits>)
 #include <limits>
+#endif
+#if __has_include(<list>)
+#include <list>
 #endif
 #if __has_include(<mach-o/dyld.h>)
 #include <mach-o/dyld.h>

@@ -35,14 +35,14 @@
 #if __has_include(<concepts>)
 #include <concepts>
 #endif
-#if __has_include(<concurrentqueue/moodycamel/blockingconcurrentqueue.h>)
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+#if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>)
+#include <galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 #endif
-#if __has_include(<concurrentqueue/moodycamel/concurrentqueue.h>)
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>)
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #endif
-#if __has_include(<concurrentqueue/moodycamel/lightweightsemaphore.h>)
-#include <concurrentqueue/moodycamel/lightweightsemaphore.h>
+#if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/lightweightsemaphore.h>)
+#include <galay/thirdparty/concurrentqueue/moodycamel/lightweightsemaphore.h>
 #endif
 #if __has_include(<coroutine>)
 #include <coroutine>

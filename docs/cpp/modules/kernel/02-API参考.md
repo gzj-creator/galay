@@ -27,7 +27,7 @@
 ## 安装包头文件边界
 
 - 当前包配置文件会导出 `GALAY_KERNEL_VERSION`、`GALAY_KERNEL_BACKEND`、`GALAY_KERNEL_INCLUDE_DIR`
-- 若 `concurrentqueue` 头文件不在标准系统前缀，consumer 需要额外传入 `GALAY_KERNEL_CONCURRENTQUEUE_INCLUDE_DIR`
+- `concurrentqueue` 已随 Galay 安装到 `include/galay/thirdparty/concurrentqueue`，consumer 不需要另外安装该依赖
 - 稳定 direct-include 入口以本页“稳定公开头快速索引”和实际安装树中的公开头为准
 - 当前源码尚未额外导出 `GALAY_KERNEL_SUPPORTED_HEADERS` / `GALAY_KERNEL_INTERNAL_HEADERS` 这类头文件边界变量
 - `awaitable.h`、`io_controller.hpp`、`timeout.hpp`、`scheduler.hpp`、`io_scheduler.hpp` 默认仍属于低层扩展 / 排障入口；日常业务优先使用 `Runtime`、`AsyncTcpSocket`、`AsyncUdpSocket` 等高层接口

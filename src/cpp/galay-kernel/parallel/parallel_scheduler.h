@@ -25,7 +25,7 @@
 #include <cstddef>
 #include <thread>
 #include <atomic>
-#include <concurrentqueue/moodycamel/blockingconcurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>
 
 namespace galay::kernel
 {

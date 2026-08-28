@@ -20,7 +20,7 @@
 
 #include "timer.hpp"
 #include "../../galay-utils/common/defn.hpp"
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #include <cstddef>
 #include <cstdint>
 #include <list>

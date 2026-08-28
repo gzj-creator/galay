@@ -5,7 +5,7 @@
 #include <atomic>
 #include <limits>
 #include <utility>
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
 namespace galay::etcd
 {

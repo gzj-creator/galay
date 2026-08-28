@@ -24,7 +24,7 @@
 #endif
 #include <bit>
 #include <concepts>
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #include <cstddef>
 #include <cstdint>
 #include <atomic>

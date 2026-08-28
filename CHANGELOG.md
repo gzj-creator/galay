@@ -11,6 +11,21 @@
 
 ## [Unreleased]
 
+## [v4.9.5] - 2026-08-29
+
+### Added
+
+- **内置 concurrentqueue 依赖**：将 moodycamel concurrentqueue 头文件、许可证与说明纳入源码包，并通过统一的 `galay/thirdparty/concurrentqueue` 安装布局提供给 CMake 与 Bazel 消费者。
+
+### Changed
+
+- **统一第三方头文件引用**：Galay C++ 源码、模块 prelude、tracing benchmark 与安装布局测试统一使用仓库内置的 `galay/thirdparty/concurrentqueue` 路径，构建不再依赖主机上的 concurrentqueue 包。
+- **同步构建版本元数据**：CMake `project()` 与 Bazel `module()` 版本均更新至 `4.9.5`。
+
+### Fixed
+
+- **修复 GCC 模块预包含边界**：模块 prelude 预包含 `mm_malloc.h`，避免 x86 intrinsic 辅助定义落入导出模块作用域导致编译问题。
+
 ## [v4.9.4] - 2026-08-28
 
 ### Added

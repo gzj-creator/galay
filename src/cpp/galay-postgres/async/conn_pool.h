@@ -4,7 +4,7 @@
 #include "client.h"
 #include "../../galay-kernel/core/waker.h"
 
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
 #include <atomic>
 #include <coroutine>

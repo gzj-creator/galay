@@ -50,7 +50,7 @@
 #include "../core/task.h"
 #include "../core/timeout.hpp"
 #include "../core/waker.h"
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #include <atomic>
 #include <coroutine>
 #include <memory>

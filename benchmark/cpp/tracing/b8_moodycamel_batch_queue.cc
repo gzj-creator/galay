@@ -1,4 +1,4 @@
-#include <concurrentqueue/moodycamel/concurrentqueue.h>
+#include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
 #include <algorithm>
 #include <array>
