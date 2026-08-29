@@ -1,6 +1,6 @@
 [package]
 name        = "galay"
-version     = "5.0.0"
+version     = "5.0.1"
 description = "C++23 coroutine networking and protocol framework"
 license     = "Apache-2.0"
 standard    = "c++23"

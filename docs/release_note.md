@@ -376,3 +376,17 @@
 - **统一 Redis 异步客户端与 TLS 构建入口**：普通 Redis 与 Rediss/TLS 实现合并到 `async/client.h` / `async/client.cc`，由 `GALAY_SSL_FEATURE_ENABLED` 控制 TLS 编译；`redis + ssl` 自动构建两种客户端，Redis-only 构建保持无 OpenSSL 依赖。
 - **收敛构建目标与公共引用**：移除独立的 `redis-tls` feature/target 及拆分客户端文件，Bazel、CMake、mcpp manifest、C++23 模块前导、测试、benchmark、examples 和文档引用同步到统一入口。
 - **修正 mcpp Linux 链接方式**：Galay mcpp 目标改为静态归档并移除 `mcpp/libaio.map` 版本脚本，使最终消费者能够解析 libaio 默认 `@@LIBAIO_*` 符号。
+
+## v5.0.1 - 2026-08-30
+
+- **版本级别**：修订版本（patch，小版本，用户指定）
+- **Git 提交消息**：`fix: 修复模块前导 intrinsic 头文件的跨平台导出边界`
+- **Git tag**：`v5.0.1`
+
+### 变更摘要
+
+本次为 `v5.0.0` 之后的修订版本发版，修复 C++23 模块 prelude 在非目标平台预包含 intrinsic 头文件导致的导出边界问题，并补充生成器与已生成文件的回归检查。CMake、Bazel 与 mcpp 三套构建元数据统一更新至 `5.0.1`。
+
+- **收紧 intrinsic 头文件守卫**：`intrin.h` 仅在 MSVC ABI 下预包含，`emmintrin.h` 仅在 x86 架构且头文件可用时预包含，避免 Clang/GCC 非目标平台的转发头或 TU-local 定义进入模块导出范围。
+- **补充回归验证**：新增 `scripts.module_prelude_intrin_guard` 测试，检查生成器和所有已生成 module prelude 均保持平台条件。
+- **同步构建版本**：CMake `project()`、Bazel `module()` 与 mcpp `[package]` 版本均对齐至 `5.0.1`。

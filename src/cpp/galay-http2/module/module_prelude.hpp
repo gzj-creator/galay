@@ -268,7 +268,7 @@
 #include <deque>
 #endif
 // GCC 的 x86 intrinsic 头从 <emmintrin.h> 引入 <mm_malloc.h>，其 TU-local 辅助函数一旦在 purview 内展开，GCC 报 "exporting declaration ... with internal linkage"。
-#if __has_include(<emmintrin.h>)
+#if (defined(__x86_64__) || defined(__i386__)) && __has_include(<emmintrin.h>)
 #include <emmintrin.h>
 #endif
 #if __has_include(<expected>)
@@ -292,7 +292,7 @@
 #if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>)
 #include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #endif
-#if __has_include(<intrin.h>)
+#if defined(_MSC_VER) && __has_include(<intrin.h>)
 #include <intrin.h>
 #endif
 #if __has_include(<iterator>)

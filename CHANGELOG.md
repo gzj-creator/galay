@@ -11,6 +11,21 @@
 
 ## [Unreleased]
 
+## [v5.0.1] - 2026-08-30
+
+### Fixed
+
+- **收紧模块 prelude 的 intrinsic 头文件边界**：`intrin.h` 仅在 MSVC
+  ABI 下预包含，`emmintrin.h` 仅在 x86 架构下预包含，避免 Clang/GCC
+  非目标平台的转发头或 TU-local 定义进入 C++23 模块导出范围。
+- **补充模块 prelude 回归测试**：新增生成器与已生成 prelude 的平台守卫检查，
+  防止后续生成结果重新引入无条件 intrinsic 头文件。
+
+### Changed
+
+- **同步三套构建版本元数据**：CMake `project()`、Bazel `module()` 与 mcpp
+  `[package]` 版本统一更新至 `5.0.1`，与本次小版本 tag 对齐。
+
 ## [v5.0.0] - 2026-08-29
 
 ### Changed
