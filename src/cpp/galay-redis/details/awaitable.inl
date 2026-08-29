@@ -4,7 +4,7 @@
 /**
  * @file awaitable.inl
  * @brief Redis 客户端状态机等待体模板实现
- * @details 仅由 async/redis_client.cc 在辅助解析函数定义之后包含。
+ * @details 仅由 async/client.cc 在辅助解析函数定义之后包含。
  */
 
     template<RingBufferBackendStrategy Strategy>

@@ -271,7 +271,7 @@ Task<bool> runWsClient(const std::string& url) {
 
 ### galay-redis
 - **用途**: 高性能异步 Redis/Rediss(TLS) 客户端，支持单命令、Pipeline、Pub/Sub 与连接池。
-- **CMake link**: `galay::redis`；**头文件前缀** `<galay/cpp/galay-redis/...>`（`async/redis_client.h`、`async/conn_pool.h`）；**命名空间** `galay::redis`
+- **CMake link**: `galay::redis`；**头文件前缀** `<galay/cpp/galay-redis/...>`（`async/client.h`、`async/conn_pool.h`）；**命名空间** `galay::redis`
 - **核心类型与接口**:
   - 结果别名: `RedisResult = std::expected<std::vector<RedisValue>, RedisError>`；`RedisVoidResult = std::expected<void, RedisError>`
   - `RedisClientBuilder` / `RedissClientBuilder`（TLS）：`.scheduler(IOScheduler*)`、`.config(AsyncRedisConfig)`、`.sendTimeout(ms)`、`.recvTimeout(ms)`、`.bufferSize(size_t)`；Rediss 额外 `.tlsConfig(...)`、`.caPath()`、`.verifyPeer(bool)`、`.serverName()`；`RedisClient build() const`
@@ -282,7 +282,7 @@ Task<bool> runWsClient(const std::string& url) {
   - 同步变体 `sync/redis_session.h`（`RedisSession`）
 - **最小示例**:
 ```cpp
-#include <galay/cpp/galay-redis/async/redis_client.h>
+#include <galay/cpp/galay-redis/async/client.h>
 using namespace galay::kernel;
 using namespace galay::redis;
 

@@ -101,7 +101,7 @@ cc_binary(
 
 - CMake target `galay::<module>` 对应 Bazel label `//src/cpp/galay-<module>:galay-<module>`，例如 `galay::kernel` ↔ `//src/cpp/galay-kernel:galay-kernel`。
 - 外部 Bazel/Bzlmod 消费时仓库名是 `galay`，label 前加 `@galay`，例如 `@galay//src/cpp/galay-kernel:galay-kernel`。
-- 例外/补充：CMake `galay::ws` 对应 Bazel `//src/cpp/galay-ws:galay-ws`；Redis TLS 额外有 Bazel `//src/cpp/galay-redis:galay-redis-tls`。
+- 例外/补充：CMake `galay::ws` 对应 Bazel `//src/cpp/galay-ws:galay-ws`；Redis 的 Rediss 实现随 `galay-redis` 目标按 `GALAY_SSL_FEATURE_ENABLED` 条件编译。
 - C++ target：`galay::kernel`、`galay::http`、`galay::http2`、`galay::ws`（注意 CMake target 是 `galay::ws`，但 C++ 命名空间是 `galay::websocket`）、`galay::redis`、`galay::mysql`、`galay::mongo`、`galay::etcd`、`galay::rpc`、`galay::mcp`、`galay::tracing`（附 `galay::tracing-kernel`、`galay::tracing-spdlog`）、`galay::utils`、`galay::ssl`。异步 socket 类型在 `galay::async` **命名空间**里，随 `galay::kernel` 提供，无独立 target。
 - C target：`galay::c-kernel`、`galay::c-common`、`galay::c-http`、`galay::c-http2`、`galay::c-ws`、`galay::c-redis`、`galay::c-mysql`、`galay::c-postgres`、`galay::c-mongo`、`galay::c-etcd`、`galay::c-rpc`、`galay::c-mcp`、`galay::c-ssl`、`galay::c-tracing`、`galay::c-utils`。
 - C++23 module 模式（`-DGALAY_ENABLE_CPP23_MODULES=ON`，需 CMake ≥ 3.28 + Ninja/VS + 非 AppleClang）：`import galay.kernel;`、`import galay.http;`、`import galay.http2;`、`import galay.websocket;`、`import galay.redis;`、`import galay.mysql;`、`import galay.mongo;`、`import galay.etcd;`、`import galay.rpc;`（`import galay.rpc.etcd;`）、`import galay.mcp;`、`import galay.tracing;`、`import galay.utils;`、`import galay.ssl;`。

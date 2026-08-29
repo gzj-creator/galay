@@ -75,25 +75,25 @@
 #if __has_include("../../galay-kernel/core/watch_defs.hpp")
 #include "../../galay-kernel/core/watch_defs.hpp"
 #endif
-#if __has_include("../../galay-ssl/async/awaitable.h")
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include("../../galay-ssl/async/awaitable.h")
 #include "../../galay-ssl/async/awaitable.h"
 #endif
-#if __has_include("../../galay-ssl/async/ssl_await.h")
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include("../../galay-ssl/async/ssl_await.h")
 #include "../../galay-ssl/async/ssl_await.h"
 #endif
-#if __has_include("../../galay-ssl/async/ssl_socket.h")
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include("../../galay-ssl/async/ssl_socket.h")
 #include "../../galay-ssl/async/ssl_socket.h"
 #endif
-#if __has_include("../../galay-ssl/common/defn.hpp")
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include("../../galay-ssl/common/defn.hpp")
 #include "../../galay-ssl/common/defn.hpp"
 #endif
-#if __has_include("../../galay-ssl/common/error.h")
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include("../../galay-ssl/common/error.h")
 #include "../../galay-ssl/common/error.h"
 #endif
-#if __has_include("../../galay-ssl/ssl/ssl_context.h")
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include("../../galay-ssl/ssl/ssl_context.h")
 #include "../../galay-ssl/ssl/ssl_context.h"
 #endif
-#if __has_include("../../galay-ssl/ssl/ssl_engine.h")
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include("../../galay-ssl/ssl/ssl_engine.h")
 #include "../../galay-ssl/ssl/ssl_engine.h"
 #endif
 #if __has_include("../../galay-utils/cache/bytes.hpp")
@@ -218,13 +218,13 @@
 #if __has_include(<new>)
 #include <new>
 #endif
-#if __has_include(<openssl/err.h>)
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include(<openssl/err.h>)
 #include <openssl/err.h>
 #endif
-#if __has_include(<openssl/ssl.h>)
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include(<openssl/ssl.h>)
 #include <openssl/ssl.h>
 #endif
-#if __has_include(<openssl/x509.h>)
+#if defined(GALAY_SSL_FEATURE_ENABLED) && __has_include(<openssl/x509.h>)
 #include <openssl/x509.h>
 #endif
 #if __has_include(<optional>)

@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-redis/async/redis_client.h>
+#include <galay/cpp/galay-redis/async/client.h>
 #include <galay/cpp/galay-redis/async/conn_pool.h>
 #include <galay/cpp/galay-redis/async/topology_client.h>
 

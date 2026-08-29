@@ -16,8 +16,8 @@
 与公开表面直接相关的事实：
 
 - `install(DIRECTORY ...)` 会安装当前仓库里的公开 `.h` / `.hpp` / `.inl`，但会显式排除 `sync/` 遗留目录
-- `galay.redis` 显式导出了 `redis_base.h`、`redis_config.h`、`redis_error.h`、`redis_value.h`、`redis_protocol.h`、`connection.h`、`redis_client.h`、`conn_pool.h`、`topology_client.h`
-- `protocol/builder.h`、`base/redis_log.h` 会经由 `redis_client.h` 被模块用户间接看到
+- `galay.redis` 显式导出了 `redis_base.h`、`redis_config.h`、`redis_error.h`、`redis_value.h`、`redis_protocol.h`、`connection.h`、`client.h`、`conn_pool.h`、`topology_client.h`
+- `protocol/builder.h`、`base/redis_log.h` 会经由 `client.h` 被模块用户间接看到
 - `module/module_prelude.hpp` 会随头文件一起安装，因为 `module/galay_redis.cppm` 在 global module fragment 中直接 `#include` 它
 - `sync/RedisSession.*` 仍存在于源码树中供遗留同步路径与回归测试使用，但不再进入安装/模块公开合同
 - `module/galay_redis.cppm` 在模块编译开启时经 `FILE_SET CXX_MODULES` 安装；模块编译关闭但 `GALAY_REDIS_INSTALL_MODULE_INTERFACE=ON` 时，仍会直接安装源码里的 `.cppm`
@@ -29,12 +29,12 @@
 | `galay-redis/base/redis_base.h` | `KVPair`、`KeyType`、`ValType`、`ScoreValType` | 显式导出 | 基础 concepts |
 | `galay-redis/base/redis_config.h` | `RedisSessionConfig`、`AsyncRedisConfig` | 显式导出 | 同步会话配置与 async 超时/缓冲配置 |
 | `galay-redis/base/redis_error.h` | `RedisErrorType`、`RedisErrorCode`、`RedisError` | 显式导出 | 统一错误对象 |
-| `galay-redis/base/redis_log.h` | `galay::redis::log::set/get`、`REDIS_LOG_*` | 间接可见 | 由 `redis_client.h` 引入 |
+| `galay-redis/base/redis_log.h` | `galay::redis::log::set/get`、`REDIS_LOG_*` | 间接可见 | 由 `client.h` 引入 |
 | `galay-redis/base/redis_value.h` | `RedisValue`、`RedisAsyncValue` | 显式导出 | async / sync 共用值包装 |
 | `galay-redis/protoc/redis_protocol.h` | `RespType`、`RespData`、`RedisReply`、`RespParser`、`RespEncoder` | 显式导出 | RESP2 / RESP3 解析与编码 |
 | `galay-redis/protoc/connection.h` | `protocol::Connection` | 显式导出 | 同步 TCP 封装 |
 | `galay-redis/protoc/builder.h` | `RedisCommandView`、`RedisEncodedCommand`、`RedisCommandBuilder` | 间接可见 | 命令构建与 batch view |
-| `galay-redis/async/redis_client.h` | `RedisConnectOptions`、`RedisClientBuilder`、`RedisClient` | 显式导出 | 单连接 async 主入口 |
+| `galay-redis/async/client.h` | `RedisConnectOptions`、`RedisClientBuilder`、`RedisClient` | 显式导出 | 单连接 async 主入口 |
 | `galay-redis/async/conn_pool.h` | `ConnectionPoolConfig`、`PooledConnection`、`RedisConnectionPool`、`ScopedConnection` | 显式导出 | 连接池 |
 | `galay-redis/async/topology_client.h` | `RedisNodeAddress`、`RedisClusterNodeAddress`、`RedisMasterSlaveClientBuilder`、`RedisMasterSlaveClient`、`RedisClusterClientBuilder`、`RedisClusterClient` | 显式导出 | 主从 / Sentinel / Cluster |
 | `galay-redis/sync/redis_session.h` | `RedisSession` | 源码树遗留，仅本地回归使用 | 不安装、不导出到模块 |
@@ -187,7 +187,7 @@
 
 ## `RedisClientBuilder` 与 `RedisClient`
 
-头文件：`galay-redis/async/redis_client.h`
+头文件：`galay-redis/async/client.h`
 
 ### 类型别名与配置结构
 
@@ -442,7 +442,7 @@
 
 ### TLS 对应类型
 
-当顶层构建选项 `GALAY_BUILD_SSL=ON` 且 Redis 一起构建时，`redis_client.h` / `conn_pool.h` / `topology_client.h` 会公开以下 TLS facade：
+当顶层构建选项 `GALAY_BUILD_SSL=ON` 且 Redis 一起构建时，`client.h` / `conn_pool.h` / `topology_client.h` 会公开以下 TLS facade：
 
 - `RedissClient`
 - `RedissClientBuilder`
@@ -619,8 +619,8 @@ TLS 单连接路径当前返回的 operation 类型是：
 
 模块可见性的边界：
 
-- 显式模块导出：`redis_base.h`、`redis_config.h`、`redis_error.h`、`redis_value.h`、`redis_protocol.h`、`connection.h`、`redis_client.h`、`conn_pool.h`、`topology_client.h`
-- 通过 `redis_client.h` 间接可见：`redis_log.h`、`builder.h`
+- 显式模块导出：`redis_base.h`、`redis_config.h`、`redis_error.h`、`redis_value.h`、`redis_protocol.h`、`connection.h`、`client.h`、`conn_pool.h`、`topology_client.h`
+- 通过 `client.h` 间接可见：`redis_log.h`、`builder.h`
 - 不在模块/安装合同里：`sync/redis_session.h`
 
 ## 统一返回、生命周期与交叉验证语义

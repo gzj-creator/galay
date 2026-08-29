@@ -96,8 +96,8 @@ bool hasBlockingLockToken(const std::string& text)
 int main()
 {
     const auto root = repoRoot();
-    const auto client_header = readFile(root / "src/cpp/galay-redis/async/redis_client.h");
-    const auto client_source = readFile(root / "src/cpp/galay-redis/async/redis_client.cc");
+    const auto client_header = readFile(root / "src/cpp/galay-redis/async/client.h");
+    const auto client_source = readFile(root / "src/cpp/galay-redis/async/client.cc");
     const auto client_awaitable_header =
         readFile(root / "src/cpp/galay-redis/details/awaitable.h");
     const auto client_awaitable_inline =
@@ -110,6 +110,19 @@ int main()
     const auto waiter_state_header = readFile(root / "src/cpp/galay-redis/async/conn_pool_waiter_state.h");
     const auto pool_source = readFile(root / "src/cpp/galay-redis/async/conn_pool.cc");
     const auto session_source = readFile(root / "src/cpp/galay-redis/sync/redis_session.cc");
+
+    if (std::filesystem::exists(root / "src/cpp/galay-redis/async/redis_client.h") ||
+        std::filesystem::exists(root / "src/cpp/galay-redis/async/redis_client.cc") ||
+        std::filesystem::exists(root / "src/cpp/galay-redis/async/client_tls.cc")) {
+        std::cerr << "redis async client implementation must use the unified client.h/client.cc files\n";
+        return 1;
+    }
+
+    if (!contains(client_source, "#ifdef GALAY_SSL_FEATURE_ENABLED") ||
+        !contains(client_source, "RedissClient::RedissClient")) {
+        std::cerr << "unified redis client source must guard and define the Rediss implementation\n";
+        return 1;
+    }
 
     for (const auto* forbidden : {
              "m_pool->initializeSync()",

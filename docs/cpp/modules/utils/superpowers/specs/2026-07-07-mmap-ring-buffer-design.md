@@ -57,7 +57,7 @@ for (size_t i = 0; i < count; ++i) {
 | **RPC stream** | 128 KB | `streamsvc.h::ring_buffer_size` | 大消息流式传输 |
 | **HTTP/2** | 4 KB → 64 KB 动态扩容 | `http2_conn.h::m_ring_buffer` | 动态适应负载 |
 | **WebSocket** | 4 KB (默认) | `ws_conn.h::m_ring_buffer` | 帧边界对齐 |
-| **Redis** | 用户配置 | `redis_client.cc::m_ring_buffer` | 可变 |
+| **Redis** | 用户配置 | `client.cc::m_ring_buffer` | 可变 |
 | **MongoDB** | 用户配置 | `connection.cc::m_recv_ring` | 可变 |
 
 **分布特点**：
@@ -447,4 +447,3 @@ void produce(size_t n) noexcept {
 | **推荐** | ✅ 按 64KB 阈值分流实现 |
 
 **核心价值**：mmap 双映射的收益**高度集中在大 I/O、长连接、流式传输**场景。按容量阈值（64KB）分流，让小缓冲区继续用轻量 vector、大缓冲区享受零拷贝连续访问，是**收益/成本比最优**的方案。
-

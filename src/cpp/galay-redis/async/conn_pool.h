@@ -11,7 +11,7 @@
 #ifndef GALAY_REDIS_CONNECTION_POOL_H
 #define GALAY_REDIS_CONNECTION_POOL_H
 
-#include "redis_client.h"
+#include "client.h"
 #include "conn_pool_waiter_state.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/io_scheduler.hpp"

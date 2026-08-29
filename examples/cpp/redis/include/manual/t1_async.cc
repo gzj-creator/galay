@@ -1,7 +1,7 @@
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <thread>
-#include <galay/cpp/galay-redis/async/redis_client.h>
+#include <galay/cpp/galay-redis/async/client.h>
 
 using namespace galay::kernel;
 using namespace galay::redis;

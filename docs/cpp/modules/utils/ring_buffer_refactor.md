@@ -63,7 +63,7 @@ AsyncMysqlClient<RingBufferBackendStrategy::Vector> client2;   // 显式 Vector
 ```
 
 类似地修改：
-- `src/cpp/galay-redis/async/redis_client.h`
+- `src/cpp/galay-redis/async/client.h`
 - `src/cpp/galay-rpc/kernel/rpc_stream.h`
 - `src/cpp/galay-rpc/kernel/rpc_conn.h`
 - `src/cpp/galay-http2/client/h2c_client.h`
@@ -109,7 +109,7 @@ AsyncMysqlClient<RingBufferBackendStrategy::Vector> client2;   // 显式 Vector
    - `RingBuffer<Strategy> m_ring_buffer`
    - 相关 awaitable/inner classes 也需要模板化
 
-2. `src/cpp/galay-redis/async/redis_client.h`
+2. `src/cpp/galay-redis/async/client.h`
    - 类似 MySQL 的改动
 
 3. `src/cpp/galay-rpc/kernel/rpc_stream.h`
@@ -145,7 +145,7 @@ ctest --test-dir build --output-on-failure -R 'utils|kernel'
 ### 修改
 - `src/cpp/galay-utils/cache/ring_buffer.hpp` —— 核心接口
 - `src/cpp/galay-mysql/async/client.h` —— MySQL client 模板化
-- `src/cpp/galay-redis/async/redis_client.h` —— Redis client 模板化
+- `src/cpp/galay-redis/async/client.h` —— Redis client 模板化
 - `src/cpp/galay-rpc/kernel/rpc_stream.h` —— RPC stream 模板化
 - `src/cpp/galay-rpc/kernel/rpc_conn.h` —— RPC conn 模板化
 - `src/cpp/galay-http2/client/h2c_client.h` —— HTTP2 client 模板化

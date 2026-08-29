@@ -258,7 +258,7 @@ co_return co_await std::forward<Fn>(fn)(*lease);
 
 **单一 TU 约束**：
 
-- `galay-redis/details/awaitable.inl` 只由 `async/redis_client.cc` include。
+- `galay-redis/details/awaitable.inl` 只由 `async/client.cc` include。
 - `galay-redis/details/pool_awaitable.inl` 只由 `async/conn_pool.cc` include。
 - `galay-mysql/details/pool_awaitable.inl` 只由 `async/conn_pool.cc` include。
 

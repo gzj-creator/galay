@@ -1,5 +1,5 @@
 /**
- * @file redis_client.h
+ * @file client.h
  * @brief Redis 异步客户端核心实现
  * @author galay-redis
  * @version 1.0.0
@@ -8,8 +8,8 @@
  *          分离在 details/awaitable.h，并由单一实现单元包含 awaitable.inl。
  */
 
-#ifndef GALAY_REDIS_CLIENT_H
-#define GALAY_REDIS_CLIENT_H
+#ifndef GALAY_REDIS_ASYNC_CLIENT_H
+#define GALAY_REDIS_ASYNC_CLIENT_H
 
 #include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/io_scheduler.hpp"
@@ -591,4 +591,4 @@ namespace galay::redis
 
 }
 
-#endif // GALAY_REDIS_CLIENT_H
+#endif // GALAY_REDIS_ASYNC_CLIENT_H

@@ -11,6 +11,21 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **统一 Redis 异步客户端入口**：将普通 Redis 与 Rediss/TLS 客户端合并到
+  `async/client.h` / `async/client.cc`，保留原有 C++ API，并通过
+  `GALAY_SSL_FEATURE_ENABLED` 控制 TLS 实现编译。
+- **调整 Redis feature 构建边界**：`redis` 负责全部普通 Redis 源码，`redis + ssl`
+  自动同时构建普通 Redis 和 Rediss；移除独立的 `redis-tls` feature/target，Redis-only
+  构建不再引入 OpenSSL。
+
+### Removed
+
+- **移除拆分的 Redis 客户端文件**：删除 `async/redis_client.h`、
+  `async/redis_client.cc` 和 `async/client_tls.cc`，统一使用 `async/client.h` 与
+  `async/client.cc`。
+
 ## [v4.10.0] - 2026-08-29
 
 ### Added

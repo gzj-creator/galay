@@ -13,7 +13,7 @@ export extern "C++" {
 #include "../base/redis_value.h"
 #include "../protoc/redis_protocol.h"
 #include "../protoc/connection.h"
-#include "../async/redis_client.h"
+#include "../async/client.h"
 #include "../async/conn_pool.h"
 #include "../async/topology_client.h"
 }

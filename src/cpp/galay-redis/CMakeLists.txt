@@ -10,10 +10,6 @@ set(GALAY_REDIS_SOURCES
     ${GALAY_REDIS_SYNC_SOURCES}
 )
 
-if(NOT GALAY_SSL_FEATURE_ENABLED)
-    list(REMOVE_ITEM GALAY_REDIS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/async/client_tls.cc")
-endif()
-
 add_library(galay-redis ${GALAY_REDIS_SOURCES})
 add_library(galay::redis ALIAS galay-redis)
 

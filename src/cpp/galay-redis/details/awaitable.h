@@ -4,7 +4,7 @@
 /**
  * @file awaitable.h
  * @brief Redis/Rediss 客户端状态机等待体声明
- * @details 仅由 async/redis_client.h 在 galay::redis 命名空间内包含。
+ * @details 仅由 async/client.h 在 galay::redis 命名空间内包含。
  */
 
     /**

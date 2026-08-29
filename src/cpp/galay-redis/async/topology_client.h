@@ -22,7 +22,7 @@
 #include <array>
 #include <utility>
 #include "../base/redis_config.h"
-#include "redis_client.h"
+#include "client.h"
 
 namespace galay::redis
 {

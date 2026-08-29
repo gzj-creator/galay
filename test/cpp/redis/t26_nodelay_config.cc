@@ -11,7 +11,7 @@
 #include <unistd.h>
 
 #define private public
-#include <galay/cpp/galay-redis/async/redis_client.h>
+#include <galay/cpp/galay-redis/async/client.h>
 #include <galay/cpp/galay-redis/protoc/connection.h>
 #include <galay/cpp/galay-redis/sync/redis_session.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
