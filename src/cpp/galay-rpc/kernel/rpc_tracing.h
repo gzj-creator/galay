@@ -18,7 +18,7 @@
 namespace galay::rpc
 {
 
-constexpr std::string_view kRpcTraceparentKey = "traceparent";
+inline constexpr std::string_view kRpcTraceparentKey = "traceparent";
 
 inline std::expected<void, RpcError> setTraceparent(RpcMetadata& metadata, std::string_view value)
 {

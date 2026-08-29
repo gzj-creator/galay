@@ -4,7 +4,9 @@ module;
 
 export module galay.ssl;
 
-export {
+// Match the ABI of the regular galay-ssl shared library when this
+// interface is consumed by GCC modules.
+export extern "C++" {
 #include "../common/defn.hpp"
 #include "../common/error.h"
 #include "../crypto/rsa.h"

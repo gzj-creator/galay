@@ -24,6 +24,17 @@ target_link_libraries(galay-utils
 
 set_target_properties(galay-utils PROPERTIES EXPORT_NAME utils)
 
+# install(DIRECTORY ...) is merge-only.  Remove stale public headers and
+# vendored third-party copies before the top-level install rules repopulate
+# those directories.  This script lives in the first enabled subdirectory so
+# it runs before the root-level C++23 module interface installs.
+install(CODE [[
+    file(REMOVE_RECURSE
+        "${CMAKE_INSTALL_PREFIX}/include/galay/cpp"
+        "${CMAKE_INSTALL_PREFIX}/include/galay/thirdparty/concurrentqueue"
+        "${CMAKE_INSTALL_PREFIX}/include/galay/thirdparty/simdjson")
+]])
+
 if(UNIX AND NOT APPLE)
     find_package(Threads REQUIRED)
     target_link_libraries(galay-utils INTERFACE Threads::Threads)

@@ -4,7 +4,9 @@ module;
 
 export module galay.postgres;
 
-export {
+// Match the ABI of the regular galay-postgres shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../base/postgres_config.h"
 #include "../base/postgres_error.h"
 #include "../base/postgres_log.h"

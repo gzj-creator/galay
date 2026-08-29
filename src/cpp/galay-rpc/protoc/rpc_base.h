@@ -82,10 +82,10 @@ enum class RpcCallMode : uint8_t {
  *
  * @details bit[0..1]: RpcCallMode，bit[2]: END_STREAM
  */
-constexpr uint8_t RPC_FLAG_MODE_MASK = 0x03;   ///< 调用模式掩码
-constexpr uint8_t RPC_FLAG_END_STREAM = 0x04;  ///< 流结束标志位
-constexpr uint8_t RPC_RESERVED_METADATA = 0x01; ///< header reserved位：请求体包含metadata扩展
-constexpr uint8_t RPC_RESERVED_KNOWN_MASK = RPC_RESERVED_METADATA; ///< 当前协议已定义的reserved位
+inline constexpr uint8_t RPC_FLAG_MODE_MASK = 0x03;   ///< 调用模式掩码
+inline constexpr uint8_t RPC_FLAG_END_STREAM = 0x04;  ///< 流结束标志位
+inline constexpr uint8_t RPC_RESERVED_METADATA = 0x01; ///< header reserved位：请求体包含metadata扩展
+inline constexpr uint8_t RPC_RESERVED_KNOWN_MASK = RPC_RESERVED_METADATA; ///< 当前协议已定义的reserved位
 
 /**
  * @brief 编码flags字段
@@ -188,22 +188,22 @@ inline const char* rpcErrorCodeToString(RpcErrorCode code) {
 /**
  * @brief RPC协议魔数
  */
-constexpr uint32_t RPC_MAGIC = 0x47525043;  // "GRPC" in hex
+inline constexpr uint32_t RPC_MAGIC = 0x47525043;  // "GRPC" in hex
 
 /**
  * @brief RPC协议版本
  */
-constexpr uint8_t RPC_VERSION = 0x01;
+inline constexpr uint8_t RPC_VERSION = 0x01;
 
 /**
  * @brief RPC消息头大小
  */
-constexpr size_t RPC_HEADER_SIZE = 16;
+inline constexpr size_t RPC_HEADER_SIZE = 16;
 
 /**
  * @brief RPC最大消息体大小 (16MB)
  */
-constexpr size_t RPC_MAX_BODY_SIZE = 16 * 1024 * 1024;
+inline constexpr size_t RPC_MAX_BODY_SIZE = 16 * 1024 * 1024;
 
 } // namespace galay::rpc
 

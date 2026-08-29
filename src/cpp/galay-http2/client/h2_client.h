@@ -13,6 +13,7 @@
 
 #include "../kernel/http2_conn.h"
 #include "../kernel/http2_stream.h"
+#include "../details/h2_client_awaitable.h"
 #include "../../galay-http/common/http_log.h"
 #include "../../galay-http/common/iovec_utils.h"
 #include "../protoc/http2_base.h"
@@ -76,7 +77,6 @@ struct H2RequestMachine;
 template<RingBufferBackendStrategy Strategy>
 auto buildRequestOperation(H2Client<Strategy>& client, Http2Request&& request);
 
-#include "../details/h2_client_awaitable.h"
 } // namespace detail
 
 /**

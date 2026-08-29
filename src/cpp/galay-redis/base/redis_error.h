@@ -52,8 +52,8 @@ namespace galay::redis
     using RedisErrorCode = RedisErrorType; ///< 错误码类型别名
 
     // 便捷的错误码常量
-    constexpr RedisErrorType NetworkError = REDIS_ERROR_TYPE_NETWORK_ERROR;           ///< 网络错误常量
-    constexpr RedisErrorType ConnectionClosed = REDIS_ERROR_TYPE_CONNECTION_CLOSED;   ///< 连接关闭常量
+    inline constexpr RedisErrorType NetworkError = REDIS_ERROR_TYPE_NETWORK_ERROR;           ///< 网络错误常量
+    inline constexpr RedisErrorType ConnectionClosed = REDIS_ERROR_TYPE_CONNECTION_CLOSED;   ///< 连接关闭常量
 
 
     /**

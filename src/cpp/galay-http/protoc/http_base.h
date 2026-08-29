@@ -191,21 +191,21 @@ namespace galay::http
     };
 
     // HTTP 方法常量（避免使用宏以防止与其他库冲突）
-    constexpr HttpMethod HTTP_GET = HttpMethod::GET;               ///< GET 方法常量
-    constexpr HttpMethod HTTP_POST = HttpMethod::POST;             ///< POST 方法常量
-    constexpr HttpMethod HTTP_HEAD = HttpMethod::HEAD;             ///< HEAD 方法常量
-    constexpr HttpMethod HTTP_PUT = HttpMethod::PUT;               ///< PUT 方法常量
-    constexpr HttpMethod HTTP_DELETE = HttpMethod::DELETE;         ///< DELETE 方法常量
-    constexpr HttpMethod HTTP_TRACE = HttpMethod::TRACE;           ///< TRACE 方法常量
-    constexpr HttpMethod HTTP_OPTIONS = HttpMethod::OPTIONS;       ///< OPTIONS 方法常量
-    constexpr HttpMethod HTTP_CONNECT = HttpMethod::CONNECT;       ///< CONNECT 方法常量
-    constexpr HttpMethod HTTP_PATCH = HttpMethod::PATCH;           ///< PATCH 方法常量
-    constexpr HttpMethod HTTP_PRI = HttpMethod::PRI;               ///< PRI 方法常量
-    constexpr HttpMethod HTTP_UNKNOWN = HttpMethod::UNKNOWN;       ///< UNKNOWN 方法常量
+    inline constexpr HttpMethod HTTP_GET = HttpMethod::GET;               ///< GET 方法常量
+    inline constexpr HttpMethod HTTP_POST = HttpMethod::POST;             ///< POST 方法常量
+    inline constexpr HttpMethod HTTP_HEAD = HttpMethod::HEAD;             ///< HEAD 方法常量
+    inline constexpr HttpMethod HTTP_PUT = HttpMethod::PUT;               ///< PUT 方法常量
+    inline constexpr HttpMethod HTTP_DELETE = HttpMethod::DELETE;         ///< DELETE 方法常量
+    inline constexpr HttpMethod HTTP_TRACE = HttpMethod::TRACE;           ///< TRACE 方法常量
+    inline constexpr HttpMethod HTTP_OPTIONS = HttpMethod::OPTIONS;       ///< OPTIONS 方法常量
+    inline constexpr HttpMethod HTTP_CONNECT = HttpMethod::CONNECT;       ///< CONNECT 方法常量
+    inline constexpr HttpMethod HTTP_PATCH = HttpMethod::PATCH;           ///< PATCH 方法常量
+    inline constexpr HttpMethod HTTP_PRI = HttpMethod::PRI;               ///< PRI 方法常量
+    inline constexpr HttpMethod HTTP_UNKNOWN = HttpMethod::UNKNOWN;       ///< UNKNOWN 方法常量
 
-    constexpr HttpVersion HTTP_VERSION_1_0 = HttpVersion::HttpVersion_1_0;  ///< HTTP/1.0 版本常量
-    constexpr HttpVersion HTTP_VERSION_1_1 = HttpVersion::HttpVersion_1_1;  ///< HTTP/1.1 版本常量
-    constexpr HttpVersion HTTP_VERSION_2_0 = HttpVersion::HttpVersion_2_0;  ///< HTTP/2.0 版本常量
+    inline constexpr HttpVersion HTTP_VERSION_1_0 = HttpVersion::HttpVersion_1_0;  ///< HTTP/1.0 版本常量
+    inline constexpr HttpVersion HTTP_VERSION_1_1 = HttpVersion::HttpVersion_1_1;  ///< HTTP/1.1 版本常量
+    inline constexpr HttpVersion HTTP_VERSION_2_0 = HttpVersion::HttpVersion_2_0;  ///< HTTP/2.0 版本常量
 }
 
 #endif

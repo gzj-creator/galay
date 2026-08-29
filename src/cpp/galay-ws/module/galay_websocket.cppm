@@ -4,7 +4,9 @@ module;
 
 export module galay.websocket;
 
-export {
+// Match the ABI of the regular galay-ws shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../builder/ws_frame_builder.h"
 #include "../protoc/ws_frame.h"
 #include "../utils/ws_helper.h"

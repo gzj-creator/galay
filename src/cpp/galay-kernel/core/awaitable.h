@@ -462,7 +462,7 @@ template <typename T, typename E>
 struct is_expected<std::expected<T, E>> : std::true_type {};
 
 template <typename ResultT>
-constexpr bool is_expected_v = is_expected<std::remove_cvref_t<ResultT>>::value;
+inline constexpr bool is_expected_v = is_expected<std::remove_cvref_t<ResultT>>::value;
 
 template <typename ResultT>
 struct expected_traits;

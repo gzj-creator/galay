@@ -76,7 +76,7 @@ int buildLogValue(int& call_count)
 
 int main()
 {
-    galay::tracing::log::set(nullptr);
+    galay::tracing::base_log::set(nullptr);
 
     int disabled_argument_count = 0;
     TRACING_LOG_ERROR("[disabled]", "value={}", buildLogValue(disabled_argument_count));
@@ -87,7 +87,7 @@ int main()
     auto logger = std::make_unique<CollectingLogger>();
     auto* raw_logger = logger.get();
     raw_logger->setMinLevel(galay::kernel::LogLevel::kWarn);
-    galay::tracing::log::set(std::move(logger));
+    galay::tracing::base_log::set(std::move(logger));
 
     int filtered_argument_count = 0;
     TRACING_LOG_DEBUG("[filtered]", "value={}", buildLogValue(filtered_argument_count));
@@ -103,6 +103,6 @@ int main()
         return EXIT_FAILURE;
     }
 
-    galay::tracing::log::set(nullptr);
+    galay::tracing::base_log::set(nullptr);
     return EXIT_SUCCESS;
 }

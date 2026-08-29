@@ -22,8 +22,8 @@ namespace galay::mysql::protocol
 
 // ======================== MySQL协议常量 ========================
 
-constexpr uint32_t MYSQL_PACKET_HEADER_SIZE = 4;    ///< MySQL包头大小（4字节）
-constexpr uint32_t MYSQL_MAX_PACKET_SIZE = 0xFFFFFF; ///< MySQL单包最大大小（16MB - 1）
+inline constexpr uint32_t MYSQL_PACKET_HEADER_SIZE = 4;    ///< MySQL包头大小（4字节）
+inline constexpr uint32_t MYSQL_MAX_PACKET_SIZE = 0xFFFFFF; ///< MySQL单包最大大小（16MB - 1）
 
 /**
  * @brief MySQL命令类型枚举

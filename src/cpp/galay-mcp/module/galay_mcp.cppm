@@ -4,7 +4,9 @@ module;
 
 export module galay.mcp;
 
-export {
+// Match the ABI of the regular galay-mcp shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../common/mcp_error.h"
 #include "../common/mcp_json.h"
 #include "../common/mcp_base.h"

@@ -13,7 +13,7 @@ namespace galay::tracing::detail
 struct TracingBaseLogTag;
 } // namespace galay::tracing::detail
 
-namespace galay::tracing::log
+namespace galay::tracing::base_log
 {
 using Slot = ::galay::kernel::LoggerSlot<::galay::tracing::detail::TracingBaseLogTag>;
 
@@ -43,39 +43,39 @@ inline void set(::galay::kernel::BaseLogger::uptr logger)
 {
     return Slot::get();
 }
-} // namespace galay::tracing::log
+} // namespace galay::tracing::base_log
 
 /// @brief 判断指定级别的 galay-tracing 内部诊断日志是否会实际写入
 #define TRACING_LOG_ENABLED(level)                                               \
-    GALAY_LOG_ENABLED(::galay::tracing::log::get, level)
+    GALAY_LOG_ENABLED(::galay::tracing::base_log::get, level)
 
 /// @brief galay-tracing 追踪级别内部诊断日志宏
 #define TRACING_LOG_TRACE(tag, ...)                                              \
-    GALAY_LOG_WITH_LOGGER(::galay::tracing::log::get,                            \
+    GALAY_LOG_WITH_LOGGER(::galay::tracing::base_log::get,                            \
                           ::galay::kernel::LogLevel::kTrace, "[tracing] " tag,   \
                           __VA_ARGS__)
 
 /// @brief galay-tracing 调试级别内部诊断日志宏
 #define TRACING_LOG_DEBUG(tag, ...)                                              \
-    GALAY_LOG_WITH_LOGGER(::galay::tracing::log::get,                            \
+    GALAY_LOG_WITH_LOGGER(::galay::tracing::base_log::get,                            \
                           ::galay::kernel::LogLevel::kDebug, "[tracing] " tag,   \
                           __VA_ARGS__)
 
 /// @brief galay-tracing 信息级别内部诊断日志宏
 #define TRACING_LOG_INFO(tag, ...)                                               \
-    GALAY_LOG_WITH_LOGGER(::galay::tracing::log::get,                            \
+    GALAY_LOG_WITH_LOGGER(::galay::tracing::base_log::get,                            \
                           ::galay::kernel::LogLevel::kInfo, "[tracing] " tag,    \
                           __VA_ARGS__)
 
 /// @brief galay-tracing 警告级别内部诊断日志宏
 #define TRACING_LOG_WARN(tag, ...)                                               \
-    GALAY_LOG_WITH_LOGGER(::galay::tracing::log::get,                            \
+    GALAY_LOG_WITH_LOGGER(::galay::tracing::base_log::get,                            \
                           ::galay::kernel::LogLevel::kWarn, "[tracing] " tag,    \
                           __VA_ARGS__)
 
 /// @brief galay-tracing 错误级别内部诊断日志宏
 #define TRACING_LOG_ERROR(tag, ...)                                              \
-    GALAY_LOG_WITH_LOGGER(::galay::tracing::log::get,                            \
+    GALAY_LOG_WITH_LOGGER(::galay::tracing::base_log::get,                            \
                           ::galay::kernel::LogLevel::kError, "[tracing] " tag,   \
                           __VA_ARGS__)
 

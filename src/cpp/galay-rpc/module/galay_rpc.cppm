@@ -4,7 +4,9 @@ module;
 
 export module galay.rpc;
 
-export {
+// Match the ABI of the regular galay-rpc shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../common/rpc_log.h"
 
 #include "../protoc/rpc_base.h"

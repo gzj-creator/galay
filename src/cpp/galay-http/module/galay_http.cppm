@@ -4,7 +4,11 @@ module;
 
 export module galay.http;
 
-export {
+// Keep the exported declarations ABI-compatible with the regular shared
+// library.  Without an explicit C++ linkage specification GCC gives names
+// included from a named module module linkage (for example `@galay.http`),
+// which cannot be resolved by libgalay-http's ordinary C++ symbols.
+export extern "C++" {
 #include "../protoc/http_base.h"
 #include "../protoc/http_body.h"
 #include "../protoc/http_chunk.h"

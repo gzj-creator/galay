@@ -11,6 +11,31 @@
 
 ## [Unreleased]
 
+### Added
+
+- **内置 GCC 16 兼容的 simdjson**：纳入 simdjson v4.6.9 单头文件与静态实现，
+  通过 `simdjson::simdjson` 项目自有目标构建，并以 `galay::simdjson` 导出，
+  消除 galay-mcp/galay-etcd 对宿主 simdjson 版本的依赖。
+- **模块 prelude 生成器**：新增 `scripts/gen_module_prelude.py`，从模块接口的
+  include 依赖自动生成或校验全局模块片段，减少模块接口与 prelude 漂移。
+
+### Changed
+
+- **统一 C++23 模块接口边界**：各模块接口使用显式 `export extern "C++"`，并
+  将标准库、系统头、第三方头和跨模块头在全局片段中展开；安装时同步提供全部
+  `.cppm` 与 `module_prelude.hpp`。
+- **收敛第三方安装布局**：simdjson 与 concurrentqueue 均安装到
+  `galay/thirdparty`，模块和普通头文件消费路径保持一致。
+
+### Fixed
+
+- **修复 GCC 16 模块 CMI 序列化**：将 simdjson formatter 使用的匿名命名空间
+  helper 调整为 `simdjson::internal` 下的 inline linkage，解决 `galay.mcp`
+  模块无法写出 CMI 的问题；解析、格式化算法和公开 API 保持不变。
+- **修复模块导出与普通库 ABI 不一致**：将跨模块公共常量改为 `inline constexpr`，
+  补齐 HTTP/2 客户端 awaitable 的自包含声明，并修正 tracing 基础 logger 命名
+  冲突。
+
 ## [v4.9.5] - 2026-08-29
 
 ### Added

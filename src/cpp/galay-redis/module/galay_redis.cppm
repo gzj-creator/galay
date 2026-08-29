@@ -4,7 +4,9 @@ module;
 
 export module galay.redis;
 
-export {
+// Match the ABI of the regular galay-redis shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../base/redis_base.h"
 #include "../base/redis_config.h"
 #include "../base/redis_error.h"

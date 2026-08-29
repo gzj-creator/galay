@@ -24,8 +24,8 @@
 namespace galay::mcp {
 
 
-constexpr const char* MCP_VERSION = "2024-11-05"; ///< MCP协议版本号
-constexpr const char* JSONRPC_VERSION = "2.0"; ///< JSON-RPC协议版本号
+inline constexpr const char* MCP_VERSION = "2024-11-05"; ///< MCP协议版本号
+inline constexpr const char* JSONRPC_VERSION = "2.0"; ///< JSON-RPC协议版本号
 
 /**
  * @brief MCP消息类型枚举
@@ -41,15 +41,15 @@ enum class MessageType {
  * @brief MCP协议方法名称常量
  */
 namespace Methods {
-    constexpr const char* INITIALIZE = "initialize"; ///< 初始化方法
-    constexpr const char* INITIALIZED = "notifications/initialized"; ///< 初始化完成通知
-    constexpr const char* PING = "ping"; ///< 心跳检测方法
-    constexpr const char* TOOLS_LIST = "tools/list"; ///< 获取工具列表
-    constexpr const char* TOOLS_CALL = "tools/call"; ///< 调用工具
-    constexpr const char* RESOURCES_LIST = "resources/list"; ///< 获取资源列表
-    constexpr const char* RESOURCES_READ = "resources/read"; ///< 读取资源
-    constexpr const char* PROMPTS_LIST = "prompts/list"; ///< 获取提示列表
-    constexpr const char* PROMPTS_GET = "prompts/get"; ///< 获取提示
+    inline constexpr const char* INITIALIZE = "initialize"; ///< 初始化方法
+    inline constexpr const char* INITIALIZED = "notifications/initialized"; ///< 初始化完成通知
+    inline constexpr const char* PING = "ping"; ///< 心跳检测方法
+    inline constexpr const char* TOOLS_LIST = "tools/list"; ///< 获取工具列表
+    inline constexpr const char* TOOLS_CALL = "tools/call"; ///< 调用工具
+    inline constexpr const char* RESOURCES_LIST = "resources/list"; ///< 获取资源列表
+    inline constexpr const char* RESOURCES_READ = "resources/read"; ///< 读取资源
+    inline constexpr const char* PROMPTS_LIST = "prompts/list"; ///< 获取提示列表
+    inline constexpr const char* PROMPTS_GET = "prompts/get"; ///< 获取提示
 }
 
 /**
@@ -283,13 +283,13 @@ struct JsonRpcError {
  * @brief JSON-RPC标准错误码常量
  */
 namespace ErrorCodes {
-    constexpr int PARSE_ERROR = -32700; ///< 解析错误
-    constexpr int INVALID_REQUEST = -32600; ///< 无效请求
-    constexpr int METHOD_NOT_FOUND = -32601; ///< 方法未找到
-    constexpr int INVALID_PARAMS = -32602; ///< 无效参数
-    constexpr int INTERNAL_ERROR = -32603; ///< 内部错误
-    constexpr int SERVER_ERROR_START = -32099; ///< 服务器错误范围起始
-    constexpr int SERVER_ERROR_END = -32000; ///< 服务器错误范围结束
+    inline constexpr int PARSE_ERROR = -32700; ///< 解析错误
+    inline constexpr int INVALID_REQUEST = -32600; ///< 无效请求
+    inline constexpr int METHOD_NOT_FOUND = -32601; ///< 方法未找到
+    inline constexpr int INVALID_PARAMS = -32602; ///< 无效参数
+    inline constexpr int INTERNAL_ERROR = -32603; ///< 内部错误
+    inline constexpr int SERVER_ERROR_START = -32099; ///< 服务器错误范围起始
+    inline constexpr int SERVER_ERROR_END = -32000; ///< 服务器错误范围结束
 }
 
 } // namespace galay::mcp

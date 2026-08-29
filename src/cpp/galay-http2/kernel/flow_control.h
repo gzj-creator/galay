@@ -20,7 +20,7 @@
 namespace galay::http2
 {
 
-constexpr int64_t kH2MaxFlowControlWindow = 0x7fffffff; ///< RFC 允许的最大窗口值
+inline constexpr int64_t kH2MaxFlowControlWindow = 0x7fffffff; ///< RFC 允许的最大窗口值
 
 /**
  * @brief 发送窗口更新错误

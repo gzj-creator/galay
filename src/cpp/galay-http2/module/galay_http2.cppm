@@ -4,7 +4,9 @@ module;
 
 export module galay.http2;
 
-export {
+// Match the ABI of the regular galay-http2 shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../protoc/http2_base.h"
 #include "../protoc/http2_error.h"
 #include "../protoc/http2_frame.h"

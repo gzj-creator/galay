@@ -5,6 +5,7 @@
 #include "../../common/mcp_base.h"
 #include "../../common/mcp_error.h"
 #include "../../../galay-kernel/common/error.h"
+#include "../../../galay-kernel/core/runtime.h"
 
 #include <expected>
 #include <iostream>
@@ -13,9 +14,6 @@
 #include <vector>
 #include <utility>
 
-namespace galay::kernel {
-class Runtime;
-}
 
 namespace galay::mcp {
 

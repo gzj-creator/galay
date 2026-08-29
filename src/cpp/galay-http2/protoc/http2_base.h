@@ -21,24 +21,24 @@ namespace galay::http2
 
 // HTTP/2 连接前言 (Connection Preface)
 // 客户端必须在连接开始时发送此字符串
-constexpr std::string_view kHttp2ConnectionPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"; ///< HTTP/2 客户端连接前言
-constexpr size_t kHttp2ConnectionPrefaceLength = 24; ///< 连接前言长度
+inline constexpr std::string_view kHttp2ConnectionPreface = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"; ///< HTTP/2 客户端连接前言
+inline constexpr size_t kHttp2ConnectionPrefaceLength = 24; ///< 连接前言长度
 
-constexpr size_t kHttp2FrameHeaderLength = 9; ///< HTTP/2 帧头长度固定为 9 字节
+inline constexpr size_t kHttp2FrameHeaderLength = 9; ///< HTTP/2 帧头长度固定为 9 字节
 
 // HTTP/2 默认设置
-constexpr uint32_t kDefaultHeaderTableSize = 4096;       ///< 默认 HPACK 动态表大小
-constexpr uint32_t kDefaultEnablePush = 1;               ///< 默认启用服务器推送
-constexpr uint32_t kDefaultMaxConcurrentStreams = 100;    ///< 默认最大并发流数
-constexpr uint32_t kDefaultInitialWindowSize = 65535;    ///< 默认初始窗口大小
-constexpr uint32_t kDefaultMaxFrameSize = 16384;         ///< 默认最大帧大小
-constexpr uint32_t kDefaultMaxHeaderListSize = 8192;     ///< 默认最大头部列表大小
+inline constexpr uint32_t kDefaultHeaderTableSize = 4096;       ///< 默认 HPACK 动态表大小
+inline constexpr uint32_t kDefaultEnablePush = 1;               ///< 默认启用服务器推送
+inline constexpr uint32_t kDefaultMaxConcurrentStreams = 100;    ///< 默认最大并发流数
+inline constexpr uint32_t kDefaultInitialWindowSize = 65535;    ///< 默认初始窗口大小
+inline constexpr uint32_t kDefaultMaxFrameSize = 16384;         ///< 默认最大帧大小
+inline constexpr uint32_t kDefaultMaxHeaderListSize = 8192;     ///< 默认最大头部列表大小
 
 // HTTP/2 帧大小限制
-constexpr uint32_t kMinFrameSize = 16384;      ///< 最小帧大小（2^14）
-constexpr uint32_t kMaxFrameSize = 16777215;   ///< 最大帧大小（2^24 - 1）
+inline constexpr uint32_t kMinFrameSize = 16384;      ///< 最小帧大小（2^14）
+inline constexpr uint32_t kMaxFrameSize = 16777215;   ///< 最大帧大小（2^24 - 1）
 
-constexpr uint32_t kMaxStreamId = 0x7FFFFFFF;  ///< 最大流 ID（2^31 - 1）
+inline constexpr uint32_t kMaxStreamId = 0x7FFFFFFF;  ///< 最大流 ID（2^31 - 1）
 
 /**
  * @brief HTTP/2 帧类型枚举
@@ -64,13 +64,13 @@ enum class Http2FrameType : uint8_t
  */
 namespace Http2FrameFlags
 {
-    constexpr uint8_t kEndStream = 0x1;   ///< END_STREAM 标志（DATA/HEADERS）
-    constexpr uint8_t kPadded = 0x8;      ///< PADDED 标志（DATA/HEADERS/PUSH_PROMISE）
+    inline constexpr uint8_t kEndStream = 0x1;   ///< END_STREAM 标志（DATA/HEADERS）
+    inline constexpr uint8_t kPadded = 0x8;      ///< PADDED 标志（DATA/HEADERS/PUSH_PROMISE）
 
-    constexpr uint8_t kEndHeaders = 0x4;  ///< END_HEADERS 标志（HEADERS/PUSH_PROMISE/CONTINUATION）
-    constexpr uint8_t kPriority = 0x20;   ///< PRIORITY 标志（HEADERS）
+    inline constexpr uint8_t kEndHeaders = 0x4;  ///< END_HEADERS 标志（HEADERS/PUSH_PROMISE/CONTINUATION）
+    inline constexpr uint8_t kPriority = 0x20;   ///< PRIORITY 标志（HEADERS）
 
-    constexpr uint8_t kAck = 0x1;         ///< ACK 标志（SETTINGS/PING）
+    inline constexpr uint8_t kAck = 0x1;         ///< ACK 标志（SETTINGS/PING）
 }
 
 /**

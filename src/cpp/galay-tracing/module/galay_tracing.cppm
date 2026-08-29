@@ -13,6 +13,31 @@ module;
 
 #include "module_prelude.hpp"
 
+// 本模块头：显式在全局片段中包含（prelude 只承担外部头，见
+// scripts/gen_module_prelude.py 的不变量），名称经下方 using 列表导出。
+#include "../adapters/http_headers.h"
+#include "../common/source_location.h"
+#include "../common/span_id.h"
+#include "../common/trace_id.h"
+#include "../common/tracing_log.h"
+#include "../context/context_storage.h"
+#include "../context/trace_context.h"
+#include "../context/traceparent.h"
+#include "../kernel/batch_span_processor.h"
+#include "../kernel/file_span_exporter.h"
+#include "../kernel/otlp_http_exporter.h"
+#include "../kernel/sampler.h"
+#include "../kernel/span_exporter.h"
+#include "../kernel/span_guard.h"
+#include "../kernel/span.h"
+#include "../kernel/span_processor.h"
+#include "../kernel/tracer_provider.h"
+#include "../log/console_sink.h"
+#include "../log/logger.h"
+#include "../log/log_level.h"
+#include "../log/log_record.h"
+#include "../log/log_sink.h"
+
 export module galay.tracing;
 
 export namespace galay::tracing {
@@ -78,6 +103,7 @@ using ::galay::tracing::field;
 using ::galay::tracing::injectTraceContextToHeaders;
 using ::galay::tracing::injectTraceparent;
 using ::galay::tracing::injectTracestate;
+using ::galay::tracing::log;
 using ::galay::tracing::logDebug;
 using ::galay::tracing::logDebugAt;
 using ::galay::tracing::logError;

@@ -92,7 +92,7 @@ endif()
 
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
-    galay-utils galay-kernel galay-ssl galay-http galay-ws galay-http2
+    galay-simdjson galay-utils galay-kernel galay-ssl galay-http galay-ws galay-http2
     galay-redis galay-rpc galay-mysql galay-postgres galay-mongo galay-etcd galay-mcp
     galay-tracing
     galay-tracing-spdlog galay-tracing-kernel
@@ -215,6 +215,11 @@ if(GALAY_INSTALL_CPP23_MODULE_INTERFACES)
     endif()
 endif()
 
+# 目录安装是合并语义，从不删除：源码里已删除的头、以及被禁用模块（如非
+# SSL 构建的 galay-ssl）的 .cppm/module_prelude.hpp 会残留在安装树里，继续
+# 被 consumer 拾取。安装清理在 galay-utils 子目录的 install 脚本中执行，
+# 因为子目录脚本先于本文件的模块接口安装脚本运行；这样清理后仍会保留
+# 本次安装的 .cppm 和 module_prelude.hpp。仅清理本工程独占的目录。
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/cpp/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/cpp
     FILES_MATCHING
@@ -234,6 +239,18 @@ install(FILES
     ${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/LICENSE.md
     ${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/README.md
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/concurrentqueue
+)
+install(DIRECTORY ${GALAY_SIMDJSON_SOURCE_DIR}/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/simdjson
+    FILES_MATCHING
+        PATTERN "*.h"
+        PATTERN "*.hpp"
+        PATTERN "*.inl"
+)
+install(FILES
+    ${GALAY_SIMDJSON_SOURCE_DIR}/LICENSE.md
+    ${GALAY_SIMDJSON_SOURCE_DIR}/README.md
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/simdjson
 )
 if(GALAY_BUILD_C_API)
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/c/

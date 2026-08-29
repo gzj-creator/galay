@@ -23,10 +23,10 @@
 namespace galay::rpc
 {
 
-constexpr size_t kRpcMetadataMaxKeySize = 128;  ///< metadata键名最大字节数
-constexpr size_t kRpcMetadataMaxValueSize = 65535;  ///< metadata值最大字节数，受wire格式uint16长度约束
-constexpr size_t kRpcMetadataMaxEntries = 256;  ///< 单次RPC最多metadata条目数
-constexpr size_t kRpcMetadataMaxWireSize = 64 * 1024;  ///< 单次RPC metadata wire编码最大字节数
+inline constexpr size_t kRpcMetadataMaxKeySize = 128;  ///< metadata键名最大字节数
+inline constexpr size_t kRpcMetadataMaxValueSize = 65535;  ///< metadata值最大字节数，受wire格式uint16长度约束
+inline constexpr size_t kRpcMetadataMaxEntries = 256;  ///< 单次RPC最多metadata条目数
+inline constexpr size_t kRpcMetadataMaxWireSize = 64 * 1024;  ///< 单次RPC metadata wire编码最大字节数
 
 /**
  * @brief RPC metadata键值容器

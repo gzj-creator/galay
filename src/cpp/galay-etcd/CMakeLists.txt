@@ -21,7 +21,8 @@ target_link_libraries(galay-etcd
         galay::kernel
         galay::utils
         galay::http
-        simdjson::simdjson
+        $<BUILD_INTERFACE:simdjson::simdjson>
+        $<INSTALL_INTERFACE:galay::simdjson>
 )
 
 set_target_properties(galay-etcd PROPERTIES EXPORT_NAME etcd)

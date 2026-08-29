@@ -1,7 +1,7 @@
 #ifndef GALAY_HTTP2_DETAILS_H2_CLIENT_AWAITABLE_INL
 #define GALAY_HTTP2_DETAILS_H2_CLIENT_AWAITABLE_INL
 
-inline CaptureSchedulerAwaitable::CaptureSchedulerAwaitable(Scheduler** out) noexcept
+inline CaptureSchedulerAwaitable::CaptureSchedulerAwaitable(galay::kernel::Scheduler** out) noexcept
     : m_out(out)
 {
 }

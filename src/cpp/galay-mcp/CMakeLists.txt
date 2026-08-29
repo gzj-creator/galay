@@ -22,7 +22,8 @@ target_link_libraries(galay-mcp
     PUBLIC
         galay::kernel
         galay::http
-        simdjson::simdjson
+        $<BUILD_INTERFACE:simdjson::simdjson>
+        $<INSTALL_INTERFACE:galay::simdjson>
 )
 
 set_target_properties(galay-mcp PROPERTIES EXPORT_NAME mcp)

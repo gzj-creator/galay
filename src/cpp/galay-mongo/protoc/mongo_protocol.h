@@ -28,9 +28,9 @@
 namespace galay::mongo::protocol
 {
 
-constexpr int32_t kMongoOpReply = 1;          ///< OP_REPLY（旧版响应，已弃用）
-constexpr int32_t kMongoOpCompressed = 2012;  ///< OP_COMPRESSED 压缩消息
-constexpr int32_t kMongoOpMsg = 2013;         ///< OP_MSG 标准消息格式
+inline constexpr int32_t kMongoOpReply = 1;          ///< OP_REPLY（旧版响应，已弃用）
+inline constexpr int32_t kMongoOpCompressed = 2012;  ///< OP_COMPRESSED 压缩消息
+inline constexpr int32_t kMongoOpMsg = 2013;         ///< OP_MSG 标准消息格式
 
 /**
  * @brief MongoDB 消息头（16 字节）

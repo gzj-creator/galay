@@ -4,7 +4,9 @@ module;
 
 export module galay.etcd;
 
-export {
+// Match the ABI of the regular galay-etcd shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../base/etcd_config.h"
 #include "../base/etcd_error.h"
 #include "../base/etcd_log.h"

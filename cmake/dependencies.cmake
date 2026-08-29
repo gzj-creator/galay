@@ -1,11 +1,14 @@
 include_guard(GLOBAL)
 
 # Resolve the repository-owned third-party tree once so the project never
-# falls back to a different concurrentqueue installation on the host.
+# falls back to a different third-party installation on the host.
 get_filename_component(GALAY_PROJECT_SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
 set(GALAY_CONCURRENTQUEUE_SOURCE_DIR
     "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/concurrentqueue"
     CACHE PATH "Galay's vendored concurrentqueue source directory" FORCE)
+set(GALAY_SIMDJSON_SOURCE_DIR
+    "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/simdjson"
+    CACHE PATH "Galay's vendored simdjson source directory" FORCE)
 set(GALAY_CONCURRENTQUEUE_INCLUDE_DIR
     "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty"
     CACHE PATH "Include root for Galay's vendored third-party headers" FORCE)
@@ -156,54 +159,45 @@ function(galay_ensure_openssl)
 endfunction()
 
 function(galay_ensure_simdjson)
-    if(TARGET simdjson::simdjson)
+    if(TARGET galay-simdjson)
         return()
     endif()
 
-    find_package(simdjson CONFIG QUIET)
+    set(_galay_simdjson_header "${GALAY_SIMDJSON_SOURCE_DIR}/simdjson.h")
+    set(_galay_simdjson_source "${GALAY_SIMDJSON_SOURCE_DIR}/simdjson.cpp")
+    if(NOT EXISTS "${_galay_simdjson_header}" OR NOT EXISTS "${_galay_simdjson_source}")
+        message(FATAL_ERROR
+            "Galay's vendored simdjson sources are missing: "
+            "${_galay_simdjson_header} and ${_galay_simdjson_source}")
+    endif()
+
+    add_library(galay-simdjson STATIC "${_galay_simdjson_source}")
+    set_target_properties(galay-simdjson PROPERTIES
+        EXPORT_NAME simdjson
+        POSITION_INDEPENDENT_CODE ON
+    )
+    target_compile_features(galay-simdjson PUBLIC cxx_std_11)
+    target_compile_definitions(galay-simdjson PUBLIC SIMDJSON_THREADS_ENABLED=1)
+    target_include_directories(galay-simdjson
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+    )
+
+    # Keep the dependency spelling used by the upstream package without an
+    # ALIAS target.  This imported interface is repository-owned and forwards
+    # to the static implementation above; BUILD_INTERFACE consumers therefore
+    # never accidentally resolve a host simdjson target.
     if(TARGET simdjson::simdjson)
-        return()
+        message(FATAL_ERROR
+            "A pre-existing simdjson::simdjson target would bypass Galay's "
+            "repository-owned simdjson implementation")
     endif()
-
-    find_package(PkgConfig QUIET)
-    if(PkgConfig_FOUND)
-        pkg_check_modules(GALAY_SIMDJSON QUIET IMPORTED_TARGET simdjson)
-        if(TARGET PkgConfig::GALAY_SIMDJSON)
-            add_library(simdjson::simdjson INTERFACE IMPORTED GLOBAL)
-            set_target_properties(simdjson::simdjson PROPERTIES
-                INTERFACE_LINK_LIBRARIES PkgConfig::GALAY_SIMDJSON
-            )
-            return()
-        endif()
-    endif()
-
-    find_path(GALAY_SIMDJSON_INCLUDE_DIR
-        NAMES simdjson.h
-        HINTS
-            "$ENV{SIMDJSON_ROOT}/include"
-            /opt/homebrew/include
-            /usr/local/include
-            /usr/include
-    )
-    find_library(GALAY_SIMDJSON_LIBRARY
-        NAMES simdjson
-        HINTS
-            "$ENV{SIMDJSON_ROOT}/lib"
-            /opt/homebrew/lib
-            /usr/local/lib
-            /usr/lib
-            /usr/lib64
-    )
-
-    if(NOT GALAY_SIMDJSON_INCLUDE_DIR OR NOT GALAY_SIMDJSON_LIBRARY)
-        message(FATAL_ERROR "simdjson not found. Install simdjson or set SIMDJSON_ROOT.")
-    endif()
-
-    add_library(simdjson::simdjson UNKNOWN IMPORTED GLOBAL)
+    add_library(simdjson::simdjson INTERFACE IMPORTED GLOBAL)
     set_target_properties(simdjson::simdjson PROPERTIES
-        IMPORTED_LOCATION "${GALAY_SIMDJSON_LIBRARY}"
-        INTERFACE_INCLUDE_DIRECTORIES "${GALAY_SIMDJSON_INCLUDE_DIR}"
+        INTERFACE_LINK_LIBRARIES galay-simdjson
     )
+
 endfunction()
 
 function(galay_ensure_spdlog)

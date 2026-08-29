@@ -4,7 +4,9 @@ module;
 
 export module galay.utils;
 
-export {
+// Match the ABI of the regular galay-utils shared library when this
+// transitional interface is consumed by GCC modules.
+export extern "C++" {
 #include "../common/defn.hpp"
 #include "../core/type_name.hpp"
 
