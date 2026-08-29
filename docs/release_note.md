@@ -348,3 +348,17 @@
 - **内置 concurrentqueue 依赖**：随源码分发 concurrentqueue 头文件、许可证与说明，安装到 `include/galay/thirdparty/concurrentqueue`，构建和消费 Galay 不再依赖主机上的 concurrentqueue 包。
 - **统一引用与安装验证**：C++ 源码、模块 prelude、tracing benchmark 及安装布局测试统一使用 `galay/thirdparty/concurrentqueue` 路径，并验证第三方头文件、许可证和实际队列操作可被安装后的 consumer 使用。
 - **GCC 模块兼容修复**：模块 prelude 预包含 `mm_malloc.h`，避免 x86 intrinsic 辅助定义进入 `galay.kernel` 导出模块作用域。
+
+## v4.10.0 - 2026-08-29
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`feat: 内置 simdjson 并修复 GCC16 模块导出边界`
+- **Git tag**：`v4.10.0`
+
+### 变更摘要
+
+本次为 `v4.9.5` 之后的次版本发版，主线是将 simdjson 纳入 Galay 源码包并完善 C++23 模块接口交付，同时修复 GCC 16 CMI 序列化和模块 ABI 边界问题。构建版本号（`CMakeLists.txt` 与 `MODULE.bazel`）同步对齐至 `4.10.0`。
+
+- **内置 simdjson 依赖**：随源码分发 simdjson v4.6.9 单头文件与静态实现，构建导出 `galay::simdjson`，安装到 `galay/thirdparty/simdjson`，不再依赖宿主 simdjson 或 pkg-config。
+- **C++23 模块接口收敛**：新增模块 prelude 生成器，为各模块统一生成全局头片段和显式 `export extern "C++"` 边界，并同步安装 `.cppm` 与 `module_prelude.hpp`。
+- **兼容性与 ABI 修复**：调整 simdjson formatter helper 的 linkage 以兼容 GCC 16 CMI，修复跨模块常量 ODR、HTTP/2 awaitable 自包含声明及 tracing logger 命名冲突。

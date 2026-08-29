@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v4.10.0] - 2026-08-29
+
 ### Added
 
 - **内置 GCC 16 兼容的 simdjson**：纳入 simdjson v4.6.9 单头文件与静态实现，
