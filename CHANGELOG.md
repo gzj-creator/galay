@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v5.0.0] - 2026-08-29
+
 ### Changed
 
 - **统一 Redis 异步客户端入口**：将普通 Redis 与 Rediss/TLS 客户端合并到
@@ -19,6 +21,14 @@
 - **调整 Redis feature 构建边界**：`redis` 负责全部普通 Redis 源码，`redis + ssl`
   自动同时构建普通 Redis 和 Rediss；移除独立的 `redis-tls` feature/target，Redis-only
   构建不再引入 OpenSSL。
+- **同步三套构建版本元数据**：CMake `project()`、Bazel `module()` 与 mcpp
+  `[package]` 版本统一更新至 `5.0.0`，与本次主版本 tag 对齐。
+
+### Fixed
+
+- **修正 mcpp Linux 链接方式**：将 Galay mcpp 目标改为静态归档并移除
+  `mcpp/libaio.map` 版本脚本，避免最终消费者无法解析 libaio 默认 `@@LIBAIO_*`
+  符号。
 
 ### Removed
 

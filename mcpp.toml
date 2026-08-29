@@ -1,6 +1,6 @@
 [package]
 name        = "galay"
-version     = "4.10.0"
+version     = "5.0.0"
 description = "C++23 coroutine networking and protocol framework"
 license     = "Apache-2.0"
 standard    = "c++23"
@@ -40,15 +40,16 @@ include_dirs = [
 cxxflags = ["-D_GNU_SOURCE"]
 
 [targets.galay]
-kind   = "shared"
-soname = "libgalay.so.4"
+# A static archive lets the final consumer executable resolve libaio's default
+# @@LIBAIO_* symbols without requiring a shared-link version script.
+kind = "lib"
 
 # Keep the platform default aligned with CMake: Linux uses epoll and macOS
 # uses kqueue.  These are package build inputs; consumers selecting an
 # alternate backend should use the corresponding backend feature below.
 [target.linux.build]
 defines = ["USE_EPOLL"]
-ldflags = ["-pthread", "-ldl", "-Wl,--version-script=../../../mcpp/libaio.map"]
+ldflags = ["-pthread", "-ldl"]
 
 [target.macos.build]
 defines = ["USE_KQUEUE"]

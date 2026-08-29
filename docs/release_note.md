@@ -362,3 +362,17 @@
 - **内置 simdjson 依赖**：随源码分发 simdjson v4.6.9 单头文件与静态实现，构建导出 `galay::simdjson`，安装到 `galay/thirdparty/simdjson`，不再依赖宿主 simdjson 或 pkg-config。
 - **C++23 模块接口收敛**：新增模块 prelude 生成器，为各模块统一生成全局头片段和显式 `export extern "C++"` 边界，并同步安装 `.cppm` 与 `module_prelude.hpp`。
 - **兼容性与 ABI 修复**：调整 simdjson formatter helper 的 linkage 以兼容 GCC 16 CMI，修复跨模块常量 ODR、HTTP/2 awaitable 自包含声明及 tracing logger 命名冲突。
+
+## v5.0.0 - 2026-08-29
+
+- **版本级别**：主版本（major，用户指定）
+- **Git 提交消息**：`chore: 发布 v5.0.0 并同步 Bazel CMake mcpp 构建元数据`
+- **Git tag**：`v5.0.0`
+
+### 变更摘要
+
+本次为 `v4.10.0` 之后的主版本发版，按用户指定将版本提升至 `v5.0.0`。本版本收束 Redis 异步客户端与 TLS 构建入口重构，并修正 mcpp Linux 静态链接方式；删除独立的 Redis TLS 构建目标属于构建接口边界变化。CMake、Bazel 与 mcpp 三套构建元数据统一对齐至 `5.0.0`。
+
+- **统一 Redis 异步客户端与 TLS 构建入口**：普通 Redis 与 Rediss/TLS 实现合并到 `async/client.h` / `async/client.cc`，由 `GALAY_SSL_FEATURE_ENABLED` 控制 TLS 编译；`redis + ssl` 自动构建两种客户端，Redis-only 构建保持无 OpenSSL 依赖。
+- **收敛构建目标与公共引用**：移除独立的 `redis-tls` feature/target 及拆分客户端文件，Bazel、CMake、mcpp manifest、C++23 模块前导、测试、benchmark、examples 和文档引用同步到统一入口。
+- **修正 mcpp Linux 链接方式**：Galay mcpp 目标改为静态归档并移除 `mcpp/libaio.map` 版本脚本，使最终消费者能够解析 libaio 默认 `@@LIBAIO_*` 符号。
