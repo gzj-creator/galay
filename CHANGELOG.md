@@ -11,6 +11,22 @@
 
 ## [Unreleased]
 
+## [v5.0.2] - 2026-08-30
+
+### Fixed
+
+- **修复 Clang 22 的 AIO 模块导出边界**：将 `AioCommitAwaitable::await_suspend`
+  类外模板定义放回 `galay::async` 命名空间作用域，避免它在
+  `export extern "C++"` 包含边界中被 Clang 误判为非 namespace scope，保留成员访问、
+  模板调用方式和 Linux `USE_EPOLL` 行为不变。
+- **补充模块命名空间回归检查**：扩展 kernel 源码边界测试，锁定模板定义不能再次退回
+  为全局限定成员定义。
+
+### Changed
+
+- **同步三套构建版本元数据**：CMake `project()`、Bazel `module()` 与 mcpp
+  `[package]` 版本统一更新至 `5.0.2`，与本次修订版本 tag 对齐。
+
 ## [v5.0.1] - 2026-08-30
 
 ### Fixed

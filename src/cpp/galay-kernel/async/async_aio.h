@@ -284,8 +284,10 @@ private:
 
 } // namespace galay::async
 
+namespace galay::async {
+
 template <typename Promise>
-inline bool galay::async::AioCommitAwaitable::await_suspend(std::coroutine_handle<Promise> handle)
+inline bool AioCommitAwaitable::await_suspend(std::coroutine_handle<Promise> handle)
 {
     m_waker = galay::kernel::Waker(handle);
 
@@ -318,6 +320,8 @@ inline bool galay::async::AioCommitAwaitable::await_suspend(std::coroutine_handl
     }
     return true;
 }
+
+} // namespace galay::async
 
 #endif // USE_EPOLL
 

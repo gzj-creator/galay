@@ -178,6 +178,16 @@ int main() {
     requireContains(failures,
                     aio_file_h,
                     aio_content,
+                    "namespace galay::async {\n\ntemplate <typename Promise>\ninline bool AioCommitAwaitable::await_suspend",
+                    "expected the await_suspend template definition to remain at namespace scope for modules");
+    requireNotContains(failures,
+                       aio_file_h,
+                       aio_content,
+                       "inline bool galay::async::AioCommitAwaitable::await_suspend",
+                       "qualified await_suspend definition must not be placed directly in export extern scope");
+    requireContains(failures,
+                    aio_file_h,
+                    aio_content,
                     "scheduler == nullptr",
                     "expected AioCommitAwaitable to guard null scheduler");
     requireOrdered(failures,

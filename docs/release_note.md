@@ -390,3 +390,25 @@
 - **收紧 intrinsic 头文件守卫**：`intrin.h` 仅在 MSVC ABI 下预包含，`emmintrin.h` 仅在 x86 架构且头文件可用时预包含，避免 Clang/GCC 非目标平台的转发头或 TU-local 定义进入模块导出范围。
 - **补充回归验证**：新增 `scripts.module_prelude_intrin_guard` 测试，检查生成器和所有已生成 module prelude 均保持平台条件。
 - **同步构建版本**：CMake `project()`、Bazel `module()` 与 mcpp `[package]` 版本均对齐至 `5.0.1`。
+
+## v5.0.2 - 2026-08-30
+
+- **版本级别**：修订版本（patch）
+- **Git 提交消息**：`fix: 修复 Clang 22 模块导出中的 AIO await_suspend 命名空间边界`
+- **Git tag**：`v5.0.2`
+
+### 变更摘要
+
+本次为 `v5.0.1` 之后的修订版本，修复 Clang 22 编译 `galay.kernel` 时对
+`async_aio.h` 中类外模板成员定义位置的模块语义诊断。定义仍保持模板可见，
+Linux `USE_EPOLL` AIO 后端、公开 API、ABI 和传统头文件包含方式均不变；CMake、
+Bazel 与 mcpp 三套构建版本元数据同步更新至 `5.0.2`。
+
+- **修正 AIO 模板命名空间作用域**：将 `AioCommitAwaitable::await_suspend` 的类外
+  定义放回 `namespace galay::async` 块中，使其在 `export extern "C++"` 导出的头文件
+  边界内仍是标准 namespace-scope 定义，Clang 22 不再将其当作错误的全局限定成员定义。
+- **保留完整实现与成员绑定**：模板定义继续直接访问 `m_controller`、`m_waker`、
+  `m_result` 等原对象成员，未关闭 `USE_EPOLL`、删除 AIO 源文件或改变调用签名。
+- **回归验证**：新增 kernel 源码边界断言，并以 GCC 14.2、Clang 22.1.8 的 CMake
+  原生模块目标和 mcpp 模块消费者验证 `galay.utils` / `galay.kernel` 导入；Epoll AIO
+  eventfd rearm、ownership surface 与 intrinsic guard 测试继续通过。
