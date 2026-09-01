@@ -332,14 +332,18 @@ private:
 
 } // namespace galay::etcd
 
-inline galay::etcd::EtcdClusterClient galay::etcd::EtcdClusterClientBuilder::build() const
+namespace galay::etcd {
+
+inline EtcdClusterClient EtcdClusterClientBuilder::build() const
 {
     return EtcdClusterClient(m_config);
 }
 
-inline const galay::etcd::EtcdConfig& galay::etcd::EtcdClusterClientBuilder::buildConfig() const
+inline const EtcdConfig& EtcdClusterClientBuilder::buildConfig() const
 {
     return m_config;
 }
+
+} // namespace galay::etcd
 
 #endif // GALAY_ETCD_CLUSTER_CLIENT_H

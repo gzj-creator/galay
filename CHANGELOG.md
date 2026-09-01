@@ -11,6 +11,20 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **修复 etcd C++23 模块导出边界**：将 etcd 异步、集群和同步客户端的类外成员定义放回
+  `galay::etcd` 命名空间作用域，避免 Clang 22 在模块接口中将全限定成员定义误判为
+  非命名空间作用域并导致 feature 构建失败。
+
+### Changed
+
+- **统一 `shared_ptr` 原子访问方式**：MCP、RPC 和 HTTP/2 static-file 缓存改用普通
+  `std::shared_ptr` 配合标准原子自由函数（load/store/CAS/exchange），移除
+  `std::atomic<std::shared_ptr<T>>` 实例，同时保持快照发布与无锁读取语义不变。
+- **补充 static-file 缓存语义说明**：明确小文件 body 只发布一次、不会自动感知磁盘
+  文件更新，以及发送队列持有 `shared_ptr` 快照的生命周期保证。
+
 ## [v5.0.2] - 2026-08-30
 
 ### Fixed

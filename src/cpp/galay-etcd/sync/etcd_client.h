@@ -335,9 +335,13 @@ private:
 
 } // namespace galay::etcd
 
-inline galay::etcd::EtcdClient galay::etcd::EtcdClientBuilder::build() const
+namespace galay::etcd {
+
+inline EtcdClient EtcdClientBuilder::build() const
 {
     return EtcdClient(m_config);
 }
+
+} // namespace galay::etcd
 
 #endif // GALAY_ETCD_SYNC_CLIENT_H

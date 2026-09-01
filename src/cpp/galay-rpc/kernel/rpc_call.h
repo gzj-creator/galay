@@ -68,9 +68,9 @@ private:
 struct RpcCancellationState {
     /**
      * @brief 取消回调链表头
-     * @note 通过原子 shared_ptr 访问，并在 cancel() 遍历期间保持 registration 生命周期。
+     * @note 通过 shared_ptr 原子自由函数访问，并在 cancel() 遍历期间保持 registration 生命周期。
      */
-    std::atomic<std::shared_ptr<RpcCancellationRegistration>> callbacks;
+    std::shared_ptr<RpcCancellationRegistration> callbacks;
     std::atomic<bool> cancelled{false};
 };
 
@@ -100,12 +100,13 @@ public:
         }
 
         auto registration = std::make_shared<RpcCancellationRegistration>(std::move(callback));
-        auto head = m_state->callbacks.load(std::memory_order_acquire);
+        auto head = std::atomic_load_explicit(&m_state->callbacks, std::memory_order_acquire);
         while (true) {
             std::shared_ptr<RpcCancellationRegistration> next = head;
             registration->next.swap(next);
-            if (m_state->callbacks.compare_exchange_weak(
-                    head,
+            if (std::atomic_compare_exchange_weak_explicit(
+                    &m_state->callbacks,
+                    &head,
                     registration,
                     std::memory_order_release,
                     std::memory_order_acquire)) {
@@ -151,7 +152,9 @@ public:
             return;
         }
 
-        auto registration = m_state->callbacks.load(std::memory_order_acquire);
+        auto registration = std::atomic_load_explicit(
+            &m_state->callbacks,
+            std::memory_order_acquire);
         while (registration) {
             const bool did_notify = registration->notifyIfActive();
             if (!did_notify) {

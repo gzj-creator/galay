@@ -640,8 +640,10 @@ private:
 
 #include "../details/awaitable.h"
 
+namespace galay::etcd {
+
 template <class Fn>
-auto galay::etcd::AsyncEtcdClusterClient::withClient(Fn fn) -> galay::kernel::Task<
+auto AsyncEtcdClusterClient::withClient(Fn fn) -> galay::kernel::Task<
     std::expected<details::AsyncEtcdOperationValue<Fn>, EtcdError>>
 {
     auto lease_result = tryAcquire();
@@ -666,14 +668,16 @@ auto galay::etcd::AsyncEtcdClusterClient::withClient(Fn fn) -> galay::kernel::Ta
     co_return std::move(operation_task_result.value());
 }
 
-inline galay::etcd::AsyncEtcdClient galay::etcd::AsyncEtcdClientBuilder::build() const
+inline AsyncEtcdClient AsyncEtcdClientBuilder::build() const
 {
     return AsyncEtcdClient(m_scheduler, m_config);
 }
 
-inline galay::etcd::AsyncEtcdClusterClient galay::etcd::AsyncEtcdClusterClientBuilder::build() const
+inline AsyncEtcdClusterClient AsyncEtcdClusterClientBuilder::build() const
 {
     return AsyncEtcdClusterClient(m_scheduler, m_config);
 }
+
+} // namespace galay::etcd
 
 #endif // GALAY_ETCD_ASYNC_ETCD_CLIENT_H

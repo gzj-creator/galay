@@ -120,8 +120,8 @@ private:
     std::map<std::string, ToolEntry> m_tools;             ///< 注册阶段写入，运行期只读
     std::map<std::string, ResourceEntry> m_resources;     ///< 注册阶段写入，运行期只读
     std::map<std::string, PromptEntry> m_prompts;         ///< 注册阶段写入，运行期只读
-    std::atomic<std::shared_ptr<http::HttpServer>> m_httpServer;
-    std::atomic<std::shared_ptr<const SubscriptionSnapshot>> m_subscriptions{
+    std::shared_ptr<http::HttpServer> m_httpServer;
+    std::shared_ptr<const SubscriptionSnapshot> m_subscriptions{
         std::make_shared<const SubscriptionSnapshot>()};
     std::atomic<std::uint64_t> m_nextSubscriptionToken{0};
     std::atomic<std::size_t> m_activeSubscriptions{0};

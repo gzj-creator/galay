@@ -435,7 +435,9 @@ kernel::Task<void> McpHttpClient::request(std::string method,
             if (JsonHelper::getString(fieldsObject, "name", toolName) &&
                 JsonHelper::getElement(fieldsObject, "arguments", arguments)) {
                 std::optional<Tool> tool;
-                const auto definitions = m_toolDefinitions.load(std::memory_order_acquire);
+                const auto definitions = std::atomic_load_explicit(
+                    &m_toolDefinitions,
+                    std::memory_order_acquire);
                 auto it = definitions->find(toolName);
                 if (it != definitions->end()) tool = it->second;
                 if (tool) {
@@ -507,7 +509,10 @@ kernel::Task<void> McpHttpClient::listTools(std::expected<std::vector<Tool>, Mcp
     definitions->reserve(valid.size());
     for (const auto& tool : valid) definitions->insert_or_assign(tool.name, tool);
     std::shared_ptr<const McpHttpClient::ToolDefinitions> published = std::move(definitions);
-    m_toolDefinitions.store(std::move(published), std::memory_order_release);
+    std::atomic_store_explicit(
+        &m_toolDefinitions,
+        std::move(published),
+        std::memory_order_release);
     result = std::move(valid);
 }
 

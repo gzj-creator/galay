@@ -210,7 +210,9 @@ std::size_t McpHttpServer::publish(
     const std::function<bool(const SubscriptionFilter&)>& matches,
     std::optional<std::string_view> uri)
 {
-    const auto subscriptions = m_subscriptions.load(std::memory_order_acquire);
+    const auto subscriptions = std::atomic_load_explicit(
+        &m_subscriptions,
+        std::memory_order_acquire);
     if (!subscriptions) return 0;
     std::size_t delivered = 0;
     for (const auto& [unused, subscription] : *subscriptions) {
@@ -460,13 +462,16 @@ std::optional<std::uint64_t> McpHttpServer::registerSubscription(
     const auto token =
         m_nextSubscriptionToken.fetch_add(1, std::memory_order_relaxed) + 1;
     while (true) {
-        auto current = m_subscriptions.load(std::memory_order_acquire);
+        auto current = std::atomic_load_explicit(
+            &m_subscriptions,
+            std::memory_order_acquire);
         if (!current) break;
         auto next = std::make_shared<SubscriptionSnapshot>(*current);
         next->emplace(token, subscription);
         std::shared_ptr<const SubscriptionSnapshot> published = std::move(next);
-        if (m_subscriptions.compare_exchange_weak(
-                current,
+        if (std::atomic_compare_exchange_weak_explicit(
+                &m_subscriptions,
+                &current,
                 std::move(published),
                 std::memory_order_release,
                 std::memory_order_acquire)) {
@@ -480,13 +485,16 @@ std::optional<std::uint64_t> McpHttpServer::registerSubscription(
 
 void McpHttpServer::eraseSubscription(std::uint64_t token)
 {
-    auto current = m_subscriptions.load(std::memory_order_acquire);
+    auto current = std::atomic_load_explicit(
+        &m_subscriptions,
+        std::memory_order_acquire);
     while (current && current->contains(token)) {
         auto next = std::make_shared<SubscriptionSnapshot>(*current);
         next->erase(token);
         std::shared_ptr<const SubscriptionSnapshot> published = std::move(next);
-        if (m_subscriptions.compare_exchange_weak(
-                current,
+        if (std::atomic_compare_exchange_weak_explicit(
+                &m_subscriptions,
+                &current,
                 std::move(published),
                 std::memory_order_release,
                 std::memory_order_acquire)) {
@@ -498,8 +506,10 @@ void McpHttpServer::eraseSubscription(std::uint64_t token)
 
 void McpHttpServer::closeSubscriptions()
 {
-    const auto subscriptions =
-        m_subscriptions.exchange({}, std::memory_order_acq_rel);
+    const auto subscriptions = std::atomic_exchange_explicit(
+        &m_subscriptions,
+        std::shared_ptr<const SubscriptionSnapshot>{},
+        std::memory_order_acq_rel);
     if (!subscriptions) return;
     for (const auto& [unused, subscription] : *subscriptions) {
         subscription->events.close();
@@ -674,7 +684,8 @@ void McpHttpServer::start()
             std::memory_order_acq_rel, std::memory_order_acquire)) {
         return;
     }
-    m_subscriptions.store(
+    std::atomic_store_explicit(
+        &m_subscriptions,
         std::make_shared<const SubscriptionSnapshot>(),
         std::memory_order_release);
     http::HttpRouter router;
@@ -696,10 +707,16 @@ void McpHttpServer::start()
     config.parallel_scheduler_count = m_parallelSchedulers;
     config.tcp_no_delay = m_tcpNoDelay;
     auto httpServer = std::make_shared<http::HttpServer>(config);
-    m_httpServer.store(httpServer, std::memory_order_release);
+    std::atomic_store_explicit(
+        &m_httpServer,
+        httpServer,
+        std::memory_order_release);
     httpServer->start(std::move(router));
     if (!httpServer->isRunning()) {
-        m_httpServer.store({}, std::memory_order_release);
+        std::atomic_store_explicit(
+            &m_httpServer,
+            std::shared_ptr<http::HttpServer>{},
+            std::memory_order_release);
         m_lifecycle.store(LifecycleState::kStopped, std::memory_order_release);
         m_lifecycle.notify_all();
         return;
@@ -730,7 +747,10 @@ void McpHttpServer::stop()
         m_activeSubscriptions.wait(active, std::memory_order_acquire);
         active = m_activeSubscriptions.load(std::memory_order_acquire);
     }
-    const auto httpServer = m_httpServer.exchange({}, std::memory_order_acq_rel);
+    const auto httpServer = std::atomic_exchange_explicit(
+        &m_httpServer,
+        std::shared_ptr<http::HttpServer>{},
+        std::memory_order_acq_rel);
     if (httpServer) {
         httpServer->stop();
     }
