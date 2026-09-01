@@ -412,3 +412,24 @@ Bazel 与 mcpp 三套构建版本元数据同步更新至 `5.0.2`。
 - **回归验证**：新增 kernel 源码边界断言，并以 GCC 14.2、Clang 22.1.8 的 CMake
   原生模块目标和 mcpp 模块消费者验证 `galay.utils` / `galay.kernel` 导入；Epoll AIO
   eventfd rearm、ownership surface 与 intrinsic guard 测试继续通过。
+
+## v5.0.3 - 2026-09-01
+
+- **版本级别**：修订版本（patch，小版本，用户指定）
+- **Git 提交消息**：`chore: 发布 v5.0.3 并同步构建版本元数据`
+- **Git tag**：`v5.0.3`
+
+### 变更摘要
+
+本次为 `v5.0.2` 之后的修订版本发版，收束 1 个未打 tag 的修复提交，主线是修复
+Clang 22 C++23 模块导出边界，并统一跨模块 `shared_ptr` 原子访问方式。CMake、Bazel
+与 mcpp 三套构建版本元数据同步更新至 `5.0.3`。
+
+- **修复 etcd 模块导出边界**：将异步、集群和同步 etcd 客户端的类外成员定义放回
+  `galay::etcd` 命名空间作用域，避免 Clang 22 在模块接口中将全限定成员定义误判为
+  非命名空间作用域并导致 feature 构建失败。
+- **统一 `shared_ptr` 原子访问方式**：MCP、RPC 与 HTTP/2 static-file 缓存改用普通
+  `std::shared_ptr` 配合标准原子自由函数，保留快照发布、无锁读取和异步发送队列的
+  生命周期语义，移除 `std::atomic<std::shared_ptr<T>>` 实例。
+- **明确 static-file 缓存语义**：补充小文件 body 只发布一次、不会自动感知磁盘文件
+  更新，以及发送队列通过 `shared_ptr` 快照持有 body 生命周期的说明。
