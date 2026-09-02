@@ -12,7 +12,7 @@ galay 是一个基于 **C++23 协程** 的高性能异步网络与协议框架�
 - 仓库根：`/Users/gongzhijie/Desktop/projects/git/galay`
 - 两套 API：C++ 模块（`src/cpp/galay-*`，命名空间 `galay::*`）与 C ABI（`src/c/galay-*-c`，前缀 `galay_*`）。
 - 完整文档：每个模块在 `docs/cpp/modules/<name>/`（`00-快速开始` / `01-架构设计` / `02-API参考` / `03-使用指南` / `04-示例代码` …），C 侧在 `docs/c/modules/<name>/`。
-- 可运行示例：`examples/cpp/<module>/include/*.cc`（头文件模式）与 `examples/cpp/<module>/import/*.cc`（C++23 module 模式）；C 示例在 `examples/c/<module>/*.c`。
+- 可运行示例：`examples/cpp/<module>/include/*.cc`（头文件模式）与 `examples/cpp/<module>/mcpp/*.cc`（C++23 module 模式）；C 示例在 `examples/c/<module>/*.c`。
 
 ## 何时使用本 skill
 

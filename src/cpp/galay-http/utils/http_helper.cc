@@ -1,12 +1,12 @@
 #include "http_helper.h"
-#include <galay/cpp/galay-http/builder/http_builder.h>
-#include <galay/cpp/galay-utils/crypto/sha1.hpp>
-#include <galay/cpp/galay-utils/encoding/base64.hpp>
+#include "../builder/http_builder.h"
+#include "../../galay-utils/crypto/sha1.hpp"
+#include "../../galay-utils/encoding/base64.hpp"
 
 // WebSocket 相关功能已经拆到独立 ws 模块。
 // TODO: WebSocket 将在单独的仓库实现
 #ifdef ENABLE_WEBSOCKET
-#include <galay/cpp/galay-ws/protoc/ws_base.h>
+#include "../../galay-ws/protoc/ws_base.h"
 #endif
 
 namespace galay::http 

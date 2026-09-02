@@ -1,6 +1,6 @@
-#include <galay/cpp/galay-redis/sync/redis_session.h>
-#include <galay/cpp/galay-redis/base/redis_log.h>
-#include <galay/cpp/galay-utils/process/system.hpp>
+#include "redis_session.h"
+#include "../base/redis_log.h"
+#include "../../galay-utils/process/system.hpp"
 #include <regex>
 #include <format>
 #include <utility>

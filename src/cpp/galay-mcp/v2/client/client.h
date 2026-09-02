@@ -103,7 +103,7 @@ private:
     std::atomic<std::int64_t> m_nextId{0};
     std::atomic<bool> m_connected{false};
     using ToolDefinitions = std::unordered_map<std::string, Tool>;
-    std::shared_ptr<const ToolDefinitions> m_toolDefinitions{
+    std::atomic<std::shared_ptr<const ToolDefinitions>> m_toolDefinitions{
         std::make_shared<const ToolDefinitions>()};
 };
 

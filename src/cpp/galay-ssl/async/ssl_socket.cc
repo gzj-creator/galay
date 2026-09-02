@@ -1,5 +1,5 @@
 #include "ssl_socket.h"
-#include <galay/cpp/galay-ssl/common/ssl_log.h>
+#include "../common/ssl_log.h"
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>

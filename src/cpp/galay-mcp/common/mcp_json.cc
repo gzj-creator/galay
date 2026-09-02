@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-mcp/common/mcp_json.h>
+#include "mcp_json.h"
 #include <charconv>
 #include <cstdio>
 #include <functional>

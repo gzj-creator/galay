@@ -256,7 +256,7 @@
 ## 交叉验证入口
 
 - include 示例：`examples/include/e1_echo.cc`、`examples/include/e2_echo.cc`
-- import 示例：`examples/import/e1_echo.cc`、`examples/import/e2_echo.cc`
+- import 示例：`examples/cpp/ssl/mcpp/e1_echo.cc`、`examples/cpp/ssl/mcpp/e2_echo.cc`
 - 测试入口统一位于 `test/`，用于交叉验证 socket、loopback、advanced TLS 行为
 - socket / loopback / advanced smoke：`test/t1_socket.cc`、`test/t2_loopback.cc`、`test/t3_policy.cc`
 - 状态机 / builder / 错误桥接回归：`test/t4_state.cc`、`test/t5_io.cc`、`test/t6_custom.cc`、`test/t7_builder.cc`、`test/t8_proto.cc`、`test/t9_bridge.cc`

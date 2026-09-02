@@ -1,6 +1,6 @@
-#include <galay/cpp/galay-mcp/v1/server/http_server.h>
-#include <galay/cpp/galay-mcp/common/mcp_log.h>
-#include <galay/cpp/galay-mcp/common/protocol_utils.h>
+#include "http_server.h"
+#include "../../common/mcp_log.h"
+#include "../../common/protocol_utils.h"
 
 namespace galay::mcp {
 

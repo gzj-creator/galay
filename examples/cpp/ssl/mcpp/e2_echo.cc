@@ -1,5 +1,5 @@
 /**
- * @file import/e2_echo.cc
+ * @file mcpp/e2_echo.cc
  * @brief SSL 客户端示例（C++23 import 版本）
  *
  * 运行方式：

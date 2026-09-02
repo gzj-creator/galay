@@ -1,5 +1,5 @@
 #include "ssl_engine.h"
-#include <galay/cpp/galay-ssl/common/ssl_log.h>
+#include "../common/ssl_log.h"
 #include <limits>
 
 namespace galay::ssl

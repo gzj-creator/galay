@@ -8,9 +8,9 @@
  * 序列化为标准 traceparent 字符串用于出站传播。
  */
 
-#include <galay/cpp/galay-tracing/context/traceparent.h>
+#include "traceparent.h"
 
-#include <galay/cpp/galay-tracing/common/id_format.h>
+#include "../common/id_format.h"
 
 #include <array>
 #include <cstddef>

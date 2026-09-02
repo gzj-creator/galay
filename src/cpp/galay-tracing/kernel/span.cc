@@ -8,7 +8,7 @@
  * 全局 Span 时间策略管理，以及 Span 的构造、属性设置和生命周期控制。
  */
 
-#include <galay/cpp/galay-tracing/kernel/span.h>
+#include "span.h"
 
 #include <atomic>
 #include <string>

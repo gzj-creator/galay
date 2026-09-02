@@ -711,7 +711,7 @@
 ## 10. 交叉验证入口
 
 - 基础能力示例：`examples/include/e1_basic.cpp`
-- import 示例：`examples/import/e1_basic.cpp`
+- import 示例：`examples/cpp/utils/mcpp/e1_basic_usage.cc`
 - include / umbrella / 模块 smoke：`test/<area>/*_test.cpp`、`test/import_smoke.cpp`
 
 ## 11. 继续阅读

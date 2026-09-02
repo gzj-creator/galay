@@ -121,7 +121,7 @@
 - 这是 WebSocket 的 canonical import，直接导出 `WebSocketFrame`
 - 同时导出 `WsClient`、`WsConn`、`WsReader`、`WsReaderSetting`、`WsSession`、`WsUpgrade`、`WsWriter`、`WsWriterSetting`
 - `WssClient` / `WssSession` 也经由对应头文件进入该模块，但它们仍受 `GALAY_BUILD_SSL=ON` 约束
-- 模块 consumer 的真实验证入口是 `examples/import/*.cpp` 与 `test/t59_module.cpp`
+- 模块 consumer 的真实验证入口是 `examples/cpp/http/mcpp/*.cc` 与 `test/t59_module.cpp`
 
 ## HTTP / HTTPS 服务端
 

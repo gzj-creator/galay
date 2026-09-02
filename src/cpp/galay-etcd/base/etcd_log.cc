@@ -3,7 +3,7 @@
  * @brief galay-etcd 独立日志槽实现
  */
 
-#include <galay/cpp/galay-etcd/base/etcd_log.h>
+#include "etcd_log.h"
 
 #include <utility>
 

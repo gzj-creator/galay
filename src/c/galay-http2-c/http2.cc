@@ -1,7 +1,7 @@
 #include <galay/c/galay-http2-c/http2.h>
 
 #include <galay/c/galay-kernel-c/async-c/tcp_socket.h>
-#include <galay/cpp/galay-http2/protoc/http2_hpack.h>
+#include "../../cpp/galay-http2/protoc/http2_hpack.h"
 
 #include <algorithm>
 #include <cctype>

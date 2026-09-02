@@ -3,7 +3,7 @@
  * @brief galay-mongo 独立日志槽实现
  */
 
-#include <galay/cpp/galay-mongo/base/mongo_log.h>
+#include "mongo_log.h"
 
 #include <utility>
 

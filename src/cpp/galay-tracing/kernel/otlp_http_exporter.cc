@@ -8,9 +8,9 @@
  * 可选启用基于 galay-http 协程的内置传输，或由用户提供自定义传输函数。
  */
 
-#include <galay/cpp/galay-tracing/kernel/otlp_http_exporter.h>
+#include "otlp_http_exporter.h"
 
-#include <galay/cpp/galay-tracing/common/tracing_log.h>
+#include "../common/tracing_log.h"
 
 #include <algorithm>
 #include <array>
@@ -22,8 +22,8 @@
 #include <string_view>
 
 #if defined(GALAY_TRACING_ENABLE_OTLP_HTTP)
-#include <galay/cpp/galay-http/client/http_client.h>
-#include <galay/cpp/galay-kernel/core/runtime.h>
+#include "../../galay-http/client/http_client.h"
+#include "../../galay-kernel/core/runtime.h"
 
 #include <map>
 #endif

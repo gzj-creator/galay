@@ -1,5 +1,5 @@
 #include "ssl_context.h"
-#include <galay/cpp/galay-ssl/common/ssl_log.h>
+#include "../common/ssl_log.h"
 #include <algorithm>
 #include <cstring>
 #include <mutex>

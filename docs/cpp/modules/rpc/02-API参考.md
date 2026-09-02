@@ -1317,7 +1317,7 @@ ServiceDiscoveryClient<LocalServiceRegistry, WeightedRandomSelector> client2(reg
 ## 交叉验证入口
 
 - include 示例：`examples/include/e1_echo.cc`、`examples/include/e2_echo.cc`、`examples/include/e3_stream.cc`、`examples/include/e4_stream.cc`
-- import 示例：`examples/import/e1_echo.cc`、`examples/import/e2_echo.cc`、`examples/import/e3_stream.cc`、`examples/import/e4_stream.cc`
+- import 示例：`examples/cpp/rpc/mcpp/e1_echo.cc`、`examples/cpp/rpc/mcpp/e2_echo.cc`、`examples/cpp/rpc/mcpp/e3_stream.cc`、`examples/cpp/rpc/mcpp/e4_stream.cc`
 - 协议测试：`test/t1_proto.cpp`
 - server / client 测试：`test/t2_server.cpp`、`test/t3_client.cpp`
 - smoke 脚本：`test/run_rpc_integration_smoke.sh`、`test/run_echo_example_smoke.sh`、`test/run_stream_example_smoke.sh`

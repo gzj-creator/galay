@@ -1,13 +1,13 @@
 #include "client.h"
 
-#include <galay/cpp/galay-redis/base/redis_error.h>
-#include <galay/cpp/galay-redis/base/redis_log.h>
+#include "../base/redis_error.h"
+#include "../base/redis_log.h"
 
-#include <galay/cpp/galay-utils/process/system.hpp>
+#include "../../galay-utils/process/system.hpp"
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include <galay/cpp/galay-ssl/async/ssl_socket.h>
-#include <galay/cpp/galay-ssl/ssl/ssl_context.h>
+#include "../../galay-ssl/async/ssl_socket.h"
+#include "../../galay-ssl/ssl/ssl_context.h"
 #endif
 
 #include <algorithm>

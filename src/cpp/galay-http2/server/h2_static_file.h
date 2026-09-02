@@ -38,7 +38,7 @@ struct H2StaticFileRequest {
  * @brief HTTP/2 静态文件小文件 body 的异步发布槽。
  *
  * @details cache 元数据只由连接 IO owner 同步访问；body 由 blocking worker 读完后
- *          通过 shared_ptr 的原子操作发布，后续连接可安全复用同一份小文件内容。
+ *          通过 atomic<shared_ptr> 发布，后续连接可安全复用同一份小文件内容。
  * @note load() 返回拥有该快照的 shared_ptr，便于异步发送队列跨线程持有 body 生命周期。
  */
 class H2StaticFileBodyCacheSlot {
@@ -50,7 +50,7 @@ public:
     H2StaticFileBodyCacheSlot& operator=(H2StaticFileBodyCacheSlot&&) = delete;
 
     std::shared_ptr<const std::string> load() const noexcept {
-        return std::atomic_load_explicit(&m_body, std::memory_order_acquire);
+        return m_body.load(std::memory_order_acquire);
     }
 
     bool storeIfEmpty(std::shared_ptr<const std::string> body) noexcept {
@@ -58,16 +58,15 @@ public:
             return false;
         }
         std::shared_ptr<const std::string> expected;
-        return std::atomic_compare_exchange_strong_explicit(
-            &m_body,
-            &expected,
+        return m_body.compare_exchange_strong(
+            expected,
             std::move(body),
             std::memory_order_acq_rel,
             std::memory_order_acquire);
     }
 
 private:
-    std::shared_ptr<const std::string> m_body;  ///< 通过 shared_ptr 原子操作发布和读取
+    std::atomic<std::shared_ptr<const std::string>> m_body;  ///< 通过 atomic<shared_ptr> 发布和读取
 };
 
 struct H2StaticFileLookup {

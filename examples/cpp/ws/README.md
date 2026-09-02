@@ -4,7 +4,7 @@
 
 - `common/`：示例公共配置
 - `include/`：direct-include 示例实现（E1~E14）
-- `import/`：模块门禁满足时启用的 import 示例实现（TLS 场景还需要 `-DGALAY_BUILD_SSL=ON`）
+- `mcpp/`：模块门禁满足时启用的 import 示例实现（TLS 场景还需要 `-DGALAY_BUILD_SSL=ON`）
 
 保留示例类型：
 
@@ -55,7 +55,7 @@ cmake --build build-mod-ssl --target galay-http T59-module_smoke --parallel
 
 说明：
 
-- `import/` 在模块门禁满足时覆盖与 `include/` 树对齐的 E1~E14 场景
+- `mcpp/` 在模块门禁满足时覆盖与 `include/` 树对齐的 E1~E14 场景
 - 其中 `E5`~`E8`、`E13`、`E14` 还需要 `-DGALAY_BUILD_SSL=ON`
 - `T59-module_smoke` 是模块 consumer 的最小验证入口，并在 TLS 构建中额外触达 `Https*` / `Wss*` / `H2*` builder
 

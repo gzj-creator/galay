@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-mcp/v2/server/stdio_server.h>
+#include "stdio_server.h"
 
 #include <limits>
 #include <string>

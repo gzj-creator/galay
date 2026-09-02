@@ -8,7 +8,7 @@
  * 支持 SpanContext 与 tracestate 的联合序列化状态管理。
  */
 
-#include <galay/cpp/galay-tracing/context/context_storage.h>
+#include "context_storage.h"
 
 #include <utility>
 

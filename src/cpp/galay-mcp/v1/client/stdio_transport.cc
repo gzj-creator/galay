@@ -1,5 +1,5 @@
-#include <galay/cpp/galay-mcp/v1/client/stdio_transport.h>
-#include <galay/cpp/galay-mcp/common/mcp_log.h>
+#include "stdio_transport.h"
+#include "../../common/mcp_log.h"
 
 #include <iostream>
 

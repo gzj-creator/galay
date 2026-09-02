@@ -1,6 +1,6 @@
-#include <galay/cpp/galay-mcp/v1/server/stdio_server.h>
-#include <galay/cpp/galay-mcp/common/mcp_log.h>
-#include <galay/cpp/galay-mcp/common/protocol_utils.h>
+#include "stdio_server.h"
+#include "../../common/mcp_log.h"
+#include "../../common/protocol_utils.h"
 #include <sstream>
 #include <stdexcept>
 #include <mutex>

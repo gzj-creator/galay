@@ -54,7 +54,7 @@ def text_lines(path: Path) -> list[str]:
 
 
 def audit_examples() -> None:
-    base = ROOT / "examples"
+    base = ROOT / "examples" / "cpp"
     if not base.exists():
         return
 
@@ -63,10 +63,10 @@ def audit_examples() -> None:
             path.name for path in (module_dir / "include").glob("*") if path.suffix in {".cc", ".cpp"}
         }
         import_names = {
-            path.name for path in (module_dir / "import").glob("*") if path.suffix in {".cc", ".cpp"}
+            path.name for path in (module_dir / "mcpp").glob("*") if path.suffix in {".cc", ".cpp"}
         }
 
-        for side in ("include", "import"):
+        for side in ("include", "mcpp"):
             side_dir = module_dir / side
             if not side_dir.exists():
                 continue
@@ -80,11 +80,11 @@ def audit_examples() -> None:
 
         include_stems = {Path(name).with_suffix(".cc").stem for name in include_names}
         import_stems = {Path(name).with_suffix(".cc").stem for name in import_names}
-        optional_include_pairs = {"e6_mpsc", "e7_unsafe", "e8_async", "e9_sleep"}
+        optional_include_pairs = {"e6_mpsc", "e7_unsafe", "e8_async", "e9_sleep", "e12_policy"}
         for stem in sorted(include_stems ^ import_stems):
             if module_dir.name == "kernel" and stem in optional_include_pairs:
                 continue
-            side = "include" if stem in include_stems else "import"
+            side = "include" if stem in include_stems else "mcpp"
             issue(module_dir / side, 1, "example-pair", f"missing paired example for {stem}")
 
 

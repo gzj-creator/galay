@@ -8,10 +8,10 @@
  * 的 TraceId / SpanId 随机生成。
  */
 
-#include <galay/cpp/galay-tracing/common/id_format.h>
+#include "id_format.h"
 
-#include <galay/cpp/galay-tracing/common/span_id.h>
-#include <galay/cpp/galay-tracing/common/trace_id.h>
+#include "span_id.h"
+#include "trace_id.h"
 
 #include <array>
 #include <atomic>

@@ -31,7 +31,7 @@
 | 协议编码 / 认证辅助 | `galay-mysql/protoc/builder.h`、`galay-mysql/protoc/mysql_auth.h`、`galay-mysql/protoc/mysql_protocol.h`、`galay-mysql/protoc/mysql_packet.h` | `examples/mysql/include/e5_pipeline.cc` | `test/mysql/t1_protocol.cc`、`test/mysql/t2_auth.cc` |
 | monorepo target | `src/cpp/galay-mysql/CMakeLists.txt`、`galay::mysql` | 顶层 `CMakeLists.txt` 的 `GALAY_BUILD_MYSQL` | `test/mysql/CMakeLists.txt` |
 
-- 当 import / module 构建路径启用时，对应示例也存在于 `examples/mysql/import/`。
+- 当 import / module 构建路径启用时，对应示例也存在于 `examples/cpp/mysql/mcpp/`。
 - 回答“这个 API 在哪有真实消费者”时，应优先回到上表中的 examples / tests，再回到 Markdown 说明。
 
 ## 基础结果类型

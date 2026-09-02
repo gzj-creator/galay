@@ -1,9 +1,9 @@
 #include "mysql_auth.h"
-#include <galay/cpp/galay-utils/crypto/hmac.hpp>
-#include <galay/cpp/galay-utils/crypto/sha1.hpp>
+#include "../../galay-utils/crypto/hmac.hpp"
+#include "../../galay-utils/crypto/sha1.hpp"
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include <galay/cpp/galay-ssl/crypto/rsa.h>
+#include "../../galay-ssl/crypto/rsa.h"
 #endif
 
 #include <cstring>

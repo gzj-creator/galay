@@ -34,7 +34,7 @@ foreach(example_source IN LISTS GALAY_MYSQL_INCLUDE_EXAMPLE_SOURCES)
 endforeach()
 
 if(GALAY_MYSQL_CPP23_MODULES_EFFECTIVE)
-    file(GLOB GALAY_MYSQL_IMPORT_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/import/*.cc")
+    file(GLOB GALAY_MYSQL_IMPORT_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/mcpp/*.cc")
     foreach(example_source IN LISTS GALAY_MYSQL_IMPORT_EXAMPLE_SOURCES)
         get_filename_component(example_name "${example_source}" NAME_WE)
         set(scenario_name "${example_name}")

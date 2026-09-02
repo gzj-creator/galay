@@ -1,6 +1,6 @@
-#include <galay/cpp/galay-http2/builder/http2_frame_builder.h>
+#include "http2_frame_builder.h"
 
-#include <galay/cpp/galay-http2/utils/h2_helper.h>
+#include "../utils/h2_helper.h"
 
 #include <algorithm>
 #include <utility>

@@ -5,14 +5,14 @@
 
 #include "static_file_reader.h"
 
-#include <galay/cpp/galay-kernel/async/async_waiter.h>
-#include <galay/cpp/galay-kernel/core/runtime.h>
+#include "../../galay-kernel/async/async_waiter.h"
+#include "../../galay-kernel/core/runtime.h"
 
 #if defined(USE_IOURING)
 // io_uring submits regular-file reads to the kernel asynchronously. The
 // kqueue file path is readiness based and performs pread in the scheduler,
 // so it intentionally uses the blocking executor below.
-#include <galay/cpp/galay-kernel/async/async_file.h>
+#include "../../galay-kernel/async/async_file.h"
 #endif
 
 #include <algorithm>

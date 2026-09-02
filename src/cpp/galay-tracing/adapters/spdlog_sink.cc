@@ -8,9 +8,9 @@
  * 自动映射日志级别到 spdlog 对应的级别枚举。
  */
 
-#include <galay/cpp/galay-tracing/adapters/spdlog_sink.h>
+#include "spdlog_sink.h"
 
-#include <galay/cpp/galay-tracing/log/log_level.h>
+#include "../log/log_level.h"
 
 #include <spdlog/logger.h>
 #include <spdlog/spdlog.h>

@@ -8,7 +8,7 @@
  * 和基于 TraceId 高 64 位比例的采样。通过原子指针支持全局采样器热替换。
  */
 
-#include <galay/cpp/galay-tracing/kernel/sampler.h>
+#include "sampler.h"
 
 #include <algorithm>
 #include <atomic>

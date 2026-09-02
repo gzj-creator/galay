@@ -8,9 +8,9 @@
  * 支持定时刷新、队列溢出丢弃统计、优雅关闭和并发 forceFlush。
  */
 
-#include <galay/cpp/galay-tracing/kernel/batch_span_processor.h>
+#include "batch_span_processor.h"
 
-#include <galay/cpp/galay-tracing/common/tracing_log.h>
+#include "../common/tracing_log.h"
 
 #include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 

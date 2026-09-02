@@ -1,8 +1,8 @@
 #ifndef GALAY_MYSQL_DETAILS_AWAITABLE_INL
 #define GALAY_MYSQL_DETAILS_AWAITABLE_INL
 
-#include <galay/cpp/galay-mysql/base/mysql_log.h>
-#include <galay/cpp/galay-mysql/protoc/builder.h>
+#include "../base/mysql_log.h"
+#include "../protoc/builder.h"
 #include <array>
 #include <concepts>
 #include <sys/uio.h>

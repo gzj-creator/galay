@@ -1,6 +1,6 @@
-#include <galay/cpp/galay-mcp/v2/common/http_headers.h>
+#include "http_headers.h"
 
-#include <galay/cpp/galay-utils/encoding/base64.hpp>
+#include "../../../galay-utils/encoding/base64.hpp"
 
 #include <cctype>
 #include <charconv>

@@ -3,7 +3,7 @@
  * @brief galay-ssl 独立日志槽实现
  */
 
-#include <galay/cpp/galay-ssl/common/ssl_log.h>
+#include "ssl_log.h"
 
 #include <utility>
 

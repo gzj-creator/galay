@@ -3,7 +3,7 @@
  * @brief galay-mysql 独立日志槽实现
  */
 
-#include <galay/cpp/galay-mysql/base/mysql_log.h>
+#include "mysql_log.h"
 
 #include <utility>
 

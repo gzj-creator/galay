@@ -8,9 +8,9 @@
  * 支持追踪上下文（trace_id/span_id）和源码位置信息。
  */
 
-#include <galay/cpp/galay-tracing/log/console_sink.h>
+#include "console_sink.h"
 
-#include <galay/cpp/galay-tracing/log/log_level.h>
+#include "log_level.h"
 
 #include <iostream>
 

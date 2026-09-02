@@ -1,7 +1,7 @@
 #include "connection.h"
-#include <galay/cpp/galay-mongo/base/mongo_config.h>
+#include "../base/mongo_config.h"
 
-#include <galay/cpp/galay-kernel/common/handle_option.h>
+#include "../../galay-kernel/common/handle_option.h"
 
 #include <algorithm>
 #include <arpa/inet.h>

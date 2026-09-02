@@ -3,7 +3,7 @@
  * @brief HTTP/1.1 request and response builder implementations.
  */
 
-#include <galay/cpp/galay-http/builder/http_builder.h>
+#include "http_builder.h"
 
 #include <sstream>
 #include <utility>

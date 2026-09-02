@@ -1,8 +1,8 @@
-#include <galay/cpp/galay-http2/server/h2_static_file.h>
+#include "h2_static_file.h"
 
-#include <galay/cpp/galay-http/protoc/http_base.h>
-#include <galay/cpp/galay-http/server/http_etag.h>
-#include <galay/cpp/galay-http/server/http_range.h>
+#include "../../galay-http/protoc/http_base.h"
+#include "../../galay-http/server/http_etag.h"
+#include "../../galay-http/server/http_range.h"
 
 #include <chrono>
 #include <sstream>

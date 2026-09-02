@@ -3,7 +3,7 @@
  * @brief galay-http 独立日志槽实现
  */
 
-#include <galay/cpp/galay-http/common/http_log.h>
+#include "http_log.h"
 
 #include <utility>
 

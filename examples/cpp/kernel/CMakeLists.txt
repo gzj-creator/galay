@@ -41,7 +41,7 @@ foreach(example_source IN LISTS GALAY_KERNEL_INCLUDE_EXAMPLE_SOURCES)
     galay_add_kernel_example(example_kernel_include_${scenario_name} ${example_source})
 endforeach()
 
-file(GLOB GALAY_KERNEL_IMPORT_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/import/*.cc")
+file(GLOB GALAY_KERNEL_IMPORT_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/mcpp/*.cc")
 foreach(example_source IN LISTS GALAY_KERNEL_IMPORT_EXAMPLE_SOURCES)
     get_filename_component(example_name "${example_source}" NAME_WE)
     set(scenario_name "${example_name}")

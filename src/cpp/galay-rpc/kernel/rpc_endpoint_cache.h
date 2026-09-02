@@ -4,7 +4,7 @@
  * @author galay-rpc
  * @version 1.0.0
  *
- * @details 写入路径复制当前快照并原子发布；读取路径只做atomic shared_ptr load，
+ * @details 写入路径复制当前快照并原子发布；读取路径只做 atomic<shared_ptr> load，
  *          不获取写锁，适合托管客户端热路径读取发现快照。
  */
 
@@ -91,10 +91,10 @@ public:
      * @brief 获取完整快照
      * @return 只读快照shared_ptr；调用方可长期持有，后续写入不会修改该快照
      *
-     * @note 读路径不参与写路径互斥锁，通过 shared_ptr 原子操作读取快照。
+     * @note 读路径不参与写路径互斥锁，通过 atomic<shared_ptr> 读取快照。
      */
     std::shared_ptr<const RpcEndpointSnapshot> snapshot() const {
-        return std::atomic_load_explicit(&m_snapshot, std::memory_order_acquire);
+        return m_snapshot.load(std::memory_order_acquire);
     }
 
     /**
@@ -134,8 +134,7 @@ public:
         } else {
             upsertInto(*next, event.endpoint);
         }
-        std::atomic_store_explicit(
-            &m_snapshot,
+        m_snapshot.store(
             std::shared_ptr<const RpcEndpointSnapshot>(std::move(next)),
             std::memory_order_release);
     }
@@ -170,7 +169,7 @@ private:
     }
 
     mutable std::mutex m_write_mutex;
-    std::shared_ptr<const RpcEndpointSnapshot> m_snapshot;  ///< 通过 shared_ptr 原子自由函数发布和读取
+    std::atomic<std::shared_ptr<const RpcEndpointSnapshot>> m_snapshot;  ///< 通过 atomic<shared_ptr> 发布和读取
 };
 
 } // namespace galay::rpc

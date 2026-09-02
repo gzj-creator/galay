@@ -1,10 +1,10 @@
-#include <galay/cpp/galay-etcd/async/client.h>
+#include "client.h"
 
-#include <galay/cpp/galay-etcd/base/etcd_internal.h>
-#include <galay/cpp/galay-etcd/base/etcd_log.h>
-#include <galay/cpp/galay-utils/common/defn.hpp>
+#include "../base/etcd_internal.h"
+#include "../base/etcd_log.h"
+#include "../../galay-utils/common/defn.hpp"
 
-#include <galay/cpp/galay-http/protoc/http_error.h>
+#include "../../galay-http/protoc/http_error.h"
 
 #include <algorithm>
 #include <cctype>

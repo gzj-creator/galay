@@ -1,11 +1,11 @@
 #include "postgres_auth.h"
 
-#include <galay/cpp/galay-utils/crypto/hmac.hpp>
-#include <galay/cpp/galay-utils/crypto/md5.hpp>
-#include <galay/cpp/galay-utils/crypto/pbkdf2.hpp>
+#include "../../galay-utils/crypto/hmac.hpp"
+#include "../../galay-utils/crypto/md5.hpp"
+#include "../../galay-utils/crypto/pbkdf2.hpp"
 #include <chrono>
-#include <galay/cpp/galay-utils/crypto/salt.hpp>
-#include <galay/cpp/galay-utils/encoding/base64.hpp>
+#include "../../galay-utils/crypto/salt.hpp"
+#include "../../galay-utils/encoding/base64.hpp"
 
 #include <algorithm>
 #include <charconv>

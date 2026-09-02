@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-mcp/v2/common/protocol.h>
+#include "protocol.h"
 
 #include <utility>
 

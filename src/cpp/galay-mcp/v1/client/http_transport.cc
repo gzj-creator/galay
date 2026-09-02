@@ -1,8 +1,8 @@
-#include <galay/cpp/galay-mcp/v1/client/http_transport.h>
-#include <galay/cpp/galay-mcp/common/json_parser.h>
-#include <galay/cpp/galay-mcp/common/mcp_log.h>
-#include <galay/cpp/galay-mcp/common/protocol_utils.h>
-#include <galay/cpp/galay-kernel/common/error.h>
+#include "http_transport.h"
+#include "../../common/json_parser.h"
+#include "../../common/mcp_log.h"
+#include "../../common/protocol_utils.h"
+#include "../../../galay-kernel/common/error.h"
 
 namespace galay::mcp::detail {
 

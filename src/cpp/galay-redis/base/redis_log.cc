@@ -3,7 +3,7 @@
  * @brief galay-redis 独立日志槽实现
  */
 
-#include <galay/cpp/galay-redis/base/redis_log.h>
+#include "redis_log.h"
 
 #include <utility>
 

@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-mcp/common/json_parser.h>
+#include "json_parser.h"
 
 namespace galay::mcp {
 

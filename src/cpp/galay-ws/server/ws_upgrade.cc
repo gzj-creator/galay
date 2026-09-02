@@ -3,8 +3,8 @@
  * @brief WebSocket 握手升级处理实现
  */
 
-#include <galay/cpp/galay-ws/server/ws_upgrade.h>
-#include <galay/cpp/galay-utils/encoding/base64.hpp>
+#include "ws_upgrade.h"
+#include "../../galay-utils/encoding/base64.hpp"
 #include <algorithm>
 #include <cctype>
 #include <cstring>

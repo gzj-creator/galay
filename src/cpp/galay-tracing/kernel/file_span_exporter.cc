@@ -8,7 +8,7 @@
  * 内部使用互斥锁保证线程安全的批量写入和文件刷新。
  */
 
-#include <galay/cpp/galay-tracing/kernel/file_span_exporter.h>
+#include "file_span_exporter.h"
 
 #include <span>
 #include <string>

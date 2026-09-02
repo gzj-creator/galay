@@ -3,7 +3,7 @@
  * @brief galay-mcp 独立日志槽实现
  */
 
-#include <galay/cpp/galay-mcp/common/mcp_log.h>
+#include "mcp_log.h"
 
 #include <utility>
 

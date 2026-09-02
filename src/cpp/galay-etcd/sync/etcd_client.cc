@@ -1,7 +1,7 @@
-#include <galay/cpp/galay-etcd/sync/etcd_client.h>
+#include "etcd_client.h"
 
-#include <galay/cpp/galay-etcd/base/etcd_internal.h>
-#include <galay/cpp/galay-etcd/base/etcd_log.h>
+#include "../base/etcd_internal.h"
+#include "../base/etcd_log.h"
 
 #include <algorithm>
 #include <array>

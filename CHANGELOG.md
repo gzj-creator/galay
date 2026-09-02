@@ -11,6 +11,16 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **统一 C++ 示例模块目录**：将 14 个 `examples/cpp/<module>/import/` 目录重命名为 `mcpp/`，同步各模块 CMake glob、README、API 文档、使用指南和示例审计脚本；保留 `include/` direct-include 示例。
+- **移除旧的 mcpp consumer 脚手架**：删除 `test/mcpp/` 目录及其 manifest、consumer 和脚本，本轮不新增测试。
+- **收敛 C++ 源码 include 路径**：保留并提交各模块已完成的相对 include 调整，避免源码构建依赖生成的绝对 include 链接。
+
+### Fixed
+
+- **消除 shared_ptr 原子 API 弃用警告**：RPC、MCP 和 HTTP/2 static-file cache 改用 `std::atomic<std::shared_ptr<T>>` 的成员操作，保持原有内存序、快照发布和无锁读取语义。
+
 ## [v5.0.3] - 2026-09-01
 
 ### Fixed

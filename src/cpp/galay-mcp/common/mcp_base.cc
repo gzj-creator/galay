@@ -1,4 +1,4 @@
-#include <galay/cpp/galay-mcp/common/mcp_base.h>
+#include "mcp_base.h"
 
 namespace galay::mcp {
 

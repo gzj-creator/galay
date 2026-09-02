@@ -9,9 +9,9 @@
  * 以及进程级默认 Logger 和默认写入器的管理。
  */
 
-#include <galay/cpp/galay-tracing/log/logger.h>
+#include "logger.h"
 
-#include <galay/cpp/galay-tracing/log/console_sink.h>
+#include "console_sink.h"
 
 #include <algorithm>
 #include <array>

@@ -1,6 +1,6 @@
 #include "ssl_await.h"
 #include "ssl_socket.h"
-#include <galay/cpp/galay-ssl/common/ssl_log.h>
+#include "../common/ssl_log.h"
 #include <algorithm>
 #include <limits>
 #include <string_view>

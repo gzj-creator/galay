@@ -20,7 +20,7 @@ foreach(example_source IN LISTS GALAY_UTILS_INCLUDE_EXAMPLE_SOURCES)
     galay_add_utils_example(example_utils_include_${scenario_name} ${example_source})
 endforeach()
 
-file(GLOB GALAY_UTILS_IMPORT_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/import/*.cc")
+file(GLOB GALAY_UTILS_IMPORT_EXAMPLE_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/mcpp/*.cc")
 foreach(example_source IN LISTS GALAY_UTILS_IMPORT_EXAMPLE_SOURCES)
     get_filename_component(example_name "${example_source}" NAME_WE)
     string(REGEX REPLACE "^e[0-9]+_" "" scenario_name "${example_name}")

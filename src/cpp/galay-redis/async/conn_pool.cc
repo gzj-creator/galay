@@ -1,5 +1,5 @@
 #include "conn_pool.h"
-#include <galay/cpp/galay-redis/base/redis_log.h>
+#include "../base/redis_log.h"
 #include <algorithm>
 #include <cstdint>
 #include <functional>

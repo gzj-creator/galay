@@ -1,7 +1,7 @@
 #include "ws_frame.h"
 #include "../common/macro.hpp"
 
-#include <galay/cpp/galay-ws/utils/ws_helper.h>
+#include "../utils/ws_helper.h"
 
 #include <algorithm>
 #include <cstring>

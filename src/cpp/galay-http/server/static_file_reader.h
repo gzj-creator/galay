@@ -10,11 +10,11 @@
 #ifndef GALAY_HTTP_STATIC_FILE_READER_H
 #define GALAY_HTTP_STATIC_FILE_READER_H
 
-#include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-kernel/common/file_descriptor.h>
+#include "../../galay-kernel/core/task.h"
+#include "../../galay-kernel/common/file_descriptor.h"
 
 #if defined(USE_IOURING)
-#include <galay/cpp/galay-kernel/async/async_file.h>
+#include "../../galay-kernel/async/async_file.h"
 #endif
 
 #include <cstddef>

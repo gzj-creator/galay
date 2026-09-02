@@ -1,6 +1,6 @@
-#include <galay/cpp/galay-ws/builder/ws_frame_builder.h>
+#include "ws_frame_builder.h"
 
-#include <galay/cpp/galay-ws/utils/ws_helper.h>
+#include "../utils/ws_helper.h"
 
 #include <utility>
 

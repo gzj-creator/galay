@@ -8,11 +8,11 @@
  * 以及 startSpan 和 startServerSpan 便捷函数中的采样决策和上下文传播。
  */
 
-#include <galay/cpp/galay-tracing/kernel/span_guard.h>
+#include "span_guard.h"
 
-#include <galay/cpp/galay-tracing/context/context_storage.h>
-#include <galay/cpp/galay-tracing/kernel/sampler.h>
-#include <galay/cpp/galay-tracing/kernel/tracer_provider.h>
+#include "../context/context_storage.h"
+#include "sampler.h"
+#include "tracer_provider.h"
 
 #include <cstdint>
 #include <string>
