@@ -148,6 +148,9 @@ std::expected<void, IOError> AsyncTcpSocket::bind(const Host& host)
     if (!host.valid()) {
         return std::unexpected(IOError(kParamInvalid, 0));
     }
+    if (!m_controller || m_controller->m_handle == GHandle::invalid()) {
+        return std::unexpected(IOError(kClosed, 0));
+    }
     if (::bind(m_controller->m_handle.fd, host.sockAddr(), host.addrLen()) < 0) {
         return std::unexpected(IOError(kBindFailed, errno));
     }
@@ -162,6 +165,9 @@ std::expected<void, IOError> AsyncTcpSocket::bind(const Host& host)
  */
 std::expected<void, IOError> AsyncTcpSocket::listen(int backlog)
 {
+    if (!m_controller || m_controller->m_handle == GHandle::invalid()) {
+        return std::unexpected(IOError(kClosed, 0));
+    }
     if (::listen(m_controller->m_handle.fd, backlog) < 0) {
         return std::unexpected(IOError(kListenFailed, errno));
     }

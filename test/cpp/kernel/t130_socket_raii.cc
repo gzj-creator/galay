@@ -103,6 +103,24 @@ bool moveAssignmentClosesPreviousSocketAndTransfersNewOne()
     return check(isClosed(newFd), "destination destructor should close the moved fd");
 }
 
+bool movedFromSyncOperationsReportClosed()
+{
+    const int fd = makeSocketFd();
+    if (!check(fd >= 0, "socket() should create a moved-from sync operation fd")) {
+        return false;
+    }
+
+    galay::async::AsyncTcpSocket socket(GHandle{.fd = fd});
+    galay::async::AsyncTcpSocket moved(std::move(socket));
+    const galay::kernel::Host host(galay::kernel::IPType::IPV4, "127.0.0.1", 0);
+    const auto bind_result = socket.bind(host);
+    const auto listen_result = socket.listen();
+    const bool bind_closed = !bind_result && bind_result.error().code() == galay::kernel::kClosed;
+    const bool listen_closed = !listen_result && listen_result.error().code() == galay::kernel::kClosed;
+    return check(bind_closed && listen_closed,
+                 "moved-from TCP bind/listen should return kClosed");
+}
+
 bool cloneKeepsSocketAliveUntilLastOwner()
 {
     const int fd = makeSocketFd();
@@ -176,6 +194,7 @@ int main()
     bool ok = true;
     ok = destructorClosesOwnedSocket() && ok;
     ok = moveAssignmentClosesPreviousSocketAndTransfersNewOne() && ok;
+    ok = movedFromSyncOperationsReportClosed() && ok;
     ok = cloneKeepsSocketAliveUntilLastOwner() && ok;
     ok = unawaitedCloseClosesOwnedSocket() && ok;
     ok = closeReportsClosedSocket() && ok;

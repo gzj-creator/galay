@@ -53,7 +53,6 @@
 #include "../core/io_scheduler.hpp"
 #include "../core/awaitable.h"
 #include <array>
-#include <atomic>
 #include <cstddef>
 #include <expected>
 #include <memory>
@@ -476,7 +475,7 @@ public:
      * - clone 出的对象与原对象在同一 IO 调度器上使用（IOController 非线程安全）
      * - 任一持有者 close() 或析构仅释放自己的引用；最后一个持有者才真正关闭句柄
      */
-    AsyncTcpSocket clone() {
+    AsyncTcpSocket clone() const {
         return AsyncTcpSocket(m_controller);
     }
 

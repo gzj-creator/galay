@@ -54,7 +54,9 @@
 #include "../common/handle_option.h"
 #include "../core/awaitable.h"
 #include "../core/io_scheduler.hpp"
+#include <cstddef>
 #include <expected>
+#include <memory>
 
 namespace galay::async
 {
@@ -68,8 +70,10 @@ namespace galay::async
  * - IOController: IO事件控制器
  *
  * @note
- * - 不可拷贝，仅支持移动语义
- * - 析构时会同步关闭仍由对象持有的 socket
+ * - 不可拷贝，仅支持移动语义；clone() 可派生共享同一底层句柄的副本
+ * - 多个持有者共享同一 IOController（shared_ptr 引用计数，初始 1）；
+ *   最后一个持有者 close()/析构时才真正关闭 socket
+ * - 协程内可显式 co_await close() 释放持有并获取错误
  * - 所有异步操作需要在任务中使用 co_await
  * - UDP是无连接协议，不需要listen/accept/connect操作
  *
@@ -103,7 +107,7 @@ public:
 
     /**
      * @brief 析构函数
-     * @note 同步关闭仍由对象持有的 socket；协程路径仍可显式 co_await close() 获取错误。
+     * @note 递减共享计数；计数减到 0 时关闭仍由对象持有的 socket，若已通过 close() 关闭则不重复处理。
      */
     ~AsyncUdpSocket();
 
@@ -127,15 +131,17 @@ public:
 
     /**
      * @brief 获取底层socket句柄
-     * @return GHandle 底层句柄，可用于底层操作
+     * @return GHandle 底层句柄，可用于底层操作；对象为 moved-from 状态时返回 invalid
      */
-    GHandle handle() const { return m_controller.m_handle; }
+    GHandle handle() const {
+        return m_controller ? m_controller->m_handle : GHandle::invalid();
+    }
 
     /**
      * @brief 获取IO控制器指针
      * @return IOController* 内部IO控制器，用于高级操作
      */
-    galay::kernel::IOController* controller() { return &m_controller; }
+    galay::kernel::IOController* controller() { return m_controller.get(); }
 
 
     /**
@@ -162,7 +168,7 @@ public:
      * socket.option().handleNonBlock();   // 设置非阻塞
      * @endcode
      */
-    galay::kernel::HandleOption option() { return galay::kernel::HandleOption(m_controller.m_handle); }
+    galay::kernel::HandleOption option() { return galay::kernel::HandleOption(handle()); }
 
     /**
      * @brief 异步接收数据报
@@ -237,12 +243,46 @@ public:
      * @brief 获取IO控制器
      * @return IOController* IO控制器
      */
-    galay::kernel::IOController* getController() { return &m_controller; }
+    galay::kernel::IOController* getController() { return m_controller.get(); }
+
+    /**
+     * @brief 克隆当前socket，共享底层句柄与IO控制器
+     *
+     * @return 与当前对象共享同一 IOController 的新 AsyncUdpSocket
+     *
+     * @note
+     * - 返回的对象与当前对象共享持有计数（shared_ptr 引用计数加 1）
+     * - clone 出的对象与原对象在同一 IO 调度器上使用（IOController 非线程安全）
+     * - 任一持有者 close() 或析构仅释放自己的引用；最后一个持有者才真正关闭句柄
+     */
+    AsyncUdpSocket clone() const {
+        return AsyncUdpSocket(m_controller);
+    }
+
+    /**
+     * @brief 获取当前socket的共享持有计数
+     * @return shared_ptr 引用计数；对象为 moved-from 状态时返回 0
+     */
+    int getSharedCount() const { return static_cast<int>(m_controller.use_count()); }
+
 private:
     static std::expected<GHandle, galay::kernel::IOError> openHandle(galay::kernel::IPType type);  ///< 按协议版本创建底层 UDP socket
 
+    /**
+     * @brief 从共享控制器构造（仅 clone 使用）
+     * @param controller 共享的 IO 控制器
+     */
+    explicit AsyncUdpSocket(std::shared_ptr<galay::kernel::IOController> controller) noexcept
+        : m_controller(std::move(controller)) {}
+
+    /**
+     * @brief 释放本对象对共享控制器的持有
+     * @note 递减共享计数；计数减到 0 且句柄仍有效时关闭句柄
+     */
+    void releaseSharedOwnership() noexcept;
+
 private:
-    galay::kernel::IOController m_controller;  ///< IO事件控制器
+    std::shared_ptr<galay::kernel::IOController> m_controller;  ///< IO事件控制器；clone 共享同一实例
 };
 
 } // namespace galay::async

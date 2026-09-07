@@ -857,6 +857,22 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
     CloseAwaitable(IOController* controller)
         : m_controller(controller) {}
 
+    CloseAwaitable(const CloseAwaitable&) = delete;
+    CloseAwaitable& operator=(const CloseAwaitable&) = delete;
+    CloseAwaitable(CloseAwaitable&&) noexcept = default;
+
+    CloseAwaitable& operator=(CloseAwaitable&& other) noexcept {
+        if (this != &other) {
+            releaseOwnedOwnership();
+            TimeoutSupport<CloseAwaitable>::operator=(std::move(other));
+            m_owned = std::move(other.m_owned);
+            m_controller = other.m_controller;
+            m_waker = std::move(other.m_waker);
+            m_result = std::move(other.m_result);
+        }
+        return *this;
+    }
+
     /**
      * @brief 接管共享控制器的引用并按持有计数决定是否真正关闭
      * @param controller 调用方移出的共享控制器（AsyncTcpSocket::close）
@@ -871,25 +887,13 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
      *       直接关闭句柄，避免引用随 awaitable 销毁导致 fd 泄漏。
      */
     ~CloseAwaitable() {
-        if (m_owned && m_owned.use_count() == 1 &&
-            m_controller->m_handle != GHandle::invalid()) {
-            (void)galay_close(m_controller->m_handle.fd);
-            m_controller->m_handle = GHandle::invalid();
-        }
+        releaseOwnedOwnership();
     }
 
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         m_waker = Waker(handle);
-        auto scheduler = m_waker.getScheduler();
-        if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
-            m_result = std::unexpected(IOError(kNotRunningOnIOScheduler, errno));
-            // close 在 await_suspend() 中同步提交；在 awaiter 可能销毁前
-            // 消费非拥有的超时绑定。
-            cancelBoundTimeoutTimer();
-            return false;
-        }
         if (m_controller == nullptr) {
             // 控制器为空说明句柄已关闭或从未打开。
             m_result = std::unexpected(IOError(kClosed, 0));
@@ -898,6 +902,14 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
         }
         if (m_controller->m_handle == GHandle::invalid()) {
             m_result = std::unexpected(IOError(kClosed, 0));
+            cancelBoundTimeoutTimer();
+            return false;
+        }
+        auto scheduler = m_waker.getScheduler();
+        if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
+            m_result = std::unexpected(IOError(kNotRunningOnIOScheduler, errno));
+            // close 在 await_suspend() 中同步提交；在 awaiter 可能销毁前
+            // 消费非拥有的超时绑定。
             cancelBoundTimeoutTimer();
             return false;
         }
@@ -927,6 +939,16 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
     IOController* m_controller;  ///< 关联的 IO 控制器
     Waker m_waker;  ///< 恢复等待协程的唤醒器
     std::expected<void, IOError> m_result;  ///< 关闭操作结果
+
+private:
+    void releaseOwnedOwnership() noexcept {
+        if (m_owned && m_owned.use_count() == 1 && m_controller != nullptr &&
+            m_controller->m_handle != GHandle::invalid()) {
+            (void)galay_close(m_controller->m_handle.fd);
+            m_controller->m_handle = GHandle::invalid();
+        }
+        m_owned.reset();
+    }
 };
 
 // ---- RecvFrom ----
