@@ -161,6 +161,9 @@ std::expected<void, IOError> AsyncAio::open(const std::string& path, AioOpenMode
     if (fd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
     }
+    if (m_handle.fd >= 0) {
+        (void)::close(m_handle.fd);
+    }
     m_handle.fd = fd;
     return {};
 }
@@ -269,6 +272,9 @@ void AsyncAio::close()
  */
 std::expected<size_t, IOError> AsyncAio::size() const
 {
+    if (m_handle == GHandle::invalid()) {
+        return std::unexpected(IOError(kClosed, 0));
+    }
     struct stat st;
     if (fstat(m_handle.fd, &st) < 0) {
         return std::unexpected(IOError(kStatFailed, errno));
@@ -282,6 +288,9 @@ std::expected<size_t, IOError> AsyncAio::size() const
  */
 std::expected<void, IOError> AsyncAio::sync()
 {
+    if (m_handle == GHandle::invalid()) {
+        return std::unexpected(IOError(kClosed, 0));
+    }
     if (fsync(m_handle.fd) < 0) {
         return std::unexpected(IOError(kSyncFailed, errno));
     }

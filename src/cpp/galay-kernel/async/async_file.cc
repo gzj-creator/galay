@@ -136,6 +136,9 @@ CloseAwaitable AsyncFile::close()
  */
 std::expected<size_t, IOError> AsyncFile::size() const
 {
+    if (m_controller.m_handle == GHandle::invalid()) {
+        return std::unexpected(IOError(kClosed, 0));
+    }
     struct stat st;
     if (fstat(m_controller.m_handle.fd, &st) < 0) {
         return std::unexpected(IOError(kStatFailed, errno));
@@ -149,6 +152,9 @@ std::expected<size_t, IOError> AsyncFile::size() const
  */
 std::expected<void, IOError> AsyncFile::sync()
 {
+    if (m_controller.m_handle == GHandle::invalid()) {
+        return std::unexpected(IOError(kClosed, 0));
+    }
     if (fsync(m_controller.m_handle.fd) < 0) {
         return std::unexpected(IOError(kSyncFailed, errno));
     }

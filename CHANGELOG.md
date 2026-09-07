@@ -23,6 +23,8 @@
 
 - **统一关闭已失效 TCP socket 的错误语义**：`AsyncTcpSocket::close()` 对 moved-from、空 controller 和 invalid fd 返回 `IOError(kClosed, 0)`，并显式处理析构关闭路径的返回值。
 - **完善失效 socket 操作检查**：TCP/UDP moved-from 或 invalid socket 的同步操作和异步 `close()` 返回 `IOError(kClosed, 0)`，避免空 controller 解引用和错误码被调度器状态覆盖。
+- **修复 AsyncAio 重开文件描述符泄漏**：成功打开新文件后关闭旧 fd，打开失败时保留原 fd；补充重开与析构关闭回归覆盖。
+- **统一文件 IO 失效状态错误语义**：AsyncAio/AsyncFile 的 `size()` 和 `sync()` 在 invalid 或 moved-from 状态下返回 `IOError(kClosed, 0)`。
 
 - **统一 C++ 示例模块目录**：将 14 个 `examples/cpp/<module>/import/` 目录重命名为 `mcpp/`，同步各模块 CMake glob、README、API 文档、使用指南和示例审计脚本；保留 `include/` direct-include 示例。
 - **移除旧的 mcpp consumer 脚手架**：删除 `test/mcpp/` 目录及其 manifest、consumer 和脚本，本轮不新增测试。

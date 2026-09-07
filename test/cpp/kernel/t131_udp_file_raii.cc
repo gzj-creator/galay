@@ -6,6 +6,10 @@
 #include <galay/cpp/galay-kernel/async/async_udp.h>
 
 #ifdef USE_EPOLL
+#include <galay/cpp/galay-kernel/async/async_aio.h>
+#endif
+
+#ifdef USE_EPOLL
 #include <galay/cpp/galay-kernel/core/epoll_scheduler.h>
 using TestScheduler = galay::kernel::EpollScheduler;
 #elif defined(USE_IOURING)
@@ -189,6 +193,74 @@ bool udpCloseReportsClosedSocket()
 #endif
 }
 
+#ifdef USE_EPOLL
+
+bool asyncAioReopenClosesOldFd()
+{
+    const auto firstPath = std::filesystem::temp_directory_path() /
+                           "galay_async_aio_raii_first.tmp";
+    const auto secondPath = std::filesystem::temp_directory_path() /
+                            "galay_async_aio_raii_second.tmp";
+    const auto missingPath = std::filesystem::temp_directory_path() /
+                             "galay_async_aio_raii_missing.tmp";
+    std::filesystem::remove(missingPath);
+    {
+        std::ofstream first(firstPath);
+        std::ofstream second(secondPath);
+        if (!check(first.good() && second.good(), "should create AsyncAio reopen files")) {
+            std::filesystem::remove(firstPath);
+            std::filesystem::remove(secondPath);
+            return false;
+        }
+        first << "first";
+        second << "second";
+    }
+
+    bool ok = true;
+    int oldFd = -1;
+    int newFd = -1;
+    {
+        galay::async::AsyncAio file;
+        auto opened = file.open(firstPath.string(), galay::async::AioOpenMode::Read);
+        if (!check(opened.has_value(), "AsyncAio initial open should succeed")) {
+            std::filesystem::remove(firstPath);
+            std::filesystem::remove(secondPath);
+            return false;
+        }
+        oldFd = file.handle().fd;
+
+        auto failed = file.open(missingPath.string(), galay::async::AioOpenMode::Read);
+        ok = check(!failed.has_value(), "AsyncAio reopen of missing path should fail") && ok;
+        ok = check(!isClosed(oldFd), "failed AsyncAio reopen should keep the existing fd") && ok;
+
+        auto reopened = file.open(secondPath.string(), galay::async::AioOpenMode::Read);
+        ok = check(reopened.has_value(), "AsyncAio reopen should succeed") && ok;
+        newFd = file.handle().fd;
+        ok = check(isClosed(oldFd), "successful AsyncAio reopen should close the old fd") && ok;
+        ok = check(newFd >= 0 && !isClosed(newFd),
+                   "successful AsyncAio reopen should keep the new fd open") && ok;
+    }
+
+    ok = check(isClosed(newFd), "AsyncAio destructor should close the reopened fd") && ok;
+    std::filesystem::remove(firstPath);
+    std::filesystem::remove(secondPath);
+    return ok;
+}
+
+bool asyncAioClosedMetadataReportsClosed()
+{
+    galay::async::AsyncAio file;
+    const auto invalidSize = file.size();
+    const auto invalidSync = file.sync();
+    bool ok = check(!invalidSize && invalidSize.error().code() == galay::kernel::kClosed,
+                    "AsyncAio size on an invalid fd should return kClosed");
+    ok = check(!invalidSync && invalidSync.error().code() == galay::kernel::kClosed,
+               "AsyncAio sync on an invalid fd should return kClosed") && ok;
+    return ok;
+}
+
+#endif
+
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 
 std::filesystem::path tempFilePath(const char* name)
@@ -297,6 +369,18 @@ bool asyncFileFailedReopenKeepsExistingFd()
     return ok;
 }
 
+bool asyncFileClosedMetadataReportsClosed()
+{
+    galay::async::AsyncFile file;
+    const auto invalidSize = file.size();
+    const auto invalidSync = file.sync();
+    bool ok = check(!invalidSize && invalidSize.error().code() == galay::kernel::kClosed,
+                    "AsyncFile size on an invalid fd should return kClosed");
+    ok = check(!invalidSync && invalidSync.error().code() == galay::kernel::kClosed,
+               "AsyncFile sync on an invalid fd should return kClosed") && ok;
+    return ok;
+}
+
 #endif
 
 } // namespace
@@ -311,10 +395,16 @@ int main()
     ok = udpUnawaitedCloseClosesOwnedSocket() && ok;
     ok = udpCloseReportsClosedSocket() && ok;
 
+#ifdef USE_EPOLL
+    ok = asyncAioReopenClosesOldFd() && ok;
+    ok = asyncAioClosedMetadataReportsClosed() && ok;
+#endif
+
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     ok = asyncFileDestructorClosesOwnedFd() && ok;
     ok = asyncFileMoveAssignmentClosesPreviousFdAndTransfersNewOne() && ok;
     ok = asyncFileFailedReopenKeepsExistingFd() && ok;
+    ok = asyncFileClosedMetadataReportsClosed() && ok;
 #endif
 
     return ok ? 0 : 1;
