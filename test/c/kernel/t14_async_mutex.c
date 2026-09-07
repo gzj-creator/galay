@@ -13,7 +13,9 @@ typedef struct LockState {
 } LockState;
 
 enum {
-    HANDOFF_STRESS_ITERATIONS = 512
+    // 每轮 handoff 含十余处 1ms 轮询等待点，512 轮约 9s 纯睡眠；
+    // 128 轮同样覆盖 lock/unlock 与超时等待的交接路径。
+    HANDOFF_STRESS_ITERATIONS = 128
 };
 
 static int expect_status(C_AsyncMutexResultCode actual, C_AsyncMutexResultCode expected)

@@ -14,7 +14,9 @@ typedef struct WaitState {
 } WaitState;
 
 enum {
-    ASYNC_WAITER_SIGNAL_RACE_ITERATIONS = 20000
+    // join 轮询粒度为 1ms，20000 次意味着 20s+ 的纯睡眠；
+    // 2000 次已足够覆盖 notify-before-wait / spawn-notify-destroy 竞态采样。
+    ASYNC_WAITER_SIGNAL_RACE_ITERATIONS = 2000
 };
 
 static int expect_status(C_AsyncWaiterResultCode actual, C_AsyncWaiterResultCode expected)

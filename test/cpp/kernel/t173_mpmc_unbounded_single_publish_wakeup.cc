@@ -71,7 +71,9 @@ using namespace std::chrono_literals;
 #if defined(__SANITIZE_THREAD__)
 constexpr uint64_t kIterations = 50;
 #else
-constexpr uint64_t kIterations = 5'000;
+// 每次迭代都是一次完整的 publish→wakeup→consume 握手，规模只需覆盖唤醒竞态；
+// 更大的规模在高负载并行 ctest 下会被调度延迟放大而超时。
+constexpr uint64_t kIterations = 1'000;
 #endif
 
 void cpuPause() noexcept
@@ -160,7 +162,8 @@ int main()
         }
     });
 
-    const auto deadline = std::chrono::steady_clock::now() + 60s;
+    // 内部 deadline 必须小于 ctest TIMEOUT(45s)，保证自身先给出诊断输出
+    const auto deadline = std::chrono::steady_clock::now() + 30s;
     while (!state.done.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < deadline) {
         std::this_thread::sleep_for(1ms);

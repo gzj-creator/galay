@@ -8,8 +8,13 @@
 #include <cstring>
 #include <atomic>
 #include <array>
+#include <cerrno>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 #include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/core/task.h>
+#include "test/cpp/common/port_cfg.h"
 #include "test/cpp/common/stdout_log.h"
 
 #ifdef USE_KQUEUE
@@ -29,6 +34,7 @@ using namespace galay::kernel;
 
 std::atomic<bool> g_server_ready{false};
 std::atomic<bool> g_test_passed{false};
+std::atomic<uint16_t> g_test_port{0};  ///< 测试监听端口；服务端绑定后从内核读取
 
 // 服务器协程 - 使用 readv 接收数据
 Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
@@ -47,12 +53,22 @@ Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
         co_return;
     }
 
-    Host bindHost(IPType::IPV4, "127.0.0.1", 9090);
+    Host bindHost(IPType::IPV4, "127.0.0.1", g_test_port.load());
     auto bindResult = listener.bind(bindHost);
     if (!bindResult) {
         LogError("[Server] Failed to bind: {}", bindResult.error().message());
         co_return;
     }
+
+    sockaddr_in bound_addr{};
+    socklen_t bound_addr_len = sizeof(bound_addr);
+    if (::getsockname(listener.handle().fd,
+                      reinterpret_cast<sockaddr*>(&bound_addr),
+                      &bound_addr_len) != 0) {
+        LogError("[Server] Failed to query bound port: {}", errno);
+        co_return;
+    }
+    g_test_port.store(ntohs(bound_addr.sin_port));
 
     auto listenResult = listener.listen(128);
     if (!listenResult) {
@@ -60,7 +76,7 @@ Task<void> readvServer([[maybe_unused]] IOScheduler* scheduler) {
         co_return;
     }
 
-    LogInfo("[Server] Listening on 127.0.0.1:9090");
+    LogInfo("[Server] Listening on 127.0.0.1:{}", g_test_port.load());
     g_server_ready = true;
 
     Host clientHost;
@@ -162,7 +178,7 @@ Task<void> writevClient([[maybe_unused]] IOScheduler* scheduler) {
         co_return;
     }
 
-    Host serverHost(IPType::IPV4, "127.0.0.1", 9090);
+    Host serverHost(IPType::IPV4, "127.0.0.1", g_test_port.load());
     auto connectResult = co_await client.connect(serverHost);
     if (!connectResult) {
         LogError("[Client] Failed to connect: {}", connectResult.error().message());
@@ -239,6 +255,10 @@ int main() {
 #endif
 
     scheduler.start();
+
+    // 端口：优先环境变量；默认由服务端绑定 0 并读取内核分配的端口。
+    uint16_t port = galay::test::resolvePortFromEnv("GALAY_TEST_IOV_PORT", 0);
+    g_test_port.store(port);
 
     // 启动服务器
     scheduleTask(scheduler, readvServer(&scheduler));
