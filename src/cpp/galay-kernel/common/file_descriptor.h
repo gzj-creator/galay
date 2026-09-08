@@ -107,11 +107,15 @@ public:
      * @brief 打开文件并接管返回的文件描述符。
      * @param path 文件路径，调用期间必须指向有效的 C 字符串
      * @param flags 传给 ::open 的打开标志
-     * @return 成功返回 void，失败返回 IOError(kOpenFailed)，并保持对象无效。
+     * @return 成功返回 void；已持有 fd 时返回 kAlreadyOpen，
+     *         失败返回 IOError(kOpenFailed)，两种失败均不改动现有 fd
      */
     std::expected<void, IOError> open(const char* path, int flags)
     {
-        close();
+        if (m_fd >= 0) {
+            m_last_error = IOError(kAlreadyOpen, 0);
+            return std::unexpected(*m_last_error);
+        }
         m_fd = ::open(path, flags);
         if (m_fd < 0) {
             m_last_error = IOError(kOpenFailed, errno);
@@ -126,11 +130,15 @@ public:
      * @param path 文件路径，调用期间必须指向有效的 C 字符串
      * @param flags 传给 ::open 的打开标志
      * @param mode 创建新文件时使用的权限
-     * @return 成功返回 void，失败返回 IOError(kOpenFailed)，并保持对象无效。
+     * @return 成功返回 void；已持有 fd 时返回 kAlreadyOpen，
+     *         失败返回 IOError(kOpenFailed)，两种失败均不改动现有 fd
      */
     std::expected<void, IOError> open(const char* path, int flags, mode_t mode)
     {
-        close();
+        if (m_fd >= 0) {
+            m_last_error = IOError(kAlreadyOpen, 0);
+            return std::unexpected(*m_last_error);
+        }
         m_fd = ::open(path, flags, mode);
         if (m_fd < 0) {
             m_last_error = IOError(kOpenFailed, errno);

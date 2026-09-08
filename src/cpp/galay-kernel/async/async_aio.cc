@@ -152,17 +152,18 @@ AsyncAio& AsyncAio::operator=(AsyncAio&& other) noexcept
  * @param path 文件系统路径
  * @param mode 期望的打开模式（Read、Write、ReadWrite）
  * @param permissions 文件创建权限（默认 0644）
- * @return 成功返回 void，失败返回带 kOpenFailed 的 IOError
+ * @return 成功返回 void；已持有打开的 fd 时返回 kAlreadyOpen，
+ *         打开失败返回带 kOpenFailed 的 IOError，两种失败均不改动现有 fd
  */
 std::expected<void, IOError> AsyncAio::open(const std::string& path, AioOpenMode mode, int permissions)
 {
+    if (m_handle.fd >= 0) {
+        return std::unexpected(IOError(kAlreadyOpen, 0));
+    }
     int flags = static_cast<int>(mode);
     int fd = ::open(path.c_str(), flags, permissions);
     if (fd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
-    }
-    if (m_handle.fd >= 0) {
-        (void)::close(m_handle.fd);
     }
     m_handle.fd = fd;
     return {};

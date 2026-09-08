@@ -73,17 +73,18 @@ AsyncFile& AsyncFile::operator=(AsyncFile&& other) noexcept
  * @param path 文件系统路径
  * @param mode 从 FileOpenMode 派生的打开模式
  * @param permissions 文件创建权限
- * @return 成功返回 void，失败返回带 kOpenFailed 的 IOError
+ * @return 成功返回 void；已持有打开的 fd 时返回 kAlreadyOpen，
+ *         打开失败返回带 kOpenFailed 的 IOError，两种失败均不改动现有 fd
  */
 std::expected<void, IOError> AsyncFile::open(const std::string& path, FileOpenMode mode, int permissions)
 {
+    if (m_controller.m_handle != GHandle::invalid()) {
+        return std::unexpected(IOError(kAlreadyOpen, 0));
+    }
     int flags = static_cast<int>(mode);
     int fd = ::open(path.c_str(), flags, permissions);
     if (fd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
-    }
-    if (m_controller.m_handle != GHandle::invalid()) {
-        galay_close(m_controller.m_handle.fd);
     }
     m_controller.m_handle.fd = fd;
     return {};

@@ -195,7 +195,7 @@ bool udpCloseReportsClosedSocket()
 
 #ifdef USE_EPOLL
 
-bool asyncAioReopenClosesOldFd()
+bool asyncAioOpenRejectsWhenAlreadyOpen()
 {
     const auto firstPath = std::filesystem::temp_directory_path() /
                            "galay_async_aio_raii_first.tmp";
@@ -218,7 +218,6 @@ bool asyncAioReopenClosesOldFd()
 
     bool ok = true;
     int oldFd = -1;
-    int newFd = -1;
     {
         galay::async::AsyncAio file;
         auto opened = file.open(firstPath.string(), galay::async::AioOpenMode::Read);
@@ -229,19 +228,26 @@ bool asyncAioReopenClosesOldFd()
         }
         oldFd = file.handle().fd;
 
-        auto failed = file.open(missingPath.string(), galay::async::AioOpenMode::Read);
-        ok = check(!failed.has_value(), "AsyncAio reopen of missing path should fail") && ok;
-        ok = check(!isClosed(oldFd), "failed AsyncAio reopen should keep the existing fd") && ok;
+        {
+            galay::async::AsyncAio fresh;
+            auto failed = fresh.open(missingPath.string(), galay::async::AioOpenMode::Read);
+            ok = check(!failed.has_value(), "AsyncAio open of missing path should fail") && ok;
+            ok = check(galay::kernel::IOError::contains(failed.error().code(),
+                                                        galay::kernel::kOpenFailed),
+                       "AsyncAio open of missing path should report kOpenFailed") && ok;
+        }
 
         auto reopened = file.open(secondPath.string(), galay::async::AioOpenMode::Read);
-        ok = check(reopened.has_value(), "AsyncAio reopen should succeed") && ok;
-        newFd = file.handle().fd;
-        ok = check(isClosed(oldFd), "successful AsyncAio reopen should close the old fd") && ok;
-        ok = check(newFd >= 0 && !isClosed(newFd),
-                   "successful AsyncAio reopen should keep the new fd open") && ok;
+        ok = check(!reopened.has_value(),
+                   "AsyncAio reopen while already open should fail") && ok;
+        ok = check(galay::kernel::IOError::contains(reopened.error().code(),
+                                                    galay::kernel::kAlreadyOpen),
+                   "AsyncAio reopen while already open should report kAlreadyOpen") && ok;
+        ok = check(!isClosed(oldFd),
+                   "rejected AsyncAio reopen should keep the existing fd") && ok;
     }
 
-    ok = check(isClosed(newFd), "AsyncAio destructor should close the reopened fd") && ok;
+    ok = check(isClosed(oldFd), "AsyncAio destructor should close the held fd") && ok;
     std::filesystem::remove(firstPath);
     std::filesystem::remove(secondPath);
     return ok;
@@ -340,7 +346,7 @@ bool asyncFileMoveAssignmentClosesPreviousFdAndTransfersNewOne()
     return closed;
 }
 
-bool asyncFileFailedReopenKeepsExistingFd()
+bool asyncFileOpenRejectsWhenAlreadyOpen()
 {
     const auto path = tempFilePath("galay_async_file_raii_reopen.tmp");
     const auto missing_path = tempFilePath("galay_async_file_raii_missing.tmp");
@@ -359,12 +365,26 @@ bool asyncFileFailedReopenKeepsExistingFd()
             return false;
         }
         fd = file.handle().fd;
-        auto reopened = file.open(missing_path.string(), galay::async::FileOpenMode::Read);
-        ok = check(!reopened.has_value(), "AsyncFile reopen of missing path should fail") && ok;
-        ok = check(!isClosed(fd), "failed AsyncFile reopen should keep the existing fd") && ok;
+
+        {
+            galay::async::AsyncFile fresh;
+            auto failed = fresh.open(missing_path.string(), galay::async::FileOpenMode::Read);
+            ok = check(!failed.has_value(), "AsyncFile open of missing path should fail") && ok;
+            ok = check(galay::kernel::IOError::contains(failed.error().code(),
+                                                        galay::kernel::kOpenFailed),
+                       "AsyncFile open of missing path should report kOpenFailed") && ok;
+        }
+
+        auto reopened = file.open(path.string(), galay::async::FileOpenMode::Read);
+        ok = check(!reopened.has_value(),
+                   "AsyncFile open while already open should fail") && ok;
+        ok = check(galay::kernel::IOError::contains(reopened.error().code(),
+                                                    galay::kernel::kAlreadyOpen),
+                   "AsyncFile open while already open should report kAlreadyOpen") && ok;
+        ok = check(!isClosed(fd), "rejected AsyncFile open should keep the existing fd") && ok;
     }
 
-    ok = check(isClosed(fd), "AsyncFile destructor should close fd kept after failed reopen") && ok;
+    ok = check(isClosed(fd), "AsyncFile destructor should close the held fd") && ok;
     std::filesystem::remove(path);
     return ok;
 }
@@ -396,14 +416,14 @@ int main()
     ok = udpCloseReportsClosedSocket() && ok;
 
 #ifdef USE_EPOLL
-    ok = asyncAioReopenClosesOldFd() && ok;
+    ok = asyncAioOpenRejectsWhenAlreadyOpen() && ok;
     ok = asyncAioClosedMetadataReportsClosed() && ok;
 #endif
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
     ok = asyncFileDestructorClosesOwnedFd() && ok;
     ok = asyncFileMoveAssignmentClosesPreviousFdAndTransfersNewOne() && ok;
-    ok = asyncFileFailedReopenKeepsExistingFd() && ok;
+    ok = asyncFileOpenRejectsWhenAlreadyOpen() && ok;
     ok = asyncFileClosedMetadataReportsClosed() && ok;
 #endif
 

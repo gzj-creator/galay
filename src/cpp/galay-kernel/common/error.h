@@ -32,6 +32,7 @@ enum IOErrorCode : uint32_t {
     kBindFailed,           ///< 绑定地址失败
     kListenFailed,         ///< 监听套接字失败
     kOpenFailed,           ///< 打开文件失败
+    kAlreadyOpen,          ///< 对象已持有打开的资源，拒绝重复打开
     kReadFailed,           ///< 读取失败
     kWriteFailed,          ///< 写入失败
     kStatFailed,           ///< 查询文件状态失败

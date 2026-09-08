@@ -425,7 +425,10 @@ int EpollReactor::addClose(IOController* controller) {
     controller->m_registered_events = 0;
     retireRegistrationEntry(controller);
 
-    close(fd);
+    const int close_result = ::close(fd);
+    if (close_result != 0) {
+        return errno == 0 ? -1 : -errno;
+    }
     controller->m_handle = GHandle::invalid();
     return 0;
 }
