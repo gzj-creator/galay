@@ -11,6 +11,8 @@
 
 ## [Unreleased]
 
+## [v5.1.0] - 2026-09-08
+
 ### Changed
 
 - **调整默认构建选项**：默认开启 CTest、示例和 benchmark 构建，便于默认配置直接进行完整编译验证。
@@ -19,6 +21,9 @@
 - **提升 IO 回归测试稳定性**：`t17_iov` 默认使用服务端绑定端口 `0` 后读取内核分配端口，避免临时探测端口与实际绑定之间的竞态；恢复对应 CTest 资源锁。
 - **缩短并发回归测试耗时**：收敛 AsyncMutex、AsyncWaiter 和 MPMC 唤醒测试的重复次数及内部等待期限，保留竞态覆盖并减少并行 CTest 调度下的超时风险。
 - **拒绝已持有资源的重复打开**：新增 `IOErrorCode::kAlreadyOpen`；`AsyncAio`/`AsyncFile`/`FileDescriptor` 的 `open()` 在已持有 fd 时返回 `IOError(kAlreadyOpen, 0)` 并保留现有 fd，不再主动关闭后重开，打开失败路径同样不改动旧 fd；补充 t125/t131 回归覆盖。
+- **统一 C++ 示例模块目录**：将 14 个 `examples/cpp/<module>/import/` 目录重命名为 `mcpp/`，同步各模块 CMake glob、README、API 文档、使用指南和示例审计脚本；保留 `include/` direct-include 示例。
+- **移除旧的 mcpp consumer 脚手架**：删除 `test/mcpp/` 目录及其 manifest、consumer 和脚本，本轮不新增测试。
+- **收敛 C++ 源码 include 路径**：保留并提交各模块已完成的相对 include 调整，避免源码构建依赖生成的绝对 include 链接。
 
 ### Fixed
 
@@ -26,13 +31,6 @@
 - **完善失效 socket 操作检查**：TCP/UDP moved-from 或 invalid socket 的同步操作和异步 `close()` 返回 `IOError(kClosed, 0)`，避免空 controller 解引用和错误码被调度器状态覆盖。
 - **修复 reactor 关闭路径错误传播**：`EpollReactor::addClose` 不再忽略 `::close` 失败，返回对应 errno；`KqueueReactor::addClose` 仅在关闭成功后才将 handle 置为 invalid。
 - **统一文件 IO 失效状态错误语义**：AsyncAio/AsyncFile 的 `size()` 和 `sync()` 在 invalid 或 moved-from 状态下返回 `IOError(kClosed, 0)`。
-
-- **统一 C++ 示例模块目录**：将 14 个 `examples/cpp/<module>/import/` 目录重命名为 `mcpp/`，同步各模块 CMake glob、README、API 文档、使用指南和示例审计脚本；保留 `include/` direct-include 示例。
-- **移除旧的 mcpp consumer 脚手架**：删除 `test/mcpp/` 目录及其 manifest、consumer 和脚本，本轮不新增测试。
-- **收敛 C++ 源码 include 路径**：保留并提交各模块已完成的相对 include 调整，避免源码构建依赖生成的绝对 include 链接。
-
-### Fixed
-
 - **消除 shared_ptr 原子 API 弃用警告**：RPC、MCP 和 HTTP/2 static-file cache 改用 `std::atomic<std::shared_ptr<T>>` 的成员操作，保持原有内存序、快照发布和无锁读取语义。
 
 ## [v5.0.3] - 2026-09-01
