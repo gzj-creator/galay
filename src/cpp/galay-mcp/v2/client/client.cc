@@ -134,8 +134,8 @@ std::expected<SubscriptionFilter, McpError> parseAcknowledged(
         !JsonHelper::getElement(meta, "io.modelcontextprotocol/subscriptionId", metaElement)) {
         return std::unexpected(McpError::invalidResponse("acknowledgement missing subscription id"));
     }
-    if (metaElement.is_int64()) id = metaElement.get_int64().value();
-    else if (metaElement.is_string()) id = std::string(metaElement.get_string().value());
+    if (metaElement.is_int64()) id = metaElement.get_int64().value_unsafe();
+    else if (metaElement.is_string()) id = std::string(metaElement.get_string().value_unsafe());
     else return std::unexpected(McpError::invalidResponse("invalid subscription id"));
     if (id != requestId) {
         return std::unexpected(McpError::invalidResponse("mismatched subscription id"));
@@ -184,9 +184,9 @@ std::expected<bool, McpError> validateSubscriptionMessage(
         }
         RequestId notificationId;
         if (subscriptionElement.is_int64()) {
-            notificationId = subscriptionElement.get_int64().value();
+            notificationId = subscriptionElement.get_int64().value_unsafe();
         } else if (subscriptionElement.is_string()) {
-            notificationId = std::string(subscriptionElement.get_string().value());
+            notificationId = std::string(subscriptionElement.get_string().value_unsafe());
         } else {
             return std::unexpected(McpError::invalidResponse(
                 "invalid subscription notification id"));

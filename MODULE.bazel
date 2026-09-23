@@ -2,3 +2,9 @@ module(name = "galay", version = "5.0.3")
 
 bazel_dep(name = "rules_cc", version = "0.1.1")
 bazel_dep(name = "platforms", version = "0.0.11")
+
+bazel_dep(name = "serde", version = "0.2.2")
+local_path_override(
+    module_name = "serde",
+    path = "thirdparty/serde",
+)

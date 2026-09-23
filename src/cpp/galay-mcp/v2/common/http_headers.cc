@@ -115,22 +115,22 @@ std::expected<std::optional<std::string>, McpError> primitiveValue(
         if (value.error()) {
             return std::unexpected(McpError::invalidParams("header parameter type mismatch"));
         }
-        return value.value() ? std::optional<std::string>("true")
+        return value.value_unsafe() ? std::optional<std::string>("true")
                              : std::optional<std::string>("false");
     }
     auto signedValue = element.get_int64();
     if (!signedValue.error()) {
         constexpr int64_t maxSafe = (int64_t{1} << 53) - 1;
         constexpr int64_t minSafe = -maxSafe;
-        if (signedValue.value() < minSafe || signedValue.value() > maxSafe) {
+        if (signedValue.value_unsafe() < minSafe || signedValue.value_unsafe() > maxSafe) {
             return std::unexpected(McpError::invalidParams(
                 "integer x-mcp-header value exceeds safe range"));
         }
-        return std::to_string(signedValue.value());
+        return std::to_string(signedValue.value_unsafe());
     }
     auto unsignedValue = element.get_uint64();
-    if (!unsignedValue.error() && unsignedValue.value() <= (uint64_t{1} << 53) - 1) {
-        return std::to_string(unsignedValue.value());
+    if (!unsignedValue.error() && unsignedValue.value_unsafe() <= (uint64_t{1} << 53) - 1) {
+        return std::to_string(unsignedValue.value_unsafe());
     }
     return std::unexpected(McpError::invalidParams("header parameter type mismatch"));
 }

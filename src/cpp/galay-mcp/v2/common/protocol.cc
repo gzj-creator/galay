@@ -24,10 +24,10 @@ void writeRequestId(JsonWriter& writer, const RequestId& id)
 std::expected<RequestId, McpError> parseRequestId(const JsonElement& element)
 {
     if (element.is_int64()) {
-        return RequestId{element.get_int64().value()};
+        return RequestId{element.get_int64().value_unsafe()};
     }
     if (element.is_string()) {
-        return RequestId{std::string(element.get_string().value())};
+        return RequestId{std::string(element.get_string().value_unsafe())};
     }
     return std::unexpected(McpError::invalidRequest("id must be a string or integer"));
 }
@@ -174,11 +174,11 @@ std::expected<uint64_t, McpError> requireUint64(const JsonObject& object,
     }
     auto unsignedValue = element.get_uint64();
     if (!unsignedValue.error()) {
-        return unsignedValue.value();
+        return unsignedValue.value_unsafe();
     }
     auto signedValue = element.get_int64();
-    if (!signedValue.error() && signedValue.value() >= 0) {
-        return static_cast<uint64_t>(signedValue.value());
+    if (!signedValue.error() && signedValue.value_unsafe() >= 0) {
+        return static_cast<uint64_t>(signedValue.value_unsafe());
     }
     return std::unexpected(McpError::invalidParams(
         std::string("missing or invalid ") + key));
@@ -194,11 +194,11 @@ std::expected<std::optional<uint64_t>, McpError> optionalUint64(
     }
     auto unsignedValue = element.get_uint64();
     if (!unsignedValue.error()) {
-        return std::optional<uint64_t>{unsignedValue.value()};
+        return std::optional<uint64_t>{unsignedValue.value_unsafe()};
     }
     auto signedValue = element.get_int64();
-    if (!signedValue.error() && signedValue.value() >= 0) {
-        return std::optional<uint64_t>{static_cast<uint64_t>(signedValue.value())};
+    if (!signedValue.error() && signedValue.value_unsafe() >= 0) {
+        return std::optional<uint64_t>{static_cast<uint64_t>(signedValue.value_unsafe())};
     }
     return std::unexpected(McpError::invalidParams(
         std::string("invalid ") + key));
@@ -1285,7 +1285,7 @@ std::expected<SubscriptionFilter, McpError> SubscriptionFilter::fromJson(
             return std::unexpected(McpError::invalidParams(
                 std::string(key) + " must be a boolean"));
         }
-        destination = value.get_bool().value();
+        destination = value.get_bool().value_unsafe();
         return {};
     };
     auto tools = readFlag("toolsListChanged", filter.toolsListChanged);

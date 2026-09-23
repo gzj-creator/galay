@@ -31,8 +31,7 @@ set_target_properties(galay-utils PROPERTIES EXPORT_NAME utils)
 install(CODE [[
     file(REMOVE_RECURSE
         "${CMAKE_INSTALL_PREFIX}/include/galay/cpp"
-        "${CMAKE_INSTALL_PREFIX}/include/galay/thirdparty/concurrentqueue"
-        "${CMAKE_INSTALL_PREFIX}/include/galay/thirdparty/simdjson")
+        "${CMAKE_INSTALL_PREFIX}/include/galay/thirdparty/concurrentqueue")
 ]])
 
 if(UNIX AND NOT APPLE)

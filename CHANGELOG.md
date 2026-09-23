@@ -11,13 +11,26 @@
 
 ## [Unreleased]
 
+### Added
+
+- **接入 serde 结构体序列化模块**：新增 `galay-serde` 构建入口、JSON/TOML 结构体往返测试、示例和编码解码基准，支持 CMake、Bazel 与 mcpp。
+
 ### Changed
+
+- **统一使用 serde 提供的 simdjson**：MCP、etcd 和 serde 共用固定版本 serde 依赖中的 simdjson，移除 Galay 自带的重复 `thirdparty/simdjson` 源码。
+- **统一跨构建依赖来源**：CMake、Bzlmod 和 mcpp 都从 `thirdparty/serde` Git submodule 读取源码。
+
+### Fixed
+
+- **适配 simdjson 无异常 API**：更新 MCP 解析、协议、生命周期测试和基准中的结果取值方式，保留原有错误检查。
+
+### Docs
+
+- 将 serde 使用说明移动到 `docs/cpp/modules/serde/00-快速开始.md`，并同步更新 MCP、etcd 及其他模块的 CMake 和 simdjson 依赖说明。
 
 - **统一 C++ 示例模块目录**：将 14 个 `examples/cpp/<module>/import/` 目录重命名为 `mcpp/`，同步各模块 CMake glob、README、API 文档、使用指南和示例审计脚本；保留 `include/` direct-include 示例。
 - **移除旧的 mcpp consumer 脚手架**：删除 `test/mcpp/` 目录及其 manifest、consumer 和脚本，本轮不新增测试。
 - **收敛 C++ 源码 include 路径**：保留并提交各模块已完成的相对 include 调整，避免源码构建依赖生成的绝对 include 链接。
-
-### Fixed
 
 - **消除 shared_ptr 原子 API 弃用警告**：RPC、MCP 和 HTTP/2 static-file cache 改用 `std::atomic<std::shared_ptr<T>>` 的成员操作，保持原有内存序、快照发布和无锁读取语义。
 

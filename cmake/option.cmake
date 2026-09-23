@@ -17,6 +17,8 @@ endif()
 
 # 是否构建 utils C++ 模块。
 option(GALAY_BUILD_UTILS "Build the utils module" ON)
+# 是否提供结构体与 JSON/TOML 之间的 serde 序列化依赖。
+option(GALAY_BUILD_SERDE "Build the serde serialization module" ON)
 # 是否构建 kernel C++ 模块。
 option(GALAY_BUILD_KERNEL "Build the kernel module" ON)
 # 是否构建 SSL C++ 模块。

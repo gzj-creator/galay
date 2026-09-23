@@ -1,4 +1,4 @@
-galay_ensure_simdjson()
+galay_ensure_serde()
 
 file(GLOB_RECURSE GALAY_MCP_SOURCES CONFIGURE_DEPENDS
     "common/*.cc"
@@ -22,8 +22,7 @@ target_link_libraries(galay-mcp
     PUBLIC
         galay::kernel
         galay::http
-        $<BUILD_INTERFACE:simdjson::simdjson>
-        $<INSTALL_INTERFACE:galay::simdjson>
+        serde::serde
 )
 
 set_target_properties(galay-mcp PROPERTIES EXPORT_NAME mcp)

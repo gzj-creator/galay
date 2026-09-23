@@ -38,7 +38,7 @@ bool readString(const galay::mcp::JsonDocument& doc, const char* key, std::strin
         std::cerr << "failed to read key " << key << ": " << simdjson::error_message(value.error()) << '\n';
         return false;
     }
-    return require(value.value() == expected, "unexpected string value");
+    return require(value.value_unsafe() == expected, "unexpected string value");
 }
 
 bool externalElementSurvivesDocumentMove()
@@ -51,7 +51,7 @@ bool externalElementSurvivesDocumentMove()
     if (!require(!params.error(), "failed to read params before document move")) {
         return false;
     }
-    galay::mcp::JsonElement paramsAlias = params.value();
+    galay::mcp::JsonElement paramsAlias = params.value_unsafe();
 
     galay::mcp::JsonDocument moved = std::move(parsed.value());
     auto name = paramsAlias["name"].get_string();
@@ -60,7 +60,7 @@ bool externalElementSurvivesDocumentMove()
                   << simdjson::error_message(name.error()) << '\n';
         return false;
     }
-    return require(name.value() == "before-move", "aliased element changed after document move") &&
+    return require(name.value_unsafe() == "before-move", "aliased element changed after document move") &&
            require(!moved.raw().empty(), "moved document lost raw JSON");
 }
 

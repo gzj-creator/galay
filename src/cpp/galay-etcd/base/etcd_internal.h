@@ -22,7 +22,7 @@
 #include "etcd_value.h"
 
 #include "../../galay-utils/encoding/base64.hpp"
-#include <galay/thirdparty/simdjson/simdjson.h>
+#include <serde/json/json.hpp>
 
 #include <algorithm>
 #include <cctype>

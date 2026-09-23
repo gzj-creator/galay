@@ -1,4 +1,4 @@
-galay_ensure_simdjson()
+galay_ensure_serde()
 
 file(GLOB GALAY_ETCD_SOURCES CONFIGURE_DEPENDS
     "base/*.cc"
@@ -21,8 +21,7 @@ target_link_libraries(galay-etcd
         galay::kernel
         galay::utils
         galay::http
-        $<BUILD_INTERFACE:simdjson::simdjson>
-        $<INSTALL_INTERFACE:galay::simdjson>
+        serde::serde
 )
 
 set_target_properties(galay-etcd PROPERTIES EXPORT_NAME etcd)

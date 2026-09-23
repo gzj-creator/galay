@@ -35,7 +35,7 @@ std::expected<JsonDocument, McpError> JsonDocument::parse(std::string_view json)
         if (parsed.error()) {
             return std::unexpected(McpError::parseError(simdjson::error_message(parsed.error())));
         }
-        doc.m_root = parsed.value();
+        doc.m_root = parsed.value_unsafe();
         return doc;
     } catch (const std::exception& e) {
         return std::unexpected(McpError::parseError(e.what()));
@@ -185,7 +185,7 @@ bool JsonHelper::getObject(const JsonElement& element, JsonObject& out) {
     if (obj.error()) {
         return false;
     }
-    out = obj.value();
+    out = obj.value_unsafe();
     return true;
 }
 
@@ -194,7 +194,7 @@ bool JsonHelper::getArray(const JsonElement& element, JsonArray& out) {
     if (arr.error()) {
         return false;
     }
-    out = arr.value();
+    out = arr.value_unsafe();
     return true;
 }
 
@@ -203,7 +203,7 @@ bool JsonHelper::getStringValue(const JsonElement& element, std::string& out) {
     if (str.error()) {
         return false;
     }
-    out = std::string(str.value());
+    out = std::string(str.value_unsafe());
     return true;
 }
 
@@ -217,7 +217,7 @@ bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
                     return false;
                 }
                 writer.startArray();
-                for (auto item : arr.value()) {
+                for (auto item : arr.value_unsafe()) {
                     if (!writeElement(item)) {
                         return false;
                     }
@@ -231,7 +231,7 @@ bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
                     return false;
                 }
                 writer.startObject();
-                for (auto field : obj.value()) {
+                for (auto field : obj.value_unsafe()) {
                     writer.key(std::string(field.key));
                     if (!writeElement(field.value)) {
                         return false;
@@ -245,7 +245,7 @@ bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
                 if (str.error()) {
                     return false;
                 }
-                writer.string(std::string(str.value()));
+                writer.string(std::string(str.value_unsafe()));
                 return true;
             }
             case simdjson::dom::element_type::INT64: {
@@ -253,7 +253,7 @@ bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
                 if (num.error()) {
                     return false;
                 }
-                writer.number(num.value());
+                writer.number(num.value_unsafe());
                 return true;
             }
             case simdjson::dom::element_type::UINT64: {
@@ -261,7 +261,7 @@ bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
                 if (num.error()) {
                     return false;
                 }
-                writer.number(num.value());
+                writer.number(num.value_unsafe());
                 return true;
             }
             case simdjson::dom::element_type::DOUBLE: {
@@ -269,7 +269,7 @@ bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
                 if (num.error()) {
                     return false;
                 }
-                writer.number(num.value());
+                writer.number(num.value_unsafe());
                 return true;
             }
             case simdjson::dom::element_type::BOOL: {
@@ -277,7 +277,7 @@ bool JsonHelper::getRawJson(const JsonElement& element, std::string& out) {
                 if (b.error()) {
                     return false;
                 }
-                writer.boolean(b.value());
+                writer.boolean(b.value_unsafe());
                 return true;
             }
             case simdjson::dom::element_type::NULL_VALUE: {
@@ -300,7 +300,7 @@ bool JsonHelper::getString(const JsonObject& obj, const char* key, std::string& 
     if (val.error()) {
         return false;
     }
-    return getStringValue(val.value(), out);
+    return getStringValue(val.value_unsafe(), out);
 }
 
 bool JsonHelper::getInt64(const JsonObject& obj, const char* key, int64_t& out) {
@@ -308,11 +308,11 @@ bool JsonHelper::getInt64(const JsonObject& obj, const char* key, int64_t& out) 
     if (val.error()) {
         return false;
     }
-    auto num = val.value().get_int64();
+    auto num = val.value_unsafe().get_int64();
     if (num.error()) {
         return false;
     }
-    out = num.value();
+    out = num.value_unsafe();
     return true;
 }
 
@@ -321,11 +321,11 @@ bool JsonHelper::getBool(const JsonObject& obj, const char* key, bool& out) {
     if (val.error()) {
         return false;
     }
-    auto b = val.value().get_bool();
+    auto b = val.value_unsafe().get_bool();
     if (b.error()) {
         return false;
     }
-    out = b.value();
+    out = b.value_unsafe();
     return true;
 }
 
@@ -334,7 +334,7 @@ bool JsonHelper::getElement(const JsonObject& obj, const char* key, JsonElement&
     if (val.error()) {
         return false;
     }
-    out = val.value();
+    out = val.value_unsafe();
     return true;
 }
 
@@ -343,7 +343,7 @@ bool JsonHelper::getObject(const JsonObject& obj, const char* key, JsonObject& o
     if (val.error()) {
         return false;
     }
-    return getObject(val.value(), out);
+    return getObject(val.value_unsafe(), out);
 }
 
 bool JsonHelper::getArray(const JsonObject& obj, const char* key, JsonArray& out) {
@@ -351,7 +351,7 @@ bool JsonHelper::getArray(const JsonObject& obj, const char* key, JsonArray& out
     if (val.error()) {
         return false;
     }
-    return getArray(val.value(), out);
+    return getArray(val.value_unsafe(), out);
 }
 
 const JsonElement& JsonHelper::emptyObject() {

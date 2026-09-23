@@ -6,12 +6,12 @@ get_filename_component(GALAY_PROJECT_SOURCE_ROOT "${CMAKE_CURRENT_LIST_DIR}/.." 
 set(GALAY_CONCURRENTQUEUE_SOURCE_DIR
     "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/concurrentqueue"
     CACHE PATH "Galay's vendored concurrentqueue source directory" FORCE)
-set(GALAY_SIMDJSON_SOURCE_DIR
-    "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/simdjson"
-    CACHE PATH "Galay's vendored simdjson source directory" FORCE)
 set(GALAY_CONCURRENTQUEUE_INCLUDE_DIR
     "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty"
     CACHE PATH "Include root for Galay's vendored third-party headers" FORCE)
+set(GALAY_SERDE_SOURCE_DIR
+    "${GALAY_PROJECT_SOURCE_ROOT}/thirdparty/serde"
+    CACHE PATH "Galay's serde submodule source directory" FORCE)
 
 function(galay_apply_cpp_module_macros target)
     if(GALAY_SSL_FEATURE_ENABLED)
@@ -158,46 +158,24 @@ function(galay_ensure_openssl)
     endif()
 endfunction()
 
-function(galay_ensure_simdjson)
-    if(TARGET galay-simdjson)
+function(galay_ensure_serde)
+    if(TARGET serde::serde)
         return()
     endif()
-
-    set(_galay_simdjson_header "${GALAY_SIMDJSON_SOURCE_DIR}/simdjson.h")
-    set(_galay_simdjson_source "${GALAY_SIMDJSON_SOURCE_DIR}/simdjson.cpp")
-    if(NOT EXISTS "${_galay_simdjson_header}" OR NOT EXISTS "${_galay_simdjson_source}")
+    if(NOT EXISTS "${GALAY_SERDE_SOURCE_DIR}/CMakeLists.txt")
         message(FATAL_ERROR
-            "Galay's vendored simdjson sources are missing: "
-            "${_galay_simdjson_header} and ${_galay_simdjson_source}")
+            "Galay serde submodule is missing: ${GALAY_SERDE_SOURCE_DIR}. "
+            "Initialize it with `git submodule update --init thirdparty/serde`.")
     endif()
-
-    add_library(galay-simdjson STATIC "${_galay_simdjson_source}")
-    set_target_properties(galay-simdjson PROPERTIES
-        EXPORT_NAME simdjson
-        POSITION_INDEPENDENT_CODE ON
-    )
-    target_compile_features(galay-simdjson PUBLIC cxx_std_11)
-    target_compile_definitions(galay-simdjson PUBLIC SIMDJSON_THREADS_ENABLED=1)
-    target_include_directories(galay-simdjson
-        PUBLIC
-            $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/include>
-            $<INSTALL_INTERFACE:include>
-    )
-
-    # Keep the dependency spelling used by the upstream package without an
-    # ALIAS target.  This imported interface is repository-owned and forwards
-    # to the static implementation above; BUILD_INTERFACE consumers therefore
-    # never accidentally resolve a host simdjson target.
-    if(TARGET simdjson::simdjson)
-        message(FATAL_ERROR
-            "A pre-existing simdjson::simdjson target would bypass Galay's "
-            "repository-owned simdjson implementation")
+    set(BUILD_TESTING OFF)
+    set(SERDE_BUILD_CPP23_MODULES OFF)
+    if(GALAY_BUILD_SERDE AND GALAY_ENABLE_CPP23_MODULES)
+        set(SERDE_BUILD_CPP23_MODULES ON)
     endif()
-    add_library(simdjson::simdjson INTERFACE IMPORTED GLOBAL)
-    set_target_properties(simdjson::simdjson PROPERTIES
-        INTERFACE_LINK_LIBRARIES galay-simdjson
-    )
-
+    set(SERDE_INSTALL_CPP23_MODULE_INTERFACES "${GALAY_INSTALL_CPP23_MODULE_INTERFACES}")
+    set(SERDE_BUILD_SHARED_LIBS OFF)
+    add_subdirectory("${GALAY_SERDE_SOURCE_DIR}"
+        "${CMAKE_BINARY_DIR}/serde-build" EXCLUDE_FROM_ALL)
 endfunction()
 
 function(galay_ensure_spdlog)

@@ -1,0 +1,6 @@
+file(GLOB GALAY_SERDE_EXAMPLE_SOURCES CONFIGURE_DEPENDS "e*.cc")
+foreach(source IN LISTS GALAY_SERDE_EXAMPLE_SOURCES)
+    get_filename_component(name "${source}" NAME_WE)
+    add_executable("example_serde_${name}" "${source}")
+    target_link_libraries("example_serde_${name}" PRIVATE galay::serde)
+endforeach()

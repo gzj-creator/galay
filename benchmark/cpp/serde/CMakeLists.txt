@@ -1,0 +1,6 @@
+file(GLOB GALAY_SERDE_BENCHMARK_SOURCES CONFIGURE_DEPENDS "b*.cc")
+foreach(source IN LISTS GALAY_SERDE_BENCHMARK_SOURCES)
+    get_filename_component(name "${source}" NAME_WE)
+    add_executable("benchmark_serde_${name}" "${source}")
+    target_link_libraries("benchmark_serde_${name}" PRIVATE galay::serde)
+endforeach()

@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.28)
 
 project(galay VERSION 5.0.3 LANGUAGES C CXX)
 
@@ -47,6 +47,10 @@ if(GALAY_BUILD_UTILS)
     add_subdirectory(src/cpp/galay-utils)
 endif()
 
+if(GALAY_BUILD_SERDE)
+    add_subdirectory(src/cpp/galay-serde)
+endif()
+
 if(GALAY_BUILD_KERNEL)
     add_subdirectory(src/cpp/galay-kernel)
 endif()
@@ -92,7 +96,7 @@ endif()
 
 set(GALAY_INSTALL_TARGETS)
 foreach(_galay_target IN ITEMS
-    galay-simdjson galay-utils galay-kernel galay-ssl galay-http galay-ws galay-http2
+    galay-utils galay-serde galay-kernel galay-ssl galay-http galay-ws galay-http2
     galay-redis galay-rpc galay-mysql galay-postgres galay-mongo galay-etcd galay-mcp
     galay-tracing
     galay-tracing-spdlog galay-tracing-kernel
@@ -240,18 +244,6 @@ install(FILES
     ${GALAY_CONCURRENTQUEUE_SOURCE_DIR}/README.md
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/concurrentqueue
 )
-install(DIRECTORY ${GALAY_SIMDJSON_SOURCE_DIR}/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/simdjson
-    FILES_MATCHING
-        PATTERN "*.h"
-        PATTERN "*.hpp"
-        PATTERN "*.inl"
-)
-install(FILES
-    ${GALAY_SIMDJSON_SOURCE_DIR}/LICENSE.md
-    ${GALAY_SIMDJSON_SOURCE_DIR}/README.md
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/thirdparty/simdjson
-)
 if(GALAY_BUILD_C_API)
     install(DIRECTORY ${PROJECT_SOURCE_DIR}/src/c/
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/galay/c
@@ -260,6 +252,10 @@ if(GALAY_BUILD_C_API)
     )
 endif()
 
+set(GALAY_CONFIG_NEEDS_SERDE OFF)
+if(TARGET serde::serde)
+    set(GALAY_CONFIG_NEEDS_SERDE ON)
+endif()
 set(GALAY_CONFIG_NEEDS_THREADS ON)
 set(GALAY_CONFIG_NEEDS_OPENSSL OFF)
 if(TARGET galay-ssl OR TARGET galay-tracing)

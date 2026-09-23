@@ -150,7 +150,7 @@ bool movedParsedRequestKeepsViewsReadable()
                   << simdjson::error_message(name.error()) << '\n';
         return false;
     }
-    return require(name.value() == "echo", "moved request params view changed");
+    return require(name.value_unsafe() == "echo", "moved request params view changed");
 }
 
 bool movedParsedResponseKeepsViewsReadable()
@@ -171,7 +171,7 @@ bool movedParsedResponseKeepsViewsReadable()
                   << simdjson::error_message(ok.error()) << '\n';
         return false;
     }
-    return require(ok.value(), "moved response result view changed");
+    return require(ok.value_unsafe(), "moved response result view changed");
 }
 
 } // namespace

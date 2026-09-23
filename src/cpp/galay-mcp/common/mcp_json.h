@@ -12,7 +12,7 @@
 #define GALAY_MCP_COMMON_MCPJSON_H
 
 #include "mcp_error.h"
-#include <galay/thirdparty/simdjson/simdjson.h>
+#include <serde/json/json.hpp>
 #include <expected>
 #include <memory>
 #include <string>

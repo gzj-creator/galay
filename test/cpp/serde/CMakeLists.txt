@@ -1,0 +1,49 @@
+# Exercise upstream headers and modules through Galay's dependency targets.
+function(galay_add_serde_test target_name source_file)
+    add_executable("${target_name}" "${source_file}")
+    target_link_libraries("${target_name}" PRIVATE galay::serde)
+    set_target_properties("${target_name}" PROPERTIES
+        CXX_STANDARD 23
+        CXX_STANDARD_REQUIRED ON
+    )
+    string(REGEX REPLACE "^t[0-9]+_" "" scenario_name "${target_name}")
+    add_test(NAME "serde.${scenario_name}" COMMAND "${target_name}")
+    set_tests_properties("serde.${scenario_name}" PROPERTIES LABELS "serde;unit")
+endfunction()
+
+file(GLOB GALAY_SERDE_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/t*.cc")
+
+foreach(test_source IN LISTS GALAY_SERDE_TEST_SOURCES)
+    get_filename_component(test_name "${test_source}" NAME_WE)
+    if(test_name STREQUAL "t12_shared_backend" AND
+       (NOT TARGET galay-mcp OR NOT TARGET galay-etcd))
+        continue()
+    endif()
+    if(test_name STREQUAL "t10_import_smoke" AND
+       NOT TARGET galay::serde-modules)
+        continue()
+    endif()
+    galay_add_serde_test("${test_name}" "${test_source}")
+    if(test_name STREQUAL "t12_shared_backend")
+        target_link_libraries("${test_name}" PRIVATE galay::mcp galay::etcd)
+    endif()
+    if(test_name STREQUAL "t10_import_smoke")
+        target_link_libraries("${test_name}" PRIVATE galay::serde-modules)
+        set_target_properties("${test_name}" PROPERTIES
+            CXX_STANDARD 23
+            CXX_SCAN_FOR_MODULES ON
+        )
+    endif()
+endforeach()
+
+add_test(NAME serde.install_consumer
+    COMMAND ${CMAKE_COMMAND}
+        "-DGALAY_BINARY_DIR=${CMAKE_BINARY_DIR}"
+        "-DGALAY_GENERATOR=${CMAKE_GENERATOR}"
+        "-DGALAY_COMPILER=${CMAKE_CXX_COMPILER}"
+        "-DGALAY_MAKE_PROGRAM=${CMAKE_MAKE_PROGRAM}"
+        "-DGALAY_CONFIG=$<CONFIG>"
+        "-DGALAY_CTEST_COMMAND=${CMAKE_CTEST_COMMAND}"
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/install_consumer.cmake")
+set_tests_properties(serde.install_consumer PROPERTIES
+    LABELS "serde;package" TIMEOUT 180 RESOURCE_LOCK galay_build_install)

@@ -93,7 +93,7 @@ int main(int argc, char** argv)
             std::cerr << "warmup id read failed: " << simdjson::error_message(id.error()) << '\n';
             return 1;
         }
-        checksum += id.value();
+        checksum += id.value_unsafe();
     }
 
     takeParserAllocationCount();
@@ -112,7 +112,7 @@ int main(int argc, char** argv)
             std::cerr << "id read failed: " << simdjson::error_message(id.error()) << '\n';
             return 1;
         }
-        checksum += id.value();
+        checksum += id.value_unsafe();
     }
     const auto end = std::chrono::steady_clock::now();
     g_count_parser_allocations.store(false, std::memory_order_relaxed);

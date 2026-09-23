@@ -17,5 +17,6 @@ cc_library(
         "//src/cpp/galay-http:galay-http",
         "//src/cpp/galay-kernel:galay-kernel",
         "//src/cpp/galay-utils:galay-utils",
+        "@serde//:serde",
     ],
 )

@@ -277,14 +277,14 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
             MCP_LOG_WARN("[stdio_client]", "invalid response id method={} id={}", method, requestId);
             return std::unexpected(McpError::invalidResponse("Invalid response id"));
         }
-        const int64_t responseId = idVal.get_int64().value();
+        const int64_t responseId = idVal.get_int64().value_unsafe();
         if (responseId != requestId) {
             continue;
         }
 
         auto errorVal = obj["error"];
         if (!errorVal.error() && !errorVal.is_null()) {
-            auto errExp = JsonRpcError::fromJson(errorVal.value());
+            auto errExp = JsonRpcError::fromJson(errorVal.value_unsafe());
             if (!errExp) {
                 MCP_LOG_WARN("[stdio_client]", "json-rpc error parse failed method={} id={} error={}",
                              method,
@@ -308,7 +308,7 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
         auto resultVal = obj["result"];
         if (!resultVal.error() && !resultVal.is_null()) {
             std::string raw;
-            if (!JsonHelper::getRawJson(resultVal.value(), raw)) {
+            if (!JsonHelper::getRawJson(resultVal.value_unsafe(), raw)) {
                 MCP_LOG_WARN("[stdio_client]", "result serialization failed method={} id={}", method, requestId);
                 return std::unexpected(McpError::parseError("Failed to parse result"));
             }

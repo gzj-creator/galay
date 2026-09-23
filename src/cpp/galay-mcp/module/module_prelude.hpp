@@ -304,9 +304,6 @@
 #if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>)
 #include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 #endif
-#if __has_include(<galay/thirdparty/simdjson/simdjson.h>)
-#include <galay/thirdparty/simdjson/simdjson.h>
-#endif
 #if defined(_MSC_VER) && __has_include(<intrin.h>)
 #include <intrin.h>
 #endif
@@ -380,6 +377,9 @@
 #endif
 #if __has_include(<sched.h>)
 #include <sched.h>
+#endif
+#if __has_include(<serde/json/json.hpp>)
+#include <serde/json/json.hpp>
 #endif
 #if __has_include(<shared_mutex>)
 #include <shared_mutex>

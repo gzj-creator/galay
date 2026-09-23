@@ -44,6 +44,31 @@ cxxflags = ["-D_GNU_SOURCE"]
 # @@LIBAIO_* symbols without requiring a shared-link version script.
 kind = "lib"
 
+[targets.example_serde_struct_formats]
+kind = "bin"
+main = "examples/cpp/serde/e1_struct_formats.cc"
+required_features = ["serde"]
+
+[targets.benchmark_serde_struct_formats]
+kind = "bin"
+main = "benchmark/cpp/serde/b1_struct_formats.cc"
+required_features = ["serde"]
+
+[targets.test_serde_struct_formats]
+kind = "bin"
+main = "test/cpp/serde/t11_struct_formats.cc"
+required_features = ["serde"]
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_serde_import]
+kind = "bin"
+main = "test/cpp/serde/t10_import_smoke.cc"
+required_features = ["serde"]
+cxxflags = ["-UNDEBUG"]
+
+[dependencies]
+serde = { path = "thirdparty/serde" }
+
 # Keep the platform default aligned with CMake: Linux uses epoll and macOS
 # uses kqueue.  These are package build inputs; consumers selecting an
 # alternate backend should use the corresponding backend feature below.
@@ -78,6 +103,7 @@ ws = ["websocket"]
 # still explicit in ordinary builds so users can keep the dependency graph
 # small and choose plaintext-only protocol surfaces.
 full = [
+    "serde",
     "ssl",
     "websocket",
     "http2",
@@ -134,19 +160,18 @@ sources = [
     "src/cpp/galay-redis/module/*.cppm",
 ]
 
-# etcd and MCP use the repository-vendored simdjson implementation.  The
-# helper feature keeps that one source compiled exactly once when either
-# public module is selected.
-[features.simdjson]
-sources = ["thirdparty/simdjson/simdjson.cpp"]
-defines = ["SIMDJSON_THREADS_ENABLED=1"]
+# Struct serialization and MCP/etcd share the dependency's single backend.
+[features.serde]
+defines = [
+    "GALAY_SERDE_ENABLED=1",
+]
 
 [features.etcd]
 sources = [
     "src/cpp/galay-etcd/**/*.cc",
     "src/cpp/galay-etcd/module/*.cppm",
 ]
-implies = ["http", "simdjson"]
+implies = ["http", "serde"]
 
 [features.mysql]
 sources = [
@@ -182,7 +207,7 @@ sources = [
     "src/cpp/galay-mcp/**/*.cc",
     "src/cpp/galay-mcp/module/*.cppm",
 ]
-implies = ["http", "simdjson"]
+implies = ["http", "serde"]
 
 # tracing/common/id_format.cc always calls OpenSSL RAND_bytes, even when the
 # HTTP and spdlog adapters are disabled, so tracing owns the same optional

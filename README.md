@@ -8,6 +8,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 - **全链路异步**：网络/文件 IO、TLS、协议解析、客户端连接池均基于协程，可 `co_await` 组合。
 - **多协议支持**：HTTP/1.1、HTTP/2、WebSocket、TLS，以及 Redis / MySQL / PostgreSQL / MongoDB / etcd / RPC / MCP 等客户端。
 - **可观测性**：内置 `tracing` 链路追踪模块（span、sampler、OTLP 导出、日志关联）。
+- **结构体序列化**：通过独立 serde 依赖，字段注册一次即可进行 JSON/TOML 编解码，错误通过 `std::expected` 返回。
 - **模块化构建**：C++ 模块位于 `src/cpp/galay-*`，C ABI 模块位于 `src/c/galay-*-c`，默认启用，可通过 `-DGALAY_BUILD_C_API=OFF` 关闭；同时支持 CMake 与 Bazel。
 - **C++23 Modules**（可选）：在受支持的编译器上可启用 `galay_*` 模块目标。
 
@@ -17,6 +18,7 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 | --- | --- |
 | `galay-kernel` | 协程运行时内核：Runtime、调度器、reactor、task、channel、定时器 |
 | `galay-utils` | 通用工具：算法、缓存、配置、加密、编码、进程、熔断/限流/负载均衡 |
+| `galay-serde` | 结构体与 JSON/TOML 转换，支持嵌套结构、容器和可选字段 |
 | `galay-ssl` | 基于 OpenSSL 的异步 TLS：socket、上下文、握手 |
 | `galay-http` | HTTP/1.1：server/client、路由、静态文件、chunk、range/etag、黑名单插件 |
 | `galay-ws` | WebSocket：server/client、ws/wss、帧编解码 |
@@ -33,13 +35,16 @@ galay 是一个基于 C++23 协程的高性能异步网络与协议框架，提�
 ## 环境要求
 
 - 支持 C++23 的编译器（GCC 14+ / Clang 18+ / MSVC 2022 17.10+）
-- CMake ≥ 3.20
+- CMake ≥ 3.28
 - OpenSSL（`galay-ssl`、`galay-http2`、`galay-redis` 等 TLS 相关模块需要）
 
 Galay 自带所需的 `concurrentqueue` 头文件。该副本位于
 [`thirdparty/concurrentqueue`](thirdparty/concurrentqueue)，并在安装时放到
 `include/galay/thirdparty/concurrentqueue`；构建和消费 Galay 不需要另外安装
 或查找原始 `concurrentqueue` 包。
+
+serde 通过 `thirdparty/serde` Git submodule 获取，MCP/etcd 共用其 JSON 后端。结构体转换示例与
+三套构建说明见 [galay-serde](docs/cpp/modules/serde/00-快速开始.md)。
 
 ## 快速开始
 
