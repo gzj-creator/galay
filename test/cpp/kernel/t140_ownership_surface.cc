@@ -55,6 +55,10 @@ static_assert(!std::is_copy_constructible_v<WithTimeout<RecvAwaitable>>);
 static_assert(!std::is_copy_assignable_v<WithTimeout<RecvAwaitable>>);
 static_assert(std::is_move_constructible_v<WithTimeout<RecvAwaitable>>);
 static_assert(std::is_move_assignable_v<WithTimeout<RecvAwaitable>>);
+static_assert(!std::is_copy_constructible_v<galay::kernel::CloseAwaitable>);
+static_assert(!std::is_copy_assignable_v<galay::kernel::CloseAwaitable>);
+static_assert(std::is_move_constructible_v<galay::kernel::CloseAwaitable>);
+static_assert(std::is_move_assignable_v<galay::kernel::CloseAwaitable>);
 
 static_assert(std::is_copy_constructible_v<TaskRef>);
 static_assert(std::is_copy_assignable_v<TaskRef>);

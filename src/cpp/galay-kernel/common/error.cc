@@ -26,6 +26,7 @@ const char* error_string[] = {
     "Failed to bind socket address",
     "Failed to listen on socket",
     "Failed to open file",
+    "Resource already open",
     "Failed to read file",
     "Failed to write file",
     "Failed to get file status",

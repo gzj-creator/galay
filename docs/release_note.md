@@ -433,3 +433,25 @@ Clang 22 C++23 模块导出边界，并统一跨模块 `shared_ptr` 原子访问
   生命周期语义，移除 `std::atomic<std::shared_ptr<T>>` 实例。
 - **明确 static-file 缓存语义**：补充小文件 body 只发布一次、不会自动感知磁盘文件
   更新，以及发送队列通过 `shared_ptr` 快照持有 body 生命周期的说明。
+
+## v5.1.0 - 2026-09-08
+
+- **版本级别**：次版本（minor）
+- **Git 提交消息**：`feat: 扩展 TCP/UDP socket 共享生命周期与关闭语义`
+- **Git tag**：`v5.1.0`
+
+### 变更摘要
+
+本次为 `v5.0.3` 之后的次版本发版，自 v5.0.3 以来累计 5 个提交，主线为扩展 TCP/UDP socket 共享所有权与统一资源关闭语义，并累计纳入目录重构、测试稳定性提升和 shared_ptr 原子 API 弃用警告消除。
+
+- **扩展 TCP socket 共享所有权**：`AsyncTcpSocket` 支持通过 `clone()` 共享底层控制器，并由最后一个持有者负责关闭 socket；补充未等待关闭请求的资源兜底处理。
+- **扩展 socket 共享所有权到 UDP**：`AsyncUdpSocket` 支持通过 `clone()` 共享底层控制器，统一移动、析构和异步 `close()` 的最后持有者关闭语义。
+- **拒绝已持有资源的重复打开**：新增 `IOErrorCode::kAlreadyOpen`；`AsyncAio`/`AsyncFile`/`FileDescriptor` 的 `open()` 在已持有 fd 时返回 `IOError(kAlreadyOpen, 0)` 并保留现有 fd，不再主动关闭后重开。
+- **统一关闭已失效 TCP socket 的错误语义**：`AsyncTcpSocket::close()` 对 moved-from、空 controller 和 invalid fd 返回 `IOError(kClosed, 0)`，并显式处理析构关闭路径的返回值。
+- **完善失效 socket 操作检查**：TCP/UDP moved-from 或 invalid socket 的同步操作和异步 `close()` 返回 `IOError(kClosed, 0)`，避免空 controller 解引用和错误码被调度器状态覆盖。
+- **修复 reactor 关闭路径错误传播**：`EpollReactor::addClose` 不再忽略 `::close` 失败，返回对应 errno；`KqueueReactor::addClose` 仅在关闭成功后才将 handle 置为 invalid。
+- **统一文件 IO 失效状态错误语义**：AsyncAio/AsyncFile 的 `size()` 和 `sync()` 在 invalid 或 moved-from 状态下返回 `IOError(kClosed, 0)`。
+- **统一 C++ 示例模块目录**：将 14 个 `examples/cpp/<module>/import/` 目录重命名为 `mcpp/`，同步各模块 CMake glob、README、API 文档、使用指南和示例审计脚本。
+- **提升 IO 回归测试稳定性**：`t17_iov` 默认使用服务端绑定端口 `0` 后读取内核分配端口，避免临时探测端口与实际绑定之间的竞态。
+- **缩短并发回归测试耗时**：收敛 AsyncMutex、AsyncWaiter 和 MPMC 唤醒测试的重复次数及内部等待期限。
+- **消除 shared_ptr 原子 API 弃用警告**：RPC、MCP 和 HTTP/2 static-file cache 改用 `std::atomic<std::shared_ptr<T>>` 的成员操作，保持原有内存序、快照发布和无锁读取语义。

@@ -17,21 +17,33 @@
 
 ### Changed
 
-- **统一使用 serde 提供的 simdjson**：MCP、etcd 和 serde 共用固定版本 serde 依赖中的 simdjson，移除 Galay 自带的重复 `thirdparty/simdjson` 源码。
-- **统一跨构建依赖来源**：CMake、Bzlmod 和 mcpp 都从 `thirdparty/serde` Git submodule 读取源码。
-
-### Fixed
-
-- **适配 simdjson 无异常 API**：更新 MCP 解析、协议、生命周期测试和基准中的结果取值方式，保留原有错误检查。
+- **统一 serde submodule 依赖**：CMake、Bzlmod 和 mcpp 都从 `thirdparty/serde` Git submodule 读取源码，并移除 Galay 自带的重复 JSON 后端源码。
+- **更新 MCP/etcd JSON 后端接线**：统一链接 serde 提供的 JSON target，并适配无异常结果 API。
 
 ### Docs
 
-- 将 serde 使用说明移动到 `docs/cpp/modules/serde/00-快速开始.md`，并同步更新 MCP、etcd 及其他模块的 CMake 和 simdjson 依赖说明。
+- 将 serde 使用说明移动到 `docs/cpp/modules/serde/00-快速开始.md`，同步更新相关模块的依赖和构建说明。
 
+## [v5.1.0] - 2026-09-08
+
+### Changed
+
+- **调整默认构建选项**：默认开启 CTest、示例和 benchmark 构建，便于默认配置直接进行完整编译验证。
+- **增强 TCP socket 共享所有权**：`AsyncTcpSocket` 支持通过 `clone()` 共享底层控制器，并由最后一个持有者负责关闭 socket；补充未等待关闭请求的资源兜底处理。
+- **扩展 socket 共享所有权到 UDP**：`AsyncUdpSocket` 支持通过 `clone()` 共享底层控制器，统一移动、析构和异步 `close()` 的最后持有者关闭语义。
+- **提升 IO 回归测试稳定性**：`t17_iov` 默认使用服务端绑定端口 `0` 后读取内核分配端口，避免临时探测端口与实际绑定之间的竞态；恢复对应 CTest 资源锁。
+- **缩短并发回归测试耗时**：收敛 AsyncMutex、AsyncWaiter 和 MPMC 唤醒测试的重复次数及内部等待期限，保留竞态覆盖并减少并行 CTest 调度下的超时风险。
+- **拒绝已持有资源的重复打开**：新增 `IOErrorCode::kAlreadyOpen`；`AsyncAio`/`AsyncFile`/`FileDescriptor` 的 `open()` 在已持有 fd 时返回 `IOError(kAlreadyOpen, 0)` 并保留现有 fd，不再主动关闭后重开，打开失败路径同样不改动旧 fd；补充 t125/t131 回归覆盖。
 - **统一 C++ 示例模块目录**：将 14 个 `examples/cpp/<module>/import/` 目录重命名为 `mcpp/`，同步各模块 CMake glob、README、API 文档、使用指南和示例审计脚本；保留 `include/` direct-include 示例。
 - **移除旧的 mcpp consumer 脚手架**：删除 `test/mcpp/` 目录及其 manifest、consumer 和脚本，本轮不新增测试。
 - **收敛 C++ 源码 include 路径**：保留并提交各模块已完成的相对 include 调整，避免源码构建依赖生成的绝对 include 链接。
 
+### Fixed
+
+- **统一关闭已失效 TCP socket 的错误语义**：`AsyncTcpSocket::close()` 对 moved-from、空 controller 和 invalid fd 返回 `IOError(kClosed, 0)`，并显式处理析构关闭路径的返回值。
+- **完善失效 socket 操作检查**：TCP/UDP moved-from 或 invalid socket 的同步操作和异步 `close()` 返回 `IOError(kClosed, 0)`，避免空 controller 解引用和错误码被调度器状态覆盖。
+- **修复 reactor 关闭路径错误传播**：`EpollReactor::addClose` 不再忽略 `::close` 失败，返回对应 errno；`KqueueReactor::addClose` 仅在关闭成功后才将 handle 置为 invalid。
+- **统一文件 IO 失效状态错误语义**：AsyncAio/AsyncFile 的 `size()` 和 `sync()` 在 invalid 或 moved-from 状态下返回 `IOError(kClosed, 0)`。
 - **消除 shared_ptr 原子 API 弃用警告**：RPC、MCP 和 HTTP/2 static-file cache 改用 `std::atomic<std::shared_ptr<T>>` 的成员操作，保持原有内存序、快照发布和无锁读取语义。
 
 ## [v5.0.3] - 2026-09-01

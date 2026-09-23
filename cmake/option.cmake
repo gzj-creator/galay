@@ -47,16 +47,16 @@ option(GALAY_BUILD_MCP "Build the mcp module" ON)
 option(GALAY_BUILD_TRACING "Build the tracing module" ON)
 
 # 是否构建并注册 CTest 测试。
-option(BUILD_TESTING "Build tests" OFF)
+option(BUILD_TESTING "Build tests" ON)
 set(GALAY_CTEST_DEFAULT_TIMEOUT 30 CACHE STRING
     "Default timeout in seconds for CTest tests without an explicit TIMEOUT property")
 if(NOT GALAY_CTEST_DEFAULT_TIMEOUT MATCHES "^[1-9][0-9]*$")
     message(FATAL_ERROR "GALAY_CTEST_DEFAULT_TIMEOUT must be a positive whole number of seconds")
 endif()
 # 是否构建已启用模块的示例程序。
-option(GALAY_BUILD_EXAMPLES "Build enabled module examples" OFF)
+option(GALAY_BUILD_EXAMPLES "Build enabled module examples" ON)
 # 是否构建已启用模块的 benchmark 程序。
-option(GALAY_BUILD_BENCHMARKS "Build enabled module benchmarks" OFF)
+option(GALAY_BUILD_BENCHMARKS "Build enabled module benchmarks" ON)
 # 是否构建 C ABI 包装目标。
 option(GALAY_BUILD_C_API "Build C ABI wrapper targets" ON)
 

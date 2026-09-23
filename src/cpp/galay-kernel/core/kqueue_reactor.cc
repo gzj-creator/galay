@@ -325,11 +325,11 @@ int KqueueReactor::addClose(IOController* controller) {
 
     const int close_result = galay_close(fd);
     const uint32_t close_errno = close_result == 0 ? 0 : static_cast<uint32_t>(errno);
-    controller->m_handle = GHandle::invalid();
     if (close_result != 0) {
         detail::storeBackendError(m_last_error_code, kDisconnectError, close_errno);
         return -static_cast<int>(close_errno);
     }
+    controller->m_handle = GHandle::invalid();
     return 0;
 }
 

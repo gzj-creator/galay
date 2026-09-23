@@ -26,10 +26,10 @@ using namespace galay::kernel;
  * @note 兼容旧调用；创建失败时内部句柄保持 invalid，错误原因通过 create() 返回。
  */
 AsyncUdpSocket::AsyncUdpSocket(IPType type)
-    : m_controller([](IPType socket_type) {
+    : m_controller(std::make_shared<IOController>([](IPType socket_type) {
         auto opened = openHandle(socket_type);
         return opened ? *opened : GHandle::invalid();
-    }(type))
+    }(type)))
 {
 }
 
@@ -52,19 +52,32 @@ std::expected<AsyncUdpSocket, IOError> AsyncUdpSocket::create(IPType type)
  * @param handle 已有的套接字句柄
  */
 AsyncUdpSocket::AsyncUdpSocket(GHandle handle)
-    : m_controller(handle)
+    : m_controller(std::make_shared<IOController>(handle))
 {
 }
 
 /**
- * @brief 析构函数；关闭仍由对象持有的套接字
+ * @brief 释放本对象对共享控制器的持有
+ * @note 本对象是最后一个持有者且句柄仍有效时才关闭句柄
+ */
+void AsyncUdpSocket::releaseSharedOwnership() noexcept
+{
+    if (m_controller == nullptr) {
+        return;
+    }
+    if (m_controller.use_count() == 1 && m_controller->m_handle != GHandle::invalid()) {
+        (void)galay_close(m_controller->m_handle.fd);
+        m_controller->m_handle = GHandle::invalid();
+    }
+    m_controller.reset();
+}
+
+/**
+ * @brief 析构函数；递减共享计数，减到 0 时关闭仍由对象持有的套接字
  */
 AsyncUdpSocket::~AsyncUdpSocket()
 {
-    if (m_controller.m_handle != GHandle::invalid()) {
-        galay_close(m_controller.m_handle.fd);
-        m_controller.m_handle = GHandle::invalid();
-    }
+    releaseSharedOwnership();
 }
 
 /**
@@ -84,10 +97,7 @@ AsyncUdpSocket::AsyncUdpSocket(AsyncUdpSocket&& other) noexcept
 AsyncUdpSocket& AsyncUdpSocket::operator=(AsyncUdpSocket&& other) noexcept
 {
     if (this != &other) {
-        if (m_controller.m_handle != GHandle::invalid()) {
-            galay_close(m_controller.m_handle.fd);
-            m_controller.m_handle = GHandle::invalid();
-        }
+        releaseSharedOwnership();
         m_controller = std::move(other.m_controller);
     }
     return *this;
@@ -128,7 +138,10 @@ std::expected<void, IOError> AsyncUdpSocket::bind(const Host& host)
     if (!host.valid()) {
         return std::unexpected(IOError(kParamInvalid, 0));
     }
-    if (::bind(m_controller.m_handle.fd, host.sockAddr(), host.addrLen()) < 0) {
+    if (!m_controller || m_controller->m_handle == GHandle::invalid()) {
+        return std::unexpected(IOError(kClosed, 0));
+    }
+    if (::bind(m_controller->m_handle.fd, host.sockAddr(), host.addrLen()) < 0) {
         return std::unexpected(IOError(kBindFailed, errno));
     }
     return {};
@@ -143,7 +156,7 @@ std::expected<void, IOError> AsyncUdpSocket::bind(const Host& host)
  */
 RecvFromAwaitable AsyncUdpSocket::recvfrom(char* buffer, size_t length, Host* from)
 {
-    return RecvFromAwaitable(&m_controller, buffer, length, from);
+    return RecvFromAwaitable(m_controller.get(), buffer, length, from);
 }
 
 /**
@@ -155,7 +168,7 @@ RecvFromAwaitable AsyncUdpSocket::recvfrom(char* buffer, size_t length, Host* fr
  */
 SendToAwaitable AsyncUdpSocket::sendto(const char* buffer, size_t length, const Host& to)
 {
-    return SendToAwaitable(&m_controller, buffer, length, to);
+    return SendToAwaitable(m_controller.get(), buffer, length, to);
 }
 
 /**
@@ -164,7 +177,7 @@ SendToAwaitable AsyncUdpSocket::sendto(const char* buffer, size_t length, const 
  */
 CloseAwaitable AsyncUdpSocket::close()
 {
-    return CloseAwaitable(&m_controller);
+    return CloseAwaitable(std::move(m_controller));
 }
 
 }

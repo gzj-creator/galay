@@ -119,6 +119,32 @@ bool testReleaseStopsOwnership()
     return check(raw_fd_still_open, "released fd should remain open after wrapper destruction");
 }
 
+bool testOpenRejectsWhenAlreadyOpen()
+{
+    const std::string path = makeTempFile();
+    if (path.empty()) {
+        return false;
+    }
+
+    galay::kernel::FileDescriptor fd;
+    auto result = fd.open(path.c_str(), O_RDONLY);
+    if (!check(result.has_value(), "existing file should open")) {
+        ::unlink(path.c_str());
+        return false;
+    }
+
+    const int original_fd = fd.get();
+    auto rejected = fd.open(path.c_str(), O_RDONLY);
+    bool ok = check(!rejected.has_value(), "open while already open should fail");
+    ok = check(galay::kernel::IOError::contains(rejected.error().code(), galay::kernel::kAlreadyOpen),
+               "open while already open should report kAlreadyOpen") && ok;
+    ok = check(fd.valid() && fd.get() == original_fd,
+               "rejected open should keep the existing fd") && ok;
+
+    ::unlink(path.c_str());
+    return ok;
+}
+
 } // namespace
 
 int main()
@@ -127,5 +153,6 @@ int main()
     ok = testOpenFailureReturnsExpectedError() && ok;
     ok = testOpenAndMoveTransferOwnership() && ok;
     ok = testReleaseStopsOwnership() && ok;
+    ok = testOpenRejectsWhenAlreadyOpen() && ok;
     return ok ? 0 : 1;
 }

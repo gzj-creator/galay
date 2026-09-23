@@ -53,7 +53,9 @@
 #include "../core/io_scheduler.hpp"
 #include "../core/awaitable.h"
 #include <array>
+#include <cstddef>
 #include <expected>
+#include <memory>
 
 namespace galay::async
 {
@@ -67,8 +69,10 @@ namespace galay::async
  * - IOController: IO事件控制器
  *
  * @note
- * - 不可拷贝，仅支持移动语义
- * - 析构时会关闭仍由对象持有的 socket；协程内可显式 co_await close() 获取错误
+ * - 不可拷贝，仅支持移动语义；clone() 可派生共享同一底层句柄的副本
+ * - 多个持有者共享同一 IOController（shared_ptr 引用计数，初始 1）；
+ *   最后一个持有者 close()/析构时才真正关闭 socket
+ * - 协程内可显式 co_await close() 释放持有并获取错误
  * - 所有异步操作需要在任务中使用 co_await
  *
  * @see IOScheduler, HandleOption, Host
@@ -105,7 +109,7 @@ public:
 
     /**
      * @brief 析构函数
-     * @note 关闭仍由对象持有的 socket；若已通过 close() 关闭则不重复关闭
+     * @note 递减共享计数；计数减到 0 时关闭仍由对象持有的 socket，若已通过 close() 关闭则不重复处理
      */
     ~AsyncTcpSocket();
 
@@ -129,15 +133,17 @@ public:
 
     /**
      * @brief 获取底层socket句柄
-     * @return GHandle 底层句柄，可用于底层操作
+     * @return GHandle 底层句柄，可用于底层操作；对象为 moved-from 状态时返回 invalid
      */
-    GHandle handle() const { return m_controller.m_handle; }
+    GHandle handle() const {
+        return m_controller ? m_controller->m_handle : GHandle::invalid();
+    }
 
     /**
      * @brief 获取IO控制器指针
-     * @return IOController* 内部IO控制器，用于高级操作
+     * @return IOController* 内部IO控制器，用于高级操作；对象为 moved-from 状态时返回 nullptr
      */
-    galay::kernel::IOController* controller() { return &m_controller; }
+    galay::kernel::IOController* controller() { return m_controller.get(); }
 
 
     /**
@@ -174,7 +180,9 @@ public:
      * socket.option().handleNonBlock();   // 设置非阻塞
      * @endcode
      */
-    galay::kernel::HandleOption option() { return galay::kernel::HandleOption(m_controller.m_handle); }
+    galay::kernel::HandleOption option() {
+        return galay::kernel::HandleOption(handle());
+    }
 
     /**
      * @brief 异步接受新连接
@@ -197,7 +205,7 @@ public:
      * @endcode
      */
     galay::kernel::AcceptAwaitable accept(galay::kernel::Host* clientHost) {
-        return galay::kernel::AcceptAwaitable(&m_controller, clientHost);
+        return galay::kernel::AcceptAwaitable(m_controller.get(), clientHost);
     }
 
     /**
@@ -219,7 +227,7 @@ public:
      * @endcode
      */
     galay::kernel::ConnectAwaitable connect(const galay::kernel::Host& host) {
-        return galay::kernel::ConnectAwaitable(&m_controller, host);
+        return galay::kernel::ConnectAwaitable(m_controller.get(), host);
     }
 
     /**
@@ -247,7 +255,7 @@ public:
      * @endcode
      */
     galay::kernel::RecvAwaitable recv(char* buffer, size_t length) {
-        return galay::kernel::RecvAwaitable(&m_controller, buffer, length);
+        return galay::kernel::RecvAwaitable(m_controller.get(), buffer, length);
     }
 
     /**
@@ -263,7 +271,7 @@ public:
      */
     ExactReadAwaitable readExact(char* buffer, size_t length) {
         return ExactReadAwaitable(
-            &m_controller,
+            m_controller.get(),
             galay::kernel::detail::ExactStreamMachine<false>{.read_buffer = buffer, .length = length});
     }
 
@@ -287,7 +295,7 @@ public:
      * @endcode
      */
     galay::kernel::SendAwaitable send(const char* buffer, size_t length) {
-        return galay::kernel::SendAwaitable(&m_controller, buffer, length);
+        return galay::kernel::SendAwaitable(m_controller.get(), buffer, length);
     }
 
     /**
@@ -302,7 +310,7 @@ public:
      */
     ExactWriteAwaitable writeAll(const char* buffer, size_t length) {
         return ExactWriteAwaitable(
-            &m_controller,
+            m_controller.get(),
             galay::kernel::detail::ExactStreamMachine<true>{.write_buffer = buffer, .length = length});
     }
 
@@ -317,7 +325,7 @@ public:
      * - 底层 iovec 存储生命周期必须持续到 co_await 完成
      */
     galay::kernel::ReadvAwaitable readv(std::span<const struct iovec> iovecs) {
-        return galay::kernel::ReadvAwaitable(&m_controller, iovecs);
+        return galay::kernel::ReadvAwaitable(m_controller.get(), iovecs);
     }
 
     /**
@@ -334,7 +342,7 @@ public:
      */
     template<size_t N>
     galay::kernel::ReadvAwaitable readv(std::array<struct iovec, N>& iovecs, size_t count = N) {
-        return galay::kernel::ReadvAwaitable(&m_controller, iovecs, count);
+        return galay::kernel::ReadvAwaitable(m_controller.get(), iovecs, count);
     }
 
     /**
@@ -351,7 +359,7 @@ public:
      */
     template<size_t N>
     galay::kernel::ReadvAwaitable readv(struct iovec (&iovecs)[N], size_t count = N) {
-        return galay::kernel::ReadvAwaitable(&m_controller, iovecs, count);
+        return galay::kernel::ReadvAwaitable(m_controller.get(), iovecs, count);
     }
 
     /**
@@ -365,7 +373,7 @@ public:
      * - 底层 iovec 存储生命周期必须持续到 co_await 完成
      */
     galay::kernel::WritevAwaitable writev(std::span<const struct iovec> iovecs) {
-        return galay::kernel::WritevAwaitable(&m_controller, iovecs);
+        return galay::kernel::WritevAwaitable(m_controller.get(), iovecs);
     }
 
     /**
@@ -382,7 +390,7 @@ public:
      */
     template<size_t N>
     galay::kernel::WritevAwaitable writev(std::array<struct iovec, N>& iovecs, size_t count = N) {
-        return galay::kernel::WritevAwaitable(&m_controller, iovecs, count);
+        return galay::kernel::WritevAwaitable(m_controller.get(), iovecs, count);
     }
 
     /**
@@ -399,7 +407,7 @@ public:
      */
     template<size_t N>
     galay::kernel::WritevAwaitable writev(struct iovec (&iovecs)[N], size_t count = N) {
-        return galay::kernel::WritevAwaitable(&m_controller, iovecs, count);
+        return galay::kernel::WritevAwaitable(m_controller.get(), iovecs, count);
     }
 
     /**
@@ -430,7 +438,7 @@ public:
      * @endcode
      */
     galay::kernel::SendFileAwaitable sendfile(int file_fd, off_t offset, size_t count) {
-        return galay::kernel::SendFileAwaitable(&m_controller, file_fd, offset, count);
+        return galay::kernel::SendFileAwaitable(m_controller.get(), file_fd, offset, count);
     }
 
     /**
@@ -438,26 +446,63 @@ public:
      *
      * @return CloseAwaitable 可等待对象，co_await后返回关闭结果
      *
-     * @note 关闭后socket变为无效状态，不可再使用
+     * @note
+     * - 调用后当前对象立即释放持有（不可再发起 IO 操作）
+     * - 仅当自己是最后一个持有者时才真正关闭底层句柄；否则仅释放引用
+     * - 已关闭的对象再调用返回 kClosed
      *
      * @code
      * co_await socket.close();
      * @endcode
      */
     galay::kernel::CloseAwaitable close() {
-        return galay::kernel::CloseAwaitable(&m_controller);
+        return galay::kernel::CloseAwaitable(std::move(m_controller));
     }
 
     /*
      * @brief 获取IO控制器
-     * @return IOController* IO控制器
+     * @return IOController* IO控制器；对象为 moved-from 状态时返回 nullptr
      */
-    galay::kernel::IOController* getController() { return &m_controller; }
+    galay::kernel::IOController* getController() { return m_controller.get(); }
+
+    /**
+     * @brief 克隆当前socket，共享底层句柄与IO控制器
+     *
+     * @return 与当前对象共享同一 IOController 的新 AsyncTcpSocket
+     *
+     * @note
+     * - 返回的对象与当前对象共享持有计数（shared_ptr 引用计数加 1）
+     * - clone 出的对象与原对象在同一 IO 调度器上使用（IOController 非线程安全）
+     * - 任一持有者 close() 或析构仅释放自己的引用；最后一个持有者才真正关闭句柄
+     */
+    AsyncTcpSocket clone() const {
+        return AsyncTcpSocket(m_controller);
+    }
+
+    /**
+     * @brief 获取当前socket的共享持有计数
+     * @return shared_ptr 引用计数；对象为 moved-from 状态时返回 0
+     */
+    int getSharedCount() const { return static_cast<int>(m_controller.use_count()); }
 
 private:
     static std::expected<GHandle, galay::kernel::IOError> openHandle(galay::kernel::IPType type);  ///< 按协议版本创建底层 socket
+
+    /**
+     * @brief 从共享控制器构造（仅 clone 使用）
+     * @param controller 共享的 IO 控制器
+     */
+    explicit AsyncTcpSocket(std::shared_ptr<galay::kernel::IOController> controller) noexcept
+        : m_controller(std::move(controller)) {}
+
+    /**
+     * @brief 释放本对象对共享控制器的持有
+     * @note 递减共享计数；计数减到 0 且句柄仍有效时关闭句柄
+     */
+    void releaseSharedOwnership() noexcept;
+
 private:
-    galay::kernel::IOController m_controller;  ///< IO事件控制器
+    std::shared_ptr<galay::kernel::IOController> m_controller;  ///< IO事件控制器；clone 共享同一实例
 };
 
 } // namespace galay::async

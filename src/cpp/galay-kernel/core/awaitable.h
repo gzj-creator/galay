@@ -312,14 +312,17 @@ inline bool finalizeAwaitableAddResult(int ret,
 
 template <IOEventType Event, typename AwaitableT>
 inline auto resumeIOAwaitable(AwaitableT& awaitable) -> decltype(std::move(awaitable.m_result)) {
-    const bool owns_read =
-        sequenceEventUsesSlot(Event, IOController::READ) &&
-        awaitable.m_controller->m_awaitable[IOController::READ] == &awaitable;
-    const bool owns_write =
-        sequenceEventUsesSlot(Event, IOController::WRITE) &&
-        awaitable.m_controller->m_awaitable[IOController::WRITE] == &awaitable;
-    if (owns_read || owns_write) {
-        awaitable.m_controller->removeAwaitable(Event);
+    // 控制器为空说明操作在挂起前已短路返回（如 kClosed），无槽位需要清理
+    if (awaitable.m_controller != nullptr) {
+        const bool owns_read =
+            sequenceEventUsesSlot(Event, IOController::READ) &&
+            awaitable.m_controller->m_awaitable[IOController::READ] == &awaitable;
+        const bool owns_write =
+            sequenceEventUsesSlot(Event, IOController::WRITE) &&
+            awaitable.m_controller->m_awaitable[IOController::WRITE] == &awaitable;
+        if (owns_read || owns_write) {
+            awaitable.m_controller->removeAwaitable(Event);
+        }
     }
     return std::move(awaitable.m_result);
 }
@@ -330,6 +333,10 @@ inline bool suspendRegisteredAwaitable(AwaitableT& awaitable, std::coroutine_han
 #ifdef USE_IOURING
     awaitable.m_sqe_type = Event;
 #endif
+    if (awaitable.m_controller == nullptr) {
+        awaitable.m_result = std::unexpected(IOError(kClosed, 0));
+        return false;
+    }
     if ((sequenceEventUsesSlot(Event, IOController::READ) &&
          awaitable.m_controller->m_sequence_owner[IOController::READ] != nullptr) ||
         (sequenceEventUsesSlot(Event, IOController::WRITE) &&
@@ -841,20 +848,76 @@ struct ConnectAwaitable: public ConnectIOContext, public TimeoutSupport<ConnectA
 /**
  * @brief close 的可等待对象
  * @details 关闭请求会立即尝试向当前 IO scheduler 提交，恢复后返回关闭结果。
+ * 支持两种持有模式：借用裸控制器（UDP/文件等非共享场景）直接关闭；
+ * 或接管共享控制器的引用（AsyncTcpSocket::close 移出 shared_ptr），
+ * 仅当自己是最后一个持有者时才真正关闭句柄，否则只释放引用。
+ * 对已关闭/为空的控制器的关闭请求返回 IOError(kClosed, 0)。
  */
 struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitable> {
     CloseAwaitable(IOController* controller)
         : m_controller(controller) {}
 
+    CloseAwaitable(const CloseAwaitable&) = delete;
+    CloseAwaitable& operator=(const CloseAwaitable&) = delete;
+    CloseAwaitable(CloseAwaitable&&) noexcept = default;
+
+    CloseAwaitable& operator=(CloseAwaitable&& other) noexcept {
+        if (this != &other) {
+            releaseOwnedOwnership();
+            TimeoutSupport<CloseAwaitable>::operator=(std::move(other));
+            m_owned = std::move(other.m_owned);
+            m_controller = other.m_controller;
+            m_waker = std::move(other.m_waker);
+            m_result = std::move(other.m_result);
+        }
+        return *this;
+    }
+
+    /**
+     * @brief 接管共享控制器的引用并按持有计数决定是否真正关闭
+     * @param controller 调用方移出的共享控制器（AsyncTcpSocket::close）
+     */
+    explicit CloseAwaitable(std::shared_ptr<IOController> controller) noexcept
+        : m_owned(std::move(controller))
+        , m_controller(m_owned.get()) {}
+
+    /**
+     * @brief 兜底关闭未执行的共享关闭请求
+     * @note close 从未执行（未 await 或提交失败）且本对象是最后持有者时，
+     *       直接关闭句柄，避免引用随 awaitable 销毁导致 fd 泄漏。
+     */
+    ~CloseAwaitable() {
+        releaseOwnedOwnership();
+    }
+
     bool await_ready() { return false; }
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle) {
         m_waker = Waker(handle);
+        if (m_controller == nullptr) {
+            // 控制器为空说明句柄已关闭或从未打开。
+            m_result = std::unexpected(IOError(kClosed, 0));
+            cancelBoundTimeoutTimer();
+            return false;
+        }
+        if (m_controller->m_handle == GHandle::invalid()) {
+            m_result = std::unexpected(IOError(kClosed, 0));
+            cancelBoundTimeoutTimer();
+            return false;
+        }
         auto scheduler = m_waker.getScheduler();
         if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
             m_result = std::unexpected(IOError(kNotRunningOnIOScheduler, errno));
             // close 在 await_suspend() 中同步提交；在 awaiter 可能销毁前
             // 消费非拥有的超时绑定。
+            cancelBoundTimeoutTimer();
+            return false;
+        }
+        if (m_owned && m_owned.use_count() > 1) {
+            // 仍有其他持有者：仅释放本引用，不真正关闭句柄
+            m_owned.reset();
+            m_controller = nullptr;
+            m_result = {};
             cancelBoundTimeoutTimer();
             return false;
         }
@@ -872,9 +935,20 @@ struct CloseAwaitable: public AwaitableBase, public TimeoutSupport<CloseAwaitabl
     }
     std::expected<void, IOError> await_resume();  ///< 返回关闭结果；失败时返回 IOError
 
+    std::shared_ptr<IOController> m_owned;  ///< 共享模式下接管的控制器引用；借用模式为空
     IOController* m_controller;  ///< 关联的 IO 控制器
     Waker m_waker;  ///< 恢复等待协程的唤醒器
     std::expected<void, IOError> m_result;  ///< 关闭操作结果
+
+private:
+    void releaseOwnedOwnership() noexcept {
+        if (m_owned && m_owned.use_count() == 1 && m_controller != nullptr &&
+            m_controller->m_handle != GHandle::invalid()) {
+            (void)galay_close(m_controller->m_handle.fd);
+            m_controller->m_handle = GHandle::invalid();
+        }
+        m_owned.reset();
+    }
 };
 
 // ---- RecvFrom ----
@@ -1516,6 +1590,11 @@ inline bool suspendSequenceAwaitable(SequenceAwaitableBase& awaitable,
 #ifdef USE_IOURING
     awaitable.m_sqe_type = SEQUENCE;
 #endif
+
+    if (awaitable.m_controller == nullptr) {
+        awaitable.m_error = IOError(kClosed, 0);
+        return false;
+    }
 
     if (!awaitable.claimRequestedDomain()) {
         awaitable.m_error = IOError(kNotReady, 0);

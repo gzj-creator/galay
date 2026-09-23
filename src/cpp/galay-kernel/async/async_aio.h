@@ -173,6 +173,7 @@ public:
      * @param permissions 文件创建权限（默认 0644）
      * @return 成功返回 void，失败返回 IOError
      *
+     * @note 若对象已持有文件，成功打开后会关闭并替换旧 fd；打开失败时保留旧 fd。
      * @note 后续所有 I/O 操作均需要缓冲区对齐
      */
     std::expected<void, galay::kernel::IOError> open(
