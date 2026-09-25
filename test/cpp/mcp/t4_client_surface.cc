@@ -9,7 +9,6 @@
 
 using galay::kernel::Runtime;
 using galay::kernel::RuntimeBuilder;
-using galay::mcp::JsonString;
 using galay::mcp::McpClient;
 using galay::mcp::McpError;
 using galay::mcp::McpHttpClientConfig;
@@ -26,22 +25,22 @@ static_assert(requires(McpClient& client) {
 
 static_assert(!std::movable<McpClient>);
 
-static_assert(requires(McpClient& client, const std::string& s, const JsonString& json) {
+static_assert(requires(McpClient& client, const std::string& s, const std::string& json) {
     { client.initialize(s, s) } -> std::same_as<std::expected<void, McpError>>;
-    { client.callTool(s, json) } -> std::same_as<std::expected<JsonString, McpError>>;
+    { client.callTool(s, json) } -> std::same_as<std::expected<std::string, McpError>>;
     { client.listTools() } -> std::same_as<std::expected<std::vector<Tool>, McpError>>;
     { client.listResources() } -> std::same_as<std::expected<std::vector<Resource>, McpError>>;
     { client.readResource(s) } -> std::same_as<std::expected<std::string, McpError>>;
     { client.listPrompts() } -> std::same_as<std::expected<std::vector<Prompt>, McpError>>;
-    { client.getPrompt(s, json) } -> std::same_as<std::expected<JsonString, McpError>>;
+    { client.getPrompt(s, json) } -> std::same_as<std::expected<std::string, McpError>>;
     { client.ping() } -> std::same_as<std::expected<void, McpError>>;
 });
 
 static_assert(requires(McpClient& client,
                        std::string s,
-                       JsonString json,
+                       std::string json,
                        std::expected<void, McpError>& void_result,
-                       std::expected<JsonString, McpError>& json_result,
+                       std::expected<std::string, McpError>& json_result,
                        std::expected<std::vector<Tool>, McpError>& tools_result) {
     client.initialize(std::move(s), std::move(s), void_result);
     client.callTool(std::move(s), std::move(json), json_result);

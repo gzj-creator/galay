@@ -32,9 +32,9 @@ namespace galay::mcp {
  */
 class McpStdioServer {
 public:
-    using ToolHandler = std::function<std::expected<JsonString, McpError>(const JsonElement&)>; ///< 工具处理函数类型
+    using ToolHandler = std::function<std::expected<std::string, McpError>(const json::Json&)>; ///< 工具处理函数类型
     using ResourceReader = std::function<std::expected<std::string, McpError>(const std::string&)>; ///< 资源读取函数类型
-    using PromptGetter = std::function<std::expected<JsonString, McpError>(const std::string&, const JsonElement&)>; ///< 提示获取函数类型
+    using PromptGetter = std::function<std::expected<std::string, McpError>(const std::string&, const json::Json&)>; ///< 提示获取函数类型
 
     McpStdioServer(); ///< 构造Stdio MCP服务器
     ~McpStdioServer(); ///< 析构函数
@@ -75,7 +75,7 @@ public:
      */
     void addTool(std::string name,
                  std::string description,
-                 JsonString inputSchema,
+                 std::string inputSchema,
                  ToolHandler handler);
 
     /**
@@ -196,7 +196,7 @@ private:
      * @param method 通知方法名
      * @param params 通知参数JSON
      */
-    void sendNotification(const std::string& method, const JsonString& params);
+    void sendNotification(const std::string& method, const std::string& params);
 
     /**
      * @brief 从输入流读取一行JSON消息
@@ -209,7 +209,7 @@ private:
      * @param message 要发送的JSON字符串
      * @return 成功返回void，失败返回McpError
      */
-    std::expected<void, McpError> writeMessage(const JsonString& message);
+    std::expected<void, McpError> writeMessage(const std::string& message);
 
 private:
     std::string m_serverName; ///< 服务器名称
@@ -270,9 +270,9 @@ private:
     std::unordered_map<std::string, PromptInfo> m_prompts; ///< 提示注册表
     mutable std::shared_mutex m_promptsMutex; ///< 提示注册表读写锁
 
-    JsonString m_toolsListCache; ///< 工具列表缓存
-    JsonString m_resourcesListCache; ///< 资源列表缓存
-    JsonString m_promptsListCache; ///< 提示列表缓存
+    std::string m_toolsListCache; ///< 工具列表缓存
+    std::string m_resourcesListCache; ///< 资源列表缓存
+    std::string m_promptsListCache; ///< 提示列表缓存
 
     std::istream* m_input; ///< 输入流指针
     std::ostream* m_output; ///< 输出流指针

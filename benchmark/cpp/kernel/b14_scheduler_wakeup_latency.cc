@@ -288,15 +288,14 @@ ScalingBenchResult runSingleSchedulerBaseline() {
 }
 
 ScalingBenchResult runTwoSchedulerRoundRobinBenchmark() {
-    Runtime runtime;
-    auto first = std::make_unique<IOSchedulerType>();
-    auto second = std::make_unique<IOSchedulerType>();
-    first->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
-    second->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
-    auto* first_ptr = first.get();
-    auto* second_ptr = second.get();
-    runtime.addIOScheduler(std::move(first));
-    runtime.addIOScheduler(std::move(second));
+    auto runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+    const auto initialized = runtime.start();
+    if (!initialized) { return {}; }
+    runtime.stop();
+    auto* first_ptr = runtime.getIOScheduler(0);
+    auto* second_ptr = runtime.getIOScheduler(1);
+    first_ptr->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
+    second_ptr->replaceTimerManager(TimingWheelTimerManager(1'000'000ULL));
     const auto started = runtime.start();
     if (!started) {
         LogError("Two scheduler runtime failed to start: {}", started.error().message());

@@ -26,16 +26,16 @@ public:
                          std::string clientVersion,
                          std::expected<void, McpError>& result);
     galay::kernel::Task<void> callTool(std::string toolName,
-                       JsonString arguments,
-                       std::expected<JsonString, McpError>& result);
+                       std::string arguments,
+                       std::expected<std::string, McpError>& result);
     galay::kernel::Task<void> listTools(std::expected<std::vector<Tool>, McpError>& result);
     galay::kernel::Task<void> listResources(std::expected<std::vector<Resource>, McpError>& result);
     galay::kernel::Task<void> readResource(std::string uri,
                            std::expected<std::string, McpError>& result);
     galay::kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
     galay::kernel::Task<void> getPrompt(std::string name,
-                        JsonString arguments,
-                        std::expected<JsonString, McpError>& result);
+                        std::string arguments,
+                        std::expected<std::string, McpError>& result);
     galay::kernel::Task<void> ping(std::expected<void, McpError>& result);
 
     bool isConnected() const;
@@ -45,8 +45,8 @@ public:
 
 private:
     galay::kernel::Task<void> sendRequest(std::string_view method,
-                          std::optional<JsonString> params,
-                          std::expected<JsonString, McpError>& result);
+                          std::optional<std::string> params,
+                          std::expected<std::string, McpError>& result);
     int64_t generateRequestId();
 
 private:

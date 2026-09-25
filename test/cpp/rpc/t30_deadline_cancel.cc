@@ -142,8 +142,9 @@ Task<void> runDeadlineCancelClient(uint16_t port, TestState* state)
         co_return;
     }
 
-    auto canceller = runtime->spawnIO(cancelSoon(&pending_cancel_source));
-    if (!canceller.has_value()) {
+    auto* owner = co_await galay::rpc::detail::CurrentSchedulerAwaitable{};
+    // Cancellation belongs to the caller's scheduler, not the runtime's next worker.
+    if (!scheduleTask(owner, cancelSoon(&pending_cancel_source))) {
         fail(*state, "failed to schedule canceller");
         co_await client.close();
         state->done.store(true, std::memory_order_release);
@@ -235,7 +236,7 @@ int main()
         return 1;
     }
 
-    Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
+    Runtime runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
     auto runtime_started = runtime.start();
     if (!runtime_started.has_value()) {
         server.stop();

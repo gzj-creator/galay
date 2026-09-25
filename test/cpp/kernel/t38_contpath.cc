@@ -5,7 +5,7 @@
  * 通过条件：continuation 恢复到预期调度器且测试返回 0。
  */
 
-#include <galay/cpp/galay-kernel/core/scheduler.hpp>
+#include "test/cpp/common/scheduler_test_adapter.h"
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
 
@@ -28,12 +28,12 @@ struct ParentState {
     int parent_resumes = 0;
 };
 
-class ManualScheduler final : public Scheduler {
+class ManualScheduler final : public detail::SchedulerTestAdapter<ManualScheduler> {
 public:
-    std::expected<void, IOError> start() override { return {}; }
-    void stop() override {}
+    std::expected<void, IOError> start() { return {}; }
+    void stop() {}
 
-    bool schedule(TaskRef task) noexcept override {
+    bool schedule(TaskRef task) noexcept {
         if (!bindTask(task)) {
             return false;
         }
@@ -42,15 +42,15 @@ public:
         return true;
     }
 
-    bool scheduleResume(TaskRef task) noexcept override {
+    bool scheduleResume(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept override {
+    bool scheduleDeferred(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept override {
+    bool scheduleImmediately(TaskRef task) noexcept {
         if (!bindTask(task)) {
             return false;
         }
@@ -58,9 +58,9 @@ public:
         return true;
     }
 
-    bool addTimer(Timer::ptr) override { return true; }
+    bool addTimer(Timer::ptr) { return true; }
 
-    SchedulerType type() override {
+    SchedulerType type() {
         return kParallelScheduler;
     }
 

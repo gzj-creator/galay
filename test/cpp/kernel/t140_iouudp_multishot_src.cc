@@ -61,7 +61,7 @@ int main()
 {
     const std::filesystem::path root(GALAY_SOURCE_ROOT);
     const std::string controller = readAll(root / "galay-kernel/core/io_controller.hpp");
-    const std::string scheduler = readAll(root / "galay-kernel/core/io_scheduler.hpp");
+    const std::string& scheduler = controller;
     const std::string reactor_h = readAll(root / "galay-kernel/core/uring_reactor.h");
     const std::string reactor_cc = readAll(root / "galay-kernel/core/uring_reactor.cc");
     if (controller.empty() || scheduler.empty() || reactor_h.empty() || reactor_cc.empty()) {

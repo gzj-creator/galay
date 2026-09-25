@@ -20,10 +20,10 @@ namespace galay::mcp::v2 {
 
 class McpStdioServer {
 public:
-    using ToolHandler = std::function<std::expected<JsonString, McpError>(const JsonElement&)>;
+    using ToolHandler = std::function<std::expected<std::string, McpError>(const json::Json&)>;
     using ResourceReader = std::function<std::expected<std::string, McpError>(const std::string&)>;
-    using PromptGetter = std::function<std::expected<JsonString, McpError>(
-        const std::string&, const JsonElement&)>;
+    using PromptGetter = std::function<std::expected<std::string, McpError>(
+        const std::string&, const json::Json&)>;
 
     McpStdioServer();
     ~McpStdioServer();
@@ -33,7 +33,7 @@ public:
     void setServerInfo(std::string name, std::string version);
     void setProductionPolicy(McpProductionPolicy policy);
     void setStreams(std::istream& input, std::ostream& output) noexcept;
-    void addTool(std::string name, std::string description, JsonString inputSchema,
+    void addTool(std::string name, std::string description, std::string inputSchema,
                  ToolHandler handler);
     void addResource(std::string uri, std::string name, std::string description,
                      std::string mimeType, ResourceReader reader);
@@ -50,11 +50,11 @@ private:
 
     std::expected<std::string, McpError> readMessage();
     std::expected<void, McpError> writeMessage(std::string_view message);
-    JsonString dispatch(const ParsedRequest& request);
-    JsonString makeList(std::string_view field, const std::vector<JsonString>& items) const;
-    JsonString normalizePromptResult(std::string_view resultJson) const;
-    JsonString error(const RequestId& id, const McpError& errorValue) const;
-    JsonString error(const RequestId& id, int code, std::string_view message,
+    std::string dispatch(const ParsedRequest& request);
+    std::string makeList(std::string_view field, const std::vector<std::string>& items) const;
+    std::string normalizePromptResult(std::string_view resultJson) const;
+    std::string error(const RequestId& id, const McpError& errorValue) const;
+    std::string error(const RequestId& id, int code, std::string_view message,
                      std::optional<std::string_view> data = std::nullopt) const;
 
     std::string m_serverName{"galay-mcp-v2-stdio"};

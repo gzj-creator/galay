@@ -2,9 +2,14 @@
 
 #include <iostream>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 using namespace galay::rpc;
+
+static_assert(std::is_same_v<decltype(std::declval<const RpcEndpointCache&>().snapshot()),
+                             RpcEndpointSnapshot>);
+static_assert(!std::is_copy_constructible_v<RpcEndpointCache>);
 
 namespace {
 
@@ -61,7 +66,7 @@ int main()
     auto updated = endpoint("a", 8001, 25);
     updated.metadata["role"] = "updated";
     cache.apply(RpcEndpointEvent::update(updated));
-    if (auto rc = expect(previous->by_service.at("Echo").at(0).port == 7001,
+    if (auto rc = expect(previous.by_service.at("Echo").at(0).port == 7001,
                          "old snapshot was mutated by cache update")) {
         return rc;
     }
@@ -82,6 +87,19 @@ int main()
         return rc;
     }
 
+    cache.apply(RpcEndpointEvent::remove("Echo", "b"));
+    cache.apply(RpcEndpointEvent::remove("Echo", "c"));
+    cache.apply(RpcEndpointEvent::remove("missing", "absent"));
+    if (!cache.snapshot().by_service.empty() ||
+        previous.by_service.at("Echo").size() != 3 ||
+        !cache.snapshot("missing").empty()) {
+        return 1;
+    }
+    auto independent = previous.clone();
+    previous.by_service.clear();
+    if (independent.by_service.at("Echo").size() != 3) {
+        return 1;
+    }
     std::cout << "RPC endpoint cache PASS\n";
     return 0;
 }

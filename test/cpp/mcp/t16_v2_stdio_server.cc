@@ -52,16 +52,16 @@ int main()
     v2::McpStdioServer server;
     server.setServerInfo("t16-server", "2.0.0");
     server.addTool("echo", "Echo text", R"({"type":"object"})",
-                   [](const JsonElement&) -> std::expected<JsonString, McpError> {
-                       return JsonString("hello");
+                   [](const json::Json&) -> std::expected<std::string, McpError> {
+                       return std::string("hello");
                    });
     server.addResource("mem://hello", "hello", "Hello", "text/plain",
                        [](const std::string&) -> std::expected<std::string, McpError> {
                            return std::string("hello");
                        });
     server.addPrompt("review", "Review", {},
-                     [](const std::string&, const JsonElement&) -> std::expected<JsonString, McpError> {
-                         return JsonString(R"({"messages":[{"role":"user","content":{"type":"text","text":"Review"}}]})");
+                     [](const std::string&, const json::Json&) -> std::expected<std::string, McpError> {
+                         return std::string(R"({"messages":[{"role":"user","content":{"type":"text","text":"Review"}}]})");
                      });
     server.setStreams(input, output);
     server.run();
@@ -83,24 +83,24 @@ int main()
         if (!parsed->response.hasResult) {
             continue;
         }
-        JsonObject result;
-        if (!require(JsonHelper::getObject(parsed->response.result, result),
+        json::Json result = parsed->response.result;
+        if (!require(result.is_object(),
                      "v2 stdio result was not an object")) {
             return 1;
         }
-        std::string type;
-        if (!require(JsonHelper::getString(result, "resultType", type) && type == "complete",
+        auto resultType = result.at("resultType").as_string();
+        if (!require(resultType.has_value() && *resultType == "complete",
                      "v2 stdio resultType was missing")) {
             return 1;
         }
         int64_t id = std::get<int64_t>(parsed->response.id);
-        sawDiscover |= id == 1 && result["supportedVersions"].error() == simdjson::SUCCESS;
-        sawTools |= id == 2 && result["tools"].error() == simdjson::SUCCESS;
-        sawCall |= id == 3 && result["content"].error() == simdjson::SUCCESS;
-        sawRead |= id == 4 && result["contents"].error() == simdjson::SUCCESS;
-        sawPrompt |= id == 5 && result["messages"].error() == simdjson::SUCCESS;
+        sawDiscover |= id == 1 && result.at("supportedVersions").valid();
+        sawTools |= id == 2 && result.at("tools").valid();
+        sawCall |= id == 3 && result.at("content").valid();
+        sawRead |= id == 4 && result.at("contents").valid();
+        sawPrompt |= id == 5 && result.at("messages").valid();
         if (id == 6) {
-            if (!require(result["tools"].error() == simdjson::SUCCESS,
+            if (!require(result.at("tools").valid(),
                          "second stateless v2 request failed")) {
                 return 1;
             }

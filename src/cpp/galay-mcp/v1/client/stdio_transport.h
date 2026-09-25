@@ -16,14 +16,14 @@ public:
 
     std::expected<void, McpError> initialize(const std::string& clientName,
                                              const std::string& clientVersion);
-    std::expected<JsonString, McpError> callTool(const std::string& toolName,
-                                                 const JsonString& arguments);
+    std::expected<std::string, McpError> callTool(const std::string& toolName,
+                                                 const std::string& arguments);
     std::expected<std::vector<Tool>, McpError> listTools();
     std::expected<std::vector<Resource>, McpError> listResources();
     std::expected<std::string, McpError> readResource(const std::string& uri);
     std::expected<std::vector<Prompt>, McpError> listPrompts();
-    std::expected<JsonString, McpError> getPrompt(const std::string& name,
-                                                  const JsonString& arguments);
+    std::expected<std::string, McpError> getPrompt(const std::string& name,
+                                                  const std::string& arguments);
     std::expected<void, McpError> ping();
     std::expected<void, McpError> disconnect();
 
@@ -34,12 +34,12 @@ public:
 
 private:
     std::expected<void, McpError> requireStreams() const;
-    std::expected<JsonString, McpError> sendRequest(std::string_view method,
-                                                    const std::optional<JsonString>& params);
+    std::expected<std::string, McpError> sendRequest(std::string_view method,
+                                                    const std::optional<std::string>& params);
     std::expected<void, McpError> sendNotification(std::string_view method,
-                                                   const std::optional<JsonString>& params);
+                                                   const std::optional<std::string>& params);
     std::expected<std::string, McpError> readMessage();
-    std::expected<void, McpError> writeMessage(const JsonString& message);
+    std::expected<void, McpError> writeMessage(const std::string& message);
     int64_t generateRequestId();
 
 private:

@@ -87,8 +87,8 @@ std::expected<void, McpError> McpClient::initialize(const std::string& clientNam
     return m_impl->stdioTransport->initialize(clientName, clientVersion);
 }
 
-std::expected<JsonString, McpError> McpClient::callTool(const std::string& toolName,
-                                                        const JsonString& arguments) {
+std::expected<std::string, McpError> McpClient::callTool(const std::string& toolName,
+                                                        const std::string& arguments) {
     if (m_impl->mode != McpClientMode::Stdio) {
         return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
     }
@@ -123,8 +123,8 @@ std::expected<std::vector<Prompt>, McpError> McpClient::listPrompts() {
     return m_impl->stdioTransport->listPrompts();
 }
 
-std::expected<JsonString, McpError> McpClient::getPrompt(const std::string& name,
-                                                         const JsonString& arguments) {
+std::expected<std::string, McpError> McpClient::getPrompt(const std::string& name,
+                                                         const std::string& arguments) {
     if (m_impl->mode != McpClientMode::Stdio) {
         return std::unexpected(McpError::invalidTransportMode("stdio API called on HTTP client"));
     }
@@ -149,8 +149,8 @@ galay::kernel::Task<void> McpClient::initialize(std::string clientName,
 }
 
 galay::kernel::Task<void> McpClient::callTool(std::string toolName,
-                              JsonString arguments,
-                              std::expected<JsonString, McpError>& result) {
+                              std::string arguments,
+                              std::expected<std::string, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
         co_await makeWrongModeTask(result, "HTTP API called on stdio client");
         co_return;
@@ -192,8 +192,8 @@ galay::kernel::Task<void> McpClient::listPrompts(std::expected<std::vector<Promp
 }
 
 galay::kernel::Task<void> McpClient::getPrompt(std::string name,
-                               JsonString arguments,
-                               std::expected<JsonString, McpError>& result) {
+                               std::string arguments,
+                               std::expected<std::string, McpError>& result) {
     if (m_impl->mode != McpClientMode::Http) {
         co_await makeWrongModeTask(result, "HTTP API called on stdio client");
         co_return;

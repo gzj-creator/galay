@@ -4,7 +4,7 @@
  * @author galay-kernel
  * @version 1.0.0
  *
- * @details 定义抽象 Scheduler 接口（start、stop、schedule、scheduleDeferred、
+ * @details 定义内部 Scheduler 借用接口（start、stop、schedule、scheduleDeferred、
  * scheduleImmediately），包含处理 Runtime 作用域的共享 resume() 实现。
  * 同时提供用于便捷 Task 提交的 scheduleTask 重载函数。
  *
@@ -24,6 +24,8 @@
 #include <expected>
 #include <optional>
 #include <thread>
+#include <type_traits>
+#include <utility>
 
 #ifdef USE_IOURING
 #include <linux/time_types.h>
@@ -41,39 +43,56 @@ enum SchedulerType {
     kParallelScheduler  ///< 基于工作线程执行的计算调度器
 }; 
 
+class EpollScheduler;
+class KqueueScheduler;
+class IOUringScheduler;
+class ParallelScheduler;
+class Scheduler;
+#if defined(USE_IOURING)
+using IOScheduler = IOUringScheduler;
+#elif defined(USE_KQUEUE)
+using IOScheduler = KqueueScheduler;
+#elif defined(USE_EPOLL)
+using IOScheduler = EpollScheduler;
+#endif
+
+template <typename Derived, SchedulerType Type> class SchedulerBase;
+template <typename Derived, typename Reactor> class IOSchedulerBase;
+#ifdef GALAY_KERNEL_TEST_SCHEDULER
+namespace detail {
+struct SchedulerTestHooks;
+template <typename Derived> class SchedulerTestAdapter;
+}
+#endif
+
 /**
  * @brief 协程调度器基类
  *
- * @details 定义协程调度的基本接口。
- * 所有调度器实现都必须继承此类。
+ * @details Task/Waker 保存的非拥有借用。仅允许内置调度器构造，不能通过此
+ * 类型删除对象。统一入口按调度器类型转到 SchedulerBase 的静态 Derived* 函数。
  *
  * @see IOScheduler, KqueueScheduler
  */
 class Scheduler {
 public:
     /**
-     * @brief 虚析构函数
-     */
-    virtual ~Scheduler() = default;
-
-    /**
      * @brief 启动调度器
      * @return 成功返回 void；底层初始化失败时返回 IOError
-     * @note 子类必须实现此方法；该接口不阻塞等待调度器退出。
+     * @note 仅分派到内置后端；该接口不阻塞等待调度器退出。
      */
-    virtual std::expected<void, IOError> start() = 0;
+    std::expected<void, IOError> start();
 
     /**
      * @brief 停止调度器
-     * @note 子类必须实现此方法
+     * @note 调用方必须先关闭异步源并等候所有借用该调度器的任务退出。
      */
-    virtual void stop() = 0;
+    void stop();
 
     /**
      * @brief 直接提交已绑定调度器的任务引用
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    virtual bool schedule(TaskRef task) noexcept = 0;
+    bool schedule(TaskRef task) noexcept;
 
     /**
      * @brief 接纳已停泊任务的恢复请求。
@@ -85,37 +104,33 @@ public:
      *          回退为跨线程内联恢复。
      * @note 调用方必须在停止或销毁 scheduler 前关闭异步源并等待所有 waiter 退出。
      */
-    virtual bool scheduleResume(TaskRef task) noexcept = 0;
+    bool scheduleResume(TaskRef task) noexcept;
 
     /**
      * @brief 延后提交已绑定调度器的任务引用
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    virtual bool scheduleDeferred(TaskRef task) noexcept = 0;
+    bool scheduleDeferred(TaskRef task) noexcept;
 
     /**
      * @brief 立即在当前线程恢复任务
      * @param task 任务引用；若未绑定 owner scheduler，会绑定到当前调度器
      */
-    virtual bool scheduleImmediately(TaskRef task) noexcept = 0;
+    bool scheduleImmediately(TaskRef task) noexcept;
 
     /**
      * @brief 将语言中立 ready entry 投递到该调度器。
      * @details C stackful coroutine 使用该入口，避免热路径通过 RTTI 识别具体
      *          IOScheduler 后端；非 IO 调度器默认拒绝该入口。
      */
-    virtual bool scheduleReadyEntry(detail::ReadyEntry& entry) noexcept
-    {
-        (void)entry;
-        return false;
-    }
+    bool scheduleReadyEntry(detail::ReadyEntry& entry) noexcept;
 
     /**
      * @brief 添加定时器到内部时间轮
      * @param timer 待注册的定时器对象
      * @return true 定时器已被调度器接管；false 注册失败
      */
-    virtual bool addTimer(Timer::ptr timer) = 0;
+    bool addTimer(Timer::ptr timer);
 
     /**
      * @brief 配置或取消调度器线程绑核
@@ -136,9 +151,10 @@ public:
      * @brief 返回Scheduler类型
      * @return  SchedulerType 调度器类型
      */
-    virtual SchedulerType type() = 0;
+    SchedulerType type() const noexcept { return m_type; }
 
 protected:
+    ~Scheduler() = default;
     /**
      * @brief 将任务与当前调度器绑定
      * @param task 待绑定的任务引用
@@ -171,9 +187,93 @@ protected:
     std::thread::id m_threadId;  ///< 调度器所属线程ID，在 start() 时设置
 
 private:
+    template <typename Derived, SchedulerType Type> friend class SchedulerBase;
+    explicit Scheduler(SchedulerType type) noexcept : m_type(type) {}
+#ifdef GALAY_KERNEL_TEST_SCHEDULER
+    template <typename Derived> friend class detail::SchedulerTestAdapter;
+    const detail::SchedulerTestHooks* m_test_hooks = nullptr;
+#endif
     static constexpr int32_t kNoAffinity = -1;
     std::atomic<int32_t> m_affinity_cpu{kNoAffinity};
+    const SchedulerType m_type;
 };
+
+/**
+ * @brief 内置调度器的 CRTP 入口及供 Scheduler 借用指针使用的静态分派函数。
+ * @note Impl 方法只由相应具体调度器实现。调度器地址必须在任务存活期间保持稳定。
+ */
+template <typename Derived, SchedulerType Type>
+class SchedulerBase : public Scheduler {
+    static_assert((Type == kIOScheduler &&
+                   (std::is_same_v<Derived, EpollScheduler> ||
+                    std::is_same_v<Derived, KqueueScheduler> ||
+                    std::is_same_v<Derived, IOUringScheduler>)) ||
+                  (Type == kParallelScheduler && std::is_same_v<Derived, ParallelScheduler>));
+public:
+    std::expected<void, IOError> start() { return start(&derived()); }
+    void stop() { stop(&derived()); }
+    bool schedule(TaskRef task) noexcept { return schedule(&derived(), std::move(task)); }
+    bool scheduleResume(TaskRef task) noexcept { return scheduleResume(&derived(), std::move(task)); }
+    bool scheduleDeferred(TaskRef task) noexcept { return scheduleDeferred(&derived(), std::move(task)); }
+    bool scheduleImmediately(TaskRef task) noexcept { return scheduleImmediately(&derived(), std::move(task)); }
+    bool scheduleReadyEntry(detail::ReadyEntry& entry) noexcept {
+        return scheduleReadyEntry(&derived(), entry);
+    }
+    bool addTimer(Timer::ptr timer) { return addTimer(&derived(), std::move(timer)); }
+
+    static std::expected<void, IOError> start(Derived* scheduler) {
+        return scheduler->startImpl();
+    }
+    static void stop(Derived* scheduler) { scheduler->stopImpl(); }
+    static bool schedule(Derived* scheduler, TaskRef task) noexcept {
+        return scheduler->scheduleImpl(std::move(task));
+    }
+    static bool scheduleResume(Derived* scheduler, TaskRef task) noexcept {
+        return scheduler->scheduleResumeImpl(std::move(task));
+    }
+    static bool scheduleDeferred(Derived* scheduler, TaskRef task) noexcept {
+        return scheduler->scheduleDeferredImpl(std::move(task));
+    }
+    static bool scheduleImmediately(Derived* scheduler, TaskRef task) noexcept {
+        return scheduler->scheduleImmediatelyImpl(std::move(task));
+    }
+    static bool scheduleReadyEntry(Derived* scheduler,
+                                   detail::ReadyEntry& entry) noexcept {
+        if constexpr (Type == kIOScheduler) {
+            return scheduler->scheduleReadyEntryImpl(entry);
+        } else {
+            return false; // compute 调度器不接纳 C stackful ready entry。
+        }
+    }
+    static bool addTimer(Derived* scheduler, Timer::ptr timer) {
+        return scheduler->addTimerImpl(std::move(timer));
+    }
+    static constexpr SchedulerType type() noexcept { return Type; }
+
+protected:
+    ~SchedulerBase() = default;
+
+private:
+    friend Derived;
+    template <typename, typename> friend class IOSchedulerBase;
+    SchedulerBase() noexcept : Scheduler(Type) {}
+    Derived& derived() noexcept { return static_cast<Derived&>(*this); }
+};
+
+#ifdef GALAY_KERNEL_TEST_SCHEDULER
+namespace detail {
+// 仅确定性竞态测试的独立库启用；生产对象布局和热路径不包含这些 hook。
+struct SchedulerTestHooks {
+    std::expected<void, IOError> (*start)(Scheduler*);
+    void (*stop)(Scheduler*);
+    bool (*schedule)(Scheduler*, TaskRef) noexcept;
+    bool (*scheduleResume)(Scheduler*, TaskRef) noexcept;
+    bool (*scheduleDeferred)(Scheduler*, TaskRef) noexcept;
+    bool (*scheduleImmediately)(Scheduler*, TaskRef) noexcept;
+    bool (*addTimer)(Scheduler*, Timer::ptr);
+};
+}
+#endif
 
 namespace detail {
 
@@ -194,29 +294,7 @@ private:
 
 bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept;
 
-inline bool scheduleReadyEntry(ReadyEntry& entry) noexcept
-{
-    if (!entry.isValid()) {
-        return false;
-    }
-
-    if (entry.isCppTask()) {
-        auto* scheduler = readyEntryScheduler(entry);
-        if (scheduler == nullptr) {
-            return false;
-        }
-        TaskRef task = readyEntryToTaskRef(entry);
-        TaskRef scheduled_task(task);
-        if (scheduler->schedule(std::move(scheduled_task))) {
-            return true;
-        }
-        entry = ReadyEntry(std::move(task));
-        return false;
-    }
-
-    auto* scheduler = readyEntryScheduler(entry);
-    return scheduler != nullptr && scheduleReadyEntryOnScheduler(scheduler, entry);
-}
+bool scheduleReadyEntry(ReadyEntry& entry) noexcept;
 
 }  // namespace detail
 
@@ -249,8 +327,9 @@ inline void Scheduler::resume(detail::ReadyEntry& entry) {
  * @param task 待提交的协程任务
  * @return true 任务成功交给调度器；false 调度器拒绝该任务
  */
-template <typename T>
-inline bool scheduleTask(Scheduler& scheduler, Task<T>&& task)
+template <typename T, typename SchedulerT>
+    requires std::is_base_of_v<Scheduler, SchedulerT>
+inline bool scheduleTask(SchedulerT& scheduler, Task<T>&& task)
 {
     return scheduler.schedule(detail::TaskAccess::detachTask(std::move(task)));
 }
@@ -262,8 +341,9 @@ inline bool scheduleTask(Scheduler& scheduler, Task<T>&& task)
  * @param task 待提交的协程任务
  * @return true 任务成功交给调度器；false 调度器为空或调度器拒绝该任务
  */
-template <typename T>
-inline bool scheduleTask(Scheduler* scheduler, Task<T>&& task)
+template <typename T, typename SchedulerT>
+    requires std::is_base_of_v<Scheduler, SchedulerT>
+inline bool scheduleTask(SchedulerT* scheduler, Task<T>&& task)
 {
     return scheduler != nullptr && scheduleTask(*scheduler, std::move(task));
 }
@@ -275,8 +355,9 @@ inline bool scheduleTask(Scheduler* scheduler, Task<T>&& task)
  * @param task 待提交的协程任务
  * @return true 任务已加入延后队列；false 调度器拒绝该任务
  */
-template <typename T>
-inline bool scheduleTaskDeferred(Scheduler& scheduler, Task<T>&& task)
+template <typename T, typename SchedulerT>
+    requires std::is_base_of_v<Scheduler, SchedulerT>
+inline bool scheduleTaskDeferred(SchedulerT& scheduler, Task<T>&& task)
 {
     return scheduler.scheduleDeferred(detail::TaskAccess::detachTask(std::move(task)));
 }
@@ -288,8 +369,9 @@ inline bool scheduleTaskDeferred(Scheduler& scheduler, Task<T>&& task)
  * @param task 待提交的协程任务
  * @return true 任务已加入延后队列；false 调度器为空或调度器拒绝该任务
  */
-template <typename T>
-inline bool scheduleTaskDeferred(Scheduler* scheduler, Task<T>&& task)
+template <typename T, typename SchedulerT>
+    requires std::is_base_of_v<Scheduler, SchedulerT>
+inline bool scheduleTaskDeferred(SchedulerT* scheduler, Task<T>&& task)
 {
     return scheduler != nullptr && scheduleTaskDeferred(*scheduler, std::move(task));
 }
@@ -302,8 +384,9 @@ inline bool scheduleTaskDeferred(Scheduler* scheduler, Task<T>&& task)
  * @return true 任务已被当前线程恢复；false 调度器拒绝该任务
  * @note 调用方需要保证该接口符合目标调度器的线程约束
  */
-template <typename T>
-inline bool scheduleTaskImmediately(Scheduler& scheduler, Task<T>&& task)
+template <typename T, typename SchedulerT>
+    requires std::is_base_of_v<Scheduler, SchedulerT>
+inline bool scheduleTaskImmediately(SchedulerT& scheduler, Task<T>&& task)
 {
     return scheduler.scheduleImmediately(detail::TaskAccess::detachTask(std::move(task)));
 }
@@ -315,8 +398,9 @@ inline bool scheduleTaskImmediately(Scheduler& scheduler, Task<T>&& task)
  * @param task 待执行的协程任务
  * @return true 任务已被当前线程恢复；false 调度器为空或调度器拒绝该任务
  */
-template <typename T>
-inline bool scheduleTaskImmediately(Scheduler* scheduler, Task<T>&& task)
+template <typename T, typename SchedulerT>
+    requires std::is_base_of_v<Scheduler, SchedulerT>
+inline bool scheduleTaskImmediately(SchedulerT* scheduler, Task<T>&& task)
 {
     return scheduler != nullptr && scheduleTaskImmediately(*scheduler, std::move(task));
 }

@@ -23,7 +23,7 @@ namespace galay::mcp::v2 {
 struct ClientConfig {
     std::string clientName{"galay-mcp-v2-client"};
     std::string clientVersion{"2.0.0"};
-    JsonString clientCapabilities{"{}"};
+    std::string clientCapabilities{"{}"};
 };
 
 /**
@@ -38,14 +38,14 @@ public:
 
     std::expected<DiscoverResult, McpError> discover();
     std::expected<std::vector<Tool>, McpError> listTools();
-    std::expected<JsonString, McpError> callTool(std::string name, JsonString arguments = "{}");
+    std::expected<std::string, McpError> callTool(std::string name, std::string arguments = "{}");
     std::expected<std::vector<Resource>, McpError> listResources();
     std::expected<std::string, McpError> readResource(std::string uri);
     std::expected<std::vector<Prompt>, McpError> listPrompts();
-    std::expected<JsonString, McpError> getPrompt(std::string name, JsonString arguments = "{}");
+    std::expected<std::string, McpError> getPrompt(std::string name, std::string arguments = "{}");
 
 private:
-    std::expected<JsonString, McpError> request(std::string_view method,
+    std::expected<std::string, McpError> request(std::string_view method,
                                                 std::string fields = "{}");
     std::expected<void, McpError> write(std::string_view message);
     std::expected<std::string, McpError> read();
@@ -59,6 +59,15 @@ private:
     std::atomic_flag m_requestActive{};
 };
 
+/**
+ * @brief HTTP client owned by runtime.getIOScheduler(0).
+ * @details Start runtime before construction and keep it alive through all calls.
+ *          Submit calls to owner(); foreign schedulers return InvalidParams.
+ *          Overlapping requests return Overload. Lifecycle tasks must be created
+ *          and awaited on owner(), to completion before any other operation.
+ *          listen() owns a separate connection but runs on the same owner.
+ *          Destroy only after all calls finish. Tool definitions are owned values.
+ */
 class McpHttpClient {
 public:
     using SubscriptionCallback = std::function<bool(std::string)>;
@@ -67,19 +76,26 @@ public:
     using CloseAwaitable = decltype(std::declval<http::HttpClient&>().close());
 
     McpHttpClient(kernel::Runtime& runtime, std::string url, ClientConfig config = {});
-    ConnectAwaitable connect();
-    CloseAwaitable close();
+    McpHttpClient(const McpHttpClient&) = delete;
+    McpHttpClient& operator=(const McpHttpClient&) = delete;
+    McpHttpClient(McpHttpClient&&) = delete;
+    McpHttpClient& operator=(McpHttpClient&&) = delete;
+    kernel::Scheduler* owner() const noexcept { return m_owner; }
+    /** @brief Check owner and return the existing transport task without wrapping it. */
+    std::expected<ConnectAwaitable, McpError> connect();
+    /** @brief Check owner and return the existing transport task without wrapping it. */
+    std::expected<CloseAwaitable, McpError> close();
 
     kernel::Task<void> discover(std::expected<DiscoverResult, McpError>& result);
     kernel::Task<void> listTools(std::expected<std::vector<Tool>, McpError>& result);
-    kernel::Task<void> callTool(std::string name, JsonString arguments,
-                                std::expected<JsonString, McpError>& result);
+    kernel::Task<void> callTool(std::string name, std::string arguments,
+                                std::expected<std::string, McpError>& result);
     kernel::Task<void> listResources(std::expected<std::vector<Resource>, McpError>& result);
     kernel::Task<void> readResource(std::string uri,
                                     std::expected<std::string, McpError>& result);
     kernel::Task<void> listPrompts(std::expected<std::vector<Prompt>, McpError>& result);
-    kernel::Task<void> getPrompt(std::string name, JsonString arguments,
-                                 std::expected<JsonString, McpError>& result);
+    kernel::Task<void> getPrompt(std::string name, std::string arguments,
+                                 std::expected<std::string, McpError>& result);
     /**
      * @brief 打开独立的长生命 SSE 订阅流。
      * @param filter 客户端显式 opt-in 的通知过滤器。
@@ -92,19 +108,19 @@ public:
 
 private:
     kernel::Task<void> request(std::string method, std::string fields,
-                               std::expected<JsonString, McpError>& result);
+                               std::expected<std::string, McpError>& result);
     RequestMeta meta() const;
     std::int64_t nextId() noexcept;
+    bool onOwner() const noexcept;
 
-    kernel::Runtime* m_runtime;
-    std::unique_ptr<http::HttpClient> m_client;
-    std::string m_url;
+    http::HttpClient m_client;
     ClientConfig m_config;
-    std::atomic<std::int64_t> m_nextId{0};
-    std::atomic<bool> m_connected{false};
     using ToolDefinitions = std::unordered_map<std::string, Tool>;
-    std::atomic<std::shared_ptr<const ToolDefinitions>> m_toolDefinitions{
-        std::make_shared<const ToolDefinitions>()};
+    ToolDefinitions m_toolDefinitions;
+    std::string m_url;
+    kernel::Scheduler* const m_owner;
+    std::int64_t m_nextId{0};
+    bool m_requestActive{false};
 };
 
 } // namespace galay::mcp::v2

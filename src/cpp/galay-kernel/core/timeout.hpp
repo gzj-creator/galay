@@ -20,6 +20,7 @@
 #include "io_controller.hpp"
 #include "waker.h"
 #include "scheduler.hpp"
+#include "scheduler_dispatch.hpp"
 #include "../common/kernel_config.h"
 #include <atomic>
 #include <chrono>

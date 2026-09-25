@@ -174,8 +174,10 @@ function(galay_ensure_serde)
     endif()
     set(SERDE_INSTALL_CPP23_MODULE_INTERFACES "${GALAY_INSTALL_CPP23_MODULE_INTERFACES}")
     set(SERDE_BUILD_SHARED_LIBS OFF)
+    # 不使用 EXCLUDE_FROM_ALL：CMake 会连带排除子目录的默认安装规则，
+    # 导致安装前缀缺少 serde 包，外部工程 find_package(galay) 失败。
     add_subdirectory("${GALAY_SERDE_SOURCE_DIR}"
-        "${CMAKE_BINARY_DIR}/serde-build" EXCLUDE_FROM_ALL)
+        "${CMAKE_BINARY_DIR}/serde-build")
 endfunction()
 
 function(galay_ensure_spdlog)

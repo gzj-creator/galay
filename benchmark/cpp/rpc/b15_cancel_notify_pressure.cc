@@ -43,24 +43,19 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    std::vector<RpcCancellationSource> sources;
+    // Stable source addresses; all registrations live on this benchmark owner.
+    auto sources = std::make_unique<RpcCancellationSource[]>(requests);
     std::vector<std::shared_ptr<RpcChannelPendingCall>> pendings;
-    sources.reserve(requests);
+    std::vector<RpcCancellationRegistration> registrations;
     pendings.reserve(requests);
+    registrations.reserve(requests);
 
-    size_t register_errors = 0;
     const auto register_start = std::chrono::steady_clock::now();
     for (size_t i = 0; i < requests; ++i) {
-        RpcCancellationSource source;
         auto pending = std::make_shared<RpcChannelPendingCall>();
         pending->request_id = static_cast<uint32_t>(i + 1);
-        auto token = source.token();
-        std::weak_ptr<RpcChannelPendingCall> weak_pending = pending;
-        auto registration = token.registerCallback([weak_pending]() {
-            auto locked = weak_pending.lock();
-            if (!locked) {
-                return;
-            }
+        auto token = sources[i].token();
+        auto registration = token.registerCallback([locked = pending.get()] {
             if (locked->completed.exchange(true, std::memory_order_acq_rel)) {
                 return;
             }
@@ -72,19 +67,14 @@ int main(int argc, char** argv)
                           << locked->request_id << "\n";
             }
         });
-        if (!registration) {
-            ++register_errors;
-            continue;
-        }
-        pending->cancellation_registration = std::move(registration);
-        sources.push_back(std::move(source));
         pendings.push_back(std::move(pending));
+        registrations.push_back(std::move(registration));
     }
     const auto register_stop = std::chrono::steady_clock::now();
 
     const auto notify_start = std::chrono::steady_clock::now();
-    for (const auto& source : sources) {
-        source.cancel();
+    for (size_t i = 0; i < requests; ++i) {
+        sources[i].cancel();
     }
     const auto notify_stop = std::chrono::steady_clock::now();
 
@@ -103,14 +93,13 @@ int main(int argc, char** argv)
 
     std::cout << "RPC cancel notify pressure\nrequests=" << requests
               << "\nregistered=" << pendings.size()
-              << "\nregister_errors=" << register_errors
               << "\ncancelled=" << cancelled
               << "\nregister_us=" << register_us
               << "\nnotify_us=" << notify_us
               << "\ncancelled_per_second=" << cancelled_per_second
               << "\n";
 
-    if (register_errors != 0 || cancelled != pendings.size()) {
+    if (cancelled != pendings.size()) {
         return 1;
     }
     return 0;

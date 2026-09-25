@@ -99,14 +99,19 @@ void benchmarkToolCall(McpClient& client, size_t iterations) {
     std::cerr << "\nBenchmarking tool calls (" << iterations << " iterations)..." << std::endl;
 
     for (size_t i = 0; i < iterations; ++i) {
-        JsonWriter argsWriter;
-        argsWriter.startObject();
-        argsWriter.key("a");
-        argsWriter.number(static_cast<int64_t>(i));
-        argsWriter.key("b");
-        argsWriter.number(static_cast<int64_t>(i + 1));
-        argsWriter.endObject();
-        JsonString args = argsWriter.takeString();
+        std::string args;
+        auto argsWriter = makeJsonWriter(args);
+        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+        (void)argsWriter.start_object();
+        (void)argsWriter.key("a");
+        (void)argsWriter.number(static_cast<int64_t>(i));
+        (void)argsWriter.key("b");
+        (void)argsWriter.number(static_cast<int64_t>(i + 1));
+        (void)argsWriter.end_object();
+        if (!argsWriter.finish()) {
+            std::cerr << "Failed to encode tool arguments" << std::endl;
+            return;
+        }
 
         auto start = high_resolution_clock::now();
         auto result = client.callTool("add", args);

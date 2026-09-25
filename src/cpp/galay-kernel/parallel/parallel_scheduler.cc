@@ -37,7 +37,7 @@ ParallelScheduler::~ParallelScheduler()
  * @details 原子地切换到运行状态并创建工作线程，线程在进入主循环前
  * 应用已配置的 CPU 亲和性。若已在运行则不做任何操作。
  */
-std::expected<void, IOError> ParallelScheduler::start()
+std::expected<void, IOError> ParallelScheduler::startImpl()
 {
     bool expected = false;
     if (!m_running.compare_exchange_strong(expected, true, std::memory_order_acq_rel)) {
@@ -69,7 +69,7 @@ std::expected<void, IOError> ParallelScheduler::start()
  * @details 先关闭专用恢复接纳，再切换运行状态并等待工作线程结束。
  * 线程在退出前会排空已接纳恢复和普通任务。若已停止则保持接纳关闭。
  */
-void ParallelScheduler::stop()
+void ParallelScheduler::stopImpl()
 {
     m_resumeQueue.close();
     bool expected = true;
@@ -81,31 +81,6 @@ void ParallelScheduler::stop()
     if (m_thread.joinable()) {
         m_thread.join();
     }
-}
-
-/**
- * @brief 将计算任务入队，在工作线程上执行
- *
- * @param task  待调度的任务
- * @return true 任务绑定并入队成功；false 任务无效
- */
-bool ParallelScheduler::schedule(TaskRef task) noexcept
-{
-    if (!bindTask(task)) {
-        return false;
-    }
-
-    m_submission_count.fetch_add(1, std::memory_order_acq_rel);
-    const bool owner_worker = std::this_thread::get_id() == m_threadId &&
-        m_worker_active.load(std::memory_order_acquire);
-    if (!m_running.load(std::memory_order_acquire) && !owner_worker) {
-        m_submission_count.fetch_sub(1, std::memory_order_release);
-        return false;
-    }
-
-    const bool accepted = m_queue.enqueue(ParallelTask{std::move(task)});
-    m_submission_count.fetch_sub(1, std::memory_order_release);
-    return accepted;
 }
 
 bool ParallelScheduler::scheduleWork(ParallelWorkItem work) noexcept
@@ -125,41 +100,6 @@ bool ParallelScheduler::scheduleWork(ParallelWorkItem work) noexcept
     const bool accepted = m_workQueue.enqueue(std::move(work));
     m_submission_count.fetch_sub(1, std::memory_order_release);
     return accepted;
-}
-
-bool ParallelScheduler::scheduleResume(TaskRef task) noexcept
-{
-    if (!bindTask(task)) {
-        return false;
-    }
-    return m_resumeQueue.push(std::move(task));
-}
-
-/**
- * @brief 以延后语义将计算任务入队
- *
- * @param task  待调度的任务
- * @return true 任务绑定并入队成功
- * @note 当前实现与 schedule() 相同，保留以作语义区分
- */
-bool ParallelScheduler::scheduleDeferred(TaskRef task) noexcept
-{
-    return schedule(std::move(task));
-}
-
-/**
- * @brief 在调用线程上立即恢复任务
- *
- * @param task  待执行的任务
- * @return true 任务绑定并恢复成功；false 绑定失败
- */
-bool ParallelScheduler::scheduleImmediately(TaskRef task) noexcept
-{
-    if (!bindTask(task)) {
-        return false;
-    }
-    resume(task);
-    return true;
 }
 
 /**

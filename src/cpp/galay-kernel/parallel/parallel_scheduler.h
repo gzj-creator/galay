@@ -126,7 +126,7 @@ struct ParallelWorkItem {
  *
  * @note 不支持 IO 操作，仅用于纯计算任务
  */
-class ParallelScheduler : public Scheduler
+class ParallelScheduler : public SchedulerBase<ParallelScheduler, kParallelScheduler>
 {
 public:
     /**
@@ -145,36 +145,6 @@ public:
     ParallelScheduler(const ParallelScheduler&) = delete;
     ParallelScheduler& operator=(const ParallelScheduler&) = delete;
 
-
-    /**
-     * @brief 返回调度器类型
-     * @return 固定返回 kParallelScheduler
-     */
-    SchedulerType type() override {
-        return kParallelScheduler;
-    }
-
-    /**
-     * @brief 启动调度器
-     * @return 成功返回 void；前一运行周期未完整排空恢复队列时返回 kNotReady
-     * @note 创建工作线程并开始处理任务
-     */
-    std::expected<void, IOError> start() override;
-
-    /**
-     * @brief 停止调度器
-     * @note 先拒绝新的恢复请求，再由工作线程排空已接纳任务并结束
-     */
-    void stop() override;
-
-    /**
-     * @brief 将计算任务排入工作线程
-     * @param task 待执行的任务引用
-     * @return true 任务已成功入队；false 任务无效或已绑定到其他调度器
-     * @note 任务会在线程池中的计算线程恢复执行
-     */
-    bool schedule(TaskRef task) noexcept override;
-
     /**
      * @brief 将一个不拥有 coroutine frame 的同步计算工作项入队。
      * @return true 表示工作项已被 worker 接纳；调度器未运行或工作项无效时
@@ -184,11 +154,63 @@ public:
     bool scheduleWork(ParallelWorkItem work) noexcept;
 
     /**
+     * @brief 检查调度器是否正在运行
+     * @return true 如果正在运行
+     */
+    bool isRunning() const { return m_running.load(std::memory_order_acquire); }
+
+private:
+    friend class SchedulerBase<ParallelScheduler, kParallelScheduler>;
+
+    /**
+     * @brief 启动调度器
+     * @return 成功返回 void；前一运行周期未完整排空恢复队列时返回 kNotReady
+     * @note 创建工作线程并开始处理任务
+     */
+    std::expected<void, IOError> startImpl();
+
+    /**
+     * @brief 停止调度器
+     * @note 先拒绝新的恢复请求，再由工作线程排空已接纳任务并结束
+     */
+    void stopImpl();
+
+    /**
+     * @brief 将计算任务排入工作线程
+     * @param task 待执行的任务引用
+     * @return true 任务已成功入队；false 任务无效或已绑定到其他调度器
+     * @note 任务会在线程池中的计算线程恢复执行
+     */
+    bool scheduleImpl(TaskRef task) noexcept
+    {
+        if (!bindTask(task)) {
+            return false;
+        }
+        m_submission_count.fetch_add(1, std::memory_order_acq_rel);
+        const bool owner_worker = std::this_thread::get_id() == m_threadId &&
+            m_worker_active.load(std::memory_order_acquire);
+        if (!m_running.load(std::memory_order_acquire) && !owner_worker) {
+            m_submission_count.fetch_sub(1, std::memory_order_release);
+            return false;
+        }
+        const bool accepted = m_queue.enqueue(ParallelTask{std::move(task)});
+        m_submission_count.fetch_sub(1, std::memory_order_release);
+        return accepted;
+    }
+
+
+    /**
      * @brief 无分配接纳已停泊任务的恢复请求。
      * @return live scheduler 接管成功返回 true；未启动、已停止、任务无效或 owner
      *         不匹配返回 false。
      */
-    bool scheduleResume(TaskRef task) noexcept override;
+    bool scheduleResumeImpl(TaskRef task) noexcept
+    {
+        if (!bindTask(task)) {
+            return false;
+        }
+        return m_resumeQueue.push(std::move(task));
+    }
 
     /**
      * @brief 将计算任务按延后语义排入工作线程
@@ -196,21 +218,24 @@ public:
      * @return true 任务已成功入队；false 任务无效或已绑定到其他调度器
      * @note 当前实现与 schedule() 共享同一工作队列，但保留独立语义入口
      */
-    bool scheduleDeferred(TaskRef task) noexcept override;
+    bool scheduleDeferredImpl(TaskRef task) noexcept
+    {
+        return scheduleImpl(std::move(task));
+    }
 
     /**
      * @brief 立即执行任务（在当前线程）
      * @param task 要执行的任务
      * @return true 如果成功执行，false 如果任务已绑定到其他调度器
      */
-    bool scheduleImmediately(TaskRef task) noexcept override;
-
-    /**
-     * @brief 检查调度器是否正在运行
-     * @return true 如果正在运行
-     */
-    bool isRunning() const { return m_running.load(std::memory_order_acquire); }
-
+    bool scheduleImmediatelyImpl(TaskRef task) noexcept
+    {
+        if (!bindTask(task)) {
+            return false;
+        }
+        resume(task);
+        return true;
+    }
 
     /**
      * @brief 注册定时器
@@ -218,7 +243,7 @@ public:
      * @param timer 定时器共享指针
      * @return true 定时器已成功交给全局 TimerScheduler；false 添加失败
      */
-    bool addTimer(Timer::ptr timer) override {
+    bool addTimerImpl(Timer::ptr timer) {
         return TimerScheduler::getInstance()->addTimer(timer);    
     }
 private:

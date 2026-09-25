@@ -170,7 +170,7 @@ void requireRoutesThroughSharedLoop(std::vector<std::string>& failures,
 // until the work-stealing wiring exists.
 int main() {
     const auto root = projectRoot();
-    const auto ioscheduler = root / "galay-kernel" / "core" / "io_scheduler.hpp";
+    const auto ioscheduler = root / "galay-kernel" / "core" / "io_ready_queue.hpp";
 
     std::vector<std::string> failures;
     const std::string ioscheduler_content = readAll(ioscheduler);
@@ -179,22 +179,22 @@ int main() {
         failures.push_back(ioscheduler.string() + ": failed to read io_scheduler.hpp");
     } else {
         const auto worker_section =
-            extractBracedSection(ioscheduler_content, "struct IOSchedulerWorkerState");
+            extractBracedSection(ioscheduler_content, "struct IOReadyQueue");
         if (worker_section.empty()) {
             failures.push_back(ioscheduler.string() +
-                               ": failed to isolate IOSchedulerWorkerState for inspection");
+                               ": failed to isolate IOReadyQueue for inspection");
         } else {
             requireNotContains(failures,
                                ioscheduler,
                                worker_section,
                                "std::deque<TaskRef> local_queue",
-                               "expected IOSchedulerWorkerState to drop std::deque local_queue in favor of a ring");
+                               "expected IOReadyQueue to drop std::deque local_queue in favor of a ring");
 
             requireContains(failures,
                             ioscheduler,
                             worker_section,
                             "ChaseLevTaskRing",
-                            "expected IOSchedulerWorkerState to own a ChaseLevTaskRing instance");
+                            "expected IOReadyQueue to own a ChaseLevTaskRing instance");
 
             requireContains(failures,
                             ioscheduler,
@@ -216,7 +216,7 @@ int main() {
 
             if (!hasStealDeclaration(worker_section)) {
                 failures.push_back(ioscheduler.string() +
-                                   ": expected IOSchedulerWorkerState to declare a stealing entry or helper");
+                                   ": expected IOReadyQueue to declare a stealing entry or helper");
             }
         }
 
@@ -277,14 +277,8 @@ int main() {
     }
 
     requireRoutesThroughSharedLoop(failures,
-                                   root / "galay-kernel" / "core" / "epoll_scheduler.cc",
-                                   "EpollScheduler::eventLoop");
-    requireRoutesThroughSharedLoop(failures,
-                                   root / "galay-kernel" / "core" / "kqueue_scheduler.cc",
-                                   "KqueueScheduler::eventLoop");
-    requireRoutesThroughSharedLoop(failures,
-                                   root / "galay-kernel" / "core" / "uring_scheduler.cc",
-                                   "IOUringScheduler::eventLoop");
+                                   root / "galay-kernel" / "core" / "io_scheduler_base.hpp",
+                                   "IOSchedulerBase::eventLoop");
 
     if (!failures.empty()) {
         for (const auto& failure : failures) {

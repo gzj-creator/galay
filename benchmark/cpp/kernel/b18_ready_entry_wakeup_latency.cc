@@ -209,13 +209,7 @@ int main() {
     return 0;
 #endif
 
-    Runtime runtime;
-    auto scheduler = std::make_unique<IOSchedulerType>();
-    auto* scheduler_ptr = scheduler.get();
-    if (!runtime.addIOScheduler(std::move(scheduler))) {
-        std::cerr << "[B18] failed to add IO scheduler\n";
-        return 1;
-    }
+    auto runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
 
     auto started = runtime.start();
     if (!started.has_value()) {
@@ -223,6 +217,7 @@ int main() {
         return 1;
     }
 
+    auto* scheduler_ptr = runtime.getIOScheduler(0);
     ReusableWakeProducer producer;
     if (!runSamples(scheduler_ptr, producer, kWarmupSamples, nullptr)) {
         runtime.stop();

@@ -276,6 +276,103 @@ struct alignas(::galay::utils::kCacheLineSize) TaskState
     std::optional<TaskRef> m_next;  ///< 当前 `co_await` 后要恢复的父任务
 };
 
+// Keep ownership transfers visible to CRTP callers so moved-from cleanup and
+// forwarding disappear without LTO. Reference counts and borrowed views retain
+// the same lifetime contract; actual frame/state destruction stays out of line.
+inline TaskRef::TaskRef(TaskState* state, bool retainRef) noexcept
+    : m_state(state)
+{
+    if (retainRef) {
+        retain();
+    }
+}
+
+inline TaskRef TaskRef::borrowed(TaskState* state) noexcept
+{
+    TaskRef result;
+    if (state == nullptr) {
+        return result;
+    }
+    const auto raw = reinterpret_cast<uintptr_t>(state);
+    result.m_state = reinterpret_cast<TaskState*>(raw | kBorrowedBit);
+    return result;
+}
+
+inline TaskRef::TaskRef(const TaskRef& other) noexcept
+    : m_state(other.state())
+{
+    retain();
+}
+
+inline TaskRef::TaskRef(TaskRef&& other) noexcept
+    : m_state(other.m_state)
+{
+    other.m_state = nullptr;
+}
+
+inline TaskRef::~TaskRef()
+{
+    release();
+}
+
+inline TaskRef& TaskRef::operator=(const TaskRef& other) noexcept
+{
+    if (this != &other) {
+        auto* state = other.state();
+        if (state != nullptr) {
+            // Retain before release: other may be this state's borrowed view.
+            state->m_refs.fetch_add(1, std::memory_order_relaxed);
+        }
+        release();
+        m_state = state;
+    }
+    return *this;
+}
+
+inline TaskRef& TaskRef::operator=(TaskRef&& other) noexcept
+{
+    if (this != &other) {
+        if (other.isBorrowed() && state() == other.state()) {
+            // A borrowed promise view cannot replace its own owning reference.
+            other.m_state = nullptr;
+            return *this;
+        }
+        release();
+        m_state = other.m_state;
+        other.m_state = nullptr;
+    }
+    return *this;
+}
+
+inline Scheduler* TaskRef::belongScheduler() const noexcept
+{
+    auto* state = this->state();
+    return state ? state->m_scheduler : nullptr;
+}
+
+inline void TaskRef::retain() noexcept
+{
+    if (auto* state = this->state()) {
+        state->m_refs.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+inline void TaskRef::release() noexcept
+{
+    if (!m_state) {
+        return;
+    }
+    if (isBorrowed()) {
+        m_state = nullptr;
+        return;
+    }
+    auto* state = this->state();
+    m_state = nullptr;
+    if (state->m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        delete state;
+    }
+}
+
 struct TaskWaiter
 {
     std::mutex m_mutex;

@@ -32,9 +32,9 @@ namespace galay::mcp {
  */
 class McpHttpServer {
 public:
-    using ToolHandler = std::function<galay::kernel::Task<void>(const JsonElement&, std::expected<JsonString, McpError>&)>; ///< 工具处理函数类型（协程）
+    using ToolHandler = std::function<galay::kernel::Task<void>(const json::Json&, std::expected<std::string, McpError>&)>; ///< 工具处理函数类型（协程）
     using ResourceReader = std::function<galay::kernel::Task<void>(const std::string&, std::expected<std::string, McpError>&)>; ///< 资源读取函数类型（协程）
-    using PromptGetter = std::function<galay::kernel::Task<void>(const std::string&, const JsonElement&, std::expected<JsonString, McpError>&)>; ///< 提示获取函数类型（协程）
+    using PromptGetter = std::function<galay::kernel::Task<void>(const std::string&, const json::Json&, std::expected<std::string, McpError>&)>; ///< 提示获取函数类型（协程）
 
     /**
      * @brief 构造HTTP MCP服务器
@@ -78,7 +78,7 @@ public:
      */
     void addTool(std::string name,
                  std::string description,
-                 JsonString inputSchema,
+                 std::string inputSchema,
                  ToolHandler handler);
 
     /**
@@ -118,7 +118,7 @@ private:
      * @param responseJson 响应JSON字符串
      * @return 协程任务
      */
-    galay::kernel::Task<void> sendJsonResponse(http::HttpConn& conn, const JsonString& responseJson);
+    galay::kernel::Task<void> sendJsonResponse(http::HttpConn& conn, const std::string& responseJson);
 
     /**
      * @brief 处理JSON-RPC请求（协程）
@@ -127,7 +127,7 @@ private:
      * @param connectionInitialized [out] 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> processRequest(const std::string& requestBody, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> processRequest(const std::string& requestBody, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理initialize方法
@@ -135,7 +135,7 @@ private:
      * @param connectionInitialized [out] 连接初始化状态
      * @return 响应JSON字符串
      */
-    JsonString handleInitialize(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handleInitialize(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理tools/list方法
@@ -143,7 +143,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 响应JSON字符串
      */
-    JsonString handleToolsList(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handleToolsList(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理tools/call方法（协程）
@@ -152,7 +152,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> handleToolsCall(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handleToolsCall(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理resources/list方法
@@ -160,7 +160,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 响应JSON字符串
      */
-    JsonString handleResourcesList(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handleResourcesList(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理resources/read方法（协程）
@@ -169,7 +169,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> handleResourcesRead(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handleResourcesRead(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理prompts/list方法
@@ -177,7 +177,7 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 响应JSON字符串
      */
-    JsonString handlePromptsList(const JsonRpcRequestView& request, bool& connectionInitialized);
+    std::string handlePromptsList(const JsonRpcRequestView& request, bool& connectionInitialized);
 
     /**
      * @brief 处理prompts/get方法（协程）
@@ -186,14 +186,14 @@ private:
      * @param connectionInitialized 连接初始化状态
      * @return 协程任务
      */
-    galay::kernel::Task<void> handlePromptsGet(const JsonRpcRequestView& request, JsonString& responseJson, bool& connectionInitialized);
+    galay::kernel::Task<void> handlePromptsGet(const JsonRpcRequestView& request, std::string& responseJson, bool& connectionInitialized);
 
     /**
      * @brief 处理ping方法
      * @param request 请求视图
      * @return 响应JSON字符串
      */
-    JsonString handlePing(const JsonRpcRequestView& request);
+    std::string handlePing(const JsonRpcRequestView& request);
 
     /**
      * @brief 创建错误响应JSON
@@ -203,25 +203,25 @@ private:
      * @param details 错误详情
      * @return 错误响应JSON字符串
      */
-    JsonString createErrorResponse(int64_t id, int code, const std::string& message, const std::string& details = "");
+    std::string createErrorResponse(int64_t id, int code, const std::string& message, const std::string& details = "");
 
     /**
      * @brief 获取缓存的工具列表结果
      * @return 工具列表JSON字符串引用
      */
-    const JsonString& getToolsListResult();
+    const std::string& getToolsListResult();
 
     /**
      * @brief 获取缓存的资源列表结果
      * @return 资源列表JSON字符串引用
      */
-    const JsonString& getResourcesListResult();
+    const std::string& getResourcesListResult();
 
     /**
      * @brief 获取缓存的提示列表结果
      * @return 提示列表JSON字符串引用
      */
-    const JsonString& getPromptsListResult();
+    const std::string& getPromptsListResult();
 
 private:
     std::string m_host; ///< 监听地址
@@ -279,9 +279,9 @@ private:
     };
     std::unordered_map<std::string, PromptInfo> m_prompts; ///< 提示注册表
 
-    JsonString m_toolsListCache; ///< 工具列表缓存
-    JsonString m_resourcesListCache; ///< 资源列表缓存
-    JsonString m_promptsListCache; ///< 提示列表缓存
+    std::string m_toolsListCache; ///< 工具列表缓存
+    std::string m_resourcesListCache; ///< 资源列表缓存
+    std::string m_promptsListCache; ///< 提示列表缓存
     McpProductionPolicy m_policy; ///< 生产运行策略
 
     std::unique_ptr<http::HttpServer> m_httpServer; ///< HTTP服务器实例

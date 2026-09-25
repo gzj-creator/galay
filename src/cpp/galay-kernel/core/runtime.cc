@@ -39,24 +39,6 @@ Runtime::~Runtime()
     stop();
 }
 
-bool Runtime::addIOScheduler(std::unique_ptr<IOScheduler> scheduler)
-{
-    if (m_running.load(std::memory_order_acquire)) {
-        return false;
-    }
-    m_io_schedulers.push_back(std::move(scheduler));
-    return true;
-}
-
-bool Runtime::addParallelScheduler(std::unique_ptr<ParallelScheduler> scheduler)
-{
-    if (m_running.load(std::memory_order_acquire)) {
-        return false;
-    }
-    m_parallel_schedulers.push_back(std::move(scheduler));
-    return true;
-}
-
 std::expected<void, RuntimeError> Runtime::start()
 {
     bool expected = false;
@@ -158,7 +140,7 @@ std::expected<void, RuntimeError> Runtime::ensureStarted()
     return {};
 }
 
-std::expected<Scheduler*, RuntimeError> Runtime::acquireIOScheduler()
+std::expected<IOScheduler*, RuntimeError> Runtime::acquireIOScheduler()
 {
     auto started = ensureStarted();
     if (!started.has_value()) {
@@ -167,7 +149,7 @@ std::expected<Scheduler*, RuntimeError> Runtime::acquireIOScheduler()
     return getNextIOScheduler();
 }
 
-std::expected<Scheduler*, RuntimeError> Runtime::acquireParallelScheduler()
+std::expected<ParallelScheduler*, RuntimeError> Runtime::acquireParallelScheduler()
 {
     auto started = ensureStarted();
     if (!started.has_value()) {
@@ -180,11 +162,6 @@ void Runtime::bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler)
 {
     detail::setTaskRuntime(task, this);
     detail::setTaskScheduler(task, scheduler);
-}
-
-bool Runtime::submitTask(const TaskRef& task)
-{
-    return detail::scheduleTask(task);
 }
 
 RuntimeError Runtime::mapTaskResultError(const detail::TaskResultError& error) noexcept

@@ -143,15 +143,20 @@ galay::kernel::Task<void> workerTask(McpClient& client, const std::string& url,
 
     // 执行请求
     for (size_t i = 0; i < requestsPerWorker; ++i) {
-        JsonWriter argsWriter;
-        argsWriter.startObject();
-        argsWriter.key("message");
-        argsWriter.string("Concurrent test " + std::to_string(i));
-        argsWriter.endObject();
-        JsonString args = argsWriter.takeString();
+        std::string args;
+        auto argsWriter = makeJsonWriter(args);
+        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+        (void)argsWriter.start_object();
+        (void)argsWriter.key("message");
+        (void)argsWriter.string("Concurrent test " + std::to_string(i));
+        (void)argsWriter.end_object();
+        if (!argsWriter.finish()) {
+            stats.addError();
+            continue;
+        }
 
         auto start = high_resolution_clock::now();
-        std::expected<JsonString, McpError> callResult;
+        std::expected<std::string, McpError> callResult;
         co_await client.callTool("echo", args, callResult);
         auto end = high_resolution_clock::now();
 

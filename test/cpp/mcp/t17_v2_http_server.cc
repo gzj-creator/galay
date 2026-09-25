@@ -152,15 +152,15 @@ int main()
     const uint16_t selectedPort = port();
     if (!require(selectedPort != 0, "failed to select test port")) return 1;
 
-    galay::mcp::v2::McpHttpServer server("127.0.0.1", selectedPort, 1, 1);
+    galay::mcp::v2::McpHttpServer server("127.0.0.1", selectedPort, 2, 1);
     server.addTool("echo", "Echo",
                    R"({"type":"object","properties":{"region":{"type":"string","x-mcp-header":"Region"}}})",
-                   [](const galay::mcp::JsonElement&,
-                      std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result)
-                       -> galay::kernel::Task<void> {
-                       result = std::string("hello");
-                       co_return;
-                   });
+                   [](const json::Json&,
+                      std::expected<std::string, galay::mcp::McpError>& result)
+                        -> galay::kernel::Task<void> {
+                        result = std::string("hello");
+                        co_return;
+                    });
     server.addResource("mem://hello", "hello", "Hello", "text/plain",
                        [](const std::string&,
                           std::expected<std::string, galay::mcp::McpError>& result)
@@ -287,21 +287,26 @@ int main()
         ::close(listenFd);
         server.stop(); serverThread.join(); return 1;
     }
-    if (!require(server.notifyToolsListChanged() == 1 &&
-                     server.notifyPromptsListChanged() == 0 &&
-                     server.notifyResourcesListChanged() == 1 &&
-                     server.notifyResourceUpdated("mem://other") == 0 &&
-                     server.notifyResourceUpdated("mem://hello/child") == 0 &&
-                     server.notifyResourceUpdated("mem://hello") == 1,
-                 "subscription filtering or delivery count is incorrect")) {
+    if (!require(server.notifyToolsListChanged().has_value() &&
+                     server.notifyPromptsListChanged().has_value() &&
+                     server.notifyResourcesListChanged().has_value() &&
+                     server.notifyResourceUpdated("mem://other").has_value() &&
+                     server.notifyResourceUpdated("mem://hello/child").has_value() &&
+                     server.notifyResourceUpdated("mem://hello").has_value(),
+                 "notification command was not accepted")) {
         ::close(listenFd);
         server.stop(); serverThread.join(); return 1;
     }
-    const auto changed = recvUntil(listenFd, "notifications/tools/list_changed");
+    const auto changed = recvUntil(listenFd, "notifications/resources/updated");
     if (!require(changed.find(
                      "\"io.modelcontextprotocol/subscriptionId\":1") !=
-                     std::string::npos,
-                 "listen stream notification is missing its subscription id")) {
+                     std::string::npos &&
+                     changed.find("notifications/tools/list_changed") != std::string::npos &&
+                     changed.find("notifications/resources/list_changed") != std::string::npos &&
+                     changed.find("notifications/prompts/list_changed") == std::string::npos &&
+                     changed.find("mem://other") == std::string::npos &&
+                     changed.find("mem://hello/child") == std::string::npos,
+                 "subscription filtering or subscription id is incorrect")) {
         ::close(listenFd);
         server.stop(); serverThread.join(); return 1;
     }

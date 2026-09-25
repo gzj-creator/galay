@@ -58,19 +58,11 @@ struct RpcChannelOptions {
  */
 struct RpcChannelPendingCall {
     AsyncWaiter<RpcCallResult> waiter;   ///< 调用完成等待器
-    std::shared_ptr<RpcCancellationRegistration> cancellation_registration; ///< 取消回调注册
     std::string service;                 ///< 指标使用的服务名
     std::string method;                  ///< 指标使用的方法名
-    std::optional<RpcCancellationToken> cancellation_token;  ///< 可选取消令牌
     std::chrono::steady_clock::time_point started_at{};  ///< 调用开始时间
     uint32_t request_id = 0;             ///< 请求ID
     std::atomic<bool> completed{false};  ///< 是否已被通知
-
-    ~RpcChannelPendingCall() {
-        if (cancellation_registration) {
-            cancellation_registration->deactivate();
-        }
-    }
 };
 
 using RpcHeartbeatResult = std::expected<void, RpcError>;
@@ -432,6 +424,8 @@ public:
      *
      * @details 调用方协程只把请求发送到MPSC队列并等待pending waiter，实际socket写入
      *          和响应读取由通道单writer/single-reader loop完成。
+     * @note 取消 source 属于调用方 owner，必须活到调用返回；外部线程应向该 owner
+     *       投递取消。writer 只访问 pending 的完成标志，不借用取消域。
      */
     Task<RpcCallResult> callWithMode(const std::string& service,
                                      const std::string& method,
@@ -482,14 +476,11 @@ public:
         outbound.pending_hint->service = service;
         outbound.pending_hint->method = method;
         outbound.pending_hint->started_at = outbound.started_at;
+        auto pending = outbound.pending_hint;
+        // 注册在调用协程中析构；pending 的最后一个引用可能在 reader/writer 线程释放。
+        RpcCancellationRegistration cancellation_registration;
         if (cancellation_token.has_value()) {
-            outbound.pending_hint->cancellation_token = *cancellation_token;
-            std::weak_ptr<RpcChannelPendingCall> weak_pending = outbound.pending_hint;
-            auto registration = cancellation_token->registerCallback([weak_pending]() {
-                auto pending = weak_pending.lock();
-                if (!pending) {
-                    return;
-                }
+            cancellation_registration = cancellation_token->registerCallback([pending = pending.get()] {
                 if (pending->completed.exchange(true, std::memory_order_acq_rel)) {
                     return;
                 }
@@ -502,14 +493,7 @@ public:
                                  pending->request_id);
                 }
             });
-            if (!registration) {
-                m_outbound_backpressure.release(outbound.reserved_bytes);
-                co_return RpcCallResult(std::unexpected(
-                    RpcError(RpcErrorCode::INTERNAL_ERROR, "Failed to register RPC cancellation callback")));
-            }
-            outbound.pending_hint->cancellation_registration = std::move(registration);
         }
-        auto pending = outbound.pending_hint;
 
         const size_t reserved_bytes = outbound.reserved_bytes;
         if (!m_outbound.send(std::move(outbound))) {
@@ -821,21 +805,6 @@ private:
                 m_outbound_backpressure.release(outbound.reserved_bytes);
                 continue;
             }
-            if (outbound.pending_hint->cancellation_token.has_value() &&
-                outbound.pending_hint->cancellation_token->cancelled()) {
-                outbound.pending_hint->completed.store(true, std::memory_order_release);
-                const bool notified = outbound.pending_hint->waiter.notify(
-                    RpcCallResult(std::unexpected(
-                        RpcError(RpcErrorCode::CANCELLED, "RPC call cancelled"))));
-                if (!notified) {
-                    RPC_LOG_WARN("[channel] [cancel] [notify-duplicate]",
-                                 "request_id={}",
-                                 outbound.pending_hint->request_id);
-                }
-                m_outbound_backpressure.release(outbound.reserved_bytes);
-                continue;
-            }
-
             auto locked = co_await m_state_mutex.lock();
             if (!locked.has_value()) {
                 m_outbound_backpressure.release(outbound.reserved_bytes);

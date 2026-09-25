@@ -1,6 +1,6 @@
 /**
  * @file scheduler.cc
- * @brief 调度器基类 CPU 亲和性实现
+ * @brief 内置调度器类型分派及 CPU 亲和性实现
  * @author galay-kernel
  * @version 1.0.0
  *
@@ -10,6 +10,7 @@
  */
 
 #include "scheduler.hpp"
+#include "scheduler_dispatch.hpp"
 
 #include <cstddef>
 
@@ -45,6 +46,30 @@ SchedulerThreadScope::SchedulerThreadScope() noexcept
 SchedulerThreadScope::~SchedulerThreadScope()
 {
     g_is_scheduler_thread = m_previous;
+}
+
+bool scheduleReadyEntry(ReadyEntry& entry) noexcept
+{
+    if (!entry.isValid()) {
+        return false;
+    }
+
+    if (entry.isCppTask()) {
+        auto* scheduler = readyEntryScheduler(entry);
+        if (scheduler == nullptr) {
+            return false;
+        }
+        TaskRef task = readyEntryToTaskRef(entry);
+        TaskRef scheduled_task(task);
+        if (scheduler->schedule(std::move(scheduled_task))) {
+            return true;
+        }
+        entry = ReadyEntry(std::move(task));
+        return false;
+    }
+
+    auto* scheduler = readyEntryScheduler(entry);
+    return scheduler != nullptr && scheduleReadyEntryOnScheduler(scheduler, entry);
 }
 
 bool scheduleReadyEntryOnScheduler(Scheduler* scheduler, ReadyEntry& entry) noexcept

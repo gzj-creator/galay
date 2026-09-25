@@ -35,9 +35,8 @@ void runHttpServer() {
         "calculate",
         "执行基本的数学计算",
         calcSchema,
-        [](const JsonElement& args, std::expected<JsonString, McpError>& result) -> galay::kernel::Task<void> {
-            JsonObject obj;
-            if (!JsonHelper::getObject(args, obj)) {
+        [](const json::Json& args, std::expected<std::string, McpError>& result) -> galay::kernel::Task<void> {
+            if (!args.is_object()) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid arguments"
@@ -45,8 +44,8 @@ void runHttpServer() {
                 co_return;
             }
 
-            std::string op;
-            if (!JsonHelper::getString(obj, "operation", op)) {
+            auto op = args.at("operation").as_string();
+            if (!op) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Missing required parameters"
@@ -54,9 +53,9 @@ void runHttpServer() {
                 co_return;
             }
 
-            auto aVal = obj["a"];
-            auto bVal = obj["b"];
-            if (aVal.error() || bVal.error()) {
+            auto aVal = args.at("a");
+            auto bVal = args.at("b");
+            if (!aVal.valid() || !bVal.valid()) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Missing required parameters"
@@ -64,13 +63,9 @@ void runHttpServer() {
                 co_return;
             }
 
-            double a = 0.0;
-            double b = 0.0;
-            if (aVal.is_double()) {
-                a = aVal.get_double().value();
-            } else if (aVal.is_int64()) {
-                a = static_cast<double>(aVal.get_int64().value());
-            } else {
+            auto aNum = aVal.as_double();
+            auto bNum = bVal.as_double();
+            if (!aNum) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid parameter 'a'"
@@ -78,11 +73,7 @@ void runHttpServer() {
                 co_return;
             }
 
-            if (bVal.is_double()) {
-                b = bVal.get_double().value();
-            } else if (bVal.is_int64()) {
-                b = static_cast<double>(bVal.get_int64().value());
-            } else {
+            if (!bNum) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid parameter 'b'"
@@ -90,15 +81,19 @@ void runHttpServer() {
                 co_return;
             }
 
+            double a = *aNum;
+            double b = *bNum;
+            std::string operation(*op);
+
             double answer = 0.0;
 
-            if (op == "add") {
+            if (operation == "add") {
                 answer = a + b;
-            } else if (op == "subtract") {
+            } else if (operation == "subtract") {
                 answer = a - b;
-            } else if (op == "multiply") {
+            } else if (operation == "multiply") {
                 answer = a * b;
-            } else if (op == "divide") {
+            } else if (operation == "divide") {
                 if (b == 0) {
                     result = std::unexpected(McpError(
                         McpErrorCode::InvalidParams,
@@ -115,14 +110,23 @@ void runHttpServer() {
                 co_return;
             }
 
-            JsonWriter resWriter;
-            resWriter.startObject();
-            resWriter.key("result");
-            resWriter.number(answer);
-            resWriter.key("operation");
-            resWriter.string(op);
-            resWriter.endObject();
-            result = resWriter.takeString();
+            std::string resultJson;
+            auto resWriter = makeJsonWriter(resultJson);
+            // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+            (void)resWriter.start_object();
+            (void)resWriter.key("result");
+            (void)resWriter.number(answer);
+            (void)resWriter.key("operation");
+            (void)resWriter.string(operation);
+            (void)resWriter.end_object();
+            if (!resWriter.finish()) {
+                result = std::unexpected(McpError(
+                    McpErrorCode::InternalError,
+                    "Failed to encode result"
+                ));
+                co_return;
+            }
+            result = std::move(resultJson);
             co_return;
         }
     );
@@ -149,9 +153,8 @@ void runHttpServer() {
         "code_review",
         "生成代码审查提示",
         promptArgs,
-        [](const std::string& name, const JsonElement& args, std::expected<JsonString, McpError>& result) -> galay::kernel::Task<void> {
-            JsonObject obj;
-            if (!JsonHelper::getObject(args, obj)) {
+        [](const std::string& name, const json::Json& args, std::expected<std::string, McpError>& result) -> galay::kernel::Task<void> {
+            if (!args.is_object()) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid arguments"
@@ -159,8 +162,8 @@ void runHttpServer() {
                 co_return;
             }
 
-            std::string lang;
-            if (!JsonHelper::getString(obj, "language", lang)) {
+            auto lang = args.at("language").as_string();
+            if (!lang) {
                 result = std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Missing 'language' parameter"
@@ -168,21 +171,30 @@ void runHttpServer() {
                 co_return;
             }
 
-            JsonWriter resWriter;
-            resWriter.startObject();
-            resWriter.key("description");
-            resWriter.string("Code review prompt for " + lang);
-            resWriter.key("messages");
-            resWriter.startArray();
-            resWriter.startObject();
-            resWriter.key("role");
-            resWriter.string("user");
-            resWriter.key("content");
-            resWriter.string("Please review this " + lang + " code for best practices and potential issues.");
-            resWriter.endObject();
-            resWriter.endArray();
-            resWriter.endObject();
-            result = resWriter.takeString();
+            std::string resultJson;
+            auto resWriter = makeJsonWriter(resultJson);
+            // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+            (void)resWriter.start_object();
+            (void)resWriter.key("description");
+            (void)resWriter.string("Code review prompt for " + std::string(*lang));
+            (void)resWriter.key("messages");
+            (void)resWriter.start_array();
+            (void)resWriter.start_object();
+            (void)resWriter.key("role");
+            (void)resWriter.string("user");
+            (void)resWriter.key("content");
+            (void)resWriter.string("Please review this " + std::string(*lang) + " code for best practices and potential issues.");
+            (void)resWriter.end_object();
+            (void)resWriter.end_array();
+            (void)resWriter.end_object();
+            if (!resWriter.finish()) {
+                result = std::unexpected(McpError(
+                    McpErrorCode::InternalError,
+                    "Failed to encode result"
+                ));
+                co_return;
+            }
+            result = std::move(resultJson);
             co_return;
         }
     );
@@ -231,28 +243,34 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
 
     // 调用计算器工具
     std::cout << "\n=== Calling Calculator Tool ===" << std::endl;
-    JsonWriter calcArgsWriter;
-    calcArgsWriter.startObject();
-    calcArgsWriter.key("operation");
-    calcArgsWriter.string("multiply");
-    calcArgsWriter.key("a");
-    calcArgsWriter.number(static_cast<int64_t>(12));
-    calcArgsWriter.key("b");
-    calcArgsWriter.number(static_cast<int64_t>(8));
-    calcArgsWriter.endObject();
-    std::expected<JsonString, McpError> calcResult;
-    co_await client.callTool("calculate", calcArgsWriter.takeString(), calcResult);
+    std::string calcArgs;
+    auto calcArgsWriter = makeJsonWriter(calcArgs);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)calcArgsWriter.start_object();
+    (void)calcArgsWriter.key("operation");
+    (void)calcArgsWriter.string("multiply");
+    (void)calcArgsWriter.key("a");
+    (void)calcArgsWriter.number(static_cast<int64_t>(12));
+    (void)calcArgsWriter.key("b");
+    (void)calcArgsWriter.number(static_cast<int64_t>(8));
+    (void)calcArgsWriter.end_object();
+    if (!calcArgsWriter.finish()) {
+        std::cerr << "Failed to encode calculator arguments" << std::endl;
+        finishClientRun(1, exitCode, state);
+        co_return;
+    }
+    std::expected<std::string, McpError> calcResult;
+    co_await client.callTool("calculate", calcArgs, calcResult);
     if (calcResult) {
         auto docExp = JsonDocument::parse(calcResult.value());
         if (docExp) {
-            JsonObject obj;
-            if (JsonHelper::getObject(docExp.value().root(), obj)) {
-                auto resultVal = obj["result"];
-                if (!resultVal.error()) {
-                    if (resultVal.is_double()) {
-                        std::cout << "12 * 8 = " << resultVal.get_double().value() << std::endl;
-                    } else if (resultVal.is_int64()) {
-                        std::cout << "12 * 8 = " << resultVal.get_int64().value() << std::endl;
+            const json::Json& root = docExp.value().root();
+            if (root.is_object()) {
+                auto resultVal = root.at("result");
+                if (resultVal.valid()) {
+                    auto resultNum = resultVal.as_double();
+                    if (resultNum) {
+                        std::cout << "12 * 8 = " << *resultNum << std::endl;
                     } else {
                         std::cout << "Result: " << calcResult.value() << std::endl;
                     }
@@ -293,13 +311,20 @@ galay::kernel::Task<void> runClientTest(McpClient& client,
 
     // 获取提示
     std::cout << "\n=== Getting Code Review Prompt ===" << std::endl;
-    JsonWriter promptArgsWriter;
-    promptArgsWriter.startObject();
-    promptArgsWriter.key("language");
-    promptArgsWriter.string("C++");
-    promptArgsWriter.endObject();
-    std::expected<JsonString, McpError> promptResult;
-    co_await client.getPrompt("code_review", promptArgsWriter.takeString(), promptResult);
+    std::string promptArgs;
+    auto promptArgsWriter = makeJsonWriter(promptArgs);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)promptArgsWriter.start_object();
+    (void)promptArgsWriter.key("language");
+    (void)promptArgsWriter.string("C++");
+    (void)promptArgsWriter.end_object();
+    if (!promptArgsWriter.finish()) {
+        std::cerr << "Failed to encode prompt arguments" << std::endl;
+        finishClientRun(1, exitCode, state);
+        co_return;
+    }
+    std::expected<std::string, McpError> promptResult;
+    co_await client.getPrompt("code_review", promptArgs, promptResult);
     if (promptResult) {
         std::cout << "Prompt: " << promptResult.value() << std::endl;
     }

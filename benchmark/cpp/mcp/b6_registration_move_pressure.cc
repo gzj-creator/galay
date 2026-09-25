@@ -118,10 +118,10 @@ class StdioToolHandler final : public CopyTracked {
 public:
     using CopyTracked::CopyTracked;
 
-    std::expected<galay::mcp::JsonString, galay::mcp::McpError>
-    operator()(const galay::mcp::JsonElement&) const
+    std::expected<std::string, galay::mcp::McpError>
+    operator()(const json::Json&) const
     {
-        return galay::mcp::JsonString(R"({"ok":true})");
+        return std::string(R"({"ok":true})");
     }
 };
 
@@ -139,10 +139,10 @@ class StdioPromptGetter final : public CopyTracked {
 public:
     using CopyTracked::CopyTracked;
 
-    std::expected<galay::mcp::JsonString, galay::mcp::McpError>
-    operator()(const std::string&, const galay::mcp::JsonElement&) const
+    std::expected<std::string, galay::mcp::McpError>
+    operator()(const std::string&, const json::Json&) const
     {
-        return galay::mcp::JsonString(R"({"messages":[]})");
+        return std::string(R"({"messages":[]})");
     }
 };
 
@@ -151,10 +151,10 @@ public:
     using CopyTracked::CopyTracked;
 
     galay::kernel::Task<void>
-    operator()(const galay::mcp::JsonElement&,
-               std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result) const
+    operator()(const json::Json&,
+               std::expected<std::string, galay::mcp::McpError>& result) const
     {
-        result = galay::mcp::JsonString(R"({"ok":true})");
+        result = std::string(R"({"ok":true})");
         co_return;
     }
 };
@@ -178,10 +178,10 @@ public:
 
     galay::kernel::Task<void>
     operator()(const std::string&,
-               const galay::mcp::JsonElement&,
-               std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result) const
+               const json::Json&,
+               std::expected<std::string, galay::mcp::McpError>& result) const
     {
-        result = galay::mcp::JsonString(R"({"messages":[]})");
+        result = std::string(R"({"messages":[]})");
         co_return;
     }
 };

@@ -4,7 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
-#include <galay/cpp/galay-kernel/core/scheduler.hpp>
+#include "test/cpp/common/scheduler_test_adapter.h"
 #include <galay/cpp/galay-kernel/core/waker.h>
 
 #include <atomic>
@@ -31,23 +31,23 @@ bool waitUntil(auto&& predicate,
     return predicate();
 }
 
-class NullScheduler final : public Scheduler {
+class NullScheduler final : public detail::SchedulerTestAdapter<NullScheduler> {
 public:
-    std::expected<void, IOError> start() override { return {}; }
-    void stop() override {}
-    bool schedule(TaskRef) noexcept override { return false; }
-    bool scheduleResume(TaskRef) noexcept override { return false; }
-    bool scheduleDeferred(TaskRef) noexcept override { return false; }
-    bool scheduleImmediately(TaskRef) noexcept override { return false; }
-    bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kParallelScheduler; }
+    std::expected<void, IOError> start() { return {}; }
+    void stop() {}
+    bool schedule(TaskRef) noexcept { return false; }
+    bool scheduleResume(TaskRef) noexcept { return false; }
+    bool scheduleDeferred(TaskRef) noexcept { return false; }
+    bool scheduleImmediately(TaskRef) noexcept { return false; }
+    bool addTimer(Timer::ptr) { return false; }
+    SchedulerType type() { return kParallelScheduler; }
 };
 
-class ResumeOnlyScheduler final : public Scheduler {
+class ResumeOnlyScheduler final : public detail::SchedulerTestAdapter<ResumeOnlyScheduler> {
 public:
-    ~ResumeOnlyScheduler() override { stop(); }
+    ~ResumeOnlyScheduler() { stop(); }
 
-    std::expected<void, IOError> start() override {
+    std::expected<void, IOError> start() {
         bool expected = false;
         if (!m_running.compare_exchange_strong(
                 expected, true, std::memory_order_acq_rel)) {
@@ -68,7 +68,7 @@ public:
         return {};
     }
 
-    void stop() override {
+    void stop() {
         if (!m_running.exchange(false, std::memory_order_acq_rel)) {
             return;
         }
@@ -77,12 +77,12 @@ public:
         }
     }
 
-    bool schedule(TaskRef) noexcept override {
+    bool schedule(TaskRef) noexcept {
         m_regularScheduleCalls.fetch_add(1, std::memory_order_relaxed);
         return false;
     }
 
-    bool scheduleResume(TaskRef task) noexcept override {
+    bool scheduleResume(TaskRef task) noexcept {
         if (!bindTask(task)) {
             return false;
         }
@@ -90,9 +90,9 @@ public:
         return m_resumeQueue.push(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef) noexcept override { return false; }
+    bool scheduleDeferred(TaskRef) noexcept { return false; }
 
-    bool scheduleImmediately(TaskRef task) noexcept override {
+    bool scheduleImmediately(TaskRef task) noexcept {
         if (!bindTask(task)) {
             return false;
         }
@@ -100,8 +100,8 @@ public:
         return true;
     }
 
-    bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kParallelScheduler; }
+    bool addTimer(Timer::ptr) { return false; }
+    SchedulerType type() { return kParallelScheduler; }
 
     int regularScheduleCalls() const noexcept {
         return m_regularScheduleCalls.load(std::memory_order_acquire);

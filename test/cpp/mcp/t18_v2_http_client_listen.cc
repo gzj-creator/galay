@@ -78,8 +78,10 @@ galay::kernel::Task<void> runClientChecks(
     auto listenTask = runListener(client, std::move(filter), listenResult,
                                   callbacks, callbackOwned, listenerDone);
 
-    auto listenHandle = runtime->spawnIO(std::move(listenTask));
-    if (!listenHandle) co_return;
+    if (!galay::kernel::scheduleTask(client->owner(), std::move(listenTask))) {
+        taskDone->store(true, std::memory_order_release);
+        co_return;
+    }
 
     const auto firstEventDeadline = std::chrono::steady_clock::now() + 3s;
     while (callbacks->load(std::memory_order_acquire) == 0 &&
@@ -108,6 +110,13 @@ galay::kernel::Task<void> runClientChecks(
            std::chrono::steady_clock::now() < callbackDeadline) {
         co_await galay::kernel::sleep(2ms);
     }
+    auto closing = client->close();
+    if (!closing) {
+        discoverOk->store(false, std::memory_order_release);
+    } else {
+        const auto closed = co_await std::move(*closing);
+        if (!closed || !*closed) discoverOk->store(false, std::memory_order_release);
+    }
     taskDone->store(true, std::memory_order_release);
     co_return;
 }
@@ -122,20 +131,20 @@ int main()
         return 1;
     }
 
-    galay::mcp::v2::McpHttpServer server("127.0.0.1", port, 1, 1);
+    galay::mcp::v2::McpHttpServer server("127.0.0.1", port, 2, 1);
     server.addTool("echo", "Echo", "{}",
-                   [](const galay::mcp::JsonElement&,
-                      std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result)
-                       -> galay::kernel::Task<void> {
-                       result = "ok";
-                       co_return;
-                   });
+                   [](const json::Json&,
+                      std::expected<std::string, galay::mcp::McpError>& result)
+                        -> galay::kernel::Task<void> {
+                        result = "ok";
+                        co_return;
+                    });
     std::thread serverThread([&server] { server.start(); });
     std::this_thread::sleep_for(80ms);
 
     galay::kernel::Runtime runtime =
-        galay::kernel::RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
-    runtime.start();
+        galay::kernel::RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+    if (!runtime.start()) { server.stop(); serverThread.join(); return 1; }
     galay::mcp::v2::McpHttpClient client(
         runtime, "http://127.0.0.1:" + std::to_string(port) + "/mcp");
 
@@ -161,10 +170,13 @@ int main()
     const auto deadline = std::chrono::steady_clock::now() + 7s;
     while (!taskDone.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < deadline) {
-        server.notifyToolsListChanged();
+        const auto sent = server.notifyToolsListChanged();
+        if (!sent) break;
         std::this_thread::sleep_for(10ms);
     }
-    const bool ok = listenResult.has_value() &&
+    const bool ok = taskDone.load(std::memory_order_acquire) &&
+                    listenerDone.load(std::memory_order_acquire) &&
+                    listenResult.has_value() &&
                     listenResult->toolsListChanged &&
                     !listenResult->resourcesListChanged &&
                     callbacks.load() == 2 &&
@@ -183,11 +195,11 @@ int main()
         }
         std::cerr << '\n';
     }
-    (void)handle->join();
-    (void)runtime.blockOnIO(client.close());
-    runtime.stop();
     server.stop();
     serverThread.join();
+    const auto joined = handle->join();
+    runtime.stop();
+    if (!joined) return 1;
 
     if (!ok) {
         std::cerr << "v2 client listen did not acknowledge, callback, and cancel cleanly\n";

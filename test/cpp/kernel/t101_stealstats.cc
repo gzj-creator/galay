@@ -41,13 +41,12 @@ TaskRef makeStealableTask(IOScheduler* owner) {
 bool runStatsScenario() {
     constexpr int kTaskCount = 16;
 
-    Runtime runtime;
-    auto source = std::make_unique<IOSchedulerType>();
-    auto sibling = std::make_unique<IOSchedulerType>();
-    auto* source_ptr = source.get();
-    auto* sibling_ptr = sibling.get();
-    runtime.addIOScheduler(std::move(source));
-    runtime.addIOScheduler(std::move(sibling));
+    auto runtime = RuntimeBuilder().ioSchedulerCount(2).parallelSchedulerCount(0).build();
+    const auto started = runtime.start();
+    if (!started) { return false; }
+    runtime.stop();
+    auto* source_ptr = runtime.getIOScheduler(0);
+    auto* sibling_ptr = runtime.getIOScheduler(1);
 
     std::vector<IOScheduler*> siblings{source_ptr, sibling_ptr};
     std::span<IOScheduler* const> sibling_span{siblings.data(), siblings.size()};

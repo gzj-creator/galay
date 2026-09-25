@@ -10,7 +10,7 @@
 
 namespace galay::mcp::detail {
 
-const JsonString& emptyObjectString();
+const std::string& emptyObjectString();
 
 template <typename T, typename ParseFn>
 std::expected<std::vector<T>, McpError> parseListField(std::string_view body,
@@ -21,18 +21,19 @@ std::expected<std::vector<T>, McpError> parseListField(std::string_view body,
         return std::unexpected(McpError::parseError(docExp.error().details()));
     }
 
-    JsonObject obj;
-    if (!JsonHelper::getObject(docExp.value().root(), obj)) {
+    json::Json obj = docExp.value().root();
+    if (!obj.is_object()) {
         return std::unexpected(McpError::parseError("Expected JSON object"));
     }
 
     std::vector<T> values;
-    JsonArray arr;
-    if (!JsonHelper::getArray(obj, fieldName, arr)) {
+    json::Json arr = obj.at(fieldName);
+    if (!arr.is_array()) {
         return values;
     }
 
-    for (auto item : arr) {
+    for (size_t i = 0; i < arr.size(); ++i) {
+        const json::Json item = arr.at(i);
         auto parsed = parseFn(item);
         if (!parsed) {
             return std::unexpected(McpError::parseError(parsed.error().message()));
@@ -44,7 +45,7 @@ std::expected<std::vector<T>, McpError> parseListField(std::string_view body,
 }
 
 std::expected<InitializeResult, McpError> parseInitializeResult(std::string_view body);
-std::expected<JsonString, McpError> parseToolCallResult(std::string_view body);
+std::expected<std::string, McpError> parseToolCallResult(std::string_view body);
 std::expected<std::string, McpError> parseFirstTextContent(std::string_view body,
                                                            const char* fieldName);
 

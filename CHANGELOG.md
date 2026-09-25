@@ -14,15 +14,40 @@
 ### Added
 
 - **接入 serde 结构体序列化模块**：新增 `galay-serde` 构建入口、JSON/TOML 结构体往返测试、示例和编码解码基准，支持 CMake、Bazel 与 mcpp。
+- **新增调度器静态分派测试与基准**：新增 `t183_scheduler_static_dispatch`（校验调度器非多态、不可经基类删除、Runtime 不再支持自定义注入）、`t184_io_controller_self_contained`（校验 IOController 槽位绑定只依赖自身头文件）和 `b38_scheduler_dispatch` 基准。
+- **测试调度器适配库**：新增 `test/cpp/common/scheduler_test_adapter.h` 与独立的 `galay-kernel-test-scheduler` 静态库，让确定性 timer/waker 竞态测试在 `GALAY_KERNEL_TEST_SCHEDULER` 下通过 hook 表控制恢复窗口，生产构建不携带该字段。
+- **新增 RPC owner 边界测试与基准**：覆盖取消注册的移动、注销、回调重入和指定 scheduler 取消投递；新增 endpoint 缓存更新/筛选与取消状态压力基准，并更新取消通知基准。
+- **新增 MCP v2 owner 边界与生命周期测试**：覆盖错误 owner、连接失败传播、无新增控制协程的命令提交、URI 所有权、有界订阅队列及多 worker/并发通知/重复启动与停止；广播基准分别核对命令接纳数和实际回调数，使用 FIFO 标记完成预热。
 
 ### Changed
 
 - **统一 serde submodule 依赖**：CMake、Bzlmod 和 mcpp 都从 `thirdparty/serde` Git submodule 读取源码，并移除 Galay 自带的重复 JSON 后端源码。
 - **更新 MCP/etcd JSON 后端接线**：统一链接 serde 提供的 JSON target，并适配无异常结果 API。
+- **迁移到 serde 0.3.0 JSON API**：更新 serde submodule，MCP v1/v2 与 etcd 统一使用 `json::Json`、显式结果读取和序列化接口，移除 MCP 自有 JSON 辅助封装及旧类型别名，同步调用方、测试、示例和基准。
+- **调度器改为 CRTP 静态分派**：`Scheduler` 收敛为非多态借用基类，`start`/`stop`/`schedule`/`scheduleResume` 等入口按 `m_type` 转发到 `SchedulerBase<Derived, Type>` 的静态 `*Impl`，去除虚表与 RTTI；`IOScheduler` 改为按构建后端选出的类型别名（epoll / kqueue / io_uring）。
+- **抽出三个 IO 后端共享实现**：新增 `IOSchedulerBase<Derived, Reactor>` 统一承载线程生命周期、就绪队列、唤醒协调与 IO 注册转发，`EpollScheduler`/`KqueueScheduler`/`IOUringScheduler` 仅保留构造与 poll/flush 适配；新增 `scheduler_dispatch.hpp` 承接调度器类型分派薄层。
+- **拆出 `IOReadyQueue` 就绪队列**：将原 `IOSchedulerWorkerState` 的就绪队列职责（本地 LIFO/ring、跨线程注入、恢复接纳、工作窃取与 steal 统计）独立为 `io_ready_queue.hpp/.cc`，`SchedulerCore` 只依赖该队列类型。
+- **`TaskRef` 实现内联到头文件**：引用计数、borrowed view 与所有权转移逻辑移入 `task.h`，避免跨编译单元分派路径依赖 LTO。
+- **`IOController` 自包含化**：`getAwaitable<T>` 显式特化与 `fillAwaitable` 移入 `io_controller.hpp`，不再依赖 `io_scheduler.hpp` 中的槽位实现。
+- **`Runtime` 移除自定义调度器注入**：删除 `addIOScheduler`/`addParallelScheduler`，`Runtime` 仅按 `RuntimeConfig` 创建内置调度器；相关基准与测试改用 `RuntimeBuilder` 配置调度器数量，并同步更新 mcpp 目标与文档。
+- **RPC 缓存与取消域改为单 owner 所有权**：移除原子共享指针、共享取消状态和缓存互斥锁，缓存原地更新并返回独立值快照；取消 source 内嵌状态、token 借用、RAII 侵入式注册节点由调用协程帧持有，注册/注销/取消必须在同一 owner 串行执行，reader/writer 只处理 pending 完成通知。
+- **MCP v2 HTTP 状态改为明确 owner 管理**：移除工具定义、HTTP server 和订阅快照的原子共享指针；server 的外部 `start()` 线程通过现有 MPSC 通道接收值命令并独占订阅链表，通知入口保持普通函数，成功仅表示接纳入队；client 直接持有 transport 与工具定义并绑定指定 IO scheduler，拒绝跨 owner 访问和重叠请求，不引入 `OwnerTask` 或额外控制协程。
+
+### Fixed
+
+- **修复 serde 安装与模块消费接线**：保留 serde 子目录的默认安装规则，统一由 `galay::serde` 传递 C++23 模块依赖，并更新外部 consumer、模块 smoke 和 tracing 配置测试。
+- **修复 MCP v2 订阅回收与关闭边界**：订阅节点使用独立对齐分配并交由 owner 回收，避免协程帧无法满足有界通道对齐要求；关闭时先停止接纳、排空命令并关闭事件队列，等待 listener 退出后再回收节点和停止 HTTP runtime，支持并发停止调用。
+- **保留 MCP v2 连接失败原因**：请求和监听路径检查 transport Task 的内外两层结果，传播连接错误；请求失败后释放 owner 内的请求占用状态。
+
+### Chore
+
+- 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。
 
 ### Docs
 
 - 将 serde 使用说明移动到 `docs/cpp/modules/serde/00-快速开始.md`，同步更新相关模块的依赖和构建说明。
+- 更新 `docs/cpp/modules/kernel/10-调度器.md` 与 `02-API参考.md`，说明 CRTP 静态分派、`IOSchedulerBase` 共享实现、`IOReadyQueue` 职责边界及 Runtime 内置调度器所有权语义。
+- 更新 RPC 架构与 MCP v2 架构/API 文档，明确 owner 投递、借用生命周期、通知接纳语义和关闭顺序。
 
 ## [v5.1.0] - 2026-09-08
 

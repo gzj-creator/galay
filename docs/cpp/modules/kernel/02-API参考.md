@@ -339,8 +339,6 @@
 - `template <typename T> std::expected<JoinHandle<T>, RuntimeError> spawnCpu(Task<T> task)`
 - `template <typename F> auto spawnBlocking(F&& func) -> JoinHandle<R>`
 - `RuntimeHandle handle()`
-- `bool addIOScheduler(std::unique_ptr<IOScheduler> scheduler)`
-- `bool addParallelScheduler(std::unique_ptr<ParallelScheduler> scheduler)`
 - `void start()`
 - `void stop()`
 - `bool isRunning() const`
@@ -374,13 +372,14 @@
 - 高层任务入口按执行语义区分为 `blockOnIO(...)`、`blockOnCpu(...)`、`spawnIO(...)`、`spawnCpu(...)` 与 `spawnBlocking(...)`
 - `JoinHandle<T>` 的公开结果路径只有 `wait()` / `join()`；当前没有 `result()` 一类兼容接口
 - `RuntimeHandle::current()` 在 runtime 上下文外会抛异常；更稳妥的探测入口是 `tryCurrent()`
-- `Runtime::start()` 只有在 IO / Parallel 两类调度器都还为空时才会自动创建默认调度器；如果你手工只添加了其中一类，另一类不会被自动补齐
+- `Runtime::start()` 按 `RuntimeConfig` 创建内置调度器；通过 `ioSchedulerCount(...)` / `parallelSchedulerCount(...)` 配置数量，不再支持自定义调度器注入
+- Scheduler 实现细节：`SchedulerBase<Derived, Type>` 以 CRTP 静态分派；三个 IO 后端复用 `IOSchedulerBase<Derived, Reactor>`；`IOReadyQueue` 管理本地队列、注入队列和 owner-only 恢复接纳。调度器在 Runtime 生命周期内保持稳定地址，Task/Waker 中的基类指针为借用指针，不可用于删除
 - `Runtime::start()` 会先启动全局 `TimerScheduler`，再启动 IO / 计算调度器
 - `Runtime::stop()` 会按相反顺序停止并回收
 - 文档与示例应使用 `getIOScheduler(size_t)`、`getParallelScheduler(size_t)` 或 `getNext*()`；当前没有 `getIOSchedulers()` / `getParallelSchedulers()`
 - `GALAY_RUNTIME_SCHEDULER_COUNT_AUTO` 表示自动数量；默认规则是 `io=2*CPU`、`parallel=CPU`；`0` 表示禁用对应默认调度器
 - 默认 IO 后端由平台和宏决定：macOS / FreeBSD 为 `KqueueScheduler`，Linux + `USE_IOURING` 为 `IOUringScheduler`，否则为 `EpollScheduler`
-- `addIOScheduler(...)` / `addParallelScheduler(...)` 只允许在运行前调用；运行中会返回 `false`
+- 调度器属于内部实现：`SchedulerBase<Derived, Type>` 用 CRTP 提供具体类型调用；Task/Waker 的借用 `Scheduler*` 根据类型选择 `SchedulerBase` 上接收 `Derived*` 的静态分派函数，不含虚表或函数指针表
 - `getNextIOScheduler()` / `getNextParallelScheduler()` 采用 round-robin 轮询；对应容器为空时返回 `nullptr`
 - `RuntimeBuilder::sequentialAffinity(io_count, parallel_count)` 会从 CPU 0 开始顺序绑定，超出 CPU 数量后回绕
 - `RuntimeBuilder::customAffinity(...)` 要求两个向量长度与当前配置的调度器数量严格一致，否则返回 `false` 且不修改配置；因此通常要先调用 `ioSchedulerCount(...)` / `parallelSchedulerCount(...)`
@@ -825,7 +824,7 @@ builder iovec 公开面：
 
 所有权与生命周期：
 
-- `Runtime::addIOScheduler(std::unique_ptr<IOScheduler>)` / `addParallelScheduler(std::unique_ptr<ParallelScheduler>)` 会转移调度器所有权给 `Runtime`
+- `Runtime` 直接持有内置具体调度器的所有权；`get*Scheduler()` 返回的指针仅供借用，不能超出 Runtime 生命周期，也不能通过 `Scheduler*` 删除对象
 - `Bytes` 的构造函数族是 owning 深拷贝；`Bytes::fromString(...)` / `fromCString(...)` 是 non-owning 视图，底层存储必须由调用方保活
 - `Buffer` 持有自己的动态缓冲；`RingBuffer` 也是 owning 固定容量缓冲，但不会自动扩容
 - `sleep(...)` 依赖全局 `TimerScheduler`；如果运行时还没启动计时器，`sleep` 对应的底层定时器注册不会成功

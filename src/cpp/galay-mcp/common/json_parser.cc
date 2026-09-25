@@ -4,9 +4,9 @@ namespace galay::mcp {
 
 namespace {
 
-bool hasJsonRpcVersion(const JsonObject& obj) {
-    std::string version;
-    return JsonHelper::getString(obj, "jsonrpc", version) && version == JSONRPC_VERSION;
+bool hasJsonRpcVersion(const json::Json& obj) {
+    auto version = obj.at("jsonrpc").as_string();
+    return version.has_value() && *version == JSONRPC_VERSION;
 }
 
 } // namespace
@@ -20,8 +20,8 @@ std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_vi
     ParsedJsonRpcRequest parsed;
     parsed.document = std::move(docExp.value());
 
-    JsonObject obj;
-    if (!JsonHelper::getObject(parsed.document.root(), obj)) {
+    json::Json obj = parsed.document.root();
+    if (!obj.is_object()) {
         return std::unexpected(McpError::invalidRequest("Expected JSON object"));
     }
     if (!hasJsonRpcVersion(obj)) {
@@ -29,30 +29,31 @@ std::expected<ParsedJsonRpcRequest, McpError> parseJsonRpcRequest(std::string_vi
     }
 
     auto methodVal = obj["method"];
-    if (methodVal.error()) {
+    if (!methodVal.valid()) {
         return std::unexpected(McpError::invalidRequest("Missing method"));
     }
-    auto methodStr = methodVal.value_unsafe().get_string();
-    if (methodStr.error()) {
+    auto methodStr = methodVal.as_string();
+    if (!methodStr) {
         return std::unexpected(McpError::invalidRequest("Invalid method type"));
     }
-    parsed.request.method = std::string(methodStr.value_unsafe());
+    parsed.request.method = std::string(methodStr.value());
 
     auto idVal = obj["id"];
-    if (!idVal.error()) {
+    if (idVal.valid()) {
         if (idVal.is_null()) {
             return std::unexpected(McpError::invalidRequest("Invalid id type"));
         }
-        if (idVal.is_int64()) {
-            parsed.request.id = idVal.get_int64().value_unsafe();
+        auto idNum = idVal.as_int64();
+        if (idNum) {
+            parsed.request.id = idNum.value();
         } else {
             return std::unexpected(McpError::invalidRequest("Invalid id type"));
         }
     }
 
     auto paramsVal = obj["params"];
-    if (!paramsVal.error() && !paramsVal.is_null()) {
-        parsed.request.params = paramsVal.value_unsafe();
+    if (paramsVal.valid() && !paramsVal.is_null()) {
+        parsed.request.params = paramsVal;
         parsed.request.hasParams = true;
     }
 
@@ -68,8 +69,8 @@ std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_
     ParsedJsonRpcResponse parsed;
     parsed.document = std::move(docExp.value());
 
-    JsonObject obj;
-    if (!JsonHelper::getObject(parsed.document.root(), obj)) {
+    json::Json obj = parsed.document.root();
+    if (!obj.is_object()) {
         return std::unexpected(McpError::invalidResponse("Expected JSON object"));
     }
     if (!hasJsonRpcVersion(obj)) {
@@ -77,24 +78,25 @@ std::expected<ParsedJsonRpcResponse, McpError> parseJsonRpcResponse(std::string_
     }
 
     auto idVal = obj["id"];
-    if (idVal.error() || !idVal.is_int64()) {
+    auto idNum = idVal.as_int64();
+    if (!idNum) {
         return std::unexpected(McpError::invalidResponse("Missing or invalid id"));
     }
-    parsed.response.id = idVal.get_int64().value_unsafe();
+    parsed.response.id = idNum.value();
 
     auto resultVal = obj["result"];
-    if (!resultVal.error()) {
-        parsed.response.result = resultVal.value_unsafe();
+    if (resultVal.valid()) {
+        parsed.response.result = resultVal;
         parsed.response.hasResult = true;
     }
 
     auto errorVal = obj["error"];
-    if (!errorVal.error()) {
-        auto errorExp = JsonRpcError::fromJson(errorVal.value_unsafe());
+    if (errorVal.valid()) {
+        auto errorExp = JsonRpcError::fromJson(errorVal);
         if (!errorExp) {
             return std::unexpected(McpError::invalidResponse("Malformed error object"));
         }
-        parsed.response.error = errorVal.value_unsafe();
+        parsed.response.error = errorVal;
         parsed.response.hasError = true;
     }
 

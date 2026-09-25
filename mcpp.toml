@@ -66,8 +66,60 @@ main = "test/cpp/serde/t10_import_smoke.cc"
 required_features = ["serde"]
 cxxflags = ["-UNDEBUG"]
 
+[targets.benchmark_kernel_scheduler_dispatch]
+kind = "bin"
+main = "benchmark/cpp/kernel/b38_scheduler_dispatch.cc"
+
+[targets.benchmark_kernel_scheduler_resume_pressure]
+kind = "bin"
+main = "benchmark/cpp/kernel/b28_scheduler_resume_pressure.cc"
+
+[targets.test_kernel_scheduler_static_dispatch]
+kind = "bin"
+main = "test/cpp/kernel/t183_scheduler_static_dispatch.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_io_controller_self_contained]
+kind = "bin"
+main = "test/cpp/kernel/t184_io_controller_self_contained.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_taskresult_storage]
+kind = "bin"
+main = "test/cpp/kernel/t122_taskresult_storage.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_runtime_executor_split]
+kind = "bin"
+main = "test/cpp/kernel/t178_runtime_executor_split.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_coroutine_frame_allocator]
+kind = "bin"
+main = "test/cpp/kernel/t180_coroutine_frame_allocator.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_parallel_shutdown_races]
+kind = "bin"
+main = "test/cpp/kernel/t182_parallel_shutdown_races.cc"
+cxxflags = ["-UNDEBUG"]
+
 [dependencies]
 serde = { path = "thirdparty/serde" }
+
+# Instrument shared implementation objects as well as test entrypoints.
+# These profiles never change the release benchmark configuration.
+[profile.asan]
+opt = 1
+debug = true
+cxxflags = ["-fsanitize=address,undefined", "-fno-omit-frame-pointer"]
+ldflags = ["-fsanitize=address,undefined"]
+
+[profile.tsan]
+opt = 1
+debug = true
+cxxflags = ["-fsanitize=thread", "-fno-omit-frame-pointer"]
+ldflags = ["-fsanitize=thread"]
 
 # Keep the platform default aligned with CMake: Linux uses epoll and macOS
 # uses kqueue.  These are package build inputs; consumers selecting an

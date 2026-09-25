@@ -32,43 +32,23 @@ bool contains(const std::string& haystack, const std::string& needle) {
 
 int main() {
     const auto root = projectRoot();
-    const auto ioscheduler = root / "galay-kernel" / "core" / "io_scheduler.hpp";
-    const auto kqueue_scheduler = root / "galay-kernel" / "core" / "kqueue_scheduler.cc";
-    const auto epoll_scheduler = root / "galay-kernel" / "core" / "epoll_scheduler.cc";
-    const auto io_uring_scheduler = root / "galay-kernel" / "core" / "uring_scheduler.cc";
+    const auto ioscheduler = root / "galay-kernel" / "core" / "io_ready_queue.cc";
+    const auto scheduler_base = root / "galay-kernel" / "core" / "io_scheduler_base.hpp";
 
     std::vector<std::string> failures;
 
     const auto ioscheduler_src = readAll(ioscheduler);
     if (ioscheduler_src.empty()) {
-        failures.push_back(ioscheduler.string() + ": failed to read io_scheduler.hpp");
+        failures.push_back(ioscheduler.string() + ": failed to read io_ready_queue.cc");
     } else if (!contains(ioscheduler_src, "!stealing_enabled")) {
         failures.push_back(ioscheduler.string() +
                            ": trySteal() must guard on worker stealing_enabled");
     }
 
-    const auto io_uring_src = readAll(io_uring_scheduler);
-    if (io_uring_src.empty()) {
-        failures.push_back(io_uring_scheduler.string() + ": failed to read uring_scheduler.cc");
-    } else if (!contains(io_uring_src, "m_worker.setStealingEnabled(false);")) {
-        failures.push_back(io_uring_scheduler.string() +
-                           ": io_uring scheduler must disable sibling work-stealing");
-    }
-
-    const auto kqueue_src = readAll(kqueue_scheduler);
-    if (kqueue_src.empty()) {
-        failures.push_back(kqueue_scheduler.string() + ": failed to read kqueue_scheduler.cc");
-    } else if (!contains(kqueue_src, "m_worker.setStealingEnabled(false);")) {
-        failures.push_back(kqueue_scheduler.string() +
-                           ": kqueue scheduler must disable sibling work-stealing");
-    }
-
-    const auto epoll_src = readAll(epoll_scheduler);
-    if (epoll_src.empty()) {
-        failures.push_back(epoll_scheduler.string() + ": failed to read epoll_scheduler.cc");
-    } else if (!contains(epoll_src, "m_worker.setStealingEnabled(false);")) {
-        failures.push_back(epoll_scheduler.string() +
-                           ": epoll scheduler must disable sibling work-stealing");
+    const auto scheduler_src = readAll(scheduler_base);
+    if (!contains(scheduler_src, "m_worker.setStealingEnabled(false);")) {
+        failures.push_back(scheduler_base.string() +
+                           ": shared IO scheduler must disable sibling work-stealing");
     }
 
     if (!failures.empty()) {

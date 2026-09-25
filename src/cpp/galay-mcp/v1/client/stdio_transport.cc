@@ -59,8 +59,8 @@ std::expected<void, McpError> StdioClientTransport::initialize(const std::string
     return {};
 }
 
-std::expected<JsonString, McpError> StdioClientTransport::callTool(const std::string& toolName,
-                                                                  const JsonString& arguments) {
+std::expected<std::string, McpError> StdioClientTransport::callTool(const std::string& toolName,
+                                                                  const std::string& arguments) {
     if (!m_initialized) {
         return std::unexpected(McpError::notInitialized());
     }
@@ -96,7 +96,7 @@ std::expected<std::vector<Tool>, McpError> StdioClientTransport::listTools() {
     return parseListField<Tool>(
         result.value(),
         "tools",
-        [](const JsonElement& item) { return Tool::fromJson(item); });
+        [](const json::Json& item) { return Tool::fromJson(item); });
 }
 
 std::expected<std::vector<Resource>, McpError> StdioClientTransport::listResources() {
@@ -115,7 +115,7 @@ std::expected<std::vector<Resource>, McpError> StdioClientTransport::listResourc
     return parseListField<Resource>(
         result.value(),
         "resources",
-        [](const JsonElement& item) { return Resource::fromJson(item); });
+        [](const json::Json& item) { return Resource::fromJson(item); });
 }
 
 std::expected<std::string, McpError> StdioClientTransport::readResource(const std::string& uri) {
@@ -126,13 +126,18 @@ std::expected<std::string, McpError> StdioClientTransport::readResource(const st
         return std::unexpected(streamCheck.error());
     }
 
-    JsonWriter paramsWriter;
-    paramsWriter.startObject();
-    paramsWriter.key("uri");
-    paramsWriter.string(uri);
-    paramsWriter.endObject();
+    std::string params;
+    auto paramsWriter = makeJsonWriter(params);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)paramsWriter.start_object();
+    (void)paramsWriter.key("uri");
+    (void)paramsWriter.string(uri);
+    (void)paramsWriter.end_object();
+    if (!paramsWriter.finish()) {
+        return std::unexpected(McpError::invalidMessage("failed to encode JSON: " + paramsWriter.finish().error()));
+    }
 
-    auto result = sendRequest(Methods::RESOURCES_READ, paramsWriter.takeString());
+    auto result = sendRequest(Methods::RESOURCES_READ, std::move(params));
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -156,11 +161,11 @@ std::expected<std::vector<Prompt>, McpError> StdioClientTransport::listPrompts()
     return parseListField<Prompt>(
         result.value(),
         "prompts",
-        [](const JsonElement& item) { return Prompt::fromJson(item); });
+        [](const json::Json& item) { return Prompt::fromJson(item); });
 }
 
-std::expected<JsonString, McpError> StdioClientTransport::getPrompt(const std::string& name,
-                                                                    const JsonString& arguments) {
+std::expected<std::string, McpError> StdioClientTransport::getPrompt(const std::string& name,
+                                                                    const std::string& arguments) {
     if (!m_initialized) {
         return std::unexpected(McpError::notInitialized());
     }
@@ -168,17 +173,22 @@ std::expected<JsonString, McpError> StdioClientTransport::getPrompt(const std::s
         return std::unexpected(streamCheck.error());
     }
 
-    JsonWriter paramsWriter;
-    paramsWriter.startObject();
-    paramsWriter.key("name");
-    paramsWriter.string(name);
+    std::string params;
+    auto paramsWriter = makeJsonWriter(params);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)paramsWriter.start_object();
+    (void)paramsWriter.key("name");
+    (void)paramsWriter.string(name);
     if (!arguments.empty()) {
-        paramsWriter.key("arguments");
-        paramsWriter.raw(arguments);
+        (void)paramsWriter.key("arguments");
+        (void)paramsWriter.raw(arguments);
     }
-    paramsWriter.endObject();
+    (void)paramsWriter.end_object();
+    if (!paramsWriter.finish()) {
+        return std::unexpected(McpError::invalidMessage("failed to encode JSON: " + paramsWriter.finish().error()));
+    }
 
-    auto result = sendRequest(Methods::PROMPTS_GET, paramsWriter.takeString());
+    auto result = sendRequest(Methods::PROMPTS_GET, std::move(params));
     if (!result) {
         return std::unexpected(result.error());
     }
@@ -223,8 +233,8 @@ const ServerCapabilities& StdioClientTransport::getServerCapabilities() const {
     return m_serverCapabilities;
 }
 
-std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::string_view method,
-                                                                      const std::optional<JsonString>& params) {
+std::expected<std::string, McpError> StdioClientTransport::sendRequest(std::string_view method,
+                                                                      const std::optional<std::string>& params) {
     if (auto streamCheck = requireStreams(); !streamCheck) {
         return std::unexpected(streamCheck.error());
     }
@@ -263,28 +273,29 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
             return std::unexpected(McpError::parseError(docExp.error().details()));
         }
 
-        JsonObject obj;
-        if (!JsonHelper::getObject(docExp.value().root(), obj)) {
+        json::Json obj = docExp.value().root();
+        if (!obj.is_object()) {
             MCP_LOG_WARN("[stdio_client]", "invalid response object method={} id={}", method, requestId);
             return std::unexpected(McpError::invalidResponse("Invalid response object"));
         }
 
         auto idVal = obj["id"];
-        if (idVal.error() || idVal.is_null()) {
+        if (!idVal.valid() || idVal.is_null()) {
             continue;
         }
-        if (!idVal.is_int64()) {
+        auto responseIdVal = idVal.as_int64();
+        if (!responseIdVal) {
             MCP_LOG_WARN("[stdio_client]", "invalid response id method={} id={}", method, requestId);
             return std::unexpected(McpError::invalidResponse("Invalid response id"));
         }
-        const int64_t responseId = idVal.get_int64().value_unsafe();
+        const int64_t responseId = responseIdVal.value();
         if (responseId != requestId) {
             continue;
         }
 
         auto errorVal = obj["error"];
-        if (!errorVal.error() && !errorVal.is_null()) {
-            auto errExp = JsonRpcError::fromJson(errorVal.value_unsafe());
+        if (errorVal.valid() && !errorVal.is_null()) {
+            auto errExp = JsonRpcError::fromJson(errorVal);
             if (!errExp) {
                 MCP_LOG_WARN("[stdio_client]", "json-rpc error parse failed method={} id={} error={}",
                              method,
@@ -306,9 +317,13 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
         }
 
         auto resultVal = obj["result"];
-        if (!resultVal.error() && !resultVal.is_null()) {
+        if (resultVal.valid() && !resultVal.is_null()) {
             std::string raw;
-            if (!JsonHelper::getRawJson(resultVal.value_unsafe(), raw)) {
+            auto serialized = json::stream::serialize(resultVal, [&](std::string_view chunk) -> json::result<void> {
+                raw.append(chunk);
+                return {};
+            });
+            if (!serialized) {
                 MCP_LOG_WARN("[stdio_client]", "result serialization failed method={} id={}", method, requestId);
                 return std::unexpected(McpError::parseError("Failed to parse result"));
             }
@@ -320,7 +335,7 @@ std::expected<JsonString, McpError> StdioClientTransport::sendRequest(std::strin
 }
 
 std::expected<void, McpError> StdioClientTransport::sendNotification(std::string_view method,
-                                                                    const std::optional<JsonString>& params) {
+                                                                    const std::optional<std::string>& params) {
     if (auto streamCheck = requireStreams(); !streamCheck) {
         return std::unexpected(streamCheck.error());
     }
@@ -349,7 +364,7 @@ std::expected<std::string, McpError> StdioClientTransport::readMessage() {
     return std::unexpected(McpError::readError("Failed to read from stdin"));
 }
 
-std::expected<void, McpError> StdioClientTransport::writeMessage(const JsonString& message) {
+std::expected<void, McpError> StdioClientTransport::writeMessage(const std::string& message) {
     std::lock_guard<std::mutex> lock(m_outputMutex);
 
     if (m_output == nullptr) {

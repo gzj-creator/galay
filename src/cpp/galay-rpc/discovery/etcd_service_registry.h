@@ -86,6 +86,7 @@ public:
         return it->second;
     }
 
+    /// @note cache 必须活到 registry 停止通知；注册、通知和缓存读取在同一 owner 执行。
     std::expected<void, RpcError> watch(const std::string& service,
                                         RpcEndpointCache& cache,
                                         std::function<void()> callback = {}) {
@@ -240,6 +241,7 @@ public:
     /**
      * @brief 注册本进程内的 endpoint 变更回调。
      * @note 当前不启动跨进程 etcd watch 流；register/deregister 会通知本对象回调。
+     *       cache 必须活到 registry 停止通知，所有访问在同一 owner 上串行执行。
      */
     std::expected<void, RpcError> watch(const std::string& service,
                                         RpcEndpointCache& cache,

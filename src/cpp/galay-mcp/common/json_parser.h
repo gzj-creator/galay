@@ -27,7 +27,7 @@ namespace galay::mcp {
 struct JsonRpcRequestView {
     std::optional<int64_t> id; ///< 请求标识符（通知消息无此字段）
     std::string method; ///< JSON-RPC方法名
-    JsonElement params; ///< 请求参数元素
+    json::Json params; ///< 请求参数元素
     bool hasParams = false; ///< 是否包含参数
 };
 
@@ -54,8 +54,8 @@ private:
  */
 struct JsonRpcResponseView {
     int64_t id = 0; ///< 响应对应的请求标识符
-    JsonElement result; ///< 响应结果元素
-    JsonElement error; ///< 响应错误元素
+    json::Json result; ///< 响应结果元素
+    json::Json error; ///< 响应错误元素
     bool hasResult = false; ///< 是否包含结果
     bool hasError = false; ///< 是否包含错误
 };

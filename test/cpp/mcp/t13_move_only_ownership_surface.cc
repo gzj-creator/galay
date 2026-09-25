@@ -8,10 +8,10 @@
 
 #include <concepts>
 #include <iostream>
+#include <string>
 #include <string_view>
 #include <type_traits>
 
-using galay::mcp::JsonWriter;
 using galay::mcp::ParsedJsonRpcRequest;
 using galay::mcp::ParsedJsonRpcResponse;
 using galay::mcp::PromptArgumentBuilder;
@@ -19,11 +19,11 @@ using galay::mcp::SchemaBuilder;
 using galay::mcp::parseJsonRpcRequest;
 using galay::mcp::parseJsonRpcResponse;
 
-static_assert(!std::copy_constructible<JsonWriter>);
-static_assert(!std::is_copy_assignable_v<JsonWriter>);
-static_assert(std::movable<JsonWriter>);
-static_assert(std::is_nothrow_move_constructible_v<JsonWriter>);
-static_assert(std::is_nothrow_move_assignable_v<JsonWriter>);
+static_assert(!std::copy_constructible<json::stream::StreamWriter>);
+static_assert(!std::is_copy_assignable_v<json::stream::StreamWriter>);
+static_assert(std::movable<json::stream::StreamWriter>);
+static_assert(std::is_nothrow_move_constructible_v<json::stream::StreamWriter>);
+static_assert(std::is_nothrow_move_assignable_v<json::stream::StreamWriter>);
 
 static_assert(!std::copy_constructible<SchemaBuilder>);
 static_assert(!std::is_copy_assignable_v<SchemaBuilder>);
@@ -45,9 +45,6 @@ static_assert(!std::copy_constructible<ParsedJsonRpcResponse>);
 static_assert(!std::is_copy_assignable_v<ParsedJsonRpcResponse>);
 static_assert(std::movable<ParsedJsonRpcResponse>);
 
-static_assert(requires(const JsonWriter& writer) {
-    { writer.clone() } -> std::same_as<JsonWriter>;
-});
 static_assert(requires(const SchemaBuilder& builder) {
     { builder.clone() } -> std::same_as<SchemaBuilder>;
 });
@@ -71,31 +68,38 @@ bool contains(std::string_view text, std::string_view needle)
     return text.find(needle) != std::string_view::npos;
 }
 
-bool jsonWriterCloneIsIndependent()
+bool jsonWriterSinksAreIndependent()
 {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("before");
-    writer.string("copy");
+    std::string originalJson;
+    std::string cloneJson;
+    auto writer = galay::mcp::makeJsonWriter(originalJson);
+    auto copy = galay::mcp::makeJsonWriter(cloneJson);
 
-    JsonWriter copy = writer.clone();
+    (void)writer.start_object();
+    (void)writer.key("before");
+    (void)writer.string("copy");
+    (void)writer.key("after");
+    (void)writer.string("original");
+    (void)writer.end_object();
 
-    writer.key("after");
-    writer.string("original");
-    writer.endObject();
+    (void)copy.start_object();
+    (void)copy.key("before");
+    (void)copy.string("copy");
+    (void)copy.key("after");
+    (void)copy.string("clone");
+    (void)copy.end_object();
 
-    copy.key("after");
-    copy.string("clone");
-    copy.endObject();
+    if (!require(writer.finish().has_value(), "first JSON writer failed to finish") ||
+        !require(copy.finish().has_value(), "second JSON writer failed to finish")) {
+        return false;
+    }
 
-    const auto originalJson = writer.takeString();
-    const auto cloneJson = copy.takeString();
     return require(contains(originalJson, R"("after":"original")"),
-                   "original JsonWriter did not keep later mutation") &&
+                   "first JSON writer did not keep later mutation") &&
            require(contains(cloneJson, R"("after":"clone")"),
-                   "cloned JsonWriter did not accept independent mutation") &&
+                   "second JSON writer did not accept independent mutation") &&
            require(!contains(cloneJson, "original"),
-                   "cloned JsonWriter observed original's later mutation");
+                   "second JSON writer observed the first writer's later mutation");
 }
 
 bool schemaBuilderCloneIsIndependent()
@@ -144,13 +148,13 @@ bool movedParsedRequestKeepsViewsReadable()
         return false;
     }
 
-    auto name = moved.request.params["name"].get_string();
-    if (name.error()) {
+    auto name = moved.request.params.at("name").as_string();
+    if (!name) {
         std::cerr << "failed to read moved request params name: "
-                  << simdjson::error_message(name.error()) << '\n';
+                  << name.error() << '\n';
         return false;
     }
-    return require(name.value_unsafe() == "echo", "moved request params view changed");
+    return require(*name == "echo", "moved request params view changed");
 }
 
 bool movedParsedResponseKeepsViewsReadable()
@@ -165,20 +169,20 @@ bool movedParsedResponseKeepsViewsReadable()
         return false;
     }
 
-    auto ok = moved.response.result["ok"].get_bool();
-    if (ok.error()) {
+    auto ok = moved.response.result.at("ok").as_bool();
+    if (!ok) {
         std::cerr << "failed to read moved response result ok: "
-                  << simdjson::error_message(ok.error()) << '\n';
+                  << ok.error() << '\n';
         return false;
     }
-    return require(ok.value_unsafe(), "moved response result view changed");
+    return require(*ok, "moved response result view changed");
 }
 
 } // namespace
 
 int main()
 {
-    if (!jsonWriterCloneIsIndependent()) {
+    if (!jsonWriterSinksAreIndependent()) {
         return 1;
     }
     if (!schemaBuilderCloneIsIndependent()) {

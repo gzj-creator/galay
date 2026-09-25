@@ -112,7 +112,7 @@ int main()
     }
     if (const int rc = requireContains(*source,
                                        "cancellation_registration",
-                                       "RPC pending call must own its cancellation registration")) {
+                                       "RPC caller coroutine must own its cancellation registration")) {
         return rc;
     }
     if (const int rc = requireNotContains(*source,

@@ -6,38 +6,37 @@
 #include <algorithm>
 #include <string>
 #include <thread>
+#include <new>
 
 namespace galay::mcp::v2 {
 
 namespace {
-
-std::expected<JsonObject, McpError> objectParams(const ParsedRequest& request)
+std::expected<json::Json, McpError> objectParams(const ParsedRequest& request)
 {
-    JsonObject object;
-    if (!JsonHelper::getObject(request.request.params, object)) {
+    if (!request.request.params.is_object()) {
         return std::unexpected(McpError::invalidParams("params must be an object"));
     }
-    return object;
+    return request.request.params;
 }
 
-std::expected<std::string, McpError> required(const JsonObject& object, const char* key)
+std::expected<std::string, McpError> required(const json::Json& object, const char* key)
 {
-    std::string value;
-    if (!JsonHelper::getString(object, key, value)) {
+    auto value = object.at(key).as_string();
+    if (!value) {
         return std::unexpected(McpError::invalidParams(
             std::string("missing or invalid ") + key));
     }
-    return value;
+    return std::string(*value);
 }
 
-std::expected<JsonElement, McpError> optionalObject(const JsonObject& object, const char* key)
+std::expected<json::Json, McpError> optionalObject(const json::Json& object,
+                                                    const char* key)
 {
-    JsonElement value;
-    if (!JsonHelper::getElement(object, key, value)) {
-        return JsonHelper::emptyObject();
+    const json::Json value = object.at(key);
+    if (!value.valid()) {
+        return galay::mcp::emptyJsonObject();
     }
-    JsonObject nested;
-    if (!JsonHelper::getObject(value, nested)) {
+    if (!value.is_object()) {
         return std::unexpected(McpError::invalidParams(
             std::string(key) + " must be an object"));
     }
@@ -64,7 +63,7 @@ bool headerValueMatches(std::string_view expected,
            actualValue == expectedValue;
 }
 
-JsonString promptResult(std::string_view value)
+std::string promptResult(std::string_view value)
 {
     auto parsed = parseResult(value);
     if (parsed) {
@@ -74,28 +73,39 @@ JsonString promptResult(std::string_view value)
     if (!document) {
         return R"({"resultType":"complete","messages":[]})";
     }
-    JsonObject object;
-    if (!JsonHelper::getObject(document->root(), object)) {
+    if (!document->root().is_object()) {
         return R"({"resultType":"complete","messages":[]})";
     }
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("resultType");
-    writer.string("complete");
-    for (auto field : object) {
-        const std::string key(field.key);
-        if (key == "resultType") {
-            continue;
+    const json::Json& object = document->root();
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    std::string raw;
+    (void)writer.start_object();
+    (void)writer.key("resultType");
+    (void)writer.string("complete");
+    object.for_each_member([&](std::string_view fieldKey, const json::Json& member) -> json::result<void> {
+        if (fieldKey == "resultType") {
+            return {};
         }
-        JsonString raw;
-        if (!JsonHelper::getRawJson(field.value, raw)) {
-            continue;
+        raw.clear();
+        auto serialized = json::stream::serialize(
+            member, [&](std::string_view chunk) -> json::result<void> {
+                raw.append(chunk);
+                return {};
+            });
+        if (!serialized) {
+            return {};
         }
-        writer.key(key);
-        writer.raw(raw);
+        (void)writer.key(fieldKey);
+        (void)writer.raw(raw);
+        return {};
+    });
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return R"({"resultType":"complete","messages":[]})";
     }
-    writer.endObject();
-    return writer.takeString();
+    return out;
 }
 
 } // namespace
@@ -105,11 +115,11 @@ McpHttpServer::McpHttpServer(std::string host,
                              std::size_t ioSchedulers,
                              std::size_t parallelSchedulers,
                              bool tcpNoDelay)
-    : m_host(std::move(host))
-    , m_ioSchedulers(ioSchedulers)
-    , m_parallelSchedulers(parallelSchedulers)
-    , m_port(port)
-    , m_tcpNoDelay(tcpNoDelay)
+    : m_httpServer(http::HttpServerBuilder().host(std::move(host))
+                       .port(static_cast<uint16_t>(port))
+                       .backlog(128).ioSchedulerCount(ioSchedulers)
+                       .parallelSchedulerCount(parallelSchedulers)
+                       .tcpNoDelay(tcpNoDelay).buildConfig())
 {
 }
 
@@ -128,7 +138,7 @@ void McpHttpServer::setProductionPolicy(McpProductionPolicy policy)
 
 void McpHttpServer::addTool(std::string name,
                             std::string description,
-                            JsonString inputSchema,
+                            std::string inputSchema,
                             ToolHandler handler)
 {
     ToolEntry entry;
@@ -137,7 +147,6 @@ void McpHttpServer::addTool(std::string name,
     entry.tool.inputSchema = std::move(inputSchema);
     entry.handler = std::move(handler);
     m_tools.insert_or_assign(entry.tool.name, std::move(entry));
-    m_hasTools.store(true, std::memory_order_release);
 }
 
 void McpHttpServer::addResource(std::string uri,
@@ -153,7 +162,6 @@ void McpHttpServer::addResource(std::string uri,
     entry.resource.mimeType = std::move(mimeType);
     entry.reader = std::move(reader);
     m_resources.insert_or_assign(entry.resource.uri, std::move(entry));
-    m_hasResources.store(true, std::memory_order_release);
 }
 
 void McpHttpServer::addPrompt(std::string name,
@@ -167,58 +175,123 @@ void McpHttpServer::addPrompt(std::string name,
     entry.prompt.arguments = std::move(arguments);
     entry.getter = std::move(getter);
     m_prompts.insert_or_assign(entry.prompt.name, std::move(entry));
-    m_hasPrompts.store(true, std::memory_order_release);
 }
 
-std::size_t McpHttpServer::notifyToolsListChanged()
+McpHttpServer::Operation McpHttpServer::Operation::acquire(
+    std::atomic<std::size_t>& count) noexcept
 {
-    return publish(NotificationMethods::TOOLS_LIST_CHANGED,
-                   [](const SubscriptionFilter& filter) {
-                       return filter.toolsListChanged;
-                   });
-}
-
-std::size_t McpHttpServer::notifyResourcesListChanged()
-{
-    return publish(NotificationMethods::RESOURCES_LIST_CHANGED,
-                   [](const SubscriptionFilter& filter) {
-                       return filter.resourcesListChanged;
-                   });
-}
-
-std::size_t McpHttpServer::notifyPromptsListChanged()
-{
-    return publish(NotificationMethods::PROMPTS_LIST_CHANGED,
-                   [](const SubscriptionFilter& filter) {
-                       return filter.promptsListChanged;
-                   });
-}
-
-std::size_t McpHttpServer::notifyResourceUpdated(std::string_view uri)
-{
-    return publish(NotificationMethods::RESOURCES_UPDATED,
-                   [uri](const SubscriptionFilter& filter) {
-                       return std::find(filter.resourceSubscriptions.begin(),
-                                        filter.resourceSubscriptions.end(),
-                                        uri) != filter.resourceSubscriptions.end();
-                   },
-                   uri);
-}
-
-std::size_t McpHttpServer::publish(
-    std::string_view method,
-    const std::function<bool(const SubscriptionFilter&)>& matches,
-    std::optional<std::string_view> uri)
-{
-    const auto subscriptions = m_subscriptions.load(std::memory_order_acquire);
-    if (!subscriptions) return 0;
-    std::size_t delivered = 0;
-    for (const auto& [unused, subscription] : *subscriptions) {
-        if (!matches(subscription->filter)) continue;
-        auto message = makeSubscriptionNotification(method, subscription->id, uri);
-        if (subscription->events.trySend(std::move(message))) ++delivered;
+    auto active = count.load(std::memory_order_acquire);
+    while ((active & kAdmissionClosed) == 0) {
+        if (count.compare_exchange_weak(active, active + 1,
+                                        std::memory_order_acq_rel,
+                                        std::memory_order_acquire)) {
+            return Operation{&count};
+        }
     }
-    return delivered;
+    return Operation{nullptr};
+}
+
+McpHttpServer::Operation::~Operation()
+{
+    if (m_count != nullptr) {
+        m_count->fetch_sub(1, std::memory_order_release);
+        m_count->notify_all();
+    }
+}
+
+std::expected<void, McpError> McpHttpServer::notifyToolsListChanged()
+{
+    return submit(Command{CommandKind::Tools});
+}
+
+std::expected<void, McpError> McpHttpServer::notifyResourcesListChanged()
+{
+    return submit(Command{CommandKind::Resources});
+}
+
+std::expected<void, McpError> McpHttpServer::notifyPromptsListChanged()
+{
+    return submit(Command{CommandKind::Prompts});
+}
+
+std::expected<void, McpError> McpHttpServer::notifyResourceUpdated(std::string uri)
+{
+    return submit(Command{CommandKind::Resource, std::move(uri)});
+}
+
+std::expected<void, McpError> McpHttpServer::submit(Command command)
+{
+    auto operation = Operation::acquire(m_admission);
+    if (!operation) return std::unexpected(McpError::connectionClosed("HTTP server is not accepting commands"));
+    if (!m_commands.send(std::move(command))) {
+        return std::unexpected(McpError::overload("HTTP owner command queue allocation failed"));
+    }
+    wakeOwner();
+    return {};
+}
+
+void McpHttpServer::wakeOwner() noexcept
+{
+    m_wakeSequence.fetch_add(1, std::memory_order_release);
+    m_wakeSequence.notify_one();
+}
+
+bool McpHttpServer::processCommands()
+{
+    // Bound each pass so a busy producer cannot starve shutdown or release.
+    std::size_t processed = 0;
+    while (processed != 256) {
+        auto command = m_commands.tryRecv();
+        if (!command) break;
+        ++processed;
+        if (command->kind == CommandKind::Register) {
+            auto* subscription = command->subscription.get();
+            subscription->next = std::move(m_subscriptions);
+            m_subscriptions = std::move(command->subscription);
+            if (!subscription->registered.notify(true)) {
+                subscription->events.close();
+            }
+        } else {
+            publish(command->kind, command->uri);
+        }
+    }
+    return processed != 0;
+}
+
+void McpHttpServer::publish(CommandKind notification, const std::string& uri)
+{
+    for (auto* subscription = m_subscriptions.get(); subscription; subscription = subscription->next.get()) {
+        if (subscription->finished.load(std::memory_order_acquire)) continue;
+        const auto& filter = subscription->filter;
+        std::string_view method;
+        switch (notification) {
+        case CommandKind::Register:
+            return;
+        case CommandKind::Tools:
+            if (!filter.toolsListChanged) continue;
+            method = NotificationMethods::TOOLS_LIST_CHANGED;
+            break;
+        case CommandKind::Resources:
+            if (!filter.resourcesListChanged) continue;
+            method = NotificationMethods::RESOURCES_LIST_CHANGED;
+            break;
+        case CommandKind::Prompts:
+            if (!filter.promptsListChanged) continue;
+            method = NotificationMethods::PROMPTS_LIST_CHANGED;
+            break;
+        case CommandKind::Resource:
+            if (std::find(filter.resourceSubscriptions.begin(),
+                          filter.resourceSubscriptions.end(), uri) ==
+                filter.resourceSubscriptions.end()) continue;
+            method = NotificationMethods::RESOURCES_UPDATED;
+            break;
+        }
+        auto message = makeSubscriptionNotification(
+            method, subscription->id, notification == CommandKind::Resource
+                ? std::optional<std::string_view>(uri) : std::nullopt);
+        // Preserve the bounded subscriber queue: overload drops this event.
+        if (!subscription->events.trySend(std::move(message))) continue;
+    }
 }
 
 McpHttpServer::HttpResult McpHttpServer::error(const std::optional<RequestId>& id,
@@ -292,9 +365,9 @@ std::expected<void, McpError> McpHttpServer::validateHeaders(
             return std::unexpected(McpError::protocolError("Mcp-Name header mismatch"));
         }
         if (parsed.request.method == Methods::TOOLS_CALL) {
-            JsonElement arguments;
-            if (!JsonHelper::getElement(params.value(), "arguments", arguments)) {
-                arguments = JsonHelper::emptyObject();
+            json::Json arguments = params.value().at("arguments");
+            if (!arguments.valid()) {
+                arguments = galay::mcp::emptyJsonObject();
             }
             Tool tool;
             auto it = m_tools.find(name.value());
@@ -344,7 +417,7 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         co_return error(parsed.request.id, params.error());
     }
     const RequestId& id = parsed.request.id;
-    const JsonObject object = params.value();
+    const json::Json object = params.value();
 
     if (parsed.request.method == Methods::SERVER_DISCOVER) {
         DiscoverResult result;
@@ -384,7 +457,7 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         auto it = m_tools.find(name.value());
         if (it == m_tools.end()) co_return error(id, ErrorCodes::METHOD_NOT_FOUND, "Method not found", name.value(), 404);
         handler = it->second.handler;
-        std::expected<JsonString, McpError> value;
+        std::expected<std::string, McpError> value;
         co_await handler(arguments.value(), value);
         if (!value) co_return error(id, value.error());
         co_return HttpResult{200, makeResultResponse(id, ToolCallResult::text(value.value()).toJson())};
@@ -414,7 +487,7 @@ galay::kernel::Task<McpHttpServer::HttpResult> McpHttpServer::dispatch(
         auto it = m_prompts.find(name.value());
         if (it == m_prompts.end()) co_return error(id, ErrorCodes::METHOD_NOT_FOUND, "Method not found", name.value(), 404);
         getter = it->second.getter;
-        std::expected<JsonString, McpError> value;
+        std::expected<std::string, McpError> value;
         co_await getter(name.value(), arguments.value(), value);
         if (!value) co_return error(id, value.error());
         co_return HttpResult{200, makeResultResponse(id, promptResult(value.value()))};
@@ -438,12 +511,12 @@ SubscriptionFilter McpHttpServer::acceptedFilter(
 {
     SubscriptionFilter accepted;
     accepted.toolsListChanged =
-        requested.toolsListChanged && m_hasTools.load(std::memory_order_acquire);
+        requested.toolsListChanged && !m_tools.empty();
     accepted.promptsListChanged =
-        requested.promptsListChanged && m_hasPrompts.load(std::memory_order_acquire);
+        requested.promptsListChanged && !m_prompts.empty();
     accepted.resourcesListChanged =
-        requested.resourcesListChanged && m_hasResources.load(std::memory_order_acquire);
-    if (m_hasResources.load(std::memory_order_acquire)) {
+        requested.resourcesListChanged && !m_resources.empty();
+    if (!m_resources.empty()) {
         for (const auto& uri : requested.resourceSubscriptions) {
             if (m_resources.contains(uri)) {
                 accepted.resourceSubscriptions.push_back(uri);
@@ -453,62 +526,24 @@ SubscriptionFilter McpHttpServer::acceptedFilter(
     return accepted;
 }
 
-std::optional<std::uint64_t> McpHttpServer::registerSubscription(
-    const std::shared_ptr<Subscription>& subscription)
+void McpHttpServer::reapSubscriptions()
 {
-    m_activeSubscriptions.fetch_add(1, std::memory_order_acq_rel);
-    const auto token =
-        m_nextSubscriptionToken.fetch_add(1, std::memory_order_relaxed) + 1;
-    while (true) {
-        auto current = m_subscriptions.load(std::memory_order_acquire);
-        if (!current) break;
-        auto next = std::make_shared<SubscriptionSnapshot>(*current);
-        next->emplace(token, subscription);
-        std::shared_ptr<const SubscriptionSnapshot> published = std::move(next);
-        if (m_subscriptions.compare_exchange_weak(
-                current, std::move(published),
-                std::memory_order_release,
-                std::memory_order_acquire)) {
-            return token;
+    auto* link = &m_subscriptions;
+    while (auto* subscription = link->get()) {
+        if (!subscription->finished.load(std::memory_order_acquire)) {
+            link = &subscription->next;
+            continue;
         }
+        auto finished = std::move(*link);
+        *link = std::move(finished->next);
     }
-
-    finishSubscription();
-    return std::nullopt;
-}
-
-void McpHttpServer::eraseSubscription(std::uint64_t token)
-{
-    auto current = m_subscriptions.load(std::memory_order_acquire);
-    while (current && current->contains(token)) {
-        auto next = std::make_shared<SubscriptionSnapshot>(*current);
-        next->erase(token);
-        std::shared_ptr<const SubscriptionSnapshot> published = std::move(next);
-        if (m_subscriptions.compare_exchange_weak(
-                current, std::move(published),
-                std::memory_order_release,
-                std::memory_order_acquire)) {
-            break;
-        }
-    }
-    finishSubscription();
 }
 
 void McpHttpServer::closeSubscriptions()
 {
-    const auto subscriptions = m_subscriptions.exchange(
-        std::shared_ptr<const SubscriptionSnapshot>{},
-        std::memory_order_acq_rel);
-    if (!subscriptions) return;
-    for (const auto& [unused, subscription] : *subscriptions) {
+    for (auto* subscription = m_subscriptions.get(); subscription; subscription = subscription->next.get()) {
         subscription->events.close();
     }
-}
-
-void McpHttpServer::finishSubscription() noexcept
-{
-    m_activeSubscriptions.fetch_sub(1, std::memory_order_acq_rel);
-    m_activeSubscriptions.notify_all();
 }
 
 galay::kernel::Task<void> McpHttpServer::listen(
@@ -520,8 +555,8 @@ galay::kernel::Task<void> McpHttpServer::listen(
         co_await sendResponse(conn, error(request.request.id, params.error()));
         co_return;
     }
-    JsonElement notifications;
-    if (!JsonHelper::getElement(params.value(), "notifications", notifications)) {
+    const json::Json notifications = params.value().at("notifications");
+    if (!notifications.valid()) {
         co_await sendResponse(
             conn, error(request.request.id,
                         McpError::invalidParams("missing notifications")));
@@ -533,10 +568,30 @@ galay::kernel::Task<void> McpHttpServer::listen(
         co_return;
     }
 
-    auto subscription = std::make_shared<Subscription>(
-        request.request.id, acceptedFilter(requested.value()));
-    const auto token = registerSubscription(subscription);
-    if (!token) co_return;
+    auto operation = Operation::acquire(m_activeSubscriptions);
+    if (!operation) co_return;
+    // The channel requires cache-line alignment, beyond the Task frame contract.
+    // Transfer aligned storage to the owner; the listener only borrows it.
+    auto state = std::unique_ptr<Subscription>(new (std::nothrow) Subscription{
+        request.request.id, acceptedFilter(requested.value())});
+    if (!state) {
+        co_await sendResponse(conn, error(request.request.id,
+            McpError::overload("subscription allocation failed")));
+        co_return;
+    }
+    auto* subscription = state.get();
+    auto submitted = submit(Command{CommandKind::Register, {}, std::move(state)});
+    if (!submitted) {
+        co_await sendResponse(conn, error(request.request.id, submitted.error()));
+        co_return;
+    }
+    const auto registered = co_await subscription->registered.wait();
+    // No timeout: the owner retains the node through registration and listening.
+    if (!registered || !*registered) {
+        subscription->finished.store(true, std::memory_order_release);
+        wakeOwner();
+        co_return;
+    }
 
     http::HttpResponseHeader header;
     header.version() = http::HttpVersion::HttpVersion_1_1;
@@ -548,50 +603,45 @@ galay::kernel::Task<void> McpHttpServer::listen(
     header.headerPairs().addHeaderPair("X-Accel-Buffering", "no");
     auto writer = conn.getWriter();
 
-    auto sendHeader = co_await writer.sendHeader(std::move(header));
-    if (!sendHeader || !sendHeader.value()) {
-        eraseSubscription(*token);
-        co_return;
-    }
-    const auto acknowledged = encodeSseEvent(
-        makeSubscriptionAcknowledgedNotification(subscription->id,
-                                                   subscription->filter));
-    auto sendAcknowledged = co_await writer.sendChunk(acknowledged);
-    if (!sendAcknowledged || !sendAcknowledged.value()) {
-        eraseSubscription(*token);
-        co_return;
-    }
+    do {
+        auto sendHeader = co_await writer.sendHeader(std::move(header));
+        if (!sendHeader || !sendHeader.value()) break;
+        const auto acknowledged = encodeSseEvent(
+            makeSubscriptionAcknowledgedNotification(subscription->id, subscription->filter));
+        auto sendAcknowledged = co_await writer.sendChunk(acknowledged);
+        if (!sendAcknowledged || !sendAcknowledged.value()) break;
 
-    while (true) {
-        auto event = co_await subscription->events.recv().timeout(
-            std::chrono::seconds(15));
-        if (!event) {
-            if (galay::kernel::IOError::contains(
-                    event.error().code(), galay::kernel::kTimeout)) {
-                auto keepAlive = co_await writer.sendChunk(": keep-alive\n\n");
-                if (keepAlive && keepAlive.value()) continue;
+        while (true) {
+            auto event = co_await subscription->events.recv().timeout(
+                std::chrono::seconds(15));
+            if (!event) {
+                if (galay::kernel::IOError::contains(
+                        event.error().code(), galay::kernel::kTimeout)) {
+                    auto keepAlive = co_await writer.sendChunk(": keep-alive\n\n");
+                    if (keepAlive && keepAlive.value()) continue;
+                }
+                break;
             }
-            break;
+            auto encoded = encodeSseEvent(event.value());
+            auto sent = co_await writer.sendChunk(encoded);
+            if (!sent || !sent.value()) {
+                subscription->events.close();
+                break;
+            }
         }
-        auto encoded = encodeSseEvent(event.value());
-        auto sent = co_await writer.sendChunk(encoded);
-        if (!sent || !sent.value()) {
-            subscription->events.close();
-            break;
-        }
-    }
 
-    if (m_running.load()) {
-        eraseSubscription(*token);
-        co_return;
-    }
-    auto complete = encodeSseEvent(makeSubscriptionCompleteResponse(subscription->id));
-    auto completeSent = co_await writer.sendChunk(complete);
-    if (completeSent && completeSent.value()) {
-        auto finalSent = co_await writer.sendChunk(std::string{}, true);
-        (void)finalSent;
-    }
-    eraseSubscription(*token);
+        if (m_running.load(std::memory_order_acquire)) break;
+        auto complete = encodeSseEvent(makeSubscriptionCompleteResponse(subscription->id));
+        auto completeSent = co_await writer.sendChunk(complete);
+        if (completeSent && completeSent.value()) {
+            auto finalSent = co_await writer.sendChunk(std::string{}, true);
+            if (!finalSent || !*finalSent) subscription->events.close();
+        }
+    } while (false);
+    // Last node access: the owner may reclaim it as soon as finished is visible.
+    // The operation lease keeps the server alive through wakeOwner().
+    subscription->finished.store(true, std::memory_order_release);
+    wakeOwner();
 }
 
 galay::kernel::Task<void> McpHttpServer::sendResponse(http::HttpConn& conn,
@@ -673,9 +723,6 @@ void McpHttpServer::start()
             std::memory_order_acq_rel, std::memory_order_acquire)) {
         return;
     }
-    m_subscriptions.store(
-        std::make_shared<const SubscriptionSnapshot>(),
-        std::memory_order_release);
     http::HttpRouter router;
     auto* server = this;
     router.addHandler<http::HttpMethod::POST>("/mcp",
@@ -687,28 +734,51 @@ void McpHttpServer::start()
             }
             co_await server->process(conn, request);
         });
-    http::HttpServerConfig config;
-    config.host = m_host;
-    config.port = static_cast<uint16_t>(m_port);
-    config.backlog = 128;
-    config.io_scheduler_count = m_ioSchedulers;
-    config.parallel_scheduler_count = m_parallelSchedulers;
-    config.tcp_no_delay = m_tcpNoDelay;
-    auto httpServer = std::make_shared<http::HttpServer>(config);
-    m_httpServer.store(httpServer, std::memory_order_release);
-    httpServer->start(std::move(router));
-    if (!httpServer->isRunning()) {
-        m_httpServer.store(
-            std::shared_ptr<http::HttpServer>{},
-            std::memory_order_release);
+    m_httpServer.start(std::move(router));
+    if (!m_httpServer.isRunning()) {
+        m_httpServer.stop();
         m_lifecycle.store(LifecycleState::kStopped, std::memory_order_release);
         m_lifecycle.notify_all();
         return;
     }
+    m_activeSubscriptions.store(0, std::memory_order_release);
+    m_admission.store(0, std::memory_order_release);
     m_running.store(true, std::memory_order_release);
     m_lifecycle.store(LifecycleState::kRunning, std::memory_order_release);
     m_lifecycle.notify_all();
-    while (m_running) std::this_thread::sleep_for(std::chrono::seconds(1));
+    while (m_lifecycle.load(std::memory_order_acquire) == LifecycleState::kRunning) {
+        const auto sequence = m_wakeSequence.load(std::memory_order_acquire);
+        const bool processed = processCommands();
+        reapSubscriptions();
+        if (!processed && m_lifecycle.load(std::memory_order_acquire) == LifecycleState::kRunning) {
+            m_wakeSequence.wait(sequence, std::memory_order_acquire);
+        }
+    }
+    m_running.store(false, std::memory_order_release);
+    // Close admission before waiting: no new operation can extend the drain.
+    // Previous counts are irrelevant; the closed bit excludes new borrowers.
+    (void)m_activeSubscriptions.fetch_or(kAdmissionClosed, std::memory_order_acq_rel);
+    (void)m_admission.fetch_or(kAdmissionClosed, std::memory_order_acq_rel);
+    auto active = m_admission.load(std::memory_order_acquire);
+    while (active != kAdmissionClosed) {
+        m_admission.wait(active, std::memory_order_acquire);
+        active = m_admission.load(std::memory_order_acquire);
+    }
+    while (processCommands()) { reapSubscriptions(); }
+    closeSubscriptions();
+    while (m_subscriptions != nullptr) {
+        const auto sequence = m_wakeSequence.load(std::memory_order_acquire);
+        reapSubscriptions();
+        if (m_subscriptions != nullptr) m_wakeSequence.wait(sequence, std::memory_order_acquire);
+    }
+    active = m_activeSubscriptions.load(std::memory_order_acquire);
+    while (active != kAdmissionClosed) {
+        m_activeSubscriptions.wait(active, std::memory_order_acquire);
+        active = m_activeSubscriptions.load(std::memory_order_acquire);
+    }
+    m_httpServer.stop();
+    m_lifecycle.store(LifecycleState::kStopped, std::memory_order_release);
+    m_lifecycle.notify_all();
 }
 
 void McpHttpServer::stop()
@@ -718,27 +788,18 @@ void McpHttpServer::stop()
         m_lifecycle.wait(state, std::memory_order_acquire);
         state = m_lifecycle.load(std::memory_order_acquire);
     }
-    if (state != LifecycleState::kRunning ||
-        !m_lifecycle.compare_exchange_strong(
-            state, LifecycleState::kStopping,
-            std::memory_order_acq_rel, std::memory_order_acquire)) {
-        return;
+    if (state == LifecycleState::kRunning &&
+        m_lifecycle.compare_exchange_strong(state, LifecycleState::kStopping,
+                                            std::memory_order_acq_rel,
+                                            std::memory_order_acquire)) {
+        m_lifecycle.notify_all();
+        wakeOwner();
+        state = LifecycleState::kStopping;
     }
-    m_running.store(false, std::memory_order_release);
-    closeSubscriptions();
-    auto active = m_activeSubscriptions.load(std::memory_order_acquire);
-    while (active != 0) {
-        m_activeSubscriptions.wait(active, std::memory_order_acquire);
-        active = m_activeSubscriptions.load(std::memory_order_acquire);
+    while (state == LifecycleState::kStopping) {
+        m_lifecycle.wait(state, std::memory_order_acquire);
+        state = m_lifecycle.load(std::memory_order_acquire);
     }
-    const auto httpServer = m_httpServer.exchange(
-        std::shared_ptr<http::HttpServer>{},
-        std::memory_order_acq_rel);
-    if (httpServer) {
-        httpServer->stop();
-    }
-    m_lifecycle.store(LifecycleState::kStopped, std::memory_order_release);
-    m_lifecycle.notify_all();
 }
 
 bool McpHttpServer::isRunning() const noexcept { return m_running.load(); }

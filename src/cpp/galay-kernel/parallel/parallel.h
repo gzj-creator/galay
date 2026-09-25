@@ -619,8 +619,8 @@ private:
             }
         }
 
-        if (m_parent_scheduler != nullptr) {
-            return dynamic_cast<ParallelScheduler*>(m_parent_scheduler);
+        if (m_parent_scheduler != nullptr && m_parent_scheduler->type() == kParallelScheduler) {
+            return static_cast<ParallelScheduler*>(m_parent_scheduler);
         }
         return nullptr;
     }

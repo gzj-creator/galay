@@ -134,7 +134,7 @@ class RuntimeHandle;
 /**
  * @brief 运行时入口，负责管理 IO / parallel scheduler 与阻塞线程池。
  *
- * `Runtime` 可以显式注入 scheduler，也可以在首次提交任务时按配置自动创建默认
+ * `Runtime` 在首次提交任务或显式 start() 时按配置创建内置
  * scheduler。实例本身不可拷贝；生命周期结束时会调用 `stop()` 停止其管理的调度器。
  */
 class Runtime
@@ -147,21 +147,9 @@ public:
     Runtime& operator=(const Runtime&) = delete;
 
     /**
-     * @brief 在 runtime 启动前注册一个 IO scheduler。
-     * @return 启动前返回 `true`；若 runtime 已运行则返回 `false`
-     */
-    bool addIOScheduler(std::unique_ptr<IOScheduler> scheduler);
-
-    /**
-     * @brief 在 runtime 启动前注册一个 parallel scheduler。
-     * @return 启动前返回 `true`；若 runtime 已运行则返回 `false`
-     */
-    bool addParallelScheduler(std::unique_ptr<ParallelScheduler> scheduler);
-
-    /**
      * @brief 启动 runtime 及其管理的 scheduler。
      *
-     * 若未显式注册 scheduler，会按 `RuntimeConfig` 自动创建默认实例。
+     * 按 `RuntimeConfig` 创建内置实例；不支持自定义调度器注入。
      * 重复调用安全，已运行时直接返回。
      */
     std::expected<void, RuntimeError> start();
@@ -188,8 +176,8 @@ public:
     }
 
 private:
-    template <typename T>
-    auto blockOnOnScheduler(Task<T> task, std::expected<Scheduler*, RuntimeError> scheduler)
+    template <typename T, typename SchedulerT>
+    auto blockOnOnScheduler(Task<T> task, std::expected<SchedulerT*, RuntimeError> scheduler)
         -> std::expected<T, RuntimeError>
     {
         if (!scheduler.has_value()) {
@@ -201,7 +189,7 @@ private:
 
         const TaskRef& taskRef = detail::TaskAccess::taskRef(task);
         bindTaskToRuntime(taskRef, *scheduler);
-        if (!submitTask(taskRef)) {
+        if (!(*scheduler)->schedule(taskRef)) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kSubmitFailed));
         }
 
@@ -240,8 +228,8 @@ public:
     }
 
 private:
-    template <typename T>
-    auto spawnOnScheduler(Task<T> task, std::expected<Scheduler*, RuntimeError> scheduler)
+    template <typename T, typename SchedulerT>
+    auto spawnOnScheduler(Task<T> task, std::expected<SchedulerT*, RuntimeError> scheduler)
         -> std::expected<JoinHandle<T>, RuntimeError>
     {
         if (!scheduler.has_value()) {
@@ -253,7 +241,7 @@ private:
 
         const TaskRef& taskRef = detail::TaskAccess::taskRef(task);
         bindTaskToRuntime(taskRef, *scheduler);
-        if (!submitTask(taskRef)) {
+        if (!(*scheduler)->schedule(taskRef)) {
             return std::unexpected(RuntimeError(RuntimeErrorCode::kSubmitFailed));
         }
         return JoinHandle<T>(detail::TaskAccess::detachTask(std::move(task)));
@@ -316,10 +304,9 @@ private:
     void createDefaultSchedulers();  ///< 按配置或 CPU 数生成默认 scheduler 集合
     void applyAffinityConfig();  ///< 把 RuntimeAffinityConfig 应用到所有已注册 scheduler
     std::expected<void, RuntimeError> ensureStarted();  ///< 若 Runtime 尚未启动则触发一次启动
-    std::expected<Scheduler*, RuntimeError> acquireIOScheduler();  ///< 为 IO 根任务选择一个 IO scheduler
-    std::expected<Scheduler*, RuntimeError> acquireParallelScheduler();  ///< 为 CPU 根任务选择一个 parallel scheduler
+    std::expected<IOScheduler*, RuntimeError> acquireIOScheduler();  ///< 保留 IO 根任务提交时的具体调度器类型
+    std::expected<ParallelScheduler*, RuntimeError> acquireParallelScheduler();  ///< 保留 CPU 根任务提交时的具体调度器类型
     void bindTaskToRuntime(const TaskRef& task, Scheduler* scheduler);  ///< 给根任务绑定 Runtime 与目标调度器
-    bool submitTask(const TaskRef& task);  ///< 把根任务提交到其所属调度器
     static size_t getCPUCount();  ///< 返回当前机器可用 CPU 数量
     static RuntimeError mapTaskResultError(const detail::TaskResultError& error) noexcept;  ///< 把任务消费错误映射为 RuntimeError
     void configureIOSchedulerStealDomains();  ///< 为 Runtime 管理的 IO scheduler 下发 steal-domain 配置
@@ -490,5 +477,7 @@ private:
 };
 
 } // namespace galay::kernel
+
+#include "scheduler_dispatch.hpp"
 
 #endif // GALAY_KERNEL_RUNTIME_H

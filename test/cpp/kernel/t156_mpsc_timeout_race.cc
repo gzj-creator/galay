@@ -4,7 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
-#include <galay/cpp/galay-kernel/core/scheduler.hpp>
+#include "test/cpp/common/scheduler_test_adapter.h"
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include <atomic>
@@ -55,7 +55,7 @@ enum class InlineSendKind : uint8_t {
     kMoveBatch,
 };
 
-class ImmediateRaceScheduler final : public Scheduler
+class ImmediateRaceScheduler final : public detail::SchedulerTestAdapter<ImmediateRaceScheduler>
 {
 public:
     explicit ImmediateRaceScheduler(galay::mpsc::UnboundedChannel<int>* channel,
@@ -64,10 +64,10 @@ public:
     {
     }
 
-    std::expected<void, IOError> start() override { return {}; }
-    void stop() override {}
+    std::expected<void, IOError> start() { return {}; }
+    void stop() {}
 
-    bool schedule(TaskRef task) noexcept override
+    bool schedule(TaskRef task) noexcept
     {
         if (!bindTask(task)) {
             return false;
@@ -77,17 +77,17 @@ public:
         return true;
     }
 
-    bool scheduleResume(TaskRef task) noexcept override
+    bool scheduleResume(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept override
+    bool scheduleDeferred(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept override
+    bool scheduleImmediately(TaskRef task) noexcept
     {
         if (!bindTask(task)) {
             return false;
@@ -96,7 +96,7 @@ public:
         return true;
     }
 
-    bool addTimer(Timer::ptr timer) override
+    bool addTimer(Timer::ptr timer)
     {
         m_addTimerCalls.fetch_add(1, std::memory_order_relaxed);
         if (m_publishValue) {
@@ -106,7 +106,7 @@ public:
         return false;
     }
 
-    SchedulerType type() override { return kParallelScheduler; }
+    SchedulerType type() { return kParallelScheduler; }
 
     int scheduleCalls() const noexcept
     {
@@ -131,13 +131,13 @@ private:
     std::atomic<bool> m_sendSucceeded{false};
 };
 
-class QueuedRaceScheduler final : public Scheduler
+class QueuedRaceScheduler final : public detail::SchedulerTestAdapter<QueuedRaceScheduler>
 {
 public:
-    std::expected<void, IOError> start() override { return {}; }
-    void stop() override {}
+    std::expected<void, IOError> start() { return {}; }
+    void stop() {}
 
-    bool schedule(TaskRef task) noexcept override
+    bool schedule(TaskRef task) noexcept
     {
         if (!bindTask(task)) {
             return false;
@@ -146,17 +146,17 @@ public:
         return true;
     }
 
-    bool scheduleResume(TaskRef task) noexcept override
+    bool scheduleResume(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept override
+    bool scheduleDeferred(TaskRef task) noexcept
     {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept override
+    bool scheduleImmediately(TaskRef task) noexcept
     {
         if (!bindTask(task)) {
             return false;
@@ -165,13 +165,13 @@ public:
         return true;
     }
 
-    bool addTimer(Timer::ptr timer) override
+    bool addTimer(Timer::ptr timer)
     {
         m_timer = std::move(timer);
         return true;
     }
 
-    SchedulerType type() override { return kParallelScheduler; }
+    SchedulerType type() { return kParallelScheduler; }
 
     bool hasSingleReadyTask() const noexcept { return m_ready.size() == 1; }
 

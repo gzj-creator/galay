@@ -40,7 +40,7 @@ galay::kernel::Task<void> HttpClientTransport::initialize(std::string clientName
     params.clientInfo.version = m_clientVersion;
     params.capabilities = emptyObjectString();
 
-    std::expected<JsonString, McpError> response;
+    std::expected<std::string, McpError> response;
     co_await sendRequest(Methods::INITIALIZE, params.toJson(), response);
     if (!response) {
         result = std::unexpected(response.error());
@@ -62,8 +62,8 @@ galay::kernel::Task<void> HttpClientTransport::initialize(std::string clientName
 }
 
 galay::kernel::Task<void> HttpClientTransport::callTool(std::string toolName,
-                                        JsonString arguments,
-                                        std::expected<JsonString, McpError>& result) {
+                                        std::string arguments,
+                                        std::expected<std::string, McpError>& result) {
     if (!m_initialized) {
         result = std::unexpected(McpError::notInitialized());
         co_return;
@@ -73,7 +73,7 @@ galay::kernel::Task<void> HttpClientTransport::callTool(std::string toolName,
     params.name = std::move(toolName);
     params.arguments = arguments.empty() ? emptyObjectString() : std::move(arguments);
 
-    std::expected<JsonString, McpError> response;
+    std::expected<std::string, McpError> response;
     co_await sendRequest(Methods::TOOLS_CALL, params.toJson(), response);
     if (!response) {
         result = std::unexpected(response.error());
@@ -90,7 +90,7 @@ galay::kernel::Task<void> HttpClientTransport::listTools(std::expected<std::vect
         co_return;
     }
 
-    std::expected<JsonString, McpError> response;
+    std::expected<std::string, McpError> response;
     co_await sendRequest(Methods::TOOLS_LIST, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
@@ -100,7 +100,7 @@ galay::kernel::Task<void> HttpClientTransport::listTools(std::expected<std::vect
     result = parseListField<Tool>(
         response.value(),
         "tools",
-        [](const JsonElement& item) { return Tool::fromJson(item); });
+        [](const json::Json& item) { return Tool::fromJson(item); });
     co_return;
 }
 
@@ -110,7 +110,7 @@ galay::kernel::Task<void> HttpClientTransport::listResources(std::expected<std::
         co_return;
     }
 
-    std::expected<JsonString, McpError> response;
+    std::expected<std::string, McpError> response;
     co_await sendRequest(Methods::RESOURCES_LIST, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
@@ -120,7 +120,7 @@ galay::kernel::Task<void> HttpClientTransport::listResources(std::expected<std::
     result = parseListField<Resource>(
         response.value(),
         "resources",
-        [](const JsonElement& item) { return Resource::fromJson(item); });
+        [](const json::Json& item) { return Resource::fromJson(item); });
     co_return;
 }
 
@@ -131,14 +131,20 @@ galay::kernel::Task<void> HttpClientTransport::readResource(std::string uri,
         co_return;
     }
 
-    JsonWriter paramsWriter;
-    paramsWriter.startObject();
-    paramsWriter.key("uri");
-    paramsWriter.string(std::move(uri));
-    paramsWriter.endObject();
+    std::string params;
+    auto paramsWriter = makeJsonWriter(params);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)paramsWriter.start_object();
+    (void)paramsWriter.key("uri");
+    (void)paramsWriter.string(uri);
+    (void)paramsWriter.end_object();
+    if (!paramsWriter.finish()) {
+        result = std::unexpected(McpError::invalidMessage("failed to encode JSON: " + paramsWriter.finish().error()));
+        co_return;
+    }
 
-    std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::RESOURCES_READ, paramsWriter.takeString(), response);
+    std::expected<std::string, McpError> response;
+    co_await sendRequest(Methods::RESOURCES_READ, std::move(params), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -154,7 +160,7 @@ galay::kernel::Task<void> HttpClientTransport::listPrompts(std::expected<std::ve
         co_return;
     }
 
-    std::expected<JsonString, McpError> response;
+    std::expected<std::string, McpError> response;
     co_await sendRequest(Methods::PROMPTS_LIST, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
@@ -164,30 +170,36 @@ galay::kernel::Task<void> HttpClientTransport::listPrompts(std::expected<std::ve
     result = parseListField<Prompt>(
         response.value(),
         "prompts",
-        [](const JsonElement& item) { return Prompt::fromJson(item); });
+        [](const json::Json& item) { return Prompt::fromJson(item); });
     co_return;
 }
 
 galay::kernel::Task<void> HttpClientTransport::getPrompt(std::string name,
-                                         JsonString arguments,
-                                         std::expected<JsonString, McpError>& result) {
+                                         std::string arguments,
+                                         std::expected<std::string, McpError>& result) {
     if (!m_initialized) {
         result = std::unexpected(McpError::notInitialized());
         co_return;
     }
 
-    JsonWriter paramsWriter;
-    paramsWriter.startObject();
-    paramsWriter.key("name");
-    paramsWriter.string(std::move(name));
+    std::string params;
+    auto paramsWriter = makeJsonWriter(params);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)paramsWriter.start_object();
+    (void)paramsWriter.key("name");
+    (void)paramsWriter.string(name);
     if (!arguments.empty()) {
-        paramsWriter.key("arguments");
-        paramsWriter.raw(arguments);
+        (void)paramsWriter.key("arguments");
+        (void)paramsWriter.raw(arguments);
     }
-    paramsWriter.endObject();
+    (void)paramsWriter.end_object();
+    if (!paramsWriter.finish()) {
+        result = std::unexpected(McpError::invalidMessage("failed to encode JSON: " + paramsWriter.finish().error()));
+        co_return;
+    }
 
-    std::expected<JsonString, McpError> response;
-    co_await sendRequest(Methods::PROMPTS_GET, paramsWriter.takeString(), response);
+    std::expected<std::string, McpError> response;
+    co_await sendRequest(Methods::PROMPTS_GET, std::move(params), response);
     if (!response) {
         result = std::unexpected(response.error());
         co_return;
@@ -203,7 +215,7 @@ galay::kernel::Task<void> HttpClientTransport::ping(std::expected<void, McpError
         co_return;
     }
 
-    std::expected<JsonString, McpError> response;
+    std::expected<std::string, McpError> response;
     co_await sendRequest(Methods::PING, emptyObjectString(), response);
     if (!response) {
         result = std::unexpected(response.error());
@@ -231,8 +243,8 @@ const ServerCapabilities& HttpClientTransport::getServerCapabilities() const {
 }
 
 galay::kernel::Task<void> HttpClientTransport::sendRequest(std::string_view method,
-                                           std::optional<JsonString> params,
-                                           std::expected<JsonString, McpError>& result) {
+                                           std::optional<std::string> params,
+                                           std::expected<std::string, McpError>& result) {
     const int64_t requestId = generateRequestId();
     const std::optional<std::string_view> params_view =
         params.has_value() ? std::optional<std::string_view>(*params) : std::nullopt;
@@ -350,7 +362,11 @@ galay::kernel::Task<void> HttpClientTransport::sendRequest(std::string_view meth
 
         if (view.hasResult) {
             std::string raw;
-            if (JsonHelper::getRawJson(view.result, raw)) {
+            auto serialized = json::stream::serialize(view.result, [&](std::string_view chunk) -> json::result<void> {
+                raw.append(chunk);
+                return {};
+            });
+            if (serialized) {
                 result = std::move(raw);
             } else {
                 MCP_LOG_WARN("[http_client]", "result serialization failed method={} id={}", method, requestId);

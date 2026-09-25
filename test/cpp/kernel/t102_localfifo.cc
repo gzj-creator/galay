@@ -26,7 +26,7 @@ uint64_t taggedTaskId(const TaskRef& task) {
 }
 
 bool runScenario() {
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
 
     worker.scheduleLocalDeferred(makeTaggedTask(0));
     worker.scheduleLocalDeferred(makeTaggedTask(1));

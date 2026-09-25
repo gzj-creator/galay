@@ -440,9 +440,13 @@ private:
         for (size_t attempt = 0; attempt < attempts; ++attempt) {
             if (m_channel) {
                 auto close_result = co_await m_channel->close();
-                if (!close_result.has_value() || !close_result.value().has_value()) {
+                // kClosed 表示旧通道已被之前的 close() 释放，重连可直接继续
+                if (!close_result.has_value() ||
+                    (!close_result.value().has_value() &&
+                     close_result.value().error().code() != kClosed)) {
                     co_return std::unexpected(IOError(kDisconnectError, 0));
                 }
+                m_channel.reset();
             }
             auto channel = makeChannel();
             auto task_result = co_await channel->connect(m_host, m_port);

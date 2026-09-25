@@ -34,6 +34,18 @@ namespace galay::kernel
 {
 
 class Scheduler;
+struct AcceptAwaitable;
+struct RecvAwaitable;
+struct SendAwaitable;
+struct ConnectAwaitable;
+struct RecvFromAwaitable;
+struct SendToAwaitable;
+struct FileReadAwaitable;
+struct FileWriteAwaitable;
+struct FileWatchAwaitable;
+struct ReadvAwaitable;
+struct WritevAwaitable;
+struct SendFileAwaitable;
 struct SequenceAwaitableBase;
 
 /**
@@ -849,7 +861,7 @@ struct IOController {
      * @brief 按具体 Awaitable 类型访问当前控制器中缓存的等待体
      * @tparam T 目标 awaitable 类型
      * @return 若当前槽位存在对应 awaitable，则返回其类型化指针；默认模板返回 nullptr
-     * @note 具体事件类型的显式特化定义位于 io_scheduler.hpp
+     * @note 具体事件类型的显式特化定义位于本头文件末尾
      */
     template<typename T>
     T* getAwaitable() { return nullptr; }
@@ -903,6 +915,211 @@ private:
     }
 #endif
 };
+
+/**
+ * @brief IOController::getAwaitable 的显式特化集合
+ * @details 这些访问器把 READ/WRITE 槽位上的 `void*` awaitable 安全转换为具体类型。
+ */
+
+template<>
+inline auto IOController::getAwaitable() -> AcceptAwaitable* {
+    return static_cast<AcceptAwaitable*>(m_awaitable[READ]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> RecvAwaitable* {
+    return static_cast<RecvAwaitable*>(m_awaitable[READ]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> SendAwaitable* {
+    return static_cast<SendAwaitable*>(m_awaitable[WRITE]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> ConnectAwaitable* {
+    return static_cast<ConnectAwaitable*>(m_awaitable[WRITE]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> RecvFromAwaitable* {
+    return static_cast<RecvFromAwaitable*>(m_awaitable[READ]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> SendToAwaitable* {
+    return static_cast<SendToAwaitable*>(m_awaitable[WRITE]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> FileReadAwaitable* {
+    return static_cast<FileReadAwaitable*>(m_awaitable[READ]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> FileWriteAwaitable* {
+    return static_cast<FileWriteAwaitable*>(m_awaitable[WRITE]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> FileWatchAwaitable* {
+    return static_cast<FileWatchAwaitable*>(m_awaitable[READ]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> ReadvAwaitable* {
+    return static_cast<ReadvAwaitable*>(m_awaitable[READ]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> WritevAwaitable* {
+    return static_cast<WritevAwaitable*>(m_awaitable[WRITE]);
+}
+
+template<>
+inline auto IOController::getAwaitable() -> SendFileAwaitable* {
+    return static_cast<SendFileAwaitable*>(m_awaitable[WRITE]);
+}
+
+
+inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
+    constexpr uint32_t kReadSlotMask =
+        static_cast<uint32_t>(IOEventType::ACCEPT) |
+        static_cast<uint32_t>(IOEventType::RECV) |
+        static_cast<uint32_t>(IOEventType::READV) |
+        static_cast<uint32_t>(IOEventType::FILEREAD) |
+        static_cast<uint32_t>(IOEventType::FILEWATCH) |
+        static_cast<uint32_t>(IOEventType::RECVFROM);
+    constexpr uint32_t kWriteSlotMask =
+        static_cast<uint32_t>(IOEventType::CONNECT) |
+        static_cast<uint32_t>(IOEventType::SEND) |
+        static_cast<uint32_t>(IOEventType::WRITEV) |
+        static_cast<uint32_t>(IOEventType::SENDFILE) |
+        static_cast<uint32_t>(IOEventType::FILEWRITE) |
+        static_cast<uint32_t>(IOEventType::SENDTO);
+
+    switch (type) {
+    case IOEventType::RECV:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
+        m_awaitable[READ] = awaitable;
+#ifdef USE_IOURING
+        m_recv_result_assigned = false;
+#endif
+        break;
+    case IOEventType::READV:
+    case IOEventType::FILEREAD:
+    case IOEventType::FILEWATCH:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
+        m_awaitable[READ] = awaitable;
+#ifdef USE_IOURING
+        advanceSqeGeneration(READ);
+#endif
+        break;
+    case IOEventType::RECVFROM:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
+        m_awaitable[READ] = awaitable;
+#ifdef USE_IOURING
+        if (!m_recvfrom_multishot_armed) {
+            advanceSqeGeneration(READ);
+        }
+        m_recvfrom_result_assigned = false;
+#endif
+        break;
+    case IOEventType::ACCEPT:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
+            static_cast<uint32_t>(type));
+        m_awaitable[READ] = awaitable;
+#ifdef USE_IOURING
+        m_accept_result_assigned = false;
+#endif
+        break;
+    case IOEventType::SEQUENCE:
+        m_type |= type;
+#ifdef USE_IOURING
+        m_awaitable[READ] = awaitable;
+        advanceSqeGeneration(READ);
+#endif
+        break;
+    case IOEventType::SEND:
+    case IOEventType::WRITEV:
+    case IOEventType::SENDFILE:
+    case IOEventType::FILEWRITE:
+    case IOEventType::SENDTO:
+    case IOEventType::CONNECT:
+        m_type = static_cast<IOEventType>(
+            (static_cast<uint32_t>(m_type) & ~kWriteSlotMask) |
+            static_cast<uint32_t>(type));
+        m_awaitable[WRITE] = awaitable;
+#ifdef USE_IOURING
+        advanceSqeGeneration(WRITE);
+#endif
+        break;
+    default:
+        return false;
+    }
+    return true;
+}
+
+inline void IOController::removeAwaitable(IOEventType type) {
+    m_type &= ~type;
+    switch (type) {
+    case IOEventType::RECV:
+        m_awaitable[READ] = nullptr;
+#ifdef USE_IOURING
+        m_recv_result_assigned = false;
+#endif
+        break;
+    case IOEventType::READV:
+    case IOEventType::FILEREAD:
+    case IOEventType::FILEWATCH:
+        m_awaitable[READ] = nullptr;
+#ifdef USE_IOURING
+        advanceSqeGeneration(READ);
+#endif
+        break;
+    case IOEventType::RECVFROM:
+        m_awaitable[READ] = nullptr;
+#ifdef USE_IOURING
+        if (!m_recvfrom_multishot_armed) {
+            advanceSqeGeneration(READ);
+        }
+        m_recvfrom_result_assigned = false;
+#endif
+        break;
+    case IOEventType::ACCEPT:
+        m_awaitable[READ] = nullptr;
+#ifdef USE_IOURING
+        m_accept_result_assigned = false;
+#endif
+        break;
+    case IOEventType::SEQUENCE:
+#ifdef USE_IOURING
+        m_awaitable[READ] = nullptr;
+        advanceSqeGeneration(READ);
+#endif
+        break;
+    case IOEventType::SEND:
+    case IOEventType::WRITEV:
+    case IOEventType::SENDFILE:
+    case IOEventType::FILEWRITE:
+    case IOEventType::SENDTO:
+    case IOEventType::CONNECT:
+        m_awaitable[WRITE] = nullptr;
+#ifdef USE_IOURING
+        advanceSqeGeneration(WRITE);
+#endif
+        break;
+    default:
+        break;
+    }
+}
 
 } // namespace galay::kernel
 

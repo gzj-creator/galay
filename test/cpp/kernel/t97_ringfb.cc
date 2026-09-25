@@ -36,7 +36,7 @@ bool runScenario() {
     constexpr size_t kExtraInjected = 3;
     constexpr size_t kRingCapacity = ChaseLevTaskRing::kCapacity;
 
-    IOSchedulerWorkerState single_item_worker;
+    IOReadyQueue single_item_worker;
     if (!single_item_worker.local_ring.push_back(makeTaskRef())) {
         std::cerr << "[T97] failed to enqueue single-item ring probe\n";
         return false;
@@ -51,7 +51,7 @@ bool runScenario() {
         return false;
     }
 
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
     worker.resizeInjectBuffer(8);
 
     const size_t fill_count = kRingCapacity - kRemainingCapacity;
@@ -119,7 +119,7 @@ bool runScenario() {
 
 bool runResumeAdmissionScenario() {
     constexpr size_t kResumeCount = 17;
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
 
     for (size_t i = 0; i < kResumeCount; ++i) {
         const auto admitted = worker.scheduleResume(makeTaskRef());
@@ -158,7 +158,7 @@ bool runResumeAdmissionScenario() {
 }
 
 bool runResumeFifoScenario() {
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
     std::array<TaskRef, 3> tasks{
         makeTaskRef(),
         makeTaskRef(),
@@ -197,7 +197,7 @@ bool runResumeFifoScenario() {
 }
 
 bool runResumeAdmissionLifecycleScenario() {
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
     worker.closeResumeAdmission();
     if (worker.scheduleResume(makeTaskRef()).has_value()) {
         std::cerr << "[T97] closed worker accepted a resume task\n";
@@ -240,7 +240,7 @@ bool runResumeAdmissionLifecycleScenario() {
 bool runResumeFairnessScenario() {
     constexpr size_t kRingCapacity = ChaseLevTaskRing::kCapacity;
     constexpr size_t kAttempts = 8;
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
     worker.resizeInjectBuffer(8);
 
     for (size_t i = 0; i + 1 < kRingCapacity; ++i) {

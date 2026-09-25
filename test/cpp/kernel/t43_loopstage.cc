@@ -31,7 +31,7 @@ const char* stageName(SchedulerCoreStage stage) {
 }  // namespace
 
 int main() {
-    IOSchedulerWorkerState worker(8);
+    IOReadyQueue worker(8);
     SchedulerCore core(worker, 8);
 
     std::vector<SchedulerCoreStage> stages;

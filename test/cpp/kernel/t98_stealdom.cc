@@ -5,7 +5,7 @@
  * Validates:
  * - `Runtime::start()` declares `configureIOSchedulerStealDomains()` and calls it before launching IO scheduler threads
  * - The helper walks `m_io_schedulers`, configures steal domains, and leaves parallel schedulers untouched
- * - `IOSchedulerWorkerState` declares the steal-domain fields and helper
+ * - `IOReadyQueue` declares the steal-domain fields and helper
  */
 
 #include <filesystem>
@@ -95,7 +95,7 @@ std::string extractBracedSection(const std::string& content,
 int main() {
     const auto root = projectRoot();
     const auto runtime = root / "galay-kernel" / "core" / "runtime.cc";
-    const auto ioscheduler = root / "galay-kernel" / "core" / "io_scheduler.hpp";
+    const auto ioscheduler = root / "galay-kernel" / "core" / "io_ready_queue.hpp";
 
     std::vector<std::string> failures;
 
@@ -151,9 +151,9 @@ int main() {
         failures.push_back(ioscheduler.string() + ": failed to read io_scheduler.hpp");
     } else {
         const auto worker_section =
-            extractBracedSection(ioscheduler_src, "struct IOSchedulerWorkerState");
+            extractBracedSection(ioscheduler_src, "struct IOReadyQueue");
         if (worker_section.empty()) {
-            failures.push_back(ioscheduler.string() + ": failed to isolate IOSchedulerWorkerState");
+            failures.push_back(ioscheduler.string() + ": failed to isolate IOReadyQueue");
         } else {
             if (!contains(worker_section, "self_index")) {
                 failures.push_back(ioscheduler.string() + ": worker state missing self_index");
@@ -171,9 +171,7 @@ int main() {
     }
 
     const std::vector<std::filesystem::path> scheduler_headers = {
-        root / "galay-kernel" / "core" / "epoll_scheduler.h",
-        root / "galay-kernel" / "core" / "kqueue_scheduler.h",
-        root / "galay-kernel" / "core" / "uring_scheduler.h",
+        root / "galay-kernel" / "core" / "io_scheduler_base.hpp",
     };
 
     for (const auto& scheduler_path : scheduler_headers) {

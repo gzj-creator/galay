@@ -3,7 +3,7 @@
  * @brief 测量 ResumeToken-backed Waker 的 hook 请求与拷贝成本。
  */
 
-#include <galay/cpp/galay-kernel/core/scheduler.hpp>
+#include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
 
 #include <atomic>
@@ -17,18 +17,6 @@ using namespace galay::kernel;
 namespace {
 
 constexpr int kIterations = 1'000'000;
-
-class NullScheduler final : public Scheduler {
-public:
-    std::expected<void, IOError> start() override { return {}; }
-    void stop() override {}
-    bool schedule(TaskRef) noexcept override { return false; }
-    bool scheduleResume(TaskRef) noexcept override { return false; }
-    bool scheduleDeferred(TaskRef) noexcept override { return false; }
-    bool scheduleImmediately(TaskRef) noexcept override { return false; }
-    bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kParallelScheduler; }
-};
 
 struct FakeResumeTokenState {
     detail::ResumeTokenHeader header;
@@ -80,7 +68,7 @@ double elapsedOpsPerSecond(std::chrono::steady_clock::time_point start,
 }  // namespace
 
 int main() {
-    NullScheduler scheduler;
+    ParallelScheduler scheduler;
     FakeResumeTokenState wake_only{.owner = &scheduler};
     {
         Waker waker(makeToken(&wake_only));

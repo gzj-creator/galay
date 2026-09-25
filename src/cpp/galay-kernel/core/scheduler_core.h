@@ -11,7 +11,7 @@
 #ifndef GALAY_KERNEL_SCHEDULER_CORE_H
 #define GALAY_KERNEL_SCHEDULER_CORE_H
 
-#include "io_scheduler.hpp"
+#include "io_ready_queue.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -68,7 +68,7 @@ void invokeReadyEntryResume(ResumeFn& resume_fn, ReadyEntry& entry)
 class SchedulerCore
 {
 public:
-    explicit SchedulerCore(IOSchedulerWorkerState& worker, size_t ready_budget) noexcept
+    explicit SchedulerCore(IOReadyQueue& worker, size_t ready_budget) noexcept
         : m_worker(worker)
         , m_ready_budget(std::max<size_t>(1, ready_budget))
     {
@@ -221,7 +221,7 @@ public:
     }
 
 private:
-    IOSchedulerWorkerState& m_worker;
+    IOReadyQueue& m_worker;
     size_t m_ready_budget;
 };
 

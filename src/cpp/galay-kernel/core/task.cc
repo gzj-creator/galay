@@ -14,6 +14,7 @@
 
 #include "task.h"
 #include "scheduler.hpp"
+#include "scheduler_dispatch.hpp"
 
 #include <limits>
 
@@ -652,104 +653,5 @@ bool waitTaskCompletion(const TaskRef& task)
 }
 
 } // namespace detail
-
-TaskRef::TaskRef(TaskState* state, bool retainRef) noexcept
-    : m_state(state)
-{
-    if (retainRef) {
-        retain();
-    }
-}
-
-TaskRef TaskRef::borrowed(TaskState* state) noexcept
-{
-    TaskRef result;
-    if (state == nullptr) {
-        return result;
-    }
-
-    const auto raw = reinterpret_cast<uintptr_t>(state);
-    result.m_state = reinterpret_cast<TaskState*>(raw | kBorrowedBit);
-    return result;
-}
-
-TaskRef::TaskRef(const TaskRef& other) noexcept
-    : m_state(other.state())
-{
-    retain();
-}
-
-TaskRef::TaskRef(TaskRef&& other) noexcept
-    : m_state(other.m_state)
-{
-    other.m_state = nullptr;
-}
-
-TaskRef::~TaskRef()
-{
-    release();
-}
-
-TaskRef& TaskRef::operator=(const TaskRef& other) noexcept
-{
-    if (this != &other) {
-        auto* state = other.state();
-        if (state != nullptr) {
-            // 先增加引用计数再释放旧值，避免从同一状态的 borrowed view 赋值时
-            // 将源对象提前失效。
-            state->m_refs.fetch_add(1, std::memory_order_relaxed);
-        }
-        release();
-        m_state = state;
-    }
-    return *this;
-}
-
-TaskRef& TaskRef::operator=(TaskRef&& other) noexcept
-{
-    if (this != &other) {
-        if (other.isBorrowed() && state() == other.state()) {
-            // borrowed promise view 不携带可转移的引用。保留现有 owner，
-            // 只让被移动对象的 view 失效。
-            other.m_state = nullptr;
-            return *this;
-        }
-        release();
-        m_state = other.m_state;
-        other.m_state = nullptr;
-    }
-    return *this;
-}
-
-Scheduler* TaskRef::belongScheduler() const noexcept
-{
-    auto* state = this->state();
-    return state ? state->m_scheduler : nullptr;
-}
-
-void TaskRef::retain() noexcept
-{
-    if (auto* state = this->state()) {
-        state->m_refs.fetch_add(1, std::memory_order_relaxed);
-    }
-}
-
-void TaskRef::release() noexcept
-{
-    if (!m_state) {
-        return;
-    }
-
-    if (isBorrowed()) {
-        m_state = nullptr;
-        return;
-    }
-
-    auto* state = this->state();
-    m_state = nullptr;
-    if (state->m_refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-        delete state;
-    }
-}
 
 } // namespace galay::kernel

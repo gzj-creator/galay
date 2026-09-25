@@ -22,7 +22,7 @@ namespace detail
 /**
  * @brief 将 IO 事件注册分发到具体的 IOScheduler 后端
  *
- * @details 将通用 IOEventType 转换为对具体 IOScheduler 虚方法的调用（addAccept、addRecv 等）。
+ * @details 将通用 IOEventType 转换为对编译期选定的 IOScheduler 方法的调用（addAccept、addRecv 等）。
  *
  * @param scheduler  目标 IO 调度器（必须是 IOScheduler）
  * @param event      要注册的 IO 事件类型

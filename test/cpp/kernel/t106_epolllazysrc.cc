@@ -116,7 +116,8 @@ int main() {
         return 1;
     }
 
-    if (!containsText(epoll_scheduler_text, "[this]() { (void)m_reactor.flushPendingChanges(); }")) {
+    if (!containsText(epoll_scheduler_text, "void EpollScheduler::flushBackend()") ||
+        !containsText(epoll_scheduler_text, "(void)m_reactor.flushPendingChanges();")) {
         std::cerr << "[T106] expected EpollScheduler event loop to flush pending changes post-pass\n";
         return 1;
     }

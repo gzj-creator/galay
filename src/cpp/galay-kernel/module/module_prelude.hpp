@@ -78,9 +78,6 @@
 #if __has_include(<cstring>)
 #include <cstring>
 #endif
-#if __has_include(<ctime>)
-#include <ctime>
-#endif
 #if __has_include(<deque>)
 #include <deque>
 #endif
@@ -96,6 +93,9 @@
 #endif
 #if __has_include(<functional>)
 #include <functional>
+#endif
+#if __has_include(<future>)
+#include <future>
 #endif
 #if __has_include(<galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>)
 #include <galay/thirdparty/concurrentqueue/moodycamel/blockingconcurrentqueue.h>

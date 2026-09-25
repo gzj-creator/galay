@@ -59,14 +59,14 @@ protected:
     std::shared_ptr<CopyStats> m_stats;
 };
 
-class StdioToolHandler final : public CountingCallable<galay::mcp::JsonString> {
+class StdioToolHandler final : public CountingCallable<std::string> {
 public:
     using CountingCallable::CountingCallable;
 
-    std::expected<galay::mcp::JsonString, galay::mcp::McpError>
-    operator()(const galay::mcp::JsonElement&) const
+    std::expected<std::string, galay::mcp::McpError>
+    operator()(const json::Json&) const
     {
-        return galay::mcp::JsonString(R"({"ok":true})");
+        return std::string(R"({"ok":true})");
     }
 };
 
@@ -80,26 +80,26 @@ public:
     }
 };
 
-class StdioPromptGetter final : public CountingCallable<galay::mcp::JsonString> {
+class StdioPromptGetter final : public CountingCallable<std::string> {
 public:
     using CountingCallable::CountingCallable;
 
-    std::expected<galay::mcp::JsonString, galay::mcp::McpError>
-    operator()(const std::string&, const galay::mcp::JsonElement&) const
+    std::expected<std::string, galay::mcp::McpError>
+    operator()(const std::string&, const json::Json&) const
     {
-        return galay::mcp::JsonString(R"({"messages":[]})");
+        return std::string(R"({"messages":[]})");
     }
 };
 
-class HttpToolHandler final : public CountingCallable<galay::mcp::JsonString> {
+class HttpToolHandler final : public CountingCallable<std::string> {
 public:
     using CountingCallable::CountingCallable;
 
     galay::kernel::Task<void>
-    operator()(const galay::mcp::JsonElement&,
-               std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result) const
+    operator()(const json::Json&,
+               std::expected<std::string, galay::mcp::McpError>& result) const
     {
-        result = galay::mcp::JsonString(R"({"ok":true})");
+        result = std::string(R"({"ok":true})");
         co_return;
     }
 };
@@ -117,16 +117,16 @@ public:
     }
 };
 
-class HttpPromptGetter final : public CountingCallable<galay::mcp::JsonString> {
+class HttpPromptGetter final : public CountingCallable<std::string> {
 public:
     using CountingCallable::CountingCallable;
 
     galay::kernel::Task<void>
     operator()(const std::string&,
-               const galay::mcp::JsonElement&,
-               std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result) const
+               const json::Json&,
+               std::expected<std::string, galay::mcp::McpError>& result) const
     {
-        result = galay::mcp::JsonString(R"({"messages":[]})");
+        result = std::string(R"({"messages":[]})");
         co_return;
     }
 };
@@ -155,7 +155,7 @@ bool stdioRegistrationMovesHandlers()
     std::vector<galay::mcp::PromptArgument> arguments;
     arguments.push_back(galay::mcp::PromptArgument{.name = "topic", .description = "Topic", .required = true});
 
-    server.addTool(std::string("echo"), std::string("Echo"), galay::mcp::JsonString("{}"), std::move(tool));
+    server.addTool(std::string("echo"), std::string("Echo"), std::string("{}"), std::move(tool));
     server.addResource(std::string("mem://one"),
                        std::string("One"),
                        std::string("Resource"),
@@ -185,7 +185,7 @@ bool httpRegistrationMovesHandlers()
     std::vector<galay::mcp::PromptArgument> arguments;
     arguments.push_back(galay::mcp::PromptArgument{.name = "topic", .description = "Topic", .required = true});
 
-    server.addTool(std::string("echo"), std::string("Echo"), galay::mcp::JsonString("{}"), std::move(tool));
+    server.addTool(std::string("echo"), std::string("Echo"), std::string("{}"), std::move(tool));
     server.addResource(std::string("mem://one"),
                        std::string("One"),
                        std::string("Resource"),

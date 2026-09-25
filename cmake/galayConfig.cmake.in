@@ -3,7 +3,7 @@
 include(CMakeFindDependencyMacro)
 
 if(@GALAY_CONFIG_NEEDS_SERDE@)
-    find_dependency(serde 0.2.1 EXACT CONFIG)
+    find_dependency(serde 0.3.0 EXACT CONFIG)
 endif()
 
 if(@GALAY_CONFIG_NEEDS_THREADS@)
@@ -54,8 +54,3 @@ if(@GALAY_CONFIG_NEEDS_SPDLOG@)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/galayTargets.cmake")
-
-if(TARGET galay::serde AND TARGET serde::serde-cpp23-modules AND
-   NOT TARGET galay::serde-modules)
-    add_library(galay::serde-modules ALIAS serde::serde-cpp23-modules)
-endif()

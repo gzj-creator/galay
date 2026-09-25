@@ -165,7 +165,7 @@ int main()
     const auto scheduler_h = readAll(root / "galay-kernel" / "core" / "scheduler.hpp");
     requireContains(root / "galay-kernel" / "core" / "scheduler.hpp",
                     scheduler_h,
-                    "virtual std::expected<void, IOError> start() = 0;",
+                    "std::expected<void, IOError> start();",
                     "Scheduler::start() must return std::expected<void, IOError>",
                     failures);
 

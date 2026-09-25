@@ -4,8 +4,8 @@
  * @author galay-rpc
  * @version 1.0.0
  *
- * @details 定义调用级deadline、重试提示和metadata配置。该类型仅保存选项，
- *          不执行计时、取消或重试逻辑。
+ * @details 定义调用级deadline、metadata和单 owner 取消域。取消状态由 source
+ *          内嵌持有，token 借用，回调注册由调用协程按值持有。
  */
 
 #ifndef GALAY_RPC_CALL_H
@@ -15,157 +15,181 @@
 
 #include <chrono>
 #include <functional>
-#include <memory>
 #include <optional>
-#include <atomic>
+#include <utility>
 
 namespace galay::rpc
 {
 
 using RpcClock = std::chrono::steady_clock;  ///< RPC deadline使用的单调时钟
 
+class RpcCancellationRegistration;
+
+namespace detail {
+struct RpcCancellationState {
+    RpcCancellationRegistration* callbacks = nullptr;
+    bool cancelled = false;
+};
+} // namespace detail
+
 /**
- * @brief 取消回调注册句柄
- * @details 由 RpcCancellationToken::registerCallback 创建；调用方持有该句柄，
- *          在 pending 完成后调用 deactivate()，避免后续 cancel() 重复通知。
+ * @brief 单 owner 的 RAII 取消注册，析构或 deactivate() 时 O(1) 摘链。
+ * @details 注册直接存放在调用方栈/协程帧中；移动时修复借用链，不分配注册节点。
+ *          所有操作必须与 source.cancel() 在同一 owner 上串行执行。
  */
 class RpcCancellationRegistration {
 public:
-    explicit RpcCancellationRegistration(std::function<void()> callback)
-        : m_callback(std::move(callback))
-    {
+    RpcCancellationRegistration() = default;
+    ~RpcCancellationRegistration() { deactivate(); }
+
+    RpcCancellationRegistration(RpcCancellationRegistration&& other) noexcept {
+        takeFrom(other);
     }
 
-    RpcCancellationRegistration(const RpcCancellationRegistration&) = delete;
-    RpcCancellationRegistration& operator=(const RpcCancellationRegistration&) = delete;
-    RpcCancellationRegistration(RpcCancellationRegistration&&) = delete;
-    RpcCancellationRegistration& operator=(RpcCancellationRegistration&&) = delete;
+    RpcCancellationRegistration& operator=(RpcCancellationRegistration&& other) noexcept {
+        if (this != &other) {
+            deactivate();
+            takeFrom(other);
+        }
+        return *this;
+    }
 
-    /// @brief 停用注册，后续 cancel() 将跳过该回调。
+    /// @brief 摘除注册并释放回调捕获；可以重复调用。
     void deactivate() noexcept {
-        m_active.store(false, std::memory_order_release);
+        unlink();
+        m_callback = nullptr;
     }
-
-    /// @brief 如果仍处于活动状态则执行回调。
-    bool notifyIfActive() const {
-        if (!m_active.load(std::memory_order_acquire)) {
-            return false;
-        }
-        if (!m_callback) {
-            return false;
-        }
-        m_callback();
-        return true;
-    }
-
-    std::shared_ptr<RpcCancellationRegistration> next; ///< 单向回调链
 
 private:
-    std::function<void()> m_callback; ///< 取消通知回调
-    std::atomic<bool> m_active{true}; ///< 是否仍然有效
-};
+    friend class RpcCancellationToken;
+    friend class RpcCancellationSource;
+    RpcCancellationRegistration(const RpcCancellationRegistration&) = delete;
+    RpcCancellationRegistration& operator=(const RpcCancellationRegistration&) = delete;
 
-struct RpcCancellationState {
-    /**
-     * @brief 取消回调链表头
-     * @note 通过 atomic<shared_ptr> 访问，并在 cancel() 遍历期间保持 registration 生命周期。
-     */
-    std::atomic<std::shared_ptr<RpcCancellationRegistration>> callbacks;
-    std::atomic<bool> cancelled{false};
+    RpcCancellationRegistration(detail::RpcCancellationState* state,
+                                std::function<void()> callback)
+        : m_callback(std::move(callback)) {
+        if (state == nullptr || !m_callback) {
+            m_callback = nullptr;
+            return;
+        }
+        if (state->cancelled) {
+            auto notify = std::move(m_callback);
+            notify();
+            return;
+        }
+        m_state = state;
+        m_next = state->callbacks;
+        if (m_next != nullptr) m_next->m_previous = this;
+        state->callbacks = this;
+    }
+
+    void unlink() noexcept {
+        if (m_state == nullptr) return;
+        if (m_previous != nullptr) {
+            m_previous->m_next = m_next;
+        } else {
+            m_state->callbacks = m_next;
+        }
+        if (m_next != nullptr) m_next->m_previous = m_previous;
+        m_state = nullptr;
+        m_previous = nullptr;
+        m_next = nullptr;
+    }
+
+    void takeFrom(RpcCancellationRegistration& other) noexcept {
+        m_callback = std::move(other.m_callback);
+        m_state = std::exchange(other.m_state, nullptr);
+        m_previous = std::exchange(other.m_previous, nullptr);
+        m_next = std::exchange(other.m_next, nullptr);
+        if (m_state == nullptr) return;
+        if (m_previous != nullptr) {
+            m_previous->m_next = this;
+        } else {
+            m_state->callbacks = this;
+        }
+        if (m_next != nullptr) m_next->m_previous = this;
+    }
+
+    std::function<void()> m_callback;
+    detail::RpcCancellationState* m_state = nullptr;
+    RpcCancellationRegistration* m_previous = nullptr;
+    RpcCancellationRegistration* m_next = nullptr;
 };
 
 /**
- * @brief 取消令牌占位
- *
- * @details 当前仓库未提供统一的协程取消token，因此先保留轻量占位类型用于API兼容。
- *          后续接入仓库原生取消能力时可在不改变RpcCallOptions主结构的情况下扩展。
+ * @brief 借用 source 内嵌状态的取消令牌，可廉价复制。
+ * @note source 必须覆盖 token 的所有使用。注册、查询、取消与注销必须在同一
+ *       owner 上串行执行；外部线程应投递取消消息，不能直接访问该 token。
  */
 class RpcCancellationToken {
 public:
     RpcCancellationToken() = default;
 
     /// @brief 是否已经请求取消
-    bool cancelled() const {
-        return m_state && m_state->cancelled.load(std::memory_order_acquire);
+    bool cancelled() const noexcept {
+        return m_state != nullptr && m_state->cancelled;
     }
 
     /**
      * @brief 注册取消通知回调
-     * @param callback cancel() 后执行的回调；不得阻塞
-     * @return 注册句柄；空 token 返回 nullptr
+     * @param callback owner 上同步执行的回调；不得阻塞、抛出或销毁 source。
+     * @return 值注册；空 token 返回空注册，已取消的 token 立即执行回调。
+     * @note 调用方必须持有返回值直到不再需要通知。
      */
-    std::shared_ptr<RpcCancellationRegistration> registerCallback(std::function<void()> callback) const {
-        if (!m_state) {
-            return nullptr;
-        }
-
-        auto registration = std::make_shared<RpcCancellationRegistration>(std::move(callback));
-        auto head = m_state->callbacks.load(std::memory_order_acquire);
-        while (true) {
-            std::shared_ptr<RpcCancellationRegistration> next = head;
-            registration->next.swap(next);
-            if (m_state->callbacks.compare_exchange_weak(
-                    head, registration,
-                    std::memory_order_release,
-                    std::memory_order_acquire)) {
-                break;
-            }
-        }
-
-        if (cancelled()) {
-            const bool notified = registration->notifyIfActive();
-            if (!notified) {
-                registration->deactivate();
-            }
-        }
-        return registration;
+    [[nodiscard]] RpcCancellationRegistration registerCallback(std::function<void()> callback) const {
+        return RpcCancellationRegistration(m_state, std::move(callback));
     }
 
 private:
     friend class RpcCancellationSource;
-    explicit RpcCancellationToken(std::shared_ptr<RpcCancellationState> state)
-        : m_state(std::move(state))
+    explicit RpcCancellationToken(detail::RpcCancellationState* state) noexcept
+        : m_state(state)
     {
     }
 
-    std::shared_ptr<RpcCancellationState> m_state;  ///< 共享取消状态
+    detail::RpcCancellationState* m_state = nullptr;  ///< 借用，绝不延长 source 生命周期
 };
 
 /**
  * @brief RPC取消源
  *
- * @details 可在调用前或调用过程中请求取消。取消状态是无锁原子标志，检查不会阻塞。
+ * @details 单 owner、无内部同步。状态内嵌，无堆分配或引用计数。因 token 和注册
+ *          借用其地址，source 不可复制/移动；必须活到所有调用完成。
+ *          外部取消通过既有调度器/消息通道投递到 owner 后执行 cancel()。
  */
 class RpcCancellationSource {
 public:
-    RpcCancellationSource()
-        : m_state(std::make_shared<RpcCancellationState>())
-    {
+    RpcCancellationSource() = default;
+    RpcCancellationSource(RpcCancellationSource&&) = delete;
+    RpcCancellationSource& operator=(RpcCancellationSource&&) = delete;
+
+    ~RpcCancellationSource() {
+        // 捕获对象的析构可能重入注册，不允许再把节点挂回正在销毁的域。
+        m_state.cancelled = true;
+        while (m_state.callbacks != nullptr) m_state.callbacks->deactivate();
     }
 
     /// @brief 请求取消
-    void cancel() const {
-        const bool already_cancelled = m_state->cancelled.exchange(true, std::memory_order_acq_rel);
-        if (already_cancelled) {
-            return;
-        }
-
-        auto registration = m_state->callbacks.load(std::memory_order_acquire);
-        while (registration) {
-            const bool did_notify = registration->notifyIfActive();
-            if (!did_notify) {
-                registration->deactivate();
-            }
-            std::shared_ptr<RpcCancellationRegistration> next = registration->next;
-            registration.swap(next);
+    void cancel() {
+        if (m_state.cancelled) return;
+        m_state.cancelled = true;
+        while (m_state.callbacks != nullptr) {
+            auto* registration = m_state.callbacks;
+            registration->unlink();
+            // 先摘链并取走回调，允许通知中删除自身、其他注册或重入 cancel()。
+            auto callback = std::move(registration->m_callback);
+            callback();
         }
     }
 
     /// @brief 获取传递给RpcCallOptions的token
-    RpcCancellationToken token() const { return RpcCancellationToken(m_state); }
+    RpcCancellationToken token() noexcept { return RpcCancellationToken(&m_state); }
 
 private:
-    std::shared_ptr<RpcCancellationState> m_state;  ///< 共享取消状态
+    RpcCancellationSource(const RpcCancellationSource&) = delete;
+    RpcCancellationSource& operator=(const RpcCancellationSource&) = delete;
+    detail::RpcCancellationState m_state;
 };
 
 /**

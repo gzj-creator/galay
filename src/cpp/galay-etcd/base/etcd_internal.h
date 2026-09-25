@@ -5,7 +5,7 @@
  * @version 1.0.0
  *
  * @details 提供 etcd 客户端内部使用的辅助函数，包括：
- *          - JSON 解析与字段提取（基于 simdjson）
+ *          - JSON 解析与字段提取（基于 serde 模块）
  *          - Base64 编解码
  *          - 端点地址解析
  *          - etcd v3 REST API 请求体构建
@@ -131,30 +131,30 @@ inline std::optional<int64_t> parseSignedInt(std::string_view value)
 }
 
 /**
- * @brief 从 simdjson 元素中提取 64 位整数
+ * @brief 从 JSON 元素中提取 64 位整数
  * @details 依次尝试 int64、uint64 和字符串三种类型，
  *          若为 uint64 则检查是否在 int64 范围内。
- * @param element simdjson JSON 元素
+ * @param element serde JSON 元素
  * @return 成功提取返回整数值，失败返回 std::nullopt
  */
-inline std::optional<int64_t> asInt64(const simdjson::dom::element& element)
+inline std::optional<int64_t> asInt64(const json::Json& element)
 {
-    auto int64_result = element.get_int64();
-    if (!int64_result.error()) {
-        return int64_result.value_unsafe();
+    auto int64_result = element.as_int64();
+    if (int64_result.has_value()) {
+        return int64_result.value();
     }
 
-    auto uint64_result = element.get_uint64();
-    if (!uint64_result.error()) {
-        const uint64_t value = uint64_result.value_unsafe();
+    auto uint64_result = element.as_uint64();
+    if (uint64_result.has_value()) {
+        const uint64_t value = uint64_result.value();
         if (value <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
             return static_cast<int64_t>(value);
         }
     }
 
-    auto string_result = element.get_string();
-    if (!string_result.error()) {
-        return parseSignedInt(string_result.value_unsafe());
+    auto string_result = element.as_string();
+    if (string_result.has_value()) {
+        return parseSignedInt(string_result.value());
     }
     return std::nullopt;
 }
@@ -165,13 +165,13 @@ inline std::optional<int64_t> asInt64(const simdjson::dom::element& element)
  * @param field 字段名
  * @return 成功提取返回整数值，字段不存在或类型不匹配返回 std::nullopt
  */
-inline std::optional<int64_t> findIntField(const simdjson::dom::object& object, std::string_view field)
+inline std::optional<int64_t> findIntField(const json::Json& object, std::string_view field)
 {
-    auto field_result = object[field];
-    if (field_result.error()) {
+    const json::Json field_value = object.at(field);
+    if (!field_value.valid()) {
         return std::nullopt;
     }
-    return asInt64(field_result.value_unsafe());
+    return asInt64(field_value);
 }
 
 /**
@@ -180,31 +180,29 @@ inline std::optional<int64_t> findIntField(const simdjson::dom::object& object, 
  * @param field 字段名
  * @return 成功提取返回字符串值，字段不存在或类型不匹配返回 std::nullopt
  */
-inline std::optional<std::string> findStringField(const simdjson::dom::object& object, std::string_view field)
+inline std::optional<std::string> findStringField(const json::Json& object, std::string_view field)
 {
-    auto field_result = object[field];
-    if (field_result.error()) {
+    const json::Json field_value = object.at(field);
+    if (!field_value.valid()) {
         return std::nullopt;
     }
 
-    auto string_result = field_result.value_unsafe().get_string();
-    if (string_result.error()) {
+    auto string_result = field_value.as_string();
+    if (!string_result.has_value()) {
         return std::nullopt;
     }
-    return std::string(string_result.value_unsafe());
+    return std::string(string_result.value());
 }
 
 /**
  * @brief 创建 JSON 解析错误
  * @param context 错误上下文描述
- * @param error simdjson 错误码
+ * @param message serde JSON 错误消息
  * @return 包含上下文和错误描述的 EtcdError
  */
-inline EtcdError makeJsonParseError(const std::string& context, simdjson::error_code error)
+inline EtcdError makeJsonParseError(const std::string& context, const std::string& message)
 {
-    return EtcdError(
-        EtcdErrorType::Parse,
-        context + ": " + std::string(simdjson::error_message(error)));
+    return EtcdError(EtcdErrorType::Parse, context + ": " + message);
 }
 
 /**
@@ -214,30 +212,31 @@ inline EtcdError makeJsonParseError(const std::string& context, simdjson::error_
  * @param parse_error 输出参数，解析失败时写入错误信息（可为 nullptr）
  * @param context 错误上下文描述
  * @return 成功返回 JSON 对象，失败返回 std::nullopt
+ * @note 返回值及其派生子值仅在同一线程下一次 parse 之前有效。
  */
-inline std::optional<simdjson::dom::object> parseJsonObject(
+inline std::optional<json::Json> parseJsonObject(
     const std::string& body,
-    simdjson::dom::parser& parser,
+    json::Parser& parser,
     EtcdError* parse_error,
     const std::string& context)
 {
     auto doc_result = parser.parse(body);
-    if (doc_result.error()) {
+    if (!doc_result.has_value()) {
         if (parse_error != nullptr) {
             *parse_error = makeJsonParseError(context, doc_result.error());
         }
         return std::nullopt;
     }
 
-    auto object_result = doc_result.value_unsafe().get_object();
-    if (object_result.error()) {
+    const json::Json& doc = doc_result.value();
+    if (!doc.is_object()) {
         if (parse_error != nullptr) {
-            *parse_error = makeJsonParseError(context, object_result.error());
+            *parse_error = makeJsonParseError(context, "JSON value is not an object");
         }
         return std::nullopt;
     }
 
-    return object_result.value_unsafe();
+    return doc;
 }
 
 /**
@@ -420,12 +419,12 @@ inline std::string buildHostHeader(const std::string& host, uint16_t port, bool 
 
 /**
  * @brief 获取线程本地的 JSON 解析器实例
- * @details 返回 thread_local 的 simdjson 解析器，避免频繁创建和销毁解析器。
- * @return 线程本地的 simdjson 解析器引用
+ * @details 返回 thread_local 的 serde 解析器，避免频繁创建和销毁解析器。
+ * @return 线程本地的 serde 解析器引用
  */
-inline simdjson::dom::parser& threadLocalJsonParser()
+inline json::Parser& threadLocalJsonParser()
 {
-    thread_local simdjson::dom::parser parser;
+    thread_local json::Parser parser;
     return parser;
 }
 
@@ -437,7 +436,7 @@ inline simdjson::dom::parser& threadLocalJsonParser()
  * @param context 错误上下文描述
  * @return 成功返回 JSON 对象，失败返回 EtcdError
  */
-inline std::expected<simdjson::dom::object, EtcdError> parseEtcdSuccessObject(
+inline std::expected<json::Json, EtcdError> parseEtcdSuccessObject(
     const std::string& body,
     const std::string& context)
 {
@@ -467,24 +466,22 @@ inline std::expected<simdjson::dom::object, EtcdError> parseEtcdSuccessObject(
  * @return 成功返回键值对列表，字段不存在返回空列表，解析失败返回 EtcdError
  */
 inline std::expected<std::vector<EtcdKeyValue>, EtcdError> parseKvsFromObject(
-    const simdjson::dom::object& object,
+    const json::Json& object,
     const std::string& context)
 {
-    auto kvs_field = object["kvs"];
-    if (kvs_field.error()) {
+    const json::Json kvs_field = object.at("kvs");
+    if (!kvs_field.valid()) {
         return std::vector<EtcdKeyValue>{};
     }
 
-    auto kvs_array_result = kvs_field.value_unsafe().get_array();
-    if (kvs_array_result.error()) {
-        return std::unexpected(makeJsonParseError(context + ".kvs as array", kvs_array_result.error()));
+    if (!kvs_field.is_array()) {
+        return std::unexpected(makeJsonParseError(context + ".kvs as array", "JSON value is not an array"));
     }
 
-    const auto kvs_array = kvs_array_result.value_unsafe();
     std::vector<EtcdKeyValue> kvs;
-    kvs.reserve(kvs_array.size());
+    kvs.reserve(kvs_field.size());
 
-    auto parseKvObject = [](const simdjson::dom::object& kv_object,
+    auto parseKvObject = [](const json::Json& kv_object,
                             const std::string& kv_context) -> std::expected<EtcdKeyValue, EtcdError> {
         const auto encoded_key = findStringField(kv_object, "key");
         if (!encoded_key.has_value()) {
@@ -512,13 +509,13 @@ inline std::expected<std::vector<EtcdKeyValue>, EtcdError> parseKvsFromObject(
         return item;
     };
 
-    for (auto kv_element : kvs_array) {
-        auto kv_object_result = kv_element.get_object();
-        if (kv_object_result.error()) {
-            return std::unexpected(makeJsonParseError(context + ".kv item as object", kv_object_result.error()));
+    for (size_t index = 0; index < kvs_field.size(); ++index) {
+        const json::Json kv_element = kvs_field.at(index);
+        if (!kv_element.is_object()) {
+            return std::unexpected(makeJsonParseError(context + ".kv item as object", "JSON value is not an object"));
         }
 
-        auto parsed_kv = parseKvObject(kv_object_result.value_unsafe(), context);
+        auto parsed_kv = parseKvObject(kv_element, context);
         if (!parsed_kv.has_value()) {
             return std::unexpected(parsed_kv.error());
         }
@@ -537,7 +534,7 @@ inline std::expected<std::vector<EtcdKeyValue>, EtcdError> parseKvsFromObject(
  * @return 成功返回 EtcdKeyValue，解析失败返回 EtcdError
  */
 inline std::expected<EtcdKeyValue, EtcdError> parseKvObject(
-    const simdjson::dom::object& kv_object,
+    const json::Json& kv_object,
     const std::string& context)
 {
     const auto encoded_key = findStringField(kv_object, "key");
@@ -567,17 +564,18 @@ inline std::expected<EtcdKeyValue, EtcdError> parseKvObject(
 }
 
 /**
- * @brief 快速判断响应体是否可能包含 etcd 错误字段
- * @details 通过检查 "code"、"message"、"error" 关键字，
- *          用于在解析前快速判断是否需要完整解析。
- * @param body HTTP 响应体
- * @return 可能包含错误字段返回 true，否则返回 false
+ * @brief 构造以字符串为输出sink的serde流式JSON写入器
+ * @param out 接收JSON文本的字符串
+ * @return 绑定sink的 json::stream::StreamWriter
+ * @note StreamWriter失败粘滞：中间写入调用的返回值可安全丢弃，
+ *       最终必须检查 finish() 的结果。
  */
-inline bool maybeContainsEtcdErrorFields(const std::string& body)
+inline json::stream::StreamWriter makeJsonWriter(std::string& out)
 {
-    return body.find("\"code\"") != std::string::npos ||
-        body.find("\"message\"") != std::string::npos ||
-        body.find("\"error\"") != std::string::npos;
+    return json::stream::StreamWriter{[&out](std::string_view text) -> json::result<void> {
+        out.append(text);
+        return {};
+    }};
 }
 
 /**
@@ -601,21 +599,22 @@ inline std::expected<std::string, EtcdError> buildPutRequestBody(
         return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "lease id must be positive"));
     }
 
-    const std::string encoded_key = encodeBase64(key);
-    const std::string encoded_value = encodeBase64(value);
     std::string body;
-    body.reserve(40 + encoded_key.size() + encoded_value.size() + (lease_id.has_value() ? 32 : 0));
-    body += "{\"key\":\"";
-    body += encoded_key;
-    body += "\",\"value\":\"";
-    body += encoded_value;
-    body += "\"";
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("key");
+    (void)writer.string(encodeBase64(key));
+    (void)writer.key("value");
+    (void)writer.string(encodeBase64(value));
     if (lease_id.has_value()) {
-        body += ",\"lease\":\"";
-        body += std::to_string(lease_id.value());
-        body += "\"";
+        (void)writer.key("lease");
+        (void)writer.string(std::to_string(lease_id.value()));
     }
-    body += "}";
+    (void)writer.end_object();
+    if (auto done = writer.finish(); !done.has_value()) {
+        return std::unexpected(EtcdError(EtcdErrorType::Internal, "encode put request body: " + done.error()));
+    }
     return body;
 }
 
@@ -639,27 +638,24 @@ inline std::expected<std::string, EtcdError> buildGetRequestBody(
         return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "limit must be positive"));
     }
 
-    const std::string encoded_key = encodeBase64(key);
-    std::string encoded_range_end;
-    if (prefix) {
-        encoded_range_end = encodeBase64(makePrefixRangeEnd(std::string(key)));
-    }
-
     std::string body;
-    body.reserve(32 + encoded_key.size() + encoded_range_end.size() + (limit.has_value() ? 24 : 0));
-    body += "{\"key\":\"";
-    body += encoded_key;
-    body += "\"";
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("key");
+    (void)writer.string(encodeBase64(key));
     if (prefix) {
-        body += ",\"range_end\":\"";
-        body += encoded_range_end;
-        body += "\"";
+        (void)writer.key("range_end");
+        (void)writer.string(encodeBase64(makePrefixRangeEnd(std::string(key))));
     }
     if (limit.has_value()) {
-        body += ",\"limit\":";
-        body += std::to_string(limit.value());
+        (void)writer.key("limit");
+        (void)writer.number(limit.value());
     }
-    body += "}";
+    (void)writer.end_object();
+    if (auto done = writer.finish(); !done.has_value()) {
+        return std::unexpected(EtcdError(EtcdErrorType::Internal, "encode get request body: " + done.error()));
+    }
     return body;
 }
 
@@ -678,23 +674,20 @@ inline std::expected<std::string, EtcdError> buildDeleteRequestBody(
         return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "key must not be empty"));
     }
 
-    const std::string encoded_key = encodeBase64(key);
-    std::string encoded_range_end;
-    if (prefix) {
-        encoded_range_end = encodeBase64(makePrefixRangeEnd(std::string(key)));
-    }
-
     std::string body;
-    body.reserve(32 + encoded_key.size() + encoded_range_end.size());
-    body += "{\"key\":\"";
-    body += encoded_key;
-    body += "\"";
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("key");
+    (void)writer.string(encodeBase64(key));
     if (prefix) {
-        body += ",\"range_end\":\"";
-        body += encoded_range_end;
-        body += "\"";
+        (void)writer.key("range_end");
+        (void)writer.string(encodeBase64(makePrefixRangeEnd(std::string(key))));
     }
-    body += "}";
+    (void)writer.end_object();
+    if (auto done = writer.finish(); !done.has_value()) {
+        return std::unexpected(EtcdError(EtcdErrorType::Internal, "encode delete request body: " + done.error()));
+    }
     return body;
 }
 
@@ -708,7 +701,17 @@ inline std::expected<std::string, EtcdError> buildLeaseGrantRequestBody(int64_t 
     if (ttl_seconds <= 0) {
         return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "ttl must be positive"));
     }
-    return std::string("{\"TTL\":") + std::to_string(ttl_seconds) + "}";
+    std::string body;
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("TTL");
+    (void)writer.number(ttl_seconds);
+    (void)writer.end_object();
+    if (auto done = writer.finish(); !done.has_value()) {
+        return std::unexpected(EtcdError(EtcdErrorType::Internal, "encode lease grant request body: " + done.error()));
+    }
+    return body;
 }
 
 /**
@@ -721,7 +724,17 @@ inline std::expected<std::string, EtcdError> buildLeaseKeepAliveRequestBody(int6
     if (lease_id <= 0) {
         return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "lease id must be positive"));
     }
-    return std::string("{\"ID\":\"") + std::to_string(lease_id) + "\"}";
+    std::string body;
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("ID");
+    (void)writer.string(std::to_string(lease_id));
+    (void)writer.end_object();
+    if (auto done = writer.finish(); !done.has_value()) {
+        return std::unexpected(EtcdError(EtcdErrorType::Internal, "encode lease keepalive request body: " + done.error()));
+    }
+    return body;
 }
 
 /**
@@ -736,7 +749,20 @@ inline std::expected<std::string, EtcdError> buildWatchRequestBody(std::string_v
         return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "key must not be empty"));
     }
 
-    return std::string("{\"create_request\":{\"key\":\"") + encodeBase64(key) + "\"}}";
+    std::string body;
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("create_request");
+    (void)writer.start_object();
+    (void)writer.key("key");
+    (void)writer.string(encodeBase64(key));
+    (void)writer.end_object();
+    (void)writer.end_object();
+    if (auto done = writer.finish(); !done.has_value()) {
+        return std::unexpected(EtcdError(EtcdErrorType::Internal, "encode watch request body: " + done.error()));
+    }
+    return body;
 }
 
 /**
@@ -752,9 +778,15 @@ inline std::expected<std::string, EtcdError> buildTxnBody(std::span<const Pipeli
         return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "pipeline operations must not be empty"));
     }
 
-    std::string body = "{\"compare\":[],\"success\":[";
-    body.reserve(operations.size() * 96 + 32);
-    bool first = true;
+    std::string body;
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("compare");
+    (void)writer.start_array();
+    (void)writer.end_array();
+    (void)writer.key("success");
+    (void)writer.start_array();
     for (const auto& op : operations) {
         if (op.key.empty()) {
             return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "pipeline op key must not be empty"));
@@ -766,59 +798,61 @@ inline std::expected<std::string, EtcdError> buildTxnBody(std::span<const Pipeli
             return std::unexpected(EtcdError(EtcdErrorType::InvalidParam, "pipeline op lease id must be positive"));
         }
 
-        if (!first) {
-            body += ",";
-        }
-        first = false;
-
+        (void)writer.start_object();
         switch (op.type) {
         case PipelineOpType::Put: {
-            const std::string encoded_key = encodeBase64(op.key);
-            const std::string encoded_value = encodeBase64(op.value);
-            body += "{\"request_put\":{\"key\":\"";
-            body += encoded_key;
-            body += "\",\"value\":\"";
-            body += encoded_value;
-            body += "\"";
+            (void)writer.key("request_put");
+            (void)writer.start_object();
+            (void)writer.key("key");
+            (void)writer.string(encodeBase64(op.key));
+            (void)writer.key("value");
+            (void)writer.string(encodeBase64(op.value));
             if (op.lease_id.has_value()) {
-                body += ",\"lease\":\"" + std::to_string(op.lease_id.value()) + "\"";
+                (void)writer.key("lease");
+                (void)writer.string(std::to_string(op.lease_id.value()));
             }
-            body += "}}";
+            (void)writer.end_object();
             break;
         }
         case PipelineOpType::Get: {
-            const std::string encoded_key = encodeBase64(op.key);
-            body += "{\"request_range\":{\"key\":\"";
-            body += encoded_key;
-            body += "\"";
+            (void)writer.key("request_range");
+            (void)writer.start_object();
+            (void)writer.key("key");
+            (void)writer.string(encodeBase64(op.key));
             if (op.prefix) {
-                body += ",\"range_end\":\"";
-                body += encodeBase64(makePrefixRangeEnd(op.key));
-                body += "\"";
+                (void)writer.key("range_end");
+                (void)writer.string(encodeBase64(makePrefixRangeEnd(op.key)));
             }
             if (op.limit.has_value()) {
-                body += ",\"limit\":" + std::to_string(op.limit.value());
+                (void)writer.key("limit");
+                (void)writer.number(op.limit.value());
             }
-            body += "}}";
+            (void)writer.end_object();
             break;
         }
         case PipelineOpType::Delete: {
-            const std::string encoded_key = encodeBase64(op.key);
-            body += "{\"request_delete_range\":{\"key\":\"";
-            body += encoded_key;
-            body += "\"";
+            (void)writer.key("request_delete_range");
+            (void)writer.start_object();
+            (void)writer.key("key");
+            (void)writer.string(encodeBase64(op.key));
             if (op.prefix) {
-                body += ",\"range_end\":\"";
-                body += encodeBase64(makePrefixRangeEnd(op.key));
-                body += "\"";
+                (void)writer.key("range_end");
+                (void)writer.string(encodeBase64(makePrefixRangeEnd(op.key)));
             }
-            body += "}}";
+            (void)writer.end_object();
             break;
         }
         }
+        (void)writer.end_object();
     }
-
-    body += "],\"failure\":[]}";
+    (void)writer.end_array();
+    (void)writer.key("failure");
+    (void)writer.start_array();
+    (void)writer.end_array();
+    (void)writer.end_object();
+    if (auto done = writer.finish(); !done.has_value()) {
+        return std::unexpected(EtcdError(EtcdErrorType::Internal, "encode txn request body: " + done.error()));
+    }
     return body;
 }
 
@@ -841,83 +875,78 @@ inline std::expected<std::string, EtcdError> buildTxnBody(const std::vector<Pipe
  * @return 成功返回 Pipeline 结果列表，失败返回 EtcdError
  */
 inline std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineResponses(
-    const simdjson::dom::object& root,
+    const json::Json& root,
     std::span<const PipelineOpType> operation_types)
 {
-    auto succeeded_field = root["succeeded"];
-    if (!succeeded_field.error()) {
-        auto succeeded_result = succeeded_field.value_unsafe().get_bool();
-        if (!succeeded_result.error() && !succeeded_result.value_unsafe()) {
+    const json::Json succeeded_field = root.at("succeeded");
+    if (succeeded_field.valid()) {
+        auto succeeded_result = succeeded_field.as_bool();
+        if (succeeded_result.has_value() && !succeeded_result.value()) {
             return std::unexpected(EtcdError(EtcdErrorType::Server, "pipeline txn returned succeeded=false"));
         }
     }
 
-    auto responses_field = root["responses"];
-    if (responses_field.error()) {
+    const json::Json responses_field = root.at("responses");
+    if (!responses_field.valid()) {
         return std::unexpected(EtcdError(EtcdErrorType::Parse, "pipeline txn response missing responses field"));
     }
 
-    auto responses_array_result = responses_field.value_unsafe().get_array();
-    if (responses_array_result.error()) {
-        return std::unexpected(makeJsonParseError("parse pipeline responses as array", responses_array_result.error()));
+    if (!responses_field.is_array()) {
+        return std::unexpected(makeJsonParseError("parse pipeline responses as array", "JSON value is not an array"));
     }
 
-    const auto responses = responses_array_result.value_unsafe();
-    if (responses.size() != operation_types.size()) {
+    if (responses_field.size() != operation_types.size()) {
         return std::unexpected(EtcdError(
             EtcdErrorType::Parse,
             "pipeline responses size mismatch, expected=" + std::to_string(operation_types.size()) +
-                ", actual=" + std::to_string(responses.size())));
+                ", actual=" + std::to_string(responses_field.size())));
     }
 
     std::vector<PipelineItemResult> pipeline_results;
     pipeline_results.reserve(operation_types.size());
 
     for (size_t i = 0; i < operation_types.size(); ++i) {
-        auto item_object_result = responses.at(i).get_object();
-        if (item_object_result.error()) {
+        const json::Json item_object = responses_field.at(i);
+        if (!item_object.is_object()) {
             return std::unexpected(makeJsonParseError(
                 "parse pipeline response item as object",
-                item_object_result.error()));
+                "JSON value is not an object"));
         }
 
-        const auto item_object = item_object_result.value_unsafe();
         PipelineItemResult item;
         item.type = operation_types[i];
 
         switch (operation_types[i]) {
         case PipelineOpType::Put: {
-            auto put_field = item_object["response_put"];
-            if (put_field.error()) {
+            const json::Json put_field = item_object.at("response_put");
+            if (!put_field.valid()) {
                 return std::unexpected(EtcdError(
                     EtcdErrorType::Parse,
                     "pipeline put response missing response_put"));
             }
-            auto put_object_result = put_field.value_unsafe().get_object();
-            if (put_object_result.error()) {
+            if (!put_field.is_object()) {
                 return std::unexpected(makeJsonParseError(
                     "parse pipeline response_put as object",
-                    put_object_result.error()));
+                    "JSON value is not an object"));
             }
             item.ok = true;
             break;
         }
         case PipelineOpType::Get: {
-            auto range_field = item_object["response_range"];
-            if (range_field.error()) {
+            const json::Json range_field = item_object.at("response_range");
+            if (!range_field.valid()) {
                 return std::unexpected(EtcdError(
                     EtcdErrorType::Parse,
                     "pipeline get response missing response_range"));
             }
-            auto range_object_result = range_field.value_unsafe().get_object();
-            if (range_object_result.error()) {
+            if (!range_field.is_object()) {
                 return std::unexpected(makeJsonParseError(
                     "parse pipeline response_range as object",
-                    range_object_result.error()));
+                    "JSON value is not an object"));
             }
 
             auto kvs_result = parseKvsFromObject(
-                range_object_result.value_unsafe(),
+                range_field,
                 "parse pipeline response_range");
             if (!kvs_result.has_value()) {
                 return std::unexpected(kvs_result.error());
@@ -927,19 +956,18 @@ inline std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineRe
             break;
         }
         case PipelineOpType::Delete: {
-            auto del_field = item_object["response_delete_range"];
-            if (del_field.error()) {
+            const json::Json del_field = item_object.at("response_delete_range");
+            if (!del_field.valid()) {
                 return std::unexpected(EtcdError(
                     EtcdErrorType::Parse,
                     "pipeline delete response missing response_delete_range"));
             }
-            auto del_object_result = del_field.value_unsafe().get_object();
-            if (del_object_result.error()) {
+            if (!del_field.is_object()) {
                 return std::unexpected(makeJsonParseError(
                     "parse pipeline response_delete_range as object",
-                    del_object_result.error()));
+                    "JSON value is not an object"));
             }
-            item.deleted_count = findIntField(del_object_result.value_unsafe(), "deleted").value_or(0);
+            item.deleted_count = findIntField(del_field, "deleted").value_or(0);
             item.ok = true;
             break;
         }
@@ -959,7 +987,7 @@ inline std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineRe
  * @return 成功返回 Pipeline 结果列表，失败返回 EtcdError
  */
 inline std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineResponses(
-    const simdjson::dom::object& root,
+    const json::Json& root,
     std::span<const PipelineOp> operations)
 {
     std::vector<PipelineOpType> operation_types;
@@ -972,16 +1000,12 @@ inline std::expected<std::vector<PipelineItemResult>, EtcdError> parsePipelineRe
 
 /**
  * @brief 解析 Put 操作响应
- * @details 检查响应体是否包含错误字段，若有则完整解析并返回错误。
+ * @details 解析响应体并检查是否包含 etcd 服务端错误字段。
  * @param body HTTP 响应体
  * @return 成功返回 void，失败返回 EtcdError
  */
 inline std::expected<void, EtcdError> parsePutResponse(const std::string& body)
 {
-    if (!maybeContainsEtcdErrorFields(body)) {
-        return {};
-    }
-
     auto root = parseEtcdSuccessObject(body, "parse put response");
     if (!root.has_value()) {
         return std::unexpected(root.error());
@@ -1114,53 +1138,50 @@ inline std::expected<EtcdWatchResponse, EtcdError> parseWatchResponse(const std:
         return std::unexpected(std::move(parse_error));
     }
 
-    auto result_field = root.value()["result"];
-    if (result_field.error()) {
+    const json::Json result_field = root.value().at("result");
+    if (!result_field.valid()) {
         return std::unexpected(EtcdError(EtcdErrorType::Parse, "watch response missing result"));
     }
 
-    auto result_object_result = result_field.value_unsafe().get_object();
-    if (result_object_result.error()) {
-        return std::unexpected(makeJsonParseError("parse watch result as object", result_object_result.error()));
+    if (!result_field.is_object()) {
+        return std::unexpected(makeJsonParseError("parse watch result as object", "JSON value is not an object"));
     }
 
-    const auto result_object = result_object_result.value_unsafe();
+    const json::Json& result_object = result_field;
 
     EtcdWatchResponse response;
     response.watch_id = findIntField(result_object, "watch_id").value_or(0);
     response.compact_revision = findIntField(result_object, "compact_revision").value_or(0);
 
-    if (auto created_field = result_object["created"]; !created_field.error()) {
-        auto created_result = created_field.value_unsafe().get_bool();
-        if (!created_result.error()) {
-            response.created = created_result.value_unsafe();
+    if (const json::Json created_field = result_object.at("created"); created_field.valid()) {
+        auto created_result = created_field.as_bool();
+        if (created_result.has_value()) {
+            response.created = created_result.value();
         }
     }
 
-    if (auto canceled_field = result_object["canceled"]; !canceled_field.error()) {
-        auto canceled_result = canceled_field.value_unsafe().get_bool();
-        if (!canceled_result.error()) {
-            response.canceled = canceled_result.value_unsafe();
+    if (const json::Json canceled_field = result_object.at("canceled"); canceled_field.valid()) {
+        auto canceled_result = canceled_field.as_bool();
+        if (canceled_result.has_value()) {
+            response.canceled = canceled_result.value();
         }
     }
 
-    auto events_field = result_object["events"];
-    if (events_field.error()) {
+    const json::Json events_field = result_object.at("events");
+    if (!events_field.valid()) {
         return response;
     }
 
-    auto events_array_result = events_field.value_unsafe().get_array();
-    if (events_array_result.error()) {
-        return std::unexpected(makeJsonParseError("parse watch events as array", events_array_result.error()));
+    if (!events_field.is_array()) {
+        return std::unexpected(makeJsonParseError("parse watch events as array", "JSON value is not an array"));
     }
 
-    for (auto event_element : events_array_result.value_unsafe()) {
-        auto event_object_result = event_element.get_object();
-        if (event_object_result.error()) {
-            return std::unexpected(makeJsonParseError("parse watch event as object", event_object_result.error()));
+    for (size_t event_index = 0; event_index < events_field.size(); ++event_index) {
+        const json::Json event_object = events_field.at(event_index);
+        if (!event_object.is_object()) {
+            return std::unexpected(makeJsonParseError("parse watch event as object", "JSON value is not an object"));
         }
 
-        const auto event_object = event_object_result.value_unsafe();
         EtcdWatchEvent event;
 
         if (auto type_string = findStringField(event_object, "type"); type_string.has_value()) {
@@ -1173,13 +1194,12 @@ inline std::expected<EtcdWatchResponse, EtcdError> parseWatchResponse(const std:
             }
         }
 
-        auto kv_field = event_object["kv"];
-        if (!kv_field.error()) {
-            auto kv_object_result = kv_field.value_unsafe().get_object();
-            if (kv_object_result.error()) {
-                return std::unexpected(makeJsonParseError("parse watch kv as object", kv_object_result.error()));
+        const json::Json kv_field = event_object.at("kv");
+        if (kv_field.valid()) {
+            if (!kv_field.is_object()) {
+                return std::unexpected(makeJsonParseError("parse watch kv as object", "JSON value is not an object"));
             }
-            auto kv_result = parseKvObject(kv_object_result.value_unsafe(), "parse watch kv");
+            auto kv_result = parseKvObject(kv_field, "parse watch kv");
             if (!kv_result.has_value()) {
                 return std::unexpected(kv_result.error());
             }
@@ -1191,13 +1211,12 @@ inline std::expected<EtcdWatchResponse, EtcdError> parseWatchResponse(const std:
             }
         }
 
-        auto prev_kv_field = event_object["prev_kv"];
-        if (!prev_kv_field.error()) {
-            auto prev_kv_object_result = prev_kv_field.value_unsafe().get_object();
-            if (prev_kv_object_result.error()) {
-                return std::unexpected(makeJsonParseError("parse watch prev_kv as object", prev_kv_object_result.error()));
+        const json::Json prev_kv_field = event_object.at("prev_kv");
+        if (prev_kv_field.valid()) {
+            if (!prev_kv_field.is_object()) {
+                return std::unexpected(makeJsonParseError("parse watch prev_kv as object", "JSON value is not an object"));
             }
-            auto prev_kv_result = parseKvObject(prev_kv_object_result.value_unsafe(), "parse watch prev_kv");
+            auto prev_kv_result = parseKvObject(prev_kv_field, "parse watch prev_kv");
             if (!prev_kv_result.has_value()) {
                 return std::unexpected(prev_kv_result.error());
             }

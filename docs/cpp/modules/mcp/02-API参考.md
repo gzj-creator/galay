@@ -614,6 +614,36 @@ public:
 - 服务端回归程序：`test/t4_http.cc`
 - HTTP 集成脚本：`scripts/S7-RunHttpIntegrationTest.sh`
 
+### v2 HTTP server 额外接口与并发契约
+
+2026-07-28 协议版本的独立 API 位于 galay::mcp::v2，不要与本节的 v1
+根命名空间类型混用。v2 McpHttpServer 的通知入口是普通函数，不返回协程：
+
+```cpp
+std::expected<void, McpError> notifyToolsListChanged();
+std::expected<void, McpError> notifyResourcesListChanged();
+std::expected<void, McpError> notifyPromptsListChanged();
+std::expected<void, McpError> notifyResourceUpdated(std::string uri);
+```
+
+这些函数可从任意线程提交拥有值的命令，不阻塞，也不创建协程。成功仅代表
+命令已进入 owner 队列，不代表订阅者已收到通知；订阅者事件队列仍有界，满时
+丢弃该事件。入口关闭返回 ConnectionClosed，队列提交失败返回 Overload。
+start() 所在线程独占订阅链表并处理命令；stop() 是供外部线程调用的阻塞生命周期
+操作，销毁对象前必须 join start() 线程。注册表及 server 配置只允许在 start()
+前由单线程设置。
+
+v2 McpHttpClient 的 transport 和工具定义表属于 runtime.getIOScheduler(0)。
+请求和 listen() 必须由该 owner scheduler 执行；跨 scheduler 调用返回
+InvalidParams，重叠请求返回 Overload。connect() / close() 返回
+std::expected<ConnectAwaitable, McpError> 和
+std::expected<CloseAwaitable, McpError>，只做 owner/并发检查，不包装成新协程；
+调用者必须在 owner 上 await 该 transport task 到完成，再执行其他客户端操作。
+
+边界测试：`test/cpp/mcp/t19_v2_owner_boundaries.cc`、
+`test/cpp/mcp/t20_v2_owner_commands.cc`、
+`test/cpp/mcp/t21_v2_owner_lifecycle.cc`。
+
 ## 10. `McpClient` HTTP 模式
 
 来源：`galay-mcp/v1/client/client.h`

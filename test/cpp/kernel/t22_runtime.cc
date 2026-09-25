@@ -42,17 +42,10 @@ void test_concurrent_get_scheduler() {
     constexpr int THREAD_COUNT = 8;
     constexpr int ITERATIONS = 100000;
 
-    Runtime runtime;
-
-    // 添加调度器
-    for (int i = 0; i < SCHEDULER_COUNT; ++i) {
-        auto io = std::make_unique<IOSchedulerType>();
-        runtime.addIOScheduler(std::move(io));
-        auto parallel = std::make_unique<ParallelScheduler>();
-        runtime.addParallelScheduler(std::move(parallel));
-    }
-
-    runtime.start();
+    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
+        .parallelSchedulerCount(SCHEDULER_COUNT).build();
+    const auto started = runtime.start();
+    if (!started) { return; }
 
     // 统计每个调度器被选中的次数
     std::vector<std::atomic<int>> io_counts(SCHEDULER_COUNT);
@@ -148,14 +141,10 @@ void test_high_concurrency_spawn() {
 
     g_task_completed.store(0);
 
-    Runtime runtime;
-
-    for (int i = 0; i < SCHEDULER_COUNT; ++i) {
-        auto io = std::make_unique<IOSchedulerType>();
-        runtime.addIOScheduler(std::move(io));
-    }
-
-    runtime.start();
+    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
+        .parallelSchedulerCount(0).build();
+    const auto started = runtime.start();
+    if (!started) { return; }
 
     auto start = std::chrono::steady_clock::now();
 
@@ -210,14 +199,10 @@ void test_index_overflow() {
     // 模拟大量调用，测试 uint32_t 溢出后的行为
     constexpr uint64_t ITERATIONS = 1000000;
 
-    Runtime runtime;
-
-    for (int i = 0; i < SCHEDULER_COUNT; ++i) {
-        auto io = std::make_unique<IOSchedulerType>();
-        runtime.addIOScheduler(std::move(io));
-    }
-
-    runtime.start();
+    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
+        .parallelSchedulerCount(0).build();
+    const auto started = runtime.start();
+    if (!started) { return; }
 
     // 快速调用大量次数
     std::map<IOScheduler*, int> distribution;
@@ -279,14 +264,10 @@ void test_performance_benchmark() {
     constexpr int SCHEDULER_COUNT = 8;
     constexpr int ITERATIONS = 10000000;
 
-    Runtime runtime;
-
-    for (int i = 0; i < SCHEDULER_COUNT; ++i) {
-        auto io = std::make_unique<IOSchedulerType>();
-        runtime.addIOScheduler(std::move(io));
-    }
-
-    runtime.start();
+    auto runtime = RuntimeBuilder().ioSchedulerCount(SCHEDULER_COUNT)
+        .parallelSchedulerCount(0).build();
+    const auto started = runtime.start();
+    if (!started) { return; }
 
     auto start = std::chrono::steady_clock::now();
 

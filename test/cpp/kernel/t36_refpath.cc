@@ -5,7 +5,7 @@
  * 通过条件：TaskRef 调度路径命中预期断言，测试返回 0。
  */
 
-#include <galay/cpp/galay-kernel/core/scheduler.hpp>
+#include "test/cpp/common/scheduler_test_adapter.h"
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
 #include <iostream>
@@ -18,36 +18,36 @@ Task<void> pendingTask() {
     co_return;
 }
 
-class CaptureScheduler final : public Scheduler {
+class CaptureScheduler final : public detail::SchedulerTestAdapter<CaptureScheduler> {
 public:
-    std::expected<void, IOError> start() override { return {}; }
-    void stop() override {}
+    std::expected<void, IOError> start() { return {}; }
+    void stop() {}
 
-    bool schedule(TaskRef task) noexcept override {
+    bool schedule(TaskRef task) noexcept {
         if (task.isValid()) {
             ++schedule_calls;
         }
         return true;
     }
 
-    bool scheduleResume(TaskRef task) noexcept override {
+    bool scheduleResume(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleDeferred(TaskRef task) noexcept override {
+    bool scheduleDeferred(TaskRef task) noexcept {
         return schedule(std::move(task));
     }
 
-    bool scheduleImmediately(TaskRef task) noexcept override {
+    bool scheduleImmediately(TaskRef task) noexcept {
         if (task.isValid()) {
             ++schedule_immediately_calls;
         }
         return true;
     }
 
-    bool addTimer(Timer::ptr) override { return true; }
+    bool addTimer(Timer::ptr) { return true; }
 
-    SchedulerType type() override {
+    SchedulerType type() {
         return kIOScheduler;
     }
 

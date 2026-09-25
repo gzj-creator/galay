@@ -4,8 +4,8 @@
  * @author galay-rpc
  * @version 1.0.0
  *
- * @details 写入路径复制当前快照并原子发布；读取路径只做 atomic<shared_ptr> load，
- *          不获取写锁，适合托管客户端热路径读取发现快照。
+ * @details 缓存由单个发现/调度上下文拥有，事件原地更新；需要保留的快照按值复制。
+ *          不在读写路径维护共享所有权、原子发布或互斥锁。
  */
 
 #ifndef GALAY_RPC_ENDPOINT_CACHE_H
@@ -14,9 +14,6 @@
 #include "rpc_endpoint.h"
 
 #include <algorithm>
-#include <atomic>
-#include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -74,36 +71,46 @@ struct RpcEndpointEvent {
  * @brief endpoint缓存快照
  */
 struct RpcEndpointSnapshot {
+    RpcEndpointSnapshot() = default;
+    RpcEndpointSnapshot(RpcEndpointSnapshot&&) noexcept = default;
+    RpcEndpointSnapshot& operator=(RpcEndpointSnapshot&&) noexcept = default;
+
+    /// @brief 显式复制独立拥有的 endpoint 数据。
+    RpcEndpointSnapshot clone() const { return RpcEndpointSnapshot(*this); }
+
     std::unordered_map<std::string, std::vector<RpcEndpointInfo>> by_service;  ///< 按服务分组
+
+private:
+    RpcEndpointSnapshot(const RpcEndpointSnapshot&) = default;
+    RpcEndpointSnapshot& operator=(const RpcEndpointSnapshot&) = delete;
 };
 
 /**
  * @brief RPC endpoint快照缓存
+ * @note 非线程安全。读取和 apply() 必须在同一 owner 上串行执行；跨线程变更
+ *       应先通过调度器/消息通道投递给 owner。返回的值快照可独立转移到其他线程。
  */
 class RpcEndpointCache {
 public:
-    RpcEndpointCache()
-        : m_snapshot(std::make_shared<const RpcEndpointSnapshot>())
-    {
-    }
+    RpcEndpointCache() = default;
+    RpcEndpointCache(RpcEndpointCache&&) noexcept = default;
+    RpcEndpointCache& operator=(RpcEndpointCache&&) noexcept = default;
 
     /**
      * @brief 获取完整快照
-     * @return 只读快照shared_ptr；调用方可长期持有，后续写入不会修改该快照
-     *
-     * @note 读路径不参与写路径互斥锁，通过 atomic<shared_ptr> 读取快照。
+     * @return 独立拥有的值快照；缓存更新或销毁不会影响已返回的数据。
+     * @note 复制所有服务；只需单个服务时使用 snapshot(service)。
      */
-    std::shared_ptr<const RpcEndpointSnapshot> snapshot() const {
-        return m_snapshot.load(std::memory_order_acquire);
+    RpcEndpointSnapshot snapshot() const {
+        return m_snapshot.clone();
     }
 
     /**
      * @brief 获取指定服务endpoint快照副本
      */
     std::vector<RpcEndpointInfo> snapshot(const std::string& service) const {
-        auto current = snapshot();
-        auto it = current->by_service.find(service);
-        if (it == current->by_service.end()) {
+        auto it = m_snapshot.by_service.find(service);
+        if (it == m_snapshot.by_service.end()) {
             return {};
         }
         return it->second;
@@ -114,7 +121,12 @@ public:
      */
     std::vector<RpcEndpointInfo> selectable(const std::string& service) const {
         std::vector<RpcEndpointInfo> result;
-        for (const auto& endpoint : snapshot(service)) {
+        auto it = m_snapshot.by_service.find(service);
+        if (it == m_snapshot.by_service.end()) {
+            return result;
+        }
+        result.reserve(it->second.size());
+        for (const auto& endpoint : it->second) {
             if (endpoint.selectable()) {
                 result.push_back(endpoint);
             }
@@ -123,23 +135,20 @@ public:
     }
 
     /**
-     * @brief 应用endpoint变更并发布新快照
-     * @note 写路径使用互斥锁序列化复制/发布，不影响并发读者持有旧快照。
+     * @brief 在 owner 上原地应用endpoint变更，不复制无关服务。
      */
     void apply(const RpcEndpointEvent& event) {
-        std::lock_guard<std::mutex> guard(m_write_mutex);
-        auto next = std::make_shared<RpcEndpointSnapshot>(*snapshot());
         if (event.type == RpcEndpointEventType::Remove) {
-            removeFrom(*next, event.service, event.instance_id);
+            removeFrom(m_snapshot, event.service, event.instance_id);
         } else {
-            upsertInto(*next, event.endpoint);
+            upsertInto(m_snapshot, event.endpoint);
         }
-        m_snapshot.store(
-            std::shared_ptr<const RpcEndpointSnapshot>(std::move(next)),
-            std::memory_order_release);
     }
 
 private:
+    RpcEndpointCache(const RpcEndpointCache&) = delete;
+    RpcEndpointCache& operator=(const RpcEndpointCache&) = delete;
+
     static void upsertInto(RpcEndpointSnapshot& snapshot, const RpcEndpointInfo& endpoint) {
         auto& endpoints = snapshot.by_service[endpoint.service];
         auto it = std::ranges::find_if(endpoints, [&](const RpcEndpointInfo& item) {
@@ -164,12 +173,12 @@ private:
             return item.instance_id == instance_id;
         });
         if (endpoints.empty()) {
-            snapshot.by_service.erase(it);
+            // 已完成本次删除，无需继续遍历返回的后继位置。
+            [[maybe_unused]] auto next = snapshot.by_service.erase(it);
         }
     }
 
-    mutable std::mutex m_write_mutex;
-    std::atomic<std::shared_ptr<const RpcEndpointSnapshot>> m_snapshot;  ///< 通过 atomic<shared_ptr> 发布和读取
+    RpcEndpointSnapshot m_snapshot;  ///< 缓存独占数据，旧快照由调用方按值拥有
 };
 
 } // namespace galay::rpc

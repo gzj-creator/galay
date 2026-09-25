@@ -22,7 +22,7 @@ bool verifyLocalFollowupPassesDrainLocalBacklog() {
     constexpr size_t kReadyBudget = 64;
     constexpr size_t kTaskCount = 200;
 
-    IOSchedulerWorkerState worker(kReadyBudget);
+    IOReadyQueue worker(kReadyBudget);
     SchedulerCore core(worker, kReadyBudget);
     size_t resumed = 0;
 
@@ -65,7 +65,7 @@ bool verifyRemoteDrainDoesNotNeedFollowupPasses() {
     constexpr size_t kReadyBudget = 64;
     constexpr size_t kTaskCount = 300;
 
-    IOSchedulerWorkerState worker(kReadyBudget);
+    IOReadyQueue worker(kReadyBudget);
     SchedulerCore core(worker, kReadyBudget);
     size_t resumed = 0;
     size_t remote_drained = 0;

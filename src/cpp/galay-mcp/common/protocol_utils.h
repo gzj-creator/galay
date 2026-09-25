@@ -30,7 +30,7 @@ namespace protocol {
  * @param hasPrompts 是否支持提示功能
  * @return 初始化结果的JSON字符串
  */
-inline JsonString buildInitializeResult(const std::string& serverName,
+inline std::string buildInitializeResult(const std::string& serverName,
                                         const std::string& serverVersion,
                                         bool hasTools,
                                         bool hasResources,
@@ -55,7 +55,7 @@ inline JsonString buildInitializeResult(const std::string& serverName,
  * @param result 结果JSON字符串
  * @return 包含成功结果的JsonRpcResponse
  */
-inline JsonRpcResponse makeResultResponse(int64_t id, const JsonString& result) {
+inline JsonRpcResponse makeResultResponse(int64_t id, const std::string& result) {
     JsonRpcResponse response;
     response.id = id;
     response.result = result;
@@ -71,30 +71,34 @@ inline JsonRpcResponse makeResultResponse(int64_t id, const JsonString& result) 
  *        without creating another temporary buffer.
  * @return Serialized JSON request body ready to send as an HTTP payload.
  */
-inline JsonString makeJsonRpcRequestBody(int64_t id,
-                                         std::string_view method,
-                                         std::optional<std::string_view> params = std::nullopt) {
-    const std::string id_string = std::to_string(id);
-    const size_t params_size = params.has_value() ? params->size() : 0;
-
-    JsonString body;
-    body.reserve(48 + id_string.size() + method.size() + params_size);
-    body += "{\"jsonrpc\":\"2.0\",\"id\":";
-    body += id_string;
-    body += ",\"method\":\"";
-    body.append(method.data(), method.size());
-    body.push_back('"');
+inline std::string makeJsonRpcRequestBody(int64_t id,
+                                          std::string_view method,
+                                          std::optional<std::string_view> params = std::nullopt) {
+    std::string body;
+    auto writer = makeJsonWriter(body);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("jsonrpc");
+    (void)writer.string(JSONRPC_VERSION);
+    (void)writer.key("id");
+    (void)writer.number(id);
+    (void)writer.key("method");
+    (void)writer.string(method);
 
     if (params.has_value()) {
-        body += ",\"params\":";
+        (void)writer.key("params");
         if (params->empty()) {
-            body += "{}";
+            (void)writer.start_object();
+            (void)writer.end_object();
         } else {
-            body.append(params->data(), params->size());
+            (void)writer.raw(*params);
         }
     }
 
-    body.push_back('}');
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
     return body;
 }
 
@@ -114,9 +118,13 @@ inline JsonRpcResponse makeErrorResponse(int64_t id,
     error.code = code;
     error.message = message;
     if (!details.empty()) {
-        JsonWriter writer;
-        writer.string(details);
-        error.data = writer.takeString();
+        std::string quoted;
+        auto writer = makeJsonWriter(quoted);
+        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+        (void)writer.string(details);
+        if (writer.finish()) {
+            error.data = std::move(quoted);
+        }
     }
 
     JsonRpcResponse response;
@@ -135,17 +143,22 @@ inline JsonRpcResponse makeErrorResponse(int64_t id,
  * @return 列表结果的JSON字符串
  */
 template <typename MapType, typename Extractor>
-JsonString buildListResultFromMap(const MapType& map, const char* key, Extractor extractor) {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key(key);
-    writer.startArray();
+std::string buildListResultFromMap(const MapType& map, const char* key, Extractor extractor) {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key(key);
+    (void)writer.start_array();
     for (const auto& [name, info] : map) {
-        writer.raw(extractor(info).toJson());
+        (void)writer.raw(extractor(info).toJson());
     }
-    writer.endArray();
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_array();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return out;
 }
 
 } // namespace protocol

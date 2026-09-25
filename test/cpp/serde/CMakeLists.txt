@@ -20,7 +20,7 @@ foreach(test_source IN LISTS GALAY_SERDE_TEST_SOURCES)
         continue()
     endif()
     if(test_name STREQUAL "t10_import_smoke" AND
-       NOT TARGET galay::serde-modules)
+       NOT GALAY_SERDE_CPP23_MODULES_EFFECTIVE)
         continue()
     endif()
     galay_add_serde_test("${test_name}" "${test_source}")
@@ -28,7 +28,6 @@ foreach(test_source IN LISTS GALAY_SERDE_TEST_SOURCES)
         target_link_libraries("${test_name}" PRIVATE galay::mcp galay::etcd)
     endif()
     if(test_name STREQUAL "t10_import_smoke")
-        target_link_libraries("${test_name}" PRIVATE galay::serde-modules)
         set_target_properties("${test_name}" PROPERTIES
             CXX_STANDARD 23
             CXX_SCAN_FOR_MODULES ON

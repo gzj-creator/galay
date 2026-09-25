@@ -204,8 +204,8 @@ int main()
     policy.transport.max_keep_alive_requests = 2;
     server.setProductionPolicy(policy);
 
-    server.addTool("large", "large result", "{}", [](const galay::mcp::JsonElement&,
-                                                      std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result)
+    server.addTool("large", "large result", "{}", [](const json::Json&,
+                                                      std::expected<std::string, galay::mcp::McpError>& result)
         -> galay::kernel::Task<void> {
         result = std::string(1024, 'x');
         co_return;

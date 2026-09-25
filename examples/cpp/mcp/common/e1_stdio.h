@@ -22,29 +22,36 @@ void runSimpleServer() {
         "echo",
         "回显输入的消息",
         echoSchema,
-        [](const JsonElement& args) -> std::expected<JsonString, McpError> {
-            JsonObject obj;
-            if (!JsonHelper::getObject(args, obj)) {
+        [](const json::Json& args) -> std::expected<std::string, McpError> {
+            if (!args.is_object()) {
                 return std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Invalid arguments"
                 ));
             }
 
-            std::string message;
-            if (!JsonHelper::getString(obj, "message", message)) {
+            auto message = args.at("message").as_string();
+            if (!message) {
                 return std::unexpected(McpError(
                     McpErrorCode::InvalidParams,
                     "Missing 'message' parameter"
                 ));
             }
 
-            JsonWriter writer;
-            writer.startObject();
-            writer.key("echo");
-            writer.string(message);
-            writer.endObject();
-            return writer.takeString();
+            std::string result;
+            auto writer = makeJsonWriter(result);
+            // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+            (void)writer.start_object();
+            (void)writer.key("echo");
+            (void)writer.string(*message);
+            (void)writer.end_object();
+            if (!writer.finish()) {
+                return std::unexpected(McpError(
+                    McpErrorCode::InternalError,
+                    "Failed to encode result"
+                ));
+            }
+            return result;
         }
     );
 
@@ -93,12 +100,18 @@ void runSimpleClient() {
 
     // 调用echo工具
     std::cout << "\nCalling echo tool..." << std::endl;
-    JsonWriter argsWriter;
-    argsWriter.startObject();
-    argsWriter.key("message");
-    argsWriter.string("Hello, MCP!");
-    argsWriter.endObject();
-    auto callResult = client.callTool("echo", argsWriter.takeString());
+    std::string args;
+    auto argsWriter = makeJsonWriter(args);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)argsWriter.start_object();
+    (void)argsWriter.key("message");
+    (void)argsWriter.string("Hello, MCP!");
+    (void)argsWriter.end_object();
+    if (!argsWriter.finish()) {
+        std::cerr << "Failed to encode arguments" << std::endl;
+        return;
+    }
+    auto callResult = client.callTool("echo", args);
     if (callResult) {
         std::cout << "Result: " << callResult.value() << std::endl;
     }

@@ -7,69 +7,78 @@ namespace galay::mcp::v2 {
 
 namespace {
 
-std::expected<JsonObject, McpError> paramsObject(const JsonElement& params)
+std::expected<json::Json, McpError> paramsObject(const json::Json& params)
 {
-    JsonObject object;
-    if (!JsonHelper::getObject(params, object)) {
+    if (!params.is_object()) {
         return std::unexpected(McpError::invalidParams("params must be an object"));
     }
-    return object;
+    return params;
 }
 
-std::expected<std::string, McpError> requiredString(const JsonObject& object,
+std::expected<std::string, McpError> requiredString(const json::Json& object,
                                                     const char* key)
 {
-    std::string value;
-    if (!JsonHelper::getString(object, key, value)) {
+    auto value = object.at(key).as_string();
+    if (!value) {
         return std::unexpected(McpError::invalidParams(
             std::string("missing or invalid ") + key));
     }
-    return value;
+    return std::string(*value);
 }
 
-std::expected<JsonElement, McpError> optionalObject(const JsonObject& object,
+std::expected<json::Json, McpError> optionalObject(const json::Json& object,
                                                     const char* key)
 {
-    JsonElement value;
-    if (!JsonHelper::getElement(object, key, value)) {
-        return JsonHelper::emptyObject();
+    const json::Json value = object.at(key);
+    if (!value.valid()) {
+        return galay::mcp::emptyJsonObject();
     }
-    JsonObject nested;
-    if (!JsonHelper::getObject(value, nested)) {
+    if (!value.is_object()) {
         return std::unexpected(McpError::invalidParams(
             std::string(key) + " must be an object"));
     }
     return value;
 }
 
-JsonString completeResultFromFields(std::string_view fieldsJson)
+std::string completeResultFromFields(std::string_view fieldsJson)
 {
     auto document = JsonDocument::parse(fieldsJson);
     if (!document) {
         return R"({"resultType":"complete"})";
     }
-    JsonObject fields;
-    if (!JsonHelper::getObject(document->root(), fields)) {
+    if (!document->root().is_object()) {
         return R"({"resultType":"complete"})";
     }
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("resultType");
-    writer.string("complete");
-    for (auto field : fields) {
-        const std::string key(field.key);
-        if (key == "resultType") {
-            continue;
+    const json::Json& fields = document->root();
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    std::string raw;
+    (void)writer.start_object();
+    (void)writer.key("resultType");
+    (void)writer.string("complete");
+    fields.for_each_member([&](std::string_view fieldKey, const json::Json& value) -> json::result<void> {
+        if (fieldKey == "resultType") {
+            return {};
         }
-        JsonString raw;
-        if (!JsonHelper::getRawJson(field.value, raw)) {
-            continue;
+        raw.clear();
+        auto serialized = json::stream::serialize(
+            value, [&](std::string_view chunk) -> json::result<void> {
+                raw.append(chunk);
+                return {};
+            });
+        if (!serialized) {
+            return {};
         }
-        writer.key(key);
-        writer.raw(raw);
+        (void)writer.key(fieldKey);
+        (void)writer.raw(raw);
+        return {};
+    });
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return R"({"resultType":"complete"})";
     }
-    writer.endObject();
-    return writer.takeString();
+    return out;
 }
 
 } // namespace
@@ -96,7 +105,7 @@ void McpStdioServer::setStreams(std::istream& input, std::ostream& output) noexc
 
 void McpStdioServer::addTool(std::string name,
                              std::string description,
-                             JsonString inputSchema,
+                             std::string inputSchema,
                              ToolHandler handler)
 {
     ToolEntry entry;
@@ -172,8 +181,8 @@ std::expected<void, McpError> McpStdioServer::writeMessage(std::string_view mess
     return {};
 }
 
-JsonString McpStdioServer::makeList(std::string_view field,
-                                    const std::vector<JsonString>& items) const
+std::string McpStdioServer::makeList(std::string_view field,
+                                    const std::vector<std::string>& items) const
 {
     ListResult result;
     result.field = std::string(field);
@@ -183,7 +192,7 @@ JsonString McpStdioServer::makeList(std::string_view field,
     return result.toJson();
 }
 
-JsonString McpStdioServer::normalizePromptResult(std::string_view resultJson) const
+std::string McpStdioServer::normalizePromptResult(std::string_view resultJson) const
 {
     auto parsed = parseResult(resultJson);
     if (parsed) {
@@ -192,7 +201,7 @@ JsonString McpStdioServer::normalizePromptResult(std::string_view resultJson) co
     return completeResultFromFields(resultJson);
 }
 
-JsonString McpStdioServer::error(const RequestId& id,
+std::string McpStdioServer::error(const RequestId& id,
                                  const McpError& errorValue) const
 {
     return error(id,
@@ -203,7 +212,7 @@ JsonString McpStdioServer::error(const RequestId& id,
                      : std::optional<std::string_view>(errorValue.details()));
 }
 
-JsonString McpStdioServer::error(const RequestId& id,
+std::string McpStdioServer::error(const RequestId& id,
                                  int code,
                                  std::string_view message,
                                  std::optional<std::string_view> data) const
@@ -211,7 +220,7 @@ JsonString McpStdioServer::error(const RequestId& id,
     return makeErrorResponse(id, code, message, data);
 }
 
-JsonString McpStdioServer::dispatch(const ParsedRequest& request)
+std::string McpStdioServer::dispatch(const ParsedRequest& request)
 {
     const RequestId& id = request.request.id;
     if (request.request.meta.protocolVersion != MCP_VERSION) {
@@ -223,7 +232,7 @@ JsonString McpStdioServer::dispatch(const ParsedRequest& request)
     if (!object) {
         return error(id, object.error());
     }
-    const JsonObject params = object.value();
+    const json::Json params = object.value();
 
     if (request.request.method == Methods::SERVER_DISCOVER) {
         DiscoverResult result;
@@ -240,7 +249,7 @@ JsonString McpStdioServer::dispatch(const ParsedRequest& request)
     if (request.request.method == Methods::TOOLS_LIST ||
         request.request.method == Methods::RESOURCES_LIST ||
         request.request.method == Methods::PROMPTS_LIST) {
-        std::vector<JsonString> items;
+        std::vector<std::string> items;
         std::string field;
         {
             std::shared_lock lock(m_registryMutex);
@@ -264,7 +273,7 @@ JsonString McpStdioServer::dispatch(const ParsedRequest& request)
     if (request.request.method == Methods::TOOLS_CALL) {
         auto name = requiredString(params, "name");
         if (!name) { return error(id, name.error()); }
-        JsonElement arguments;
+        json::Json arguments;
         auto argumentsResult = optionalObject(params, "arguments");
         if (!argumentsResult) { return error(id, argumentsResult.error()); }
         arguments = argumentsResult.value();
@@ -305,7 +314,7 @@ JsonString McpStdioServer::dispatch(const ParsedRequest& request)
     if (request.request.method == Methods::PROMPTS_GET) {
         auto name = requiredString(params, "name");
         if (!name) { return error(id, name.error()); }
-        JsonElement arguments;
+        json::Json arguments;
         auto argumentsResult = optionalObject(params, "arguments");
         if (!argumentsResult) { return error(id, argumentsResult.error()); }
         arguments = argumentsResult.value();
@@ -344,13 +353,13 @@ void McpStdioServer::run()
         // v2 cancellation is a stdio-only notification and has no response.
         auto notificationDocument = JsonDocument::parse(message.value());
         if (notificationDocument) {
-            JsonObject notification;
-            std::string method;
-            if (JsonHelper::getObject(notificationDocument->root(), notification) &&
-                JsonHelper::getString(notification, "method", method) &&
-                method == Methods::CANCELLED &&
-                notification["id"].error() == simdjson::NO_SUCH_FIELD) {
-                continue;
+            const json::Json& notification = notificationDocument->root();
+            if (notification.is_object()) {
+                const auto method = notification.at("method").as_string();
+                if (method && *method == Methods::CANCELLED &&
+                    !notification.contains("id")) {
+                    continue;
+                }
             }
         }
         auto request = parseRequest(message.value());

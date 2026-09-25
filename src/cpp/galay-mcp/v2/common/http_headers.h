@@ -22,7 +22,7 @@ std::expected<std::vector<HeaderAnnotation>, McpError>
 toolHeaderAnnotations(const Tool& tool);
 
 std::expected<std::optional<std::string>, McpError>
-argumentHeaderValue(const JsonElement& arguments, const HeaderAnnotation& annotation);
+argumentHeaderValue(const json::Json& arguments, const HeaderAnnotation& annotation);
 
 bool safeHeaderValue(std::string_view value) noexcept;
 std::string encodeHeaderValue(std::string_view value);

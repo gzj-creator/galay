@@ -11,7 +11,7 @@
 using namespace galay::kernel;
 
 int main() {
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
     worker.setStealingEnabled(false);
 
     TaskRef queued(new TaskState(std::coroutine_handle<>{}), false);

@@ -13,7 +13,7 @@
 #define GALAY_KERNEL_KQUEUE_REACTOR_H
 
 #include "backend_reactor.h"
-#include "io_scheduler.hpp"
+#include "io_controller.hpp"
 #include "wake_coordinator.h"
 
 #ifdef USE_KQUEUE

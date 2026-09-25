@@ -147,7 +147,7 @@ public:
      */
     SchemaBuilder& addObject(const std::string& name,
                              const std::string& description,
-                             const JsonString& objectSchema,
+                             const std::string& objectSchema,
                              bool required = false) {
         Property prop;
         prop.kind = PropertyKind::Object;
@@ -200,18 +200,20 @@ public:
      * @brief 构建最终的 Schema
      * @return JSON Schema 字符串
      */
-    JsonString build() const {
-        JsonWriter writer;
-        writer.startObject();
-        writer.key("type");
-        writer.string("object");
-        writer.key("properties");
-        writer.startObject();
+    std::string build() const {
+        std::string out;
+        auto writer = makeJsonWriter(out);
+        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+        (void)writer.start_object();
+        (void)writer.key("type");
+        (void)writer.string("object");
+        (void)writer.key("properties");
+        (void)writer.start_object();
         for (const auto& prop : m_properties) {
-            writer.key(prop.name);
+            (void)writer.key(prop.name);
             writeProperty(writer, prop);
         }
-        writer.endObject();
+        (void)writer.end_object();
 
         bool hasRequired = false;
         for (const auto& prop : m_properties) {
@@ -221,17 +223,20 @@ public:
             }
         }
         if (hasRequired) {
-            writer.key("required");
-            writer.startArray();
+            (void)writer.key("required");
+            (void)writer.start_array();
             for (const auto& prop : m_properties) {
                 if (prop.required) {
-                    writer.string(prop.name);
+                    (void)writer.string(prop.name);
                 }
             }
-            writer.endArray();
+            (void)writer.end_array();
         }
-        writer.endObject();
-        return writer.takeString();
+        (void)writer.end_object();
+        if (!writer.finish()) {
+            return std::string{};
+        }
+        return std::move(out);
     }
 
 private:
@@ -261,7 +266,7 @@ private:
         bool required{false}; ///< 是否必填
         std::string itemType; ///< 数组元素类型（Array类型使用）
         std::vector<std::string> enumValues; ///< 枚举值列表（Enum类型使用）
-        JsonString objectSchema; ///< 对象Schema（Object类型使用）
+        std::string objectSchema; ///< 对象Schema（Object类型使用）
     };
 
     /**
@@ -269,90 +274,102 @@ private:
      * @param writer JSON写入器
      * @param prop 属性定义
      */
-    static void writeProperty(JsonWriter& writer, const Property& prop) {
+    static void writeProperty(json::stream::StreamWriter& writer, const Property& prop) {
+        // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
         if (prop.kind == PropertyKind::Object && !prop.objectSchema.empty()) {
             if (prop.description.empty()) {
-                writer.raw(prop.objectSchema);
+                (void)writer.raw(prop.objectSchema);
                 return;
             }
 
             auto parsed = JsonDocument::parse(prop.objectSchema);
             if (!parsed) {
-                writer.raw(prop.objectSchema);
+                (void)writer.raw(prop.objectSchema);
                 return;
             }
 
-            JsonObject obj;
-            if (!JsonHelper::getObject(parsed.value().root(), obj)) {
-                writer.raw(prop.objectSchema);
+            if (!parsed.value().root().is_object()) {
+                (void)writer.raw(prop.objectSchema);
                 return;
             }
+            const json::Json& obj = parsed.value().root();
 
-            JsonWriter merged;
-            merged.startObject();
-            merged.key("description");
-            merged.string(prop.description);
-            for (auto field : obj) {
+            std::string mergedOut;
+            auto merged = makeJsonWriter(mergedOut);
+            // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+            (void)merged.start_object();
+            (void)merged.key("description");
+            (void)merged.string(prop.description);
+            obj.for_each_member([&](std::string_view key, const json::Json& value) -> json::result<void> {
                 std::string raw;
-                if (JsonHelper::getRawJson(field.value, raw)) {
-                    merged.key(std::string(field.key));
-                    merged.raw(raw);
+                auto serialized = json::stream::serialize(value, [&](std::string_view chunk) -> json::result<void> {
+                    raw.append(chunk);
+                    return {};
+                });
+                if (serialized) {
+                    (void)merged.key(key);
+                    (void)merged.raw(raw);
                 }
+                return {};
+            });
+            (void)merged.end_object();
+            if (!merged.finish()) {
+                (void)writer.raw(prop.objectSchema);
+                return;
             }
-            merged.endObject();
-            writer.raw(merged.takeString());
+            (void)writer.raw(mergedOut);
             return;
         }
 
-        writer.startObject();
-        writer.key("type");
+        (void)writer.start_object();
+        (void)writer.key("type");
         switch (prop.kind) {
             case PropertyKind::String:
-                writer.string("string");
+                (void)writer.string("string");
                 break;
             case PropertyKind::Number:
-                writer.string("number");
+                (void)writer.string("number");
                 break;
             case PropertyKind::Integer:
-                writer.string("integer");
+                (void)writer.string("integer");
                 break;
             case PropertyKind::Boolean:
-                writer.string("boolean");
+                (void)writer.string("boolean");
                 break;
             case PropertyKind::Array:
-                writer.string("array");
+                (void)writer.string("array");
                 break;
             case PropertyKind::Enum:
-                writer.string("string");
+                (void)writer.string("string");
                 break;
             case PropertyKind::Object:
-                writer.string("object");
+                (void)writer.string("object");
                 break;
         }
 
         if (!prop.description.empty()) {
-            writer.key("description");
-            writer.string(prop.description);
+            (void)writer.key("description");
+            (void)writer.string(prop.description);
         }
 
         if (prop.kind == PropertyKind::Array) {
-            writer.key("items");
-            writer.startObject();
-            writer.key("type");
-            writer.string(prop.itemType.empty() ? "string" : prop.itemType);
-            writer.endObject();
+            (void)writer.key("items");
+            (void)writer.start_object();
+            (void)writer.key("type");
+            (void)writer.string(prop.itemType.empty() ? "string" : prop.itemType);
+            (void)writer.end_object();
         }
 
         if (prop.kind == PropertyKind::Enum) {
-            writer.key("enum");
-            writer.startArray();
+            (void)writer.key("enum");
+            (void)writer.start_array();
             for (const auto& value : prop.enumValues) {
-                writer.string(value);
+                (void)writer.string(value);
             }
-            writer.endArray();
+            (void)writer.end_array();
         }
 
-        writer.endObject();
+        (void)writer.end_object();
     }
 
     std::vector<Property> m_properties; ///< 属性列表

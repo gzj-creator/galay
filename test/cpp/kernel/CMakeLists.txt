@@ -3,6 +3,22 @@
 # 扫描 test/ 下所有测试源文件，并统一注册到 CTest
 file(GLOB TEST_SOURCES CONFIGURE_DEPENDS "*.cc")
 
+# Deterministic timeout/waker tests need manually controlled scheduling. Keep
+# their hook table in a separate static library: production has neither the
+# hook field nor the extra branch, and each executable uses one consistent ABI.
+get_target_property(KERNEL_TEST_SOURCES galay-kernel SOURCES)
+find_package(Threads REQUIRED)
+list(FILTER KERNEL_TEST_SOURCES INCLUDE REGEX "\\.cc$")
+add_library(galay-kernel-test-scheduler STATIC EXCLUDE_FROM_ALL ${KERNEL_TEST_SOURCES})
+target_compile_features(galay-kernel-test-scheduler PUBLIC cxx_std_23)
+target_include_directories(galay-kernel-test-scheduler PUBLIC
+    $<TARGET_PROPERTY:galay-kernel,INTERFACE_INCLUDE_DIRECTORIES>)
+target_compile_definitions(galay-kernel-test-scheduler PUBLIC
+    $<TARGET_PROPERTY:galay-kernel,INTERFACE_COMPILE_DEFINITIONS>
+    GALAY_KERNEL_TEST_SCHEDULER)
+target_link_libraries(galay-kernel-test-scheduler PUBLIC
+    $<TARGET_PROPERTY:galay-kernel,LINK_LIBRARIES>)
+
 set(GALAY_KERNEL_SCENARIO_t2_tcp tcp_basic)
 set(GALAY_KERNEL_SCENARIO_t3_tcp tcp_server)
 set(GALAY_KERNEL_SCENARIO_t4_tcp tcp_client)
@@ -27,7 +43,13 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
     # 创建可执行文件
     add_executable(${TEST_NAME} ${TEST_SOURCE})
-    target_link_libraries(${TEST_NAME} PRIVATE galay::kernel)
+    file(STRINGS "${TEST_SOURCE}" TEST_SCHEDULER_ADAPTER_INCLUDE
+        REGEX "^#include .*scheduler_test_adapter.h")
+    if(TEST_SCHEDULER_ADAPTER_INCLUDE)
+        target_link_libraries(${TEST_NAME} PRIVATE galay-kernel-test-scheduler)
+    else()
+        target_link_libraries(${TEST_NAME} PRIVATE galay::kernel)
+    endif()
     target_include_directories(${TEST_NAME}
         PRIVATE
             ${CMAKE_SOURCE_DIR}

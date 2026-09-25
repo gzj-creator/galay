@@ -58,21 +58,21 @@ void waitForFlag(const std::atomic<bool>& flag) {
 }
 
 struct RuntimePair {
-    Runtime runtime;
+    Runtime runtime{RuntimeConfig{.io_scheduler_count = 2, .parallel_scheduler_count = 0}};
     IOSchedulerType* source = nullptr;
     IOSchedulerType* sibling = nullptr;
 };
 
 void startRuntimePair(RuntimePair& pair, uint64_t tick_ns = 1'000'000ULL) {
-    auto source = std::make_unique<IOSchedulerType>();
-    auto sibling = std::make_unique<IOSchedulerType>();
-    source->replaceTimerManager(TimingWheelTimerManager(tick_ns));
-    sibling->replaceTimerManager(TimingWheelTimerManager(tick_ns));
-    pair.source = source.get();
-    pair.sibling = sibling.get();
-    pair.runtime.addIOScheduler(std::move(source));
-    pair.runtime.addIOScheduler(std::move(sibling));
-    pair.runtime.start();
+    const auto initialized = pair.runtime.start();
+    if (!initialized) { throw std::runtime_error("runtime initialization failed"); }
+    pair.runtime.stop();
+    pair.source = pair.runtime.getIOScheduler(0);
+    pair.sibling = pair.runtime.getIOScheduler(1);
+    pair.source->replaceTimerManager(TimingWheelTimerManager(tick_ns));
+    pair.sibling->replaceTimerManager(TimingWheelTimerManager(tick_ns));
+    const auto started = pair.runtime.start();
+    if (!started) { throw std::runtime_error("runtime restart failed"); }
 
     const bool threads_ready = waitUntil([&]() {
         return pair.source->threadId() != std::thread::id{} &&

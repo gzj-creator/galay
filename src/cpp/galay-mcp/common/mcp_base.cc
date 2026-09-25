@@ -4,76 +4,81 @@ namespace galay::mcp {
 
 namespace {
 
-std::expected<JsonObject, McpError> requireObject(const JsonElement& element, const char* context) {
-    JsonObject obj;
-    if (!JsonHelper::getObject(element, obj)) {
+std::expected<json::Json, McpError> requireObject(const json::Json& element, const char* context) {
+    if (!element.is_object()) {
         return std::unexpected(McpError::invalidMessage(std::string("Expected object for ") + context));
     }
-    return obj;
+    return element;
 }
 
-std::expected<std::string, McpError> requireString(const JsonObject& obj, const char* key) {
-    std::string value;
-    if (!JsonHelper::getString(obj, key, value)) {
+std::expected<std::string, McpError> requireString(const json::Json& obj, const char* key) {
+    auto value = obj.at(key).as_string();
+    if (!value) {
         return std::unexpected(McpError::invalidMessage(std::string("Missing or invalid ") + key));
     }
-    return value;
+    return std::string(*value);
 }
 
-std::expected<int64_t, McpError> requireInt64(const JsonObject& obj, const char* key) {
-    int64_t value = 0;
-    if (!JsonHelper::getInt64(obj, key, value)) {
+std::expected<int64_t, McpError> requireInt64(const json::Json& obj, const char* key) {
+    auto value = obj.at(key).as_int64();
+    if (!value) {
         return std::unexpected(McpError::invalidMessage(std::string("Missing or invalid ") + key));
     }
-    return value;
+    return *value;
 }
 
-void writeRawOrEmptyObject(JsonWriter& writer, const JsonString& raw) {
+void writeRawOrEmptyObject(json::stream::StreamWriter& writer, const std::string& raw) {
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
     if (raw.empty()) {
-        writer.startObject();
-        writer.endObject();
+        (void)writer.start_object();
+        (void)writer.end_object();
         return;
     }
-    writer.raw(raw);
+    (void)writer.raw(raw);
 }
 
 } // namespace
 
-JsonString Content::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
+std::string Content::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
     switch (type) {
         case ContentType::Text:
-            writer.key("type");
-            writer.string("text");
-            writer.key("text");
-            writer.string(text);
+            (void)writer.key("type");
+            (void)writer.string("text");
+            (void)writer.key("text");
+            (void)writer.string(text);
             break;
         case ContentType::Image:
-            writer.key("type");
-            writer.string("image");
-            writer.key("data");
-            writer.string(data);
-            writer.key("mimeType");
-            writer.string(mimeType);
+            (void)writer.key("type");
+            (void)writer.string("image");
+            (void)writer.key("data");
+            (void)writer.string(data);
+            (void)writer.key("mimeType");
+            (void)writer.string(mimeType);
             break;
         case ContentType::Resource:
-            writer.key("type");
-            writer.string("resource");
-            writer.key("uri");
-            writer.string(uri);
+            (void)writer.key("type");
+            (void)writer.string("resource");
+            (void)writer.key("uri");
+            (void)writer.string(uri);
             break;
     }
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<Content, McpError> Content::fromJson(const JsonElement& element) {
+std::expected<Content, McpError> Content::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "content");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     auto typeStrExp = requireString(obj, "type");
     if (!typeStrExp) {
@@ -115,25 +120,30 @@ std::expected<Content, McpError> Content::fromJson(const JsonElement& element) {
     return c;
 }
 
-JsonString Tool::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("name");
-    writer.string(name);
-    writer.key("description");
-    writer.string(description);
-    writer.key("inputSchema");
+std::string Tool::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("name");
+    (void)writer.string(name);
+    (void)writer.key("description");
+    (void)writer.string(description);
+    (void)writer.key("inputSchema");
     writeRawOrEmptyObject(writer, inputSchema);
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<Tool, McpError> Tool::fromJson(const JsonElement& element) {
+std::expected<Tool, McpError> Tool::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "tool");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     Tool t;
     auto nameExp = requireString(obj, "name");
@@ -147,10 +157,14 @@ std::expected<Tool, McpError> Tool::fromJson(const JsonElement& element) {
     t.name = nameExp.value();
     t.description = descExp.value();
 
-    JsonElement schemaElement;
-    if (JsonHelper::getElement(obj, "inputSchema", schemaElement)) {
+    json::Json schemaElement = obj.at("inputSchema");
+    if (schemaElement.valid()) {
         std::string raw;
-        if (JsonHelper::getRawJson(schemaElement, raw)) {
+        auto serialized = json::stream::serialize(schemaElement, [&](std::string_view chunk) -> json::result<void> {
+            raw.append(chunk);
+            return {};
+        });
+        if (serialized) {
             t.inputSchema = std::move(raw);
         }
     }
@@ -158,27 +172,32 @@ std::expected<Tool, McpError> Tool::fromJson(const JsonElement& element) {
     return t;
 }
 
-JsonString Resource::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("uri");
-    writer.string(uri);
-    writer.key("name");
-    writer.string(name);
-    writer.key("description");
-    writer.string(description);
-    writer.key("mimeType");
-    writer.string(mimeType);
-    writer.endObject();
-    return writer.takeString();
+std::string Resource::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("uri");
+    (void)writer.string(uri);
+    (void)writer.key("name");
+    (void)writer.string(name);
+    (void)writer.key("description");
+    (void)writer.string(description);
+    (void)writer.key("mimeType");
+    (void)writer.string(mimeType);
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<Resource, McpError> Resource::fromJson(const JsonElement& element) {
+std::expected<Resource, McpError> Resource::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "resource");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     Resource r;
     auto uriExp = requireString(obj, "uri");
@@ -205,25 +224,30 @@ std::expected<Resource, McpError> Resource::fromJson(const JsonElement& element)
     return r;
 }
 
-JsonString PromptArgument::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("name");
-    writer.string(name);
-    writer.key("description");
-    writer.string(description);
-    writer.key("required");
-    writer.boolean(required);
-    writer.endObject();
-    return writer.takeString();
+std::string PromptArgument::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("name");
+    (void)writer.string(name);
+    (void)writer.key("description");
+    (void)writer.string(description);
+    (void)writer.key("required");
+    (void)writer.boolean(required);
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<PromptArgument, McpError> PromptArgument::fromJson(const JsonElement& element) {
+std::expected<PromptArgument, McpError> PromptArgument::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "prompt argument");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     PromptArgument arg;
     auto nameExp = requireString(obj, "name");
@@ -237,37 +261,42 @@ std::expected<PromptArgument, McpError> PromptArgument::fromJson(const JsonEleme
     arg.name = nameExp.value();
     arg.description = descExp.value();
 
-    bool required = false;
-    if (JsonHelper::getBool(obj, "required", required)) {
-        arg.required = required;
+    auto requiredVal = obj.at("required").as_bool();
+    if (requiredVal) {
+        arg.required = *requiredVal;
     }
 
     return arg;
 }
 
-JsonString Prompt::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("name");
-    writer.string(name);
-    writer.key("description");
-    writer.string(description);
-    writer.key("arguments");
-    writer.startArray();
+std::string Prompt::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("name");
+    (void)writer.string(name);
+    (void)writer.key("description");
+    (void)writer.string(description);
+    (void)writer.key("arguments");
+    (void)writer.start_array();
     for (const auto& arg : arguments) {
-        writer.raw(arg.toJson());
+        (void)writer.raw(arg.toJson());
     }
-    writer.endArray();
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_array();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<Prompt, McpError> Prompt::fromJson(const JsonElement& element) {
+std::expected<Prompt, McpError> Prompt::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "prompt");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     Prompt p;
     auto nameExp = requireString(obj, "name");
@@ -281,9 +310,10 @@ std::expected<Prompt, McpError> Prompt::fromJson(const JsonElement& element) {
     p.name = nameExp.value();
     p.description = descExp.value();
 
-    JsonArray argsArray;
-    if (JsonHelper::getArray(obj, "arguments", argsArray)) {
-        for (auto item : argsArray) {
+    json::Json argsArray = obj.at("arguments");
+    if (argsArray.is_array()) {
+        for (size_t i = 0; i < argsArray.size(); ++i) {
+            const json::Json item = argsArray.at(i);
             auto argExp = PromptArgument::fromJson(item);
             if (!argExp) {
                 return std::unexpected(argExp.error());
@@ -295,23 +325,28 @@ std::expected<Prompt, McpError> Prompt::fromJson(const JsonElement& element) {
     return p;
 }
 
-JsonString ClientInfo::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("name");
-    writer.string(name);
-    writer.key("version");
-    writer.string(version);
-    writer.endObject();
-    return writer.takeString();
+std::string ClientInfo::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("name");
+    (void)writer.string(name);
+    (void)writer.key("version");
+    (void)writer.string(version);
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<ClientInfo, McpError> ClientInfo::fromJson(const JsonElement& element) {
+std::expected<ClientInfo, McpError> ClientInfo::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "clientInfo");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     ClientInfo c;
     auto nameExp = requireString(obj, "name");
@@ -327,25 +362,30 @@ std::expected<ClientInfo, McpError> ClientInfo::fromJson(const JsonElement& elem
     return c;
 }
 
-JsonString ServerInfo::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("name");
-    writer.string(name);
-    writer.key("version");
-    writer.string(version);
-    writer.key("capabilities");
+std::string ServerInfo::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("name");
+    (void)writer.string(name);
+    (void)writer.key("version");
+    (void)writer.string(version);
+    (void)writer.key("capabilities");
     writeRawOrEmptyObject(writer, capabilities);
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<ServerInfo, McpError> ServerInfo::fromJson(const JsonElement& element) {
+std::expected<ServerInfo, McpError> ServerInfo::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "serverInfo");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     ServerInfo s;
     auto nameExp = requireString(obj, "name");
@@ -359,10 +399,14 @@ std::expected<ServerInfo, McpError> ServerInfo::fromJson(const JsonElement& elem
     s.name = nameExp.value();
     s.version = versionExp.value();
 
-    JsonElement capsElement;
-    if (JsonHelper::getElement(obj, "capabilities", capsElement)) {
+    json::Json capsElement = obj.at("capabilities");
+    if (capsElement.valid()) {
         std::string raw;
-        if (JsonHelper::getRawJson(capsElement, raw)) {
+        auto serialized = json::stream::serialize(capsElement, [&](std::string_view chunk) -> json::result<void> {
+            raw.append(chunk);
+            return {};
+        });
+        if (serialized) {
             s.capabilities = std::move(raw);
         }
     }
@@ -370,72 +414,82 @@ std::expected<ServerInfo, McpError> ServerInfo::fromJson(const JsonElement& elem
     return s;
 }
 
-JsonString ServerCapabilities::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
+std::string ServerCapabilities::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
     if (tools) {
-        writer.key("tools");
-        writer.startObject();
-        writer.endObject();
+        (void)writer.key("tools");
+        (void)writer.start_object();
+        (void)writer.end_object();
     }
     if (resources) {
-        writer.key("resources");
-        writer.startObject();
-        writer.endObject();
+        (void)writer.key("resources");
+        (void)writer.start_object();
+        (void)writer.end_object();
     }
     if (prompts) {
-        writer.key("prompts");
-        writer.startObject();
-        writer.endObject();
+        (void)writer.key("prompts");
+        (void)writer.start_object();
+        (void)writer.end_object();
     }
     if (logging) {
-        writer.key("logging");
-        writer.startObject();
-        writer.endObject();
+        (void)writer.key("logging");
+        (void)writer.start_object();
+        (void)writer.end_object();
     }
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(const JsonElement& element) {
+std::expected<ServerCapabilities, McpError> ServerCapabilities::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "capabilities");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     ServerCapabilities c;
     auto toolsVal = obj["tools"];
-    c.tools = !toolsVal.error() && !toolsVal.is_null();
+    c.tools = toolsVal.valid() && !toolsVal.is_null();
     auto resVal = obj["resources"];
-    c.resources = !resVal.error() && !resVal.is_null();
+    c.resources = resVal.valid() && !resVal.is_null();
     auto promptsVal = obj["prompts"];
-    c.prompts = !promptsVal.error() && !promptsVal.is_null();
+    c.prompts = promptsVal.valid() && !promptsVal.is_null();
     auto loggingVal = obj["logging"];
-    c.logging = !loggingVal.error() && !loggingVal.is_null();
+    c.logging = loggingVal.valid() && !loggingVal.is_null();
 
     return c;
 }
 
-JsonString InitializeParams::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("protocolVersion");
-    writer.string(protocolVersion);
-    writer.key("clientInfo");
-    writer.raw(clientInfo.toJson());
-    writer.key("capabilities");
+std::string InitializeParams::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("protocolVersion");
+    (void)writer.string(protocolVersion);
+    (void)writer.key("clientInfo");
+    (void)writer.raw(clientInfo.toJson());
+    (void)writer.key("capabilities");
     writeRawOrEmptyObject(writer, capabilities);
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<InitializeParams, McpError> InitializeParams::fromJson(const JsonElement& element) {
+std::expected<InitializeParams, McpError> InitializeParams::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "initialize params");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     InitializeParams p;
     auto protocolExp = requireString(obj, "protocolVersion");
@@ -444,8 +498,8 @@ std::expected<InitializeParams, McpError> InitializeParams::fromJson(const JsonE
     }
     p.protocolVersion = protocolExp.value();
 
-    JsonElement clientElement;
-    if (!JsonHelper::getElement(obj, "clientInfo", clientElement)) {
+    json::Json clientElement = obj.at("clientInfo");
+    if (!clientElement.valid()) {
         return std::unexpected(McpError::invalidMessage("Missing clientInfo"));
     }
     auto clientExp = ClientInfo::fromJson(clientElement);
@@ -454,10 +508,14 @@ std::expected<InitializeParams, McpError> InitializeParams::fromJson(const JsonE
     }
     p.clientInfo = std::move(clientExp.value());
 
-    JsonElement capsElement;
-    if (JsonHelper::getElement(obj, "capabilities", capsElement)) {
+    json::Json capsElement = obj.at("capabilities");
+    if (capsElement.valid()) {
         std::string raw;
-        if (JsonHelper::getRawJson(capsElement, raw)) {
+        auto serialized = json::stream::serialize(capsElement, [&](std::string_view chunk) -> json::result<void> {
+            raw.append(chunk);
+            return {};
+        });
+        if (serialized) {
             p.capabilities = std::move(raw);
         }
     }
@@ -465,25 +523,30 @@ std::expected<InitializeParams, McpError> InitializeParams::fromJson(const JsonE
     return p;
 }
 
-JsonString InitializeResult::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("protocolVersion");
-    writer.string(protocolVersion);
-    writer.key("serverInfo");
-    writer.raw(serverInfo.toJson());
-    writer.key("capabilities");
-    writer.raw(capabilities.toJson());
-    writer.endObject();
-    return writer.takeString();
+std::string InitializeResult::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("protocolVersion");
+    (void)writer.string(protocolVersion);
+    (void)writer.key("serverInfo");
+    (void)writer.raw(serverInfo.toJson());
+    (void)writer.key("capabilities");
+    (void)writer.raw(capabilities.toJson());
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<InitializeResult, McpError> InitializeResult::fromJson(const JsonElement& element) {
+std::expected<InitializeResult, McpError> InitializeResult::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "initialize result");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     InitializeResult r;
     auto protocolExp = requireString(obj, "protocolVersion");
@@ -492,8 +555,8 @@ std::expected<InitializeResult, McpError> InitializeResult::fromJson(const JsonE
     }
     r.protocolVersion = protocolExp.value();
 
-    JsonElement serverElement;
-    if (!JsonHelper::getElement(obj, "serverInfo", serverElement)) {
+    json::Json serverElement = obj.at("serverInfo");
+    if (!serverElement.valid()) {
         return std::unexpected(McpError::invalidMessage("Missing serverInfo"));
     }
     auto serverExp = ServerInfo::fromJson(serverElement);
@@ -502,8 +565,8 @@ std::expected<InitializeResult, McpError> InitializeResult::fromJson(const JsonE
     }
     r.serverInfo = std::move(serverExp.value());
 
-    JsonElement capsElement;
-    if (!JsonHelper::getElement(obj, "capabilities", capsElement)) {
+    json::Json capsElement = obj.at("capabilities");
+    if (!capsElement.valid()) {
         return std::unexpected(McpError::invalidMessage("Missing capabilities"));
     }
     auto capsExp = ServerCapabilities::fromJson(capsElement);
@@ -515,23 +578,28 @@ std::expected<InitializeResult, McpError> InitializeResult::fromJson(const JsonE
     return r;
 }
 
-JsonString ToolCallParams::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("name");
-    writer.string(name);
-    writer.key("arguments");
+std::string ToolCallParams::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("name");
+    (void)writer.string(name);
+    (void)writer.key("arguments");
     writeRawOrEmptyObject(writer, arguments);
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<ToolCallParams, McpError> ToolCallParams::fromJson(const JsonElement& element) {
+std::expected<ToolCallParams, McpError> ToolCallParams::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "tool call params");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     ToolCallParams p;
     auto nameExp = requireString(obj, "name");
@@ -540,10 +608,14 @@ std::expected<ToolCallParams, McpError> ToolCallParams::fromJson(const JsonEleme
     }
     p.name = nameExp.value();
 
-    JsonElement argsElement;
-    if (JsonHelper::getElement(obj, "arguments", argsElement)) {
+    json::Json argsElement = obj.at("arguments");
+    if (argsElement.valid()) {
         std::string raw;
-        if (JsonHelper::getRawJson(argsElement, raw)) {
+        auto serialized = json::stream::serialize(argsElement, [&](std::string_view chunk) -> json::result<void> {
+            raw.append(chunk);
+            return {};
+        });
+        if (serialized) {
             p.arguments = std::move(raw);
         }
     }
@@ -551,35 +623,41 @@ std::expected<ToolCallParams, McpError> ToolCallParams::fromJson(const JsonEleme
     return p;
 }
 
-JsonString ToolCallResult::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("content");
-    writer.startArray();
+std::string ToolCallResult::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("content");
+    (void)writer.start_array();
     for (const auto& item : content) {
-        writer.raw(item.toJson());
+        (void)writer.raw(item.toJson());
     }
-    writer.endArray();
+    (void)writer.end_array();
     if (isError) {
-        writer.key("isError");
-        writer.boolean(true);
+        (void)writer.key("isError");
+        (void)writer.boolean(true);
     }
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<ToolCallResult, McpError> ToolCallResult::fromJson(const JsonElement& element) {
+std::expected<ToolCallResult, McpError> ToolCallResult::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "tool call result");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     ToolCallResult r;
 
-    JsonArray contentArray;
-    if (JsonHelper::getArray(obj, "content", contentArray)) {
-        for (auto item : contentArray) {
+    json::Json contentArray = obj.at("content");
+    if (contentArray.is_array()) {
+        for (size_t i = 0; i < contentArray.size(); ++i) {
+            const json::Json item = contentArray.at(i);
             auto contentExp = Content::fromJson(item);
             if (!contentExp) {
                 return std::unexpected(contentExp.error());
@@ -588,58 +666,68 @@ std::expected<ToolCallResult, McpError> ToolCallResult::fromJson(const JsonEleme
         }
     }
 
-    bool isError = false;
-    if (JsonHelper::getBool(obj, "isError", isError)) {
-        r.isError = isError;
+    auto isErrorVal = obj.at("isError").as_bool();
+    if (isErrorVal) {
+        r.isError = *isErrorVal;
     }
 
     return r;
 }
 
-JsonString JsonRpcRequest::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("jsonrpc");
-    writer.string(jsonrpc);
+std::string JsonRpcRequest::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("jsonrpc");
+    (void)writer.string(jsonrpc);
     if (id.has_value()) {
-        writer.key("id");
-        writer.number(id.value());
+        (void)writer.key("id");
+        (void)writer.number(id.value());
     }
-    writer.key("method");
-    writer.string(method);
+    (void)writer.key("method");
+    (void)writer.string(method);
     if (params.has_value()) {
-        writer.key("params");
+        (void)writer.key("params");
         writeRawOrEmptyObject(writer, params.value());
     }
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-JsonString JsonRpcResponse::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("jsonrpc");
-    writer.string(jsonrpc);
-    writer.key("id");
-    writer.number(id);
+std::string JsonRpcResponse::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("jsonrpc");
+    (void)writer.string(jsonrpc);
+    (void)writer.key("id");
+    (void)writer.number(id);
     if (result.has_value()) {
-        writer.key("result");
+        (void)writer.key("result");
         writeRawOrEmptyObject(writer, result.value());
     }
     if (error.has_value()) {
-        writer.key("error");
+        (void)writer.key("error");
         writeRawOrEmptyObject(writer, error.value());
     }
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<JsonRpcResponse, McpError> JsonRpcResponse::fromJson(const JsonElement& element) {
+std::expected<JsonRpcResponse, McpError> JsonRpcResponse::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "jsonrpc response");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     JsonRpcResponse r;
     auto idExp = requireInt64(obj, "id");
@@ -648,18 +736,26 @@ std::expected<JsonRpcResponse, McpError> JsonRpcResponse::fromJson(const JsonEle
     }
     r.id = idExp.value();
 
-    JsonElement resultElement;
-    if (JsonHelper::getElement(obj, "result", resultElement)) {
+    json::Json resultElement = obj.at("result");
+    if (resultElement.valid()) {
         std::string raw;
-        if (JsonHelper::getRawJson(resultElement, raw)) {
+        auto serialized = json::stream::serialize(resultElement, [&](std::string_view chunk) -> json::result<void> {
+            raw.append(chunk);
+            return {};
+        });
+        if (serialized) {
             r.result = std::move(raw);
         }
     }
 
-    JsonElement errorElement;
-    if (JsonHelper::getElement(obj, "error", errorElement)) {
+    json::Json errorElement = obj.at("error");
+    if (errorElement.valid()) {
         std::string raw;
-        if (JsonHelper::getRawJson(errorElement, raw)) {
+        auto serialized = json::stream::serialize(errorElement, [&](std::string_view chunk) -> json::result<void> {
+            raw.append(chunk);
+            return {};
+        });
+        if (serialized) {
             r.error = std::move(raw);
         }
     }
@@ -667,42 +763,52 @@ std::expected<JsonRpcResponse, McpError> JsonRpcResponse::fromJson(const JsonEle
     return r;
 }
 
-JsonString JsonRpcNotification::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("jsonrpc");
-    writer.string(jsonrpc);
-    writer.key("method");
-    writer.string(method);
+std::string JsonRpcNotification::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("jsonrpc");
+    (void)writer.string(jsonrpc);
+    (void)writer.key("method");
+    (void)writer.string(method);
     if (params.has_value()) {
-        writer.key("params");
+        (void)writer.key("params");
         writeRawOrEmptyObject(writer, params.value());
     }
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-JsonString JsonRpcError::toJson() const {
-    JsonWriter writer;
-    writer.startObject();
-    writer.key("code");
-    writer.number(static_cast<int64_t>(code));
-    writer.key("message");
-    writer.string(message);
+std::string JsonRpcError::toJson() const {
+    std::string out;
+    auto writer = makeJsonWriter(out);
+    // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+    (void)writer.start_object();
+    (void)writer.key("code");
+    (void)writer.number(static_cast<int64_t>(code));
+    (void)writer.key("message");
+    (void)writer.string(message);
     if (data.has_value()) {
-        writer.key("data");
+        (void)writer.key("data");
         writeRawOrEmptyObject(writer, data.value());
     }
-    writer.endObject();
-    return writer.takeString();
+    (void)writer.end_object();
+    if (!writer.finish()) {
+        return std::string{};
+    }
+    return std::move(out);
 }
 
-std::expected<JsonRpcError, McpError> JsonRpcError::fromJson(const JsonElement& element) {
+std::expected<JsonRpcError, McpError> JsonRpcError::fromJson(const json::Json& element) {
     auto objExp = requireObject(element, "jsonrpc error");
     if (!objExp) {
         return std::unexpected(objExp.error());
     }
-    JsonObject obj = objExp.value();
+    json::Json obj = objExp.value();
 
     JsonRpcError e;
     auto codeExp = requireInt64(obj, "code");
@@ -716,10 +822,14 @@ std::expected<JsonRpcError, McpError> JsonRpcError::fromJson(const JsonElement& 
     }
     e.message = msgExp.value();
 
-    JsonElement dataElement;
-    if (JsonHelper::getElement(obj, "data", dataElement)) {
+    json::Json dataElement = obj.at("data");
+    if (dataElement.valid()) {
         std::string raw;
-        if (JsonHelper::getRawJson(dataElement, raw)) {
+        auto serialized = json::stream::serialize(dataElement, [&](std::string_view chunk) -> json::result<void> {
+            raw.append(chunk);
+            return {};
+        });
+        if (serialized) {
             e.data = std::move(raw);
         }
     }

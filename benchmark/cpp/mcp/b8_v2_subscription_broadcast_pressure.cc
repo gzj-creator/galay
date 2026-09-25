@@ -65,10 +65,10 @@ int main(int argc, char** argv)
         return 1;
     }
 
-    galay::mcp::v2::McpHttpServer server("127.0.0.1", port, 1, 0);
+    galay::mcp::v2::McpHttpServer server("127.0.0.1", port, 2, 0);
     server.addTool("pressure", "pressure", "{}",
-                   [](const galay::mcp::JsonElement&,
-                      std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result)
+                   [](const json::Json&,
+                      std::expected<std::string, galay::mcp::McpError>& result)
                        -> galay::kernel::Task<void> {
                        result = "ok";
                        co_return;
@@ -81,8 +81,8 @@ int main(int argc, char** argv)
                            co_return;
                        });
     server.addPrompt("pressure", "pressure", {},
-                     [](const std::string&, const galay::mcp::JsonElement&,
-                        std::expected<galay::mcp::JsonString, galay::mcp::McpError>& result)
+                     [](const std::string&, const json::Json&,
+                        std::expected<std::string, galay::mcp::McpError>& result)
                          -> galay::kernel::Task<void> {
                          result = R"({"messages":[]})";
                          co_return;
@@ -121,10 +121,17 @@ int main(int argc, char** argv)
     std::expected<galay::mcp::v2::SubscriptionFilter, galay::mcp::McpError> listenResult =
         std::unexpected(galay::mcp::McpError::invalidResponse("pending acknowledgement"));
     std::atomic<std::size_t> received{0};
+    std::atomic<bool> subscribed{false};
+    std::atomic<bool> warmed{false};
     auto listener = client.listen(
         filter,
-        [&received](std::string) {
-            received.fetch_add(1, std::memory_order_acq_rel);
+        [&received, &subscribed, &warmed](std::string message) {
+            subscribed.store(true, std::memory_order_release);
+            if (warmed.load(std::memory_order_acquire)) {
+                received.fetch_add(1, std::memory_order_release);
+            } else if (message.find("notifications/resources/list_changed") != std::string::npos) {
+                warmed.store(true, std::memory_order_release);
+            }
             return true;
         },
         listenResult);
@@ -139,20 +146,25 @@ int main(int argc, char** argv)
 
     const auto acknowledgementDeadline = std::chrono::steady_clock::now() + 3s;
     bool warmupEnqueued = false;
-    while (!warmupEnqueued && std::chrono::steady_clock::now() < acknowledgementDeadline) {
-        warmupEnqueued = server.notifyToolsListChanged() == 1;
-        if (warmupEnqueued) break;
-        std::this_thread::sleep_for(1ms);
-    }
-    while (received.load(std::memory_order_acquire) == 0 &&
+    while (!subscribed.load(std::memory_order_acquire) &&
            std::chrono::steady_clock::now() < acknowledgementDeadline) {
+        warmupEnqueued = server.notifyToolsListChanged().has_value();
+        if (!warmupEnqueued) break;
         std::this_thread::sleep_for(1ms);
     }
-    if (!warmupEnqueued || received.load(std::memory_order_acquire) == 0) {
+    // All warmup commands and this marker share one producer's FIFO stream.
+    // Receiving the marker proves warmup drained, without a timing assumption.
+    const auto marker = server.notifyResourcesListChanged();
+    while (marker && !warmed.load(std::memory_order_acquire) &&
+           std::chrono::steady_clock::now() < acknowledgementDeadline) {
+        std::this_thread::sleep_for(50us);
+    }
+    if (!warmupEnqueued || !marker || !warmed.load(std::memory_order_acquire)) {
         server.stop();
-        (void)listenerHandle->join();
+        const auto joined = listenerHandle->join();
         serverThread.join();
         runtime.stop();
+        if (!joined) std::cerr << "subscription join failed" << std::endl;
         std::cerr << "subscription acknowledgement timed out\n";
         return 1;
     }
@@ -161,34 +173,43 @@ int main(int argc, char** argv)
     const auto start = std::chrono::steady_clock::now();
     std::size_t enqueued = 0;
     for (std::size_t i = 0; i < iterations; ++i) {
-        enqueued += server.notifyToolsListChanged();
-        enqueued += server.notifyResourcesListChanged();
-        enqueued += server.notifyPromptsListChanged();
-        enqueued += server.notifyResourceUpdated("mem://pressure");
+        enqueued += server.notifyToolsListChanged().has_value();
+        enqueued += server.notifyResourcesListChanged().has_value();
+        enqueued += server.notifyPromptsListChanged().has_value();
+        enqueued += server.notifyResourceUpdated("mem://pressure").has_value();
+        // Bound in-flight events below the subscriber's capacity. Command
+        // acceptance and actual delivery are deliberately checked separately.
+        if ((i + 1) % 32 == 0) {
+            const auto drainDeadline = std::chrono::steady_clock::now() + 5s;
+            while (received.load(std::memory_order_acquire) < enqueued &&
+                   std::chrono::steady_clock::now() < drainDeadline) {
+                std::this_thread::sleep_for(50us);
+            }
+            if (received.load(std::memory_order_acquire) < enqueued) break;
+        }
     }
-    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        std::chrono::steady_clock::now() - start).count();
-
     const auto listenerDeadline = std::chrono::steady_clock::now() + 5s;
-    while (received.load(std::memory_order_acquire) < enqueued + 1 &&
+    while (received.load(std::memory_order_acquire) < enqueued &&
            std::chrono::steady_clock::now() < listenerDeadline) {
         std::this_thread::sleep_for(1ms);
     }
-    const auto callbackEvents = received.load(std::memory_order_acquire) - 1;
+    const auto elapsed = std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now() - start).count();
+    const auto callbackEvents = received.load(std::memory_order_acquire);
     server.stop();
-    (void)listenerHandle->join();
+    const auto joined = listenerHandle->join();
     serverThread.join();
     runtime.stop();
 
-    if (elapsed <= 0 || callbackEvents != enqueued || !listenResult.has_value()) return 1;
+    if (!joined || elapsed <= 0 || enqueued != publishCalls || callbackEvents != enqueued || !listenResult.has_value()) return 1;
     std::cout << "MCP v2 subscription iterations: " << iterations << '\n'
               << "Broadcast calls: " << publishCalls << '\n'
               << "Enqueued events: " << enqueued << '\n'
               << "Callback events: " << callbackEvents << '\n'
-              << "Publish throughput: "
+              << "End-to-end throughput (including drain waits): "
               << (static_cast<double>(publishCalls) * 1'000'000'000.0 / elapsed)
               << " events/s\n"
-              << "Average publish: "
+              << "Amortized end-to-end time: "
               << (static_cast<double>(elapsed) / publishCalls)
               << " ns/event\n";
     return 0;

@@ -194,13 +194,18 @@ galay::kernel::Task<void> workerTask(McpClient& client,
                 break;
             }
             case Operation::ToolCall: {
-                JsonWriter argsWriter;
-                argsWriter.startObject();
-                argsWriter.key("message");
-                argsWriter.string("Benchmark test message " + std::to_string(i));
-                argsWriter.endObject();
-                JsonString args = argsWriter.takeString();
-                std::expected<JsonString, McpError> callResult;
+                std::string args;
+                auto argsWriter = makeJsonWriter(args);
+                // StreamWriter 失败粘滞：中间结果统一丢弃，由 finish() 统一检查
+                (void)argsWriter.start_object();
+                (void)argsWriter.key("message");
+                (void)argsWriter.string("Benchmark test message " + std::to_string(i));
+                (void)argsWriter.end_object();
+                if (!argsWriter.finish()) {
+                    stats.addError();
+                    break;
+                }
+                std::expected<std::string, McpError> callResult;
                 co_await client.callTool("echo", args, callResult);
                 ok = callResult.has_value();
                 break;

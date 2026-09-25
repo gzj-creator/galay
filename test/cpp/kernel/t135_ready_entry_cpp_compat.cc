@@ -4,6 +4,7 @@
  */
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
+#include "test/cpp/common/scheduler_test_adapter.h"
 #include <galay/cpp/galay-kernel/core/scheduler_core.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
@@ -102,16 +103,16 @@ TaskRef makeDummyTaskRef() {
     return TaskRef(new TaskState(std::coroutine_handle<>{}), false);
 }
 
-class NullScheduler final : public Scheduler {
+class NullScheduler final : public detail::SchedulerTestAdapter<NullScheduler> {
 public:
-    std::expected<void, IOError> start() override { return {}; }
-    void stop() override {}
-    bool schedule(TaskRef) noexcept override { return false; }
-    bool scheduleResume(TaskRef) noexcept override { return false; }
-    bool scheduleDeferred(TaskRef) noexcept override { return false; }
-    bool scheduleImmediately(TaskRef) noexcept override { return false; }
-    bool addTimer(Timer::ptr) override { return false; }
-    SchedulerType type() override { return kParallelScheduler; }
+    std::expected<void, IOError> start() { return {}; }
+    void stop() {}
+    bool schedule(TaskRef) noexcept { return false; }
+    bool scheduleResume(TaskRef) noexcept { return false; }
+    bool scheduleDeferred(TaskRef) noexcept { return false; }
+    bool scheduleImmediately(TaskRef) noexcept { return false; }
+    bool addTimer(Timer::ptr) { return false; }
+    SchedulerType type() { return kParallelScheduler; }
 };
 
 struct FakeCoroState {
@@ -257,7 +258,7 @@ bool verifyCppScheduleRejectKeepsEntry() {
 }
 
 bool verifySchedulerCoreAcceptsReadyEntryResume() {
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
     SchedulerCore core(worker, 4);
     worker.scheduleLocal(makeDummyTaskRef());
 
@@ -319,7 +320,7 @@ bool verifyWorkerRequeuesOwnerOnlyEntryThroughInjectQueue() {
         .released = &released,
     };
     detail::ReadyEntry entry = makeFakeCoroEntry(&state);
-    IOSchedulerWorkerState worker;
+    IOReadyQueue worker;
 
     if (!worker.local_ring.push_back(entry)) {
         std::cerr << "[T135] failed to queue worker owner-only probe\n";
@@ -354,7 +355,7 @@ bool verifyPendingReadyEntriesReleaseOnWorkerDestroy() {
     FakeCoroState buffer_state{.released = &released};
 
     {
-        IOSchedulerWorkerState worker(2);
+        IOReadyQueue worker(2);
         worker.scheduleLocal(makeFakeCoroEntry(&ring_state));
         worker.scheduleLocal(makeFakeCoroEntry(&lifo_state));
         worker.scheduleInjected(makeFakeCoroEntry(&injected_state));

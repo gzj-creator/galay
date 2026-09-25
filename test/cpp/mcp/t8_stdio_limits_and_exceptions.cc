@@ -61,9 +61,9 @@ int main()
         galay::mcp::McpProductionPolicy policy;
         policy.transport.max_response_bytes = 512;
         server.setProductionPolicy(policy);
-        server.addTool("boom", "throws", "{}", [](const galay::mcp::JsonElement&) {
+        server.addTool("boom", "throws", "{}", [](const json::Json&) {
             throw std::runtime_error("secret-token-should-not-leak");
-            return std::expected<galay::mcp::JsonString, galay::mcp::McpError>{galay::mcp::JsonString("{}")};
+            return std::expected<std::string, galay::mcp::McpError>{std::string("{}")};
         });
 
         std::istringstream input(
@@ -90,9 +90,9 @@ int main()
         galay::mcp::McpProductionPolicy policy;
         policy.transport.max_response_bytes = 256;
         server.setProductionPolicy(policy);
-        server.addTool("large", "large response", "{}", [](const galay::mcp::JsonElement&) {
-            return std::expected<galay::mcp::JsonString, galay::mcp::McpError>{
-                galay::mcp::JsonString(1024, 'x')};
+        server.addTool("large", "large response", "{}", [](const json::Json&) {
+            return std::expected<std::string, galay::mcp::McpError>{
+                std::string(1024, 'x')};
         });
 
         std::istringstream input(
