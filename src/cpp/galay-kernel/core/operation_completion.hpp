@@ -108,9 +108,20 @@ public:
      * @return 未完成/draining/未移交恢复权或重复取结果时返回 kResultUnavailable。
      */
     [[nodiscard]] std::expected<Result, OperationError> takeResult() noexcept {
-        if (m_state.phase() != OperationPhase::kResumeIssued || !m_result) {
+        if (m_state.phase() != OperationPhase::kResumeIssued) {
             return std::unexpected(OperationError::kResultUnavailable);
         }
+
+        // FIX: 必须等待所有 physical refs drain 完成
+        if (m_state.physicalReferenceCount() != 0) {
+            // 仍有 backend attachment 未清理，不能安全地取结果
+            return std::unexpected(OperationError::kDrainIncomplete);
+        }
+
+        if (!m_result) {
+            return std::unexpected(OperationError::kResultUnavailable);
+        }
+
         std::expected<Result, OperationError> result(std::in_place, std::move(*m_result));
         m_result.reset();
         return result;

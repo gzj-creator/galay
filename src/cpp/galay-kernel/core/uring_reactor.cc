@@ -348,7 +348,8 @@ IOUringReactor::~IOUringReactor() {
     // A persistent handle owns a shared_ptr back to its arena. No CQE can be
     // delivered after queue_exit(), so this is the first safe point to break
     // that cycle for requests cancelled by shutdown without a terminal CQE.
-    for (auto& registration : m_accept_registrations) {
+    for (auto& [state, registration] : m_accept_registrations) {
+        (void)state;  // 避免未使用警告
         if (registration.handle != nullptr && registration.handle->arena) {
             registration.handle->recycle();
         }
@@ -435,6 +436,13 @@ bool IOUringReactor::submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
     const int result = addAccept(controller);
     if (result < 0) { return fail(IOError(kAcceptFailed, negativeRetOrErrno(result))); }
     if (result == kImmediateReady) {
+        // FIX: 同步完成路径必须立即释放 physical reference
+        const auto release_result = awaitable.m_operation->releasePhysicalReference();
+        if (!release_result) {
+            detail::storeBackendError(m_last_error_code, kNotReady,
+                                       static_cast<uint32_t>(OperationError::kNoPhysicalReference));
+            return fail(IOError(kNotReady, EAGAIN));
+        }
         const auto resume = detachAccept(awaitable);
         if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
         return false;
@@ -511,21 +519,11 @@ int IOUringReactor::submitMultishotAccept(IOController* controller) {
 
     auto* state = controller->m_sqe_state[IOController::READ];
     if (state != nullptr) {
-        const auto known = std::find_if(
-            m_accept_registrations.begin(), m_accept_registrations.end(),
-            [state](const AcceptRegistration& registration) {
-                return registration.state == state;
-            });
-        if (known == m_accept_registrations.end()) {
-            m_accept_registrations.push_back(AcceptRegistration{
-                .arena = controller->m_sqe_handle_pool[IOController::READ],
-                .state = state,
-                .handle = handle,
-            });
-        } else {
-            known->arena = controller->m_sqe_handle_pool[IOController::READ];
-            known->handle = handle;
-        }
+        // PERF: O(1) 查找和插入，使用 unordered_map
+        auto& registration = m_accept_registrations[state];
+        registration.arena = controller->m_sqe_handle_pool[IOController::READ];
+        registration.state = state;
+        registration.handle = handle;
     }
 
     io_uring_prep_multishot_accept(sqe,
@@ -543,8 +541,9 @@ int IOUringReactor::submitMultishotAccept(IOController* controller) {
 
 void IOUringReactor::stopAccepts() {
     m_accept_stopping = true;
-    for (size_t index = 0; index != m_accept_registrations.size(); ++index) {
-        auto* state = m_accept_registrations[index].state;
+    // PERF: O(n) 优化 - 使用 unordered_map 迭代
+    for (auto& [state_key, registration] : m_accept_registrations) {
+        auto* state = registration.state;
         if (state == nullptr) {
             continue;
         }

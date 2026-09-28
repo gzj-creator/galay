@@ -69,7 +69,7 @@ std::expected<std::vector<ssize_t>, IOError> AioCommitAwaitable::await_resume()
  */
 AsyncAio::AsyncAio(int max_events)
     : m_handle(GHandle::invalid())
-    , m_controller(GHandle::invalid())
+    , m_controller(std::make_unique<IOController>(GHandle::invalid()))
     , m_aio_ctx(0)
     , m_event_fd(-1)
     , m_max_events(max_events)
@@ -113,6 +113,8 @@ AsyncAio::AsyncAio(AsyncAio&& other) noexcept
     other.m_handle = GHandle::invalid();
     other.m_aio_ctx = 0;
     other.m_event_fd = -1;
+    // FIX: 创建新的 controller 给 moved-from 对象
+    other.m_controller = std::make_unique<IOController>(GHandle::invalid());
 }
 
 /**
@@ -142,6 +144,8 @@ AsyncAio& AsyncAio::operator=(AsyncAio&& other) noexcept
         other.m_handle = GHandle::invalid();
         other.m_aio_ctx = 0;
         other.m_event_fd = -1;
+        // FIX: 创建新的 controller 给 moved-from 对象
+        other.m_controller = std::make_unique<IOController>(GHandle::invalid());
     }
     return *this;
 }
@@ -244,7 +248,7 @@ AioCommitAwaitable AsyncAio::commit()
 
     // 移动 pending_ptrs 的所有权给 awaitable，避免生命周期问题
     std::vector<struct iocb*> ptrs_copy = m_pending_ptrs;
-    return AioCommitAwaitable(&m_controller, m_aio_ctx, m_event_fd, std::move(ptrs_copy), pending_count);
+    return AioCommitAwaitable(m_controller.get(), m_aio_ctx, m_event_fd, std::move(ptrs_copy), pending_count);
 }
 
 /**

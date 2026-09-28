@@ -59,15 +59,15 @@ static uint32_t toInotifyMask(FileWatchEvent events)
  * @brief 构造 AsyncFileWatcher；在 Linux 上初始化 inotify，在 macOS 上延迟初始化
  */
 AsyncFileWatcher::AsyncFileWatcher()
-    : m_controller(GHandle::invalid())
+    : m_controller(std::make_unique<IOController>(GHandle::invalid()))
     , m_watch_fd(-1)
 #ifdef USE_KQUEUE
     , m_current_events(FileWatchEvent::None)
 #endif
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
-    m_controller.m_handle.fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
-    m_watch_fd = m_controller.m_handle.fd;
+    m_controller->m_handle.fd = inotify_init1(IN_NONBLOCK | IN_CLOEXEC);
+    m_watch_fd = m_controller->m_handle.fd;
 #endif
     // macOS: m_controller 在 addWatch 时设置为第一个监控的文件 fd
 }
@@ -78,11 +78,11 @@ AsyncFileWatcher::AsyncFileWatcher()
 AsyncFileWatcher::~AsyncFileWatcher()
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
-    if (m_controller.m_handle.fd >= 0) {
+    if (m_controller->m_handle.fd >= 0) {
         for (const auto& [wd, path] : m_watches) {
-            inotify_rm_watch(m_controller.m_handle.fd, wd);
+            inotify_rm_watch(m_controller->m_handle.fd, wd);
         }
-        close(m_controller.m_handle.fd);
+        close(m_controller->m_handle.fd);
     }
 #else
     // macOS: 关闭所有打开的文件描述符
@@ -106,6 +106,8 @@ AsyncFileWatcher::AsyncFileWatcher(AsyncFileWatcher&& other) noexcept
 #endif
 {
     other.m_watch_fd = -1;
+    // FIX: 创建新的 controller 给 moved-from 对象
+    other.m_controller = std::make_unique<IOController>(GHandle::invalid());
 }
 
 /**
@@ -118,11 +120,11 @@ AsyncFileWatcher& AsyncFileWatcher::operator=(AsyncFileWatcher&& other) noexcept
     if (this != &other) {
         // 清理当前资源
 #if defined(USE_IOURING) || defined(USE_EPOLL)
-        if (m_controller.m_handle.fd >= 0) {
+        if (m_controller->m_handle.fd >= 0) {
             for (const auto& [wd, path] : m_watches) {
-                inotify_rm_watch(m_controller.m_handle.fd, wd);
+                inotify_rm_watch(m_controller->m_handle.fd, wd);
             }
-            close(m_controller.m_handle.fd);
+            close(m_controller->m_handle.fd);
         }
 #else
         for (const auto& [fd, path] : m_watches) {
@@ -136,6 +138,8 @@ AsyncFileWatcher& AsyncFileWatcher::operator=(AsyncFileWatcher&& other) noexcept
         m_watches = std::move(other.m_watches);
         m_watch_fd = other.m_watch_fd;
         other.m_watch_fd = -1;
+        // FIX: 创建新的 controller 给 moved-from 对象
+        other.m_controller = std::make_unique<IOController>(GHandle::invalid());
 #ifdef USE_KQUEUE
         m_current_events = other.m_current_events;
 #endif
@@ -156,12 +160,12 @@ AsyncFileWatcher& AsyncFileWatcher::operator=(AsyncFileWatcher&& other) noexcept
 std::expected<int, IOError> AsyncFileWatcher::addWatch(const std::string& path, FileWatchEvent events)
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
-    if (m_controller.m_handle.fd < 0) {
+    if (m_controller->m_handle.fd < 0) {
         return std::unexpected(IOError(kOpenFailed, EBADF));
     }
 
     uint32_t mask = toInotifyMask(events);
-    int wd = inotify_add_watch(m_controller.m_handle.fd, path.c_str(), mask);
+    int wd = inotify_add_watch(m_controller->m_handle.fd, path.c_str(), mask);
     if (wd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
     }
@@ -179,8 +183,8 @@ std::expected<int, IOError> AsyncFileWatcher::addWatch(const std::string& path, 
     m_current_events = events;
 
     // 设置第一个监控的 fd 作为 watch_fd
-    if (m_controller.m_handle.fd < 0) {
-        m_controller.m_handle.fd = fd;
+    if (m_controller->m_handle.fd < 0) {
+        m_controller->m_handle.fd = fd;
         m_watch_fd = fd;
     }
 
@@ -200,7 +204,7 @@ std::expected<int, IOError> AsyncFileWatcher::addWatch(const std::string& path, 
 std::expected<void, IOError> AsyncFileWatcher::removeWatch(int wd)
 {
 #if defined(USE_IOURING) || defined(USE_EPOLL)
-    if (m_controller.m_handle.fd < 0) {
+    if (m_controller->m_handle.fd < 0) {
         return std::unexpected(IOError(kOpenFailed, EBADF));
     }
 
@@ -209,7 +213,7 @@ std::expected<void, IOError> AsyncFileWatcher::removeWatch(int wd)
         return std::unexpected(IOError(kOpenFailed, EINVAL));
     }
 
-    if (inotify_rm_watch(m_controller.m_handle.fd, wd) < 0) {
+    if (inotify_rm_watch(m_controller->m_handle.fd, wd) < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
     }
 
@@ -226,12 +230,12 @@ std::expected<void, IOError> AsyncFileWatcher::removeWatch(int wd)
     m_watches.erase(it);
 
     // 如果删除的是当前 watch_fd，更新为下一个
-    if (wd == m_controller.m_handle.fd) {
+    if (wd == m_controller->m_handle.fd) {
         if (!m_watches.empty()) {
-            m_controller.m_handle.fd = m_watches.begin()->first;
-            m_watch_fd = m_controller.m_handle.fd;
+            m_controller->m_handle.fd = m_watches.begin()->first;
+            m_watch_fd = m_controller->m_handle.fd;
         } else {
-            m_controller.m_handle.fd = -1;
+            m_controller->m_handle.fd = -1;
             m_watch_fd = -1;
         }
     }
@@ -251,10 +255,10 @@ std::expected<void, IOError> AsyncFileWatcher::removeWatch(int wd)
 FileWatchAwaitable AsyncFileWatcher::watch()
 {
 #ifdef USE_KQUEUE
-    return FileWatchAwaitable(&m_controller,
+    return FileWatchAwaitable(m_controller.get(),
                               m_buffer, BUFFER_SIZE, m_current_events, &m_ready_events);
 #else
-    return FileWatchAwaitable(&m_controller,
+    return FileWatchAwaitable(m_controller.get(),
                               m_buffer, BUFFER_SIZE, &m_ready_events);
 #endif
 }

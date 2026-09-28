@@ -129,7 +129,7 @@ private:
         SqeState* state = nullptr;  ///< arena 内稳定 state；owner 原子解析当前 controller
         SqeRequestHandle* handle = nullptr;  ///< 当前持久 accept 请求；停机后 ring teardown 才能回收 self-reference
     };
-    std::vector<AcceptRegistration> m_accept_registrations;  ///< listener accept resource registrations
+    std::unordered_map<SqeState*, AcceptRegistration> m_accept_registrations;  ///< PERF: O(1) 查找的 listener accept resource registrations
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
     uint32_t m_next_accept_generation = 1; ///< 单次 operation key；不等同于 persistent request generation。
     bool m_accept_stopping = false; ///< owner stop 后拒绝发布新的 frame 引用。

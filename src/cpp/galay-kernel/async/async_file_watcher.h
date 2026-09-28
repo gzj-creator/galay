@@ -155,10 +155,10 @@ public:
      * @brief 获取内部 IO 控制器（用于高级操作）
      * @return IOController 指针
      */
-    galay::kernel::IOController* getController() { return &m_controller; }
+    galay::kernel::IOController* getController() { return m_controller.get(); }
 
 private:
-    galay::kernel::IOController m_controller;      ///< IO控制器
+    std::unique_ptr<galay::kernel::IOController> m_controller;      ///< IO控制器
     std::deque<galay::kernel::FileWatchResult> m_ready_events; ///< 已读取但尚未交付的事件队列
     std::unordered_map<int, std::string> m_watches; ///< wd/fd -> path 映射
     int m_watch_fd;                                ///< Linux: inotify fd, macOS: 当前监控的 fd

@@ -166,19 +166,36 @@ void EpollReactor::retireRegistrationEntry(IOController* controller) {
 }
 
 size_t EpollReactor::findPendingChangeIndex(IOController* controller) const {
-    for (size_t index = 0; index < m_pending_changes.size(); ++index) {
-        auto* entry = m_pending_changes[index].entry;
-        if (entry != nullptr && entry->controller == controller) {
-            return index;
-        }
+    // PERF: O(1) 查找，使用 hash map 索引
+    auto it = m_pending_change_index.find(controller);
+    if (it != m_pending_change_index.end()) {
+        return it->second;
     }
     return m_pending_changes.size();
 }
 
 void EpollReactor::erasePendingChange(size_t index) {
-    if (index < m_pending_changes.size()) {
-        m_pending_changes.erase(m_pending_changes.begin() + index);
+    if (index >= m_pending_changes.size()) {
+        return;
     }
+
+    // PERF: swap-and-pop 删除，避免移动元素
+    auto* entry = m_pending_changes[index].entry;
+    if (entry && entry->controller) {
+        m_pending_change_index.erase(entry->controller);
+    }
+
+    if (index != m_pending_changes.size() - 1) {
+        // 将最后一个元素移到被删除位置
+        m_pending_changes[index] = std::move(m_pending_changes.back());
+        // 更新被移动元素的索引
+        auto* moved_entry = m_pending_changes[index].entry;
+        if (moved_entry && moved_entry->controller) {
+            m_pending_change_index[moved_entry->controller] = index;
+        }
+    }
+
+    m_pending_changes.pop_back();
 }
 
 void EpollReactor::discardPendingChange(IOController* controller) {
@@ -261,10 +278,13 @@ int EpollReactor::applyEvents(IOController* controller, uint32_t events, bool fl
         if (entry == nullptr) {
             return -1;
         }
+        // PERF: 添加 pending change 时同步更新索引
+        const size_t new_index = m_pending_changes.size();
         m_pending_changes.push_back(PendingChange{
             .entry = entry,
             .events = events,
         });
+        m_pending_change_index[controller] = new_index;
     }
 
     if (flush_at_threshold && m_pending_changes.size() >= BATCH_THRESHOLD) {
@@ -307,6 +327,9 @@ int EpollReactor::updateRegistration(IOController* controller, uint32_t events) 
 }
 
 int EpollReactor::flushPendingChanges() {
+    // FIX: 收集所有需要执行的恢复能力，避免在遍历期间修改状态
+    std::vector<ResumeCapability> resumes_to_execute;
+
     size_t index = 0;
     while (index < m_pending_changes.size()) {
         PendingChange change = m_pending_changes[index];
@@ -331,7 +354,13 @@ int EpollReactor::flushPendingChanges() {
 
         const auto error = static_cast<uint32_t>(-ret);
         detail::storeBackendError(m_last_error_code, kNotReady, error);
-        if (events == EPOLLET) { return ret; }
+        if (events == EPOLLET) {
+            // FIX: 安全执行所有收集的恢复
+            for (auto& resume : resumes_to_execute) {
+                std::move(resume).resume();
+            }
+            return ret;
+        }
         if ((static_cast<uint32_t>(controller->m_type) & ACCEPT) != 0) {
             auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
             if (awaitable && awaitable->selectError(CompletionReason::kBackendError,
@@ -341,13 +370,24 @@ int EpollReactor::flushPendingChanges() {
                 retireRegistrationEntry(controller);
                 auto resume = awaitable->detach();
                 if (resume) {
-                    std::move(*resume).resume();
-                    return -static_cast<int>(error);
+                    // FIX: 保存到容器，稍后执行
+                    resumes_to_execute.push_back(std::move(*resume));
+                    ++index;
+                    continue;
                 }
                 detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
             }
         }
+        // FIX: 安全执行所有收集的恢复
+        for (auto& resume : resumes_to_execute) {
+            std::move(resume).resume();
+        }
         return -static_cast<int>(error);
+    }
+
+    // FIX: 安全执行所有恢复（此时不再遍历 m_pending_changes）
+    for (auto& resume : resumes_to_execute) {
+        std::move(resume).resume();
     }
     return 0;
 }
@@ -388,8 +428,28 @@ bool EpollReactor::submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
     if (!awaitable.m_operation->markSubmitted()) { return fail(IOError(kNotReady, EINVAL)); }
     const auto retained = awaitable.m_operation->addPhysicalReference();
     if (!retained) { return fail(IOError(kNotReady, EOVERFLOW)); }
-    if (!controller->fillAwaitable(ACCEPT, &awaitable)) { return fail(IOError(kNotReady, EINVAL)); }
+    if (!controller->fillAwaitable(ACCEPT, &awaitable)) {
+        // FIX: fillAwaitable 失败发生在 addPhysicalReference 之后，必须使用 detachAccept
+        if (!awaitable.selectError(CompletionReason::kBackendError, IOError(kNotReady, EINVAL))) {
+            detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+        }
+        const auto resume = detachAccept(awaitable);
+        if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        return false;
+    }
     const int result = addAccept(controller);
+    if (result == kImmediateReady) {
+        // FIX: 同步完成路径必须立即释放 physical reference
+        const auto release_result = awaitable.m_operation->releasePhysicalReference();
+        if (!release_result) {
+            detail::storeBackendError(m_last_error_code, kNotReady,
+                                       static_cast<uint32_t>(OperationError::kNoPhysicalReference));
+            return fail(IOError(kNotReady, EAGAIN));
+        }
+        const auto resume = detachAccept(awaitable);
+        if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        return false;
+    }
     if (result != 0) {
         if (result < 0 && !awaitable.m_operation->state().completionReason() &&
             !awaitable.selectError(CompletionReason::kBackendError,
@@ -466,28 +526,33 @@ void EpollReactor::timeoutAccept(AcceptAwaitable& awaitable) {
 
 void EpollReactor::stopAccepts() {
     m_accept_stopping = true;
-    for (;;) {
-        AcceptAwaitable* pending = nullptr;
-        for (const auto& [fd, entry] : m_registration_entries) {
-            (void)fd;
-            auto* controller = entry->controller;
-            if (controller && (static_cast<uint32_t>(controller->m_type) & ACCEPT)) {
-                pending = controller->getAwaitable<AcceptAwaitable>();
-                if (pending) { break; }
+
+    // PERF: O(n) 优化 - 预先收集所有待处理的 accept awaitable
+    std::vector<AcceptAwaitable*> pending_accepts;
+    for (const auto& [fd, entry] : m_registration_entries) {
+        (void)fd;
+        auto* controller = entry->controller;
+        if (controller && (static_cast<uint32_t>(controller->m_type) & ACCEPT)) {
+            auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
+            if (awaitable) {
+                pending_accepts.push_back(awaitable);
             }
         }
-        if (!pending) { return; }
+    }
+
+    // 统一处理所有 accept
+    for (auto* pending : pending_accepts) {
         if (!pending->selectError(CompletionReason::kRuntimeStopped, IOError(kClosed, 0))) {
             detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
-            return;
+            continue;
         }
         auto resume = detachAccept(*pending);
         if (!resume) {
             detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
-            return;
+            continue;
         }
         std::move(*resume).resume();
-        // 内联 C 恢复允许销毁/移动其他资源；重新取 owner，不能沿用 map iterator。
+        // 内联 C 恢复允许销毁/移动其他资源
     }
 }
 

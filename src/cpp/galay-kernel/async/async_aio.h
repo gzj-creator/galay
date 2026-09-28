@@ -269,11 +269,11 @@ public:
      * @brief 获取内部 IO 控制器（用于高级操作）
      * @return IOController 指针
      */
-    galay::kernel::IOController* getController() { return &m_controller; }
+    galay::kernel::IOController* getController() { return m_controller.get(); }
 
 private:
     GHandle m_handle;  ///< 当前文件句柄
-    galay::kernel::IOController m_controller;  ///< 批量提交完成通知使用的 IO 控制器
+    std::unique_ptr<galay::kernel::IOController> m_controller;  ///< 批量提交完成通知使用的 IO 控制器
 
     io_context_t m_aio_ctx;  ///< libaio 上下文
     int m_event_fd;  ///< 完成通知 eventfd

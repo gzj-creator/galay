@@ -39,6 +39,7 @@ enum class OperationError : uint8_t {
     kNotSafeToResume,
     kResumeAlreadyTaken,
     kResultUnavailable,
+    kDrainIncomplete,  // FIX: physical refs 尚未完全释放
 };
 
 /**
