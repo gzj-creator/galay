@@ -48,6 +48,7 @@
 
 ### Chore
 
+- 按当前工作区状态提交 `mcpp.lock`，移除已有的 `compat.openssl` 3.5.1 锁记录；未重新解析依赖、改变 manifest 或生成版本号。
 - 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。
 
 ### Docs
