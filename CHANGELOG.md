@@ -23,6 +23,7 @@
 
 ### Changed
 
+- **归档 HTTP/kqueue listener 关闭的探索性实现**：HTTP stop 在停止 Runtime 前向 IO owner 提交 listener close 并等待任务；kqueue close 冻结旧 accept 的关闭结果、取消 timer 并唤醒。仅保存已有工作区实现，其同步等待、错误路径和完成协议仍待后续门禁验证，不视为生产 Runtime drain 或 kqueue typed completion 完成。
 - **epoll/io_uring 单次 accept 接入 typed completion**：ready、timeout、close、owner stop 和提交失败共享唯一完成裁决，恢复前解除 controller slot、timer 和 frame 借用，`await_resume()` 仅消费已冻结结果；删除旧 io_uring accept 结果 gate 和恢复路径。
 - **分离单次 accept 与持久 multishot 生命周期**：单次恢复不等待 original terminal，后续 accepted fd 继续由资源队列缓存；持久 handle/arena 独立保活与回收，并补充 owner stop 和重启 admission 接线。
 - **统一 serde submodule 依赖**：CMake、Bzlmod 和 mcpp 都从 `thirdparty/serde` Git submodule 读取源码，并移除 Galay 自带的重复 JSON 后端源码。

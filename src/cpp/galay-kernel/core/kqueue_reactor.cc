@@ -291,6 +291,15 @@ int KqueueReactor::addClose(IOController* controller) {
 
     const int fd = controller->m_handle.fd;
     discardPendingChanges(controller);
+
+    Waker accept_waker;
+    if ((static_cast<uint32_t>(controller->m_type) & ACCEPT) != 0) {
+        if (auto* awaitable = controller->getAwaitable<AcceptAwaitable>(); awaitable != nullptr) {
+            awaitable->m_result = std::unexpected(IOError(kClosed, 0));
+            awaitable->cancelBoundTimeoutTimer();
+            accept_waker = std::move(awaitable->m_waker);
+        }
+    }
     retireRegistrationEntry(controller);
     const uint8_t armed_mask = static_cast<uint8_t>(
         controller->m_simple_armed_mask |
@@ -330,6 +339,7 @@ int KqueueReactor::addClose(IOController* controller) {
         return -static_cast<int>(close_errno);
     }
     controller->m_handle = GHandle::invalid();
+    accept_waker.wakeUp();
     return 0;
 }
 

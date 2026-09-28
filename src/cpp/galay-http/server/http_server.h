@@ -342,6 +342,7 @@ public:
         m_running.store(false);
 
         stopStartedPlugins();
+        closeListeners();
         m_runtime.stop();
         m_listeners.clear();
 
@@ -380,6 +381,44 @@ protected:
         galay::kernel::detail::setTaskRuntime(task_ref, &m_runtime);
         galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
         return scheduler->schedule(std::move(task_ref));
+    }
+
+    Task<void> closeListener(AsyncTcpSocket* listener) {
+        if (listener == nullptr || listener->handle() == GHandle::invalid()) {
+            co_return;
+        }
+        auto close_result = co_await listener->close();
+        if (!close_result && close_result.error().code() != kClosed) {
+            HTTP_LOG_WARN("[socket] [close-fail]",
+                          "context=server-listener error={}",
+                          close_result.error().message());
+        }
+        co_return;
+    }
+
+    void closeListeners() {
+        std::vector<JoinHandle<void>> pending;
+        pending.reserve(m_listeners.size());
+        for (size_t i = 0; i < m_listeners.size(); ++i) {
+            auto* scheduler = m_runtime.getIOScheduler(i);
+            auto task = closeListener(&m_listeners[i]);
+            if (scheduler == nullptr || !task.isValid()) {
+                continue;
+            }
+            const TaskRef& task_ref = galay::kernel::detail::TaskAccess::taskRef(task);
+            galay::kernel::detail::setTaskRuntime(task_ref, &m_runtime);
+            galay::kernel::detail::setTaskScheduler(task_ref, scheduler);
+            if (scheduler->schedule(task_ref)) {
+                pending.emplace_back(
+                    galay::kernel::detail::TaskAccess::detachTask(std::move(task)));
+            }
+        }
+        for (const auto& task : pending) {
+            auto wait_result = task.wait();
+            if (!wait_result) {
+                HTTP_LOG_WARN("[runtime] [wait-fail]", "context=server-listener-close");
+            }
+        }
     }
 
     /**
