@@ -39,6 +39,7 @@
 
 ### Fixed
 
+- **保留 HTTP/2 静态缓存的 LLVM/libc++ 兼容性调整**：将 `atomic<shared_ptr>` 成员改为普通 `shared_ptr` 与原子自由函数，保持 acquire/acq_rel 内存序与只发布一次的语义；本次仅提交工作区已有修改。
 - **修复 io_uring accept 完成与资源回收边界**：关闭 stale 成功 CQE 携带的 fd，避免 ready 后 close 覆盖结果或重复唤醒，并消除 terminal CQE 在恢复回调释放 controller/awaiter 后继续访问的 UAF；未消费成功结果自动关闭连接。
 - **修复 serde 安装与模块消费接线**：保留 serde 子目录的默认安装规则，统一由 `galay::serde` 传递 C++23 模块依赖，并更新外部 consumer、模块 smoke 和 tracing 配置测试。
 - **修复 MCP v2 订阅回收与关闭边界**：订阅节点使用独立对齐分配并交由 owner 回收，避免协程帧无法满足有界通道对齐要求；关闭时先停止接纳、排空命令并关闭事件队列，等待 listener 退出后再回收节点和停止 HTTP runtime，支持并发停止调用。
