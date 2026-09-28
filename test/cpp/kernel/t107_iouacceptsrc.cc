@@ -76,8 +76,10 @@ int main() {
         std::cerr << "[T107] expected IOController to track multishot accept armed state\n";
         return 1;
     }
-    if (!containsText(iocontroller_text, "bool m_accept_result_assigned")) {
-        std::cerr << "[T107] expected IOController to track active accept delivery state\n";
+    if (containsText(iocontroller_text, "m_accept_result_assigned") ||
+        !containsText(iouring_text, "IOUringReactor::detachAccept") ||
+        !containsText(iouring_text, "awaitable->selectReady(*result)")) {
+        std::cerr << "[T107] expected unique typed completion and detached frame entry\n";
         return 1;
     }
 
@@ -85,13 +87,30 @@ int main() {
         std::cerr << "[T107] expected IOUringReactor to use multishot accept submission\n";
         return 1;
     }
+    if (!containsText(iocontroller_text, "IOEventType multishot_type") ||
+        !containsText(iocontroller_text, "handle->multishot_type = IOEventType::INVALID") ||
+        !containsText(iouring_text, "handle->multishot_type = ACCEPT") ||
+        !containsText(iouring_text, "handle->multishot_type = RECV;") ||
+        !containsText(iouring_text, "handle->multishot_type = RECVFROM;") ||
+        !containsText(iouring_text, "handle->multishot_type == ACCEPT && cqe->res >= 0")) {
+        std::cerr << "[T107] expected persistent result identity and stale accept fd cleanup\n";
+        return 1;
+    }
     if (!containsText(iouring_text, "IORING_CQE_F_MORE")) {
         std::cerr << "[T107] expected IOUringReactor accept path to inspect IORING_CQE_F_MORE\n";
         return 1;
     }
-    if (!containsText(iouring_text, "getpeername(") &&
-        !containsText(iocontroller_text, "getpeername(")) {
+    const auto awaitable_text = readAll(root / "galay-kernel" / "core" / "awaitable.cc");
+    const auto select_ready = extractFunction(awaitable_text, "bool AcceptAwaitable::selectReady(GHandle handle)");
+    if (!containsText(select_ready, "getpeername(") ||
+        !containsText(select_ready, "AcceptedConnection(handle, std::move(peer))")) {
         std::cerr << "[T107] expected multishot accept delivery to resolve peer host lazily\n";
+        return 1;
+    }
+    if (!containsText(iouring_text, "void IOUringReactor::stopAccepts()") ||
+        !containsText(iouring_text, "m_accept_registrations") ||
+        !containsText(iouring_text, "registration.handle->recycle()")) {
+        std::cerr << "[T107] expected owner stop to retain and teardown accept registrations\n";
         return 1;
     }
 

@@ -262,6 +262,29 @@ private:
             [this](TaskRef& task) { this->resume(task); },
             [&backend]() { backend.pollBackend(); },
             [&backend]() { backend.flushBackend(); });
+#ifdef USE_EPOLL
+        // Accept 的最小停机闭环；其他 operation 的统一 drain 属于后续阶段。
+        // 仍在 owner 上，local resume admission 可完成已接纳的等待者。
+        m_reactor.stopAccepts();
+        while (m_core.hasPendingWork()) {
+            const auto ran = m_core.runReadyPass(
+                [this](TaskRef& task) { this->resume(task); },
+                [this](size_t drained) { m_wake_coordinator.onRemoteCollected(drained); });
+            if (ran == 0) { break; }
+            backend.flushBackend();
+        }
+#endif
+#ifdef USE_IOURING
+        // io_uring has no readiness registration queue, but its persistent
+        // accept resource still needs an owner-side logical stop completion.
+        m_reactor.stopAccepts();
+        while (m_core.hasPendingWork()) {
+            const auto ran = m_core.runReadyPass(
+                [this](TaskRef& task) { this->resume(task); },
+                [this](size_t drained) { m_wake_coordinator.onRemoteCollected(drained); });
+            if (ran == 0) { break; }
+        }
+#endif
     }
 };
 

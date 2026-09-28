@@ -114,3 +114,28 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
         )
     endif()
 endforeach()
+
+# Keep the accept-only stop pressure check distinct from the future Runtime
+# six-counter shutdown gate. Other backends still require their own migration.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND GALAY_DISABLE_IOURING)
+    add_test(NAME kernel.runtime_pending_accept_10k
+        COMMAND $<TARGET_FILE:t185_runtime_pending_accept_lsan> 10000)
+    set_tests_properties(kernel.runtime_pending_accept_10k PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        LABELS "kernel;stress"
+        TIMEOUT 40)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND NOT GALAY_DISABLE_IOURING
+       AND GALAY_LIBURING_INCLUDE_DIR AND GALAY_LIBURING_LIBRARY)
+    # io_uring's default queue depth is finite; this verifies the logical stop
+    # boundary at a size that fits the current registration/backpressure path.
+    add_test(NAME kernel.runtime_pending_accept_uring_2k
+        COMMAND $<TARGET_FILE:t185_runtime_pending_accept_lsan> 2000)
+    set_tests_properties(kernel.runtime_pending_accept_uring_2k PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        LABELS "kernel;stress"
+        TIMEOUT 40)
+endif()
+set_tests_properties(kernel.runtime_pending_accept_lsan kernel.accept_completion_integration
+    PROPERTIES TIMEOUT 20)
+set_tests_properties(kernel.iou_accept_completion_resource kernel.iou_accept_typed_completion
+    PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)

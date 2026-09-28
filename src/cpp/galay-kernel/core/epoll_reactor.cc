@@ -61,6 +61,7 @@ EpollReactor::EpollReactor(int max_events, std::atomic<uint64_t>& last_error_cod
 
 std::expected<void, IOError> EpollReactor::start()
 {
+    m_accept_stopping = false;
     if (m_epoll_fd != -1 && m_event_fd != -1) {
         return {};
     }
@@ -229,7 +230,7 @@ int EpollReactor::armPersistentRead(IOController* controller) {
     return applyEvents(controller, buildEvents(controller));
 }
 
-int EpollReactor::applyEvents(IOController* controller, uint32_t events) {
+int EpollReactor::applyEvents(IOController* controller, uint32_t events, bool flush_at_threshold) {
     if (controller == nullptr || controller->m_handle == GHandle::invalid()) {
         return -1;
     }
@@ -266,9 +267,42 @@ int EpollReactor::applyEvents(IOController* controller, uint32_t events) {
         });
     }
 
-    if (m_pending_changes.size() >= BATCH_THRESHOLD) {
+    if (flush_at_threshold && m_pending_changes.size() >= BATCH_THRESHOLD) {
         return flushPendingChanges();
     }
+    return 0;
+}
+
+int EpollReactor::updateRegistration(IOController* controller, uint32_t events) {
+    if (events == controller->m_registered_events ||
+        (events == EPOLLET && controller->m_registered_events == 0)) { return 0; }
+
+    const int fd = controller->m_handle.fd;
+    if (events == EPOLLET) {
+        int ret;
+        do { ret = epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, nullptr); }
+        while (ret == -1 && errno == EINTR);
+        if (ret == 0 || errno == ENOENT) {
+            controller->m_registered_events = 0;
+            return 0;
+        }
+        return -errno;
+    }
+
+    epoll_event event{};
+    event.events = events;
+    event.data.ptr = registrationEntryForController(controller);
+    if (event.data.ptr == nullptr) { return -EINVAL; }
+    const int action = controller->m_registered_events == 0 ? EPOLL_CTL_ADD : EPOLL_CTL_MOD;
+    int ret;
+    do { ret = epoll_ctl(m_epoll_fd, action, fd, &event); }
+    while (ret == -1 && errno == EINTR);
+    if (ret == -1 && action == EPOLL_CTL_MOD && errno == ENOENT) {
+        do { ret = epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, fd, &event); }
+        while (ret == -1 && errno == EINTR);
+    }
+    if (ret != 0) { return -errno; }
+    controller->m_registered_events = events;
     return 0;
 }
 
@@ -288,58 +322,29 @@ int EpollReactor::flushPendingChanges() {
             continue;
         }
 
-        const int fd = controller->m_handle.fd;
-        if (events == EPOLLET) {
-            if (controller->m_registered_events == 0) {
-                erasePendingChange(index);
-                continue;
-            }
-
-            int ret = -1;
-            do {
-                ret = epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, nullptr);
-            } while (ret == -1 && errno == EINTR);
-
-            if (ret == 0 || errno == ENOENT) {
-                controller->m_registered_events = 0;
-                retireRegistrationEntry(controller);
-                erasePendingChange(index);
-                continue;
-            }
-            detail::storeBackendError(
-                m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
-            return -1;
-        }
-
-        struct epoll_event ev;
-        ev.events = events;
-        ev.data.ptr = change.entry;
-
-        int ret = -1;
-        if (controller->m_registered_events == 0) {
-            do {
-                ret = epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
-            } while (ret == -1 && errno == EINTR);
-        } else {
-            do {
-                ret = epoll_ctl(m_epoll_fd, EPOLL_CTL_MOD, fd, &ev);
-            } while (ret == -1 && errno == EINTR);
-            if (ret == -1 && errno == ENOENT) {
-                do {
-                    ret = epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
-                } while (ret == -1 && errno == EINTR);
-            }
-        }
-
+        const int ret = updateRegistration(controller, events);
         if (ret == 0) {
-            controller->m_registered_events = events;
+            if (events == EPOLLET) { retireRegistrationEntry(controller); }
             erasePendingChange(index);
             continue;
         }
 
-        detail::storeBackendError(
-            m_last_error_code, kNotReady, static_cast<uint32_t>(errno));
-        return -1;
+        const auto error = static_cast<uint32_t>(-ret);
+        detail::storeBackendError(m_last_error_code, kNotReady, error);
+        if (events == EPOLLET) { return ret; }
+        if ((static_cast<uint32_t>(controller->m_type) & ACCEPT) != 0) {
+            auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
+            if (awaitable && awaitable->selectError(CompletionReason::kBackendError,
+                                                  IOError(kAcceptFailed, error))) {
+                controller->removeAwaitable(ACCEPT);
+                erasePendingChange(index);
+                retireRegistrationEntry(controller);
+                auto resume = awaitable->detach();
+                if (resume) { std::move(*resume).resume(); }
+                else { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+            }
+        }
+        return -static_cast<int>(error);
     }
     return 0;
 }
@@ -347,10 +352,140 @@ int EpollReactor::flushPendingChanges() {
 int EpollReactor::addAccept(IOController* controller) {
     auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
     if (awaitable == nullptr) return -1;
-    if (awaitable->handleComplete(controller->m_handle)) {
+    if (awaitable->selectReady(controller->m_handle)) {
         return kImmediateReady;
     }
-    return applyEvents(controller, buildEvents(controller));
+    // The scheduler flushes after the ready pass, outside await_suspend. A
+    // failed older registration may otherwise resume C code that frees this
+    // controller while submitAccept still borrows it.
+    return applyEvents(controller, buildEvents(controller), false);
+}
+
+bool EpollReactor::submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
+    auto* controller = awaitable.m_controller;
+    const auto fail = [&](IOError error) {
+        if (awaitable.selectError(CompletionReason::kBackendError, error)) {
+            const auto resume = awaitable.detach(); // 同步完成，不发布 ready entry。
+            if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        }
+        return false;
+    };
+    const bool valid = controller && controller->m_handle != GHandle::invalid();
+    const OperationKey key{valid ? static_cast<uint32_t>(controller->m_handle.fd) : 0,
+                           m_next_accept_generation};
+    awaitable.m_operation.emplace(key, std::move(waker));
+    if (!valid) { return fail(IOError(kClosed, 0)); }
+    if (m_accept_stopping) { return fail(IOError(kClosed, 0)); }
+    if (m_next_accept_generation == 0) { return fail(IOError(kNotReady, EOVERFLOW)); }
+    ++m_next_accept_generation; // uint32 wrap 到 0 后拒绝新提交，不发布重复 key。
+    if (controller->m_awaitable[IOController::READ] ||
+        controller->m_sequence_owner[IOController::READ]) {
+        return fail(IOError(kNotReady, EBUSY));
+    }
+    if (!awaitable.m_operation->markSubmitted()) { return fail(IOError(kNotReady, EINVAL)); }
+    const auto retained = awaitable.m_operation->addPhysicalReference();
+    if (!retained) { return fail(IOError(kNotReady, EOVERFLOW)); }
+    if (!controller->fillAwaitable(ACCEPT, &awaitable)) { return fail(IOError(kNotReady, EINVAL)); }
+    const int result = addAccept(controller);
+    if (result != 0) {
+        if (result < 0 && !awaitable.m_operation->state().completionReason() &&
+            !awaitable.selectError(CompletionReason::kBackendError,
+                IOError(kAcceptFailed, detail::normalizeAwaitableErrno(result)))) {
+            detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+        }
+        const auto resume = detachAccept(awaitable);
+        if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        return false;
+    }
+    awaitable.m_registration_owner = controller->m_registration_owner_slot;
+    if (awaitable.m_timer) {
+        const auto timer_ref = awaitable.m_operation->addPhysicalReference();
+        if (!timer_ref) {
+            if (awaitable.selectError(CompletionReason::kBackendError, IOError(kNotReady, EOVERFLOW))) {
+                const auto resume = detachAccept(awaitable);
+                if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+            }
+            return false;
+        }
+        awaitable.m_timer_attached = true;
+        awaitable.m_timer->bind(&awaitable, [](void* value) noexcept {
+            static_cast<AcceptAwaitable*>(value)->timeoutOnOwner();
+        });
+        // push() can synchronously notify an already expired timer. Keep the
+        // suspend boundary closed until it returns: no resume may escape yet.
+        awaitable.m_submitting = true;
+        const bool added = awaitable.m_scheduler->addTimer(awaitable.m_timer);
+        awaitable.m_submitting = false;
+        if (awaitable.m_operation->state().completionReason()) { return false; }
+        if (!added) {
+            if (awaitable.selectError(CompletionReason::kBackendError, IOError(kNotReady, ENOMEM))) {
+                const auto resume = detachAccept(awaitable);
+                if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+            }
+            return false;
+        }
+    }
+    return true;
+}
+
+std::expected<ResumeCapability, OperationError>
+EpollReactor::detachAccept(AcceptAwaitable& awaitable) {
+    auto* controller = awaitable.m_registration_owner ? *awaitable.m_registration_owner
+                                                     : awaitable.m_controller;
+    if (controller && controller->m_awaitable[IOController::READ] == &awaitable) {
+        controller->removeAwaitable(ACCEPT);
+        // Readiness 注册不持有 frame 地址。先提交 DEL，再令已拷贝事件的稳定
+        // entry 失效；即使 DEL 失败，晚到事件也不能访问 operation/controller。
+        // Do not flush unrelated registrations here: their error recovery may
+        // resume inline and destroy this controller before close/detach returns.
+        discardPendingChange(controller);
+        const int updated = updateRegistration(controller, buildEvents(controller));
+        if (updated < 0) {
+            detail::storeBackendError(m_last_error_code, kNotReady, static_cast<uint32_t>(-updated));
+        }
+        if (controller->m_type == IOEventType::INVALID) {
+            retireRegistrationEntry(controller);
+        }
+    }
+    return awaitable.detach();
+}
+
+void EpollReactor::timeoutAccept(AcceptAwaitable& awaitable) {
+    if (!awaitable.selectError(CompletionReason::kTimedOut, IOError(kTimeout, 0))) { return; }
+    const bool submitting = awaitable.m_submitting;
+    auto resume = detachAccept(awaitable);
+    if (!resume) {
+        detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+        return;
+    }
+    if (!submitting) { std::move(*resume).resume(); }
+}
+
+void EpollReactor::stopAccepts() {
+    m_accept_stopping = true;
+    for (;;) {
+        AcceptAwaitable* pending = nullptr;
+        for (const auto& [fd, entry] : m_registration_entries) {
+            (void)fd;
+            auto* controller = entry->controller;
+            if (controller && (static_cast<uint32_t>(controller->m_type) & ACCEPT)) {
+                pending = controller->getAwaitable<AcceptAwaitable>();
+                if (pending) { break; }
+            }
+        }
+        if (!pending) { return; }
+        if (!pending->selectError(CompletionReason::kRuntimeStopped, IOError(kClosed, 0))) {
+            detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+            return;
+        }
+        auto resume = detachAccept(*pending);
+        if (!resume) {
+            detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+            return;
+        }
+        std::move(*resume).resume();
+        // 内联 C 恢复允许销毁/移动其他资源；重新取 owner，不能沿用 map iterator。
+    }
 }
 
 int EpollReactor::addConnect(IOController* controller) {
@@ -415,6 +550,17 @@ int EpollReactor::addClose(IOController* controller) {
     const int fd = controller->m_handle.fd;
     discardPendingChange(controller);
 
+    std::optional<ResumeCapability> accept_resume;
+    if ((static_cast<uint32_t>(controller->m_type) & ACCEPT) != 0) {
+        if (auto* awaitable = controller->getAwaitable<AcceptAwaitable>(); awaitable != nullptr) {
+            if (awaitable->selectError(CompletionReason::kResourceClosed, IOError(kClosed, 0))) {
+                auto resume = detachAccept(*awaitable);
+                if (resume) { accept_resume.emplace(std::move(*resume)); }
+                else { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+            }
+        }
+    }
+
     controller->m_type = IOEventType::INVALID;
     controller->m_awaitable[IOController::READ] = nullptr;
     controller->m_awaitable[IOController::WRITE] = nullptr;
@@ -426,11 +572,10 @@ int EpollReactor::addClose(IOController* controller) {
     retireRegistrationEntry(controller);
 
     const int close_result = ::close(fd);
-    if (close_result != 0) {
-        return errno == 0 ? -1 : -errno;
-    }
+    const int close_error = close_result == 0 ? 0 : (errno == 0 ? -1 : -errno);
     controller->m_handle = GHandle::invalid();
-    return 0;
+    if (accept_resume) { std::move(*accept_resume).resume(); }
+    return close_error;
 }
 
 int EpollReactor::addFileRead(IOController* controller) {
@@ -565,7 +710,16 @@ void EpollReactor::processEvent(struct epoll_event& ev) {
 
     if (ev.events & EPOLLIN) {
         if (t & ACCEPT) {
-            (void)complete_one_shot(controller->getAwaitable<AcceptAwaitable>(), ACCEPT);
+            auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
+            if (awaitable && awaitable->selectReady(controller->m_handle)) {
+                auto resume = detachAccept(*awaitable);
+                if (!resume) {
+                    detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+                    return;
+                }
+                std::move(*resume).resume();
+            }
+            return; // 恢复可能内联销毁 controller。
         } else if (t & RECV) {
             (void)complete_one_shot(controller->getAwaitable<RecvAwaitable>(), RECV);
         } else if (t & READV) {

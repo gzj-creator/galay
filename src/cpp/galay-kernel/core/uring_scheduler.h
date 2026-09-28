@@ -21,6 +21,11 @@ public:
                           int batch_size = GALAY_SCHEDULER_BATCH_SIZE);
     /** @brief 在线程退出后再析构 reactor 和队列；调用前须关闭借用者的异步源。 */
     ~IOUringScheduler();
+    /** @brief 单次 accept 的 owner 注册/timeout 入口；不等待持久 SQE 终止。 */
+    bool submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
+        return m_reactor.submitAccept(awaitable, std::move(waker));
+    }
+    void timeoutAccept(AcceptAwaitable& awaitable) { m_reactor.timeoutAccept(awaitable); }
 
     IOUringScheduler(const IOUringScheduler&) = delete;
     IOUringScheduler& operator=(const IOUringScheduler&) = delete;

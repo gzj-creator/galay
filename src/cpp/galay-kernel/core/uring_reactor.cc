@@ -75,13 +75,6 @@ inline auto ioErrorCodeFromError(const IOError& error) -> IOErrorCode {
     return static_cast<IOErrorCode>(error.code() & 0xffffffffu);
 }
 
-inline void closeUndeliveredAcceptedHandle(std::expected<GHandle, IOError>& result) noexcept {
-    if (result && *result != GHandle::invalid()) {
-        galay_close((*result).fd);
-        result = GHandle::invalid();
-    }
-}
-
 template <typename Awaitable>
 requires requires(Awaitable& awaitable) {
     { awaitable.cancelBoundTimeoutTimer() } noexcept;
@@ -273,6 +266,7 @@ IOUringReactor::IOUringReactor(int queue_depth, std::atomic<uint64_t>& last_erro
 
 std::expected<void, IOError> IOUringReactor::start()
 {
+    m_accept_stopping = false;
     if (m_ring_initialized) {
         return {};
     }
@@ -351,6 +345,15 @@ IOUringReactor::~IOUringReactor() {
     if (m_ring_initialized) {
         io_uring_queue_exit(&m_ring);
     }
+    // A persistent handle owns a shared_ptr back to its arena. No CQE can be
+    // delivered after queue_exit(), so this is the first safe point to break
+    // that cycle for requests cancelled by shutdown without a terminal CQE.
+    for (auto& registration : m_accept_registrations) {
+        if (registration.handle != nullptr && registration.handle->arena) {
+            registration.handle->recycle();
+        }
+    }
+    m_accept_registrations.clear();
     if (m_event_fd != -1) {
         close(m_event_fd);
     }
@@ -401,15 +404,89 @@ void IOUringReactor::prepareSendSqe(struct io_uring_sqe* sqe,
     io_uring_prep_send(sqe, fd, buffer, length, send_flags);
 }
 
+bool IOUringReactor::submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
+    auto* controller = awaitable.m_controller;
+    const bool valid = controller && controller->m_handle != GHandle::invalid();
+    const OperationKey key{valid ? static_cast<uint32_t>(controller->m_handle.fd) : 0,
+                           m_next_accept_generation};
+    // emplace 返回内部可写别名；这里只构造存储，不向 adapter 暴露该别名。
+    (void)awaitable.m_operation.emplace(key, std::move(waker));
+    const auto fail = [&](IOError error) {
+        if (awaitable.selectError(CompletionReason::kBackendError, error)) {
+            const auto resume = detachAccept(awaitable); // 同步继续，不调用恢复回调。
+            if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        }
+        return false;
+    };
+    if (!valid || m_accept_stopping) { return fail(IOError(kClosed, 0)); }
+    if (!m_ring_initialized) { return fail(IOError(kNotReady, EBADF)); }
+    if (m_next_accept_generation == 0) { return fail(IOError(kNotReady, EOVERFLOW)); }
+    ++m_next_accept_generation; // 耗尽后拒绝新 key；不改变持久 SQE 的 generation。
+    if (controller->m_awaitable[IOController::READ] ||
+        controller->m_sequence_owner[IOController::READ]) {
+        return fail(IOError(kNotReady, EBUSY));
+    }
+    if (!awaitable.m_operation->markSubmitted()) { return fail(IOError(kNotReady, EINVAL)); }
+    const auto retained = awaitable.m_operation->addPhysicalReference();
+    if (!retained) { return fail(IOError(kNotReady, EOVERFLOW)); }
+    awaitable.m_sqe_type = ACCEPT;
+    if (!controller->fillAwaitable(ACCEPT, &awaitable)) { return fail(IOError(kNotReady, EINVAL)); }
+    awaitable.m_registration_state = controller->m_sqe_state[IOController::READ];
+    const int result = addAccept(controller);
+    if (result < 0) { return fail(IOError(kAcceptFailed, negativeRetOrErrno(result))); }
+    if (result == kImmediateReady) {
+        const auto resume = detachAccept(awaitable);
+        if (!resume) { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        return false;
+    }
+    if (awaitable.m_timer) {
+        const auto retained_timer = awaitable.m_operation->addPhysicalReference();
+        if (!retained_timer) { return fail(IOError(kNotReady, EOVERFLOW)); }
+        awaitable.m_timer_attached = true;
+        awaitable.m_timer->bind(&awaitable, [](void* value) noexcept {
+            static_cast<AcceptAwaitable*>(value)->timeoutOnOwner();
+        });
+        // 时间轮 push 可同步到期；此时只允许 await_suspend 返回 false，不能内联恢复。
+        awaitable.m_submitting = true;
+        const bool added = awaitable.m_scheduler->addTimer(awaitable.m_timer);
+        awaitable.m_submitting = false;
+        if (awaitable.m_operation->state().completionReason()) { return false; }
+        if (!added) { return fail(IOError(kNotReady, ENOMEM)); }
+    }
+    return true;
+}
+
+std::expected<ResumeCapability, OperationError>
+IOUringReactor::detachAccept(AcceptAwaitable& awaitable) {
+    auto* controller = awaitable.m_registration_state
+        ? awaitable.m_registration_state->owner.load(std::memory_order_acquire)
+        : awaitable.m_controller;
+    if (controller && controller->m_awaitable[IOController::READ] == &awaitable) {
+        // 只解除当前 frame 的入口。持久 SQE 无 frame 指针，后续 fd 仍归资源缓存。
+        controller->removeAwaitable(ACCEPT);
+    }
+    return awaitable.detach();
+}
+
+void IOUringReactor::timeoutAccept(AcceptAwaitable& awaitable) {
+    if (!awaitable.selectError(CompletionReason::kTimedOut, IOError(kTimeout, 0))) { return; }
+    const bool submitting = awaitable.m_submitting;
+    auto resume = detachAccept(awaitable);
+    if (!resume) {
+        detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+        return;
+    }
+    if (!submitting) { std::move(*resume).resume(); }
+}
+
 int IOUringReactor::addAccept(IOController* controller) {
     auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
-    if (awaitable == nullptr) return -1;
-    if (controller->tryConsumeAcceptedHandle(awaitable->m_host, awaitable->m_result)) {
-        return kImmediateReady;
+    if (awaitable == nullptr) { return -EINVAL; }
+    if (const auto accepted = controller->takeAcceptedHandle()) {
+        if (awaitable->selectReady(*accepted)) { return kImmediateReady; }
+        return -EINVAL; // 已有 winner 不应再次发布同一个 awaiter。
     }
-    if (controller->m_accept_multishot_armed) {
-        return 0;
-    }
+    if (controller->m_accept_multishot_armed) { return 0; }
     return submitMultishotAccept(controller);
 }
 
@@ -432,16 +509,59 @@ int IOUringReactor::submitMultishotAccept(IOController* controller) {
         return -EAGAIN;
     }
 
+    auto* state = controller->m_sqe_state[IOController::READ];
+    if (state != nullptr) {
+        const auto known = std::find_if(
+            m_accept_registrations.begin(), m_accept_registrations.end(),
+            [state](const AcceptRegistration& registration) {
+                return registration.state == state;
+            });
+        if (known == m_accept_registrations.end()) {
+            m_accept_registrations.push_back(AcceptRegistration{
+                .arena = controller->m_sqe_handle_pool[IOController::READ],
+                .state = state,
+                .handle = handle,
+            });
+        } else {
+            known->arena = controller->m_sqe_handle_pool[IOController::READ];
+            known->handle = handle;
+        }
+    }
+
     io_uring_prep_multishot_accept(sqe,
                                    controller->m_handle.fd,
                                    nullptr,
                                    nullptr,
                                    SOCK_NONBLOCK | SOCK_CLOEXEC);
     io_uring_sqe_set_data(sqe, handle);
+    handle->multishot_type = ACCEPT;
     handle->persistent = true;
     controller->m_accept_multishot_handle = handle;
     controller->m_accept_multishot_armed = true;
     return 0;
+}
+
+void IOUringReactor::stopAccepts() {
+    m_accept_stopping = true;
+    for (size_t index = 0; index != m_accept_registrations.size(); ++index) {
+        auto* state = m_accept_registrations[index].state;
+        if (state == nullptr) {
+            continue;
+        }
+        auto* controller = state->owner.load(std::memory_order_acquire);
+        if (controller == nullptr ||
+            (static_cast<uint32_t>(controller->m_type) & ACCEPT) == 0) {
+            continue;
+        }
+        // addClose() is the owner-side logical completion boundary. It
+        // invalidates generation before waking the task; late accept CQEs
+        // close undelivered fds and retain the handle until terminal. Ring
+        // cancellation/drain remain a separate physical-shutdown gate.
+        const int closed = addClose(controller);
+        if (closed < 0) {
+            detail::storeBackendError(m_last_error_code, kDisconnectError, negativeRetOrErrno(closed));
+        }
+    }
 }
 
 int IOUringReactor::addConnect(IOController* controller) {
@@ -506,6 +626,7 @@ int IOUringReactor::submitMultishotRecv(IOController* controller) {
     sqe->flags |= IOSQE_BUFFER_SELECT;
     sqe->buf_group = kRecvBufferGroup;
     io_uring_sqe_set_data(sqe, handle);
+    handle->multishot_type = RECV;
     handle->persistent = true;
     controller->m_recv_multishot_handle = handle;
     controller->m_recv_multishot_armed = true;
@@ -618,15 +739,29 @@ int IOUringReactor::addClose(IOController* controller) {
 
     const int fd = controller->m_handle.fd;
 
+    std::optional<ResumeCapability> accept_resume;
+    if ((static_cast<uint32_t>(controller->m_type) & ACCEPT) != 0) {
+        if (auto* awaitable = controller->getAwaitable<AcceptAwaitable>();
+            awaitable && awaitable->selectError(m_accept_stopping
+                ? CompletionReason::kRuntimeStopped : CompletionReason::kResourceClosed,
+                IOError(kClosed, 0))) {
+            auto resume = detachAccept(*awaitable);
+            // 不使用 emplace 的可写别名；仅在资源记账完成后消费局部恢复权。
+            if (resume) { (void)accept_resume.emplace(std::move(*resume)); }
+            else { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+        }
+    }
+
     struct io_uring_sqe* cancel_sqe = io_uring_get_sqe(&m_ring);
     if (cancel_sqe) {
         io_uring_prep_cancel_fd(cancel_sqe, fd, 0);
         io_uring_sqe_set_data(cancel_sqe, nullptr);
     }
 
+    int result = 0;
     struct io_uring_sqe* close_sqe = io_uring_get_sqe(&m_ring);
     if (!close_sqe) {
-        close(fd);
+        if (::close(fd) != 0) { result = -errno; }
     } else {
         io_uring_prep_close(close_sqe, fd);
         io_uring_sqe_set_data(close_sqe, nullptr);
@@ -637,7 +772,8 @@ int IOUringReactor::addClose(IOController* controller) {
     controller->m_awaitable[IOController::WRITE] = nullptr;
     controller->invalidateSqeRequests();
     controller->m_handle = GHandle::invalid();
-    return 0;
+    if (accept_resume) { std::move(*accept_resume).resume(); }
+    return result; // 恢复回调之后不得访问 controller/awaiter。
 }
 
 int IOUringReactor::addFileRead(IOController* controller) {
@@ -768,6 +904,7 @@ int IOUringReactor::submitMultishotRecvFrom(IOController* controller)
     sqe->flags |= IOSQE_BUFFER_SELECT;
     sqe->buf_group = kRecvFromBufferGroup;
     io_uring_sqe_set_data(sqe, handle);
+    handle->multishot_type = RECVFROM;
     handle->persistent = true;
     controller->m_recvfrom_multishot_handle = handle;
     controller->m_recvfrom_multishot_armed = true;
@@ -1141,15 +1278,20 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
             recycle_guard.handle = nullptr;
         }
     }
-    if (!handle->state) {
-        return;
-    }
-    if (handle->state->generation.load(std::memory_order_acquire) != handle->generation) {
-        return;
-    }
-
-    auto* controller = handle->state->owner.load(std::memory_order_acquire);
+    auto* state = handle->state;
+    auto* controller = state != nullptr &&
+            state->generation.load(std::memory_order_acquire) == handle->generation
+        ? state->owner.load(std::memory_order_acquire) : nullptr;
     if (!controller) {
+        // A stale accept still transfers a process fd. Resolve its type from
+        // the physical request, never from a replaced/freed awaitable. MORE
+        // keeps this identity alive; only the original terminal CQE recycles it.
+        if (!notification && handle->multishot_type == ACCEPT && cqe->res >= 0) {
+            if (::close(cqe->res) != 0) {
+                detail::storeBackendError(
+                    m_last_error_code, kDisconnectError, static_cast<uint32_t>(errno));
+            }
+        }
         return;
     }
 
@@ -1376,65 +1518,46 @@ void IOUringReactor::processCompletion(struct io_uring_cqe* cqe) {
 void IOUringReactor::processAcceptCompletion(IOController* controller,
                                              AcceptAwaitable* awaitable,
                                              struct io_uring_cqe* cqe) {
-    if (controller == nullptr) {
-        return;
-    }
-
     const bool more = (cqe->flags & IORING_CQE_F_MORE) != 0;
     auto result = io::handleAccept(cqe);
-
+    bool completed = false; // 本次 tryComplete 的返回值，不是第二个持久完成 gate。
     if (result) {
-        if (awaitable != nullptr && !controller->m_accept_result_assigned) {
-            if (awaitable->handleComplete(cqe, controller->m_handle)) {
-                controller->enqueueAcceptedHandle(*result);
-                if (controller->tryConsumeAcceptedHandle(awaitable->m_host, awaitable->m_result)) {
-                    controller->m_accept_result_assigned = true;
-                    completeAndWake(awaitable);
-                }
-            } else {
-                closeUndeliveredAcceptedHandle(result);
-            }
-        } else {
-            controller->enqueueAcceptedHandle(*result);
-        }
+        if (awaitable) { completed = awaitable->selectReady(*result); }
+        else { controller->enqueueAcceptedHandle(*result); }
     } else if (!IOError::contains(result.error().code(), kNotReady)) {
-        if (awaitable != nullptr && !controller->m_accept_result_assigned) {
-            awaitable->m_result = std::unexpected(result.error());
-            controller->m_accept_result_assigned = true;
-            completeAndWake(awaitable);
+        if (awaitable) {
+            completed = awaitable->selectError(CompletionReason::kBackendError, result.error());
         } else {
-            detail::storeBackendError(
-                m_last_error_code,
-                ioErrorCodeFromError(result.error()),
-                systemCodeFromError(result.error()));
+            detail::storeBackendError(m_last_error_code,
+                ioErrorCodeFromError(result.error()), systemCodeFromError(result.error()));
         }
     }
 
-    if (more) {
-        return;
+    if (!more) {
+        controller->m_accept_multishot_handle = nullptr;
+        controller->m_accept_multishot_armed = false;
+        if (controller->m_handle != GHandle::invalid() && !m_accept_stopping) {
+            const int ret = submitMultishotAccept(controller);
+            if (ret < 0) {
+                if (awaitable && awaitable->selectError(CompletionReason::kBackendError,
+                        IOError(kAcceptFailed, negativeRetOrErrno(ret)))) {
+                    completed = true;
+                } else {
+                    detail::storeBackendError(m_last_error_code, kAcceptFailed, negativeRetOrErrno(ret));
+                }
+            }
+        }
     }
-
-    controller->m_accept_multishot_handle = nullptr;
-    controller->m_accept_multishot_armed = false;
-    if (controller->m_handle == GHandle::invalid()) {
-        return;
+    // 先完成资源重挂/错误记账，再断开 frame 入口。原请求由 terminal guard
+    // 独立 recycle；MORE 完成单次 accept 不等待、更不回收持久请求。
+    if (completed) {
+        auto resume = detachAccept(*awaitable);
+        if (!resume) {
+            detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
+            return;
+        }
+        std::move(*resume).resume();
     }
-
-    const int ret = submitMultishotAccept(controller);
-    if (ret >= 0) {
-        return;
-    }
-
-    if (awaitable != nullptr && !controller->m_accept_result_assigned) {
-        awaitable->m_result =
-            std::unexpected(IOError(kAcceptFailed, negativeRetOrErrno(ret)));
-        controller->m_accept_result_assigned = true;
-        completeAndWake(awaitable);
-        return;
-    }
-
-    detail::storeBackendError(
-        m_last_error_code, kAcceptFailed, negativeRetOrErrno(ret));
 }
 
 void IOUringReactor::processRecvCompletion(IOController* controller,

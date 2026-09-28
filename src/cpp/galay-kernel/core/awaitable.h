@@ -29,6 +29,9 @@
 #include "timeout.hpp"
 #include "watch_defs.hpp"
 #include "waker.h"
+#if defined(USE_EPOLL) || defined(USE_IOURING)
+#include "accept_operation.hpp"
+#endif
 #include <cerrno>
 #include <concepts>
 #include <coroutine>
@@ -525,6 +528,68 @@ struct AcceptIOContext: public IOContextBase {
  * @brief accept 的可等待对象
  * @details `co_await` 后返回新连接句柄，超时或失败时返回 `IOError`。
  */
+#if defined(USE_EPOLL) || defined(USE_IOURING)
+/**
+ * @brief Owner-thread accept，结果在完成时冻结，恢复时不再访问监听资源。
+ * @note 仅可在首次 await_suspend 前移动；operation 在最终 frame 位置原地构造。
+ *       timeout 只发送 owner 通知，不持有第二份结果或恢复权。
+ */
+struct AcceptAwaitable : public AwaitableBase {
+    AcceptAwaitable(IOController* controller, Host* host) noexcept
+        : m_controller(controller), m_host(host) {}
+    AcceptAwaitable(AcceptAwaitable&& other) noexcept
+        : m_controller(std::exchange(other.m_controller, nullptr)),
+          m_host(std::exchange(other.m_host, nullptr)),
+          m_duration(other.m_duration), m_timer(std::move(other.m_timer)) {}
+    AcceptAwaitable& operator=(AcceptAwaitable&&) = delete;
+
+    bool await_ready() const noexcept { return false; }
+    template <typename Promise>
+    bool await_suspend(std::coroutine_handle<Promise> handle) {
+        return suspend(Waker(handle));
+    }
+    std::expected<GHandle, IOError> await_resume();
+    AcceptAwaitable timeout(std::chrono::milliseconds duration) && {
+        m_duration = duration;
+        return std::move(*this);
+    }
+    AcceptAwaitable timeout(std::chrono::milliseconds duration) & {
+        return std::move(*this).timeout(duration);
+    }
+    /** @brief 未发布前创建 owner timer；通常由 suspend 惰性调用。 */
+    void ensureTimer() {
+        if (m_duration && !m_timer) {
+            m_timer = std::make_shared<AcceptTimeoutTimer>(*m_duration);
+        }
+    }
+
+    /** @brief 以下入口仅供 IO owner adapter；不得跨线程调用。 */
+    bool suspend(Waker&& waker);
+    void timeoutOnOwner() noexcept;
+    [[nodiscard]] bool selectError(CompletionReason reason, IOError error) noexcept;
+    /** @brief epoll 借用 listener；io_uring 接管 accepted fd（含失败/败者的回收）。
+     *  peer 只写入 typed result，调用方 Host 直到 await_resume 才更新。 */
+    [[nodiscard]] bool selectReady(GHandle handle);
+    [[nodiscard]] std::expected<ResumeCapability, OperationError> detach();
+
+    std::optional<AcceptOperation> m_operation;
+    IOController* m_controller;
+#ifdef USE_IOURING
+    SqeState* m_registration_state = nullptr; ///< resource arena 的稳定 state，跟随 controller 移动。
+#else
+    IOController** m_registration_owner = nullptr; ///< reactor 的稳定 owner 槽，跟随 controller 移动。
+#endif
+    Host* m_host;
+    Scheduler* m_scheduler = nullptr;
+    std::optional<std::chrono::milliseconds> m_duration;
+    std::shared_ptr<AcceptTimeoutTimer> m_timer;
+    bool m_timer_attached = false;
+    bool m_submitting = false; ///< 时间轮 push 的同步到期只能令 await_suspend 同步继续。
+private:
+    AcceptAwaitable(const AcceptAwaitable&) = delete;
+    AcceptAwaitable& operator=(const AcceptAwaitable&) = delete;
+};
+#else
 struct AcceptAwaitable: public AcceptIOContext, public TimeoutSupport<AcceptAwaitable> {
     AcceptAwaitable(IOController* controller, Host* host)
         : AcceptIOContext(host), m_controller(controller) {}
@@ -540,6 +605,7 @@ struct AcceptAwaitable: public AcceptIOContext, public TimeoutSupport<AcceptAwai
     IOController* m_controller;  ///< 关联的 IO 控制器
     Waker m_waker;  ///< 恢复等待协程的唤醒器
 };
+#endif
 
 // ---- Recv ----
 

@@ -13,6 +13,8 @@
 
 ### Added
 
+- **新增异步操作完成基础模块**：引入独立 `OperationKey`、`OperationState`、`OperationCompletion` 与唯一 `ResumeCapability`，以 `AcceptOperation` 和 `AcceptedConnection` 承载单次 accept 的结果、恢复权及未消费连接的 RAII 回收。
+- **新增 accept 生命周期测试与基准**：新增 T185–T191，覆盖 pending accept、完成竞争、frame/controller 解绑、真实及重排 CQE、fd 回收与 multishot arena 生命周期；新增 B39–B41，并接入 CMake/CTest、mcpp 及 epoll 10k/io_uring 2k pending 压力入口。
 - **接入 serde 结构体序列化模块**：新增 `galay-serde` 构建入口、JSON/TOML 结构体往返测试、示例和编码解码基准，支持 CMake、Bazel 与 mcpp。
 - **新增调度器静态分派测试与基准**：新增 `t183_scheduler_static_dispatch`（校验调度器非多态、不可经基类删除、Runtime 不再支持自定义注入）、`t184_io_controller_self_contained`（校验 IOController 槽位绑定只依赖自身头文件）和 `b38_scheduler_dispatch` 基准。
 - **测试调度器适配库**：新增 `test/cpp/common/scheduler_test_adapter.h` 与独立的 `galay-kernel-test-scheduler` 静态库，让确定性 timer/waker 竞态测试在 `GALAY_KERNEL_TEST_SCHEDULER` 下通过 hook 表控制恢复窗口，生产构建不携带该字段。
@@ -21,6 +23,8 @@
 
 ### Changed
 
+- **epoll/io_uring 单次 accept 接入 typed completion**：ready、timeout、close、owner stop 和提交失败共享唯一完成裁决，恢复前解除 controller slot、timer 和 frame 借用，`await_resume()` 仅消费已冻结结果；删除旧 io_uring accept 结果 gate 和恢复路径。
+- **分离单次 accept 与持久 multishot 生命周期**：单次恢复不等待 original terminal，后续 accepted fd 继续由资源队列缓存；持久 handle/arena 独立保活与回收，并补充 owner stop 和重启 admission 接线。
 - **统一 serde submodule 依赖**：CMake、Bzlmod 和 mcpp 都从 `thirdparty/serde` Git submodule 读取源码，并移除 Galay 自带的重复 JSON 后端源码。
 - **更新 MCP/etcd JSON 后端接线**：统一链接 serde 提供的 JSON target，并适配无异常结果 API。
 - **迁移到 serde 0.3.0 JSON API**：更新 serde submodule，MCP v1/v2 与 etcd 统一使用 `json::Json`、显式结果读取和序列化接口，移除 MCP 自有 JSON 辅助封装及旧类型别名，同步调用方、测试、示例和基准。
@@ -35,6 +39,7 @@
 
 ### Fixed
 
+- **修复 io_uring accept 完成与资源回收边界**：关闭 stale 成功 CQE 携带的 fd，避免 ready 后 close 覆盖结果或重复唤醒，并消除 terminal CQE 在恢复回调释放 controller/awaiter 后继续访问的 UAF；未消费成功结果自动关闭连接。
 - **修复 serde 安装与模块消费接线**：保留 serde 子目录的默认安装规则，统一由 `galay::serde` 传递 C++23 模块依赖，并更新外部 consumer、模块 smoke 和 tracing 配置测试。
 - **修复 MCP v2 订阅回收与关闭边界**：订阅节点使用独立对齐分配并交由 owner 回收，避免协程帧无法满足有界通道对齐要求；关闭时先停止接纳、排空命令并关闭事件队列，等待 listener 退出后再回收节点和停止 HTTP runtime，支持并发停止调用。
 - **保留 MCP v2 连接失败原因**：请求和监听路径检查 transport Task 的内外两层结果，传播连接错误；请求失败后释放 owner 内的请求占用状态。
@@ -45,6 +50,7 @@
 
 ### Docs
 
+- 新增异步操作取消设计与执行计划，记录所有权契约、实际红绿测试、GCC/LLVM 与 sanitizer/module 验证、隔离 B41 七轮 before/after 及分配审计；明确 awaiter/frame 增长成本，Step 3 整体仍为 NO-GO，生产 Runtime drain、累计性能与内存等门禁未完成，HTTP/connect 未开放。
 - 将 serde 使用说明移动到 `docs/cpp/modules/serde/00-快速开始.md`，同步更新相关模块的依赖和构建说明。
 - 更新 `docs/cpp/modules/kernel/10-调度器.md` 与 `02-API参考.md`，说明 CRTP 静态分派、`IOSchedulerBase` 共享实现、`IOReadyQueue` 职责边界及 Runtime 内置调度器所有权语义。
 - 更新 RPC 架构与 MCP v2 架构/API 文档，明确 owner 投递、借用生命周期、通知接纳语义和关闭顺序。

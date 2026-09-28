@@ -16,6 +16,7 @@
 #include "wake_coordinator.h"
 
 #ifdef USE_EPOLL
+#include "operation_completion.hpp"
 
 #include <sys/epoll.h>
 
@@ -46,6 +47,14 @@ public:
     std::expected<void, IOError> start();  ///< 显式初始化 epoll 和 eventfd，失败时返回 IOError
 
     int addAccept(IOController* controller);  ///< 注册 accept 等待；1=立即完成，0=已登记，<0=错误
+    /** @brief 构造最终地址的 accept operation 并提交；false 为同步完成。 */
+    bool submitAccept(AcceptAwaitable& awaitable, Waker&& waker);
+    /** @brief 先清除注册/slot，再移交恢复权；错误通过 lastError 记录。 */
+    std::expected<ResumeCapability, OperationError> detachAccept(AcceptAwaitable& awaitable);
+    /** @brief Owner 上冻结 timeout 结果并解除注册，最后才恢复等待者。 */
+    void timeoutAccept(AcceptAwaitable& awaitable);
+    /** @brief 停机 owner 入口：拒绝新 accept，完成并解绑所有已登记 accept。 */
+    void stopAccepts();
     int addConnect(IOController* controller);  ///< 注册 connect 等待；1=立即完成，0=已登记，<0=错误
     int addRecv(IOController* controller);  ///< 注册 recv 等待；1=立即完成，0=已登记，<0=错误
     int addSend(IOController* controller);  ///< 注册 send 等待；1=立即完成，0=已登记，<0=错误
@@ -65,6 +74,7 @@ public:
     void poll(int timeout_ms, WakeCoordinator& wake_coordinator);  ///< 轮询事件并通过 wake coordinator 分发唤醒
 
 private:
+    friend struct EpollReactorTestAccess; // 无布局/分支成本；测试只注入已拷贝 ready event。
     struct RegistrationEntry {
         IOController* controller = nullptr;  ///< 当前 fd 绑定的控制器；退役后置空过滤晚到事件
     };
@@ -77,7 +87,8 @@ private:
     uint32_t buildEvents(IOController* controller) const;  ///< 根据控制器状态计算目标 epoll 事件掩码
     int armPersistentRead(IOController* controller);  ///< 为 recv/readv 保留持久 EPOLLET READ 兴趣
     int armPersistentWrite(IOController* controller);  ///< 为 send 保留持久 EPOLLET WRITE 兴趣
-    int applyEvents(IOController* controller, uint32_t events);  ///< 把计算出的 epoll 事件掩码写入本地 pending 队列
+    int applyEvents(IOController* controller, uint32_t events, bool flush_at_threshold = true); ///< 排队变更；accept 提交期间禁止派发其他操作的错误恢复
+    int updateRegistration(IOController* controller, uint32_t events); ///< 只提交此资源的变更；不派发任何恢复回调
     int processSequence(IOEventType type, IOController* controller);  ///< 处理 sequence awaitable 的注册/同步逻辑
     void processEvent(struct epoll_event& ev);  ///< 消费单个 epoll 事件并唤醒对应 awaitable
     void syncEvents(IOController* controller);  ///< 同步控制器当前关注事件到 epoll
@@ -97,6 +108,8 @@ private:
     std::unordered_map<int, std::unique_ptr<RegistrationEntry>> m_registration_entries;  ///< fd 到稳定注册入口的映射
     std::vector<std::unique_ptr<RegistrationEntry>> m_retired_entries;  ///< 已退役但保留地址的注册入口
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
+    uint32_t m_next_accept_generation = 1; ///< 耗尽时拒绝提交，绝不重用旧 key。
+    bool m_accept_stopping = false;
 };
 
 static_assert(ReactorType<EpollReactor>);

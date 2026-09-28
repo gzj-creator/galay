@@ -92,14 +92,100 @@ int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller)
 /**
  * @brief 恢复 accept awaitable 并返回结果
  *
- * @details 在 io_uring 模式下，先重置 accept-result-assigned 标记，
- * 再委托给通用 resumeIOAwaitable 辅助函数。
+ * @details epoll/io_uring 从唯一 typed completion 取结果，不再借用 controller；
+ * kqueue 在其迁移门禁完成前仍使用原有恢复入口。
  *
  * @return 成功时返回已接受的连接句柄，失败时返回 IOError
  */
 std::expected<GHandle, IOError> AcceptAwaitable::await_resume() {
+#if defined(USE_EPOLL) || defined(USE_IOURING)
+    auto result = m_operation->takeResult();
+    if (!result) {
+        return std::unexpected(IOError(kNotReady, EINVAL));
+    }
+    if (!*result) {
+        return std::unexpected(result->error());
+    }
+    if (m_host) {
+        *m_host = result->value().peer();
+    }
+    return result->value().release();
+#else
     return detail::resumeIOAwaitable<ACCEPT>(*this);
+#endif
 }
+
+#if defined(USE_EPOLL) || defined(USE_IOURING)
+bool AcceptAwaitable::suspend(Waker&& waker) {
+    m_scheduler = waker.getScheduler();
+    if (!m_scheduler || m_scheduler->type() != kIOScheduler) {
+        m_operation.emplace(OperationKey{}, std::move(waker));
+        if (selectError(CompletionReason::kBackendError, IOError(kNotRunningOnIOScheduler, 0))) {
+            const auto resume = detach(); // 同步继续，消费但不排队恢复权。
+            if (!resume) { return false; }
+        }
+        return false;
+    }
+    ensureTimer();
+    return static_cast<IOScheduler*>(m_scheduler)->submitAccept(*this, std::move(waker));
+}
+
+bool AcceptAwaitable::selectError(CompletionReason reason, IOError error) noexcept {
+    return m_operation->tryComplete(reason, std::unexpected(error));
+}
+
+bool AcceptAwaitable::selectReady(GHandle handle) {
+#ifdef USE_IOURING
+    // CQE/cache transfers ownership even if peer lookup or completion loses.
+    Host peer;
+    if (m_host) {
+        sockaddr_storage address{};
+        socklen_t length = sizeof(address);
+        if (::getpeername(handle.fd, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
+            const auto error = static_cast<uint32_t>(errno);
+            AcceptedConnection unconsumed(handle, std::move(peer));
+            return selectError(CompletionReason::kBackendError, IOError(kAcceptFailed, error));
+        }
+        peer = Host::fromSockAddr(address);
+    }
+    return m_operation->tryComplete(CompletionReason::kReady,
+        AcceptedConnection(handle, std::move(peer)));
+#else
+    auto [result, peer] = io::handleAccept(handle);
+    if (!result) {
+        if (IOError::contains(result.error().code(), kNotReady)) { return false; }
+        return selectError(CompletionReason::kBackendError, result.error());
+    }
+    return m_operation->tryComplete(CompletionReason::kReady,
+        AcceptedConnection(*result, std::move(peer)));
+#endif
+}
+
+std::expected<ResumeCapability, OperationError> AcceptAwaitable::detach() {
+    // Reactor 已解除所有能访问 frame 的入口。时间轮中的晚到节点不再借用 frame。
+    if (m_timer) { m_timer->detach(); }
+    if (m_timer_attached) {
+        m_timer_attached = false;
+        auto drained = m_operation->releasePhysicalReference();
+        if (!drained) { return std::unexpected(drained.error()); }
+    }
+    m_controller = nullptr;
+#ifdef USE_IOURING
+    m_registration_state = nullptr;
+#else
+    m_registration_owner = nullptr;
+#endif
+    if (m_operation->state().physicalReferenceCount() != 0) {
+        auto drained = m_operation->releasePhysicalReference();
+        if (!drained) { return std::unexpected(drained.error()); }
+    }
+    return m_operation->takeResume();
+}
+
+void AcceptAwaitable::timeoutOnOwner() noexcept {
+    static_cast<IOScheduler*>(m_scheduler)->timeoutAccept(*this);
+}
+#endif
 
 /**
  * @brief 恢复 recv awaitable 并返回已接收字节数

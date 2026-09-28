@@ -13,8 +13,9 @@
 #define GALAY_KERNEL_IOURING_REACTOR_H
 
 #include "backend_reactor.h"
-#include "awaitable.h"
+#include "io_controller.hpp"
 #include "wake_coordinator.h"
+#include "operation_completion.hpp"
 
 #ifdef USE_IOURING
 
@@ -22,8 +23,11 @@
 #include <cstdint>
 #include <expected>
 #include <memory>
+#include <vector>
 
 namespace galay::kernel {
+
+struct IOContextBase;
 
 /**
  * @brief io_uring 后端 reactor
@@ -43,6 +47,10 @@ public:
     std::expected<void, IOError> start();  ///< 显式初始化 eventfd、io_uring ring 和 recv buffer ring
 
     int addAccept(IOController* controller);  ///< 注册 accept 请求；1=立即完成，0=已提交，<0=错误
+    /** @brief owner 发布单次 accept；false 表示同步完成且不发出恢复回调。 */
+    bool submitAccept(AcceptAwaitable& awaitable, Waker&& waker);
+    /** @brief owner timer 竞争同一 completion；只解绑 frame，不取消资源 multishot。 */
+    void timeoutAccept(AcceptAwaitable& awaitable);
     int addConnect(IOController* controller);  ///< 注册 connect 请求；1=立即完成，0=已提交，<0=错误
     int addRecv(IOController* controller);  ///< 注册 recv 请求；1=立即完成，0=已提交，<0=错误
     int addSend(IOController* controller);  ///< 注册 send 请求；1=立即完成，0=已提交，<0=错误
@@ -57,10 +65,14 @@ public:
     int addSendFile(IOController* controller);  ///< 注册 sendfile 请求；1=立即完成，0=已提交，<0=错误
     int addSequence(IOController* controller);  ///< 注册组合式序列请求；0=已提交或已唤醒立即完成 owner，<0=错误
     int remove(IOController* controller);  ///< 使控制器关联的未完成请求失效或移除
+    void stopAccepts();  ///< owner 停机入口：完成已登记 accept 的逻辑等待；物理 CQE drain 仍由后续门禁负责
 
     void poll(uint64_t timeout_ns, WakeCoordinator& wake_coordinator);  ///< 等待完成事件并通过 wake coordinator 分发唤醒
 
 private:
+    friend struct IOUringReactorTestAccess;  ///< 确定性 CQE 注入；不增加生产对象状态或回调。
+    /** @brief 清除当前 frame 的 slot/timer 引用，再取唯一恢复权；持久请求不计入 frame refs。 */
+    std::expected<ResumeCapability, OperationError> detachAccept(AcceptAwaitable& awaitable);
     int submitMultishotAccept(IOController* controller);  ///< 为 listener 提交持久 multishot accept SQE
     int submitMultishotRecv(IOController* controller);  ///< 为 socket 提交持久 multishot recv SQE
     int submitMultishotRecvFrom(IOController* controller);  ///< 为 UDP socket 提交持久 multishot recvmsg SQE
@@ -112,7 +124,15 @@ private:
     bool m_recvmsg_multishot_confirmed = false;  ///< 是否已收到成功 CQE，避免把后续 EINVAL 误判为能力缺失
     std::shared_ptr<void> m_recv_buffer_pool;  ///< recv provided buffer ring 的共享所有权
     std::shared_ptr<void> m_recvfrom_buffer_pool;  ///< UDP recvmsg provided buffer ring 的共享所有权
+    struct AcceptRegistration {
+        std::shared_ptr<SqeHandleArena> arena;  ///< 保持 SQE state 地址到 late CQE 处理完成
+        SqeState* state = nullptr;  ///< arena 内稳定 state；owner 原子解析当前 controller
+        SqeRequestHandle* handle = nullptr;  ///< 当前持久 accept 请求；停机后 ring teardown 才能回收 self-reference
+    };
+    std::vector<AcceptRegistration> m_accept_registrations;  ///< listener accept resource registrations
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位
+    uint32_t m_next_accept_generation = 1; ///< 单次 operation key；不等同于 persistent request generation。
+    bool m_accept_stopping = false; ///< owner stop 后拒绝发布新的 frame 引用。
 };
 
 static_assert(ReactorType<IOUringReactor>);

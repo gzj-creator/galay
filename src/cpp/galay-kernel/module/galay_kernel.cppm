@@ -21,6 +21,7 @@ using ::galay::utils::ByteQueueView;
 }
 
 #include "../core/task.h"
+#include "../core/operation_completion.hpp"
 #include "../core/scheduler.hpp"
 #include "../core/io_scheduler.hpp"
 #include "../parallel/parallel_scheduler.h"

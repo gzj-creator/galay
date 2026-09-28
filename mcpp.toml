@@ -32,6 +32,7 @@ include_dirs = [
     "include",
     "src/cpp",
     "thirdparty",
+    ".",
 ]
 
 # libaio and several glibc declarations are GNU extensions.  This is private
@@ -74,6 +75,39 @@ main = "benchmark/cpp/kernel/b38_scheduler_dispatch.cc"
 kind = "bin"
 main = "benchmark/cpp/kernel/b28_scheduler_resume_pressure.cc"
 
+# Async-operation cancellation lifecycle repros and Phase 3 baseline probes.
+[targets.benchmark_kernel_ready_entry_wakeup_latency]
+kind = "bin"
+main = "benchmark/cpp/kernel/b18_ready_entry_wakeup_latency.cc"
+
+[targets.benchmark_kernel_resume_token_waker_ops]
+kind = "bin"
+main = "benchmark/cpp/kernel/b19_resume_token_waker_ops.cc"
+
+[targets.benchmark_kernel_thread_safe_timer_manager]
+kind = "bin"
+main = "benchmark/cpp/kernel/b20_thread_safe_timer_manager.cc"
+
+[targets.benchmark_kernel_runtime_executor_split]
+kind = "bin"
+main = "benchmark/cpp/kernel/b30_runtime_executor_split.cc"
+
+[targets.benchmark_kernel_timeout_ready_path]
+kind = "bin"
+main = "benchmark/cpp/kernel/b33_timeout_ready_path.cc"
+
+[targets.benchmark_kernel_coroutine_frame_allocator_pressure]
+kind = "bin"
+main = "benchmark/cpp/kernel/b34_coroutine_frame_allocator_pressure.cc"
+
+[targets.benchmark_kernel_operation_state_gate]
+kind = "bin"
+main = "benchmark/cpp/kernel/b39_operation_state_gate.cc"
+
+[targets.benchmark_kernel_operation_completion_pressure]
+kind = "bin"
+main = "benchmark/cpp/kernel/b40_operation_completion_pressure.cc"
+
 [targets.test_kernel_scheduler_static_dispatch]
 kind = "bin"
 main = "test/cpp/kernel/t183_scheduler_static_dispatch.cc"
@@ -102,6 +136,45 @@ cxxflags = ["-UNDEBUG"]
 [targets.test_kernel_parallel_shutdown_races]
 kind = "bin"
 main = "test/cpp/kernel/t182_parallel_shutdown_races.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_runtime_pending_accept_lsan]
+kind = "bin"
+main = "test/cpp/kernel/t185_runtime_pending_accept_lsan.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_pending_frame_destroy_source]
+kind = "bin"
+main = "test/cpp/kernel/t186_pending_frame_destroy_source.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_operation_state_completion]
+kind = "bin"
+main = "test/cpp/kernel/t187_operation_state_completion.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_operation_completion_boundary]
+kind = "bin"
+main = "test/cpp/kernel/t188_operation_completion_boundary.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_accept_completion_integration]
+kind = "bin"
+main = "test/cpp/kernel/t189_accept_completion_integration.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.benchmark_kernel_accept_completion_lifecycle]
+kind = "bin"
+main = "benchmark/cpp/kernel/b41_accept_completion_lifecycle.cc"
+
+[targets.test_kernel_iou_accept_completion_resource]
+kind = "bin"
+main = "test/cpp/kernel/t190_iou_accept_completion_resource.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_kernel_iou_accept_typed_completion]
+kind = "bin"
+main = "test/cpp/kernel/t191_iou_accept_typed_completion.cc"
 cxxflags = ["-UNDEBUG"]
 
 [dependencies]

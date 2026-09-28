@@ -27,6 +27,7 @@
 #include <deque>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <utility>
 #endif
 
@@ -93,6 +94,7 @@ struct SqeRequestHandle {
     SqeState* state = nullptr;  ///< 借用的 SQE 状态；真实生命周期由 handle arena 保活
     SqeRequestHandle* next_free = nullptr;  ///< 空闲链表指针
     uint64_t generation = 0;  ///< 本次提交时观测到的 generation
+    IOEventType multishot_type = IOEventType::INVALID;  ///< 持久请求的结果类型；owner 失效后仍可识别 accepted fd。
     bool persistent = false;  ///< 是否绑定到会产生多次 CQE 的持久请求
     bool notify_expected = false;  ///< 当前请求是否还在等待 zero-copy notification CQE
     bool notify_received = false;  ///< 是否已经收到 zero-copy notification CQE
@@ -155,6 +157,7 @@ struct SqeHandleArena {
         handle->state = nullptr;
         handle->arena.reset();
         handle->generation = 0;
+        handle->multishot_type = IOEventType::INVALID;
         handle->persistent = false;
         handle->notify_expected = false;
         handle->notify_received = false;
@@ -435,7 +438,6 @@ struct IOController {
         , m_accept_multishot_armed(other.m_accept_multishot_armed)
         , m_recv_multishot_armed(other.m_recv_multishot_armed)
         , m_recvfrom_multishot_armed(other.m_recvfrom_multishot_armed)
-        , m_accept_result_assigned(other.m_accept_result_assigned)
         , m_recv_result_assigned(other.m_recv_result_assigned)
         , m_recvfrom_result_assigned(other.m_recvfrom_result_assigned)
 #endif
@@ -497,7 +499,6 @@ struct IOController {
             m_accept_multishot_armed = other.m_accept_multishot_armed;
             m_recv_multishot_armed = other.m_recv_multishot_armed;
             m_recvfrom_multishot_armed = other.m_recvfrom_multishot_armed;
-            m_accept_result_assigned = other.m_accept_result_assigned;
             m_recv_result_assigned = other.m_recv_result_assigned;
             m_recvfrom_result_assigned = other.m_recvfrom_result_assigned;
             rebindSqeState();
@@ -589,7 +590,6 @@ struct IOController {
         m_accept_multishot_armed = false;
         m_recv_multishot_armed = false;
         m_recvfrom_multishot_armed = false;
-        m_accept_result_assigned = false;
         m_recv_result_assigned = false;
         m_recvfrom_result_assigned = false;
 #endif
@@ -637,33 +637,13 @@ struct IOController {
         m_ready_accepts.push_back(handle);
     }
 
-    /**
-     * @brief 尝试从 ready queue 中取出一个 accept 结果
-     * @param host 可选的输出 Host；为空时跳过地址解析
-     * @param result 返回 accept 结果或错误
-     * @return true 表示已消费一个缓存结果（成功或失败）；false 表示队列为空
-     */
-    bool tryConsumeAcceptedHandle(Host* host, std::expected<GHandle, IOError>& result) {
-        if (m_ready_accepts.empty()) {
-            return false;
-        }
-
-        GHandle handle = m_ready_accepts.front();
+    /** @brief 移交一个资源侧缓存的 accepted fd；调用者立即接管所有权。
+     *  @return nullopt 表示队列为空；不涉及单次用户 accept 的完成裁决。 */
+    std::optional<GHandle> takeAcceptedHandle() {
+        if (m_ready_accepts.empty()) { return std::nullopt; }
+        const GHandle handle = m_ready_accepts.front();
         m_ready_accepts.pop_front();
-
-        if (host != nullptr) {
-            sockaddr_storage addr{};
-            socklen_t addr_len = sizeof(addr);
-            if (::getpeername(handle.fd, reinterpret_cast<sockaddr*>(&addr), &addr_len) != 0) {
-                result = std::unexpected(IOError(kAcceptFailed, static_cast<uint32_t>(errno)));
-                galay_close(handle.fd);
-                return true;
-            }
-            *host = Host::fromSockAddr(addr);
-        }
-
-        result = handle;
-        return true;
+        return handle;
     }
 
     /**
@@ -852,7 +832,6 @@ struct IOController {
     bool m_accept_multishot_armed = false;  ///< listener 当前是否已挂上 multishot accept SQE
     bool m_recv_multishot_armed = false;  ///< socket 当前是否已挂上 multishot recv SQE
     bool m_recvfrom_multishot_armed = false;  ///< UDP socket 当前是否已挂上 multishot recvmsg SQE
-    bool m_accept_result_assigned = false;  ///< 当前 suspended accept awaitable 是否已写入一个结果
     bool m_recv_result_assigned = false;  ///< 当前 suspended recv awaitable 是否已写入一个结果
     bool m_recvfrom_result_assigned = false;  ///< 当前 suspended recvfrom awaitable 是否已写入一个结果
 #endif
@@ -878,7 +857,6 @@ private:
         m_accept_multishot_armed = false;
         m_recv_multishot_armed = false;
         m_recvfrom_multishot_armed = false;
-        m_accept_result_assigned = false;
         m_recv_result_assigned = false;
         m_recvfrom_result_assigned = false;
         for (auto* state : m_sqe_state) {
@@ -1036,9 +1014,6 @@ inline bool IOController::fillAwaitable(IOEventType type, void* awaitable) {
             (static_cast<uint32_t>(m_type) & ~kReadSlotMask) |
             static_cast<uint32_t>(type));
         m_awaitable[READ] = awaitable;
-#ifdef USE_IOURING
-        m_accept_result_assigned = false;
-#endif
         break;
     case IOEventType::SEQUENCE:
         m_type |= type;
@@ -1095,9 +1070,6 @@ inline void IOController::removeAwaitable(IOEventType type) {
         break;
     case IOEventType::ACCEPT:
         m_awaitable[READ] = nullptr;
-#ifdef USE_IOURING
-        m_accept_result_assigned = false;
-#endif
         break;
     case IOEventType::SEQUENCE:
 #ifdef USE_IOURING

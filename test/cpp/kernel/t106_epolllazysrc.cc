@@ -89,7 +89,7 @@ int main() {
 
     const std::string apply_events = extractFunction(
         epoll_source_text,
-        "int EpollReactor::applyEvents(IOController* controller, uint32_t events) {");
+        "int EpollReactor::applyEvents(");
     if (apply_events.empty()) {
         std::cerr << "[T106] failed to isolate EpollReactor::applyEvents\n";
         return 1;
