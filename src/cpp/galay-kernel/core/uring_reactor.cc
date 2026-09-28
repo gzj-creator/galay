@@ -771,9 +771,14 @@ int IOUringReactor::addClose(IOController* controller) {
     controller->m_awaitable[IOController::READ] = nullptr;
     controller->m_awaitable[IOController::WRITE] = nullptr;
     controller->invalidateSqeRequests();
+
+    if (accept_resume) {
+        std::move(*accept_resume).resume();
+        return result; // 恢复回调之后不得访问 controller/awaiter。
+    }
+
     controller->m_handle = GHandle::invalid();
-    if (accept_resume) { std::move(*accept_resume).resume(); }
-    return result; // 恢复回调之后不得访问 controller/awaiter。
+    return result;
 }
 
 int IOUringReactor::addFileRead(IOController* controller) {

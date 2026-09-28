@@ -340,8 +340,11 @@ int EpollReactor::flushPendingChanges() {
                 erasePendingChange(index);
                 retireRegistrationEntry(controller);
                 auto resume = awaitable->detach();
-                if (resume) { std::move(*resume).resume(); }
-                else { detail::storeBackendError(m_last_error_code, kNotReady, EINVAL); }
+                if (resume) {
+                    std::move(*resume).resume();
+                    return -static_cast<int>(error);
+                }
+                detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
             }
         }
         return -static_cast<int>(error);
