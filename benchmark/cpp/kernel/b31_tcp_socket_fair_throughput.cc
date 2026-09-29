@@ -11,6 +11,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <ctime>
 #include <cstdint>
 #include <cstring>
 #include <iostream>
@@ -498,7 +499,7 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point started,
                            std::chrono::steady_clock::time_point ended,
                            const StatsSnapshot& measured,
                            const StatsSnapshot& settled,
-                           bool status_ok) {
+                           bool status_ok, double cpu_ns) {
     const auto measured_us = std::chrono::duration_cast<std::chrono::microseconds>(ended - started).count();
     const double seconds = static_cast<double>(measured_us) / 1'000'000.0;
     const double measured_loss = measured.client_sent == 0
@@ -548,6 +549,7 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point started,
               << " server_bytes_received=" << measured.server_bytes_received
               << " server_bytes_sent=" << measured.server_bytes_sent
               << " measurement_ms=" << measured_us / 1000
+              << " cpu_ns_per_sent_packet=" << cpu_ns / measured.client_sent
               << " client_pkt_s=" << measured.client_sent / seconds
               << " server_pkt_s=" << measured.server_received / seconds
               << " client_loss_pct=" << measured_loss
@@ -673,9 +675,11 @@ int runBenchmark(SchedulerType& scheduler)
 
     resetMeasurementCounters();
     g_phase.store(Phase::measured, std::memory_order_release);
+    const auto cpu_start = std::clock();
     const auto measurement_start = std::chrono::steady_clock::now();
     std::this_thread::sleep_for(kDuration);
     const auto measurement_end = std::chrono::steady_clock::now();
+    const auto cpu_end = std::clock();
     const auto measured = snapshotStats();
 
     g_phase.store(Phase::drain, std::memory_order_release);
@@ -691,13 +695,14 @@ int runBenchmark(SchedulerType& scheduler)
     scheduler.stop();
 
     const auto settled = snapshotStats();
-    const bool status_ok = clients_done && servers_done && connections_done &&
+    const bool status_ok = cpu_start != std::clock_t(-1) && cpu_end != std::clock_t(-1) && clients_done && servers_done && connections_done &&
                            g_client_ready.load(std::memory_order_acquire) == kClients &&
                            g_server_ready.load(std::memory_order_acquire) == kServerWorkers &&
                            measured.client_sent > 0 && measured.runtime_errors == 0 &&
                            measured.shutdown_errors == 0 && settled.runtime_errors == 0 &&
                            settled.shutdown_errors == 0 && settledCountersMatch(settled);
-    printBenchmarkResults(measurement_start, measurement_end, measured, settled, status_ok);
+    printBenchmarkResults(measurement_start, measurement_end, measured, settled, status_ok,
+                          1e9 * static_cast<double>(cpu_end - cpu_start) / CLOCKS_PER_SEC);
 
     g_client_completion = nullptr;
     g_server_completion = nullptr;

@@ -3,6 +3,7 @@
 
 import importlib.util
 import json
+import math
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -17,15 +18,47 @@ SPEC.loader.exec_module(measure)
 
 
 class MeasurementTest(unittest.TestCase):
+    def test_paired_cost_ratios_and_known_log_interval(self):
+        # Symmetric log ratios: geometric mean 1, exact t interval.
+        a = [100.0] * 10
+        b = [100 * math.exp(x) for x in [-.01, .01] * 5]
+        result = measure.paired_comparison(a, b, higher_is_better=False)
+        self.assertAlmostEqual(result["degradation"], 0.0)
+        margin = 2.262157 * .01 / 3
+        self.assertAlmostEqual(result["ci_low"], math.expm1(-margin), places=7)
+        self.assertAlmostEqual(result["ci_high"], math.expm1(margin), places=7)
+        for higher, candidate in [(False, 98), (True, 100 / .98)]:
+            result = measure.paired_comparison(a, [candidate] * 10, higher)
+            self.assertAlmostEqual(result["degradation"], -.02)
+            self.assertAlmostEqual(result["ci_low"], -.02)
+            self.assertAlmostEqual(result["ci_high"], -.02)
+        for bad in ([100] * 9, [0] * 10, [float("nan")] * 10):
+            with self.assertRaises(ValueError):
+                measure.paired_comparison(a, bad, False)
+
+    def test_balanced_seeded_pairs(self):
+        order = measure.pair_order(20, 1729)
+        self.assertEqual(order.count((0, 1)), 10)
+        self.assertEqual(order.count((1, 0)), 10)
+        self.assertEqual(order, measure.pair_order(20, 1729))
+        self.assertNotEqual(order, measure.pair_order(20, 1730))
+        with self.assertRaises(ValueError):
+            measure.pair_order(19, 1729)
+
+    def test_frozen_counts_use_fastest_sample(self):
+        self.assertEqual(measure.calibrated_iterations(1000, [10e6, 20e6], 100e6), 12500)
+        with self.assertRaises(ValueError):
+            measure.calibrated_iterations(1000, [0], 100e6)
+
     def tcp(self, **changes):
         fields = dict(client_sent=100, client_received=100, server_received=100,
                       server_sent=100, runtime_errors=0, shutdown_errors=0)
         fields.update(changes)
         settled = "settled " + " ".join(f"{k}={v}" for k, v in fields.items())
-        return "measured client_pkt_s=20 runtime_errors=0 shutdown_errors=0\n" + settled + "\nstatus=ok\n"
+        return "measured client_pkt_s=20 cpu_ns_per_sent_packet=50 runtime_errors=0 shutdown_errors=0\n" + settled + "\nstatus=ok\n"
 
     def test_valid_tcp_and_settled_accounting(self):
-        self.assertEqual(measure.parse_metrics("tcp", self.tcp()), {"tcp.client_pkt_s": 20.0})
+        self.assertEqual(measure.parse_metrics("tcp", self.tcp()), {"tcp.client_pkt_s": 20.0, "tcp.cpu_ns_per_op": 50.0})
         for changes in ({"client_received": 99}, {"runtime_errors": 1}, {"client_sent": 0}):
             with self.assertRaises(ValueError):
                 measure.parse_metrics("tcp", self.tcp(**changes))
@@ -37,7 +70,7 @@ class MeasurementTest(unittest.TestCase):
                 measure.parse_metrics("tcp", output)
 
     def test_accept_requires_both_widths_and_valid_percentiles(self):
-        line = "B41 batch={batch} operations={operations} accepts_per_s=1000 p50_us=2 p99_us=5 errors=0\n"
+        line = "B41 batch={batch} operations={operations} accepts_per_s=1000 p50_us=2 p99_us=5 cpu_ns_per_op=80 errors=0\n"
         single = line.format(batch=1, operations=2048)
         output = single + line.format(batch=64, operations=8192)
         self.assertEqual(measure.parse_metrics("accept", output)["accept.64.p99_us"], 5)
@@ -57,19 +90,39 @@ class MeasurementTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             measure.parse_metrics("resume", output.replace("batch=256", "batch=255"))
 
+    def test_micro_accounting_and_duration(self):
+        raw = "IOSchedulerResumeDrain iterations=1024 batch=256 elapsed_ns=128000000 cpu_ns=120000000\n"
+        self.assertEqual(measure.micro_record("resume", "io_256", raw, 1000)["resume.io_256.ns_per_op"], 125000)
+        for bad in (raw.replace("1024", "1000"), raw.replace("256", "64"), raw + raw,
+                    raw.replace("cpu_ns=120000000", "cpu_ns=-1")):
+            with self.assertRaises(ValueError):
+                measure.micro_record("resume", "io_256", bad, 1000)
+
+    def test_single_io_batch_identity_is_checked(self):
+        raw = "IOSchedulerResumeDrain iterations=1000 batch=8 elapsed_ns=100000000 cpu_ns=90000000\n"
+        with self.assertRaises(ValueError):
+            measure.micro_record("resume", "io_1", raw, 1000)
+
+    def test_components_cannot_replace_parked_accept_gate(self):
+        raw = "B41Components implementation=galay batch=1 operations=2048 ready_accept_ns_per_op=100 errors=0\n"
+        raw += "B41Components implementation=galay batch=64 operations=8192 ready_accept_ns_per_op=100 errors=0\n"
+        with self.assertRaises(ValueError):
+            measure.parse_metrics("accept", raw)
+
     def test_frame_rejects_truncated_output(self):
         with self.assertRaises(ValueError):
             measure.parse_metrics("frame", "frame_size_128 iterations=1 ns_per_op=3\n")
 
     def test_subset_needs_only_selected_binary_and_records_cooldown(self):
-        output = "ParallelSchedulerResume iterations=10000, ns_per_resume=25.5\n"
-        output += "".join(f"IOSchedulerResumeDrain batch={n}, ns_per_task=12.0\n"
-                          for n in (1, 8, 64, 256))
-
         def run(command, **kwargs):
-            kwargs["stdout"].write(output)
+            sample = command[command.index("--sample") + 1]
+            count = int(command[command.index("--iterations") + 1])
+            width = int(sample.split("_")[1]) if sample.startswith("io_") else 1
+            actual = ((count + width - 1) // width) * width
+            prefix = "ParallelSchedulerResume" if sample == "parallel" else "IOSchedulerResumeDrain"
+            kwargs["stdout"].write(f"{prefix} iterations={actual} batch={width} elapsed_ns=200000000 cpu_ns=150000000\n")
             resource = Path(command[command.index("-o") + 1])
-            resource.write_text("user_s=0.1 system_s=0.0 max_rss_kb=10 elapsed_s=0.1\n")
+            resource.write_text("user_s=0.1 system_s=0.0 max_rss_kb=10 elapsed_s=0.2\n")
             return SimpleNamespace(returncode=0)
 
         with TemporaryDirectory() as directory:
@@ -79,16 +132,17 @@ class MeasurementTest(unittest.TestCase):
             binary.write_text("fixture: not executed")
             (build / "CMakeCache.txt").write_text("fixture\n")
             results = Path(directory) / "results"
-            with patch.object(measure, "command_output", return_value="fixture\n"), \
+            with patch.object(measure, "command_output", side_effect=lambda cmd: "" if "ls-files" in cmd else "fixture\n"), \
                  patch.object(measure.subprocess, "run", side_effect=run), \
                  patch.object(measure.time, "sleep") as sleep:
-                measure.measure({"fixture": build}, 1, results, "0", 2.5, ["resume"])
-            sleep.assert_called_once_with(2.5)
+                measure.measure({"a": build, "b": build}, 10, results, "0", 2.5, ["resume"], aa=True)
+            self.assertEqual(sleep.call_count, 10)
+            sleep.assert_called_with(2.5)
             metadata = json.loads((results / "environment.json").read_text())
             self.assertEqual(metadata["scenarios"], ["resume"])
             self.assertEqual(metadata["cooldown_seconds_before_each_repetition"], 2.5)
-            self.assertIn("resume.io.256.ns_per_task", (results / "summary.csv").read_text())
-            self.assertFalse((results / "fixture-1-accept.txt").exists())
+            self.assertIn("resume.io_256.ns_per_op", (results / "summary.csv").read_text())
+            self.assertFalse((results / "a-1-accept.txt").exists())
 
 
 if __name__ == "__main__":

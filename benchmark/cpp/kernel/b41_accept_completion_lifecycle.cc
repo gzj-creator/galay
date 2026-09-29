@@ -8,11 +8,13 @@
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
+#include <ctime>
 #include <iomanip>
 #include <iostream>
 #include <fstream>
 #include <netinet/tcp.h>
 #include <numeric>
+#include <string_view>
 #include <poll.h>
 #include <vector>
 #include <unistd.h>
@@ -59,6 +61,7 @@ struct Batch {
     std::vector<double> latencies;
     size_t completed = 0;
     size_t errors = 0;
+    bool latency = true;
 };
 
 Task<void> acceptBatch(IOController& controller, Batch& batch) {
@@ -71,7 +74,9 @@ Task<void> acceptBatch(IOController& controller, Batch& batch) {
             co_return;
         }
         batch.accepted[i] = result->fd;
-        batch.latencies[i] = std::chrono::duration<double, std::micro>(Clock::now() - batch.starts[i]).count();
+        if (batch.latency) {
+            batch.latencies[i] = std::chrono::duration<double, std::micro>(Clock::now() - batch.starts[i]).count();
+        }
         ++batch.completed;
     }
 }
@@ -112,7 +117,7 @@ void diagnoseTimeout(int listener, const std::vector<int>& clients, bool registe
     }
 }
 
-bool measure(size_t width, size_t rounds) {
+bool measure(size_t width, size_t rounds, bool components = false, bool native = false, bool latency = true) {
     const int listener = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
     sockaddr_in address{};
     address.sin_family = AF_INET;
@@ -134,17 +139,20 @@ bool measure(size_t width, size_t rounds) {
     IOController controller(GHandle{.fd = listener});
     Batch batch{std::vector<int>(width, -1), std::vector<Clock::time_point>(width),
                 std::vector<double>(width)};
+    batch.latency = latency;
     std::vector<int> clients(width, -1);
     std::vector<double> samples;
     samples.reserve(rounds * width);
     double elapsed = 0;
+    double cpu_ns = 0;
+    double connect_ns = 0, confirm_ns = 0, accept_ns = 0;
     size_t errors = 0;
     constexpr size_t warmup = 16;
     for (size_t round = 0; round != rounds + warmup; ++round) {
         batch.completed = 0;
         batch.errors = 0;
-        if (!scheduleTask(owner, acceptBatch(controller, batch)) || !owner.dispatch() ||
-            batch.completed != 0 || !owner.registered(controller)) { ++errors; break; }
+        if (!components && (!scheduleTask(owner, acceptBatch(controller, batch)) || !owner.dispatch() ||
+            batch.completed != 0 || !owner.registered(controller))) { ++errors; break; }
         for (auto& client : clients) {
             client = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
             if (client < 0) {
@@ -152,24 +160,70 @@ bool measure(size_t width, size_t rounds) {
                 ++errors;
             }
         }
+        const auto cpu_begin = std::clock();
         const auto begin = Clock::now();
         for (size_t i = 0; i != width; ++i) {
-            batch.starts[i] = Clock::now();
+            if (latency) { batch.starts[i] = Clock::now(); }
             if (::connect(clients[i], reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 &&
                 errno != EINPROGRESS) {
                 std::cerr << "B41 connect errno=" << errno << '\n';
                 ++errors;
             }
         }
+        // Diagnostic-only phase boundaries. Default B41 retains its parked path.
+        auto connected = begin, confirmed = begin;
+        if (components) {
+            connected = Clock::now();
+            // Confirm all client handshakes and listener readability BEFORE the
+            // ready-accept timer; this setup cost is reported separately.
+            const auto deadline = begin + std::chrono::seconds(2);
+            for (const int client : clients) {
+                bool established = false;
+                do {
+                    tcp_info info{};
+                    socklen_t size = sizeof(info);
+                    if (::getsockopt(client, IPPROTO_TCP, TCP_INFO, &info, &size) != 0) {
+                        ++errors; break;
+                    }
+                    established = info.tcpi_state == TCP_ESTABLISHED;
+                } while (!established && Clock::now() < deadline);
+                if (!established) { ++errors; }
+            }
+            pollfd ready{listener, POLLIN, 0};
+            if (::poll(&ready, 1, 0) != 1 || !(ready.revents & POLLIN)) { ++errors; }
+            confirmed = Clock::now();
+            if (errors == 0) {
+                if (native) {
+                    // Independent socket control: no Galay scheduling or awaiter.
+                    for (size_t i = 0; i != width; ++i) {
+                        sockaddr_storage peer{};
+                        socklen_t size = sizeof(peer);
+                        const int accepted = ::accept4(listener, reinterpret_cast<sockaddr*>(&peer), &size,
+                                                       SOCK_NONBLOCK | SOCK_CLOEXEC);
+                        if (accepted < 0) { ++errors; break; }
+                        batch.accepted[i] = accepted;
+                        ++batch.completed;
+                        if (latency) {
+                            batch.latencies[i] = std::chrono::duration<double, std::micro>(Clock::now() - batch.starts[i]).count();
+                        }
+                    }
+                } else if (!scheduleTask(owner, acceptBatch(controller, batch)) || !owner.dispatch()) {
+                    ++errors;
+                }
+            }
+        }
         // 只在同步 driver poll。以时间限制 setup 故障，不能把空 poll 次数
         // 当成超时：本机 10000 次仅约 5 ms，会提前中断尚未完成的连接。
         const auto deadline = begin + std::chrono::seconds(2);
         unsigned passes = 0;
-        for (; batch.completed != width && batch.errors == 0 && Clock::now() < deadline; ++passes) {
+        for (; !components && batch.completed != width && batch.errors == 0 && Clock::now() < deadline; ++passes) {
             if (!owner.poll()) { std::cerr << "B41 poll failed\n"; ++errors; break; }
             if (!owner.dispatch()) { std::cerr << "B41 dispatch failed\n"; ++errors; break; }
         }
-        const double seconds = std::chrono::duration<double>(Clock::now() - begin).count();
+        const auto finished = Clock::now();
+        const auto cpu_end = std::clock();
+        if (cpu_begin == std::clock_t(-1) || cpu_end == std::clock_t(-1)) { ++errors; }
+        const double seconds = std::chrono::duration<double>(finished - begin).count();
         errors += batch.errors + (batch.completed != width);
         if (errors != 0) {
             std::cerr << "B41 incomplete batch=" << width << " round=" << round
@@ -179,6 +233,12 @@ bool measure(size_t width, size_t rounds) {
         }
         if (round >= warmup) {
             elapsed += seconds;
+            cpu_ns += 1e9 * static_cast<double>(cpu_end - cpu_begin) / CLOCKS_PER_SEC;
+            if (components) {
+                connect_ns += std::chrono::duration<double, std::nano>(connected - begin).count();
+                confirm_ns += std::chrono::duration<double, std::nano>(confirmed - connected).count();
+                accept_ns += std::chrono::duration<double, std::nano>(finished - confirmed).count();
+            }
             samples.insert(samples.end(), batch.latencies.begin(), batch.latencies.end());
         }
         for (size_t i = 0; i != width; ++i) {
@@ -199,6 +259,17 @@ bool measure(size_t width, size_t rounds) {
     owner.stop();
     if (samples.empty()) { return false; }
     std::sort(samples.begin(), samples.end());
+    if (components) {
+        std::cout << std::fixed << std::setprecision(3)
+                  << "B41Components implementation=" << (native ? "socket" : "galay")
+                  << " batch=" << width << " operations=" << samples.size()
+                  << " connect_submit_ns_per_op=" << connect_ns / samples.size()
+                  << " ready_confirmation_ns_per_op=" << confirm_ns / samples.size()
+                  << " ready_accept_ns_per_op=" << accept_ns / samples.size()
+                  << " lifecycle_ns_per_op=" << elapsed * 1e9 / samples.size()
+                  << " latency_observation=" << latency << " errors=" << errors << '\n';
+        return errors == 0;
+    }
     std::cout << std::fixed << std::setprecision(3)
               << "B41 backend="
 #ifdef USE_EPOLL
@@ -208,6 +279,7 @@ bool measure(size_t width, size_t rounds) {
 #endif
               << " batch=" << width << " operations=" << samples.size()
               << " warmup_batches=" << warmup << " accepts_per_s=" << samples.size() / elapsed
+              << " cpu_ns_per_op=" << cpu_ns / samples.size()
               << " p50_us=" << samples[samples.size() / 2]
               << " p99_us=" << samples[(samples.size() - 1) * 99 / 100]
               << " errors=" << errors << " awaiter_bytes=" << sizeof(AcceptAwaitable) << '\n';
@@ -216,10 +288,16 @@ bool measure(size_t width, size_t rounds) {
 } // namespace
 #endif
 
-int main() {
+int main(int argc, char** argv) {
 #if defined(USE_EPOLL) || defined(USE_IOURING)
-    const bool single = measure(1, 2048);
-    const bool burst = measure(64, 128);
+    const bool components = argc > 1 && std::string_view(argv[1]) == "--components";
+    const bool native = components && argc > 2 && std::string_view(argv[2]) == "socket";
+    const bool latency = !(argc > 3 && std::string_view(argv[3]) == "--no-latency");
+    if ((argc != 1 && !components) || argc > 4 ||
+        (argc > 2 && !native && std::string_view(argv[2]) != "galay") ||
+        (argc > 3 && latency)) { return 1; }
+    const bool single = measure(1, 2048, components, native, latency);
+    const bool burst = measure(64, 128, components, native, latency);
     return single && burst ? 0 : 1;
 #else
     std::cout << "B41 SKIP (requires epoll or io_uring)\n";

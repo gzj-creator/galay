@@ -5,6 +5,8 @@
 
 #include <galay/cpp/galay-kernel/core/task.h>
 
+#include "benchmark/cpp/common/micro_measurement.h"
+
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -23,11 +25,8 @@ namespace {
 
 constexpr std::size_t kAlignment = alignof(std::max_align_t);
 
-struct Measurement {
-    std::size_t iterations = 0;
-    std::chrono::steady_clock::duration elapsed{};
-    std::size_t fallbackEstimate = 0;
-};
+using Measurement = galay::benchmark::MicroMeasurement;
+using galay::benchmark::MicroTimer;
 
 double nanosecondsPerOperation(const Measurement& measurement) {
     if (measurement.iterations == 0) {
@@ -45,6 +44,7 @@ void printMeasurement(const char* name, const Measurement& measurement) {
               << std::chrono::duration_cast<std::chrono::nanoseconds>(
                      measurement.elapsed)
                      .count()
+              << ", cpu_ns=" << measurement.cpu_ns
               << ", ns_per_op=" << std::fixed << std::setprecision(2) << ns
               << ", ops_per_sec=" << throughput
               << ", fallback_estimate=" << measurement.fallbackEstimate << '\n';
@@ -55,17 +55,17 @@ Measurement measureFrameChurn(std::size_t size, std::size_t iterations) {
         .iterations = iterations,
         .fallbackEstimate = size > 2048 ? iterations : 1,
     };
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         void* frame = allocateFrameStorage(size, kAlignment);
         if (frame == nullptr) {
             measurement.iterations = i;
-            measurement.elapsed = std::chrono::steady_clock::now() - begin;
+            timer.finish(measurement);
             return measurement;
         }
         releaseFrameStorage(frame, size, kAlignment);
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -75,7 +75,7 @@ Measurement measureDirectFrameChurn(std::size_t size,
         .iterations = iterations,
         .fallbackEstimate = iterations,
     };
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         void* frame = ::operator new(size, std::nothrow);
         if (frame == nullptr) {
@@ -84,7 +84,7 @@ Measurement measureDirectFrameChurn(std::size_t size,
         }
         ::operator delete(frame);
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -94,7 +94,7 @@ Measurement measureMixedFrameChurn(std::size_t iterations) {
         .iterations = iterations,
         .fallbackEstimate = iterations / sizes.size() + sizes.size() - 1,
     };
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         const std::size_t size = sizes[i % sizes.size()];
         void* frame = allocateFrameStorage(size, kAlignment);
@@ -104,7 +104,7 @@ Measurement measureMixedFrameChurn(std::size_t iterations) {
         }
         releaseFrameStorage(frame, size, kAlignment);
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -114,7 +114,7 @@ Measurement measureDirectMixedFrameChurn(std::size_t iterations) {
         .iterations = iterations,
         .fallbackEstimate = iterations,
     };
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         void* frame = ::operator new(sizes[i % sizes.size()], std::nothrow);
         if (frame == nullptr) {
@@ -123,7 +123,7 @@ Measurement measureDirectMixedFrameChurn(std::size_t iterations) {
         }
         ::operator delete(frame);
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -133,7 +133,7 @@ Measurement measureOverAlignedChurn(std::size_t iterations,
         .iterations = iterations,
         .fallbackEstimate = iterations,
     };
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         void* frame = allocateFrameStorage(256, alignment);
         if (frame == nullptr) {
@@ -142,7 +142,7 @@ Measurement measureOverAlignedChurn(std::size_t iterations,
         }
         releaseFrameStorage(frame, 256, alignment);
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -153,7 +153,7 @@ Measurement measureLiveBurst(std::size_t size,
         .iterations = frameCount,
         .fallbackEstimate = frameCount,
     };
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (void*& frame : frames) {
         frame = allocateFrameStorage(size, kAlignment);
         if (frame == nullptr) {
@@ -165,7 +165,7 @@ Measurement measureLiveBurst(std::size_t size,
     for (void* frame : frames) {
         releaseFrameStorage(frame, size, kAlignment);
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -175,7 +175,7 @@ Measurement measureConcurrentFrameChurn(std::size_t iterationsPerWorker,
     std::atomic<std::size_t> completed{0};
     std::vector<std::thread> workers;
     workers.reserve(workerCount);
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t worker = 0; worker < workerCount; ++worker) {
         workers.emplace_back([&, worker]() {
             std::size_t localCompleted = 0;
@@ -199,7 +199,7 @@ Measurement measureConcurrentFrameChurn(std::size_t iterationsPerWorker,
         .iterations = completed.load(std::memory_order_relaxed),
         .fallbackEstimate = workerCount * sizes.size(),
     };
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -226,7 +226,7 @@ Task<void> suspendResumeTask() {
 template <typename Factory>
 Measurement measureTaskCreateDestroy(Factory&& factory, std::size_t iterations) {
     Measurement measurement{.iterations = iterations};
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         auto task = factory();
         if (!task.isValid()) {
@@ -234,7 +234,7 @@ Measurement measureTaskCreateDestroy(Factory&& factory, std::size_t iterations) 
             break;
         }
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -242,7 +242,7 @@ template <typename Factory>
 Measurement measureTaskCompleteDestroy(Factory&& factory,
                                        std::size_t iterations) {
     Measurement measurement{.iterations = iterations};
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         auto task = factory();
         if (!task.isValid()) {
@@ -256,13 +256,13 @@ Measurement measureTaskCompleteDestroy(Factory&& factory,
         }
         state->m_handle.resume();
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
 Measurement measureSuspendResume(std::size_t iterations) {
     Measurement measurement{.iterations = iterations};
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
     for (std::size_t i = 0; i < iterations; ++i) {
         auto task = suspendResumeTask();
         if (!task.isValid()) {
@@ -273,7 +273,7 @@ Measurement measureSuspendResume(std::size_t iterations) {
         state->m_handle.resume();
         state->m_handle.resume();
     }
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -283,7 +283,7 @@ Measurement measureCrossThreadRelease(std::size_t iterations) {
         .iterations = iterations,
         .fallbackEstimate = iterations,
     };
-    const auto begin = std::chrono::steady_clock::now();
+    MicroTimer timer;
 
     std::thread producer([&frames]() {
         for (void*& frame : frames) {
@@ -299,7 +299,7 @@ Measurement measureCrossThreadRelease(std::size_t iterations) {
     });
     consumer.join();
 
-    measurement.elapsed = std::chrono::steady_clock::now() - begin;
+    timer.finish(measurement);
     return measurement;
 }
 
@@ -320,94 +320,55 @@ bool measureRetainedMemory(std::size_t retainedTasks) {
 
 }  // namespace
 
-int main() {
-    constexpr std::size_t kWarmupIterations = 2'000;
-    constexpr std::size_t kMeasuredIterations = 20'000;
-
-    (void)measureFrameChurn(256, kWarmupIterations);
-
-    const auto recycler =
-        measureFrameChurn(256, kMeasuredIterations);
-    const auto direct =
-        measureDirectFrameChurn(256, kMeasuredIterations);
-    printMeasurement("frame_churn_recycler", recycler);
-    printMeasurement("frame_churn_direct", direct);
-
-    const auto size128 = measureFrameChurn(128, kMeasuredIterations);
-    const auto size512 = measureFrameChurn(512, kMeasuredIterations);
-    const auto size2048 = measureFrameChurn(2048, kMeasuredIterations);
-    const auto sizeLarge = measureFrameChurn(4096, kMeasuredIterations);
-    printMeasurement("frame_size_128", size128);
-    printMeasurement("frame_size_512", size512);
-    printMeasurement("frame_size_2048", size2048);
-    printMeasurement("frame_size_4096", sizeLarge);
-
-    const auto mixedRecycler =
-        measureMixedFrameChurn(kMeasuredIterations);
-    const auto mixedDirect =
-        measureDirectMixedFrameChurn(kMeasuredIterations);
-    printMeasurement("frame_mixed_recycler", mixedRecycler);
-    printMeasurement("frame_mixed_direct", mixedDirect);
-
-    const auto overAligned64 =
-        measureOverAlignedChurn(kMeasuredIterations, kAlignment * 4);
-    printMeasurement("frame_overaligned_64", overAligned64);
-
-    const auto liveBurst = measureLiveBurst(128, 4096);
-    printMeasurement("frame_live_burst_128", liveBurst);
-
-    const auto concurrentRecycler =
-        measureConcurrentFrameChurn(50'000, 4);
-    printMeasurement("frame_concurrent_recycler", concurrentRecycler);
-    if (mixedRecycler.iterations != kMeasuredIterations ||
-        mixedDirect.iterations != kMeasuredIterations ||
-        overAligned64.iterations != kMeasuredIterations ||
-        liveBurst.iterations != 4096 ||
-        concurrentRecycler.iterations != 200'000) {
-        std::cerr << "[B34] frame pressure setup or allocation failed\n";
-        return 1;
+int main(int argc, char** argv) {
+    galay::benchmark::MicroOptions options;
+    if (!galay::benchmark::parseMicroOptions(argc, argv, options)) { return 1; }
+    using Measure = Measurement (*)(std::size_t);
+    struct Sample { const char* name; Measure measure; };
+    const Sample samples[] = {
+        {"frame_size_128", [](size_t n) { return measureFrameChurn(128, n); }},
+        {"frame_size_4096", [](size_t n) { return measureFrameChurn(4096, n); }},
+        {"frame_mixed_recycler", measureMixedFrameChurn},
+        {"task_void_unsubmitted_destroy", [](size_t n) { return measureTaskCreateDestroy([] { return lightweightTask(); }, n); }},
+        {"task_int_unsubmitted_destroy", [](size_t n) { return measureTaskCreateDestroy([] { return integerTask(); }, n); }},
+        {"task_void_complete_destroy", [](size_t n) { return measureTaskCompleteDestroy([] { return lightweightTask(); }, n); }},
+        {"task_int_complete_destroy", [](size_t n) { return measureTaskCompleteDestroy([] { return integerTask(); }, n); }},
+        {"task_suspend_resume", measureSuspendResume},
+    };
+    bool found = false;
+    for (const auto& sample : samples) {
+        if (!options.sample.empty() && options.sample != sample.name) { continue; }
+        found = true;
+        const size_t warmup = std::max(size_t(1), options.iterations / 10);
+        const auto warmed = sample.measure(warmup);
+        if (warmed.iterations != warmup || warmed.cpu_ns < 0) { return 1; }
+        const auto measured = sample.measure(options.iterations);
+        printMeasurement(sample.name, measured);
+        if (measured.iterations != options.iterations || measured.cpu_ns < 0) { return 1; }
     }
-
-    const auto voidChurn = measureTaskCreateDestroy(
-        []() { return lightweightTask(); }, kMeasuredIterations);
-    const auto intChurn = measureTaskCreateDestroy(
-        []() { return integerTask(); }, kMeasuredIterations);
-    printMeasurement("task_void_unsubmitted_destroy", voidChurn);
-    printMeasurement("task_int_unsubmitted_destroy", intChurn);
-
-    const auto voidComplete = measureTaskCompleteDestroy(
-        []() { return lightweightTask(); }, kMeasuredIterations);
-    const auto intComplete = measureTaskCompleteDestroy(
-        []() { return integerTask(); }, kMeasuredIterations);
-    printMeasurement("task_void_complete_destroy", voidComplete);
-    printMeasurement("task_int_complete_destroy", intComplete);
-
-    const auto suspendResume = measureSuspendResume(kMeasuredIterations);
-    printMeasurement("task_suspend_resume", suspendResume);
-
-    const auto crossThread = measureCrossThreadRelease(kMeasuredIterations);
-    printMeasurement("cross_thread_release", crossThread);
-
-    if (recycler.iterations != kMeasuredIterations ||
-        direct.iterations != kMeasuredIterations ||
-        size128.iterations != kMeasuredIterations ||
-        size512.iterations != kMeasuredIterations ||
-        size2048.iterations != kMeasuredIterations ||
-        sizeLarge.iterations != kMeasuredIterations ||
-        voidChurn.iterations != kMeasuredIterations ||
-        intChurn.iterations != kMeasuredIterations ||
-        voidComplete.iterations != kMeasuredIterations ||
-        intComplete.iterations != kMeasuredIterations ||
-        suspendResume.iterations != kMeasuredIterations ||
-        crossThread.iterations != kMeasuredIterations) {
-        std::cerr << "[B34] task pressure setup or allocation failed\n";
-        return 1;
+    if (!found) { std::cerr << "B34: unknown --sample\n"; return 1; }
+    if (options.diagnostics) {
+        // Fixed bounded pressure work, deliberately excluded from throughput runs.
+        constexpr size_t n = 20'000;
+        const Sample diagnostics[] = {
+            {"frame_churn_recycler", [](size_t count) { return measureFrameChurn(256, count); }},
+            {"frame_churn_direct", [](size_t count) { return measureDirectFrameChurn(256, count); }},
+            {"frame_size_512", [](size_t count) { return measureFrameChurn(512, count); }},
+            {"frame_size_2048", [](size_t count) { return measureFrameChurn(2048, count); }},
+            {"frame_mixed_direct", measureDirectMixedFrameChurn},
+            {"frame_overaligned_64", [](size_t count) { return measureOverAlignedChurn(count, kAlignment * 4); }},
+            {"cross_thread_release", measureCrossThreadRelease},
+        };
+        for (const auto& sample : diagnostics) {
+            const auto measured = sample.measure(n);
+            printMeasurement(sample.name, measured);
+            if (measured.iterations != n || measured.cpu_ns < 0) { return 1; }
+        }
+        const auto burst = measureLiveBurst(128, 4096);
+        const auto concurrent = measureConcurrentFrameChurn(50'000, 4);
+        printMeasurement("frame_live_burst_128", burst);
+        printMeasurement("frame_concurrent_recycler", concurrent);
+        if (burst.iterations != 4096 || concurrent.iterations != 200'000 || !measureRetainedMemory(5'000)) { return 1; }
     }
-
-    if (!measureRetainedMemory(5'000)) {
-        std::cerr << "[B34] retained task setup failed\n";
-        return 1;
-    }
-
     return 0;
 }
