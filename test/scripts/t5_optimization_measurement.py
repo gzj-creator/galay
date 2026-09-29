@@ -37,10 +37,13 @@ class MeasurementTest(unittest.TestCase):
                 measure.parse_metrics("tcp", output)
 
     def test_accept_requires_both_widths_and_valid_percentiles(self):
-        line = "B41 batch={batch} operations=128 accepts_per_s=1000 p50_us=2 p99_us=5 errors=0\n"
-        output = line.format(batch=1) + line.format(batch=64)
+        line = "B41 batch={batch} operations={operations} accepts_per_s=1000 p50_us=2 p99_us=5 errors=0\n"
+        single = line.format(batch=1, operations=2048)
+        output = single + line.format(batch=64, operations=8192)
         self.assertEqual(measure.parse_metrics("accept", output)["accept.64.p99_us"], 5)
-        for bad in (line.format(batch=1), output.replace("errors=0", "errors=1"),
+        for bad in (single, output.replace("errors=0", "errors=1"),
+                    output.replace("operations=2048", "operations=2047"),
+                    output.replace("operations=8192", "operations=8256"),
                     output.replace("p99_us=5", "p99_us=1"),
                     output.replace("accepts_per_s=1000", "accepts_per_s=nan")):
             with self.assertRaises(ValueError):

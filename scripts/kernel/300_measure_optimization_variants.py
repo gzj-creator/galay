@@ -68,7 +68,9 @@ def parse_metrics(scenario: str, output: str) -> dict[str, float]:
             result = {}
             for record in records:
                 no_errors(record, "errors")
-                positive(record["operations"])
+                expected_operations = {"1": 2048, "64": 8192}[record["batch"]]
+                if int(record["operations"]) != expected_operations:
+                    raise ValueError("accept operation count does not match the fixed workload")
                 if positive(record["p99_us"]) < positive(record["p50_us"]):
                     raise ValueError("invalid accept latency percentiles")
                 for metric in ("accepts_per_s", "p50_us", "p99_us"):

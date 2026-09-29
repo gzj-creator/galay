@@ -10,7 +10,10 @@
 #include <cstdlib>
 #include <iomanip>
 #include <iostream>
+#include <fstream>
+#include <netinet/tcp.h>
 #include <numeric>
+#include <poll.h>
 #include <vector>
 #include <unistd.h>
 
@@ -70,6 +73,42 @@ Task<void> acceptBatch(IOController& controller, Batch& batch) {
         batch.accepted[i] = result->fd;
         batch.latencies[i] = std::chrono::duration<double, std::micro>(Clock::now() - batch.starts[i]).count();
         ++batch.completed;
+    }
+}
+
+// Failure-only observations: SO_ERROR=0 alone does not prove a completed
+// nonblocking connect. SYN_SENT plus an empty listener is not a lost wakeup.
+void diagnoseTimeout(int listener, const std::vector<int>& clients, bool registered) {
+    pollfd ready{listener, POLLIN, 0};
+    const int polled = ::poll(&ready, 1, 0);
+    std::cerr << "B41 diagnostic registered=" << registered
+              << " listener_poll=" << polled << " revents=" << ready.revents;
+    if (polled < 0) { std::cerr << " errno=" << errno; }
+    std::cerr << '\n';
+    for (size_t i = 0; i != clients.size(); ++i) {
+        tcp_info info{};
+        socklen_t size = sizeof(info);
+        if (::getsockopt(clients[i], IPPROTO_TCP, TCP_INFO, &info, &size) != 0) {
+            std::cerr << "B41 client=" << i << " TCP_INFO errno=" << errno << '\n';
+            continue;
+        }
+        int error = 0;
+        size = sizeof(error);
+        if (::getsockopt(clients[i], SOL_SOCKET, SO_ERROR, &error, &size) != 0) {
+            std::cerr << "B41 client=" << i << " SO_ERROR errno=" << errno << '\n';
+            continue;
+        }
+        if (info.tcpi_state != TCP_ESTABLISHED || error != 0) {
+            std::cerr << "B41 client=" << i << " tcp_state=" << unsigned(info.tcpi_state)
+                      << " retransmits=" << unsigned(info.tcpi_retransmits)
+                      << " so_error=" << error << '\n';
+        }
+    }
+    for (const char* name : {"nf_conntrack_count", "nf_conntrack_max"}) {
+        std::ifstream input(std::string("/proc/sys/net/netfilter/") + name);
+        unsigned long value = 0;
+        if (input >> value) { std::cerr << "B41 " << name << '=' << value << '\n'; }
+        else { std::cerr << "B41 " << name << " unavailable\n"; }
     }
 }
 
@@ -136,6 +175,7 @@ bool measure(size_t width, size_t rounds) {
             std::cerr << "B41 incomplete batch=" << width << " round=" << round
                       << " completed=" << batch.completed << " passes=" << passes
                       << " seconds=" << seconds << '\n';
+            diagnoseTimeout(listener, clients, owner.registered(controller));
         }
         if (round >= warmup) {
             elapsed += seconds;
