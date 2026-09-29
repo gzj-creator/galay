@@ -3,6 +3,8 @@
  * @brief MCP 2026-07-28 request/response encode and parse throughput.
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mcp/v2/common/protocol.h>
 
 #include <charconv>
@@ -12,6 +14,10 @@
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::size_t iterations = 200'000;
     if (argc > 1) {
         const std::string_view text(argv[1]);

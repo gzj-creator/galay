@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_service.h>
 
 #include <algorithm>
@@ -62,6 +64,10 @@ Config parseArgs(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     Config config = parseArgs(argc, argv);
     RouteBenchService service;
     std::vector<RpcCallMode> modes{

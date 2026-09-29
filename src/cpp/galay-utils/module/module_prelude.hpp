@@ -115,6 +115,9 @@
 #if __has_include(<limits>)
 #include <limits>
 #endif
+#if __has_include(<linux/mempolicy.h>)
+#include <linux/mempolicy.h>
+#endif
 #if __has_include(<list>)
 #include <list>
 #endif
@@ -195,6 +198,9 @@
 #endif
 #if __has_include(<sys/wait.h>)
 #include <sys/wait.h>
+#endif
+#if __has_include(<system_error>)
+#include <system_error>
 #endif
 #if __has_include(<thread>)
 #include <thread>

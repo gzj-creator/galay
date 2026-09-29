@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-redis/base/redis_value.h>
 #include <galay/cpp/galay-redis/protoc/builder.h>
 #include <galay/cpp/galay-redis/protoc/redis_protocol.h>
@@ -153,6 +155,10 @@ bool reportScenario(const char* name, BenchmarkResult result, size_t iterations)
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 100000;
     size_t width = 8;
     size_t payload_size = 64;

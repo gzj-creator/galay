@@ -20,7 +20,7 @@
 #include "../../galay-kernel/common/host.hpp"
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/task.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 
 #include <expected>
 #include <memory>

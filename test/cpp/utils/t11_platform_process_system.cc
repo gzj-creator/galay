@@ -25,12 +25,6 @@ void test_system() {
     assert(System::isDirectory(testDir));
     assert(System::remove(testDir));
 
-    // Environment
-    System::setEnv("GALAY_TEST_VAR", "test_value");
-    assert(System::getEnv("GALAY_TEST_VAR") == "test_value");
-    System::unsetEnv("GALAY_TEST_VAR");
-    assert(System::getEnv("GALAY_TEST_VAR", "default") == "default");
-
     // System info
     assert(System::cpuCount() > 0);
     assert(!System::hostname().empty());
@@ -49,11 +43,6 @@ void test_system() {
     assert(System::fileExists("/tmp/empty_file.txt"));
     assert(System::fileSize("/tmp/empty_file.txt") == 0);
     System::remove("/tmp/empty_file.txt");
-
-    // Environment variables with empty values
-    System::setEnv("GALAY_EMPTY_VAR", "");
-    assert(System::getEnv("GALAY_EMPTY_VAR") == "");
-    System::unsetEnv("GALAY_EMPTY_VAR");
 
     std::cout << "System tests passed!" << std::endl;
 }

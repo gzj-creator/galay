@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-tracing/log/logger.h>
 #include <galay/cpp/galay-tracing/log/log_sink.h>
 
@@ -27,6 +29,10 @@ public:
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr int kIterations = 200000;
     auto sink = std::make_shared<NullSink>();
     galay::tracing::Logger logger;

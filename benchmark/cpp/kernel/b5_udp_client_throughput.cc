@@ -5,6 +5,8 @@
  * 通过条件：客户端完成设定压测周期并输出统计结果，进程干净退出。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <cstring>
 #include <atomic>
@@ -162,6 +164,10 @@ void printUsage(const char* program_name) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     // 解析命令行参数
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];

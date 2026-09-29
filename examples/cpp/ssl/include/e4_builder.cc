@@ -6,7 +6,7 @@
 
 #include <galay/cpp/galay-ssl/async/ssl_socket.h>
 #include <galay/cpp/galay-ssl/ssl/ssl_context.h>
-#include <galay/cpp/galay-utils/cache/byte_queue_view.hpp>
+#include <galay/cpp/galay-utils/buffer/byte_queue_view.hpp>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <array>
 #include <atomic>

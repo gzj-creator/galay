@@ -15,31 +15,33 @@
 - `galay-utils/galay_utils.hpp`
 - `galay-utils/core/string.hpp`
 - `galay-utils/core/random.hpp`
-- `galay-utils/process/system.hpp`
+- `galay-utils/system/system.hpp`
+- `galay-utils/system/env.hpp`
 - `galay-utils/core/time.hpp`
 - `galay-utils/core/type_name.hpp`
-- `galay-utils/process/backtrace.hpp`
-- `galay-utils/process/signal.hpp`
-- `galay-utils/tool/thread.hpp`
-- `galay-utils/tool/pool.hpp`
+- `galay-utils/system/backtrace.hpp`
+- `galay-utils/system/signal.hpp`
+- `galay-utils/concurrency/thread.hpp`
+- `galay-utils/concurrency/pool.hpp`
 - `galay-utils/cache/lru_cache.hpp`
-- `galay-utils/cache/bytes.hpp`
-- `galay-utils/cache/byte_queue_view.hpp`
-- `galay-utils/cache/ring_buffer.hpp`
-- `galay-utils/tool/rate_limiter.hpp`
-- `galay-utils/tool/circuit_breaker.hpp`
-- `galay-utils/tool/balancer.hpp`
+- `galay-utils/buffer/bytes.hpp`
+- `galay-utils/buffer/byte_queue_view.hpp`
+- `galay-utils/buffer/ring_buffer.hpp`
+- `galay-utils/resilience/rate_limiter.hpp`
+- `galay-utils/resilience/circuit_breaker.hpp`
+- `galay-utils/algorithm/balancer.hpp`
 - `galay-utils/algorithm/consistent_hash.hpp`
 - `galay-utils/algorithm/bloom_filter.hpp`
 - `galay-utils/algorithm/trie.hpp`
 - `galay-utils/algorithm/mvcc.hpp`
-- `galay-utils/algorithm/huffman.hpp`
+- `galay-utils/encoding/huffman.hpp`
 - `galay-utils/app/app.hpp`
 - `galay-utils/config/parser_manager.hpp`
-- `galay-utils/process/process.hpp`
+- `galay-utils/system/process.hpp`
+- `galay-utils/system/performance.hpp`
 - `galay-utils/encoding/base64.hpp`
 - `galay-utils/crypto/md5.hpp`
-- `galay-utils/crypto/murmur_hash3.hpp`
+- `galay-utils/algorithm/murmur_hash3.hpp`
 - `galay-utils/crypto/salt.hpp`
 - `galay-utils/crypto/hmac.hpp`
 - `galay-utils/common/defn.hpp`
@@ -53,10 +55,35 @@
 | String | `galay-utils/core/string.hpp` | `StringUtils` |
 | Random | `galay-utils/core/random.hpp` | `RandomGenerator`、`Randomizer` |
 | Time | `galay-utils/core/time.hpp` | `Time`、`StopWatch<Clock>`、`Deadline<Clock>`、`Backoff` |
-| System | `galay-utils/process/system.hpp` | `System`、`System::AddressType` |
+| System | `galay-utils/system/system.hpp` | `System`、`System::AddressType` |
+| Env | `galay-utils/system/env.hpp` | `Env` |
 | TypeName | `galay-utils/core/type_name.hpp` | `getTypeName<T>()`、`getTypeName(obj)`、`demangleSymbol()` |
-| BackTrace | `galay-utils/process/backtrace.hpp` | `BackTrace` |
-| Signal | `galay-utils/process/signal.hpp` | `SignalHandler` |
+| BackTrace | `galay-utils/system/backtrace.hpp` | `BackTrace` |
+| Signal | `galay-utils/system/signal.hpp` | `SignalHandler` |
+| Performance | `galay-utils/system/performance.hpp` | `Performance`、`NumaPolicy`、`NumaPolicyState` |
+
+### `Performance`：CPU / NUMA 放置
+
+公开头为 `<galay/cpp/galay-utils/system/performance.hpp>`，也从 umbrella 和 `galay.utils` 模块导出，与 `Env`、`System` 一起归入 `system/` 目录。
+
+| 静态方法 | 返回值 / 契约 |
+|---|---|
+| `cpuAffinity()` | 当前调用线程的有效逻辑 CPU ID 集合，按 ID 排序 |
+| `bindCurrentThread(cpus)` | 设置当前线程，返回系统回读的实际 CPU 集合；重复 ID 合并 |
+| `allowedNumaNodes()` | 当前 cpuset 允许使用的内存节点 |
+| `numaPolicy()` | 当前线程的原生策略值（包含标志位）和节点集合 |
+| `setNumaPolicy(policy, nodes)` | 设置 `Default` / `Bind` / `Interleave`；成功返回空 expected |
+
+所有方法使用 `std::expected<T, std::error_code>`。系统调用失败立即保留原始 errno，参数错误为 `invalid_argument`，非 Linux 平台为 `operation_not_supported`；不抛出或捕获异常处理可恢复错误。调用方必须检查结果。
+
+- 作用于**当前线程**，不隐式修改已有工作线程。Linux 新建线程继承创建者当时的 CPU mask 和 NUMA 策略，应在创建线程前配置。
+- `bindCurrentThread` 的回读结果可能是内核与 online / cpuset 限制的交集；调用方要比较实际集合与请求。需要保留 taskset 边界时，先验证请求是启动 mask 的子集。回读失败时绑定可能已经生效，此接口不承诺事务式回滚。
+- `Default` 要求空节点集；`Bind` / `Interleave` 要求非空集。设置后可用 `numaPolicy()` 回读验证；压测公共入口会自动检查允许节点和精确回读。
+- CPU ID 范围由 `CPU_SETSIZE` 决定，当前 Linux 实现为 0–1023；NUMA 节点范围为 0–1023。超范围请求明确失败；读取系统 mask 的容量不足会返回内核错误，不截断集合。
+- NUMA 策略影响后续内存分配和首次触碰，不迁移已有页；静态初始化、已触碰的分配器缓存、显式 VMA 策略等不因此改变。CPU 绑定与内存节点绑定是独立设置，需按机器拓扑选择。
+- 只包装内核现有 affinity / mempolicy 接口，不增加 libnuma 依赖，不修改频率、实时调度、IRQ 或系统全局配置。
+
+压测配置、示例及限制见 [05-性能测试：CPU / NUMA 启动控制](05-性能测试.md#2026-09-29cpu--numa-启动控制)。
 
 ### `StringUtils`
 
@@ -130,10 +157,24 @@
 
 - 文件：`System::readFile` / `System::writeFile` / `System::readFileMmap`
 - 文件系统：`System::fileExists` / `System::isDirectory` / `System::fileSize` / `System::createDirectory` / `System::remove` / `System::listDirectory`
-- 环境变量：`System::getEnv` / `System::setEnv` / `System::unsetEnv`
 - 网络：`System::resolveHostIPv4` / `System::resolveHostIPv6` / `System::checkAddressType`
 - 主机：`System::cpuCount` / `System::hostname` / `System::currentDir` / `System::changeDir` / `System::executablePath`
-- 语义：系统时间戳和时间格式化 API 已移至 `Time`
+- 语义：系统时间戳和时间格式化 API 使用 `Time`；进程环境变量使用 `Env`
+
+### `Env`
+
+- 细粒度入口：`#include <galay/cpp/galay-utils/system/env.hpp>`；总头和 `import galay.utils;` 同样导出
+- `Env::get(const std::string& name) -> std::expected<std::optional<std::string>, std::error_code>`
+- `Env::set(const std::string& name, const std::string& value, bool overwrite = true) -> std::expected<void, std::error_code>`
+- `Env::unset(const std::string& name) -> std::expected<void, std::error_code>`
+- 语义：
+  - `get` 返回独立字符串副本；不存在时成功返回 `std::nullopt`，POSIX 上存在但为空的变量返回空字符串
+  - `set(..., false)` 保留已有变量（包括 POSIX 空值）；不存在时创建。Windows CRT 将空值视为删除
+  - `unset` 对不存在的变量也成功
+  - 名称不能为空或包含 `=`、NUL；值不能包含 NUL。非法输入返回 `std::errc::invalid_argument`，不会修改环境
+  - 系统失败通过 `std::error_code` 保留 errno / CRT 原始错误码；必须先检查 `expected`，再读取结果或错误
+  - 直接操作进程共享环境，不缓存、不加锁；调用方须避免与其他环境读写并发，建议在启动工作线程/协程前完成修改
+  - `.env` 文件解析仍由 `EnvParser` 提供，不会自动写入进程环境
 
 ### `TypeName`
 
@@ -176,11 +217,11 @@
 | 模块 | 头文件 | 主要类型 |
 |---|---|---|
 | Cache | `galay-utils/cache/lru_cache.hpp` | `LruCache<Key, Value, Hash, KeyEqual, Clock, EnableStats>` |
-| Bytes | `galay-utils/cache/bytes.hpp` | `Bytes`、`ByteMetaData` |
-| ByteQueueView | `galay-utils/cache/byte_queue_view.hpp` | `ByteQueueView` |
-| RingBuffer | `galay-utils/cache/ring_buffer.hpp` | `RingBuffer` |
-| Thread | `galay-utils/tool/thread.hpp` | `ThreadPool`、`TaskWaiter` |
-| Pool | `galay-utils/tool/pool.hpp` | `PoolableObject`、`ObjectPool<T>`、`BlockingObjectPool<T>` |
+| Bytes | `galay-utils/buffer/bytes.hpp` | `Bytes`、`ByteMetaData` |
+| ByteQueueView | `galay-utils/buffer/byte_queue_view.hpp` | `ByteQueueView` |
+| RingBuffer | `galay-utils/buffer/ring_buffer.hpp` | `RingBuffer` |
+| Thread | `galay-utils/concurrency/thread.hpp` | `ThreadPool`、`TaskWaiter` |
+| Pool | `galay-utils/concurrency/pool.hpp` | `PoolableObject`、`ObjectPool<T>`、`BlockingObjectPool<T>` |
 
 ### `LruCache`
 
@@ -311,8 +352,8 @@
 
 | 模块 | 头文件 | 主要类型 |
 |---|---|---|
-| RateLimiter | `galay-utils/tool/rate_limiter.hpp` | `CountingSemaphore`、`TokenBucketLimiter`、`SlidingWindowLimiter`、`LeakyBucketLimiter` |
-| CircuitBreaker | `galay-utils/tool/circuit_breaker.hpp` | `CircuitState`、`CircuitBreakerError`、`CircuitBreakerExpected`、`CircuitBreakerConfig`、`BasicCircuitBreaker`、`CircuitBreaker` |
+| RateLimiter | `galay-utils/resilience/rate_limiter.hpp` | `CountingSemaphore`、`TokenBucketLimiter`、`SlidingWindowLimiter`、`LeakyBucketLimiter` |
+| CircuitBreaker | `galay-utils/resilience/circuit_breaker.hpp` | `CircuitState`、`CircuitBreakerError`、`CircuitBreakerExpected`、`CircuitBreakerConfig`、`BasicCircuitBreaker`、`CircuitBreaker` |
 
 ### `RateLimiter`
 
@@ -370,16 +411,24 @@
   - 配置归一化：`failureThreshold`、`successThreshold`、`halfOpenMaxRequests` 小于 1 时按 1 处理；负的 `resetTimeout` 按 0 处理
   - 半开语义：`halfOpenMaxRequests` 限制半开状态下同时放行的探测请求数，探测成功或失败后释放名额
 
-## 5. 路由、分布式与数据结构
+## 5. 算法与数据结构
 
 | 模块 | 头文件 | 主要类型 / 方法 |
 |---|---|---|
-| Balancer | `galay-utils/tool/balancer.hpp` | `RoundRobinLoadBalancer<T>`、`WeightRoundRobinLoadBalancer<T>`、`RandomLoadBalancer<T>`、`WeightedRandomLoadBalancer<T>` |
+| Balancer | `galay-utils/algorithm/balancer.hpp` | `RoundRobinLoadBalancer<T>`、`WeightRoundRobinLoadBalancer<T>`、`RandomLoadBalancer<T>`、`WeightedRandomLoadBalancer<T>` |
 | ConsistentHash | `galay-utils/algorithm/consistent_hash.hpp` | `NodeConfig`、`NodeStatus`、`PhysicalNode`、`ConsistentHash` |
 | BloomFilter | `galay-utils/algorithm/bloom_filter.hpp` | `BloomFilter<T, Hash>` |
 | Trie | `galay-utils/algorithm/trie.hpp` | `TrieTree` |
 | MVCC | `galay-utils/algorithm/mvcc.hpp` | `VersionedValue<T>`、`Mvcc<T>`、`Snapshot`、`Transaction<T>` |
-| Huffman | `galay-utils/algorithm/huffman.hpp` | `HuffmanCode`、`HuffmanTable<T>`、`HuffmanEncoder<T>`、`HuffmanDecoder<T>`、`HuffmanBuilder<T>` |
+| MurmurHash3 | `galay-utils/algorithm/murmur_hash3.hpp` | `MurmurHash3Util` |
+
+### `MurmurHash3Util`
+
+- `Hash32(const void*, size_t, uint32_t seed = 0)` / `Hash32(const std::string&, uint32_t seed = 0)`
+- `Hash128(const void*, size_t, uint32_t seed = 0)` / `Hash128(const std::string&, uint32_t seed = 0)`
+- `Hash128Raw(const void*, size_t, uint32_t seed = 0)` / `Hash128Raw(const std::string&, uint32_t seed = 0)`
+- C++17：`Hash32View(std::string_view, uint32_t seed = 0)`、`Hash128View(std::string_view, uint32_t seed = 0)`、`Hash128RawView(std::string_view, uint32_t seed = 0)`
+- 语义：`Hash32(...)` 返回 32 位整数；`Hash128(...)` / `Hash128View(...)` 返回 32 字符十六进制字符串；`Hash128Raw(...)` / `Hash128RawView(...)` 返回 `std::array<uint64_t, 2>`
 
 ### `Balancer`
 
@@ -475,42 +524,13 @@
   - `isCommitted() const`
 - 语义：`compareAndSwap(...)` 冲突时返回 `0`；`deleteValue()` 会写入 tombstone 版本，而不是立即擦除历史版本
 
-### `Huffman`
-
-- `HuffmanCode`
-  - 数据成员：`code` / `length`
-- `HuffmanTable<T>`
-  - `HuffmanTable()`
-  - `addCode(const T& symbol, uint32_t code, uint8_t length)`
-  - `getCode(const T& symbol) const -> const HuffmanCode&`
-  - `hasSymbol(const T& symbol) const`
-  - `getSymbol(uint32_t code, uint8_t length) const -> const T&`
-  - `tryGetSymbol(uint32_t code, uint8_t length, T& symbol) const`
-  - `getSymbols() const -> std::vector<T>`
-  - `size() const`
-  - `clear()`
-- `HuffmanEncoder<T>`
-  - `explicit HuffmanEncoder(const HuffmanTable<T>& table)`
-  - `encode(const T& symbol)`
-  - `encode(const std::vector<T>& symbols)`
-  - `finish() -> std::vector<uint8_t>`
-  - `bitCount() const`
-  - `reset()`
-- `HuffmanDecoder<T>`
-  - `HuffmanDecoder(const HuffmanTable<T>& table, uint8_t minCodeLen = 1, uint8_t maxCodeLen = 32)`
-  - `decode(const std::vector<uint8_t>& data, size_t symbolCount = 0) -> std::vector<T>`
-- `HuffmanBuilder<T>`
-  - `build(const std::unordered_map<T, size_t>& frequencies) -> HuffmanTable<T>`
-  - `buildFromData(const std::vector<T>& data) -> HuffmanTable<T>`
-- 语义：`HuffmanTable<T>::getCode()` / `getSymbol()` 在缺失项上抛异常；`HuffmanDecoder<T>::decode()` 在超过 `maxCodeLen` 时抛 `std::runtime_error`
-
 ## 6. 应用与系统集成
 
 | 模块 | 头文件 | 主要类型 |
 |---|---|---|
 | App | `galay-utils/app/app.hpp` | `CliErrorCode`、`CliError`、`CliValue<T>`、`Opt<T>`、`Positional<T>`、`Cmd`、`App` |
 | Parser | `galay-utils/config/parser_manager.hpp` | `ParserBase`、`ConfigParser`、`IniParser`、`EnvParser`、`TomlParser`、`ParserManager` |
-| Process | `galay-utils/process/process.hpp` | `ProcessId`、`ExitStatus`、`ProcessPriorityError`、`ProcessAffinityError`、`Process` |
+| Process | `galay-utils/system/process.hpp` | `ProcessId`、`ExitStatus`、`ProcessPriorityError`、`ProcessAffinityError`、`Process` |
 
 ### `App`
 
@@ -606,13 +626,13 @@
   - `Process::isRunning(ProcessId pid)`
   - `daemonize()`
 
-## 7. 算法与辅助模块
+## 7. 编解码、密码学与公共定义
 
 | 头文件 | 主要类型 |
 |---|---|
 | `galay-utils/encoding/base64.hpp` | `Base64Util` |
+| `galay-utils/encoding/huffman.hpp` | `HuffmanCode`、`HuffmanTable<T>`、`HuffmanEncoder<T>`、`HuffmanDecoder<T>`、`HuffmanBuilder<T>` |
 | `galay-utils/crypto/md5.hpp` | `MD5Util` |
-| `galay-utils/crypto/murmur_hash3.hpp` | `MurmurHash3Util` |
 | `galay-utils/crypto/salt.hpp` | `SaltGenerator` |
 | `galay-utils/crypto/hmac.hpp` | `SHA256`、`HMAC` |
 | `galay-utils/common/defn.hpp` | 基础类型别名、`NonCopyable`、`NonMovable`、`Singleton<T>` |
@@ -632,20 +652,41 @@
   - `remove_linebreaks = true` 会先移除输入中的 `
 ` 再解码，适合处理 PEM / MIME 风格输出
 
+### `Huffman`
+
+- `HuffmanCode`
+  - 数据成员：`code` / `length`
+- `HuffmanTable<T>`
+  - `HuffmanTable()`
+  - `addCode(const T& symbol, uint32_t code, uint8_t length)`
+  - `getCode(const T& symbol) const -> const HuffmanCode&`
+  - `hasSymbol(const T& symbol) const`
+  - `getSymbol(uint32_t code, uint8_t length) const -> const T&`
+  - `tryGetSymbol(uint32_t code, uint8_t length, T& symbol) const`
+  - `getSymbols() const -> std::vector<T>`
+  - `size() const`
+  - `clear()`
+- `HuffmanEncoder<T>`
+  - `explicit HuffmanEncoder(const HuffmanTable<T>& table)`
+  - `encode(const T& symbol)`
+  - `encode(const std::vector<T>& symbols)`
+  - `finish() -> std::vector<uint8_t>`
+  - `bitCount() const`
+  - `reset()`
+- `HuffmanDecoder<T>`
+  - `HuffmanDecoder(const HuffmanTable<T>& table, uint8_t minCodeLen = 1, uint8_t maxCodeLen = 32)`
+  - `decode(const std::vector<uint8_t>& data, size_t symbolCount = 0) -> std::vector<T>`
+- `HuffmanBuilder<T>`
+  - `build(const std::unordered_map<T, size_t>& frequencies) -> HuffmanTable<T>`
+  - `buildFromData(const std::vector<T>& data) -> HuffmanTable<T>`
+- 语义：`HuffmanTable<T>::getCode()` / `getSymbol()` 在缺失项上抛异常；`HuffmanDecoder<T>::decode()` 在超过 `maxCodeLen` 时抛 `std::runtime_error`
+
 ### `MD5Util`
 
 - `MD5(const std::string&)` / `MD5(const unsigned char*, size_t)`
 - `MD5Raw(const std::string&)` / `MD5Raw(const unsigned char*, size_t)`
 - C++17：`MD5View(std::string_view)` / `MD5RawView(std::string_view)`
 - 语义：`MD5(...)` / `MD5View(...)` 返回 32 字符小写十六进制字符串；`MD5Raw(...)` / `MD5RawView(...)` 返回 `std::array<uint8_t, 16>` 原始摘要字节
-
-### `MurmurHash3Util`
-
-- `Hash32(const void*, size_t, uint32_t seed = 0)` / `Hash32(const std::string&, uint32_t seed = 0)`
-- `Hash128(const void*, size_t, uint32_t seed = 0)` / `Hash128(const std::string&, uint32_t seed = 0)`
-- `Hash128Raw(const void*, size_t, uint32_t seed = 0)` / `Hash128Raw(const std::string&, uint32_t seed = 0)`
-- C++17：`Hash32View(std::string_view, uint32_t seed = 0)`、`Hash128View(std::string_view, uint32_t seed = 0)`、`Hash128RawView(std::string_view, uint32_t seed = 0)`
-- 语义：`Hash32(...)` 返回 32 位整数；`Hash128(...)` / `Hash128View(...)` 返回 32 字符十六进制字符串；`Hash128Raw(...)` / `Hash128RawView(...)` 返回 `std::array<uint64_t, 2>`
 
 ### `SaltGenerator`
 
@@ -700,7 +741,7 @@
 
 - 当前仓库没有统一的 `expected` / 错误码基类；检索失败语义时必须回到对应头文件签名，而不能把整个仓库当成单一错误模型
 - 纯工具类主路径集中在 `core/`、`encoding/`、`crypto/`、`common/`，它们主要回答“输入是什么、返回值是什么”
-- 线程 / 资源相关能力集中在 `tool/`、`process/`，检索时要额外关注阻塞/等待/资源释放语义
+- 线程池、等待器与对象池位于 `concurrency/`，系统资源接口位于 `system/`；检索时要额外关注阻塞、等待与资源释放语义
 - `ThreadPool::addTask(...)` 返回 `std::future<...>`，而 `execute(...)` 是 fire-and-forget 风格；两者不应混用为同一等待模型
 - `ObjectPool<T>` 与 `BlockingObjectPool<T>` 不是同一组方法：前者是“可扩容 + 非阻塞取对象”，后者是“固定池 + 阻塞等待”
 - `RateLimiter` 不再提供 `acquire(...)` awaitable；使用无锁同步非阻塞 `tryAcquire(...)` 获取结果

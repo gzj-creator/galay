@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/protoc/http_request.h>
 #include <galay/cpp/galay-http/kernel/http_session.h>
 #include <galay/cpp/galay-http/server/http_range.h>
@@ -70,6 +72,10 @@ void runBench(const char* name, size_t iterations, Func&& func)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr size_t kIterations = 50000;
 
     std::string te_cl =

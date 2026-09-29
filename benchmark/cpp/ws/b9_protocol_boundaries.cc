@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/protoc/http_request.h>
 #include <galay/cpp/galay-ws/kernel/ws_reader.h>
 #include <galay/cpp/galay-ws/protoc/ws_frame.h>
@@ -105,6 +107,10 @@ void runBench(const char* name, size_t iterations, Func&& func)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr size_t kIterations = 50000;
     std::string non_minimal =
         makeMaskedRaw(WsOpcode::Binary, 126, {0x00, 0x7D}, std::string(125, 'a'));

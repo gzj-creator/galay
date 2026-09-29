@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_conn.h>
 #include <galay/cpp/galay-rpc/kernel/rpc_stream.h>
 #include <galay/cpp/galay-rpc/protoc/rpc_message.h>
@@ -13,6 +15,10 @@ using namespace galay::rpc;
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t requests = argc > 1 ? static_cast<size_t>(std::stoull(argv[1])) : 10000;
     const size_t payload_size = argc > 2 ? static_cast<size_t>(std::stoull(argv[2])) : 1024;
     std::string payload(payload_size, 'x');

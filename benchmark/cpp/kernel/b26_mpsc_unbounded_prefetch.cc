@@ -3,6 +3,8 @@
  * @brief 隔离测量 MPSC unbounded 单消费者预取上限的吞吐影响。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include "benchmark/cpp/common/benchmark_sync.h"
 
@@ -165,6 +167,10 @@ bool runCase(size_t prefetchLimit, int producerCount)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::array<size_t, 4> kPrefetchLimits{0, 1, 4, 16};
     constexpr std::array<int, 2> kProducerCounts{2, 4};
     for (const int producerCount : kProducerCounts) {

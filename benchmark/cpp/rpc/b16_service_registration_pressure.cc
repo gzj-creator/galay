@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_server.h>
 #include <galay/cpp/galay-rpc/kernel/streamsvc.h>
 
@@ -78,6 +80,10 @@ bool registerAll(Server& server, Services& services)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 10000;
     if (argc > 1) {
         iterations = std::max<size_t>(1, std::strtoull(argv[1], nullptr, 10));

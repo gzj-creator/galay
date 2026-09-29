@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-utils/cache/lru_cache.hpp>
 
 #include <algorithm>
@@ -345,6 +347,10 @@ void runScenario(const std::string& scenario,
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t opCount = 5'000'000;
     constexpr int capacity = 8192;
 

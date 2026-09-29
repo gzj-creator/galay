@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-tracing/kernel/otlp_http_exporter.h>
 #include <galay/cpp/galay-tracing/log/console_sink.h>
 #include <galay/cpp/galay-tracing/log/logger.h>
@@ -108,6 +110,10 @@ template <typename Fn>
 } // namespace
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const auto iterations = iterationCount(argc, argv);
     std::size_t observed = 0;
 

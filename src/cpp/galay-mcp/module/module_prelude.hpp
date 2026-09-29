@@ -252,11 +252,11 @@
 #if __has_include("../../galay-ssl/ssl/ssl_engine.h")
 #include "../../galay-ssl/ssl/ssl_engine.h"
 #endif
-#if __has_include("../../galay-utils/cache/bytes.hpp")
-#include "../../galay-utils/cache/bytes.hpp"
+#if __has_include("../../galay-utils/buffer/bytes.hpp")
+#include "../../galay-utils/buffer/bytes.hpp"
 #endif
-#if __has_include("../../galay-utils/cache/ring_buffer.hpp")
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#if __has_include("../../galay-utils/buffer/ring_buffer.hpp")
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 #endif
 #if __has_include("../../galay-utils/common/defn.hpp")
 #include "../../galay-utils/common/defn.hpp"

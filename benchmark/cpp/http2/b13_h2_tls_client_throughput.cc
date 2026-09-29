@@ -3,6 +3,8 @@
  * @brief H2 (HTTP/2 over TLS) 客户端压测程序
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
 #include <atomic>
@@ -252,6 +254,10 @@ void runBenchmark(const std::string& host,
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::string host = "localhost";
     uint16_t port = 9443;
     int concurrent_clients = 20;
@@ -284,6 +290,10 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "SSL support is not enabled.\n";
     std::cout << "Rebuild with -DGALAY_BUILD_SSL=ON\n";
     return 0;

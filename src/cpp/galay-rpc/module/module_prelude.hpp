@@ -165,8 +165,8 @@
 #if __has_include("../../galay-kernel/parallel/parallel_scheduler.h")
 #include "../../galay-kernel/parallel/parallel_scheduler.h"
 #endif
-#if __has_include("../../galay-utils/cache/ring_buffer.hpp")
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#if __has_include("../../galay-utils/buffer/ring_buffer.hpp")
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 #endif
 #if __has_include("../../galay-utils/common/defn.hpp")
 #include "../../galay-utils/common/defn.hpp"
@@ -174,11 +174,11 @@
 #if __has_include("../../galay-utils/common/macro.hpp")
 #include "../../galay-utils/common/macro.hpp"
 #endif
-#if __has_include("../../galay-utils/tool/circuit_breaker.hpp")
-#include "../../galay-utils/tool/circuit_breaker.hpp"
+#if __has_include("../../galay-utils/resilience/circuit_breaker.hpp")
+#include "../../galay-utils/resilience/circuit_breaker.hpp"
 #endif
-#if __has_include("../../galay-utils/tool/rate_limiter.hpp")
-#include "../../galay-utils/tool/rate_limiter.hpp"
+#if __has_include("../../galay-utils/resilience/rate_limiter.hpp")
+#include "../../galay-utils/resilience/rate_limiter.hpp"
 #endif
 #if __has_include(<WinSock2.h>)
 #include <WinSock2.h>

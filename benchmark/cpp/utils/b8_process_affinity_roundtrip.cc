@@ -1,11 +1,17 @@
+#include "../common/benchmark_environment.h"
+
 #include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
 
-#include <galay/cpp/galay-utils/process/process.hpp>
+#include <galay/cpp/galay-utils/system/process.hpp>
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     int iterations = 1000;
     if (argc > 1) {
         iterations = std::max(1, std::atoi(argv[1]));

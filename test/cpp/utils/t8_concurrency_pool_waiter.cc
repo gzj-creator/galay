@@ -4,12 +4,11 @@
 #include <fstream>
 #include <sstream>
 
-void test_concurrency_headers_moved_to_tool() {
+void test_concurrency_header_layout() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
-    assert(!std::filesystem::exists(sourceRoot / "galay-utils/concurrency/pool.hpp"));
-    assert(!std::filesystem::exists(sourceRoot / "galay-utils/concurrency/thread.hpp"));
-    assert(std::filesystem::exists(sourceRoot / "galay-utils/tool/pool.hpp"));
-    assert(std::filesystem::exists(sourceRoot / "galay-utils/tool/thread.hpp"));
+    assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool"));
+    assert(std::filesystem::exists(sourceRoot / "galay-utils/concurrency/pool.hpp"));
+    assert(std::filesystem::exists(sourceRoot / "galay-utils/concurrency/thread.hpp"));
 }
 
 void test_pool() {
@@ -46,7 +45,7 @@ void test_pool() {
 // ==================== Thread Tests ====================
 
 void test_thread_pool_uses_concurrent_queue_without_mutex() {
-    std::ifstream input(std::string(GALAY_UTILS_SOURCE_DIR) + "/galay-utils/tool/thread.hpp");
+    std::ifstream input(std::string(GALAY_UTILS_SOURCE_DIR) + "/galay-utils/concurrency/thread.hpp");
     assert(input.good());
 
     std::ostringstream buffer;
@@ -223,7 +222,7 @@ void test_stress_thread_pool() {
 int main() {
     std::cout << "\n=== concurrency_test ===" << std::endl;
     try {
-        test_concurrency_headers_moved_to_tool();
+        test_concurrency_header_layout();
         test_pool();
         test_thread_pool_uses_concurrent_queue_without_mutex();
         test_thread();

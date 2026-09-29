@@ -3,6 +3,8 @@
  * @brief SSL 服务端性能测试
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-ssl/async/ssl_socket.h>
 #include <galay/cpp/galay-ssl/ssl/ssl_context.h>
 #include <galay/cpp/galay-kernel/core/task.h>
@@ -204,6 +206,10 @@ Task<void> sslServer(IOScheduler* scheduler,
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         printUsage(argv[0]);
         return 0;

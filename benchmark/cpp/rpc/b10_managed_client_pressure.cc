@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_managed_client.h>
 
 #include <chrono>
@@ -7,6 +9,10 @@ using namespace galay::rpc;
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t requests = argc > 1 ? static_cast<size_t>(std::stoull(argv[1])) : 100000;
     RpcStaticDiscovery discovery;
     discovery.set("BenchService", {

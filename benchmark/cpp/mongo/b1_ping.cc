@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include "common/bench_common.h"
 #include <galay/cpp/galay-mongo/sync/mongo_client.h>
 
@@ -77,6 +79,10 @@ void operator delete[](void* ptr, std::size_t) noexcept
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     if (argc > 1 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
         mongo_bench::printUsage(argv[0]);
         return 0;

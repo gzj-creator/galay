@@ -4,6 +4,8 @@
  * @details 配合 B11-WssServer 进行 WSS 性能测试
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <string>
 #include <atomic>
@@ -224,6 +226,10 @@ void signalHandler(int) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     // 设置日志为文件模式
 
     // 解析命令行参数
@@ -306,6 +312,10 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "SSL support is not enabled.\n";
     std::cout << "Rebuild with -DGALAY_BUILD_SSL=ON\n";
     return 0;

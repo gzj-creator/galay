@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_connection_pool.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
@@ -50,6 +52,10 @@ Task<void> runPool(size_t requests, Result* result)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t requests = argc > 1 ? static_cast<size_t>(std::stoull(argv[1])) : 10000;
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(0).build();
     runtime.start();

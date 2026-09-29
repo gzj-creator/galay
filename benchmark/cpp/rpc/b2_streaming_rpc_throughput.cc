@@ -3,6 +3,8 @@
  * @brief RPC压测客户端（含P99延迟统计）
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_conn.h>
 #include <galay/cpp/galay-rpc/utils/runtime_compat.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
@@ -224,6 +226,10 @@ void printUsage(const char* prog) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 #if defined(SIGPIPE)

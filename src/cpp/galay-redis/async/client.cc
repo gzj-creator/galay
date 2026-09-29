@@ -3,7 +3,7 @@
 #include "../base/redis_error.h"
 #include "../base/redis_log.h"
 
-#include "../../galay-utils/process/system.hpp"
+#include "../../galay-utils/system/system.hpp"
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
 #include "../../galay-ssl/async/ssl_socket.h"

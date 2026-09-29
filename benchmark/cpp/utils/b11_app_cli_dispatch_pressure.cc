@@ -3,6 +3,8 @@
  * @brief App 空参数帮助与版本短选项分派压力基准。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-utils/app/app.hpp>
 
 #include <chrono>
@@ -43,6 +45,10 @@ bool runScenario(const char* name, galay::utils::App& app, int argc,
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 100'000;
 
     galay::utils::App app("risk-control");

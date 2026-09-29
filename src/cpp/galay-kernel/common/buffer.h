@@ -19,8 +19,8 @@
 #include <string>
 #include <string_view>
 #include <cstdint>
-#include "../../galay-utils/cache/bytes.hpp"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/bytes.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 
 namespace galay::kernel
 {

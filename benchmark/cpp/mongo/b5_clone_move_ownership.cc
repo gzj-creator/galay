@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mongo/base/mongo_value.h>
 
 #include <charconv>
@@ -129,6 +131,10 @@ galay::mongo::MongoArray makeSeedArray(size_t item_count)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 50000;
     if (argc > 1) {
         auto parsed = parsePositiveSize(argv[1], iterations);

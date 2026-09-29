@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-tracing/adapters/http_headers.h>
 
 #include <galay/cpp/galay-http/protoc/http_header.h>
@@ -37,6 +39,10 @@ galay::tracing::TraceContext makeContext() {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const auto context = makeContext();
     std::size_t propagated = 0;
 

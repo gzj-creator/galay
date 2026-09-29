@@ -3,7 +3,7 @@
  * @brief 模块导入版本的 SSL Builder 协议流示例。
  */
 
-#include <galay/cpp/galay-utils/cache/byte_queue_view.hpp>
+#include <galay/cpp/galay-utils/buffer/byte_queue_view.hpp>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <array>
 #include <atomic>

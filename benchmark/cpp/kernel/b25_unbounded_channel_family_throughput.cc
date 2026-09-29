@@ -3,6 +3,8 @@
  * @brief 压测 unbounded MPMC 完整路径、退役 block 扫描延迟与基线吞吐。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/concurrency/mpmc/unbounded_channel.h>
 #include "benchmark/cpp/common/benchmark_affinity.h"
 #include "benchmark/cpp/common/benchmark_sync.h"
@@ -706,6 +708,10 @@ bool runBlockScanLatency()
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     bool ok = runBlockScanLatency();
     ok = runComparison("2p2c", 2, 2) && ok;
     ok = runComparison("4p4c", 4, 4) && ok;

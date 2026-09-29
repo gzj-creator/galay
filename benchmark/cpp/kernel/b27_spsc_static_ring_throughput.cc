@@ -7,6 +7,8 @@
  * 消息数量和 checksum。构造、线程创建和起跑同步不计入样本时间。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
 #include "benchmark/cpp/common/benchmark_affinity.h"
 
@@ -428,6 +430,10 @@ template <size_t Words, size_t Capacity>
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const auto config = parseArguments(argc, argv);
     if (!config.has_value()) {
         std::cerr << "b27 argument error: " << parseErrorName(config.error()) << '\n';

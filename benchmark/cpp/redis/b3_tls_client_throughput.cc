@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-redis/async/client.h>
 
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -411,6 +413,10 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, const BenchmarkOptions* opt
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     BenchmarkOptions options;
     bool show_help = false;
     if (!parseArgs(argc, argv, options, show_help)) {

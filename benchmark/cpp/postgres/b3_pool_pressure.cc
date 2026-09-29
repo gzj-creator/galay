@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include "common/config.h"
 
 #include <galay/cpp/galay-kernel/async/async_waiter.h>
@@ -167,6 +169,10 @@ Task<bool> run(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     auto config = postgres_benchmark::loadConfig();
     if (!postgres_benchmark::parseArgs(config, argc, argv)) {
         postgres_benchmark::printUsage(argv[0]);

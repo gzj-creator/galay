@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-utils/algorithm/consistent_hash.hpp>
 
 #include <chrono>
@@ -13,6 +15,10 @@ volatile std::size_t g_sink = 0;
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 200'000;
 
     galay::utils::ConsistentHash hash(64);

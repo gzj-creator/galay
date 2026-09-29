@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-redis/async/conn_pool.h>
 
 #include <galay/cpp/galay-kernel/async/async_waiter.h>
@@ -138,6 +140,10 @@ Task<void> runTest(IOScheduler* scheduler, std::promise<int>* exit_code)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     try {
         Runtime runtime;
         runtime.start();

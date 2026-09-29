@@ -6,6 +6,8 @@
  * 避免逐个 join 结果带来的额外噪声，分别报告 IO / CPU 入口的中位数吞吐。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include "benchmark/cpp/common/benchmark_sync.h"
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
@@ -115,6 +117,10 @@ bool runMode(std::string_view mode, Submit&& submit)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(1).parallelSchedulerCount(1).build();
     const auto started = runtime.start();
     if (!started.has_value()) {

@@ -3,6 +3,8 @@
  * @brief HTTP/2 move-only ownership and explicit clone pressure benchmark.
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/kernel/http2_stream.h>
 #include <galay/cpp/galay-http2/protoc/http2_frame.h>
 #include <galay/cpp/galay-http2/protoc/http2_hpack.h>
@@ -88,6 +90,10 @@ HpackDecoder makeDecoder()
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 100000;
     if (argc > 1) {
         const int parsed = std::atoi(argv[1]);

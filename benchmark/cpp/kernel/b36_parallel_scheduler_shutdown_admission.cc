@@ -3,6 +3,8 @@
  * @brief 测量停机与生产者发生竞态时 ParallelScheduler 的工作接纳情况。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 
 #include <atomic>
@@ -106,6 +108,10 @@ bool runRound(std::size_t producer_count,
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t kRounds = 100;
     constexpr std::size_t kProducerCount = 8;
     constexpr std::size_t kAttemptsPerProducer = 256;

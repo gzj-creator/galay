@@ -14,6 +14,8 @@
  *   wrk -t8 -c500 -d30s --latency http://127.0.0.1:8080/
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/server/http_server.h>
 #include <galay/cpp/galay-http/kernel/http_conn.h>
 #include <galay/cpp/galay-http/protoc/http_request.h>
@@ -64,6 +66,10 @@ Task<void> handleHttpRequest(HttpConn conn) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     // 禁用日志以获得最佳性能
 
     uint16_t port = 8080;

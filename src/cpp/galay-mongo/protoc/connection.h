@@ -15,7 +15,7 @@
 
 #include "mongo_protocol.h"
 #include "../base/mongo_error.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 
 #include <cstddef>
 #include <cstdint>

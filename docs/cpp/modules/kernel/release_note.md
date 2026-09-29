@@ -70,9 +70,9 @@
 - Git 提交消息：`refactor: 发布 v5.1.0 并复用 utils 缓冲工具`
 - Git Tag：`v5.1.0`
 - 自述摘要：
-  - 移除 `galay-kernel` 本地 `common/bytes.h` / `bytes.cc`，统一复用 `galay-utils/cache/bytes.hpp` 中的 `Bytes`、`ByteMetaData` 与字节内存辅助函数。
-  - 移除 `galay-kernel/common/queue_view.h` 本地实现，协议解析示例与测试改为直接包含 `galay-utils/cache/byte_queue_view.hpp`。
-  - 移除 `galay-kernel` 本地 `RingBuffer` 实现，`galay-kernel/common/buffer.h` 通过 using 保留 `galay::kernel::RingBuffer` 入口并复用 `galay-utils/cache/ring_buffer.hpp`。
+  - 移除 `galay-kernel` 本地 `common/bytes.h` / `bytes.cc`，统一复用 `galay-utils/buffer/bytes.hpp` 中的 `Bytes`、`ByteMetaData` 与字节内存辅助函数。
+  - 移除 `galay-kernel/common/queue_view.h` 本地实现，协议解析示例与测试改为直接包含 `galay-utils/buffer/byte_queue_view.hpp`。
+  - 移除 `galay-kernel` 本地 `RingBuffer` 实现，`galay-kernel/common/buffer.h` 通过 using 保留 `galay::kernel::RingBuffer` 入口并复用 `galay-utils/buffer/ring_buffer.hpp`。
   - `galay-kernel` CMake 与 package config 声明依赖 `galay-utils >= 3.1.0`，优先使用已安装的 `galay::galay-utils` 目标，开发构建仍支持 `GALAY_UTILS_INCLUDE_DIR`。
 
 ## v5.2.0 - 2026-06-11

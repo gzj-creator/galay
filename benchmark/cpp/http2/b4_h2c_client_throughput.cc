@@ -5,6 +5,8 @@
  *          使用 StreamManager 进行帧分发，每个流通过 stream->getFrame() 协程接收响应
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/client/h2c_client.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
@@ -253,6 +255,10 @@ void runBenchmark(const std::string& host,
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::string host = "localhost";
     uint16_t port = 9080;
     int concurrent_clients = 100;

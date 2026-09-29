@@ -1,7 +1,9 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-utils/algorithm/bloom_filter.hpp>
-#include <galay/cpp/galay-utils/algorithm/huffman.hpp>
-#include <galay/cpp/galay-utils/cache/bytes.hpp>
-#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
+#include <galay/cpp/galay-utils/encoding/huffman.hpp>
+#include <galay/cpp/galay-utils/buffer/bytes.hpp>
+#include <galay/cpp/galay-utils/buffer/ring_buffer.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -102,6 +104,10 @@ bool prepareRing(galay::utils::RingBuffer<galay::utils::RingBufferBackendStrateg
 } // namespace
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const std::size_t iterations = parseArg(argc, argv, 1, 1000);
     const std::size_t items = parseArg(argc, argv, 2, 4096);
     const std::size_t ringCapacity = std::max<std::size_t>(parseArg(argc, argv, 3, 8192), 128);

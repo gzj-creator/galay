@@ -5,6 +5,8 @@
  * 通过条件：压测样本全部完成并输出结果，进程无崩溃、死锁或超时。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -348,6 +350,10 @@ ScalingBenchResult runTwoSchedulerRoundRobinBenchmark() {
 }  // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
 #if defined(USE_KQUEUE)
     KqueueScheduler scheduler;
     constexpr const char* backend = "kqueue";

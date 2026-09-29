@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-etcd/sync/etcd_client.h>
 
 #include <algorithm>
@@ -199,6 +201,10 @@ void runWorker(std::string endpoint,
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const Args args = parseArgs(argc, argv);
     const std::string value = payloadOfSize(args.value_size);
     const std::string key_prefix = "/galay-etcd/bench/" +

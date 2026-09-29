@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -338,6 +340,10 @@ void printSummary(const mysql_benchmark::DbBenchmarkConfig& cfg,
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     auto cfg = mysql_benchmark::loadDbBenchmarkConfig();
     if (!mysql_benchmark::parseArgs(cfg, argc, argv, std::cerr)) {
         mysql_benchmark::printUsage(argv[0]);

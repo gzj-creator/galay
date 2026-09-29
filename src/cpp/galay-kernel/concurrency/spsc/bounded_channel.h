@@ -18,7 +18,7 @@
 #include "../../core/timeout.hpp"
 #include "../detail/asymmetric_memory_barrier.h"
 #include "../../../galay-utils/common/defn.hpp"
-#include "../../../galay-utils/cache/type_ring_buffer.hpp"
+#include "../../../galay-utils/buffer/type_ring_buffer.hpp"
 #include <coroutine>
 
 #if defined(_MSC_VER)

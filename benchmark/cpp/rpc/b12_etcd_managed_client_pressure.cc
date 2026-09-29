@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/discovery/etcd_service_registry.h>
 #include <galay/cpp/galay-rpc/kernel/rpc_managed_client.h>
 #include <galay/cpp/galay-rpc/kernel/rpc_server.h>
@@ -149,6 +151,10 @@ Task<void> runPressure(RpcStaticDiscovery* discovery,
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     if (!integrationEnabled()) {
         std::cout << "[SKIP] set GALAY_IT_ENABLE=1 to run RPC etcd managed client pressure benchmark\n";
         return kSkip;

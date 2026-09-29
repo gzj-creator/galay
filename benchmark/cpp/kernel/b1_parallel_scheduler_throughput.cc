@@ -5,6 +5,8 @@
  * 通过条件：预热与正式统计都能完成，输出性能结果且进程无崩溃、死锁或超时。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <algorithm>
 #include <atomic>
@@ -316,6 +318,10 @@ void benchSustained(int scheduler_count, int duration_sec) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const unsigned hardware_threads = std::max(1u, std::thread::hardware_concurrency());
     int scheduler_count = galay::benchmark::defaultBenchmarkSchedulerCount(hardware_threads);
     if (argc > 1) {

@@ -1,4 +1,6 @@
-#include <galay/cpp/galay-utils/cache/byte_queue_view.hpp>
+#include "../common/benchmark_environment.h"
+
+#include <galay/cpp/galay-utils/buffer/byte_queue_view.hpp>
 
 #include <chrono>
 #include <cstdint>
@@ -60,6 +62,10 @@ std::uint32_t readBigEndian32(std::string_view view) {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 5'000'000;
     constexpr std::size_t chunk = 256;
 

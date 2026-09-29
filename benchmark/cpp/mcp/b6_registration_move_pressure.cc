@@ -3,6 +3,8 @@
  * @brief MCP 注册路径大 payload 与 handler move 压力基准。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mcp/v1/server/http_server.h>
 #include <galay/cpp/galay-mcp/v1/server/stdio_server.h>
 
@@ -280,6 +282,10 @@ BenchmarkResult runHttpRegistration(std::size_t registrations,
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::size_t registrations = 500;
     if (!parseIterations(argc, argv, registrations)) {
         return 2;

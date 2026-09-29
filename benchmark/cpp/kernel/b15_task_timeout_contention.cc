@@ -7,6 +7,8 @@
  * - timeout 与 IO completion 竞态裁决在 completion-wins / timeout-wins 两个分支下的开销。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -203,6 +205,10 @@ void benchTimeoutWins()
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     benchSpawnBlockingSuccess();
     benchSpawnBlockingException();
     benchTimeoutCompletionWins();

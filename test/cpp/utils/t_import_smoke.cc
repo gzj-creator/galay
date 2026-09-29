@@ -1,16 +1,25 @@
 import galay.utils;
 
-#include <galay/cpp/galay-utils/tool/rate_limiter.hpp>
-
 #include <cassert>
 #include <chrono>
 #include <cstddef>
 #include <iostream>
+#include <new>
 #include <string>
+#include <system_error>
 #include <utility>
 
 int main() {
     using namespace galay::utils;
+
+    static_assert(Performance::kMaxCpus > 0);
+    static_assert(Performance::kMaxNumaNodes > 0);
+
+    const auto invalidEnv = Env::get("");
+    if (invalidEnv || invalidEnv.error() != std::errc::invalid_argument) {
+        std::cerr << "Env should be exported and reject invalid names\n";
+        return 1;
+    }
 
     auto parts = StringUtils::split("a,b,c", ',');
     assert(parts.size() == 3);

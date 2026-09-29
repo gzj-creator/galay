@@ -3,6 +3,8 @@
  * @brief HTTP/2 kernel dispatcher/flow/scheduler pressure benchmark
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/kernel/flow_control.h>
 #include <galay/cpp/galay-http2/kernel/frame_dispacher.h>
 #include <galay/cpp/galay-http2/kernel/h2_core.h>
@@ -378,6 +380,10 @@ const char* throughputBottleneckStage(const BenchResult& result)
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t streams = 1000;
     size_t payload_bytes = 128;
     size_t flow_rounds = 100000;

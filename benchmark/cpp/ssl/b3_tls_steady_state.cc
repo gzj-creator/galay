@@ -5,6 +5,8 @@
  * 通过条件：16 个连接持续 echo 1024B 负载，全部完成，无 send/recv/peer-closed/mismatch。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-ssl/async/ssl_socket.h>
 #include <galay/cpp/galay-ssl/ssl/ssl_context.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
@@ -279,6 +281,10 @@ Task<void> runClient(SslContext* ctx, SteadyState* state, int client_id)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     SteadyState state;
 
     SslContext server_ctx(SslMethod::TLS_Server);

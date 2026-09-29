@@ -5,6 +5,8 @@
  * 通过条件：服务端能持续承压并输出统计，收到停止信号后干净退出。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <atomic>
 #include <chrono>
@@ -145,6 +147,10 @@ void statsThread() {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     uint16_t port = 8080;
     if (argc > 1) {
         port = static_cast<uint16_t>(std::atoi(argv[1]));

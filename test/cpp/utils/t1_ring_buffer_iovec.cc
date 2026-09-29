@@ -5,7 +5,7 @@
 #include <sys/uio.h>
 #include <vector>
 
-#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
+#include <galay/cpp/galay-utils/buffer/ring_buffer.hpp>
 
 static_assert(galay::utils::RingBufferBackendStrategy::Mmap != galay::utils::RingBufferBackendStrategy::Vector);
 static_assert(galay::utils::RingBufferBackendStrategy::Auto != galay::utils::RingBufferBackendStrategy::Mmap);

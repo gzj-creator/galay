@@ -11,6 +11,8 @@
  * API shape as Galay's AsyncUdpSocket benchmark.
  */
 
+#include "../../../common/benchmark_environment.h"
+
 #include <utility>
 #include <boost/asio.hpp>
 #include <boost/asio/experimental/parallel_group.hpp>
@@ -610,6 +612,10 @@ std::string boostVersion()
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     Config config;
     if (!parseConfig(argc, argv, config)) {
         printUsage(argv[0]);

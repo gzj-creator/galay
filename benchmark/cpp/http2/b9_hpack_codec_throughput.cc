@@ -4,6 +4,8 @@
  * @details 单独测量 HPACK encode/decode 吞吐，排除网络 IO 开销
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/protoc/http2_hpack.h>
 #include <chrono>
 #include <iostream>
@@ -115,6 +117,10 @@ BenchResult runBench(int iterations) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     int iterations = 200;
     if (argc > 1) iterations = std::atoi(argv[1]);
 

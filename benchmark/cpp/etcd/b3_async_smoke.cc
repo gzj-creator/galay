@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include "benchmark/cpp/etcd/bench_support.h"
 
 #include <iostream>
@@ -5,6 +7,10 @@
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     galay::etcd::benchmark::AsyncBenchmarkArgs args;
     args.endpoint = argc > 1 ? argv[1] : "http://127.0.0.1:2379";
     args.workers = 1;

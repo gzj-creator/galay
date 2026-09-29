@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-etcd/async/client.h>
 #include <galay/cpp/galay-etcd/cluster/etcd_cluster_client.h>
 
@@ -48,6 +50,10 @@ int64_t parseIterations(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const int64_t iterations = parseIterations(argc, argv);
     uint64_t checksum = 0;
 

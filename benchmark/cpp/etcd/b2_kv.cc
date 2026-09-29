@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include "bench_support.h"
 
 #include <algorithm>
@@ -22,6 +24,10 @@ int parsePositiveInt(const char* value, int fallback)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     galay::etcd::benchmark::AsyncBenchmarkArgs args;
     if (argc > 1) args.endpoint = argv[1];
     if (argc > 2) args.workers = parsePositiveInt(argv[2], args.workers);

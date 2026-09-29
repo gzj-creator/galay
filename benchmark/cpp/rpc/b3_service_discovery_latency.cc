@@ -7,6 +7,8 @@
  * 注意：每个 worker 使用独立的 registry 实例，避免共享状态竞争。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_discovery.h>
 #include <galay/cpp/galay-rpc/utils/runtime_compat.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -73,6 +75,10 @@ Task<void> benchWorker(size_t worker_id) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 

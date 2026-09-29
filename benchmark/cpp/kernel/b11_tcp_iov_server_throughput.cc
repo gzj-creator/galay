@@ -5,6 +5,8 @@
  * 通过条件：服务端可持续承接压测连接并输出统计，停止后干净退出。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <algorithm>
 #include <array>
@@ -186,6 +188,10 @@ void statsThread() {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     uint16_t port = 8081;
     if (argc > 1) {
         port = static_cast<uint16_t>(std::atoi(argv[1]));

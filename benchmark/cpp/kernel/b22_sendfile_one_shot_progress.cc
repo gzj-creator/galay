@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 
 #include <fcntl.h>
@@ -176,6 +178,10 @@ bool runOneIteration()
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     if (!createPatternFile()) {
         return 1;
     }

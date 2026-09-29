@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -29,6 +31,10 @@ size_t parseIterations(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t iterations = parseIterations(argc, argv);
     const std::string valid_sql = "SELECT 1";
     const std::string oversized_sql(MYSQL_MAX_PACKET_SIZE, 'x');

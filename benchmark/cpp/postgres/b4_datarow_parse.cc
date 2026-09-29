@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <algorithm>
 #include <charconv>
 #include <chrono>
@@ -248,6 +250,10 @@ void printUsage(const char* program)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 250000;
     size_t column_count = 12;
     size_t value_size = 64;

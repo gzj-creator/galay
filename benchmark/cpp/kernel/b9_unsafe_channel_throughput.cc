@@ -5,6 +5,8 @@
  * 通过条件：所有测量样本完成并输出统计结果，进程无异常退出。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <atomic>
 #include <chrono>
 #include <vector>
@@ -656,6 +658,10 @@ void benchComparison(int64_t message_count) {
 }
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     LogInfo("=== galay::spsc::UnboundedChannel Benchmark ===");
     LogInfo("role: same-thread / same-scheduler high-performance channel");
     LogInfo("note: galay::mpsc::UnboundedChannel numbers in this benchmark are reference-only because semantics differ");

@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mongo/base/mongo_value.h>
 #include <galay/cpp/galay-mongo/protoc/mongo_protocol.h>
 
@@ -43,6 +45,10 @@ double benchNsPerOp(size_t iterations, Fn&& fn)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t iterations = parseIterations(argc, argv);
 
     size_t invalid_oid_unexpected_success = 0;

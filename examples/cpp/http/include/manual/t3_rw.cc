@@ -11,7 +11,7 @@
 #include <galay/cpp/galay-http/protoc/http_response.h>
 #include <galay/cpp/galay-http/builder/http_builder.h>
 #include <galay/cpp/galay-kernel/async/async_tcp.h>
-#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
+#include <galay/cpp/galay-utils/buffer/ring_buffer.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
 #ifdef USE_KQUEUE

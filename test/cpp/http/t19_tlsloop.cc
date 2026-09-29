@@ -5,7 +5,7 @@
 #include <vector>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include <galay/cpp/galay-utils/cache/bytes.hpp>
+#include <galay/cpp/galay-utils/buffer/bytes.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-ssl/common/error.h>
 

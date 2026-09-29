@@ -35,13 +35,13 @@ namespace galay::utils {
  * @author galay-utils
  * @version 1.0.0
  *
- * @details 提供跨平台的系统工具函数，包括文件操作、环境变量管理、
- *          网络地址解析和系统信息查询。时间相关能力位于 core/time.hpp。
+ * @details 提供跨平台的系统工具函数，包括文件操作、网络地址解析和系统信息查询。
+ *          时间相关能力位于 core/time.hpp，环境变量管理位于 system/env.hpp。
  */
 
 /**
  * @brief 系统工具类
- * @details 提供文件、环境变量、网络和系统信息等静态工具方法。
+ * @details 提供文件、网络和系统信息等静态工具方法。
  */
 class System {
 public:
@@ -260,32 +260,6 @@ public:
 #endif
 
         return result;
-    }
-
-    // Environment functions
-
-    static std::string getEnv(const std::string& name, const std::string& defaultValue = "") {
-        const char* value = std::getenv(name.c_str());
-        return value ? std::string(value) : defaultValue;
-    }
-
-    static bool setEnv(const std::string& name, const std::string& value, bool overwrite = true) {
-#if defined(_WIN32)
-        if (!overwrite && std::getenv(name.c_str()) != nullptr) {
-            return true;
-        }
-        return _putenv_s(name.c_str(), value.c_str()) == 0;
-#else
-        return setenv(name.c_str(), value.c_str(), overwrite ? 1 : 0) == 0;
-#endif
-    }
-
-    static bool unsetEnv(const std::string& name) {
-#if defined(_WIN32)
-        return _putenv_s(name.c_str(), "") == 0;
-#else
-        return unsetenv(name.c_str()) == 0;
-#endif
     }
 
     // Network functions

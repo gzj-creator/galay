@@ -3,6 +3,8 @@
  * @brief 压测 kernel move-only ownership 表面的 clone/move 与 awaitable 构造成本。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/async/async_aio.h>
 #include <galay/cpp/galay-kernel/common/buffer.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
@@ -166,6 +168,10 @@ bool benchTimerAwaitableConstruction(std::size_t iterations)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::size_t iterations = 0;
     if (!parseIterations(argc, argv, iterations)) {
         return 1;

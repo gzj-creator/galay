@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mongo/protoc/crc32c.h>
 
 #include <charconv>
@@ -42,6 +44,10 @@ std::string makePayload(size_t bytes)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 200000;
     if (argc > 1) {
         auto parsed = parsePositiveSize(argv[1], iterations);

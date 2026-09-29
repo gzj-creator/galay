@@ -6,6 +6,8 @@
  * 各阶段的 compiler memory barrier 防止跨阶段常量折叠；不使用 volatile bool
  * 作为不等价的对照。每种 batch 内置一次预热，正式重复由外部 runner 控制。
  */
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/operation_state.hpp>
 
 #include <array>
@@ -83,6 +85,10 @@ bool run()
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "sizeof_state=" << sizeof(OperationState)
               << " alignof_state=" << alignof(OperationState) << " warmup=1\n";
     if (!run<1>() || !run<64>() || !run<1024>()) {

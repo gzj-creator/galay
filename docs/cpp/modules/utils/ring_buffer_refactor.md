@@ -23,7 +23,7 @@
 
 ### 1. 新增 `RingBufferBackendStrategy` 枚举
 
-在 `src/cpp/galay-utils/cache/ring_buffer.hpp` 中：
+在 `src/cpp/galay-utils/buffer/ring_buffer.hpp` 中：
 
 ```cpp
 namespace galay::utils {
@@ -143,7 +143,7 @@ ctest --test-dir build --output-on-failure -R 'utils|kernel'
 ## 关键文件
 
 ### 修改
-- `src/cpp/galay-utils/cache/ring_buffer.hpp` —— 核心接口
+- `src/cpp/galay-utils/buffer/ring_buffer.hpp` —— 核心接口
 - `src/cpp/galay-mysql/async/client.h` —— MySQL client 模板化
 - `src/cpp/galay-redis/async/client.h` —— Redis client 模板化
 - `src/cpp/galay-rpc/kernel/rpc_stream.h` —— RPC stream 模板化

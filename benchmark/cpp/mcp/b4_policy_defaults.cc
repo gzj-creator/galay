@@ -3,6 +3,8 @@
  * @brief MCP生产策略值类型默认构造 smoke benchmark。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mcp/common/mcp_policy.h>
 
 #include <chrono>
@@ -11,6 +13,10 @@
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 1'000'000;
     std::size_t checksum = 0;
 

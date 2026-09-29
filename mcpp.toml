@@ -45,6 +45,11 @@ cxxflags = ["-D_GNU_SOURCE"]
 # @@LIBAIO_* symbols without requiring a shared-link version script.
 kind = "lib"
 
+[targets.test_utils_import]
+kind = "bin"
+main = "test/cpp/utils/t_import_smoke.cc"
+cxxflags = ["-UNDEBUG"]
+
 [targets.example_serde_struct_formats]
 kind = "bin"
 main = "examples/cpp/serde/e1_struct_formats.cc"

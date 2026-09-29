@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/async/async_waiter.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
@@ -106,6 +108,10 @@ Task<void> runPoolBenchmark(IOScheduler* scheduler,
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     auto cfg = mysql_benchmark::loadDbBenchmarkConfig();
     if (!mysql_benchmark::parseArgs(cfg, argc, argv, std::cerr)) {
         mysql_benchmark::printUsage(argv[0]);

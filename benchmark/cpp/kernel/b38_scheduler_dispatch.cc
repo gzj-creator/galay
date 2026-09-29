@@ -1,6 +1,8 @@
 /** @brief 分别测量禁止内联的调用成本、允许优化的派发路径，以及真实 Task 恢复。
  *  类型擦除路径额外包含 kind 判断，不能把与 CRTP 的差额算成 CRTP 成本。
  */
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/scheduler_dispatch.hpp>
 
@@ -316,6 +318,10 @@ void printSummary(const char* name, SampleSummary summary)
 
 int main(int argc, char**)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr size_t kWarmupIterations = 100'000;
     constexpr size_t kDispatchIterations = 4'000'000;
     constexpr size_t kTaskIterations = 200'000;

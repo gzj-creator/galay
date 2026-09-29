@@ -1,3 +1,5 @@
+#include "../../../common/benchmark_environment.h"
+
 // Historical/internal-only fixture. Not a formal competitor baseline; see docs/cpp/modules/kernel/05-性能测试.md.
 /**
  * @file mpsc_paired.cc
@@ -452,6 +454,10 @@ Measurement runUnbounded(const Config& config)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     auto config = parseArguments(argc, argv);
     if (!config) {
         std::cerr << "mpsc paired benchmark argument error: "

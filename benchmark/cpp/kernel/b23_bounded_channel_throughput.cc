@@ -3,6 +3,8 @@
  * @brief 有界 MPMC channel 吞吐、延迟和关闭收尾压测。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/concurrency/mpmc/bounded_channel.h>
 #include <galay/cpp/galay-kernel/concurrency/mpsc/unbounded_channel.h>
 #include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
@@ -380,6 +382,10 @@ void printMpscThroughput(int producerCount)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     printThroughput("bounded", 1, 1, 256);
     printThroughput("bounded", 1, 1, 4096);
     printThroughput("bounded", 4, 1, 256);

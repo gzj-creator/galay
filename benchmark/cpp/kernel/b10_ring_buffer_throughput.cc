@@ -5,6 +5,8 @@
  * 通过条件：各类压测样本均能完成并输出结果，进程返回 0。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <atomic>
 #include <algorithm>
 #include <array>
@@ -404,6 +406,10 @@ void benchNetworkSendSimulation() {
 }
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     LogInfo("========================================");
     LogInfo("RingBuffer Performance Benchmark");
     LogInfo("========================================");

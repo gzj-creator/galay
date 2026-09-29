@@ -3,6 +3,8 @@
  * @brief 测量同步与异步 cluster client 无锁租约池的 acquire/release 吞吐。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-etcd/async/client.h>
 #include <galay/cpp/galay-etcd/cluster/etcd_cluster_client.h>
 
@@ -55,6 +57,10 @@ std::pair<int64_t, size_t> runConcurrentAcquire(
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const long parsed_iterations = argc > 1 ? std::strtol(argv[1], nullptr, 10) : 1'000'000;
     const size_t iterations = parsed_iterations > 0
         ? static_cast<size_t>(parsed_iterations)

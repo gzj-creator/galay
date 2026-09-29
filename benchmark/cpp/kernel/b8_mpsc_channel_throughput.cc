@@ -5,6 +5,8 @@
  * 通过条件：所有压测阶段完成并输出吞吐结果，进程无崩溃、卡死或超时。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <atomic>
 #include <chrono>
@@ -400,6 +402,10 @@ void benchSustained(int duration_sec) {
 }
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     LogInfo("=== galay::mpsc::UnboundedChannel Benchmark ===");
     LogInfo("role: cross-thread MPSC channel, single-consumer correctness path");
     LogInfo("note: use B9-galay::spsc::UnboundedChannel for same-thread/high-performance channel measurements");

@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_conn.h>
 #include <galay/cpp/galay-rpc/kernel/rpc_stream.h>
 #include <galay/cpp/galay-rpc/protoc/rpc_message.h>
@@ -49,6 +51,10 @@ bool viewEquals(RpcPayloadView view, std::string_view expected)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t iterations = argc > 1 ? parseSizeArg(argv, 1, 10000) : 10000;
     const size_t payload_size = argc > 2 ? parseSizeArg(argv, 2, 1024) : 1024;
 

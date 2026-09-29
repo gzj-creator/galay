@@ -8,7 +8,7 @@
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/core/task.h>
-#include <galay/cpp/galay-utils/cache/byte_queue_view.hpp>
+#include <galay/cpp/galay-utils/buffer/byte_queue_view.hpp>
 #include <array>
 #include <atomic>
 #include <cerrno>

@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-tracing/kernel/otlp_http_exporter.h>
 
 #include <chrono>
@@ -49,6 +51,10 @@ std::vector<galay::tracing::Span> makeBatch() {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr int kIterations = 10000;
     auto spans = makeBatch();
 

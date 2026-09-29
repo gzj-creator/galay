@@ -7,6 +7,8 @@
  *   默认: 9080 4 1000 0
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/server/http2_server.h>
 
 #include <atomic>
@@ -68,6 +70,10 @@ void writeFile(const std::filesystem::path& path, size_t size, char fill)
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     uint16_t port = 9080;
     int io_threads = 4;
     uint32_t max_streams = 1000;

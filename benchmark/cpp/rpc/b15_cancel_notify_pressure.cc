@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_channel.h>
 
 #include <charconv>
@@ -29,6 +31,10 @@ std::expected<size_t, const char*> parseSize(const char* text)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t requests = 10000;
     if (argc > 1) {
         auto parsed = parseSize(argv[1]);

@@ -9,6 +9,8 @@
  *   ./benchmark_http_static_server_throughput [port] [io_threads] [file_path]
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/server/http_server.h>
 #include <galay/cpp/galay-http/kernel/http_conn.h>
 #include <galay/cpp/galay-http/protoc/http_request.h>
@@ -89,6 +91,10 @@ Task<void> handleStaticRequest(HttpConn conn) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     uint16_t port = 18081;
     int io_threads = 4;
     g_file_path = "/tmp/galay-http-static-www/ok.txt";

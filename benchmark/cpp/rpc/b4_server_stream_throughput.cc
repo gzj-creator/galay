@@ -3,6 +3,8 @@
  * @brief 真实流式 RPC 压测服务端
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_service.h>
 #include <galay/cpp/galay-rpc/kernel/streamsvc.h>
 #include <galay/cpp/galay-rpc/utils/runtime_compat.h>
@@ -73,6 +75,10 @@ public:
 } // namespace
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 #if defined(SIGPIPE)

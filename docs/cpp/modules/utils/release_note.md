@@ -72,7 +72,7 @@
 
 ### 变更摘要
 
-- 新增 `galay-utils/cache/bytes.hpp`，提供 header-only `Bytes` 仅移动字节容器和 `ByteMetaData` 原始字节元数据
+- 新增 `galay-utils/buffer/bytes.hpp`，提供 header-only `Bytes` 仅移动字节容器和 `ByteMetaData` 原始字节元数据
 - `Bytes` 支持 owning 深拷贝构造、non-owning `fromString` / `fromCString` 视图、移动语义、字符串转换和字节内容比较
 - 新增 `mallocBytes`、`deepCopyBytes`、`reallocBytes`、`clearBytes`、`freeBytes` 辅助函数，便于 kernel 等下游复用统一字节元数据
 - 将 `Bytes` 接入 umbrella header 与 C++23 module facade，补充 buffer 测试和模块导入烟测

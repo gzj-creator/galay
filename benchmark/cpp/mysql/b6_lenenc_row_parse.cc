@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <chrono>
 #include <cstdint>
 #include <cstdlib>
@@ -157,6 +159,10 @@ void printRate(const char* label, const BenchResult& result, size_t operations)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t iterations = parseSizeArg(argc, argv, 1, 100000);
     const size_t column_count = parseSizeArg(argc, argv, 2, 10);
     const size_t value_size = parseSizeArg(argc, argv, 3, 64);

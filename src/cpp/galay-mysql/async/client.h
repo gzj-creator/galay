@@ -21,7 +21,7 @@
 #include "../../galay-kernel/core/timeout.hpp"
 #include "../../galay-kernel/common/host.hpp"
 #include "../../galay-kernel/common/error.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 #include <memory>
 #include <string>
 #include <string_view>

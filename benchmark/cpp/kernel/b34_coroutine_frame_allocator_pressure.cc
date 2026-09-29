@@ -3,6 +3,8 @@
  * @brief 固定尺寸协程 frame recycler 压力与 direct allocation 基线。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include "benchmark/cpp/common/micro_measurement.h"
@@ -321,6 +323,10 @@ bool measureRetainedMemory(std::size_t retainedTasks) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     galay::benchmark::MicroOptions options;
     if (!galay::benchmark::parseMicroOptions(argc, argv, options)) { return 1; }
     using Measure = Measurement (*)(std::size_t);

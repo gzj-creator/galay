@@ -4,6 +4,8 @@
  * @details 提供 keep-alive 的 200 OK 文本响应，用于与 Go/Rust HTTPS 服务横向对比
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/server/http_server.h>
 #include <galay/cpp/galay-http/protoc/http_request.h>
 #include <chrono>
@@ -56,6 +58,10 @@ Task<void> handleHttpsRequest(HttpConnImpl<galay::ssl::SslSocket> conn) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
 
     uint16_t port = 9444;
     int io_threads = 4;
@@ -113,6 +119,10 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "SSL support is not enabled.\n";
     std::cout << "Rebuild with -DGALAY_BUILD_SSL=ON\n";
     return 0;

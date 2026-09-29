@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-tracing/context/context_storage.h>
 #include <galay/cpp/galay-tracing/kernel/span_guard.h>
 
@@ -131,6 +133,10 @@ double measureChildSpanNs(bool sampled, galay::tracing::SpanTimingPolicy timingP
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "B3-SpanScope workload=20000 build=" << buildType() << " backend=core"
               << " subscriber_like_noop_ns_per_scope=" << measureSubscriberLikeNoopNs()
               << " span_id_random_ns=" << measureSpanIdRandomNs()

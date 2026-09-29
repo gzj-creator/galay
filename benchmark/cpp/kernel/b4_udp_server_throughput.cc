@@ -5,6 +5,8 @@
  * 通过条件：服务端可持续响应压测流量并输出统计，停止后干净退出。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <cstring>
 #include <atomic>
@@ -146,6 +148,10 @@ void statsReporter() {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         std::cout << "Usage: " << argv[0] << " [port]\n";
         return 0;

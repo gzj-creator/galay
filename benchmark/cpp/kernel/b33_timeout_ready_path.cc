@@ -3,6 +3,8 @@
  * @brief 对比 timeout 包装器 ready 快路径与真正挂起路径的固定开销。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 
 #include <chrono>
@@ -64,6 +66,10 @@ void benchEagerTimerControl() {
 }  // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     benchEagerTimerControl();
     if (!benchReadyPath()) {
         return 1;

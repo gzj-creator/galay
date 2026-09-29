@@ -3,6 +3,8 @@
  * @brief WebSocket 客户端压测程序
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <string>
 #include <atomic>
@@ -244,6 +246,10 @@ void printStats(const std::chrono::steady_clock::time_point& start_time,
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     // 压测默认关闭日志，避免日志 IO 成为吞吐瓶颈。
     // 设置 GALAY_HTTP_BENCH_LOG=1 可开启文件日志。
     const char* bench_log = std::getenv("GALAY_HTTP_BENCH_LOG");

@@ -14,7 +14,7 @@
 
 #include "../protoc/rpc_error.h"
 #include "../../galay-kernel/core/awaitable.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 
 #include <array>
 #include <expected>

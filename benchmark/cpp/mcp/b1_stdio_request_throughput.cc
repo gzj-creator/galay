@@ -4,6 +4,8 @@
  * @details 测试基于标准输入输出的MCP协议性能，包括吞吐量、延迟等指标
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mcp/v1/client/client.h>
 #include <galay/cpp/galay-mcp/v1/server/stdio_server.h>
 #include <iostream>
@@ -261,6 +263,10 @@ void printSystemInfo() {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     printSystemInfo();
 
     std::cerr << "\n=== Stdio MCP Performance Benchmark ===" << std::endl;

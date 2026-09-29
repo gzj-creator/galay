@@ -7,7 +7,7 @@
 #include "../protoc/builder.h"
 #include "../protoc/postgres_auth.h"
 #include "../protoc/postgres_protocol.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 
 #include <cstdint>
 #include <expected>

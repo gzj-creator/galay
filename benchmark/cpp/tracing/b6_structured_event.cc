@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-tracing/log/logger.h>
 #include <galay/cpp/galay-tracing/log/log_sink.h>
 
@@ -234,6 +236,10 @@ double measureLoggerFallbackNs(std::size_t& writes) {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::size_t writes = 0;
     std::size_t fields = 0;
     const double disabled = measureDisabledNs();

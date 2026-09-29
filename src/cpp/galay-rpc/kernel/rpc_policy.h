@@ -14,8 +14,8 @@
 #include "rpc_call.h"
 #include "../protoc/rpc_error.h"
 #include "../../galay-kernel/common/sleep.hpp"
-#include "../../galay-utils/tool/circuit_breaker.hpp"
-#include "../../galay-utils/tool/rate_limiter.hpp"
+#include "../../galay-utils/resilience/circuit_breaker.hpp"
+#include "../../galay-utils/resilience/rate_limiter.hpp"
 
 #include <algorithm>
 #include <atomic>

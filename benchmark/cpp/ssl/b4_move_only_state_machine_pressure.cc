@@ -8,6 +8,8 @@
  * - SslStateMachineAwaitable: 地址稳定类型，仅做构造压力，不做 move
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-ssl/async/awaitable.h>
 #include <charconv>
 #include <chrono>
@@ -137,6 +139,10 @@ void runAwaitableConstructPressure(size_t iterations, size_t local_nodes, BenchM
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     if (argc == 2 && std::string_view(argv[1]) == "--help") {
         printUsage(argv[0]);
         return 0;

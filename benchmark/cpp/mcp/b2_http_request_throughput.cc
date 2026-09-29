@@ -4,6 +4,8 @@
  * @details Use multiple connections and concurrent requests to measure throughput and latency.
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mcp/v1/client/client.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -349,6 +351,10 @@ static void printUsage(const char* prog) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::string url = "http://127.0.0.1:8080/mcp";
     size_t connections = 8;
     size_t requestsPerConn = 2000;

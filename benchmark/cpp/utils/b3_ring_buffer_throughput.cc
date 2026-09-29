@@ -1,4 +1,6 @@
-#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
+#include "../common/benchmark_environment.h"
+
+#include <galay/cpp/galay-utils/buffer/ring_buffer.hpp>
 
 #include <algorithm>
 #include <array>
@@ -78,6 +80,10 @@ void benchWrappedIovec(std::size_t capacity, std::size_t iterations) {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t capacity = 64 * 1024;
     constexpr std::size_t chunk = 1024;
     constexpr std::size_t iterations = 5'000'000;

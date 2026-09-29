@@ -3,6 +3,8 @@
  * @brief H2 (HTTP/2 over TLS) Echo 服务器压测程序
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/server/http2_server.h>
 #include <iostream>
 #include <csignal>
@@ -237,6 +239,10 @@ Task<void> handleStream(Http2Stream::ptr stream) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     uint16_t port = 9443;
     int io_threads = 4;
     std::string cert_path = "../cert/test.crt";
@@ -347,6 +353,10 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "SSL support is not enabled.\n";
     std::cout << "Rebuild with -DGALAY_BUILD_SSL=ON\n";
     return 0;

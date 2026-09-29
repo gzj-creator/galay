@@ -3,6 +3,8 @@
  * @brief 测量反向链上的无分配并行图验证性能。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/parallel/parallel.h>
 
@@ -46,6 +48,10 @@ Task<void> validateReverseChain(std::size_t node_count,
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(0)
         // 让链始终在一个 worker 上执行，使测量反映图验证本身，而不是跨线程

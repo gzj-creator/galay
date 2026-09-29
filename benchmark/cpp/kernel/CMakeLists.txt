@@ -41,10 +41,10 @@ if(GALAY_BOOST_ASIO_INCLUDE_DIR)
         compare/boost-asio-coro/boost_asio_coro_tcp.cc
     )
     target_include_directories(benchmark_kernel_compare_boost_asio_coro_udp
-        PRIVATE ${GALAY_BOOST_ASIO_INCLUDE_DIR}
+        PRIVATE ${GALAY_BOOST_ASIO_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/include
     )
     target_include_directories(benchmark_kernel_compare_boost_asio_coro_tcp
-        PRIVATE ${GALAY_BOOST_ASIO_INCLUDE_DIR}
+        PRIVATE ${GALAY_BOOST_ASIO_INCLUDE_DIR} ${CMAKE_BINARY_DIR}/include
     )
     target_compile_definitions(benchmark_kernel_compare_boost_asio_coro_udp
         PRIVATE BOOST_ERROR_CODE_HEADER_ONLY=1 BOOST_SYSTEM_NO_DEPRECATED=1

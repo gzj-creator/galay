@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_connection_pool.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 
@@ -74,6 +76,10 @@ Task<void> runEndpointSwitching(size_t operations, size_t endpoint_count, Result
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t operations = argc > 1 ? static_cast<size_t>(std::stoull(argv[1])) : 200000;
     const size_t endpoint_count = argc > 2 ? static_cast<size_t>(std::stoull(argv[2])) : 64;
     if (endpoint_count == 0 || endpoint_count > 512) {

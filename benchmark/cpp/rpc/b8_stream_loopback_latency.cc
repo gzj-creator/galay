@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_client.h>
 #include <galay/cpp/galay-rpc/kernel/rpc_service.h>
 #include <galay/cpp/galay-rpc/kernel/streamsvc.h>
@@ -183,6 +185,10 @@ Config parseArgs(int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     Config config = parseArgs(argc, argv);
     auto server = RpcStreamServerBuilder()
         .host("127.0.0.1")

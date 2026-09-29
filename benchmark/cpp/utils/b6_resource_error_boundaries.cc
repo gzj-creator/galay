@@ -1,6 +1,8 @@
-#include <galay/cpp/galay-utils/cache/bytes.hpp>
+#include "../common/benchmark_environment.h"
+
+#include <galay/cpp/galay-utils/buffer/bytes.hpp>
 #include <galay/cpp/galay-utils/encoding/base64.hpp>
-#include <galay/cpp/galay-utils/tool/pool.hpp>
+#include <galay/cpp/galay-utils/concurrency/pool.hpp>
 
 #include <chrono>
 #include <iomanip>
@@ -41,6 +43,10 @@ void measure(const std::string& name, std::size_t iterations, Fn&& fn)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 200'000;
     const std::string base64Payload(1024, 'x');
     const std::string base64Encoded = galay::utils::Base64Util::Base64Encode(base64Payload);

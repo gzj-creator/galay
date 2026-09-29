@@ -3,6 +3,8 @@
  * @brief 衡量 Host 校验和 bind 参数错误快路径成本。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/async/async_udp.h>
 
@@ -50,6 +52,10 @@ std::size_t requireParamInvalid(const std::expected<void, galay::kernel::IOError
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 100'000;
 
     std::cout << "Kernel Host validation benchmark\n";

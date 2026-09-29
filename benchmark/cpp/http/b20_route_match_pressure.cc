@@ -6,6 +6,8 @@
  *   ./benchmark_http_route_match_pressure [iterations]
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/server/http_router.h>
 
 #include <array>
@@ -67,6 +69,10 @@ bool runBench(const char* name, size_t iterations, Func&& func)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 1000000;
     if (argc > 1) {
         const long requested = std::strtol(argv[1], nullptr, 10);

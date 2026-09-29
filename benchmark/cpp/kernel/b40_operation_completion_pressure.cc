@@ -5,6 +5,8 @@
  * 使用已有非拥有 C resume hook 计数，不运行网络或 scheduler，也不声称测量
  * accept 吞吐。固定栈上存储；batch=64/1024、每场景 1M 次、内置一次预热。
  */
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/operation_completion.hpp>
 
 #include <array>
@@ -105,6 +107,10 @@ bool run()
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "sizeof_completion=" << sizeof(OperationCompletion<std::uint64_t>)
               << " warmup=1\n";
     if (!run<64>() || !run<1024>()) {

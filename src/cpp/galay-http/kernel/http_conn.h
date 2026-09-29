@@ -14,7 +14,7 @@
 #include "http_reader.h"
 #include "http_writer.h"
 #include "../../galay-kernel/async/async_tcp.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 
 namespace galay::websocket {
     template<typename SocketType>

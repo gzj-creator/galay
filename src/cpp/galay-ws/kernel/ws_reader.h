@@ -17,8 +17,8 @@
 #include "../protoc/ws_error.h"
 #include "../protoc/ws_frame.h"
 #include "../../galay-kernel/async/async_tcp.h"
-#include "../../galay-utils/cache/bytes.hpp"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/bytes.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 #include "../../galay-kernel/core/awaitable.h"
 #include <expected>
 #include <limits>

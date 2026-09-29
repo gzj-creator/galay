@@ -3,6 +3,8 @@
  * @brief 测量 ParallelScheduler 连续恢复和 IO scheduler 批量恢复搬运成本。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 #include <galay/cpp/galay-kernel/core/waker.h>
@@ -135,6 +137,10 @@ bool reportIOResumeDrain(size_t iterations) {
 } // namespace
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     galay::benchmark::MicroOptions options;
     if (!galay::benchmark::parseMicroOptions(argc, argv, options) || options.diagnostics ||
         (!options.sample.empty() && options.sample != "parallel" && options.sample != "io_1" &&

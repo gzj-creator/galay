@@ -16,7 +16,7 @@
 #include "../../galay-kernel/async/async_tcp.h"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/task.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 #include <algorithm>
 #include <array>
 #include <cstring>

@@ -3,6 +3,8 @@
  * @brief 测量 ResumeToken-backed Waker 的 hook 请求与拷贝成本。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/parallel/parallel_scheduler.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
 
@@ -68,6 +70,10 @@ double elapsedOpsPerSecond(std::chrono::steady_clock::time_point start,
 }  // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     ParallelScheduler scheduler;
     FakeResumeTokenState wake_only{.owner = &scheduler};
     {

@@ -6,6 +6,8 @@
  *   benchmark_kernel_coroutine_task_scale [count] [churn|live]
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/task.h>
 
 #include <chrono>
@@ -88,6 +90,10 @@ bool runLive(std::size_t count) {
 }  // namespace
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const std::size_t count = argc > 1
         ? std::strtoull(argv[1], nullptr, 10)
         : 1'000'000;

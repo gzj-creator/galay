@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include "common/config.h"
 
 #include <galay/cpp/galay-postgres/sync/postgres_client.h>
@@ -134,6 +136,10 @@ double percentileMs(const std::vector<uint64_t>& sorted_samples, double fraction
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     auto config = postgres_benchmark::loadConfig();
     if (!postgres_benchmark::parseArgs(config, argc, argv)) {
         postgres_benchmark::printUsage(argv[0]);

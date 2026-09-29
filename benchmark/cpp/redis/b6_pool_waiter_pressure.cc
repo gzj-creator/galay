@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-redis/async/conn_pool_waiter_state.h>
 
 #include <atomic>
@@ -50,6 +52,10 @@ Counts runPressure()
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const auto start = std::chrono::steady_clock::now();
     const Counts counts = runPressure();
     const auto elapsed = std::chrono::steady_clock::now() - start;

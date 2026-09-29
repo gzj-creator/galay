@@ -29,7 +29,7 @@
 #include <sys/uio.h>
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include "../../galay-utils/cache/bytes.hpp"
+#include "../../galay-utils/buffer/bytes.hpp"
 #include "../../galay-ssl/async/ssl_await.h"
 #include "../../galay-ssl/async/ssl_socket.h"
 #endif

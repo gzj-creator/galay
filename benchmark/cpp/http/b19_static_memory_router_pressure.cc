@@ -8,6 +8,8 @@
  *   ./benchmark_http_static_memory_router_pressure [requests] [concurrency] [file_kib]
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
@@ -345,6 +347,10 @@ bool cleanupDirectory(const std::string& dir)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t total_requests = 128;
     size_t concurrency = 8;
     size_t file_kib = 256;

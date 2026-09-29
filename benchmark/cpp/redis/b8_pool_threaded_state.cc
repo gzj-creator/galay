@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <atomic>
 #include <chrono>
 #include <expected>
@@ -157,6 +159,10 @@ Task<void> runBenchmark(IOScheduler** schedulers,
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     Runtime runtime = RuntimeBuilder()
         .ioSchedulerCount(kSchedulerCount)
         .parallelSchedulerCount(0)

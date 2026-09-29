@@ -5,6 +5,8 @@
  * 通过条件：所有测量轮次正常完成并输出统计结果，进程返回 0。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <atomic>
 #include <chrono>
@@ -418,6 +420,10 @@ void runIOUringBenchmark(const BenchConfig& config) {
 #endif
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     // 注册信号处理
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);

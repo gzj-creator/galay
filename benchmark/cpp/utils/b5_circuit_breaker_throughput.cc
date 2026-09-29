@@ -1,4 +1,6 @@
-#include <galay/cpp/galay-utils/tool/circuit_breaker.hpp>
+#include "../common/benchmark_environment.h"
+
+#include <galay/cpp/galay-utils/resilience/circuit_breaker.hpp>
 
 #include <algorithm>
 #include <chrono>
@@ -94,6 +96,10 @@ Result measureConcurrent(std::string name,
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 5'000'000;
     const std::size_t hardwareThreads = std::max(2u, std::thread::hardware_concurrency());
     const std::size_t threadCount = static_cast<std::size_t>(hardwareThreads);

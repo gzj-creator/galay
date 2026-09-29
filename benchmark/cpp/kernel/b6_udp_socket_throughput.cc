@@ -5,6 +5,8 @@
  * 通过条件：预热与正式压测都能完成，输出结果且进程无异常退出。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <cstring>
 #include <atomic>
@@ -483,6 +485,10 @@ void printBenchmarkResults(std::chrono::steady_clock::time_point measurement_sta
 }
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     LogInfo("UDP Socket Benchmark Test (Optimized)");
     LogInfo("Configuration: {} clients, {} workers, {} bytes/message, warmup {} seconds, duration {} seconds",
             NUM_CLIENTS, NUM_SERVER_WORKERS, MESSAGE_SIZE, WARMUP_DURATION_SEC,

@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-redis/async/client.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
@@ -167,6 +169,10 @@ Task<void> benchmarkPipeline(IOScheduler* scheduler, int client_id, int batch_si
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     // 默认参数
     int num_clients = 10;
     int operations_per_client = 100;

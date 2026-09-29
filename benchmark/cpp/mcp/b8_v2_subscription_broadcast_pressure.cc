@@ -3,6 +3,8 @@
  * @brief Real SSE subscription broadcast pressure benchmark.
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-mcp/v2/client/client.h>
 #include <galay/cpp/galay-mcp/v2/server/http_server.h>
@@ -49,6 +51,10 @@ uint16_t pickPort()
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::size_t iterations = 200'000;
     if (argc > 1) {
         const std::string_view text(argv[1]);

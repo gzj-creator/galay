@@ -3,6 +3,8 @@
  * @brief 采集 ReadyEntry ready queue 下跨线程唤醒 C++ Task 的延迟分布。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/core/task.h>
 #include <galay/cpp/galay-kernel/core/waker.h>
@@ -198,6 +200,10 @@ bool runSamples(IOScheduler* scheduler,
 }  // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
 #if defined(USE_KQUEUE)
     constexpr const char* backend = "kqueue";
 #elif defined(USE_EPOLL)

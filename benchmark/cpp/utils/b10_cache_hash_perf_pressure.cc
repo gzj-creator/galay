@@ -6,6 +6,8 @@
  *   ./benchmark_utils_cache_hash_perf_pressure [iterations] [threads]
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-utils/algorithm/consistent_hash.hpp>
 
 #include <array>
@@ -158,6 +160,10 @@ bool runConsistentHashLookup(size_t iterations, size_t thread_count)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 200000;
     size_t thread_count = 4;
     if (argc > 1) {

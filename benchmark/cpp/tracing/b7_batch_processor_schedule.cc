@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-tracing/kernel/batch_span_processor.h>
 
 #include <atomic>
@@ -230,6 +232,10 @@ void runShutdownTimeoutPressure() {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     runSchedule(galay::tracing::BatchSpanScheduleMode::kTimed);
     runSchedule(galay::tracing::BatchSpanScheduleMode::kOnEnd);
     runSchedule(galay::tracing::BatchSpanScheduleMode::kBatchSize);

@@ -13,6 +13,8 @@
 
 ### Added
 
+- **新增独立 Env 环境变量接口**：以 std::expected 显式返回读写与删除结果，区分缺失变量和空值，校验非法名称及嵌入 NUL，保留系统错误码和读取快照语义。
+- **新增 Performance CPU / NUMA 控制接口**：读取与设置当前线程 CPU 亲和性、允许内存节点及 default/bind/interleave 策略，回读实际生效集合，保留 errno；不支持的平台明确返回错误。
 - **建立可校准的成对性能测量门禁**：B28/B34 支持独立预热、单项校准及冻结迭代数；测量脚本记录平衡随机 A/B 次序、成对比值与 Student-t 95% 置信区间、CPU/RSS 和环境快照。B41 增加 connect、就绪确认、立即 accept 分项及原生 socket 对照，保留原完整生命周期门禁。
 - **补充测量与协程生命周期回归**：测量脚本扩展至 12 项测试；新增 T194，覆盖初始挂起、未提交/挂起/完成销毁、frame/TaskState 分配失败、内联/堆结果及跨线程最终释放。
 - **完成 H2 PGO 告警诊断和恢复完整采样**：增加 50 行复现与 T97 所有权边界检查，确认指定对齐指针调用链的借用冷分支告警不可达；保留告警与严格 profile 校验，三变体各 13 项回归、3 项 ASan 及各 5 轮四场景测量通过，性能仍有回退，不更改默认优化选项。
@@ -29,6 +31,9 @@
 
 ### Changed
 
+- **按职责重组 galay-utils 公开目录**：系统接口统一到 system，字节与环形缓冲归入 buffer，并发工具归入 concurrency，限流和熔断归入 resilience；MurmurHash3 与负载选择归入 algorithm，Huffman 归入 encoding，cache 保留 LRU。同步所有调用方、总头、模块导出、示例、文档及安装检查，不保留旧路径转发头。
+- **收敛环境变量职责**：移除 System 的 getEnv/setEnv/unsetEnv，统一使用 system/env.hpp 中的 Env；config/env.hpp 继续负责 .env 文件解析。
+- **统一 C++ benchmark 启动环境**：通过 GALAY_BENCH_CPUS 和 GALAY_BENCH_NUMA 控制继承 CPU 集合与内存策略，启动时校验边界及回读结果，工作线程按选定 CPU 集合放置；请求无法生效时明确失败退出。
 - **收敛 IO 调度器的 CRTP 特化边界**：各配置共享对应后端的真实基类，事件循环由每个 `Config` 独立特化收敛为每后端一份；保留后端级非虚静态分派，配置模板只负责提供构造容量，不将此调整视为配置级特化或性能完全等价。
 - **归档 HTTP/kqueue listener 关闭的探索性实现**：HTTP stop 在停止 Runtime 前向 IO owner 提交 listener close 并等待任务；kqueue close 冻结旧 accept 的关闭结果、取消 timer 并唤醒。仅保存已有工作区实现，其同步等待、错误路径和完成协议仍待后续门禁验证，不视为生产 Runtime drain 或 kqueue typed completion 完成。
 - **epoll/io_uring 单次 accept 接入 typed completion**：ready、timeout、close、owner stop 和提交失败共享唯一完成裁决，恢复前解除 controller slot、timer 和 frame 借用，`await_resume()` 仅消费已冻结结果；删除旧 io_uring accept 结果 gate 和恢复路径。
@@ -63,6 +68,7 @@
 
 ### Chore
 
+- 环境控制与目录调整已通过 utils 23/23、安装布局检查、14 个迁移头文件独立编译、13 个下游 C++ 库及 6 个相关压测目标构建；mcpp 使用 LLVM 22.1.8 完成 SSL feature 构建，utils 导入及三个 SSL/epoll 回归程序通过。全仓其余 10 个模块的 prelude 既存漂移经迁移前副本对照确认，本次未新增漂移。
 - 新增 T195 epoll 注册生命周期和 T16 SSL socket 移动回归，接入 mcpp 的 SSL 移动、并发握手及 epoll 注册测试目标；LLVM 22.1.8 模块构建与三个回归程序通过。
 - **独立清理 H3 的 26 项阻塞风格问题**：补齐 E13 import 示例，迁移编号化腾讯脚本和 prelude 生成器，删除 Linux verifier 兼容入口，修正已有测试白名单路径并编号断言测试；同步调用方、增加 5 项回归，最终 19 项定向 CTest 与两种 E13 Release 示例通过，保留非阻塞建议；文档保留验证结论，19 份原始日志不纳入提交历史。
 - 本轮修复已验证 io_uring 完整内核库构建、相关定向回归及 HTTP 静态文件读取，epoll 文件 IO/RAII 回归通过；尚未验证原生 kqueue 或全量测试，T189/T191 中直接移动不可移动 `IOController` 的既有测试用法仍待处理，未新增性能等价结论。
@@ -71,6 +77,7 @@
 
 ### Docs
 
+- 补充 CPU / NUMA 配置、线程继承、首次触碰与平台限制说明，更新工具目录职责及 Env API 使用文档；记录功能验收与性能验收的边界。
 - **提炼 H3 与 K0–K2 验证摘要**：按两个独立协议分别记录各 10 对 A/A 的几何均值、置信区间和正确性结论；两次本地提交经重写排除 1,628 份原始产物，后续输出使用已忽略的 `benchmark-results/`。两批完整精度门禁均未通过；K1 虽消除 LTO 成功入队后的三次空清理，但未满足采用条件，K2 最小候选未消除额外 actor 调用并被否决。生产源码保持基线，K0/K1/K2 性能验收及 K3–K7 保持未完成，不宣称性能收益。
 - 将本次异步操作重构的 916 个原始证据文件纳入版本控制，保留全部红绿日志、失败/skip、B41 样本、分析脚本、反汇编和隔离 before 源码归档；附索引与 SHA-256 清单，排除四个 ELF 构建产物，不改变现有门禁结论。
 - 新增异步操作取消设计与执行计划，记录所有权契约、实际红绿测试、GCC/LLVM 与 sanitizer/module 验证、隔离 B41 七轮 before/after 及分配审计；明确 awaiter/frame 增长成本，Step 3 整体仍为 NO-GO，生产 Runtime drain、累计性能与内存等门禁未完成，HTTP/connect 未开放。

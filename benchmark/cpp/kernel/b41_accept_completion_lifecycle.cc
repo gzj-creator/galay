@@ -3,6 +3,8 @@
  *  B3 connect-only 的一秒采样窗口不能测量短 accept 吞吐，本入口计时到实际恢复。
  *  同步客户端和清理只运行于 benchmark driver，协程只执行异步 accept。
  */
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/core/awaitable.h>
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
 #include <algorithm>
@@ -289,6 +291,10 @@ bool measure(size_t width, size_t rounds, bool components = false, bool native =
 #endif
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
 #if defined(USE_EPOLL) || defined(USE_IOURING)
     const bool components = argc > 1 && std::string_view(argv[1]) == "--components";
     const bool native = components && argc > 2 && std::string_view(argv[2]) == "socket";

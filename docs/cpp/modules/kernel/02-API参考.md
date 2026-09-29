@@ -62,7 +62,7 @@
   - `galay-kernel/common/sleep.hpp`
   - `galay-kernel/common/buffer.h`
   - `galay-kernel/common/file_descriptor.h`
-  - `galay-utils/cache/byte_queue_view.hpp`
+  - `galay-utils/buffer/byte_queue_view.hpp`
   - `galay-kernel/common/error.h`
 - 并发：
   - `galay-kernel/async/async_mutex.h`
@@ -129,7 +129,7 @@
 
 - `galay-kernel/common/host.hpp`
 - `galay-kernel/common/error.h`
-- `galay-utils/cache/bytes.hpp`
+- `galay-utils/buffer/bytes.hpp`
 - `galay-kernel/common/buffer.h`
 
 `IPType` / `Host`：
@@ -237,7 +237,7 @@
 
 语义说明：
 
-- `Bytes`、`ByteMetaData` 与辅助函数由 `galay-utils/cache/bytes.hpp` 提供，`galay-kernel` 不再保留本地 `bytes.h` / `bytes.cc`
+- `Bytes`、`ByteMetaData` 与辅助函数由 `galay-utils/buffer/bytes.hpp` 提供，`galay-kernel` 不再保留本地 `bytes.h` / `bytes.cc`
 - `ByteMetaData` 是公开可见但偏底层的原始缓冲描述结构；业务代码更推荐优先使用 `Bytes` / `Buffer`
 - `mallocBytes(...)` 分配容量并把 `size` 初始化为 `0`
 - `deepCopyBytes(...)` 会按源对象的 `capacity` 分配并复制已有 `size`
@@ -277,7 +277,7 @@
 
 - `Buffer` 是 owning 动态缓冲区；`resize(...)` 最终调用 `reallocBytes(...)`，缩容时可能截断已有 `length()`
 - `Buffer::clear()` 会把已有容量区间清零，但保留已分配容量，适合重复复用
-- `RingBuffer` 由 `galay-utils/cache/ring_buffer.hpp` 提供，`galay-kernel` 只在 `common/buffer.h` 中保留 `galay::kernel::RingBuffer` using 入口
+- `RingBuffer` 由 `galay-utils/buffer/ring_buffer.hpp` 提供，`galay-kernel` 只在 `common/buffer.h` 中保留 `galay::kernel::RingBuffer` using 入口
 - `RingBuffer` 是固定容量、不会自动扩容的环形缓冲；写满后 `tryWriteBatch(...)` / `produce(...)` 只会推进可容纳的那部分字节
 - `getWriteIovecs(...)` / `getReadIovecs(...)` 最多返回两段连续内存，专门服务 `readv` / `writev`
 - `consume(...)` 在把可读数据完全耗尽后，会把读写指针都重置到 `0`
@@ -430,7 +430,7 @@
 头文件：
 
 - `galay-kernel/core/awaitable.h`
-- `galay-utils/cache/byte_queue_view.hpp`
+- `galay-utils/buffer/byte_queue_view.hpp`
 
 公开类型：
 
@@ -454,7 +454,7 @@
 - 复杂双向协议、读写切换或 handshake/shutdown 状态推进优先用 `AwaitableBuilder::fromStateMachine(...)` 或直接 `StateMachineAwaitable<MachineT>`
 - 需要显式持有步骤对象、跨步骤共享状态或自定义 re-arm 路径时使用 `SequenceAwaitable + SequenceStep`
 - 协议解析优先使用 `AwaitableBuilder::parse(...)`，parse handler 返回 `ParseStatus`
-- `ByteQueueView` 由 `galay-utils/cache/byte_queue_view.hpp` 提供，`galay-kernel` 不再保留本地 `queue_view.h`
+- `ByteQueueView` 由 `galay-utils/buffer/byte_queue_view.hpp` 提供，`galay-kernel` 不再保留本地 `queue_view.h`
 - 链式 `AwaitableBuilder` 的 `build()` 现在返回 machine-backed awaitable，并与 `fromStateMachine(...)` 共享同一套状态机驱动
 
 自定义 awaitable 的最小扩展面：

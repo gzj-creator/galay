@@ -9,6 +9,8 @@
  * 4. BM_HeaderLookup_Common - 常见 header 查询性能（O(1) vs O(log n)）
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/protoc/http_header.h>
 #include <chrono>
 #include <iostream>
@@ -287,6 +289,10 @@ void BM_ParseResponseHeaders() {
 }
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     printHeader();
 
     std::cout << "\n[Phase 1: Parsing Performance - Fast-path vs Slow-path]\n" << std::endl;

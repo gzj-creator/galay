@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include "common/bench_common.h"
 #include <galay/cpp/galay-mongo/async/client.h>
 #include <galay/cpp/galay-mongo/protoc/builder.h>
@@ -314,6 +316,10 @@ Task<void> runWorker(IOScheduler* scheduler,
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     if (argc > 1 && (std::string(argv[1]) == "-h" || std::string(argv[1]) == "--help")) {
         mongo_bench::printUsage(argv[0]);
         std::cout << "Async extra: --fanout=N or env GALAY_MONGO_BENCH_ASYNC_FANOUT (default 1)\n";

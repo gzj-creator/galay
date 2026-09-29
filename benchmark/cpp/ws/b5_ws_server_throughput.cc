@@ -5,6 +5,8 @@
  * @usage benchmark_ws_ws_server_throughput [port] [io_threads] [nodelay:on|off]
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/server/http_server.h>
 #include <galay/cpp/galay-ws/server/ws_upgrade.h>
 #include <galay/cpp/galay-ws/kernel/ws_conn.h>
@@ -152,6 +154,10 @@ Task<void> handleHttpRequest(HttpConn conn) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     // 压测默认关闭日志，避免日志 IO 成为吞吐瓶颈。
     // 设置 GALAY_HTTP_BENCH_LOG=1 可开启文件日志。
     const char* bench_log = std::getenv("GALAY_HTTP_BENCH_LOG");

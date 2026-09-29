@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-redis/protoc/redis_protocol.h>
 
 #include <algorithm>
@@ -145,6 +147,10 @@ bool runScenario(const char* name,
 
 int main(int argc, char* argv[])
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t iterations = 1000000;
     size_t bulk_payload_size = 64;
 

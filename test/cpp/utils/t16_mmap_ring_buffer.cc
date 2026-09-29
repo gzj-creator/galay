@@ -6,7 +6,7 @@
 #include <string_view>
 #include <vector>
 
-#include <galay/cpp/galay-utils/cache/ring_buffer.hpp>
+#include <galay/cpp/galay-utils/buffer/ring_buffer.hpp>
 
 #if defined(__unix__) || defined(__APPLE__)
 #include <sys/uio.h>

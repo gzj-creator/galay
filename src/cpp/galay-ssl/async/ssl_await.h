@@ -19,7 +19,7 @@
 #define GALAY_SSL_AWAIT_H
 
 #include "../common/error.h"
-#include "../../galay-utils/cache/bytes.hpp"
+#include "../../galay-utils/buffer/bytes.hpp"
 #include "../../galay-kernel/core/awaitable.h"
 #include "../../galay-kernel/core/timeout.hpp"
 #include <concepts>

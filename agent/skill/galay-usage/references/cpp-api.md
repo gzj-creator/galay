@@ -57,22 +57,24 @@ Task<void> echoServer() {
 - **文档**: `docs/cpp/modules/kernel/`（协程 11、网络IO 12、文件IO 13、并发 14、定时器 15、环形缓冲 16、Runtime 18、异步同步原语 20）
 
 ### galay-utils
-- **用途**: 无依赖头文件工具集——字符串/时间/随机、缓存（LRU/环形缓冲）、编码（Base64）、加密（SHA1/SHA256/MD5/HMAC/PBKDF2/MurmurHash3）、算法（一致性哈希/布隆过滤器/Trie/Huffman/MVCC）、限流/熔断/负载均衡、配置解析。
+- **用途**: 通用工具集——字符串/时间/随机、系统接口、LRU 缓存、字节与环形缓冲、并发工具、编码（Base64/Huffman）、密码学工具（SHA1/SHA256/MD5/HMAC/PBKDF2）、算法（一致性哈希/MurmurHash3/布隆过滤器/Trie/MVCC/负载选择）、限流/熔断、配置解析。
 - **CMake link**: `galay::utils`
 - **头文件前缀**: `<galay/cpp/galay-utils/...>`；一站式总头 `<galay/cpp/galay-utils/galay_utils.hpp>`
 - **命名空间**: `galay::utils`
 - **核心类型与接口**:
   - `StringUtils`（`core/string.hpp`）— `static std::vector<std::string> split(std::string_view, char)`、`join(const std::vector<std::string>&, std::string_view)`、`trim/trimLeft/trimRight(std::string_view)`
   - `LruCache<Key, Value>`（`cache/lru_cache.hpp`）— `put(K&&, V&&)` / `put(..., ttl)`、`Value* get(const Key&)`、`EvictCallback`、`Stats`；不可拷贝/移动
-  - `RingBuffer`（`cache/ring_buffer.hpp`）、`Bytes`（`cache/bytes.hpp`，`data()`/`size()`/`toStringView()`）
+  - `RingBuffer`（`buffer/ring_buffer.hpp`）、`Bytes`（`buffer/bytes.hpp`，`data()`/`size()`/`toStringView()`）
   - `Base64Util`（`encoding/base64.hpp`）— `static std::string Base64Encode(std::string const&, bool url=false)`、`Base64Decode(std::string const&, bool remove_linebreaks=false)`
-  - 加密 — `SHA1::hashHex(const std::string&)`、`SHA256`、`HMAC::hmacSha256Hex(const std::string& key, const std::string& data)`、`MD5`、`PBKDF2`、`MurmurHash3::hash32(const std::string&, uint32_t seed=0)`
-  - `TokenBucketLimiter`（`tool/rate_limiter.hpp`）— `TokenBucketLimiter(double rate, size_t capacity)`、`bool tryAcquire(size_t tokens=1)`、`double availableTokens() const`；另有 `CountingSemaphore`
-  - `CircuitBreaker`（`tool/circuit_breaker.hpp`）— `explicit BasicCircuitBreaker(CircuitBreakerConfig = {})`、`bool allowRequest()`、`onSuccess()`、`onFailure()`、`template<F> auto execute(F&&)`（熔断打开返回 `std::unexpected(CircuitBreakerError::Open)`）、`executeWithFallback(F&&, Fallback&&)`、`CircuitState state()`
-  - 负载均衡（`tool/balancer.hpp`）— `RoundRobinLoadBalancer<T>` / `WeightRoundRobinLoadBalancer<T>` / `RandomLoadBalancer<T>` / `WeightedRandomLoadBalancer<T>`：`std::optional<T> select()`、`void append(T[, uint32_t weight])`、`size_t size()`
-  - `ConsistentHash`、`BloomFilter`、`Trie`、`Huffman`、`MVCC`（`algorithm/`）
+  - 密码学工具（`crypto/`）— `SHA1::hashHex(const std::string&)`、`SHA256`、`HMAC::hmacSha256Hex(const std::string& key, const std::string& data)`、`MD5`、`PBKDF2`
+  - 非密码学哈希（`algorithm/murmur_hash3.hpp`）— `MurmurHash3Util::Hash32(const std::string&, uint32_t seed=0)`
+  - `TokenBucketLimiter`（`resilience/rate_limiter.hpp`）— `TokenBucketLimiter(double rate, size_t capacity)`、`bool tryAcquire(size_t tokens=1)`、`double availableTokens() const`；另有 `CountingSemaphore`
+  - `CircuitBreaker`（`resilience/circuit_breaker.hpp`）— `explicit BasicCircuitBreaker(CircuitBreakerConfig = {})`、`bool allowRequest()`、`onSuccess()`、`onFailure()`、`template<F> auto execute(F&&)`（熔断打开返回 `std::unexpected(CircuitBreakerError::Open)`）、`executeWithFallback(F&&, Fallback&&)`、`CircuitState state()`
+  - 负载均衡（`algorithm/balancer.hpp`）— `RoundRobinLoadBalancer<T>` / `WeightRoundRobinLoadBalancer<T>` / `RandomLoadBalancer<T>` / `WeightedRandomLoadBalancer<T>`：`std::optional<T> select()`、`void append(T[, uint32_t weight])`、`size_t size()`
+  - `ConsistentHash`、`BloomFilter`、`Trie`、`MVCC`（`algorithm/`）；Huffman 编解码（`encoding/huffman.hpp`）
+  - `ThreadPool`、`TaskWaiter`（`concurrency/thread.hpp`）与 `ObjectPool`、`BlockingObjectPool`（`concurrency/pool.hpp`）
   - 配置（`config/parser_manager.hpp`）— `ParserManager::instance().createParser(const std::string& path)`（按 `.conf/.ini/.env/.toml` 分发）；解析器 `bool parseFile(...)`、`std::optional<std::string> getValue(key)`、`get<T>(key)`
-  - `System`（`process/system.hpp`）— `System::cpuCount()` 等
+  - `System`（`system/system.hpp`）— `System::cpuCount()` 等
 - **最小示例**:
 ```cpp
 #include <galay/cpp/galay-utils/galay_utils.hpp>

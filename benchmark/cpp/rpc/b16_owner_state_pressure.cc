@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_call.h>
 #include <galay/cpp/galay-rpc/kernel/rpc_endpoint_cache.h>
 
@@ -11,6 +13,10 @@ using namespace galay::rpc;
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr size_t iterations = 100000;
     uint64_t observed = 0;
     RpcEndpointCache cache;

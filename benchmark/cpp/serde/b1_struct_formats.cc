@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <serde/json/json.hpp>
 #include <serde/toml/toml.hpp>
 #include <serde/reflect/reflect_macros.hpp>
@@ -63,6 +65,10 @@ bool measure(std::string_view name, std::size_t iterations, std::size_t bytes,
 }
 
 int main(int argc, char** argv) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::size_t iterations = 20'000;
     if (argc > 2) return 1;
     if (argc == 2) {

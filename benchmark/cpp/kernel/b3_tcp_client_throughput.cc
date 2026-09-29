@@ -5,6 +5,8 @@
  * 通过条件：客户端完成既定负载并输出统计结果，测试结束后干净退出。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <atomic>
 #include <algorithm>
 #include <chrono>
@@ -369,6 +371,10 @@ void printUsage(const char* program) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     BenchConfig config;
     g_running.store(true, std::memory_order_release);
     resetBenchStats();

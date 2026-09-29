@@ -22,42 +22,45 @@
 #include "core/random.hpp"
 
 /// 系统工具
-#include "process/system.hpp"
+#include "system/system.hpp"
+
+/// 进程环境变量
+#include "system/env.hpp"
 
 /// 时间工具
 #include "core/time.hpp"
 
 /// 堆栈跟踪
-#include "process/backtrace.hpp"
+#include "system/backtrace.hpp"
 
 /// 信号处理
-#include "process/signal.hpp"
+#include "system/signal.hpp"
 
 /// 对象池
-#include "tool/pool.hpp"
+#include "concurrency/pool.hpp"
 
 /// LRU 缓存
 #include "cache/lru_cache.hpp"
 
 /// 字节容器
-#include "cache/bytes.hpp"
+#include "buffer/bytes.hpp"
 
 /// 字节队列视图
-#include "cache/byte_queue_view.hpp"
+#include "buffer/byte_queue_view.hpp"
 
 /// 环形缓冲区
-#include "cache/ring_buffer.hpp"
+#include "buffer/ring_buffer.hpp"
 
 /// 单生产者单消费者 typed 环形缓冲区
-#include "cache/type_ring_buffer.hpp"
+#include "buffer/type_ring_buffer.hpp"
 
 /// 线程池
-#include "tool/thread.hpp"
+#include "concurrency/thread.hpp"
 
 /// 熔断器
-#include "tool/circuit_breaker.hpp"
+#include "resilience/circuit_breaker.hpp"
 /// 限流器
-#include "tool/rate_limiter.hpp"
+#include "resilience/rate_limiter.hpp"
 
 /// 一致性哈希
 #include "algorithm/consistent_hash.hpp"
@@ -69,7 +72,7 @@
 #include "algorithm/trie.hpp"
 
 /// 哈夫曼编码
-#include "algorithm/huffman.hpp"
+#include "encoding/huffman.hpp"
 
 /// 多版本并发控制
 #include "algorithm/mvcc.hpp"
@@ -81,10 +84,13 @@
 #include "config/parser_manager.hpp"
 
 /// 进程管理
-#include "process/process.hpp"
+#include "system/process.hpp"
+
+/// CPU 亲和性及 NUMA 内存策略
+#include "system/performance.hpp"
 
 /// 负载均衡
-#include "tool/balancer.hpp"
+#include "algorithm/balancer.hpp"
 
 /// Base64 编解码
 #include "encoding/base64.hpp"
@@ -93,7 +99,7 @@
 /// MD5 哈希
 #include "crypto/md5.hpp"
 /// MurmurHash3 哈希
-#include "crypto/murmur_hash3.hpp"
+#include "algorithm/murmur_hash3.hpp"
 /// 盐值生成
 #include "crypto/salt.hpp"
 /// HMAC-SHA256

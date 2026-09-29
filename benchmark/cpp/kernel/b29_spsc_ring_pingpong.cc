@@ -3,6 +3,8 @@
  * @brief 隔离测量 SPSC ring 单线程 write/read 往返成本。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/concurrency/spsc/bounded_channel.h>
 
 #include <algorithm>
@@ -61,6 +63,10 @@ template <typename Producer, typename Consumer>
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     galay::spsc::Ring<uint64_t> ring(kCapacity);
     if (ring.error() != galay::spsc::RingError::kNone) {
         std::cerr << "failed to construct SPSC ring: "

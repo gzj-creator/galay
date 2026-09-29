@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-etcd/cluster/etcd_cluster_client.h>
 
 #include <chrono>
@@ -6,6 +8,10 @@
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     galay::etcd::EtcdProductionConfig production;
     production.endpoints = {
         "http://127.0.0.1:2379",

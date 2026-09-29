@@ -3,6 +3,8 @@
  * @brief 压测资源 RAII 关闭与 iovec 参数错误快路径。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/async/async_tcp.h>
 #include <galay/cpp/galay-kernel/async/async_udp.h>
 
@@ -74,6 +76,10 @@ std::filesystem::path makeTempFile()
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t iterations = 20'000;
 
     std::cout << "Kernel resource/error boundary benchmark\n";

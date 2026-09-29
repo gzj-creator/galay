@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-rpc/kernel/rpc_stream.h>
 
 #include <algorithm>
@@ -10,6 +12,10 @@ using namespace galay::rpc;
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t frames = 10000;
     size_t payload_size = 128;
     if (argc > 1) {

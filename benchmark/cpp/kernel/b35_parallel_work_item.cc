@@ -6,6 +6,8 @@
  * `parallel.h`: ordinary CPU work must not need a coroutine frame per node.
  */
 
+#include "../common/benchmark_environment.h"
+
 #include "benchmark/cpp/common/benchmark_sync.h"
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <galay/cpp/galay-kernel/parallel/parallel.h>
@@ -91,6 +93,10 @@ std::int64_t measure(Submit&& submit,
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     Runtime runtime = RuntimeBuilder().ioSchedulerCount(0).parallelSchedulerCount(4).build();
     const auto started = runtime.start();
     if (!started.has_value()) {

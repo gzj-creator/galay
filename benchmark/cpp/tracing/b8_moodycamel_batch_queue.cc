@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/thirdparty/concurrentqueue/moodycamel/concurrentqueue.h>
 
 #include <algorithm>
@@ -266,5 +268,9 @@ void runBenchmark() {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     runBenchmark();
 }

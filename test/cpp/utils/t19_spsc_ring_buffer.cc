@@ -3,7 +3,7 @@
  * @brief 验证 typed SPSC ring 的容量、移动语义、批量接口、回绕与跨线程 FIFO。
  */
 
-#include <galay/cpp/galay-utils/cache/type_ring_buffer.hpp>
+#include <galay/cpp/galay-utils/buffer/type_ring_buffer.hpp>
 
 #include <array>
 #include <atomic>

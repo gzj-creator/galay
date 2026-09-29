@@ -4,6 +4,8 @@
  * @details 类似 wrk 的持续压测，测试服务器的真实 QPS
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http/client/http_client.h>
 #include <galay/cpp/galay-kernel/core/runtime.h>
 #include <iostream>
@@ -205,6 +207,10 @@ void runContinuousBenchmark(Runtime& rt, int connections, int duration_sec,
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::string host = "localhost";
     int port = 8080;
     std::string path = "/";

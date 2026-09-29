@@ -4,6 +4,8 @@
  * @details 测试MCP服务器在高并发场景下的性能表现
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mcp/v1/client/client.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
 #include <galay/cpp/galay-kernel/core/runtime.h>
@@ -302,6 +304,10 @@ void printSystemInfo() {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::string url = "http://127.0.0.1:8080/mcp";
     size_t numWorkers = 10;
     size_t requestsPerWorker = 100;

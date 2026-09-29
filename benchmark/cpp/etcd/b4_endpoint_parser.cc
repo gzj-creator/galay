@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-etcd/base/etcd_internal.h>
 
 #include <array>
@@ -8,6 +10,10 @@
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const std::array<std::string, 5> endpoints = {
         "http://127.0.0.1:2379",
         "https://etcd.example.com:443/v3",

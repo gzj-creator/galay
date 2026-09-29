@@ -3,6 +3,8 @@
  * @brief 压测 bounded MPMC 在多生产者、多消费者拓扑下的同步吞吐。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-kernel/concurrency/mpmc/bounded_channel.h>
 #include "benchmark/cpp/common/benchmark_affinity.h"
 #include "benchmark/cpp/common/benchmark_sync.h"
@@ -224,6 +226,10 @@ bool runCase(const char* topology,
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     bool ok = true;
     for (const size_t capacity : {size_t{256}, size_t{4096}}) {
         ok = runCase("2p2c", 2, 2, capacity) && ok;

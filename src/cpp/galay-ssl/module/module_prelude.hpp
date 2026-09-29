@@ -129,8 +129,8 @@
 #if __has_include("../../galay-kernel/parallel/parallel_scheduler.h")
 #include "../../galay-kernel/parallel/parallel_scheduler.h"
 #endif
-#if __has_include("../../galay-utils/cache/bytes.hpp")
-#include "../../galay-utils/cache/bytes.hpp"
+#if __has_include("../../galay-utils/buffer/bytes.hpp")
+#include "../../galay-utils/buffer/bytes.hpp"
 #endif
 #if __has_include("../../galay-utils/common/defn.hpp")
 #include "../../galay-utils/common/defn.hpp"

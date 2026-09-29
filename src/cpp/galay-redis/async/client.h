@@ -17,9 +17,9 @@
 #include "../../galay-kernel/core/timeout.hpp"
 #include "../../galay-kernel/common/host.hpp"
 #include "../../galay-kernel/common/error.h"
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 #ifdef GALAY_SSL_FEATURE_ENABLED
-#include "../../galay-utils/cache/bytes.hpp"
+#include "../../galay-utils/buffer/bytes.hpp"
 #include "../../galay-ssl/async/ssl_await.h"
 #include "../../galay-ssl/async/ssl_socket.h"
 #endif

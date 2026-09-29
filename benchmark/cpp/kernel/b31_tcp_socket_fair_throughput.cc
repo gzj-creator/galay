@@ -7,6 +7,8 @@
  * packet coalescing and partial socket operations cannot change the workload.
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -713,6 +715,10 @@ int runBenchmark(SchedulerType& scheduler)
 
 int main()
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
 #if defined(USE_KQUEUE)
     KqueueScheduler scheduler;
 #elif defined(USE_IOURING)

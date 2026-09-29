@@ -18,7 +18,7 @@
 #include "../protoc/mysql_auth.h"
 #include "../protoc/mysql_protocol.h"
 
-#include "../../galay-utils/cache/ring_buffer.hpp"
+#include "../../galay-utils/buffer/ring_buffer.hpp"
 
 #include <cstdint>
 #include <expected>

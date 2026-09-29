@@ -5,6 +5,8 @@
  * 通过条件：两类传输基准都能完成并输出对比数据，进程返回 0。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <iostream>
 #include <fstream>
 #include <atomic>
@@ -284,6 +286,10 @@ void printResults() {
 }
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     LogInfo("=== SendFile Performance Benchmark ===\n");
 
     std::vector<size_t> test_sizes = {

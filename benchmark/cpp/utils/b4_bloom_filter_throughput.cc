@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-utils/algorithm/bloom_filter.hpp>
 
 #include <chrono>
@@ -55,6 +57,10 @@ void printResult(const Result& result) {
 } // namespace
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     constexpr std::size_t items = 1000000;
     constexpr double targetFalsePositiveRate = 0.01;
 

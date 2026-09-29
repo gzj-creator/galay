@@ -10,6 +10,13 @@
 
 int main()
 {
+    const auto invalidEnv = galay::utils::Env::get("");
+    if (invalidEnv || invalidEnv.error() != std::errc::invalid_argument) {
+        std::cerr << "[t13] Env should be visible and reject invalid names\n";
+        return 1;
+    }
+    static_assert(galay::utils::Performance::kMaxCpus > 0);
+    static_assert(galay::utils::Performance::kMaxNumaNodes > 0);
     galay::utils::CountingSemaphore semaphore(2);
     if (!semaphore.tryAcquire(2)) {
         std::cerr << "[t13] CountingSemaphore should be visible through galay_utils.hpp\n";

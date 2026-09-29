@@ -1,18 +1,8 @@
 #ifndef GALAY_BENCHMARK_AFFINITY_H
 #define GALAY_BENCHMARK_AFFINITY_H
 
+#include "benchmark_environment.h"
 #include <cstddef>
-#include <thread>
-
-#if defined(__linux__)
-#include <pthread.h>
-#include <sched.h>
-#elif defined(__APPLE__)
-#include <mach/mach.h>
-#include <mach/thread_policy.h>
-#include <pthread.h>
-#include <pthread/qos.h>
-#endif
 
 namespace galay::benchmark {
 
@@ -50,44 +40,29 @@ inline const char* threadPlacementName(ThreadPlacement placement) noexcept
 
 /**
  * @brief 把当前线程固定到基准测试用的执行资源上。
- * @param coreIndex 期望的逻辑核序号；会按在线核数取模。
+ * @param coreIndex 启动时选择的 CPU 集合中的索引；超出集合大小时取模。
  * @return 实际生效的放置方式，调用方必须据此标注结果可比性。
  *
- * @note Linux 通过 pthread_setaffinity_np 真正绑核。
- * @note Darwin 的 THREAD_AFFINITY_POLICY 只是调度亲和标签，不是 CPU 绑定；
- *       QoS 成功时仅报告 kPerformanceClassOnly，不会把标签误报为 pinned。
+ * @note 必须先在 main 调用 initializeBenchmarkEnvironment()。绑定失败立即
+ *       终止压测，不输出伪装为已控制环境的样本；显式 none 返回 unsupported。
  */
-inline ThreadPlacement pinCurrentThread(std::size_t coreIndex) noexcept
+inline ThreadPlacement pinCurrentThread(std::size_t coreIndex)
 {
-    const unsigned online = std::thread::hardware_concurrency();
-    const std::size_t target = online == 0 ? 0 : coreIndex % online;
-
-#if defined(__linux__)
-    cpu_set_t set;
-    CPU_ZERO(&set);
-    CPU_SET(static_cast<int>(target), &set);
-    if (pthread_setaffinity_np(pthread_self(), sizeof(set), &set) == 0) {
-        return ThreadPlacement::kPinnedToCore;
+    if (!detail::environmentInitialized) {
+        std::cerr << "GALAY_BENCH_ENV status=error operation=worker-before-initialization\n";
+        std::exit(EXIT_FAILURE);
     }
-    return ThreadPlacement::kUnsupported;
-#elif defined(__APPLE__)
-    // Darwin affinity tag 只提示调度器把相关线程放在不同资源组，不绑定逻辑核。
-    thread_affinity_policy_data_t policy = {static_cast<integer_t>(target + 1)};
-    const kern_return_t affinityHint = thread_policy_set(
-        pthread_mach_thread_np(pthread_self()),
-        THREAD_AFFINITY_POLICY,
-        reinterpret_cast<thread_policy_t>(&policy),
-        THREAD_AFFINITY_POLICY_COUNT);
-    if (pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0) == 0) {
-        return ThreadPlacement::kPerformanceClassOnly;
+    if (!detail::cpuBindingEnabled) {
+        return ThreadPlacement::kUnsupported;
     }
-    return affinityHint == KERN_SUCCESS
-        ? ThreadPlacement::kAffinityHintOnly
-        : ThreadPlacement::kUnsupported;
-#else
-    (void)target;
-    return ThreadPlacement::kUnsupported;
-#endif
+    const unsigned target = detail::selectedCpus[coreIndex % detail::selectedCpus.size()];
+    const auto actual = utils::Performance::bindCurrentThread(std::span(&target, 1));
+    if (!actual || actual->size() != 1 || actual->front() != target) {
+        std::cerr << "GALAY_BENCH_ENV status=error operation=worker-cpu-affinity cpu="
+                  << target << " error=" << (actual ? 0 : actual.error().value()) << '\n';
+        std::exit(EXIT_FAILURE);
+    }
+    return ThreadPlacement::kPinnedToCore;
 }
 
 }  // namespace galay::benchmark

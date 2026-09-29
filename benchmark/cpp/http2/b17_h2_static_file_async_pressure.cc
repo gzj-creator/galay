@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/client/h2c_client.h>
 #include <galay/cpp/galay-http2/server/http2_server.h>
 #include <galay/cpp/galay-kernel/common/sleep.hpp>
@@ -161,6 +163,10 @@ Task<void> runClient(uint16_t port,
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     size_t requests = 128;
     size_t file_size = 16 * 1024;
     if (argc > 1) {

@@ -30,12 +30,13 @@ static_assert(UnifiedByteRingBatchApi<UnifiedByteRing>);
 static_assert(!HasLegacyByteWrite<UnifiedByteRing>);
 static_assert(!HasLegacyByteRead<UnifiedByteRing>);
 
-void test_buffer_headers_moved_to_cache() {
+void test_buffer_header_layout() {
     const auto sourceRoot = std::filesystem::path(GALAY_UTILS_SOURCE_DIR);
-    assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool/byte_queue_view.hpp"));
-    assert(!std::filesystem::exists(sourceRoot / "galay-utils/tool/ring_buffer.hpp"));
-    assert(std::filesystem::exists(sourceRoot / "galay-utils/cache/byte_queue_view.hpp"));
-    assert(std::filesystem::exists(sourceRoot / "galay-utils/cache/ring_buffer.hpp"));
+    for (const char* header : {"bytes.hpp", "byte_queue_view.hpp",
+                               "ring_buffer.hpp", "type_ring_buffer.hpp"}) {
+        assert(!std::filesystem::exists(sourceRoot / "galay-utils/cache" / header));
+        assert(std::filesystem::exists(sourceRoot / "galay-utils/buffer" / header));
+    }
 }
 
 void test_byte_queue_view() {
@@ -338,7 +339,7 @@ void test_bytes_container() {
 int main() {
     std::cout << "\n=== buffer_test ===" << std::endl;
     try {
-        test_buffer_headers_moved_to_cache();
+        test_buffer_header_layout();
         test_byte_meta_data_helpers();
         test_bytes_container();
         test_byte_queue_view();

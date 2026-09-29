@@ -1,3 +1,5 @@
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-ws/builder/ws_frame_builder.h>
 #include <galay/cpp/galay-ws/client/ws_client.h>
 #include <galay/cpp/galay-ws/kernel/ws_conn.h>
@@ -134,6 +136,10 @@ bool exerciseSessionAndUpgraderState(size_t)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     const size_t iterations = parseIterations(argc, argv);
 
     require(exerciseBuilderCloneMove(0), "builder clone/move fixture should pass");

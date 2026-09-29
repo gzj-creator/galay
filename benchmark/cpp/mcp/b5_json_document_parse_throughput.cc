@@ -5,6 +5,8 @@
  *          本基准只测量解析吞吐，不再统计解析器对象分配。
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-mcp/common/mcp_json.h>
 
 #include <charconv>
@@ -42,6 +44,10 @@ bool parseIterations(int argc, char** argv, std::size_t& iterations)
 
 int main(int argc, char** argv)
 {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::size_t iterations = 200'000;
     if (!parseIterations(argc, argv, iterations)) {
         return 2;

@@ -5,6 +5,8 @@
  *          移除统计功能，由客户端负责统计
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <chrono>
 #include <csignal>
 #include <iostream>
@@ -106,6 +108,10 @@ Task<void> httpsHandler(HttpConnImpl<galay::ssl::SslSocket> conn) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     bool debug_log = false;
     if (const char* env = std::getenv("GALAY_WSS_DEBUG_LOG")) {
         debug_log = std::atoi(env) != 0;
@@ -180,6 +186,10 @@ int main(int argc, char* argv[]) {
 #else
 
 int main() {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     std::cout << "SSL support is not enabled.\n";
     std::cout << "Rebuild with -DGALAY_BUILD_SSL=ON\n";
     return 0;

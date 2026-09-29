@@ -4,6 +4,8 @@
  * @details 高性能 H2c Echo 服务器，移除统计功能，由客户端负责统计
  */
 
+#include "../common/benchmark_environment.h"
+
 #include <galay/cpp/galay-http2/server/http2_server.h>
 #include <iostream>
 #include <csignal>
@@ -108,6 +110,10 @@ Task<void> handleActiveConn(Http2ConnContext& ctx) {
 }
 
 int main(int argc, char* argv[]) {
+    if (!galay::benchmark::initializeBenchmarkEnvironment()) {
+        return 1;
+    }
+
     uint16_t port = 9080;
     int io_threads = 4;
     int debug_log = 0;
