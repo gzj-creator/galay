@@ -59,6 +59,7 @@
 
 ### Chore
 
+- **独立清理 H3 的 26 项阻塞风格问题**：补齐 E13 import 示例，迁移编号化腾讯脚本和 prelude 生成器，删除 Linux verifier 兼容入口，修正已有测试白名单路径并编号断言测试；同步调用方、增加 5 项回归，最终 19 项定向 CTest 与两种 E13 Release 示例通过，保留非阻塞建议；文档保留验证结论，19 份原始日志不纳入提交历史。
 - 本轮修复已验证 io_uring 完整内核库构建、相关定向回归及 HTTP 静态文件读取，epoll 文件 IO/RAII 回归通过；尚未验证原生 kqueue 或全量测试，T189/T191 中直接移动不可移动 `IOController` 的既有测试用法仍待处理，未新增性能等价结论。
 - 按当前工作区状态提交 `mcpp.lock`，移除已有的 `compat.openssl` 3.5.1 锁记录；未重新解析依赖、改变 manifest 或生成版本号。
 - 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。

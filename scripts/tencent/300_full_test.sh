@@ -1,12 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 # Tencent 机器完整测试套件
 # 包含系统信息收集、标准性能测试、内部策略验证、Boost.Asio 协程对标和结果汇总
 
-set -euo pipefail
 
 # ==================== 配置 ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUILD_DIR="${BUILD_DIR:-${PROJECT_ROOT}/build}"
 RESULT_DIR="${RESULT_DIR:-${PROJECT_ROOT}/benchmark-results/tencent-full-$(date +%Y%m%d-%H%M%S)}"
 LOG_FILE="${RESULT_DIR}/full_test.log"
@@ -583,8 +583,8 @@ generate_summary() {
 
         echo ""
         echo "--- 下一步建议 ---"
-        echo "1. 运行 NUMA 感知测试: ${SCRIPT_DIR}/tencent_numa_test.sh"
-        echo "2. 运行 perf 性能分析: ${SCRIPT_DIR}/tencent_perf_analysis.sh"
+        echo "1. 运行 NUMA 感知测试: ${SCRIPT_DIR}/301_numa_test.sh"
+        echo "2. 运行 perf 性能分析: ${SCRIPT_DIR}/302_perf_analysis.sh"
         echo "3. 使用 Python 脚本分析结果:"
         echo "   解析 benchmark/cpp/kernel/compare/boost-asio-coro 的 measured 行并按中位数汇总"
         echo ""

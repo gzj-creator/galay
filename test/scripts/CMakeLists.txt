@@ -27,3 +27,9 @@ add_test(
     COMMAND python3 -B "${CMAKE_CURRENT_SOURCE_DIR}/t5_optimization_measurement.py"
 )
 set_tests_properties(scripts.optimization_measurement PROPERTIES LABELS "scripts;unit")
+
+add_test(
+    NAME scripts.style_audit
+    COMMAND python3 -B "${CMAKE_CURRENT_SOURCE_DIR}/t6_style_audit.py"
+)
+set_tests_properties(scripts.style_audit PROPERTIES LABELS "scripts;unit" TIMEOUT 60)

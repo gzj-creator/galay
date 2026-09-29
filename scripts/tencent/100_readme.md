@@ -9,9 +9,9 @@
 
 | 脚本 | 用途 | 预计耗时 |
 |------|------|---------|
-| `tencent_full_test.sh` | 完整性能测试流程 | 30-60 分钟 |
-| `tencent_numa_test.sh` | NUMA 感知性能测试 | 20-40 分钟 |
-| `tencent_perf_analysis.sh` | perf 深度性能分析 | 15-30 分钟 |
+| `300_full_test.sh` | 完整性能测试流程 | 30-60 分钟 |
+| `301_numa_test.sh` | NUMA 感知性能测试 | 20-40 分钟 |
+| `302_perf_analysis.sh` | perf 深度性能分析 | 15-30 分钟 |
 
 ## 🚀 快速开始
 
@@ -36,18 +36,18 @@ sudo sysctl kernel.perf_event_paranoid=-1
 
 ```bash
 # 1. 完整测试套件 (推荐首次运行)
-./scripts/tencent_full_test.sh
+./scripts/tencent/300_full_test.sh
 
 # 2. NUMA 感知测试
-./scripts/tencent_numa_test.sh
+./scripts/tencent/301_numa_test.sh
 
 # 3. perf 性能分析
-./scripts/tencent_perf_analysis.sh
+./scripts/tencent/302_perf_analysis.sh
 ```
 
 ## 📊 测试内容详解
 
-### 1. tencent_full_test.sh - 完整测试流程
+### 1. 300_full_test.sh - 完整测试流程
 
 **功能:**
 - ✅ 系统信息收集 (CPU/内存/NUMA 拓扑)
@@ -79,7 +79,7 @@ benchmark-results/tencent-full-YYYYMMDD-HHMMSS/
 
 ---
 
-### 2. tencent_numa_test.sh - NUMA 感知测试
+### 2. 301_numa_test.sh - NUMA 感知测试
 
 **功能:**
 - ✅ NUMA 拓扑检测和可视化
@@ -118,7 +118,7 @@ numactl --interleave=all benchmark
 
 ---
 
-### 3. tencent_perf_analysis.sh - Perf 深度分析
+### 3. 302_perf_analysis.sh - Perf 深度分析
 
 **功能:**
 - ✅ perf stat 统计 (cycles/instructions/cache/branch)
@@ -250,15 +250,15 @@ ls -lh build/benchmark/cpp/kernel/benchmark_*
 # 修改脚本中的参数
 # 编辑脚本,减少测试次数或消息数量
 
-# tencent_full_test.sh
+# 300_full_test.sh
 MESSAGES=1000000         # 默认 10000000
 RUNS_PER_CONFIG=3        # 默认 5
 
-# tencent_numa_test.sh
+# 301_numa_test.sh
 MESSAGES=1000000         # 默认 5000000
 RUNS_PER_CONFIG=3        # 默认 5
 
-# tencent_perf_analysis.sh
+# 302_perf_analysis.sh
 MESSAGES=1000000         # 默认 10000000
 DURATION=15              # 默认 30 秒
 ```
@@ -289,21 +289,21 @@ ulimit -n 65535
 
 ```bash
 # 第一步: 完整测试,建立基线
-./scripts/tencent_full_test.sh
+./scripts/tencent/300_full_test.sh
 
 # 第二步: NUMA 优化
-./scripts/tencent_numa_test.sh
+./scripts/tencent/301_numa_test.sh
 # 识别最佳 NUMA 配置
 
 # 第三步: 性能剖析
-./scripts/tencent_perf_analysis.sh
+./scripts/tencent/302_perf_analysis.sh
 # 识别热点和瓶颈
 
 # 第四步: 基于发现进行优化
 # ... 代码优化 ...
 
 # 第五步: 重新运行测试验证改进
-./scripts/tencent_full_test.sh
+./scripts/tencent/300_full_test.sh
 ```
 
 ### 结果归档

@@ -22,7 +22,7 @@ TCP_CSV_PATH = (
 )
 FORMAL_RAW_DIR = ROOT / "docs/cpp/modules/kernel/benchmark_data/raw"
 KERNEL_DOC = ROOT / "docs/cpp/modules/kernel/05-性能测试.md"
-TENCENT_RUNNER = ROOT / "scripts/tencent_full_test.sh"
+TENCENT_RUNNER = ROOT / "scripts/tencent/300_full_test.sh"
 
 POLICY_SCRIPTS = (
     "scripts/etcd/300_etcd_compare_etcdctl.sh",

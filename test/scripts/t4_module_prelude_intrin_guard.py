@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-GENERATOR = ROOT / "scripts" / "gen_module_prelude.py"
+GENERATOR = ROOT / "scripts" / "common" / "106_gen_module_prelude.py"
 EXPECTED_GUARD = "#if defined(_MSC_VER) && __has_include(<intrin.h>)\n#include <intrin.h>\n#endif"
 EXPECTED_EMMINTRIN_GUARD = (
     "#if (defined(__x86_64__) || defined(__i386__)) && "

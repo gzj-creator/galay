@@ -1,12 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 # Tencent 机器 perf 性能分析脚本
 # 使用 Linux perf 工具进行深度性能分析
 
-set -euo pipefail
 
 # ==================== 配置 ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUILD_DIR="${PROJECT_ROOT}/build"
 RESULT_DIR="${PROJECT_ROOT}/benchmark-results/tencent-perf-$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="${RESULT_DIR}/perf_analysis.log"
@@ -481,11 +481,11 @@ generate_summary() {
 
 # ==================== 主流程 ====================
 main() {
+    # Create the log directory before the first tee under strict mode.
+    mkdir -p "${RESULT_DIR}"
     log_section "Perf 性能深度分析"
     log "开始时间: $(date)"
 
-    # 创建结果目录
-    mkdir -p "${RESULT_DIR}"
     log "结果目录: ${RESULT_DIR}"
 
     # 检查 perf 可用性

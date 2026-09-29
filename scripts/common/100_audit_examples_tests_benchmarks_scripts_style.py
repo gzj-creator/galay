@@ -108,8 +108,8 @@ def audit_tests() -> None:
             and GROUPED_UTIL_TEST_RE.match(path.name)
         )
         approved_single_tests = {
-            "test/config/t_module_config_surface.cc",
-            "test/utils/t_import_smoke.cc",
+            "test/cpp/config/t_module_config_surface.cc",
+            "test/cpp/utils/t_import_smoke.cc",
         }
         if not grouped_utils and rel(path) not in approved_single_tests and not TEST_RE.match(path.name):
             issue(path, 1, "test-name", "test should match tNN_<scenario>.cc")

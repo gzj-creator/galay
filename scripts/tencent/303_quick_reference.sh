@@ -1,4 +1,5 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 # 腾讯机器测试套件 - 快速参考卡
 
 cat << 'EOF'
@@ -7,23 +8,23 @@ cat << 'EOF'
 ╚════════════════════════════════════════════════════════════════╝
 
 📦 三个核心脚本:
-  1️⃣  tencent_full_test.sh      - 完整性能测试 (30-60分钟)
-  2️⃣  tencent_numa_test.sh      - NUMA感知测试 (20-40分钟)
-  3️⃣  tencent_perf_analysis.sh  - perf深度分析 (15-30分钟)
+  1️⃣  300_full_test.sh      - 完整性能测试 (30-60分钟)
+  2️⃣  301_numa_test.sh      - NUMA感知测试 (20-40分钟)
+  3️⃣  302_perf_analysis.sh  - perf深度分析 (15-30分钟)
 
 🚀 快速开始:
   # 1. 构建项目
   cmake -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
 
   # 2. 运行完整测试
-  ./scripts/tencent_full_test.sh
+  ./scripts/tencent/300_full_test.sh
 
   # 3. 查看结果
   cat benchmark-results/tencent-full-*/summary.txt
 
 📊 测试内容:
 
-  tencent_full_test.sh
+  300_full_test.sh
   ├─ 系统信息收集 (CPU/内存/NUMA拓扑)
   ├─ 标准性能测试 (1P-64P, 多容量配置)
   ├─ 内部策略验证 (fair/balanced/throughput)
@@ -31,13 +32,13 @@ cat << 'EOF'
   ├─ Boost.Asio 协程 TCP 公平对标 (Galay vs Boost.Asio)
   └─ 自动生成汇总报告
 
-  tencent_numa_test.sh
+  301_numa_test.sh
   ├─ NUMA拓扑检测
   ├─ 同节点 vs 跨节点测试
   ├─ CPU亲和性测试
   └─ 内存分配策略对比
 
-  tencent_perf_analysis.sh
+  302_perf_analysis.sh
   ├─ perf stat统计
   ├─ perf record采样
   ├─ 火焰图生成 (SVG)
@@ -87,7 +88,7 @@ cat << 'EOF'
   cat results.jsonl | jq -r '"\(.producers)P: \(.messages_per_second/1e6) M/s"'
 
 📚 详细文档:
-  scripts/README_TENCENT_TESTS.md
+  scripts/tencent/100_readme.md
 
 🐛 故障排查:
   - perf权限错误 → sudo sysctl kernel.perf_event_paranoid=-1

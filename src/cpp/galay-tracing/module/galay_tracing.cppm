@@ -14,7 +14,7 @@ module;
 #include "module_prelude.hpp"
 
 // 本模块头：显式在全局片段中包含（prelude 只承担外部头，见
-// scripts/gen_module_prelude.py 的不变量），名称经下方 using 列表导出。
+// scripts/common/106_gen_module_prelude.py 的不变量），名称经下方 using 列表导出。
 #include "../adapters/http_headers.h"
 #include "../common/source_location.h"
 #include "../common/span_id.h"

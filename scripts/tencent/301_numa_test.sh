@@ -1,12 +1,12 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 # Tencent 机器 NUMA 感知测试脚本
 # 测试跨 NUMA 节点 vs 同节点性能差异,CPU 亲和性影响
 
-set -euo pipefail
 
 # ==================== 配置 ====================
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 BUILD_DIR="${PROJECT_ROOT}/build"
 RESULT_DIR="${PROJECT_ROOT}/benchmark-results/tencent-numa-$(date +%Y%m%d-%H%M%S)"
 LOG_FILE="${RESULT_DIR}/numa_test.log"
@@ -405,7 +405,7 @@ EOF
         echo ""
 
         echo "--- 下一步建议 ---"
-        echo "1. 运行详细的 perf 分析: ${SCRIPT_DIR}/tencent_perf_analysis.sh"
+        echo "1. 运行详细的 perf 分析: ${SCRIPT_DIR}/302_perf_analysis.sh"
         echo "2. 在最佳 NUMA 配置下重新运行完整测试套件"
         echo "3. 使用 numastat 监控运行时 NUMA 统计"
         echo ""
@@ -417,11 +417,11 @@ EOF
 
 # ==================== 主流程 ====================
 main() {
+    # Create the log directory before the first tee under strict mode.
+    mkdir -p "${RESULT_DIR}"
     log_section "NUMA 感知性能测试"
     log "开始时间: $(date)"
 
-    # 创建结果目录
-    mkdir -p "${RESULT_DIR}"
     log "结果目录: ${RESULT_DIR}"
 
     # 检查 NUMA 可用性

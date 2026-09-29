@@ -4,7 +4,7 @@ foreach(test_source IN LISTS GALAY_CONFIG_TEST_SOURCES)
     add_executable(${test_name} ${test_source})
     target_include_directories(${test_name} PRIVATE ${CMAKE_BINARY_DIR}/include)
     string(REGEX REPLACE "^t_module_config_" "module_" scenario_name "${test_name}")
-    string(REGEX REPLACE "^t_" "" scenario_name "${scenario_name}")
+    string(REGEX REPLACE "^t[0-9]*_" "" scenario_name "${scenario_name}")
     add_test(NAME "config.${scenario_name}" COMMAND ${test_name})
 endforeach()
 
