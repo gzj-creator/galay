@@ -18,6 +18,7 @@
 #include "../common/timer.hpp"
 #include "../common/error.h"
 #include "../common/kernel_config.h"
+#include "../common/scheduler_config.h"
 #include "task.h"
 #include <atomic>
 #include <cstdint>
@@ -41,13 +42,20 @@ namespace galay::kernel
 enum SchedulerType {
     kIOScheduler,      ///< 基于 IO 事件循环的调度器
     kParallelScheduler  ///< 基于工作线程执行的计算调度器
-}; 
+};
 
-class EpollScheduler;
-class KqueueScheduler;
-class IOUringScheduler;
+// 前向声明模板类
+template <typename Config> class EpollSchedulerT;
+template <typename Config> class KqueueSchedulerT;
+template <typename Config> class IOUringSchedulerT;
 class ParallelScheduler;
 class Scheduler;
+
+// 默认调度器类型别名
+using EpollScheduler = EpollSchedulerT<DefaultIOSchedulerConfig>;
+using KqueueScheduler = KqueueSchedulerT<DefaultIOSchedulerConfig>;
+using IOUringScheduler = IOUringSchedulerT<DefaultIOSchedulerConfig>;
+
 #if defined(USE_IOURING)
 using IOScheduler = IOUringScheduler;
 #elif defined(USE_KQUEUE)
@@ -204,10 +212,17 @@ private:
  */
 template <typename Derived, SchedulerType Type>
 class SchedulerBase : public Scheduler {
+    // 检查是否是模板调度器类型
+    template <typename T, template <typename> class Template>
+    struct is_specialization_of : std::false_type {};
+
+    template <template <typename> class Template, typename... Args>
+    struct is_specialization_of<Template<Args...>, Template> : std::true_type {};
+
     static_assert((Type == kIOScheduler &&
-                   (std::is_same_v<Derived, EpollScheduler> ||
-                    std::is_same_v<Derived, KqueueScheduler> ||
-                    std::is_same_v<Derived, IOUringScheduler>)) ||
+                   (is_specialization_of<Derived, EpollSchedulerT>::value ||
+                    is_specialization_of<Derived, KqueueSchedulerT>::value ||
+                    is_specialization_of<Derived, IOUringSchedulerT>::value)) ||
                   (Type == kParallelScheduler && std::is_same_v<Derived, ParallelScheduler>));
 public:
     std::expected<void, IOError> start() { return start(&derived()); }

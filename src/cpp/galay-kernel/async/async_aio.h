@@ -26,10 +26,6 @@
 #include <fcntl.h>
 #include <libaio.h>
 
-namespace galay::kernel {
-    class EpollScheduler;
-}
-
 namespace galay::async
 {
 /**
