@@ -9,7 +9,7 @@ namespace galay::ssl
 {
 
 SslSocket::SslSocket(SslContext* ctx, IPType type)
-    : m_controller(GHandle::invalid())
+    : m_controller(std::make_unique<IOController>(GHandle::invalid()))
     , m_engine(ctx)
     , m_recvCipherBuffer()
     , m_sendCipherBuffer()
@@ -20,12 +20,12 @@ SslSocket::SslSocket(SslContext* ctx, IPType type)
     int domain = (type == IPType::IPV4) ? AF_INET : AF_INET6;
     int fd = ::socket(domain, SOCK_STREAM, 0);
     if (fd >= 0) {
-        m_controller.m_handle.fd = fd;
+        m_controller->m_handle.fd = fd;
     }
 }
 
 SslSocket::SslSocket(SslContext* ctx, GHandle handle)
-    : m_controller(handle)
+    : m_controller(std::make_unique<IOController>(handle))
     , m_engine(ctx)
     , m_recvCipherBuffer()
     , m_sendCipherBuffer()
@@ -73,7 +73,10 @@ SslSocket& SslSocket::operator=(SslSocket&& other) noexcept
 
 std::expected<void, IOError> SslSocket::bind(const Host& host)
 {
-    if (::bind(m_controller.m_handle.fd, host.sockAddr(), host.addrLen()) < 0) {
+    if (handle() == GHandle::invalid()) {
+        return std::unexpected(IOError(IOErrorCode::kClosed, 0));
+    }
+    if (::bind(handle().fd, host.sockAddr(), host.addrLen()) < 0) {
         return std::unexpected(IOError(IOErrorCode::kBindFailed, errno));
     }
     return {};
@@ -81,7 +84,10 @@ std::expected<void, IOError> SslSocket::bind(const Host& host)
 
 std::expected<void, IOError> SslSocket::listen(int backlog)
 {
-    if (::listen(m_controller.m_handle.fd, backlog) < 0) {
+    if (handle() == GHandle::invalid()) {
+        return std::unexpected(IOError(IOErrorCode::kClosed, 0));
+    }
+    if (::listen(handle().fd, backlog) < 0) {
         return std::unexpected(IOError(IOErrorCode::kListenFailed, errno));
     }
 
@@ -100,14 +106,14 @@ bool SslSocket::initEngine()
         return true;  // 已初始化，避免重复调用
     }
 
-    if (m_controller.m_handle.fd < 0 || !m_engine.isValid()) {
-        SSL_LOG_ERROR("[socket] [init]", "fd={} engine init failed", m_controller.m_handle.fd);
+    if (handle().fd < 0 || !m_engine.isValid()) {
+        SSL_LOG_ERROR("[socket] [init]", "fd={} engine init failed", handle().fd);
         return false;
     }
 
     auto result = m_engine.initMemoryBIO();
     if (!result) {
-        SSL_LOG_ERROR("[socket] [init]", "fd={} engine init failed", m_controller.m_handle.fd);
+        SSL_LOG_ERROR("[socket] [init]", "fd={} engine init failed", handle().fd);
         return false;
     }
 
@@ -123,7 +129,7 @@ bool SslSocket::initEngine()
 
 AcceptAwaitable SslSocket::accept(Host* clientHost)
 {
-    return AcceptAwaitable(&m_controller, clientHost);
+    return AcceptAwaitable(m_controller.get(), clientHost);
 }
 
 ConnectAwaitable SslSocket::connect(const Host& host)
@@ -132,7 +138,7 @@ ConnectAwaitable SslSocket::connect(const Host& host)
     m_isServer = false;
     initEngine();
 
-    return ConnectAwaitable(&m_controller, host);
+    return ConnectAwaitable(m_controller.get(), host);
 }
 
 SslHandshakeAwaitable SslSocket::handshake()
@@ -142,27 +148,27 @@ SslHandshakeAwaitable SslSocket::handshake()
         initEngine();
     }
 
-    return SslHandshakeAwaitable(&m_controller, this);
+    return SslHandshakeAwaitable(m_controller.get(), this);
 }
 
 SslRecvAwaitable SslSocket::recv(char* buffer, size_t length)
 {
-    return SslRecvAwaitable(&m_controller, this, buffer, length);
+    return SslRecvAwaitable(m_controller.get(), this, buffer, length);
 }
 
 SslSendAwaitable SslSocket::send(const char* buffer, size_t length)
 {
-    return SslSendAwaitable(&m_controller, this, buffer, length);
+    return SslSendAwaitable(m_controller.get(), this, buffer, length);
 }
 
 SslShutdownAwaitable SslSocket::shutdown()
 {
-    return SslShutdownAwaitable(&m_controller, this);
+    return SslShutdownAwaitable(m_controller.get(), this);
 }
 
 CloseAwaitable SslSocket::close()
 {
-    return CloseAwaitable(&m_controller);
+    return CloseAwaitable(m_controller.get());
 }
 
 } // namespace galay::ssl

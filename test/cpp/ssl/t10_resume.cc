@@ -39,10 +39,10 @@ void expect(bool condition, const char* message)
 
 void replaceSocketFd(SslSocket& socket, int fd, bool is_server)
 {
-    if (socket.m_controller.m_handle.fd >= 0) {
-        ::close(socket.m_controller.m_handle.fd);
+    if (socket.handle().fd >= 0) {
+        expect(::close(socket.handle().fd) == 0, "close previous socket failed");
     }
-    socket.m_controller.m_handle.fd = fd;
+    socket.controller()->m_handle.fd = fd;
     socket.m_isServer = is_server;
     socket.m_engineInitialized = false;
     expect(socket.initEngine(), "initEngine failed");

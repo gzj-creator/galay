@@ -105,7 +105,7 @@ private:
     int m_max_events = 0;  ///< 单次 poll 处理的最大事件数
     std::vector<struct epoll_event> m_events;  ///< epoll_wait 复用缓冲区
     std::vector<PendingChange> m_pending_changes;  ///< 待批量提交的 epoll 事件变更
-    std::unordered_map<IOController*, size_t> m_pending_change_index;  ///< O(1) 查找 controller 对应的 pending change 索引
+    std::unordered_map<RegistrationEntry*, size_t> m_pending_change_index;  ///< O(1) 查找稳定注册入口对应的 pending change 索引
     std::unordered_map<int, std::unique_ptr<RegistrationEntry>> m_registration_entries;  ///< fd 到稳定注册入口的映射
     std::vector<std::unique_ptr<RegistrationEntry>> m_retired_entries;  ///< 已退役但保留地址的注册入口
     std::atomic<uint64_t>& m_last_error_code;  ///< 最近一次后端错误编码输出槽位

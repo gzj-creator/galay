@@ -67,6 +67,23 @@ main = "test/cpp/serde/t10_import_smoke.cc"
 required_features = ["serde"]
 cxxflags = ["-UNDEBUG"]
 
+[targets.test_ssl_socket_move]
+kind = "bin"
+main = "test/cpp/ssl/t16_socket_move.cc"
+required_features = ["ssl"]
+cxxflags = ["-UNDEBUG", "-DGALAY_TEST_SSL_IMPORT"]
+
+[targets.test_kernel_epoll_pending_registration]
+kind = "bin"
+main = "test/cpp/kernel/t195_epoll_pending_registration.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_ssl_handshake]
+kind = "bin"
+main = "test/cpp/ssl/t12_handshake.cc"
+required_features = ["ssl"]
+cxxflags = ["-UNDEBUG"]
+
 [targets.benchmark_kernel_scheduler_dispatch]
 kind = "bin"
 main = "benchmark/cpp/kernel/b38_scheduler_dispatch.cc"

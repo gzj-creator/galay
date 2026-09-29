@@ -166,8 +166,11 @@ void EpollReactor::retireRegistrationEntry(IOController* controller) {
 }
 
 size_t EpollReactor::findPendingChangeIndex(IOController* controller) const {
-    // PERF: O(1) 查找，使用 hash map 索引
-    auto it = m_pending_change_index.find(controller);
+    const auto entry = m_registration_entries.find(controller->m_handle.fd);
+    if (entry == m_registration_entries.end() || entry->second->controller != controller) {
+        return m_pending_changes.size();
+    }
+    auto it = m_pending_change_index.find(entry->second.get());
     if (it != m_pending_change_index.end()) {
         return it->second;
     }
@@ -180,19 +183,16 @@ void EpollReactor::erasePendingChange(size_t index) {
     }
 
     // PERF: swap-and-pop 删除，避免移动元素
-    auto* entry = m_pending_changes[index].entry;
-    if (entry && entry->controller) {
-        m_pending_change_index.erase(entry->controller);
-    }
+    // 注销或 controller 析构会清空 entry->controller，但 entry 的地址仍稳定。
+    // 用 entry 作 key，才能在这些路径上清除索引，避免后续注册覆盖其他 fd。
+    // erase 的计数仅报告是否存在；队列清理无需使用该计数。
+    (void)m_pending_change_index.erase(m_pending_changes[index].entry);
 
     if (index != m_pending_changes.size() - 1) {
         // 将最后一个元素移到被删除位置
         m_pending_changes[index] = std::move(m_pending_changes.back());
         // 更新被移动元素的索引
-        auto* moved_entry = m_pending_changes[index].entry;
-        if (moved_entry && moved_entry->controller) {
-            m_pending_change_index[moved_entry->controller] = index;
-        }
+        m_pending_change_index[m_pending_changes[index].entry] = index;
     }
 
     m_pending_changes.pop_back();
@@ -284,7 +284,7 @@ int EpollReactor::applyEvents(IOController* controller, uint32_t events, bool fl
             .entry = entry,
             .events = events,
         });
-        m_pending_change_index[controller] = new_index;
+        m_pending_change_index[entry] = new_index;
     }
 
     if (flush_at_threshold && m_pending_changes.size() >= BATCH_THRESHOLD) {

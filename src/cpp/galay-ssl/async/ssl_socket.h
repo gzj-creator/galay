@@ -21,6 +21,7 @@
 #include "../../galay-kernel/core/io_scheduler.hpp"
 #include "../../galay-kernel/core/awaitable.h"
 #include <expected>
+#include <memory>
 #include <vector>
 
 namespace galay::ssl
@@ -114,23 +115,25 @@ public:
 
     /**
      * @brief 移动构造函数
+     * @note 保持 IO 控制器地址稳定；移动前须完成依赖当前 SslSocket 的 TLS 操作。
      */
     SslSocket(SslSocket&& other) noexcept;
 
     /**
      * @brief 移动赋值运算符
+     * @note 赋值前须显式关闭当前句柄，并完成双方依赖 SslSocket 的 TLS 操作。
      */
     SslSocket& operator=(SslSocket&& other) noexcept;
 
     /**
      * @brief 获取底层 socket 句柄
      */
-    GHandle handle() const { return m_controller.m_handle; }
+    GHandle handle() const { return m_controller ? m_controller->m_handle : GHandle::invalid(); }
 
     /**
      * @brief 获取 IO 控制器指针
      */
-    IOController* controller() { return &m_controller; }
+    IOController* controller() { return m_controller.get(); }
 
     /**
      * @brief 获取 SSL 引擎指针
@@ -140,7 +143,7 @@ public:
     /**
      * @brief 检查 socket 是否有效
      */
-    bool isValid() const { return m_controller.m_handle.fd >= 0 && m_engine.isValid(); }
+    bool isValid() const { return handle().fd >= 0 && m_engine.isValid(); }
 
     /**
      * @brief 检查 SSL 握手是否完成
@@ -166,7 +169,7 @@ public:
     /**
      * @brief 获取句柄选项配置器
      */
-    HandleOption option() { return HandleOption(m_controller.m_handle); }
+    HandleOption option() { return HandleOption(handle()); }
 
     /**
      * @brief 设置 SNI 主机名（客户端使用）
@@ -300,7 +303,7 @@ private:
 private:
     friend class SslOperationDriver;
 
-    IOController m_controller;  ///< IO 事件控制器
+    std::unique_ptr<IOController> m_controller;  ///< 地址稳定、独占持有的 IO 事件控制器
     SslEngine m_engine;         ///< SSL 引擎
     std::vector<char> m_handshakeBuffer;   ///< 握手阶段的密文缓冲区
     std::vector<char> m_shutdownBuffer;    ///< 关闭阶段的密文缓冲区

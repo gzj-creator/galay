@@ -47,6 +47,8 @@
 
 ### Fixed
 
+- **修复 SSL socket 构建与移动语义**：通过独占指针保持不可移动 IOController 的地址和注册关系稳定，移动后的源对象显式报告关闭状态；补充移动构造、赋值、已有 awaitable 和源对象析构回归。
+- **修复 epoll 并发握手超时**：pending change 索引改用地址稳定的 RegistrationEntry，注销或 controller 析构后仍能清理索引，避免地址复用和 swap-and-pop 更新覆盖其他 fd 的注册。
 - **定位 H1 密集 accept 超时并收紧测量门禁**：确认宿主机 conntrack 满表丢弃 SYN，增加 B41 握手/就绪诊断和独立可复核对照；隔离网络环境下完成 122880 次连接及 B41 连续 20 轮，解析器严格校验 2048/8192 操作数，保留红绿测试和 ASan 证据。
 - **修复 epoll pending flush 的错误传播与遍历**：保留 accept 注册失败的返回值，swap-and-pop 删除后继续处理换入项；T189 新增混合失败/成功注册回归，所有权转移用例保持 IOController 不可移动及地址稳定。
 - **修正 accept 基准的等待上限与诊断**：B41 改用 2 秒实际时间上限，输出 syscall、poll/dispatch 和未完成批次信息；密集建连仍可超时，保留失败结果并明确其不构成完整性能验收通过。
@@ -61,6 +63,7 @@
 
 ### Chore
 
+- 新增 T195 epoll 注册生命周期和 T16 SSL socket 移动回归，接入 mcpp 的 SSL 移动、并发握手及 epoll 注册测试目标；LLVM 22.1.8 模块构建与三个回归程序通过。
 - **独立清理 H3 的 26 项阻塞风格问题**：补齐 E13 import 示例，迁移编号化腾讯脚本和 prelude 生成器，删除 Linux verifier 兼容入口，修正已有测试白名单路径并编号断言测试；同步调用方、增加 5 项回归，最终 19 项定向 CTest 与两种 E13 Release 示例通过，保留非阻塞建议；文档保留验证结论，19 份原始日志不纳入提交历史。
 - 本轮修复已验证 io_uring 完整内核库构建、相关定向回归及 HTTP 静态文件读取，epoll 文件 IO/RAII 回归通过；尚未验证原生 kqueue 或全量测试，T189/T191 中直接移动不可移动 `IOController` 的既有测试用法仍待处理，未新增性能等价结论。
 - 按当前工作区状态提交 `mcpp.lock`，移除已有的 `compat.openssl` 3.5.1 锁记录；未重新解析依赖、改变 manifest 或生成版本号。
