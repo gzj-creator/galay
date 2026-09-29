@@ -430,6 +430,51 @@ bool runResumeQueueDuplicateScenario() {
     return true;
 }
 
+bool runResumeQueueOwnershipScenario() {
+    static_assert(alignof(TaskState) >= 2); // The low bit belongs to the promise view.
+    detail::TaskResumeQueue queue;
+    if (queue.push(TaskRef{})) {
+        std::cerr << "[T97] empty reference was admitted\n";
+        return false;
+    }
+    TaskRef owner = makeTaskRef();
+    TaskState* state = owner.state();
+    const auto handle = std::coroutine_handle<TaskPromise<void>>::from_address(
+        state->m_handle.address());
+    const TaskRef& borrowed = handle.promise().taskRefView();
+    if (!borrowed.isValid() || borrowed.state() != state ||
+        (reinterpret_cast<uintptr_t>(state) & 1U) != 0 || state->m_refs.load() != 1) {
+        std::cerr << "[T97] invalid aligned promise view\n";
+        return false;
+    }
+    // Passing the const borrowed view by value must materialize an owning ref.
+    if (!queue.push(borrowed) || state->m_refs.load() != 2 ||
+        !borrowed.isValid() || queue.push(borrowed) || state->m_refs.load() != 2) {
+        std::cerr << "[T97] borrowed view copy/duplicate ownership imbalance\n";
+        return false;
+    }
+    detail::TaskResumeQueue::releaseAll(queue.takeAll());
+    if (state->m_refs.load() != 1 || state->m_resume_queue_claimed.load()) {
+        std::cerr << "[T97] drain did not release reference and claim\n";
+        return false;
+    }
+    TaskRef moved(borrowed);
+    if (!queue.push(std::move(moved)) || moved.isValid() ||
+        queue.push(std::move(moved)) || state->m_refs.load() != 2) {
+        std::cerr << "[T97] moved reference admission imbalance\n";
+        return false;
+    }
+    detail::TaskResumeQueue::releaseAll(queue.takeAll());
+    queue.close();
+    if (queue.push(borrowed) || state->m_refs.load() != 1 ||
+        state->m_resume_queue_claimed.load() || !queue.empty()) {
+        std::cerr << "[T97] closed rejection did not restore ownership\n";
+        return false;
+    }
+    std::cout << "T97 resume ownership: empty/borrowed-copy/move/duplicate/drain/close PASS\n";
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -452,6 +497,9 @@ int main() {
         return 1;
     }
     if (!runResumeQueueDuplicateScenario()) {
+        return 1;
+    }
+    if (!runResumeQueueOwnershipScenario()) {
         return 1;
     }
     std::cout << "T97-ioscheduler_inject_ring_fallback PASS\n";
