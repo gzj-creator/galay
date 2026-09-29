@@ -17,6 +17,7 @@
 #include <optional>
 #include <string_view>
 #include <thread>
+#include <type_traits>
 #include <utility>
 
 #ifdef USE_EPOLL
@@ -28,6 +29,9 @@
 
 using namespace galay::kernel;
 using namespace std::chrono_literals;
+
+static_assert(!std::is_move_constructible_v<IOController>);
+static_assert(!std::is_move_assignable_v<IOController>);
 
 namespace galay::kernel {
 struct EpollReactorTestAccess {
@@ -349,14 +353,20 @@ bool runBoundaries() {
     first.timer->handleTimeout(); // 旧 timer 不能取消同资源上的新 operation。
     scheduler.deliver(old_event); // 已拷贝的旧 event 不能访问新 operation。
     if (first_key == next_key || next.resumes != 0 || scheduler.dispatch() != 0) { return false; }
-    // IOController 的既有移动契约必须包含 pending accept；释放旧地址后才关闭。
-    auto moved = std::make_unique<IOController>(std::move(*controller));
-    controller.reset();
-    controller = std::move(moved);
-    if (scheduler.addClose(controller.get()) != 0) { return false; }
+    // 只转移拥有者，controller 地址及 pending accept 的注册入口必须保持稳定。
+    auto* const stable_controller = controller.get();
+    auto* const registration_slot = controller->m_registration_owner_slot;
+    auto transferred = std::move(controller);
+    if (controller || transferred.get() != stable_controller || registration_slot == nullptr ||
+        transferred->m_registration_owner_slot != registration_slot ||
+        *registration_slot != transferred.get() ||
+        transferred->m_awaitable[IOController::READ] != next.awaitable) {
+        return false;
+    }
+    if (scheduler.addClose(transferred.get()) != 0) { return false; }
     const int closed_fd = listener.release();
     if (closed_fd < 0) { return false; }
-    controller.reset();
+    transferred.reset();
     if (scheduler.dispatch() != 1 || next.resumes != 1 || next.scope_destroys != 1) { return false; }
     scheduler.deliver(old_event); // controller/frame 释放后同一 event 仍可安全丢弃。
     Trace invalid;
@@ -402,7 +412,7 @@ bool runBoundaries() {
     immediate.timer->handleTimeout();
     const bool ok = scheduler.dispatch() == 0 && immediate.resumes == 1 &&
         immediate.scope_destroys == 1 && accepted.close();
-    std::cout << "T189 duplicate/key-reuse/fd-reuse/late-timer/invalid/synchronous/null-peer "
+    std::cout << "T189 duplicate/key-reuse/owner-transfer/fd-reuse/late-timer/invalid/synchronous/null-peer "
               << (ok ? "PASS" : "FAIL") << '\n';
     return ok;
 }
@@ -431,6 +441,48 @@ bool runRegistrationFailure() {
     if (trace.timer) { trace.timer->handleTimeout(); }
     std::cout << "T189 deferred-registration-failure " << (resumed && error ? "PASS" : "FAIL") << '\n';
     return resumed && error;
+}
+
+bool runMixedRegistrationFailure() {
+    ManualScheduler scheduler;
+    if (!scheduler.initialize()) { return false; }
+    TestFd failed_fd(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
+    TestFd valid_fd(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
+    for (const auto* fd : {&failed_fd, &valid_fd}) {
+        sockaddr_in address{};
+        address.sin_family = AF_INET;
+        address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+        if (fd->get() < 0 ||
+            ::bind(fd->get(), reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 ||
+            ::listen(fd->get(), 16) != 0) { return false; }
+    }
+    IOController failed(GHandle{.fd = failed_fd.get()});
+    IOController valid(GHandle{.fd = valid_fd.get()});
+    Trace failure;
+    Trace pending;
+    if (!scheduleTask(scheduler, acceptOnce(&failed, &failure, false)) ||
+        scheduler.dispatch() != 1 ||
+        !scheduleTask(scheduler, acceptOnce(&valid, &pending, false)) ||
+        scheduler.dispatch() != 1 || !failed_fd.close()) { return false; }
+
+    // 删除失败 ADD 后，swap-and-pop 换入同一索引的有效 ADD 仍必须提交。
+    // 成功恢复失败 operation 不能把整个 flush 的失败返回值覆盖为成功。
+    const bool flush_failed = !scheduler.flush();
+    const bool registered = (valid.m_registered_events & EPOLLIN) != 0;
+    const bool failed_once = scheduler.dispatch() == 1 && failure.resumes == 1 &&
+        failure.scope_destroys == 1 && failure.result && !*failure.result &&
+        IOError::contains(failure.result->error().code(), kAcceptFailed) &&
+        (failure.result->error().code() >> 32) == EBADF && pending.resumes == 0;
+
+    const bool closed = scheduler.addClose(&valid) == 0;
+    const int closed_fd = valid_fd.release();
+    const bool drained = scheduler.dispatch() == 1 && pending.resumes == 1 &&
+        pending.scope_destroys == 1 && pending.result && !*pending.result &&
+        IOError::contains(pending.result->error().code(), kClosed);
+    const bool ok = flush_failed && registered && failed_once && closed && closed_fd >= 0 && drained;
+    std::cout << "T189 mixed-registration-failure " << (ok ? "PASS" : "FAIL")
+              << " flush_failed=" << flush_failed << " registered=" << registered << '\n';
+    return ok;
 }
 
 bool runExpiredTimerDuringSubmit() {
@@ -723,6 +775,7 @@ int main(int argc, char** argv) {
     if (selected.empty()) {
         ok = runBoundaries() && ok;
         ok = runRegistrationFailure() && ok;
+        ok = runMixedRegistrationFailure() && ok;
         ok = runExpiredTimerDuringSubmit() && ok;
         ok = runReentrantRegistrationFailure() && ok;
         ok = runInlineRecoveryAndResultOwnership() && ok;

@@ -13,6 +13,7 @@
 
 ### Added
 
+- **新增可复核性能实验与交接记录**：增加串行变体测量脚本及 6 项测试，保存 Release/LTO/PGO 的配置、成功与失败原始样本、校验和及独立 pending 索引生命周期实验；记录未采用优化的依据和后续排查入口，不改变默认编译选项或引入生产 Abseil 依赖。
 - **新增调度配置与文件移动回归**：T192 覆盖默认、高吞吐、低延迟及自定义配置下的借用分派、任务恢复、IO 与超时；T193 覆盖 `AsyncFile` 控制器地址稳定、已提交 IO 后移动、源对象复用及 fd 释放，并增加默认宏与预设配置重合时的编译检查。
 - **新增自定义 IO 配置示例**：E13 演示通过 `IOSchedulerConfig` 配置事件容量、协程批量大小与 io_uring 队列深度，并独立管理调度器生命周期；明确配置不替换 reactor/poll 策略，`Runtime` 仍不支持自定义调度器注入。
 - **新增异步操作完成基础模块**：引入独立 `OperationKey`、`OperationState`、`OperationCompletion` 与唯一 `ResumeCapability`，以 `AcceptOperation` 和 `AcceptedConnection` 承载单次 accept 的结果、恢复权及未消费连接的 RAII 回收。
@@ -43,6 +44,8 @@
 
 ### Fixed
 
+- **修复 epoll pending flush 的错误传播与遍历**：保留 accept 注册失败的返回值，swap-and-pop 删除后继续处理换入项；T189 新增混合失败/成功注册回归，所有权转移用例保持 IOController 不可移动及地址稳定。
+- **修正 accept 基准的等待上限与诊断**：B41 改用 2 秒实际时间上限，输出 syscall、poll/dispatch 和未完成批次信息；密集建连仍可超时，保留失败结果并明确其不构成完整性能验收通过。
 - **修复非默认 IO 配置的错误向下转换**：`Scheduler*` 分派、IO awaitable 和 AIO 注册统一转换到实际存在的后端基类，不再把高吞吐、低延迟或自定义配置对象当作默认配置对象使用。
 - **修复后端模板化后的编译与超时适配**：移除 io_uring 不存在的 `flush()` 调用并恢复专用等待超时上限，将 kqueue 的纳秒超时转换为 `timespec`；移除预设显式实例化，避免默认宏与预设重合时重复实例化。
 - **修复 `AsyncFile` 移动语义与控制器契约冲突**：通过 `unique_ptr<IOController>` 转移所有权并保持控制器地址稳定，不放开控制器的移动限制；移动后的源对象可重新 `open/adopt`，空对象操作返回 `kClosed`，析构与替换旧 fd 时检查关闭结果并记录失败原因。

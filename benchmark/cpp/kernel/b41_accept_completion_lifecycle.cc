@@ -62,7 +62,11 @@ Task<void> acceptBatch(IOController& controller, Batch& batch) {
     for (size_t i = 0; i != batch.accepted.size(); ++i) {
         Host peer;
         auto result = co_await AcceptAwaitable(&controller, &peer);
-        if (!result) { ++batch.errors; co_return; }
+        if (!result) {
+            std::cerr << "B41 accept error=" << result.error().code() << '\n';
+            ++batch.errors;
+            co_return;
+        }
         batch.accepted[i] = result->fd;
         batch.latencies[i] = std::chrono::duration<double, std::micro>(Clock::now() - batch.starts[i]).count();
         ++batch.completed;
@@ -104,21 +108,35 @@ bool measure(size_t width, size_t rounds) {
             batch.completed != 0 || !owner.registered(controller)) { ++errors; break; }
         for (auto& client : clients) {
             client = ::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0);
-            if (client < 0) { ++errors; }
+            if (client < 0) {
+                std::cerr << "B41 socket errno=" << errno << '\n';
+                ++errors;
+            }
         }
         const auto begin = Clock::now();
         for (size_t i = 0; i != width; ++i) {
             batch.starts[i] = Clock::now();
             if (::connect(clients[i], reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0 &&
-                errno != EINPROGRESS) { ++errors; }
+                errno != EINPROGRESS) {
+                std::cerr << "B41 connect errno=" << errno << '\n';
+                ++errors;
+            }
         }
-        // 只在同步 driver poll；硬上限用于报告 OS/setup 故障，不放入协程。
-        for (unsigned pass = 0; batch.completed != width && batch.errors == 0 && pass != 10000; ++pass) {
-            if (!owner.poll()) { ++errors; break; }
-            if (!owner.dispatch()) { ++errors; break; }
+        // 只在同步 driver poll。以时间限制 setup 故障，不能把空 poll 次数
+        // 当成超时：本机 10000 次仅约 5 ms，会提前中断尚未完成的连接。
+        const auto deadline = begin + std::chrono::seconds(2);
+        unsigned passes = 0;
+        for (; batch.completed != width && batch.errors == 0 && Clock::now() < deadline; ++passes) {
+            if (!owner.poll()) { std::cerr << "B41 poll failed\n"; ++errors; break; }
+            if (!owner.dispatch()) { std::cerr << "B41 dispatch failed\n"; ++errors; break; }
         }
         const double seconds = std::chrono::duration<double>(Clock::now() - begin).count();
         errors += batch.errors + (batch.completed != width);
+        if (errors != 0) {
+            std::cerr << "B41 incomplete batch=" << width << " round=" << round
+                      << " completed=" << batch.completed << " passes=" << passes
+                      << " seconds=" << seconds << '\n';
+        }
         if (round >= warmup) {
             elapsed += seconds;
             samples.insert(samples.end(), batch.latencies.begin(), batch.latencies.end());

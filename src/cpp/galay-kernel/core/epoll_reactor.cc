@@ -329,6 +329,7 @@ int EpollReactor::updateRegistration(IOController* controller, uint32_t events) 
 int EpollReactor::flushPendingChanges() {
     // FIX: 收集所有需要执行的恢复能力，避免在遍历期间修改状态
     std::vector<ResumeCapability> resumes_to_execute;
+    int first_error = 0;
 
     size_t index = 0;
     while (index < m_pending_changes.size()) {
@@ -353,6 +354,9 @@ int EpollReactor::flushPendingChanges() {
         }
 
         const auto error = static_cast<uint32_t>(-ret);
+        if (first_error == 0) {
+            first_error = ret;
+        }
         detail::storeBackendError(m_last_error_code, kNotReady, error);
         if (events == EPOLLET) {
             // FIX: 安全执行所有收集的恢复
@@ -372,7 +376,7 @@ int EpollReactor::flushPendingChanges() {
                 if (resume) {
                     // FIX: 保存到容器，稍后执行
                     resumes_to_execute.push_back(std::move(*resume));
-                    ++index;
+                    // erasePendingChange 会把末项换入 index，必须继续处理此位置。
                     continue;
                 }
                 detail::storeBackendError(m_last_error_code, kNotReady, EINVAL);
@@ -389,7 +393,7 @@ int EpollReactor::flushPendingChanges() {
     for (auto& resume : resumes_to_execute) {
         std::move(resume).resume();
     }
-    return 0;
+    return first_error;
 }
 
 int EpollReactor::addAccept(IOController* controller) {

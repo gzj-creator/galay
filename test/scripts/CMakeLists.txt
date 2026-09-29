@@ -21,3 +21,9 @@ add_test(
     COMMAND python3 -B "${CMAKE_CURRENT_SOURCE_DIR}/t4_module_prelude_intrin_guard.py"
 )
 set_tests_properties(scripts.module_prelude_intrin_guard PROPERTIES LABELS "scripts;unit")
+
+add_test(
+    NAME scripts.optimization_measurement
+    COMMAND python3 -B "${CMAKE_CURRENT_SOURCE_DIR}/t5_optimization_measurement.py"
+)
+set_tests_properties(scripts.optimization_measurement PROPERTIES LABELS "scripts;unit")

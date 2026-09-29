@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.28)
+project(pending_index_experiment LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Deliberately standalone: this experiment adds no production dependency.
+if(NOT EXISTS "${ABSEIL_SOURCE_DIR}/absl/container/flat_hash_map.h")
+    message(FATAL_ERROR "Set ABSEIL_SOURCE_DIR to the pinned Abseil checkout")
+endif()
+set(ABSL_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+set(ABSL_PROPAGATE_CXX_STD ON CACHE BOOL "" FORCE)
+add_subdirectory("${ABSEIL_SOURCE_DIR}" abseil EXCLUDE_FROM_ALL)
+add_executable(benchmark_pending_index_lifecycle pending_index_lifecycle.cc)
+target_link_libraries(benchmark_pending_index_lifecycle PRIVATE absl::flat_hash_map)
