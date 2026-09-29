@@ -3,14 +3,26 @@
 #ifdef USE_EPOLL
 namespace galay::kernel {
 
-// 显式实例化默认配置的调度器
-template class EpollSchedulerT<DefaultIOSchedulerConfig>;
+EpollSchedulerBackend::EpollSchedulerBackend(int max_events, int batch_size)
+    : IOSchedulerBase<EpollSchedulerBackend, EpollReactor>(max_events, batch_size)
+{
+}
 
-// 显式实例化高性能配置的调度器
-template class EpollSchedulerT<HighPerformanceIOSchedulerConfig>;
+EpollSchedulerBackend::~EpollSchedulerBackend()
+{
+    stop();
+}
 
-// 显式实例化低延迟配置的调度器
-template class EpollSchedulerT<LowLatencyIOSchedulerConfig>;
+void EpollSchedulerBackend::pollBackend()
+{
+    m_reactor.poll(schedulerPollTimeoutMilliseconds(), m_wake_coordinator);
+}
+
+void EpollSchedulerBackend::flushBackend()
+{
+    // flush 将错误保存到 lastError；事件循环继续排空已接纳的任务。
+    (void)m_reactor.flushPendingChanges();
+}
 
 } // namespace galay::kernel
 #endif

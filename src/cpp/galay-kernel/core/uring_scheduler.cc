@@ -3,14 +3,25 @@
 #ifdef USE_IOURING
 namespace galay::kernel {
 
-// 显式实例化默认配置的调度器
-template class IOUringSchedulerT<DefaultIOSchedulerConfig>;
+IOUringSchedulerBackend::IOUringSchedulerBackend(int queue_depth, int batch_size)
+    : IOSchedulerBase<IOUringSchedulerBackend, IOUringReactor>(queue_depth, batch_size)
+{
+}
 
-// 显式实例化高性能配置的调度器
-template class IOUringSchedulerT<HighPerformanceIOSchedulerConfig>;
+IOUringSchedulerBackend::~IOUringSchedulerBackend()
+{
+    stop();
+}
 
-// 显式实例化低延迟配置的调度器
-template class IOUringSchedulerT<LowLatencyIOSchedulerConfig>;
+void IOUringSchedulerBackend::pollBackend()
+{
+    m_reactor.poll(schedulerPollTimeoutIoUringNanoseconds(), m_wake_coordinator);
+}
+
+void IOUringSchedulerBackend::flushBackend()
+{
+    // io_uring 请求由 reactor 提交，不需要 readiness 后端的延后注册 flush。
+}
 
 } // namespace galay::kernel
 #endif

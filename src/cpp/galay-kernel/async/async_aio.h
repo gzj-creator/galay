@@ -306,7 +306,7 @@ inline bool AioCommitAwaitable::await_suspend(std::coroutine_handle<Promise> han
             galay::kernel::IOError(galay::kernel::kNotRunningOnIOScheduler, errno));
         return false;
     }
-    auto io_scheduler = static_cast<galay::kernel::IOScheduler*>(scheduler);
+    auto io_scheduler = static_cast<galay::kernel::IOSchedulerBackend*>(scheduler);
 
     m_controller->m_handle.fd = m_event_fd;
     m_controller->fillAwaitable(FILEREAD, this);

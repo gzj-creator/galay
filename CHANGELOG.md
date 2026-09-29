@@ -13,6 +13,8 @@
 
 ### Added
 
+- **新增调度配置与文件移动回归**：T192 覆盖默认、高吞吐、低延迟及自定义配置下的借用分派、任务恢复、IO 与超时；T193 覆盖 `AsyncFile` 控制器地址稳定、已提交 IO 后移动、源对象复用及 fd 释放，并增加默认宏与预设配置重合时的编译检查。
+- **新增自定义 IO 配置示例**：E13 演示通过 `IOSchedulerConfig` 配置事件容量、协程批量大小与 io_uring 队列深度，并独立管理调度器生命周期；明确配置不替换 reactor/poll 策略，`Runtime` 仍不支持自定义调度器注入。
 - **新增异步操作完成基础模块**：引入独立 `OperationKey`、`OperationState`、`OperationCompletion` 与唯一 `ResumeCapability`，以 `AcceptOperation` 和 `AcceptedConnection` 承载单次 accept 的结果、恢复权及未消费连接的 RAII 回收。
 - **新增 accept 生命周期测试与基准**：新增 T185–T191，覆盖 pending accept、完成竞争、frame/controller 解绑、真实及重排 CQE、fd 回收与 multishot arena 生命周期；新增 B39–B41，并接入 CMake/CTest、mcpp 及 epoll 10k/io_uring 2k pending 压力入口。
 - **接入 serde 结构体序列化模块**：新增 `galay-serde` 构建入口、JSON/TOML 结构体往返测试、示例和编码解码基准，支持 CMake、Bazel 与 mcpp。
@@ -23,6 +25,7 @@
 
 ### Changed
 
+- **收敛 IO 调度器的 CRTP 特化边界**：各配置共享对应后端的真实基类，事件循环由每个 `Config` 独立特化收敛为每后端一份；保留后端级非虚静态分派，配置模板只负责提供构造容量，不将此调整视为配置级特化或性能完全等价。
 - **归档 HTTP/kqueue listener 关闭的探索性实现**：HTTP stop 在停止 Runtime 前向 IO owner 提交 listener close 并等待任务；kqueue close 冻结旧 accept 的关闭结果、取消 timer 并唤醒。仅保存已有工作区实现，其同步等待、错误路径和完成协议仍待后续门禁验证，不视为生产 Runtime drain 或 kqueue typed completion 完成。
 - **epoll/io_uring 单次 accept 接入 typed completion**：ready、timeout、close、owner stop 和提交失败共享唯一完成裁决，恢复前解除 controller slot、timer 和 frame 借用，`await_resume()` 仅消费已冻结结果；删除旧 io_uring accept 结果 gate 和恢复路径。
 - **分离单次 accept 与持久 multishot 生命周期**：单次恢复不等待 original terminal，后续 accepted fd 继续由资源队列缓存；持久 handle/arena 独立保活与回收，并补充 owner stop 和重启 admission 接线。
@@ -40,6 +43,9 @@
 
 ### Fixed
 
+- **修复非默认 IO 配置的错误向下转换**：`Scheduler*` 分派、IO awaitable 和 AIO 注册统一转换到实际存在的后端基类，不再把高吞吐、低延迟或自定义配置对象当作默认配置对象使用。
+- **修复后端模板化后的编译与超时适配**：移除 io_uring 不存在的 `flush()` 调用并恢复专用等待超时上限，将 kqueue 的纳秒超时转换为 `timespec`；移除预设显式实例化，避免默认宏与预设重合时重复实例化。
+- **修复 `AsyncFile` 移动语义与控制器契约冲突**：通过 `unique_ptr<IOController>` 转移所有权并保持控制器地址稳定，不放开控制器的移动限制；移动后的源对象可重新 `open/adopt`，空对象操作返回 `kClosed`，析构与替换旧 fd 时检查关闭结果并记录失败原因。
 - **保留 HTTP/2 静态缓存的 LLVM/libc++ 兼容性调整**：将 `atomic<shared_ptr>` 成员改为普通 `shared_ptr` 与原子自由函数，保持 acquire/acq_rel 内存序与只发布一次的语义；本次仅提交工作区已有修改。
 - **修复 io_uring accept 完成与资源回收边界**：关闭 stale 成功 CQE 携带的 fd，避免 ready 后 close 覆盖结果或重复唤醒，并消除 terminal CQE 在恢复回调释放 controller/awaiter 后继续访问的 UAF；未消费成功结果自动关闭连接。
 - **修复 serde 安装与模块消费接线**：保留 serde 子目录的默认安装规则，统一由 `galay::serde` 传递 C++23 模块依赖，并更新外部 consumer、模块 smoke 和 tracing 配置测试。
@@ -48,11 +54,13 @@
 
 ### Chore
 
+- 本轮修复已验证 io_uring 完整内核库构建、相关定向回归及 HTTP 静态文件读取，epoll 文件 IO/RAII 回归通过；尚未验证原生 kqueue 或全量测试，T189/T191 中直接移动不可移动 `IOController` 的既有测试用法仍待处理，未新增性能等价结论。
 - 按当前工作区状态提交 `mcpp.lock`，移除已有的 `compat.openssl` 3.5.1 锁记录；未重新解析依赖、改变 manifest 或生成版本号。
 - 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。
 
 ### Docs
 
+- 将本次异步操作重构的 916 个原始证据文件纳入版本控制，保留全部红绿日志、失败/skip、B41 样本、分析脚本、反汇编和隔离 before 源码归档；附索引与 SHA-256 清单，排除四个 ELF 构建产物，不改变现有门禁结论。
 - 新增异步操作取消设计与执行计划，记录所有权契约、实际红绿测试、GCC/LLVM 与 sanitizer/module 验证、隔离 B41 七轮 before/after 及分配审计；明确 awaiter/frame 增长成本，Step 3 整体仍为 NO-GO，生产 Runtime drain、累计性能与内存等门禁未完成，HTTP/connect 未开放。
 - 将 serde 使用说明移动到 `docs/cpp/modules/serde/00-快速开始.md`，同步更新相关模块的依赖和构建说明。
 - 更新 `docs/cpp/modules/kernel/10-调度器.md` 与 `02-API参考.md`，说明 CRTP 静态分派、`IOSchedulerBase` 共享实现、`IOReadyQueue` 职责边界及 Runtime 内置调度器所有权语义。

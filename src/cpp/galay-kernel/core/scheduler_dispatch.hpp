@@ -17,8 +17,8 @@ inline std::expected<void, IOError> Scheduler::start()
     if (m_test_hooks) { return m_test_hooks->start(this); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOScheduler, kIOScheduler>::start(
-            static_cast<IOScheduler*>(this));
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::start(
+            static_cast<IOSchedulerBackend*>(this));
     }
     return SchedulerBase<ParallelScheduler, kParallelScheduler>::start(
         static_cast<ParallelScheduler*>(this));
@@ -30,7 +30,7 @@ inline void Scheduler::stop()
     if (m_test_hooks) { m_test_hooks->stop(this); return; }
 #endif
     if (m_type == kIOScheduler) {
-        SchedulerBase<IOScheduler, kIOScheduler>::stop(static_cast<IOScheduler*>(this));
+        SchedulerBase<IOSchedulerBackend, kIOScheduler>::stop(static_cast<IOSchedulerBackend*>(this));
     } else {
         SchedulerBase<ParallelScheduler, kParallelScheduler>::stop(
             static_cast<ParallelScheduler*>(this));
@@ -43,8 +43,8 @@ inline bool Scheduler::schedule(TaskRef task) noexcept
     if (m_test_hooks) { return m_test_hooks->schedule(this, std::move(task)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOScheduler, kIOScheduler>::schedule(
-            static_cast<IOScheduler*>(this), std::move(task));
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::schedule(
+            static_cast<IOSchedulerBackend*>(this), std::move(task));
     }
     return SchedulerBase<ParallelScheduler, kParallelScheduler>::schedule(
         static_cast<ParallelScheduler*>(this), std::move(task));
@@ -56,8 +56,8 @@ inline bool Scheduler::scheduleResume(TaskRef task) noexcept
     if (m_test_hooks) { return m_test_hooks->scheduleResume(this, std::move(task)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOScheduler, kIOScheduler>::scheduleResume(
-            static_cast<IOScheduler*>(this), std::move(task));
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleResume(
+            static_cast<IOSchedulerBackend*>(this), std::move(task));
     }
     return SchedulerBase<ParallelScheduler, kParallelScheduler>::scheduleResume(
         static_cast<ParallelScheduler*>(this), std::move(task));
@@ -69,8 +69,8 @@ inline bool Scheduler::scheduleDeferred(TaskRef task) noexcept
     if (m_test_hooks) { return m_test_hooks->scheduleDeferred(this, std::move(task)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOScheduler, kIOScheduler>::scheduleDeferred(
-            static_cast<IOScheduler*>(this), std::move(task));
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleDeferred(
+            static_cast<IOSchedulerBackend*>(this), std::move(task));
     }
     return SchedulerBase<ParallelScheduler, kParallelScheduler>::scheduleDeferred(
         static_cast<ParallelScheduler*>(this), std::move(task));
@@ -82,8 +82,8 @@ inline bool Scheduler::scheduleImmediately(TaskRef task) noexcept
     if (m_test_hooks) { return m_test_hooks->scheduleImmediately(this, std::move(task)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOScheduler, kIOScheduler>::scheduleImmediately(
-            static_cast<IOScheduler*>(this), std::move(task));
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleImmediately(
+            static_cast<IOSchedulerBackend*>(this), std::move(task));
     }
     return SchedulerBase<ParallelScheduler, kParallelScheduler>::scheduleImmediately(
         static_cast<ParallelScheduler*>(this), std::move(task));
@@ -95,8 +95,8 @@ inline bool Scheduler::scheduleReadyEntry(detail::ReadyEntry& entry) noexcept
     if (m_test_hooks) { return false; }
 #endif
     if (m_type != kIOScheduler) { return false; }
-    return SchedulerBase<IOScheduler, kIOScheduler>::scheduleReadyEntry(
-        static_cast<IOScheduler*>(this), entry);
+    return SchedulerBase<IOSchedulerBackend, kIOScheduler>::scheduleReadyEntry(
+        static_cast<IOSchedulerBackend*>(this), entry);
 }
 
 inline bool Scheduler::addTimer(Timer::ptr timer)
@@ -105,8 +105,8 @@ inline bool Scheduler::addTimer(Timer::ptr timer)
     if (m_test_hooks) { return m_test_hooks->addTimer(this, std::move(timer)); }
 #endif
     if (m_type == kIOScheduler) {
-        return SchedulerBase<IOScheduler, kIOScheduler>::addTimer(
-            static_cast<IOScheduler*>(this), std::move(timer));
+        return SchedulerBase<IOSchedulerBackend, kIOScheduler>::addTimer(
+            static_cast<IOSchedulerBackend*>(this), std::move(timer));
     }
     return SchedulerBase<ParallelScheduler, kParallelScheduler>::addTimer(
         static_cast<ParallelScheduler*>(this), std::move(timer));

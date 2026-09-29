@@ -57,9 +57,10 @@ private:
     int m_fd;
 };
 bool closed(int fd) { errno = 0; return ::fcntl(fd, F_GETFD) == -1 && errno == EBADF; }
-class Owner final : public IOUringScheduler {
+using OwnerScheduler = IOUringSchedulerT<IOSchedulerConfig<
+    GALAY_SCHEDULER_MAX_EVENTS, GALAY_SCHEDULER_BATCH_SIZE, 32>>;
+class Owner final : public OwnerScheduler {
 public:
-    Owner() : IOUringScheduler(32) {}
     bool initialize() {
         if (!m_reactor.start() || !m_worker.reopenResumeAdmission()) { return false; }
         m_threadId = std::this_thread::get_id();

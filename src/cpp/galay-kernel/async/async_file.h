@@ -22,6 +22,7 @@
 #include "../core/awaitable.h"
 #include "../common/error.h"
 #include <expected>
+#include <memory>
 #include <string>
 #include <fcntl.h>
 
@@ -66,8 +67,9 @@ public:
     AsyncFile& operator=(const AsyncFile&) = delete;
 
     /**
-     * @brief 移动构造函数；从 other 转移 IO 控制器
+     * @brief 移动构造函数；转移控制器所有权，保持已借用的控制器地址不变
      * @param other 被移动的对象
+     * @note 源对象变为空，可重新 open/adopt；移动不得与对象访问并发进行。
      */
     AsyncFile(AsyncFile&& other) noexcept;
 
@@ -75,6 +77,7 @@ public:
      * @brief 移动赋值运算符；关闭当前句柄后再转移
      * @param other 被移动的对象
      * @return 当前对象的引用
+     * @note 目标不得有未完成的 IO；源对象已有的 IO 仍须遵守 owner 线程契约。
      */
     AsyncFile& operator=(AsyncFile&& other) noexcept;
 
@@ -85,7 +88,7 @@ public:
      * @param mode 打开模式（Read、Write、ReadWrite、Append、Truncate）
      * @param permissions 文件创建权限（默认 0644）
      * @return 成功返回 void，失败返回 IOError
-     * @note 若对象已持有文件，成功打开新文件前会先同步关闭旧 fd。
+     * @note 若已持有文件，返回 kAlreadyOpen 并保留旧 fd；可用于重新打开移动后的源对象。
      */
     std::expected<void, galay::kernel::IOError> open(
         const std::string& path,
@@ -97,6 +100,7 @@ public:
      * @param fd An owned descriptor; AsyncFile closes it on destruction.
      * @note The descriptor should be opened by an async-file adapter or a
      *       blocking executor before entering the scheduler coroutine.
+     *       The current file must have no pending I/O. A moved-from object may be reused.
      */
     void adopt(int fd) noexcept;
 
@@ -134,9 +138,9 @@ public:
 
     /**
      * @brief 获取底层文件句柄
-     * @return 当前的 GHandle
+     * @return 当前的 GHandle；移动后的源对象返回 invalid
      */
-    GHandle handle() const { return m_controller.m_handle; }
+    GHandle handle() const { return m_controller ? m_controller->m_handle : GHandle::invalid(); }
 
     /**
      * @brief 通过 fstat 获取当前文件大小
@@ -152,12 +156,15 @@ public:
 
     /**
      * @brief 获取内部 IO 控制器（用于高级操作）
-     * @return IOController 指针
+     * @return IOController 指针；移动后的源对象返回 nullptr
      */
-    galay::kernel::IOController* getController() { return &m_controller; }
+    galay::kernel::IOController* getController() { return m_controller.get(); }
 
 private:
-    galay::kernel::IOController m_controller;
+    // 析构、移动赋值和 adopt 无错误返回通道；关闭失败记录原始 errno。
+    void releaseOwnedHandle() noexcept;
+
+    std::unique_ptr<galay::kernel::IOController> m_controller;
 };
 
 } // namespace galay::async

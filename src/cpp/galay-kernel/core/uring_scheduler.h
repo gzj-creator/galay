@@ -14,53 +14,44 @@
 #ifdef USE_IOURING
 namespace galay::kernel {
 
-/**
- * @brief Linux io_uring 内置后端；公开操作遵守 IOSchedulerBase 的线程契约。
- * @tparam Config 调度器配置（编译期常量），默认使用标准配置
- */
+/** @brief 同一后端所有配置共享的调度与 IO 注册实现；仅允许派生配置类型构造。 */
+class IOUringSchedulerBackend : public IOSchedulerBase<IOUringSchedulerBackend, IOUringReactor>
+{
+public:
+    /** @brief Accept operation 的 owner 注册及 timeout 适配入口。 */
+    bool submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
+        return m_reactor.submitAccept(awaitable, std::move(waker));
+    }
+    void timeoutAccept(AcceptAwaitable& awaitable) { m_reactor.timeoutAccept(awaitable); }
+
+protected:
+    explicit IOUringSchedulerBackend(int queue_depth, int batch_size);
+    /** @brief 在线程退出后再析构 reactor 和队列；调用前须关闭借用者的异步源。 */
+    ~IOUringSchedulerBackend();
+
+private:
+    friend class IOSchedulerBase<IOUringSchedulerBackend, IOUringReactor>;
+    void pollBackend();
+    void flushBackend();
+};
+
+/** @brief 配置模板只负责构造容量；公共借用入口始终分派到同一真实后端基类。 */
 template <typename Config = DefaultIOSchedulerConfig>
-class IOUringSchedulerT : public IOSchedulerBase<IOUringSchedulerT<Config>, IOUringReactor>
+class IOUringSchedulerT : public IOUringSchedulerBackend
 {
 public:
     using ConfigType = Config;
 
-    /** @brief 使用编译期配置构造调度器 */
     explicit IOUringSchedulerT()
-        : IOSchedulerBase<IOUringSchedulerT<Config>, IOUringReactor>(
-            static_cast<int>(Config::kQueueDepth),
-            static_cast<int>(Config::kBatchSize))
+        : IOUringSchedulerBackend(
+            static_cast<int>(Config::kQueueDepth), static_cast<int>(Config::kBatchSize))
     {}
-
-    /** @brief 在线程退出后再析构 reactor 和队列；调用前须关闭借用者的异步源。 */
-    ~IOUringSchedulerT() { this->stop(); }
-
-    /** @brief 单次 accept 的 owner 注册/timeout 入口；不等待持久 SQE 终止。 */
-    bool submitAccept(AcceptAwaitable& awaitable, Waker&& waker) {
-        return this->m_reactor.submitAccept(awaitable, std::move(waker));
-    }
-
-    void timeoutAccept(AcceptAwaitable& awaitable) {
-        this->m_reactor.timeoutAccept(awaitable);
-    }
 
     IOUringSchedulerT(const IOUringSchedulerT&) = delete;
     IOUringSchedulerT& operator=(const IOUringSchedulerT&) = delete;
 
-    /** @brief 获取编译期配置常量 */
     static constexpr size_t queueDepth() noexcept { return Config::kQueueDepth; }
     static constexpr size_t batchSize() noexcept { return Config::kBatchSize; }
-
-private:
-    friend class IOSchedulerBase<IOUringSchedulerT<Config>, IOUringReactor>;
-
-    void pollBackend() {
-        const uint64_t timeout_ns = this->schedulerPollTimeoutNanoseconds();
-        this->m_reactor.poll(timeout_ns, this->m_wake_coordinator);
-    }
-
-    void flushBackend() {
-        this->m_reactor.flush();
-    }
 };
 
 /** @brief 默认 io_uring 调度器 */

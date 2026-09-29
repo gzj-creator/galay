@@ -111,12 +111,12 @@ int main() {
         std::cerr << "[T106] expected poll() to flush pending changes before epoll_wait\n";
         return 1;
     }
-    if (!containsText(epoll_source_text, "m_pending_changes.erase(")) {
+    if (!containsText(epoll_source_text, "erasePendingChange(index);")) {
         std::cerr << "[T106] expected flush path to erase completed pending changes\n";
         return 1;
     }
 
-    if (!containsText(epoll_scheduler_text, "void EpollScheduler::flushBackend()") ||
+    if (!containsText(epoll_scheduler_text, "void EpollSchedulerBackend::flushBackend()") ||
         !containsText(epoll_scheduler_text, "(void)m_reactor.flushPendingChanges();")) {
         std::cerr << "[T106] expected EpollScheduler event loop to flush pending changes post-pass\n";
         return 1;

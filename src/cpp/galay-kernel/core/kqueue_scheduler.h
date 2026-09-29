@@ -14,44 +14,37 @@
 #ifdef USE_KQUEUE
 namespace galay::kernel {
 
-/**
- * @brief macOS/BSD kqueue 内置后端；公开操作遵守 IOSchedulerBase 的线程契约。
- * @tparam Config 调度器配置（编译期常量），默认使用标准配置
- */
+/** @brief 同一后端所有配置共享的调度与 IO 注册实现；仅允许派生配置类型构造。 */
+class KqueueSchedulerBackend : public IOSchedulerBase<KqueueSchedulerBackend, KqueueReactor>
+{
+protected:
+    explicit KqueueSchedulerBackend(int max_events, int batch_size);
+    /** @brief 在线程退出后再析构 reactor 和队列；调用前须关闭借用者的异步源。 */
+    ~KqueueSchedulerBackend();
+
+private:
+    friend class IOSchedulerBase<KqueueSchedulerBackend, KqueueReactor>;
+    void pollBackend();
+    void flushBackend();
+};
+
+/** @brief 配置模板只负责构造容量；公共借用入口始终分派到同一真实后端基类。 */
 template <typename Config = DefaultIOSchedulerConfig>
-class KqueueSchedulerT : public IOSchedulerBase<KqueueSchedulerT<Config>, KqueueReactor>
+class KqueueSchedulerT : public KqueueSchedulerBackend
 {
 public:
     using ConfigType = Config;
 
-    /** @brief 使用编译期配置构造调度器 */
     explicit KqueueSchedulerT()
-        : IOSchedulerBase<KqueueSchedulerT<Config>, KqueueReactor>(
-            static_cast<int>(Config::kMaxEvents),
-            static_cast<int>(Config::kBatchSize))
+        : KqueueSchedulerBackend(
+            static_cast<int>(Config::kMaxEvents), static_cast<int>(Config::kBatchSize))
     {}
-
-    /** @brief 在线程退出后再析构 reactor 和队列；调用前须关闭借用者的异步源。 */
-    ~KqueueSchedulerT() { this->stop(); }
 
     KqueueSchedulerT(const KqueueSchedulerT&) = delete;
     KqueueSchedulerT& operator=(const KqueueSchedulerT&) = delete;
 
-    /** @brief 获取编译期配置常量 */
     static constexpr size_t maxEvents() noexcept { return Config::kMaxEvents; }
     static constexpr size_t batchSize() noexcept { return Config::kBatchSize; }
-
-private:
-    friend class IOSchedulerBase<KqueueSchedulerT<Config>, KqueueReactor>;
-
-    void pollBackend() {
-        const uint64_t timeout_ns = this->schedulerPollTimeoutNanoseconds();
-        this->m_reactor.poll(timeout_ns, this->m_wake_coordinator);
-    }
-
-    void flushBackend() {
-        (void)this->m_reactor.flushPendingChanges();
-    }
 };
 
 /** @brief 默认 kqueue 调度器 */

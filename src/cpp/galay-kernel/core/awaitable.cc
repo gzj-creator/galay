@@ -33,7 +33,7 @@ int registerIOSchedulerEvent(Scheduler* scheduler,
                              IOEventType event,
                              IOController* controller) noexcept
 {
-    auto* io_scheduler = static_cast<IOScheduler*>(scheduler);
+    auto* io_scheduler = static_cast<IOSchedulerBackend*>(scheduler);
     switch (event) {
     case ACCEPT:
         return io_scheduler->addAccept(controller);
@@ -76,7 +76,7 @@ int registerIOSchedulerEvent(Scheduler* scheduler,
 int registerIOSchedulerClose(Scheduler* scheduler,
                              IOController* controller) noexcept
 {
-    return static_cast<IOScheduler*>(scheduler)->addClose(controller);
+    return static_cast<IOSchedulerBackend*>(scheduler)->addClose(controller);
 }
 
 int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller) noexcept
@@ -84,7 +84,7 @@ int removeTimedOutIORegistration(Scheduler* scheduler, IOController* controller)
     if (scheduler == nullptr || scheduler->type() != kIOScheduler) {
         return 0;
     }
-    return static_cast<IOScheduler*>(scheduler)->remove(controller);
+    return static_cast<IOSchedulerBackend*>(scheduler)->remove(controller);
 }
 
 } // namespace detail
@@ -127,7 +127,7 @@ bool AcceptAwaitable::suspend(Waker&& waker) {
         return false;
     }
     ensureTimer();
-    return static_cast<IOScheduler*>(m_scheduler)->submitAccept(*this, std::move(waker));
+    return static_cast<IOSchedulerBackend*>(m_scheduler)->submitAccept(*this, std::move(waker));
 }
 
 bool AcceptAwaitable::selectError(CompletionReason reason, IOError error) noexcept {
@@ -183,7 +183,7 @@ std::expected<ResumeCapability, OperationError> AcceptAwaitable::detach() {
 }
 
 void AcceptAwaitable::timeoutOnOwner() noexcept {
-    static_cast<IOScheduler*>(m_scheduler)->timeoutAccept(*this);
+    static_cast<IOSchedulerBackend*>(m_scheduler)->timeoutAccept(*this);
 }
 #endif
 

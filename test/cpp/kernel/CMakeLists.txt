@@ -139,3 +139,26 @@ set_tests_properties(kernel.runtime_pending_accept_lsan kernel.accept_completion
     PROPERTIES TIMEOUT 20)
 set_tests_properties(kernel.iou_accept_completion_resource kernel.iou_accept_typed_completion
     PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
+set_tests_properties(kernel.scheduler_config PROPERTIES TIMEOUT 30 SKIP_RETURN_CODE 77)
+set_tests_properties(kernel.async_file_move PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
+
+# Defaults may equal a named preset. Compile the backend and consumer with
+# both sets of overrides to catch duplicate instantiations and type drift.
+foreach(CONFIG_PRESET IN ITEMS high_performance low_latency)
+    set(CONFIG_TARGET galay-kernel-config-${CONFIG_PRESET})
+    add_library(${CONFIG_TARGET} OBJECT
+        ${PROJECT_SOURCE_DIR}/src/cpp/galay-kernel/core/epoll_scheduler.cc
+        ${PROJECT_SOURCE_DIR}/src/cpp/galay-kernel/core/uring_scheduler.cc
+        ${PROJECT_SOURCE_DIR}/src/cpp/galay-kernel/core/kqueue_scheduler.cc
+        t192_scheduler_config.cc)
+    target_link_libraries(${CONFIG_TARGET} PRIVATE galay::kernel)
+    if(CONFIG_PRESET STREQUAL "high_performance")
+        target_compile_definitions(${CONFIG_TARGET} PRIVATE
+            GALAY_SCHEDULER_MAX_EVENTS=2048 GALAY_SCHEDULER_BATCH_SIZE=512
+            GALAY_SCHEDULER_QUEUE_DEPTH=8192)
+    else()
+        target_compile_definitions(${CONFIG_TARGET} PRIVATE
+            GALAY_SCHEDULER_MAX_EVENTS=512 GALAY_SCHEDULER_BATCH_SIZE=64
+            GALAY_SCHEDULER_QUEUE_DEPTH=2048)
+    endif()
+endforeach()

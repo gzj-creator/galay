@@ -48,6 +48,9 @@ enum SchedulerType {
 template <typename Config> class EpollSchedulerT;
 template <typename Config> class KqueueSchedulerT;
 template <typename Config> class IOUringSchedulerT;
+class EpollSchedulerBackend;
+class KqueueSchedulerBackend;
+class IOUringSchedulerBackend;
 class ParallelScheduler;
 class Scheduler;
 
@@ -58,10 +61,13 @@ using IOUringScheduler = IOUringSchedulerT<DefaultIOSchedulerConfig>;
 
 #if defined(USE_IOURING)
 using IOScheduler = IOUringScheduler;
+using IOSchedulerBackend = IOUringSchedulerBackend;
 #elif defined(USE_KQUEUE)
 using IOScheduler = KqueueScheduler;
+using IOSchedulerBackend = KqueueSchedulerBackend;
 #elif defined(USE_EPOLL)
 using IOScheduler = EpollScheduler;
+using IOSchedulerBackend = EpollSchedulerBackend;
 #endif
 
 template <typename Derived, SchedulerType Type> class SchedulerBase;
@@ -212,17 +218,8 @@ private:
  */
 template <typename Derived, SchedulerType Type>
 class SchedulerBase : public Scheduler {
-    // 检查是否是模板调度器类型
-    template <typename T, template <typename> class Template>
-    struct is_specialization_of : std::false_type {};
-
-    template <template <typename> class Template, typename... Args>
-    struct is_specialization_of<Template<Args...>, Template> : std::true_type {};
-
-    static_assert((Type == kIOScheduler &&
-                   (is_specialization_of<Derived, EpollSchedulerT>::value ||
-                    is_specialization_of<Derived, KqueueSchedulerT>::value ||
-                    is_specialization_of<Derived, IOUringSchedulerT>::value)) ||
+    // 所有配置共享同一真实后端子对象，Scheduler* 的向下转换不依赖配置。
+    static_assert((Type == kIOScheduler && std::is_same_v<Derived, IOSchedulerBackend>) ||
                   (Type == kParallelScheduler && std::is_same_v<Derived, ParallelScheduler>));
 public:
     std::expected<void, IOError> start() { return start(&derived()); }

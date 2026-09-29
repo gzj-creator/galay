@@ -13,9 +13,11 @@
 
 #if defined(USE_KQUEUE) || defined(USE_IOURING)
 
+#include "../common/log_macro.h"
 #include <unistd.h>
 #include <sys/stat.h>
 #include <cerrno>
+#include <utility>
 
 namespace galay::async
 {
@@ -26,7 +28,7 @@ using namespace galay::kernel;
  * @brief 默认构造函数；以无效句柄初始化 IO 控制器
  */
 AsyncFile::AsyncFile()
-    : m_controller(GHandle::invalid())
+    : m_controller(std::make_unique<IOController>(GHandle::invalid()))
 {
 }
 
@@ -35,9 +37,18 @@ AsyncFile::AsyncFile()
  */
 AsyncFile::~AsyncFile()
 {
-    if (m_controller.m_handle != GHandle::invalid()) {
-        galay_close(m_controller.m_handle.fd);
-        m_controller.m_handle = GHandle::invalid();
+    releaseOwnedHandle();
+}
+
+void AsyncFile::releaseOwnedHandle() noexcept
+{
+    if (m_controller && m_controller->m_handle != GHandle::invalid()) {
+        const int fd = std::exchange(m_controller->m_handle, GHandle::invalid()).fd;
+        if (galay_close(fd) != 0) {
+            const int close_error = errno;
+            GALAY_KERNEL_LOG_ERROR("[kernel] [async_file] [close]",
+                                   "fd={} errno={}", fd, close_error);
+        }
     }
 }
 
@@ -58,10 +69,7 @@ AsyncFile::AsyncFile(AsyncFile&& other) noexcept
 AsyncFile& AsyncFile::operator=(AsyncFile&& other) noexcept
 {
     if (this != &other) {
-        if (m_controller.m_handle != GHandle::invalid()) {
-            galay_close(m_controller.m_handle.fd);
-            m_controller.m_handle = GHandle::invalid();
-        }
+        releaseOwnedHandle();
         m_controller = std::move(other.m_controller);
     }
     return *this;
@@ -78,24 +86,28 @@ AsyncFile& AsyncFile::operator=(AsyncFile&& other) noexcept
  */
 std::expected<void, IOError> AsyncFile::open(const std::string& path, FileOpenMode mode, int permissions)
 {
-    if (m_controller.m_handle != GHandle::invalid()) {
+    if (handle() != GHandle::invalid()) {
         return std::unexpected(IOError(kAlreadyOpen, 0));
+    }
+    if (!m_controller) {
+        m_controller = std::make_unique<IOController>(GHandle::invalid());
     }
     int flags = static_cast<int>(mode);
     int fd = ::open(path.c_str(), flags, permissions);
     if (fd < 0) {
         return std::unexpected(IOError(kOpenFailed, errno));
     }
-    m_controller.m_handle.fd = fd;
+    m_controller->m_handle.fd = fd;
     return {};
 }
 
 void AsyncFile::adopt(int fd) noexcept
 {
-    if (m_controller.m_handle != GHandle::invalid()) {
-        (void)galay_close(m_controller.m_handle.fd);
+    if (!m_controller) {
+        m_controller = std::make_unique<IOController>(GHandle::invalid());
     }
-    m_controller.m_handle.fd = fd;
+    releaseOwnedHandle();
+    m_controller->m_handle.fd = fd;
 }
 
 /**
@@ -107,7 +119,7 @@ void AsyncFile::adopt(int fd) noexcept
  */
 FileReadAwaitable AsyncFile::read(char* buffer, size_t length, off_t offset)
 {
-    return FileReadAwaitable(&m_controller, buffer, length, offset);
+    return FileReadAwaitable(m_controller.get(), buffer, length, offset);
 }
 
 /**
@@ -119,7 +131,7 @@ FileReadAwaitable AsyncFile::read(char* buffer, size_t length, off_t offset)
  */
 FileWriteAwaitable AsyncFile::write(const char* buffer, size_t length, off_t offset)
 {
-    return FileWriteAwaitable(&m_controller, buffer, length, offset);
+    return FileWriteAwaitable(m_controller.get(), buffer, length, offset);
 }
 
 /**
@@ -128,7 +140,7 @@ FileWriteAwaitable AsyncFile::write(const char* buffer, size_t length, off_t off
  */
 CloseAwaitable AsyncFile::close()
 {
-    return CloseAwaitable(&m_controller);
+    return CloseAwaitable(m_controller.get());
 }
 
 /**
@@ -137,11 +149,11 @@ CloseAwaitable AsyncFile::close()
  */
 std::expected<size_t, IOError> AsyncFile::size() const
 {
-    if (m_controller.m_handle == GHandle::invalid()) {
+    if (handle() == GHandle::invalid()) {
         return std::unexpected(IOError(kClosed, 0));
     }
     struct stat st;
-    if (fstat(m_controller.m_handle.fd, &st) < 0) {
+    if (fstat(m_controller->m_handle.fd, &st) < 0) {
         return std::unexpected(IOError(kStatFailed, errno));
     }
     return static_cast<size_t>(st.st_size);
@@ -153,10 +165,10 @@ std::expected<size_t, IOError> AsyncFile::size() const
  */
 std::expected<void, IOError> AsyncFile::sync()
 {
-    if (m_controller.m_handle == GHandle::invalid()) {
+    if (handle() == GHandle::invalid()) {
         return std::unexpected(IOError(kClosed, 0));
     }
-    if (fsync(m_controller.m_handle.fd) < 0) {
+    if (fsync(m_controller->m_handle.fd) < 0) {
         return std::unexpected(IOError(kSyncFailed, errno));
     }
     return {};
