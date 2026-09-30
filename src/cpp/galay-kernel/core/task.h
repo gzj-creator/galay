@@ -1065,6 +1065,10 @@ public:
     [[nodiscard]] TaskState* takeAll() noexcept
     {
         uintptr_t head = m_head.load(std::memory_order_acquire);
+        // Empty drain linearizes at this acquire observation; later pushes stay queued.
+        if (decode(head) == nullptr) {
+            return nullptr;
+        }
         for (;;) {
             const uintptr_t replacement = head & kClosedBit;
             if (m_head.compare_exchange_weak(

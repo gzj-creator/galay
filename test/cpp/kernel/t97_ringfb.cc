@@ -512,6 +512,111 @@ bool runResumeQueueOwnershipScenario() {
     return true;
 }
 
+bool runResumeQueueEmptyLifecycleScenario() {
+    detail::TaskResumeQueue queue;
+    TaskRef task = makeTaskRef();
+    for (size_t round = 0; round < 32; ++round) {
+        for (size_t i = 0; i < 4096; ++i) {
+            TaskState* ready = queue.takeAll();
+            if (ready != nullptr) {
+                detail::TaskResumeQueue::releaseAll(ready);
+                std::cerr << "[T97] empty open queue returned a node\n";
+                return false;
+            }
+        }
+        if (!queue.push(task)) { return false; }
+        queue.close();
+        // A nonempty closed queue must retain its nodes and reject reopen.
+        if (queue.reopen()) { return false; }
+        TaskState* ready = queue.takeAll();
+        const bool single = ready == task.state() && ready->m_resume_queue_next == nullptr;
+        detail::TaskResumeQueue::releaseAll(ready);
+        if (!single || !queue.isClosed()) { return false; }
+        for (size_t i = 0; i < 4096; ++i) {
+            ready = queue.takeAll();
+            if (ready != nullptr || !queue.isClosed()) {
+                detail::TaskResumeQueue::releaseAll(ready);
+                std::cerr << "[T97] empty drain changed closed state\n";
+                return false;
+            }
+        }
+        if (queue.push(task) || task.state()->m_refs.load() != 1 ||
+            task.state()->m_resume_queue_claimed.load() || !queue.reopen()) {
+            return false;
+        }
+        if (!queue.push(task)) { return false; }
+        detail::TaskResumeQueue::releaseAll(queue.takeAll());
+        if (!queue.empty() || task.state()->m_refs.load() != 1 ||
+            task.state()->m_resume_queue_claimed.load()) { return false; }
+    }
+    std::cout << "T97 resume empty: open/closed/poll/refill/reopen/ownership PASS\n";
+    return true;
+}
+
+bool runResumeQueueConcurrentDrainScenario() {
+    constexpr size_t kProducers = 4;
+    constexpr size_t kPerProducer = 256;
+    constexpr size_t kCount = kProducers * kPerProducer;
+    for (size_t round = 0; round < 16; ++round) {
+        detail::TaskResumeQueue queue;
+        std::array<TaskRef, kCount> tasks;
+        std::array<bool, kCount> accepted{};
+        std::array<unsigned, kCount> seen{};
+        for (TaskRef& task : tasks) { task = makeTaskRef(); }
+        std::atomic<bool> start{false};
+        std::atomic<size_t> done{0};
+        std::atomic<size_t> progressed{0};
+        std::array<std::thread, kProducers> producers;
+        for (size_t p = 0; p < kProducers; ++p) {
+            producers[p] = std::thread([&, p]() {
+                while (!start.load(std::memory_order_acquire)) { std::this_thread::yield(); }
+                for (size_t n = 0; n < kPerProducer; ++n) {
+                    const size_t i = p * kPerProducer + n;
+                    accepted[i] = queue.push(tasks[i]);
+                    progressed.fetch_add(1, std::memory_order_release);
+                    if (n % 16 == 0) { std::this_thread::yield(); }
+                }
+                done.fetch_add(1, std::memory_order_release);
+            });
+        }
+        std::thread closer([&]() {
+            // Alternate open drain and close racing publication after some progress.
+            const size_t threshold = round % 2 == 0 ? kCount : kCount / 4;
+            while (progressed.load(std::memory_order_acquire) < threshold) {
+                std::this_thread::yield();
+            }
+            queue.close();
+        });
+        bool valid = true;
+        start.store(true, std::memory_order_release);
+        do {
+            TaskState* ready = queue.takeAll();
+            for (TaskState* node = ready; node != nullptr; node = node->m_resume_queue_next) {
+                size_t i = 0;
+                while (i < kCount && tasks[i].state() != node) { ++i; }
+                if (i == kCount || ++seen[i] != 1) { valid = false; }
+            }
+            detail::TaskResumeQueue::releaseAll(ready);
+            std::this_thread::yield();
+        } while (done.load(std::memory_order_acquire) != kProducers || !queue.empty());
+        for (std::thread& producer : producers) { producer.join(); }
+        closer.join();
+        for (size_t i = 0; i < kCount; ++i) {
+            if (seen[i] != static_cast<unsigned>(accepted[i]) ||
+                tasks[i].state()->m_refs.load() != 1 ||
+                tasks[i].state()->m_resume_queue_claimed.load()) { valid = false; }
+        }
+        if (!valid || !queue.isClosed() || !queue.empty() || !queue.reopen() ||
+            !queue.push(tasks.front())) {
+            std::cerr << "[T97] concurrent drain lost/duplicated a task or ownership\n";
+            return false;
+        }
+        detail::TaskResumeQueue::releaseAll(queue.takeAll());
+    }
+    std::cout << "T97 resume MPSC: concurrent empty drain/publication/close/exactly-once PASS\n";
+    return true;
+}
+
 }  // namespace
 
 int main() {
@@ -537,6 +642,10 @@ int main() {
         return 1;
     }
     if (!runResumeQueueDuplicateScenario()) {
+        return 1;
+    }
+    if (!runResumeQueueEmptyLifecycleScenario() ||
+        !runResumeQueueConcurrentDrainScenario()) {
         return 1;
     }
     if (!runResumeQueueOwnershipScenario()) {

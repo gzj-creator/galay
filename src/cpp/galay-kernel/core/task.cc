@@ -302,9 +302,9 @@ void releaseFrameStorage(void* ptr,
     // 调用方传入过期或不匹配的尺寸时，也不能将内存块放入更大的缓存桶。
     // size 参数仍属于编译器 delete ABI，但在此处有意忽略。
     auto* header = frameAllocationHeader(ptr);
-    if (!g_frameRecyclerEnabled || header == nullptr ||
+    if (header == nullptr ||
         header->bucket >= kFrameSizeClassCount ||
-        alignment > kFrameDefaultAlignment) {
+        alignment > kFrameDefaultAlignment || !g_frameRecyclerEnabled) {
         releaseFrameRaw(ptr, alignment);
         return;
     }

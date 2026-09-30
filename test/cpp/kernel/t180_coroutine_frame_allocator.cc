@@ -627,10 +627,46 @@ bool verifyNestedAndExceptionTasks() {
                     "unhandled_exception should preserve its error category");
 }
 
+bool verifyFreshThreadCacheLifecycle() {
+    constexpr std::array<std::size_t, 5> sizes{{128, 256, 512, 1024, 2048}};
+    for (size_t round = 0; round < 32; ++round) {
+        std::array<void*, sizes.size()> frames{};
+        for (size_t i = 0; i < sizes.size(); ++i) {
+            frames[i] = allocateFrameStorage(sizes[i], kDefaultAlignment);
+            if (frames[i] == nullptr) {
+                for (size_t j = 0; j < i; ++j) {
+                    releaseFrameStorage(frames[j], sizes[j], kDefaultAlignment);
+                }
+                return false;
+            }
+        }
+        bool valid = true;
+        // First allocator operation on this fresh thread is a remote release.
+        std::thread consumer([&]() {
+            for (size_t i = 0; i < sizes.size(); ++i) {
+                releaseFrameStorage(frames[i], sizes[i], kDefaultAlignment);
+                void* reused = allocateFrameStorage(sizes[i], kDefaultAlignment);
+                if (reused != frames[i]) { valid = false; }
+                releaseFrameStorage(reused, sizes[i], kDefaultAlignment);
+                if (frameFreeListSizeForTesting(sizes[i], kDefaultAlignment) != 1) {
+                    valid = false;
+                }
+            }
+            // Thread exit must clean all five populated buckets.
+        });
+        consumer.join();
+        if (!require(valid, "fresh-thread release/reuse changed bucket ownership")) {
+            return false;
+        }
+    }
+    return true;
+}
+
 }  // namespace
 
 int main() {
-    if (!verifySmallAndOverflowInputs() ||
+    if (!verifyFreshThreadCacheLifecycle() ||
+        !verifySmallAndOverflowInputs() ||
         !verifyBoundaryReuse() ||
         !verifyCapacityAndFallback() ||
         !verifyDeleteCombinations() ||
