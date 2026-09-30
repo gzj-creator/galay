@@ -512,6 +512,140 @@ bool runResumeQueueOwnershipScenario() {
     return true;
 }
 
+bool runResumeQueueCrossQueueClaimScenario() {
+    constexpr size_t kProducers = 4;
+    for (size_t round = 0; round < 64; ++round) {
+        std::array<detail::TaskResumeQueue, 2> queues;
+        TaskRef task = makeTaskRef();
+        std::array<TaskRef, 2> guards{makeTaskRef(), makeTaskRef()};
+        for (size_t i = 0; i < queues.size(); ++i) {
+            if (!queues[i].push(guards[i])) { return false; }
+        }
+        std::atomic<bool> start{false};
+        std::array<size_t, kProducers> accepted{};
+        std::array<std::thread, kProducers> producers;
+        for (size_t p = 0; p < kProducers; ++p) {
+            producers[p] = std::thread([&, p, owned = TaskRef(task)]() {
+                while (!start.load(std::memory_order_acquire)) { std::this_thread::yield(); }
+                for (size_t i = 0; i < 256; ++i) {
+                    accepted[p] += queues[p % queues.size()].push(owned) ? 1 : 0;
+                }
+            });
+        }
+        start.store(true, std::memory_order_release);
+        size_t total = 0;
+        for (size_t p = 0; p < kProducers; ++p) {
+            producers[p].join();
+            total += accepted[p];
+        }
+        if (total != 1 || task.state()->m_refs.load() != 2 ||
+            !task.state()->m_resume_queue_claimed.load()) { return false; }
+        size_t seen = 0;
+        for (size_t i = 0; i < queues.size(); ++i) {
+            TaskState* ready = queues[i].takeAll();
+            const bool has_task = ready == task.state();
+            TaskState* guard = has_task ? ready->m_resume_queue_next : ready;
+            if (guard != guards[i].state() || guard->m_resume_queue_next != nullptr) {
+                std::cerr << "[T97] competing queues corrupted intrusive links\n";
+                return false;
+            }
+            seen += has_task ? 1 : 0;
+            // Even a detached node still owns its claim in both queues.
+            if (has_task && (queues[0].push(task) || queues[1].push(task))) { return false; }
+            detail::TaskResumeQueue::releaseAll(ready);
+        }
+        if (seen != 1 || task.state()->m_refs.load() != 1 ||
+            task.state()->m_resume_queue_claimed.load() || !queues[1].push(task)) {
+            return false;
+        }
+        detail::TaskResumeQueue::releaseAll(queues[1].takeAll());
+    }
+    std::cout << "T97 resume claim: same-state producers/cross-queue/detached/refs PASS\n";
+    return true;
+}
+
+bool runResumeQueueSameStateDrainScenario() {
+    constexpr size_t kProducers = 4;
+    constexpr size_t kAttempts = 20000;
+    for (bool close_during_drain : {false, true}) {
+        detail::TaskResumeQueue queue;
+        TaskRef task = makeTaskRef();
+        std::atomic<bool> start{false};
+        std::atomic<size_t> done{0};
+        std::atomic<size_t> progress{0};
+        std::array<size_t, kProducers> accepted{};
+        std::array<std::thread, kProducers> producers;
+        for (size_t p = 0; p < kProducers; ++p) {
+            producers[p] = std::thread([&, p, owned = TaskRef(task)]() {
+                while (!start.load(std::memory_order_acquire)) { std::this_thread::yield(); }
+                for (size_t i = 0; i < kAttempts; ++i) {
+                    accepted[p] += queue.push(owned) ? 1 : 0;
+                    progress.fetch_add(1, std::memory_order_release);
+                }
+                done.fetch_add(1, std::memory_order_release);
+            });
+        }
+        bool valid = true;
+        size_t consumed = 0;
+        start.store(true, std::memory_order_release);
+        do {
+            if (close_during_drain && progress.load(std::memory_order_acquire) >= kAttempts) {
+                queue.close();
+            }
+            TaskState* ready = queue.takeAll();
+            if (ready != nullptr) {
+                if (ready != task.state() || ready->m_resume_queue_next != nullptr ||
+                    !ready->m_resume_queue_claimed.load()) { valid = false; }
+                ++consumed;
+                detail::TaskResumeQueue::releaseAll(ready);
+            }
+            std::this_thread::yield();
+        } while (done.load(std::memory_order_acquire) != kProducers || !queue.empty());
+        size_t total = 0;
+        for (size_t p = 0; p < kProducers; ++p) {
+            producers[p].join();
+            total += accepted[p];
+        }
+        if (!valid || total != consumed || consumed == 0 || !queue.empty() ||
+            task.state()->m_refs.load() != 1 || task.state()->m_resume_queue_claimed.load() ||
+            queue.isClosed() != close_during_drain) {
+            std::cerr << "[T97] same-state drain/close lost admission or ownership\n";
+            return false;
+        }
+        if (!queue.reopen() || !queue.push(task)) { return false; }
+        detail::TaskResumeQueue::releaseAll(queue.takeAll());
+    }
+    std::cout << "T97 resume claim: same-state concurrent drain/close/reclaim PASS\n";
+    return true;
+}
+
+bool runResumeDuplicatePendingScenario() {
+    IOReadyQueue worker;
+    TaskRef task = makeTaskRef();
+    if (!worker.scheduleResume(task).has_value()) { return false; }
+    for (size_t i = 0; i < 4096; ++i) {
+        if (worker.scheduleResume(task).has_value() ||
+            worker.injected_outstanding.load() != 1 || task.state()->m_refs.load() != 2) {
+            return false;
+        }
+    }
+    if (worker.drainInjected() != 1 || worker.injected_outstanding.load() != 0) { return false; }
+    TaskRef popped;
+    if (!worker.local_ring.pop_back(popped) || popped.state() != task.state() ||
+        worker.scheduleResume(task).has_value() || worker.injected_outstanding.load() != 0 ||
+        !detail::resumeTaskState(popped.state())) { return false; }
+    popped = TaskRef{};
+    if (task.state()->m_refs.load() != 1 || task.state()->m_resume_queue_claimed.load() ||
+        worker.hasPendingResume() || worker.hasPendingInjected()) { return false; }
+    worker.closeResumeAdmission();
+    if (worker.scheduleResume(task).has_value() || worker.injected_outstanding.load() != 0 ||
+        task.state()->m_refs.load() != 1 || task.state()->m_resume_queue_claimed.load()) {
+        return false;
+    }
+    std::cout << "T97 resume claim: IO duplicate/pending rollback/drain/close PASS\n";
+    return true;
+}
+
 bool runResumeQueueEmptyLifecycleScenario() {
     detail::TaskResumeQueue queue;
     TaskRef task = makeTaskRef();
@@ -649,6 +783,11 @@ int main() {
         return 1;
     }
     if (!runResumeQueueOwnershipScenario()) {
+        return 1;
+    }
+    if (!runResumeQueueCrossQueueClaimScenario() ||
+        !runResumeQueueSameStateDrainScenario() ||
+        !runResumeDuplicatePendingScenario()) {
         return 1;
     }
     std::cout << "T97-ioscheduler_inject_ring_fallback PASS\n";

@@ -1030,7 +1030,8 @@ public:
 
         TaskState* state = TaskRefStorageAccess::releaseState(task);
         bool expected = false;
-        if (!state->m_resume_queue_claimed.compare_exchange_strong(
+        if (state->m_resume_queue_claimed.load(std::memory_order_acquire) ||
+            !state->m_resume_queue_claimed.compare_exchange_strong(
                 expected,
                 true,
                 std::memory_order_acq_rel,
