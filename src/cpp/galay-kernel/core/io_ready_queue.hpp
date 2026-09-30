@@ -87,16 +87,13 @@ public:
     bool pop_back(detail::ReadyEntry& out) {
         if (!m_stealing_enabled) {
             uint64_t tail = m_tail.load(std::memory_order_relaxed);
-            if (tail == 0) {
+            const uint64_t head = m_head.load(std::memory_order_relaxed);
+            // owner 独占游标，可先判空，避免空队列上的 tail 写入与回滚。
+            if (tail <= head) {
                 return false;
             }
             --tail;
             m_tail.store(tail, std::memory_order_relaxed);
-            const uint64_t head = m_head.load(std::memory_order_relaxed);
-            if (head > tail) {
-                m_tail.store(head, std::memory_order_relaxed);
-                return false;
-            }
             // 禁用 stealing 后只有 owner 能读写槽位，无需 exchange 的原子 RMW。
             // 仍清空槽位，保证停机后重新启用 stealing 时 CAS 能接纳新 entry。
             auto& slot = m_slots[static_cast<size_t>(tail & kMask)];

@@ -28,6 +28,36 @@ constexpr detail::ReadyEntryHooks kHooks{
     .release = releaseFake,
 };
 
+bool verifyEmptyAndSingleTask() {
+    for (const size_t advance : {size_t(0), ChaseLevTaskRing::kCapacity - 5}) {
+        FakeCoro coro{};
+        coro.header.hooks = &kHooks;
+        ChaseLevTaskRing ring;
+        detail::ReadyEntry out;
+        for (size_t i = 0; i < advance; ++i) {
+            detail::ReadyEntry entry(detail::ReadyEntryKind::CCoroutine, &coro);
+            if (!ring.push_back(entry) || !ring.steal_front(out)) { return false; }
+            detail::releaseReadyEntry(out);
+        }
+        ring.setStealingEnabled(false);
+        for (size_t cycle = 0; cycle < 4096; ++cycle) {
+            // Cover both initial and advanced empty cursors, then a single task.
+            for (size_t poll = 0; poll < 8; ++poll) {
+                if (ring.pop_back(out) || out.isValid() || !ring.empty() ||
+                    ring.remainingCapacity() != ChaseLevTaskRing::kCapacity) {
+                    return false;
+                }
+            }
+            detail::ReadyEntry entry(detail::ReadyEntryKind::CCoroutine, &coro);
+            if (!ring.push_back(entry) || entry.isValid() || ring.size() != 1 ||
+                !ring.pop_back(out) || out.state() != &coro) { return false; }
+            detail::releaseReadyEntry(out);
+            if (coro.releases != advance + cycle + 1 || !ring.empty()) { return false; }
+        }
+    }
+    return true;
+}
+
 bool verifyOwnerOnlyLifecycle() {
     constexpr size_t capacity = ChaseLevTaskRing::kCapacity;
     std::array<TaskRef, capacity> tasks;
@@ -122,6 +152,10 @@ bool verifyReenableStealing() {
 } // namespace
 
 int main() {
+    if (!verifyEmptyAndSingleTask()) {
+        std::cerr << "[T176] empty polling or single-task roundtrip failure\n";
+        return 1;
+    }
     if (!verifyOwnerOnlyLifecycle()) {
         std::cerr << "[T176] owner-only capacity/order/ownership failure\n";
         return 1;
