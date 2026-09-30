@@ -103,6 +103,34 @@ class MeasurementTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             measure.micro_record("resume", "io_1", raw, 1000)
 
+    def test_ring_samples_and_ownership_accounting(self):
+        self.assertEqual(measure.workloads(["ring"]),
+                         [("ring", sample) for sample in
+                          ("owner-1", "owner-64", "shared-1", "shared-64")])
+        raw = ("ReadyRing sample=owner-64 iterations=1000 elapsed_ns=100000000 "
+               "cpu_ns=90000000 releases=1000 errors=0\n")
+        result = measure.micro_record("ring", "owner-64", raw, 1000)
+        self.assertEqual(result["ring.owner-64.ns_per_op"], 100000)
+        for bad in (raw.replace("owner-64", "shared-64"),
+                    raw.replace("iterations=1000", "iterations=1024"),
+                    raw.replace("releases=1000", "releases=999"),
+                    raw.replace("releases=1000", "releases=1001"),
+                    raw.replace("releases=1000", ""),
+                    raw.replace("cpu_ns=90000000", "cpu_ns=-1"),
+                    raw.replace("errors=0", "errors=1"), raw + raw):
+            with self.subTest(raw=bad), self.assertRaises(ValueError):
+                measure.micro_record("ring", "owner-64", bad, 1000)
+
+    def test_ring_is_explicit_and_default_matrix_stays_focused(self):
+        for args, expected in (([], ["tcp", "accept", "resume", "frame"]),
+                               (["--scenario", "ring"], ["ring"])):
+            with self.subTest(args=args), patch("sys.argv", [
+                    "measure", "--variant", "a=build/a", "--variant", "b=build/b",
+                    "--output", "build/results", *args]), \
+                    patch.object(measure, "measure") as run:
+                measure.main()
+                self.assertEqual(run.call_args.args[5], expected)
+
     def test_components_cannot_replace_parked_accept_gate(self):
         raw = "B41Components implementation=galay batch=1 operations=2048 ready_accept_ns_per_op=100 errors=0\n"
         raw += "B41Components implementation=galay batch=64 operations=8192 ready_accept_ns_per_op=100 errors=0\n"

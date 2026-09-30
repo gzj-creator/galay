@@ -21,7 +21,9 @@ BENCHMARKS = {
     "accept": "accept_completion_lifecycle",
     "resume": "scheduler_resume_pressure",
     "frame": "coroutine_frame_allocator_pressure",
+    "ring": "ready_ring_lifecycle",
 }
+RING_SAMPLES = ("owner-1", "owner-64", "shared-1", "shared-64")
 FRAME_SAMPLES = ("frame_size_128", "frame_size_4096", "frame_mixed_recycler",
                  "task_void_unsubmitted_destroy", "task_int_unsubmitted_destroy",
                  "task_void_complete_destroy", "task_int_complete_destroy", "task_suspend_resume")
@@ -158,7 +160,7 @@ def observation() -> dict:
 
 
 def micro_record(scenario: str, sample: str, output: str, iterations: int) -> dict[str, float]:
-    prefix = sample if scenario == "frame" else (
+    prefix = "ReadyRing" if scenario == "ring" else sample if scenario == "frame" else (
         "ParallelSchedulerResume" if sample == "parallel" else "IOSchedulerResumeDrain")
     matches = [fields(line) for line in output.splitlines() if line.startswith(prefix + " ")]
     if len(matches) != 1:
@@ -168,6 +170,10 @@ def micro_record(scenario: str, sample: str, output: str, iterations: int) -> di
     expected = ((iterations + width - 1) // width) * width
     if int(record["iterations"]) != expected or (sample.startswith("io_") and int(record["batch"]) != width):
         raise ValueError("micro operation count differs from frozen workload")
+    if scenario == "ring" and (record.get("sample") != sample or
+                               int(record.get("releases", "-1")) != expected or
+                               int(record.get("errors", "-1")) != 0):
+        raise ValueError("ring identity or ownership accounting differs from workload")
     elapsed = positive(record["elapsed_ns"])
     cpu = positive(record["cpu_ns"])
     stem = f"{scenario}.{sample}"
@@ -177,6 +183,7 @@ def micro_record(scenario: str, sample: str, output: str, iterations: int) -> di
 
 def workloads(scenarios: list[str]) -> list[tuple[str, str]]:
     return [(scenario, sample) for scenario in scenarios for sample in (
+        RING_SAMPLES if scenario == "ring" else
         FRAME_SAMPLES if scenario == "frame" else
         ("parallel", "io_1", "io_8", "io_64", "io_256") if scenario == "resume" else ("",))]
 
@@ -218,7 +225,7 @@ def measure(variants: dict[str, Path], runs: int, output: Path, cpus: str, coold
         "ordering": "seeded balanced paired orders; each workload adjacent A/B",
         "seed": seed, "pair_order": [[names[i] for i in pair] for pair in order],
         "aa": aa, "minimum_ms": minimum_ms, "observation": observation(),
-        "duration_scope": "B28/B34 micro segments; TCP fixed 5s and B41 fixed 2048/8192 operations",
+        "duration_scope": "B28/B34/B42 micro segments; TCP fixed 5s and B41 fixed 2048/8192 operations",
         "ci_method": "geometric mean paired cost ratio; two-sided 95% Student t on log ratios",
         "latency_population": "B41 within-run connect-start to accept-completion per connection; CI compares run P99 values, not pooled requests",
         "variants": {name: str(path) for name, path in variants.items()},
@@ -385,7 +392,8 @@ def main() -> None:
         parser.error("--cooldown-seconds must be finite and nonnegative")
     if not math.isfinite(args.minimum_ms) or args.minimum_ms < 100:
         parser.error("--minimum-ms must be finite and at least 100")
-    scenarios = args.scenario or list(BENCHMARKS)
+    # The focused ring diagnostic is opt-in; retain the existing default matrix.
+    scenarios = args.scenario or ["tcp", "accept", "resume", "frame"]
     if len(scenarios) != len(set(scenarios)):
         parser.error("--scenario entries must be unique")
     measure(variants, args.runs, args.output.resolve(), args.cpus, args.cooldown_seconds, scenarios,

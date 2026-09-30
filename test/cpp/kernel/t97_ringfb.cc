@@ -196,6 +196,43 @@ bool runResumeFifoScenario() {
     return true;
 }
 
+bool runResumeBatchedFifoScenario(bool stealing_enabled) {
+    constexpr size_t capacity = ChaseLevTaskRing::kCapacity;
+    std::array<TaskRef, capacity + 17> tasks;
+    IOReadyQueue worker;
+    worker.setStealingEnabled(stealing_enabled);
+    for (TaskRef& task : tasks) {
+        task = makeTaskRef();
+        if (!worker.scheduleResume(task).has_value()) { return false; }
+    }
+    size_t offset = 0;
+    while (offset < tasks.size()) {
+        const size_t remaining = tasks.size() - offset;
+        const size_t expected = remaining < capacity ? remaining : capacity;
+        if (worker.drainInjected() != expected) {
+            std::cerr << "[T97] partial resume batch size mismatch\n";
+            return false;
+        }
+        for (size_t i = 0; i < expected; ++i) {
+            TaskRef popped;
+            if (!worker.local_ring.pop_back(popped) ||
+                popped.state() != tasks[offset + i].state() ||
+                !detail::resumeTaskState(popped.state())) {
+                std::cerr << "[T97] partial resume batch FIFO mismatch\n";
+                return false;
+            }
+        }
+        offset += expected;
+        if (!worker.local_ring.empty() ||
+            worker.injected_outstanding.load() != tasks.size() - offset) { return false; }
+    }
+    for (const TaskRef& task : tasks) {
+        if (task.state()->m_refs.load() != 1 ||
+            task.state()->m_resume_queue_claimed.load()) { return false; }
+    }
+    return !worker.hasPendingResume() && !worker.hasPendingInjected();
+}
+
 bool runResumeAdmissionLifecycleScenario() {
     IOReadyQueue worker;
     worker.closeResumeAdmission();
@@ -485,6 +522,9 @@ int main() {
         return 1;
     }
     if (!runResumeFifoScenario()) {
+        return 1;
+    }
+    if (!runResumeBatchedFifoScenario(false) || !runResumeBatchedFifoScenario(true)) {
         return 1;
     }
     if (!runResumeAdmissionLifecycleScenario()) {

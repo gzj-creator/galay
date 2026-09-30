@@ -1,6 +1,6 @@
 /**
  * @file t176_io_worker_ring_mode.cc
- * @brief 验证 IO worker 的 stealing 开关会传递到本地 Chase-Lev ring。
+ * @brief 验证 IO ring 的 owner-only 生命周期、槽位复用与停机后的模式切换。
  */
 
 #include <galay/cpp/galay-kernel/core/io_scheduler.hpp>
@@ -47,6 +47,11 @@ bool verifyOwnerOnlyLifecycle() {
     ring.setStealingEnabled(false);
     if (ring.pop_back(out) || out.isValid()) { return false; }
     for (size_t cycle = 0; cycle < 16; ++cycle) {
+        // Empty polling must preserve the advanced cursors and full refill capacity.
+        for (size_t poll = 0; poll < capacity; ++poll) {
+            if (ring.pop_back(out) || out.isValid() || !ring.empty() ||
+                ring.size() != 0 || ring.remainingCapacity() != capacity) { return false; }
+        }
         for (size_t i = 0; i < capacity; ++i) {
             detail::ReadyEntry entry = (i % 2 == 0)
                 ? detail::ReadyEntry(TaskRef(tasks[i]))
@@ -80,11 +85,49 @@ bool verifyOwnerOnlyLifecycle() {
     ring.clear();
     return tasks[0].state()->m_refs.load() == 1 && coros[0].releases == 1 && ring.empty();
 }
+
+bool verifyReenableStealing() {
+    TaskRef task(new TaskState(std::coroutine_handle<>{}), false);
+    ChaseLevTaskRing ring;
+    detail::ReadyEntry out;
+    for (size_t cycle = 0; cycle < 4; ++cycle) {
+        ring.setStealingEnabled(false);
+        detail::ReadyEntry invalid;
+        if (ring.push_back(invalid)) { return false; }
+        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
+            detail::ReadyEntry entry{TaskRef(task)};
+            if (!ring.push_back(entry)) { return false; }
+        }
+        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
+            if (!ring.pop_back(out) || out.state() != task.state()) { return false; }
+            detail::releaseReadyEntry(out);
+        }
+        // With no workers active, reuse every owner-drained slot via the CAS path.
+        // A load-only pop would leave stale entries and reject these pushes.
+        ring.setStealingEnabled(true);
+        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
+            detail::ReadyEntry entry{TaskRef(task)};
+            if (!ring.push_back(entry)) { return false; }
+        }
+        for (size_t i = 0; i < ChaseLevTaskRing::kCapacity; ++i) {
+            const bool popped = i % 2 == 0 ? ring.pop_back(out) : ring.steal_front(out);
+            if (!popped || out.state() != task.state()) { return false; }
+            detail::releaseReadyEntry(out);
+        }
+        if (!ring.empty() || ring.pop_back(out) || ring.steal_front(out) ||
+            task.state()->m_refs.load() != 1) { return false; }
+    }
+    return true;
+}
 } // namespace
 
 int main() {
     if (!verifyOwnerOnlyLifecycle()) {
         std::cerr << "[T176] owner-only capacity/order/ownership failure\n";
+        return 1;
+    }
+    if (!verifyReenableStealing()) {
+        std::cerr << "[T176] re-enabled ring retained consumed slots or references\n";
         return 1;
     }
     IOReadyQueue worker;

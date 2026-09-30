@@ -97,9 +97,11 @@ public:
                 m_tail.store(head, std::memory_order_relaxed);
                 return false;
             }
-            const uintptr_t encoded =
-                m_slots[static_cast<size_t>(tail & kMask)].exchange(
-                    0, std::memory_order_relaxed);
+            // 禁用 stealing 后只有 owner 能读写槽位，无需 exchange 的原子 RMW。
+            // 仍清空槽位，保证停机后重新启用 stealing 时 CAS 能接纳新 entry。
+            auto& slot = m_slots[static_cast<size_t>(tail & kMask)];
+            const uintptr_t encoded = slot.load(std::memory_order_relaxed);
+            slot.store(0, std::memory_order_relaxed);
             if (encoded == 0) {
                 return false;
             }
@@ -208,6 +210,7 @@ public:
         return true;
     }
 
+    // 仅在启动前或所有 owner/stealer 都已停止后切换模式。
     void setStealingEnabled(bool enabled) noexcept {
         m_stealing_enabled = enabled;
     }

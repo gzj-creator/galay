@@ -13,6 +13,8 @@
 
 ### Added
 
+- **新增 B42 ring 生命周期基准及校验**：覆盖 owner/shared 的单项与 64 项批次，测量入口显式启用 ring 场景并核对完成量、释放量、错误与 CPU 计时；原默认矩阵及 parallel 场景保持不变，测量脚本回归扩展至 14 项。
+- **补充 ring 模式切换与恢复分批回归**：T176 校验非零游标空轮询及所有访问者停止后重新启用 stealing 的全槽位复用；T97 覆盖 owner/shared 两种模式的 256+17 分批 FIFO、引用计数和 resume claim 恢复。
 - **扩展就绪队列 owner-only 生命周期回归**：T176 覆盖满容量混合 C/C++ entry、多轮回绕、入队失败保留所有权、禁用窃取、部分排空与重复 clear，校验引用守恒及唯一释放；当前构建与独立运行通过。
 - **新增独立 Env 环境变量接口**：以 std::expected 显式返回读写与删除结果，区分缺失变量和空值，校验非法名称及嵌入 NUL，保留系统错误码和读取快照语义。
 - **新增 Performance CPU / NUMA 控制接口**：读取与设置当前线程 CPU 亲和性、允许内存节点及 default/bind/interleave 策略，回读实际生效集合，保留 errno；不支持的平台明确返回错误。
@@ -32,6 +34,8 @@
 
 ### Changed
 
+- **采用 owner-only ring 局部优化**：槽位原子 exchange 改为 relaxed load 加 store(0)，保留清零、stealing 协议及停止所有访问者后才可切换模式的约束；owner 与 IO resume 局部收益已验证，综合性能门禁未通过。
+- **简化 x86 WebSocket 掩码向量构造**：使用 4-byte memcpy 加 32-bit broadcast，保持现有 SIMD 主循环、尾部源码、parser、NEON 与 API；采用经冻结实验验证的局部收益，不声称 TCP 或生产下单全路径已加速。
 - **按职责重组 galay-utils 公开目录**：系统接口统一到 system，字节与环形缓冲归入 buffer，并发工具归入 concurrency，限流和熔断归入 resilience；MurmurHash3 与负载选择归入 algorithm，Huffman 归入 encoding，cache 保留 LRU。同步所有调用方、总头、模块导出、示例、文档及安装检查，不保留旧路径转发头。
 - **收敛环境变量职责**：移除 System 的 getEnv/setEnv/unsetEnv，统一使用 system/env.hpp 中的 Env；config/env.hpp 继续负责 .env 文件解析。
 - **统一 C++ benchmark 启动环境**：通过 GALAY_BENCH_CPUS 和 GALAY_BENCH_NUMA 控制继承 CPU 集合与内存策略，启动时校验边界及回读结果，工作线程按选定 CPU 集合放置；请求无法生效时明确失败退出。
@@ -53,6 +57,7 @@
 
 ### Fixed
 
+- **拒绝 B42 CPU 计时失败**：MicroTimer 返回负 CPU 时间时基准返回失败，避免仅依赖外部解析器拒绝无效计量；保留故障注入的修复前后结果，既有冻结性能样本不变。
 - **修复 SSL socket 构建与移动语义**：通过独占指针保持不可移动 IOController 的地址和注册关系稳定，移动后的源对象显式报告关闭状态；补充移动构造、赋值、已有 awaitable 和源对象析构回归。
 - **修复 epoll 并发握手超时**：pending change 索引改用地址稳定的 RegistrationEntry，注销或 controller 析构后仍能清理索引，避免地址复用和 swap-and-pop 更新覆盖其他 fd 的注册。
 - **定位 H1 密集 accept 超时并收紧测量门禁**：确认宿主机 conntrack 满表丢弃 SYN，增加 B41 握手/就绪诊断和独立可复核对照；隔离网络环境下完成 122880 次连接及 B41 连续 20 轮，解析器严格校验 2048/8192 操作数，保留红绿测试和 ASan 证据。
@@ -78,6 +83,7 @@
 
 ### Docs
 
+- **记录冻结性能审计与局部收益采用规则**：保留 owner/shared/parallel 与 IO 全场景、WS micro/parser/TCP 成对统计、A/A 和综合门禁失败及已撤回候选；按用户授权接受可信函数或关联路径收益，不设置最低改善幅度，也不再要求集成收益达到固定百分比，原统计分类与不利证据不变。
 - **归档热路径候选验收状态**：记录 H0 噪声校验与 H1 微基准结果及保护门槛未通过的原因，保留生产候选撤回和 H2–H7 暂停状态；不将静态优化或局部微基准改善表述为完整性能验收通过。
 - 补充 CPU / NUMA 配置、线程继承、首次触碰与平台限制说明，更新工具目录职责及 Env API 使用文档；记录功能验收与性能验收的边界。
 - **提炼 H3 与 K0–K2 验证摘要**：按两个独立协议分别记录各 10 对 A/A 的几何均值、置信区间和正确性结论；两次本地提交经重写排除 1,628 份原始产物，后续输出使用已忽略的 `benchmark-results/`。两批完整精度门禁均未通过；K1 虽消除 LTO 成功入队后的三次空清理，但未满足采用条件，K2 最小候选未消除额外 actor 调用并被否决。生产源码保持基线，K0/K1/K2 性能验收及 K3–K7 保持未完成，不宣称性能收益。

@@ -42,11 +42,10 @@ void applyMaskBytesImpl(char* data, size_t len, const uint8_t masking_key[4]) {
     }
 #elif defined(GALAY_WS_SIMD_X86)
     if (len >= 16) {
-        uint8_t mask_array[16];
-        for (int j = 0; j < 16; ++j) {
-            mask_array[j] = masking_key[j % 4];
-        }
-        __m128i mask_vec = _mm_loadu_si128(reinterpret_cast<const __m128i*>(mask_array));
+        uint32_t mask32;
+        // memcpy 支持未对齐的 key；返回的目标地址无需使用。
+        (void)std::memcpy(&mask32, masking_key, sizeof(mask32));
+        __m128i mask_vec = _mm_set1_epi32(static_cast<int>(mask32));
 
         for (; i + 16 <= len; i += 16) {
             __m128i data_vec = _mm_loadu_si128(reinterpret_cast<const __m128i*>(ptr + i));
