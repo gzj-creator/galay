@@ -67,6 +67,8 @@
 
 ### Fixed
 
+- **修复 MPMC 接收 pump 的 CAS 重试活锁**：竞争 owner 排空并返回 idle 后，CAS 失败保留实际 observed，只在首次发布后合入工作位，避免发送线程持续自旋；保持内存序、关闭、waiter 和引用所有权协议。T173 新增确定性 owner 交接及注册/关闭回归，保留原压力；22 项 Release（含 T100 一千万项）、10 项本地 kernel ASan/UBSan/LSan、3 项 TSan 与两百万项诊断通过，根因、验证范围及历史不确定性见独立报告。
+
 - **拒绝 B42 CPU 计时失败**：MicroTimer 返回负 CPU 时间时基准返回失败，避免仅依赖外部解析器拒绝无效计量；保留故障注入的修复前后结果，既有冻结性能样本不变。
 - **修复 SSL socket 构建与移动语义**：通过独占指针保持不可移动 IOController 的地址和注册关系稳定，移动后的源对象显式报告关闭状态；补充移动构造、赋值、已有 awaitable 和源对象析构回归。
 - **修复 epoll 并发握手超时**：pending change 索引改用地址稳定的 RegistrationEntry，注销或 controller 析构后仍能清理索引，避免地址复用和 swap-and-pop 更新覆盖其他 fd 的注册。

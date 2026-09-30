@@ -1639,13 +1639,19 @@ private:
      */
     void requestRecvPump() noexcept
     {
-        uint8_t observed =
-            m_recvPumpState.fetch_or(kRecvWork, std::memory_order_release);
+        uint8_t observed = static_cast<uint8_t>(
+            m_recvPumpState.fetch_or(kRecvWork, std::memory_order_release) |
+            kRecvWork);
+#ifdef GALAY_MPMC_UNBOUNDED_PUMP_PUBLISHED_TEST_POINT
+        GALAY_MPMC_UNBOUNDED_PUMP_PUBLISHED_TEST_POINT();
+#endif
         for (;;) {
             if ((observed & kPumpRunning) != 0) {
                 return;
             }
-            observed = static_cast<uint8_t>(observed | kRecvWork);
+            // A competing owner may already have drained our work and returned
+            // to idle. Preserve the actual state returned by a failed CAS;
+            // inventing a work bit in expected would spin forever against 0.
             const uint8_t desired =
                 static_cast<uint8_t>(observed | kPumpRunning);
             if (m_recvPumpState.compare_exchange_weak(
