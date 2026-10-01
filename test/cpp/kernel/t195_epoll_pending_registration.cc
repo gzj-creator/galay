@@ -16,6 +16,17 @@
 
 using namespace galay::kernel;
 
+namespace galay::kernel {
+struct EpollReactorTestAccess {
+    static size_t pendingCount(const EpollReactor& reactor) {
+        return reactor.m_pending_changes.size();
+    }
+    static size_t pendingIndexCount(const EpollReactor& reactor) {
+        return reactor.m_pending_change_index.size();
+    }
+};
+}
+
 namespace {
 
 void require(bool condition, const char* message)
@@ -122,6 +133,47 @@ void cancelledMiddleChangeKeepsSwappedIndex(EpollReactor& reactor)
             "remove surviving read interest");
 }
 
+void existingEntrySurvivesMergedAndCancelledChanges(EpollReactor& reactor)
+{
+    SocketPair pair;
+    IOController controller(GHandle{.fd = pair.fds[0]});
+    require(reactor.addFileWrite(&controller) == 0 &&
+                reactor.flushPendingChanges() == 0, "register reusable entry");
+    auto* const owner_slot = controller.m_registration_owner_slot;
+    require(owner_slot != nullptr && *owner_slot == &controller,
+            "initial registration owns its stable slot");
+
+    for (int round = 0; round < 64; ++round) {
+        require(reactor.addFileRead(&controller) == 0 &&
+                    reactor.addFileRead(&controller) == 0,
+                "merge repeated read registration");
+        require(EpollReactorTestAccess::pendingCount(reactor) == 1 &&
+                    EpollReactorTestAccess::pendingIndexCount(reactor) == 1,
+                "repeated event has exactly one pending index");
+        require(reactor.addFileWrite(&controller) == 0,
+                "return to registered events cancels pending change");
+        require(EpollReactorTestAccess::pendingCount(reactor) == 0 &&
+                    EpollReactorTestAccess::pendingIndexCount(reactor) == 0,
+                "cancelled change removes both pending records");
+        require(controller.m_registration_owner_slot == owner_slot &&
+                    *owner_slot == &controller,
+                "cancellation retains registration ownership");
+    }
+
+    require(reactor.addFileRead(&controller) == 0 &&
+                reactor.flushPendingChanges() == 0, "flush reused registration entry");
+    require(controller.m_registration_owner_slot == owner_slot &&
+                *owner_slot == &controller,
+            "requeued registration uses the same owner slot");
+    checkReadRegistration(reactor, controller, pair);
+    require(reactor.remove(&controller) == 0 && reactor.flushPendingChanges() == 0,
+            "remove reused registration");
+    require(controller.m_registration_owner_slot == nullptr &&
+                EpollReactorTestAccess::pendingCount(reactor) == 0 &&
+                EpollReactorTestAccess::pendingIndexCount(reactor) == 0,
+            "retired registration leaves no pending entry");
+}
+
 } // namespace
 #endif
 
@@ -134,6 +186,7 @@ int main()
     retiredRegistrationCanBeQueuedAgain(reactor);
     destroyedPendingControllerLeavesNoIndex(reactor);
     cancelledMiddleChangeKeepsSwappedIndex(reactor);
+    existingEntrySurvivesMergedAndCancelledChanges(reactor);
     require(last_error.load() == 0, "reactor reports no backend errors");
     require(std::puts("epoll pending registration PASS") >= 0, "print test result");
 #else

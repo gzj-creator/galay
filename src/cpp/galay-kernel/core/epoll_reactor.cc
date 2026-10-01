@@ -165,16 +165,18 @@ void EpollReactor::retireRegistrationEntry(IOController* controller) {
     m_registration_entries.erase(it);
 }
 
-size_t EpollReactor::findPendingChangeIndex(IOController* controller) const {
+std::pair<size_t, EpollReactor::RegistrationEntry*>
+EpollReactor::findPendingChange(IOController* controller) const {
     const auto entry = m_registration_entries.find(controller->m_handle.fd);
     if (entry == m_registration_entries.end() || entry->second->controller != controller) {
-        return m_pending_changes.size();
+        return {m_pending_changes.size(), nullptr};
     }
-    auto it = m_pending_change_index.find(entry->second.get());
+    auto* registration = entry->second.get();
+    auto it = m_pending_change_index.find(registration);
     if (it != m_pending_change_index.end()) {
-        return it->second;
+        return {it->second, registration};
     }
-    return m_pending_changes.size();
+    return {m_pending_changes.size(), registration};
 }
 
 void EpollReactor::erasePendingChange(size_t index) {
@@ -199,7 +201,7 @@ void EpollReactor::erasePendingChange(size_t index) {
 }
 
 void EpollReactor::discardPendingChange(IOController* controller) {
-    const size_t index = findPendingChangeIndex(controller);
+    const size_t index = findPendingChange(controller).first;
     if (index != m_pending_changes.size()) {
         erasePendingChange(index);
     }
@@ -252,7 +254,7 @@ int EpollReactor::applyEvents(IOController* controller, uint32_t events, bool fl
         return -1;
     }
 
-    const size_t index = findPendingChangeIndex(controller);
+    const auto [index, registered_entry] = findPendingChange(controller);
     // 未注册状态下的删除是 no-op，不能留下可能跨过 socket 析构的裸 controller 指针。
     if (events == EPOLLET && controller->m_registered_events == 0) {
         if (index != m_pending_changes.size()) {
@@ -274,7 +276,9 @@ int EpollReactor::applyEvents(IOController* controller, uint32_t events, bool fl
         if (events == controller->m_registered_events) {
             return 0;
         }
-        auto* entry = registrationEntryForController(controller);
+        auto* entry = registered_entry != nullptr
+            ? registered_entry
+            : registrationEntryForController(controller);
         if (entry == nullptr) {
             return -1;
         }

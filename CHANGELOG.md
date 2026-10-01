@@ -13,6 +13,8 @@
 
 ### Added
 
+- **补充 pending 注册与混合注入回归**：T195 增加 64 轮注册合并、取消、重排队、双索引清理和稳定 owner-slot 生命周期检查；T97 保留 normal/resume 混合搬运的分批 FIFO、引用守恒、零转换及并发 drain/close/reopen 覆盖。
+
 - **补充重复恢复 claim 并发回归**：T97 新增同一状态多生产者跨队列竞争、摘下仍 claimed、并发 drain/close、重新接纳、IO pending 回滚与引用恢复检查。
 
 - **补充空恢复队列生命周期与并发回归**：T97 覆盖反复 open/closed 空 drain、填充后排空、关闭非空拒绝 reopen、引用与 claim 恢复，以及四生产者发布和 drain/close 竞争下的恰好一次消费。
@@ -38,6 +40,8 @@
 - **新增 MCP v2 owner 边界与生命周期测试**：覆盖错误 owner、连接失败传播、无新增控制协程的命令提交、URI 所有权、有界订阅队列及多 worker/并发通知/重复启动与停止；广播基准分别核对命令接纳数和实际回调数，使用 FIFO 标记完成预热。
 
 ### Changed
+
+- **采用 epoll pending 注册入口复用**：findPendingChange 同时返回 pending 下标及已确认 owner 的稳定 RegistrationEntry，applyEvents 新排队时复用入口，减少重复 fd 查找和幂等绑定；保留合并、取消、回收、flush 与错误完成协议。固定 600 个正式进程及独立复算支持 requeue_1/requeue_8 成本分别下降 14.24%/11.61%，明确接受 duplicate_1 与 resume.io_1 成本上升，不外推生产混合净收益。
 
 - **采用重复 resume claim 提前拒绝**：TaskResumeQueue::push 对已 claimed 状态先 acquire-load，未 claimed 时保留原 strong CAS；关闭、发布、回滚与引用归属不变。直接重复队列与 IO API 路径 wall 成对下降 44.62%/23.69%，不外推真实业务唤醒或整体吞吐。
 
@@ -94,6 +98,9 @@
 - 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。
 
 ### Docs
+
+- **归档跨维度性能优化计划与 P01–P06 审查**：记录 TaskState 释放资格、唤醒统计、epoll pending 入口复用、超时取消、Channel waiter 与 HTTP 状态生命周期的实际结论；同步采用记录、历史计数合并/cold 报告和续跑交接，游标为 P07 G1。
+- **完成 P05 v2 补验与 P06 安全审查**：P05 两版各 34 Release、14 ASan/UBSan/LSan、6 TSan，保留 T100 一千万项和 T173 一千次压力（含 TSan），8,172 个证据文件重新封存验证；无有效 Release 机器码成本降低，静态否决。P06 九个基线测试/诊断进程通过，response 单槽复用不满足 pending/copy 操作独占与绑定契约，未创建候选。两项均无新增生产补丁，正式矩阵为 0，原始产物不纳入 Git。
 
 - **完成重复 claim 独立验证闭环**：记录两版各 12 项回归（T100 一千万项）、相关 sanitizer、Release 机器码、15 场景共 600 个正式进程与独立复算；保留 6 条并发短样本、正常路径宽区间、A/A 与保护诊断失败。记录正式前校准修订、局部采用取舍及后续批量发布诊断方向，原始证据不纳入 Git。
 

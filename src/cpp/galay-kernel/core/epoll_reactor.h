@@ -92,7 +92,7 @@ private:
     int processSequence(IOEventType type, IOController* controller);  ///< 处理 sequence awaitable 的注册/同步逻辑
     void processEvent(struct epoll_event& ev);  ///< 消费单个 epoll 事件并唤醒对应 awaitable
     void syncEvents(IOController* controller);  ///< 同步控制器当前关注事件到 epoll
-    size_t findPendingChangeIndex(IOController* controller) const;  ///< 查找控制器对应的 pending change
+    std::pair<size_t, RegistrationEntry*> findPendingChange(IOController* controller) const;  ///< 同时返回 pending 下标与已确认归属的稳定入口
     void erasePendingChange(size_t index);  ///< 删除指定下标的 pending change
     void discardPendingChange(IOController* controller);  ///< 丢弃控制器对应的 pending change
     RegistrationEntry* registrationEntryForController(IOController* controller);  ///< 获取 fd 对应的稳定注册入口

@@ -512,6 +512,132 @@ bool runResumeQueueOwnershipScenario() {
     return true;
 }
 
+
+bool runMixedDrainAccountingScenario() {
+    for (bool stealing : {false, true}) {
+        IOReadyQueue worker;
+        worker.setStealingEnabled(stealing);
+        worker.resizeInjectBuffer(8);
+        std::array<TaskRef, 32> normal;
+        std::array<TaskRef, 17> resumes;
+        for (auto& task : normal) { task = makeTaskRef(); }
+        for (auto& task : resumes) { task = makeTaskRef(); }
+        for (size_t i = 0; i < normal.size(); ++i) {
+            const auto accepted = worker.scheduleInjected(normal[i]);
+            if (!accepted.has_value() || *accepted != (i == 0)) { return false; }
+        }
+        for (auto& task : resumes) {
+            const auto accepted = worker.scheduleResume(task);
+            if (!accepted.has_value() || *accepted) { return false; }
+        }
+        constexpr size_t kSlots = 7;
+        for (size_t i = kSlots; i < ChaseLevTaskRing::kCapacity; ++i) {
+            if (!worker.local_ring.push_back(makeTaskRef())) { return false; }
+        }
+        size_t normal_seen = 0;
+        size_t resume_seen = 0;
+        while (worker.hasPendingInjected()) {
+            const auto before = worker.injected_outstanding.load();
+            const size_t drained = worker.drainInjected();
+            if (drained == 0 || drained > kSlots ||
+                worker.injected_outstanding.load() != before - drained ||
+                !worker.hasOwnerDrainedInjected()) { return false; }
+            for (size_t i = 0; i < drained; ++i) {
+                TaskRef task;
+                if (!worker.local_ring.pop_back(task)) { return false; }
+                if (task.state()->m_resume_queue_claimed.load()) {
+                    if (resume_seen >= resumes.size() ||
+                        task.state() != resumes[resume_seen++].state() ||
+                        !detail::resumeTaskState(task.state())) { return false; }
+                } else {
+                    if (normal_seen >= normal.size() ||
+                        task.state() != normal[normal_seen++].state()) { return false; }
+                }
+            }
+        }
+        if (normal_seen != normal.size() || resume_seen != resumes.size() ||
+            worker.hasPendingResume() || worker.drainInjected() != 0) { return false; }
+        for (auto& task : normal) {
+            if (task.state()->m_refs.load() != 1) { return false; }
+        }
+        for (auto& task : resumes) {
+            if (task.state()->m_refs.load() != 1 ||
+                task.state()->m_resume_queue_claimed.load()) { return false; }
+        }
+        const auto next = worker.scheduleInjected(makeTaskRef());
+        if (!next.has_value() || !*next || worker.drainInjected() != 1 ||
+            worker.injected_outstanding.load() != 0) { return false; }
+    }
+    std::cout << "T97 mixed drain: bounded batches/FIFO/pending/zero transition PASS\n";
+    return true;
+}
+
+bool runMixedDrainConcurrentScenario() {
+    constexpr size_t kItems = 8192;
+    for (bool close_during_drain : {false, true}) {
+        IOReadyQueue worker;
+        worker.setStealingEnabled(false);
+        worker.resizeInjectBuffer(8);
+        std::array<TaskRef, kItems> normal;
+        std::array<TaskRef, kItems> resumes;
+        for (auto& task : normal) { task = makeTaskRef(); }
+        for (auto& task : resumes) { task = makeTaskRef(); }
+        std::atomic<bool> start{false};
+        std::atomic<size_t> done{0};
+        std::atomic<size_t> progress{0};
+        std::array<size_t, 2> accepted{};
+        std::array<std::thread, 2> producers;
+        for (size_t p = 0; p < producers.size(); ++p) {
+            producers[p] = std::thread([&, p]() {
+                while (!start.load(std::memory_order_acquire)) { std::this_thread::yield(); }
+                for (size_t i = 0; i < kItems; ++i) {
+                    const auto result = p == 0 ? worker.scheduleInjected(normal[i])
+                                               : worker.scheduleResume(resumes[i]);
+                    accepted[p] += result.has_value() ? 1 : 0;
+                    progress.fetch_add(1, std::memory_order_release);
+                }
+                done.fetch_add(1, std::memory_order_release);
+            });
+        }
+        std::array<size_t, 2> consumed{};
+        bool valid = true;
+        start.store(true, std::memory_order_release);
+        do {
+            if (close_during_drain && progress.load(std::memory_order_acquire) >= kItems) {
+                worker.closeResumeAdmission();
+            }
+            const size_t drained = worker.drainInjected();
+            size_t popped = 0;
+            TaskRef task;
+            while (worker.local_ring.pop_back(task)) {
+                const bool resume = task.state()->m_resume_queue_claimed.load();
+                ++consumed[resume ? 1 : 0];
+                if (resume && !detail::resumeTaskState(task.state())) { valid = false; }
+                task = TaskRef{};
+                ++popped;
+            }
+            if (drained != popped || worker.injected_outstanding.load() > 2 * kItems) {
+                valid = false;
+            }
+            std::this_thread::yield();
+        } while (done.load(std::memory_order_acquire) != 2 || worker.hasPendingInjected());
+        for (auto& producer : producers) { producer.join(); }
+        if (!valid || accepted[0] != kItems || accepted != consumed ||
+            worker.injected_outstanding.load() != 0 || worker.hasPendingResume() ||
+            (!close_during_drain && accepted[1] != kItems) ||
+            !worker.reopenResumeAdmission()) { return false; }
+        for (auto& task : normal) {
+            if (task.state()->m_refs.load() != 1) { return false; }
+        }
+        for (auto& task : resumes) {
+            if (task.state()->m_refs.load() != 1 ||
+                task.state()->m_resume_queue_claimed.load()) { return false; }
+        }
+    }
+    std::cout << "T97 mixed drain: concurrent normal/resume/close/accounting PASS\n";
+    return true;
+}
+
 bool runResumeQueueCrossQueueClaimScenario() {
     constexpr size_t kProducers = 4;
     for (size_t round = 0; round < 64; ++round) {
@@ -788,6 +914,9 @@ int main() {
     if (!runResumeQueueCrossQueueClaimScenario() ||
         !runResumeQueueSameStateDrainScenario() ||
         !runResumeDuplicatePendingScenario()) {
+        return 1;
+    }
+    if (!runMixedDrainAccountingScenario() || !runMixedDrainConcurrentScenario()) {
         return 1;
     }
     std::cout << "T97-ioscheduler_inject_ring_fallback PASS\n";
