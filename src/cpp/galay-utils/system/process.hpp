@@ -24,6 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <span>
+#include <utility>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -303,7 +304,8 @@ public:
     /**
      * @brief 获取当前进程 CPU 亲和性
      * @return 当前允许运行的零基 CPU ID 列表；失败返回具体错误
-     * @note Linux/Windows 支持进程级 CPU 亲和性；不支持的平台返回 Unsupported。
+     * @note Linux 查询进程主线程（pid）的 mask，不代表所有线程；Windows 查询进程 mask。
+     *       不支持的平台返回 Unsupported。
      */
     [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpuAffinity() {
         return cpuAffinity(currentId());
@@ -313,6 +315,7 @@ public:
      * @brief 获取指定进程 CPU 亲和性
      * @param pid 目标进程 ID
      * @return 目标进程允许运行的零基 CPU ID 列表；失败返回具体错误
+     * @note Linux 使用动态 mask；枚举完整 CPU ID，不能用 CPU::count() 作为 ID 上界。
      */
     [[nodiscard]] static std::expected<std::vector<unsigned int>, ProcessAffinityError> cpuAffinity(ProcessId pid) {
 #if defined(_WIN32)
@@ -341,20 +344,11 @@ public:
         }
         return cpus;
 #elif defined(__linux__)
-        cpu_set_t mask;
-        CPU_ZERO(&mask);
-        if (sched_getaffinity(static_cast<pid_t>(pid), sizeof(mask), &mask) != 0) {
-            return std::unexpected(affinityErrorFromErrno(errno));
+        auto cpus = detail::queryCpuAffinity(static_cast<pid_t>(pid));
+        if (!cpus) {
+            return std::unexpected(affinityErrorFromErrno(cpus.error().value()));
         }
-
-        std::vector<unsigned int> cpus;
-        const unsigned int cpu_count = CPU::count();
-        for (unsigned int cpu = 0; cpu < cpu_count && cpu < CPU_SETSIZE; ++cpu) {
-            if (CPU_ISSET(cpu, &mask)) {
-                cpus.push_back(cpu);
-            }
-        }
-        return cpus;
+        return std::move(*cpus);
 #else
         (void)pid;
         return std::unexpected(ProcessAffinityError::Unsupported);
@@ -376,7 +370,8 @@ public:
      * @param pid 目标进程 ID
      * @param cpus 零基 CPU ID 集合，不能为空
      * @return 成功返回空 expected，失败返回具体错误
-     * @note Linux/Windows 支持进程级 CPU 亲和性；不支持的平台返回 Unsupported。
+     * @note Linux 只设置传入 pid/tid 对应线程的 mask，不遍历已有线程；内核决定
+     *       online/cpuset 交集。Windows 设置进程 mask；不支持的平台返回 Unsupported。
      */
     [[nodiscard]] static std::expected<void, ProcessAffinityError>
     setCpuAffinity(ProcessId pid, std::span<const unsigned int> cpus) {
@@ -410,16 +405,9 @@ public:
         }
         return {};
 #elif defined(__linux__)
-        cpu_set_t mask;
-        CPU_ZERO(&mask);
-        for (unsigned int cpu : *normalized) {
-            if (cpu >= CPU_SETSIZE) {
-                return std::unexpected(ProcessAffinityError::InvalidCpu);
-            }
-            CPU_SET(cpu, &mask);
-        }
-        if (sched_setaffinity(static_cast<pid_t>(pid), sizeof(mask), &mask) != 0) {
-            return std::unexpected(affinityErrorFromErrno(errno));
+        const auto set = detail::setCpuAffinity(static_cast<pid_t>(pid), *normalized);
+        if (!set) {
+            return std::unexpected(affinityErrorFromErrno(set.error().value()));
         }
         return {};
 #else
@@ -685,16 +673,10 @@ private:
             return std::unexpected(ProcessAffinityError::EmptyCpuSet);
         }
 
-        const unsigned int cpu_count = CPU::count();
         std::vector<unsigned int> normalized(cpus.begin(), cpus.end());
         std::sort(normalized.begin(), normalized.end());
         normalized.erase(std::unique(normalized.begin(), normalized.end()), normalized.end());
 
-        for (unsigned int cpu : normalized) {
-            if (cpu >= cpu_count) {
-                return std::unexpected(ProcessAffinityError::InvalidCpu);
-            }
-        }
         return normalized;
     }
 

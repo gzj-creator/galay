@@ -100,6 +100,10 @@ int main()
         bool numaOk = false;
         bool numaRestricted = false;
         std::thread numaWorker([&] {
+            const auto initial = Memory::numaPolicy();
+            if (!initial) {
+                return;
+            }
             for (const auto mode : {Memory::Policy::Bind, Memory::Policy::Interleave}) {
                 const std::array<unsigned, 1> selected{allowed->front()};
                 const auto set = Memory::setNumaPolicy(mode, selected);
@@ -126,9 +130,59 @@ int main()
                     return;
                 }
             }
-            const auto reset = Memory::setNumaPolicy(Memory::Policy::Default, {});
+            const std::vector<Memory::PolicyState> nativePolicies{
+                {MPOL_PREFERRED, {allowed->front()}},
+                {MPOL_PREFERRED, {}}, {MPOL_LOCAL, {}},
+                {MPOL_BIND | MPOL_F_STATIC_NODES, {allowed->front()}},
+                {MPOL_INTERLEAVE | MPOL_F_RELATIVE_NODES, {0}},
+#if defined(MPOL_F_NUMA_BALANCING)
+                {MPOL_BIND | MPOL_F_NUMA_BALANCING, {allowed->front()}},
+#endif
+            };
+            for (const auto& requested : nativePolicies) {
+                const auto set = Memory::restoreNumaPolicy(requested);
+                if (!set && set.error() == std::errc::invalid_argument &&
+                    (requested.native_mode & MPOL_MODE_FLAGS) != 0) {
+                    // Optional flags can be absent on an older running kernel.
+                    std::cout << "[SKIP] native mempolicy flags unsupported, mode="
+                              << requested.native_mode << '\n';
+                    continue;
+                }
+                const auto saved = Memory::numaPolicy();
+                // Linux canonicalizes PREFERRED with an empty mask to LOCAL.
+                const int expectedMode = requested.native_mode == MPOL_PREFERRED &&
+                    requested.nodes.empty() ? MPOL_LOCAL : requested.native_mode;
+                if (!set || !saved || saved->native_mode != expectedMode ||
+                    saved->nodes != requested.nodes) {
+                    return;
+                }
+                const auto changed = Memory::setNumaPolicy(Memory::Policy::Default, {});
+                const auto defaultPolicy = Memory::numaPolicy();
+                if (!changed || !defaultPolicy || defaultPolicy->native_mode != MPOL_DEFAULT ||
+                    !defaultPolicy->nodes.empty()) {
+                    return;
+                }
+                const auto restored = Memory::restoreNumaPolicy(*saved);
+                const auto actual = Memory::numaPolicy();
+                if (!restored || !actual || actual->native_mode != saved->native_mode ||
+                    actual->nodes != saved->nodes) {
+                    return;
+                }
+                bool inherited = false;
+                std::thread child([&] {
+                    const auto childPolicy = Memory::numaPolicy();
+                    inherited = childPolicy && childPolicy->native_mode == saved->native_mode &&
+                                childPolicy->nodes == saved->nodes;
+                });
+                child.join();
+                if (!inherited) {
+                    return;
+                }
+            }
+            const auto reset = Memory::restoreNumaPolicy(*initial);
             const auto actual = Memory::numaPolicy();
-            numaOk = reset && actual && actual->native_mode == MPOL_DEFAULT && actual->nodes.empty();
+            numaOk = reset && actual && actual->native_mode == initial->native_mode &&
+                     actual->nodes == initial->nodes;
         });
         numaWorker.join();
         const auto unchanged = Memory::numaPolicy();

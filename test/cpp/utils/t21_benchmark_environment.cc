@@ -177,7 +177,10 @@ int main()
                 }
             } else if (denied == SYS_set_mempolicy) {
                 const auto set = Memory::setNumaPolicy(galay::utils::Memory::Policy::Default, {});
-                if (set || set.error().value() != EPERM) {
+                const auto restore = Memory::restoreNumaPolicy({});
+                if (set || set.error().value() != EPERM ||
+                    restore || restore.error().value() != EPERM ||
+                    restore.error().category() != std::generic_category()) {
                     _exit(4);
                 }
             } else {

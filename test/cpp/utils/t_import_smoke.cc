@@ -7,12 +7,16 @@ import galay.utils;
 #include <new>
 #include <string>
 #include <system_error>
+#include <thread>
 #include <utility>
 
 int main() {
     using namespace galay::utils;
 
-    static_assert(CPU::kMaxCpus > 0);
+    const auto pageSize = Memory::pageSize();
+    if (!pageSize || *pageSize == 0) {
+        return 1;
+    }
     static_assert(Numa::kMaxNodes > 0);
     static_assert(Memory::kMaxNodes > 0);
 
@@ -29,7 +33,9 @@ int main() {
     RandomGenerator random(7);
     assert(random.randomString(4, "a") == "aaaa");
     assert(Time::formatTime(0, "%Y", true) == "1970");
-    assert(CPU::count() > 0);
+    if (CPU::count() != std::thread::hardware_concurrency()) {
+        return 1;
+    }
 
     LruCache<int, int> cache(1);
     assert(cache.put(1, 10));

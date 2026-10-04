@@ -13,6 +13,8 @@
 
 ### Added
 
+- **补充系统资源查询与原生策略恢复**：新增 CPU 在线 ID 和当前 CPU 快照、NUMA 在线节点/CPU 拓扑/相对距离、以字节计的基础页大小和 `Memory::restoreNumaPolicy`；保留原生 mode、flags 与 nodemask，无新增链接依赖。
+
 - **补充 pending 注册与混合注入回归**：T195 增加 64 轮注册合并、取消、重排队、双索引清理和稳定 owner-slot 生命周期检查；T97 保留 normal/resume 混合搬运的分批 FIFO、引用守恒、零转换及并发 drain/close/reopen 覆盖。
 
 - **补充重复恢复 claim 并发回归**：T97 新增同一状态多生产者跨队列竞争、摘下仍 claimed、并发 drain/close、重新接纳、IO pending 回滚与引用恢复检查。
@@ -72,6 +74,8 @@
 - **MCP v2 HTTP 状态改为明确 owner 管理**：移除工具定义、HTTP server 和订阅快照的原子共享指针；server 的外部 `start()` 线程通过现有 MPSC 通道接收值命令并独占订阅链表，通知入口保持普通函数，成功仅表示接纳入队；client 直接持有 transport 与工具定义并绑定指定 IO scheduler，拒绝跨 owner 访问和重叠请求，不引入 `OwnerTask` 或额外控制协程。
 
 ### Fixed
+
+- **修正 CPU 数量与编号语义混用**：`CPU::count()` 保留硬件并发度提示，Process 不再以该数量校验或截断 CPU ID；Linux CPU/Process 共用动态 affinity mask，支持非连续和超过 1023 的 CPU ID，benchmark 按继承集合校验。NUMA 策略设置同时确保最高支持节点位可传给内核，补充稀疏 ID、sysfs 错误、策略保存/修改/恢复及失败传播回归。
 
 - **修复 MPMC 接收 pump 的 CAS 重试活锁**：竞争 owner 排空并返回 idle 后，CAS 失败保留实际 observed，只在首次发布后合入工作位，避免发送线程持续自旋；保持内存序、关闭、waiter 和引用所有权协议。T173 新增确定性 owner 交接及注册/关闭回归，保留原压力；22 项 Release（含 T100 一千万项）、10 项本地 kernel ASan/UBSan/LSan、3 项 TSan 与两百万项诊断通过，根因、验证范围及历史不确定性见独立报告。
 

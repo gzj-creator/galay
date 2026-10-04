@@ -105,8 +105,12 @@ inline void printPlacementIds(std::span<const unsigned> ids)
         if (!inherited) {
             return detail::placementError("read-cpu-affinity", inherited.error());
         }
+        if (inherited->empty()) {
+            return detail::placementError("empty-cpu-affinity",
+                std::make_error_code(std::errc::invalid_argument));
+        }
         const auto requested = cpuText == "inherit"
-            ? inherited : detail::parsePlacementIds(cpuText, CPU::kMaxCpus);
+            ? inherited : detail::parsePlacementIds(cpuText, inherited->back() + 1U);
         if (!requested) {
             return detail::placementError("parse-GALAY_BENCH_CPUS", requested.error());
         }

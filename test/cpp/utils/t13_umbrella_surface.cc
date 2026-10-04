@@ -15,7 +15,10 @@ int main()
         std::cerr << "[t13] Env should be visible and reject invalid names\n";
         return 1;
     }
-    static_assert(galay::utils::CPU::kMaxCpus > 0);
+    const auto pageSize = galay::utils::Memory::pageSize();
+    if (!pageSize || *pageSize == 0) {
+        return 1;
+    }
     static_assert(galay::utils::Numa::kMaxNodes > 0);
     static_assert(galay::utils::Memory::kMaxNodes > 0);
     galay::utils::CountingSemaphore semaphore(2);

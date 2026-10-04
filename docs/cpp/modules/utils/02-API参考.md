@@ -62,31 +62,60 @@
 | TypeName | `galay-utils/core/type_name.hpp` | `getTypeName<T>()`、`getTypeName(obj)`、`demangleSymbol()` |
 | BackTrace | `galay-utils/system/backtrace.hpp` | `BackTrace` |
 | Signal | `galay-utils/system/signal.hpp` | `SignalHandler` |
-| CPU | `galay-utils/system/cpu.hpp` | `CPU::count()`、`CPU::cpuAffinity()`、`CPU::bindCurrentThread()` |
-| Numa | `galay-utils/system/numa.hpp` | `Numa::allowedNumaNodes()` |
-| Memory | `galay-utils/system/memory.hpp` | `Memory::Policy`、`Memory::PolicyState`、`Memory::numaPolicy()`、`Memory::setNumaPolicy()` |
+| CPU | `galay-utils/system/cpu.hpp` | 硬件并发度、在线 CPU ID、当前 CPU 快照与线程亲和性 |
+| Numa | `galay-utils/system/numa.hpp` | 在线节点、CPU/节点拓扑、相对距离与允许节点 |
+| Memory | `galay-utils/system/memory.hpp` | 基础页大小、当前线程默认 NUMA 策略与原生状态恢复 |
 
-### `CPU`、`Numa` 与 `Memory`：线程放置
+### `CPU`、`Numa` 与 `Memory`：系统资源与线程放置
 
-三个细粒度头分别承担 CPU 亲和性、NUMA 节点约束和当前线程默认内存策略；总头和 `galay.utils` 模块统一导出这三个类型。
+三个细粒度头分别承担 CPU 信息与亲和性、NUMA 拓扑与节点约束、页大小与内存策略；总头和 `galay.utils` 模块统一导出这三个类型。`system/detail/sysfs.hpp` 仅为安装时必需的内部实现头，不是独立公开 API。
 
-| 静态方法 / 类型 | 返回值 / 契约 |
+下表除 `count()` 外，返回值均为 `std::expected<T, std::error_code>`，其中 `T` 列出成功值的类型。
+
+| 静态方法 / 类型 | 成功类型 | 契约 |
+|---|---|---|
+| `CPU::count() noexcept` | `unsigned` | 原样返回 `std::thread::hardware_concurrency()` 的硬件并发度提示，可能为 0 |
+| `CPU::onlineCpus()` | `std::vector<unsigned>` | 系统在线逻辑 CPU ID 快照，排序去重，不按调用线程的 cpuset 过滤 |
+| `CPU::currentId()` | `unsigned` | 查询瞬间正在执行调用线程的 CPU ID，不保证后续不迁移 |
+| `CPU::cpuAffinity()` | `std::vector<unsigned>` | 当前调用线程的有效 CPU ID 集合，按 ID 排序 |
+| `CPU::bindCurrentThread(std::span<const unsigned> cpus)` | `std::vector<unsigned>` | 设置当前线程，回读实际 CPU 集合；输入不能为空，重复 ID 合并 |
+| `Numa::onlineNodes()` | `std::vector<unsigned>` | 系统在线 NUMA 节点快照，不按 cpuset 过滤 |
+| `Numa::nodeOfCpu(unsigned cpu)` | `unsigned` | 在线 CPU 所属的在线 NUMA 节点；未找到该 CPU 为 `no_such_device` |
+| `Numa::cpusOfNode(unsigned node)` | `std::vector<unsigned>` | 在线节点的在线 CPU ID 集合，不按线程 affinity 过滤；无 CPU 的节点成功返回空集 |
+| `Numa::distance(unsigned from, unsigned to)` | `unsigned` | sysfs 报告的正整数相对距离，无时间/字节单位，不承诺对称或固定值 |
+| `Numa::allowedNumaNodes()` | `std::vector<unsigned>` | 当前线程所属 cpuset 允许使用的内存节点 |
+| `Memory::pageSize()` | `std::size_t` | 系统基础页大小，单位为字节，必须为正；不表示 huge page 大小 |
+| `Memory::numaPolicy()` | `Memory::PolicyState` | 当前线程的原生 mode（包括 flags）和原生 nodemask 中的节点集合 |
+| `Memory::setNumaPolicy(Policy policy, std::span<const unsigned> nodes)` | `void` | 枚举接口仅覆盖 `Default` / `Bind` / `Interleave` |
+| `Memory::restoreNumaPolicy(const PolicyState& state)` | `void` | 将保存的原生 mode、flags 和 nodemask 原样传给内核，失败必须向上传播 |
+
+`CPU::count()` 保留标准库提示语义，避免改变线程池/调度器的并发度推导。在线 CPU 集合、当前线程 affinity 集合与该提示是三个不同概念；需要可运行 CPU 数量时，检查 `cpuAffinity()` 后使用集合的 `.size()`。CPU ID 不保证连续，例如 `{0, 2}` 的数量是 2，但 CPU 2 仍是合法 ID，不能用 `cpu < count()` 校验，也不能把线程索引直接作为 CPU ID。
+
+Linux 的 CPU 读取与设置共用 `CPU_ALLOC` 动态 mask，`sched_getaffinity` 返回容量不足的 `EINVAL` 时扩大探测；不再有固定 `CPU_SETSIZE` / 1024 上限，也不再公开 `CPU::kMaxCpus`。实现支持 `0 <= CPU ID < INT_MAX`，并受内核实际 mask 和可分配内存约束；sysfs 超出该编号范围时返回 `value_too_large`，不会截断结果。绑定时由内核决定 online/cpuset 交集，调用方须比较实际集合与请求；绑定后的回读失败不代表绑定未生效，不承诺事务式回滚。
+
+NUMA 拓扑来自 `/sys/devices/system/node/online`、`nodeN/cpulist`、`nodeN/distance`；距离列按在线节点排序后的顺序对应，不能把节点 ID 当成数组下标。拓扑查询与 `allowedNumaNodes()` 清楚区分，内存策略仍由 `Memory` 负责。节点 mask 保留 `Numa::kMaxNodes == Memory::kMaxNodes == 1024`，支持节点 ID 0–1023；拓扑在线列表超容量为 `value_too_large`，参数超范围为 `invalid_argument`，内核 mask 容量不足保留 `EINVAL`，不返回截断集合。
+
+原生策略恢复契约：
+
+- `PolicyState` 含 `int native_mode` 和 `std::vector<unsigned> nodes`。`MPOL_F_RELATIVE_NODES` 下 `nodes` 表示相对当前 cpuset 的索引，恢复时不转换为物理节点 ID；`MPOL_F_STATIC_NODES` 保留物理 ID。两种 flags 不能同时指定。
+- `MPOL_DEFAULT` / `MPOL_LOCAL` 要求空集；`MPOL_BIND` / `MPOL_INTERLEAVE` 及系统头文件定义的其他非 preferred 原生模式要求非空集。`MPOL_PREFERRED` 允许非空集（内核选择最低 ID）或无 flags 的空集（Linux 回读规范化为 `MPOL_LOCAL`）。`MPOL_LOCAL` 和空集 preferred 不能附带 static/relative flags。
+- 原生 mode 必须在编译时 Linux 头文件定义的模式范围内。剩余 flags 组合、内存节点有效性、cpuset 约束和运行内核版本由 `set_mempolicy` 校验，例如旧内核不支持某些 flags 时保留其 `EINVAL`；不降级成其他策略。
+- cpuset、节点在线状态或权限在保存后发生变化，可能导致恢复失败；调用方必须检查恢复结果。枚举接口仍只提供明确支持的三个策略，恢复接口没有扩大枚举契约。
+
+错误与平台行为：
+
+| 情况 | 结果 |
 |---|---|
-| `CPU::count()` | 标准库报告的逻辑 CPU 数量 |
-| `CPU::cpuAffinity()` | 当前调用线程的有效逻辑 CPU ID 集合，按 ID 排序 |
-| `CPU::bindCurrentThread(cpus)` | 设置当前线程，返回系统回读的实际 CPU 集合；重复 CPU ID 合并 |
-| `Numa::allowedNumaNodes()` | 当前 cpuset 允许使用的内存节点 |
-| `Memory::numaPolicy()` | 当前线程的原生策略值（包含标志位）和节点集合 |
-| `Memory::setNumaPolicy(policy, nodes)` | 设置 `Default` / `Bind` / `Interleave`；成功返回空 expected |
+| Linux CPU / NUMA 查询与控制 | 使用 sysfs / POSIX 系统调用；失败保留 `errno` 与 `std::generic_category()` |
+| 非 Linux CPU 在线/当前 ID/亲和性、NUMA 与内存策略接口 | `operation_not_supported`；`CPU::count()` 仍可用 |
+| `Memory::pageSize()` | Linux/macOS 使用 `sysconf(_SC_PAGESIZE)`，失败保留 errno；非正数且无 errno 为 `io_error`。Windows 使用无错误返回值的 `GetSystemInfo`，零页大小为 `io_error`；其他平台不支持 |
+| sysfs 缺失或读取失败 | 保留 `ENOENT`、`EACCES`、`EISDIR` 等错误，不通过外部命令或猜测拓扑补偿 |
+| 非法节点、畸形列表/距离、空在线列表 | `invalid_argument`；空 `cpulist` 是合法的无 CPU 节点 |
+| ID 列表超容量 / 数字解析溢出 | `value_too_large` / `result_out_of_range`，范围在展开前检查 |
 
-放置控制方法使用 `std::expected<T, std::error_code>`。系统调用失败立即保留原始 errno，参数错误为 `invalid_argument`，非 Linux 平台为 `operation_not_supported`；调用方必须检查结果。
+以上查询都是同步快照，不缓存，不保证跨多次读取的 CPU 热插拔一致性；sysfs 读取会同步访问文件，适合启动配置或诊断，不宜放进协程调度热路径。Linux 新建线程继承创建者当时的 CPU mask 和内存策略，已有工作线程不会被隐式修改。内存策略只影响后续分配/首次触碰，不迁移已有页，不覆盖已有分配器缓存或显式 VMA 策略。没有引入 libnuma、hwloc 或新的链接依赖。
 
-- `CPU::cpuAffinity()`、`CPU::bindCurrentThread()`、`Numa::allowedNumaNodes()` 和 `Memory::*()` 只作用于当前线程，不隐式修改已有工作线程。Linux 新建线程继承创建者当时的 CPU mask 和内存策略，应在创建线程前配置。
-- `CPU::bindCurrentThread()` 的回读结果可能是内核与 online / cpuset 限制的交集；调用方要比较实际集合与请求。回读失败时绑定可能已经生效，此接口不承诺事务式回滚。
-- `Memory::Policy::Default` 要求空节点集；`Bind` / `Interleave` 要求非空集。设置后用 `Memory::numaPolicy()` 回读验证；压测公共入口会检查允许节点和精确回读。
-- CPU ID 范围由 `CPU_SETSIZE` 决定，当前 Linux 实现为 0–1023；NUMA 节点范围为 0–1023。超范围请求明确失败；读取系统 mask 的容量不足会返回内核错误，不截断集合。
-- 内存策略影响后续分配和首次触碰，不迁移已有页；静态初始化、已触碰的分配器缓存、显式 VMA 策略等不因此改变。CPU 绑定与内存节点绑定是独立设置，需按机器拓扑选择。
-- 只包装内核现有 affinity / mempolicy 接口，不增加 libnuma 依赖，不修改频率、实时调度、IRQ 或系统全局配置。
+本轮没有增加 `Memory::info()`：系统总内存、可用内存、cgroup 限额与进程 RSS 的范围和单位契约须分别定义后再设计查询结构。
 
 压测配置、示例及限制见 [05-性能测试：CPU / NUMA 启动控制](05-性能测试.md#2026-09-29cpu--numa-启动控制)。
 
@@ -631,6 +660,8 @@
   - `Process::isRunning(ProcessId pid)`
   - `daemonize()`
 
+Linux 的进程亲和性接口操作传入 pid/tid 对应线程，默认使用进程主线程 pid；不会遍历已有线程。读取使用动态 mask，完整枚举实际 CPU ID；设置只做集合排序去重，编号与 online/cpuset 限制交给内核，不使用 `CPU::count()` 判定。Windows 保留 `GetProcessAffinityMask` / `SetProcessAffinityMask` 的现有单处理器组语义与 `DWORD_PTR` 位数限制。错误继续映射为现有 `ProcessAffinityError`；需要原始 `std::error_code` 的调用线程控制使用 `CPU` 接口。
+
 ## 7. 编解码、密码学与公共定义
 
 | 头文件 | 主要类型 |
@@ -741,6 +772,7 @@
 - `.ini` 使用独立公开类型 `IniParser`；`.toml` 使用 `TomlParser`
 - 文档中不再使用“API 索引”旧名；本页 canonical 标题为“API参考”
 - benchmark target 通过 `BUILD_BENCHMARKS=ON` 显式构建，默认不进入普通构建或 CTest
+- GCC 14 / libstdc++ 的 `import galay.utils;` 消费端仍存在仓库原有的 named-module 与标准头重复声明问题（如 `__cxa_init_primary_exception`、`std::nothrow`）；`galay_utils.cppm` 接口单元可独立编译。本轮系统接口验证不将该消费端问题当作接口错误。
 
 ## 9. 返回、线程与使用语义
 

@@ -1,4 +1,5 @@
 #include "test_common.hpp"
+#include <limits>
 
 void test_system() {
     std::cout << "=== Testing System ===" << std::endl;
@@ -26,7 +27,10 @@ void test_system() {
     assert(System::remove(testDir));
 
     // System info
-    assert(CPU::count() > 0);
+    if (CPU::count() != std::thread::hardware_concurrency()) {
+        std::cerr << "CPU::count must preserve the hardware concurrency hint\n";
+        std::exit(1);
+    }
     assert(!System::hostname().empty());
     assert(!System::currentDir().empty());
 
@@ -108,34 +112,46 @@ void test_process_affinity() {
     auto original = Process::cpuAffinity(pid);
 
 #if !defined(_WIN32) && !defined(__linux__)
-    assert(!original.has_value());
-    assert(original.error() == ProcessAffinityError::Unsupported);
+    if (original || original.error() != ProcessAffinityError::Unsupported) {
+        std::exit(1);
+    }
 #else
-    assert(original.has_value());
-    assert(!original->empty());
-
-    const unsigned int cpu_count = CPU::count();
-    for (unsigned int cpu : *original) {
-        assert(cpu < cpu_count);
+    if (!original || original->empty()) {
+        std::exit(1);
     }
 
-    auto sameAffinity = Process::setCpuAffinity(pid, *original);
-    assert(sameAffinity.has_value());
+#if defined(__linux__)
+    const auto current = CPU::cpuAffinity();
+    if (!current || *current != *original) {
+        std::cerr << "Process must enumerate the entire actual Linux mask\n";
+        std::exit(1);
+    }
+#endif
 
+    auto sameAffinity = Process::setCpuAffinity(pid, *original);
     auto after = Process::cpuAffinity(pid);
-    assert(after.has_value());
-    assert(*after == *original);
+    if (!sameAffinity || !after || *after != *original) {
+        std::exit(1);
+    }
 #endif
 
     const std::array<unsigned int, 0> empty{};
     auto emptyResult = Process::setCpuAffinity(pid, empty);
-    assert(!emptyResult.has_value());
-    assert(emptyResult.error() == ProcessAffinityError::EmptyCpuSet);
+    if (emptyResult || emptyResult.error() != ProcessAffinityError::EmptyCpuSet) {
+        std::exit(1);
+    }
 
-    const std::array<unsigned int, 1> invalid{CPU::count() + 1024U};
+    const std::array<unsigned int, 1> invalid{std::numeric_limits<unsigned>::max()};
     auto invalidResult = Process::setCpuAffinity(pid, invalid);
-    assert(!invalidResult.has_value());
-    assert(invalidResult.error() == ProcessAffinityError::InvalidCpu);
+#if defined(_WIN32) || defined(__linux__)
+    if (invalidResult || invalidResult.error() != ProcessAffinityError::InvalidCpu) {
+        std::exit(1);
+    }
+#else
+    if (invalidResult || invalidResult.error() != ProcessAffinityError::Unsupported) {
+        std::exit(1);
+    }
+#endif
 
     const ProcessAffinityError errors[] = {
         ProcessAffinityError::EmptyCpuSet,

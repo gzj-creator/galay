@@ -88,9 +88,9 @@
 
 /// CPU 信息与线程亲和性
 #include "system/cpu.hpp"
-/// NUMA 节点约束
+/// NUMA 拓扑与节点约束
 #include "system/numa.hpp"
-/// 当前线程默认内存策略
+/// 页大小与当前线程默认内存策略
 #include "system/memory.hpp"
 
 /// 负载均衡

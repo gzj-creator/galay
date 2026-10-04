@@ -27,6 +27,15 @@ foreach(test_source IN LISTS GALAY_UTILS_TEST_SOURCES)
         continue()
     endif()
     galay_add_utils_test("${test_name}" "${test_source}")
+    if(test_name STREQUAL "t23_linux_cpu_affinity" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_options("${test_name}" PRIVATE
+            "-Wl,--wrap=sched_getaffinity" "-Wl,--wrap=sched_setaffinity"
+            "-Wl,--wrap=sched_getcpu")
+    endif()
+    if(test_name STREQUAL "t25_memory_policy_syscalls" AND CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        target_link_options("${test_name}" PRIVATE
+            "-Wl,--wrap=syscall" "-Wl,--wrap=sysconf")
+    endif()
     if(test_name STREQUAL "t_import_smoke")
         set_target_properties(t_import_smoke PROPERTIES CXX_SCAN_FOR_MODULES ON)
         set_tests_properties(utils.import_smoke PROPERTIES LABELS "utils;surface")
