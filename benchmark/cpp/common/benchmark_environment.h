@@ -1,7 +1,9 @@
 #ifndef GALAY_BENCHMARK_ENVIRONMENT_H
 #define GALAY_BENCHMARK_ENVIRONMENT_H
 
-#include <galay/cpp/galay-utils/system/performance.hpp>
+#include <galay/cpp/galay-utils/system/cpu.hpp>
+#include <galay/cpp/galay-utils/system/numa.hpp>
+#include <galay/cpp/galay-utils/system/memory.hpp>
 
 #include <algorithm>
 #include <charconv>
@@ -85,8 +87,9 @@ inline void printPlacementIds(std::span<const unsigned> ids)
  */
 [[nodiscard]] inline bool initializeBenchmarkEnvironment()
 {
-    using utils::NumaPolicy;
-    using utils::Performance;
+    using utils::CPU;
+    using utils::Numa;
+    using utils::Memory;
     if (detail::environmentInitialized) {
         return detail::placementError("already-initialized",
             std::make_error_code(std::errc::operation_not_permitted));
@@ -98,12 +101,12 @@ inline void printPlacementIds(std::span<const unsigned> ids)
     const bool bindCpus = cpuText != "none";
     std::vector<unsigned> cpus;
     if (bindCpus) {
-        const auto inherited = Performance::cpuAffinity();
+        const auto inherited = CPU::cpuAffinity();
         if (!inherited) {
             return detail::placementError("read-cpu-affinity", inherited.error());
         }
         const auto requested = cpuText == "inherit"
-            ? inherited : detail::parsePlacementIds(cpuText, Performance::kMaxCpus);
+            ? inherited : detail::parsePlacementIds(cpuText, CPU::kMaxCpus);
         if (!requested) {
             return detail::placementError("parse-GALAY_BENCH_CPUS", requested.error());
         }
@@ -114,7 +117,7 @@ inline void printPlacementIds(std::span<const unsigned> ids)
         cpus = *requested;
     }
 
-    NumaPolicy numaMode = NumaPolicy::Default;
+    Memory::Policy numaMode = Memory::Policy::Default;
     std::vector<unsigned> numaNodes;
     const bool setNuma = numaText != "keep";
     if (setNuma && numaText != "default") {
@@ -124,13 +127,13 @@ inline void printPlacementIds(std::span<const unsigned> ids)
             return detail::placementError("parse-GALAY_BENCH_NUMA",
                 std::make_error_code(std::errc::invalid_argument));
         }
-        numaMode = mode == "bind" ? NumaPolicy::Bind : NumaPolicy::Interleave;
-        const auto parsed = detail::parsePlacementIds(numaText.substr(colon + 1), Performance::kMaxNumaNodes);
+        numaMode = mode == "bind" ? Memory::Policy::Bind : Memory::Policy::Interleave;
+        const auto parsed = detail::parsePlacementIds(numaText.substr(colon + 1), Numa::kMaxNodes);
         if (!parsed) {
             return detail::placementError("parse-GALAY_BENCH_NUMA-nodes", parsed.error());
         }
         numaNodes = *parsed;
-        const auto allowed = Performance::allowedNumaNodes();
+        const auto allowed = Numa::allowedNumaNodes();
         if (!allowed) {
             return detail::placementError("read-allowed-numa-nodes", allowed.error());
         }
@@ -141,7 +144,7 @@ inline void printPlacementIds(std::span<const unsigned> ids)
     }
 
     if (bindCpus) {
-        const auto actual = Performance::bindCurrentThread(cpus);
+        const auto actual = CPU::bindCurrentThread(cpus);
         if (!actual) {
             return detail::placementError("bind-cpu-affinity", actual.error());
         }
@@ -151,12 +154,12 @@ inline void printPlacementIds(std::span<const unsigned> ids)
         }
     }
     if (setNuma) {
-        const auto applied = Performance::setNumaPolicy(numaMode, numaNodes);
+        const auto applied = Memory::setNumaPolicy(numaMode, numaNodes);
         if (!applied) {
             return detail::placementError("set-numa-policy", applied.error());
         }
     }
-    const auto policy = Performance::numaPolicy();
+    const auto policy = Memory::numaPolicy();
     if (setNuma && !policy) {
         return detail::placementError("read-numa-policy", policy.error());
     }

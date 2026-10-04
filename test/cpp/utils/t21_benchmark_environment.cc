@@ -12,7 +12,9 @@
 #include <sys/wait.h>
 #endif
 
-using galay::utils::Performance;
+using galay::utils::CPU;
+using galay::utils::Numa;
+using galay::utils::Memory;
 
 int main()
 {
@@ -20,24 +22,24 @@ int main()
     std::cout << "[SKIP] benchmark environment integration requires Linux\n";
     return 0;
 #else
-    const auto original = Performance::cpuAffinity();
+    const auto original = CPU::cpuAffinity();
     if (!original || original->empty()) {
         return 1;
     }
-    const auto nodes = Performance::allowedNumaNodes();
+    const auto nodes = Numa::allowedNumaNodes();
     std::array<bool, 3> numaAvailable{};
     bool probeValid = true;
     std::thread probe([&] {
-        const std::array modes{galay::utils::NumaPolicy::Default,
-                               galay::utils::NumaPolicy::Bind,
-                               galay::utils::NumaPolicy::Interleave};
+        const std::array modes{galay::utils::Memory::Policy::Default,
+                               galay::utils::Memory::Policy::Bind,
+                               galay::utils::Memory::Policy::Interleave};
         for (std::size_t i = 0; i < modes.size(); ++i) {
             if (i != 0 && (!nodes || nodes->empty())) {
                 continue;
             }
             const std::vector<unsigned> chosen = i == 0
                 ? std::vector<unsigned>{} : std::vector<unsigned>{nodes->front()};
-            const auto set = Performance::setNumaPolicy(modes[i], chosen);
+            const auto set = Memory::setNumaPolicy(modes[i], chosen);
             if (!set) {
                 probeValid = probeValid &&
                     (set.error() == std::errc::operation_not_permitted ||
@@ -46,7 +48,7 @@ int main()
                 std::cout << "[SKIP] NUMA set probe: " << set.error().message() << '\n';
                 continue;
             }
-            numaAvailable[i] = Performance::numaPolicy().has_value();
+            numaAvailable[i] = Memory::numaPolicy().has_value();
         }
     });
     probe.join();
@@ -100,7 +102,7 @@ int main()
             }
             if (test.narrow) {
                 const std::array<unsigned, 1> cpus{original->front()};
-                if (!Performance::bindCurrentThread(cpus)) {
+                if (!CPU::bindCurrentThread(cpus)) {
                     _exit(3);
                 }
             }
@@ -109,9 +111,9 @@ int main()
                 _exit(4);
             }
             if (ok) {
-                const auto actual = Performance::cpuAffinity();
+                const auto actual = CPU::cpuAffinity();
                 bool inherited = false;
-                std::thread child([&] { inherited = Performance::cpuAffinity() == actual; });
+                std::thread child([&] { inherited = CPU::cpuAffinity() == actual; });
                 child.join();
                 if (!inherited) {
                     _exit(5);
@@ -124,7 +126,7 @@ int main()
                     bool mapped = false;
                     std::thread worker([&] {
                         const auto placement = galay::benchmark::pinCurrentThread(1);
-                        const auto mask = Performance::cpuAffinity();
+                        const auto mask = CPU::cpuAffinity();
                         mapped = placement == galay::benchmark::ThreadPlacement::kPinnedToCore &&
                                  mask && *mask == std::vector<unsigned>{original->back()};
                     });
@@ -169,17 +171,17 @@ int main()
                 _exit(77);
             }
             if (denied == SYS_sched_setaffinity) {
-                const auto bound = Performance::bindCurrentThread(*original);
+                const auto bound = CPU::bindCurrentThread(*original);
                 if (bound || bound.error().value() != EPERM) {
                     _exit(3);
                 }
             } else if (denied == SYS_set_mempolicy) {
-                const auto set = Performance::setNumaPolicy(galay::utils::NumaPolicy::Default, {});
+                const auto set = Memory::setNumaPolicy(galay::utils::Memory::Policy::Default, {});
                 if (set || set.error().value() != EPERM) {
                     _exit(4);
                 }
             } else {
-                const auto policy = Performance::numaPolicy();
+                const auto policy = Memory::numaPolicy();
                 if (policy || policy.error().value() != EPERM) {
                     _exit(5);
                 }
@@ -193,7 +195,7 @@ int main()
             return 1;
         }
     }
-    if (Performance::cpuAffinity() != original) {
+    if (CPU::cpuAffinity() != original) {
         return 1;
     }
     std::cout << "[PASS] benchmark startup validation / inheritance / worker mapping\n";

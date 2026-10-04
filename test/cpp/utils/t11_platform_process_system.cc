@@ -26,11 +26,11 @@ void test_system() {
     assert(System::remove(testDir));
 
     // System info
-    assert(System::cpuCount() > 0);
+    assert(CPU::count() > 0);
     assert(!System::hostname().empty());
     assert(!System::currentDir().empty());
 
-    std::cout << "  CPU count: " << System::cpuCount() << std::endl;
+    std::cout << "  CPU count: " << CPU::count() << std::endl;
     std::cout << "  Hostname: " << System::hostname() << std::endl;
 
     // Edge cases for file operations
@@ -114,7 +114,7 @@ void test_process_affinity() {
     assert(original.has_value());
     assert(!original->empty());
 
-    const unsigned int cpu_count = System::cpuCount();
+    const unsigned int cpu_count = CPU::count();
     for (unsigned int cpu : *original) {
         assert(cpu < cpu_count);
     }
@@ -132,7 +132,7 @@ void test_process_affinity() {
     assert(!emptyResult.has_value());
     assert(emptyResult.error() == ProcessAffinityError::EmptyCpuSet);
 
-    const std::array<unsigned int, 1> invalid{System::cpuCount() + 1024U};
+    const std::array<unsigned int, 1> invalid{CPU::count() + 1024U};
     auto invalidResult = Process::setCpuAffinity(pid, invalid);
     assert(!invalidResult.has_value());
     assert(invalidResult.error() == ProcessAffinityError::InvalidCpu);

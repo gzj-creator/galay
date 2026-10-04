@@ -1,6 +1,6 @@
 #include <galay/cpp/galay-utils/buffer/bytes.hpp>
 #include <galay/cpp/galay-utils/encoding/base64.hpp>
-#include <galay/cpp/galay-utils/concurrency/pool.hpp>
+#include <galay/cpp/galay-utils/common/pool.hpp>
 
 #include <cassert>
 #include <string>

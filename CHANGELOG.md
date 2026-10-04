@@ -24,7 +24,7 @@
 - **补充 ring 模式切换与恢复分批回归**：T176 校验非零游标空轮询及所有访问者停止后重新启用 stealing 的全槽位复用；T97 覆盖 owner/shared 两种模式的 256+17 分批 FIFO、引用计数和 resume claim 恢复。
 - **扩展就绪队列 owner-only 生命周期回归**：T176 覆盖满容量混合 C/C++ entry、多轮回绕、入队失败保留所有权、禁用窃取、部分排空与重复 clear，校验引用守恒及唯一释放；当前构建与独立运行通过。
 - **新增独立 Env 环境变量接口**：以 std::expected 显式返回读写与删除结果，区分缺失变量和空值，校验非法名称及嵌入 NUL，保留系统错误码和读取快照语义。
-- **新增 Performance CPU / NUMA 控制接口**：读取与设置当前线程 CPU 亲和性、允许内存节点及 default/bind/interleave 策略，回读实际生效集合，保留 errno；不支持的平台明确返回错误。
+- **新增 CPU / NUMA / Memory 控制接口**：读取与设置当前线程 CPU 亲和性、允许内存节点及 default/bind/interleave 策略，回读实际生效集合，保留 errno；不支持的平台明确返回错误。
 - **建立可校准的成对性能测量门禁**：B28/B34 支持独立预热、单项校准及冻结迭代数；测量脚本记录平衡随机 A/B 次序、成对比值与 Student-t 95% 置信区间、CPU/RSS 和环境快照。B41 增加 connect、就绪确认、立即 accept 分项及原生 socket 对照，保留原完整生命周期门禁。
 - **补充测量与协程生命周期回归**：测量脚本扩展至 12 项测试；新增 T194，覆盖初始挂起、未提交/挂起/完成销毁、frame/TaskState 分配失败、内联/堆结果及跨线程最终释放。
 - **完成 H2 PGO 告警诊断和恢复完整采样**：增加 50 行复现与 T97 所有权边界检查，确认指定对齐指针调用链的借用冷分支告警不可达；保留告警与严格 profile 校验，三变体各 13 项回归、3 项 ASan 及各 5 轮四场景测量通过，性能仍有回退，不更改默认优化选项。
@@ -41,6 +41,8 @@
 
 ### Changed
 
+- **拆分 CPU、NUMA 与内存职责**：删除 Performance 集中式接口，分别提供 system/cpu.hpp、system/numa.hpp 和 system/memory.hpp 中的 CPU、Numa、Memory 静态工具类；CPU 数量统一使用 CPU::count()，移除 System::cpuCount()。同步压测绑核、内存策略、总头和模块导出及相关回归，不保留旧接口。
+
 - **采用 epoll pending 注册入口复用**：findPendingChange 同时返回 pending 下标及已确认 owner 的稳定 RegistrationEntry，applyEvents 新排队时复用入口，减少重复 fd 查找和幂等绑定；保留合并、取消、回收、flush 与错误完成协议。固定 600 个正式进程及独立复算支持 requeue_1/requeue_8 成本分别下降 14.24%/11.61%，明确接受 duplicate_1 与 resume.io_1 成本上升，不外推生产混合净收益。
 
 - **采用重复 resume claim 提前拒绝**：TaskResumeQueue::push 对已 claimed 状态先 acquire-load，未 claimed 时保留原 strong CAS；关闭、发布、回滚与引用归属不变。直接重复队列与 IO API 路径 wall 成对下降 44.62%/23.69%，不外推真实业务唤醒或整体吞吐。
@@ -50,7 +52,7 @@
 - **采用 owner-only pop 提前判空**：先确认 head/tail 非空再更新 tail，保留槽位清零与 stealing 协议；冻结成对实验支持非零/零游标空轮询分别降低 30.36%/5.62%，明确接受 IO batch=64 成本上升 0.59% 的局部取舍，不宣称混合业务负载净收益。
 - **采用 owner-only ring 局部优化**：槽位原子 exchange 改为 relaxed load 加 store(0)，保留清零、stealing 协议及停止所有访问者后才可切换模式的约束；owner 与 IO resume 局部收益已验证，综合性能门禁未通过。
 - **简化 x86 WebSocket 掩码向量构造**：使用 4-byte memcpy 加 32-bit broadcast，保持现有 SIMD 主循环、尾部源码、parser、NEON 与 API；采用经冻结实验验证的局部收益，不声称 TCP 或生产下单全路径已加速。
-- **按职责重组 galay-utils 公开目录**：系统接口统一到 system，字节与环形缓冲归入 buffer，并发工具归入 concurrency，限流和熔断归入 resilience；MurmurHash3 与负载选择归入 algorithm，Huffman 归入 encoding，cache 保留 LRU。同步所有调用方、总头、模块导出、示例、文档及安装检查，不保留旧路径转发头。
+- **按职责重组 galay-utils 公开目录**：系统接口统一到 system，字节与环形缓冲归入 buffer，线程池和任务等待器归入 thread，对象池归入 common，限流和熔断归入 resilience；MurmurHash3 与负载选择归入 algorithm，Huffman 归入 encoding，cache 保留 LRU。同步所有调用方、总头、模块导出、示例、文档及安装检查，不保留旧路径转发头。
 - **收敛环境变量职责**：移除 System 的 getEnv/setEnv/unsetEnv，统一使用 system/env.hpp 中的 Env；config/env.hpp 继续负责 .env 文件解析。
 - **统一 C++ benchmark 启动环境**：通过 GALAY_BENCH_CPUS 和 GALAY_BENCH_NUMA 控制继承 CPU 集合与内存策略，启动时校验边界及回读结果，工作线程按选定 CPU 集合放置；请求无法生效时明确失败退出。
 - **收敛 IO 调度器的 CRTP 特化边界**：各配置共享对应后端的真实基类，事件循环由每个 `Config` 独立特化收敛为每后端一份；保留后端级非虚静态分派，配置模板只负责提供构造容量，不将此调整视为配置级特化或性能完全等价。

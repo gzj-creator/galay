@@ -37,7 +37,7 @@
 #include "system/signal.hpp"
 
 /// 对象池
-#include "concurrency/pool.hpp"
+#include "common/pool.hpp"
 
 /// LRU 缓存
 #include "cache/lru_cache.hpp"
@@ -55,7 +55,7 @@
 #include "buffer/type_ring_buffer.hpp"
 
 /// 线程池
-#include "concurrency/thread.hpp"
+#include "thread/thread.hpp"
 
 /// 熔断器
 #include "resilience/circuit_breaker.hpp"
@@ -86,8 +86,12 @@
 /// 进程管理
 #include "system/process.hpp"
 
-/// CPU 亲和性及 NUMA 内存策略
-#include "system/performance.hpp"
+/// CPU 信息与线程亲和性
+#include "system/cpu.hpp"
+/// NUMA 节点约束
+#include "system/numa.hpp"
+/// 当前线程默认内存策略
+#include "system/memory.hpp"
 
 /// 负载均衡
 #include "algorithm/balancer.hpp"

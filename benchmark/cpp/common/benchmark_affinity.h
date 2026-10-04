@@ -56,7 +56,7 @@ inline ThreadPlacement pinCurrentThread(std::size_t coreIndex)
         return ThreadPlacement::kUnsupported;
     }
     const unsigned target = detail::selectedCpus[coreIndex % detail::selectedCpus.size()];
-    const auto actual = utils::Performance::bindCurrentThread(std::span(&target, 1));
+    const auto actual = utils::CPU::bindCurrentThread(std::span(&target, 1));
     if (!actual || actual->size() != 1 || actual->front() != target) {
         std::cerr << "GALAY_BENCH_ENV status=error operation=worker-cpu-affinity cpu="
                   << target << " error=" << (actual ? 0 : actual.error().value()) << '\n';

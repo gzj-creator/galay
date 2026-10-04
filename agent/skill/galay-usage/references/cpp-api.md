@@ -72,9 +72,10 @@ Task<void> echoServer() {
   - `CircuitBreaker`（`resilience/circuit_breaker.hpp`）— `explicit BasicCircuitBreaker(CircuitBreakerConfig = {})`、`bool allowRequest()`、`onSuccess()`、`onFailure()`、`template<F> auto execute(F&&)`（熔断打开返回 `std::unexpected(CircuitBreakerError::Open)`）、`executeWithFallback(F&&, Fallback&&)`、`CircuitState state()`
   - 负载均衡（`algorithm/balancer.hpp`）— `RoundRobinLoadBalancer<T>` / `WeightRoundRobinLoadBalancer<T>` / `RandomLoadBalancer<T>` / `WeightedRandomLoadBalancer<T>`：`std::optional<T> select()`、`void append(T[, uint32_t weight])`、`size_t size()`
   - `ConsistentHash`、`BloomFilter`、`Trie`、`MVCC`（`algorithm/`）；Huffman 编解码（`encoding/huffman.hpp`）
-  - `ThreadPool`、`TaskWaiter`（`concurrency/thread.hpp`）与 `ObjectPool`、`BlockingObjectPool`（`concurrency/pool.hpp`）
+  - `ThreadPool`、`TaskWaiter`（`thread/thread.hpp`）与 `ObjectPool`、`BlockingObjectPool`（`common/pool.hpp`）
   - 配置（`config/parser_manager.hpp`）— `ParserManager::instance().createParser(const std::string& path)`（按 `.conf/.ini/.env/.toml` 分发）；解析器 `bool parseFile(...)`、`std::optional<std::string> getValue(key)`、`get<T>(key)`
-  - `System`（`system/system.hpp`）— `System::cpuCount()` 等
+  - `CPU` / `Numa` / `Memory`（`system/cpu.hpp`、`system/numa.hpp`、`system/memory.hpp`）— 当前线程 CPU 绑定、NUMA 节点查询与内存策略
+  - `System`（`system/system.hpp`）— 文件、目录、主机和网络工具
 - **最小示例**:
 ```cpp
 #include <galay/cpp/galay-utils/galay_utils.hpp>

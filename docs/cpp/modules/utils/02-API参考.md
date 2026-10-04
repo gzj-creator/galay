@@ -21,8 +21,8 @@
 - `galay-utils/core/type_name.hpp`
 - `galay-utils/system/backtrace.hpp`
 - `galay-utils/system/signal.hpp`
-- `galay-utils/concurrency/thread.hpp`
-- `galay-utils/concurrency/pool.hpp`
+- `galay-utils/thread/thread.hpp`
+- `galay-utils/common/pool.hpp`
 - `galay-utils/cache/lru_cache.hpp`
 - `galay-utils/buffer/bytes.hpp`
 - `galay-utils/buffer/byte_queue_view.hpp`
@@ -38,7 +38,9 @@
 - `galay-utils/app/app.hpp`
 - `galay-utils/config/parser_manager.hpp`
 - `galay-utils/system/process.hpp`
-- `galay-utils/system/performance.hpp`
+- `galay-utils/system/cpu.hpp`
+- `galay-utils/system/numa.hpp`
+- `galay-utils/system/memory.hpp`
 - `galay-utils/encoding/base64.hpp`
 - `galay-utils/crypto/md5.hpp`
 - `galay-utils/algorithm/murmur_hash3.hpp`
@@ -60,27 +62,30 @@
 | TypeName | `galay-utils/core/type_name.hpp` | `getTypeName<T>()`、`getTypeName(obj)`、`demangleSymbol()` |
 | BackTrace | `galay-utils/system/backtrace.hpp` | `BackTrace` |
 | Signal | `galay-utils/system/signal.hpp` | `SignalHandler` |
-| Performance | `galay-utils/system/performance.hpp` | `Performance`、`NumaPolicy`、`NumaPolicyState` |
+| CPU | `galay-utils/system/cpu.hpp` | `CPU::count()`、`CPU::cpuAffinity()`、`CPU::bindCurrentThread()` |
+| Numa | `galay-utils/system/numa.hpp` | `Numa::allowedNumaNodes()` |
+| Memory | `galay-utils/system/memory.hpp` | `Memory::Policy`、`Memory::PolicyState`、`Memory::numaPolicy()`、`Memory::setNumaPolicy()` |
 
-### `Performance`：CPU / NUMA 放置
+### `CPU`、`Numa` 与 `Memory`：线程放置
 
-公开头为 `<galay/cpp/galay-utils/system/performance.hpp>`，也从 umbrella 和 `galay.utils` 模块导出，与 `Env`、`System` 一起归入 `system/` 目录。
+三个细粒度头分别承担 CPU 亲和性、NUMA 节点约束和当前线程默认内存策略；总头和 `galay.utils` 模块统一导出这三个类型。
 
-| 静态方法 | 返回值 / 契约 |
+| 静态方法 / 类型 | 返回值 / 契约 |
 |---|---|
-| `cpuAffinity()` | 当前调用线程的有效逻辑 CPU ID 集合，按 ID 排序 |
-| `bindCurrentThread(cpus)` | 设置当前线程，返回系统回读的实际 CPU 集合；重复 ID 合并 |
-| `allowedNumaNodes()` | 当前 cpuset 允许使用的内存节点 |
-| `numaPolicy()` | 当前线程的原生策略值（包含标志位）和节点集合 |
-| `setNumaPolicy(policy, nodes)` | 设置 `Default` / `Bind` / `Interleave`；成功返回空 expected |
+| `CPU::count()` | 标准库报告的逻辑 CPU 数量 |
+| `CPU::cpuAffinity()` | 当前调用线程的有效逻辑 CPU ID 集合，按 ID 排序 |
+| `CPU::bindCurrentThread(cpus)` | 设置当前线程，返回系统回读的实际 CPU 集合；重复 CPU ID 合并 |
+| `Numa::allowedNumaNodes()` | 当前 cpuset 允许使用的内存节点 |
+| `Memory::numaPolicy()` | 当前线程的原生策略值（包含标志位）和节点集合 |
+| `Memory::setNumaPolicy(policy, nodes)` | 设置 `Default` / `Bind` / `Interleave`；成功返回空 expected |
 
-所有方法使用 `std::expected<T, std::error_code>`。系统调用失败立即保留原始 errno，参数错误为 `invalid_argument`，非 Linux 平台为 `operation_not_supported`；不抛出或捕获异常处理可恢复错误。调用方必须检查结果。
+放置控制方法使用 `std::expected<T, std::error_code>`。系统调用失败立即保留原始 errno，参数错误为 `invalid_argument`，非 Linux 平台为 `operation_not_supported`；调用方必须检查结果。
 
-- 作用于**当前线程**，不隐式修改已有工作线程。Linux 新建线程继承创建者当时的 CPU mask 和 NUMA 策略，应在创建线程前配置。
-- `bindCurrentThread` 的回读结果可能是内核与 online / cpuset 限制的交集；调用方要比较实际集合与请求。需要保留 taskset 边界时，先验证请求是启动 mask 的子集。回读失败时绑定可能已经生效，此接口不承诺事务式回滚。
-- `Default` 要求空节点集；`Bind` / `Interleave` 要求非空集。设置后可用 `numaPolicy()` 回读验证；压测公共入口会自动检查允许节点和精确回读。
+- `CPU::cpuAffinity()`、`CPU::bindCurrentThread()`、`Numa::allowedNumaNodes()` 和 `Memory::*()` 只作用于当前线程，不隐式修改已有工作线程。Linux 新建线程继承创建者当时的 CPU mask 和内存策略，应在创建线程前配置。
+- `CPU::bindCurrentThread()` 的回读结果可能是内核与 online / cpuset 限制的交集；调用方要比较实际集合与请求。回读失败时绑定可能已经生效，此接口不承诺事务式回滚。
+- `Memory::Policy::Default` 要求空节点集；`Bind` / `Interleave` 要求非空集。设置后用 `Memory::numaPolicy()` 回读验证；压测公共入口会检查允许节点和精确回读。
 - CPU ID 范围由 `CPU_SETSIZE` 决定，当前 Linux 实现为 0–1023；NUMA 节点范围为 0–1023。超范围请求明确失败；读取系统 mask 的容量不足会返回内核错误，不截断集合。
-- NUMA 策略影响后续内存分配和首次触碰，不迁移已有页；静态初始化、已触碰的分配器缓存、显式 VMA 策略等不因此改变。CPU 绑定与内存节点绑定是独立设置，需按机器拓扑选择。
+- 内存策略影响后续分配和首次触碰，不迁移已有页；静态初始化、已触碰的分配器缓存、显式 VMA 策略等不因此改变。CPU 绑定与内存节点绑定是独立设置，需按机器拓扑选择。
 - 只包装内核现有 affinity / mempolicy 接口，不增加 libnuma 依赖，不修改频率、实时调度、IRQ 或系统全局配置。
 
 压测配置、示例及限制见 [05-性能测试：CPU / NUMA 启动控制](05-性能测试.md#2026-09-29cpu--numa-启动控制)。
@@ -158,7 +163,7 @@
 - 文件：`System::readFile` / `System::writeFile` / `System::readFileMmap`
 - 文件系统：`System::fileExists` / `System::isDirectory` / `System::fileSize` / `System::createDirectory` / `System::remove` / `System::listDirectory`
 - 网络：`System::resolveHostIPv4` / `System::resolveHostIPv6` / `System::checkAddressType`
-- 主机：`System::cpuCount` / `System::hostname` / `System::currentDir` / `System::changeDir` / `System::executablePath`
+- 主机：`CPU::count()` / `System::hostname` / `System::currentDir` / `System::changeDir` / `System::executablePath`
 - 语义：系统时间戳和时间格式化 API 使用 `Time`；进程环境变量使用 `Env`
 
 ### `Env`
@@ -220,8 +225,8 @@
 | Bytes | `galay-utils/buffer/bytes.hpp` | `Bytes`、`ByteMetaData` |
 | ByteQueueView | `galay-utils/buffer/byte_queue_view.hpp` | `ByteQueueView` |
 | RingBuffer | `galay-utils/buffer/ring_buffer.hpp` | `RingBuffer` |
-| Thread | `galay-utils/concurrency/thread.hpp` | `ThreadPool`、`TaskWaiter` |
-| Pool | `galay-utils/concurrency/pool.hpp` | `PoolableObject`、`ObjectPool<T>`、`BlockingObjectPool<T>` |
+| Thread | `galay-utils/thread/thread.hpp` | `ThreadPool`、`TaskWaiter` |
+| Pool | `galay-utils/common/pool.hpp` | `PoolableObject`、`ObjectPool<T>`、`BlockingObjectPool<T>` |
 
 ### `LruCache`
 
@@ -741,7 +746,7 @@
 
 - 当前仓库没有统一的 `expected` / 错误码基类；检索失败语义时必须回到对应头文件签名，而不能把整个仓库当成单一错误模型
 - 纯工具类主路径集中在 `core/`、`encoding/`、`crypto/`、`common/`，它们主要回答“输入是什么、返回值是什么”
-- 线程池、等待器与对象池位于 `concurrency/`，系统资源接口位于 `system/`；检索时要额外关注阻塞、等待与资源释放语义
+- 线程池位于 `thread/`，对象池位于 `common/`，系统资源接口位于 `system/`；检索时要额外关注阻塞、等待与资源释放语义
 - `ThreadPool::addTask(...)` 返回 `std::future<...>`，而 `execute(...)` 是 fire-and-forget 风格；两者不应混用为同一等待模型
 - `ObjectPool<T>` 与 `BlockingObjectPool<T>` 不是同一组方法：前者是“可扩容 + 非阻塞取对象”，后者是“固定池 + 阻塞等待”
 - `RateLimiter` 不再提供 `acquire(...)` awaitable；使用无锁同步非阻塞 `tryAcquire(...)` 获取结果

@@ -12,8 +12,9 @@ import galay.utils;
 int main() {
     using namespace galay::utils;
 
-    static_assert(Performance::kMaxCpus > 0);
-    static_assert(Performance::kMaxNumaNodes > 0);
+    static_assert(CPU::kMaxCpus > 0);
+    static_assert(Numa::kMaxNodes > 0);
+    static_assert(Memory::kMaxNodes > 0);
 
     const auto invalidEnv = Env::get("");
     if (invalidEnv || invalidEnv.error() != std::errc::invalid_argument) {
@@ -28,7 +29,7 @@ int main() {
     RandomGenerator random(7);
     assert(random.randomString(4, "a") == "aaaa");
     assert(Time::formatTime(0, "%Y", true) == "1970");
-    assert(System::cpuCount() > 0);
+    assert(CPU::count() > 0);
 
     LruCache<int, int> cache(1);
     assert(cache.put(1, 10));

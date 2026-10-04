@@ -7,6 +7,6 @@ int main() {
 
     auto parts = StringUtils::split("hello,galay,utils", ',');
     std::cout << StringUtils::join(parts, " ") << std::endl;
-    std::cout << "cpu cores: " << System::cpuCount() << std::endl;
+    std::cout << "cpu cores: " << CPU::count() << std::endl;
     return 0;
 }

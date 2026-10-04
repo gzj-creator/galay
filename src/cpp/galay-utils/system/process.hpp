@@ -13,6 +13,7 @@
 
 #include "../common/defn.hpp"
 #include "system.hpp"
+#include "cpu.hpp"
 #include <algorithm>
 #include <cerrno>
 #include <expected>
@@ -347,7 +348,7 @@ public:
         }
 
         std::vector<unsigned int> cpus;
-        const unsigned int cpu_count = System::cpuCount();
+        const unsigned int cpu_count = CPU::count();
         for (unsigned int cpu = 0; cpu < cpu_count && cpu < CPU_SETSIZE; ++cpu) {
             if (CPU_ISSET(cpu, &mask)) {
                 cpus.push_back(cpu);
@@ -684,7 +685,7 @@ private:
             return std::unexpected(ProcessAffinityError::EmptyCpuSet);
         }
 
-        const unsigned int cpu_count = System::cpuCount();
+        const unsigned int cpu_count = CPU::count();
         std::vector<unsigned int> normalized(cpus.begin(), cpus.end());
         std::sort(normalized.begin(), normalized.end());
         normalized.erase(std::unique(normalized.begin(), normalized.end()), normalized.end());

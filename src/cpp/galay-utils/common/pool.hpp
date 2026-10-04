@@ -11,7 +11,11 @@
 #ifndef GALAY_UTILS_POOL_HPP
 #define GALAY_UTILS_POOL_HPP
 
-#include "../common/defn.hpp"
+#include "defn.hpp"
+#include <chrono>
+#include <concepts>
+#include <cstddef>
+#include <type_traits>
 #include <memory>
 #include <functional>
 #include <queue>

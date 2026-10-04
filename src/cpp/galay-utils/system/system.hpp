@@ -6,7 +6,6 @@
 #include <vector>
 #include <optional>
 #include <fstream>
-#include <thread>
 
 #if defined(GALAY_PLATFORM_MACOS) || defined(GALAY_PLATFORM_LINUX) || defined(__APPLE__) || defined(__linux__)
 #include <unistd.h>
@@ -332,10 +331,6 @@ public:
     }
 
     // System info
-
-    static unsigned int cpuCount() {
-        return std::thread::hardware_concurrency();
-    }
 
     static std::string hostname() {
         char buffer[256];
