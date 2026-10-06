@@ -7,6 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <thread>
+#include <type_traits>
 #include <utility>
 #ifdef USE_IOURING
 #include <galay/cpp/galay-kernel/core/uring_scheduler.h>
@@ -14,6 +15,8 @@
 #include <unistd.h>
 using namespace galay::kernel;
 using namespace std::chrono_literals;
+static_assert(!std::is_move_constructible_v<IOController>);
+static_assert(!std::is_move_assignable_v<IOController>);
 namespace galay::kernel {
 struct IOUringReactorTestAccess {
     static void deliver(IOUringReactor& reactor, SqeRequestHandle* handle, int result, unsigned flags) {
@@ -325,26 +328,35 @@ void admissionBoundaries() {
     Fd listener(::socket(AF_INET, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0));
     Owner owner;
     if (!check(listener.get() >= 0 && owner.initialize(), "admission setup")) { return; }
-    IOController controller(GHandle{listener.get()});
+    auto controller = std::make_unique<IOController>(GHandle{listener.get()});
     Probe probe{{}, &owner};
-    auto op = AcceptAwaitable(&controller, nullptr).timeout(1h);
+    auto op = AcceptAwaitable(controller.get(), nullptr).timeout(1h);
     if (!check(op.suspend(waker(probe)), "original parked")) { return; }
     Probe other_probe{{}, &owner};
-    AcceptAwaitable duplicate(&controller, nullptr);
+    AcceptAwaitable duplicate(controller.get(), nullptr);
     check(!duplicate.suspend(waker(other_probe)), "duplicate rejected");
     const auto rejected = duplicate.await_resume();
     check(!rejected && (rejected.error().code() >> 32) == EBUSY && other_probe.wakes == 0 &&
-          controller.m_awaitable[IOController::READ] == &op, "duplicate does not detach original");
-    // Move the resource while the operation is parked: stable state resolves its new owner.
-    auto moved = std::make_unique<IOController>(std::move(controller));
+          controller->m_awaitable[IOController::READ] == &op, "duplicate does not detach original");
+    auto* stable_controller = controller.get();
+    auto* handle = controller->m_accept_multishot_handle;
+    auto* state = handle->state;
+    const auto generation = handle->generation;
+    const auto key = op.m_operation->state().key();
+    // Resource moves transfer ownership; reactor and awaitable borrows keep the same address.
+    auto moved = std::move(controller);
+    check(!controller && moved.get() == stable_controller && op.m_controller == stable_controller &&
+          op.m_registration_state == state && state->owner.load(std::memory_order_acquire) == stable_controller &&
+          state->generation.load(std::memory_order_acquire) == generation &&
+          moved->m_accept_multishot_handle == handle && op.m_operation->state().key() == key,
+          "parked owner transfer preserves controller, request and operation identities");
     op.m_timer->handleTimeout();
     drained(op, *moved);
-    auto* handle = moved->m_accept_multishot_handle;
     moved.reset();
     IOUringReactorTestAccess::deliver(owner.reactor(), handle, -ECANCELED, 0);
     const auto result = op.await_resume();
     check(!result && IOError::contains(result.error().code(), kTimeout) && probe.wakes == 1,
-          "moved then freed controller is not borrowed by resume");
+          "transferred then freed controller is not borrowed by resume");
     AcceptAwaitable null_controller(nullptr, nullptr);
     check(!null_controller.suspend(waker(other_probe)), "null controller completes synchronously");
     const auto null_result = null_controller.await_resume();
@@ -426,11 +438,16 @@ void inlineDestruction(Event event, bool more, bool consume) {
     probe.callback = [](void* p) noexcept {
         auto& ctx = *static_cast<Context*>(p);
         drained(*ctx.op, *ctx.controller);
-        // Published OperationCompletion has a fixed address. Move its owning
-        // pointer; also move the actual controller, then destroy both inline.
+        // Published controller and OperationCompletion both keep fixed addresses.
+        // Transfer their owning pointers, then destroy both inside the wake callback.
+        auto* stable_controller = ctx.controller.get();
+        auto* stable_op = ctx.op.get();
+        auto* stable_completion = &*ctx.op->m_operation;
         auto owned_op = std::move(ctx.op);
-        IOController moved(std::move(*ctx.controller));
-        ctx.controller.reset();
+        auto owned_controller = std::move(ctx.controller);
+        check(!ctx.controller && !ctx.op && owned_controller.get() == stable_controller &&
+              owned_op.get() == stable_op && &*owned_op->m_operation == stable_completion,
+              "inline owner transfers preserve published addresses");
         if (ctx.consume) {
             const auto result = owned_op->await_resume();
             if (result) { check(::close(result->fd) == 0, "inline consumed fd"); }

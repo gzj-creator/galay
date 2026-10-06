@@ -75,6 +75,8 @@
 
 ### Fixed
 
+- **修复稳定地址所有权回归的旧移动用法**：T168 和 T191 改为转移 `unique_ptr<IOController>` 所有权，保留控制器不可移动的静态断言；检查 pending/flushed 注册、awaitable 借用、request/generation/operation 身份及内联销毁时 completion 地址稳定，不放开生产控制器移动契约。
+
 - **修正 CPU 数量与编号语义混用**：`CPU::count()` 保留硬件并发度提示，Process 不再以该数量校验或截断 CPU ID；Linux CPU/Process 共用动态 affinity mask，支持非连续和超过 1023 的 CPU ID，benchmark 按继承集合校验。NUMA 策略设置同时确保最高支持节点位可传给内核，补充稀疏 ID、sysfs 错误、策略保存/修改/恢复及失败传播回归。
 
 - **修复 MPMC 接收 pump 的 CAS 重试活锁**：竞争 owner 排空并返回 idle 后，CAS 失败保留实际 observed，只在首次发布后合入工作位，避免发送线程持续自旋；保持内存序、关闭、waiter 和引用所有权协议。T173 新增确定性 owner 交接及注册/关闭回归，保留原压力；22 项 Release（含 T100 一千万项）、10 项本地 kernel ASan/UBSan/LSan、3 项 TSan 与两百万项诊断通过，根因、验证范围及历史不确定性见独立报告。
@@ -96,6 +98,8 @@
 
 ### Chore
 
+- **归档稳定地址修复的实际验证与构建边界**：T168 已完成 4 项 Release、3 项 ASan/UBSan/LSan 和 3 项 TSan；T191 保留 P10 v2 的匹配 Release、sanitizer 与生命周期门禁及指定源码身份。默认聚合构建越过 T168 后仍在 T95 的旧移动断言失败，未修复、未标通过；kqueue 与全仓库测试未获通过结论。
+
 - 环境控制与目录调整已通过 utils 23/23、安装布局检查、14 个迁移头文件独立编译、13 个下游 C++ 库及 6 个相关压测目标构建；mcpp 使用 LLVM 22.1.8 完成 SSL feature 构建，utils 导入及三个 SSL/epoll 回归程序通过。全仓其余 10 个模块的 prelude 既存漂移经迁移前副本对照确认，本次未新增漂移。
 - 新增 T195 epoll 注册生命周期和 T16 SSL socket 移动回归，接入 mcpp 的 SSL 移动、并发握手及 epoll 注册测试目标；LLVM 22.1.8 模块构建与三个回归程序通过。
 - **独立清理 H3 的 26 项阻塞风格问题**：补齐 E13 import 示例，迁移编号化腾讯脚本和 prelude 生成器，删除 Linux verifier 兼容入口，修正已有测试白名单路径并编号断言测试；同步调用方、增加 5 项回归，最终 19 项定向 CTest 与两种 E13 Release 示例通过，保留非阻塞建议；文档保留验证结论，19 份原始日志不纳入提交历史。
@@ -104,6 +108,10 @@
 - 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。
 
 ### Docs
+
+- **归档 P07–P15 性能计划最终验收**：补齐 Redis/HTTP 状态与读写链、accept 生命周期、io_uring bookkeeping、共享布局、LTO、PGO、已采用组合及 victim 选择的审查报告；P09 v2、P10 v2、P14 主收益未验证，候选不采用，P07/P08/P11–P13/P15 的具体机制或资格静态否决。P08 的 22 项 kernel Release 缺口已独立补齐，七项既有局部采用及历史代价保持，无新增生产性能优化。
+- **同步采用记录、执行计划和最终交接**：记录 T168 独立修复、P09 新限定连接模型 G1–G10、P08–P14 依赖核验和 P15 G1 静态闭环；后续有资格实验预先固定 3–5 轮成对 A/B、默认 3，正确性保护保持，CI 跨 0 记未验证并停止。保留旧失败、未执行阶段、raw 和 seal，最终游标停止，原始产物继续留在忽略目录。
+- **保存性能机会分析初稿**：纳入 `docs/performance/` 的导航、架构机会、热路径微优化与总结四份原有文档；其中收益、风险、工时和建议属于历史假设，以正式验收报告的实际结论为准，不作为已验证收益或新增采用。
 
 - **归档跨维度性能优化计划与 P01–P06 审查**：记录 TaskState 释放资格、唤醒统计、epoll pending 入口复用、超时取消、Channel waiter 与 HTTP 状态生命周期的实际结论；同步采用记录、历史计数合并/cold 报告和续跑交接，游标为 P07 G1。
 - **完成 P05 v2 补验与 P06 安全审查**：P05 两版各 34 Release、14 ASan/UBSan/LSan、6 TSan，保留 T100 一千万项和 T173 一千次压力（含 TSan），8,172 个证据文件重新封存验证；无有效 Release 机器码成本降低，静态否决。P06 九个基线测试/诊断进程通过，response 单槽复用不满足 pending/copy 操作独占与绑定契约，未创建候选。两项均无新增生产补丁，正式矩阵为 0，原始产物不纳入 Git。

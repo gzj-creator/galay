@@ -1,6 +1,6 @@
 /**
  * @file t168_registration_move.cc
- * @brief 验证持久 reactor 注册在 IOController 移动后原位重绑到新对象。
+ * @brief 验证 owner pointer 转移后持久 reactor 注册仍指向稳定的 IOController。
  */
 
 #include <galay/cpp/galay-kernel/core/awaitable.h>
@@ -18,9 +18,13 @@
 #include <iostream>
 #include <memory>
 #include <sys/socket.h>
+#include <type_traits>
 #include <unistd.h>
 
 using namespace galay::kernel;
+
+static_assert(!std::is_move_constructible_v<IOController>);
+static_assert(!std::is_move_assignable_v<IOController>);
 
 namespace {
 
@@ -62,11 +66,11 @@ bool pendingRegistrationMoveCanBeCancelled() {
         return false;
     }
 
-    IOController source(GHandle{.fd = fds[0]});
+    auto source = std::make_unique<IOController>(GHandle{.fd = fds[0]});
     char recv_buffer = 0;
-    RecvAwaitable recv_awaitable(&source, &recv_buffer, 1);
-    if (!source.fillAwaitable(RECV, &recv_awaitable) ||
-        reactor.addRecv(&source) != 0) {
+    RecvAwaitable recv_awaitable(source.get(), &recv_buffer, 1);
+    if (!source->fillAwaitable(RECV, &recv_awaitable) ||
+        reactor.addRecv(source.get()) != 0) {
         std::cerr << "[T168] failed to queue pending recv before move\n";
         const bool first_closed = closeFd(fds[0]);
         const bool second_closed = closeFd(fds[1]);
@@ -76,24 +80,44 @@ bool pendingRegistrationMoveCanBeCancelled() {
         return false;
     }
 
-    IOController moved(std::move(source));
-    moved.removeAwaitable(RECV);
+    auto* const stable_controller = source.get();
+    auto* const owner_slot = source->m_registration_owner_slot;
+    auto moved = std::move(source);
+    source.reset();
     bool passed = true;
-    if (reactor.remove(&moved) != 0 || reactor.flushPendingChanges() != 0) {
+    if (source || moved.get() != stable_controller || owner_slot == nullptr ||
+        moved->m_registration_owner_slot != owner_slot || *owner_slot != stable_controller ||
+        recv_awaitable.m_controller != stable_controller ||
+        moved->m_awaitable[IOController::READ] != &recv_awaitable) {
+        std::cerr << "[T168] pending owner transfer changed published identities\n";
+        passed = false;
+    }
+    moved->removeAwaitable(RECV);
+    const int remove_result = reactor.remove(moved.get());
+    const int flush_result = reactor.flushPendingChanges();
+    if (remove_result != 0 || flush_result != 0) {
         std::cerr << "[T168] failed to cancel moved pending registration\n";
         passed = false;
-    } else if (moved.m_registered_events != 0) {
-        std::cerr << "[T168] pending registration survived controller move and remove\n";
+    } else if (moved->m_registered_events != 0 ||
+               moved->m_registration_owner_slot != owner_slot || *owner_slot != stable_controller) {
+        std::cerr << "[T168] pending registration survived owner transfer and remove\n";
         passed = false;
     }
 
-    if (reactor.addClose(&moved) != 0) {
+    if (reactor.addClose(moved.get()) != 0) {
         std::cerr << "[T168] pending-move controller cleanup failed\n";
         passed = false;
     } else {
         fds[0] = -1;
+        if (moved->m_registration_owner_slot != nullptr ||
+            moved->m_handle != GHandle::invalid()) {
+            std::cerr << "[T168] close retained controller registration or handle\n";
+            passed = false;
+        }
     }
-    if (!closeFd(fds[0]) || !closeFd(fds[1])) {
+    const bool first_closed = closeFd(fds[0]);
+    const bool second_closed = closeFd(fds[1]);
+    if (!first_closed || !second_closed || last_error.load() != 0) {
         std::cerr << "[T168] pending-move socket cleanup failed\n";
         passed = false;
     }
@@ -169,7 +193,6 @@ int main() {
 
     IOController** owner_slot = nullptr;
     if (passed) {
-        source->removeAwaitable(RECV);
         owner_slot = source->m_registration_owner_slot;
         if (owner_slot == nullptr || *owner_slot != source.get()) {
             std::cerr << "[T168] reactor entry did not bind source controller\n";
@@ -179,14 +202,16 @@ int main() {
 
     std::unique_ptr<IOController> moved;
     if (passed) {
-        moved = std::make_unique<IOController>(std::move(*source));
+        auto* const stable_controller = source.get();
+        moved = std::move(source);
+        source.reset();
         if (moved->m_registration_owner_slot != owner_slot ||
-            source->m_registration_owner_slot != nullptr ||
-            *owner_slot != moved.get()) {
-            std::cerr << "[T168] registration owner was not rebound during move\n";
+            source || moved.get() != stable_controller || *owner_slot != stable_controller ||
+            recv_awaitable.m_controller != stable_controller ||
+            moved->m_awaitable[IOController::READ] != &recv_awaitable) {
+            std::cerr << "[T168] flushed owner transfer changed published identities\n";
             passed = false;
         }
-        source.reset();
     }
 
     if (passed) {
@@ -211,8 +236,10 @@ int main() {
         const timespec timeout{0, 0};
         reactor.poll(timeout, wake_coordinator);
 #endif
-        if (*owner_slot != moved.get()) {
-            std::cerr << "[T168] event dispatch lost the moved controller binding\n";
+        if (*owner_slot != moved.get() || !recv_awaitable.m_result ||
+            recv_awaitable.m_result.value() != 1 || recv_buffer != 'x' ||
+            moved->m_awaitable[IOController::READ] != nullptr) {
+            std::cerr << "[T168] event dispatch lost the stable controller or recv result\n";
             passed = false;
         }
     }
@@ -231,7 +258,17 @@ int main() {
 #endif
     }
 
-    if (!closeFd(fds[0]) || !closeFd(fds[1])) {
+    if (registered_controller != nullptr) {
+        if (reactor.addClose(registered_controller) != 0) {
+            std::cerr << "[T168] controller close failed\n";
+            passed = false;
+        } else {
+            fds[0] = -1;
+        }
+    }
+    const bool first_closed = closeFd(fds[0]);
+    const bool second_closed = closeFd(fds[1]);
+    if (!first_closed || !second_closed || last_error.load() != 0) {
         std::cerr << "[T168] socket close failed\n";
         passed = false;
     }
