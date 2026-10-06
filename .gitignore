@@ -30,9 +30,26 @@ __pycache__/
 /benchmark_run_results.txt
 /test_failure_summary.md
 
-# Kernel evidence consolidated in docs/extreme_performance_summary_2026-09-29.md
-/docs/cpp/modules/kernel/benchmark_data/peak_2026-09-29/
-/docs/cpp/modules/kernel/benchmark_data/handoff_2026-09-29/h3/
+# Local intermediate reports and raw benchmark evidence
+/REFACTOR_PLAN.md
+/REFACTOR_SUMMARY.md
+/docs/FINAL_REPORT.md
+/docs/async_operation_*.md
+/docs/extreme_performance_*.md
+/docs/full_build_validation_*.md
+/docs/hotpath_optimization_plan_*.md
+/docs/performance_*.md
+/docs/performance/*
+!/docs/performance/machine_config.md
+/docs/validation/
+/docs/refactoring/
+/docs/plans/async_operation_cancellation_execution_plan.md
+/docs/cpp/modules/*/benchmark_data/
+/docs/cpp/modules/http/*_2026-10-*.md
+/docs/cpp/modules/kernel/*_2026-09-29.md
+/docs/cpp/modules/kernel/*_2026-09-30.md
+/docs/cpp/modules/kernel/*_2026-10-*.md
+/docs/cpp/modules/redis/redis_operation_state_review_2026-10-02.md
 
 # CMake build output
 build/

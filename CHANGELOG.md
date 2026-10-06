@@ -15,141 +15,35 @@
 
 ### Added
 
-- **补齐全模块与安装消费者回归**：新增 mcpp `full` 模块联合导入、Redis/Rediss 初始化 awaitable 移动、C reactor、低 fd 上限并发 sleep、提前唤醒和 scheduler 销毁回归；原生安装消费者联合导入 kernel/postgres/rpc 与 JSON/TOML。
-
-- **补充系统资源查询与原生策略恢复**：新增 CPU 在线 ID 和当前 CPU 快照、NUMA 在线节点/CPU 拓扑/相对距离、以字节计的基础页大小和 `Memory::restoreNumaPolicy`；保留原生 mode、flags 与 nodemask，无新增链接依赖。
-
-- **补充 pending 注册与混合注入回归**：T195 增加 64 轮注册合并、取消、重排队、双索引清理和稳定 owner-slot 生命周期检查；T97 保留 normal/resume 混合搬运的分批 FIFO、引用守恒、零转换及并发 drain/close/reopen 覆盖。
-
-- **补充重复恢复 claim 并发回归**：T97 新增同一状态多生产者跨队列竞争、摘下仍 claimed、并发 drain/close、重新接纳、IO pending 回滚与引用恢复检查。
-
-- **补充空恢复队列生命周期与并发回归**：T97 覆盖反复 open/closed 空 drain、填充后排空、关闭非空拒绝 reopen、引用与 claim 恢复，以及四生产者发布和 drain/close 竞争下的恰好一次消费。
-- **补充帧分配器边界与线程退出检查**：T180 新增首次远端释放及五尺寸类复用；T196 覆盖冷分配对齐、可写边界、溢出与注入失败、跨线程错误尺寸释放及大 Task 生命周期，保留未采用候选验证中形成的有效回归。
-- **补充空轮询后单任务往返回归**：T176 覆盖初始零游标和已推进游标，反复空轮询后检查单任务入队、出队、容量及唯一释放；保留既有满容量复用与停止后的模式切换覆盖。
-- **新增 B42 ring 生命周期基准及校验**：覆盖 owner/shared 的单项与 64 项批次，测量入口显式启用 ring 场景并核对完成量、释放量、错误与 CPU 计时；原默认矩阵及 parallel 场景保持不变，测量脚本回归扩展至 14 项。
-- **补充 ring 模式切换与恢复分批回归**：T176 校验非零游标空轮询及所有访问者停止后重新启用 stealing 的全槽位复用；T97 覆盖 owner/shared 两种模式的 256+17 分批 FIFO、引用计数和 resume claim 恢复。
-- **扩展就绪队列 owner-only 生命周期回归**：T176 覆盖满容量混合 C/C++ entry、多轮回绕、入队失败保留所有权、禁用窃取、部分排空与重复 clear，校验引用守恒及唯一释放；当前构建与独立运行通过。
-- **新增独立 Env 环境变量接口**：以 std::expected 显式返回读写与删除结果，区分缺失变量和空值，校验非法名称及嵌入 NUL，保留系统错误码和读取快照语义。
-- **新增 CPU / NUMA / Memory 控制接口**：读取与设置当前线程 CPU 亲和性、允许内存节点及 default/bind/interleave 策略，回读实际生效集合，保留 errno；不支持的平台明确返回错误。
-- **建立可校准的成对性能测量门禁**：B28/B34 支持独立预热、单项校准及冻结迭代数；测量脚本记录平衡随机 A/B 次序、成对比值与 Student-t 95% 置信区间、CPU/RSS 和环境快照。B41 增加 connect、就绪确认、立即 accept 分项及原生 socket 对照，保留原完整生命周期门禁。
-- **补充测量与协程生命周期回归**：测量脚本扩展至 12 项测试；新增 T194，覆盖初始挂起、未提交/挂起/完成销毁、frame/TaskState 分配失败、内联/堆结果及跨线程最终释放。
-- **完成 H2 PGO 告警诊断和恢复完整采样**：增加 50 行复现与 T97 所有权边界检查，确认指定对齐指针调用链的借用冷分支告警不可达；保留告警与严格 profile 校验，三变体各 13 项回归、3 项 ASan 及各 5 轮四场景测量通过，性能仍有回退，不更改默认优化选项。
-- **新增可复核性能实验与交接记录**：增加串行变体测量脚本及 6 项测试，保存 Release/LTO/PGO 的配置、成功与失败原始样本、校验和及独立 pending 索引生命周期实验；记录未采用优化的依据和后续排查入口，不改变默认编译选项或引入生产 Abseil 依赖。
-- **新增调度配置与文件移动回归**：T192 覆盖默认、高吞吐、低延迟及自定义配置下的借用分派、任务恢复、IO 与超时；T193 覆盖 `AsyncFile` 控制器地址稳定、已提交 IO 后移动、源对象复用及 fd 释放，并增加默认宏与预设配置重合时的编译检查。
-- **新增自定义 IO 配置示例**：E13 演示通过 `IOSchedulerConfig` 配置事件容量、协程批量大小与 io_uring 队列深度，并独立管理调度器生命周期；明确配置不替换 reactor/poll 策略，`Runtime` 仍不支持自定义调度器注入。
-- **新增异步操作完成基础模块**：引入独立 `OperationKey`、`OperationState`、`OperationCompletion` 与唯一 `ResumeCapability`，以 `AcceptOperation` 和 `AcceptedConnection` 承载单次 accept 的结果、恢复权及未消费连接的 RAII 回收。
-- **新增 accept 生命周期测试与基准**：新增 T185–T191，覆盖 pending accept、完成竞争、frame/controller 解绑、真实及重排 CQE、fd 回收与 multishot arena 生命周期；新增 B39–B41，并接入 CMake/CTest、mcpp 及 epoll 10k/io_uring 2k pending 压力入口。
-- **接入 serde 结构体序列化模块**：新增 `galay-serde` 构建入口、JSON/TOML 结构体往返测试、示例和编码解码基准，支持 CMake、Bazel 与 mcpp。
-- **新增调度器静态分派测试与基准**：新增 `t183_scheduler_static_dispatch`（校验调度器非多态、不可经基类删除、Runtime 不再支持自定义注入）、`t184_io_controller_self_contained`（校验 IOController 槽位绑定只依赖自身头文件）和 `b38_scheduler_dispatch` 基准。
-- **测试调度器适配库**：新增 `test/cpp/common/scheduler_test_adapter.h` 与独立的 `galay-kernel-test-scheduler` 静态库，让确定性 timer/waker 竞态测试在 `GALAY_KERNEL_TEST_SCHEDULER` 下通过 hook 表控制恢复窗口，生产构建不携带该字段。
-- **新增 RPC owner 边界测试与基准**：覆盖取消注册的移动、注销、回调重入和指定 scheduler 取消投递；新增 endpoint 缓存更新/筛选与取消状态压力基准，并更新取消通知基准。
-- **新增 MCP v2 owner 边界与生命周期测试**：覆盖错误 owner、连接失败传播、无新增控制协程的命令提交、URI 所有权、有界订阅队列及多 worker/并发通知/重复启动与停止；广播基准分别核对命令接纳数和实际回调数，使用 FIFO 标记完成预热。
+- 新增异步操作完成协议，提供单次 accept 的 typed completion、唯一恢复权和未消费连接的 RAII 回收，补齐完成竞争、frame/controller 解绑、CQE 重排和停止压力回归。
+- 新增独立 Env 以及 CPU/NUMA/Memory 控制、资源查询与原生策略恢复接口，以显式结果保留系统失败原因；补齐稀疏 CPU ID、策略保存/恢复及错误传播回归。
+- 接入 serde submodule 与 JSON/TOML 结构体序列化，提供 CMake、Bazel、mcpp 构建入口、示例、测试和编码解码基准。
+- 新增调度配置示例、静态分派和稳定地址所有权回归；扩展成对性能测量工具，保留预热、校准、冻结迭代数、A/A 和置信区间检查。
+- 补齐全模块导入、原生安装消费者、C reactor、低 fd 上限并发 sleep、提前唤醒和 scheduler 销毁回归。
 
 ### Changed
 
-- **C sleep 共用调度器期限队列**：移除每个 sleep 独占的 Linux timerfd，复用 scheduler deadline 管理，支持 epoll/kqueue，期限正常到达返回 Ok、提前唤醒返回 Cancelled；64 个并发 sleep 在 fd 上限 32 下完成三轮，未据此宣称吞吐或延迟提升。
-- **原生模块交付要求 CMake 3.31+**：源码构建与安装后的模块消费者明确检查最低版本；安装的 `galay::serde` 直接别名到 serde 静态模块目标，消费者按自身编译器与选项重建 BMI，头文件构建仍支持 CMake 3.28。
-- **同步发布版本元数据**：CMake、Bazel 与 mcpp 统一为 `6.0.0`；自 v5.1.0 累计的调度器、Runtime 注入接口、公开目录及 owner 契约变化按主版本发布，不保留旧接口兼容层。
-
-- **拆分 CPU、NUMA 与内存职责**：删除 Performance 集中式接口，分别提供 system/cpu.hpp、system/numa.hpp 和 system/memory.hpp 中的 CPU、Numa、Memory 静态工具类；CPU 数量统一使用 CPU::count()，移除 System::cpuCount()。同步压测绑核、内存策略、总头和模块导出及相关回归，不保留旧接口。
-
-- **采用 epoll pending 注册入口复用**：findPendingChange 同时返回 pending 下标及已确认 owner 的稳定 RegistrationEntry，applyEvents 新排队时复用入口，减少重复 fd 查找和幂等绑定；保留合并、取消、回收、flush 与错误完成协议。固定 600 个正式进程及独立复算支持 requeue_1/requeue_8 成本分别下降 14.24%/11.61%，明确接受 duplicate_1 与 resume.io_1 成本上升，不外推生产混合净收益。
-
-- **采用重复 resume claim 提前拒绝**：TaskResumeQueue::push 对已 claimed 状态先 acquire-load，未 claimed 时保留原 strong CAS；关闭、发布、回滚与引用归属不变。直接重复队列与 IO API 路径 wall 成对下降 44.62%/23.69%，不外推真实业务唤醒或整体吞吐。
-
-- **采用空 resume 队列提前返回**：TaskResumeQueue::takeAll 在初始 acquire 观察为空时跳过 CAS，保留非空发布、关闭位及所有权协议；空 drain 10.1566→0.6611 ns/op，成对降低 93.38% [95% CI: −93.50%, −93.26%]，关联空 IO drain 降低 46.32%，不外推生产混合负载。
-- **采用帧释放资格判断前置**：releaseFrameStorage 在读取 recycler TLS 前检查 header、bucket 与 alignment；128-byte 缓存控制的分配/释放往返降低 10.35% [−16.25%, −4.04%]，64-byte 对齐大帧次要路径降低 7.33% [−12.20%, −2.19%]。本项依据次要/控制路径作局部采用复核，两个预声明主目标仍未验证，原协议未达成结论保留。
-- **采用 owner-only pop 提前判空**：先确认 head/tail 非空再更新 tail，保留槽位清零与 stealing 协议；冻结成对实验支持非零/零游标空轮询分别降低 30.36%/5.62%，明确接受 IO batch=64 成本上升 0.59% 的局部取舍，不宣称混合业务负载净收益。
-- **采用 owner-only ring 局部优化**：槽位原子 exchange 改为 relaxed load 加 store(0)，保留清零、stealing 协议及停止所有访问者后才可切换模式的约束；owner 与 IO resume 局部收益已验证，综合性能门禁未通过。
-- **简化 x86 WebSocket 掩码向量构造**：使用 4-byte memcpy 加 32-bit broadcast，保持现有 SIMD 主循环、尾部源码、parser、NEON 与 API；采用经冻结实验验证的局部收益，不声称 TCP 或生产下单全路径已加速。
-- **按职责重组 galay-utils 公开目录**：系统接口统一到 system，字节与环形缓冲归入 buffer，线程池和任务等待器归入 thread，对象池归入 common，限流和熔断归入 resilience；MurmurHash3 与负载选择归入 algorithm，Huffman 归入 encoding，cache 保留 LRU。同步所有调用方、总头、模块导出、示例、文档及安装检查，不保留旧路径转发头。
-- **收敛环境变量职责**：移除 System 的 getEnv/setEnv/unsetEnv，统一使用 system/env.hpp 中的 Env；config/env.hpp 继续负责 .env 文件解析。
-- **统一 C++ benchmark 启动环境**：通过 GALAY_BENCH_CPUS 和 GALAY_BENCH_NUMA 控制继承 CPU 集合与内存策略，启动时校验边界及回读结果，工作线程按选定 CPU 集合放置；请求无法生效时明确失败退出。
-- **收敛 IO 调度器的 CRTP 特化边界**：各配置共享对应后端的真实基类，事件循环由每个 `Config` 独立特化收敛为每后端一份；保留后端级非虚静态分派，配置模板只负责提供构造容量，不将此调整视为配置级特化或性能完全等价。
-- **归档 HTTP/kqueue listener 关闭的探索性实现**：HTTP stop 在停止 Runtime 前向 IO owner 提交 listener close 并等待任务；kqueue close 冻结旧 accept 的关闭结果、取消 timer 并唤醒。仅保存已有工作区实现，其同步等待、错误路径和完成协议仍待后续门禁验证，不视为生产 Runtime drain 或 kqueue typed completion 完成。
-- **epoll/io_uring 单次 accept 接入 typed completion**：ready、timeout、close、owner stop 和提交失败共享唯一完成裁决，恢复前解除 controller slot、timer 和 frame 借用，`await_resume()` 仅消费已冻结结果；删除旧 io_uring accept 结果 gate 和恢复路径。
-- **分离单次 accept 与持久 multishot 生命周期**：单次恢复不等待 original terminal，后续 accepted fd 继续由资源队列缓存；持久 handle/arena 独立保活与回收，并补充 owner stop 和重启 admission 接线。
-- **统一 serde submodule 依赖**：CMake、Bzlmod 和 mcpp 都从 `thirdparty/serde` Git submodule 读取源码，并移除 Galay 自带的重复 JSON 后端源码。
-- **更新 MCP/etcd JSON 后端接线**：统一链接 serde 提供的 JSON target，并适配无异常结果 API。
-- **迁移到 serde 0.3.0 JSON API**：更新 serde submodule，MCP v1/v2 与 etcd 统一使用 `json::Json`、显式结果读取和序列化接口，移除 MCP 自有 JSON 辅助封装及旧类型别名，同步调用方、测试、示例和基准。
-- **调度器改为 CRTP 静态分派**：`Scheduler` 收敛为非多态借用基类，`start`/`stop`/`schedule`/`scheduleResume` 等入口按 `m_type` 转发到 `SchedulerBase<Derived, Type>` 的静态 `*Impl`，去除虚表与 RTTI；`IOScheduler` 改为按构建后端选出的类型别名（epoll / kqueue / io_uring）。
-- **抽出三个 IO 后端共享实现**：新增 `IOSchedulerBase<Derived, Reactor>` 统一承载线程生命周期、就绪队列、唤醒协调与 IO 注册转发，`EpollScheduler`/`KqueueScheduler`/`IOUringScheduler` 仅保留构造与 poll/flush 适配；新增 `scheduler_dispatch.hpp` 承接调度器类型分派薄层。
-- **拆出 `IOReadyQueue` 就绪队列**：将原 `IOSchedulerWorkerState` 的就绪队列职责（本地 LIFO/ring、跨线程注入、恢复接纳、工作窃取与 steal 统计）独立为 `io_ready_queue.hpp/.cc`，`SchedulerCore` 只依赖该队列类型。
-- **`TaskRef` 实现内联到头文件**：引用计数、borrowed view 与所有权转移逻辑移入 `task.h`，避免跨编译单元分派路径依赖 LTO。
-- **`IOController` 自包含化**：`getAwaitable<T>` 显式特化与 `fillAwaitable` 移入 `io_controller.hpp`，不再依赖 `io_scheduler.hpp` 中的槽位实现。
-- **`Runtime` 移除自定义调度器注入**：删除 `addIOScheduler`/`addParallelScheduler`，`Runtime` 仅按 `RuntimeConfig` 创建内置调度器；相关基准与测试改用 `RuntimeBuilder` 配置调度器数量，并同步更新 mcpp 目标与文档。
-- **RPC 缓存与取消域改为单 owner 所有权**：移除原子共享指针、共享取消状态和缓存互斥锁，缓存原地更新并返回独立值快照；取消 source 内嵌状态、token 借用、RAII 侵入式注册节点由调用协程帧持有，注册/注销/取消必须在同一 owner 串行执行，reader/writer 只处理 pending 完成通知。
-- **MCP v2 HTTP 状态改为明确 owner 管理**：移除工具定义、HTTP server 和订阅快照的原子共享指针；server 的外部 `start()` 线程通过现有 MPSC 通道接收值命令并独占订阅链表，通知入口保持普通函数，成功仅表示接纳入队；client 直接持有 transport 与工具定义并绑定指定 IO scheduler，拒绝跨 owner 访问和重叠请求，不引入 `OwnerTask` 或额外控制协程。
+- 调度器采用 CRTP 静态分派，各配置共享对应 IO 后端实现；拆出 IOReadyQueue，内联 TaskRef，实现 IOController 自包含。Runtime 仅拥有内置调度器，删除自定义调度器注入接口。
+- RPC 缓存/取消域和 MCP v2 HTTP 状态明确由单 owner 串行管理，收敛借用生命周期、通知接纳和关闭契约。
+- 按 system/buffer/thread/common/resilience 等职责重组 utils 公开目录并迁移调用方，不保留旧路径转发头。
+- C sleep 共用 scheduler deadline，移除每次 sleep 的 timerfd；C++ benchmark 支持 CPU/NUMA 启动环境控制和实际生效回读。
+- 保留七项局部性能采用对应的源码和长期回归，未将 LTO/PGO 设为默认优化；局部采用不代表综合性能门禁或生产 Runtime drain 完成。
 
 ### Fixed
 
-- **实现 C kqueue reactor 并修正资源错误处理**：补齐 EVFILT_USER 唤醒、读写事件注册/修改/注销、EOF/error 唤醒与 close-on-exec；公开真实 reactor fd，保留创建、通知与销毁失败原因，使用 Linux libkqueue 独立验证后端。
-- **修复 C scheduler 退出时任务引用泄漏**：deadline 独立保活 sleep 与 I/O task；无限期 I/O 等待同样纳入 scheduler 所有权，退出时取消等待和 ready queue 任务、清理槽位及 controller 注册状态，等待中的 socket 可在 runtime 销毁后关闭。
-- **修复 C++ 全量编译与模块消费**：T95 对齐 IOController 稳定地址契约；Rediss 初始化 awaitable 与普通连接池一致采用 always-ready 值结果，恢复可移动性；Mongo 门面导出实际声明，补齐十个 prelude 的传递依赖，并将 kernel 外部工具头移入全局片段。
-- **修复安装后原生模块链接**：postgres/rpc 导出目标直接携带 kernel 后端定义；serde 子模块改为静态模块库并发布安装消费者修复，解决模块初始化符号、多消费者 Ninja 规则和模块发现问题。
-- **修复关闭模块接口安装后的导出失败**：原生构建中的 serde 模块依赖限定为 build interface；根项目和 serde 关闭模块接口安装后不导出模块目标或元数据，安装回归检查目标集合，头文件消费者以 CMake 3.28 验证通过。
-- **修复测试对运行目录和宿主服务的依赖**：SSL 证书与源码审计使用源码路径；MySQL 拒绝连接测试保留一个未监听的临时 loopback 端口；完整保留 prefetch 一亿二千万消息及 ringsteal 一千万项压力，按线程数和实际 Debug 耗时设置有限 CTest 预算。
-
-- **修复稳定地址所有权回归的旧移动用法**：T168 和 T191 改为转移 `unique_ptr<IOController>` 所有权，保留控制器不可移动的静态断言；检查 pending/flushed 注册、awaitable 借用、request/generation/operation 身份及内联销毁时 completion 地址稳定，不放开生产控制器移动契约。
-
-- **修正 CPU 数量与编号语义混用**：`CPU::count()` 保留硬件并发度提示，Process 不再以该数量校验或截断 CPU ID；Linux CPU/Process 共用动态 affinity mask，支持非连续和超过 1023 的 CPU ID，benchmark 按继承集合校验。NUMA 策略设置同时确保最高支持节点位可传给内核，补充稀疏 ID、sysfs 错误、策略保存/修改/恢复及失败传播回归。
-
-- **修复 MPMC 接收 pump 的 CAS 重试活锁**：竞争 owner 排空并返回 idle 后，CAS 失败保留实际 observed，只在首次发布后合入工作位，避免发送线程持续自旋；保持内存序、关闭、waiter 和引用所有权协议。T173 新增确定性 owner 交接及注册/关闭回归，保留原压力；22 项 Release（含 T100 一千万项）、10 项本地 kernel ASan/UBSan/LSan、3 项 TSan 与两百万项诊断通过，根因、验证范围及历史不确定性见独立报告。
-
-- **拒绝 B42 CPU 计时失败**：MicroTimer 返回负 CPU 时间时基准返回失败，避免仅依赖外部解析器拒绝无效计量；保留故障注入的修复前后结果，既有冻结性能样本不变。
-- **修复 SSL socket 构建与移动语义**：通过独占指针保持不可移动 IOController 的地址和注册关系稳定，移动后的源对象显式报告关闭状态；补充移动构造、赋值、已有 awaitable 和源对象析构回归。
-- **修复 epoll 并发握手超时**：pending change 索引改用地址稳定的 RegistrationEntry，注销或 controller 析构后仍能清理索引，避免地址复用和 swap-and-pop 更新覆盖其他 fd 的注册。
-- **定位 H1 密集 accept 超时并收紧测量门禁**：确认宿主机 conntrack 满表丢弃 SYN，增加 B41 握手/就绪诊断和独立可复核对照；隔离网络环境下完成 122880 次连接及 B41 连续 20 轮，解析器严格校验 2048/8192 操作数，保留红绿测试和 ASan 证据。
-- **修复 epoll pending flush 的错误传播与遍历**：保留 accept 注册失败的返回值，swap-and-pop 删除后继续处理换入项；T189 新增混合失败/成功注册回归，所有权转移用例保持 IOController 不可移动及地址稳定。
-- **修正 accept 基准的等待上限与诊断**：B41 改用 2 秒实际时间上限，输出 syscall、poll/dispatch 和未完成批次信息；密集建连仍可超时，保留失败结果并明确其不构成完整性能验收通过。
-- **修复非默认 IO 配置的错误向下转换**：`Scheduler*` 分派、IO awaitable 和 AIO 注册统一转换到实际存在的后端基类，不再把高吞吐、低延迟或自定义配置对象当作默认配置对象使用。
-- **修复后端模板化后的编译与超时适配**：移除 io_uring 不存在的 `flush()` 调用并恢复专用等待超时上限，将 kqueue 的纳秒超时转换为 `timespec`；移除预设显式实例化，避免默认宏与预设重合时重复实例化。
-- **修复 `AsyncFile` 移动语义与控制器契约冲突**：通过 `unique_ptr<IOController>` 转移所有权并保持控制器地址稳定，不放开控制器的移动限制；移动后的源对象可重新 `open/adopt`，空对象操作返回 `kClosed`，析构与替换旧 fd 时检查关闭结果并记录失败原因。
-- **保留 HTTP/2 静态缓存的 LLVM/libc++ 兼容性调整**：将 `atomic<shared_ptr>` 成员改为普通 `shared_ptr` 与原子自由函数，保持 acquire/acq_rel 内存序与只发布一次的语义；本次仅提交工作区已有修改。
-- **修复 io_uring accept 完成与资源回收边界**：关闭 stale 成功 CQE 携带的 fd，避免 ready 后 close 覆盖结果或重复唤醒，并消除 terminal CQE 在恢复回调释放 controller/awaiter 后继续访问的 UAF；未消费成功结果自动关闭连接。
-- **修复 serde 安装与模块消费接线**：保留 serde 子目录的默认安装规则，统一由 `galay::serde` 传递 C++23 模块依赖，并更新外部 consumer、模块 smoke 和 tracing 配置测试。
-- **修复 MCP v2 订阅回收与关闭边界**：订阅节点使用独立对齐分配并交由 owner 回收，避免协程帧无法满足有界通道对齐要求；关闭时先停止接纳、排空命令并关闭事件队列，等待 listener 退出后再回收节点和停止 HTTP runtime，支持并发停止调用。
-- **保留 MCP v2 连接失败原因**：请求和监听路径检查 transport Task 的内外两层结果，传播连接错误；请求失败后释放 owner 内的请求占用状态。
+- 修复非默认 IO 配置分派、AsyncFile/SSL 移动的稳定地址所有权、epoll 并发握手超时、pending 注册批次错误传播以及 MPMC pump CAS 交接活锁。
+- 修复 epoll/io_uring 单次 accept 的结果冻结、晚到 CQE、fd 回收和恢复后 UAF 边界；明确单次 accept 与持久 multishot 的独立生命周期。
+- 实现 C kqueue reactor，修复 scheduler 退出时等待/ready task 引用泄漏及 controller 注册清理，保留资源错误原因。
+- 修复 T95/T168/T191 旧移动断言、Rediss 初始化 awaitable、Mongo 导出、模块 prelude 漂移和测试运行目录依赖。
+- 修复 postgres/rpc 原生模块安装的后端宏传播、serde 静态模块库与 BMI 元数据，以及关闭模块接口安装后的导出泄漏；原生模块消费者要求 CMake >= 3.31，经典头文件消费者支持 CMake 3.28。
 
 ### Chore
 
-- **归档稳定地址修复的实际验证与构建边界**：T168 已完成 4 项 Release、3 项 ASan/UBSan/LSan 和 3 项 TSan；T191 保留 P10 v2 的匹配 Release、sanitizer 与生命周期门禁及指定源码身份。默认聚合构建越过 T168 后仍在 T95 的旧移动断言失败，未修复、未标通过；kqueue 与全仓库测试未获通过结论。
-
-- 环境控制与目录调整已通过 utils 23/23、安装布局检查、14 个迁移头文件独立编译、13 个下游 C++ 库及 6 个相关压测目标构建；mcpp 使用 LLVM 22.1.8 完成 SSL feature 构建，utils 导入及三个 SSL/epoll 回归程序通过。全仓其余 10 个模块的 prelude 既存漂移经迁移前副本对照确认，本次未新增漂移。
-- 新增 T195 epoll 注册生命周期和 T16 SSL socket 移动回归，接入 mcpp 的 SSL 移动、并发握手及 epoll 注册测试目标；LLVM 22.1.8 模块构建与三个回归程序通过。
-- **独立清理 H3 的 26 项阻塞风格问题**：补齐 E13 import 示例，迁移编号化腾讯脚本和 prelude 生成器，删除 Linux verifier 兼容入口，修正已有测试白名单路径并编号断言测试；同步调用方、增加 5 项回归，最终 19 项定向 CTest 与两种 E13 Release 示例通过，保留非阻塞建议；文档保留验证结论，19 份原始日志不纳入提交历史。
-- 本轮修复已验证 io_uring 完整内核库构建、相关定向回归及 HTTP 静态文件读取，epoll 文件 IO/RAII 回归通过；尚未验证原生 kqueue 或全量测试，T189/T191 中直接移动不可移动 `IOController` 的既有测试用法仍待处理，未新增性能等价结论。
-- 按当前工作区状态提交 `mcpp.lock`，移除已有的 `compat.openssl` 3.5.1 锁记录；未重新解析依赖、改变 manifest 或生成版本号。
-- 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。
-
-### Docs
-
-- **新增全量验证与发布报告**：分别列出 CMake、mcpp、C sanitizer、libkqueue、安装消费者和隔离数据库服务验证，明确 skip/disabled、原生平台缺口与历史性能门禁；本次构建正确性检查不取代生产 Runtime drain 或综合性能验收。
-
-- **归档 P07–P15 性能计划最终验收**：补齐 Redis/HTTP 状态与读写链、accept 生命周期、io_uring bookkeeping、共享布局、LTO、PGO、已采用组合及 victim 选择的审查报告；P09 v2、P10 v2、P14 主收益未验证，候选不采用，P07/P08/P11–P13/P15 的具体机制或资格静态否决。P08 的 22 项 kernel Release 缺口已独立补齐，七项既有局部采用及历史代价保持，无新增生产性能优化。
-- **同步采用记录、执行计划和最终交接**：记录 T168 独立修复、P09 新限定连接模型 G1–G10、P08–P14 依赖核验和 P15 G1 静态闭环；后续有资格实验预先固定 3–5 轮成对 A/B、默认 3，正确性保护保持，CI 跨 0 记未验证并停止。保留旧失败、未执行阶段、raw 和 seal，最终游标停止，原始产物继续留在忽略目录。
-- **保存性能机会分析初稿**：纳入 `docs/performance/` 的导航、架构机会、热路径微优化与总结四份原有文档；其中收益、风险、工时和建议属于历史假设，以正式验收报告的实际结论为准，不作为已验证收益或新增采用。
-
-- **归档跨维度性能优化计划与 P01–P06 审查**：记录 TaskState 释放资格、唤醒统计、epoll pending 入口复用、超时取消、Channel waiter 与 HTTP 状态生命周期的实际结论；同步采用记录、历史计数合并/cold 报告和续跑交接，游标为 P07 G1。
-- **完成 P05 v2 补验与 P06 安全审查**：P05 两版各 34 Release、14 ASan/UBSan/LSan、6 TSan，保留 T100 一千万项和 T173 一千次压力（含 TSan），8,172 个证据文件重新封存验证；无有效 Release 机器码成本降低，静态否决。P06 九个基线测试/诊断进程通过，response 单槽复用不满足 pending/copy 操作独占与绑定契约，未创建候选。两项均无新增生产补丁，正式矩阵为 0，原始产物不纳入 Git。
-
-- **完成重复 claim 独立验证闭环**：记录两版各 12 项回归（T100 一千万项）、相关 sanitizer、Release 机器码、15 场景共 600 个正式进程与独立复算；保留 6 条并发短样本、正常路径宽区间、A/A 与保护诊断失败。记录正式前校准修订、局部采用取舍及后续批量发布诊断方向，原始证据不纳入 Git。
-
-- **汇总性能优化进展与续跑交接**：新增五项已采用机制、收益与退化证据、拒绝及未验证候选、证据入口和后续优先级，区分生产源码基线与文档提交。
-- **明确下一候选验证协议**：限定重复 resume claim 提前拒绝，保留正确性、机器码、冻结基线、15 场景各 5 A/A + 5 A/B 四进程配对块及独立复算；记录原工作区空间阻塞，续跑目录改为 `/data/disk1/projects/galay`。
-- **限定交接提交与历史证据复用范围**：要求逐文件审查和显式暂存，不提交原始数据、构建产物、日志、临时脚本或无关文件；新目录拉取后另行确认被忽略的历史产物及其绝对路径依赖。
-- **记录两项局部采用及验证边界**：新增空 takeAll 与帧释放资格前置报告，追加当前采用记录；后者固定每场景 5 A/A、5 A/B 四进程块，20 场景共 800 个有效进程。区分原统计分类、收益方向、协议判定和采用决定，保留不利点估计、宽区间、原精度/保护诊断失败及 P99/宿主隔离未验证。
-- **保留未采用 allocator 候选的完整结论**：记录 TLS cleanup 拆分的热路径退化、大尺寸类提前退出的局部收益与不可接受退化，以及默认对齐实验因 ENOSPC 中止、证据不完整；候选未进入生产，历史原始数据与冻结二进制不改写，生成产物继续留在忽略目录。
-- **记录 owner pop 定向验证与采用决定**：保留 10 个 A/A、20 个随机 ABBA/BAAB A/B 时间块及全部 11 场景，1,320 个进程有效；分别记录统计分类、收益方向与采用取舍，保留 owner-1 本轮未验证、历史改善及 shared-1 上升信号、精度与保护诊断失败，单操作 P99 和宿主隔离仍未验证。
-- **记录冻结性能审计与局部收益采用规则**：保留 owner/shared/parallel 与 IO 全场景、WS micro/parser/TCP 成对统计、A/A 和综合门禁失败及已撤回候选；按用户授权接受可信函数或关联路径收益，不设置最低改善幅度，也不再要求集成收益达到固定百分比，原统计分类与不利证据不变。
-- **归档热路径候选验收状态**：记录 H0 噪声校验与 H1 微基准结果及保护门槛未通过的原因，保留生产候选撤回和 H2–H7 暂停状态；不将静态优化或局部微基准改善表述为完整性能验收通过。
-- 补充 CPU / NUMA 配置、线程继承、首次触碰与平台限制说明，更新工具目录职责及 Env API 使用文档；记录功能验收与性能验收的边界。
-- **提炼 H3 与 K0–K2 验证摘要**：按两个独立协议分别记录各 10 对 A/A 的几何均值、置信区间和正确性结论；两次本地提交经重写排除 1,628 份原始产物，后续输出使用已忽略的 `benchmark-results/`。两批完整精度门禁均未通过；K1 虽消除 LTO 成功入队后的三次空清理，但未满足采用条件，K2 最小候选未消除额外 actor 调用并被否决。生产源码保持基线，K0/K1/K2 性能验收及 K3–K7 保持未完成，不宣称性能收益。
-- 将本次异步操作重构的 916 个原始证据文件纳入版本控制，保留全部红绿日志、失败/skip、B41 样本、分析脚本、反汇编和隔离 before 源码归档；附索引与 SHA-256 清单，排除四个 ELF 构建产物，不改变现有门禁结论。
-- 新增异步操作取消设计与执行计划，记录所有权契约、实际红绿测试、GCC/LLVM 与 sanitizer/module 验证、隔离 B41 七轮 before/after 及分配审计；明确 awaiter/frame 增长成本，Step 3 整体仍为 NO-GO，生产 Runtime drain、累计性能与内存等门禁未完成，HTTP/connect 未开放。
-- 将 serde 使用说明移动到 `docs/cpp/modules/serde/00-快速开始.md`，同步更新相关模块的依赖和构建说明。
-- 更新 `docs/cpp/modules/kernel/10-调度器.md` 与 `02-API参考.md`，说明 CRTP 静态分派、`IOSchedulerBase` 共享实现、`IOReadyQueue` 职责边界及 Runtime 内置调度器所有权语义。
-- 更新 RPC 架构与 MCP v2 架构/API 文档，明确 owner 投递、借用生命周期、通知接纳语义和关闭顺序。
+- CMake、Bazel 和 mcpp 项目版本统一为 `6.0.0`，整理主版本发布说明并重新创建同版本注解 tag。
+- 重写近期提交与关联开发分支，移除中间计划、交接、临时审查/验证报告及原始 benchmark 证据，清掉仅承载中间文档的提交；既有版本 tag 保持不变。
+- 正式模块文档、基准源码及旧版本压测资料继续保留；机器配置迁移到 `docs/performance/machine_config.md` 并同步引用，中间文档和新生成的原始结果加入忽略规则，本地资料单独保留。
+- 原发布验证记录：CMake 全模块、C API、示例和 benchmark 构建通过，628 项 CTest 中 587 通过、36 跳过、5 禁用、0 失败；mcpp/LLVM 22.1.8 `full` Release 构建通过，21 个程序中 19 通过、2 跳过，另完成 C sanitizer、Linux libkqueue、安装消费者和隔离数据库/协议矩阵。
+- 本次历史清理核对三处版本、逐提交检查过滤路径并比较源码/测试/基准/构建配置；未重新运行全量构建或性能测量，保留原生平台和历史性能验证边界。
 
 ## [v5.1.0] - 2026-09-08
 
