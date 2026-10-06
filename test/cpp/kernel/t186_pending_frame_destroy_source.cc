@@ -4,10 +4,6 @@
 #include <iterator>
 #include <string>
 
-#ifndef GALAY_SOURCE_ROOT
-#define GALAY_SOURCE_ROOT "src/cpp"
-#endif
-
 namespace {
 
 std::string readAll(const std::filesystem::path& path)
@@ -39,22 +35,12 @@ bool requireContains(const std::string& name,
 
 int main()
 {
-    std::filesystem::path root(GALAY_SOURCE_ROOT);
-    if (!std::filesystem::exists(root / "galay-kernel")) {
-        const auto cwd = std::filesystem::current_path();
-        const std::filesystem::path candidates[] = {
-            cwd / "src/cpp",
-            cwd / "../../src/cpp",
-            cwd / "../../../src/cpp",
-            cwd / "../../../../src/cpp",
-        };
-        for (const auto& candidate : candidates) {
-            if (std::filesystem::exists(candidate / "galay-kernel")) {
-                root = candidate;
-                break;
-            }
-        }
-    }
+#ifdef GALAY_SOURCE_ROOT
+    const std::filesystem::path root(GALAY_SOURCE_ROOT);
+#else
+    const auto root = std::filesystem::path(__FILE__).parent_path().parent_path()
+        .parent_path().parent_path() / "src/cpp";
+#endif
     const auto task = readAll(root / "galay-kernel/core/task.cc");
     const auto awaitable = readAll(root / "galay-kernel/core/awaitable.h");
     const auto epoll = readAll(root / "galay-kernel/core/epoll_reactor.cc");

@@ -141,6 +141,10 @@ set_tests_properties(kernel.iou_accept_completion_resource kernel.iou_accept_typ
     PROPERTIES TIMEOUT 20 SKIP_RETURN_CODE 77)
 set_tests_properties(kernel.scheduler_config PROPERTIES TIMEOUT 30 SKIP_RETURN_CODE 77)
 set_tests_properties(kernel.async_file_move PROPERTIES TIMEOUT 15 SKIP_RETURN_CODE 77)
+# The 24 recycled-block cases transfer 120 million messages in Debug builds.
+set_tests_properties(kernel.prefetch PROPERTIES TIMEOUT 120 PROCESSORS 2)
+# Ten million owner/stealer transfers use five active threads.
+set_tests_properties(kernel.ringsteal PROPERTIES TIMEOUT 120 PROCESSORS 5)
 
 # Defaults may equal a named preset. Compile the backend and consumer with
 # both sets of overrides to catch duplicate instantiations and type drift.

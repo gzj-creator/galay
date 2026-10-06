@@ -55,9 +55,45 @@ foreach(test_source IN LISTS GALAY_C_KERNEL_TEST_SOURCES)
     if(source_name IN_LIST GALAY_C_KERNEL_SOCKET_TESTS)
         set_tests_properties("c.kernel.${scenario_name}" PROPERTIES SKIP_RETURN_CODE 125)
     endif()
+    if(source_name STREQUAL "t34_coro_sleep_concurrency")
+        set_tests_properties("c.kernel.${scenario_name}" PROPERTIES
+            SKIP_RETURN_CODE 125 TIMEOUT 15)
+    endif()
     if(source_name STREQUAL "t23_coro_task" OR
        source_name STREQUAL "t24_coro_result_wait" OR
        source_name STREQUAL "t25_coro_tcp")
         set_tests_properties("c.kernel.${scenario_name}" PROPERTIES RUN_SERIAL TRUE)
     endif()
 endforeach()
+
+# libkqueue exercises the native BSD reactor on Linux without a production
+# dependency or changing the platform's normal backend.
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(Threads REQUIRED)
+    find_path(GALAY_TEST_LIBKQUEUE_INCLUDE_DIR sys/event.h PATH_SUFFIXES kqueue)
+    find_library(GALAY_TEST_LIBKQUEUE_LIBRARY NAMES kqueue)
+    if(GALAY_TEST_LIBKQUEUE_INCLUDE_DIR AND GALAY_TEST_LIBKQUEUE_LIBRARY)
+        enable_language(ASM)
+        get_target_property(KQUEUE_TEST_SOURCES galay-c-kernel SOURCES)
+        add_library(galay-c-kernel-kqueue-test STATIC ${KQUEUE_TEST_SOURCES})
+        target_compile_features(galay-c-kernel-kqueue-test PUBLIC c_std_11)
+        target_compile_definitions(galay-c-kernel-kqueue-test PRIVATE
+            GALAY_C_TEST_KQUEUE GALAY_DISABLE_IOURING=1)
+        target_include_directories(galay-c-kernel-kqueue-test
+            PUBLIC ${CMAKE_BINARY_DIR}/include
+            PRIVATE ${GALAY_TEST_LIBKQUEUE_INCLUDE_DIR})
+        target_link_libraries(galay-c-kernel-kqueue-test
+            PUBLIC galay::c-common Threads::Threads ${GALAY_TEST_LIBKQUEUE_LIBRARY})
+        foreach(KQUEUE_TEST IN ITEMS t2_runtime_lifecycle t25_coro_tcp t26_coro_sleep
+                t18_tcp_timeout_callbacks t19_udp_timeout_callbacks t33_scheduler_reactor
+                t34_coro_sleep_concurrency t35_coro_sleep_interruption
+                t36_coro_scheduler_shutdown)
+            set(KQUEUE_TARGET test_c_kernel_kqueue_${KQUEUE_TEST})
+            add_executable(${KQUEUE_TARGET} ${KQUEUE_TEST}.c)
+            target_link_libraries(${KQUEUE_TARGET} PRIVATE galay-c-kernel-kqueue-test)
+            add_test(NAME c.kernel.kqueue_${KQUEUE_TEST} COMMAND ${KQUEUE_TARGET})
+            set_tests_properties(c.kernel.kqueue_${KQUEUE_TEST} PROPERTIES
+                LABELS "c;kernel;unit;libkqueue" TIMEOUT 15)
+        endforeach()
+    endif()
+endif()

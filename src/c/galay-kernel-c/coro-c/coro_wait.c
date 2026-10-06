@@ -2,6 +2,7 @@
 #include "coro_task_internal.h"
 
 #include <errno.h>
+#include <stdint.h>
 #include <sys/socket.h>
 
 static C_IOResult make_result(C_IOResultCode code, int sys_errno)
@@ -71,9 +72,11 @@ C_IOResult galay_c_coro_wait_io(galay_c_io_scheduler_t* scheduler,
             ? make_result(wait_code, 0)
             : make_result(C_IOResultError, 0);
     }
-    if (timeout_ms > 0) {
+    if (timeout_ms != 0) {
+        // Untimed waits remain owned by the scheduler until completion or shutdown.
         const C_IOResult timer_registered =
-            galay_c_coro_task_register_timeout(current, controller, event_type, timeout_ms);
+            galay_c_coro_task_register_timeout(current, controller, event_type,
+                                               timeout_ms < 0 ? INT64_MAX : timeout_ms);
         if (timer_registered.code != C_IOResultOk) {
             if (clear_wait_slot(controller, event_type, current).code == C_IOResultOk) {
                 galay_c_coro_task_release(current);

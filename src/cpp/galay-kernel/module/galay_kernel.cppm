@@ -1,6 +1,8 @@
 module;
 
 #include "module_prelude.hpp"
+#include "../../galay-utils/buffer/bytes.hpp"
+#include "../../galay-utils/buffer/byte_queue_view.hpp"
 
 export module galay.kernel;
 
@@ -10,8 +12,6 @@ export extern "C++" {
 #include "../common/file_descriptor.h"
 #include "../common/host.hpp"
 #include "../common/handle_option.h"
-#include "../../galay-utils/buffer/bytes.hpp"
-#include "../../galay-utils/buffer/byte_queue_view.hpp"
 #include "../common/buffer.h"
 #include "../common/sleep.hpp"
 #include "../common/logger.h"

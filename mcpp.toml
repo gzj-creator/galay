@@ -1,6 +1,6 @@
 [package]
 name        = "galay"
-version     = "5.0.3"
+version     = "6.0.0"
 description = "C++23 coroutine networking and protocol framework"
 license     = "Apache-2.0"
 standard    = "c++23"
@@ -48,6 +48,18 @@ kind = "lib"
 [targets.test_utils_import]
 kind = "bin"
 main = "test/cpp/utils/t_import_smoke.cc"
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_full_import]
+kind = "bin"
+main = "test/cpp/config/t2_mcpp_full_import.cc"
+required_features = ["full"]
+cxxflags = ["-UNDEBUG"]
+
+[targets.test_redis_pool_initialize_move]
+kind = "bin"
+main = "test/cpp/redis/t26_pool_initialize_move.cc"
+required_features = ["redis"]
 cxxflags = ["-UNDEBUG"]
 
 [targets.example_serde_struct_formats]

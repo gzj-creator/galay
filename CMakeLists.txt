@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.28)
 
-project(galay VERSION 5.0.3 LANGUAGES C CXX)
+project(galay VERSION 6.0.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -119,6 +119,11 @@ endif()
 if(GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE)
     list(REMOVE_ITEM GALAY_INSTALL_TARGETS galay-postgres)
 endif()
+set(GALAY_CONFIG_SERDE_MODULE_ALIAS OFF)
+if(GALAY_SERDE_CPP23_MODULES_EFFECTIVE AND GALAY_INSTALL_CPP23_MODULE_INTERFACES)
+    list(REMOVE_ITEM GALAY_INSTALL_TARGETS galay-serde)
+    set(GALAY_CONFIG_SERDE_MODULE_ALIAS ON)
+endif()
 
 if(GALAY_INSTALL_TARGETS)
     install(TARGETS ${GALAY_INSTALL_TARGETS}
@@ -133,6 +138,11 @@ endif()
 # targets are not exported when interface installation is disabled, so this
 # branch needs no FILE_SET argument.
 function(galay_install_native_cpp23_module_target target module_dir)
+    # Imported BMI compilation needs the backend definition directly on each target.
+    if(NOT target STREQUAL "galay-kernel")
+        get_target_property(kernel_definitions galay-kernel INTERFACE_COMPILE_DEFINITIONS)
+        target_compile_definitions(${target} PUBLIC ${kernel_definitions})
+    endif()
     if(GALAY_INSTALL_CPP23_MODULE_INTERFACES)
         install(TARGETS ${target}
             EXPORT galayTargets
@@ -253,6 +263,12 @@ if(GALAY_BUILD_C_API)
 endif()
 
 set(GALAY_CONFIG_NEEDS_SERDE OFF)
+set(GALAY_CONFIG_NATIVE_MODULES OFF)
+if(GALAY_INSTALL_CPP23_MODULE_INTERFACES AND
+   (GALAY_KERNEL_CPP23_MODULES_EFFECTIVE OR GALAY_RPC_CPP23_MODULES_EFFECTIVE OR
+    GALAY_POSTGRES_CPP23_MODULES_EFFECTIVE OR GALAY_CONFIG_SERDE_MODULE_ALIAS))
+    set(GALAY_CONFIG_NATIVE_MODULES ON)
+endif()
 if(TARGET serde::serde)
     set(GALAY_CONFIG_NEEDS_SERDE ON)
 endif()

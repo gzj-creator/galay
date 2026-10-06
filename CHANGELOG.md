@@ -11,7 +11,11 @@
 
 ## [Unreleased]
 
+## [v6.0.0] - 2026-10-06
+
 ### Added
+
+- **补齐全模块与安装消费者回归**：新增 mcpp `full` 模块联合导入、Redis/Rediss 初始化 awaitable 移动、C reactor、低 fd 上限并发 sleep、提前唤醒和 scheduler 销毁回归；原生安装消费者联合导入 kernel/postgres/rpc 与 JSON/TOML。
 
 - **补充系统资源查询与原生策略恢复**：新增 CPU 在线 ID 和当前 CPU 快照、NUMA 在线节点/CPU 拓扑/相对距离、以字节计的基础页大小和 `Memory::restoreNumaPolicy`；保留原生 mode、flags 与 nodemask，无新增链接依赖。
 
@@ -42,6 +46,10 @@
 - **新增 MCP v2 owner 边界与生命周期测试**：覆盖错误 owner、连接失败传播、无新增控制协程的命令提交、URI 所有权、有界订阅队列及多 worker/并发通知/重复启动与停止；广播基准分别核对命令接纳数和实际回调数，使用 FIFO 标记完成预热。
 
 ### Changed
+
+- **C sleep 共用调度器期限队列**：移除每个 sleep 独占的 Linux timerfd，复用 scheduler deadline 管理，支持 epoll/kqueue，期限正常到达返回 Ok、提前唤醒返回 Cancelled；64 个并发 sleep 在 fd 上限 32 下完成三轮，未据此宣称吞吐或延迟提升。
+- **原生模块交付要求 CMake 3.31+**：源码构建与安装后的模块消费者明确检查最低版本；安装的 `galay::serde` 直接别名到 serde 静态模块目标，消费者按自身编译器与选项重建 BMI，头文件构建仍支持 CMake 3.28。
+- **同步发布版本元数据**：CMake、Bazel 与 mcpp 统一为 `6.0.0`；自 v5.1.0 累计的调度器、Runtime 注入接口、公开目录及 owner 契约变化按主版本发布，不保留旧接口兼容层。
 
 - **拆分 CPU、NUMA 与内存职责**：删除 Performance 集中式接口，分别提供 system/cpu.hpp、system/numa.hpp 和 system/memory.hpp 中的 CPU、Numa、Memory 静态工具类；CPU 数量统一使用 CPU::count()，移除 System::cpuCount()。同步压测绑核、内存策略、总头和模块导出及相关回归，不保留旧接口。
 
@@ -74,6 +82,13 @@
 - **MCP v2 HTTP 状态改为明确 owner 管理**：移除工具定义、HTTP server 和订阅快照的原子共享指针；server 的外部 `start()` 线程通过现有 MPSC 通道接收值命令并独占订阅链表，通知入口保持普通函数，成功仅表示接纳入队；client 直接持有 transport 与工具定义并绑定指定 IO scheduler，拒绝跨 owner 访问和重叠请求，不引入 `OwnerTask` 或额外控制协程。
 
 ### Fixed
+
+- **实现 C kqueue reactor 并修正资源错误处理**：补齐 EVFILT_USER 唤醒、读写事件注册/修改/注销、EOF/error 唤醒与 close-on-exec；公开真实 reactor fd，保留创建、通知与销毁失败原因，使用 Linux libkqueue 独立验证后端。
+- **修复 C scheduler 退出时任务引用泄漏**：deadline 独立保活 sleep 与 I/O task；无限期 I/O 等待同样纳入 scheduler 所有权，退出时取消等待和 ready queue 任务、清理槽位及 controller 注册状态，等待中的 socket 可在 runtime 销毁后关闭。
+- **修复 C++ 全量编译与模块消费**：T95 对齐 IOController 稳定地址契约；Rediss 初始化 awaitable 与普通连接池一致采用 always-ready 值结果，恢复可移动性；Mongo 门面导出实际声明，补齐十个 prelude 的传递依赖，并将 kernel 外部工具头移入全局片段。
+- **修复安装后原生模块链接**：postgres/rpc 导出目标直接携带 kernel 后端定义；serde 子模块改为静态模块库并发布安装消费者修复，解决模块初始化符号、多消费者 Ninja 规则和模块发现问题。
+- **修复关闭模块接口安装后的导出失败**：原生构建中的 serde 模块依赖限定为 build interface；根项目和 serde 关闭模块接口安装后不导出模块目标或元数据，安装回归检查目标集合，头文件消费者以 CMake 3.28 验证通过。
+- **修复测试对运行目录和宿主服务的依赖**：SSL 证书与源码审计使用源码路径；MySQL 拒绝连接测试保留一个未监听的临时 loopback 端口；完整保留 prefetch 一亿二千万消息及 ringsteal 一千万项压力，按线程数和实际 Debug 耗时设置有限 CTest 预算。
 
 - **修复稳定地址所有权回归的旧移动用法**：T168 和 T191 改为转移 `unique_ptr<IOController>` 所有权，保留控制器不可移动的静态断言；检查 pending/flushed 注册、awaitable 借用、request/generation/operation 身份及内联销毁时 completion 地址稳定，不放开生产控制器移动契约。
 
@@ -108,6 +123,8 @@
 - 增加 mcpp 调度器测试/基准目标与 ASan/UBSan、TSan 构建 profile，更新依赖锁文件和模块 prelude。
 
 ### Docs
+
+- **新增全量验证与发布报告**：分别列出 CMake、mcpp、C sanitizer、libkqueue、安装消费者和隔离数据库服务验证，明确 skip/disabled、原生平台缺口与历史性能门禁；本次构建正确性检查不取代生产 Runtime drain 或综合性能验收。
 
 - **归档 P07–P15 性能计划最终验收**：补齐 Redis/HTTP 状态与读写链、accept 生命周期、io_uring bookkeeping、共享布局、LTO、PGO、已采用组合及 victim 选择的审查报告；P09 v2、P10 v2、P14 主收益未验证，候选不采用，P07/P08/P11–P13/P15 的具体机制或资格静态否决。P08 的 22 项 kernel Release 缺口已独立补齐，七项既有局部采用及历史代价保持，无新增生产性能优化。
 - **同步采用记录、执行计划和最终交接**：记录 T168 独立修复、P09 新限定连接模型 G1–G10、P08–P14 依赖核验和 P15 G1 静态闭环；后续有资格实验预先固定 3–5 轮成对 A/B、默认 3，正确性保护保持，CI 跨 0 记未验证并停止。保留旧失败、未执行阶段、raw 和 seal，最终游标停止，原始产物继续留在忽略目录。

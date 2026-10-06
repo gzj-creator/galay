@@ -455,3 +455,44 @@ Clang 22 C++23 模块导出边界，并统一跨模块 `shared_ptr` 原子访问
 - **提升 IO 回归测试稳定性**：`t17_iov` 默认使用服务端绑定端口 `0` 后读取内核分配端口，避免临时探测端口与实际绑定之间的竞态。
 - **缩短并发回归测试耗时**：收敛 AsyncMutex、AsyncWaiter 和 MPMC 唤醒测试的重复次数及内部等待期限。
 - **消除 shared_ptr 原子 API 弃用警告**：RPC、MCP 和 HTTP/2 static-file cache 改用 `std::atomic<std::shared_ptr<T>>` 的成员操作，保持原有内存序、快照发布和无锁读取语义。
+
+## v6.0.0 - 2026-10-06
+
+- **版本级别**：主版本（major）
+- **Git 提交消息**：`fix: 修复全量构建与 C 调度器生命周期并发布 v6.0.0`
+- **Git tag**：`v6.0.0`
+
+### 变更摘要
+
+本版本收束自 `v5.1.0` 以来的 34 个已有提交与本次全量构建修复。
+调度器 CRTP 分派、Runtime 注入接口删除、IOController 稳定地址所有权、
+RPC/MCP owner 契约与 utils 公开目录均发生破坏性变化，按主版本发布。
+CMake、Bazel 与 mcpp 版本元数据统一为 `6.0.0`。
+
+- **调度器与完成协议**：按 IO 后端共享 CRTP 实现，配置提供构造容量；
+  Runtime 只拥有内置调度器。epoll/io_uring 单次 accept 接入 typed completion，
+  补齐结果冻结、slot/timer/frame 借用解除、accepted fd 回收和停止压力回归。
+- **明确 owner 与稳定地址契约**：RPC 缓存/取消域、MCP v2 HTTP 状态由单 owner
+  串行管理；修复 SSL/AsyncFile 移动和 epoll 并发握手超时，控制器由稳定地址 owner 持有。
+  修复 MPMC pump CAS 交接活锁、epoll 批量注册错误与异步操作恢复后的资源生命周期问题。
+- **公开工具接口与 serde**：按 system/buffer/thread 等职责重组 utils，新增 Env、
+  CPU/NUMA/Memory 控制、资源查询和策略恢复，保留系统失败原因；统一 serde submodule
+  与 JSON/TOML 结构体序列化，MCP/etcd 统一使用显式结果 API。
+- **C 资源优化与退出修复**：sleep 共用 scheduler deadline，移除每次 sleep 的 timerfd；
+  实现 kqueue reactor，补齐唤醒与资源错误传播。期限和无限期 I/O 等待独立保活，
+  scheduler 销毁取消并释放等待/ready task、清理 controller 注册状态，覆盖退出后 socket 关闭。
+  64 个并发 sleep 在 fd 上限 32 下完成三轮，未据此宣称吞吐或延迟收益。
+- **全量编译与模块安装**：修复旧 IOController 移动断言、Rediss 初始化 awaitable、
+  Mongo 导出、十个 prelude 漂移和运行目录依赖；安装的 postgres/rpc 目标直接携带后端宏，
+  serde 提供静态模块库与可重建 BMI 的源码/依赖元数据。原生 CMake 模块及安装消费者
+  要求 CMake >= 3.31；修复关闭模块接口安装后的导出目标泄漏，根项目与 serde 的
+  经典头文件消费者均使用 CMake 3.28 验证通过。
+- **性能结论保留实际边界**：累计七项局部采用及其收益、退化和取舍继续保留；
+  冻结成对测量、A/A、置信区间、机器码审计和未采用候选记录不改写。
+  本次构建检查不代表历史综合性能门禁或生产 Runtime drain 完成。
+- **发布验证**：CMake 全模块、C API、示例与 benchmark 编译通过；628 项 CTest 中
+  587 通过、36 跳过、5 禁用、0 失败。mcpp/LLVM 22.1.8 `full` Release 全量构建通过，
+  21 个程序中 19 通过、2 个后端条件跳过。C sanitizer、Linux libkqueue、原生模块安装、
+  经典 C/C++ 消费者与隔离 PostgreSQL/MySQL/Mongo/Redis/etcd/RPC 矩阵通过。
+  未执行项、原生平台与性能边界见 `docs/full_build_validation_2026-10-06.md`，
+  不将跳过项或有限测试表述为全平台绝对正确性保证。

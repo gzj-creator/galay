@@ -68,7 +68,8 @@ cmake -B build \
   -DGALAY_BUILD_MONGO=OFF
 ```
 
-启用 C++23 Modules（实验性）：
+启用 C++23 Modules（实验性）需要 CMake 3.31+，安装后的模块消费者同样需要
+CMake 3.31+；包含 serde 时使用 Clang 17+ 或 GCC 15+ 与 Ninja：
 
 ```bash
 cmake -B build -DGALAY_ENABLE_CPP23_MODULES=ON

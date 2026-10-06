@@ -1,4 +1,6 @@
 file(GLOB GALAY_CONFIG_TEST_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/t*.cc")
+# The full import consumer is built by mcpp, which provides every module facade.
+list(FILTER GALAY_CONFIG_TEST_SOURCES EXCLUDE REGEX "/t2_mcpp_full_import\\.cc$")
 foreach(test_source IN LISTS GALAY_CONFIG_TEST_SOURCES)
     get_filename_component(test_name "${test_source}" NAME_WE)
     add_executable(${test_name} ${test_source})

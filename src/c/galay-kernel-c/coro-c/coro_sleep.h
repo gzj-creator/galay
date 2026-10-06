@@ -20,9 +20,9 @@ extern "C" {
 /**
  * @brief 挂起当前 C 协程指定时间。
  *
- * @param timeout_ms 休眠毫秒数；0 表示立即返回，负数无效。
+ * @param timeout_ms 休眠毫秒数；0 表示让出调度器，负数无效。
  * @return 成功休眠返回 C_IOResultOk；不在协程内或参数无效返回 C_IOResultInvalid；
- * 定时器错误返回 C_IOResultError。
+ * 定时器错误返回 C_IOResultError；期限到达前被唤醒返回 C_IOResultCancelled。
  *
  * @note 该函数挂起协程，不阻塞 scheduler 线程。
  *

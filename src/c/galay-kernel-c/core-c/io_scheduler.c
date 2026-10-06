@@ -2,14 +2,15 @@
 #include "../coro-c/coro_task_internal.h"
 
 #include <errno.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <string.h>
 #include <threads.h>
 
-#ifdef __linux__
+#if defined(__linux__) && !defined(GALAY_C_TEST_KQUEUE)
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
-#elif defined(__APPLE__) || defined(__FreeBSD__)
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(GALAY_C_TEST_KQUEUE)
 #include <sys/event.h>
 #include <sys/time.h>
 #endif
@@ -57,6 +58,18 @@ static ready_queue_t* ready_queue_create(void)
     return queue;
 }
 
+static void ready_queue_discard_task(C_CoroTaskInternal* task)
+{
+    C_CoroState expected = C_CoroStateReady;
+    if (atomic_compare_exchange_strong_explicit(&task->state, &expected,
+                                                C_CoroStateCancelled,
+                                                memory_order_acq_rel,
+                                                memory_order_acquire)) {
+        atomic_store_explicit(&task->queued, 0, memory_order_release);
+    }
+    galay_c_coro_task_release(task);
+}
+
 static void ready_queue_destroy(ready_queue_t* queue)
 {
     if (!queue) {
@@ -67,6 +80,7 @@ static void ready_queue_destroy(ready_queue_t* queue)
                                                          memory_order_acq_rel);
     while (node) {
         ready_queue_node_t* next = atomic_load_explicit(&node->next, memory_order_relaxed);
+        ready_queue_discard_task(node->coro);
         free(node);
         node = next;
     }
@@ -74,6 +88,7 @@ static void ready_queue_destroy(ready_queue_t* queue)
     node = queue->pending;
     while (node) {
         ready_queue_node_t* next = atomic_load_explicit(&node->next, memory_order_relaxed);
+        ready_queue_discard_task(node->coro);
         free(node);
         node = next;
     }
@@ -190,13 +205,16 @@ static int ready_queue_has_items(const ready_queue_t* queue)
 }
 
 // Reactor context
-#ifdef __linux__
+#if defined(__linux__) && !defined(GALAY_C_TEST_KQUEUE)
 typedef struct epoll_reactor_context {
     int epoll_fd;
     int wake_fd;  // eventfd：跨线程入队时唤醒 epoll_wait
     struct epoll_event* events;
     int max_events;
+    _Atomic int notification_error;
 } epoll_reactor_context_t;
+
+static int reactor_destroy(void* context);
 
 static void* reactor_create(int max_events)
 {
@@ -204,18 +222,18 @@ static void* reactor_create(int max_events)
     if (!ctx) {
         return NULL;
     }
+    ctx->epoll_fd = -1;
+    ctx->wake_fd = -1;
+    atomic_init(&ctx->notification_error, 0);
 
     ctx->epoll_fd = epoll_create1(EPOLL_CLOEXEC);
     if (ctx->epoll_fd < 0) {
-        free(ctx);
-        return NULL;
+        goto failed;
     }
 
     ctx->wake_fd = eventfd(0, EFD_NONBLOCK | EFD_CLOEXEC);
     if (ctx->wake_fd < 0) {
-        close(ctx->epoll_fd);
-        free(ctx);
-        return NULL;
+        goto failed;
     }
 
     // 水平触发的唤醒 fd：计数器非零时 epoll_wait 立即返回，杜绝丢失唤醒。
@@ -223,39 +241,48 @@ static void* reactor_create(int max_events)
     wake_ev.events = EPOLLIN;
     wake_ev.data.ptr = NULL;
     if (epoll_ctl(ctx->epoll_fd, EPOLL_CTL_ADD, ctx->wake_fd, &wake_ev) < 0) {
-        close(ctx->wake_fd);
-        close(ctx->epoll_fd);
-        free(ctx);
-        return NULL;
+        goto failed;
     }
 
     ctx->max_events = max_events > 0 ? max_events : kDefaultMaxEvents;
     ctx->events = calloc(ctx->max_events, sizeof(struct epoll_event));
     if (!ctx->events) {
-        close(ctx->wake_fd);
-        close(ctx->epoll_fd);
-        free(ctx);
-        return NULL;
+        goto failed;
     }
 
     return ctx;
+
+failed:
+    {
+        const int saved_errno = errno;
+        const int cleaned = reactor_destroy(ctx);
+        errno = saved_errno != 0 ? saved_errno : -cleaned;
+        return NULL;
+    }
 }
 
-static void reactor_destroy(void* context)
+static int reactor_destroy(void* context)
 {
     if (!context) {
-        return;
+        return 0;
     }
 
     epoll_reactor_context_t* ctx = context;
-    if (ctx->wake_fd >= 0) {
-        close(ctx->wake_fd);
+    int error = 0;
+    if (ctx->wake_fd >= 0 && close(ctx->wake_fd) != 0) {
+        error = errno;
     }
-    if (ctx->epoll_fd >= 0) {
-        close(ctx->epoll_fd);
+    if (ctx->epoll_fd >= 0 && close(ctx->epoll_fd) != 0 && error == 0) {
+        error = errno;
     }
     free(ctx->events);
     free(ctx);
+    return -error;
+}
+
+static int reactor_descriptor(void* context)
+{
+    return ((epoll_reactor_context_t*)context)->epoll_fd;
 }
 
 // 唤醒阻塞在 epoll_wait 的事件循环；EAGAIN 说明计数器已非零，唤醒必然发生。
@@ -266,7 +293,13 @@ static void reactor_notify(void* context)
         return;
     }
     const uint64_t one = 1;
-    (void)write(ctx->wake_fd, &one, sizeof(one));
+    ssize_t written;
+    do {
+        written = write(ctx->wake_fd, &one, sizeof(one));
+    } while (written < 0 && errno == EINTR);
+    if (written < 0 && errno != EAGAIN) {
+        atomic_store_explicit(&ctx->notification_error, errno, memory_order_release);
+    }
 }
 
 static int reactor_register(void* context, galay_c_io_controller_t* controller, uint32_t events)
@@ -276,6 +309,9 @@ static int reactor_register(void* context, galay_c_io_controller_t* controller, 
     }
 
     epoll_reactor_context_t* ctx = context;
+    if (controller->fd < 0) {
+        return -EBADF;
+    }
     struct epoll_event ev = {0};
     ev.data.ptr = controller;
     ev.events = EPOLLET;
@@ -327,6 +363,11 @@ static int reactor_wait(void* context,
     }
 
     epoll_reactor_context_t* ctx = context;
+    const int notification_error =
+        atomic_exchange_explicit(&ctx->notification_error, 0, memory_order_acq_rel);
+    if (notification_error != 0) {
+        return -notification_error;
+    }
     int n = epoll_wait(ctx->epoll_fd, ctx->events, ctx->max_events, timeout_ms);
     if (n < 0) {
         return -errno;
@@ -382,25 +423,179 @@ static int reactor_wait(void* context,
     return io_events;
 }
 
-#elif defined(__APPLE__) || defined(__FreeBSD__)
-// kqueue 实现类似，这里先占位
+#elif defined(__APPLE__) || defined(__FreeBSD__) || defined(GALAY_C_TEST_KQUEUE)
 typedef struct kqueue_reactor_context {
     int kqueue_fd;
     struct kevent* events;
     int max_events;
+    _Atomic int notification_error;
 } kqueue_reactor_context_t;
+
+static int reactor_destroy(void* context);
 
 static void* reactor_create(int max_events)
 {
-    // TODO: implement kqueue version
-    return NULL;
+    kqueue_reactor_context_t* ctx = calloc(1, sizeof(*ctx));
+    if (ctx == NULL) {
+        return NULL;
+    }
+    ctx->kqueue_fd = -1;
+    atomic_init(&ctx->notification_error, 0);
+    ctx->kqueue_fd = kqueue();
+    if (ctx->kqueue_fd < 0 || fcntl(ctx->kqueue_fd, F_SETFD, FD_CLOEXEC) < 0) {
+        goto failed;
+    }
+    struct kevent wake_event;
+    EV_SET(&wake_event, 0, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, NULL);
+    if (kevent(ctx->kqueue_fd, &wake_event, 1, NULL, 0, NULL) < 0) {
+        goto failed;
+    }
+    ctx->max_events = max_events > 0 ? max_events : kDefaultMaxEvents;
+    ctx->events = calloc((size_t)ctx->max_events, sizeof(*ctx->events));
+    if (ctx->events == NULL) {
+        goto failed;
+    }
+    return ctx;
+
+failed:
+    {
+        const int saved_errno = errno;
+        const int cleaned = reactor_destroy(ctx);
+        errno = saved_errno != 0 ? saved_errno : -cleaned;
+        return NULL;
+    }
 }
 
-static void reactor_destroy(void* context) {}
-static void reactor_notify(void* context) {}
-static int reactor_register(void* context, galay_c_io_controller_t* controller, uint32_t events) { return -ENOSYS; }
-static int reactor_unregister(void* context, galay_c_io_controller_t* controller) { return -ENOSYS; }
-static int reactor_wait(void* context, galay_c_io_scheduler_t* scheduler, ready_queue_t* ready_queue, int timeout_ms) { return -ENOSYS; }
+static int reactor_destroy(void* context)
+{
+    kqueue_reactor_context_t* ctx = context;
+    if (ctx == NULL) {
+        return 0;
+    }
+    const int error = ctx->kqueue_fd >= 0 && close(ctx->kqueue_fd) != 0 ? errno : 0;
+    free(ctx->events);
+    free(ctx);
+    return -error;
+}
+
+static int reactor_descriptor(void* context)
+{
+    return ((kqueue_reactor_context_t*)context)->kqueue_fd;
+}
+
+static void reactor_notify(void* context)
+{
+    kqueue_reactor_context_t* ctx = context;
+    struct kevent event;
+    EV_SET(&event, 0, EVFILT_USER, 0, NOTE_TRIGGER, 0, NULL);
+    int result;
+    do {
+        result = kevent(ctx->kqueue_fd, &event, 1, NULL, 0, NULL);
+    } while (result < 0 && errno == EINTR);
+    if (result < 0) {
+        atomic_store_explicit(&ctx->notification_error, errno, memory_order_release);
+    }
+}
+
+static int reactor_register(void* context, galay_c_io_controller_t* controller, uint32_t events)
+{
+    if (context == NULL || controller == NULL) {
+        return -EINVAL;
+    }
+    kqueue_reactor_context_t* ctx = context;
+    if (controller->fd < 0) {
+        return -EBADF;
+    }
+    uint32_t registered = atomic_load_explicit(&controller->registered_events,
+                                                memory_order_acquire);
+    const uint32_t bits[] = {GALAY_C_EVENT_READ, GALAY_C_EVENT_WRITE};
+    const int16_t filters[] = {EVFILT_READ, EVFILT_WRITE};
+    for (size_t i = 0; i < 2; ++i) {
+        if (((registered ^ events) & bits[i]) == 0) {
+            continue;
+        }
+        const int adding = (events & bits[i]) != 0;
+        struct kevent change;
+        EV_SET(&change, controller->fd, filters[i],
+               adding ? EV_ADD | EV_CLEAR : EV_DELETE, 0, 0, controller);
+        if (kevent(ctx->kqueue_fd, &change, 1, NULL, 0, NULL) < 0 &&
+            (adding || errno != ENOENT)) {
+            return -errno;
+        }
+        // Keep partial successful changes observable if a later filter fails.
+        registered = adding ? registered | bits[i] : registered & ~bits[i];
+        atomic_store_explicit(&controller->registered_events, registered,
+                              memory_order_release);
+    }
+    return 0;
+}
+
+static int reactor_unregister(void* context, galay_c_io_controller_t* controller)
+{
+    return reactor_register(context, controller, GALAY_C_EVENT_NONE);
+}
+
+static int reactor_wait(void* context, galay_c_io_scheduler_t* scheduler,
+                       ready_queue_t* ready_queue, int timeout_ms)
+{
+    if (context == NULL || scheduler == NULL || ready_queue == NULL) {
+        return -EINVAL;
+    }
+    kqueue_reactor_context_t* ctx = context;
+    const int notification_error =
+        atomic_exchange_explicit(&ctx->notification_error, 0, memory_order_acq_rel);
+    if (notification_error != 0) {
+        return -notification_error;
+    }
+    struct timespec timeout = {
+        .tv_sec = timeout_ms / 1000,
+        .tv_nsec = (long)(timeout_ms % 1000) * 1000000,
+    };
+    const int count = kevent(ctx->kqueue_fd, NULL, 0, ctx->events, ctx->max_events,
+                            timeout_ms < 0 ? NULL : &timeout);
+    if (count < 0) {
+        return -errno;
+    }
+    int io_events = 0;
+    for (int i = 0; i < count; ++i) {
+        const struct kevent* event = &ctx->events[i];
+        if (event->filter == EVFILT_USER) {
+            continue;
+        }
+        galay_c_io_controller_t* controller = event->udata;
+        if (controller == NULL) {
+            continue;
+        }
+        const int exceptional = (event->flags & (EV_ERROR | EV_EOF)) != 0;
+        if (event->filter == EVFILT_READ || exceptional) {
+            C_CoroTaskInternal* task = atomic_exchange_explicit(
+                &controller->read_slot, NULL, memory_order_acq_rel);
+            if (task != NULL) {
+                atomic_store_explicit(&task->wait_code, C_IOResultOk, memory_order_release);
+                const C_IOResult result = galay_c_coro_task_wake(task);
+                galay_c_coro_task_release(task);
+                if (result.code == C_IOResultOk) {
+                    atomic_fetch_add_explicit(&scheduler->wake_count, 1, memory_order_relaxed);
+                }
+            }
+        }
+        if (event->filter == EVFILT_WRITE || exceptional) {
+            C_CoroTaskInternal* task = atomic_exchange_explicit(
+                &controller->write_slot, NULL, memory_order_acq_rel);
+            if (task != NULL) {
+                atomic_store_explicit(&task->wait_code, C_IOResultOk, memory_order_release);
+                const C_IOResult result = galay_c_coro_task_wake(task);
+                galay_c_coro_task_release(task);
+                if (result.code == C_IOResultOk) {
+                    atomic_fetch_add_explicit(&scheduler->wake_count, 1, memory_order_relaxed);
+                }
+            }
+        }
+        ++io_events;
+    }
+    atomic_fetch_add_explicit(&scheduler->event_count, io_events, memory_order_relaxed);
+    return io_events;
+}
 #endif
 
 // Scheduler API 实现
@@ -424,11 +619,12 @@ C_IOResult galay_c_io_scheduler_create(galay_c_io_scheduler_t* out_scheduler,
 
     ready_queue_t* queue = ready_queue_create();
     if (!queue) {
-        reactor_destroy(reactor_ctx);
-        return make_result(C_IOResultError, errno);
+        const int saved_errno = errno;
+        const int cleaned = reactor_destroy(reactor_ctx);
+        return make_result(C_IOResultError, saved_errno != 0 ? saved_errno : -cleaned);
     }
 
-    out_scheduler->reactor_fd = 0; // 平台相关，暂时不暴露
+    out_scheduler->reactor_fd = reactor_descriptor(reactor_ctx);
     atomic_init(&out_scheduler->running, 0);
     atomic_init(&out_scheduler->active, 0);
     atomic_init(&out_scheduler->event_count, 0);
@@ -451,11 +647,13 @@ C_IOResult galay_c_io_scheduler_destroy(galay_c_io_scheduler_t* scheduler)
         return make_result(C_IOResultInvalid, 0);
     }
 
-    reactor_destroy(scheduler->reactor_context);
+    galay_c_coro_task_discard_timeouts(scheduler);
+    const int destroyed = reactor_destroy(scheduler->reactor_context);
     ready_queue_destroy(scheduler->ready_queue);
 
     memset(scheduler, 0, sizeof(*scheduler));
-    return make_result(C_IOResultOk, 0);
+    return destroyed < 0 ? make_result(C_IOResultError, -destroyed)
+                         : make_result(C_IOResultOk, 0);
 }
 
 C_IOResult galay_c_io_scheduler_run(galay_c_io_scheduler_t* scheduler)

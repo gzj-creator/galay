@@ -84,12 +84,13 @@ C_IOResult galay_c_coro_task_prepare_wait(void);
 C_IOResult galay_c_coro_task_rollback_wait(void);
 C_IOResult galay_c_coro_task_park_prepared(void);
 C_IOResult galay_c_coro_task_suspend_current(C_CoroState next_state);
-/** Scheduler-thread-only deadline registration used by native I/O waits. */
+/** Scheduler-thread-only deadline registration; NULL/NONE denotes sleep. */
 C_IOResult galay_c_coro_task_register_timeout(C_CoroTaskInternal* task,
                                             galay_c_io_controller_t* controller,
                                             uint32_t event_type,
                                             int64_t timeout_ms);
 void galay_c_coro_task_cancel_timeout(C_CoroTaskInternal* task);
+void galay_c_coro_task_discard_timeouts(galay_c_io_scheduler_t* scheduler);
 void galay_c_coro_task_process_timeouts(galay_c_io_scheduler_t* scheduler);
 int galay_c_coro_task_next_timeout_ms(galay_c_io_scheduler_t* scheduler,
                                     int maximum_ms);

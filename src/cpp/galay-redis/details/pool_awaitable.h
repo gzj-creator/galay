@@ -102,12 +102,11 @@ namespace galay::redis
      * @details 用于协程中等待 Rediss 连接池初始化完成
      */
     class RedissPoolInitializeAwaitable
-        : public galay::kernel::ForwardingAwaitable<RedissPoolInitializeAwaitable>
-        , public galay::kernel::TimeoutSupport<RedissPoolInitializeAwaitable>
+        : public galay::kernel::TimeoutSupport<RedissPoolInitializeAwaitable>
     {
     public:
-        friend class galay::kernel::ForwardingAwaitable<RedissPoolInitializeAwaitable>;
         using Result = RedisVoidResult;
+        static constexpr bool kAlwaysReady = true;
 
         explicit RedissPoolInitializeAwaitable(RedissConnectionPool& pool);
         RedissPoolInitializeAwaitable(const RedissPoolInitializeAwaitable&) = delete;
@@ -115,24 +114,16 @@ namespace galay::redis
         RedissPoolInitializeAwaitable(RedissPoolInitializeAwaitable&&) noexcept = default;
         RedissPoolInitializeAwaitable& operator=(RedissPoolInitializeAwaitable&&) noexcept = default;
 
-    private:
-        struct Flow
+        bool await_ready() const noexcept { return true; }
+        template <typename Promise>
+        bool await_suspend(std::coroutine_handle<Promise>)
         {
-            explicit Flow(RedissConnectionPool& pool);
-
-            void run(galay::kernel::SequenceOps<Result, 4>& ops);
-
-            RedissConnectionPool* m_pool = nullptr;
-        };
-
-        using InnerAwaitable =
-            galay::kernel::StateMachineAwaitable<typename galay::kernel::AwaitableBuilder<Result, 4, Flow>::MachineT>;
-
-        galay::kernel::IOController m_controller{GHandle::invalid()};
-        std::unique_ptr<Flow> m_flow;
+            return false;
+        }
+        Result await_resume() { return std::move(m_result); }
 
     private:
-        InnerAwaitable m_inner;
+        Result m_result;
     };
 
     /**

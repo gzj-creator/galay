@@ -1,5 +1,11 @@
+#include <arpa/inet.h>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <string>
+#include <sys/socket.h>
+#include <unistd.h>
 #include <galay/cpp/galay-mysql/sync/mysql_client.h>
 #include "config.h"
 
@@ -58,8 +64,36 @@ bool test_connection_refused_then_recover(const mysql_test::DbTestConfig& cfg)
 {
     std::cout << "Testing connection refused then recovery..." << std::endl;
 
-    MysqlConfig bad = MysqlConfig::create(cfg.host,
-                                          static_cast<uint16_t>(cfg.port == 3306 ? 3307 : 3306),
+    // Keep a loopback port reserved without listening so no other server can answer.
+    const int reserved_fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (reserved_fd < 0) {
+        std::cerr << "reserve socket failed: " << std::strerror(errno) << std::endl;
+        return false;
+    }
+    struct ReservedSocket {
+        int fd;
+        ~ReservedSocket()
+        {
+            if (::close(fd) != 0) {
+                std::cerr << "close reserved socket failed: " << std::strerror(errno) << std::endl;
+                std::abort();
+            }
+        }
+    } reserved{reserved_fd};
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    if (::bind(reserved_fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) != 0) {
+        std::cerr << "reserve port failed: " << std::strerror(errno) << std::endl;
+        return false;
+    }
+    socklen_t address_size = sizeof(address);
+    if (::getsockname(reserved_fd, reinterpret_cast<sockaddr*>(&address), &address_size) != 0) {
+        std::cerr << "read reserved port failed: " << std::strerror(errno) << std::endl;
+        return false;
+    }
+    MysqlConfig bad = MysqlConfig::create("127.0.0.1",
+                                          ntohs(address.sin_port),
                                           cfg.user,
                                           cfg.password,
                                           cfg.database);

@@ -6,6 +6,7 @@ file(COPY "${CMAKE_CURRENT_LIST_DIR}/consumer/CMakeLists.txt"
     "${CMAKE_CURRENT_LIST_DIR}/t10_import_smoke.cc"
     "${CMAKE_CURRENT_LIST_DIR}/t12_shared_backend.cc"
     "${CMAKE_CURRENT_LIST_DIR}/struct_formats.hpp"
+    "${CMAKE_CURRENT_LIST_DIR}/consumer/t13_native_modules.cc"
     DESTINATION "${work}/source")
 
 function(run_checked)
@@ -21,8 +22,10 @@ run_checked("${CMAKE_COMMAND}" --install "${GALAY_BINARY_DIR}"
 run_checked("${CMAKE_COMMAND}" -S "${work}/source" -B "${work}/build"
     -G "${GALAY_GENERATOR}"
     "-DCMAKE_CXX_COMPILER=${GALAY_COMPILER}"
+    "-DCMAKE_CXX_FLAGS=${GALAY_COMPILER_FLAGS}"
     "-DCMAKE_MAKE_PROGRAM=${GALAY_MAKE_PROGRAM}"
     "-DCMAKE_BUILD_TYPE=${GALAY_CONFIG}"
+    "-DGALAY_EXPECT_NO_MODULES=${GALAY_EXPECT_NO_MODULES}"
     "-DCMAKE_PREFIX_PATH=${prefix}")
 run_checked("${CMAKE_COMMAND}" --build "${work}/build" --config "${GALAY_CONFIG}" --parallel 2)
 run_checked("${GALAY_CTEST_COMMAND}" --test-dir "${work}/build"

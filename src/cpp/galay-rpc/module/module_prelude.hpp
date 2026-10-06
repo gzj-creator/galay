@@ -66,6 +66,9 @@
 #if __has_include("../../galay-kernel/common/logger.h")
 #include "../../galay-kernel/common/logger.h"
 #endif
+#if __has_include("../../galay-kernel/common/scheduler_config.h")
+#include "../../galay-kernel/common/scheduler_config.h"
+#endif
 #if __has_include("../../galay-kernel/common/sleep.hpp")
 #include "../../galay-kernel/common/sleep.hpp"
 #endif
@@ -80,6 +83,9 @@
 #endif
 #if __has_include("../../galay-kernel/concurrency/mpsc/unbounded_channel.h")
 #include "../../galay-kernel/concurrency/mpsc/unbounded_channel.h"
+#endif
+#if __has_include("../../galay-kernel/core/accept_operation.hpp")
+#include "../../galay-kernel/core/accept_operation.hpp"
 #endif
 #if __has_include("../../galay-kernel/core/awaitable.h")
 #include "../../galay-kernel/core/awaitable.h"
@@ -119,6 +125,15 @@
 #endif
 #if __has_include("../../galay-kernel/core/kqueue_scheduler.h")
 #include "../../galay-kernel/core/kqueue_scheduler.h"
+#endif
+#if __has_include("../../galay-kernel/core/operation_completion.hpp")
+#include "../../galay-kernel/core/operation_completion.hpp"
+#endif
+#if __has_include("../../galay-kernel/core/operation_key.hpp")
+#include "../../galay-kernel/core/operation_key.hpp"
+#endif
+#if __has_include("../../galay-kernel/core/operation_state.hpp")
+#include "../../galay-kernel/core/operation_state.hpp"
 #endif
 #if __has_include("../../galay-kernel/core/runtime.h")
 #include "../../galay-kernel/core/runtime.h"

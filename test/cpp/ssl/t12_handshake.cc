@@ -14,6 +14,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <mutex>
 #include <stdexcept>
@@ -203,9 +204,10 @@ int main()
     SslContext client_ctx(SslMethod::TLS_Client);
     expect(server_ctx.isValid(), "server context invalid");
     expect(client_ctx.isValid(), "client context invalid");
-    expect(server_ctx.loadCertificate("certs/server.crt").has_value(), "load server cert failed");
-    expect(server_ctx.loadPrivateKey("certs/server.key").has_value(), "load server key failed");
-    expect(client_ctx.loadCACertificate("certs/ca.crt").has_value(), "load CA failed");
+    const auto cert_dir = std::filesystem::path(__FILE__).parent_path() / "certs";
+    expect(server_ctx.loadCertificate((cert_dir / "server.crt").string()).has_value(), "load server cert failed");
+    expect(server_ctx.loadPrivateKey((cert_dir / "server.key").string()).has_value(), "load server key failed");
+    expect(client_ctx.loadCACertificate((cert_dir / "ca.crt").string()).has_value(), "load CA failed");
     server_ctx.setSessionCacheMode(SSL_SESS_CACHE_OFF);
     server_ctx.setSessionTimeout(0);
     client_ctx.setVerifyMode(SslVerifyMode::Peer);

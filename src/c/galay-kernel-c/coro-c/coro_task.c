@@ -387,15 +387,19 @@ C_IOResult galay_c_coro_task_register_timeout(C_CoroTaskInternal* task,
                                             uint32_t event_type,
                                             int64_t timeout_ms)
 {
-    if (task == NULL || task->owner == NULL || controller == NULL || timeout_ms <= 0 ||
-        task->timeout_active ||
-        (event_type != GALAY_C_EVENT_READ && event_type != GALAY_C_EVENT_WRITE)) {
+    const int sleep_deadline = controller == NULL && event_type == GALAY_C_EVENT_NONE;
+    if (task == NULL || task->owner == NULL || timeout_ms <= 0 ||
+        task->timeout_active || (!sleep_deadline &&
+        (controller == NULL || (event_type != GALAY_C_EVENT_READ &&
+                                event_type != GALAY_C_EVENT_WRITE)))) {
         return make_result(C_IOResultInvalid, 0);
     }
     const int64_t now = monotonic_milliseconds();
     if (now < 0) {
         return make_result(C_IOResultError, errno);
     }
+    // The deadline list owns a reference independently of the I/O slot or handle.
+    galay_c_coro_task_retain(task);
     task->wait_deadline_ms = timeout_ms > INT64_MAX - now ? INT64_MAX : now + timeout_ms;
     task->wait_controller = controller;
     task->wait_event = event_type;
@@ -423,12 +427,46 @@ void galay_c_coro_task_cancel_timeout(C_CoroTaskInternal* task)
     task->wait_deadline_ms = 0;
     task->wait_event = GALAY_C_EVENT_NONE;
     task->timeout_active = 0;
+    galay_c_coro_task_release(task);
+}
+
+void galay_c_coro_task_discard_timeouts(galay_c_io_scheduler_t* scheduler)
+{
+    while (scheduler->timeout_head != NULL) {
+        C_CoroTaskInternal* const task = scheduler->timeout_head;
+        galay_c_io_controller_t* const controller = task->wait_controller;
+        const uint32_t event_type = task->wait_event;
+        // Keep the task alive until both deadline and I/O slot ownership are released.
+        galay_c_coro_task_retain(task);
+        galay_c_coro_task_cancel_timeout(task);
+        if (controller != NULL) {
+            const C_IOResult cleared = event_type == GALAY_C_EVENT_READ
+                ? galay_c_io_controller_clear_read(controller, task)
+                : galay_c_io_controller_clear_write(controller, task);
+            if (cleared.code == C_IOResultOk) {
+                galay_c_coro_task_release(task);
+            }
+            // Invalid means the slot was already detached by another completion.
+            if (atomic_load_explicit(&controller->read_slot, memory_order_acquire) == NULL &&
+                atomic_load_explicit(&controller->write_slot, memory_order_acquire) == NULL) {
+                // The stopped reactor is destroyed immediately after this cleanup.
+                atomic_store_explicit(&controller->registered_events, GALAY_C_EVENT_NONE,
+                                      memory_order_release);
+                atomic_store_explicit(&controller->owner_scheduler, NULL, memory_order_release);
+            }
+        }
+        if (!task_is_final(atomic_load_explicit(&task->state, memory_order_acquire))) {
+            atomic_store_explicit(&task->state, C_CoroStateCancelled, memory_order_release);
+        }
+        galay_c_coro_task_release(task);
+    }
 }
 
 static int task_wait_slot_matches(const C_CoroTaskInternal* task)
 {
     if (task->wait_controller == NULL) {
-        return 0;
+        return task->wait_event == GALAY_C_EVENT_NONE &&
+               atomic_load_explicit(&task->state, memory_order_acquire) == C_CoroStateWaiting;
     }
     C_CoroTaskInternal* const waiting = task->wait_event == GALAY_C_EVENT_READ
         ? atomic_load_explicit(&task->wait_controller->read_slot, memory_order_acquire)
@@ -449,12 +487,17 @@ void galay_c_coro_task_process_timeouts(galay_c_io_scheduler_t* scheduler)
     while (*cursor != NULL) {
         C_CoroTaskInternal* const task = *cursor;
         if (!task->timeout_active || !task_wait_slot_matches(task)) {
+            if (task->timeout_active && task->wait_controller == NULL) {
+                atomic_store_explicit(&task->wait_code, C_IOResultCancelled,
+                                      memory_order_release);
+            }
             *cursor = task->timeout_next;
             task->timeout_next = NULL;
             task->wait_controller = NULL;
             task->wait_deadline_ms = 0;
             task->wait_event = GALAY_C_EVENT_NONE;
             task->timeout_active = 0;
+            galay_c_coro_task_release(task);
             continue;
         }
         if (task->wait_deadline_ms > now) {
@@ -471,19 +514,25 @@ void galay_c_coro_task_process_timeouts(galay_c_io_scheduler_t* scheduler)
         task->wait_event = GALAY_C_EVENT_NONE;
         task->timeout_active = 0;
 
-        const C_IOResult cleared = event_type == GALAY_C_EVENT_READ
-            ? galay_c_io_controller_clear_read(controller, task)
-            : galay_c_io_controller_clear_write(controller, task);
+        const C_IOResult cleared = controller == NULL
+            ? make_result(C_IOResultOk, 0)
+            : event_type == GALAY_C_EVENT_READ
+                ? galay_c_io_controller_clear_read(controller, task)
+                : galay_c_io_controller_clear_write(controller, task);
         if (cleared.code == C_IOResultOk) {
-            atomic_store_explicit(&task->wait_code, C_IOResultTimeout,
+            atomic_store_explicit(&task->wait_code,
+                                  controller == NULL ? C_IOResultOk : C_IOResultTimeout,
                                   memory_order_release);
             const C_IOResult woke = galay_c_coro_task_wake(task);
             if (woke.code != C_IOResultOk) {
                 atomic_store_explicit(&task->wait_code, C_IOResultError,
                                       memory_order_release);
             }
-            galay_c_coro_task_release(task);
+            if (controller != NULL) {
+                galay_c_coro_task_release(task);
+            }
         }
+        galay_c_coro_task_release(task);
     }
 }
 

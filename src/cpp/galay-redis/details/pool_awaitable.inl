@@ -226,22 +226,8 @@
 
 #ifdef GALAY_SSL_FEATURE_ENABLED
     RedissPoolInitializeAwaitable::RedissPoolInitializeAwaitable(RedissConnectionPool& pool)
-        : m_flow(std::make_unique<Flow>(pool))
-        , m_inner(galay::kernel::AwaitableBuilder<Result, 4, Flow>(&m_controller, *m_flow)
-                      .local<&Flow::run>()
-                      .build())
+        : m_result(pool.initializeSync())
     {
-    }
-
-    RedissPoolInitializeAwaitable::Flow::Flow(RedissConnectionPool& pool)
-        : m_pool(&pool)
-    {
-    }
-
-    void RedissPoolInitializeAwaitable::Flow::run(galay::kernel::SequenceOps<Result, 4>& ops)
-    {
-        auto& pool = *m_pool;
-        ops.complete(pool.initializeSync());
     }
 
     RedissPoolAcquireAwaitable::RedissPoolAcquireAwaitable(RedissConnectionPool& pool)

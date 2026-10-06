@@ -1,5 +1,9 @@
 @PACKAGE_INIT@
 
+if(@GALAY_CONFIG_NATIVE_MODULES@)
+    cmake_minimum_required(VERSION 3.31)
+endif()
+
 include(CMakeFindDependencyMacro)
 
 if(@GALAY_CONFIG_NEEDS_SERDE@)
@@ -54,3 +58,7 @@ if(@GALAY_CONFIG_NEEDS_SPDLOG@)
 endif()
 
 include("${CMAKE_CURRENT_LIST_DIR}/galayTargets.cmake")
+
+if(@GALAY_CONFIG_SERDE_MODULE_ALIAS@)
+    add_library(galay::serde ALIAS serde::serde-cpp23-modules)
+endif()
